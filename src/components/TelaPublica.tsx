@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
+import { useRouter } from "next/navigation";
+import { type ReactNode, useState, useTransition } from "react";
 import { ROTULO_VISTA_PUBLICA, type VistaPublica } from "@/lib/publico-core";
 import { Button } from "./Button";
 import { IconDashboard, IconDocumentos, IconLinhas, IconTelaAcesso, IconWallet } from "./icons";
 import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral, type SecaoMenu } from "./MenuLateral";
 import { PcaSeletor } from "./PcaSeletor";
+import { SeletorUnidade } from "./SeletorUnidade";
 import { ThemeToggle } from "./ThemeToggle";
-import { UnitFilter } from "./UnitFilter";
 
 const ICONE: Record<VistaPublica, SecaoMenu["itens"][number]["Icon"]> = {
   dashboard: IconDashboard,
@@ -20,7 +21,8 @@ const ICONE: Record<VistaPublica, SecaoMenu["itens"][number]["Icon"]> = {
 
 /**
  * A CASCA da tela pública (consulta do PCA sem login): o MESMO menu lateral do painel (recolhível; gaveta no celular) com
- * as abas que o ADM publicou e o "Entrar" fixo no rodapé — só com o menu aberto. O servidor decide a aba e só manda a dela.
+ * as abas que o ADM publicou (sem título de seção — no trilho recolhido não sobra linha) e o "Entrar" fixo no rodapé — só
+ * com o menu aberto. O menu começa como o ADM escolheu e recolher/expandir vale só na visita (`guardar={false}`). O servidor decide a aba e só manda a dela.
  */
 export function TelaPublica({
   identidade,
@@ -42,15 +44,17 @@ export function TelaPublica({
   children: ReactNode;
 }) {
   const [gaveta, setGaveta] = useState(false);
-  const href = (a: VistaPublica) => {
+  const router = useRouter();
+  const [trocando, iniciar] = useTransition();
+  const href = (a: VistaPublica, unidade = unidades?.atual) => {
     const q = new URLSearchParams();
     if (pcaId != null) q.set("pca", String(pcaId));
     if (a !== "dashboard") q.set("aba", a);
-    if (unidades?.atual != null && (a === "dashboard" || a === "consulta")) q.set("unidade", String(unidades.atual));
+    if (unidade != null && (a === "dashboard" || a === "consulta")) q.set("unidade", String(unidade));
     const s = q.toString();
     return s ? `/?${s}` : "/";
   };
-  const secoes: SecaoMenu[] = [{ chave: "pca", titulo: "Consulta do PCA", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) }];
+  const secoes: SecaoMenu[] = [{ chave: "pca", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) }];
   const ativo = (item: { href: string }) => item.href === href(vista);
   const marca = (
     <Link href="/" className="flex min-w-0 items-center">
@@ -66,7 +70,7 @@ export function TelaPublica({
 
   return (
     <div className="flex min-h-dvh bg-bg text-text lg:overflow-x-clip">
-      <MenuLateral topo={marca} conteudo={itens()} rodape={<div className="menu-esconde mb-2 px-1">{entrar}</div>} />
+      <MenuLateral guardar={false} topo={marca} conteudo={itens()} rodape={<div className="menu-esconde mb-2 px-1">{entrar}</div>} />
       <GavetaMenu aberto={gaveta} onFechar={() => setGaveta(false)} topo={marca} conteudo={itens(() => setGaveta(false))} rodape={entrar} />
       <div className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp
@@ -80,9 +84,16 @@ export function TelaPublica({
                 </div>
               )}
               {unidades && unidades.lista.length > 1 && (
-                <div className="w-36 min-w-0 sm:w-64">
-                  <UnitFilter unidades={unidades.lista} current={unidades.atual} compacto />
-                </div>
+                <SeletorUnidade
+                  unidades={unidades.lista.map((u) => ({ id: u.id, codigo: u.codigo, nome: u.municipio || u.codigo }))}
+                  ativaId={unidades.atual ?? null}
+                  todas="Todas as unidades"
+                  trocando={trocando}
+                  onEscolher={(id, fechar) => {
+                    fechar();
+                    if (id !== (unidades.atual ?? null)) iniciar(() => router.push(href(vista, id ?? undefined)));
+                  }}
+                />
               )}
               <ThemeToggle />
             </>

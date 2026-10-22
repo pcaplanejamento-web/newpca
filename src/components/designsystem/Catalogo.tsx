@@ -5,6 +5,7 @@ import { CamposSeguranca } from "@/components/SegurancaAdmin";
 import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
 import { CabecalhoApp, ItensMenu } from "@/components/MenuLateral";
 import { CamposPublico } from "@/components/PublicoAdmin";
+import { SeletorUnidade } from "@/components/SeletorUnidade";
 import { type ConfigPublico, PUBLICO_PADRAO } from "@/lib/publico-core";
 import { CONFIG_ESCOPO_PADRAO, type ConfigEscopo } from "@/lib/escopo-cabecalho-core";
 import { TabelaAcessos } from "@/components/HistoricoAcessos";
@@ -490,6 +491,16 @@ function DemoProtecao() {
 }
 
 /** TELA PÚBLICA: as abas publicadas (sem gravar). */
+/** SELETOR DE UNIDADE do cabeçalho (painel e tela pública), com a opção "todas". */
+function DemoSeletorUnidade() {
+  const [id, setId] = useState<number | null>(null);
+  const unidades = [
+    { id: 1, codigo: "SEMED", nome: "Secretaria Municipal de Educação" },
+    { id: 2, codigo: "SMS", nome: "Secretaria Municipal de Saúde" },
+  ];
+  return <SeletorUnidade unidades={unidades} ativaId={id} todas="Todas as unidades" onEscolher={(v, fechar) => { fechar(); setId(v); }} />;
+}
+
 function DemoPublico() {
   const [v, setV] = useState<ConfigPublico>(PUBLICO_PADRAO);
   return <CamposPublico valor={v} onChange={setV} />;
@@ -3565,6 +3576,10 @@ export function Catalogo() {
 
       <Secao titulo="Tela pública — CamposPublico / PublicoAdmin (Configurações → Tela pública: as abas do PCA na consulta sem login)">
         <DemoPublico />
+      </Secao>
+
+      <Secao titulo="SeletorUnidade (o seletor de unidade do cabeçalho — painel e tela pública)">
+        <DemoSeletorUnidade />
       </Secao>
 
       <Secao titulo="Filtro da unidade — CamposEscopo (Configurações → Filtro da unidade: quais telas obedecem à unidade do cabeçalho)">

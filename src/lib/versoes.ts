@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.153.0",
+    data: "2026-10-22",
+    titulo: "Tela pública: seletor de unidade padrão e consulta só com a tabela",
+    mudancas: [
+      { tipo: "correcao", area: "Tela pública", texto: "Com o menu recolhido, a linha abaixo do cabeçalho sumiu.", link: "/" },
+      { tipo: "melhoria", area: "Tela pública", texto: "O filtro de unidade do cabeçalho é o mesmo seletor do sistema (sigla e nome, com busca) — e saiu o filtro Unidade repetido abaixo dos indicadores.", link: "/" },
+      { tipo: "melhoria", area: "Tela pública", texto: "A Consulta de itens mostra só a tabela, com os filtros dela.", link: "/?aba=consulta" },
+      { tipo: "novo", area: "Configurações", texto: "Tela pública: escolha se o menu lateral começa aberto ou recolhido.", link: "/painel/configuracoes?aba=publico" },
+    ],
+  },
+  {
     versao: "1.152.0",
     data: "2026-10-21",
     titulo: "Tela pública: filtros no cabeçalho e consulta no menu",

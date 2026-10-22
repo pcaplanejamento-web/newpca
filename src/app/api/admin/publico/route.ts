@@ -3,13 +3,13 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ok, parseCorpo } from "@/lib/http";
 import { getConfigPublico, gravarConfigPublico } from "@/lib/publico";
-import { ABAS_PUBLICAS, diffPublico } from "@/lib/publico-core";
+import { ABAS_PUBLICAS, diffPublico, MENUS_PUBLICO } from "@/lib/publico-core";
 
 export const dynamic = "force-dynamic";
 
 // Configurações → Tela pública (ADM): as abas do PCA publicadas na consulta sem login. Mesma linha `configuracoes` id=1
 // (chave `publico`) — as chaves irmãs ficam. Só as da lista fechada são aceitas (Mesa/Importação/Configuração nunca).
-const publicoSchema = z.strictObject({ abas: z.array(z.enum(ABAS_PUBLICAS)).max(ABAS_PUBLICAS.length) });
+const publicoSchema = z.strictObject({ abas: z.array(z.enum(ABAS_PUBLICAS)).max(ABAS_PUBLICAS.length), menu: z.enum(MENUS_PUBLICO) });
 
 export async function GET() {
   const g = await exigirAdmin();

@@ -21,12 +21,18 @@ const DICA: Record<(typeof ABAS_PUBLICAS)[number], string> = {
 export function CamposPublico({ valor, onChange }: { valor: ConfigPublico; onChange: (v: ConfigPublico) => void }) {
   return (
     <div className="grid gap-x-4 sm:grid-cols-2">
+      <Switch
+        checked={valor.menu === "recolhido"}
+        onChange={(v) => onChange({ ...valor, menu: v ? "recolhido" : "aberto" })}
+        label="Menu lateral começa recolhido"
+        dica="No computador, a tela pública abre com o menu no trilho de ícones; o visitante expande quando quiser"
+      />
       {ABAS_PUBLICAS.map((a) => (
         <Switch
           key={a}
           checked={valor.abas.includes(a)}
           disabled={a === "dashboard"}
-          onChange={(v) => onChange({ abas: ABAS_PUBLICAS.filter((x) => (x === a ? v : valor.abas.includes(x))) })}
+          onChange={(v) => onChange({ ...valor, abas: ABAS_PUBLICAS.filter((x) => (x === a ? v : valor.abas.includes(x))) })}
           label={ROTULO_ABA_PUBLICA[a]}
           dica={DICA[a]}
         />
@@ -69,7 +75,7 @@ export function PublicoAdmin() {
   return (
     <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       <div className="flex items-center gap-2">
-        <p className="flex-1 text-[15px] font-semibold text-text">Abas públicas do PCA</p>
+        <p className="flex-1 text-[15px] font-semibold text-text">Tela pública</p>
         <Ajuda titulo="Tela pública">
           <TopicoAjuda titulo="Como funciona">
             A tela inicial (sem login) mostra o PCA PUBLICADO com um menu lateral. As abas ligadas aqui aparecem no menu; as

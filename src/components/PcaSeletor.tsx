@@ -6,7 +6,7 @@ import { Selecao } from "./Selecao";
 
 /**
  * Seletor (dropdown) do PCA PUBLICADO na tela inicial — troca `?pca=` e limpa o filtro de unidade
- * (as unidades são de cada PCA). Mesmo visual do `UnitFilter`.
+ * (as unidades são de cada PCA). Mesmo visual dos seletores do cabeçalho.
  */
 export function PcaSeletor({
   pcas,

@@ -23,11 +23,11 @@ import { ThemeToggle } from "./ThemeToggle";
 import { TrilhaCabecalho } from "./TrilhaCabecalho";
 import { GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
 import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral";
+import { SeletorUnidade } from "./SeletorUnidade";
 import { toast } from "./Toast";
 import {
   IconAlternarNivel,
   IconBox,
-  IconBuilding,
   IconLandmark,
   IconCheck,
   IconClock,
@@ -338,89 +338,9 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
     }
   }
 
-  return (
-    <Dropdown
-      align="start"
-      ariaLabel={`Unidade ativa: ${ativa.nome}`}
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
-      width={340}
-      trigger={
-        <>
-          {trocando ? (
-            <IconSpinner className="h-3.5 w-3.5" />
-          ) : (
-            <IconBuilding className="h-3.5 w-3.5 opacity-70" />
-          )}
-          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={ativa.nome}>{ativa.nome}</span>
-          <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
-        </>
-      }
-    >
-      {(close) => <ListaUnidades reparticoes={reparticoes} ativaId={ativa.id} onEscolher={(id) => trocar(id, close)} />}
-    </Dropdown>
-  );
+  return <SeletorUnidade unidades={reparticoes} ativaId={ativa.id} trocando={trocando} onEscolher={(id, close) => id != null && trocar(id, close)} />;
 }
 
-/** A lista do seletor de unidade — o desenho do filtro de unidades das tabelas: busca no topo, a SIGLA em cima e o
- *  NOME por extenso embaixo (menor), a escolhida em accent com o check. A busca acha pela sigla ou pelo nome. */
-function ListaUnidades({
-  reparticoes,
-  ativaId,
-  onEscolher,
-}: {
-  reparticoes: ReparticaoNav[];
-  ativaId: number;
-  onEscolher: (id: number) => void;
-}) {
-  const [q, setQ] = useState("");
-  const termo = semAcento(q.trim());
-  const visiveis = termo ? reparticoes.filter((r) => semAcento(`${r.codigo} ${r.nome}`).includes(termo)) : reparticoes;
-  return (
-    <div className="flex max-h-[min(70vh,440px)] w-full flex-col">
-      {reparticoes.length > 8 && (
-        <div className="border-b border-border p-2">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && visiveis.length === 1) onEscolher(visiveis[0].id);
-            }}
-            aria-label="Buscar unidade por sigla ou nome"
-            placeholder="Buscar sigla ou nome"
-            className="h-11 w-full rounded-control border border-border-2 bg-surface px-2.5 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
-          />
-        </div>
-      )}
-      <div className="min-h-0 flex-1 overflow-y-auto p-1">
-        {visiveis.map((r) => {
-          const ativa = r.id === ativaId;
-          const mesmo = semAcento(r.codigo) === semAcento(r.nome);
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => onEscolher(r.id)}
-              className={`flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left lg:min-h-0 ${
-                ativa ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2"
-              }`}
-            >
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className={`break-words text-[13px] ${ativa ? "font-semibold" : "font-medium text-text"}`}>{r.codigo}</span>
-                {!mesmo && <span className={`break-words text-[11px] leading-snug ${ativa ? "text-accent/80" : "text-faint"}`}>{r.nome}</span>}
-              </span>
-              {ativa && <IconCheck className="h-4 w-4 shrink-0" />}
-            </button>
-          );
-        })}
-        {visiveis.length === 0 && <div className="px-3 py-4 text-center text-[12px] text-faint">Nenhuma unidade encontrada</div>}
-      </div>
-    </div>
-  );
-}
-
-function semAcento(t: string): string {
-  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
 
 /** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
 function useUltimoValido<T>(v: T | null | undefined): T | null {

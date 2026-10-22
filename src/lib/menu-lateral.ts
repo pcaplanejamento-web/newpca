@@ -6,3 +6,18 @@ export const SCRIPT_MENU = `(function(){try{if(localStorage.getItem(${JSON.strin
 
 /** A ação "Recolher ou expandir o menu" (pesquisa do sistema → o menu lateral). */
 export const EVENTO_ALTERNAR_MENU = "menu-lateral:alternar";
+
+/** O menu da TELA PÚBLICA começa como o ADM escolheu (vale só nela — a preferência guardada não muda). */
+export const scriptMenuPublico = (recolhido: boolean) =>
+  `document.documentElement.${recolhido ? `setAttribute(${JSON.stringify(ATRIBUTO_MENU)},"")` : `removeAttribute(${JSON.stringify(ATRIBUTO_MENU)})`};`;
+
+/** Volta o atributo à preferência guardada neste aparelho (ao sair da tela pública). */
+export function aplicarMenuGuardado() {
+  let r = false;
+  try {
+    r = localStorage.getItem(CHAVE_MENU) === "1";
+  } catch {
+    /* sem armazenamento */
+  }
+  document.documentElement.toggleAttribute(ATRIBUTO_MENU, r);
+}

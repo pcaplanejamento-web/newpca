@@ -2682,12 +2682,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`GET /api/pca/[id]/consulta/documento/[docId]`** (pública: aba publicada + PCA publicado + documento do PCA e completo;
   404 fora disso, `no-store`, sem download). **v1.152.0:** o cabeçalho é o **`CabecalhoApp`** (`MenuLateral.tsx` — o MESMO do
   `AppShell`: borda na própria altura `--h-header`, alinhada à faixa da marca do menu) com o `PcaSeletor compacto` e o
-  `UnitFilter compacto` (só no Dashboard/consulta, 2+ unidades) — os KPIs começam logo abaixo; o menu = `vistasDoMenu`
+  `SeletorUnidade` (v1.153.0 — o MESMO seletor de unidade do cabeçalho do painel, com "Todas as unidades"; só no Dashboard/consulta, 2+ unidades; o filtro Unidade dos `FiltrosDashboard` sai — `semFiltroUnidade`) — os KPIs começam logo abaixo; o menu = `vistasDoMenu`
   (Dashboard · **Consulta de itens** [`?aba=consulta`, parte do Dashboard — `vistaPublicaPedida`] · as abas publicadas) e o
-  `PainelPca vista` fixa os gráficos OU a consulta (`DashboardPcaCliente.vista` — sem o `Segmented`, só monta a escolhida);
+  `PainelPca vista` fixa os gráficos OU a consulta (`DashboardPcaCliente.vista` — sem o `Segmented`, só monta a escolhida; a
+  consulta SEM os indicadores e os filtros do topo); a seção do menu público não tem título (sem a `menu-linha` no trilho —
+  `SecaoMenu.titulo` opcional); o ADM escolhe o menu inicial (`ConfigPublico.menu` aberto|recolhido → `scriptMenuPublico`
+  antes da pintura; `MenuLateral guardar={false}`: alternar vale só na visita e, ao sair, volta a preferência do aparelho —
+  `aplicarMenuGuardado`);
   o "Entrar" fica a 60% até o hover/foco.
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
-  `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
+  `SeletorUnidade` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
   erro/aviso. v1.70.0: o cartão da consulta NÃO tem cabeçalho (`ChartCard` sem `title`) — UMA linha com as abas + a busca dos

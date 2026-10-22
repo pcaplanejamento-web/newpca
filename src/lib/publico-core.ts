@@ -9,9 +9,13 @@ export type AbaPublica = (typeof ABAS_PUBLICAS)[number];
 
 export const ROTULO_ABA_PUBLICA: Record<AbaPublica, string> = { dashboard: "Dashboard", orcamento: "Orçamento", documentos: "Documentos" };
 
-export type ConfigPublico = { abas: AbaPublica[] };
+/** O menu lateral da tela pública começa aberto ou recolhido (o ADM decide; o visitante alterna só na visita). */
+export const MENUS_PUBLICO = ["aberto", "recolhido"] as const;
+export type MenuPublico = (typeof MENUS_PUBLICO)[number];
 
-export const PUBLICO_PADRAO: ConfigPublico = { abas: ["dashboard"] };
+export type ConfigPublico = { abas: AbaPublica[]; menu: MenuPublico };
+
+export const PUBLICO_PADRAO: ConfigPublico = { abas: ["dashboard"], menu: "aberto" };
 
 const ehAbaPublica = (v: unknown): v is AbaPublica => typeof v === "string" && (ABAS_PUBLICAS as readonly string[]).includes(v);
 
@@ -20,7 +24,8 @@ export function lerConfigPublico(v: unknown): ConfigPublico {
   const lidas = v && typeof v === "object" && Array.isArray((v as { abas?: unknown }).abas) ? (v as { abas: unknown[] }).abas : [];
   const set = new Set(lidas.filter(ehAbaPublica));
   set.add("dashboard");
-  return { abas: ABAS_PUBLICAS.filter((a) => set.has(a)) };
+  const menu = v && typeof v === "object" && (v as { menu?: unknown }).menu === "recolhido" ? "recolhido" : "aberto";
+  return { abas: ABAS_PUBLICAS.filter((a) => set.has(a)), menu };
 }
 
 /** A aba pedida na URL → a que vale (fora das públicas = o Dashboard). */
@@ -50,5 +55,8 @@ export function podeLerPublico(pca: { status: string } | null, cfg: ConfigPublic
 
 export function diffPublico(antes: ConfigPublico, depois: ConfigPublico): string {
   const r = (c: ConfigPublico) => c.abas.map((a) => ROTULO_ABA_PUBLICA[a]).join(", ");
-  return r(antes) === r(depois) ? "sem mudança" : `abas públicas: ${r(antes)} → ${r(depois)}`;
+  const partes: string[] = [];
+  if (r(antes) !== r(depois)) partes.push(`abas públicas: ${r(antes)} → ${r(depois)}`);
+  if (antes.menu !== depois.menu) partes.push(`menu: ${antes.menu} → ${depois.menu}`);
+  return partes.join("; ") || "sem mudança";
 }

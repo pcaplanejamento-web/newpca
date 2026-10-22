@@ -137,6 +137,7 @@ export function DashboardPcaCliente({
   nomesUnidades,
   nome,
   vista,
+  semFiltroUnidade = false,
 }: {
   resumo: Resumo;
   porClassificacao: Fatia[];
@@ -156,6 +157,8 @@ export function DashboardPcaCliente({
   nome?: string;
   /** Vista FIXA escolhida fora (o menu da tela pública): sem o seletor Gráficos | Consulta — só monta a escolhida. */
   vista?: "graficos" | "consulta";
+  /** A unidade já é filtrada no cabeçalho (tela pública): o filtro Unidade sai do topo (o gráfico fica). */
+  semFiltroUnidade?: boolean;
 }) {
   const itens = useMemo(() => itensDoTexto(itensTexto), [itensTexto]);
   const [filtros, setFiltros] = useState<FiltrosDash>({});
@@ -270,13 +273,13 @@ export function DashboardPcaCliente({
   // Os menus do topo: as opções CONECTADAS (os demais filtros valem) com o texto de cada uma.
   const campos: CampoFiltroDash[] = useMemo(
     () =>
-      DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : d.dim === "previsao" ? temPrevisao : d.dim === "dominio" ? temDominio : true)).map((d) => ({
+      DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades && !semFiltroUnidade : d.dim === "previsao" ? temPrevisao : d.dim === "dominio" ? temDominio : true)).map((d) => ({
         dim: d.dim,
         rotulo: d.dim === "unidade" ? rotuloUnidade : d.rotulo,
         opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave), detalhe: d.dim === "unidade" ? nomesUnidades?.[o.chave] : undefined })),
         selecionados: chavesDoFiltro(filtros, d.dim),
       })),
-    [itens, filtros, temPrioridade, temUnidades, temPrevisao, temDominio, rotuloUnidade, nomesUnidades],
+    [itens, filtros, temPrioridade, temUnidades, semFiltroUnidade, temPrevisao, temDominio, rotuloUnidade, nomesUnidades],
   );
   function mudarTopo(dim: string, chaves: string[]) {
     const d = dim as DimTopo;
@@ -412,8 +415,13 @@ export function DashboardPcaCliente({
     </Ajuda>
   );
 
+  // A vista FIXA da consulta (menu da tela pública) é só a consulta: os indicadores e os filtros do topo repetiriam os
+  // filtros da própria tabela.
+  const soConsulta = vista === "consulta";
   return (
     <>
+      {!soConsulta && (
+      <>
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
         <KpiStat
           realce
@@ -548,6 +556,8 @@ export function DashboardPcaCliente({
         </div>
         )}
       </section>
+      </>
+      )}
 
       {!vista && <Segmented
         value={aba}

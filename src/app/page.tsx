@@ -11,6 +11,7 @@ import { dashboardDoPca, getPcaEspaco, listarPcasPublicados, orcamentoDoAno, orc
 import { getConfigProtecao } from "@/lib/protecao";
 import { protecaoPublica } from "@/lib/protecao-core";
 import { getConfigPublico } from "@/lib/publico";
+import { scriptMenuPublico } from "@/lib/menu-lateral";
 import { podeLerPublico, vistaPublicaPedida, vistasDoMenu } from "@/lib/publico-core";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       ) : (
           <PainelPca
             vista={vista === "consulta" ? "consulta" : "graficos"}
+            semFiltroUnidade={dados.unidades.length > 1}
             nome={pca.nome}
             dados={dados}
             unidadeFiltrada={dados.unidadeId != null}
@@ -102,6 +104,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <>
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho estático (scriptMenuPublico), só o booleano do ADM. */}
+      <script dangerouslySetInnerHTML={{ __html: scriptMenuPublico(cfg.menu === "recolhido") }} />
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
       <TelaPublica identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
         {conteudo}

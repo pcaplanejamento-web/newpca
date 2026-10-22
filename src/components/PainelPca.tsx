@@ -28,6 +28,7 @@ export function PainelPca({
   consulta,
   nome,
   vista,
+  semFiltroUnidade,
 }: {
   dados: DadosPainelPca;
   unidadeFiltrada?: boolean;
@@ -38,6 +39,8 @@ export function PainelPca({
   nome?: string;
   /** Vista fixa (o menu da tela pública): só os gráficos ou só a consulta de itens. */
   vista?: "graficos" | "consulta";
+  /** A unidade é filtrada no cabeçalho (tela pública). */
+  semFiltroUnidade?: boolean;
 }) {
   const { resumo, previa } = dados;
   return (
@@ -55,6 +58,7 @@ export function PainelPca({
       previa={!!previa}
       nomesUnidades={dados.nomesUnidades}
       vista={vista}
+      semFiltroUnidade={semFiltroUnidade}
     />
   );
 }

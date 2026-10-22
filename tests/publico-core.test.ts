@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abaPublicaPedida, lerConfigPublico, podeLerPublico, PUBLICO_PADRAO } from "../src/lib/publico-core.ts";
+import { abaPublicaPedida, diffPublico, lerConfigPublico, podeLerPublico, PUBLICO_PADRAO } from "../src/lib/publico-core.ts";
 
 test("lerConfigPublico: lista fechada, Dashboard sempre, ordem fixa", () => {
   assert.deepEqual(lerConfigPublico(null), PUBLICO_PADRAO);
@@ -23,4 +23,11 @@ test("podeLerPublico: PCA publicado + aba ligada", () => {
   assert.equal(podeLerPublico({ status: "preview" }, cfg, "documentos", true), true);
   assert.equal(podeLerPublico({ status: "publicado" }, cfg, "orcamento", false), false);
   assert.equal(podeLerPublico(null, cfg, "dashboard", true), false);
+});
+
+test("menu inicial: só 'recolhido' recolhe; qualquer outro valor = aberto", () => {
+  assert.equal(lerConfigPublico({ menu: "recolhido" }).menu, "recolhido");
+  assert.equal(lerConfigPublico({ menu: "fechado" }).menu, "aberto");
+  assert.equal(lerConfigPublico(null).menu, "aberto");
+  assert.match(diffPublico(lerConfigPublico({}), lerConfigPublico({ menu: "recolhido" })), /menu: aberto → recolhido/);
 });
