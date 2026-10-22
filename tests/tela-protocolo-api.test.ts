@@ -45,3 +45,16 @@ test("Tela Protocolo: o motivo de uma lista não reconhecida (só os nomes das c
   assert.ok(r?.colunas.includes("Protocolo"));
   assert.equal(motivoNaoTela({ Data: { Items: [{ Id: 1, Protocolo: "123", Ano: 2026, Interessado: { Nome: "A" } }] } }), null);
 });
+
+test("Tela Protocolo: o postdata de CONSULTA é leitura; o de salvar, não", () => {
+  const { consultaPermitida } = pecas() as unknown as { consultaPermitida: (c: string, m: string, b?: unknown) => boolean };
+  const corpo = { Data: { Reparticoes: [{ Id: 1, Descricao: "X", selected: true }] }, ItensPerPage: 50, Method: "TelaProtocolo", Page: 1 };
+  assert.equal(consultaPermitida("restauth/postdata", "POST", corpo), true);
+  assert.equal(consultaPermitida("restauth/postdata", "POST", JSON.stringify(corpo)), true);
+  assert.equal(consultaPermitida("restauth/postdata", "GET", corpo), false);
+  assert.equal(consultaPermitida("restauth/postdata", "POST"), false);
+  assert.equal(consultaPermitida("restauth/postdata", "POST", { ...corpo, Method: "SalvarProtocolo" }), false);
+  assert.equal(consultaPermitida("restauth/postdata", "POST", { ...corpo, Object: {} }), false);
+  assert.equal(consultaPermitida("restauth/postdata", "POST", { Data: {}, Method: "X" }), false);
+  assert.equal(consultaPermitida("restauth/listarassuntosconversa", "GET"), true);
+});

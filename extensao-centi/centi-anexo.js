@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p42";
+  const NOME = "__pcaCentiAnexo_p43";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -440,10 +440,30 @@
     return { caminho: `${u.pathname.slice(i + 1)}${u.search}`, api: m[1].toLowerCase(), verbo: m[2] };
   }
   /** Uma CONSULTA que a extensão pode repetir: só a API restauth, verbo de leitura, nunca de escrita. */
-  function consultaPermitida(caminho, metodo) {
+  /** O corpo de um `postdata` que é CONSULTA paginada (a pesquisa da Tela Protocolo): tem página/tamanho e nada de salvar —
+   * sem `Object`/`Entity`/`Token` e nenhuma chave nem o `Method` com cara de escrita. */
+  function consultaPostdata(corpo) {
+    let b = corpo;
+    if (typeof b === "string") {
+      try {
+        b = JSON.parse(b);
+      } catch {
+        return false;
+      }
+    }
+    if (!b || typeof b !== "object" || Array.isArray(b)) return false;
+    const chaves = Object.keys(b);
+    if (!chaves.some((k) => /^(page|itensperpage|pagesize|take|skip)$/i.test(k))) return false;
+    const escrita = (t) => VERBO_ESCRITA.test(t) || /(salv|grav|inclu|alter|edit|arquiv|anex|encam|protocolar)/i.test(t);
+    if (chaves.some((k) => /^(object|entity|token)$/i.test(k) || escrita(k))) return false;
+    return !escrita(String(b.Method ?? b.method ?? ""));
+  }
+  function consultaPermitida(caminho, metodo, corpo) {
     if (!/^(GET|POST)$/.test(String(metodo || ""))) return false;
     const c = caminhoDaApi(caminho);
-    return !!c && c.api === "restauth" && VERBO_LEITURA.test(c.verbo) && !VERBO_ESCRITA.test(c.verbo) && !VERBO_ARQUIVO.test(c.verbo);
+    if (!c || c.api !== "restauth" || VERBO_ESCRITA.test(c.verbo) || VERBO_ARQUIVO.test(c.verbo)) return false;
+    if (VERBO_LEITURA.test(c.verbo)) return true;
+    return /^postdata$/i.test(c.verbo) && metodo === "POST" && consultaPostdata(corpo);
   }
   /** O corpo sem nada com cara de segredo (as chaves), até 16 KB; outro formato = undefined (o pedido não é aprendido). */
   function semSegredos(v, prof = 0) {
@@ -725,7 +745,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, motivoNaoTela, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

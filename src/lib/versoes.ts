@@ -45,6 +45,15 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.165.1",
+    data: "2026-10-22",
+    titulo: "Automação: a pesquisa da Tela Protocolo passa a ser aprendida",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A extensão (1.27.0) reconhece a pesquisa da Tela Protocolo (PO011), que a Centi faz por um pedido que a trava de leitura recusava — por isso o “ainda não foi aprendida” continuava mesmo depois de pesquisar.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O diagnóstico aponta também a lista que chegou por um pedido não aceito como consulta.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.165.0",
     data: "2026-10-22",
     titulo: "Lixeira da Mesa completa, com os banners originais",

@@ -152,7 +152,7 @@ test("emissão: o parâmetro do protocolo leva o campo da linha; o nome do PDF s
 
 test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a operação aprendida e o id é FIXO (chave no manifesto)", () => {
   const main = readFileSync("extensao-centi/centi-main.js", "utf8");
-  assert.match(main, /async function ler\(d\) \{[\s\S]*?A\.consultaPermitida\(caminho, metodo\)/);
+  assert.match(main, /async function ler\(d\) \{[\s\S]*?A\.consultaPermitida\(caminho, metodo, d\?\.corpo\)/);
   assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler, cm002, telaApi, reparticoesApi, trocarOrgao \};/);
   assert.match(main, /operacoesAprendidas\(\)\.includes\(A\?\.chaveOperacao\(c\)\)/);
   // O aprendiz nunca guarda cabeçalhos (a sessão vai neles).
