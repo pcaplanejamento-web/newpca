@@ -69,3 +69,35 @@ describe("lixeira da Mesa (retrato no mesmo lote da exclusão)", () => {
     assert.equal(linhas().length, 0);
   });
 });
+
+it("exclusões antigas pelo histórico: protocolo, DFD e itens removidos", async () => {
+  const { excluidosDaAuditoria, pcaPeloHistorico } = await import("../src/lib/mesa-excluidos-core.ts");
+  const base = { antes: null, detalhe: null, origem: null, protocoloId: 7, usuarioId: 1, usuarioNome: "Ana", criadoEm: "2026-09-01 10:00:00", entidadeId: 7 };
+  const [p] = excluidosDaAuditoria({ ...base, id: 1, entidade: "protocolo", resumo: "Protocolo 1234/2026 excluído (com os DFDs vinculados)", origem: "exclusao" });
+  assert.equal(p.tipo, "protocolo");
+  assert.equal(p.numero, "1234/2026");
+  const [d] = excluidosDaAuditoria({
+    ...base,
+    id: 2,
+    entidade: "dfd",
+    entidadeId: 30,
+    origem: "exclusao",
+    resumo: "DFD 531 excluído",
+    antes: JSON.stringify({ numero: "531", valorTotal: 1500 }),
+    detalhe: JSON.stringify({ alvo: { numero: "531", planejamento: "640" } }),
+  });
+  assert.deepEqual([d.tipo, d.numero, d.planejamento, d.valor], ["dfd", "531", "640", 1500]);
+  assert.equal(excluidosDaAuditoria({ ...base, id: 3, entidade: "dfd", origem: "exclusao", resumo: "DFD 9 excluído (gravação desfeita após falha)" }).length, 0);
+  const itens = excluidosDaAuditoria({
+    ...base,
+    id: 4,
+    entidade: "dfd",
+    entidadeId: 30,
+    origem: "massa",
+    resumo: "DFD 531: 2 item(ns) removidos",
+    detalhe: JSON.stringify({ alvo: { numero: "531", planejamento: "640" }, itens: [{ tipo: "removido", item: 3, codigo: "1", descricao: "X", campos: [] }, { tipo: "alterado", item: 4, campos: [] }, { tipo: "removido", item: 5, codigo: "2", descricao: "Y", campos: [] }] }),
+  });
+  assert.deepEqual(itens.map((i) => [i.tipo, i.numero, i.chave]), [["item", "3", "a4-0"], ["item", "5", "a4-1"]]);
+  assert.equal(pcaPeloHistorico("Protocolo 1 incorporado ao PCA 2027", 3), 3);
+  assert.equal(pcaPeloHistorico("Protocolo 1 devolvido à Mesa principal pelo PCA 2027", 3), null);
+});

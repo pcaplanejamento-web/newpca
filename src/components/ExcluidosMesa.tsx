@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { brl, dataHoraBR, num } from "@/lib/format";
-import { type ItemExcluido, type MotivoExclusao, ROTULO_MOTIVO_EXCLUSAO, type RetratoProtocolo } from "@/lib/mesa-excluidos-core";
+import { type ExcluidoAntigo, type ItemExcluido, type MotivoExclusao, ROTULO_MOTIVO_EXCLUSAO, type RetratoProtocolo } from "@/lib/mesa-excluidos-core";
 import { Badge } from "./Badge";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
@@ -14,7 +14,11 @@ import { SkeletonLinhas } from "./Skeleton";
 
 type Tipo = "protocolo" | "dfd" | "item";
 type Linha = {
+  /** A chave da linha: o id da lixeira, ou `a<id da auditoria>` na exclusão antiga. */
+  chave: string;
   id: number;
+  /** Exclusão ANTERIOR à lixeira (do histórico): sem retrato. */
+  antigo?: ExcluidoAntigo;
   tipo: Tipo;
   numero: string | null;
   planejamento: string | null;
@@ -51,7 +55,7 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
   const [tipo, setTipo] = useState<Tipo>("protocolo");
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
-  const [atual, setAtual] = useState<number | null>(null);
+  const [atual, setAtual] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const [erroDet, setErroDet] = useState<string | null>(null);
 
@@ -66,8 +70,25 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
       .then((r) => r.json() as Promise<{ ok: boolean; error?: string } & Record<string, unknown>>)
       .then((j) => {
         if (!vivo) return;
-        if (j.ok) setLinhas(j.excluidos as Linha[]);
-        else setFalha(j.error ?? "Falha ao carregar.");
+        if (!j.ok) return setFalha(j.error ?? "Falha ao carregar.");
+        const novos = (j.excluidos as Linha[]).map((l) => ({ ...l, chave: String(l.id) }));
+        const antigos = ((j.antigos ?? []) as (ExcluidoAntigo & { reparticaoId: number | null; protocoloNumero: string | null })[]).map(
+          (a): Linha => ({
+            chave: a.chave,
+            id: 0,
+            antigo: a,
+            tipo: a.tipo,
+            numero: a.numero,
+            planejamento: a.planejamento,
+            protocoloNumero: a.protocoloNumero,
+            reparticaoId: a.reparticaoId,
+            valor: a.valor,
+            motivo: a.motivo,
+            excluidoNome: a.excluidoNome,
+            excluidoEm: a.excluidoEm,
+          }),
+        );
+        setLinhas([...novos, ...antigos]);
       })
       .catch(() => vivo && setFalha("Sem conexão."));
     return () => {
@@ -75,11 +96,13 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
     };
   }, [aberto, tipo, pcaId]);
 
+  const linhaAtual = atual == null ? null : (linhas?.find((l) => l.chave === atual) ?? null);
+
   useEffect(() => {
-    if (atual == null) return;
-    let vivo = true;
     setDetalhe(null);
     setErroDet(null);
+    if (atual == null || atual.startsWith("a")) return;
+    let vivo = true;
     fetch(`/api/mesa/excluidos/${atual}`)
       .then((r) => r.json() as Promise<{ ok: boolean; error?: string } & Record<string, unknown>>)
       .then((j) => {
@@ -106,11 +129,20 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
       { key: "em", header: "Excluído em", nowrap: true, filter: "date", value: (l) => l.excluidoEm ?? "", render: (l) => dataHoraBR(l.excluidoEm), total: false },
       { key: "por", header: "Por", nowrap: true, value: (l) => l.excluidoNome ?? "—", render: (l) => l.excluidoNome ?? "—" },
       { key: "motivo", header: "Motivo", nowrap: true, value: (l) => motivo(l.motivo), render: (l) => motivo(l.motivo) },
+      {
+        key: "registro",
+        header: "Registro",
+        nowrap: true,
+        value: (l) => (l.antigo ? "Sem retrato" : "Completo"),
+        render: (l) => (l.antigo ? <Badge tone="amber" title="Excluído antes da lixeira: só o que o histórico guardou">Sem retrato</Badge> : <Badge tone="emerald">Completo</Badge>),
+      },
     );
     return base;
   }, [tipo, siglas]);
 
-  const titulo = detalhe ? `${TIPOS.find((t) => t.value === detalhe.excluido.tipo)?.label.slice(0, -1) ?? ""} ${detalhe.excluido.numero ?? ""} — excluído` : "Excluído";
+  const titulo = linhaAtual?.antigo
+    ? `${TIPOS.find((t) => t.value === linhaAtual.tipo)?.label.slice(0, -1) ?? ""} ${linhaAtual.numero ?? ""} — excluído`
+    : detalhe ? `${TIPOS.find((t) => t.value === detalhe.excluido.tipo)?.label.slice(0, -1) ?? ""} ${detalhe.excluido.numero ?? ""} — excluído` : "Excluído";
 
   return (
     <>
@@ -135,7 +167,7 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
           aberto: atual != null,
           titulo,
           onClose: () => setAtual(null),
-          children: <DetalheExcluido detalhe={detalhe} erro={erroDet} />,
+          children: linhaAtual?.antigo ? <DetalheAntigo a={linhaAtual.antigo} linha={linhaAtual} /> : <DetalheExcluido detalhe={detalhe} erro={erroDet} />,
         }}
       >
         <div className="space-y-[var(--gap-block)]">
@@ -148,12 +180,12 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
             <DataTable
               columns={colunas}
               rows={linhas}
-              getKey={(l) => l.id}
+              getKey={(l) => l.chave}
               density="compact"
-              onRowClick={(l) => setAtual(l.id)}
+              onRowClick={(l) => setAtual(l.chave)}
               activeKey={atual}
               exportar={{ nome: "Excluídos" }}
-              vazio="Nada excluído aqui desde que a lixeira começou a guardar (as exclusões anteriores não têm retrato)."
+              vazio="Nada excluído nesta Mesa."
               resumo={(ls) => `${num(ls.length)} excluído(s) · ${brl(ls.reduce((s, l) => s + (l.valor ?? 0), 0))}`}
             />
           )}
@@ -255,6 +287,38 @@ function DetalheExcluido({ detalhe, erro }: { detalhe: Detalhe | null; erro: str
     <div className="space-y-[var(--gap-block)]">
       {topo}
       <Callout kind="warn">O retrato desta exclusão não pôde ser lido.</Callout>
+    </div>
+  );
+}
+
+/** O banner de uma exclusão ANTERIOR à lixeira: só o que o histórico registrou. */
+function DetalheAntigo({ a, linha }: { a: ExcluidoAntigo; linha: Linha }) {
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="red" dot>Excluído</Badge>
+        <Badge tone="amber">Sem retrato</Badge>
+        <span className="text-sm text-muted">
+          {dataHoraBR(a.excluidoEm)} · {a.excluidoNome ?? "—"} · {motivo(a.motivo)}
+        </span>
+      </div>
+      <Callout kind="warn">Excluído antes de a lixeira existir: o sistema só tem o que o histórico de alterações registrou.</Callout>
+      <div className="grid grid-cols-2 gap-3 rounded-card border border-border p-[var(--pad-card)]">
+        <Campo rotulo={a.tipo === "protocolo" ? "Protocolo" : a.tipo === "dfd" ? "Nº DFD" : "Item"} valor={a.numero} />
+        {a.tipo !== "protocolo" && <Campo rotulo="Nº Plan." valor={a.planejamento} />}
+        {a.tipo !== "protocolo" && <Campo rotulo="Protocolo" valor={linha.protocoloNumero} />}
+        {a.valor != null && <Campo rotulo="Valor" valor={brl(a.valor)} />}
+        {a.item && <Campo rotulo="Código" valor={a.item.codigo} />}
+        {a.item && (
+          <div className="col-span-2">
+            <Campo rotulo="Descrição" valor={a.item.descricao} />
+          </div>
+        )}
+        {a.item?.campos.map((c) => <Campo key={c.rotulo} rotulo={c.rotulo} valor={c.antes} />)}
+        <div className="col-span-2">
+          <Campo rotulo="Registro no histórico" valor={a.resumo} />
+        </div>
+      </div>
     </div>
   );
 }

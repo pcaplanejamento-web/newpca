@@ -2,7 +2,7 @@ import { escopoMesa } from "@/lib/acesso-mesa";
 import { podePca } from "@/lib/acesso";
 import { exigirSessao, recusa } from "@/lib/api-auth";
 import { erro, ok } from "@/lib/http";
-import { type Excluido, excluidoVisivel, listarExcluidos } from "@/lib/mesa-excluidos";
+import { type Excluido, excluidosDoHistorico, excluidoVisivel, listarExcluidos } from "@/lib/mesa-excluidos";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +25,12 @@ export async function GET(req: Request) {
   const esc = await escopoMesa();
   if (!esc) return erro("Faça login.", 401);
   const linhas = (await listarExcluidos(doPca ? pca : null, tipo)).filter((e) => excluidoVisivel(esc, g.u.id, e));
-  return ok({ excluidos: linhas });
+  // As exclusões ANTERIORES à lixeira, pelo histórico (sem retrato). Falha aqui não derruba a lista.
+  const antigos = await excluidosDoHistorico(doPca ? pca : null, tipo)
+    .then((xs) => xs.filter((e) => excluidoVisivel(esc, g.u.id, e)))
+    .catch((e) => {
+      console.error("[mesa-excluidos] histórico falhou:", e);
+      return [];
+    });
+  return ok({ excluidos: linhas, antigos });
 }

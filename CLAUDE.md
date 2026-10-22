@@ -3766,7 +3766,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   que saem no "Salvar" — `edicao`). Leitura pura `mesa-excluidos-core.ts`; D1 `mesa-excluidos.ts` (`listarExcluidos`,
   `getExcluido`, `excluidoVisivel` = o escopo da Mesa, `visualDoRetrato`); retenção 180 dias no cron dos e-mails. Rotas
   `GET /api/mesa/excluidos?pca=&tipo=` e `GET /api/mesa/excluidos/[id]`. Tela: `ExcluidosMesa` (lixeira na barra das duas
-  Mesas). Exclusões anteriores à v1.162.0 não têm retrato. Próximas: acréscimo/supressão no histórico e Restaurar.
+  Mesas). **Exclusões ANTERIORES (v1.163.0):** `excluidosDoHistorico` lê a `auditoria` (antes da 1ª linha da lixeira) — núcleo puro `excluidosDaAuditoria`/`pcaPeloHistorico` — protocolo/DFD excluído e itens `removido` do `detalhe`; unidade pelo registro de entrada (ou o DFD vivo) e a Mesa pelo último envio/incorporação/devolução; a rota devolve `antigos` e a tela mostra o selo "Sem retrato" (banner `DetalheAntigo`, sem restauração). Próximas: acréscimo/supressão no histórico e Restaurar.
+
+## Acréscimo × supressão de itens (v1.164.0, sem migração)
+- Núcleo puro `alteracao-itens-core.ts` (testado): `classificarAlteracaoItem(DiffItemDfd)` = inclusão · acréscimo · supressão · exclusão · sem impacto (o valor total decide, senão a quantidade; lê os números já formatados — `numeroFormatado`) e `resumoAlteracoesItens`. O `Historico` mostra o selo (`SeloAlteracao`) em cada item e o resumo (`ResumoItens`) no bloco Itens do evento. Próxima: Restaurar da lixeira.
 
 ## Documentos (v1.136.0, migração `0116`)
 - Módulo **`documentos`** (`ABA_KEYS`, `IconDocumentos`, ações visualizar · manipular [renomear] · importar · exportar
@@ -4967,7 +4970,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   bolhas do chat (`BolhasChat` `tela().base`) e os avisos flutuantes ficam acima; respeita `--reserva-rodape`. Usado pela
   Automação (`page.tsx` → `ManterVivo chave="automacao"`); os fluxos (`FluxosAutomacao`) informam o andamento e têm FILA
   (executar com outro rodando enfileira — roda em seguida; o agendador também).
-- **APRENDIZADO DA TELA PROTOCOLO (v1.162.1, extensão 1.26.0, protocolo 42):** o `lembrarCm002` grava a consulta da PO011 em QUALQUER pesquisa reconhecida (antes só com linha "Em análise"; entre duas do mesmo endereço vale a com "Em análise", depois a de mais linhas); a lista vista e não reconhecida vai ao diagnóstico (`motivoNaoTela`, só os nomes das colunas — `sessionStorage __pcaAprendizTela_v1`), devolvido pelo `telaApi` sem consulta; o `estado` traz `aprendido` {telaProtocolo, cm002, loadProtocolo}; os nós `centi.protocolos`/`centi.reparticoes` mostram o passo a passo + o diagnóstico (`erroSemConsulta`).
+- **APRENDIZADO DA TELA PROTOCOLO (v1.164.1, extensão 1.26.0, protocolo 42):** o `lembrarCm002` grava a consulta da PO011 em QUALQUER pesquisa reconhecida (antes só com linha "Em análise"; entre duas do mesmo endereço vale a com "Em análise", depois a de mais linhas); a lista vista e não reconhecida vai ao diagnóstico (`motivoNaoTela`, só os nomes das colunas — `sessionStorage __pcaAprendizTela_v1`), devolvido pelo `telaApi` sem consulta; o `estado` traz `aprendido` {telaProtocolo, cm002, loadProtocolo}; os nós `centi.protocolos`/`centi.reparticoes` mostram o passo a passo + o diagnóstico (`erroSemConsulta`).
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só

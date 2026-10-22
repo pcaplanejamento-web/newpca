@@ -18,7 +18,15 @@ import {
   resumoCurtoAlteracao,
   rotuloAlvo,
 } from "@/lib/auditoria-core";
-import { dataHoraBR, num } from "@/lib/format";
+import {
+  classificarAlteracaoItem,
+  type ClasseAlteracaoItem,
+  ROTULO_CLASSE_ITEM,
+  resumoAlteracoesItens,
+  temImpacto,
+} from "@/lib/alteracao-itens-core";
+import type { DiffItemDfd } from "@/lib/comparar-protocolo";
+import { brl, dataHoraBR, num } from "@/lib/format";
 import { Badge, type Tone } from "./Badge";
 import { Callout } from "./Callout";
 import { BlocoDiff, DiffItem, DiffLinha } from "./ComparacaoReenvio";
@@ -146,7 +154,10 @@ export function Historico({
             <Meta l={linha} escopo="item" protocoloId={null} anonimo={anonimo} />
             <div className="mt-2 space-y-1.5">
               {dif ? (
-                <DiffItem it={dif} rotulos={ROTULOS_HISTORICO} compacto />
+                <>
+                  <SeloAlteracao it={dif} />
+                  <DiffItem it={dif} rotulos={ROTULOS_HISTORICO} compacto />
+                </>
               ) : (
                 <p className="text-[12.5px] text-text-2">
                   <span className="font-semibold" style={{ color: COR_ACAO.importar }}>
@@ -352,8 +363,12 @@ function DetalheAlteracao({ a }: { a: AlteracaoHistorico }) {
       )}
       {a.itens.length > 0 && (
         <BlocoDiff titulo="Itens" qtd={a.itens.length}>
+          <ResumoItens itens={a.itens} />
           {itens.map((it, k) => (
-            <DiffItem key={`${it.tipo}:${it.item}:${it.codigo}:${k}`} it={it} rotulos={ROTULOS_HISTORICO} compacto />
+            <div key={`${it.tipo}:${it.item}:${it.codigo}:${k}`} className="space-y-1">
+              <SeloAlteracao it={it} />
+              <DiffItem it={it} rotulos={ROTULOS_HISTORICO} compacto />
+            </div>
           ))}
           {a.itens.length > itens.length && (
             <button
@@ -424,4 +439,40 @@ export function HistoricoDoItem({
       )}
     </section>
   );
+}
+
+const TOM_CLASSE: Record<ClasseAlteracaoItem, Tone> = {
+  inclusao: "blue",
+  acrescimo: "emerald",
+  supressao: "amber",
+  exclusao: "red",
+  "sem-impacto": "slate",
+};
+
+/** O selo da alteração do item (Lei 14.133): inclusão, acréscimo, supressão, exclusão. */
+function SeloAlteracao({ it }: { it: DiffItemDfd }) {
+  const c = classificarAlteracaoItem(it);
+  if (c.classe === "sem-impacto") return null;
+  const partes: string[] = [];
+  if (c.dQtd != null && c.dQtd !== 0) partes.push(`${c.dQtd > 0 ? "+" : "−"}${num(Math.abs(c.dQtd))} un.`);
+  if (c.dValor != null && c.dValor !== 0) partes.push(`${c.dValor > 0 ? "+" : "−"}${brl(Math.abs(c.dValor))}`);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[12px] tabular-nums text-text-2">
+      <Badge tone={TOM_CLASSE[c.classe]}>{ROTULO_CLASSE_ITEM[c.classe]}</Badge>
+      {partes.length > 0 && <span>{partes.join(" · ")}</span>}
+    </div>
+  );
+}
+
+/** O resumo das alterações de itens de um evento: incluídos, acrescidos, suprimidos e excluídos. */
+function ResumoItens({ itens }: { itens: DiffItemDfd[] }) {
+  const r = resumoAlteracoesItens(itens);
+  if (!temImpacto(r)) return null;
+  const partes = [
+    r.inclusao && `${num(r.inclusao)} incluído(s)`,
+    r.acrescimo && `${num(r.acrescimo)} acrescido(s) (+${brl(r.valorAcrescido)})`,
+    r.supressao && `${num(r.supressao)} suprimido(s) (−${brl(r.valorSuprimido)})`,
+    r.exclusao && `${num(r.exclusao)} excluído(s)`,
+  ].filter(Boolean);
+  return <p className="text-[12px] font-medium text-text-2">{partes.join(" · ")}</p>;
 }

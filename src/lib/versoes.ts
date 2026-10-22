@@ -35,12 +35,29 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.162.1",
+    versao: "1.164.1",
     data: "2026-10-22",
     titulo: "Automação: Tela Protocolo aprendida com mais facilidade",
     mudancas: [
       { tipo: "correcao", area: "Automação", texto: "A extensão (1.26.0) passa a aprender a consulta da Tela Protocolo em qualquer pesquisa da PO011 — antes só valia se a lista tivesse algum protocolo “Em análise”.", link: "/painel/automacao" },
       { tipo: "melhoria", area: "Automação", texto: "Quando a consulta ainda não foi aprendida, o erro diz exatamente o que fazer e quais listas a extensão viu sem reconhecer (só os nomes das colunas).", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.164.0",
+    data: "2026-10-22",
+    titulo: "Acréscimo e supressão de itens no histórico",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "O histórico do item, do DFD e do protocolo marca cada alteração de item como Inclusão, Acréscimo, Supressão ou Exclusão, com a diferença de quantidade e de valor.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Mesa", texto: "Cada evento do histórico com itens alterados resume quantos foram incluídos, acrescidos, suprimidos e excluídos, com os valores somados.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
+    versao: "1.163.0",
+    data: "2026-10-22",
+    titulo: "Excluídos antigos na lixeira da Mesa",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A lixeira da Mesa também mostra os protocolos, DFDs e itens excluídos antes dela existir, lidos do histórico de alterações, na Mesa em que estavam (a do sistema ou a do PCA). Eles aparecem com o selo \"Sem retrato\" e trazem só o que o histórico registrou.", link: "/painel/mesa" },
     ],
   },
   {

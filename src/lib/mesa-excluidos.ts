@@ -1,10 +1,10 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
-import { mesaExcluidos } from "@/db/schema";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, min, or, type SQLWrapper, sql } from "drizzle-orm";
+import { auditoria, dfdProtocolos, dfds, mesaExcluidos } from "@/db/schema";
 import type { EscopoMesa } from "./acesso-mesa";
 import type { DfdVisual } from "@/components/DfdView";
 import { getDb } from "./db";
 import { parseAssinaturas, parseSecoes } from "./dfd";
-import type { RetratoDfd } from "./mesa-excluidos-core";
+import { type ExcluidoAntigo, excluidosDaAuditoria, type LinhaAuditoriaExclusao, pcaPeloHistorico, type RetratoDfd } from "./mesa-excluidos-core";
 import { comandoLimparExcluidos } from "./mesa-excluidos-sql";
 
 /** O que a lista da opção "Excluídos" mostra (sem o retrato — ele vem só ao abrir uma linha). */
@@ -118,4 +118,116 @@ export function visualDoRetrato(r: RetratoDfd, unidade: { codigo: string; nome: 
     secoes: parseSecoes(r.secoes),
     assinaturas: { lista: parseAssinaturas(r.assinaturas), solicitante: null },
   };
+}
+
+/** Uma exclusão ANTIGA (anterior à lixeira), lida do histórico — sem retrato, com o que o histórico guardou. */
+export type ExcluidoDoHistorico = ExcluidoAntigo & { reparticaoId: number | null; pcaId: number | null; protocoloNumero: string | null };
+
+/** Os ids num parâmetro JSON só (qualquer quantidade, uma consulta). */
+const emIds = (col: SQLWrapper, ids: number[]) => sql`${col} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`;
+const lerJson = (t: string | null): Record<string, unknown> | null => {
+  try {
+    return t ? (JSON.parse(t) as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * As exclusões feitas ANTES da lixeira existir, pelo histórico (a auditoria): protocolos e DFDs excluídos e itens
+ * removidos (em massa ou no "Salvar" com o item a item). A unidade vem do registro de quando entrou (protocolação/
+ * importação) — ou do DFD vivo, no item —, e a Mesa do último envio/incorporação/devolução do protocolo a um PCA.
+ * Só o que veio ANTES da 1ª linha da lixeira (as de depois já têm o retrato).
+ */
+export async function excluidosDoHistorico(pcaId: number | null, tipo: Excluido["tipo"]): Promise<ExcluidoDoHistorico[]> {
+  const db = getDb();
+  const [c] = await db.select({ corte: min(mesaExcluidos.excluidoEm) }).from(mesaExcluidos);
+  const corte = c?.corte ?? null;
+  const filtroTipo =
+    tipo === "protocolo"
+      ? and(eq(auditoria.entidade, "protocolo"), eq(auditoria.acao, "excluir"))
+      : tipo === "dfd"
+        ? and(eq(auditoria.entidade, "dfd"), eq(auditoria.acao, "excluir"), or(isNull(auditoria.origem), inArray(auditoria.origem, ["exclusao", "reenvio"])))
+        : and(eq(auditoria.entidade, "dfd"), sql`${auditoria.detalhe} LIKE '%"tipo":"removido"%'`);
+  const linhas = (await db
+    .select({
+      id: auditoria.id,
+      entidade: auditoria.entidade,
+      entidadeId: auditoria.entidadeId,
+      resumo: auditoria.resumo,
+      antes: auditoria.antes,
+      detalhe: auditoria.detalhe,
+      origem: auditoria.origem,
+      protocoloId: auditoria.protocoloId,
+      usuarioId: auditoria.usuarioId,
+      usuarioNome: auditoria.usuarioNome,
+      criadoEm: auditoria.criadoEm,
+    })
+    .from(auditoria)
+    .where(corte ? and(filtroTipo, lt(auditoria.criadoEm, corte)) : filtroTipo)
+    .orderBy(desc(auditoria.id))
+    .limit(MAX_EXCLUIDOS)) as LinhaAuditoriaExclusao[];
+  const antigos = linhas.flatMap(excluidosDaAuditoria).filter((e) => e.tipo === tipo);
+  if (!antigos.length) return [];
+
+  // Protocolos e DFDs envolvidos.
+  const protIds = [...new Set(antigos.map((e) => e.protocoloId).filter((v): v is number => v != null))];
+  const dfdIds = [...new Set(antigos.map((e) => e.dfdId).filter((v): v is number => v != null))];
+
+  // A Mesa: o último envio/incorporação/devolução do protocolo.
+  const pcaDoProt = new Map<number, number | null>();
+  const numeroDoProt = new Map<number, string>();
+  const repDoProt = new Map<number, number | null>();
+  {
+    const l = protIds;
+    const regs = await db
+      .select({ p: auditoria.protocoloId, pca: auditoria.entidadeId, resumo: auditoria.resumo })
+      .from(auditoria)
+      .where(and(eq(auditoria.entidade, "pca"), emIds(auditoria.protocoloId, l)))
+      .orderBy(desc(auditoria.id));
+    for (const r of regs) if (r.p != null && !pcaDoProt.has(r.p)) pcaDoProt.set(r.p, pcaPeloHistorico(r.resumo, r.pca));
+    const vivos = await db.select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, rep: dfdProtocolos.reparticaoId, pca: dfdProtocolos.pcaId }).from(dfdProtocolos).where(emIds(dfdProtocolos.id, l));
+    for (const v of vivos) {
+      numeroDoProt.set(v.id, v.numero);
+      repDoProt.set(v.id, v.rep);
+      pcaDoProt.set(v.id, v.pca);
+    }
+    const criacoes = await db
+      .select({ id: auditoria.entidadeId, depois: auditoria.depois })
+      .from(auditoria)
+      .where(and(eq(auditoria.entidade, "protocolo"), emIds(auditoria.entidadeId, l), isNotNull(auditoria.depois)))
+      .orderBy(desc(auditoria.id));
+    for (const r of criacoes) {
+      if (r.id == null || repDoProt.has(r.id)) continue;
+      const d = lerJson(r.depois);
+      if (d && "reparticaoId" in d) {
+        repDoProt.set(r.id, typeof d.reparticaoId === "number" ? d.reparticaoId : null);
+        if (typeof d.numero === "string" && !numeroDoProt.has(r.id)) numeroDoProt.set(r.id, d.numero);
+      }
+    }
+  }
+  // A unidade do DFD: o vivo ou o registro de quando entrou.
+  const repDoDfd = new Map<number, number | null>();
+  {
+    const l = dfdIds;
+    const vivos = await db.select({ id: dfds.id, rep: dfds.reparticaoId }).from(dfds).where(emIds(dfds.id, l));
+    for (const v of vivos) repDoDfd.set(v.id, v.rep);
+    const regs = await db
+      .select({ id: auditoria.entidadeId, depois: auditoria.depois })
+      .from(auditoria)
+      .where(and(eq(auditoria.entidade, "dfd"), emIds(auditoria.entidadeId, l), isNotNull(auditoria.depois)))
+      .orderBy(desc(auditoria.id));
+    for (const r of regs) {
+      if (r.id == null || repDoDfd.has(r.id)) continue;
+      const d = lerJson(r.depois);
+      if (d && typeof d.reparticaoId === "number") repDoDfd.set(r.id, d.reparticaoId);
+    }
+  }
+  return antigos
+    .map((e) => {
+      const pca = e.protocoloId != null ? (pcaDoProt.get(e.protocoloId) ?? null) : null;
+      const rep = (e.dfdId != null ? repDoDfd.get(e.dfdId) : undefined) ?? (e.protocoloId != null ? (repDoProt.get(e.protocoloId) ?? null) : null);
+      return { ...e, pcaId: pca, reparticaoId: rep, protocoloNumero: e.protocoloId != null ? (numeroDoProt.get(e.protocoloId) ?? null) : null };
+    })
+    .filter((e) => (pcaId == null ? e.pcaId == null : e.pcaId === pcaId));
 }
