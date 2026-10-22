@@ -3889,7 +3889,7 @@ export function Catalogo() {
             options={[
               { value: "catalogo", label: "Catálogo" },
               { value: "lista", label: "Lista de Itens", curto: "Itens" },
-              { value: "unidades", label: "Medidas" },
+              { value: "unidades", label: "Medida" },
               { value: "classificacoes", label: "Classificações", curto: "Classif." },
             ]}
           />

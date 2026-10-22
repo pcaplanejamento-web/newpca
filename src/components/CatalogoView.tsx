@@ -886,7 +886,7 @@ export function CatalogoView({
               ...(pasta
                 ? []
                 : [
-                    { value: "unidades" as const, label: "Medidas" },
+                    { value: "unidades" as const, label: "Medida" },
                     { value: "classificacoes" as const, label: "Classificações", curto: "Classif." },
                   ]),
             ].filter((o) => libera(CHAVE_VISTA[o.value]))}

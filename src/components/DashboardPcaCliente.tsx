@@ -67,7 +67,7 @@ const TITULO: Record<Grafico, string> = {
   previsao: "Definição da Previsão",
   periodo: "Contratações Periódicas",
   item: "Top 100 Itens por Valor",
-  unidadeMedida: "Medidas",
+  unidadeMedida: "Medida",
   prioridade: "Prioridade dos DFDs",
   unidade: "Valor por Unidade",
   dominio: "Domínio dos Itens",

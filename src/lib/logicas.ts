@@ -469,7 +469,7 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "norm-unidades-medida",
     dominio: "normalizacao",
-    titulo: "Medidas: comparação dos itens com o cadastro (Catálogo)",
+    titulo: "Medida: comparação dos itens com o cadastro (Catálogo)",
     descricao:
       "Catálogo → Unidades de medida: cada unidade tem sigla, nome e sinônimos (as outras grafias aceitas). Toda grafia de unidade dos itens (DFDs e catálogo) é comparada com o cadastro e aparece como Cadastrada, Sugestão ou Não cadastrada, com quantos itens a usam.",
     detalhes: [

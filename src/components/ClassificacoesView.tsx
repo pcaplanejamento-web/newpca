@@ -155,7 +155,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
     { key: "palavras", header: "Palavras-chave", filter: "none", nowrap: true, render: (c) => <CelulaLista valores={c.palavras} max={3} /> },
     {
       key: "unidades",
-      header: "Medidas",
+      header: "Medida",
       filter: "none",
       nowrap: true,
       render: (c) => <CelulaLista valores={siglasPorClass.get(c.id) ?? []} max={3} mono />,
