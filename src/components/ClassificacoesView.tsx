@@ -425,7 +425,7 @@ export const ClassificacaoDosItens = memo(function ClassificacaoDosItens({ linha
             </div>
             <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
               <Campo label="Descrição" valor={aberta.descricao || "—"} span />
-              <Campo label="Unidade" valor={aberta.unidade ?? "—"} mono />
+              <Campo label="Medida" valor={aberta.unidade ?? "—"} mono />
               <Campo label="Itens" valor={`${num(aberta.dfd + aberta.catalogo)} (DFDs ${num(aberta.dfd)} · catálogo ${num(aberta.catalogo)})`} />
               <Campo label="Valor (DFDs)" valor={brl(aberta.valor)} />
             </dl>

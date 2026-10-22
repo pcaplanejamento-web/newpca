@@ -108,7 +108,7 @@ describe("catalogo-conferencia", () => {
     const soDesc = conferirItem(item({ descricao: "OUTRA COISA" }), ref({ tipos: ["DFD-S"] }), "DFD-S");
     assert.deepEqual(rotulosDivergencia(soDesc), ["Descrição diferente do catálogo"]);
     const soUnid = conferirItem(item({ unidade: "KG" }), ref(), "DFD-S");
-    assert.deepEqual(rotulosDivergencia(soUnid), ["Unidade de medida diferente do catálogo"]);
+    assert.deepEqual(rotulosDivergencia(soUnid), ["Medida diferente do catálogo"]);
     const tipo = conferirItem(item(), ref({ tipos: ["DFD-S"] }), "DFD-O");
     assert.deepEqual(rotulosDivergencia(tipo), ["Tipo de DFD incompatível com o catálogo"]);
     const nc = conferirItem(item({ codigo: "999999" }), null, "DFD-S");

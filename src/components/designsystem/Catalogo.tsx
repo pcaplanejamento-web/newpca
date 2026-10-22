@@ -1585,7 +1585,7 @@ function GraficosDashboardDemo() {
         <ChartCard title="Top Itens por Valor" subtitle="Barras horizontais por token">
           <TopItensChart data={G_TOP} ativo={item} onSelecionar={(r) => r.dim === "item" && setItem((i) => (i === r.id ? null : r.id))} />
         </ChartCard>
-        <ChartCard title="Unidades de Medida" subtitle="As 10 maiores + Outras; Itens ou Valor">
+        <ChartCard title="Medida" subtitle="As 10 maiores + Outras; Itens ou Valor">
           <UnidadeChart data={G_UNID} ativos={unid} onSelecionar={(r) => r.dim === "unidadeMedida" && alterna(unid, r.labels, setUnid)} />
         </ChartCard>
         <ChartCard title="Prioridade dos DFDs" subtitle="Cores pela CATEGORIA (semáforo), nunca pela posição">
@@ -1801,7 +1801,7 @@ function PadronizacaoDemo() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => abrirUnid(unidDemo)}>
-          Editor de unidade de medida
+          Editor de medida
         </Button>
         <Button variant="secondary" onClick={() => abrirClass(classDemo)}>
           Editor de classificação
@@ -3477,7 +3477,7 @@ export function Catalogo() {
           <TextArea label="Descrição (multi-linha)" placeholder="Digite uma descrição…" rows={3} />
         </div>
         <div className="mt-4 max-w-md">
-          <SelectField label="Seleção (SelectField — o mesmo visual do campo)" defaultValue="" hint="Ex.: a classificação que a unidade de medida indica.">
+          <SelectField label="Seleção (SelectField — o mesmo visual do campo)" defaultValue="" hint="Ex.: a classificação que a medida indica.">
             <option value="">Nenhuma</option>
             <option value="1">SERVIÇO</option>
             <option value="2">MATERIAL DE CONSUMO</option>
@@ -4885,7 +4885,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Padronização (Catálogo → Unidades de medida | Classificações) — comparação das unidades dos itens, classificação automática, editores (edição e consulta), ErroCarga (falha de carga + Tentar de novo) e as células da Mesa → Itens">
+      <Secao titulo="Padronização (Catálogo → Medida | Classificações) — comparação das unidades dos itens, classificação automática, editores (edição e consulta), ErroCarga (falha de carga + Tentar de novo) e as células da Mesa → Itens">
         <PadronizacaoDemo />
       </Secao>
 

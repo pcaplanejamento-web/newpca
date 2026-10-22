@@ -72,12 +72,12 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
     na: "no Catálogo",
     a: "ao Catálogo",
     acoes: {
-      visualizar: "Consultar catálogos, itens, unidades de medida e classificações.",
+      visualizar: "Consultar catálogos, itens, medidas e classificações.",
       manipular: "Criar e editar catálogos e itens, os tipos de DFD e compartilhar itens.",
       importar: "Importar catálogo (.xlsx ou .pdf) e baixar o modelo.",
       exportar: "Baixar o catálogo em .xlsx ou PDF.",
       excluir: "Excluir catálogos e itens.",
-      configurar: "Cadastrar unidades de medida, sinônimos e classificações.",
+      configurar: "Cadastrar medidas, sinônimos e classificações.",
     },
   },
   orcamento: {

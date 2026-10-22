@@ -430,7 +430,7 @@ export function BarraEdicaoMassaItens({ aplicando = false, onAplicar }: { aplica
     <Moldura
       campos={[
         { value: "catalogo", label: "Padronizar" },
-        { value: "unidade", label: "Unidade" },
+        { value: "unidade", label: "Medida" },
         { value: "quantidade", label: "Quantidade" },
         { value: "valorUnitario", label: "Valor unit." },
         { value: "remover", label: "Remover" },

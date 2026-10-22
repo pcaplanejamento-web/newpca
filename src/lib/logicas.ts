@@ -471,7 +471,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "normalizacao",
     titulo: "Medida: comparação dos itens com o cadastro (Catálogo)",
     descricao:
-      "Catálogo → Unidades de medida: cada unidade tem sigla, nome e sinônimos (as outras grafias aceitas). Toda grafia de unidade dos itens (DFDs e catálogo) é comparada com o cadastro e aparece como Cadastrada, Sugestão ou Não cadastrada, com quantos itens a usam.",
+      "Catálogo → Medida: cada unidade tem sigla, nome e sinônimos (as outras grafias aceitas). Toda grafia de unidade dos itens (DFDs e catálogo) é comparada com o cadastro e aparece como Cadastrada, Sugestão ou Não cadastrada, com quantos itens a usam.",
     detalhes: [
       "\"Und.\", \"UND\" e \"und\" são a MESMA grafia (sem caixa, acento, pontuação e espaço; m² = M2).",
       "Sugestão: por QUALQUER escrita da grafia, a regra do sistema a põe na mesma unidade de UMA cadastrada (UND e U.N.D = UNIDADE) ou ela é o plural de uma grafia cadastrada (CAIXAS → CAIXA). Com duas possíveis, não sugere.",
@@ -487,7 +487,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "normalizacao",
     titulo: "Classificação automática dos itens (Catálogo → Classificações)",
     descricao:
-      "Cada classificação tem nome, cor e palavras-chave. Todo item é classificado automaticamente pela DESCRIÇÃO: vence a palavra-chave que aparece primeiro; na mesma posição, a mais longa; depois, a ordem da lista. Sem palavra-chave, vale a classificação que a unidade de medida cadastrada indica; sem nenhuma, \"Não classificado\".",
+      "Cada classificação tem nome, cor e palavras-chave. Todo item é classificado automaticamente pela DESCRIÇÃO: vence a palavra-chave que aparece primeiro; na mesma posição, a mais longa; depois, a ordem da lista. Sem palavra-chave, vale a classificação que a medida cadastrada indica; sem nenhuma, \"Não classificado\".",
     detalhes: [
       "\"SERVIÇO DE MANUTENÇÃO EM CADEIRAS\" é serviço (SERVIÇO aparece antes de CADEIRA); \"MATERIAL DE LIMPEZA\" vence \"MATERIAL\" na mesma posição.",
       "A palavra-chave casa o início das palavras da descrição (CADEIRA acha CADEIRAS); as de até 3 letras só inteiras ou no plural (KIT acha KITS; AR não acha ARMÁRIO). Sem acento, caixa ou pontuação.",

@@ -164,7 +164,7 @@ export function ItemDetalhe({
       <div className="space-y-[var(--gap-block)]">
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <CampoCongelado label="Código" valor={item.codigo} mono />
-          <CampoCongelado label="Unidade" valor={item.unidade} />
+          <CampoCongelado label="Medida" valor={item.unidade} />
           <CampoCongelado label="Domínio" valor={item.dominio || dominioPorDescricao(item.descricao)} />
           <CampoCongelado label="Descrição" valor={item.descricao} span />
           <CampoCongelado label="Quantidade" valor={item.quantidade != null ? num(item.quantidade) : null} />
@@ -202,7 +202,7 @@ export function ItemDetalhe({
       {/* Campos do item — cada um com cadeado próprio quando editável */}
       <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
         <CampoTexto label="Código" valor={item.codigo ?? ""} mono {...props("codigo")} onChange={(v) => onChange?.({ codigo: v || null })} />
-        <CampoTexto label="Unidade" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
+        <CampoTexto label="Medida" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
         <CampoCongelado label="Domínio" valor={item.dominio || dominioPorDescricao(item.descricao)} />
         <CampoTexto
           label="Descrição"
@@ -315,7 +315,7 @@ export function ItemDetalhe({
               {/* Mesma grade e MESMO tamanho de fonte do item importado (comparação lado a lado). */}
               <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                 <Campo label="Código" valor={conf.sugestao.codigoRaw ?? conf.sugestao.codigo} mono />
-                <Campo label="Unidade" valor={conf.sugestao.unidade ?? "—"} />
+                <Campo label="Medida" valor={conf.sugestao.unidade ?? "—"} />
                 <Campo label="Descrição" valor={conf.sugestao.descricao} span />
                 <div className="sm:col-span-2">
                   <dt className="text-xs text-muted">Tipos de DFD</dt>

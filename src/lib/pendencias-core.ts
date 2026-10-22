@@ -147,7 +147,7 @@ function textoNoItem(chave: string, it: DfdItemParseado, iguais: (number | null)
     case "item.naoCatalogado":
       return `Fora do catálogo${it.codigo ? ` (código ${it.codigo})` : ""}`;
     case "item.divergenteCatalogo":
-      return "Descrição/unidade diferente do catálogo";
+      return "Descrição/medida diferente do catálogo";
     default:
       return "Tipo de DFD não permitido pelo catálogo";
   }
@@ -485,7 +485,7 @@ const COLUNAS_ITENS: ColunaDoc[] = [
   { titulo: "Item", peso: 0.7, alinhar: "right" },
   { titulo: "Código", peso: 1.5 },
   { titulo: "Descrição", peso: 4.2 },
-  { titulo: "Unid.", peso: 1 },
+  { titulo: "Medida", peso: 1 },
   { titulo: "Qtd.", peso: 1, alinhar: "right" },
   { titulo: "Vlr. unit.", peso: 1.4, alinhar: "right" },
   { titulo: "Pendência", peso: 3.6 },

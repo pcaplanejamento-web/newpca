@@ -67,7 +67,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
       setDados((d) => ({ unidades: j.unidades, classificacoes: j.classificacoes, uso: j.uso ?? d?.uso ?? [] }));
       setErroCarga(null);
     } catch (e) {
-      setErroCarga(e instanceof Error ? e.message : "Erro ao carregar as unidades de medida.");
+      setErroCarga(e instanceof Error ? e.message : "Erro ao carregar as medidas.");
     }
   }, []);
   useEffect(() => {
@@ -483,7 +483,7 @@ export function ComparacaoUnidades({
         )}
       </div>
       {linhas.length === 0 ? (
-        <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">Nenhum item com unidade de medida ainda.</p>
+        <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">Nenhum item com medida ainda.</p>
       ) : (
         <DataTable
           columns={colunas}
@@ -555,7 +555,7 @@ export function EditorUnidadeMedida({
       open
       onClose={onFechar}
       bloqueado={salvando}
-      titulo={nova ? "Nova unidade de medida" : `${somenteLeitura ? "Unidade" : "Editar unidade"} ${inicial.sigla}`}
+      titulo={nova ? "Nova medida" : `${somenteLeitura ? "Medida" : "Editar medida"} ${inicial.sigla}`}
       size="md"
       rodape={
         <div className="flex justify-end gap-2">

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.154.2",
+    data: "2026-10-22",
+    titulo: "Medida também nos detalhes do item",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O detalhe do item, a edição em massa, as comparações, os relatórios e as mensagens do catálogo chamam a unidade de medida de Medida.", link: "/painel/mesa?vista=itens" },
+    ],
+  },
+  {
     versao: "1.154.1",
     data: "2026-10-22",
     titulo: "Só \"Medida\", no singular",

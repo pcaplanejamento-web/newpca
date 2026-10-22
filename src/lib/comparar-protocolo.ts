@@ -210,7 +210,7 @@ export function diffItem(a: ItemComparavel, b: ItemComparavel): DiffCampo[] {
   if (a.item !== b.item) out.push({ campo: "item", rotulo: "Nº do item", antes: ver(a.item), depois: ver(b.item) });
   if (txt(a.codigo) !== txt(b.codigo)) out.push({ campo: "codigo", rotulo: "Código", antes: ver(a.codigo), depois: ver(b.codigo) });
   if (txt(a.descricao) !== txt(b.descricao)) out.push({ campo: "descricao", rotulo: "Descrição", antes: ver(a.descricao), depois: ver(b.descricao) });
-  if (txt(a.unidade).toUpperCase() !== txt(b.unidade).toUpperCase()) out.push({ campo: "unidade", rotulo: "Unidade", antes: ver(a.unidade), depois: ver(b.unidade) });
+  if (txt(a.unidade).toUpperCase() !== txt(b.unidade).toUpperCase()) out.push({ campo: "unidade", rotulo: "Medida", antes: ver(a.unidade), depois: ver(b.unidade) });
   if (!mesmoNum(a.quantidade, b.quantidade, 1e-6)) out.push({ campo: "quantidade", rotulo: "Quantidade", antes: qtd(a.quantidade), depois: qtd(b.quantidade) });
   if (!mesmoNum(a.valorUnitario, b.valorUnitario, 0.005)) out.push({ campo: "valorUnitario", rotulo: "Valor unitário", antes: moeda(a.valorUnitario), depois: moeda(b.valorUnitario) });
   if (!mesmoNum(a.valorTotal, b.valorTotal, 0.005)) out.push({ campo: "valorTotal", rotulo: "Valor total", antes: moeda(a.valorTotal), depois: moeda(b.valorTotal) });

@@ -70,14 +70,14 @@ export function UnidadeChart({
       <Segmented
         value={medida}
         onChange={setMedida}
-        ariaLabel="Medida das unidades de medida"
+        ariaLabel="Medida dos itens"
         options={[
           { value: "count", label: "Itens" },
           { value: "total", label: "Valor" },
         ]}
       />
       <BarrasH
-        ariaLabel="Itens por unidade de medida"
+        ariaLabel="Itens por medida"
         ativa={onSelecionar ? ativa : undefined}
         acao="filtrar o Dashboard"
         onEscolher={

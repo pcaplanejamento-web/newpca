@@ -597,7 +597,7 @@ export function DashboardPcaCliente({
               <ChartCard key="item" title={TITULO.item} subtitle={`Os ${num(tops.length)} maiores itens — role a lista; toque para filtrar`} onExpandir={() => setExplorar("item")}>
                 <TopItensChart data={tops} onSelecionar={filtrar} ativo={itemAtivo} alturaMax={420} />
               </ChartCard>,
-              <ChartCard key="unidadeMedida" title={TITULO.unidadeMedida} subtitle="Itens por unidade de medida — toque para filtrar" onExpandir={() => setExplorar("unidadeMedida")}>
+              <ChartCard key="unidadeMedida" title={TITULO.unidadeMedida} subtitle="Itens por medida — toque para filtrar" onExpandir={() => setExplorar("unidadeMedida")}>
                 <UnidadeChart data={unids} onSelecionar={filtrar} ativos={labels("unidadeMedida")} />
               </ChartCard>,
               temPrioridade ? (

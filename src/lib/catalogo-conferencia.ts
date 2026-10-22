@@ -42,7 +42,7 @@ export function rotulosDivergencia(c: ConferenciaCompacta): string[] {
   const r: string[] = [];
   if (c.faltas.includes("naoCatalogado")) r.push("Fora do catálogo");
   if (c.divergDescricao) r.push("Descrição diferente do catálogo");
-  if (c.divergUnidade) r.push("Unidade de medida diferente do catálogo");
+  if (c.divergUnidade) r.push("Medida diferente do catálogo");
   if (c.faltas.includes("tipoIncompativel")) r.push("Tipo de DFD incompatível com o catálogo");
   return r;
 }

@@ -19,7 +19,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const p = await parseCorpo(unidadeMedidaSchema, req);
   if ("resp" in p) return p.resp;
   const antes = await getUnidadeMedida(id);
-  if (!antes) return erro("Unidade de medida não encontrada.", 404);
+  if (!antes) return erro("Medida não encontrada.", 404);
   const pr = await prepararUnidade(p.data, id);
   if ("erro" in pr) return erro(pr.erro, pr.status);
   await atualizarUnidadeMedida(id, pr.dados);
@@ -29,7 +29,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     acao: "editar",
     entidade: "unidade_medida",
     entidadeId: id,
-    resumo: `Unidade de medida ${antes.sigla}: ${dd.resumo || "editada"}`,
+    resumo: `Medida ${antes.sigla}: ${dd.resumo || "editada"}`,
     antes: dd.antes,
     depois: dd.depois,
   });
@@ -44,14 +44,14 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
   const antes = await getUnidadeMedida(id);
-  if (!antes) return erro("Unidade de medida não encontrada.", 404);
+  if (!antes) return erro("Medida não encontrada.", 404);
   await excluirUnidadeMedida(id);
   await registrarAuditoria({
     usuario: g.u,
     acao: "excluir",
     entidade: "unidade_medida",
     entidadeId: id,
-    resumo: `Unidade de medida ${antes.sigla} (${antes.nome}) excluída`,
+    resumo: `Medida ${antes.sigla} (${antes.nome}) excluída`,
     antes,
   });
   depoisDaResposta(reclassificarTudo(), "reclassificar itens"); // o cadastro mudou: grava de novo a classificação/domínio dos itens

@@ -221,7 +221,7 @@ export function blocosRelatorioVariacao(rel: RelatorioVariacao, opcoes: OpcoesBl
     {
       tipo: "paragrafo",
       texto:
-        "Cada código reúne os itens de MESMO código dos DFDs. A VARIAÇÃO é o coeficiente de variação dos valores unitários (até 25% = homogêneo; de 25% a 50% = atenção; acima de 50% = alta). A REFERÊNCIA de cada item é o valor médio ponderado da MESMA unidade de medida; quando há histórico de compra, vale o menor entre ele e o valor atual do histórico. Um item é apontado para REAJUSTE quando o valor unitário passa da referência em mais de 25%; o VALOR SUGERIDO é a referência e o IMPACTO é a diferença multiplicada pela quantidade.",
+        "Cada código reúne os itens de MESMO código dos DFDs. A VARIAÇÃO é o coeficiente de variação dos valores unitários (até 25% = homogêneo; de 25% a 50% = atenção; acima de 50% = alta). A REFERÊNCIA de cada item é o valor médio ponderado da MESMA medida; quando há histórico de compra, vale o menor entre ele e o valor atual do histórico. Um item é apontado para REAJUSTE quando o valor unitário passa da referência em mais de 25%; o VALOR SUGERIDO é a referência e o IMPACTO é a diferença multiplicada pela quantidade.",
       cor: "muted",
     },
     { tipo: "secao", texto: "Resumo" },
@@ -265,7 +265,7 @@ export function blocosRelatorioVariacao(rel: RelatorioVariacao, opcoes: OpcoesBl
       { titulo: "DFD", peso: 1.3 },
       { titulo: "Protocolo", peso: 1 },
       { titulo: "Sigla", peso: 0.8 },
-      { titulo: "Unid.", peso: 0.8 },
+      { titulo: "Medida", peso: 0.8 },
       { titulo: "Qtd.", peso: 0.8, alinhar: "right" },
       { titulo: "Vlr. unit.", peso: 1.1, alinhar: "right" },
       { titulo: "Sugerido", peso: 1.2, alinhar: "right" },
@@ -300,7 +300,7 @@ export function blocosRelatorioVariacao(rel: RelatorioVariacao, opcoes: OpcoesBl
       colunas: [
         { titulo: "Código", peso: 1.1 },
         { titulo: "Descrição", peso: 2.6 },
-        { titulo: "Unid.", peso: 1 },
+        { titulo: "Medida", peso: 1 },
         { titulo: "Itens", peso: 0.6, alinhar: "right" },
         { titulo: "Menor", peso: 1, alinhar: "right" },
         { titulo: "Mediana", peso: 1, alinhar: "right" },

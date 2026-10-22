@@ -974,7 +974,7 @@ export function CatalogoView({
           onFile={handleFile}
           titulo="Solte o PDF ou a planilha para atualizar"
           icon={<IconUpload className="h-7 w-7" />}
-          dica="Extraímos código, descrição e unidade de medida de cada item."
+          dica="Extraímos código, descrição e medida de cada item."
         />
       </Modal>
 
@@ -1208,13 +1208,13 @@ export function CatalogoView({
                         <div className="space-y-2 rounded-control border border-border-2 p-2.5">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Novo (do arquivo)</p>
                           <TextArea label="Descrição" value={v.novoDesc} rows={2} onChange={(e) => setE({ novoDesc: e.target.value })} />
-                          <TextField label="Unidade" value={v.novoUnid} onChange={(e) => setE({ novoUnid: e.target.value })} />
+                          <TextField label="Medida" value={v.novoUnid} onChange={(e) => setE({ novoUnid: e.target.value })} />
                         </div>
                         <div className="space-y-2 rounded-control border border-border-2 p-2.5">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Existente · {existente.catalogoNome}</p>
                           {/* Editar o item que já existe = Manipular; sem ele, só o lado novo se ajusta. */}
                           <TextArea label="Descrição" value={v.exDesc} rows={2} disabled={!podeEditar} onChange={(e) => setE({ exDesc: e.target.value })} />
-                          <TextField label="Unidade" value={v.exUnid} disabled={!podeEditar} onChange={(e) => setE({ exUnid: e.target.value })} />
+                          <TextField label="Medida" value={v.exUnid} disabled={!podeEditar} onChange={(e) => setE({ exUnid: e.target.value })} />
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
