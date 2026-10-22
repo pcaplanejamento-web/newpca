@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { dfdItens, dfdProtocolos, dfds } from "../src/db/schema.ts";
-import { comandoLimparExcluidos, comandoRetratoDfds, comandoRetratoItens, comandoRetratoProtocolo } from "../src/lib/mesa-excluidos-sql.ts";
+import { comandoLimparExcluidos, consultaDfdsRestantes, comandoRetratoDfds, comandoRetratoItens, comandoRetratoProtocolo } from "../src/lib/mesa-excluidos-sql.ts";
 import { lerRetratoDfd, lerRetratoItem, lerRetratoProtocolo } from "../src/lib/mesa-excluidos-core.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -124,4 +124,16 @@ it("abrangência da exclusão e limpeza com a cascata", () => {
   ];
   assert.deepEqual(planoLimpeza(ls, new Set([1])), [1, 2]);
   assert.deepEqual(planoLimpeza(ls, new Set([3])), [3]);
+});
+
+it("protocolo vazio: conta SÓ os DFDs do protocolo (nunca o DFD contra ele mesmo)", async () => {
+  const db = aplicarTudo();
+  const orm = drizzle(d1Sobre(db) as never, { schema });
+  // O caso real: um DFD QUALQUER com id = protocolo_id fazia a subconsulta antiga contar 1 para todo protocolo.
+  db.exec("INSERT INTO dfd_protocolos (id, numero) VALUES (5, '5/2026'), (6, '6/2026')");
+  db.exec("INSERT INTO dfds (id, numero, protocolo_id) VALUES (5, '9005', 5), (7, '9007', 6)");
+  assert.equal(Number((await consultaDfdsRestantes(orm, 6))[0].n), 1);
+  db.exec("DELETE FROM dfds WHERE id = 7");
+  assert.equal(Number((await consultaDfdsRestantes(orm, 6))[0].n), 0);
+  assert.equal(Number((await consultaDfdsRestantes(orm, 5))[0].n), 1);
 });

@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.166.1",
+    data: "2026-10-22",
+    titulo: "Correção: o protocolo sem DFDs passa a ser excluído",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Excluir o último DFD de um protocolo (ou remover o último item do último DFD) agora exclui também o protocolo — a conferência de DFDs restantes contava errado.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A exclusão do DFD avisa antes e depois quando o protocolo sai junto.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.166.0",
     data: "2026-10-22",
     titulo: "Lixeira da Mesa: limpeza, abrangência e exclusão do que fica vazio",

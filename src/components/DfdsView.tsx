@@ -942,14 +942,15 @@ export function DfdsView({
     pcaId != null && incorporadoEm ? ` ${impactoSaidaPca(pcas.find((p) => p.id === pcaId)?.nome, itens)}` : "";
 
   async function excluirDfd(id: number, numero: string, pca = "") {
-    if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.${pca}`)) return;
+    if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos — e, se for o último DFD do protocolo, o protocolo também.${pca}`)) return;
     setErro(null);
     const res = await fetch(`/api/dfd/${id}`, { method: "DELETE" });
-    const j = (await res.json()) as { ok?: boolean; error?: string };
+    const j = (await res.json()) as { ok?: boolean; error?: string; protocoloExcluido?: boolean };
     if (!res.ok || !j.ok) {
       setErro(j.error ?? "Não foi possível excluir o DFD.");
       return;
     }
+    toast.success(`DFD ${numero} excluído${j.protocoloExcluido ? " — era o último do protocolo, que também foi excluído" : ""}. Está na lixeira da Mesa.`, 9000);
     router.refresh();
   }
 

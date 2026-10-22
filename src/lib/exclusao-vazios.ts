@@ -1,9 +1,10 @@
-import { eq, sql } from "drizzle-orm";
-import { dfdProtocolos, dfds } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { dfdProtocolos } from "@/db/schema";
 import { registrarAuditoria } from "./auditoria";
 import type { Ator as AtorAuditoria } from "./auditoria-core";
 import { getDb } from "./db";
 import { excluirDfd } from "./dfd";
+import { consultaDfdsRestantes } from "./mesa-excluidos-sql";
 import { excluirProtocolo } from "./protocolo";
 
 type Ator = AtorAuditoria & { id: number; nome: string };
@@ -15,12 +16,11 @@ type Ator = AtorAuditoria & { id: number; nome: string };
 export async function excluirProtocoloSeVazio(protocoloId: number | null, u: Ator): Promise<boolean> {
   if (protocoloId == null) return false;
   const db = getDb();
-  const [p] = await db
-    .select({ numero: dfdProtocolos.numero, restam: sql<number>`(SELECT COUNT(*) FROM ${dfds} WHERE ${dfds.protocoloId} = ${dfdProtocolos.id})` })
-    .from(dfdProtocolos)
-    .where(eq(dfdProtocolos.id, protocoloId))
-    .limit(1);
-  if (!p || Number(p.restam) > 0) return false;
+  const [[p], [c]] = await Promise.all([
+    db.select({ numero: dfdProtocolos.numero }).from(dfdProtocolos).where(eq(dfdProtocolos.id, protocoloId)).limit(1),
+    consultaDfdsRestantes(db, protocoloId),
+  ]);
+  if (!p || Number(c?.n ?? 1) > 0) return false;
   await excluirProtocolo(protocoloId, u.id, { id: u.id, nome: u.nome }, "esvaziado");
   await registrarAuditoria({
     usuario: u,

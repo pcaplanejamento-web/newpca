@@ -138,3 +138,12 @@ export function comandosDescartarAntigos(db: Db, chaves: string[]) {
   for (let i = 0; i < chaves.length; i += 40) out.push(db.insert(mesaLixeiraDescartados).values(chaves.slice(i, i + 40).map((chave) => ({ chave }))).onConflictDoNothing());
   return out;
 }
+
+/**
+ * Quantos DFDs AINDA estão no protocolo (a regra "o protocolo sem DFDs é excluído"). Consulta DIRETA na tabela dos DFDs —
+ * nunca uma subconsulta correlacionada num SELECT de uma tabela só: o Drizzle omite o nome da tabela nas colunas e
+ * `protocolo_id = id` passava a comparar o DFD com ele mesmo (o protocolo nunca era excluído). Testado no D1 real.
+ */
+export function consultaDfdsRestantes(db: Db, protocoloId: number) {
+  return db.select({ n: sql<number>`COUNT(*)` }).from(dfds).where(eq(dfds.protocoloId, protocoloId));
+}
