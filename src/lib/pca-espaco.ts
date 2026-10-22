@@ -749,7 +749,7 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
  * só os itens dela (`false` = nenhum; `null`/ausente = todos). */
 export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep: number | readonly number[] | false | null = null): Promise<DashboardPca> {
   if (rep === false) return Promise.resolve(vazioDash());
-  return memoPorVersao(`dash:${chavePca(pca)}:${unidadeIdPedida ?? ""}:${chaveFiltroId(rep)}`, () => calcularDashboardDoPca(pca, unidadeIdPedida, rep ?? undefined));
+  return memoPorVersao(`dash:${chavePca(pca)}:${unidadeIdPedida ?? ""}:${chaveFiltroId(rep)}`, async () => comNomesUnidades(await calcularDashboardDoPca(pca, unidadeIdPedida, rep ?? undefined)));
 }
 
 /** O que do PCA muda as cargas dele (a chave do `memoPorVersao`). */
@@ -791,7 +791,6 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, 
     ...ag,
     itensTexto: itensParaTexto(itens),
     dfdsLista,
-    nomesUnidades: await nomesDasUnidades([...reps.keys()]),
     protocolosLista,
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
     unidadeId,
@@ -1371,11 +1370,14 @@ export async function cronogramaPcas(de: string, ate: string, permitidos: Set<nu
 }
 
 /** Sigla → nome das unidades (o filtro Unidade do Dashboard mostra e busca pelos dois). */
-async function nomesDasUnidades(ids: number[]): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
-  for (const lote of lotesDeIds(ids)) {
-    const linhas = await getDb().select({ codigo: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(inArray(reparticoes.id, lote));
-    for (const l of linhas) if (l.codigo && l.nome && l.nome !== l.codigo) out[l.codigo] = l.nome;
+/** O NOME de cada unidade pela SIGLA em TODO caminho do Dashboard: o filtro de unidade (cabeçalho público e o filtro
+ *  Unidade do topo) mostra a sigla e o nome embaixo — o padrão dos filtros de unidade do sistema. */
+async function comNomesUnidades(d: DashboardPca): Promise<DashboardPca> {
+  const siglas = [...new Set(d.unidades.map((u) => u.codigo).filter(Boolean))];
+  const nomes: Record<string, string> = {};
+  for (let i = 0; i < siglas.length; i += 90) {
+    const linhas = await getDb().select({ codigo: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(inArray(reparticoes.codigo, siglas.slice(i, i + 90)));
+    for (const l of linhas) if (l.codigo && l.nome && l.nome !== l.codigo && !nomes[l.codigo]) nomes[l.codigo] = l.nome;
   }
-  return out;
+  return { ...d, nomesUnidades: { ...nomes, ...d.nomesUnidades }, unidades: d.unidades.map((u) => ({ ...u, municipio: u.municipio || nomes[u.codigo] || "" })) };
 }

@@ -1794,3 +1794,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - [x] v1.140.0 — Documentos: o máximo da barra é o arquivo original (até 20 MB); o PDF é gravado em partes de 1 MB.
 - v1.149.0: Geral das minhas unidades + fonte dos dados por aba (grupo).
 - v1.153.0: tela pública — seletor de unidade padrão (SeletorUnidade) no cabeçalho, consulta só com a tabela, menu inicial aberto/recolhido pelo ADM e sem a linha no trilho.
+- v1.153.1: filtros de unidade do Dashboard do PCA e da tela pública com sigla + nome (comNomesUnidades).

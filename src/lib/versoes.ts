@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.153.1",
+    data: "2026-10-22",
+    titulo: "Filtros de unidade no mesmo padrão",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "Os filtros de unidade do Dashboard do PCA e da tela pública mostram a sigla e o nome embaixo, como os demais filtros de unidade do sistema.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.153.0",
     data: "2026-10-22",
     titulo: "Tela pública: seletor de unidade padrão e consulta só com a tabela",

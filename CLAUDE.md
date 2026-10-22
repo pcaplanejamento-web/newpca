@@ -2682,7 +2682,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`GET /api/pca/[id]/consulta/documento/[docId]`** (pública: aba publicada + PCA publicado + documento do PCA e completo;
   404 fora disso, `no-store`, sem download). **v1.152.0:** o cabeçalho é o **`CabecalhoApp`** (`MenuLateral.tsx` — o MESMO do
   `AppShell`: borda na própria altura `--h-header`, alinhada à faixa da marca do menu) com o `PcaSeletor compacto` e o
-  `SeletorUnidade` (v1.153.0 — o MESMO seletor de unidade do cabeçalho do painel, com "Todas as unidades"; só no Dashboard/consulta, 2+ unidades; o filtro Unidade dos `FiltrosDashboard` sai — `semFiltroUnidade`) — os KPIs começam logo abaixo; o menu = `vistasDoMenu`
+  `SeletorUnidade` (v1.153.0 — o MESMO seletor de unidade do cabeçalho do painel, com "Todas as unidades"; só no Dashboard/consulta, 2+ unidades; o filtro Unidade dos `FiltrosDashboard` sai — `semFiltroUnidade`; v1.153.1: `comNomesUnidades` em `dashboardDoPca` dá o NOME de cada sigla em todo caminho — `nomesUnidades` + `unidades[].municipio` —, então todo filtro de unidade mostra sigla + nome) — os KPIs começam logo abaixo; o menu = `vistasDoMenu`
   (Dashboard · **Consulta de itens** [`?aba=consulta`, parte do Dashboard — `vistaPublicaPedida`] · as abas publicadas) e o
   `PainelPca vista` fixa os gráficos OU a consulta (`DashboardPcaCliente.vista` — sem o `Segmented`, só monta a escolhida; a
   consulta SEM os indicadores e os filtros do topo); a seção do menu público não tem título (sem a `menu-linha` no trilho —
