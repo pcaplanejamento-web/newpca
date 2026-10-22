@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.165.0",
+    data: "2026-10-22",
+    titulo: "Lixeira da Mesa completa, com os banners originais",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os excluídos abrem nos mesmos banners da Mesa: protocolo (com os DFDs excluídos junto, que abrem ao toque), DFD (com os itens ao lado) e item.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "O registro guarda e mostra tudo: CPF/CNPJ, órgão, situação, responsável, envio e incorporação ao PCA, arquivo de origem, quem e quando importou e a conferência com a Centi.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Mesa", texto: "Itens que saem ao sobrescrever ou reenviar um DFD também vão para a lixeira.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Mesa", texto: "O (?) da lixeira explica os registros “Completo” e “Sem retrato” (excluídos antes de a lixeira existir) e cada motivo.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.164.1",
     data: "2026-10-22",
     titulo: "Automação: Tela Protocolo aprendida com mais facilidade",
