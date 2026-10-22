@@ -17,6 +17,7 @@ import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
 import { IconArquivar, IconDesarquivar, IconBadgeCheck, IconCheck, IconSave, IconSenhaNova, IconShield, IconShieldCheck, IconTrash, IconUserCheck, IconUserX, IconWhatsapp } from "./icons";
 import { Modal } from "./Modal";
 import { SeletorMultiplo } from "./SeletorMultiplo";
+import { AparelhosConta } from "./AparelhosConta";
 import { HistoricoAcessos } from "./HistoricoAcessos";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { BotaoWhatsapp } from "./Telefone";
@@ -664,6 +665,9 @@ function Corpo({
         </div>
       </SecaoBanner>
 
+      <SecaoBanner titulo="Aparelhos e termos">
+        <AparelhosConta usuarioId={u.id} admin />
+      </SecaoBanner>
       <SecaoBanner titulo="Histórico de acesso">
         <HistoricoAcessos url={`/api/admin/usuarios/${u.id}/acessos`} nomeExportacao={`Acessos - ${u.nome}`} />
       </SecaoBanner>

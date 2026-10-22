@@ -2,6 +2,10 @@
 
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
+import { CamposAcessoConta } from "@/components/TermoUsoAdmin";
+import { AvisoTermoPendente, LeituraTermo } from "@/components/AceiteTermo";
+import { LinhaAparelho } from "@/components/NomearAparelho";
+import { ACESSO_CONTA_PADRAO, type ConfigAcessoConta } from "@/lib/acesso-conta-core";
 import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
 import { CabecalhoApp, ItensMenu } from "@/components/MenuLateral";
 import { CamposPublico } from "@/components/PublicoAdmin";
@@ -522,6 +526,22 @@ function DemoEscopo() {
 function DemoSeguranca() {
   const [v, setV] = useState<ConfigSeguranca>({ ...SEGURANCA_PADRAO, inatividadeMin: 60 });
   return <CamposSeguranca valor={v} onChange={setV} />;
+}
+
+/** TERMO DE USO + APARELHOS: os campos da implantação/aparelhos, a leitura do termo (destrava ao chegar ao fim), o aviso
+ * da carência e a linha de um aparelho. */
+function DemoTermoAparelhos() {
+  const [v, setV] = useState<ConfigAcessoConta>({ ...ACESSO_CONTA_PADRAO, modo: "teste" });
+  const [fim, setFim] = useState(false);
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <CamposAcessoConta valor={v} onChange={setV} pessoas={[{ id: 2, nome: "Maria Clara Souza", email: "maria.souza@rioverde.go.gov.br", status: "ativo" }]} papeis={[{ id: 3, nome: "Membro" }]} />
+      <AvisoTermoPendente />
+      <LeituraTermo texto={"# Termo de Uso\n\nVersão 1 — publicada em 22/10/2026.\n\n## 1. Objeto\n\nTexto de exemplo do termo.\n\n## 2. Aparelhos\n\n- No máximo 2 aparelhos por conta.\n- Troca bloqueada por 30 dias."} onFim={() => setFim(true)} altura="max-h-40" />
+      <p className="text-[12px] text-muted">{fim ? "Chegou ao fim — o aceite destrava." : "Role até o fim."}</p>
+      <LinhaAparelho a={{ nome: "Notebook do trabalho", navegador: "Chrome no Windows", ip: "177.10.20.30", vistoEm: "2026-10-22T13:00:00Z", criadoEm: "2026-10-01T10:00:00Z" }} />
+    </div>
+  );
 }
 
 /** USUÁRIOS: matrícula (6 posições no fundo), telefone (+ WhatsApp e o "(?)"), o botão de conversa e o BANNER do usuário. */
@@ -3577,6 +3597,10 @@ export function Catalogo() {
 
       <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, marca d'água, papéis e tela pública) · MarcaDagua (quem vê, sobre toda a tela) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
         <DemoProtecao />
+      </Secao>
+
+      <Secao titulo="Termo de Uso e aparelhos — CamposAcessoConta, LeituraTermo, AvisoTermoPendente, LinhaAparelho (Configurações → Termo de uso; /acesso/termo; /acesso/aparelho)">
+        <DemoTermoAparelhos />
       </Secao>
 
       <Secao titulo="Segurança do acesso — CamposSeguranca (Configurações → Segurança: encerrar a sessão inativa, alertas de aparelho novo e de conta bloqueada)">

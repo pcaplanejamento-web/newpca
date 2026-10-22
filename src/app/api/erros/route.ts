@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirUsuarioLivre } from "@/lib/api-auth";
 import { falhaTelaSchema } from "@/lib/erro-tela-validation";
 import { ok, parseCorpo } from "@/lib/http";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * SESSÃO. Sem nome/e-mail e SEM auditoria (a auditoria mudaria a versão dos dados e recarregaria as telas de todos).
  */
 export async function POST(req: Request) {
-  const g = await exigirUsuario();
+  const g = await exigirUsuarioLivre();
   if ("erro" in g) return g.erro;
   const corpo = await parseCorpo(falhaTelaSchema, req);
   if ("resp" in corpo) return corpo.resp;

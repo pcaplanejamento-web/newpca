@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  FileSignature,
   Link2Off,
   ChevronsUpDown,
   Activity,
@@ -389,3 +390,7 @@ export const IconOrganizar = LNetwork;
 export const IconTemaSite = Sparkles;
 export const IconTemaSistema = MonitorSmartphone;
 export const IconTemaHorario = SunMoon;
+/** O TERMO DE USO (assinado). */
+export const IconTermo = FileSignature;
+/** Um APARELHO vinculado à conta. */
+export const IconAparelho = MonitorSmartphone;

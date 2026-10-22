@@ -205,7 +205,7 @@ export const codigosEmail = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     email: text("email").notNull(),
-    finalidade: text("finalidade", { enum: ["cadastro", "senha"] }).notNull(),
+    finalidade: text("finalidade", { enum: ["cadastro", "senha", "termo"] }).notNull(),
     codigoHash: text("codigo_hash").notNull(),
     tentativas: integer("tentativas").notNull().default(0),
     expiraEm: text("expira_em").notNull(),
@@ -241,6 +241,8 @@ export const sessoes = sqliteTable(
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     /** A última atividade (ISO) — o ADM pode encerrar a sessão parada (Configurações → Segurança). */
     vistoEm: text("visto_em"),
+    /** O APARELHO nomeado da sessão (migração `0128`; nulo = ainda sem nome — com as regras valendo, pede o nome). */
+    aparelhoId: integer("aparelho_id").references((): AnySQLiteColumn => aparelhos.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("sessoes_token_uq").on(t.tokenHash),
@@ -2004,3 +2006,96 @@ export const mesaExcluidos = sqliteTable(
     index("mesa_excluidos_dfd_idx").on(t.dfdId),
   ],
 );
+
+/** TERMO DE USO (migração `0128`): rascunho → publicado (texto final congelado + SHA-256). */
+export const termosUso = sqliteTable(
+  "termos_uso",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    versao: integer("versao").notNull(),
+    titulo: text("titulo").notNull(),
+    textoAdm: text("texto_adm").notNull(),
+    clausulasAuto: text("clausulas_auto"),
+    textoFinal: text("texto_final"),
+    hash: text("hash"),
+    estado: text("estado").notNull().default("rascunho"),
+    carenciaDias: integer("carencia_dias").notNull().default(0),
+    publicadoEm: text("publicado_em"),
+    publicadoPor: text("publicado_por"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("termos_uso_versao_uq").on(t.versao)],
+);
+
+/** O ACEITE (assinatura eletrônica simples) — o retrato da pessoa e do aparelho no momento + o selo. */
+export const termosAceites = sqliteTable(
+  "termos_aceites",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    termoId: integer("termo_id")
+      .notNull()
+      .references(() => termosUso.id, { onDelete: "cascade" }),
+    versao: integer("versao").notNull(),
+    hash: text("hash").notNull(),
+    nome: text("nome").notNull(),
+    matricula: text("matricula").notNull().default(""),
+    cargo: text("cargo").notNull().default(""),
+    unidade: text("unidade").notNull().default(""),
+    email: text("email").notNull(),
+    ip: text("ip").notNull().default(""),
+    navegador: text("navegador").notNull().default(""),
+    aparelhoId: integer("aparelho_id"),
+    aparelhoNome: text("aparelho_nome").notNull().default(""),
+    metodo: text("metodo").notNull(),
+    codigo: text("codigo").notNull(),
+    selo: text("selo").notNull(),
+    em: text("em").notNull(),
+    teste: integer("teste", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [uniqueIndex("termos_aceites_codigo_uq").on(t.codigo), uniqueIndex("termos_aceites_usuario_termo_uq").on(t.usuarioId, t.termoId)],
+);
+
+/** Quem precisa aceitar uma versão (sai ao aceitar) — `prazo` = o fim da carência. */
+export const termosPendencias = sqliteTable(
+  "termos_pendencias",
+  {
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    termoId: integer("termo_id")
+      .notNull()
+      .references(() => termosUso.id, { onDelete: "cascade" }),
+    prazo: text("prazo").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.termoId] })],
+);
+
+/** Os APARELHOS nomeados de cada conta (o hash do cookie `pca_aparelho`). */
+export const aparelhos = sqliteTable(
+  "aparelhos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    hash: text("hash").notNull(),
+    nome: text("nome").notNull(),
+    navegador: text("navegador").notNull().default(""),
+    ip: text("ip").notNull().default(""),
+    criadoEm: text("criado_em").notNull(),
+    vistoEm: text("visto_em"),
+    teste: integer("teste", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [uniqueIndex("aparelhos_usuario_hash_uq").on(t.usuarioId, t.hash)],
+);
+
+/** O limite PRÓPRIO da pessoa (nulo = o do papel ou o padrão) e o fim da trava de troca. */
+export const aparelhosConta = sqliteTable("aparelhos_conta", {
+  usuarioId: integer("usuario_id")
+    .primaryKey()
+    .references(() => usuarios.id, { onDelete: "cascade" }),
+  limite: integer("limite"),
+  trocaAte: text("troca_ate"),
+});

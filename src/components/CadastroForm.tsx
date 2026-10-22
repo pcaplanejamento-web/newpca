@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   DOMINIO_INSTITUCIONAL,
   emailDaParteLocal,
@@ -21,10 +21,12 @@ import { Button } from "./Button";
 import { CartaoAuth, ConcluidoAuth, ErroAuth } from "./CartaoAuth";
 import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
 import { OpcoesUnidades, rotuloUnidade } from "./OpcoesUnidades";
-import { PasswordField, SelectField, TextField } from "./Field";
+import { Checkbox, PasswordField, SelectField, TextField } from "./Field";
 import { CampoMatricula } from "./CampoMatricula";
 import { CampoTelefone } from "./Telefone";
 import { IconArrowRight, IconMail, IconUser } from "./icons";
+import { Modal } from "./Modal";
+import { LeituraTermo } from "./AceiteTermo";
 
 /**
  * CADASTRO em 2 etapas (um dos modos da `TelaAcesso`): (1) nome completo, matrícula, contato institucional (WhatsApp), cargo/função, unidade, e-mail INSTITUCIONAL e senha (+ captcha) → envia o código;
@@ -66,6 +68,18 @@ export function CadastroForm({
   const [erro, setErro] = useState<string | null>(erroInicial);
   const [criando, setCriando] = useState(false);
   const [pendente, setPendente] = useState(false);
+  // O TERMO DE USO em vigor (implantação ativa): obrigatório ANTES de enviar o código — lido até o fim no banner.
+  const [termo, setTermo] = useState<{ versao: number; hash: string; titulo: string; texto: string } | null>(null);
+  const [termoAberto, setTermoAberto] = useState(false);
+  const [termoLido, setTermoLido] = useState(false);
+  const [aceitou, setAceitou] = useState(false);
+  useEffect(() => {
+    if (semCodigo) return;
+    fetch("/api/termo/vigente", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ exigido?: boolean; termo?: { versao: number; hash: string; titulo: string; texto: string } }>)
+      .then((j) => setTermo(j.exigido && j.termo ? j.termo : null))
+      .catch(() => {});
+  }, [semCodigo]);
   const captcha = useCaptcha(turnstile);
   const cod = useCodigoEmail("cadastro");
 
@@ -108,6 +122,7 @@ export function CadastroForm({
           senha,
           // O 1º acesso (sem código) confere o captcha aqui; os demais já o conferiram ao pedir o código.
           ...(semCodigo ? { token: captcha.token } : { codigo }),
+          ...(termo ? { termoVersao: termo.versao, termoHash: termo.hash } : {}),
         }),
       });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; pendente?: boolean };
@@ -141,6 +156,10 @@ export function CadastroForm({
     const primeiro = Object.values(problemas)[0];
     if (primeiro) {
       setErro(`Confira os campos destacados — ${primeiro}`);
+      return;
+    }
+    if (termo && !aceitou) {
+      setErro("Leia e aceite o Termo de Uso para continuar.");
       return;
     }
     if (!captcha.pronto) {
@@ -319,6 +338,49 @@ export function CadastroForm({
           required
         />
       </div>
+
+      {termo && (
+        <div className="mt-2 flex items-center gap-2 text-[13px]">
+          <Checkbox
+            label={
+              <span>
+                Li e aceito o{" "}
+                <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => setTermoAberto(true)}>
+                  Termo de Uso
+                </button>
+              </span>
+            }
+            checked={aceitou}
+            onChange={(e) => (termoLido ? setAceitou(e.target.checked) : setTermoAberto(true))}
+          />
+        </div>
+      )}
+      {termo && (
+        <Modal
+          open={termoAberto}
+          onClose={() => setTermoAberto(false)}
+          titulo={`${termo.titulo} — versão ${termo.versao}`}
+          size="xl"
+          rodape={
+            <div className="flex items-center justify-end gap-2">
+              {!termoLido && <span className="text-[12px] text-muted">Role até o fim para aceitar.</span>}
+              <Button
+                size="sm"
+                variant="accent"
+                disabled={!termoLido}
+                onClick={() => {
+                  setAceitou(true);
+                  setTermoAberto(false);
+                }}
+              >
+                Li e aceito
+              </Button>
+            </div>
+          }
+        >
+          <LeituraTermo texto={termo.texto} onFim={() => setTermoLido(true)} altura="max-h-[60vh]" />
+        </Modal>
+      )}
 
       {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
 

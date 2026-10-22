@@ -27,6 +27,12 @@ export const LIMITES_ACESSO = {
   chatPrivado: { max: 30, janelaS: 60 },
   /** RECONFERÊNCIAS completas da Mesa ("Reverificar tudo" — cada fatia conta) da MESMA pessoa. */
   conferenciaFresca: { max: 300, janelaS: 10 * 60 },
+  /** TERMO DE USO: tentativas de assinar (senha/código/frase errados) da MESMA pessoa. */
+  aceiteTermo: { max: 10, janelaS: 15 * 60 },
+  /** A verificação PÚBLICA do comprovante pelo código (por IP). */
+  verificarTermoIp: { max: 30, janelaS: 10 * 60 },
+  /** "Pedir liberação ao ADM" da troca de aparelho (por pessoa). */
+  liberacaoAparelho: { max: 3, janelaS: 24 * 60 * 60 },
 } as const satisfies Record<string, RegraLimite>;
 
 export type TipoLimite = keyof typeof LIMITES_ACESSO;

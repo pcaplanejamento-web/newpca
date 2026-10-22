@@ -264,6 +264,43 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     SVG repetido em `OPACIDADE_MARCA.tela` (abaixo do que o olho percebe; aparece ao realçar a captura) e `.papel` na
     impressão (`[data-marca-dagua]` + `print-color-adjust:exact`), sem capturar o toque. As ferramentas que salvam a captura em
     arquivo e a foto pelo celular nenhum site alcança — a marca d'água identifica. Os "Copiar" do sistema e as exportações (ação Exportar) seguem.
+- **TERMO DE USO + APARELHOS DA CONTA (v1.167.0, migração `0128`, aditiva — tabelas `termos_uso`, `termos_aceites`,
+  `termos_pendencias`, `aparelhos`, `aparelhos_conta` + `sessoes.aparelho_id` set null; config no blob `configuracoes.acessoConta`):**
+  - **Implantação** (`acesso-conta-core.ts`, puro e testado — `tests/termo-aparelhos.test.ts`): `modo` desligado (PADRÃO — nada
+    muda) · teste (só os `testadores`; `repetirAoEntrar` = cada login pede o aceite e o nome do aparelho de novo, sem trava; os
+    aceites ficam `teste=1` e o PDF leva "TESTE") · ativo (todos; passar a ativo pede confirmação com a contagem e apaga os
+    aceites/aparelhos/pendências do teste, depois exige a versão vigente de todos). **`regrasValemPara`** é o ÚNICO ponto que
+    decide; `aparelhosValemPara` (o ADM fica fora do limite com `isentarAdm`, menos no teste). Loader `acesso-conta.ts` (cache 60 s).
+  - **Sessão sem consulta a mais:** `getUsuarioAtual` lê na MESMA consulta o aparelho da sessão, o aparelho conhecido pelo cookie
+    `pca_aparelho` (`hashDoAparelho` = SHA-256 de `aparelho:<cookie>`) e o MENOR prazo das pendências → `UsuarioSessao.pendencia`
+    {nomearAparelho, termo ok|carencia|bloqueado (`estadoTermo`; o ADM nunca bloqueado), aparelhoId}. A sessão de um aparelho
+    conhecido é ligada sozinha (menos no "repetir"). **Bloqueio:** o layout do `/painel` leva a `/acesso/aparelho` ou
+    `/acesso/termo` (`destinoBloqueio`, fora do painel, como o `/nova-senha`); a carência mostra o `AvisoTermoPendente`; as
+    guardas `exigirUsuario`/`exigirSessao` respondem 403 `{bloqueio}` — só `exigirUsuarioLivre` (acesso, termo, contas, erros,
+    perfil/senha) passa. Os canais ao vivo do `worker.ts` NÃO conferem o bloqueio (só leitura; a tela bloqueada não os abre).
+  - **Aparelhos** (`aparelhos-sql.ts`, trava NO SQL, testados no D1 real; D1 `aparelhos.ts`): limite = o da pessoa
+    (`aparelhos_conta.limite`) › o do papel (`porPapel`) › o padrão (1–10); nomear entra só com vaga (`INSERT … SELECT … WHERE
+    COUNT < limite`); lotado = TROCA atômica (encerra as sessões dos retirados, retira, registra o novo, liga a sessão e grava
+    `troca_ate` — só se a retirada abre a vaga; o aparelho da própria sessão nunca sai); em trava nenhum aparelho NOVO entra,
+    mesmo com vaga (`situacaoNovoAparelho`); "Pedir liberação" avisa os ADMs (tipo `seguranca`, 3/dia); o ADM libera a troca e
+    muda o limite no banner do usuário. Retirar outro aparelho no Perfil não trava. Só o cookie identifica (nunca IP + navegador).
+  - **Termo** (`termo-uso-core.ts` puro + `termos-sql.ts` + D1 `termo-uso.ts`): rascunho (o `modeloTermo` profissional como
+    início) → **publicar** congela o texto final (`montarTermo` = texto do ADM + as **cláusulas automáticas**
+    `clausulasAutomaticas` das configurações reais: aparelhos, sessão/inatividade, registros, proteção de dados, presença/chat,
+    e-mails, LGPD com o encarregado, aceite eletrônico) + o SHA-256 (`hashTexto`); o público (todos · papéis · grupos · pessoas;
+    no teste ∩ testadores) recebe a pendência com a carência 0–30 dias; "Exigir de novo" numa versão; aviso de termo
+    DESATUALIZADO quando as cláusulas de agora diferem (`assinaturaClausulas`). **Aceite** (`POST /api/acesso/termo`): o hash
+    lido = o vigente, a identidade pela senha, pelo código do e-mail (finalidade `termo` — `POST /api/acesso/termo/codigo`) ou,
+    sem nenhum dos dois, a frase "LI E CONCORDO"; grava o retrato (nome, matrícula, cargo, unidade, e-mail — sem CPF), IP,
+    navegador, aparelho, método, o código de verificação (128 bits base32) e o SELO (`seloAceite` = SHA-256 de tudo).
+    Assinatura eletrônica SIMPLES (Lei 14.063/2020, art. 4º, I). **Cadastro:** com o termo em vigor (ativo), "Li e aceito"
+    (o termo num `Modal`, `LeituraTermo` destrava no fim) antes do código; a rota confere versão + hash (409 se mudou) e grava o
+    aceite com a conta. **Comprovante:** `GET /api/termo/aceites/[id]` (a pessoa ou o ADM) → PDF no navegador
+    (`baixarComprovanteTermo`, `blocosComprovante`); verificação PÚBLICA `/termo/verificar/[código]` (limite por IP; só
+    válido/versão/data/INICIAIS). O ADM baixa o texto integral de cada versão em PDF (a Proteção de dados não afeta).
+  - **Telas:** Configurações → **Termo de uso** (`TermoUsoAdmin` + `CamposAcessoConta`), `/acesso/aparelho` (`NomearAparelho`,
+    `LinhaAparelho`), `/acesso/termo` (`AceiteTermo`, `TextoTermo`, `LeituraTermo`), Perfil → Segurança → "Meus aparelhos e
+    termos" e o banner do usuário (`AparelhosConta`, `admin`). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o

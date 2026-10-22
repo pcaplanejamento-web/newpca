@@ -45,7 +45,8 @@ import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 import { Tabs } from "./Tabs";
 import { AparenciaPessoal } from "./AparenciaPessoal";
-import { IconPalette } from "./icons";
+import { IconAparelho, IconPalette } from "./icons";
+import { AparelhosConta } from "./AparelhosConta";
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
 
@@ -539,6 +540,10 @@ export function PerfilView({
                 {captcha.widget}
               </div>
             )}
+          </SecaoPerfil>
+          {/* TERMO DE USO + APARELHOS: os aparelhos nomeados (renomear, retirar os outros) e os comprovantes dos termos aceitos */}
+          <SecaoPerfil icone={<IconAparelho className="h-4 w-4" />} titulo="Meus aparelhos e termos" descricao="Os aparelhos vinculados à sua conta e os comprovantes do Termo de Uso que você aceitou.">
+            <AparelhosConta />
           </SecaoPerfil>
               </div>
             ),

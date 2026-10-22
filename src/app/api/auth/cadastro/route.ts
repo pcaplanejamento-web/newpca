@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { usuarios } from "@/db/schema";
+import { getAcessoConta } from "@/lib/acesso-conta";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { contarUsuarios, criarSessao, definirCookieSessao, hashSenha } from "@/lib/auth";
 import { cadastroSchema } from "@/lib/auth-validation";
@@ -14,6 +15,7 @@ import { comandoCadastroPendente, comandoCadastroPrimeiro } from "@/lib/papeis-s
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 import { depoisDaResposta } from "@/lib/segundo-plano";
 import { contarTentativa, ipDe, respostaLimite, verificarCaptcha } from "@/lib/seguranca-acesso";
+import { aceitarTermo, termoDoCadastro } from "@/lib/termo-uso";
 import { matriculaEmUso, MSG_MATRICULA_EM_USO, violouMatriculaUnica } from "@/lib/usuarios-unicos";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +45,11 @@ export async function POST(req: Request) {
     const [existe] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, email)).limit(1);
     if (existe) return erro("Este e-mail já está cadastrado. Entre ou use “Esqueci a senha”.", 409);
     if (await matriculaEmUso(matricula)) return erro(MSG_MATRICULA_EM_USO, 409);
+    // O TERMO DE USO em vigor (implantação ATIVA) é obrigatório — antes de gastar o código; o texto lido tem de ser o vigente.
+    const acesso = await getAcessoConta();
+    const termo = !primeiro && acesso.modo === "ativo" ? await termoDoCadastro(corpo.data.termoVersao, corpo.data.termoHash) : { termo: null, mudou: false };
+    if (termo.termo && !corpo.data.termoVersao) return erro("Leia e aceite o Termo de Uso para criar a conta.", 422);
+    if (termo.mudou) return erro("O Termo de Uso foi atualizado — leia e aceite a versão atual.", 409);
     if (primeiro) {
       // Sem o código (ainda não há envio de e-mails): o captcha é conferido AQUI.
       const cap = await verificarCaptcha(req, token);
@@ -58,13 +65,15 @@ export async function POST(req: Request) {
     // nunca viram dois ADMs); os demais entram com o papel PADRÃO, pendentes de aprovação.
     const [u] = primeiro ? await comandoCadastroPrimeiro(db, dados) : await comandoCadastroPendente(db, dados);
     if (!u) return erro("Outra pessoa acabou de criar a primeira conta. Recarregue a página e confirme o seu e-mail com o código.", 409);
+    // O aceite gravado JUNTO da criação da conta (o código do e-mail confirmou a identidade).
+    const aceite = termo.termo ? await aceitarTermo(termo.termo, { usuarioId: u.id, ip: ipDe(req), userAgent: req.headers.get("user-agent"), aparelhoId: null, aparelhoNome: "", metodo: "codigo" }, acesso) : null;
 
     await registrarAuditoria({
       usuario: { id: u.id, nome, email },
       acao: "cadastro",
       entidade: "usuario",
       entidadeId: u.id,
-      resumo: `${nome} criou uma conta (${u.status === "ativo" ? "ativa" : "pendente de aprovação"})`,
+      resumo: `${nome} criou uma conta (${u.status === "ativo" ? "ativa" : "pendente de aprovação"})${aceite ? ` — Termo de Uso versão ${termo.termo?.versao} aceito (código ${aceite.codigo})` : ""}`,
       depois: { nome, email, matricula, cargo, reparticaoId, telefone, telefoneWhatsapp, status: u.status },
     });
 

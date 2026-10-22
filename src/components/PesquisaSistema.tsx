@@ -125,7 +125,7 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
   "/painel/configuracoes": {
     param: "aba",
     abas: [
-      ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"],
+      ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"], ["termo", "Termo de uso"],
       ["escopo", "Filtro da unidade"], ["publico", "Tela pública"], ["cargos", "Cargos e funções"], ["acesso", "Tela de acesso"], ["tabelas", "Tabelas"], ["pcas", "PCAs"], ["situacoes", "Situações"],
       ["feriados", "Feriados"], ["presenca", "Presença e chat"], ["notificacoes", "Notificações"], ["avaliacao", "Avaliação"],
       ["referencia", "Referência"], ["mais", "Mais"],
@@ -138,6 +138,7 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
  * `href` da tela ou "href?valor" da aba.
  */
 const PALAVRAS: Record<string, string> = {
+  "/painel/configuracoes?aba=termo": "termo de uso aceite assinatura lgpd encarregado aparelhos limite troca teste implantação cláusulas",
   "/painel/integracoes": "turnstile captcha google login resend email e-mail trello cloudflare monitoramento métricas",
   "/painel/armazenamento": "banco dados tamanho saúde sessões expurgar online worker",
   "/painel/auditoria": "histórico alterações registro log quem mudou",

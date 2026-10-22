@@ -1,6 +1,17 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import {
+  aparelhosValemPara,
+  COOKIE_APARELHO,
+  hashDoAparelho,
+  idAparelhoValido,
+  type PendenciaAcesso,
+  regrasValemPara,
+  repeteAoEntrar,
+  SEM_PENDENCIA,
+} from "./acesso-conta-core";
+import { getAcessoConta } from "./acesso-conta";
 import { COOKIE_CONTAS, lerContas, MAX_CONTAS, textoContas } from "./contas-core";
 import { getDb } from "./db";
 import { type Capacidades, coerceCapacidades } from "./papeis-core";
@@ -9,6 +20,7 @@ import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
 import { urlFoto } from "./pessoa";
 import { getConfigSeguranca } from "./seguranca";
 import { renovarAtividade, sessaoInativa } from "./seguranca-core";
+import { estadoTermo } from "./termo-uso-core";
 import { papeis, sessoes, usuarios } from "@/db/schema";
 
 /**
@@ -38,6 +50,8 @@ export type UsuarioSessao = {
   papel: PapelSessao;
   /** O ADM exigiu uma SENHA NOVA: o painel leva a pessoa a `/nova-senha` antes de qualquer tela. */
   trocarSenha: boolean;
+  /** TERMO DE USO + APARELHOS: o que a sessão precisa resolver antes de usar o sistema (sem as regras valendo = nada). */
+  pendencia: PendenciaAcesso;
 };
 
 /** O papel da sessão: as AÇÕES por tela (`capacidades`) e os DETALHES — o controle fino dentro delas (colunas das Mesas,
@@ -251,7 +265,7 @@ type LinhaSessao = {
 export function sessaoDaLinha(row: LinhaSessao): UsuarioSessao {
   const { temFoto, versao, papelId, papelNome, papelChave, papelCapacidades, papelDetalhes, ...u } = row;
   const papel = papelDaLinha({ id: papelId, nome: papelNome, chave: papelChave, capacidades: papelCapacidades, detalhes: papelDetalhes });
-  return { ...u, apelido: u.apelido ?? null, foto: urlFoto(u.id, !!temFoto, versao), admin: papel.chave === "admin", papel };
+  return { ...u, apelido: u.apelido ?? null, foto: urlFoto(u.id, !!temFoto, versao), admin: papel.chave === "admin", papel, pendencia: SEM_PENDENCIA };
 }
 
 /**
@@ -263,9 +277,20 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
   const token = jar.get(COOKIE)?.value;
   if (!token) return null;
   const tokenHash = await sha256Hex(token);
-  const [[linha], cfg] = await Promise.all([
+  const idAp = jar.get(COOKIE_APARELHO)?.value;
+  const hashAp = idAparelhoValido(idAp) ? await hashDoAparelho(idAp) : "";
+  const [[linha], cfg, cfgConta] = await Promise.all([
     getDb()
-    .select({ ...colunasSessao, sessaoId: sessoes.id, vistoEm: sessoes.vistoEm, criadoEmSessao: sessoes.criadoEm })
+    .select({
+      ...colunasSessao,
+      sessaoId: sessoes.id,
+      vistoEm: sessoes.vistoEm,
+      criadoEmSessao: sessoes.criadoEm,
+      aparelhoSessao: sessoes.aparelhoId,
+      // O aparelho deste navegador já nomeado pela pessoa (pelo cookie) e o MENOR prazo de termo pendente — na MESMA consulta.
+      aparelhoConhecido: sql<number | null>`(SELECT ap.id FROM aparelhos AS ap WHERE ap.usuario_id = ${usuarios.id} AND ap.hash = ${hashAp})`,
+      termoPrazo: sql<string | null>`(SELECT MIN(tp.prazo) FROM termos_pendencias AS tp WHERE tp.usuario_id = ${usuarios.id})`,
+    })
     .from(sessoes)
     .innerJoin(usuarios, eq(sessoes.usuarioId, usuarios.id))
     .leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
@@ -277,9 +302,10 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
     )
     .limit(1),
     getConfigSeguranca(),
+    getAcessoConta(),
   ]);
   if (linha?.status !== "ativo") return null;
-  const { sessaoId, vistoEm, criadoEmSessao, ...row } = linha;
+  const { sessaoId, vistoEm, criadoEmSessao, aparelhoSessao, aparelhoConhecido, termoPrazo, ...row } = linha;
   // INATIVIDADE (Configurações → Segurança): parada além do limite = encerrada. A atividade é gravada no máximo a cada
   // poucos minutos (best-effort — nunca derruba a requisição).
   const agora = Date.now();
@@ -296,7 +322,18 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
       .batch([db.update(sessoes).set({ vistoEm: iso }).where(eq(sessoes.id, sessaoId)), db.update(usuarios).set({ ultimoAcessoEm: iso }).where(eq(usuarios.id, row.id))])
       .catch(() => {});
   }
-  return sessaoDaLinha(row);
+  const pessoa = sessaoDaLinha(row);
+  const quem = { id: pessoa.id, admin: pessoa.admin };
+  if (!regrasValemPara(cfgConta, quem)) return pessoa;
+  // O aparelho: a sessão já ligada vale; a NÃO ligada de um aparelho conhecido é ligada agora (best-effort) — menos no teste
+  // com "repetir a cada login", em que cada sessão nova nomeia (ou escolhe) o aparelho de novo.
+  let aparelhoId = aparelhoSessao ?? null;
+  if (aparelhoId == null && aparelhoConhecido != null && !repeteAoEntrar(cfgConta, quem)) {
+    aparelhoId = aparelhoConhecido;
+    await getDb().update(sessoes).set({ aparelhoId }).where(eq(sessoes.id, sessaoId)).catch(() => {});
+  }
+  const nomearAparelho = aparelhosValemPara(cfgConta, quem) && aparelhoId == null;
+  return { ...pessoa, pendencia: { nomearAparelho, termo: estadoTermo(termoPrazo, agora, pessoa.admin), aparelhoId } };
 });
 
 /** Quantos usuários existem (para o bootstrap do primeiro admin). */

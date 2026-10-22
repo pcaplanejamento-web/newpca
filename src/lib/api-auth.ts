@@ -1,12 +1,29 @@
 import { NextResponse } from "next/server";
 import { type Acesso, getAcesso, motivoNoQuadro, motivoRecusa, podeOrcamento, podePca } from "./acesso";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
+import { destinoBloqueio } from "./acesso-conta-core";
 import type { AcaoPapel, Tela } from "./papeis-core";
 
-/** Exige usuário autenticado. Retorna { u } ou { erro } (resposta 401). */
+/** TERMO DE USO + APARELHOS: a sessão com o aparelho sem nome ou o termo vencido não usa a API (só as rotas de acesso, que
+ * chamam `exigirUsuarioLivre`). 403 com o destino — a tela leva a pessoa até ele. */
+function bloqueio(u: UsuarioSessao): { erro: NextResponse } | null {
+  const destino = destinoBloqueio(u.pendencia);
+  if (!destino) return null;
+  const error = destino === "/acesso/aparelho" ? "Dê um nome a este aparelho para continuar." : "Aceite o Termo de Uso atualizado para continuar.";
+  return { erro: NextResponse.json({ ok: false, error, bloqueio: destino }, { status: 403 }) };
+}
+
+/** Exige usuário autenticado (e sem bloqueio de termo/aparelho). Retorna { u } ou { erro } (401/403). */
 export async function exigirUsuario(): Promise<
   { u: UsuarioSessao } | { erro: NextResponse }
 > {
+  const r = await exigirUsuarioLivre();
+  if ("erro" in r) return r;
+  return bloqueio(r.u) ?? r;
+}
+
+/** A sessão SEM o bloqueio de termo/aparelho — só as rotas que resolvem o bloqueio (acesso, termo, contas, erros). */
+export async function exigirUsuarioLivre(): Promise<{ u: UsuarioSessao } | { erro: NextResponse }> {
   const u = await getUsuarioAtual();
   if (!u)
     return { erro: NextResponse.json({ ok: false, error: "Não autenticado." }, { status: 401 }) };
@@ -32,7 +49,7 @@ const naoAutenticado = () => ({ erro: NextResponse.json({ ok: false, error: "Nã
 export async function exigirSessao(): Promise<Guarda | { erro: NextResponse }> {
   const acesso = await getAcesso();
   if (!acesso) return naoAutenticado();
-  return { u: acesso.u, acesso };
+  return bloqueio(acesso.u) ?? { u: acesso.u, acesso };
 }
 
 /** A recusa (403) quando a AÇÃO não é permitida na tela — no grupo ativo ou, com `grupoId`, no grupo do recurso.

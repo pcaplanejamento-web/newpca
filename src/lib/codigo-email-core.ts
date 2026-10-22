@@ -5,7 +5,7 @@
 
 import { iguaisEmTempoConstante, sha256Hex } from "./password.ts";
 
-export const FINALIDADES_CODIGO = ["cadastro", "senha"] as const;
+export const FINALIDADES_CODIGO = ["cadastro", "senha", "termo"] as const;
 export type FinalidadeCodigo = (typeof FINALIDADES_CODIGO)[number];
 
 /** Validade do código (minutos). */

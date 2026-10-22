@@ -1,4 +1,6 @@
 import { ehGeral } from "@/lib/escopo-unidades-core";
+import { destinoBloqueio } from "@/lib/acesso-conta-core";
+import { AvisoTermoPendente } from "@/components/AceiteTermo";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ComponentesPapel } from "@/components/ComponentesPapel";
@@ -40,6 +42,9 @@ export default async function PainelLayout({
   const { u: usuario, grupos, grupoAtivo: ativo } = acesso;
   // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
   if (usuario.trocarSenha) redirect("/nova-senha");
+  // TERMO DE USO + APARELHOS: o aparelho sem nome ou o termo vencido — nenhuma tela antes de resolver.
+  const bloqueio = destinoBloqueio(usuario.pendencia);
+  if (bloqueio) redirect(bloqueio);
 
   const [aparencia, pcas, versao, protecaoCfg, modulos, nomesSiglas] = await Promise.all([
     getAparencia(),
@@ -96,6 +101,7 @@ export default async function PainelLayout({
     >
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
+      {usuario.pendencia.termo === "carencia" && <AvisoTermoPendente />}
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
         <ComponentesPapel retirados={componentesDoAcesso(acesso)} exibicao={usuario.papel.detalhes.exibicao}>

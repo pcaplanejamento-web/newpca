@@ -18,6 +18,8 @@ export type AcaoAuditoria =
   | "aprovar";
 
 export type EntidadeAuditoria =
+  | "termo_uso"
+  | "aparelho"
   | "dfd"
   | "dfd_item"
   | "protocolo"
@@ -74,6 +76,8 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
 
 /** Nome legível de cada entidade. */
 export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
+  termo_uso: "Termo de Uso",
+  aparelho: "Aparelho",
   dfd: "DFD",
   dfd_item: "Item do DFD",
   mesa_lixeira: "Lixeira da Mesa",

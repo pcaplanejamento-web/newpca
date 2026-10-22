@@ -45,7 +45,8 @@ export const codigoSchema = z.string().trim().regex(/^\d{6}$/, "Informe os 6 dí
 /** Pedir um CÓDIGO por e-mail (antes: o captcha). Na senha, com a sessão ativa, o e-mail é o da conta. */
 export const solicitarCodigoSchema = z.object({
   email: emailSchema,
-  finalidade: z.enum(FINALIDADES_CODIGO),
+  // O "termo" (aceite do Termo de Uso) só pela rota logada `POST /api/acesso/termo/codigo`.
+  finalidade: z.enum(FINALIDADES_CODIGO).exclude(["termo"]),
   // O captcha (token do Turnstile ou da verificação própria) — a rota SEMPRE confere.
   token: z.string().max(4000).optional(),
   // No cadastro: a matrícula já usada é recusada antes de enviar o código.
@@ -68,6 +69,9 @@ export const cadastroSchema = z.object({
   codigo: codigoSchema.optional(),
   // O captcha — conferido aqui só no PRIMEIRO acesso (sem código); nos demais, antes de enviar o código.
   token: z.string().max(4000).optional(),
+  // O TERMO DE USO aceito no cadastro (em vigor): a versão e o hash do texto LIDO — mudou no meio = 409.
+  termoVersao: z.number().int().positive().optional(),
+  termoHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
 });
 
 /** Criar/redefinir a senha pelo código enviado ao e-mail ("Esqueci a senha"). */

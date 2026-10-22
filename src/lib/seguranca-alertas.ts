@@ -10,6 +10,22 @@ import { salvarPreferenciaTabela } from "./preferencias-tabela";
 import { getConfigSeguranca } from "./seguranca";
 import type { AcessoRegistro } from "./acessos-core";
 import { avaliarAparelho, lerAparelhos, resumoNavegador } from "./seguranca-core";
+import { getAcessoConta } from "./acesso-conta";
+import { termoVigente } from "./termo-uso";
+import { comandoPendenciaJa } from "./termos-sql";
+
+/** O TESTE do Termo de Uso com "repetir a cada login": a pendência da versão vigente volta já (a sessão nova também pede o
+ * nome do aparelho de novo — `getUsuarioAtual` não a liga sozinha nesse modo). Best-effort. */
+async function repetirTesteAoEntrar(usuarioId: number): Promise<void> {
+  try {
+    const cfg = await getAcessoConta({ fresco: true });
+    if (!cfg.repetirAoEntrar || cfg.modo !== "teste" || !cfg.testadores.includes(usuarioId)) return;
+    const t = await termoVigente();
+    if (t) await comandoPendenciaJa(getDb(), usuarioId, t.id, new Date().toISOString()).run();
+  } catch (e) {
+    console.error("[termo] repetir ao entrar:", (e as Error).message);
+  }
+}
 
 // ALERTAS DE LOGIN SUSPEITO (Configurações → Segurança): aparelho novo e conta bloqueada por senhas erradas. BEST-EFFORT —
 // nunca derrubam o login. O aparelho = um cookie httpOnly aleatório (o banco guarda só o HASH, na preferência da pessoa).
@@ -21,6 +37,7 @@ type Pessoa = { id: number; nome: string; email: string };
 
 /** Depois de um login bem-sucedido (senha ou Google): aparelho novo → aviso aos ADMs e à própria pessoa. */
 export async function aposEntrar(req: Request, u: Pessoa, canal: "senha" | "Google"): Promise<void> {
+  await repetirTesteAoEntrar(u.id);
   try {
     const cfg = await getConfigSeguranca();
     const jar = await cookies();

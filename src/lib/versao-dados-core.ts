@@ -7,6 +7,8 @@
  * EXCLUSÃO: toda entidade nova ou desconhecida continua contando (invalidar a mais, nunca a menos).
  */
 export const FORA_DOS_DADOS = [
+  "termo_uso",
+  "aparelho",
   "tarefa",
   "tarefa_quadro",
   "tarefa_lista",

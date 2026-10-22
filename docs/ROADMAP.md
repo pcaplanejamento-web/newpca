@@ -11,6 +11,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Termo de Uso assinado + aparelhos vinculados à conta (v1.167.0) — entregue
+Configurações → Termo de uso: implantação Desligado · Teste (testadores, repetir a cada login) · Ativo; texto do ADM + cláusulas
+automáticas; versões com público e carência; aceite por senha/código/declaração com selo e comprovante em PDF; verificação
+pública pelo código. Aparelhos: nome no 1º acesso, limite (padrão/papel/pessoa), troca atômica e prazo sem troca; o ADM libera.
+**Próximo:** o canal ao vivo (`worker.ts`) conferir o aparelho nomeado; o alerta de login suspeito usar a tabela `aparelhos`.
+
 ### Acesso às unidades por aba (v1.161.0/1) — entregue
 Na aba em Todas o cabeçalho segue com as unidades do grupo; a tabela filtra pela coluna Unidade.
 Uma configuração por aba no grupo (Da pessoa · Soma · Todas): ex.: a Mesa do PCA com todas as unidades e o Dashboard/Orçamento só na unidade da pessoa; na Soma o seletor do cabeçalho trava.

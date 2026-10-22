@@ -1,6 +1,6 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { sessoes, usuarios } from "@/db/schema";
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirUsuarioLivre } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { hashSenha, sessaoAtualId } from "@/lib/auth";
 import { trocarSenhaSchema } from "@/lib/auth-validation";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /** Trocar (ou CRIAR) a senha no Perfil: vale depois do código de 6 dígitos enviado ao e-mail da conta. As OUTRAS sessões
  * são encerradas (a atual continua). */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirUsuarioLivre();
   if ("erro" in a) return a.erro;
   const corpo = await parseCorpo(trocarSenhaSchema, req);
   if ("resp" in corpo) return corpo.resp;

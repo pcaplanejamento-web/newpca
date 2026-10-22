@@ -150,12 +150,17 @@ export function emailAcessoLiberado(p: { nome: string }, ctx: ContextoEmail): Co
 }
 
 /** O CÓDIGO de confirmação (cadastro ou senha) — 6 dígitos, com a validade. */
-export function emailCodigo(p: { codigo: string; finalidade: "cadastro" | "senha"; validadeMin: number }, ctx: ContextoEmail): ConteudoEmail {
-  const cad = p.finalidade === "cadastro";
+export function emailCodigo(p: { codigo: string; finalidade: "cadastro" | "senha" | "termo"; validadeMin: number }, ctx: ContextoEmail): ConteudoEmail {
+  const TEXTO = {
+    cadastro: ["Confirme o seu e-mail institucional", "Use o código abaixo para confirmar o e-mail e concluir o cadastro na plataforma."],
+    senha: ["Confirme a sua nova senha", "Use o código abaixo para confirmar a nova senha da sua conta."],
+    termo: ["Confirme a assinatura do Termo de Uso", "Use o código abaixo para assinar eletronicamente o Termo de Uso da plataforma."],
+  } as const;
+  const [titulo, texto] = TEXTO[p.finalidade];
   return layoutEmail(ctx, {
     assunto: `${p.codigo} é o seu código de confirmação`,
-    titulo: cad ? "Confirme o seu e-mail institucional" : "Confirme a sua nova senha",
-    paragrafos: [cad ? "Use o código abaixo para confirmar o e-mail e concluir o cadastro na plataforma." : "Use o código abaixo para confirmar a nova senha da sua conta."],
+    titulo,
+    paragrafos: [texto],
     destaque: p.codigo,
     rodape: `O código vale por ${p.validadeMin} minutos. Se não foi você quem pediu, ignore este e-mail — nada será alterado.`,
   });

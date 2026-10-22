@@ -1,5 +1,5 @@
 import { contasDoAparelho, encerrarTodasSessoes, trocarConta } from "@/lib/auth";
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirUsuarioLivre } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { nomeExibicao } from "@/lib/pessoa";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /** As OUTRAS contas guardadas neste navegador — só o que o seletor mostra (nunca o token). */
 export async function GET() {
-  const g = await exigirUsuario();
+  const g = await exigirUsuarioLivre();
   if ("erro" in g) return g.erro;
   const contas = await contasDoAparelho(g.u.id);
   return ok({
@@ -21,7 +21,7 @@ const corpo = z.union([z.strictObject({ trocar: z.number().int().positive() }), 
 
 /** Troca para uma conta guardada, ou sai de TODAS as contas deste navegador. */
 export async function POST(req: Request) {
-  const g = await exigirUsuario();
+  const g = await exigirUsuarioLivre();
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(corpo, req);
   if ("resp" in p) return p.resp;

@@ -130,6 +130,17 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/usuarios/[id]/acessos": { GET: ADMIN },
 
   // ── Acesso (sem sessão) ─────────────────────────────────────────────────────────────────────────────────
+  "acesso/aparelho": { GET: pessoal("a situação dos aparelhos da conta"), POST: pessoal("nomear (ou trocar) o aparelho desta sessão — sem o bloqueio") },
+  "acesso/aparelho/liberacao": { POST: pessoal("pedir ao ADM a liberação da troca de aparelho") },
+  "acesso/termo": { GET: pessoal("o termo pendente da pessoa"), POST: pessoal("assinar o Termo de Uso (senha, código ou declaração)") },
+  "acesso/termo/codigo": { POST: pessoal("o código para assinar o termo, ao e-mail da própria conta") },
+  "perfil/aparelhos": { GET: pessoal("os aparelhos e os termos aceitos da própria conta") },
+  "perfil/aparelhos/[id]": { PATCH: pessoal("renomear um aparelho da própria conta"), DELETE: pessoal("retirar outro aparelho da própria conta") },
+  "termo/aceites/[id]": { GET: pessoal("o comprovante do aceite (a própria pessoa ou o ADM)") },
+  "termo/vigente": { GET: publica("o Termo de Uso em vigor, para o cadastro") },
+  "admin/termo": { GET: ADMIN, POST: ADMIN },
+  "admin/termo/[id]": { GET: ADMIN },
+  "admin/usuarios/[id]/aparelhos": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "auth/contas": { GET: pessoal("as outras contas guardadas neste navegador"), POST: pessoal("trocar de conta ou sair de todas") },
   "auth/cadastro": { POST: publica("criar a conta (código do e-mail)") },
   "auth/codigo": { POST: publica("enviar o código de confirmação (captcha)") },

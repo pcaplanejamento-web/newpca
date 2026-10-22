@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.167.0",
+    data: "2026-10-22",
+    titulo: "Termo de Uso assinado e aparelhos vinculados à conta (com fase de teste)",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Aba Termo de uso: o ADM escreve o termo (com modelo pronto), vê a prévia com as cláusulas automáticas (aparelhos, sessão, registros, proteção, LGPD), publica versões escolhendo quem precisa aceitar e o prazo, e acompanha quem aceitou.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Configurações", texto: "Implantação em três fases — Desligado, Teste (só os testadores escolhidos, com a opção de repetir a cada login) e Ativo (toda a plataforma).", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Configurações", texto: "Aparelhos por conta: limite padrão, por papel e por pessoa, e o prazo sem nova troca; o ADM libera a troca no banner do usuário.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Perfil", texto: "Meus aparelhos e termos: renomear e retirar aparelhos e baixar o comprovante assinado de cada termo aceito.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "novo", area: "Usuários", texto: "Banner do usuário com os aparelhos (retirar, limite próprio, liberar troca) e os termos aceitos.", link: "/painel/usuarios" },
+    ],
+  },
+  {
     versao: "1.166.2",
     data: "2026-10-22",
     titulo: "Nada fica vazio: limpeza dos protocolos sem DFDs e a regra do mover",

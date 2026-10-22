@@ -74,7 +74,7 @@ describe("acesso das rotas da API", () => {
         const falta = (x: string) => erros.push(`${m} ${k}: falta ${x}`);
         // A guarda do ADM pode estar num auxiliar do arquivo (a `chamada`), que chama `exigirAdmin`.
         if (r.tipo === "admin" && !(r.chamada ? tem(r.chamada) && fonte.includes("exigirAdmin(") : tem("exigirAdmin("))) falta(r.chamada ?? "exigirAdmin(");
-        if (r.tipo === "pessoal" && !tem("exigirUsuario(") && !tem("exigirSessao(")) falta("exigirUsuario( ou exigirSessao(");
+        if (r.tipo === "pessoal" && !tem("exigirUsuario(") && !tem("exigirUsuarioLivre(") && !tem("exigirSessao(")) falta("exigirUsuario( ou exigirSessao(");
         if (r.tipo === "tela") {
           if (!tem("exigirAcesso(")) falta("exigirAcesso(");
           if (!tem(`"${r.acao}"`)) falta(`a ação "${r.acao}"`);
