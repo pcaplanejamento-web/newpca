@@ -403,6 +403,7 @@ export function OrcamentoPca({
   }
   const dados = useMemo<DadosOrcamentoPca>(() => {
     if (!comparativo) return dadosServidor;
+    // Visão excluída (ou id antigo) = o orçamento inteiro — o seletor mostra o mesmo.
     const v = (comparativo.visoes ?? visoes).find((x) => x.id === visaoTela) ?? null;
     return { ...dadosServidor, ...orcamentoNaVisao(comparativo.itens, comparativo.vinculos ?? [], v, comparativo.alvos) };
   }, [dadosServidor, comparativo, visaoTela, visoes]);
@@ -421,7 +422,7 @@ export function OrcamentoPca({
   // A visão aberta SÓ PARA CONSULTA (o olho ao lado da Visão): filtros e vínculos travados.
   const [visaoVista, setVisaoVista] = useState<VisaoOrcamento | null>(null);
   const linhasVisao = useMemo(() => comparativo?.itens ?? null, [comparativo]);
-  const ausentes = contarAusentes(dados.ausentes ?? []);
+  const ausentes = contarAusentes(dadosServidor.ausentes ?? []);
   // VÍNCULOS por linha (o lápis): as unidades do CUBO do orçamento do ano + a gravação da aba Vínculos.
   const unidadesCubo = useMemo(() => (comparativo ? unidadesDoOrcamento(comparativo.itens) : []), [comparativo]);
   const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS, visoes);
@@ -661,7 +662,15 @@ export function OrcamentoPca({
           label={`Dotação ${dados.ano}`}
           value={brl(dados.filtrado)}
           detalhes={[
-            { rotulo: "Visão", valor: dados.visaoNome ?? "Orçamento inteiro" },
+            {
+              rotulo: "Visão",
+              // Uma linha só, cortada (o nome inteiro na dica) — o tamanho da KPI não muda com o nome da visão.
+              valor: (
+                <span className="inline-block max-w-[11rem] truncate align-bottom" title={dados.visaoNome ?? "Orçamento inteiro"}>
+                  {dados.visaoNome ?? "Orçamento inteiro"}
+                </span>
+              ),
+            },
             { rotulo: "Retirado pela visão", valor: brl(dados.bruto - dados.filtrado) },
             { rotulo: "Sem vínculo", valor: brl(ind.semVinculo), cor: ind.semVinculo > 0 ? "var(--warn)" : undefined },
           ]}
@@ -760,10 +769,10 @@ export function OrcamentoPca({
               <div className="flex w-full min-w-[12rem] items-center gap-2 sm:w-auto sm:max-w-sm sm:flex-1">
                 <div className="min-w-0 flex-1">
                   <SeletorVisaoPca
-                    visaoId={visaoTela}
+                    visaoId={dados.visaoId ?? null}
                     onEscolher={(id) => startTransition(() => setVisaoTela(id))}
                     visoes={visoes}
-                    podeEscolher
+                    podeEscolher={comparativo != null}
                     itens={linhasVisao}
                     onVer={linhasVisao && libera("pca.visaoDetalhes") ? setVisaoVista : undefined}
                     onEditar={
@@ -779,7 +788,7 @@ export function OrcamentoPca({
             <div className="flex items-center gap-2 lg:ml-auto">
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao
                   pcaId={dados.pcaId}
-                  visaoId={visaoTela}
+                  visaoId={dados.visaoId ?? null}
                   filtradas={
                     nivel === "unidade" && visiveis.length < linhas.length
                       ? visiveis.flatMap((l) => (l.nivel === "unidade" && l.unidadeId != null ? [l.unidadeId] : []))
@@ -859,7 +868,7 @@ export function OrcamentoPca({
           pcaId={dados.pcaId}
           aberto={engrenagem}
           onFechar={() => setEngrenagem(false)}
-          visaoId={dados.visaoId ?? null}
+          visaoId={dadosServidor.visaoId ?? null}
           visoes={visoes}
           itens={linhasVisao}
           vinculos={comparativo?.vinculos}

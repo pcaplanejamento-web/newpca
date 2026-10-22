@@ -99,7 +99,7 @@ export function SeletorVisaoPca({
       ]
     : undefined;
   return (
-    <div className="flex min-w-0 items-center gap-1.5" title={podeEscolher ? dica : `${dica} — sem acesso ao PCA para trocar a visão`}>
+    <div className="flex min-w-0 items-center gap-1.5" title={podeEscolher ? dica : `${dica} — sem o orçamento do ano carregado não há o que trocar`}>
       <div className="min-w-0 flex-1">
       <SelectField
         compacto

@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.7",
+    data: "2026-10-22",
+    titulo: "Revisão da troca de visão do orçamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "Na KPI de Dotação o nome da visão fica numa linha só (o inteiro na dica) — o tamanho não muda; o aviso da engrenagem e o editor seguem a visão PADRÃO do PCA; uma visão excluída volta ao orçamento inteiro; sem orçamento do ano o seletor fica travado.",
+        link: "/painel/pca?aba=orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.158.6",
     data: "2026-10-22",
     titulo: "Troca de visão fluida",
