@@ -23,7 +23,7 @@ const pcasSchema = idsSchema.nullable();
 
 /** No modo "unidade de cadastro": as telas em que o grupo vê TODAS as unidades (`{tela: "todas"}`; ausente = só as de
  * cadastro da pessoa). A rota guarda só as telas que o grupo abre. */
-const escopoTelasSchema = z.record(z.string().regex(/^[a-z]{1,30}$/, "Tela inválida."), z.literal("todas"));
+const escopoTelasSchema = z.record(z.string().regex(/^[a-z]{1,30}(\.[a-z]{1,30})?$/, "Tela inválida."), z.literal("todas"));
 
 /** As abas em FONTE ÚNICA no grupo (chaves "tela.aba"; a rota guarda só as conhecidas e das telas do grupo). */
 const fontesAbasSchema = z

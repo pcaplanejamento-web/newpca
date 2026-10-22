@@ -93,7 +93,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // O escopo por tela guarda só as telas que o grupo ABRE (as de agora ou as novas).
   const escopoTelas = escopoPedido !== undefined ? compactarEscopoTelas(escopoPedido, abas ?? antes.abas) : undefined;
   // As funções desligadas: só as das telas que o grupo abre (as de agora ou as novas); trocar os módulos também as poda.
-  const fontesAbas = funcoesPedidas !== undefined || abas ? compactarFontesAbas(funcoesPedidas ?? antes.fontesAbas, abas ?? antes.abas) : undefined;
+  const fontesAbas = funcoesPedidas !== undefined || abas ? compactarFontesAbas(funcoesPedidas ?? antes.fontesAbas, abas ?? antes.abas).filter((c) => !(escopoTelas ?? antes.escopoTelas)[c]) : undefined;
   // Tudo num LOTE: nome/módulos/chat/PCAs + pessoas + unidades (um id inválido nunca deixa o grupo pela metade).
   const comandos = [
     db

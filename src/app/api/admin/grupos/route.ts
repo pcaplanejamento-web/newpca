@@ -101,7 +101,7 @@ export async function POST(req: Request) {
   if (invalido) return erro(invalido, 422);
   const abas = telasDosModulos(modulos, mods);
   const escopoTelas = compactarEscopoTelas(escopoPedido, abas);
-  const fontesAbas = compactarFontesAbas(funcoesPedidas, abas);
+  const fontesAbas = compactarFontesAbas(funcoesPedidas, abas).filter((c) => !escopoTelas[c]);
   const [row] = await db
     .insert(grupos)
     .values({ nome, modulos: JSON.stringify(mods), abas: JSON.stringify(abas), chat, modoUnidades, escopoTelas: JSON.stringify(escopoTelas), pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo), orcamentos: orcsGrupo == null ? null : JSON.stringify(orcsGrupo), fontesAbas: fontesAbas.length ? JSON.stringify(fontesAbas) : null })

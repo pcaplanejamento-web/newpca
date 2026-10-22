@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.161.0",
+    data: "2026-10-22",
+    titulo: "Acesso às unidades por aba",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Grupos",
+        texto:
+          "\"Acesso de cada tela\" e \"Fonte dos dados\" viraram UMA configuração, aba a aba: Da pessoa (as unidades dela), Soma (a soma travada) ou Todas. Ex.: a Mesa do PCA com todas as unidades e o Dashboard e o Orçamento só na unidade da pessoa. Vale nos dois modos de unidades.",
+        link: "/painel/grupos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Cabeçalho",
+        texto: "Na aba em Soma, o seletor de unidade fica travado (\"Minhas unidades\"); nas abas com Todas, ele mostra todas as unidades só ali.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.160.1",
     data: "2026-10-22",
     titulo: "Mesa do PCA pelo grupo, sem a Mesa do sistema",

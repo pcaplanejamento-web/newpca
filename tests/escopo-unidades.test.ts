@@ -95,22 +95,32 @@ describe("escopo por tela e várias unidades de cadastro (v1.141.0)", async () =
     assert.deepEqual(m.unidadesDoMembro("cadastro", [], []), []);
   });
   it("lerEscopoTelas: só 'todas' com chave válida; lixo = vazio", () => {
-    assert.deepEqual(m.lerEscopoTelas('{"dfd":"todas","pca":"cadastro","X!":"todas"}'), { dfd: "todas" });
+    assert.deepEqual(m.lerEscopoTelas('{"dfd":"todas","pca":"cadastro","X!":"todas"}'), { "dfd.mesa": "todas" });
     assert.deepEqual(m.lerEscopoTelas("não é json"), {});
     assert.deepEqual(m.lerEscopoTelas(null), {});
     assert.deepEqual(m.lerEscopoTelas(["dfd"]), {});
   });
-  it("telaVeTodas: só no modo cadastro, com a tela marcada", () => {
-    const e = { tarefas: "todas" } as const;
-    assert.equal(m.telaVeTodas("cadastro", e, "tarefas"), true);
-    assert.equal(m.telaVeTodas("cadastro", e, "dfd"), false);
-    assert.equal(m.telaVeTodas("lista", e, "tarefas"), false);
-    assert.equal(m.telaVeTodas("cadastro", e, null), false);
-    assert.deepEqual(m.telasComTodas("cadastro", e), ["tarefas"]);
-    assert.deepEqual(m.telasComTodas("lista", e), []);
+  it("acesso por ABA: a Mesa do PCA vê todas, o Dashboard e o Orçamento não", () => {
+    const e = m.lerEscopoTelas('{"pca.mesa":"todas"}');
+    assert.equal(m.telaVeTodas(e, "pca", "mesa"), true);
+    assert.equal(m.telaVeTodas(e, "pca", "dashboard"), false);
+    assert.equal(m.telaVeTodas(e, "pca", "orcamento"), false);
+    assert.deepEqual(m.telasComTodas(e), ["pca.mesa"]);
+    assert.equal(m.acessoDaAba(e, ["pca.dashboard"], "pca.dashboard"), "soma");
+    assert.equal(m.acessoDaAba(e, [], "pca.orcamento"), "pessoa");
+  });
+  it("legado: a tela marcada 'todas' vale em todas as abas dela", () => {
+    const e = m.lerEscopoTelas('{"pca":"todas"}');
+    assert.equal(m.telaVeTodas(e, "pca", "mesa"), true);
+    assert.equal(m.telaVeTodas(e, "pca", "dashboard"), true);
+  });
+  it("chaveDaRota: a aba da URL decide", () => {
+    assert.equal(m.chaveDaRota("/painel/pca/3", { aba: "mesa" }), "pca.mesa");
+    assert.equal(m.chaveDaRota("/painel/pca/3", {}), "pca.dashboard");
+    assert.equal(m.chaveDaRota("/painel/mesa", { pca: "3" }), "pca.mesa");
   });
   it("compactar guarda só as telas do grupo", () => {
-    assert.deepEqual(m.compactarEscopoTelas({ dfd: "todas", pca: "todas" }, ["pca", "tarefas"]), { pca: "todas" });
+    assert.deepEqual(m.compactarEscopoTelas({ "dfd.mesa": "todas", "pca.mesa": "todas" }, ["pca", "tarefas"]), { "pca.mesa": "todas" });
   });
   it("unirEscopos: a Mesa do sistema + a do PCA", () => {
     assert.deepEqual(m.unirEscopos(m.ESCOPO_NENHUMA, { tipo: "unidades", ids: [2] }), { tipo: "unidades", ids: [2] });

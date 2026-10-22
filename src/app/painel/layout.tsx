@@ -11,7 +11,8 @@ import { SegundoPlano } from "@/components/SegundoPlano";
 import { componentesDoAcesso, getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
-import { getReparticaoContexto, telasTodasDoGrupo } from "@/lib/grupos";
+import { acessosDoGrupo, getReparticaoContexto } from "@/lib/grupos";
+import { partesDaChave } from "@/lib/escopo-unidades-core";
 import { listarPcasCards } from "@/lib/pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { getModulos } from "@/lib/modulos";
@@ -64,9 +65,11 @@ export default async function PainelLayout({
     getConfigChat(),
     getConfigEscopo(),
   ]);
-  // Grupo de "unidade de cadastro" com telas que veem TODAS as unidades: nelas o cabeçalho troca a lista (e a ativa).
-  const telasTodas = !usuario.admin && ativo ? await telasTodasDoGrupo(ativo.id) : [];
-  const contextoTodas = telasTodas.length ? await getReparticaoContexto(usuario, ativo, telasTodas[0]) : null;
+  // Grupos → Acesso por aba: nas abas com TODAS as unidades o cabeçalho troca a lista (e a ativa); nas de SOMA, trava.
+  const acessos = !usuario.admin && ativo ? await acessosDoGrupo(ativo.id) : { todas: [], somas: [] };
+  const primeira = acessos.todas[0] ? partesDaChave(acessos.todas[0]) : null;
+  const contextoTodas = primeira ? await getReparticaoContexto(usuario, ativo, primeira.tela, primeira.aba) : null;
+  const telasTodas = acessos.todas;
   const unidadeDe = (r: { id: number; codigo: string; nome: string } | null) =>
     r && !ehGeral(r) ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
 
@@ -80,7 +83,7 @@ export default async function PainelLayout({
       modulos={secoesDosModulos(modulos, new Set(acesso.telas), usuario.admin)}
       reparticoes={contexto.lista}
       reparticaoAtivaId={contexto.ativa?.id ?? null}
-      unidadesPorTela={contextoTodas ? { telas: telasTodas, lista: contextoTodas.lista, ativaId: contextoTodas.ativa?.id ?? null } : undefined}
+      unidadesPorTela={{ telas: telasTodas, travadas: acessos.somas, lista: contextoTodas?.lista ?? null, ativaId: contextoTodas?.ativa?.id ?? null }}
       pcas={pcas}
       pcaFiltroId={pcaFiltro?.id ?? null}
       cartoesPca={cartoesPca}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Dropdown } from "./Dropdown";
-import { IconBuilding, IconCheck, IconSpinner } from "./icons";
+import { IconBuilding, IconCheck, IconLock, IconSpinner } from "./icons";
 import { SetaDropdown } from "./SetaDropdown";
 
 export type UnidadeOpcao = { id: number; codigo: string; nome: string };
@@ -22,14 +22,27 @@ export function SeletorUnidade({
   onEscolher,
   trocando = false,
   todas,
+  travado,
 }: {
   unidades: UnidadeOpcao[];
   ativaId: number | null;
   onEscolher: (id: number | null, fechar: () => void) => void;
   trocando?: boolean;
   todas?: string;
+  /** O grupo pôs esta aba na SOMA das unidades da pessoa: o seletor não escolhe — mostra o texto (o motivo na dica). */
+  travado?: string;
 }) {
   const ativa = unidades.find((u) => u.id === ativaId);
+  if (travado)
+    return (
+      <span
+        className="inline-flex h-11 items-center gap-1.5 rounded-chip border border-border-2 bg-surface-2 px-3 text-[13px] font-medium text-muted lg:h-[var(--h-control-sm)]"
+        title="Nesta tela, os dados somam todas as suas unidades (definido no grupo)."
+      >
+        <IconLock className="h-3.5 w-3.5 opacity-70" />
+        <span className="whitespace-nowrap">{travado}</span>
+      </span>
+    );
   const rotulo = ativa?.nome ?? todas ?? unidades[0]?.nome ?? "";
   return (
     <Dropdown

@@ -34,14 +34,24 @@ export function unidadesDoMembro<T extends UnidadeRef>(modo: ModoUnidades, doGru
 }
 
 /**
- * ESCOPO POR TELA (modo `cadastro`): em cada tela do grupo, só as unidades de cadastro da pessoa (padrão) ou TODAS as
- * unidades. Gravado como `{tela: "todas"}` — só o que difere do padrão.
+ * ACESSO POR ABA (o mesmo em qualquer modo de unidades): em cada aba de uma tela do grupo (chave "tela.aba" de
+ * `ABAS_FONTE`; a tela sem abas = a própria tela), as unidades da pessoa (padrão), a SOMA delas com o seletor do cabeçalho
+ * travado (`fontes_abas`) ou TODAS as unidades (`escopo_telas` = `{chave: "todas"}`). Ex.: a Mesa do PCA com todas e o
+ * Dashboard só com as da pessoa.
  */
-export const ESCOPOS_TELA = ["cadastro", "todas"] as const;
-export type EscopoTela = (typeof ESCOPOS_TELA)[number];
+export const ACESSOS_ABA = ["pessoa", "soma", "todas"] as const;
+export type AcessoAba = (typeof ACESSOS_ABA)[number];
 export type EscopoTelas = Readonly<Record<string, "todas">>;
 
-/** Lê o JSON gravado (texto ou objeto): só as chaves com "todas" ficam; qualquer outra coisa = vazio (= de cadastro). */
+/** A chave de acesso de uma tela + aba (sem aba = a 1ª da tela; a tela sem abas = a própria tela). */
+export function chaveAcesso(tela: string | null | undefined, aba?: string | null): string | null {
+  return chaveFonte(tela, aba) ?? (tela || null);
+}
+
+const CHAVE_ACESSO = /^[a-z]{1,30}(\.[a-z]{1,30})?$/;
+
+/** Lê o JSON gravado (texto ou objeto): só as chaves com "todas" ficam; a chave ANTIGA só da tela (antes do acesso por
+ * aba) vale para todas as abas dela; qualquer outra coisa = vazio. */
 export function lerEscopoTelas(v: unknown): EscopoTelas {
   let o: unknown = v;
   if (typeof v === "string") {
@@ -53,25 +63,42 @@ export function lerEscopoTelas(v: unknown): EscopoTelas {
   }
   if (!o || typeof o !== "object" || Array.isArray(o)) return {};
   const r: Record<string, "todas"> = {};
-  for (const [k, val] of Object.entries(o)) if (val === "todas" && /^[a-z]{1,30}$/.test(k)) r[k] = "todas";
+  for (const [k, val] of Object.entries(o)) {
+    if (val !== "todas" || !CHAVE_ACESSO.test(k)) continue;
+    const abas = !k.includes(".") ? ABAS_FONTE[k] : undefined;
+    if (abas?.length) for (const a of abas) r[`${k}.${a.aba}`] = "todas";
+    else r[k] = "todas";
+  }
   return r;
 }
 
-/** Só as telas que o grupo ABRE (uma tela que saiu do grupo não guarda escolha) — o que vai ao banco. */
+/** Só as chaves das telas que o grupo ABRE — o que vai ao banco. */
 export function compactarEscopoTelas(e: EscopoTelas, telas: readonly string[]): EscopoTelas {
   const r: Record<string, "todas"> = {};
-  for (const t of telas) if (e[t] === "todas") r[t] = "todas";
+  for (const k of Object.keys(lerEscopoTelas(e)).sort()) if (telas.includes(k.split(".")[0])) r[k] = "todas";
   return r;
 }
 
-/** Nesta tela o membro vê TODAS as unidades? Só no modo `cadastro`, com a tela marcada "todas". Sem tela = não. */
-export function telaVeTodas(modo: ModoUnidades | undefined, e: EscopoTelas, tela: string | null | undefined): boolean {
-  return modo === "cadastro" && !!tela && e[tela] === "todas";
+/** Nesta tela + aba o membro vê TODAS as unidades? Sem tela = não. */
+export function telaVeTodas(e: EscopoTelas, tela: string | null | undefined, aba?: string | null): boolean {
+  const k = chaveAcesso(tela, aba);
+  return !!k && e[k] === "todas";
 }
 
-/** As telas marcadas "todas" (para o cabeçalho trocar a lista ao entrar nelas). Fora do modo `cadastro`, nenhuma. */
-export function telasComTodas(modo: ModoUnidades | undefined, e: EscopoTelas): string[] {
-  return modo === "cadastro" ? Object.keys(e).filter((k) => e[k] === "todas") : [];
+/** As chaves (tela.aba) em que o grupo vê TODAS as unidades — o cabeçalho troca a lista nelas. */
+export function telasComTodas(e: EscopoTelas): string[] {
+  return Object.keys(e).filter((k) => e[k] === "todas");
+}
+
+/** O acesso de uma aba pelas duas listas do grupo (todas vence a soma). */
+export function acessoDaAba(e: EscopoTelas, somas: readonly string[], chave: string): AcessoAba {
+  return e[chave] === "todas" ? "todas" : somas.includes(chave) ? "soma" : "pessoa";
+}
+
+/** Tela + aba de uma chave de acesso. */
+export function partesDaChave(chave: string): { tela: string; aba: string | undefined } {
+  const [tela, aba] = chave.split(".");
+  return { tela, aba };
 }
 
 /** Rotas do painel → a TELA (a chave de `ABAS`). A Mesa do PCA (`/painel/mesa?pca=`) segue a Mesa. */
@@ -89,6 +116,16 @@ const ROTAS_TELA: readonly [string, string][] = [
 export function telaDaRota(pathname: string | null | undefined): string | null {
   const p = pathname ?? "";
   return ROTAS_TELA.find(([r]) => p === r || p.startsWith(`${r}/`))?.[1] ?? null;
+}
+
+/** A chave de acesso (tela.aba) da tela aberta: o espaço de um PCA sem `?aba=` = o Dashboard; a Mesa com `?pca=` = a
+ * Mesa do PCA; o espaço do orçamento sem aba = os Lançamentos. */
+export function chaveDaRota(pathname: string | null | undefined, busca: { aba?: string | null; pca?: string | null } = {}): string | null {
+  const p = pathname ?? "";
+  if (/^\/painel\/pca\/\d+$/.test(p)) return chaveAcesso("pca", busca.aba || "dashboard");
+  if (p === "/painel/mesa" && busca.pca) return "pca.mesa";
+  if (/^\/painel\/orcamento\/\d+$/.test(p)) return chaveAcesso("orcamento", busca.aba || "lancamentos");
+  return chaveAcesso(telaDaRota(p), busca.aba);
 }
 
 export type EscopoUnidades = { tipo: "todas" } | { tipo: "unidades"; ids: readonly number[] } | { tipo: "nenhuma" };

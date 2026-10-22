@@ -341,7 +341,7 @@ export function GruposAdmin() {
             <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
           </fieldset>
           <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
-          <FontesPorAba telas={telasGrupo} unicas={fontesAbas} onChange={setFontesAbas} />
+          <AcessoPorAba telas={telasGrupo} escopo={escopo} somas={fontesAbas} onEscopo={setEscopo} onSomas={setFontesAbas} />
           {telasGrupo.includes("pca") && (
             <ListaEscolhaIds titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
           )}
@@ -359,10 +359,7 @@ export function GruposAdmin() {
                 </p>
                 <p className="mt-2">
                   <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só as unidades em que trabalha (o cadastro dela em
-                  Usuários — pode ter várias). Em <b>Acesso de cada tela</b>, escolha as telas em que o grupo vê{" "}
-                  <b>todas as unidades</b> (ex.: o Calendário de todas e a Mesa só a de cadastro). Quem não tem unidade de
-                  cadastro não vê dado nenhum nas telas "só as de cadastro". As unidades escolhidas ficam guardadas para
-                  quando voltar ao outro modo.
+                  Usuários — pode ter várias). Quem não tem unidade de cadastro não vê dado nenhum. O que cada aba mostra fica em <b>Acesso às unidades por aba</b>.
                 </p>
               </Ajuda>
             </div>
@@ -376,9 +373,6 @@ export function GruposAdmin() {
                 { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
               ]}
             />
-            {modo === "cadastro" && (
-              <EscopoPorTela telas={telasGrupo} valor={escopo} onChange={setEscopo} />
-            )}
             {modo === "cadastro" ? (
               semUnidade.length > 0 ? (
                 <Callout kind="warn">
@@ -454,51 +448,56 @@ export function GruposAdmin() {
   );
 }
 
-/** As FUNÇÕES de cada tela do grupo (abas, visões, relatórios): marcada = ligada. Desligar some com ela para todas as
- * pessoas do grupo (o papel de cada uma ainda pode retirar mais). */
-function FontesPorAba({ telas, unicas, onChange }: { telas: AbaKey[]; unicas: Set<string>; onChange: (v: Set<string>) => void }) {
-  const comAbas = telas.filter((t) => ABAS_FONTE[t]?.length);
-  if (!comAbas.length) return null;
-  const n = [...unicas].filter((c) => comAbas.includes(c.split(".")[0] as AbaKey)).length;
+/** Acesso às unidades em CADA ABA de cada tela do grupo — uma configuração só: as unidades da PESSOA (o seletor do
+ * cabeçalho escolhe entre elas), a SOMA delas (o seletor fica travado) ou TODAS as unidades (ex.: só a Mesa do PCA). */
+function AcessoPorAba({ telas, escopo, somas, onEscopo, onSomas }: { telas: AbaKey[]; escopo: EscopoTelas; somas: Set<string>; onEscopo: (v: EscopoTelas) => void; onSomas: (v: Set<string>) => void }) {
+  if (!telas.length) return null;
+  const linhas = (t: AbaKey) =>
+    ABAS_FONTE[t]?.length ? ABAS_FONTE[t].map((x) => ({ chave: `${t}.${x.aba}`, rotulo: x.rotulo, soma: true })) : [{ chave: t, rotulo: rotuloAba(t), soma: false }];
+  const valor = (c: string) => (escopo[c] === "todas" ? "todas" : somas.has(c) ? "soma" : "pessoa");
+  const mudar = (c: string, v: string) => {
+    const e: Record<string, "todas"> = { ...escopo };
+    const s = new Set(somas);
+    delete e[c];
+    s.delete(c);
+    if (v === "todas") e[c] = "todas";
+    if (v === "soma") s.add(c);
+    onEscopo(e);
+    onSomas(s);
+  };
+  const n = telas.flatMap(linhas).filter((l) => valor(l.chave) !== "pessoa").length;
   return (
     <fieldset>
       <legend className="mb-2 flex items-center gap-1.5 text-[13.5px] font-bold text-text">
-        Fonte dos dados{n ? ` · ${n} em fonte única` : " · todas pela unidade selecionada"}
-        <Ajuda titulo="Fonte dos dados" compacta>
+        Acesso às unidades por aba{n ? ` · ${n} alterada(s)` : ""}
+        <Ajuda titulo="Acesso às unidades por aba" compacta>
           <p>
-            Para cada aba: <b>Selecionada</b> = os dados seguem a unidade escolhida no cabeçalho; <b>Única</b> = sempre a soma de
-            todas as unidades que a pessoa acessa, qualquer que seja a do cabeçalho. Não muda o que a pessoa pode fazer — só de
-            onde vêm os dados.
+            <b>Da pessoa</b> (padrão): os dados das unidades da pessoa; o seletor do cabeçalho escolhe entre elas. <b>Soma</b>:
+            sempre a soma das unidades da pessoa, com o seletor travado. <b>Todas</b>: os dados de todas as unidades só naquela
+            aba (ex.: liberar a Mesa do PCA e manter o Dashboard e o Orçamento na unidade da pessoa).
           </p>
         </Ajuda>
       </legend>
       <div className="space-y-2 rounded-control border border-border p-2">
-        {comAbas.map((t) => (
+        {telas.map((t) => (
           <div key={t} className="rounded-control p-1.5">
-            <span className="mb-1 block text-[12.5px] font-semibold text-text">{rotuloAba(t)}</span>
+            {ABAS_FONTE[t]?.length ? <span className="mb-1 block text-[12.5px] font-semibold text-text">{rotuloAba(t)}</span> : null}
             <div className="space-y-1.5">
-              {ABAS_FONTE[t].map((x) => {
-                const chave = `${t}.${x.aba}`;
-                return (
-                  <div key={chave} className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[13px] text-text">{x.rotulo}</span>
-                    <Segmented
-                      ariaLabel={`Fonte dos dados: ${x.rotulo}`}
-                      value={unicas.has(chave) ? "unica" : "selecionada"}
-                      onChange={(v) => {
-                        const s = new Set(unicas);
-                        if (v === "unica") s.add(chave);
-                        else s.delete(chave);
-                        onChange(s);
-                      }}
-                      options={[
-                        { value: "selecionada", label: "Selecionada" },
-                        { value: "unica", label: "Única" },
-                      ]}
-                    />
-                  </div>
-                );
-              })}
+              {linhas(t).map((l) => (
+                <div key={l.chave} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[13px] text-text">{l.rotulo}</span>
+                  <Segmented
+                    ariaLabel={`Unidades em ${l.rotulo}`}
+                    value={valor(l.chave)}
+                    onChange={(v) => mudar(l.chave, v)}
+                    options={[
+                      { value: "pessoa", label: "Da pessoa", dica: "As unidades da pessoa; o seletor do cabeçalho escolhe entre elas." },
+                      ...(l.soma ? [{ value: "soma", label: "Soma", dica: "A soma das unidades da pessoa; o seletor do cabeçalho fica travado." }] : []),
+                      { value: "todas", label: "Todas", dica: "Os dados de todas as unidades nesta aba." },
+                    ]}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -508,35 +507,6 @@ function FontesPorAba({ telas, unicas, onChange }: { telas: AbaKey[]; unicas: Se
 }
 
 /** O que o grupo passa a abrir com os módulos escolhidos — o grupo ANTIGO (telas avulsas) mostra o que ganha e o que perde. */
-/** No modo "unidade de cadastro": em CADA tela do grupo, só as unidades de cadastro da pessoa (padrão) ou todas. */
-function EscopoPorTela({ telas, valor, onChange }: { telas: AbaKey[]; valor: EscopoTelas; onChange: (v: EscopoTelas) => void }) {
-  if (telas.length === 0) return <p className="mb-2 text-[12px] text-faint">Escolha os módulos do grupo para definir o acesso de cada tela.</p>;
-  return (
-    <fieldset className="mb-2 space-y-1 rounded-control border border-border p-2">
-      <legend className="px-1 text-[12.5px] font-semibold text-text">Acesso de cada tela</legend>
-      {telas.map((t) => (
-        <div key={t} className="flex flex-wrap items-center justify-between gap-2 rounded-control p-1.5 hover:bg-surface-2">
-          <span className="text-[13px] font-medium text-text">{rotuloAba(t)}</span>
-          <Segmented
-            ariaLabel={`Unidades na tela ${rotuloAba(t)}`}
-            value={valor[t] === "todas" ? "todas" : "cadastro"}
-            onChange={(v) => {
-              const n: Record<string, "todas"> = { ...valor };
-              if (v === "todas") n[t] = "todas";
-              else delete n[t];
-              onChange(n);
-            }}
-            options={[
-              { value: "cadastro", label: "Só as de cadastro", curto: "Cadastro", dica: "A pessoa vê só as unidades do cadastro dela (Usuários)." },
-              { value: "todas", label: "Todas as unidades", curto: "Todas", dica: "A pessoa vê os dados de todas as unidades nesta tela." },
-            ]}
-          />
-        </div>
-      ))}
-    </fieldset>
-  );
-}
-
 function MudancaTelas({ grupo, tocados, telas }: { grupo: Grupo | null; tocados: boolean; telas: AbaKey[] }) {
   const lista = (l: readonly AbaKey[]) => l.map(rotuloAba).join(", ");
   if (grupo && grupo.modulos == null) {

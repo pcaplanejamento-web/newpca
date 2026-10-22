@@ -103,9 +103,9 @@ export async function unidadesDeCadastro(usuarioId: number): Promise<ReparticaoR
 
 /**
  * As unidades de um MEMBRO no grupo: as escolhidas (modo `lista`) ou as unidades de cadastro dele (modo `cadastro`). No
- * modo `cadastro`, a TELA marcada "todas" pelo ADM dá todas as unidades (a "Geral" junto — escopo todas).
+ * qualquer modo, a ABA marcada "todas" pelo ADM dá todas as unidades (a "Geral" junto — escopo todas).
  */
-export async function reparticoesDoMembro(grupo: GrupoResumo, usuarioId: number, tela?: string | null): Promise<ReparticaoResumo[]> {
+export async function reparticoesDoMembro(grupo: GrupoResumo, usuarioId: number, tela?: string | null, aba?: string | null): Promise<ReparticaoResumo[]> {
   let modo = grupo.modoUnidades;
   let escopoTelas = grupo.escopoTelas;
   if (!modo || escopoTelas === undefined) {
@@ -113,8 +113,9 @@ export async function reparticoesDoMembro(grupo: GrupoResumo, usuarioId: number,
     modo = g?.m ?? "lista";
     escopoTelas = g?.e ?? null;
   }
+  // A aba marcada "todas" (Grupos → Acesso por aba) dá todas as unidades, em qualquer modo.
+  if (telaVeTodas(lerEscopoTelas(escopoTelas), tela, aba)) return listarReparticoes();
   if (modo === "cadastro") {
-    if (telaVeTodas(modo, lerEscopoTelas(escopoTelas), tela)) return listarReparticoes();
     return unidadesDoMembro(modo, [], await unidadesDeCadastro(usuarioId));
   }
   return reparticoesDoGrupo(grupo.id);
@@ -138,6 +139,7 @@ export async function getReparticaoContexto(
   usuario?: UsuarioSessao | null,
   grupoAtivo?: GrupoResumo | null,
   tela?: string | null,
+  aba?: string | null,
 ): Promise<{ lista: ReparticaoResumo[]; ativa: ReparticaoResumo | null }> {
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   let lista: ReparticaoResumo[];
@@ -146,7 +148,7 @@ export async function getReparticaoContexto(
   } else {
     const grupo = grupoAtivo === undefined ? await getGrupoAtivo(u) : grupoAtivo;
     if (!grupo || !u) return { lista: [], ativa: null };
-    lista = await reparticoesDoMembro(grupo, u.id, tela);
+    lista = await reparticoesDoMembro(grupo, u.id, tela, aba);
   }
   if (lista.length === 0) return { lista, ativa: null };
   lista = listaComGeral(lista);
@@ -188,7 +190,7 @@ export async function unidadesDaSessao(
 ): Promise<UnidadesDaSessao> {
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   if (!u) return { lista: [], ativa: null, escopo: ESCOPO_NENHUMA, filtro: FILTRO_NENHUMA, acessivel: () => false };
-  const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo, tela);
+  const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo, tela, aba);
   const reais = lista.filter((r) => r.id !== ID_MINHAS_UNIDADES);
   const escopo = escopoDeAcesso(u.admin, reais);
   const grupo = grupoAtivo && "fontesAbas" in grupoAtivo ? grupoAtivo : await getGrupoAtivo(u);
@@ -221,8 +223,8 @@ export async function definirReparticaoAtiva(reparticaoId: number): Promise<void
   });
 }
 
-/** As telas em que o grupo (no modo "unidade de cadastro") vê TODAS as unidades — o cabeçalho troca a lista nelas. */
-export async function telasTodasDoGrupo(grupoId: number): Promise<string[]> {
-  const [g] = await getDb().select({ m: grupos.modoUnidades, e: grupos.escopoTelas }).from(grupos).where(eq(grupos.id, grupoId)).limit(1);
-  return g ? telasComTodas(g.m, lerEscopoTelas(g.e)) : [];
+/** As abas (tela.aba) do grupo: as que veem TODAS as unidades e as em SOMA (seletor do cabeçalho travado). */
+export async function acessosDoGrupo(grupoId: number): Promise<{ todas: string[]; somas: string[] }> {
+  const [g] = await getDb().select({ e: grupos.escopoTelas, f: grupos.fontesAbas }).from(grupos).where(eq(grupos.id, grupoId)).limit(1);
+  return g ? { todas: telasComTodas(lerEscopoTelas(g.e)), somas: lerFontesAbas(g.f) } : { todas: [], somas: [] };
 }

@@ -4,8 +4,8 @@ import type { VersoesDados } from "@/lib/versao-dados-core";
 import Link from "next/link";
 import { Button } from "./Button";
 import { rotaInicial } from "@/lib/abas";
-import { usePathname, useRouter } from "next/navigation";
-import { telaDaRota } from "@/lib/escopo-unidades-core";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { chaveDaRota } from "@/lib/escopo-unidades-core";
 import { type ReactNode, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { ContasNavegador } from "./ContasNavegador";
@@ -217,7 +217,7 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaCardDados[]; ativoId: number | 
 type ReparticaoNav = { id: number; codigo: string; nome: string };
 
 /** Seletor de repartição ativa no cabeçalho (entre as do grupo ativo). */
-function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav[]; ativaId: number | null }) {
+function ReparticaoSelect({ reparticoes, ativaId, travado }: { reparticoes: ReparticaoNav[]; ativaId: number | null; travado?: boolean }) {
   const router = useRouter();
   const [trocando, setTrocando] = useState(false);
   if (reparticoes.length === 0) return null;
@@ -242,7 +242,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
     }
   }
 
-  return <SeletorUnidade unidades={reparticoes} ativaId={ativa.id} trocando={trocando} onEscolher={(id, close) => id != null && trocar(id, close)} />;
+  return <SeletorUnidade unidades={reparticoes} ativaId={ativa.id} trocando={trocando} travado={travado ? "Minhas unidades" : undefined} onEscolher={(id, close) => id != null && trocar(id, close)} />;
 }
 
 
@@ -281,8 +281,9 @@ export function AppShell({
   modulos: SecaoModulo[];
   reparticoes: ReparticaoNav[];
   reparticaoAtivaId: number | null;
-  /** Grupo de "unidade de cadastro": nas `telas` marcadas pelo ADM, o seletor mostra TODAS as unidades (`lista`). */
-  unidadesPorTela?: { telas: readonly string[]; lista: ReparticaoNav[]; ativaId: number | null };
+  /** Grupos → Acesso por aba: nas abas `telas` (tela.aba) com "todas", o seletor mostra TODAS as unidades (`lista`); nas
+   * `travadas` (a soma das unidades da pessoa), o seletor não escolhe. */
+  unidadesPorTela?: { telas: readonly string[]; travadas: readonly string[]; lista: ReparticaoNav[] | null; ativaId: number | null };
   /** PCAs do seletor do cabeçalho (filtro global) e o escolhido (`null` = todos). */
   pcas?: PcaNav[];
   pcaFiltroId?: number | null;
@@ -299,9 +300,11 @@ export function AppShell({
   /** O CHAT AO VIVO (o do grupo e/ou o privado ligados pelo ADM; só com a presença) — `null` = sem o chat. */
   chat?: ConfigChat | null;
 }) {
-  const telaAtual = telaDaRota(usePathname());
-  const porTela = unidadesPorTela && telaAtual && unidadesPorTela.telas.includes(telaAtual) ? unidadesPorTela : null;
-  const reparticoes = porTela ? porTela.lista : reparticoesBase;
+  const busca = useSearchParams();
+  const chaveAtual = chaveDaRota(usePathname(), { aba: busca.get("aba"), pca: busca.get("pca") });
+  const porTela = unidadesPorTela?.lista && chaveAtual && unidadesPorTela.telas.includes(chaveAtual) ? unidadesPorTela : null;
+  const travado = !!chaveAtual && !!unidadesPorTela?.travadas.includes(chaveAtual);
+  const reparticoes = porTela?.lista ?? reparticoesBase;
   const reparticaoAtivaId = porTela ? porTela.ativaId : ativaBase;
   const presenca = useUltimoValido(presencaServidor);
   const chat = useUltimoValido(chatServidor);
@@ -340,7 +343,7 @@ export function AppShell({
         acima={
           (reparticoes.length > 0 || grupos.length > 0) && (
             <div className="flex flex-wrap gap-2 px-4 pt-3 sm:hidden">
-              <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
+              <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
           )
@@ -385,7 +388,7 @@ export function AppShell({
               </div>
             )}
             <div className="hidden items-center gap-1.5 sm:flex">
-              <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
+              <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
             {/* UM componente só: quem está online + as conversas (abas no mesmo painel); as bolhas do chat flutuam. */}
