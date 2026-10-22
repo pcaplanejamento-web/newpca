@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.0",
+    data: "2026-10-22",
+    titulo: "Seletor de PCA em cartões também no sistema",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "O PCA do cabeçalho do sistema é escolhido pelos mesmos cartões da página pública, com o cartão \"Todos os PCAs\".", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Página pública", texto: "O painel dos PCAs tem a largura dos cartões, com espaçamento padrão, e os cartões mantêm a proporção 4:5.", link: "/" },
+      { tipo: "novo", area: "Configurações", texto: "Tela pública: opção de mostrar os cartões dos PCAs só com a imagem de fundo.", link: "/painel/configuracoes?aba=publico" },
+    ],
+  },
+  {
     versao: "1.157.1",
     data: "2026-10-22",
     titulo: "Ajustes no seletor de PCA e nas telas de acesso",

@@ -13,9 +13,10 @@ export const ROTULO_ABA_PUBLICA: Record<AbaPublica, string> = { dashboard: "Dash
 export const MENUS_PUBLICO = ["aberto", "recolhido"] as const;
 export type MenuPublico = (typeof MENUS_PUBLICO)[number];
 
-export type ConfigPublico = { abas: AbaPublica[]; menu: MenuPublico };
+/** `cartoesSoImagem` = os cartões do seletor de PCA da tela pública mostram SÓ a imagem da capa (sem status, fonte e números). */
+export type ConfigPublico = { abas: AbaPublica[]; menu: MenuPublico; cartoesSoImagem: boolean };
 
-export const PUBLICO_PADRAO: ConfigPublico = { abas: ["dashboard"], menu: "aberto" };
+export const PUBLICO_PADRAO: ConfigPublico = { abas: ["dashboard"], menu: "aberto", cartoesSoImagem: false };
 
 const ehAbaPublica = (v: unknown): v is AbaPublica => typeof v === "string" && (ABAS_PUBLICAS as readonly string[]).includes(v);
 
@@ -25,7 +26,8 @@ export function lerConfigPublico(v: unknown): ConfigPublico {
   const set = new Set(lidas.filter(ehAbaPublica));
   set.add("dashboard");
   const menu = v && typeof v === "object" && (v as { menu?: unknown }).menu === "recolhido" ? "recolhido" : "aberto";
-  return { abas: ABAS_PUBLICAS.filter((a) => set.has(a)), menu };
+  const cartoesSoImagem = !!v && typeof v === "object" && (v as { cartoesSoImagem?: unknown }).cartoesSoImagem === true;
+  return { abas: ABAS_PUBLICAS.filter((a) => set.has(a)), menu, cartoesSoImagem };
 }
 
 /** A aba pedida na URL → a que vale (fora das públicas = o Dashboard). */
@@ -58,5 +60,6 @@ export function diffPublico(antes: ConfigPublico, depois: ConfigPublico): string
   const partes: string[] = [];
   if (r(antes) !== r(depois)) partes.push(`abas públicas: ${r(antes)} → ${r(depois)}`);
   if (antes.menu !== depois.menu) partes.push(`menu: ${antes.menu} → ${depois.menu}`);
+  if (antes.cartoesSoImagem !== depois.cartoesSoImagem) partes.push(`cartões dos PCAs: ${depois.cartoesSoImagem ? "só a imagem" : "com os dados"}`);
   return partes.join("; ") || "sem mudança";
 }

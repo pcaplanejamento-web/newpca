@@ -31,3 +31,9 @@ test("menu inicial: só 'recolhido' recolhe; qualquer outro valor = aberto", () 
   assert.equal(lerConfigPublico(null).menu, "aberto");
   assert.match(diffPublico(lerConfigPublico({}), lerConfigPublico({ menu: "recolhido" })), /menu: aberto → recolhido/);
 });
+
+test("lerConfigPublico: cartões só com a imagem (padrão desligado)", () => {
+  assert.equal(lerConfigPublico(null).cartoesSoImagem, false);
+  assert.equal(lerConfigPublico({ cartoesSoImagem: true }).cartoesSoImagem, true);
+  assert.equal(lerConfigPublico({ cartoesSoImagem: "sim" }).cartoesSoImagem, false);
+});

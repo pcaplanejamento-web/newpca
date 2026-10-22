@@ -27,6 +27,12 @@ export function CamposPublico({ valor, onChange }: { valor: ConfigPublico; onCha
         label="Menu lateral começa recolhido"
         dica="No computador, a tela pública abre com o menu no trilho de ícones; o visitante expande quando quiser"
       />
+      <Switch
+        checked={valor.cartoesSoImagem}
+        onChange={(v) => onChange({ ...valor, cartoesSoImagem: v })}
+        label="Cartões dos PCAs só com a imagem"
+        dica="No seletor de PCA da tela pública, os cartões mostram só a capa — sem status, fonte e números"
+      />
       {ABAS_PUBLICAS.map((a) => (
         <Switch
           key={a}

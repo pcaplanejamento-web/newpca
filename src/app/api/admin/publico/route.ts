@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 // Configurações → Tela pública (ADM): as abas do PCA publicadas na consulta sem login. Mesma linha `configuracoes` id=1
 // (chave `publico`) — as chaves irmãs ficam. Só as da lista fechada são aceitas (Mesa/Importação/Configuração nunca).
-const publicoSchema = z.strictObject({ abas: z.array(z.enum(ABAS_PUBLICAS)).max(ABAS_PUBLICAS.length), menu: z.enum(MENUS_PUBLICO) });
+const publicoSchema = z.strictObject({ abas: z.array(z.enum(ABAS_PUBLICAS)).max(ABAS_PUBLICAS.length), menu: z.enum(MENUS_PUBLICO), cartoesSoImagem: z.boolean() });
 
 export async function GET() {
   const g = await exigirAdmin();

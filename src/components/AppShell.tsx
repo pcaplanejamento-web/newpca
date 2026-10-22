@@ -12,6 +12,8 @@ import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
+import type { PcaCardDados } from "./PcaCard";
+import { PcaSeletor } from "./PcaSeletor";
 import { AcessoNovidades, VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
 import { SetaDropdown } from "./SetaDropdown";
@@ -27,7 +29,6 @@ import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral"
 import { SeletorUnidade } from "./SeletorUnidade";
 import { toast } from "./Toast";
 import {
-  IconAlternarNivel,
   IconBox,
   IconLandmark,
   IconCheck,
@@ -218,32 +219,25 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
 type PcaNav = { id: number; nome: string; ano: number };
 
 /**
- * PCA do CABEÇALHO — o filtro GLOBAL (cookie, como a unidade e o grupo): a Mesa, os cards do módulo PCA e o Orçamento
+ * PCA do CABEÇALHO (o `PcaSeletor`, o MESMO da tela pública) — o filtro GLOBAL (cookie, como a unidade e o grupo): a Mesa, os cards do módulo PCA e o Orçamento
  * mostram só o PCA escolhido; "Todos os PCAs" = sem filtro. Dentro do espaço de um PCA, escolher outro leva ao espaço
  * dele (na mesma aba). No celular o gatilho mostra só o ANO (o nome inteiro na lista).
  */
-function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }) {
+function PcaSelect({ pcas, ativoId }: { pcas: PcaCardDados[]; ativoId: number | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const [trocando, setTrocando] = useState(false);
   // A escolha vale NA HORA pelo estado local: o layout é COMPARTILHADO — ir de um espaço de PCA a outro (push) não o
-  // renderiza de novo, e o `ativoId` do servidor ficaria o antigo (a marca no PCA errado e o clique de volta sem efeito).
-  // Quando o servidor manda outro valor (refresh), ele vale.
+  // renderiza de novo, e o `ativoId` do servidor ficaria o antigo. Quando o servidor manda outro valor (refresh), ele vale.
   const [sel, setSel] = useState(ativoId);
   const [doServidor, setDoServidor] = useState(ativoId);
   if (doServidor !== ativoId) {
     setDoServidor(ativoId);
     setSel(ativoId);
   }
-  if (pcas.length === 0) return null;
-  const ativo = pcas.find((p) => p.id === sel) ?? null;
-  // "Todos os PCAs" só faz sentido com MAIS de um PCA; com um só, o gatilho mostra ele.
-  const varios = pcas.length > 1;
-  const rotulo = ativo ?? (varios ? null : pcas[0]);
 
-  async function trocar(id: number | null, close: () => void) {
-    close();
-    if (id === (ativo?.id ?? null)) return;
+  async function trocar(id: number | null) {
+    if (id === sel) return;
     setTrocando(true);
     try {
       const res = await fetch("/api/pca/filtro", {
@@ -262,47 +256,8 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
     }
   }
 
-  const opcao = (marcado: boolean) =>
-    `flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
-      marcado ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
-    }`;
-  return (
-    <Dropdown
-      align="end"
-      ariaLabel={`PCA do cabeçalho: ${ativo ? `${ativo.nome} (${ativo.ano})` : "todos os PCAs"} — filtra todo o sistema`}
-      triggerClassName={`gap-1 rounded-chip border px-2 h-11 min-w-11 justify-center text-[13px] font-medium sm:gap-1.5 sm:px-3 lg:h-[var(--h-control-sm)] ${
-        ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
-      }`}
-      width={300}
-      trigger={
-        <>
-          {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-          <span className="truncate sm:hidden">{rotulo ? `PCA ${rotulo.ano}` : "Todos"}</span>
-          <span className="hidden whitespace-nowrap sm:inline">{rotulo ? rotulo.nome : "Todos os PCAs"}</span>
-          <IconAlternarNivel className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
-        </>
-      }
-    >
-      {(close) => (
-        <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
-          {varios && (
-            <button type="button" onClick={() => trocar(null, close)} className={opcao(ativo == null)}>
-              <IconBox className="h-4 w-4 shrink-0 opacity-70" />
-              <span className="min-w-0 flex-1 break-words">Todos os PCAs</span>
-              {ativo == null && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
-            </button>
-          )}
-          {pcas.map((p) => (
-            <button key={p.id} type="button" onClick={() => trocar(p.id, close)} className={opcao(p.id === ativo?.id)}>
-              <span className="shrink-0 font-mono text-[10.5px] text-faint">{p.ano}</span>
-              <span className="min-w-0 flex-1 break-words">{p.nome}</span>
-              {p.id === ativo?.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </Dropdown>
-  );
+  // "Todos os PCAs" só faz sentido com MAIS de um PCA; com um só, o gatilho mostra ele.
+  return <PcaSeletor pcas={pcas} atual={sel} todos={pcas.length > 1} trocando={trocando} onEscolher={trocar} align="end" />;
 }
 
 type ReparticaoNav = { id: number; codigo: string; nome: string };
@@ -356,6 +311,7 @@ export function AppShell({
   unidadesPorTela,
   pcas = [],
   pcaFiltroId = null,
+  cartoesPca = [],
   identidade,
   notificacoes = 0,
   versaoDados,
@@ -376,6 +332,8 @@ export function AppShell({
   /** PCAs do seletor do cabeçalho (filtro global) e o escolhido (`null` = todos). */
   pcas?: PcaNav[];
   pcaFiltroId?: number | null;
+  /** Os CARTÕES desses PCAs (capa e números) — o seletor do cabeçalho os mostra. */
+  cartoesPca?: PcaCardDados[];
   identidade?: Identidade;
   /** Notificações NÃO LIDAS (o número do sino). */
   notificacoes?: number;
@@ -469,7 +427,7 @@ export function AppShell({
                 Orçamento). É o único item que ENCOLHE numa tela estreita (o rótulo trunca). */}
             {filtraPca && (
               <div className="min-w-0">
-                <PcaSelect pcas={pcas} ativoId={pcaFiltroId} />
+                <PcaSelect pcas={cartoesPca} ativoId={pcaFiltroId} />
               </div>
             )}
             <div className="hidden items-center gap-1.5 sm:flex">

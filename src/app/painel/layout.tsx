@@ -12,6 +12,7 @@ import { componentesDoAcesso, getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
 import { getReparticaoContexto, telasTodasDoGrupo } from "@/lib/grupos";
+import { listarPcasCards } from "@/lib/pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { getModulos } from "@/lib/modulos";
 import { secoesDosModulos } from "@/lib/modulos-core";
@@ -49,6 +50,9 @@ export default async function PainelLayout({
     getModulos(),
     nomesDasSiglas().catch(() => ({})),
   ]);
+  // Os cartões do seletor de PCA do cabeçalho, na ordem e no acesso do filtro (os números memorizados por versão).
+  const porId = pcas.length ? new Map((await listarPcasCards(null).catch(() => [])).map((c) => [c.id, c])) : new Map();
+  const cartoesPca = pcas.flatMap((p) => porId.get(p.id) ?? []);
   // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
   const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
   const [contexto, pcaFiltro, notificacoes, presenca, configChat, escopoCab] = await Promise.all([
@@ -79,6 +83,7 @@ export default async function PainelLayout({
       unidadesPorTela={contextoTodas ? { telas: telasTodas, lista: contextoTodas.lista, ativaId: contextoTodas.ativa?.id ?? null } : undefined}
       pcas={pcas}
       pcaFiltroId={pcaFiltro?.id ?? null}
+      cartoesPca={cartoesPca}
       identidade={aparencia.identidade}
       notificacoes={notificacoes ?? 0}
       versaoDados={versao}

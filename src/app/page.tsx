@@ -125,7 +125,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da consulta: as linhas do ADM e o NOME de cada sigla no filtro das colunas de unidade. */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesUnidades}>
-      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={cartoes}>
+      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={cartoes} soImagem={cfg.cartoesSoImagem}>
         {conteudo}
       </TelaPublica>
       </ConfigTabelas>

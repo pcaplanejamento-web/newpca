@@ -1017,7 +1017,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Itens, Consolidada, `ComposicaoItem`) e "Dado = Unidade" do Dashboard; PCA — "Por órgão"/coluna Órgão do `OrcamentoPca`,
   Unidade da `ConsultaPca`; Orçamento — Comparativo sem dimensões de um valor só (abre pela Ação), Lançamentos sem
   Órgão/Unidade de valor único; Tarefas — coluna Unidade e seção do Filtrar. Ficam os campos que MOVEM de unidade.
-- **PCA do CABEÇALHO — filtro GLOBAL (sem migração):** um dropdown à ESQUERDA do head (`PcaSelect`, no `AppShell`; no
+- **PCA do CABEÇALHO — filtro GLOBAL (sem migração):** o **`PcaSeletor`** (v1.158.0 — o MESMO da tela pública: os CARTÕES 4:5 de largura fixa 13rem, o painel com a largura dos cartões + `--gap-block` até a borda do display, folha com 2 colunas no celular; `todos` = o cartão "Todos os PCAs"; `onEscolher` no painel, `href` na pública; os cartões vêm do layout — `listarPcasCards(null)` na ordem/acesso de `pcasDoFiltro` → `AppShell.cartoesPca`) — um dropdown à ESQUERDA do head (`PcaSelect`, no `AppShell`; no
   celular mostra só o ano) escolhe o PCA — cookie **`pca_filtro`** (como a unidade/grupo: `src/lib/pca-filtro.ts` —
   `pcasDoFiltro` = os PCAs cadastrados COM ano, `getPcaFiltro`, `definirPcaFiltro`; rota **`POST /api/pca/filtro`**
   `{pcaId|null}` com `filtroPcaSchema`, `exigirUsuario`, 404 p/ PCA inexistente). "Todos os PCAs" (sem cookie) = sem filtro.
@@ -2688,7 +2688,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (Dashboard · **Consulta de itens** [`?aba=consulta`, parte do Dashboard — `vistaPublicaPedida`] · as abas publicadas) e o
   `PainelPca vista` fixa os gráficos OU a consulta (`DashboardPcaCliente.vista` — sem o `Segmented`, só monta a escolhida; a
   consulta SEM os indicadores e os filtros do topo); a seção do menu público não tem título (sem a `menu-linha` no trilho —
-  `SecaoMenu.titulo` opcional); o ADM escolhe o menu inicial (`ConfigPublico.menu` aberto|recolhido → `scriptMenuPublico`
+  `SecaoMenu.titulo` opcional); o ADM escolhe o menu inicial (`ConfigPublico.cartoesSoImagem` = os cartões do seletor de PCA só com a imagem — `PcaCard soImagem`, v1.158.0; `ConfigPublico.menu` aberto|recolhido → `scriptMenuPublico`
   antes da pintura; `MenuLateral guardar={false}`: alternar vale só na visita e, ao sair, volta a preferência do aparelho —
   `aplicarMenuGuardado`);
   o "Entrar" fica a 60% até o hover/foco. v1.155.2: o `MenuLateral inicial` reaplica a escolha do ADM a cada chegada (navegação do cliente não roda o script) e a vista Consulta usa `alturaCheia` (`scrollInterno` nas tabelas da `ConsultaPca`/`ItemTable`).

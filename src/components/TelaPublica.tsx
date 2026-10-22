@@ -31,6 +31,7 @@ export function TelaPublica({
   vista,
   pcaId,
   pcas,
+  soImagem = false,
   unidades,
   painel,
   children,
@@ -46,6 +47,8 @@ export function TelaPublica({
   pcaId: number | null;
   /** Os PCAs publicados como CARTÕES (o seletor do cabeçalho). */
   pcas: PcaCardDados[];
+  /** Os cartões do seletor só com a imagem (Configurações → Tela pública). */
+  soImagem?: boolean;
   /** O filtro de unidade do cabeçalho — só na vista que o usa (Dashboard/consulta) e com 2+ unidades. */
   unidades?: { lista: { id: number; codigo: string; municipio: string }[]; atual?: number };
   children: ReactNode;
@@ -53,6 +56,8 @@ export function TelaPublica({
   const [gaveta, setGaveta] = useState(false);
   const router = useRouter();
   const [trocando, iniciar] = useTransition();
+  // Trocar de PCA mantém a vista e limpa a unidade (as unidades são de cada PCA).
+  const hrefPca = (id: number) => `/?pca=${id}${vista !== "dashboard" ? `&aba=${vista}` : ""}`;
   const href = (a: VistaPublica, unidade = unidades?.atual) => {
     const q = new URLSearchParams();
     if (pcaId != null) q.set("pca", String(pcaId));
@@ -82,7 +87,7 @@ export function TelaPublica({
             <div className="flex min-w-0 items-center gap-3">
               <div className="hidden min-w-0 sm:block lg:hidden">{marca}</div>
               {/* À esquerda: o PCA, com os cartões de cada um ao abrir (só com 2+ publicados). */}
-              {pcaId != null && pcas.length > 1 && <PcaSeletor pcas={pcas} current={pcaId} />}
+              {pcaId != null && pcas.length > 1 && <PcaSeletor pcas={pcas} atual={pcaId} soImagem={soImagem} href={hrefPca} />}
             </div>
           }
           direita={
