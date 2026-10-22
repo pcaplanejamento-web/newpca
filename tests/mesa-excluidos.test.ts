@@ -137,3 +137,14 @@ it("protocolo vazio: conta SÓ os DFDs do protocolo (nunca o DFD contra ele mesm
   assert.equal(Number((await consultaDfdsRestantes(orm, 6))[0].n), 0);
   assert.equal(Number((await consultaDfdsRestantes(orm, 5))[0].n), 1);
 });
+
+it("item consolidado no PCA: o retrato leva o PCA e o SEQUENCIAL (a restauração volta com o mesmo nº)", async () => {
+  const db = aplicarTudo();
+  const orm = drizzle(d1Sobre(db) as never, { schema });
+  db.exec("INSERT INTO pcas (id, nome, ano) VALUES (3, 'PCA 2027', 2027)");
+  db.exec("INSERT INTO dfds (id, numero) VALUES (1, '501')");
+  db.exec("INSERT INTO dfd_itens (id, dfd_id, item, descricao, sequencial, pca_id, pca_sequencial) VALUES (1, 1, 1, 'CANETA', 1, 3, 42)");
+  await orm.batch([comandoRetratoItens(orm, 1, [1], "massa", ator), orm.delete(dfdItens).where(eq(dfdItens.id, 1))]);
+  const r = lerRetratoItem((db.prepare("SELECT retrato FROM mesa_excluidos").get() as { retrato: string }).retrato);
+  assert.deepEqual([r?.item.pcaId, r?.item.pcaSequencial], [3, 42]);
+});
