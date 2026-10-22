@@ -1,4 +1,5 @@
 import { exigirAcesso, recusa } from "@/lib/api-auth";
+import { excluirProtocoloSeVazio } from "@/lib/exclusao-vazios";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { type DetalheAuditoria, ROTULO_ORIGEM } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
@@ -199,6 +200,9 @@ export async function POST(req: Request) {
         }, [] as number[])
       : [];
   const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows, existente?.id ?? null, { ids: removidos, quem: { id: a.u.id, nome: a.u.nome } });
+  // O DFD que veio de OUTRO protocolo era o último de lá: o protocolo de origem, vazio, também é excluído.
+  if (existente?.protocoloId != null && d.protocoloId != null && existente.protocoloId !== d.protocoloId)
+    await excluirProtocoloSeVazio(existente.protocoloId, a.u);
   const origem = d.origem ?? (d.protocoloId != null ? "protocolacao" : "avulso");
   // O protocolo por onde a gravação PASSOU (o histórico dele): o de destino, ou o que o DFD já tinha.
   const protocoloHist = d.protocoloId ?? antigo?.protocoloId ?? null;

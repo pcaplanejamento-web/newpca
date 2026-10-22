@@ -8,7 +8,9 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, type DfdDetalhe, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
 import { semValorUnitario } from "@/lib/dfd-tratamento";
 import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
+import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { consultaDfdsRestantes } from "@/lib/mesa-excluidos-sql";
 import { redigirDfdDetalhe } from "@/lib/mesa-redacao";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { telaDoRecurso } from "@/lib/papeis-core";
@@ -144,6 +146,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   // Vincular/desvincular a um protocolo (unidade do protocolo tem de ser acessível).
+  let protocoloOrigemExcluido = false;
   if (p.data.protocoloId !== undefined) {
     let destino: { numero: string } | null = null;
     if (p.data.protocoloId != null) {
@@ -155,7 +158,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (negadoDestino) return negadoDestino;
       destino = proto;
     }
+    // Mover o ÚLTIMO DFD para fora exclui o protocolo de origem (nada fica vazio): precisa da ação Excluir lá.
+    const sai = dfd.protocoloId != null && p.data.protocoloId !== dfd.protocoloId ? dfd.protocoloId : null;
+    if (sai != null) {
+      const [c] = await consultaDfdsRestantes(getDb(), sai);
+      if (Number(c?.n ?? 0) <= 1 && recusa(a.acesso, telaDoRecurso(dfd.pcaId), "excluir"))
+        return erro("Este é o último DFD do protocolo: tirá-lo exclui o protocolo — sua função não pode excluir nesta Mesa.", 403);
+    }
     await vincularDfd(id, p.data.protocoloId, dfd.numero, a.u.id);
+    protocoloOrigemExcluido = await excluirProtocoloSeVazio(sai, a.u);
     // Histórico nos DOIS protocolos (o de onde saiu e o para onde foi) — cada um mostra o seu lado.
     if (p.data.protocoloId !== dfd.protocoloId) {
       const alvo = { numero: dfd.numero, planejamento: dfd.planejamento };
@@ -293,7 +304,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     });
   }
 
-  return ok();
+  return ok({ protocoloOrigemExcluido });
 }
 
 /** O DFD DEPOIS do PATCH (para o histórico): o gravado com os campos enviados, as seções/assinaturas

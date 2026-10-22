@@ -978,6 +978,9 @@ export function DfdsView({
 
   async function salvarVincular() {
     if (!vincAlvo) return;
+    // O último DFD saindo do protocolo: o protocolo de origem, vazio, é excluído (vai à lixeira) — avisa antes.
+    const origem = vincAlvo.protocoloId != null && vincSel !== vincAlvo.protocoloId ? protocolos.find((p) => p.id === vincAlvo.protocoloId) : undefined;
+    if (origem && origem.totalDfds <= 1 && !confirm(`O DFD ${vincAlvo.numero} é o último do protocolo ${origem.numero}: ao tirá-lo, o protocolo ${origem.numero} é excluído (vai à lixeira da Mesa). Continuar?`)) return;
     setSalvandoVinc(true);
     setErro(null);
     try {
@@ -987,8 +990,9 @@ export function DfdsView({
         body: JSON.stringify({ protocoloId: vincSel }),
       });
       // Resposta sem JSON (falha do servidor) não vira mensagem crua: vale a do servidor quando há (ex.: 423 da trava).
-      const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; protocoloOrigemExcluido?: boolean } | null;
       if (!res.ok || !j?.ok) throw new Error(j?.error ?? `Não foi possível vincular (erro ${res.status}).`);
+      if (j.protocoloOrigemExcluido) toast.success(`DFD ${vincAlvo.numero} movido — o protocolo de origem ficou vazio e foi excluído (está na lixeira da Mesa).`, 9000);
       setVincAlvo(null);
       router.refresh();
     } catch (e) {

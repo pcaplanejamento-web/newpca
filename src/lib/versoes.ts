@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.166.2",
+    data: "2026-10-22",
+    titulo: "Nada fica vazio: limpeza dos protocolos sem DFDs e a regra do mover",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Os protocolos que tinham ficado sem DFDs foram excluídos e estão na lixeira da Mesa (motivo \"Ficou vazio\").", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Mover o último DFD de um protocolo para outro (à mão ou pela importação) exclui o protocolo de origem que ficou vazio — com aviso antes e depois.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.166.1",
     data: "2026-10-22",
     titulo: "Correção: o protocolo sem DFDs passa a ser excluído",
