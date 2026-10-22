@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
-import { type ExcluidoAntigo, type MotivoExclusao, ROTULO_MOTIVO_EXCLUSAO, type RetratoItem, type RetratoProtocolo } from "@/lib/mesa-excluidos-core";
+import { type Abrangencia, abrangenciaExclusao, chaveItemDoDfd, type ExcluidoAntigo, lerChaveItemDoDfd, type MotivoExclusao, ROTULO_ABRANGENCIA, ROTULO_MOTIVO_EXCLUSAO, type RetratoItem, type RetratoProtocolo } from "@/lib/mesa-excluidos-core";
+import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { CampoCongelado } from "./CampoCadeado";
@@ -31,6 +34,10 @@ type Linha = {
   reparticaoId: number | null;
   valor: number | null;
   motivo: string;
+  /** De onde veio a exclusão (avulso ou junto com o DFD/protocolo). */
+  abrangencia: Abrangencia;
+  /** Item que saiu dentro de um DFD excluído (abre o DFD com o item). */
+  viaDfd?: boolean;
   excluidoNome: string | null;
   excluidoEm: string | null;
 };
@@ -57,7 +64,12 @@ const motivo = (m: string) => ROTULO_MOTIVO_EXCLUSAO[m as MotivoExclusao] ?? m;
  * LIXEIRA DA MESA — o botão (lixeira, na barra da Mesa do sistema e da Mesa do PCA) que abre os protocolos, DFDs e itens
  * EXCLUÍDOS daquela Mesa, com o retrato guardado no momento da exclusão. Só leitura: tocar numa linha mostra o que era.
  */
-export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas: Map<number, string> }) {
+export function ExcluidosMesa({ pcaId, siglas, podeLimpar = false }: { pcaId: number | null; siglas: Map<number, string>; podeLimpar?: boolean }) {
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [recarga, setRecarga] = useState(0);
+  const [limpando, setLimpando] = useState(false);
+  const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
   const [aberto, setAberto] = useState(false);
   const [tipo, setTipo] = useState<Tipo>("protocolo");
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
@@ -72,6 +84,7 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
     let vivo = true;
     setLinhas(null);
     setFalha(null);
+    setSel(new Set());
     const q = new URLSearchParams({ tipo });
     if (pcaId) q.set("pca", String(pcaId));
     fetch(`/api/mesa/excluidos?${q}`)
@@ -79,7 +92,25 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
       .then((j) => {
         if (!vivo) return;
         if (!j.ok) return setFalha(j.error ?? "Falha ao carregar.");
-        const novos = (j.excluidos as Linha[]).map((l) => ({ ...l, chave: String(l.id) }));
+        const novos = (j.excluidos as Linha[]).map((l) => ({ ...l, chave: String(l.id), abrangencia: abrangenciaExclusao(l.tipo, l.motivo) }));
+        type DoDfd = { dfdExcluidoId: number; idx: number; item: string | null; descricao: string | null; dfdNumero: string | null; planejamento: string | null; protocoloNumero: string | null; reparticaoId: number | null; valor: number | null; motivo: string; excluidoNome: string | null; excluidoEm: string | null };
+        const doDfd = ((j.doDfd ?? []) as DoDfd[]).map(
+          (d): Linha => ({
+            chave: chaveItemDoDfd(d.dfdExcluidoId, d.idx),
+            id: d.dfdExcluidoId,
+            viaDfd: true,
+            tipo: "item",
+            numero: d.item ? `${d.item} · DFD ${d.dfdNumero ?? "—"}` : `DFD ${d.dfdNumero ?? "—"}`,
+            planejamento: d.planejamento,
+            protocoloNumero: d.protocoloNumero,
+            reparticaoId: d.reparticaoId,
+            valor: d.valor,
+            motivo: d.motivo,
+            abrangencia: abrangenciaExclusao("item", d.motivo, true),
+            excluidoNome: d.excluidoNome,
+            excluidoEm: d.excluidoEm,
+          }),
+        );
         const antigos = ((j.antigos ?? []) as (ExcluidoAntigo & { reparticaoId: number | null; protocoloNumero: string | null })[]).map(
           (a): Linha => ({
             chave: a.chave,
@@ -92,17 +123,62 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
             reparticaoId: a.reparticaoId,
             valor: a.valor,
             motivo: a.motivo,
+            abrangencia: abrangenciaExclusao(a.tipo, a.motivo),
             excluidoNome: a.excluidoNome,
             excluidoEm: a.excluidoEm,
           }),
         );
-        setLinhas([...novos, ...antigos]);
+        setLinhas([...novos, ...doDfd, ...antigos]);
       })
       .catch(() => vivo && setFalha("Sem conexão."));
     return () => {
       vivo = false;
     };
-  }, [aberto, tipo, pcaId]);
+  }, [aberto, tipo, pcaId, recarga]);
+
+  async function limpar(tudo: boolean) {
+    if (!linhas) return;
+    const escolhidas = tudo ? linhas : linhas.filter((l) => sel.has(l.chave));
+    const viaDfd = escolhidas.filter((l) => l.viaDfd);
+    const ids = [...new Set(escolhidas.filter((l) => !l.antigo && !l.viaDfd).map((l) => l.id))];
+    const antigos = escolhidas.filter((l) => l.antigo).map((l) => l.chave);
+    if (!tudo && !ids.length && !antigos.length) {
+      setAviso({ kind: "danger", texto: "Itens que saíram junto com um DFD só saem da lixeira com o DFD — limpe o DFD na visão DFDs." });
+      return;
+    }
+    const prot = escolhidas.some((l) => l.tipo === "protocolo" && !l.antigo);
+    const ok = await confirmar({
+      titulo: tudo ? `Limpar a lixeira (${TIPOS.find((t) => t.value === tipo)?.label})?` : `Limpar ${num(ids.length + antigos.length)} registro(s) da lixeira?`,
+      texto: (
+        <>
+          Os registros são APAGADOS do banco e não podem ser recuperados nem restaurados.
+          {prot && " Os DFDs que saíram junto com o protocolo também saem."}
+          {viaDfd.length > 0 && !tudo && ` ${num(viaDfd.length)} item(ns) que saíram com um DFD ficam (saem só com o DFD).`}
+          {antigos.length > 0 && " As exclusões antigas somem da lixeira; o histórico de alterações continua."}
+        </>
+      ),
+      confirmar: "Limpar de vez",
+      perigo: true,
+    });
+    if (!ok) return;
+    setLimpando(true);
+    try {
+      const r = await fetch("/api/mesa/excluidos", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(tudo ? { pca: pcaId, tudo: tipo } : { pca: pcaId, ids, antigos }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; apagados?: number; descartados?: number };
+      if (!j.ok) return setAviso({ kind: "danger", texto: j.error ?? "Não foi possível limpar." });
+      setAviso({ kind: "ok", texto: `Lixeira limpa: ${num((j.apagados ?? 0) + (j.descartados ?? 0))} registro(s) apagado(s).` });
+      setAtual(null);
+      setRecarga((n) => n + 1);
+    } catch {
+      setAviso({ kind: "danger", texto: "Sem conexão." });
+    } finally {
+      setLimpando(false);
+    }
+  }
 
   const linhaAtual = atual == null ? null : (linhas?.find((l) => l.chave === atual) ?? null);
 
@@ -111,12 +187,16 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
     setErroDet(null);
     setItemIdx(null);
     if (atual == null || atual.startsWith("a")) return;
+    const viaDfd = lerChaveItemDoDfd(atual);
     let vivo = true;
-    fetch(`/api/mesa/excluidos/${atual}`)
+    fetch(`/api/mesa/excluidos/${viaDfd ? viaDfd.id : atual}`)
       .then((r) => r.json() as Promise<{ ok: boolean; error?: string } & Record<string, unknown>>)
       .then((j) => {
         if (!vivo) return;
-        if (j.ok) setDetalhe(j as unknown as Detalhe);
+        if (j.ok) {
+          setDetalhe(j as unknown as Detalhe);
+          if (viaDfd) setItemIdx(viaDfd.idx);
+        }
         else setErroDet(j.error ?? "Falha ao carregar.");
       })
       .catch(() => vivo && setErroDet("Sem conexão."));
@@ -137,6 +217,17 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
       { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (l) => l.valor, value: (l) => String(l.valor ?? ""), render: (l) => brl(l.valor) },
       { key: "em", header: "Excluído em", nowrap: true, filter: "date", value: (l) => l.excluidoEm ?? "", render: (l) => dataHoraBR(l.excluidoEm), total: false },
       { key: "por", header: "Por", nowrap: true, value: (l) => l.excluidoNome ?? "—", render: (l) => l.excluidoNome ?? "—" },
+      {
+        key: "abrangencia",
+        header: "Exclusão",
+        nowrap: true,
+        value: (l) => ROTULO_ABRANGENCIA[l.abrangencia],
+        render: (l) => (
+          <Badge tone={l.abrangencia === "protocolo" || l.abrangencia.endsWith("protocolo") ? "violet" : l.abrangencia === "item-dfd" ? "orange" : "slate"} title={DICA_ABRANGENCIA[l.abrangencia]}>
+            {ROTULO_ABRANGENCIA[l.abrangencia]}
+          </Badge>
+        ),
+      },
       { key: "motivo", header: "Motivo", nowrap: true, value: (l) => motivo(l.motivo), render: (l) => motivo(l.motivo) },
       {
         key: "registro",
@@ -219,15 +310,43 @@ export function ExcluidosMesa({ pcaId, siglas }: { pcaId: number | null; siglas:
               onRowClick={(l) => setAtual(l.chave)}
               activeKey={atual}
               exportar={{ nome: "Excluídos" }}
+              selectable={podeLimpar}
+              selected={sel}
+              onSelected={(s) => setSel(s as Set<string>)}
+              acoesRodape={
+                podeLimpar ? (
+                  <>
+                    {sel.size > 0 && (
+                      <Button size="sm" variant="danger" loading={limpando} onClick={() => limpar(false)}>
+                        Limpar selecionados ({num(sel.size)})
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" loading={limpando} disabled={!linhas.length} onClick={() => limpar(true)}>
+                      Limpar lixeira
+                    </Button>
+                  </>
+                ) : undefined
+              }
               vazio="Nada excluído nesta Mesa."
               resumo={(ls) => `${num(ls.length)} excluído(s) · ${brl(ls.reduce((s, l) => s + (l.valor ?? 0), 0))}`}
             />
           )}
         </div>
       </Modal>
+      {confirmacao}
+      {aviso && <AvisoFlutuante kind={aviso.kind} titulo={aviso.texto} onClose={() => setAviso(null)} duracao={6000} />}
     </>
   );
 }
+
+const DICA_ABRANGENCIA: Record<Abrangencia, string> = {
+  protocolo: "O protocolo inteiro foi excluído (com os DFDs e os itens dele)",
+  "dfd-avulso": "O DFD foi excluído sozinho (com os itens dele)",
+  "dfd-protocolo": "O DFD saiu junto com a exclusão do protocolo inteiro",
+  "item-avulso": "O item foi excluído sozinho (em massa, no Salvar ou na sobrescrita)",
+  "item-dfd": "O item saiu junto com a exclusão do DFD inteiro — toque para ver o DFD com o item",
+  "item-protocolo": "O item saiu junto com a exclusão do protocolo inteiro",
+};
 
 
 const SEM_CONCILIACAO: ConciliacaoCapa = { ativa: false, divergente: false, zerada: false, bloqueia: false, somatorio: 0, motivo: null };

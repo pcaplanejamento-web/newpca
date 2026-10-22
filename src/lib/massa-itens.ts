@@ -37,6 +37,8 @@ export type PatchItem = Partial<Pick<ItemMassa, "descricao" | "unidade" | "quant
 export type PlanoMassaItens = {
   atualizar: { id: number; patch: PatchItem }[];
   remover: number[];
+  /** Os itens removidos são TODOS os do DFD: o DFD é excluído inteiro (não sobra DFD vazio). */
+  excluirDfd?: boolean;
   /** Itens selecionados que a regra NÃO deixa alterar (com o motivo — vão para o relatório). */
   recusas: { id: number; item: number | null; motivo: string }[];
 };
@@ -57,11 +59,9 @@ export function planejarMassaItens(
   const plano: PlanoMassaItens = { atualizar: [], remover: [], recusas: [] };
   const sel = itensDfd.filter((it) => alvos.has(it.id));
   if (acao.campo === "remover") {
-    if (sel.length >= totalNoDfd) {
-      for (const it of sel) plano.recusas.push({ id: it.id, item: it.item, motivo: "o DFD ficaria sem itens" });
-      return plano;
-    }
     plano.remover = sel.map((it) => it.id);
+    // Remover TODOS os itens = o DFD fica vazio e é EXCLUÍDO (e, se era o último do protocolo, o protocolo também).
+    if (sel.length >= totalNoDfd) plano.excluirDfd = true;
     return plano;
   }
   for (const it of sel) {

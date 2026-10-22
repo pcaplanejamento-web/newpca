@@ -1971,6 +1971,12 @@ export const documentoPartes = sqliteTable(
  * gravado no MESMO lote da exclusão (`mesa-excluidos-sql.ts`). Sem FK: o alvo já não existe. Consulta na opção
  * "Excluídos" das Mesas; a retenção limpa no cron dos e-mails.
  */
+/** As exclusões antigas (do histórico) que foram limpas da lixeira — a chave da linha (`a<id>…`). */
+export const mesaLixeiraDescartados = sqliteTable("mesa_lixeira_descartados", {
+  chave: text("chave").primaryKey(),
+  em: text("em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 export const mesaExcluidos = sqliteTable(
   "mesa_excluidos",
   {

@@ -294,6 +294,7 @@ export function useDfdGravado({
   async function salvar() {
     if (!orig || !dfd) return;
     const body = diffDfdGravado(orig, dfd, repId, itensEditados);
+    if (itensEditados && dfd.itens.length === 0 && !window.confirm(`O DFD ${orig.numero} ficou sem itens e será EXCLUÍDO (vai à lixeira da Mesa). Se for o último DFD do protocolo, o protocolo também será excluído. Continuar?`)) return;
     if (Object.keys(body).length === 0) {
       setEditado(false);
       setItensEditados(false);
@@ -307,9 +308,17 @@ export function useDfdGravado({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; excluido?: boolean; protocoloExcluido?: boolean };
       if (!r.ok || !j.ok) throw new Error(j.error ?? `Não foi possível salvar (HTTP ${r.status}).`);
       onAlterado();
+      // Sem itens, o DFD foi EXCLUÍDO (e o protocolo, se era o último DFD): o banner fecha.
+      if (j.excluido) {
+        toast.success(`DFD ${orig.numero} excluído: ficou sem itens${j.protocoloExcluido ? " — o protocolo, sem DFDs, também foi excluído" : ""}. Está na lixeira da Mesa.`, 9000);
+        setEditado(false);
+        setItensEditados(false);
+        onFechar();
+        return;
+      }
       // Recarrega mantendo o item do banner do item — só se o banner ainda mostra ESTE DFD.
       if (pedidoRef.current === orig.id) await carregar(orig.id, alvoAtual());
     } catch (e) {

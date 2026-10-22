@@ -1,11 +1,11 @@
 import { and, desc, eq, inArray, isNotNull, isNull, lt, min, or, type SQLWrapper, sql } from "drizzle-orm";
-import { auditoria, dfdProtocolos, dfds, mesaExcluidos } from "@/db/schema";
+import { auditoria, dfdProtocolos, dfds, mesaExcluidos, mesaLixeiraDescartados } from "@/db/schema";
 import type { EscopoMesa } from "./acesso-mesa";
 import type { DfdVisual } from "@/components/DfdView";
 import { getDb } from "./db";
 import { parseAssinaturas, parseSecoes } from "./dfd";
-import { type ExcluidoAntigo, excluidosDaAuditoria, type LinhaAuditoriaExclusao, pcaPeloHistorico, type RetratoDfd } from "./mesa-excluidos-core";
-import { comandoLimparExcluidos } from "./mesa-excluidos-sql";
+import { type ExcluidoAntigo, excluidosDaAuditoria, type LinhaAuditoriaExclusao, lerRetratoDfd, pcaPeloHistorico, type RetratoDfd } from "./mesa-excluidos-core";
+import { comandoApagarExcluidos, comandoLimparExcluidos, comandosDescartarAntigos } from "./mesa-excluidos-sql";
 
 /** O que a lista da opção "Excluídos" mostra (sem o retrato — ele vem só ao abrir uma linha). */
 export type Excluido = {
@@ -167,7 +167,8 @@ export async function excluidosDoHistorico(pcaId: number | null, tipo: Excluido[
     .where(corte ? and(filtroTipo, lt(auditoria.criadoEm, corte)) : filtroTipo)
     .orderBy(desc(auditoria.id))
     .limit(MAX_EXCLUIDOS)) as LinhaAuditoriaExclusao[];
-  const antigos = linhas.flatMap(excluidosDaAuditoria).filter((e) => e.tipo === tipo);
+  const descartados = new Set((await db.select({ c: mesaLixeiraDescartados.chave }).from(mesaLixeiraDescartados)).map((r) => r.c));
+  const antigos = linhas.flatMap(excluidosDaAuditoria).filter((e) => e.tipo === tipo && !descartados.has(e.chave));
   if (!antigos.length) return [];
 
   // Protocolos e DFDs envolvidos.
@@ -230,4 +231,70 @@ export async function excluidosDoHistorico(pcaId: number | null, tipo: Excluido[
       return { ...e, pcaId: pca, reparticaoId: rep, protocoloNumero: e.protocoloId != null ? (numeroDoProt.get(e.protocoloId) ?? null) : null };
     })
     .filter((e) => (pcaId == null ? e.pcaId == null : e.pcaId === pcaId));
+}
+
+/** Um item que saiu JUNTO com um DFD excluído (avulso ou na cascata do protocolo) — a linha virtual da visão Itens. */
+export type ItemDoDfdExcluido = {
+  dfdExcluidoId: number;
+  idx: number;
+  item: string | null;
+  codigo: string | null;
+  descricao: string | null;
+  dfdNumero: string | null;
+  planejamento: string | null;
+  protocoloNumero: string | null;
+  reparticaoId: number | null;
+  excluidoPor: number | null;
+  valor: number | null;
+  motivo: string;
+  excluidoNome: string | null;
+  excluidoEm: string | null;
+};
+
+/** Os itens dentro dos retratos dos DFDs excluídos de UMA Mesa. */
+export async function itensDosDfdsExcluidos(pcaId: number | null): Promise<ItemDoDfdExcluido[]> {
+  const rows = await getDb()
+    .select({ ...COLUNAS, retrato: mesaExcluidos.retrato })
+    .from(mesaExcluidos)
+    .where(and(eq(mesaExcluidos.tipo, "dfd"), pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId)))
+    .orderBy(desc(mesaExcluidos.id))
+    .limit(MAX_EXCLUIDOS);
+  const out: ItemDoDfdExcluido[] = [];
+  for (const r of rows) {
+    const d = lerRetratoDfd(r.retrato);
+    for (const [idx, it] of (d?.itens ?? []).entries())
+      out.push({
+        dfdExcluidoId: r.id,
+        idx,
+        item: it.item != null ? String(it.item) : null,
+        codigo: it.codigo ?? null,
+        descricao: it.descricao ?? null,
+        dfdNumero: r.numero,
+        planejamento: r.planejamento,
+        protocoloNumero: r.protocoloNumero,
+        reparticaoId: r.reparticaoId,
+        excluidoPor: r.excluidoPor,
+        valor: it.valorTotal ?? null,
+        motivo: r.motivo,
+        excluidoNome: r.excluidoNome,
+        excluidoEm: r.excluidoEm,
+      });
+    if (out.length >= MAX_EXCLUIDOS * 5) break;
+  }
+  return out;
+}
+
+/** As linhas (só id, tipo, protocolo, motivo e o escopo) de UMA Mesa — base da limpeza. */
+export async function linhasParaLimpeza(pcaId: number | null) {
+  return getDb()
+    .select({ id: mesaExcluidos.id, tipo: mesaExcluidos.tipo, protocoloId: mesaExcluidos.protocoloId, motivo: mesaExcluidos.motivo, reparticaoId: mesaExcluidos.reparticaoId, excluidoPor: mesaExcluidos.excluidoPor })
+    .from(mesaExcluidos)
+    .where(pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId));
+}
+
+/** A LIMPEZA definitiva: apaga as linhas da lixeira e descarta as exclusões antigas, num lote. */
+export async function limparLixeira(ids: number[], antigos: string[]): Promise<void> {
+  const db = getDb();
+  const cmds = [...(ids.length ? [comandoApagarExcluidos(db, ids)] : []), ...comandosDescartarAntigos(db, antigos)];
+  if (cmds.length) await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
 }

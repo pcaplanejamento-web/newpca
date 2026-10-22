@@ -43,6 +43,7 @@ export type EntidadeAuditoria =
   | "classificacao_item"
   | "tarefa"
   | "tarefa_quadro"
+  | "mesa_lixeira"
   | "tarefa_pasta"
   | "trello_integracao"
   | "tarefa_lista"
@@ -75,6 +76,7 @@ export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
 export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   dfd: "DFD",
   dfd_item: "Item do DFD",
+  mesa_lixeira: "Lixeira da Mesa",
   protocolo: "Protocolo",
   catalogo: "Catálogo",
   catalogo_item: "Item do catálogo",

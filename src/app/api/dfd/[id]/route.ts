@@ -1,3 +1,4 @@
+import { excluirDfdEsvaziado, excluirProtocoloSeVazio } from "@/lib/exclusao-vazios";
 import { dfdLegivelNaMesa, escopoMesa, MSG_SEM_ACESSO_DFD, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso, exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
@@ -95,7 +96,10 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     origem: reenvio ? "reenvio" : "exclusao",
     detalhe: alvo ? { alvo: { numero: alvo.numero, planejamento: alvo.planejamento } } : null,
   });
-  return ok();
+  // O último DFD do protocolo: o protocolo vazio também é excluído (nunca no desfazer da importação nem no reenvio —
+  // nesses o protocolo está sendo gravado e recebe os DFDs novos).
+  const protocoloExcluido = !desfeita && !reenvio ? await excluirProtocoloSeVazio(dfd.protocoloId, a.u) : false;
+  return ok({ protocoloExcluido });
 }
 
 /**
@@ -124,7 +128,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // pela metade). Mesma régua do import: ao menos um item e — quando o ADM mantém o valor unitário
   // BLOQUEANTE (padrão) — todo item com valor unitário (> 0).
   if (p.data.itens !== undefined) {
-    if (p.data.itens.length === 0) return erro("O DFD precisa ter ao menos um item.", 422);
+    // Sem nenhum item, o DFD é EXCLUÍDO (precisa da ação Excluir) — e o protocolo, se era o último DFD dele.
+    if (p.data.itens.length === 0) {
+      const semExcluir = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "excluir");
+      if (semExcluir) return erro("Remover todos os itens exclui o DFD — sua função não pode excluir nesta Mesa.", 403);
+      const r = await excluirDfdEsvaziado({ id, numero: dfd.numero ?? String(id), protocoloId: dfd.protocoloId }, a.u);
+      return ok({ excluido: true, protocoloExcluido: r.protocoloExcluido });
+    }
     if (p.data.itens.some((r) => semValorUnitario(r.valorUnitario))) {
       // A MESMA régua do banner: tipo do DFD + a categoria do protocolo em que ele está (exceções do ADM).
       const ctxItens = { dfdTipo: tipoCurtoDfd(p.data.tipo !== undefined ? p.data.tipo : dfd.tipo), categoria: await categoriaDoProtocolo(dfd.protocoloId) };

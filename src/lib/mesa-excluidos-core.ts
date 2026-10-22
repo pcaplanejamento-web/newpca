@@ -1,4 +1,4 @@
-export type MotivoExclusao = "exclusao" | "reenvio" | "cascata" | "massa" | "edicao" | "sobrescrita" | "desfeita";
+export type MotivoExclusao = "exclusao" | "reenvio" | "cascata" | "massa" | "edicao" | "sobrescrita" | "desfeita" | "esvaziado";
 export const ROTULO_MOTIVO_EXCLUSAO: Record<MotivoExclusao, string> = {
   exclusao: "Exclusão",
   reenvio: "Fora do reenvio",
@@ -7,6 +7,7 @@ export const ROTULO_MOTIVO_EXCLUSAO: Record<MotivoExclusao, string> = {
   edicao: "Removido na edição",
   sobrescrita: "Saiu na sobrescrita",
   desfeita: "Gravação desfeita",
+  esvaziado: "Ficou vazio",
 };
 
 /**
@@ -318,4 +319,36 @@ export function excluidosDaAuditoria(l: LinhaAuditoriaExclusao): ExcluidoAntigo[
 export function pcaPeloHistorico(resumo: string | null, pcaId: number | null): number | null {
   if (!resumo || pcaId == null) return null;
   return /devolvido/i.test(resumo) ? null : pcaId;
+}
+
+/** De onde veio a exclusão: o próprio protocolo/DFD/item, ou junto com o DFD/protocolo inteiro. */
+export type Abrangencia = "protocolo" | "dfd-avulso" | "dfd-protocolo" | "item-avulso" | "item-dfd" | "item-protocolo";
+export const ROTULO_ABRANGENCIA: Record<Abrangencia, string> = {
+  protocolo: "Protocolo completo",
+  "dfd-avulso": "DFD avulso",
+  "dfd-protocolo": "Com o protocolo",
+  "item-avulso": "Item avulso",
+  "item-dfd": "Com o DFD",
+  "item-protocolo": "Com o protocolo",
+};
+/** A abrangência de uma linha da lixeira. `viaDfd` = o item que veio dentro do retrato de um DFD excluído (o motivo é o do DFD). */
+export function abrangenciaExclusao(tipo: "protocolo" | "dfd" | "item", motivo: string, viaDfd = false): Abrangencia {
+  if (tipo === "protocolo") return "protocolo";
+  if (tipo === "dfd") return motivo === "cascata" ? "dfd-protocolo" : "dfd-avulso";
+  if (!viaDfd) return "item-avulso";
+  return motivo === "cascata" ? "item-protocolo" : "item-dfd";
+}
+/** A chave da linha virtual de um item que saiu junto com um DFD: `d<id da linha do DFD>:<índice do item>`. */
+export const chaveItemDoDfd = (dfdExcluidoId: number, idx: number) => `d${dfdExcluidoId}:${idx}`;
+export function lerChaveItemDoDfd(chave: string): { id: number; idx: number } | null {
+  const m = /^d(\d+):(\d+)$/.exec(chave);
+  return m ? { id: Number(m[1]), idx: Number(m[2]) } : null;
+}
+/** O que a limpeza apaga: as linhas da lixeira (os DFDs da cascata vão junto com o protocolo) e as chaves antigas a descartar. */
+export function planoLimpeza(
+  linhas: { id: number; tipo: string; protocoloId: number | null; motivo: string }[],
+  pedidas: Set<number>,
+): number[] {
+  const prots = new Set(linhas.filter((l) => pedidas.has(l.id) && l.tipo === "protocolo" && l.protocoloId != null).map((l) => l.protocoloId));
+  return linhas.filter((l) => pedidas.has(l.id) || (l.tipo === "dfd" && l.motivo === "cascata" && prots.has(l.protocoloId))).map((l) => l.id);
 }

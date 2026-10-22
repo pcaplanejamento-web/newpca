@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.166.0",
+    data: "2026-10-22",
+    titulo: "Lixeira da Mesa: limpeza, abrangência e exclusão do que fica vazio",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "A lixeira mostra se o DFD ou item foi excluído avulso, com o DFD inteiro ou com o protocolo inteiro.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Mesa", texto: "Limpar a lixeira inteira ou só os protocolos, DFDs e itens selecionados — apaga de vez do banco.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Excluir o último DFD de um protocolo exclui o protocolo; remover o último item de um DFD exclui o DFD (com confirmação; vão à lixeira como “Ficou vazio”).", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.165.0",
     data: "2026-10-22",
     titulo: "Lixeira da Mesa completa, com os banners originais",

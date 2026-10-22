@@ -408,7 +408,7 @@ export function BarraEdicaoMassaProtocolos({
 /**
  * Edição EM MASSA dos ITENS selecionados (Mesa): PADRONIZAR pelo catálogo, UNIDADE de medida,
  * QUANTIDADE, VALOR UNITÁRIO (o total do item é recalculado) ou REMOVER — com as mesmas travas do item
- * a item (aplicadas no servidor: unidade igual à do catálogo fica travada; o DFD nunca fica sem itens).
+ * a item (aplicadas no servidor: unidade igual à do catálogo fica travada; o DFD que fica sem itens é excluído).
  */
 export function BarraEdicaoMassaItens({ aplicando = false, onAplicar }: { aplicando?: boolean; onAplicar: (acao: AcaoMassaItem) => void }) {
   const [campo, setCampo] = useState<CampoMassaItem>("catalogo");
@@ -453,7 +453,7 @@ export function BarraEdicaoMassaItens({ aplicando = false, onAplicar }: { aplica
             <TextField aria-label="Medida" placeholder="Ex.: UN, CX, KG" value={unidade} onChange={(e) => setUnidade(e.target.value)} />
           </div>
         ) : campo === "remover" ? (
-          <Nota>Remove os itens selecionados dos DFDs (o total do DFD é recalculado; um DFD nunca fica sem itens).</Nota>
+          <Nota>Remove os itens selecionados dos DFDs (o total do DFD é recalculado; o DFD que ficar sem itens é EXCLUÍDO — e o protocolo que ficar sem DFDs também).</Nota>
         ) : (
           <div className="min-w-[160px] flex-1">
             <TextField

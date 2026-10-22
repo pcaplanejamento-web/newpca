@@ -47,11 +47,12 @@ describe("planejarMassaItens — mesmas travas da edição item a item", () => {
     ]);
   });
 
-  it("remover nunca deixa o DFD sem itens", () => {
+  it("remover todos os itens marca o DFD para exclusão", () => {
     assert.deepEqual(planejarMassaItens(itens, new Set([1, 3]), { campo: "remover" }, catalogo).remover, [1, 3]);
     const tudo = planejarMassaItens(itens, new Set([1, 2, 3]), { campo: "remover" }, catalogo);
-    assert.deepEqual(tudo.remover, []);
-    assert.equal(tudo.recusas.length, 3);
+    // Todos os itens: o DFD é excluído inteiro (não sobra DFD vazio).
+    assert.deepEqual(tudo.remover, [1, 2, 3]);
+    assert.equal(tudo.excluirDfd, true);
   });
 
   it("ids que não são do DFD são ignorados", () => {
@@ -61,14 +62,14 @@ describe("planejarMassaItens — mesmas travas da edição item a item", () => {
 });
 
 describe("planejarMassaItens — trava pela CONTAGEM do DFD (o servidor lê só os itens pedidos)", () => {
-  it("remover: recusa só quando os pedidos são TODOS os itens do DFD", () => {
+  it("remover: exclui o DFD só quando os pedidos são TODOS os itens dele", () => {
     const soPedidos = [it2];
     // O DFD tem 3 itens e só o 2 foi pedido → remove.
     assert.deepEqual(planejarMassaItens(soPedidos, new Set([2]), { campo: "remover" }, catalogo, 3).remover, [2]);
-    // O DFD tem só esse item → recusado (nunca fica sem itens).
+    // O DFD tem só esse item → o DFD é excluído.
     const p = planejarMassaItens(soPedidos, new Set([2]), { campo: "remover" }, catalogo, 1);
-    assert.deepEqual(p.remover, []);
-    assert.equal(p.recusas[0].motivo, "o DFD ficaria sem itens");
+    assert.deepEqual(p.remover, [2]);
+    assert.equal(p.excluirDfd, true);
   });
   it("descreverAcaoItem", () => {
     assert.equal(descreverAcaoItem({ campo: "unidade", valor: "UN" }), "unidade → UN");

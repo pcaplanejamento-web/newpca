@@ -476,12 +476,22 @@ export function useProtocoloGravado({
     const falhas: string[] = [];
     const preservar: Preservar = { dfds: new Map(), capa: null };
     const sujos = ordem.filter((id) => editados.has(id) || itensEditados.has(id));
+    // DFD que ficou sem itens é EXCLUÍDO no servidor (e o protocolo, se ficar sem DFDs): confirma antes.
+    const vazios = sujos.filter((id) => itensEditados.has(id) && (dfds.get(id)?.itens.length ?? 1) === 0).map((id) => dfds.get(id)?.numero ?? String(id));
+    if (vazios.length && !window.confirm(`${vazios.length === 1 ? `O DFD ${vazios[0]} ficou` : `Os DFDs ${vazios.join(", ")} ficaram`} sem itens e ${vazios.length === 1 ? "será EXCLUÍDO" : "serão EXCLUÍDOS"} (vão à lixeira da Mesa). Se o protocolo ficar sem DFDs, ele também será excluído. Continuar?`)) {
+      setSalvando(false);
+      return;
+    }
+    let dfdsExcluidos = 0;
+    let protocoloExcluido = false;
     try {
       /** PATCH resiliente: rede fora / 5xx sem corpo viram FALHA daquele alvo (os demais seguem). */
       const enviar = async (url: string, body: unknown): Promise<string | null> => {
         try {
           const r = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-          const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+          const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; excluido?: boolean; protocoloExcluido?: boolean };
+          if (j.excluido) dfdsExcluidos += 1;
+          if (j.protocoloExcluido) protocoloExcluido = true;
           return r.ok && j.ok ? null : (j.error ?? `falha ao salvar (HTTP ${r.status})`);
         } catch {
           return "sem conexão com o servidor";
@@ -515,6 +525,11 @@ export function useProtocoloGravado({
       setProgresso(null);
     }
     onAlterado();
+    if (dfdsExcluidos > 0) toast.success(`${dfdsExcluidos} DFD(s) sem itens excluído(s)${protocoloExcluido ? " — o protocolo, sem DFDs, também foi excluído" : ""}. Estão na lixeira da Mesa.`, 9000);
+    if (protocoloExcluido) {
+      onFechar();
+      return;
+    }
     if (pedidoRef.current !== proto.id) return; // o banner já mostra outro protocolo (ou fechou)
     await carregar(proto.id, abertoId, preservar);
     if (falhas.length > 0) setErro(`Não foi possível salvar: ${falhas.join(" · ")}`);

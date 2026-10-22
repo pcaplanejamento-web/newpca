@@ -3,6 +3,7 @@ import { dfdNasLinhas, escopoMesa, pcaDosProtocolos } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { entradasCatalogo } from "@/lib/catalogo";
+import { excluirDfdEsvaziado } from "@/lib/exclusao-vazios";
 import { aplicarPlanoItens, dfdsParaMassa, itensParaMassa } from "@/lib/dfd";
 import { MASSA_ITENS_MAX_DFDS, massaItensSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -48,6 +49,8 @@ export async function POST(req: Request) {
     acao.campo === "catalogo" || acao.campo === "unidade" ? await entradasCatalogo(itens.map((it) => normalizarCodigo(it.codigo))) : new Map();
 
   let alterados = 0;
+  const dfdsExcluidos: string[] = [];
+  let protocolosExcluidos = 0;
   const falhas: { dfd: string; item: number | null; motivo: string }[] = [];
   for (const d of dfds) {
     const sel = porDfd.get(d.id) ?? [];
@@ -66,6 +69,23 @@ export async function POST(req: Request) {
     for (const r of plano.recusas) falhas.push({ dfd: d.numero, item: r.item, motivo: r.motivo });
     const n = plano.atualizar.length + plano.remover.length;
     if (n === 0) continue;
+    // Todos os itens do DFD: o DFD é EXCLUÍDO (precisa da ação Excluir na Mesa dele); o protocolo vazio vai junto.
+    if (plano.excluirDfd) {
+      const semExcluir = motivoRecusa(a.acesso, telaDoRecurso(d.protocoloId != null ? pcaDe.get(d.protocoloId) : null), "excluir");
+      if (semExcluir) {
+        for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: `remover todos os itens exclui o DFD — ${semExcluir}` });
+        continue;
+      }
+      try {
+        const r = await excluirDfdEsvaziado({ id: d.id, numero: d.numero, protocoloId: d.protocoloId }, a.u);
+        alterados += n;
+        dfdsExcluidos.push(d.numero);
+        if (r.protocoloExcluido) protocolosExcluidos += 1;
+      } catch (e) {
+        falhas.push({ dfd: d.numero, item: null, motivo: e instanceof Error ? e.message : "falha ao excluir o DFD" });
+      }
+      continue;
+    }
     try {
       await aplicarPlanoItens(d.id, plano, a.u.id, { id: a.u.id, nome: a.u.nome });
       alterados += n;
@@ -84,7 +104,7 @@ export async function POST(req: Request) {
       falhas.push({ dfd: d.numero, item: null, motivo: e instanceof Error ? e.message : "falha ao gravar" });
     }
   }
-  return ok({ alterados, falhas });
+  return ok({ alterados, falhas, dfdsExcluidos, protocolosExcluidos });
 }
 
 /** Histórico da massa: cada item alterado (campo a campo, a MESMA régua do reenvio) ou removido. */

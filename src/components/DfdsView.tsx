@@ -1099,18 +1099,19 @@ export function DfdsView({
     const alvo = lista.filter((it) => selItens.has(it.id));
     if (alvo.length === 0) return;
     const rotulo = descreverAcaoItem(acao);
-    if (!confirm(`${acao.campo === "remover" ? "Remover" : "Aplicar"} em ${alvo.length} item(ns) (${rotulo})? Gravado diretamente no banco.`)) return;
-    setErro(null);
-    // Remover TODOS os itens de um DFD não é permitido: recusa aqui (mesmo se a seleção for dividida).
-    const recusas: { dfd: string; item: number | null; motivo: string }[] = [];
-    let ids = alvo.map((it) => it.id);
+    // Remover TODOS os itens de um DFD exclui o DFD (e o protocolo, se era o último DFD dele) — a confirmação diz quais.
+    let aviso = "";
     if (acao.campo === "remover") {
       const porDfd = new Map<number, number>();
       for (const it of alvo) porDfd.set(it.dfdId, (porDfd.get(it.dfdId) ?? 0) + 1);
-      const cheios = new Set([...porDfd].filter(([id, n]) => n >= (dfdPorId.get(id)?.totalItens ?? Number.POSITIVE_INFINITY)).map(([id]) => id));
-      for (const it of alvo) if (cheios.has(it.dfdId)) recusas.push({ dfd: it.dfdNumero, item: it.item, motivo: "o DFD ficaria sem itens" });
-      ids = alvo.filter((it) => !cheios.has(it.dfdId)).map((it) => it.id);
+      const cheios = [...porDfd].filter(([id, n]) => n >= (dfdPorId.get(id)?.totalItens ?? Number.POSITIVE_INFINITY)).map(([id]) => dfdPorId.get(id)?.numero ?? String(id));
+      if (cheios.length)
+        aviso = `\n\nATENÇÃO: ${cheios.length === 1 ? `o DFD ${cheios[0]} fica` : `os DFDs ${cheios.slice(0, 8).join(", ")}${cheios.length > 8 ? "…" : ""} ficam`} sem itens e ${cheios.length === 1 ? "será EXCLUÍDO" : "serão EXCLUÍDOS"} — e o protocolo que ficar sem DFDs também.`;
     }
+    if (!confirm(`${acao.campo === "remover" ? "Remover" : "Aplicar"} em ${alvo.length} item(ns) (${rotulo})? Gravado diretamente no banco.${aviso}`)) return;
+    setErro(null);
+    const recusas: { dfd: string; item: number | null; motivo: string }[] = [];
+    const ids = alvo.map((it) => it.id);
     const dfdDe = new Map(lista.map((it) => [it.id, it.dfdId]));
     const r = ids.length > 0 ? await emFatias("/api/dfd/itens/massa", fatiarItensPorDfd(ids, dfdDe, FATIA_ITENS_DFDS, FATIA_ITENS), acao, "item(ns)") : { alterados: 0, falhas: [], erros: [] };
     setSelItens(new Set());
@@ -2417,7 +2418,7 @@ export function DfdsView({
             onClick={reverificarTudo}
           />
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
-          {vista !== "dashboard" && <ExcluidosMesa pcaId={pcaDaMesa ?? null} siglas={siglasExcluidos} />}
+          {vista !== "dashboard" && <ExcluidosMesa pcaId={pcaDaMesa ?? null} siglas={siglasExcluidos} podeLimpar={podeNoRecurso(pode, pcaDaMesa ?? null).excluir} />}
           {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao(false).rotulo} onEscolher={(id) => rodarAutomacao(id, false)} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
           {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}

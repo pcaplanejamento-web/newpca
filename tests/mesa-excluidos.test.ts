@@ -105,3 +105,23 @@ it("exclusões antigas pelo histórico: protocolo, DFD e itens removidos", async
   assert.equal(pcaPeloHistorico("Protocolo 1 incorporado ao PCA 2027", 3), 3);
   assert.equal(pcaPeloHistorico("Protocolo 1 devolvido à Mesa principal pelo PCA 2027", 3), null);
 });
+
+import { abrangenciaExclusao, chaveItemDoDfd, lerChaveItemDoDfd, planoLimpeza } from "../src/lib/mesa-excluidos-core.ts";
+it("abrangência da exclusão e limpeza com a cascata", () => {
+  assert.equal(abrangenciaExclusao("protocolo", "exclusao"), "protocolo");
+  assert.equal(abrangenciaExclusao("dfd", "cascata"), "dfd-protocolo");
+  assert.equal(abrangenciaExclusao("dfd", "exclusao"), "dfd-avulso");
+  assert.equal(abrangenciaExclusao("item", "massa"), "item-avulso");
+  assert.equal(abrangenciaExclusao("item", "exclusao", true), "item-dfd");
+  assert.equal(abrangenciaExclusao("item", "cascata", true), "item-protocolo");
+  assert.deepEqual(lerChaveItemDoDfd(chaveItemDoDfd(12, 3)), { id: 12, idx: 3 });
+  assert.equal(lerChaveItemDoDfd("a5"), null);
+  const ls = [
+    { id: 1, tipo: "protocolo", protocoloId: 9, motivo: "exclusao" },
+    { id: 2, tipo: "dfd", protocoloId: 9, motivo: "cascata" },
+    { id: 3, tipo: "dfd", protocoloId: 9, motivo: "exclusao" },
+    { id: 4, tipo: "dfd", protocoloId: 8, motivo: "cascata" },
+  ];
+  assert.deepEqual(planoLimpeza(ls, new Set([1])), [1, 2]);
+  assert.deepEqual(planoLimpeza(ls, new Set([3])), [3]);
+});

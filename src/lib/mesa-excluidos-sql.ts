@@ -1,7 +1,7 @@
 import { and, eq, lt, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { dfdItens, dfdProtocolos, dfds, mesaExcluidos } from "../db/schema.ts";
+import { dfdItens, dfdProtocolos, dfds, mesaExcluidos, mesaLixeiraDescartados } from "../db/schema.ts";
 
 /**
  * LIXEIRA DA MESA — os comandos como BUILDERS (testados pelo driver D1 real dentro de `db.batch`). Cada um LÊ O
@@ -127,3 +127,14 @@ export function comandoLimparExcluidos(db: Db, antes: string) {
   return db.delete(mesaExcluidos).where(lt(mesaExcluidos.excluidoEm, antes));
 }
 
+
+/** A limpeza DEFINITIVA de linhas da lixeira (os ids num parâmetro JSON). */
+export function comandoApagarExcluidos(db: Db, ids: number[]) {
+  return db.delete(mesaExcluidos).where(sql`${mesaExcluidos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`);
+}
+/** As exclusões antigas (do histórico) limpas da lixeira — 40 chaves por INSERT. */
+export function comandosDescartarAntigos(db: Db, chaves: string[]) {
+  const out = [];
+  for (let i = 0; i < chaves.length; i += 40) out.push(db.insert(mesaLixeiraDescartados).values(chaves.slice(i, i + 40).map((chave) => ({ chave }))).onConflictDoNothing());
+  return out;
+}
