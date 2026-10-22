@@ -402,7 +402,7 @@ export function OrcamentoPca({
     setVisaoTela(dadosServidor.visaoId ?? null);
   }
   const dados = useMemo<DadosOrcamentoPca>(() => {
-    if (!comparativo || visaoTela === (dadosServidor.visaoId ?? null)) return dadosServidor;
+    if (!comparativo) return dadosServidor;
     const v = (comparativo.visoes ?? visoes).find((x) => x.id === visaoTela) ?? null;
     return { ...dadosServidor, ...orcamentoNaVisao(comparativo.itens, comparativo.vinculos ?? [], v, comparativo.alvos) };
   }, [dadosServidor, comparativo, visaoTela, visoes]);

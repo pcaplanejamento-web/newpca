@@ -180,7 +180,8 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: Pode
         visaoNome: orc.visao?.nome ?? null,
         bruto: orc.bruto,
         filtrado: orc.filtrado,
-        linhas: orc.linhas,
+        // Com os lançamentos do comparativo, a tela monta as linhas sozinha (não trafegam duas vezes).
+        linhas: comp ? [] : orc.linhas,
         planejado: orc.planejado,
         previa: orc.previa,
         visaoId: orc.visao?.id ?? null,

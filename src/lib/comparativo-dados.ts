@@ -3,6 +3,7 @@ import { alvosVinculoOrcamento, getOrcamentoItens, listarVinculosOrcamento, type
 import { lancamentoNaUnidade } from "./escopo-cabecalho-core";
 import { comVinculos, mapaVinculos, unidadeDoLancamento, vinculosDaVisao } from "./orcamento-vinculo";
 import { listarVisoesOrcamento } from "./pca-espaco";
+import { memoPorVersao } from "./versao-dados";
 
 /**
  * Os dados do COMPARATIVO (a tabela cruzada) de UM orçamento — os MESMOS na tela do orçamento e no espaço do PCA: os
@@ -27,14 +28,16 @@ export function lancamentosDaUnidade<T extends { unidade: string | null; acao: s
 }
 
 export async function dadosComparativo(orcamentoId: number, usuarioId: number | null, rep: UnidadeDosLancamentos = null) {
-  const [itens, visoes, vinculos, alvos, ed] = await Promise.all([
-    getOrcamentoItens(orcamentoId),
-    listarVisoesOrcamento(),
-    listarVinculosOrcamento(),
-    alvosVinculoOrcamento(),
+  // A parte COMPARTILHADA (lançamentos + vínculos + alvos) fica pronta na memória enquanto a versão dos dados for a mesma.
+  const chaveRep = rep ? `${JSON.stringify(rep.id)}${rep.semVinculo ? "s" : ""}` : "";
+  const [base, ed] = await Promise.all([
+    memoPorVersao(`comp:${orcamentoId}:${chaveRep}`, async () => {
+      const [itens, visoes, vinculos, alvos] = await Promise.all([getOrcamentoItens(orcamentoId), listarVisoesOrcamento(), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
+      return { itens: comVinculos(lancamentosDaUnidade(itens, vinculos, rep), vinculosDaVisao(vinculos, null), alvos), visoes, vinculos, alvos };
+    }),
     carregarEdicoes(usuarioId, "orcamento-comparativo:"),
   ]);
-  return { itens: comVinculos(lancamentosDaUnidade(itens, vinculos, rep), vinculosDaVisao(vinculos, null), alvos), visoes, vinculos, alvos, edicoes: ed.lista, padroes: ed.padroes };
+  return { ...base, edicoes: ed.lista, padroes: ed.padroes };
 }
 
 /** O resumo (cards e cabeçalho do orçamento) só dos lançamentos dados — a mesma conta da agregação no banco. */

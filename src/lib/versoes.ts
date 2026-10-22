@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.5",
+    data: "2026-10-22",
+    titulo: "Aba Orçamento do PCA sem estourar o servidor",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "A aba Orçamento do PCA dava o erro 1102 da Cloudflare (limite de processamento). Os lançamentos do orçamento ficam prontos na memória do servidor e não trafegam mais duas vezes: a tela monta as linhas com os dados que já recebeu.",
+        link: "/painel/pca?aba=orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.158.4",
     data: "2026-10-22",
     titulo: "Orçamento do PCA mais leve no servidor",
