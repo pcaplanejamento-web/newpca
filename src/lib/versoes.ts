@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.155.0",
+    data: "2026-10-22",
+    titulo: "Atalhos entre o sistema e a página pública",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "Botão no cabeçalho que abre a página pública.", link: "/" },
+      { tipo: "novo", area: "Página pública", texto: "Logado, o cabeçalho da página pública ganha o botão de voltar ao sistema: as Configurações para o ADM, o painel para os demais.", link: "/painel/configuracoes" },
+    ],
+  },
+  {
     versao: "1.154.2",
     data: "2026-10-22",
     titulo: "Medida também nos detalhes do item",

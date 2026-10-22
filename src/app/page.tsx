@@ -5,6 +5,7 @@ import { PainelPca } from "@/components/PainelPca";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { TelaPublica } from "@/components/TelaPublica";
 import { getAparencia } from "@/lib/aparencia";
+import { getUsuarioAtual } from "@/lib/auth";
 import { listarDocumentos } from "@/lib/documentos";
 import { dataHoraBR, num } from "@/lib/format";
 import { dashboardDoPca, getPcaEspaco, listarPcasPublicados, orcamentoDoAno, orcamentoDoPca, type PcaEspaco } from "@/lib/pca-espaco";
@@ -63,7 +64,15 @@ async function abaDocumentos(pca: PcaEspaco) {
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ unidade?: string; pca?: string; aba?: string }> }) {
   const sp = await searchParams;
-  const [publicados, aparencia, protecaoCfg, cfg] = await Promise.all([listarPcasPublicados(), getAparencia(), getConfigProtecao(), getConfigPublico()]);
+  const [publicados, aparencia, protecaoCfg, cfg, usuario] = await Promise.all([
+    listarPcasPublicados(),
+    getAparencia(),
+    getConfigProtecao(),
+    getConfigPublico(),
+    getUsuarioAtual().catch(() => null),
+  ]);
+  // Logado: o atalho do cabeçalho — o ADM vai às Configurações; os demais, ao painel (as Configurações são só do ADM).
+  const painel = usuario ? (usuario.admin ? { href: "/painel/configuracoes", rotulo: "Configurações" } : { href: "/painel", rotulo: "Ir ao painel" }) : null;
   const protecao = protecaoPublica(protecaoCfg);
 
   // PCA escolhido no dropdown (só os PUBLICADOS); padrão = o ativo, senão o mais recente.
@@ -107,7 +116,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho estático (scriptMenuPublico), só o booleano do ADM. */}
       <script dangerouslySetInnerHTML={{ __html: scriptMenuPublico(cfg.menu === "recolhido") }} />
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
-      <TelaPublica identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
+      <TelaPublica painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
         {conteudo}
       </TelaPublica>
     </>

@@ -2670,6 +2670,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não
   soma nada); ambíguo/sem equivalente = não mexe; auditoria "adaptada ao QDD novo". Excluir uma visão diz quais PCAs voltam ao orçamento
   inteiro (confirmação e auditoria).
+- **ATALHOS (v1.155.0):** o cabeçalho do painel tem o botão "Página pública" (`IconWeb` → `/`); a página pública lê a sessão (`getUsuarioAtual`, falha = deslogado) e, logado, mostra o botão de engrenagem (`TelaPublica.painel`): ADM → `/painel/configuracoes`, demais → `/painel` (as Configurações são só do ADM).
 - **TELA PÚBLICA COM MENU + ABAS PUBLICADAS (v1.151.0, sem migração — blob `configuracoes.publico`):** o menu lateral virou
   UM componente (**`MenuLateral`**/`GavetaMenu`/`ItensMenu`, `MenuLateral.tsx` — o `AppShell` e a tela pública usam o
   mesmo; `EVENTO_ALTERNAR_MENU` mora em `menu-lateral.ts`). `/` = **`TelaPublica`** (marca no topo do menu, as abas

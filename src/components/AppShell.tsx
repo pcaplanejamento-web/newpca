@@ -2,6 +2,7 @@
 
 import type { VersoesDados } from "@/lib/versao-dados-core";
 import Link from "next/link";
+import { Button } from "./Button";
 import { rotaInicial } from "@/lib/abas";
 import { usePathname, useRouter } from "next/navigation";
 import { telaDaRota } from "@/lib/escopo-unidades-core";
@@ -41,6 +42,7 @@ import {
   IconSpinner,
   IconUser,
   IconUsers,
+  IconWeb,
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
 import { nomeExibicao } from "@/lib/pessoa";
@@ -487,6 +489,7 @@ export function AppShell({
                 <PresencaGrupo verMesa={abasSet.has("dfd")} verOnline={presenca.ver} />
               </ChatAoVivo>
             )}
+            <Button href="/" variant="icon" size="sm" aria-label="Página pública" title="Página pública" icon={<IconWeb className="h-4 w-4" />} />
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">

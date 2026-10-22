@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { ROTULO_VISTA_PUBLICA, type VistaPublica } from "@/lib/publico-core";
 import { Button } from "./Button";
-import { IconDashboard, IconDocumentos, IconLinhas, IconTelaAcesso, IconWallet } from "./icons";
+import { IconDashboard, IconDocumentos, IconLinhas, IconSettings, IconTelaAcesso, IconWallet } from "./icons";
 import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral, type SecaoMenu } from "./MenuLateral";
 import { PcaSeletor } from "./PcaSeletor";
@@ -31,8 +31,11 @@ export function TelaPublica({
   pcaId,
   pcas,
   unidades,
+  painel,
   children,
 }: {
+  /** Logado: o botão do cabeçalho que volta ao sistema (Configurações para o ADM). */
+  painel?: { href: string; rotulo: string } | null;
   identidade?: Identidade;
   /** Os itens do menu (as abas publicadas pelo ADM + a consulta de itens) — `vistasDoMenu`. */
   vistas: readonly VistaPublica[];
@@ -94,6 +97,9 @@ export function TelaPublica({
                     if (id !== (unidades.atual ?? null)) iniciar(() => router.push(href(vista, id ?? undefined)));
                   }}
                 />
+              )}
+              {painel && (
+                <Button href={painel.href} variant="icon" size="sm" aria-label={painel.rotulo} title={painel.rotulo} icon={<IconSettings className="h-4 w-4" />} />
               )}
               <ThemeToggle />
             </>
