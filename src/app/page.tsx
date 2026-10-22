@@ -116,7 +116,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho estático (scriptMenuPublico), só o booleano do ADM. */}
       <script dangerouslySetInnerHTML={{ __html: scriptMenuPublico(cfg.menu === "recolhido") }} />
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
-      <TelaPublica painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
+      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
         {conteudo}
       </TelaPublica>
     </>

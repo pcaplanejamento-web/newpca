@@ -26,6 +26,7 @@ export function ItemTable({
   ativo = null,
   busca,
   fim,
+  alturaCheia,
 }: {
   rows: ItemRow[];
   showUnidade: boolean;
@@ -38,6 +39,8 @@ export function ItemTable({
   busca?: string;
   /** Na barra da própria tabela, depois da busca (ex.: o (?)). */
   fim?: ReactNode;
+  /** A tabela ocupa até o fim do display (rola por dentro) — a vista Consulta de itens. */
+  alturaCheia?: boolean;
 }) {
   const [qLocal, setQ] = useState("");
   const q = busca ?? qLocal;
@@ -208,7 +211,7 @@ export function ItemTable({
         columns={colunas}
         rows={filtradas}
         getKey={(r) => r.id}
-        pageSize={20}
+        {...(alturaCheia ? { scrollInterno: true } : { pageSize: 20 })}
         density="compact"
         minWidth={origem ? 1180 : showUnidade ? 980 : 900}
         onRowClick={onRowClick}

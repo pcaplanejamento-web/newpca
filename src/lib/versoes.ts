@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.155.2",
+    data: "2026-10-22",
+    titulo: "Página pública: menu e consulta",
+    mudancas: [
+      { tipo: "correcao", area: "Página pública", texto: "O menu começa recolhido sempre que o ADM assim configurou, também ao chegar pelo botão \"Site\" ou trocando de aba.", link: "/" },
+      { tipo: "melhoria", area: "Página pública", texto: "A Consulta de itens ocupa a tela até o rodapé, com a tabela rolando por dentro.", link: "/?aba=consulta" },
+    ],
+  },
+  {
     versao: "1.155.1",
     data: "2026-10-22",
     titulo: "Atalhos no fim do cabeçalho",

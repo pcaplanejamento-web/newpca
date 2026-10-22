@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ATRIBUTO_MENU, aplicarMenuGuardado, CHAVE_MENU, EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { IconeNavegacao } from "./CarregandoLink";
 import { IconClose, IconMenu, IconRecolherMenu } from "./icons";
@@ -114,10 +114,13 @@ export function MenuLateral({
   extraRodape,
   semMarca,
   guardar = true,
+  inicial,
 }: {
   topo: ReactNode;
   /** false = recolher/expandir vale só nesta tela (a tela pública: o início é do ADM e a preferência do painel fica). */
   guardar?: boolean;
+  /** Com `guardar={false}`: o menu começa recolhido (true) ou aberto (false) a CADA chegada à tela — também por navegação do cliente. */
+  inicial?: boolean;
   /** Logo abaixo da marca (ex.: a pesquisa). */
   semMarca?: ReactNode;
   conteudo: ReactNode;
@@ -128,11 +131,12 @@ export function MenuLateral({
   const [recolhido, setRecolhido] = useState(false);
   // Logo depois de recolher, o ponteiro ainda está em cima: não reabre por cima até sair e voltar.
   const [semPeek, setSemPeek] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!guardar && inicial !== undefined) document.documentElement.toggleAttribute(ATRIBUTO_MENU, inicial);
     setRecolhido(document.documentElement.hasAttribute(ATRIBUTO_MENU));
     // Sem guardar: ao sair da tela, o atributo volta à preferência do aparelho.
     return guardar ? undefined : aplicarMenuGuardado;
-  }, [guardar]);
+  }, [guardar, inicial]);
   function alternarMenu() {
     const novo = !document.documentElement.hasAttribute(ATRIBUTO_MENU);
     document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);

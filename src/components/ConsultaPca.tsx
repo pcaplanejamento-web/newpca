@@ -84,6 +84,7 @@ export function ConsultaPca({
   aberto,
   onAbrir: setAberto,
   fim,
+  alturaCheia,
 }: {
   protocolos: ProtocoloDoPca[];
   dfds: DfdDoPca[];
@@ -94,6 +95,8 @@ export function ConsultaPca({
   onAbrir: (a: AberturaMesa) => void;
   /** No fim da linha das abas (ex.: o (?)). */
   fim?: ReactNode;
+  /** As tabelas ocupam até o fim do display (a vista Consulta de itens). */
+  alturaCheia?: boolean;
 }) {
   const [visao, setVisao] = useState<Visao>("itens");
   const [busca, setBusca] = useState("");
@@ -141,6 +144,7 @@ export function ConsultaPca({
             showUnidade={showUnidade}
             origem
             busca={busca}
+            alturaCheia={alturaCheia}
             onRowClick={(r) => r.dfdId != null && setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } })}
             ativo={aberto?.tipo === "item" ? aberto.itemId : null}
           />
@@ -149,20 +153,20 @@ export function ConsultaPca({
             columns={COLS_FORA}
             rows={foraDaSoma}
             getKey={(d) => d.id}
-            pageSize={20}
+            {...(alturaCheia ? { scrollInterno: true } : { pageSize: 20 })}
             minWidth={820}
             density="compact"
             exportar={{ nome: "DFDs fora da soma" }}
             resumo={(l) => `${l.length} DFD${l.length === 1 ? "" : "s"} fora da soma · ${num(l.reduce((s, d) => s + d.itens, 0))} itens · ${brl(l.reduce((s, d) => s + d.valor, 0))}`}
           />
         ) : visao === "dfds" ? (
-          <PlanilhaDfds linhas={linhas} semEstado onRowClick={(id) => setAberto({ tipo: "dfd", id })} ativa={aberto?.tipo === "dfd" ? aberto.id : null} />
+          <PlanilhaDfds linhas={linhas} scrollInterno={alturaCheia} semEstado onRowClick={(id) => setAberto({ tipo: "dfd", id })} ativa={aberto?.tipo === "dfd" ? aberto.id : null} />
         ) : (
           <DataTable
             columns={semSigla ? COLS_PROTOCOLO.filter((c) => c.key !== "sigla") : COLS_PROTOCOLO}
             rows={protocolos}
             getKey={(p) => p.id}
-            pageSize={20}
+            {...(alturaCheia ? { scrollInterno: true } : { pageSize: 20 })}
             minWidth={760}
             onRowClick={(p) => setAberto({ tipo: "protocolo", id: p.id })}
             activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}

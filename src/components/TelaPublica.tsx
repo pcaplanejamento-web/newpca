@@ -27,6 +27,7 @@ const ICONE: Record<VistaPublica, SecaoMenu["itens"][number]["Icon"]> = {
 export function TelaPublica({
   identidade,
   vistas,
+  menuRecolhido,
   vista,
   pcaId,
   pcas,
@@ -39,6 +40,8 @@ export function TelaPublica({
   identidade?: Identidade;
   /** Os itens do menu (as abas publicadas pelo ADM + a consulta de itens) — `vistasDoMenu`. */
   vistas: readonly VistaPublica[];
+  /** O menu começa recolhido (escolha do ADM) a cada chegada à tela. */
+  menuRecolhido?: boolean;
   vista: VistaPublica;
   pcaId: number | null;
   pcas: { id: number; nome: string }[];
@@ -73,7 +76,7 @@ export function TelaPublica({
 
   return (
     <div className="flex min-h-dvh bg-bg text-text lg:overflow-x-clip">
-      <MenuLateral guardar={false} topo={marca} conteudo={itens()} rodape={<div className="menu-esconde mb-2 px-1">{entrar}</div>} />
+      <MenuLateral guardar={false} inicial={menuRecolhido} topo={marca} conteudo={itens()} rodape={<div className="menu-esconde mb-2 px-1">{entrar}</div>} />
       <GavetaMenu aberto={gaveta} onFechar={() => setGaveta(false)} topo={marca} conteudo={itens(() => setGaveta(false))} rodape={entrar} />
       <div className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp

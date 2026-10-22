@@ -635,9 +635,10 @@ export function DashboardPcaCliente({
                 aberto={aberto}
                 onAbrir={setAberto}
                 fim={ajudaConsulta}
+                alturaCheia={vista === "consulta"}
               />
             ) : (
-              <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} />
+              <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={vista === "consulta"} />
             )}
           </ChartCard>
         )}

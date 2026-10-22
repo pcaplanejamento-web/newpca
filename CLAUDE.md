@@ -2691,7 +2691,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `SecaoMenu.titulo` opcional); o ADM escolhe o menu inicial (`ConfigPublico.menu` aberto|recolhido → `scriptMenuPublico`
   antes da pintura; `MenuLateral guardar={false}`: alternar vale só na visita e, ao sair, volta a preferência do aparelho —
   `aplicarMenuGuardado`);
-  o "Entrar" fica a 60% até o hover/foco.
+  o "Entrar" fica a 60% até o hover/foco. v1.155.2: o `MenuLateral inicial` reaplica a escolha do ADM a cada chegada (navegação do cliente não roda o script) e a vista Consulta usa `alturaCheia` (`scrollInterno` nas tabelas da `ConsultaPca`/`ItemTable`).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `SeletorUnidade` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
