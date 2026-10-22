@@ -5,8 +5,10 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
+import { aparelhosPresentes, lerListaMensagem } from "../src/lib/presenca-core.ts";
 import {
   ACESSO_CONTA_PADRAO,
+  canalRecusado,
   aparelhosValemPara,
   destinoBloqueio,
   hashDoAparelho,
@@ -235,9 +237,7 @@ describe("termo no D1 real", () => {
   });
 });
 
-describe("canais ao vivo e o aparelho no online", async () => {
-  const { canalRecusado } = await import("../src/lib/acesso-conta-core.ts");
-  const { aparelhosPresentes, lerListaMensagem } = await import("../src/lib/presenca-core.ts");
+describe("canais ao vivo e o aparelho no online", () => {
   it("o canal recusa a sessão sem aparelho ou com o termo vencido — só com as regras valendo", () => {
     const base = { id: 2, admin: false, aparelhoId: null, termoPrazo: null, agoraMs: Date.parse("2026-10-22T12:00:00Z") };
     assert.equal(canalRecusado({ ...base, cfgJson: null }), null);
