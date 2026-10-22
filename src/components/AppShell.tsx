@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { telaDaRota } from "@/lib/escopo-unidades-core";
 import { type ReactNode, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
+import { ContasNavegador } from "./ContasNavegador";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { type Identidade, MarcaLink } from "./MarcaSistema";
@@ -34,7 +35,6 @@ import {
   IconCheck,
   IconClock,
   IconDatabase,
-  IconLogout,
   IconLayers,
   IconPalette,
   IconPlug,
@@ -100,52 +100,6 @@ function NavLinks({
 }) {
   const pathname = usePathname();
   return <ItensMenu secoes={secoesVisiveis(admin, modulos)} ativo={(item) => itemAtivo(pathname, item)} onNavigate={onNavigate} />;
-}
-
-function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?: () => void }) {
-  const router = useRouter();
-  const [saindo, setSaindo] = useState(false);
-
-  async function sair() {
-    setSaindo(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      /* ignora */
-    }
-    router.push("/login");
-    router.refresh();
-  }
-
-  return (
-    <div className="menu-cartao flex w-full shrink-0 items-stretch overflow-hidden rounded-card border border-border p-0.5 max-lg:w-auto">
-      <Link
-        href="/painel/perfil"
-        onClick={onNavigate}
-        title="Meu perfil"
-        className="flex min-w-[37px] flex-1 items-center gap-2 overflow-hidden rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
-      >
-        <Avatar nome={usuario.nome} foto={usuario.foto} className="max-w-none" />
-        <div className="menu-esconde min-w-0">
-          {/* O APELIDO (nome de exibição) — o nome completo no title. */}
-          <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
-            {nomeExibicao(usuario)}
-          </div>
-          <div className="truncate text-[11px] text-muted">{usuario.papel.nome}</div>
-        </div>
-      </Link>
-      <button
-        type="button"
-        onClick={sair}
-        disabled={saindo}
-        title="Sair"
-        aria-label="Sair"
-        className="menu-esconde menu-sair ml-1 grid w-11 shrink-0 place-items-center overflow-hidden rounded-control text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)] disabled:opacity-60"
-      >
-        {saindo ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconLogout className="h-[18px] w-[18px]" />}
-      </button>
-    </div>
-  );
 }
 
 type GrupoNav = { id: number; nome: string };
@@ -374,7 +328,7 @@ export function AppShell({
         topo={<MarcaLink href="/" dica={DICA_SITE} identidade={identidade} />}
         semMarca={<GatilhoPesquisa />}
         conteudo={<NavLinks admin={usuario.admin} modulos={modulos} />}
-        rodape={<UserMenu usuario={usuario} />}
+        rodape={<ContasNavegador usuario={usuario} />}
         extraRodape={(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema className="justify-start" />}
       />
 
@@ -401,7 +355,7 @@ export function AppShell({
         }
         rodape={
           <>
-            <UserMenu usuario={usuario} onNavigate={fecharMenu} />
+            <ContasNavegador usuario={usuario} onNavigate={fecharMenu} />
             {(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema onNavigate={fecharMenu} />}
           </>
         }

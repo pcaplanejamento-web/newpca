@@ -13,11 +13,13 @@ import { listarUnidadesTrabalho } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
-type Busca = { modo?: string | string[]; erro?: string | string[]; motivo?: string | string[] };
+type Busca = { adicionar?: string | string[]; modo?: string | string[]; erro?: string | string[]; motivo?: string | string[] };
 
 /** A TELA ÚNICA de acesso: entrar, criar conta (`?modo=cadastro`) e redefinir a senha (`?modo=senha`). */
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Busca> }) {
-  if (await getUsuarioAtual()) redirect("/painel");
+  const sp0 = await searchParams;
+  // "Adicionar conta": quem já entrou pode entrar com OUTRA conta (a atual fica guardada para a troca).
+  if (sp0.adicionar !== "1" && (await getUsuarioAtual())) redirect("/painel");
   const [sp, integ, aparencia, unidades, cargos, total, jar] = await Promise.all([
     searchParams,
     getIntegracoes(),

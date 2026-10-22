@@ -11,6 +11,9 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Várias contas no mesmo navegador (v1.159.0) — entregue
+- Dropup no cartão do usuário: trocar, adicionar, sair desta ou de todas; sessões guardadas em cookie httpOnly, dados da conta anterior limpos na troca.
+
 ### Grupos: funções de cada tela + orçamentos do grupo (v1.144.0) — entregue
 - No banner do grupo, as funções de cada tela (abas, visões, Relatório de variação) ligam/desligam para o grupo; os
   orçamentos do grupo seguem o modelo dos PCAs (todos ou os escolhidos) na lista, no espaço, nas rotas e na pesquisa.

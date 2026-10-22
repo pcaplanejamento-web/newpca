@@ -46,6 +46,7 @@ import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
 import { useConfirmacao } from "@/components/Confirmacao";
 import { SalvarEdicao, SeletorEdicoes } from "@/components/EdicoesTabela";
 import { Avatar } from "@/components/Avatar";
+import { ContasNavegador } from "@/components/ContasNavegador";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
@@ -3733,6 +3734,11 @@ export function Catalogo() {
         <DashboardMesaEsqueleto metricas />
       </Secao>
 
+      <Secao titulo="Contas do navegador (ContasNavegador — o cartão do rodapé do menu: trocar, adicionar, sair)">
+        <div className="max-w-[16rem]">
+          <ContasNavegador usuario={{ id: -1, nome: "Maria Silva", email: "maria@rioverde.go.gov.br", foto: null, papel: { id: 0, nome: "Gestor" } } as never} />
+        </div>
+      </Secao>
       <Secao titulo="Avatares (com `presenca`: o ponto verde = online, âmbar = ausente)">
         <div className="flex flex-wrap items-center gap-3">
           {["Jhone Prado", "Maria Silva", "Naty Costa", "Cris Souza", "Thamires Lima"].map((n) => (

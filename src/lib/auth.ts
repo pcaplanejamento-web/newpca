@@ -1,6 +1,7 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { COOKIE_CONTAS, lerContas, MAX_CONTAS, textoContas } from "./contas-core";
 import { getDb } from "./db";
 import { type Capacidades, coerceCapacidades } from "./papeis-core";
 import { type DetalhesPapel, detalhesDoJson } from "./papeis-detalhes-core";
@@ -54,15 +55,102 @@ export async function criarSessao(usuarioId: number): Promise<string> {
   return token;
 }
 
+const OPCOES_COOKIE = { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: SESSAO_DIAS * 86_400 } as const;
+/** O contexto do cabeçalho (grupo, unidade, PCA) é de UMA pessoa — sai quando a conta muda. */
+const COOKIES_CONTEXTO = ["pca_grupo", "pca_reparticao", "pca_filtro"];
+
+type Jar = Awaited<ReturnType<typeof cookies>>;
+
+function gravarContas(jar: Jar, tokens: readonly string[]) {
+  const v = textoContas(tokens);
+  if (v) jar.set(COOKIE_CONTAS, v, OPCOES_COOKIE);
+  else jar.delete(COOKIE_CONTAS);
+}
+
+/** As sessões VÁLIDAS dos tokens (não vencidas, pessoa ATIVA, dentro do limite de inatividade do ADM), com a pessoa. */
+async function sessoesValidas(tokens: readonly string[]) {
+  const unicos = [...new Set(tokens)].slice(0, MAX_CONTAS + 2);
+  if (unicos.length === 0) return [];
+  const hashes = await Promise.all(unicos.map((t) => sha256Hex(t)));
+  const [linhas, cfg] = await Promise.all([
+    getDb()
+      .select({ ...colunasSessao, tokenHash: sessoes.tokenHash, sessaoId: sessoes.id, vistoEm: sessoes.vistoEm, criadoEmSessao: sessoes.criadoEm })
+      .from(sessoes)
+      .innerJoin(usuarios, eq(sessoes.usuarioId, usuarios.id))
+      .leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
+      .where(and(inArray(sessoes.tokenHash, hashes), gt(sessoes.expiraEm, new Date().toISOString()))),
+    getConfigSeguranca(),
+  ]);
+  const agora = Date.now();
+  return unicos.flatMap((token, i) => {
+    const l = linhas.find((x) => x.tokenHash === hashes[i]);
+    if (!l || l.status !== "ativo" || sessaoInativa(l.vistoEm ?? l.criadoEmSessao, agora, cfg.inatividadeMin)) return [];
+    const { tokenHash: _h, sessaoId, vistoEm: _v, criadoEmSessao: _c, ...row } = l;
+    return [{ token, sessaoId, pessoa: sessaoDaLinha(row) }];
+  });
+}
+
+async function apagarSessoes(ids: number[]) {
+  if (ids.length) await getDb().delete(sessoes).where(inArray(sessoes.id, ids)).catch(() => {});
+}
+
+/**
+ * Põe a sessão nova no cookie. Se o navegador já tinha a sessão VÁLIDA de OUTRA pessoa (o "Adicionar conta"), ela é
+ * GUARDADA em `pca_contas` para a troca rápida; a da MESMA pessoa (entrou de novo) é encerrada — nunca duas sessões
+ * guardadas da mesma conta. Trocou a pessoa = o contexto do cabeçalho (grupo/unidade/PCA) sai.
+ */
 export async function definirCookieSessao(token: string): Promise<void> {
   const jar = await cookies();
-  jar.set(COOKIE, token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSAO_DIAS * 86_400,
-  });
+  const antigo = jar.get(COOKIE)?.value;
+  const contas = lerContas(jar.get(COOKIE_CONTAS)?.value);
+  jar.set(COOKIE, token, OPCOES_COOKIE);
+  const outros = [...(antigo && antigo !== token ? [antigo] : []), ...contas.filter((t) => t !== token)];
+  if (outros.length === 0) return;
+  const validas = await sessoesValidas([token, ...outros]);
+  const nova = validas.find((v) => v.token === token)?.pessoa.id ?? null;
+  const vistos = new Set<number>(nova == null ? [] : [nova]);
+  const lista: string[] = [];
+  const apagar: number[] = [];
+  for (const t of outros) {
+    const v = validas.find((x) => x.token === t);
+    if (!v) continue;
+    if (vistos.has(v.pessoa.id) || lista.length >= MAX_CONTAS) apagar.push(v.sessaoId);
+    else {
+      vistos.add(v.pessoa.id);
+      lista.push(t);
+    }
+  }
+  gravarContas(jar, lista);
+  const pessoaAntiga = validas.find((x) => x.token === antigo)?.pessoa.id;
+  if (antigo && pessoaAntiga !== nova) for (const c of COOKIES_CONTEXTO) jar.delete(c);
+  await apagarSessoes(apagar);
+}
+
+/** As OUTRAS contas guardadas neste navegador (só as de sessão ainda válida — as vencidas saem do cookie). Rota. */
+export async function contasDoAparelho(atual: number): Promise<UsuarioSessao[]> {
+  const jar = await cookies();
+  const tokens = lerContas(jar.get(COOKIE_CONTAS)?.value);
+  if (tokens.length === 0) return [];
+  const validas = (await sessoesValidas(tokens)).filter((v) => v.pessoa.id !== atual);
+  if (validas.length !== tokens.length) gravarContas(jar, validas.map((v) => v.token));
+  return validas.map((v) => v.pessoa);
+}
+
+/** Troca para uma conta GUARDADA: ela vira a ativa e a atual vai para a lista. `null` = não está guardada (ou venceu). */
+export async function trocarConta(usuarioId: number): Promise<UsuarioSessao | null> {
+  const jar = await cookies();
+  const atual = jar.get(COOKIE)?.value;
+  const contas = lerContas(jar.get(COOKIE_CONTAS)?.value);
+  const validas = await sessoesValidas([...(atual ? [atual] : []), ...contas]);
+  const alvo = validas.find((v) => v.token !== atual && v.pessoa.id === usuarioId);
+  if (!alvo) return null;
+  jar.set(COOKIE, alvo.token, OPCOES_COOKIE);
+  gravarContas(
+    jar,
+    validas.filter((v) => v.token !== alvo.token && v.pessoa.id !== usuarioId).map((v) => v.token),
+  );
+  for (const c of COOKIES_CONTEXTO) jar.delete(c);
+  return alvo.pessoa;
 }
 
 /** O id da sessão ATUAL (pelo cookie) — trocar a senha encerra as OUTRAS sessões e mantém esta. */
@@ -73,14 +161,32 @@ export async function sessaoAtualId(): Promise<number | null> {
   return r?.id ?? null;
 }
 
-export async function encerrarSessaoAtual(): Promise<void> {
+/** Sai da conta ATUAL. Com outra conta guardada neste navegador, ela vira a ativa (devolve a pessoa). */
+export async function encerrarSessaoAtual(): Promise<UsuarioSessao | null> {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
-  if (token) {
-    const tokenHash = await sha256Hex(token);
-    await getDb().delete(sessoes).where(eq(sessoes.tokenHash, tokenHash));
-  }
+  if (token) await getDb().delete(sessoes).where(eq(sessoes.tokenHash, await sha256Hex(token)));
   jar.delete(COOKIE);
+  for (const c of COOKIES_CONTEXTO) jar.delete(c);
+  const contas = lerContas(jar.get(COOKIE_CONTAS)?.value);
+  if (contas.length === 0) return null;
+  const [prox, ...resto] = await sessoesValidas(contas);
+  if (!prox) {
+    jar.delete(COOKIE_CONTAS);
+    return null;
+  }
+  jar.set(COOKIE, prox.token, OPCOES_COOKIE);
+  gravarContas(jar, resto.map((v) => v.token));
+  return prox.pessoa;
+}
+
+/** Sai de TODAS as contas deste navegador (a ativa e as guardadas). */
+export async function encerrarTodasSessoes(): Promise<void> {
+  const jar = await cookies();
+  const tokens = [jar.get(COOKIE)?.value, ...lerContas(jar.get(COOKIE_CONTAS)?.value)].filter((t): t is string => !!t);
+  const hashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  if (hashes.length) await getDb().delete(sessoes).where(inArray(sessoes.tokenHash, hashes));
+  for (const c of [COOKIE, COOKIE_CONTAS, ...COOKIES_CONTEXTO]) jar.delete(c);
 }
 
 /** O papel da pessoa: o `papel_id`; sem ele (legado), o papel do sistema de mesma chave que o `role`. */

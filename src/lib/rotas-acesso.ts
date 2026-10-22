@@ -130,6 +130,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/usuarios/[id]/acessos": { GET: ADMIN },
 
   // ── Acesso (sem sessão) ─────────────────────────────────────────────────────────────────────────────────
+  "auth/contas": { GET: pessoal("as outras contas guardadas neste navegador"), POST: pessoal("trocar de conta ou sair de todas") },
   "auth/cadastro": { POST: publica("criar a conta (código do e-mail)") },
   "auth/codigo": { POST: publica("enviar o código de confirmação (captcha)") },
   "auth/desafio": { POST: publica("o desafio da verificação anti-robô própria (limite por IP)") },
