@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.159.1",
+    data: "2026-10-22",
+    titulo: "Contas do navegador mais compactas",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Conta",
+        texto: "O menu das contas ficou mais enxuto: espaçamentos uniformes, as outras contas com foto menor e o papel, e “Sair” e “Sair de todas” lado a lado numa linha. Entrar com outra conta pela tela de login também limpa do aparelho os dados da conta anterior e avisa as outras abas.",
+        link: "/painel/perfil",
+      },
+    ],
+  },
+  {
     versao: "1.159.0",
     data: "2026-10-22",
     titulo: "Várias contas no mesmo navegador",

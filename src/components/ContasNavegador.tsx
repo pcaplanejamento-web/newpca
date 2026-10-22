@@ -31,9 +31,15 @@ function irPara(rota: string) {
   window.location.assign(rota);
 }
 
-/** As outras abas acompanham a troca de conta (recarregam na conta nova). */
+/** As outras abas acompanham a troca de conta (recarregam na conta nova); entrar com outra conta pelo login também limpa. */
 export function useContaEmOutraAba(id: number) {
   useEffect(() => {
+    try {
+      const v = localStorage.getItem(CHAVE_CONTA_ATIVA);
+      if (!v || Number(v.split(":")[0]) !== id) trocouDePessoa(id);
+    } catch {
+      /* armazenamento bloqueado */
+    }
     const ouvir = (e: StorageEvent) => {
       if (e.key !== CHAVE_CONTA_ATIVA || !e.newValue) return;
       if (Number(e.newValue.split(":")[0]) !== id) irPara("/painel");
@@ -43,7 +49,8 @@ export function useContaEmOutraAba(id: number) {
   }, [id]);
 }
 
-const ITEM = "flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-surface-2 disabled:opacity-60 lg:min-h-9";
+const ITEM = "flex min-h-11 w-full items-center gap-2.5 rounded-control px-2 text-left text-sm text-text transition-colors hover:bg-surface-2 disabled:opacity-60 lg:min-h-9";
+const SAIR = "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-[13px] font-medium text-[var(--danger)] transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] disabled:opacity-60 lg:min-h-9";
 
 /**
  * O cartão do usuário no rodapé do menu: tocar abre o DROPUP das contas DESTE navegador — trocar (um toque), adicionar
@@ -103,7 +110,7 @@ export function ContasNavegador({ usuario, onNavigate }: { usuario: UsuarioSessa
       triggerClassName="flex w-full min-w-[42px] items-center gap-2 overflow-hidden rounded-card border border-border p-[3px] pr-2 text-left transition-colors hover:bg-surface-2"
       title="Contas e perfil"
       ariaLabel={`Conta: ${nomeExibicao(usuario)} — trocar, adicionar ou sair`}
-      width={288}
+      width={272}
       onAberto={(a) => {
         if (a) void carregar();
       }}
@@ -120,51 +127,53 @@ export function ContasNavegador({ usuario, onNavigate }: { usuario: UsuarioSessa
       }
     >
       {(fechar) => (
-        <div className="space-y-1 p-1.5">
-          <div className="flex items-center gap-2.5 rounded-control bg-surface-2 px-2.5 py-2">
+        <div className="p-1.5">
+          <div className="flex items-center gap-2.5 rounded-control bg-surface-2 p-2">
             <Avatar nome={usuario.nome} foto={usuario.foto} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-text">{nomeExibicao(usuario)}</div>
-              <div className="truncate text-[11px] text-muted">{usuario.email}</div>
+              <div className="truncate text-xs text-muted" title={usuario.email}>{usuario.email}</div>
             </div>
             <IconCheck className="h-4 w-4 shrink-0 text-accent" aria-label="Conta atual" />
           </div>
-          <Link href="/painel/perfil" onClick={() => { fechar(); onNavigate?.(); }} className={ITEM}>
-            <IconUser className="h-4 w-4 text-muted" /> Meu perfil
+          <Link href="/painel/perfil" onClick={() => { fechar(); onNavigate?.(); }} className={`${ITEM} mt-1`}>
+            <IconUser className="h-4 w-4 shrink-0 text-muted" /> Meu perfil
           </Link>
-          <div className="my-1 border-t border-border" />
-          <div className="px-2.5 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-faint">Outras contas</div>
+          <div className="my-1.5 border-t border-border" />
+          <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-faint">Outras contas</div>
           {contas === null ? (
-            <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-muted">
+            <div className={`${ITEM} text-muted hover:bg-transparent`}>
               <IconSpinner className="h-4 w-4" /> Carregando…
             </div>
           ) : contas.length === 0 ? (
-            <p className="px-2.5 py-1 text-xs text-muted">Nenhuma outra conta neste navegador.</p>
+            <p className="px-2 pb-1 text-xs text-muted">Nenhuma outra conta neste navegador.</p>
           ) : (
             contas.map((c) => (
-              <button key={c.id} type="button" className={ITEM} disabled={ocupado !== null} onClick={() => trocar(c)} title={`Trocar para ${c.nome}`}>
-                <Avatar nome={c.nome} foto={c.foto} />
+              <button key={c.id} type="button" className={`${ITEM} py-1.5`} disabled={ocupado !== null} onClick={() => trocar(c)} aria-label={`Trocar para ${c.nome}`}>
+                <Avatar nome={c.nome} foto={c.foto} size="sm" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-text">{c.nome}</span>
-                  <span className="block truncate text-[11px] text-muted">{c.papel} · {c.email}</span>
+                  <span className="block truncate font-medium">{c.nome}</span>
+                  <span className="block truncate text-xs text-muted" title={c.email}>{c.papel}</span>
                 </span>
-                {ocupado === c.id && <IconSpinner className="h-4 w-4" />}
+                {ocupado === c.id && <IconSpinner className="h-4 w-4 shrink-0" />}
               </button>
             ))
           )}
-          {falha && <p className="px-2.5 text-xs text-[var(--danger)]">{falha}</p>}
-          <a href="/login?adicionar=1" className={ITEM} aria-disabled={ocupado !== null}>
-            <IconCadastro className="h-4 w-4 text-muted" /> Adicionar outra conta
+          {falha && <p className="px-2 py-1 text-xs text-[var(--danger)]">{falha}</p>}
+          <a href="/login?adicionar=1" className={`${ITEM} ${ocupado !== null ? "pointer-events-none opacity-60" : ""}`}>
+            <IconCadastro className="h-4 w-4 shrink-0 text-muted" /> Adicionar outra conta
           </a>
-          <div className="my-1 border-t border-border" />
-          <button type="button" className={`${ITEM} text-[var(--danger)]`} disabled={ocupado !== null} onClick={() => sair(false)}>
-            {ocupado === "sair" ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />} Sair desta conta
-          </button>
-          {contas && contas.length > 0 && (
-            <button type="button" className={`${ITEM} text-[var(--danger)]`} disabled={ocupado !== null} onClick={() => sair(true)}>
-              {ocupado === "todas" ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />} Sair de todas as contas
+          <div className="my-1.5 border-t border-border" />
+          <div className="flex gap-1">
+            <button type="button" className={SAIR} disabled={ocupado !== null} onClick={() => sair(false)} title="Sair desta conta">
+              {ocupado === "sair" ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />} Sair
             </button>
-          )}
+            {contas && contas.length > 0 && (
+              <button type="button" className={SAIR} disabled={ocupado !== null} onClick={() => sair(true)} title="Sair de todas as contas deste navegador">
+                {ocupado === "todas" ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />} Sair de todas
+              </button>
+            )}
+          </div>
         </div>
       )}
     </Dropdown>
