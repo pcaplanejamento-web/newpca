@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.164.0",
+    data: "2026-10-22",
+    titulo: "Acréscimo e supressão de itens no histórico",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "O histórico do item, do DFD e do protocolo marca cada alteração de item como Inclusão, Acréscimo, Supressão ou Exclusão, com a diferença de quantidade e de valor.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Mesa", texto: "Cada evento do histórico com itens alterados resume quantos foram incluídos, acrescidos, suprimidos e excluídos, com os valores somados.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.163.0",
     data: "2026-10-22",
     titulo: "Excluídos antigos na lixeira da Mesa",

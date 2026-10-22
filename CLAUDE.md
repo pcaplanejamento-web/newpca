@@ -3768,6 +3768,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `GET /api/mesa/excluidos?pca=&tipo=` e `GET /api/mesa/excluidos/[id]`. Tela: `ExcluidosMesa` (lixeira na barra das duas
   Mesas). **Exclusões ANTERIORES (v1.163.0):** `excluidosDoHistorico` lê a `auditoria` (antes da 1ª linha da lixeira) — núcleo puro `excluidosDaAuditoria`/`pcaPeloHistorico` — protocolo/DFD excluído e itens `removido` do `detalhe`; unidade pelo registro de entrada (ou o DFD vivo) e a Mesa pelo último envio/incorporação/devolução; a rota devolve `antigos` e a tela mostra o selo "Sem retrato" (banner `DetalheAntigo`, sem restauração). Próximas: acréscimo/supressão no histórico e Restaurar.
 
+## Acréscimo × supressão de itens (v1.164.0, sem migração)
+- Núcleo puro `alteracao-itens-core.ts` (testado): `classificarAlteracaoItem(DiffItemDfd)` = inclusão · acréscimo · supressão · exclusão · sem impacto (o valor total decide, senão a quantidade; lê os números já formatados — `numeroFormatado`) e `resumoAlteracoesItens`. O `Historico` mostra o selo (`SeloAlteracao`) em cada item e o resumo (`ResumoItens`) no bloco Itens do evento. Próxima: Restaurar da lixeira.
+
 ## Documentos (v1.136.0, migração `0116`)
 - Módulo **`documentos`** (`ABA_KEYS`, `IconDocumentos`, ações visualizar · manipular [renomear] · importar · exportar
   [baixar] · excluir; a `0116` deu a tela aos grupos com o Catálogo e as mesmas ações aos papéis). Tabela `documentos`
