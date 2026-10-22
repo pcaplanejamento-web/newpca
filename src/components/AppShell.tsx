@@ -89,7 +89,7 @@ function itemAtivo(pathname: string, item: NavItem): boolean {
 function Brand({ compact = false, identidade }: { compact?: boolean; identidade?: Identidade }) {
   // A marca leva à página pública (o mesmo atalho do botão "Site"), com o realce do cartão da conta.
   return (
-    <Link href="/" title="Abrir a página pública" aria-label="Abrir a página pública" className="flex min-w-0 items-center rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2">
+    <Link href="/" title="Abrir a página pública" aria-label="Abrir a página pública" className="flex min-w-0 items-center -m-[2.5px] -mr-1.5 rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2">
       <MarcaSistema identidade={identidade} compacta={compact} />
     </Link>
   );

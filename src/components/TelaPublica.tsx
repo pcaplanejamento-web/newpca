@@ -67,7 +67,7 @@ export function TelaPublica({
       href={painel?.href ?? "/"}
       title={painel?.dica}
       aria-label={painel?.dica}
-      className="flex min-w-0 items-center rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
+      className="flex min-w-0 items-center -m-[2.5px] -mr-1.5 rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
     >
       <MarcaSistema identidade={identidade} />
     </Link>

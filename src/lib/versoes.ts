@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.156.1",
+    data: "2026-10-22",
+    titulo: "Logo inteira no menu recolhido",
+    mudancas: [{ tipo: "correcao", area: "Menu", texto: "Com o menu recolhido, a logo volta a aparecer inteira e centrada.", link: "/painel" }],
+  },
+  {
     versao: "1.156.0",
     data: "2026-10-22",
     titulo: "A marca também transita",
