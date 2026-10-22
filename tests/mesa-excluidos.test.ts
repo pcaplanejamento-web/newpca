@@ -8,7 +8,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { dfdItens, dfdProtocolos, dfds } from "../src/db/schema.ts";
 import { comandoLimparExcluidos, comandoRetratoDfds, comandoRetratoItens, comandoRetratoProtocolo } from "../src/lib/mesa-excluidos-sql.ts";
-import { lerRetratoDfd } from "../src/lib/mesa-excluidos-core.ts";
+import { lerRetratoDfd, lerRetratoItem, lerRetratoProtocolo } from "../src/lib/mesa-excluidos-core.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // A LIXEIRA DA MESA pelos MESMOS builders do servidor, no driver D1 real e DENTRO do lote da exclusão.
@@ -42,7 +42,8 @@ describe("lixeira da Mesa (retrato no mesmo lote da exclusão)", () => {
     assert.equal(l.numero, "2");
     assert.equal(l.pn, "100/2026");
     assert.equal(l.por, "Ana Teste");
-    assert.equal(JSON.parse(l.retrato as string).item.descricao, "LÁPIS");
+    const r = lerRetratoItem(l.retrato as string);
+    assert.deepEqual([r?.item.descricao, r?.dfdPlanejamento, r?.protocoloNumero, r?.item.quantidade], ["LÁPIS", "601", "100/2026", 4]);
   });
 
   it("protocolo excluído: a capa + UM retrato por DFD (cascata) com os itens", async () => {
@@ -58,6 +59,9 @@ describe("lixeira da Mesa (retrato no mesmo lote da exclusão)", () => {
     const d = lerRetratoDfd(ls[1].retrato as string);
     assert.equal(d?.planejamento, "601");
     assert.deepEqual(d?.itens.map((i) => i.descricao), ["CANETA"]);
+    assert.equal(d?.protocoloNumero, "100/2026");
+    const p = lerRetratoProtocolo(ls[0].retrato as string);
+    assert.deepEqual([p?.assunto, p?.dfds, p?.itens, p?.valorDfds], ["INCLUSÃO", 2, 2, 35]);
   });
 
   it("DFD avulso excluído; nada a excluir = nada gravado; retenção limpa", async () => {

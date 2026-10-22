@@ -114,7 +114,7 @@ export function visualDoRetrato(r: RetratoDfd, unidade: { codigo: string; nome: 
     reparticaoCodigo: unidade?.codigo ?? null,
     reparticaoNome: unidade?.nome ?? null,
     totalItens: r.itens.length,
-    itens: r.itens.map((i) => ({ item: i.item, codigo: i.codigo, descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: i.valorUnitario, valorTotal: i.valorTotal })),
+    itens: r.itens.map((i) => ({ item: i.item, codigo: i.codigo, descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade, valorUnitario: i.valorUnitario, valorTotal: i.valorTotal, dominio: i.dominio })),
     secoes: parseSecoes(r.secoes),
     assinaturas: { lista: parseAssinaturas(r.assinaturas), solicitante: null },
   };

@@ -34,6 +34,20 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     excluido: linha,
     sigla: rep(e.reparticaoId)?.codigo ?? null,
     dfd: dfdLido ? visualDoRetrato(dfdLido, rep(e.reparticaoId)) : null,
+    dfdExtra: dfdLido
+      ? {
+          protocoloNumero: dfdLido.protocoloNumero,
+          orgaoNome: dfdLido.orgaoNome,
+          siglaSetor: dfdLido.siglaSetor,
+          nomeArquivo: dfdLido.nomeArquivo,
+          criadoEm: dfdLido.criadoEm,
+          criadoPorNome: dfdLido.criadoPorNome,
+          atualizadoEm: dfdLido.atualizadoEm,
+          execucaoCenti: dfdLido.execucaoCenti,
+          conferenciaCenti: dfdLido.conferenciaCenti,
+          conferenciaCentiMotivo: dfdLido.conferenciaCentiMotivo,
+        }
+      : null,
     protocolo: e.tipo === "protocolo" ? lerRetratoProtocolo(retrato) : null,
     item: e.tipo === "item" ? lerRetratoItem(retrato) : null,
     dfds: cascata.map(({ retrato: r, ...d }) => {

@@ -18,7 +18,7 @@ export type AtorExclusao = { id: number | null; nome: string | null };
 /** O JSON de um item (as colunas que o banner mostra). `t` = o nome da tabela/alias dos itens. */
 function jsonItem(t: string): SQL {
   const c = (n: string) => sql.raw(`${t}."${n}"`);
-  return sql`json_object('id', ${c("id")}, 'item', ${c("item")}, 'codigo', ${c("codigo")}, 'descricao', ${c("descricao")}, 'unidade', ${c("unidade")}, 'quantidade', ${c("quantidade")}, 'valorUnitario', ${c("valor_unitario")}, 'valorTotal', ${c("valor_total")}, 'sequencial', ${c("sequencial")}, 'pcaSequencial', ${c("pca_sequencial")})`;
+  return sql`json_object('id', ${c("id")}, 'item', ${c("item")}, 'codigo', ${c("codigo")}, 'descricao', ${c("descricao")}, 'unidade', ${c("unidade")}, 'quantidade', ${c("quantidade")}, 'valorUnitario', ${c("valor_unitario")}, 'valorTotal', ${c("valor_total")}, 'sequencial', ${c("sequencial")}, 'pcaId', ${c("pca_id")}, 'pcaSequencial', ${c("pca_sequencial")}, 'classificacao', ${c("classificacao")}, 'dominio', ${c("dominio")})`;
 }
 
 /** O retrato do DFD (cabeçalho + seções + assinaturas + itens). */
@@ -30,7 +30,12 @@ const RETRATO_DFD = sql`json_object(
   'numeroContrato', "dfds"."numero_contrato", 'numeroAta', "dfds"."numero_ata", 'numeroLicitacao', "dfds"."numero_licitacao",
   'valorTotal', "dfds"."valor_total", 'totalItens', "dfds"."total_itens", 'secoes', "dfds"."secoes",
   'assinaturas', "dfds"."assinaturas", 'nomeArquivo', "dfds"."nome_arquivo", 'protocoloId', "dfds"."protocolo_id",
-  'criadoEm', "dfds"."criado_em",
+  'criadoEm', "dfds"."criado_em", 'atualizadoEm', "dfds"."atualizado_em", 'criadoPor', "dfds"."criado_por",
+  'criadoPorNome', (SELECT u."nome" FROM "usuarios" u WHERE u."id" = "dfds"."criado_por"),
+  'orgaoId', "dfds"."orgao_id", 'orgaoNome', (SELECT o."nome" FROM "orgaos" o WHERE o."id" = "dfds"."orgao_id"),
+  'protocoloNumero', (SELECT p."numero" FROM "dfd_protocolos" p WHERE p."id" = "dfds"."protocolo_id"),
+  'execucaoCenti', "dfds"."execucao_centi", 'execucaoCentiEm', "dfds"."execucao_centi_em",
+  'conferenciaCenti', "dfds"."conferencia_centi", 'conferenciaCentiMotivo', "dfds"."conferencia_centi_motivo",
   'itens', (SELECT json_group_array(${jsonItem("di")}) FROM "dfd_itens" di WHERE di."dfd_id" = "dfds"."id")
 )`;
 
@@ -72,7 +77,7 @@ export function comandoRetratoDfds(db: Db, alvo: { dfdId: number } | { protocolo
 /** A capa do protocolo (os DFDs dele vão em `comandoRetratoDfds` com o motivo `cascata`). */
 export function comandoRetratoProtocolo(db: Db, protocoloId: number, motivo: MotivoExclusao, ator: AtorExclusao) {
   const p = (n: string) => sql.raw(`"dfd_protocolos"."${n}"`);
-  const retrato = sql`json_object('numero', ${p("numero")}, 'idExterno', ${p("id_externo")}, 'data', ${p("data")}, 'interessado', ${p("interessado")}, 'assunto', ${p("assunto")}, 'observacao', ${p("observacao")}, 'valorCapa', ${p("valor_capa")}, 'anoPca', ${p("ano_pca")}, 'reparticaoId', ${p("reparticao_id")}, 'localReparticao', ${p("local_reparticao")}, 'pcaId', ${p("pca_id")}, 'criadoEm', ${p("criado_em")}, 'dfds', (SELECT COUNT(*) FROM "dfds" WHERE "dfds"."protocolo_id" = ${p("id")}))`;
+  const retrato = sql`json_object('numero', ${p("numero")}, 'idExterno', ${p("id_externo")}, 'data', ${p("data")}, 'interessado', ${p("interessado")}, 'assunto', ${p("assunto")}, 'observacao', ${p("observacao")}, 'valorCapa', ${p("valor_capa")}, 'anoPca', ${p("ano_pca")}, 'reparticaoId', ${p("reparticao_id")}, 'localReparticao', ${p("local_reparticao")}, 'pcaId', ${p("pca_id")}, 'criadoEm', ${p("criado_em")}, 'atualizadoEm', ${p("atualizado_em")}, 'documento', ${p("documento")}, 'nomeArquivo', ${p("nome_arquivo")}, 'orgaoId', ${p("orgao_id")}, 'orgaoNome', (SELECT o."nome" FROM "orgaos" o WHERE o."id" = ${p("orgao_id")}), 'responsavelId', ${p("responsavel_id")}, 'responsavelNome', (SELECT COALESCE(NULLIF(u."apelido", ''), u."nome") FROM "usuarios" u WHERE u."id" = ${p("responsavel_id")}), 'situacao', (SELECT s."nome" FROM "protocolo_situacoes" s WHERE s."id" = ${p("situacao_id")}), 'criadoPorNome', (SELECT u."nome" FROM "usuarios" u WHERE u."id" = ${p("criado_por")}), 'pcaNome', (SELECT x."nome" FROM "pcas" x WHERE x."id" = ${p("pca_id")}), 'pcaEnviadoEm', ${p("pca_enviado_em")}, 'pcaIncorporadoEm', ${p("pca_incorporado_em")}, 'valorDfds', (SELECT ROUND(SUM("dfds"."valor_total"), 4) FROM "dfds" WHERE "dfds"."protocolo_id" = ${p("id")}), 'itens', (SELECT COUNT(*) FROM "dfd_itens" di JOIN "dfds" ON "dfds"."id" = di."dfd_id" WHERE "dfds"."protocolo_id" = ${p("id")}), 'dfds', (SELECT COUNT(*) FROM "dfds" WHERE "dfds"."protocolo_id" = ${p("id")}))`;
   const sel = db
     .select({
       id: sql<number>`NULL`.as("id"),
@@ -108,7 +113,7 @@ export function comandoRetratoItens(db: Db, dfdId: number, ids: number[], motivo
       reparticaoId: dfds.reparticaoId,
       pcaId: dfdProtocolos.pcaId,
       valor: dfdItens.valorTotal,
-      ...comuns(motivo, sql`json_object('item', ${jsonItem('"dfd_itens"')}, 'dfdNumero', "dfds"."numero", 'dfdTipo', "dfds"."tipo")`, ator),
+      ...comuns(motivo, sql`json_object('item', ${jsonItem('"dfd_itens"')}, 'dfdNumero', "dfds"."numero", 'dfdTipo', "dfds"."tipo", 'dfdPlanejamento', "dfds"."planejamento", 'dfdObjeto', "dfds"."objeto", 'dfdSigla', "dfds"."sigla_setor", 'dfdAnoPca', "dfds"."ano_pca", 'protocoloNumero', "dfd_protocolos"."numero")`, ator),
     })
     .from(dfdItens)
     .innerJoin(dfds, eq(dfds.id, dfdItens.dfdId))

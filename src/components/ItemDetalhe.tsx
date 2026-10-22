@@ -88,7 +88,7 @@ export function ItemDetalhe({
   historicoDfdId?: number | null;
   /** CONSULTA (Dashboard do PCA, público): campos CONGELADOS, sem estado/faltas/catálogo; o histórico vem da
    * rota PÚBLICA (`urlHistorico` — só protocolos incorporados, sem autor). */
-  consulta?: { urlHistorico: string } | null;
+  consulta?: { urlHistorico?: string } | null;
   /** Leva ao campo com pendência e o destaca (o painel de pendências — valor unitário, quantidade, repetidos, catálogo). */
   destaque?: AncoraAlvo | null;
   /** O DFD de origem (nº + planejamento) — título da cópia e do PDF das pendências do item. */
@@ -171,7 +171,7 @@ export function ItemDetalhe({
           <CampoCongelado label="Valor unitário" valor={item.valorUnitario != null ? brl(item.valorUnitario) : null} />
           <CampoCongelado label="Valor total" valor={item.valorTotal != null ? brl(item.valorTotal) : null} span forte />
         </div>
-        <HistoricoDoItem url={consulta.urlHistorico} anonimo item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />
+        {consulta.urlHistorico && <HistoricoDoItem url={consulta.urlHistorico} anonimo item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />}
       </div>
     );
 

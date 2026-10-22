@@ -186,7 +186,19 @@ export async function POST(req: Request) {
   // `protocoloId` (avulso/banner) o DFD FICA no protocolo dele. `movido` só redige o histórico.
   const movido = antigo?.protocoloId != null && d.protocoloId != null && antigo.protocoloId !== d.protocoloId;
   // Protocolo INCORPORADO: o PCA acompanha a gravação (os itens mantêm o nº; o DFD entra/sai com o protocolo).
-  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows, existente?.id ?? null);
+  // Lixeira da Mesa: os itens do gravado que SAEM (só com todos os itens no 1º lote — o pareamento da comparação).
+  const removidos =
+    antigo && d.rows.length >= (d.totalItens ?? d.rows.length)
+      ? await detalheSeguro(async () => {
+          const c = compararDfd(antigo, comparavelDoPayload(d, assinaturas, true), () => "");
+          return c.itens.flatMap((x) => {
+            const g = x.tipo === "removido" && x.chave?.startsWith("r:") ? Number(x.chave.slice(2)) : -1;
+            const idItem = antigo.itens[g]?.id;
+            return typeof idItem === "number" ? [idItem] : [];
+          });
+        }, [] as number[])
+      : [];
+  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows, existente?.id ?? null, { ids: removidos, quem: { id: a.u.id, nome: a.u.nome } });
   const origem = d.origem ?? (d.protocoloId != null ? "protocolacao" : "avulso");
   // O protocolo por onde a gravação PASSOU (o histórico dele): o de destino, ou o que o DFD já tinha.
   const protocoloHist = d.protocoloId ?? antigo?.protocoloId ?? null;

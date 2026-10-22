@@ -680,6 +680,8 @@ export async function upsertDfdCabecalho(
   criadoPor: number | null,
   primeiroLote: DfdItemPayload[],
   existenteId?: number | null,
+  /** Lixeira da Mesa: os itens do DFD gravado que SAEM nesta sobrescrita (retrato antes de apagar). */
+  removidos?: { ids: number[]; quem: AtorExclusao },
 ): Promise<{ id: number; numero: string }> {
   const db = getDb();
   // DFD já gravado e numerado no PCA (protocolo incorporado): os itens regravados MANTÊM o nº (`pca-sincronia.ts`).
@@ -725,7 +727,10 @@ export async function upsertDfdCabecalho(
     .returning({ id: dfds.id });
   // O id do DFD DENTRO do lote (a linha é criada/atualizada nele mesmo): pelo `numero` (único).
   const idDoDfd = sql`(SELECT id FROM dfds WHERE numero = ${dados.numero})`;
+  const lixeira: Stmt[] =
+    existenteId && removidos && removidos.ids.length > 0 ? [comandoRetratoItens(db, existenteId, removidos.ids, "sobrescrita", removidos.quem)] : [];
   const lote: Stmt[] = [
+    ...lixeira,
     ...rastro,
     upsert,
     ...(num?.antes ?? []),
@@ -736,7 +741,7 @@ export async function upsertDfdCabecalho(
     comandoTotaisDfd(db, idDoDfd, { soCompleto: true }),
   ];
   const res = await db.batch(lote as [Stmt, ...Stmt[]]);
-  const id = (res[rastro.length] as { id: number }[])[0].id;
+  const id = (res[lixeira.length + rastro.length] as { id: number }[])[0].id;
   // O PCA acompanha: o DFD entra/sai/fica no PCA do protocolo incorporado; completo, numera os novos e baixa os sem item.
   await sincronizarDfdNoPca(id, criadoPor, primeiroLote.length);
   return { id, numero: dados.numero };

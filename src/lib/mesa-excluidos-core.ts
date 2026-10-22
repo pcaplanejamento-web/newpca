@@ -1,10 +1,11 @@
-export type MotivoExclusao = "exclusao" | "reenvio" | "cascata" | "massa" | "edicao" | "desfeita";
+export type MotivoExclusao = "exclusao" | "reenvio" | "cascata" | "massa" | "edicao" | "sobrescrita" | "desfeita";
 export const ROTULO_MOTIVO_EXCLUSAO: Record<MotivoExclusao, string> = {
   exclusao: "Exclusão",
   reenvio: "Fora do reenvio",
   cascata: "Com o protocolo",
   massa: "Remoção em massa",
   edicao: "Removido na edição",
+  sobrescrita: "Saiu na sobrescrita",
   desfeita: "Gravação desfeita",
 };
 
@@ -21,7 +22,10 @@ export type ItemExcluido = {
   valorUnitario: number | null;
   valorTotal: number | null;
   sequencial: number | null;
+  pcaId: number | null;
   pcaSequencial: number | null;
+  classificacao: string | null;
+  dominio: string | null;
 };
 
 export type RetratoDfd = {
@@ -44,6 +48,16 @@ export type RetratoDfd = {
   numeroContrato: string | null;
   numeroAta: string | null;
   numeroLicitacao: string | null;
+  siglaSetor: string | null;
+  orgaoNome: string | null;
+  protocoloNumero: string | null;
+  nomeArquivo: string | null;
+  criadoEm: string | null;
+  atualizadoEm: string | null;
+  criadoPorNome: string | null;
+  execucaoCenti: string | null;
+  conferenciaCenti: string | null;
+  conferenciaCentiMotivo: string | null;
   itens: ItemExcluido[];
 };
 
@@ -56,6 +70,20 @@ export type RetratoProtocolo = {
   observacao: string | null;
   valorCapa: number | null;
   anoPca: number | null;
+  documento: string | null;
+  localReparticao: string | null;
+  nomeArquivo: string | null;
+  orgaoNome: string | null;
+  responsavelNome: string | null;
+  situacao: string | null;
+  criadoEm: string | null;
+  atualizadoEm: string | null;
+  criadoPorNome: string | null;
+  pcaNome: string | null;
+  pcaEnviadoEm: string | null;
+  pcaIncorporadoEm: string | null;
+  valorDfds: number | null;
+  itens: number | null;
   dfds: number;
 };
 
@@ -83,7 +111,10 @@ function item(v: unknown): ItemExcluido {
     valorUnitario: n(o.valorUnitario),
     valorTotal: n(o.valorTotal),
     sequencial: n(o.sequencial),
+    pcaId: n(o.pcaId),
     pcaSequencial: n(o.pcaSequencial),
+    classificacao: s(o.classificacao),
+    dominio: s(o.dominio),
   };
 }
 
@@ -113,6 +144,16 @@ export function lerRetratoDfd(txt: string | null | undefined): RetratoDfd | null
     numeroContrato: s(o.numeroContrato),
     numeroAta: s(o.numeroAta),
     numeroLicitacao: s(o.numeroLicitacao),
+    siglaSetor: s(o.siglaSetor),
+    orgaoNome: s(o.orgaoNome),
+    protocoloNumero: s(o.protocoloNumero),
+    nomeArquivo: s(o.nomeArquivo),
+    criadoEm: s(o.criadoEm),
+    atualizadoEm: s(o.atualizadoEm),
+    criadoPorNome: s(o.criadoPorNome),
+    execucaoCenti: s(o.execucaoCenti),
+    conferenciaCenti: s(o.conferenciaCenti),
+    conferenciaCentiMotivo: s(o.conferenciaCentiMotivo),
     itens,
   };
 }
@@ -129,15 +170,48 @@ export function lerRetratoProtocolo(txt: string | null | undefined): RetratoProt
     observacao: s(o.observacao),
     valorCapa: n(o.valorCapa),
     anoPca: n(o.anoPca),
+    documento: s(o.documento),
+    localReparticao: s(o.localReparticao),
+    nomeArquivo: s(o.nomeArquivo),
+    orgaoNome: s(o.orgaoNome),
+    responsavelNome: s(o.responsavelNome),
+    situacao: s(o.situacao),
+    criadoEm: s(o.criadoEm),
+    atualizadoEm: s(o.atualizadoEm),
+    criadoPorNome: s(o.criadoPorNome),
+    pcaNome: s(o.pcaNome),
+    pcaEnviadoEm: s(o.pcaEnviadoEm),
+    pcaIncorporadoEm: s(o.pcaIncorporadoEm),
+    valorDfds: n(o.valorDfds),
+    itens: n(o.itens),
     dfds: n(o.dfds) ?? 0,
   };
 }
 
 /** O item de um retrato de item removido + o DFD de onde saiu. */
-export function lerRetratoItem(txt: string | null | undefined): { item: ItemExcluido; dfdNumero: string | null; dfdTipo: string | null } | null {
+export type RetratoItem = {
+  item: ItemExcluido;
+  dfdNumero: string | null;
+  dfdTipo: string | null;
+  dfdPlanejamento: string | null;
+  dfdObjeto: string | null;
+  dfdSigla: string | null;
+  dfdAnoPca: number | null;
+  protocoloNumero: string | null;
+};
+export function lerRetratoItem(txt: string | null | undefined): RetratoItem | null {
   const o = obj(txt);
   if (!o) return null;
-  return { item: item(o.item), dfdNumero: s(o.dfdNumero), dfdTipo: s(o.dfdTipo) };
+  return {
+    item: item(o.item),
+    dfdNumero: s(o.dfdNumero),
+    dfdTipo: s(o.dfdTipo),
+    dfdPlanejamento: s(o.dfdPlanejamento),
+    dfdObjeto: s(o.dfdObjeto),
+    dfdSigla: s(o.dfdSigla),
+    dfdAnoPca: n(o.dfdAnoPca),
+    protocoloNumero: s(o.protocoloNumero),
+  };
 }
 
 // ---------------------------------------------------------------- EXCLUSÕES ANTIGAS (antes da lixeira)
