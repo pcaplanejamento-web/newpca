@@ -711,6 +711,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   são de leitura (catálogo). v1.77.1: o `Segmented` Protocolo | DFD à direita do título escolhe a `Dropzone`; com `verificacao` os banners são SÓ LEITURA (capa `leitura`, DFD `readOnly`, item sem editar, sem seleção/massa, sem excluir/restaurar/manter, PCA e unidade travados).
 
 ## Grupos, Órgãos e Unidades (RBAC por grupo)
+> **Medida (v1.154.0):** na interface a unidade de medida do item chama-se **"Medida"** (colunas, filtros, Dashboard, Catálogo → Medidas, "Medida cadastrada"); o código segue `unidade`/`unidadeMedida`.
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
 > **Órgão** (entidade nova, acima). NÃO confundir com a **Planilha (PCA)** (tabela `unidades`, arquivo

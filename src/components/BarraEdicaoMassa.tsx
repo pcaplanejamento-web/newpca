@@ -450,7 +450,7 @@ export function BarraEdicaoMassaItens({ aplicando = false, onAplicar }: { aplica
           <Nota>Descrição e unidade passam a ser as do catálogo (só o que diverge; item fora do catálogo não muda).</Nota>
         ) : campo === "unidade" ? (
           <div className="min-w-[160px] flex-1">
-            <TextField aria-label="Unidade de medida" placeholder="Ex.: UN, CX, KG" value={unidade} onChange={(e) => setUnidade(e.target.value)} />
+            <TextField aria-label="Medida" placeholder="Ex.: UN, CX, KG" value={unidade} onChange={(e) => setUnidade(e.target.value)} />
           </div>
         ) : campo === "remover" ? (
           <Nota>Remove os itens selecionados dos DFDs (o total do DFD é recalculado; um DFD nunca fica sem itens).</Nota>

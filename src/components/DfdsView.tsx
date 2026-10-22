@@ -1744,7 +1744,7 @@ export function DfdsView({
       ? [
           {
             key: "unidCad",
-            header: "Unid. cadastrada",
+            header: "Medida cadastrada",
             nowrap: true,
             value: atributoItem.unidCad.valor,
             render: (r: ItemDfdRow) => <CelulaUnidadeCadastrada texto={r.unidade} unidade={unidadeDoItem(r.unidade).unidade} />,
@@ -1862,7 +1862,7 @@ export function DfdsView({
     // Unidades diferentes no mesmo código = a quantidade soma unidades distintas → âmbar (atenção).
     {
       key: "unidade",
-      header: "Unidade",
+      header: "Medida",
       nowrap: true,
       value: (l) => l.unidades.map((u) => u.texto).join(" · "),
       filtroExterno: filtroExterno("unidade"),
@@ -1884,7 +1884,7 @@ export function DfdsView({
       ? [
           {
             key: "unidCad",
-            header: "Unid. cadastrada",
+            header: "Medida cadastrada",
             nowrap: true,
             value: (l: Cons) => infoDe(l).unidadesCad.join(" · ") || "—",
             filtroExterno: filtroExterno("unidCad"),

@@ -1795,3 +1795,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - v1.149.0: Geral das minhas unidades + fonte dos dados por aba (grupo).
 - v1.153.0: tela pública — seletor de unidade padrão (SeletorUnidade) no cabeçalho, consulta só com a tabela, menu inicial aberto/recolhido pelo ADM e sem a linha no trilho.
 - v1.153.1: filtros de unidade do Dashboard do PCA e da tela pública com sigla + nome (comNomesUnidades).
+- v1.154.0: unidade de medida do item renomeada para "Medida" na interface.

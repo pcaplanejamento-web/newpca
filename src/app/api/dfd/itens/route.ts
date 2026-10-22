@@ -49,7 +49,7 @@ function enriquecer(base: ItemDfdRow[]): Promise<Enriquecido> {
 // ACESSÍVEIS ao usuário (não só a ativa) — com a visão dos MARCADOS do PCA, também os do ano dele na Mesa do sistema.
 // Cada item vem com a CONFORMIDADE com o catálogo (veredito compacto — a coluna "Catálogo"), numa consulta só, e a
 // resposta traz o cadastro da PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações): as colunas "Classificação" e
-// "Unid. cadastrada" — e a REFERÊNCIA do HISTÓRICO DE COMPRA de cada código (o valor atual + médio/menor/maior entre
+// "Medida cadastrada" — e a REFERÊNCIA do HISTÓRICO DE COMPRA de cada código (o valor atual + médio/menor/maior entre
 // contratos — a coluna "Histórico", que aponta o item com valor divergente), carregados só com a visão Itens aberta.
 export async function GET(req: Request) {
   const g = await exigirSessao();

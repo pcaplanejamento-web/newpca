@@ -81,7 +81,7 @@ const COLUNAS_ITENS: Column<ItemUpload>[] = [
   { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade, render: (r) => r.unidade },
   { key: "codigo", header: "Código", nowrap: true, value: (r) => r.codigo ?? "", render: (r) => (r.codigo ? <CelulaCopiavel copiar={r.codigo} rotulo="código">{r.codigo}</CelulaCopiavel> : "—") },
   { key: "produto", header: "Produto", minWidth: 260, value: (r) => r.produto ?? "", render: (r) => <CelulaTexto texto={r.produto ?? "—"} /> },
-  { key: "um", header: "Unid.", nowrap: true, value: (r) => r.unidadeMedida ?? "", render: (r) => r.unidadeMedida ?? "—" },
+  { key: "um", header: "Medida", nowrap: true, value: (r) => r.unidadeMedida ?? "", render: (r) => r.unidadeMedida ?? "—" },
   { key: "qtd", header: "Qtd.", nowrap: true, filter: "range", numero: (r) => r.quantidade, formatarFaixa: num, value: (r) => String(r.quantidade ?? 0), render: (r) => num(r.quantidade ?? 0) },
   { key: "vu", header: "Vlr. unit.", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorUnitario, total: false, value: (r) => String(r.valorUnitario ?? 0), render: (r) => brl(r.valorUnitario ?? 0) },
   { key: "vt", header: "Vlr. total", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorTotal, value: (r) => String(r.valorTotal ?? 0), render: (r) => brl(r.valorTotal ?? 0) },

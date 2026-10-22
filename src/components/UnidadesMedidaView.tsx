@@ -86,7 +86,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
     const corpo = { sigla: r.sigla, nome: r.nome, sinonimos: r.sinonimos, classificacaoId: r.classificacaoId };
     const gravou = await executar(async () => {
       await chamarPadronizacao(nova ? URL_UNIDADES : `${URL_UNIDADES}/${r.id}`, nova ? "POST" : "PATCH", corpo);
-      return { msg: nova ? "Unidade de medida cadastrada." : "Unidade de medida atualizada." };
+      return { msg: nova ? "Medida cadastrada." : "Medida atualizada." };
     });
     if (gravou) setEditando(null);
   }
@@ -101,7 +101,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
     if (!confirm(aviso)) return;
     void executar(async () => {
       await chamarPadronizacao(`${URL_UNIDADES}/${u.id}`, "DELETE");
-      return { msg: "Unidade de medida excluída." };
+      return { msg: "Medida excluída." };
     });
   }
 
@@ -379,7 +379,7 @@ export function ComparacaoUnidades({
     },
     {
       key: "unidade",
-      header: "Unidade cadastrada",
+      header: "Medida cadastrada",
       align: "left",
       minWidth: 280,
       value: (l) => {

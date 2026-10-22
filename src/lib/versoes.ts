@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.154.0",
+    data: "2026-10-22",
+    titulo: "Unidade de medida agora se chama Medida",
+    mudancas: [
+      { tipo: "melhoria", area: "Dashboard do PCA", texto: "O filtro e o gráfico de unidade de medida passam a se chamar Medida.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Mesa", texto: "Nas tabelas de itens, a coluna da unidade de medida chama-se Medida (e Medida cadastrada).", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Catálogo", texto: "A visão Unidades de medida passa a se chamar Medidas.", link: "/painel/catalogo" },
+    ],
+  },
+  {
     versao: "1.153.1",
     data: "2026-10-22",
     titulo: "Filtros de unidade no mesmo padrão",

@@ -1776,7 +1776,7 @@ function PadronizacaoDemo() {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-border bg-surface p-[var(--pad-card)]">
-        <span className="text-xs text-muted">Unid. cadastrada:</span>
+        <span className="text-xs text-muted">Medida cadastrada:</span>
         <CelulaUnidadeCadastrada texto="Und." unidade={UNIDADES_DEMO[0]} />
         <CelulaUnidadeCadastrada texto="PACOTE" unidade={null} />
         <CelulaUnidadeCadastrada texto="" unidade={null} />
@@ -3889,7 +3889,7 @@ export function Catalogo() {
             options={[
               { value: "catalogo", label: "Catálogo" },
               { value: "lista", label: "Lista de Itens", curto: "Itens" },
-              { value: "unidades", label: "Unidades de medida", curto: "Unid. medida" },
+              { value: "unidades", label: "Medidas" },
               { value: "classificacoes", label: "Classificações", curto: "Classif." },
             ]}
           />

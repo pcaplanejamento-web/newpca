@@ -155,7 +155,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
     { key: "palavras", header: "Palavras-chave", filter: "none", nowrap: true, render: (c) => <CelulaLista valores={c.palavras} max={3} /> },
     {
       key: "unidades",
-      header: "Unidades de medida",
+      header: "Medidas",
       filter: "none",
       nowrap: true,
       render: (c) => <CelulaLista valores={siglasPorClass.get(c.id) ?? []} max={3} mono />,
@@ -347,7 +347,7 @@ const COLUNAS_ITENS: Column<LinhaClassificada>[] = [
   },
   {
     key: "unidade",
-    header: "Unidade",
+    header: "Medida",
     nowrap: true,
     value: (l) => l.unidade ?? "—",
     render: (l) => <span className="font-mono text-[12px]">{l.unidade ?? "—"}</span>,

@@ -81,7 +81,7 @@ export function colunasItemMesa<R extends LinhaItemMesa>(valores: Valores<R> = {
         </CelulaCopiavel>
       ),
     } as Column<R>,
-    unidade: { key: "unidade", header: "Unidade", nowrap: true, value: valores.unidade ?? ((r) => r.unidade ?? "—"), render: (r) => r.unidade ?? "—" } as Column<R>,
+    unidade: { key: "unidade", header: "Medida", nowrap: true, value: valores.unidade ?? ((r) => r.unidade ?? "—"), render: (r) => r.unidade ?? "—" } as Column<R>,
     qtd: { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") } as Column<R>,
     vunit: { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, total: false, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") } as Column<R>,
     vtotal: { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") } as Column<R>,

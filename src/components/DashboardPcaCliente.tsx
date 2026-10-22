@@ -67,7 +67,7 @@ const TITULO: Record<Grafico, string> = {
   previsao: "Definição da Previsão",
   periodo: "Contratações Periódicas",
   item: "Top 100 Itens por Valor",
-  unidadeMedida: "Unidades de Medida",
+  unidadeMedida: "Medidas",
   prioridade: "Prioridade dos DFDs",
   unidade: "Valor por Unidade",
   dominio: "Domínio dos Itens",
@@ -94,7 +94,7 @@ const TITULO_CHIP: Record<DimDash, string> = {
   mes: "Mês",
   previsao: "Previsão",
   item: "Item",
-  unidadeMedida: "Unidade de medida",
+  unidadeMedida: "Medida",
   prioridade: "Prioridade",
   unidade: "Unidade",
   dominio: "Domínio",
@@ -108,7 +108,7 @@ const DIMS_TOPO: { dim: DimTopo; rotulo: string }[] = [
   { dim: "prioridade", rotulo: "Prioridade" },
   { dim: "unidade", rotulo: "Unidade" },
   { dim: "dominio", rotulo: "Domínio" },
-  { dim: "unidadeMedida", rotulo: "Unidade de medida" },
+  { dim: "unidadeMedida", rotulo: "Medida" },
 ];
 
 /**
@@ -349,7 +349,7 @@ export function DashboardPcaCliente({
               ...(temPrioridade ? [{ titulo: TITULO.prioridade, rotulo: "Prioridade", fatias: prioridades.map((f) => ({ ...f, label: rotuloPrioridade(f.label) })) }] : []),
               ...(temUnidades ? [{ titulo: `Valor por ${rotuloUnidade}`, rotulo: rotuloUnidade, fatias: unidades.map((f) => ({ ...f, label: f.label === "—" ? "Sem unidade" : f.label })) }] : []),
               ...(temDominio ? [{ titulo: TITULO.dominio, rotulo: "Domínio", fatias: dominios.map((f) => ({ ...f, label: f.label === "—" ? "Sem domínio" : f.label })) }] : []),
-              { titulo: TITULO.unidadeMedida, rotulo: "Unidade de medida", fatias: unids },
+              { titulo: TITULO.unidadeMedida, rotulo: "Medida", fatias: unids },
               { titulo: TITULO.item, rotulo: "Item", fatias: tops.map((t) => ({ label: t.nome ?? "—", total: t.valor, count: 1 })) },
             ],
           }),

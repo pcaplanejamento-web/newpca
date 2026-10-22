@@ -50,7 +50,7 @@ const COLS: Column<LinhaComp>[] = [
       </CelulaCopiavel>
     ),
   },
-  { key: "unidade", header: "Unidade", nowrap: true, render: (r) => r.unidade ?? "—" },
+  { key: "unidade", header: "Medida", nowrap: true, render: (r) => r.unidade ?? "—" },
   {
     key: "quantidade",
     header: "Qtd.",

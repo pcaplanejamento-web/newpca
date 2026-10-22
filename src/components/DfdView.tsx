@@ -141,7 +141,7 @@ const COLS: Column<ItemK>[] = [
       </CelulaCopiavel>
     ),
   },
-  { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
+  { key: "unidade", header: "Medida", nowrap: true, value: (r) => r.unidade ?? "", render: (r) => r.unidade ?? "—" },
   {
     key: "quantidade",
     header: "Qtd.",

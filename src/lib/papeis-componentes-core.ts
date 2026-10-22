@@ -111,8 +111,8 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
     importar: "Importar um histórico de compra.",
     exportar: "Baixar o histórico (.xlsx).",
   }),
-  c("catalogo", "unidades", "Unidades de medida", "A visão Unidades de medida (padronização).", {
-    visualizar: "Ver as Unidades de medida.",
+  c("catalogo", "unidades", "Medidas", "A visão Medidas (padronização).", {
+    visualizar: "Ver as Medidas.",
     configurar: "Cadastrar unidades e sinônimos.",
   }),
   c("catalogo", "classificacoes", "Classificações", "A visão Classificações dos itens (padronização).", {

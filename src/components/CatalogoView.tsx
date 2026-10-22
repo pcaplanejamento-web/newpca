@@ -660,7 +660,7 @@ export function CatalogoView({
         </CelulaCopiavel>
       ),
     },
-    { key: "unidade", header: "Unidade", minWidth: 110, value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },
+    { key: "unidade", header: "Medida", minWidth: 110, value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },
     colTipos,
     {
       key: "seq",
@@ -718,7 +718,7 @@ export function CatalogoView({
         </CelulaCopiavel>
       ),
     },
-    { key: "unidade", header: "Unidade", minWidth: 100, filter: "none", value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },
+    { key: "unidade", header: "Medida", minWidth: 100, filter: "none", value: (r) => r.unidade ?? "", render: (r) => <span className="text-muted">{r.unidade ?? "—"}</span> },
   ];
 
   const podeImportar =
@@ -886,7 +886,7 @@ export function CatalogoView({
               ...(pasta
                 ? []
                 : [
-                    { value: "unidades" as const, label: "Unidades de medida", curto: "Unid. medida" },
+                    { value: "unidades" as const, label: "Medidas" },
                     { value: "classificacoes" as const, label: "Classificações", curto: "Classif." },
                   ]),
             ].filter((o) => libera(CHAVE_VISTA[o.value]))}

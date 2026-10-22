@@ -16,7 +16,7 @@ const COLUNAS: Column<LinhaPrevia>[] = ([
   { key: "seq", header: "Seq.", value: (r) => String(r.sequencial ?? ""), numero: (r) => r.sequencial, nowrap: true, total: false, formatarFaixa: num },
   { key: "codigo", header: "Código", value: (r) => r.idProduto ?? "—", nowrap: true },
   { key: "produto", header: "Produto", value: (r) => r.nomeProduto ?? "—", align: "left", minWidth: 280 },
-  { key: "um", header: "Unidade de medida", value: (r) => r.unidadeMedida ?? "—", nowrap: true },
+  { key: "um", header: "Medida", value: (r) => r.unidadeMedida ?? "—", nowrap: true },
   { key: "classificacao", header: "Classificação", value: (r) => r.classificacao ?? "—", nowrap: true },
   { key: "dominio", header: "Domínio", value: (r) => r.dominio ?? "—", nowrap: true },
   { key: "qtd", header: "Qtd.", value: (r) => num(r.quantidade), numero: (r) => r.quantidade, filter: "range", formatarFaixa: num, nowrap: true },

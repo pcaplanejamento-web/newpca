@@ -144,7 +144,7 @@ export function ItemTable({
     if (showUnidade)
       cols.push({
         key: "codigo",
-        header: "Unid.",
+        header: "Unidade",
         nowrap: true,
         value: (r) => r.codigo ?? "",
         render: (r) => <span className="font-mono text-[12px] font-semibold text-text-2">{r.codigo ?? "—"}</span>,

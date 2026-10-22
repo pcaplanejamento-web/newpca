@@ -119,7 +119,7 @@ export function CatalogoCard({
     : [
         { rotulo: "Itens", valor: num(agenda?.itens ?? c.totalItens) },
         { rotulo: "Sem tipo", valor: num(agenda?.semTipo ?? 0), cor: agenda?.semTipo ? "var(--warn)" : "var(--text-2)" },
-        { rotulo: "Unid. medida", valor: num(agenda?.unidades ?? 0), cor: "var(--text-2)" },
+        { rotulo: "Medidas", valor: num(agenda?.unidades ?? 0), cor: "var(--text-2)" },
       ];
   const acoes = [
     onEditar && { rotulo: "Editar", icone: <IconPencil className="h-4 w-4 text-muted" />, onClick: onEditar },

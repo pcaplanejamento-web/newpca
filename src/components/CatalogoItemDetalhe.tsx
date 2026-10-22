@@ -66,7 +66,7 @@ export function CatalogoItemDetalhe({
           placeholder="Ex.: 5241948381"
           hint="Só os dígitos são gravados. É a chave única global — não pode repetir em nenhum catálogo."
         />
-        <TextField label="Unidade de medida" value={unidade} onChange={(e) => setUnidade(e.target.value)} disabled={salvando} placeholder="UNIDADE, KG, CAIXA…" />
+        <TextField label="Medida" value={unidade} onChange={(e) => setUnidade(e.target.value)} disabled={salvando} placeholder="UNIDADE, KG, CAIXA…" />
         <TextArea label="Descrição" value={descricao} onChange={(e) => setDescricao(e.target.value)} disabled={salvando} rows={5} />
         <div>
           <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD</p>
@@ -134,7 +134,7 @@ export function CatalogoItemDetalhe({
       {podeEditar ? (
         <>
           <p className="text-[11px] text-faint">O código é a chave global do item e não é editável aqui — para trocá-lo, exclua e crie de novo.</p>
-          <TextField label="Unidade de medida" value={unidade} onChange={(e) => setUnidade(e.target.value)} disabled={salvando} placeholder="UNIDADE, KG, CAIXA…" />
+          <TextField label="Medida" value={unidade} onChange={(e) => setUnidade(e.target.value)} disabled={salvando} placeholder="UNIDADE, KG, CAIXA…" />
           <TextArea label="Descrição" value={descricao} onChange={(e) => setDescricao(e.target.value)} disabled={salvando} rows={5} />
           <div>
             <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD</p>
@@ -164,7 +164,7 @@ export function CatalogoItemDetalhe({
       ) : (
         <>
           <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
-            <Campo label="Unidade de medida" valor={item.unidade ?? "—"} />
+            <Campo label="Medida" valor={item.unidade ?? "—"} />
             <Campo label="Código (normalizado)" valor={item.codigo} mono />
             <Campo label="Descrição" valor={item.descricao} span />
           </dl>

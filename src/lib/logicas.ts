@@ -469,7 +469,7 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "norm-unidades-medida",
     dominio: "normalizacao",
-    titulo: "Unidades de medida: comparação dos itens com o cadastro (Catálogo)",
+    titulo: "Medidas: comparação dos itens com o cadastro (Catálogo)",
     descricao:
       "Catálogo → Unidades de medida: cada unidade tem sigla, nome e sinônimos (as outras grafias aceitas). Toda grafia de unidade dos itens (DFDs e catálogo) é comparada com o cadastro e aparece como Cadastrada, Sugestão ou Não cadastrada, com quantos itens a usam.",
     detalhes: [
@@ -478,7 +478,7 @@ export const LOGICAS: LogicaRef[] = [
       "Escolha a unidade na linha (a sugestão já vem escolhida) e confirme em \"Adicionar\" — a grafia vira um sinônimo; \"Adicionar N sugestões\" grava todas de uma vez, cada uma na unidade escolhida; \"Cadastrar\" abre a unidade nova já proposta a partir das grafias dos itens.",
       "Se só parte das grafias entrar (outra pessoa alterou a unidade no meio, por exemplo), o aviso diz quantas entraram e o motivo das demais — nada é sobrescrito.",
       "Uma grafia pertence a UMA unidade só — repetir a de outra é recusado. Excluir uma unidade não mexe nos itens: as grafias dela voltam a \"não cadastrada\".",
-      "Na Mesa → Itens, a coluna \"Unid. cadastrada\" mostra a sigla cadastrada de cada item (ou \"Não cadastrada\"). Os itens de DFD seguem a unidade ativa do cabeçalho.",
+      "Na Mesa → Itens, a coluna \"Medida cadastrada\" mostra a sigla cadastrada de cada item (ou \"Não cadastrada\"). Os itens de DFD seguem a unidade ativa do cabeçalho.",
     ],
     fonte: "compararUnidades / comparadorUnidades (padronizacao-core)",
   },
