@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.160.0",
+    data: "2026-10-22",
+    titulo: "Mesa do PCA com todas as unidades, já filtrada na sua",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "A aba Mesa do PCA segue o acesso da tela Mesa do grupo (com \"Todas as unidades\" em Grupos → Acesso de cada tela, vê protocolos, DFDs e itens de todas) e o seletor de unidade do cabeçalho. Sem unidade escolhida, o sistema abre na unidade do seu cadastro — troque para \"Geral\" para ver tudo.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "A pesquisa acha os ajustes de acesso: \"acesso de cada tela\", \"todas as unidades\", \"fonte dos dados\", \"PCAs do grupo\" (Grupos), \"componentes\"/\"ocultar abas\" (Papéis), \"Filtro da unidade\" e \"Tela pública\" (Configurações).",
+        link: "/painel/grupos",
+      },
+    ],
+  },
+  {
     versao: "1.159.2",
     data: "2026-10-22",
     titulo: "Menu recolhido estável com as contas abertas",

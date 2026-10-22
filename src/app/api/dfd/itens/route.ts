@@ -3,7 +3,7 @@ import { exigirSessao, recusa } from "@/lib/api-auth";
 import { conformidadeDosItens } from "@/lib/catalogo";
 import { referenciasHistorico } from "@/lib/catalogo-historico";
 import { type ItemDfdRow, listarItensDfds } from "@/lib/dfd";
-import { unidadeDoModulo } from "@/lib/escopo-cabecalho";
+import { unidadeDaMesaDoPca } from "@/lib/escopo-cabecalho";
 import { idDoFiltro, passaFiltroId } from "@/lib/escopo-unidades-core";
 import { erro, ok } from "@/lib/http";
 import { redigirItens } from "@/lib/mesa-redacao";
@@ -68,7 +68,7 @@ export async function GET(req: Request) {
   if (doPca) {
     // Com a visão dos MARCADOS ligada no PCA (o servidor decide), também os itens do ano dele ainda na Mesa do sistema.
     // E, com o PCA obedecendo ao cabeçalho (Configurações → Filtro da unidade), só os da unidade ativa.
-    const rep = (await unidadeDoModulo("pca", g.u, undefined, "mesa")).id;
+    const rep = await unidadeDaMesaDoPca(g.u);
     if (rep !== false) base = await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca));
     itens = base.filter((it) => un.acessivel(it.reparticaoId) && passaFiltroId(rep, it.reparticaoId));
   } else {

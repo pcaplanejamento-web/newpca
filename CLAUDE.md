@@ -760,6 +760,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
+- **MESA DO PCA PELA TELA MESA + UNIDADE INICIAL (v1.160.0, sem migração):** a aba Mesa do PCA usa as unidades da tela `dfd` (`unidadeDaMesaDoPca`, `escopo-cabecalho.ts` — lista + a regra "PCA obedece ao cabeçalho"; `telaDaRota(path, aba)` dá `dfd` a `/painel/pca/<id>?aba=mesa`, o cabeçalho troca a lista) e, sem cookie de unidade, `getReparticaoContexto` abre na unidade do CADASTRO da pessoa (`unidadesDeCadastro`, a principal primeiro) quando está na lista — não na "Geral". Os ajustes (Acesso de cada tela, Fonte dos dados, Componentes, Filtro da unidade, Tela pública) estão nas `PALAVRAS`/`ABAS_TELAS` da pesquisa.
 - **ORÇAMENTOS POR GRUPO (v1.144.0, migração `0120` — `grupos.orcamentos` JSON de ids, NULL = todos)** — `orcamentosDoAcesso`/
   `podeOrcamento` na lista, no espaço `[id]`, em `recusaOrcamento`, na pesquisa e nos vínculos. As "Funções das telas" saíram
   (v1.149.0: a `0123` zerou `funcoes_off`, coluna DORMENTE).

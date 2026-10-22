@@ -69,6 +69,15 @@ export async function unidadeDoModulo(
   return { id, sigla: ativa?.codigo ?? null, nome: ativa?.nome ?? null, cfg };
 }
 
+/**
+ * A unidade da MESA DO PCA: as unidades da tela MESA (no grupo de "unidade de cadastro" com a Mesa em "todas", todas — a
+ * pessoa troca no cabeçalho) e a escolha do ADM de o PCA obedecer ao cabeçalho. Sem escolha, a unidade do cadastro.
+ */
+export async function unidadeDaMesaDoPca(u?: UsuarioSessao | null): Promise<FiltroId> {
+  const [un, cfg] = await Promise.all([unidadesDaSessao(u, undefined, "dfd"), getConfigEscopo()]);
+  return filtroDoModulo(cfg, "pca", idDoFiltro(un.filtro));
+}
+
 /** O Catálogo no modo "usados": a unidade do cabeçalho (só os itens/históricos cujo código ela usa); `todos` = sem filtro. */
 export async function unidadeDoCatalogo(): Promise<FiltroId> {
   const r = await unidadeDoModulo("catalogo");

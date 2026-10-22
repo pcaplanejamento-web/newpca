@@ -86,8 +86,10 @@ const ROTAS_TELA: readonly [string, string][] = [
   ["/painel/verificacao", "verificacao"],
   ["/painel/documentos", "documentos"],
 ];
-export function telaDaRota(pathname: string | null | undefined): string | null {
+export function telaDaRota(pathname: string | null | undefined, aba?: string | null): string | null {
   const p = pathname ?? "";
+  // A aba MESA do espaço de um PCA usa as unidades da tela Mesa (o mesmo escopo da Mesa do sistema).
+  if (aba === "mesa" && /^\/painel\/pca\/\d+$/.test(p)) return "dfd";
   return ROTAS_TELA.find(([r]) => p === r || p.startsWith(`${r}/`))?.[1] ?? null;
 }
 
