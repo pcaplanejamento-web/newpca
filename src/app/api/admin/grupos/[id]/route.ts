@@ -91,7 +91,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // As telas vêm dos módulos (gravadas também em `abas` — o retrato do momento).
   const abas = mods ? telasDosModulos(modulos, mods) : undefined;
   // O escopo por tela guarda só as telas que o grupo ABRE (as de agora ou as novas).
-  const escopoTelas = escopoPedido !== undefined ? compactarEscopoTelas(escopoPedido, abas ?? antes.abas) : undefined;
+  const escopoTelas = escopoPedido !== undefined || abas ? compactarEscopoTelas(escopoPedido ?? antes.escopoTelas, abas ?? antes.abas) : undefined;
   // As funções desligadas: só as das telas que o grupo abre (as de agora ou as novas); trocar os módulos também as poda.
   const fontesAbas = funcoesPedidas !== undefined || abas ? compactarFontesAbas(funcoesPedidas ?? antes.fontesAbas, abas ?? antes.abas).filter((c) => !(escopoTelas ?? antes.escopoTelas)[c]) : undefined;
   // Tudo num LOTE: nome/módulos/chat/PCAs + pessoas + unidades (um id inválido nunca deixa o grupo pela metade).
@@ -139,14 +139,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     chat !== undefined && chat !== antes.chat ? `chat ${chat ? "liberado" : "bloqueado"}` : null,
     pcasGrupo !== undefined && !mesmaLista(pcasGrupo, antes.pcas) ? `PCAs: ${textoPcas(antes.pcas)} → ${textoPcas(pcasGrupo)}` : null,
     orcsGrupo !== undefined && !mesmaLista(orcsGrupo, antes.orcamentos) ? `orçamentos: ${textoOrcs(antes.orcamentos)} → ${textoOrcs(orcsGrupo)}` : null,
-    fontesAbas !== undefined && !mesmaLista(fontesAbas, antes.fontesAbas) ? `fontes únicas: ${textoFuncoes(antes.fontesAbas)} → ${textoFuncoes(fontesAbas)}` : null,
+    fontesAbas !== undefined && !mesmaLista(fontesAbas, antes.fontesAbas) ? `acesso por aba (soma): ${textoFuncoes(antes.fontesAbas)} → ${textoFuncoes(fontesAbas)}` : null,
     membros !== undefined ? trocaIds(antes.membros, membros, "pessoas") : null,
     reps !== undefined ? trocaIds(antes.reparticoes, reps, "unidades") : null,
     modoUnidades !== undefined && modoUnidades !== antes.modoUnidades
       ? `unidades: ${ROTULO_MODO[antes.modoUnidades]} → ${ROTULO_MODO[modoUnidades]}`
       : null,
     escopoTelas !== undefined && textoEscopo(escopoTelas) !== textoEscopo(antes.escopoTelas)
-      ? `telas com todas as unidades: ${textoEscopo(antes.escopoTelas)} → ${textoEscopo(escopoTelas)}`
+      ? `acesso por aba (todas): ${textoEscopo(antes.escopoTelas)} → ${textoEscopo(escopoTelas)}`
       : null,
   ].filter((x): x is string => !!x);
   await registrarAuditoria({

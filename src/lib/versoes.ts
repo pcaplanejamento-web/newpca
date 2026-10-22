@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.161.3",
+    data: "2026-10-22",
+    titulo: "Filtro da Mesa do PCA acompanha o cabeçalho",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Trocar a unidade do cabeçalho refaz o filtro de unidade da Mesa do PCA.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Grupos", texto: "Trocar os módulos do grupo também poda o acesso por aba das telas que saíram; o histórico diz acesso por aba.", link: "/painel/grupos" },
+    ],
+  },
+  {
     versao: "1.161.2",
     data: "2026-10-22",
     titulo: "Mesa do PCA abre na unidade do cabeçalho",

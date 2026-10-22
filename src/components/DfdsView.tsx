@@ -641,6 +641,23 @@ export function DfdsView({
     }
     if (todas) setVersaoRecorte((n) => n + 1);
   };
+  // O filtro de UNIDADE acompanha o cabeçalho: trocar a unidade lá (a página recarrega com as siglas novas) troca a coluna
+  // Unidade das três visões e remonta a tabela; os demais filtros ficam.
+  const chaveSiglas = (siglasIniciais ?? []).join("|");
+  const siglasAntes = useRef(chaveSiglas);
+  useEffect(() => {
+    if (siglasAntes.current === chaveSiglas) return;
+    siglasAntes.current = chaveSiglas;
+    const sig = chaveSiglas ? chaveSiglas.split("|") : null;
+    const com = (e: EstadoVisao | undefined, campo: string): EstadoVisao => {
+      const filtros = { ...(e?.filtros ?? {}) };
+      if (sig) filtros[campo] = sig;
+      else delete filtros[campo];
+      return { filtros, ordem: e?.ordem ?? null };
+    };
+    setEstadoVisoes((m) => ({ protocolos: com(m.protocolos, "reparticao"), dfds: com(m.dfds, "sigla"), itens: com(m.itens, "sigla") }));
+    setVersaoRecorte((n) => n + 1);
+  }, [chaveSiglas]);
   useEffect(() => setSelDfds((s) => podar(s, new Set(dfdsR.map((d) => d.id)))), [dfdsR]);
   useEffect(() => setSelProtos((s) => podar(s, new Set(protocolosR.map((p) => p.id)))), [protocolosR]);
   useEffect(() => {
