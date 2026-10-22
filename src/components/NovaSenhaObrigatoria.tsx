@@ -8,7 +8,7 @@ import { CartaoAuth, ErroAuth } from "./CartaoAuth";
 import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
 import { PasswordField } from "./Field";
 import { IconArrowRight, IconKey, IconLogout } from "./icons";
-import { type Identidade, MarcaSistema } from "./MarcaSistema";
+import { type Identidade, MarcaLink } from "./MarcaSistema";
 
 /**
  * TROCA DE SENHA OBRIGATÓRIA (o ADM exigiu — Usuários → o banner do usuário → "Exigir nova senha"): antes de qualquer tela
@@ -74,7 +74,9 @@ export function NovaSenhaObrigatoria({ email, identidade, turnstile }: { email: 
   return (
     <main className="flex min-h-dvh items-start justify-center bg-bg px-[var(--pad-canvas)] py-10 sm:items-center">
       <div className="w-full max-w-[440px] space-y-8">
-        <MarcaSistema identidade={identidade} tamanho="lg" />
+        <div className="flex">
+          <MarcaLink href="/" dica="Abrir a página pública" identidade={identidade} tamanho="lg" />
+        </div>
         <CartaoAuth
           titulo="Crie uma nova senha"
           etapa={cod.destino ? "Etapa 2 de 2" : "Etapa 1 de 2"}

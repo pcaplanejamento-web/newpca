@@ -29,6 +29,7 @@ export function PcaSeletor({ pcas, current }: { pcas: PcaCardDados[]; current: n
     <Dropdown
       papel="dialog"
       className="min-w-0"
+      width={704}
       ariaLabel="Escolher o PCA"
       title="Escolher o PCA"
       folha={folha}
@@ -49,7 +50,7 @@ export function PcaSeletor({ pcas, current }: { pcas: PcaCardDados[]; current: n
       }
     >
       {(fechar) => (
-        <div className={`max-h-[70vh] overflow-y-auto p-[var(--pad-card)] ${folha ? "w-full" : "w-[min(44rem,calc(100vw-2rem))]"}`}>
+        <div className="p-2">
           <p className="mb-3 text-sm font-semibold text-text">Escolha o PCA</p>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] gap-[var(--gap-block)]" role="none" onClickCapture={() => fechar()}>
             {pcas.map((p) => (

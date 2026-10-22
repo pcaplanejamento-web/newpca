@@ -207,9 +207,12 @@ export function Dropdown({
         createPortal(
           // O diálogo tem nome (o do gatilho); o menu, como sempre.
           papel === "dialog" ? (
-            <div role="dialog" aria-label={ariaLabel} {...painel}>
-              {conteudo}
-            </div>
+            <>
+              {folha && <div aria-hidden="true" className="animate-fundo-folha fixed inset-0 z-[199] bg-[var(--scrim)]" />}
+              <div role="dialog" aria-label={ariaLabel} {...painel}>
+                {conteudo}
+              </div>
+            </>
           ) : papel === "listbox" ? (
             <>
               {/* A FOLHA tem o fundo escuro (tocar nele fecha — é "fora" do painel). */}

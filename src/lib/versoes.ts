@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.157.1",
+    data: "2026-10-22",
+    titulo: "Ajustes no seletor de PCA e nas telas de acesso",
+    mudancas: [
+      { tipo: "correcao", area: "Página pública", texto: "Os cartões do seletor de PCA abrem num painel largo, sem rolagem lateral; no celular, com o fundo escurecido.", link: "/" },
+      { tipo: "melhoria", area: "Acesso", texto: "A logo da tela de nova senha também leva à página pública.", link: "/login" },
+    ],
+  },
+  {
     versao: "1.157.0",
     data: "2026-10-22",
     titulo: "PCA em cartões na página pública e marca única",
