@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * que cada vínculo atribui a cada unidade cadastrada (unidade do CUBO + ações) e o que fica de fora. A tela monta o PDF.
  * Quem EXPORTA no PCA.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirAcesso("pca", "exportar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
@@ -18,7 +18,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (semPca) return semPca;
   const pca = await getPcaEspaco(id);
   if (!pca) return erro("PCA não encontrado.", 404);
-  const relatorio = await relatorioOrcamentoDoPca(pca);
+  const v = new URL(req.url).searchParams.get("visao");
+  const n = v === null ? Number.NaN : Number(v);
+  const alvo = Number.isInteger(n) && n >= 0 ? { ...pca, orcamentoVisaoId: n || null } : pca;
+  const relatorio = await relatorioOrcamentoDoPca(alvo);
   if (!relatorio) return erro("Nenhum orçamento importado para o ano deste PCA.", 404);
   return ok({ relatorio });
 }

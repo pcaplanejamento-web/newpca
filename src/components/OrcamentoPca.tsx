@@ -224,7 +224,7 @@ function OrigemLinha({ dados, aberta, onClose, unidades = dados.unidades }: { da
  * cada VÍNCULO atribui a cada unidade (unidade do CUBO + ações) e o que fica de fora, e gera o documento didático
  * (`blocosRelatorioOrcamento` → `baixarDocumentoPdf`). O código do PDF só é carregado no clique.
  */
-function BotaoRelatorioComposicao({ pcaId, filtradas }: { pcaId: number; /** As unidades à vista na tabela (com filtro); sem filtro, ausente. */ filtradas?: number[] }) {
+function BotaoRelatorioComposicao({ pcaId, filtradas, visaoId }: { pcaId: number; /** A visão à vista (a da barra). */ visaoId?: number | null; /** As unidades à vista na tabela (com filtro); sem filtro, ausente. */ filtradas?: number[] }) {
   const [aberto, setAberto] = useState(false);
   const [rel, setRel] = useState<RelatorioOrcamento | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -239,7 +239,7 @@ function BotaoRelatorioComposicao({ pcaId, filtradas }: { pcaId: number; /** As 
     setModo(filtradas?.length ? "filtradas" : "todas");
     setCarregando(true);
     try {
-      const r = await fetch(`/api/pca/${pcaId}/orcamento/relatorio`);
+      const r = await fetch(`/api/pca/${pcaId}/orcamento/relatorio${visaoId === undefined ? "" : `?visao=${visaoId ?? 0}`}`);
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; relatorio?: RelatorioOrcamento };
       if (!r.ok || !j.ok || !j.relatorio) throw new Error(j.error ?? "Não foi possível montar o relatório.");
       setRel(j.relatorio);
@@ -764,6 +764,7 @@ export function OrcamentoPca({
             <div className="flex items-center gap-2 lg:ml-auto">
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao
                   pcaId={dados.pcaId}
+                  visaoId={dados.visaoId ?? null}
                   filtradas={
                     nivel === "unidade" && visiveis.length < linhas.length
                       ? visiveis.flatMap((l) => (l.nivel === "unidade" && l.unidadeId != null ? [l.unidadeId] : []))

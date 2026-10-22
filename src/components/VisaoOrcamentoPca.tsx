@@ -62,6 +62,24 @@ export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
 }
 
 /**
+ * A visão escolhida na BARRA vale só para esta tela: troca o `?visao=` da URL (o servidor recalcula com ela, memorizado) — não
+ * grava no PCA nem muda a visão padrão dos outros. A padrão do PCA segue pela engrenagem/Configuração.
+ */
+function useVisaoNaTela(visaoId: number | null) {
+  const router = useRouter();
+  const [escolha, setEscolha] = useState<number | null>(visaoId);
+  const [gravando, iniciar] = useTransition();
+  useEffect(() => setEscolha(visaoId), [visaoId]);
+  function ver(id: number | null) {
+    setEscolha(id);
+    const u = new URL(window.location.href);
+    u.searchParams.set("visao", String(id ?? 0));
+    iniciar(() => router.replace(`${u.pathname}${u.search}`, { scroll: false }));
+  }
+  return { escolha, gravando, ver };
+}
+
+/**
  * A VISÃO do orçamento do PCA NA BARRA do PCA × Orçamento (à vista, sem abrir a engrenagem): `SelectField compacto` com o
  * orçamento inteiro e as visões salvas (o resumo de cada uma na dica); escolher grava na hora no PCA (`useVisaoDoPca`). Sem
  * `podeEscolher`, mostra a visão em uso travada. Editar/criar visões segue pela engrenagem.
@@ -87,7 +105,7 @@ export function SeletorVisaoPca({
   /** Ver as configurações da visão em uso (filtros e vínculos), só leitura — o olho ao lado; ausente = sem o olho. */
   onVer?: (v: VisaoOrcamento) => void;
 }) {
-  const { escolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
+  const { escolha, gravando, ver } = useVisaoNaTela(visaoId);
   const atual = visoes.find((v) => v.id === escolha) ?? null;
   const dica = atual ? `${atual.nome} — ${resumoVisao(atual.filtros)}` : "Orçamento inteiro (sem visão)";
   const ausentes = useMemo(() => new Map(visoes.map((v) => [v.id, itens ? contarAusentes(valoresAusentes(itens, v.filtros)) : 0])), [visoes, itens]);
@@ -107,7 +125,7 @@ export function SeletorVisaoPca({
         disabled={!podeEscolher || gravando}
         aria-busy={gravando || undefined}
         acoes={acoes}
-        onChange={(e) => void gravar(e.target.value ? Number(e.target.value) : null)}
+        onChange={(e) => ver(e.target.value ? Number(e.target.value) : null)}
       >
         <option value="" data-detalhe="Todos os lançamentos do orçamento do ano">
           Orçamento inteiro

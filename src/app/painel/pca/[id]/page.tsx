@@ -48,7 +48,7 @@ export default async function PcaEspacoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string; abrir?: string }>;
+  searchParams: Promise<{ aba?: string; abrir?: string; visao?: string }>;
 }) {
   const r = await acessoPagina("pca");
   if (r.bloqueio) return r.bloqueio;
@@ -75,7 +75,7 @@ export default async function PcaEspacoPage({
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca);
-  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
+  else if (aba === "orcamento") conteudo = await abaOrcamento(comVisaoDaUrl(pca, sp.visao), u.id, pode, podeTela(acesso, "orcamento").configurar);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
   else if (aba === "importacao")
     conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={await itensDosUploads(pca.id)} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
@@ -204,4 +204,11 @@ async function abaMesa(pca: PcaEspaco, u: UsuarioSessao, abrir?: string) {
   const alvo = lerVinculo(abrir);
   const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   return <MesaPca {...await carregarMesaDoPca(u, pca)} abrirInicial={abrirInicial} />;
+}
+
+/** A visão escolhida na barra do PCA × Orçamento vale SÓ para quem vê (`?visao=`; "0" = orçamento inteiro) — nada é gravado. */
+function comVisaoDaUrl(pca: PcaEspaco, visao: string | undefined): PcaEspaco {
+  if (visao === undefined) return pca;
+  const n = Number(visao);
+  return Number.isInteger(n) && n >= 0 ? { ...pca, orcamentoVisaoId: n || null } : pca;
 }

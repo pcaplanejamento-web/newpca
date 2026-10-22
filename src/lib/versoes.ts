@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.2",
+    data: "2026-10-22",
+    titulo: "Visão do PCA × Orçamento só para quem vê",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "Trocar a visão na barra do Orçamento do PCA virou um filtro da sua tela: não grava no PCA, não muda a visão padrão nem afeta os outros usuários. A visão padrão segue pela engrenagem.",
+        link: "/painel/pca?aba=orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.158.1",
     data: "2026-10-22",
     titulo: "Cartões de PCA com marcação estável e sombra suave",
