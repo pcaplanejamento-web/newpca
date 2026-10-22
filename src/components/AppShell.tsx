@@ -260,9 +260,9 @@ export function AppShell({
   grupoAtivoId,
   abas,
   modulos,
-  reparticoes: reparticoesBase,
-  reparticaoAtivaId: ativaBase,
-  unidadesPorTela,
+  reparticoes,
+  reparticaoAtivaId,
+  travadas,
   pcas = [],
   pcaFiltroId = null,
   cartoesPca = [],
@@ -281,9 +281,8 @@ export function AppShell({
   modulos: SecaoModulo[];
   reparticoes: ReparticaoNav[];
   reparticaoAtivaId: number | null;
-  /** Grupos → Acesso por aba: nas abas `telas` (tela.aba) com "todas", o seletor mostra TODAS as unidades (`lista`); nas
-   * `travadas` (a soma das unidades da pessoa), o seletor não escolhe. */
-  unidadesPorTela?: { telas: readonly string[]; travadas: readonly string[]; lista: ReparticaoNav[] | null; ativaId: number | null };
+  /** Grupos → Acesso por aba: as abas (tela.aba) em "Soma" — o seletor de unidade trava. */
+  travadas?: readonly string[];
   /** PCAs do seletor do cabeçalho (filtro global) e o escolhido (`null` = todos). */
   pcas?: PcaNav[];
   pcaFiltroId?: number | null;
@@ -302,10 +301,7 @@ export function AppShell({
 }) {
   const busca = useSearchParams();
   const chaveAtual = chaveDaRota(usePathname(), { aba: busca.get("aba"), pca: busca.get("pca") });
-  const porTela = unidadesPorTela?.lista && chaveAtual && unidadesPorTela.telas.includes(chaveAtual) ? unidadesPorTela : null;
-  const travado = !!chaveAtual && !!unidadesPorTela?.travadas.includes(chaveAtual);
-  const reparticoes = porTela?.lista ?? reparticoesBase;
-  const reparticaoAtivaId = porTela ? porTela.ativaId : ativaBase;
+  const travado = !!chaveAtual && !!travadas?.includes(chaveAtual);
   const presenca = useUltimoValido(presencaServidor);
   const chat = useUltimoValido(chatServidor);
   const [menuAberto, setMenuAberto] = useState(false);

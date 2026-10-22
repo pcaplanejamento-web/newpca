@@ -761,6 +761,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
 - **MESA DO PCA PELO GRUPO (v1.160.1; unidade inicial v1.160.0, sem migração):** a Mesa do sistema (`dfd`) é do ADM; a aba Mesa do PCA usa as unidades da tela **PCA, aba Mesa** (`unidadesDaSessao(u, g, "pca", "mesa")` — "Acesso de cada tela → PCA: Todas" libera todas; "Fonte dos dados → Mesa do PCA" soma as da pessoa): `contextoBanners(u, "pca")`, `unidadeDaMesaDoPca`, `GET /api/dfd/itens?pca=` (`esc.unPca`). `escopoMesa()` traz `un` (sistema) + `unPca` e `acessivel` = a UNIÃO (a tela de cada recurso segue em `recusa`); pesquisa e vínculos de tarefa usam `escopoDasMesas` (`unirEscopos`). Sem cookie de unidade, `getReparticaoContexto` abre na unidade do CADASTRO. Os ajustes do grupo estão na pesquisa (`PALAVRAS`/`ABAS_TELAS`).
+- **ACESSO ÀS UNIDADES POR ABA (v1.161.0/1, sem migração):** UMA configuração por aba no banner do grupo (`AcessoPorAba`;
+  chave `tela.aba` de `ABAS_FONTE`, tela sem abas = a própria tela): **Da pessoa** (padrão) · **Soma** (`fontes_abas` — o
+  seletor do cabeçalho TRAVA: `AppShell.travadas` → `SeletorUnidade travado`) · **Todas** (`escopo_telas` `{"pca.mesa":"todas"}`,
+  nos dois modos): SÓ os dados da aba — `unidadesDaSessao` devolve escopo/filtro todas; o cabeçalho segue com as unidades do
+  grupo (`reparticoesDoMembro`/`getReparticaoContexto` não olham a aba) e a coluna Unidade fica à vista
+  (`UnidadeUnica todasAsUnidades`). Núcleo: `chaveDaRota(path, {aba, pca})`, `acessoDaAba`, `partesDaChave`,
+  `telaVeTodas(e, tela, aba)`; a chave legada só de tela vale em todas as abas dela. `acessosDoGrupo` (layout); as rotas de
+  grupo tiram da Soma a aba em Todas. O banner do grupo é organizado em blocos (identificação · módulos · pessoas · unidades
+  · acesso por aba · PCAs e orçamentos).
 - **ORÇAMENTOS POR GRUPO (v1.144.0, migração `0120` — `grupos.orcamentos` JSON de ids, NULL = todos)** — `orcamentosDoAcesso`/
   `podeOrcamento` na lista, no espaço `[id]`, em `recusaOrcamento`, na pesquisa e nos vínculos. As "Funções das telas" saíram
   (v1.149.0: a `0123` zerou `funcoes_off`, coluna DORMENTE).

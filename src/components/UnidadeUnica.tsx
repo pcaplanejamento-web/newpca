@@ -12,16 +12,16 @@ export type UnidadeAtiva = { id: number; sigla: string; nome: string };
 type Valor = { unidade: UnidadeAtiva | null; modulos: Partial<Record<ModuloEscopo, boolean>> };
 const Ctx = createContext<Valor>({ unidade: null, modulos: {} });
 
-/** `porTela` = as abas (tela.aba) em que o grupo vê TODAS as unidades (a unidade ativa delas vem da lista completa). */
+/** `todasAsUnidades` = as abas (tela.aba) em que o grupo vê TODAS as unidades: lá a interface não é "de uma unidade". */
 export function UnidadeUnica({
   children,
   unidade,
   modulos,
-  porTela,
-}: Valor & { porTela?: { telas: readonly string[]; unidade: UnidadeAtiva | null }; children: ReactNode }) {
+  todasAsUnidades,
+}: Valor & { todasAsUnidades?: readonly string[]; children: ReactNode }) {
   const busca = useSearchParams();
   const chave = chaveDaRota(usePathname(), { aba: busca.get("aba"), pca: busca.get("pca") });
-  const efetiva = porTela && chave && porTela.telas.includes(chave) ? porTela.unidade : unidade;
+  const efetiva = chave && todasAsUnidades?.includes(chave) ? null : unidade;
   return <Ctx.Provider value={{ unidade: efetiva, modulos }}>{children}</Ctx.Provider>;
 }
 

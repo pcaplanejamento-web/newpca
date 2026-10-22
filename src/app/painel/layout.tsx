@@ -12,7 +12,6 @@ import { componentesDoAcesso, getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
 import { acessosDoGrupo, getReparticaoContexto } from "@/lib/grupos";
-import { partesDaChave } from "@/lib/escopo-unidades-core";
 import { listarPcasCards } from "@/lib/pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { getModulos } from "@/lib/modulos";
@@ -65,10 +64,9 @@ export default async function PainelLayout({
     getConfigChat(),
     getConfigEscopo(),
   ]);
-  // Grupos → Acesso por aba: nas abas com TODAS as unidades o cabeçalho troca a lista (e a ativa); nas de SOMA, trava.
+  // Grupos → Acesso por aba: nas abas em TODAS os dados vêm de todas as unidades (o cabeçalho segue o do grupo e a coluna
+  // Unidade fica à vista); nas de SOMA, o seletor do cabeçalho trava.
   const acessos = !usuario.admin && ativo ? await acessosDoGrupo(ativo.id) : { todas: [], somas: [] };
-  const primeira = acessos.todas[0] ? partesDaChave(acessos.todas[0]) : null;
-  const contextoTodas = primeira ? await getReparticaoContexto(usuario, ativo, primeira.tela, primeira.aba) : null;
   const telasTodas = acessos.todas;
   const unidadeDe = (r: { id: number; codigo: string; nome: string } | null) =>
     r && !ehGeral(r) ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
@@ -83,7 +81,7 @@ export default async function PainelLayout({
       modulos={secoesDosModulos(modulos, new Set(acesso.telas), usuario.admin)}
       reparticoes={contexto.lista}
       reparticaoAtivaId={contexto.ativa?.id ?? null}
-      unidadesPorTela={{ telas: telasTodas, travadas: acessos.somas, lista: contextoTodas?.lista ?? null, ativaId: contextoTodas?.ativa?.id ?? null }}
+      travadas={acessos.somas}
       pcas={pcas}
       pcaFiltroId={pcaFiltro?.id ?? null}
       cartoesPca={cartoesPca}
@@ -104,7 +102,7 @@ export default async function PainelLayout({
           <UnidadeUnica
             modulos={escopoCab.modulos}
             unidade={unidadeDe(contexto.ativa)}
-            porTela={contextoTodas ? { telas: telasTodas, unidade: unidadeDe(contextoTodas.ativa) } : undefined}
+            todasAsUnidades={telasTodas}
           >
             <SegundoPlano>{children}</SegundoPlano>
           </UnidadeUnica>

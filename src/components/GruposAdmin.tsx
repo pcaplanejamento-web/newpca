@@ -316,131 +316,145 @@ export function GruposAdmin() {
       >
         <form id={FORM_ID} onSubmit={salvar} className="space-y-[var(--gap-block)]">
           {erroModal && <Callout kind="danger">{erroModal}</Callout>}
-          <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={MAX_NOME_RBAC} required />
-          <fieldset>
-            <legend className="mb-2 block text-[13.5px] font-bold text-text">Módulos do grupo · {mods.size} selecionado(s)</legend>
-            <div className="grid gap-1 rounded-control border border-border p-2 sm:grid-cols-2">
-              {modulosDisp.map((m) => (
-                <div key={m.id} className="rounded-control p-1.5 hover:bg-surface-2">
-                  <Checkbox
-                    checked={mods.has(m.id)}
-                    onChange={() => {
-                      setModsTocados(true);
-                      alternar(setMods, m.id);
-                    }}
-                    label={
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-medium text-text">{m.nome}</span>
-                        <span className="block text-[11.5px] text-muted">{m.telas.map(rotuloAba).join(", ") || "Sem telas"}</span>
-                      </span>
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
-          </fieldset>
-          <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
-          <AcessoPorAba telas={telasGrupo} escopo={escopo} somas={fontesAbas} onEscopo={setEscopo} onSomas={setFontesAbas} />
-          {telasGrupo.includes("pca") && (
-            <ListaEscolhaIds titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
-          )}
-          {telasGrupo.includes("orcamento") && (
-            <ListaEscolhaIds titulo="Orçamentos do grupo" todos="Todos os orçamentos (também os que forem importados)" vazio="Nenhum orçamento importado." aviso="Sem nenhum orçamento, as pessoas do grupo não veem nenhum orçamento." opcoes={orcsDisp} valor={orcsSel} onChange={setOrcsSel} />
-          )}
-          <div>
-            <div className="mb-2 flex items-center gap-1.5">
-              <span className="text-[13.5px] font-bold text-text">
-                Unidades do grupo{modo === "lista" ? ` · ${reps.size} selecionada(s)` : ""}
-              </span>
-              <Ajuda titulo="Unidades do grupo" compacta>
-                <p>
-                  <b>Unidades escolhidas</b>: todas as pessoas do grupo veem os dados das unidades marcadas (a "Geral" = todas).
-                </p>
-                <p className="mt-2">
-                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só as unidades em que trabalha (o cadastro dela em
-                  Usuários — pode ter várias). Quem não tem unidade de cadastro não vê dado nenhum. O que cada aba mostra fica em <b>Acesso às unidades por aba</b>.
-                </p>
-              </Ajuda>
-            </div>
-            <Segmented
-              ariaLabel="De onde vêm as unidades"
-              value={modo}
-              onChange={setModo}
-              className="mb-2"
-              options={[
-                { value: "lista", label: "Unidades escolhidas", curto: "Escolhidas" },
-                { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
-              ]}
-            />
-            {modo === "cadastro" ? (
-              semUnidade.length > 0 ? (
-                <Callout kind="warn">
-                  {semUnidade.length} pessoa(s) do grupo sem unidade de cadastro não verão dado nenhum:{" "}
-                  {semUnidade.map((u) => u.nome).join(", ")}. Defina a unidade em Usuários.
-                </Callout>
-              ) : (
-                <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-muted">
-                  Cada pessoa verá os dados da unidade do próprio cadastro.
-                </p>
-              )
-            ) : repsDisp.length === 0 ? (
-              <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
-                Nenhuma unidade cadastrada. Cadastre em Órgãos e Unidades.
-              </p>
-            ) : (
-              <div className="max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
-                {repsDisp.map((r) => (
-                  <div key={r.id} className="rounded-control p-1.5 hover:bg-surface-2">
+          <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
+            <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={MAX_NOME_RBAC} required />
+            <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
+          </section>
+          <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
+            <fieldset>
+              <legend className="mb-2 block text-[13.5px] font-bold text-text">Módulos do grupo · {mods.size} selecionado(s)</legend>
+              <div className="grid gap-1 rounded-control border border-border p-2 sm:grid-cols-2">
+                {modulosDisp.map((m) => (
+                  <div key={m.id} className="rounded-control p-1.5 hover:bg-surface-2">
                     <Checkbox
-                      checked={reps.has(r.id)}
-                      onChange={() => alternar(setReps, r.id)}
+                      checked={mods.has(m.id)}
+                      onChange={() => {
+                        setModsTocados(true);
+                        alternar(setMods, m.id);
+                      }}
                       label={
-                        <span className="flex items-center gap-2">
-                          <span className="font-mono text-[10.5px] text-faint">{r.codigo}</span>
-                          <span className="min-w-0 truncate text-[13px] text-text">{r.nome}</span>
-                          {ehGeral(r) && <Badge tone="blue">Todas as unidades</Badge>}
-                          {r.oculto && <Badge tone="slate">Oculta</Badge>}
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-medium text-text">{m.nome}</span>
+                          <span className="block text-[11.5px] text-muted">{m.telas.map(rotuloAba).join(", ") || "Sem telas"}</span>
                         </span>
                       }
                     />
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-          <div>
-            <span className="mb-2 block text-[13.5px] font-bold text-text">
-              Pessoas do grupo · {membros.size} selecionada(s)
-            </span>
-            <SearchField value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Buscar pessoa..." />
-            <div className="mt-2 max-h-[280px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
-              {usuariosFiltrados.map((u) => (
-                <div key={u.id} className="rounded-control p-1.5 hover:bg-surface-2">
-                  <Checkbox
-                    checked={membros.has(u.id)}
-                    onChange={() => alternar(setMembros, u.id)}
-                    label={
-                      <span className="flex items-center gap-2.5">
-                        <Avatar nome={u.nome} size="sm" />
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate text-[13px] font-medium text-text">{u.nome}</span>
-                            {u.status === "pendente" && <Badge tone="amber">Pendente</Badge>}
-                            {u.status === "inativo" && <Badge tone="slate">Inativo</Badge>}
+              <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
+            </fieldset>
+          </section>
+          <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
+            <div>
+              <span className="mb-2 block text-[13.5px] font-bold text-text">
+                Pessoas do grupo · {membros.size} selecionada(s)
+              </span>
+              <SearchField value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Buscar pessoa..." />
+              <div className="mt-2 max-h-[280px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
+                {usuariosFiltrados.map((u) => (
+                  <div key={u.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                    <Checkbox
+                      checked={membros.has(u.id)}
+                      onChange={() => alternar(setMembros, u.id)}
+                      label={
+                        <span className="flex items-center gap-2.5">
+                          <Avatar nome={u.nome} size="sm" />
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate text-[13px] font-medium text-text">{u.nome}</span>
+                              {u.status === "pendente" && <Badge tone="amber">Pendente</Badge>}
+                              {u.status === "inativo" && <Badge tone="slate">Inativo</Badge>}
+                            </span>
+                            <span className="block truncate text-[11px] text-muted">{u.email}</span>
                           </span>
-                          <span className="block truncate text-[11px] text-muted">{u.email}</span>
                         </span>
-                      </span>
-                    }
-                  />
+                      }
+                    />
+                  </div>
+                ))}
+                {usuariosFiltrados.length === 0 && (
+                  <p className="p-2 text-center text-[12px] text-faint">Nenhuma pessoa encontrada.</p>
+                )}
+              </div>
+            </div>
+          </section>
+          <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
+            <div>
+              <div className="mb-2 flex items-center gap-1.5">
+                <span className="text-[13.5px] font-bold text-text">
+                  Unidades do grupo{modo === "lista" ? ` · ${reps.size} selecionada(s)` : ""}
+                </span>
+                <Ajuda titulo="Unidades do grupo" compacta>
+                  <p>
+                    <b>Unidades escolhidas</b>: todas as pessoas do grupo veem os dados das unidades marcadas (a "Geral" = todas).
+                  </p>
+                  <p className="mt-2">
+                    <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só as unidades em que trabalha (o cadastro dela em
+                    Usuários — pode ter várias). Quem não tem unidade de cadastro não vê dado nenhum. O que cada aba mostra fica em <b>Acesso às unidades por aba</b>.
+                  </p>
+                </Ajuda>
+              </div>
+              <Segmented
+                ariaLabel="De onde vêm as unidades"
+                value={modo}
+                onChange={setModo}
+                className="mb-2"
+                options={[
+                  { value: "lista", label: "Unidades escolhidas", curto: "Escolhidas" },
+                  { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
+                ]}
+              />
+              {modo === "cadastro" ? (
+                semUnidade.length > 0 ? (
+                  <Callout kind="warn">
+                    {semUnidade.length} pessoa(s) do grupo sem unidade de cadastro não verão dado nenhum:{" "}
+                    {semUnidade.map((u) => u.nome).join(", ")}. Defina a unidade em Usuários.
+                  </Callout>
+                ) : (
+                  <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-muted">
+                    Cada pessoa verá os dados da unidade do próprio cadastro.
+                  </p>
+                )
+              ) : repsDisp.length === 0 ? (
+                <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
+                  Nenhuma unidade cadastrada. Cadastre em Órgãos e Unidades.
+                </p>
+              ) : (
+                <div className="max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
+                  {repsDisp.map((r) => (
+                    <div key={r.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                      <Checkbox
+                        checked={reps.has(r.id)}
+                        onChange={() => alternar(setReps, r.id)}
+                        label={
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono text-[10.5px] text-faint">{r.codigo}</span>
+                            <span className="min-w-0 truncate text-[13px] text-text">{r.nome}</span>
+                            {ehGeral(r) && <Badge tone="blue">Todas as unidades</Badge>}
+                            {r.oculto && <Badge tone="slate">Oculta</Badge>}
+                          </span>
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {usuariosFiltrados.length === 0 && (
-                <p className="p-2 text-center text-[12px] text-faint">Nenhuma pessoa encontrada.</p>
               )}
             </div>
-          </div>
+          </section>
+          <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
+            <AcessoPorAba telas={telasGrupo} escopo={escopo} somas={fontesAbas} onEscopo={setEscopo} onSomas={setFontesAbas} />
+          </section>
+          {(telasGrupo.includes("pca") || telasGrupo.includes("orcamento")) && (
+          <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
+            {telasGrupo.includes("pca") && (
+              <ListaEscolhaIds titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
+            )}
+            {telasGrupo.includes("orcamento") && (
+              <ListaEscolhaIds titulo="Orçamentos do grupo" todos="Todos os orçamentos (também os que forem importados)" vazio="Nenhum orçamento importado." aviso="Sem nenhum orçamento, as pessoas do grupo não veem nenhum orçamento." opcoes={orcsDisp} valor={orcsSel} onChange={setOrcsSel} />
+            )}
+          </section>
+          )}
         </form>
       </Modal>
       {confirmacao}
@@ -473,8 +487,8 @@ function AcessoPorAba({ telas, escopo, somas, onEscopo, onSomas }: { telas: AbaK
         <Ajuda titulo="Acesso às unidades por aba" compacta>
           <p>
             <b>Da pessoa</b> (padrão): os dados das unidades da pessoa; o seletor do cabeçalho escolhe entre elas. <b>Soma</b>:
-            sempre a soma das unidades da pessoa, com o seletor travado. <b>Todas</b>: os dados de todas as unidades só naquela
-            aba (ex.: liberar a Mesa do PCA e manter o Dashboard e o Orçamento na unidade da pessoa).
+            sempre a soma das unidades da pessoa, com o seletor travado. <b>Todas</b>: os dados de todas as unidades só naquela aba, sem o filtro do cabeçalho (o cabeçalho segue com as unidades do grupo; filtre pela coluna Unidade da tabela) —
+            ex.: liberar a Mesa do PCA e manter o Dashboard e o Orçamento na unidade da pessoa).
           </p>
         </Ajuda>
       </legend>
@@ -493,7 +507,7 @@ function AcessoPorAba({ telas, escopo, somas, onEscopo, onSomas }: { telas: AbaK
                     options={[
                       { value: "pessoa", label: "Da pessoa", dica: "As unidades da pessoa; o seletor do cabeçalho escolhe entre elas." },
                       ...(l.soma ? [{ value: "soma", label: "Soma", dica: "A soma das unidades da pessoa; o seletor do cabeçalho fica travado." }] : []),
-                      { value: "todas", label: "Todas", dica: "Os dados de todas as unidades nesta aba." },
+                      { value: "todas", label: "Todas", dica: "Os dados de todas as unidades nesta aba; o cabeçalho segue com as do grupo e a tabela filtra pela coluna Unidade." },
                     ]}
                   />
                 </div>

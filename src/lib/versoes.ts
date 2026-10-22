@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.161.1",
+    data: "2026-10-22",
+    titulo: "Aba em Todas sem mudar o cabeçalho + banner do grupo organizado",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Grupos",
+        texto:
+          "A aba em \"Todas\" (ex.: a Mesa do PCA) mostra os dados de todas as unidades sem mexer no seletor de unidade do cabeçalho, que segue com as unidades do grupo; a coluna Unidade fica à vista para filtrar na própria tabela.",
+        link: "/painel/grupos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Grupos",
+        texto: "O banner de editar grupo foi organizado em blocos: identificação · módulos · pessoas · unidades · acesso por aba · PCAs e orçamentos.",
+        link: "/painel/grupos",
+      },
+    ],
+  },
+  {
     versao: "1.161.0",
     data: "2026-10-22",
     titulo: "Acesso às unidades por aba",

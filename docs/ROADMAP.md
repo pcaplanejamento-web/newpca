@@ -11,7 +11,8 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
-### Acesso às unidades por aba (v1.161.0) — entregue
+### Acesso às unidades por aba (v1.161.0/1) — entregue
+Na aba em Todas o cabeçalho segue com as unidades do grupo; a tabela filtra pela coluna Unidade.
 Uma configuração por aba no grupo (Da pessoa · Soma · Todas): ex.: a Mesa do PCA com todas as unidades e o Dashboard/Orçamento só na unidade da pessoa; na Soma o seletor do cabeçalho trava.
 
 ### Mesa do PCA pelo grupo (v1.160.1) — entregue
