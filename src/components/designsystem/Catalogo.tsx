@@ -22,7 +22,8 @@ import { VerificacaoRobo } from "@/components/VerificacaoRobo";
 import { CampoMatricula } from "@/components/CampoMatricula";
 import { BotaoWhatsapp, CampoTelefone } from "@/components/Telefone";
 import { type UsuarioAdmin, UsuarioDetalhe } from "@/components/UsuarioDetalhe";
-import { MarcaSistema } from "@/components/MarcaSistema";
+import { MarcaLink, MarcaSistema } from "@/components/MarcaSistema";
+import { PcaSeletor } from "@/components/PcaSeletor";
 import { OpcoesUnidades } from "@/components/OpcoesUnidades";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { EsqueletoPcaCard, PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
@@ -456,6 +457,9 @@ function DemoAcesso() {
       </CartaoAuth>
       <div className="space-y-[var(--gap-block)]">
         <MarcaSistema />
+        <div className="flex">
+          <MarcaLink href="/" dica="MarcaLink — a marca clicável dos cabeçalhos (abre a página pública)" />
+        </div>
         <Button size="sm" variant="secondary" onClick={() => setErroDemo(true)}>
           Mostrar erro (ErroAuth flutuante)
         </Button>
@@ -618,6 +622,15 @@ function PcaEspacoDemo() {
           <IconeNavegacao Icon={Icons.IconSettings} className="h-[17px] w-[17px]" strokeWidth={1.8} />
           Item do menu
         </Link>
+      </div>
+      <div className="flex">
+        <PcaSeletor
+          current={1}
+          pcas={[
+            { id: 1, nome: "PCA 2026", ano: 2026, fonte: "lista", status: "publicado", capa: null, total: 1_390_000_000, itens: 1116, partes: 5 },
+            { id: 2, nome: "PCA 2027", ano: 2027, fonte: "protocolo", status: "publicado", capa: null, total: 412_800_000, itens: 1632, partes: 5 },
+          ]}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <PcaCard pca={{ id: 1, nome: "PCA 2026", ano: 2026, fonte: "lista", status: "publicado", capa: null, total: 1_390_000_000, itens: 1116, partes: 5 }} onClick={() => {}} />

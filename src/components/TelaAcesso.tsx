@@ -7,7 +7,7 @@ import type { ModoAcesso } from "@/lib/modo-acesso";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { AuthForm } from "./AuthForm";
 import type { ConfigCaptcha } from "./CodigoEmail";
-import { type Identidade, MarcaSistema } from "./MarcaSistema";
+import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { VitrineAcesso } from "./VitrineAcesso";
@@ -72,8 +72,8 @@ export function TelaAcesso({
     <main className="grid min-h-dvh bg-surface lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:overflow-hidden">
       <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16 lg:[@media(max-height:820px)]:pt-8 lg:[@media(max-height:680px)]:pb-4">
         {/* No desktop a marca fica na vitrine. */}
-        <div className="lg:hidden">
-          <MarcaSistema identidade={identidade} />
+        <div className="flex lg:hidden">
+          <MarcaLink href="/" dica="Abrir a página pública" identidade={identidade} />
         </div>
         <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col pt-10 lg:pt-0">
           {/* No desktop, na MESMA linha da logo da vitrine (o mesmo respiro do topo e a altura da logo). */}

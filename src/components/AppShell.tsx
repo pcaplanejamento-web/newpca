@@ -10,7 +10,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
-import { type Identidade, MarcaSistema } from "./MarcaSistema";
+import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
 import { AcessoNovidades, VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
@@ -82,17 +82,10 @@ function secoesVisiveis(admin: boolean, modulos: readonly SecaoModulo[]): NavSec
   return [...secoes, ...(admin ? [ADMINISTRACAO] : [])].filter((s) => s.itens.length > 0);
 }
 
+const DICA_SITE = "Abrir a página pública";
+
 function itemAtivo(pathname: string, item: NavItem): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
-}
-
-function Brand({ compact = false, identidade }: { compact?: boolean; identidade?: Identidade }) {
-  // A marca leva à página pública (o mesmo atalho do botão "Site"), com o realce do cartão da conta.
-  return (
-    <Link href="/" title="Abrir a página pública" aria-label="Abrir a página pública" className="flex min-w-0 items-center -m-[2.5px] -mr-1.5 rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2">
-      <MarcaSistema identidade={identidade} compacta={compact} />
-    </Link>
-  );
 }
 
 function NavLinks({
@@ -420,7 +413,7 @@ export function AppShell({
     <div className="min-h-dvh bg-bg text-text lg:flex lg:overflow-x-clip">
       {versaoDados != null && <SincronizarDados versoes={versaoDados} />}
       <MenuLateral
-        topo={<Brand identidade={identidade} />}
+        topo={<MarcaLink href="/" dica={DICA_SITE} identidade={identidade} />}
         semMarca={<GatilhoPesquisa />}
         conteudo={<NavLinks admin={usuario.admin} modulos={modulos} />}
         rodape={<UserMenu usuario={usuario} />}
@@ -431,7 +424,7 @@ export function AppShell({
       <GavetaMenu
         aberto={menuAberto}
         onFechar={fecharMenu}
-        topo={<Brand identidade={identidade} />}
+        topo={<MarcaLink href="/" dica={DICA_SITE} identidade={identidade} />}
         acima={
           (reparticoes.length > 0 || grupos.length > 0) && (
             <div className="flex flex-wrap gap-2 px-4 pt-3 sm:hidden">
@@ -464,7 +457,7 @@ export function AppShell({
             <>
           {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
           <div className={`shrink-0 sm:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
-            <Brand compact identidade={identidade} />
+            <MarcaLink href="/" dica={DICA_SITE} compacta identidade={identidade} />
           </div>
           {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
           <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} pcaFiltroId={pcaFiltroId} />

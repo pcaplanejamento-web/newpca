@@ -1,3 +1,4 @@
+import { ConfigTabelas } from "@/components/ConfigTabelas";
 import { DocumentosPublicos } from "@/components/DocumentosPublicos";
 import { IconInbox } from "@/components/icons";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
@@ -8,11 +9,12 @@ import { getAparencia } from "@/lib/aparencia";
 import { getUsuarioAtual } from "@/lib/auth";
 import { listarDocumentos } from "@/lib/documentos";
 import { dataHoraBR, num } from "@/lib/format";
-import { dashboardDoPca, getPcaEspaco, listarPcasPublicados, orcamentoDoAno, orcamentoDoPca, type PcaEspaco } from "@/lib/pca-espaco";
+import { dashboardDoPca, getPcaEspaco, listarPcasCards, listarPcasPublicados, orcamentoDoAno, orcamentoDoPca, type PcaEspaco } from "@/lib/pca-espaco";
 import { getConfigProtecao } from "@/lib/protecao";
 import { protecaoPublica } from "@/lib/protecao-core";
 import { getConfigPublico } from "@/lib/publico";
 import { scriptMenuPublico } from "@/lib/menu-lateral";
+import { linhasTabela } from "@/lib/theme";
 import { podeLerPublico, vistaPublicaPedida, vistasDoMenu } from "@/lib/publico-core";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +86,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const aba = pedida === "consulta" ? "dashboard" : pedida;
   const liberada = podeLerPublico(pca, cfg, aba, false);
   const vista = liberada ? pedida : "dashboard";
+  // Os cartões do seletor de PCA do cabeçalho (só com 2+ publicados; os números já memorizados por versão).
+  const ids = new Set(publicados.map((p) => p.id));
+  const cartoes = publicados.length > 1 ? (await listarPcasCards(null)).filter((c) => ids.has(c.id)) : [];
+  let nomesUnidades: Record<string, string> = {};
   let unidades: { lista: { id: number; codigo: string; municipio: string }[]; atual?: number } | undefined;
 
   let conteudo: React.ReactNode;
@@ -94,6 +100,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
     const dados = await dashboardDoPca(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
     unidades = { lista: dados.unidades, atual: dados.unidadeId ?? undefined };
+    nomesUnidades = dados.nomesUnidades ?? {};
     const comProtocolos = pca.fonte === "protocolo" || dados.protocolos > 0;
     conteudo =
       dados.resumo.count === 0 ? (
@@ -116,9 +123,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho estático (scriptMenuPublico), só o booleano do ADM. */}
       <script dangerouslySetInnerHTML={{ __html: scriptMenuPublico(cfg.menu === "recolhido") }} />
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
-      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
+      {/* As tabelas da consulta: as linhas do ADM e o NOME de cada sigla no filtro das colunas de unidade. */}
+      <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesUnidades}>
+      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={cartoes}>
         {conteudo}
       </TelaPublica>
+      </ConfigTabelas>
     </>
   );
 }

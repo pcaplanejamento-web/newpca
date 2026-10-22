@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.157.0",
+    data: "2026-10-22",
+    titulo: "PCA em cartões na página pública e marca única",
+    mudancas: [
+      { tipo: "melhoria", area: "Página pública", texto: "O filtro da coluna Unidade da consulta de itens mostra a sigla e o nome, como no sistema.", link: "/?aba=consulta" },
+      { tipo: "novo", area: "Página pública", texto: "O PCA é escolhido à esquerda do cabeçalho, com os cartões de cada PCA publicado.", link: "/" },
+      { tipo: "melhoria", area: "Acesso", texto: "A logo com o nome no login e no cadastro leva à página pública — a mesma marca dos cabeçalhos.", link: "/login" },
+    ],
+  },
+  {
     versao: "1.156.1",
     data: "2026-10-22",
     titulo: "Logo inteira no menu recolhido",

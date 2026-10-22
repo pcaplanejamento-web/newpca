@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { TextosAcesso } from "@/lib/acesso-core";
 import { ConstelacaoAnimada } from "./ConstelacaoAnimada";
 import { IconBadgeCheck, IconClipboard, IconLayers } from "./icons";
-import { type Identidade, MarcaSistema } from "./MarcaSistema";
+import { type Identidade, MarcaLink, MarcaSistema } from "./MarcaSistema";
 
 // A VITRINE das telas de acesso: o painel IMERSIVO ao lado do formulário (só a partir do `lg` — no celular, o formulário
 // ocupa a tela). Fundo escuro por token (`--vitrine-*`), a constelação animada e os TEXTOS do ADM (Configurações → Tela
@@ -21,7 +21,14 @@ export function VitrineAcesso({ identidade, textos, previa = false }: { identida
       <ConstelacaoAnimada className="absolute inset-0" />
 
       <div className={`relative flex flex-1 flex-col ${previa ? "p-6 sm:p-8" : "p-12 xl:p-16 [@media(max-height:820px)]:p-8 [@media(max-height:820px)]:px-12"}`}>
-        <MarcaSistema identidade={identidade} tamanho="lg" claro />
+        {/* Na prévia do ADM a marca não navega; no login leva à página pública. */}
+        {previa ? (
+          <MarcaSistema identidade={identidade} tamanho="lg" claro />
+        ) : (
+          <div className="flex">
+            <MarcaLink href="/" dica="Abrir a página pública" identidade={identidade} tamanho="lg" claro />
+          </div>
+        )}
 
         <div className={`my-auto max-w-xl ${previa ? "py-8" : "py-12"}`}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--vitrine-ponto)]">{textos.rotulo}</p>

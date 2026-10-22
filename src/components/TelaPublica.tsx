@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { ROTULO_VISTA_PUBLICA, type VistaPublica } from "@/lib/publico-core";
 import { Button } from "./Button";
 import { IconDashboard, IconDocumentos, IconLinhas, IconSettings, IconTelaAcesso, IconWallet } from "./icons";
-import { type Identidade, MarcaSistema } from "./MarcaSistema";
+import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral, type SecaoMenu } from "./MenuLateral";
+import type { PcaCardDados } from "./PcaCard";
 import { PcaSeletor } from "./PcaSeletor";
 import { SeletorUnidade } from "./SeletorUnidade";
 import { ThemeToggle } from "./ThemeToggle";
@@ -44,7 +44,8 @@ export function TelaPublica({
   menuRecolhido?: boolean;
   vista: VistaPublica;
   pcaId: number | null;
-  pcas: { id: number; nome: string }[];
+  /** Os PCAs publicados como CARTÕES (o seletor do cabeçalho). */
+  pcas: PcaCardDados[];
   /** O filtro de unidade do cabeçalho — só na vista que o usa (Dashboard/consulta) e com 2+ unidades. */
   unidades?: { lista: { id: number; codigo: string; municipio: string }[]; atual?: number };
   children: ReactNode;
@@ -62,16 +63,7 @@ export function TelaPublica({
   };
   const secoes: SecaoMenu[] = [{ chave: "pca", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) }];
   const ativo = (item: { href: string }) => item.href === href(vista);
-  const marca = (
-    <Link
-      href={painel?.href ?? "/"}
-      title={painel?.dica}
-      aria-label={painel?.dica}
-      className="flex min-w-0 items-center -m-[2.5px] -mr-1.5 rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
-    >
-      <MarcaSistema identidade={identidade} />
-    </Link>
-  );
+  const marca = <MarcaLink href={painel?.href ?? "/"} dica={painel?.dica} identidade={identidade} />;
   const entrar = (
     <Button href="/login" variant="primary" icon={<IconTelaAcesso className="h-4 w-4" />} className="w-full rounded-full opacity-60 hover:opacity-100 focus-visible:opacity-100 motion-safe:active:scale-[0.96]">
       Entrar
@@ -86,14 +78,15 @@ export function TelaPublica({
       <div className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp
           onMenu={() => setGaveta(true)}
-          inicio={<div className="hidden min-w-0 sm:block lg:hidden">{marca}</div>}
+          inicio={
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="hidden min-w-0 sm:block lg:hidden">{marca}</div>
+              {/* À esquerda: o PCA, com os cartões de cada um ao abrir (só com 2+ publicados). */}
+              {pcaId != null && pcas.length > 1 && <PcaSeletor pcas={pcas} current={pcaId} />}
+            </div>
+          }
           direita={
             <>
-              {pcaId != null && pcas.length > 1 && (
-                <div className="w-36 min-w-0 sm:w-56">
-                  <PcaSeletor pcas={pcas} current={pcaId} compacto />
-                </div>
-              )}
               {unidades && unidades.lista.length > 1 && (
                 <SeletorUnidade
                   unidades={unidades.lista.map((u) => ({ id: u.id, codigo: u.codigo, nome: u.municipio || u.codigo }))}

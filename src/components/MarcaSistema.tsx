@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 /** Identidade do site definida pelo ADM (Configurações → Identidade). */
 export type Identidade = { nome?: string; subtitulo?: string; favicon?: string };
 
@@ -47,5 +49,35 @@ export function MarcaSistema({
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * A MARCA CLICÁVEL — o MESMO componente em todo cabeçalho (painel, página pública, login/cadastro): leva ao `href` e, ao
+ * passar o mouse, ganha o realce do cartão da conta. A margem negativa devolve o respiro do realce: a logo fica no mesmo
+ * lugar (também no trilho do menu recolhido).
+ */
+export function MarcaLink({
+  href,
+  dica,
+  claro = false,
+  ...marca
+}: {
+  href: string;
+  dica?: string;
+  identidade?: Identidade;
+  compacta?: boolean;
+  tamanho?: "md" | "lg";
+  claro?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      title={dica}
+      aria-label={dica}
+      className={`flex min-w-0 items-center -m-[2.5px] -mr-1.5 rounded-control p-[2.5px] pr-1.5 transition-colors ${claro ? "hover:bg-white/10" : "hover:bg-surface-2"}`}
+    >
+      <MarcaSistema {...marca} claro={claro} />
+    </Link>
   );
 }

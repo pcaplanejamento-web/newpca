@@ -233,7 +233,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     PATCH: tela("pca", "configurar", "nome, ano, fonte, publicar, capa, marcados; só a visão do orçamento = Visualizar"),
     DELETE: tela("pca", "excluir", "devolve os protocolos à Mesa e desfaz as incorporações"),
   },
-  "pca/[id]/capa": { GET: tela("pca", "visualizar") },
+  "pca/[id]/capa": { GET: publica("a do PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/orcamento/relatorio": { GET: tela("pca", "exportar") },
   "pca/[id]/itens": { POST: naMesa(tela("pca", "excluir", "retirar itens do PCA")) },
   "pca/[id]/planilhas/[uploadId]": { DELETE: tela("pca", "excluir") },
