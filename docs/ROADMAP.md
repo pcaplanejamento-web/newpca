@@ -11,6 +11,9 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Mesa do PCA pelo grupo (v1.160.1) — entregue
+- A Mesa do PCA segue a tela PCA do grupo (Acesso de cada tela / Fonte dos dados), independente da Mesa do sistema (só do ADM); abre na unidade de cadastro da pessoa.
+
 ### Várias contas no mesmo navegador (v1.159.0) — entregue
 - Dropup no cartão do usuário: trocar, adicionar, sair desta ou de todas; sessões guardadas em cookie httpOnly, dados da conta anterior limpos na troca.
 

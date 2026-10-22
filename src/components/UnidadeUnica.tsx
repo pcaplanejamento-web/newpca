@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createContext, type ReactNode, useContext } from "react";
 import { telaDaRota } from "@/lib/escopo-unidades-core";
 import type { ModuloEscopo } from "@/lib/escopo-cabecalho-core";
@@ -19,7 +19,7 @@ export function UnidadeUnica({
   modulos,
   porTela,
 }: Valor & { porTela?: { telas: readonly string[]; unidade: UnidadeAtiva | null }; children: ReactNode }) {
-  const tela = telaDaRota(usePathname(), useSearchParams().get("aba"));
+  const tela = telaDaRota(usePathname());
   const efetiva = porTela && tela && porTela.telas.includes(tela) ? porTela.unidade : unidade;
   return <Ctx.Provider value={{ unidade: efetiva, modulos }}>{children}</Ctx.Provider>;
 }

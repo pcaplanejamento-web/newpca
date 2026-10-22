@@ -35,7 +35,8 @@ import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
-import { gruposDoUsuario, unidadesDaSessao } from "./grupos";
+import { unidadeNoEscopo } from "./escopo-unidades-core";
+import { escopoDasMesas, gruposDoUsuario } from "./grupos";
 import { condMeuDfd, condMeuProtocolo } from "./linhas-sql";
 import { visaoMesa } from "./mesa-visao-core";
 import { lotesDeIds } from "./reparticoes";
@@ -1666,7 +1667,7 @@ export async function buscarVinculos(
   }
   // O escopo de unidades da pessoa (o ADM e a "Geral" = todas; sem grupo/unidade = nenhuma) e as LINHAS dela ("só os meus",
   // detalhe do papel: os protocolos em que é Responsável ou que protocolou, e os DFDs deles).
-  const { escopo: esc } = await unidadesDaSessao(u, undefined, "dfd");
+  const esc = await escopoDasMesas(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";
@@ -1837,7 +1838,7 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
   const cond = soMeus ? (v.tipo === "protocolo" ? condMeuProtocolo(u.id) : condMeuDfd(db, u.id)) : undefined;
   const [r] = await db.select({ rep: t.reparticaoId }).from(t).where(and(eq(t.id, v.id), cond));
   if (!r) return false;
-  return (await unidadesDaSessao(u, undefined, "dfd")).acessivel(r.rep);
+  return unidadeNoEscopo(await escopoDasMesas(u), r.rep);
 }
 
 // ─── Fase 3: avisos · recorrência · automações · modelos ─────────────────────────────────────────────────────
@@ -2590,7 +2591,7 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
   const db = getDb();
   const u = a.u;
   const padroes = indice ? [] : padroesLike(q);
-  const { escopo: esc } = await unidadesDaSessao(u, undefined, "dfd");
+  const esc = await escopoDasMesas(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";

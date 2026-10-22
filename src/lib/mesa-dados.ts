@@ -43,11 +43,11 @@ import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./u
  * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e o que o PAPEL
  * permite nas duas Mesas (cada protocolo segue a sua).
  */
-export async function contextoBanners(u: UsuarioSessao | null) {
+export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pca" = "dfd") {
   // O acesso já foi lido pela página (memorizado na requisição): o GRUPO ATIVO dele evita reler os grupos da pessoa.
   const acesso = await getAcesso();
   // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).
-  const un = await unidadesDaSessao(u, acesso ? acesso.grupoAtivo : undefined, "dfd");
+  const un = await unidadesDaSessao(u, acesso ? acesso.grupoAtivo : undefined, tela, tela === "pca" ? "mesa" : undefined);
   const lista = await unidadesAcessiveis(un);
   const ids = lista.map((r) => r.id);
   const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([
@@ -84,7 +84,7 @@ export async function contextoBanners(u: UsuarioSessao | null) {
 const prefixoEdicoesMesa = (pcaId?: number) => (pcaId ? "mesa-pca:" : "mesa:");
 
 async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
-  const [ctx, pref] = await Promise.all([contextoBanners(u), pcaId ? ("todos" as const) : mesaResponsavelGravado(u?.id)]);
+  const [ctx, pref] = await Promise.all([contextoBanners(u, pcaId ? "pca" : "dfd"), pcaId ? ("todos" as const) : mesaResponsavelGravado(u?.id)]);
   // Mesa principal: a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada). Mesa do PCA: o escopo de acesso.
   const repId = idDoFiltro(ctx.un.filtro);
   const nada = repId === false;

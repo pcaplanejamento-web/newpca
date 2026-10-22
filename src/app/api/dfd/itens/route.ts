@@ -64,17 +64,16 @@ export async function GET(req: Request) {
   let base: ItemDfdRow[] = [];
   const esc = await escopoMesa();
   if (!esc) return erro("Faça login.", 401);
-  const un = esc.un;
   if (doPca) {
     // Com a visão dos MARCADOS ligada no PCA (o servidor decide), também os itens do ano dele ainda na Mesa do sistema.
     // E, com o PCA obedecendo ao cabeçalho (Configurações → Filtro da unidade), só os da unidade ativa.
     const rep = await unidadeDaMesaDoPca(g.u);
     if (rep !== false) base = await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca));
-    itens = base.filter((it) => un.acessivel(it.reparticaoId) && passaFiltroId(rep, it.reparticaoId));
+    itens = base.filter((it) => esc.unPca.acessivel(it.reparticaoId) && passaFiltroId(rep, it.reparticaoId));
   } else {
     const ano = Number(params.get("ano"));
     // A unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada).
-    const repId = idDoFiltro(un.filtro);
+    const repId = idDoFiltro(esc.un.filtro);
     if (repId !== false) base = await listarItensDfds(repId ?? undefined, undefined, Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null);
     itens = base;
   }

@@ -74,7 +74,7 @@ export async function unidadeDoModulo(
  * pessoa troca no cabeçalho) e a escolha do ADM de o PCA obedecer ao cabeçalho. Sem escolha, a unidade do cadastro.
  */
 export async function unidadeDaMesaDoPca(u?: UsuarioSessao | null): Promise<FiltroId> {
-  const [un, cfg] = await Promise.all([unidadesDaSessao(u, undefined, "dfd"), getConfigEscopo()]);
+  const [un, cfg] = await Promise.all([unidadesDaSessao(u, undefined, "pca", "mesa"), getConfigEscopo()]);
   return filtroDoModulo(cfg, "pca", idDoFiltro(un.filtro));
 }
 

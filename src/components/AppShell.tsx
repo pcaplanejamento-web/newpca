@@ -4,7 +4,7 @@ import type { VersoesDados } from "@/lib/versao-dados-core";
 import Link from "next/link";
 import { Button } from "./Button";
 import { rotaInicial } from "@/lib/abas";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { telaDaRota } from "@/lib/escopo-unidades-core";
 import { type ReactNode, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
@@ -299,7 +299,7 @@ export function AppShell({
   /** O CHAT AO VIVO (o do grupo e/ou o privado ligados pelo ADM; só com a presença) — `null` = sem o chat. */
   chat?: ConfigChat | null;
 }) {
-  const telaAtual = telaDaRota(usePathname(), useSearchParams().get("aba"));
+  const telaAtual = telaDaRota(usePathname());
   const porTela = unidadesPorTela && telaAtual && unidadesPorTela.telas.includes(telaAtual) ? unidadesPorTela : null;
   const reparticoes = porTela ? porTela.lista : reparticoesBase;
   const reparticaoAtivaId = porTela ? porTela.ativaId : ativaBase;

@@ -86,10 +86,8 @@ const ROTAS_TELA: readonly [string, string][] = [
   ["/painel/verificacao", "verificacao"],
   ["/painel/documentos", "documentos"],
 ];
-export function telaDaRota(pathname: string | null | undefined, aba?: string | null): string | null {
+export function telaDaRota(pathname: string | null | undefined): string | null {
   const p = pathname ?? "";
-  // A aba MESA do espaço de um PCA usa as unidades da tela Mesa (o mesmo escopo da Mesa do sistema).
-  if (aba === "mesa" && /^\/painel\/pca\/\d+$/.test(p)) return "dfd";
   return ROTAS_TELA.find(([r]) => p === r || p.startsWith(`${r}/`))?.[1] ?? null;
 }
 
@@ -103,6 +101,13 @@ export function escopoDeAcesso(admin: boolean, lista: readonly UnidadeRef[]): Es
   if (admin || lista.some((r) => ehCodigoGeral(r.codigo))) return ESCOPO_TODAS;
   if (lista.length === 0) return ESCOPO_NENHUMA;
   return { tipo: "unidades", ids: [...new Set(lista.map((r) => r.id))] };
+}
+
+/** A UNIÃO de dois escopos (a Mesa do sistema + a Mesa do PCA): todas vence; nenhuma não soma nada. */
+export function unirEscopos(a: EscopoUnidades, b: EscopoUnidades): EscopoUnidades {
+  if (a.tipo === "todas" || b.tipo === "todas") return ESCOPO_TODAS;
+  const ids = [...new Set([...(a.tipo === "unidades" ? a.ids : []), ...(b.tipo === "unidades" ? b.ids : [])])];
+  return ids.length ? { tipo: "unidades", ids } : ESCOPO_NENHUMA;
 }
 
 /** O filtro das LISTAS (a unidade ATIVA do cabeçalho): todas · uma unidade · nenhuma (a consulta nem roda). */

@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.160.1",
+    data: "2026-10-22",
+    titulo: "Mesa do PCA pelo grupo, sem a Mesa do sistema",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Grupos",
+        texto:
+          "A Mesa do PCA segue a tela PCA do grupo: \"Acesso de cada tela → PCA: Todas as unidades\" libera todos os protocolos, DFDs e itens da Mesa do PCA, que abre filtrada pela unidade da pessoa — sem precisar da Mesa do sistema (só do Administrador) e sem liberar Orçamento.",
+        link: "/painel/grupos",
+      },
+      {
+        tipo: "correcao",
+        area: "Pesquisa",
+        texto: "A pesquisa e os vínculos de tarefa acham os protocolos e DFDs da Mesa do PCA pelo mesmo acesso.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.160.0",
     data: "2026-10-22",
     titulo: "Mesa do PCA com todas as unidades, já filtrada na sua",

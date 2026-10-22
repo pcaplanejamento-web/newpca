@@ -112,6 +112,15 @@ describe("escopo por tela e várias unidades de cadastro (v1.141.0)", async () =
   it("compactar guarda só as telas do grupo", () => {
     assert.deepEqual(m.compactarEscopoTelas({ dfd: "todas", pca: "todas" }, ["pca", "tarefas"]), { pca: "todas" });
   });
+  it("unirEscopos: a Mesa do sistema + a do PCA", () => {
+    assert.deepEqual(m.unirEscopos(m.ESCOPO_NENHUMA, { tipo: "unidades", ids: [2] }), { tipo: "unidades", ids: [2] });
+    assert.deepEqual(m.unirEscopos({ tipo: "unidades", ids: [1, 2] }, { tipo: "unidades", ids: [2, 3] }), { tipo: "unidades", ids: [1, 2, 3] });
+    assert.equal(m.unirEscopos({ tipo: "unidades", ids: [1] }, m.ESCOPO_TODAS).tipo, "todas");
+    assert.equal(m.unirEscopos(m.ESCOPO_NENHUMA, m.ESCOPO_NENHUMA).tipo, "nenhuma");
+  });
+  it("telaDaRota: a aba Mesa do PCA segue a tela PCA (a Mesa do sistema é outra tela)", () => {
+    assert.equal(m.telaDaRota("/painel/pca/12"), "pca");
+  });
   it("telaDaRota: as rotas do painel → a tela", () => {
     assert.equal(m.telaDaRota("/painel/mesa"), "dfd");
     assert.equal(m.telaDaRota("/painel/pca/12"), "pca");

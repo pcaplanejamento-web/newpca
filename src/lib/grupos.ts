@@ -16,6 +16,7 @@ import {
   telasComTodas,
   telaVeTodas,
   unidadeNoEscopo,
+  unirEscopos,
   unidadesDoMembro,
   ID_MINHAS_UNIDADES,
   listaComGeral,
@@ -194,6 +195,13 @@ export async function unidadesDaSessao(
   const chave = chaveFonte(tela, aba);
   const unica = !!chave && lerFontesAbas(grupo?.fontesAbas).includes(chave);
   return { lista, ativa, escopo, filtro: unica ? filtroDoEscopo(escopo) : filtroDeLista(u.admin, ativa, reais), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
+}
+
+/** O escopo das DUAS Mesas: a do sistema (tela Mesa) somada à do PCA (tela PCA, aba Mesa) — a tela de cada recurso segue
+ * conferida à parte (pesquisa, vínculos de tarefa). */
+export async function escopoDasMesas(u: UsuarioSessao): Promise<EscopoUnidades> {
+  const [a, b] = await Promise.all([unidadesDaSessao(u, undefined, "dfd"), unidadesDaSessao(u, undefined, "pca", "mesa")]);
+  return unirEscopos(a.escopo, b.escopo);
 }
 
 /** As unidades que a pessoa ACESSA, para os banners (conferência e escolha): com o escopo "todas" (o ADM ou a "Geral"),

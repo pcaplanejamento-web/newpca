@@ -59,6 +59,8 @@ export async function dfdLegivel(acessivel: Acessivel, dfd: { reparticaoId: numb
 export type EscopoMesa = {
   acesso: Acesso;
   un: UnidadesDaSessao;
+  /** As unidades da MESA DO PCA — a tela PCA do grupo (aba Mesa), independente da Mesa do sistema (só do ADM). */
+  unPca: UnidadesDaSessao;
   /** A unidade está no escopo de acesso? (só a UNIDADE — a de destino de uma edição, as listas por unidade) */
   acessivel: Acessivel;
   /** Os detalhes do papel resolvidos para as Mesas. */
@@ -83,8 +85,14 @@ export const escopoMesa = cache(async (): Promise<EscopoMesa | null> => {
   const acesso = await getAcesso();
   if (!acesso) return null;
   const vis = visaoDoAcesso(acesso);
-  const [un, meus] = await Promise.all([unidadesDaSessao(acesso.u, acesso.grupoAtivo, "dfd"), vis.linhas === "meus" ? carregarMeus(acesso.u.id) : null]);
-  return { acesso, un, acessivel: un.acessivel, vis, meus };
+  const [un, unPca, meus] = await Promise.all([
+    unidadesDaSessao(acesso.u, acesso.grupoAtivo, "dfd"),
+    unidadesDaSessao(acesso.u, acesso.grupoAtivo, "pca", "mesa"),
+    vis.linhas === "meus" ? carregarMeus(acesso.u.id) : null,
+  ]);
+  // A unidade vale pela Mesa do sistema OU pela do PCA; a TELA de cada recurso (`recusa`/`telaDoRecurso`) segue conferida
+  // à parte — quem só abre o PCA nunca alcança o protocolo da Mesa do sistema.
+  return { acesso, un, unPca, acessivel: (rid) => un.acessivel(rid) || unPca.acessivel(rid), vis, meus };
 });
 
 /** O protocolo passa nas LINHAS da pessoa? (sem "só os meus", todos passam) */
