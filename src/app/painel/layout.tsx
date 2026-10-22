@@ -1,6 +1,9 @@
 import { ehGeral } from "@/lib/escopo-unidades-core";
 import { destinoBloqueio } from "@/lib/acesso-conta-core";
-import { AvisoTermoPendente } from "@/components/AceiteTermo";
+import { PendenciasAcesso } from "@/components/PendenciasAcesso";
+import { headers } from "next/headers";
+import { estadoAparelhos } from "@/lib/aparelhos";
+import { dadosDoAceite } from "@/lib/termo-uso";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ComponentesPapel } from "@/components/ComponentesPapel";
@@ -42,9 +45,13 @@ export default async function PainelLayout({
   const { u: usuario, grupos, grupoAtivo: ativo } = acesso;
   // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
   if (usuario.trocarSenha) redirect("/nova-senha");
-  // TERMO DE USO + APARELHOS: o aparelho sem nome ou o termo vencido — nenhuma tela antes de resolver.
+  // TERMO DE USO + APARELHOS: o aparelho sem nome ou o termo vencido — o BANNER flutuante por cima do painel, sem a tela
+  // (nada da tela é montado nem pedido antes de resolver); na carência, o aviso no topo abre o banner do aceite.
   const bloqueio = destinoBloqueio(usuario.pendencia);
-  if (bloqueio) redirect(bloqueio);
+  const [pendAparelho, pendTermo] = await Promise.all([
+    usuario.pendencia.nomearAparelho ? estadoAparelhos(usuario, (await headers()).get("user-agent")).catch(() => null) : null,
+    !usuario.pendencia.nomearAparelho && usuario.pendencia.termo !== "ok" ? dadosDoAceite(usuario).catch(() => null) : null,
+  ]);
 
   const [aparencia, pcas, versao, protecaoCfg, modulos, nomesSiglas] = await Promise.all([
     getAparencia(),
@@ -93,15 +100,15 @@ export default async function PainelLayout({
       identidade={aparencia.identidade}
       notificacoes={notificacoes ?? 0}
       versaoDados={versao}
-      presenca={presenca}
+      presenca={bloqueio ? null : presenca}
       // O chat ao vivo vive no canal da presença: sem ela, sem o chat.
       // `undefined` = a leitura FALHOU (o AppShell mantém o que já estava): uma falha passageira nunca desmonta o canal e o chat.
       // O GRUPO ativo também libera (ou não) o chat — Grupos → "Chat liberado".
-      chat={presenca === undefined || configChat === null ? undefined : presenca && ativo?.chat && chatLigado(configChat) ? configChat : null}
+      chat={bloqueio ? null : presenca === undefined || configChat === null ? undefined : presenca && ativo?.chat && chatLigado(configChat) ? configChat : null}
     >
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
-      {usuario.pendencia.termo === "carencia" && <AvisoTermoPendente />}
+      <PendenciasAcesso aparelho={pendAparelho} termo={pendTermo} bloqueado={bloqueio === "termo"} nome={usuario.nome} />
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
         <ComponentesPapel retirados={componentesDoAcesso(acesso)} exibicao={usuario.papel.detalhes.exibicao}>
@@ -110,7 +117,7 @@ export default async function PainelLayout({
             unidade={unidadeDe(contexto.ativa)}
             todasAsUnidades={telasTodas}
           >
-            <SegundoPlano>{children}</SegundoPlano>
+            <SegundoPlano>{bloqueio ? null : children}</SegundoPlano>
           </UnidadeUnica>
         </ComponentesPapel>
       </ConfigTabelas>

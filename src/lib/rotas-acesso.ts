@@ -130,9 +130,9 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/usuarios/[id]/acessos": { GET: ADMIN },
 
   // ── Acesso (sem sessão) ─────────────────────────────────────────────────────────────────────────────────
-  "acesso/aparelho": { GET: pessoal("a situação dos aparelhos da conta"), POST: pessoal("nomear (ou trocar) o aparelho desta sessão — sem o bloqueio") },
+  "acesso/aparelho": { POST: pessoal("nomear (ou trocar) o aparelho desta sessão — sem o bloqueio") },
   "acesso/aparelho/liberacao": { POST: pessoal("pedir ao ADM a liberação da troca de aparelho") },
-  "acesso/termo": { GET: pessoal("o termo pendente da pessoa"), POST: pessoal("assinar o Termo de Uso (senha, código ou declaração)") },
+  "acesso/termo": { POST: pessoal("assinar o Termo de Uso (senha, código ou declaração)") },
   "acesso/termo/codigo": { POST: pessoal("o código para assinar o termo, ao e-mail da própria conta") },
   "perfil/aparelhos": { GET: pessoal("os aparelhos e os termos aceitos da própria conta") },
   "perfil/aparelhos/[id]": { PATCH: pessoal("renomear um aparelho da própria conta"), DELETE: pessoal("retirar outro aparelho da própria conta") },

@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.168.0",
+    data: "2026-10-22",
+    titulo: "Termo e aparelho em banners flutuantes, aparelho no Online e editor de texto visual",
+    mudancas: [
+      { tipo: "melhoria", area: "Acesso", texto: "O aceite do Termo de Uso e o cadastro do aparelho agora são banners flutuantes por cima do sistema (sem telas separadas); no prazo de aceite, o aviso no topo abre o banner.", link: "/painel" },
+      { tipo: "novo", area: "Configurações", texto: "O texto do Termo de Uso é escrito como se vê, num editor de documentos: estilos de parágrafo, títulos, negrito, itálico, listas, citação, links, desfazer e refazer.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Usuários", texto: "Aparelhos da conta em cartões, com o limite e de onde ele vem, a troca liberada ou bloqueada até a data e o prazo após uma troca.", link: "/painel/usuarios" },
+      { tipo: "novo", area: "Presença", texto: "O Online agora mostra em qual aparelho cada pessoa está usando o sistema.", link: "/painel" },
+      { tipo: "correcao", area: "Configurações", texto: "Os seletores de limite por papel e de prazo do Termo de uso não cortam mais o texto.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Acesso", texto: "Avisos e presença em tempo real também exigem o aparelho nomeado e o termo em dia.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.167.0",
     data: "2026-10-22",
     titulo: "Termo de Uso assinado e aparelhos vinculados à conta (com fase de teste)",

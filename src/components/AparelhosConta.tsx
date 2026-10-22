@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { emTrava } from "@/lib/acesso-conta-core";
+import { emTrava, LIMITE_MAX, LIMITE_MIN, ROTULO_ORIGEM_LIMITE } from "@/lib/acesso-conta-core";
 import { baixarComprovanteTermo } from "@/lib/comprovante-termo";
 import { dataBR, dataHoraBR, ROTULO_METODO } from "@/lib/termo-uso-core";
 import { Badge } from "./Badge";
@@ -10,14 +10,25 @@ import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
-import { IconCheck, IconDownload, IconPencil, IconTermo, IconTrash } from "./icons";
-import { LinhaAparelho } from "./NomearAparelho";
+import { IconCheck, IconDownload, IconLock, IconPencil, IconTermo, IconTrash } from "./icons";
+import { CartaoAparelho } from "./NomearAparelho";
 import { SkeletonLinhas } from "./Skeleton";
+import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 
 type Aparelho = { id: number; nome: string; navegador: string; ip: string; criadoEm: string; vistoEm: string | null; teste: boolean };
 type Termo = { id: number; versao: number; em: string; metodo: string; codigo: string; teste: boolean; aparelhoNome: string };
-type Dados = { lista: Aparelho[]; atualId?: number | null; limite: number; limiteProprio?: number | null; padrao?: number; trocaAte: string | null; termos: Termo[] };
+type Dados = {
+  lista: Aparelho[];
+  atualId?: number | null;
+  limite: number;
+  limiteProprio?: number | null;
+  origemLimite: keyof typeof ROTULO_ORIGEM_LIMITE;
+  trocaDias: number;
+  trocaAte: string | null;
+  valem: boolean;
+  termos: Termo[];
+};
 
 async function chamar<T>(url: string, metodo = "GET", corpo?: unknown): Promise<T> {
   const r = await fetch(url, { method: metodo, headers: corpo ? { "Content-Type": "application/json" } : undefined, body: corpo ? JSON.stringify(corpo) : undefined, cache: "no-store" });
@@ -104,38 +115,45 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
   }
 
   const travado = emTrava(d.trocaAte, Date.now());
+  const lotado = d.lista.length >= d.limite;
+  const diasRestantes = travado && d.trocaAte ? Math.max(1, Math.ceil((Date.parse(d.trocaAte) - Date.now()) / 86_400_000)) : 0;
   return (
-    <div className="space-y-5">
+    <div className="space-y-[var(--gap-block)]">
       {confirmacao}
-      <div className="space-y-3">
-        <p className="text-[13px] text-muted">
-          {d.lista.length} de {d.limite} aparelho(s) vinculado(s).
-          {travado && d.trocaAte ? ` Troca de aparelho bloqueada até ${dataBR(d.trocaAte)}.` : ""}
-        </p>
-        {admin && (
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-56">
-              <SelectField label="Limite desta pessoa" compacto value={d.limiteProprio ? String(d.limiteProprio) : ""} onChange={(e) => conta({ limite: e.target.value ? Number(e.target.value) : null })} disabled={ocupado === "conta"}>
-                <option value="">O do papel / padrão</option>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-            {travado && (
-              <Button size="sm" variant="secondary" loading={ocupado === "conta"} onClick={() => conta({ liberarTroca: true })}>
-                Liberar troca
-              </Button>
-            )}
+      {!d.valem && <Callout kind="info">As regras de aparelhos ainda não estão em vigor (Configurações → Termo de uso).</Callout>}
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-3">
+        <StatMini label="Aparelhos vinculados" value={`${d.lista.length} de ${d.limite}`} hint={lotado ? "Limite atingido" : `${d.limite - d.lista.length} vaga(s)`} tone={lotado ? "warn" : "default"} />
+        <StatMini label="Limite" value={`${d.limite} aparelho${d.limite === 1 ? "" : "s"}`} hint={ROTULO_ORIGEM_LIMITE[d.origemLimite]} />
+        <StatMini
+          label="Troca de aparelho"
+          value={travado ? "Bloqueada" : "Liberada"}
+          hint={travado && d.trocaAte ? `Até ${dataBR(d.trocaAte)} (${diasRestantes} dia${diasRestantes === 1 ? "" : "s"})` : d.trocaDias > 0 ? `Prazo após uma troca: ${d.trocaDias} dia(s)` : "Sem prazo após troca"}
+          tone={travado ? "danger" : "ok"}
+        />
+      </div>
+      {admin && (
+        <div className="flex flex-wrap items-end gap-3 rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
+          <div className="w-full sm:w-64">
+            <SelectField label="Limite desta pessoa" value={d.limiteProprio ? String(d.limiteProprio) : ""} onChange={(e) => conta({ limite: e.target.value ? Number(e.target.value) : null })} disabled={ocupado === "conta"}>
+              <option value="">Do papel / padrão</option>
+              {Array.from({ length: LIMITE_MAX - LIMITE_MIN + 1 }, (_, i) => LIMITE_MIN + i).map((n) => (
+                <option key={n} value={n}>
+                  {n} aparelho{n === 1 ? "" : "s"}
+                </option>
+              ))}
+            </SelectField>
           </div>
-        )}
+          <Button size="sm" variant={travado ? "accent" : "secondary"} disabled={!travado} loading={ocupado === "conta"} onClick={() => conta({ liberarTroca: true })} icon={<IconLock className="h-4 w-4" />}>
+            {travado ? "Liberar troca agora" : "Troca liberada"}
+          </Button>
+        </div>
+      )}
+      <div className="space-y-2">
         {d.lista.length === 0 && <Callout kind="info">Nenhum aparelho nomeado ainda.</Callout>}
         {d.lista.map((a) =>
           editando?.id === a.id ? (
-            <div key={a.id} className="flex items-end gap-2">
-              <div className="flex-1">
+            <div key={a.id} className="flex flex-wrap items-end gap-2 rounded-card border border-accent bg-surface p-[var(--pad-card)]">
+              <div className="min-w-0 flex-1">
                 <TextField label="Nome do aparelho" value={editando.nome} maxLength={40} onChange={(e) => setEditando({ id: a.id, nome: e.target.value })} autoFocus />
               </div>
               <Button size="sm" loading={ocupado === a.id} onClick={renomear} icon={<IconCheck className="h-4 w-4" />}>
@@ -146,20 +164,22 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
               </Button>
             </div>
           ) : (
-            <LinhaAparelho
+            <CartaoAparelho
               key={a.id}
               a={a}
-              extra={
-                <div className="flex shrink-0 items-center gap-1">
+              selos={
+                <>
                   {a.id === d.atualId && <Badge tone="blue">Este aparelho</Badge>}
                   {a.teste && <Badge tone="amber">Teste</Badge>}
-                  {!admin && (
-                    <Button size="xs" variant="icon" aria-label={`Renomear ${a.nome}`} title="Renomear" onClick={() => setEditando({ id: a.id, nome: a.nome })} icon={<IconPencil className="h-4 w-4" />} />
-                  )}
+                </>
+              }
+              acoes={
+                <>
+                  {!admin && <Button size="xs" variant="icon" aria-label={`Renomear ${a.nome}`} title="Renomear" onClick={() => setEditando({ id: a.id, nome: a.nome })} icon={<IconPencil className="h-4 w-4" />} />}
                   {(admin || a.id !== d.atualId) && (
                     <Button size="xs" variant="icon" aria-label={`Retirar ${a.nome}`} title="Retirar" loading={ocupado === a.id} onClick={() => retirar(a)} icon={<IconTrash className="h-4 w-4" />} />
                   )}
-                </div>
+                </>
               }
             />
           ),
@@ -171,15 +191,19 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
         </p>
         {d.termos.length === 0 && <p className="text-[13px] text-muted">Nenhum termo aceito ainda.</p>}
         {d.termos.map((t) => (
-          <div key={t.id} className="flex flex-wrap items-center gap-3">
+          <div key={t.id} className="flex flex-wrap items-center gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--ok)_12%,var(--surface))] text-[var(--ok)]">
+              <IconTermo className="h-5 w-5" />
+            </span>
             <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-semibold text-text">
-                Versão {t.versao} {t.teste && <Badge tone="amber">Teste</Badge>}
+              <div className="flex flex-wrap items-center gap-1.5 text-[15px] font-semibold text-text">
+                Versão {t.versao} {t.teste ? <Badge tone="amber">Teste</Badge> : <Badge tone="emerald">Assinado</Badge>}
               </div>
-              <div className="truncate text-[12px] text-muted">
+              <div className="truncate text-[12.5px] text-muted">
                 {dataHoraBR(t.em)} · {ROTULO_METODO[t.metodo] ?? t.metodo}
-                {t.aparelhoNome ? ` · ${t.aparelhoNome}` : ""} · <span className="font-mono">{t.codigo}</span>
+                {t.aparelhoNome ? ` · ${t.aparelhoNome}` : ""}
               </div>
+              <div className="truncate font-mono text-[11.5px] text-faint">{t.codigo}</div>
             </div>
             <Button size="sm" variant="secondary" loading={ocupado === `t${t.id}`} onClick={() => baixar(t)} icon={<IconDownload className="h-4 w-4" />}>
               Comprovante

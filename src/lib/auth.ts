@@ -4,6 +4,7 @@ import { cache } from "react";
 import {
   aparelhosValemPara,
   COOKIE_APARELHO,
+  estadoTermo,
   hashDoAparelho,
   idAparelhoValido,
   type PendenciaAcesso,
@@ -20,7 +21,7 @@ import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
 import { urlFoto } from "./pessoa";
 import { getConfigSeguranca } from "./seguranca";
 import { renovarAtividade, sessaoInativa } from "./seguranca-core";
-import { estadoTermo } from "./termo-uso-core";
+
 import { papeis, sessoes, usuarios } from "@/db/schema";
 
 /**

@@ -9,7 +9,7 @@ import type { AcaoPapel, Tela } from "./papeis-core";
 function bloqueio(u: UsuarioSessao): { erro: NextResponse } | null {
   const destino = destinoBloqueio(u.pendencia);
   if (!destino) return null;
-  const error = destino === "/acesso/aparelho" ? "Dê um nome a este aparelho para continuar." : "Aceite o Termo de Uso atualizado para continuar.";
+  const error = destino === "aparelho" ? "Dê um nome a este aparelho para continuar." : "Aceite o Termo de Uso atualizado para continuar.";
   return { erro: NextResponse.json({ ok: false, error, bloqueio: destino }, { status: 403 }) };
 }
 

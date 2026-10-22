@@ -1,19 +1,12 @@
 import { exigirUsuarioLivre } from "@/lib/api-auth";
 import { nomeAparelhoValido, NOME_APARELHO_MAX, NOME_APARELHO_MIN } from "@/lib/acesso-conta-core";
 import { nomearAparelhoSchema } from "@/lib/acesso-validation";
-import { estadoAparelhos, nomearAparelhoDaSessao } from "@/lib/aparelhos";
+import { nomearAparelhoDaSessao } from "@/lib/aparelhos";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-/** A situação dos aparelhos da pessoa (a tela de nomear). */
-export async function GET(req: Request) {
-  const g = await exigirUsuarioLivre();
-  if ("erro" in g) return g.erro;
-  return ok({ estado: await estadoAparelhos(g.u, req.headers.get("user-agent")) });
-}
 
 /** NOMEAR o aparelho desta sessão (com a troca atômica quando a conta está lotada). */
 export async function POST(req: Request) {

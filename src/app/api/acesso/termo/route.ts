@@ -12,27 +12,13 @@ import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarTentativa, ipDe, respostaLimite } from "@/lib/seguranca-acesso";
 import { fraseConfere } from "@/lib/termo-uso-core";
-import { aceitarTermo, pendenciaDe, termoPorId } from "@/lib/termo-uso";
+import { aceitarTermo, termoPorId } from "@/lib/termo-uso";
 import { aparelhos } from "@/db/schema";
 import { getIntegracoes } from "@/lib/integracoes";
 import { resendConfigurado } from "@/lib/integracoes-core";
 import { SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
 
 export const dynamic = "force-dynamic";
-
-/** O termo que a pessoa tem de ler agora (a pendência mais urgente) e os jeitos de assinar. */
-export async function GET() {
-  const g = await exigirUsuarioLivre();
-  if ("erro" in g) return g.erro;
-  const p = await pendenciaDe(g.u.id);
-  if (!p) return ok({ termo: null });
-  const [conta] = await getDb().select({ senhaHash: usuarios.senhaHash }).from(usuarios).where(eq(usuarios.id, g.u.id)).limit(1);
-  return ok({
-    termo: { id: p.termo.id, versao: p.termo.versao, titulo: p.termo.titulo, texto: p.termo.textoFinal, hash: p.termo.hash, publicadoEm: p.termo.publicadoEm },
-    prazo: p.prazo,
-    metodos: { senha: !!conta?.senhaHash && conta.senhaHash !== SENHA_INUTILIZAVEL, codigo: resendConfigurado(await getIntegracoes()) },
-  });
-}
 
 /**
  * ASSINAR o termo: a versão e o hash LIDOS têm de ser os vigentes e a identidade é confirmada pela senha, pelo código do

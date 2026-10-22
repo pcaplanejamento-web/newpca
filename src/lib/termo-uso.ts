@@ -7,6 +7,7 @@ import { getDb } from "./db";
 import { NOME_SISTEMA_PADRAO } from "./email-core";
 import { getIntegracoes } from "./integracoes";
 import { googleConfigurado, resendConfigurado } from "./integracoes-core";
+import { SENHA_INUTILIZAVEL } from "./google-oauth-core";
 import { getConfigChat, getConfigPresenca } from "./presenca";
 import { getConfigProtecao } from "./protecao";
 import { resumoNavegador } from "./seguranca-core";
@@ -334,3 +335,21 @@ export async function termoDoCadastro(versao: number | undefined, hash: string |
   return { termo: t, mudou: versao !== t.versao || hash !== t.hash };
 }
 
+
+/** Os dados do BANNER de aceite da pessoa (o termo pendente mais urgente + como ela confirma a identidade). */
+export async function dadosDoAceite(u: { id: number; email: string }): Promise<import("@/components/AceiteTermo").DadosAceiteTermo | null> {
+  const p = await pendenciaDe(u.id);
+  if (!p?.termo.textoFinal || !p.termo.hash) return null;
+  const [integ, sistema, [conta]] = await Promise.all([
+    getIntegracoes(),
+    nomeDoSistema(),
+    getDb().select({ senhaHash: usuarios.senhaHash }).from(usuarios).where(eq(usuarios.id, u.id)).limit(1),
+  ]);
+  return {
+    termo: { id: p.termo.id, versao: p.termo.versao, titulo: p.termo.titulo, texto: p.termo.textoFinal, hash: p.termo.hash, publicadoEm: p.termo.publicadoEm },
+    prazo: p.prazo,
+    metodos: { senha: !!conta?.senhaHash && conta.senhaHash !== SENHA_INUTILIZAVEL, codigo: resendConfigurado(integ) },
+    email: u.email,
+    sistema,
+  };
+}

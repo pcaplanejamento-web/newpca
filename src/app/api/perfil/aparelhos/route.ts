@@ -1,6 +1,6 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { getAcessoConta } from "@/lib/acesso-conta";
-import { limiteEfetivo } from "@/lib/acesso-conta-core";
+import { limiteEfetivo, origemDoLimite } from "@/lib/acesso-conta-core";
 import { contaDe, listarAparelhos } from "@/lib/aparelhos";
 import { ok } from "@/lib/http";
 import { aceitesDe } from "@/lib/termo-uso";
@@ -12,5 +12,5 @@ export async function GET() {
   const g = await exigirUsuario();
   if ("erro" in g) return g.erro;
   const [lista, conta, cfg, termos] = await Promise.all([listarAparelhos(g.u.id), contaDe(g.u.id), getAcessoConta(), aceitesDe(g.u.id)]);
-  return ok({ lista, atualId: g.u.pendencia.aparelhoId, limite: limiteEfetivo(cfg, g.u.papel.id, conta.limite), trocaAte: conta.trocaAte, termos });
+  return ok({ lista, atualId: g.u.pendencia.aparelhoId, limite: limiteEfetivo(cfg, g.u.papel.id, conta.limite), origemLimite: origemDoLimite(cfg, g.u.papel.id, conta.limite), trocaDias: cfg.trocaDias, valem: cfg.modo !== "desligado", trocaAte: conta.trocaAte, termos });
 }

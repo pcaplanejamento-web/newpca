@@ -2,6 +2,8 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  Redo2,
+  RemoveFormatting,
   FileSignature,
   Link2Off,
   ChevronsUpDown,
@@ -394,3 +396,7 @@ export const IconTemaHorario = SunMoon;
 export const IconTermo = FileSignature;
 /** Um APARELHO vinculado à conta. */
 export const IconAparelho = MonitorSmartphone;
+/** Refazer (o editor de texto). */
+export const IconRedo = Redo2;
+/** Limpar a formatação (o editor de texto). */
+export const IconLimparFormato = RemoveFormatting;

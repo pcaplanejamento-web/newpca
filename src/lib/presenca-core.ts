@@ -86,6 +86,8 @@ export type ConexaoPresenca = {
   ate?: string | null;
   /** Desde quando esta aba está ausente (ms) — o "ausente há 12 min". */
   ausenteDesde?: number;
+  /** O NOME do aparelho da sessão (Termo de Uso + aparelhos — vem do servidor, nunca da aba). */
+  aparelho?: string;
 };
 
 /** O que vai às abas por pessoa: [id, "o" | "a", status?, recado?] — compacto (Disponível sem recado = só os dois). */
@@ -143,6 +145,18 @@ export function ausentesDesde(conexoes: readonly ConexaoPresenca[]): [number, nu
     .sort((a, b) => a[0] - b[0]);
 }
 
+/** Os APARELHOS em que cada pessoa está com o sistema aberto (sem os invisíveis; nomes distintos, até 4). Ordenado pelo id. */
+export function aparelhosPresentes(conexoes: readonly ConexaoPresenca[]): [number, string[]][] {
+  const por = new Map<number, Set<string>>();
+  for (const c of conexoes) {
+    if (c.invisivel || !c.aparelho) continue;
+    const s = por.get(c.id) ?? new Set<string>();
+    if (s.size < 4) s.add(c.aparelho);
+    por.set(c.id, s);
+  }
+  return [...por].map(([id, s]) => [id, [...s]] as [number, string[]]).sort((a, b) => a[0] - b[0]);
+}
+
 /** O "visto por último": quem SAIU há menos de 24 h e não está mais conectado (ordenado pelo id). */
 export function vistosRecentes(vistos: ReadonlyMap<number, number>, presentes: ReadonlySet<number>, agora = Date.now()): [number, number][] {
   return [...vistos].filter(([id, ts]) => !presentes.has(id) && agora - ts < JANELA_VISTO_MS).sort((a, b) => a[0] - b[0]);
@@ -187,13 +201,21 @@ export function lerMensagemAba(msg: unknown): MensagemAba | null {
 }
 
 /** O que a tela sabe de cada pessoa presente. */
-export type InfoPresenca = { estado: EstadoPresenca; status: StatusPresenca; recado: string; /** Ausente desde (ms). */ desde?: number };
+export type InfoPresenca = {
+  estado: EstadoPresenca;
+  status: StatusPresenca;
+  recado: string;
+  /** Ausente desde (ms). */
+  desde?: number;
+  /** Os aparelhos (nomeados) em que a pessoa está com o sistema aberto. */
+  aparelhos?: string[];
+};
 
 /** A mensagem de presença que vai às abas → quem está (id → info) e quem saiu há pouco (id → quando). Inválida = `null`. */
 export function lerListaMensagem(msg: unknown): { estados: Map<number, InfoPresenca>; vistos: Map<number, number> } | null {
   if (typeof msg !== "string") return null;
   try {
-    const o = JSON.parse(msg) as { t?: unknown; p?: unknown; v?: unknown; d?: unknown };
+    const o = JSON.parse(msg) as { t?: unknown; p?: unknown; v?: unknown; d?: unknown; ap?: unknown };
     if (o.t !== "presenca" || !Array.isArray(o.p)) return null;
     const estados = new Map<number, InfoPresenca>();
     for (const it of o.p)
@@ -203,6 +225,11 @@ export function lerListaMensagem(msg: unknown): { estados: Map<number, InfoPrese
       for (const it of o.d) {
         const info = Array.isArray(it) && Number.isInteger(it[0]) && Number.isFinite(it[1]) ? estados.get(it[0]) : undefined;
         if (info?.estado === "ausente") info.desde = it[1];
+      }
+    if (Array.isArray(o.ap))
+      for (const it of o.ap) {
+        const info = Array.isArray(it) && Number.isInteger(it[0]) && Array.isArray(it[1]) ? estados.get(it[0]) : undefined;
+        if (info) info.aparelhos = (it[1] as unknown[]).filter((n): n is string => typeof n === "string" && n.length > 0).map((n) => n.slice(0, 40)).slice(0, 4);
       }
     const vistos = new Map<number, number>();
     if (Array.isArray(o.v)) for (const it of o.v) if (Array.isArray(it) && Number.isInteger(it[0]) && Number.isFinite(it[1])) vistos.set(it[0], it[1]);

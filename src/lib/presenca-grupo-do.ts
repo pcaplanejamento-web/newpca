@@ -1,5 +1,6 @@
 import { contarNaJanela, idDaConversa, INTERVALO_DIGITANDO_MS, lerMensagemChatAba } from "./chat-core";
 import {
+  aparelhosPresentes,
   ausentesDesde,
   CARENCIA_SAIDA_MS,
   type ConexaoPresenca,
@@ -131,6 +132,7 @@ export class PresencaGrupo {
       atividade: req.headers.get("x-presenca-atividade") === "1",
       cego: req.headers.get("x-presenca-ver") === "0",
       observador: req.headers.get("x-presenca-observar") === "1",
+      aparelho: lerAparelho(req.headers.get("x-presenca-aparelho")),
     };
     anexo.desde = Date.now();
     servidor.serializeAttachment(anexo);
@@ -204,7 +206,7 @@ export class PresencaGrupo {
     // "Mostrar ausente" é da config do ADM: vale o que a conexão mais nova trouxe.
     const mostrarAusente = anexos.length ? anexos[anexos.length - 1].ausente !== false : true;
     const presentes = new Set(anexos.filter((a) => !a.invisivel).map((a) => a.id));
-    const msg = JSON.stringify({ t: "presenca", p: listaPresenca(anexos, mostrarAusente), v: vistosRecentes(this.vistos, presentes), d: mostrarAusente ? ausentesDesde(anexos) : [] });
+    const msg = JSON.stringify({ t: "presenca", p: listaPresenca(anexos, mostrarAusente), v: vistosRecentes(this.vistos, presentes), d: mostrarAusente ? ausentesDesde(anexos) : [], ap: aparelhosPresentes(anexos) });
     const mudou = msg !== this.ultima;
     this.ultima = msg;
     for (const ws of abertas) {
@@ -328,7 +330,17 @@ export class PresencaGrupo {
   }
 }
 
-const VAZIO_PRESENCA = JSON.stringify({ t: "presenca", p: [], v: [], d: [] });
+const VAZIO_PRESENCA = JSON.stringify({ t: "presenca", p: [], v: [], d: [], ap: [] });
+
+/** O nome do aparelho que o `worker.ts` manda (codificado; até 40 caracteres). */
+function lerAparelho(v: string | null): string | undefined {
+  if (!v) return undefined;
+  try {
+    return decodeURIComponent(v).slice(0, 40) || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function fechar(ws: WebSocket, code: number, motivo: string) {
   try {

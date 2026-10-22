@@ -106,6 +106,14 @@ export function limiteEfetivo(cfg: ConfigAcessoConta, papelId: number | null, da
   return doPapel ?? cfg.limite;
 }
 
+/** De onde vem o limite da pessoa (o mesmo critério de `limiteEfetivo`). */
+export function origemDoLimite(cfg: ConfigAcessoConta, papelId: number | null, daPessoa: number | null | undefined): "pessoa" | "papel" | "padrao" {
+  if (Number.isInteger(daPessoa) && (daPessoa as number) >= LIMITE_MIN && (daPessoa as number) <= LIMITE_MAX) return "pessoa";
+  return papelId != null && cfg.porPapel[String(papelId)] ? "papel" : "padrao";
+}
+
+export const ROTULO_ORIGEM_LIMITE = { pessoa: "Desta pessoa", papel: "Do papel", padrao: "Padrão do sistema" } as const;
+
 /** A trava de troca está valendo? (ISO; vazio = não.) */
 export function emTrava(trocaAte: string | null | undefined, agoraMs: number): boolean {
   if (!trocaAte) return false;
@@ -184,9 +192,38 @@ export type PendenciaAcesso = {
 };
 export const SEM_PENDENCIA: PendenciaAcesso = { nomearAparelho: false, termo: "ok", aparelhoId: null };
 
-/** A pessoa precisa resolver algo ANTES de usar o sistema (a tela vai a `/acesso/...`; a API responde 403)? */
-export function destinoBloqueio(p: PendenciaAcesso): "/acesso/aparelho" | "/acesso/termo" | null {
-  if (p.nomearAparelho) return "/acesso/aparelho";
-  if (p.termo === "bloqueado") return "/acesso/termo";
+/** A pessoa precisa resolver algo ANTES de usar o sistema (o painel mostra o banner; a API responde 403)? */
+export function destinoBloqueio(p: PendenciaAcesso): "aparelho" | "termo" | null {
+  if (p.nomearAparelho) return "aparelho";
+  if (p.termo === "bloqueado") return "termo";
+  return null;
+}
+
+export type EstadoTermo = "ok" | "carencia" | "bloqueado";
+
+/** O estado da pessoa pelo MENOR prazo das pendências (null = nenhuma). O ADM nunca é bloqueado — fica na carência. */
+export function estadoTermo(prazoMin: string | null | undefined, agoraMs: number, admin = false): EstadoTermo {
+  if (!prazoMin) return "ok";
+  const t = Date.parse(prazoMin);
+  const vencido = !Number.isFinite(t) || t <= agoraMs;
+  return vencido && !admin ? "bloqueado" : "carencia";
+}
+
+/**
+ * Os CANAIS AO VIVO (`worker.ts` — notificações e presença) com as regras valendo: a sessão sem o aparelho nomeado (quando o
+ * limite vale para a pessoa) ou com o termo vencido é RECUSADA — a mesma régua do painel. `cfgJson` = o `acessoConta` do blob.
+ */
+export function canalRecusado(d: { cfgJson: string | null; id: number; admin: boolean; aparelhoId: number | null; termoPrazo: string | null; agoraMs: number }): string | null {
+  let bruto: unknown = null;
+  try {
+    bruto = d.cfgJson ? JSON.parse(d.cfgJson) : null;
+  } catch {
+    bruto = null;
+  }
+  const cfg = lerConfigAcessoConta(bruto);
+  const quem = { id: d.id, admin: d.admin };
+  if (!regrasValemPara(cfg, quem)) return null;
+  if (aparelhosValemPara(cfg, quem) && d.aparelhoId == null) return "Aparelho sem nome.";
+  if (estadoTermo(d.termoPrazo, d.agoraMs, d.admin) === "bloqueado") return "Termo de Uso pendente.";
   return null;
 }

@@ -1,6 +1,6 @@
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { getAcessoConta } from "@/lib/acesso-conta";
-import { limiteEfetivo } from "@/lib/acesso-conta-core";
+import { limiteEfetivo, origemDoLimite } from "@/lib/acesso-conta-core";
 import { contaAparelhosSchema } from "@/lib/acesso-validation";
 import { contaDe, listarAparelhos } from "@/lib/aparelhos";
 import { comandoContaAparelhos, comandosRetirarAparelhos } from "@/lib/aparelhos-sql";
@@ -25,7 +25,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const [p] = await getDb().select({ papelId: usuarios.papelId }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
   if (!p) return erro("Usuário não encontrado.", 404);
   const [lista, conta, cfg, termos] = await Promise.all([listarAparelhos(id), contaDe(id), getAcessoConta(), aceitesDe(id)]);
-  return ok({ lista, limiteProprio: conta.limite, trocaAte: conta.trocaAte, limite: limiteEfetivo(cfg, p.papelId, conta.limite), padrao: cfg.limite, termos });
+  return ok({ lista, limiteProprio: conta.limite, trocaAte: conta.trocaAte, limite: limiteEfetivo(cfg, p.papelId, conta.limite), origemLimite: origemDoLimite(cfg, p.papelId, conta.limite), trocaDias: cfg.trocaDias, valem: cfg.modo !== "desligado", padrao: cfg.limite, termos });
 }
 
 /** O limite PRÓPRIO da pessoa (null = o do papel/padrão) e/ou liberar a troca. */

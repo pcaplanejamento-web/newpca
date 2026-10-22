@@ -3,8 +3,9 @@
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
 import { CamposAcessoConta } from "@/components/TermoUsoAdmin";
+import { EditorRico } from "@/components/EditorRico";
 import { AvisoTermoPendente, LeituraTermo } from "@/components/AceiteTermo";
-import { LinhaAparelho } from "@/components/NomearAparelho";
+import { CartaoAparelho } from "@/components/NomearAparelho";
 import { ACESSO_CONTA_PADRAO, type ConfigAcessoConta } from "@/lib/acesso-conta-core";
 import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
 import { CabecalhoApp, ItensMenu } from "@/components/MenuLateral";
@@ -530,16 +531,22 @@ function DemoSeguranca() {
 
 /** TERMO DE USO + APARELHOS: os campos da implantação/aparelhos, a leitura do termo (destrava ao chegar ao fim), o aviso
  * da carência e a linha de um aparelho. */
+/** O EDITOR VISUAL de texto (escreve como se vê; grava o texto formatado). */
+function DemoEditorRico() {
+  const [t, setT] = useState("## Título\n\nTexto com **negrito**, _itálico_ e [link](https://rioverde.go.gov.br).\n\n- um item\n- outro item");
+  return <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30vh] max-h-[50vh]" />;
+}
+
 function DemoTermoAparelhos() {
   const [v, setV] = useState<ConfigAcessoConta>({ ...ACESSO_CONTA_PADRAO, modo: "teste" });
   const [fim, setFim] = useState(false);
   return (
     <div className="space-y-[var(--gap-block)]">
       <CamposAcessoConta valor={v} onChange={setV} pessoas={[{ id: 2, nome: "Maria Clara Souza", email: "maria.souza@rioverde.go.gov.br", status: "ativo" }]} papeis={[{ id: 3, nome: "Membro" }]} />
-      <AvisoTermoPendente />
+      <AvisoTermoPendente prazo="2026-11-01T00:00:00Z" onAbrir={() => setFim(false)} />
       <LeituraTermo texto={"# Termo de Uso\n\nVersão 1 — publicada em 22/10/2026.\n\n## 1. Objeto\n\nTexto de exemplo do termo.\n\n## 2. Aparelhos\n\n- No máximo 2 aparelhos por conta.\n- Troca bloqueada por 30 dias."} onFim={() => setFim(true)} altura="max-h-40" />
       <p className="text-[12px] text-muted">{fim ? "Chegou ao fim — o aceite destrava." : "Role até o fim."}</p>
-      <LinhaAparelho a={{ nome: "Notebook do trabalho", navegador: "Chrome no Windows", ip: "177.10.20.30", vistoEm: "2026-10-22T13:00:00Z", criadoEm: "2026-10-01T10:00:00Z" }} />
+      <CartaoAparelho a={{ nome: "Notebook do trabalho", navegador: "Chrome no Windows", ip: "177.10.20.30", vistoEm: "2026-10-22T13:00:00Z", criadoEm: "2026-10-01T10:00:00Z" }} selos={<Badge tone="blue">Este aparelho</Badge>} />
     </div>
   );
 }
@@ -3599,7 +3606,11 @@ export function Catalogo() {
         <DemoProtecao />
       </Secao>
 
-      <Secao titulo="Termo de Uso e aparelhos — CamposAcessoConta, LeituraTermo, AvisoTermoPendente, LinhaAparelho (Configurações → Termo de uso; /acesso/termo; /acesso/aparelho)">
+      <Secao titulo="Editor visual de texto — EditorRico (como num editor de documentos: estilos de parágrafo, negrito, itálico, código, link, listas, citação, separador, desfazer/refazer, limpar; grava o texto formatado)">
+        <DemoEditorRico />
+      </Secao>
+
+      <Secao titulo="Termo de Uso e aparelhos — CamposAcessoConta, LeituraTermo, AvisoTermoPendente, CartaoAparelho (Configurações → Termo de uso; os banners BannerTermo e BannerAparelho abrem por cima do painel)">
         <DemoTermoAparelhos />
       </Secao>
 

@@ -15,7 +15,9 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 Configurações → Termo de uso: implantação Desligado · Teste (testadores, repetir a cada login) · Ativo; texto do ADM + cláusulas
 automáticas; versões com público e carência; aceite por senha/código/declaração com selo e comprovante em PDF; verificação
 pública pelo código. Aparelhos: nome no 1º acesso, limite (padrão/papel/pessoa), troca atômica e prazo sem troca; o ADM libera.
-**Próximo:** o canal ao vivo (`worker.ts`) conferir o aparelho nomeado; o alerta de login suspeito usar a tabela `aparelhos`.
+v1.168.0: termo e aparelho em BANNERS flutuantes (sem páginas), canais ao vivo conferem o aparelho, o aparelho no "Online
+agora", cartões de aparelho com o status da troca e o editor visual do texto (`EditorRico`).
+**Próximo:** o alerta de login suspeito usar a tabela `aparelhos`; o `EditorRico` nas descrições/notas das tarefas.
 
 ### Acesso às unidades por aba (v1.161.0/1) — entregue
 Na aba em Todas o cabeçalho segue com as unidades do grupo; a tabela filtra pela coluna Unidade.

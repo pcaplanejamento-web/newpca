@@ -272,15 +272,7 @@ export function codigoNormal(c: string): string | null {
   return /^[A-HJ-NP-Z2-9]{20,32}$/.test(s) ? (s.match(/.{1,4}/g) ?? []).join("-") : null;
 }
 
-export type EstadoTermo = "ok" | "carencia" | "bloqueado";
-
-/** O estado da pessoa pelo MENOR prazo das pendências (null = nenhuma). O ADM nunca é bloqueado — fica na carência. */
-export function estadoTermo(prazoMin: string | null | undefined, agoraMs: number, admin = false): EstadoTermo {
-  if (!prazoMin) return "ok";
-  const t = Date.parse(prazoMin);
-  const vencido = !Number.isFinite(t) || t <= agoraMs;
-  return vencido && !admin ? "bloqueado" : "carencia";
-}
+export { type EstadoTermo, estadoTermo } from "./acesso-conta-core.ts";
 
 export const MAX_CARENCIA_DIAS = 30;
 /** O prazo das pendências de uma publicação (0 dias = já vale: bloqueia no próximo acesso). */

@@ -274,10 +274,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Sessão sem consulta a mais:** `getUsuarioAtual` lê na MESMA consulta o aparelho da sessão, o aparelho conhecido pelo cookie
     `pca_aparelho` (`hashDoAparelho` = SHA-256 de `aparelho:<cookie>`) e o MENOR prazo das pendências → `UsuarioSessao.pendencia`
     {nomearAparelho, termo ok|carencia|bloqueado (`estadoTermo`; o ADM nunca bloqueado), aparelhoId}. A sessão de um aparelho
-    conhecido é ligada sozinha (menos no "repetir"). **Bloqueio:** o layout do `/painel` leva a `/acesso/aparelho` ou
-    `/acesso/termo` (`destinoBloqueio`, fora do painel, como o `/nova-senha`); a carência mostra o `AvisoTermoPendente`; as
-    guardas `exigirUsuario`/`exigirSessao` respondem 403 `{bloqueio}` — só `exigirUsuarioLivre` (acesso, termo, contas, erros,
-    perfil/senha) passa. Os canais ao vivo do `worker.ts` NÃO conferem o bloqueio (só leitura; a tela bloqueada não os abre).
+    conhecido é ligada sozinha (menos no "repetir"). **Bloqueio em BANNERS FLUTUANTES (v1.168.0 — não há mais páginas
+    `/acesso/*`):** o layout do `/painel` monta o **`PendenciasAcesso`** (`destinoBloqueio` → "aparelho" | "termo"): o
+    **`BannerAparelho`** (nomear / trocar / trava com "Pedir liberação" — sem fechar, só "Sair") e o **`BannerTermo`** (o aceite;
+    vencido = sem fechar; na carência o `AvisoTermoPendente` no topo abre o banner e "Ler depois" fecha). Bloqueado, a tela NÃO é
+    montada (`children` = nada) e a presença/chat não abrem; concluir = `router.refresh()`. As guardas
+    `exigirUsuario`/`exigirSessao` respondem 403 `{bloqueio}` — só `exigirUsuarioLivre` (acesso, termo, contas, erros,
+    perfil/senha) passa. Os **canais ao vivo** (`worker.ts`) recusam a mesma sessão (`canalRecusado`, na MESMA consulta da sessão:
+    `sessoes.aparelho_id`, o menor prazo das pendências, o `acessoConta` do blob e se é ADM — testado no SQLite,
+    `tests/worker-acesso-sql.test.ts`) e mandam o NOME do aparelho à presença (`x-presenca-aparelho` → anexo do DO →
+    `aparelhosPresentes` → `ap` na mensagem → `InfoPresenca.aparelhos`): o "Online agora" mostra em que aparelho cada pessoa está.
   - **Aparelhos** (`aparelhos-sql.ts`, trava NO SQL, testados no D1 real; D1 `aparelhos.ts`): limite = o da pessoa
     (`aparelhos_conta.limite`) › o do papel (`porPapel`) › o padrão (1–10); nomear entra só com vaga (`INSERT … SELECT … WHERE
     COUNT < limite`); lotado = TROCA atômica (encerra as sessões dos retirados, retira, registra o novo, liga a sessão e grava
@@ -298,9 +304,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     aceite com a conta. **Comprovante:** `GET /api/termo/aceites/[id]` (a pessoa ou o ADM) → PDF no navegador
     (`baixarComprovanteTermo`, `blocosComprovante`); verificação PÚBLICA `/termo/verificar/[código]` (limite por IP; só
     válido/versão/data/INICIAIS). O ADM baixa o texto integral de cada versão em PDF (a Proteção de dados não afeta).
-  - **Telas:** Configurações → **Termo de uso** (`TermoUsoAdmin` + `CamposAcessoConta`), `/acesso/aparelho` (`NomearAparelho`,
-    `LinhaAparelho`), `/acesso/termo` (`AceiteTermo`, `TextoTermo`, `LeituraTermo`), Perfil → Segurança → "Meus aparelhos e
-    termos" e o banner do usuário (`AparelhosConta`, `admin`). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
+  - **Telas:** Configurações → **Termo de uso** (`TermoUsoAdmin` + `CamposAcessoConta`; o texto no **`EditorRico`** — ver
+    abaixo), os banners (`BannerAparelho` + `CartaoAparelho` em `NomearAparelho.tsx`; `BannerTermo`, `TextoTermo`,
+    `LeituraTermo`, `AvisoTermoPendente` em `AceiteTermo.tsx`), Perfil → Segurança → "Meus aparelhos e termos" e o banner do
+    usuário (**`AparelhosConta`**, `admin`: `StatMini` Aparelhos x de N · Limite com a ORIGEM — `origemDoLimite` pessoa/papel/
+    padrão · Troca Liberada/Bloqueada até a data, o prazo após troca; o ADM muda o limite e "Liberar troca agora"; um
+    `CartaoAparelho` sólido por aparelho).
+  - **EDITOR VISUAL (`EditorRico`, v1.168.0):** escreve-se COMO SE VÊ (contentEditable, a folha branca sobre o fundo cinza, como
+    num editor de documentos): estilos de parágrafo (Texto normal · Título 1/2/3 · Citação), negrito, itálico, código, link
+    (Ctrl+K, só http/https), listas, separador, desfazer/refazer, limpar formatação, atalhos (Ctrl+B/I/K/Z/Y, Ctrl+Alt+0–3,
+    Ctrl+Shift+7/8) e a contagem de caracteres. Grava o MESMO texto formatado de sempre — núcleo puro **`texto-rico-core.ts`**
+    (`htmlDoTexto`/`textoDoHtml`, testado: o modelo do termo vai e volta igual; o itálico sai como `_x_`, sem ambiguidade junto do
+    negrito); o colado de outro programa passa pelos dois conversores (fica só o que o formato conhece; scripts/estilos saem). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o

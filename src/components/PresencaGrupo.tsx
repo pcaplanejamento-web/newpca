@@ -27,7 +27,7 @@ import { ChipsEscolha } from "./ChipsEscolha";
 import { AtividadePessoa } from "./PresencaNoItem";
 import { Dropdown } from "./Dropdown";
 import { SearchField, SelectField, TextField } from "./Field";
-import { IconChat, IconClipboard, IconUsers } from "./icons";
+import { IconAparelho, IconChat, IconClipboard, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { MAX_FOTOS_PILHA, PilhaFotos } from "./PilhaFotos";
 import { BotaoWhatsapp } from "./Telefone";
@@ -176,7 +176,7 @@ export function PresencaGrupo({
                     return {
                       id: pessoa.id,
                       foto: <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={info?.estado} pulsar={info?.estado === "online"} />,
-                      titulo: `${nomeExibicao(pessoa)}${varios ? ` (${nomesGrupos(c.grupos, c.gruposDe.get(pessoa.id))})` : ""}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}`,
+                      titulo: `${nomeExibicao(pessoa)}${varios ? ` (${nomesGrupos(c.grupos, c.gruposDe.get(pessoa.id))})` : ""}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}${info?.aparelhos?.length ? ` — ${info.aparelhos.join(", ")}` : ""}`,
                       novo: novos.has(pessoa.id),
                     };
                   })}
@@ -419,6 +419,12 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
           </span>
         )}
         {atividade && <AtividadePessoa atividade={atividade} />}
+        {!inv && info?.aparelhos && info.aparelhos.length > 0 && (
+          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11.5px] text-muted" title={`Aparelho${info.aparelhos.length > 1 ? "s" : ""}: ${info.aparelhos.join(", ")}`}>
+            <IconAparelho className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{info.aparelhos.join(" · ")}</span>
+          </span>
+        )}
         {!voce && c && c.grupos.length > 1 && l.grupos.length > 0 && (
           <span className="mt-0.5 flex flex-wrap gap-1" title={`Grupos: ${nomesGrupos(c.grupos, l.grupos)}`}>
             {l.grupos.map((g) => (

@@ -87,7 +87,7 @@ describe("configuração de acesso da conta", () => {
     assert.equal(nomeAparelhoValido("  Notebook​ da   sala "), "Notebook da sala");
     assert.equal(nomeAparelhoValido("a"), null);
     assert.equal(iniciais("Ana Maria de Souza"), "A. M. S.");
-    assert.equal(destinoBloqueio({ nomearAparelho: true, termo: "bloqueado", aparelhoId: null }), "/acesso/aparelho");
+    assert.equal(destinoBloqueio({ nomearAparelho: true, termo: "bloqueado", aparelhoId: null }), "aparelho");
     assert.equal(destinoBloqueio({ nomearAparelho: false, termo: "carencia", aparelhoId: 1 }), null);
   });
   it("hash do aparelho é estável e não revela o cookie", async () => {
@@ -232,5 +232,32 @@ describe("termo no D1 real", () => {
     assert.equal(de2.length, 0, "o oficial não é refeito");
     await comandoPendencias(orm, 1, { todos: true }, "2026-12-01").run();
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE usuario_id = 2").get()?.n, 0, "quem já aceitou não volta a dever");
+  });
+});
+
+describe("canais ao vivo e o aparelho no online", async () => {
+  const { canalRecusado } = await import("../src/lib/acesso-conta-core.ts");
+  const { aparelhosPresentes, lerListaMensagem } = await import("../src/lib/presenca-core.ts");
+  it("o canal recusa a sessão sem aparelho ou com o termo vencido — só com as regras valendo", () => {
+    const base = { id: 2, admin: false, aparelhoId: null, termoPrazo: null, agoraMs: Date.parse("2026-10-22T12:00:00Z") };
+    assert.equal(canalRecusado({ ...base, cfgJson: null }), null);
+    assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}' }), "Aparelho sem nome.");
+    assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}', aparelhoId: 3 }), null);
+    assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}', aparelhoId: 3, termoPrazo: "2026-10-01" }), "Termo de Uso pendente.");
+    assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"teste","testadores":[9]}' }), null);
+    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: "2026-10-01" }), null, "ADM isento e nunca bloqueado");
+    assert.equal(canalRecusado({ ...base, cfgJson: "{inválido" }), null);
+  });
+  it("os aparelhos de cada pessoa presente chegam à tela", () => {
+    const ap = aparelhosPresentes([
+      { id: 1, estado: "online", invisivel: false, aparelho: "PC" },
+      { id: 1, estado: "online", invisivel: false, aparelho: "Celular" },
+      { id: 1, estado: "online", invisivel: false, aparelho: "PC" },
+      { id: 2, estado: "online", invisivel: true, aparelho: "Oculto" },
+      { id: 3, estado: "online", invisivel: false },
+    ]);
+    assert.deepEqual(ap, [[1, ["PC", "Celular"]]]);
+    const l = lerListaMensagem(JSON.stringify({ t: "presenca", p: [[1, "o"]], v: [], d: [], ap }));
+    assert.deepEqual(l?.estados.get(1)?.aparelhos, ["PC", "Celular"]);
   });
 });

@@ -5,6 +5,7 @@
 // as rotas internas DIRETO no handler (sem sair para a internet), autenticadas pelo SHA-256 de `INTEGRACOES_CHAVE:cron`.
 // @ts-expect-error — gerado no build (fora do typecheck: ver tsconfig "exclude")
 import handler from "./.open-next/worker.js";
+import { canalRecusado } from "./src/lib/acesso-conta-core";
 import { lerCookie, origemDoProprioSite } from "./src/lib/ao-vivo-core";
 import { lerConfigChat } from "./src/lib/chat-core";
 import { CHAVE_PREF_PRESENCA, lerConfigPresenca, lerPrefsPresenca } from "./src/lib/presenca-core";
@@ -26,6 +27,14 @@ const ROTAS_CRON: Record<string, [string, string]> = {
   "2-59/5 * * * *": ["email", "/api/integracoes/email/cron"],
 };
 
+/** As colunas do TERMO DE USO + APARELHOS lidas na mesma consulta da sessão. */
+type AcessoDaSessao = { aparelho_id: number | null; aparelho_nome: string | null; termo_prazo: string | null; acesso_conta: string | null; admin: number };
+
+/** A sessão sem o aparelho nomeado (ou com o termo vencido), com as regras valendo, não abre canal — a régua do painel. */
+function recusaDoAcesso(l: { id: number } & AcessoDaSessao): string | null {
+  return canalRecusado({ cfgJson: l.acesso_conta, id: l.id, admin: l.admin === 1, aparelhoId: l.aparelho_id, termoPrazo: l.termo_prazo, agoraMs: Date.now() });
+}
+
 /** O canal AO VIVO: só do próprio site, só com a sessão válida de uma pessoa ATIVA — e vai à caixa DELA. */
 async function aoVivo(req: Request, env: Env): Promise<Response> {
   if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Esperado WebSocket.", { status: 426 });
@@ -33,11 +42,18 @@ async function aoVivo(req: Request, env: Env): Promise<Response> {
   const token = lerCookie(req.headers.get("Cookie"), "pca_session");
   if (!token) return new Response("Sem sessão.", { status: 401 });
   const linha = await env.DB.prepare(
-    "SELECT s.usuario_id AS id FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1",
+    `SELECT s.usuario_id AS id, s.aparelho_id AS aparelho_id,
+       (SELECT ap.nome FROM aparelhos ap WHERE ap.id = s.aparelho_id) AS aparelho_nome,
+       (SELECT MIN(tp.prazo) FROM termos_pendencias tp WHERE tp.usuario_id = s.usuario_id) AS termo_prazo,
+       (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.acessoConta') END FROM configuracoes c WHERE c.id = 1) AS acesso_conta,
+       COALESCE((SELECT pa.chave = 'admin' FROM papeis pa WHERE pa.id = u.papel_id), 0) AS admin
+     FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1`,
   )
     .bind(await sha256(token), new Date().toISOString())
-    .first<{ id: number }>();
+    .first<{ id: number } & AcessoDaSessao>();
   if (!linha) return new Response("Sessão inválida.", { status: 401 });
+  const recusa = recusaDoAcesso(linha);
+  if (recusa) return new Response(recusa, { status: 403 });
   const caixa = env.CAIXA_NOTIFICACOES.get(env.CAIXA_NOTIFICACOES.idFromName(`u${linha.id}`));
   return caixa.fetch(new Request("https://caixa/ws", { headers: req.headers }));
 }
@@ -66,13 +82,20 @@ async function presenca(req: Request, env: Env): Promise<Response> {
        (SELECT CASE WHEN pa.chave = 'admin' THEN 1 WHEN json_valid(pa.detalhes) THEN COALESCE(json_extract(pa.detalhes, '$.presenca.verOnline'), 1) ELSE 1 END
           FROM papeis pa WHERE pa.id = u.papel_id) AS ver_online,
        (SELECT CASE WHEN pa.chave = 'admin' THEN 1 WHEN json_valid(pa.detalhes) THEN COALESCE(json_extract(pa.detalhes, '$.presenca.visivel'), 1) ELSE 1 END
-          FROM papeis pa WHERE pa.id = u.papel_id) AS visivel
+          FROM papeis pa WHERE pa.id = u.papel_id) AS visivel,
+       s.aparelho_id AS aparelho_id,
+       (SELECT ap.nome FROM aparelhos ap WHERE ap.id = s.aparelho_id) AS aparelho_nome,
+       (SELECT MIN(tp.prazo) FROM termos_pendencias tp WHERE tp.usuario_id = s.usuario_id) AS termo_prazo,
+       (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.acessoConta') END FROM configuracoes c WHERE c.id = 1) AS acesso_conta,
+       COALESCE((SELECT pa.chave = 'admin' FROM papeis pa WHERE pa.id = u.papel_id), 0) AS admin
      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
      WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1`,
   )
     .bind(grupo, CHAVE_PREF_PRESENCA, grupo, await sha256(token), new Date().toISOString())
-    .first<{ id: number; membro: number; prefs: string | null; config: string | null; chat: string | null; chat_do_grupo: number | null; ver_online: number | null; visivel: number | null }>();
+    .first<{ id: number; membro: number; prefs: string | null; config: string | null; chat: string | null; chat_do_grupo: number | null; ver_online: number | null; visivel: number | null } & AcessoDaSessao>();
   if (!linha) return new Response("Sessão inválida.", { status: 401 });
+  const recusa = recusaDoAcesso(linha);
+  if (recusa) return new Response(recusa, { status: 403 });
   if (!linha.membro) return new Response("Fora do grupo.", { status: 403 });
   if (observar && linha.ver_online === 0) return new Response("O papel não vê quem está online.", { status: 403 });
   let bruto: unknown = null;
@@ -85,6 +108,8 @@ async function presenca(req: Request, env: Env): Promise<Response> {
   if (!cfg.ativo) return new Response("Presença desligada.", { status: 403 });
   const headers = new Headers(req.headers);
   headers.set("x-presenca-usuario", String(linha.id));
+  // O APARELHO da sessão (Termo de Uso + aparelhos): aparece no "Online agora".
+  if (linha.aparelho_nome) headers.set("x-presenca-aparelho", encodeURIComponent(linha.aparelho_nome));
   // INVISÍVEL = só o PAPEL decide (Papéis → Detalhes → Presença → "Aparecer online"); o Administrador sempre aparece.
   headers.set("x-presenca-invisivel", linha.visivel === 0 ? "1" : "0");
   headers.set("x-presenca-ausente", cfg.ausente ? "1" : "0");

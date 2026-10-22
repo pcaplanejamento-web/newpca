@@ -1,23 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
 import { dataBR, FRASE_ACEITE } from "@/lib/termo-uso-core";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { ErroAuth } from "./CartaoAuth";
 import { CampoCodigo } from "./CodigoEmail";
-import { CartaoAuth, ErroAuth } from "./CartaoAuth";
 import { Checkbox, PasswordField, TextField } from "./Field";
 import { IconArrowRight, IconCheck, IconDownload, IconLogout, IconMailCheck, IconTermo } from "./icons";
-import { type Identidade, MarcaLink } from "./MarcaSistema";
+import { Modal } from "./Modal";
 import { TextoFormatado } from "./TextoFormatado";
 
 /** O texto do termo (formatado), em partes — o leitor lê até 20 mil caracteres por vez. */
 export function TextoTermo({ texto, className = "" }: { texto: string; className?: string }) {
   return (
-    <div className={`space-y-3 text-[14px] leading-relaxed ${className}`}>
+    <div className={`space-y-3 text-[14px] leading-relaxed text-text-2 ${className}`}>
       {partesDoTermo(texto).map((p, i) => (
         <TextoFormatado key={i} texto={p} />
       ))}
@@ -26,71 +25,69 @@ export function TextoTermo({ texto, className = "" }: { texto: string; className
 }
 
 /** A caixa ROLÁVEL do termo: avisa quando a pessoa chegou ao fim (o aceite só destrava depois de ler tudo). */
-export function LeituraTermo({ texto, onFim, altura = "max-h-[52vh]" }: { texto: string; onFim: () => void; altura?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
+export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto: string; onFim: () => void; altura?: string }) {
+  const ref = useRef<HTMLElement>(null);
   const avisou = useRef(false);
+  const fim = useRef(onFim);
+  fim.current = onFim;
   const conferir = () => {
     const el = ref.current;
     if (!el || avisou.current) return;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
       avisou.current = true;
-      onFim();
+      fim.current();
     }
   };
-  // O texto curto que cabe inteiro já conta como lido.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: conferir só ao montar e ao trocar o texto
+  // O texto curto que cabe inteiro já conta como lido (confere depois da 1ª pintura).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: conferir ao montar e ao trocar o texto
   useEffect(() => {
     avisou.current = false;
-    conferir();
+    const t = window.setTimeout(conferir, 50);
+    return () => window.clearTimeout(t);
   }, [texto]);
   return (
-    // biome-ignore lint/a11y/noNoninteractiveTabindex: a caixa rola pelo teclado (setas) — o leitor precisa chegar ao fim
-    <div ref={ref} tabIndex={0} onScroll={conferir} className={`${altura} overflow-y-auto rounded-card border border-border bg-surface p-[var(--pad-card)] focus-visible:shadow-ring`}>
+    <section
+      ref={ref}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: a caixa rola pelo teclado (setas) — o leitor precisa chegar ao fim do termo
+      tabIndex={0}
+      onScroll={conferir}
+      aria-label="Texto do Termo de Uso"
+      className={`${altura} overflow-y-auto rounded-card border border-border bg-surface-2 p-[var(--pad-card)] focus-visible:shadow-ring focus-visible:outline-none`}
+    >
       <TextoTermo texto={texto} />
-    </div>
+    </section>
   );
 }
 
-/** O aviso no painel durante a CARÊNCIA: há uma versão nova do termo para aceitar. */
-export function AvisoTermoPendente() {
+/** O aviso no painel durante a CARÊNCIA: há uma versão nova do termo para aceitar (o botão abre o banner do aceite). */
+export function AvisoTermoPendente({ prazo, onAbrir }: { prazo?: string; onAbrir: () => void }) {
   return (
     <div className="mb-[var(--gap-block)]">
       <Callout kind="warn" icon={<IconTermo className="h-4 w-4" />}>
-        Há uma versão nova do <strong>Termo de Uso</strong> para você ler e aceitar.{" "}
-        <Link href="/acesso/termo" className="font-semibold underline underline-offset-2">
-          Ler e aceitar agora
-        </Link>
-        .
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Há uma versão nova do <strong>Termo de Uso</strong> para você ler e aceitar{prazo ? ` até ${dataBR(prazo)}` : ""}.
+          </span>
+          <Button size="sm" variant="secondary" onClick={onAbrir} icon={<IconTermo className="h-4 w-4" />}>
+            Ler e aceitar
+          </Button>
+        </span>
       </Callout>
     </div>
   );
 }
 
 export type TermoParaAceite = { id: number; versao: number; titulo: string; texto: string; hash: string; publicadoEm: string | null };
+export type DadosAceiteTermo = { termo: TermoParaAceite; prazo: string; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string };
 
 /**
- * O ACEITE do Termo de Uso (fora do painel — `/acesso/termo`): ler até o fim → marcar "Li e concordo" → confirmar a
- * identidade (a senha da conta; sem senha, o código enviado ao e-mail; sem nenhum dos dois, a declaração digitada) →
- * assinar. Depois, o comprovante em PDF.
+ * O BANNER de ACEITE do Termo de Uso (flutuante): ler até o fim → "Li e concordo" → confirmar a identidade (a senha da
+ * conta; sem senha, o código enviado ao e-mail; sem nenhum dos dois, a declaração digitada) → assinar → o comprovante em
+ * PDF. `bloqueado` = o prazo venceu: sem fechar (só "Sair"); senão, "Ler depois" fecha.
  */
-export function AceiteTermo({
-  termo,
-  prazo,
-  metodos,
-  email,
-  identidade,
-  sistema,
-  bloqueado,
-}: {
-  termo: TermoParaAceite;
-  prazo: string;
-  metodos: { senha: boolean; codigo: boolean };
-  email: string;
-  identidade?: Identidade;
-  sistema?: string;
-  bloqueado: boolean;
-}) {
+export function BannerTermo({ dados, bloqueado, aberto, onFechar }: { dados: DadosAceiteTermo; bloqueado: boolean; aberto: boolean; onFechar: () => void }) {
   const router = useRouter();
+  const { termo, prazo, metodos, email, sistema } = dados;
   const metodo: "senha" | "codigo" | "sessao" = metodos.senha ? "senha" : metodos.codigo ? "codigo" : "sessao";
   const [leu, setLeu] = useState(false);
   const [concordo, setConcordo] = useState(false);
@@ -100,6 +97,7 @@ export function AceiteTermo({
   const [enviouCodigo, setEnviouCodigo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [gravando, setGravando] = useState(false);
+  const [saindo, setSaindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<{ aceiteId: number; codigo: string } | null>(null);
   const [baixando, setBaixando] = useState(false);
@@ -119,8 +117,7 @@ export function AceiteTermo({
     }
   }
 
-  async function assinar(e: FormEvent) {
-    e.preventDefault();
+  async function assinar() {
     if (!leu) return setErro("Leia o termo até o fim.");
     if (!concordo) return setErro("Marque “Li e concordo” para assinar.");
     if (metodo === "codigo" && !enviouCodigo) return pedirCodigo();
@@ -130,7 +127,14 @@ export function AceiteTermo({
       const r = await fetch("/api/acesso/termo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ termoId: termo.id, hash: termo.hash, metodo, senha: metodo === "senha" ? senha : undefined, codigo: metodo === "codigo" ? codigo : undefined, frase: metodo === "sessao" ? frase : undefined }),
+        body: JSON.stringify({
+          termoId: termo.id,
+          hash: termo.hash,
+          metodo,
+          senha: metodo === "senha" ? senha : undefined,
+          codigo: metodo === "codigo" ? codigo : undefined,
+          frase: metodo === "sessao" ? frase : undefined,
+        }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; aceiteId?: number; codigo?: string };
       if (!r.ok || !j.ok || !j.aceiteId || !j.codigo) throw new Error(j.error ?? "Não foi possível assinar o termo.");
@@ -154,110 +158,114 @@ export function AceiteTermo({
     }
   }
 
-  async function sair() {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    router.replace("/login");
-    router.refresh();
-  }
-
-  const continuar = () => {
-    router.replace("/painel");
+  // Concluído: o painel é montado de novo, sem a pendência.
+  const concluir = () => {
+    onFechar();
     router.refresh();
   };
 
-  const pronto = leu && concordo && (metodo === "senha" ? senha.length > 0 : metodo === "codigo" ? !enviouCodigo || codigo.length === 6 : frase.trim().length > 0);
+  const pronto =
+    leu && concordo && (metodo === "senha" ? senha.length > 0 : metodo === "codigo" ? !enviouCodigo || codigo.length === 6 : frase.trim().length > 0);
+  const fechavel = !bloqueado && !feito && !gravando;
 
   return (
-    <main className="flex min-h-dvh items-start justify-center bg-bg px-[var(--pad-canvas)] py-8">
-      <div className="w-full max-w-[760px] space-y-6">
-        <div className="flex">
-          <MarcaLink href="/" dica="Abrir a página pública" identidade={identidade} tamanho="lg" />
-        </div>
-        {feito ? (
-          <CartaoAuth titulo="Termo de Uso aceito" subtitulo={`Versão ${termo.versao}. Guarde o comprovante: ele traz o registro da sua assinatura eletrônica.`}>
-            <div className="space-y-4">
-              <Callout kind="ok" icon={<IconCheck className="h-4 w-4" />}>
-                Assinatura registrada. Código de verificação: <strong className="font-mono">{feito.codigo}</strong>
-              </Callout>
-              {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" loading={baixando} onClick={baixar} icon={<IconDownload className="h-4 w-4" />}>
-                  Baixar comprovante (PDF)
-                </Button>
-                <Button variant="accent" onClick={continuar} icon={<IconArrowRight className="h-4 w-4" />}>
-                  Continuar
-                </Button>
-              </div>
-            </div>
-          </CartaoAuth>
-        ) : (
-          <CartaoAuth
-            titulo={termo.titulo}
-            etapa={`Versão ${termo.versao}`}
-            subtitulo={
-              bloqueado
-                ? "Para continuar usando o sistema, leia o termo até o fim e assine."
-                : `Leia e aceite até ${dataBR(prazo)} — depois dessa data o sistema só abre com o aceite.`
-            }
-            onSubmit={assinar}
-          >
-            <div className="space-y-4">
-              <LeituraTermo texto={termo.texto} onFim={() => setLeu(true)} />
-              {!leu && <p className="text-[13px] text-muted">Role o texto até o fim para liberar a assinatura.</p>}
-              <Checkbox
-                label="Li e concordo com todas as condições deste Termo de Uso."
-                checked={concordo}
-                disabled={!leu}
-                onChange={(e) => setConcordo(e.target.checked)}
-              />
-              {metodo === "senha" && (
-                <PasswordField label="Confirme com a sua senha" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" disabled={!concordo} />
-              )}
-              {metodo === "codigo" &&
-                (enviouCodigo ? (
-                  <div className="space-y-2">
-                    <CampoCodigo value={codigo} onChange={setCodigo} autoFocus />
-                    <p className="text-[13px] text-muted">
-                      Enviado para <strong className="font-semibold text-text-2">{email}</strong>.{" "}
-                      <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={pedirCodigo} disabled={enviando}>
-                        Enviar outro
-                      </button>
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-muted">Vamos enviar um código de 6 dígitos para {email} para confirmar a sua assinatura.</p>
-                ))}
-              {metodo === "sessao" && (
-                <TextField label={`Digite “${FRASE_ACEITE}” para confirmar`} value={frase} onChange={(e) => setFrase(e.target.value)} disabled={!concordo} autoComplete="off" />
-              )}
-              <p className="text-[12px] text-faint">
-                Assinatura eletrônica simples (Lei nº 14.063/2020, art. 4º, I): registramos o seu nome, matrícula, cargo e unidade, a data e a hora, o endereço IP, o navegador, o aparelho e o resumo criptográfico do texto aceito.
-              </p>
-            </div>
-            {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
+    <Modal
+      open={aberto}
+      onClose={fechavel ? onFechar : () => {}}
+      bloqueado={!fechavel}
+      size="xl"
+      titulo={feito ? "Termo de Uso aceito" : `${termo.titulo} — versão ${termo.versao}`}
+      rodape={
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {feito ? (
+            <span />
+          ) : bloqueado ? (
             <Button
-              type="submit"
-              variant="accent"
-              loading={gravando || enviando}
-              disabled={!pronto}
-              icon={metodo === "codigo" && !enviouCodigo ? <IconMailCheck className="h-4 w-4" /> : <IconTermo className="h-4 w-4" />}
-              className="mt-6 h-[52px] w-full text-[15px]"
+              variant="ghost"
+              size="sm"
+              loading={saindo}
+              icon={<IconLogout className="h-4 w-4" />}
+              onClick={async () => {
+                setSaindo(true);
+                await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+                router.replace("/login");
+                router.refresh();
+              }}
             >
-              {metodo === "codigo" && !enviouCodigo ? "Enviar código e assinar" : "Assinar o Termo de Uso"}
+              Sair
             </Button>
-          </CartaoAuth>
-        )}
-        <div className="flex justify-center gap-2">
-          {!bloqueado && !feito && (
-            <Button variant="ghost" size="sm" onClick={continuar}>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={onFechar}>
               Ler depois
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={sair} icon={<IconLogout className="h-4 w-4" />}>
-            Sair
-          </Button>
+          {feito ? (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" loading={baixando} onClick={baixar} icon={<IconDownload className="h-4 w-4" />}>
+                Baixar comprovante
+              </Button>
+              <Button size="sm" variant="accent" onClick={concluir} icon={<IconArrowRight className="h-4 w-4" />}>
+                Continuar
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="accent"
+              loading={gravando || enviando}
+              disabled={!pronto}
+              onClick={assinar}
+              icon={metodo === "codigo" && !enviouCodigo ? <IconMailCheck className="h-4 w-4" /> : <IconTermo className="h-4 w-4" />}
+            >
+              {metodo === "codigo" && !enviouCodigo ? "Enviar código" : "Assinar"}
+            </Button>
+          )}
         </div>
-      </div>
-    </main>
+      }
+    >
+      {feito ? (
+        <div className="space-y-[var(--gap-block)]">
+          <Callout kind="ok" icon={<IconCheck className="h-4 w-4" />}>
+            Assinatura registrada (versão {termo.versao}). Código de verificação: <strong className="font-mono">{feito.codigo}</strong>
+          </Callout>
+          <p className="text-[13px] text-muted">O comprovante traz o termo integral e o registro da sua assinatura eletrônica. Ele fica também no seu Perfil → Segurança.</p>
+          {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
+        </div>
+      ) : (
+        <div className="space-y-[var(--gap-block)]">
+          <p className="text-[13px] text-muted">
+            {bloqueado ? "Para continuar usando o sistema, leia o termo até o fim e assine." : `Leia e aceite até ${dataBR(prazo)} — depois dessa data o sistema só abre com o aceite.`}
+          </p>
+          <LeituraTermo texto={termo.texto} onFim={() => setLeu(true)} />
+          {!leu && <p className="text-[12px] text-muted">Role o texto até o fim para liberar a assinatura.</p>}
+          <Checkbox label="Li e concordo com todas as condições deste Termo de Uso." checked={concordo} disabled={!leu} onChange={(e) => setConcordo(e.target.checked)} />
+          {metodo === "senha" && (
+            <PasswordField label="Confirme com a sua senha" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" disabled={!concordo} />
+          )}
+          {metodo === "codigo" &&
+            (enviouCodigo ? (
+              <div className="space-y-1.5">
+                <CampoCodigo value={codigo} onChange={setCodigo} autoFocus />
+                <p className="text-[12px] text-muted">
+                  Enviado para <strong className="font-semibold text-text-2">{email}</strong>.{" "}
+                  <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={pedirCodigo} disabled={enviando}>
+                    Enviar outro
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <p className="text-[12px] text-muted">Vamos enviar um código de 6 dígitos para {email} para confirmar a assinatura.</p>
+            ))}
+          {metodo === "sessao" && (
+            <TextField label={`Digite “${FRASE_ACEITE}” para confirmar`} value={frase} onChange={(e) => setFrase(e.target.value)} disabled={!concordo} autoComplete="off" />
+          )}
+          <p className="text-[11.5px] text-faint">
+            Assinatura eletrônica simples (Lei nº 14.063/2020, art. 4º, I): ficam registrados o seu nome, matrícula, cargo e unidade, a data e a hora, o endereço IP, o
+            navegador, o aparelho e o resumo criptográfico do texto aceito.
+          </p>
+          {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
+        </div>
+      )}
+    </Modal>
   );
 }

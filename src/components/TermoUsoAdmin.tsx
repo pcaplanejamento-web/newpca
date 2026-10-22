@@ -19,7 +19,7 @@ import { Segmented } from "./Segmented";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
 import { Switch } from "./Switch";
-import { EditorTexto } from "./TextoFormatado";
+import { EditorRico } from "./EditorRico";
 import { toast } from "./Toast";
 
 type Versao = { id: number; versao: number; titulo: string; estado: string; carenciaDias: number; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
@@ -45,7 +45,6 @@ const MODOS: { value: ModoImplantacao; label: string; dica: string }[] = [
 export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor: ConfigAcessoConta; onChange: (v: ConfigAcessoConta) => void; pessoas: Pessoa[]; papeis: Ref[] }) {
   const set = (p: Partial<ConfigAcessoConta>) => onChange({ ...valor, ...p });
   const limites = Array.from({ length: LIMITE_MAX - LIMITE_MIN + 1 }, (_, i) => LIMITE_MIN + i);
-  const papeisComLimite = Object.keys(valor.porPapel).map(Number);
   return (
     <div className="space-y-[var(--gap-block)]">
       <section className="space-y-3">
@@ -91,15 +90,15 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
         <Switch checked={valor.isentarAdm} onChange={(isentarAdm) => set({ isentarAdm })} label="Administrador fora do limite" dica="O Administrador não tem limite de aparelhos (no teste, o ADM testador segue as regras)" />
         {papeis.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[12px] text-muted">Limite por papel (vale mais que o padrão; o de cada pessoa, no banner do usuário, vale mais que todos)</p>
-            {papeis.map((p) => {
-              const atual = valor.porPapel[String(p.id)];
-              return (
-                <div key={p.id} className="grid grid-cols-[1fr_12rem] items-center gap-3">
-                  <span className="truncate text-[14px] text-text">{p.nome}</span>
+            <p className="text-[13px] font-semibold text-text-2">Limite por papel</p>
+            <p className="text-[12px] text-muted">Vale mais que o padrão; o limite de cada pessoa (no banner do usuário) vale mais que todos.</p>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {papeis.map((p) => {
+                const atual = valor.porPapel[String(p.id)];
+                return (
                   <SelectField
-                    label={`Limite — ${p.nome}`}
-                    compacto
+                    key={p.id}
+                    label={p.nome}
                     value={atual ? String(atual) : ""}
                     onChange={(e) => {
                       const porPapel = { ...valor.porPapel };
@@ -108,17 +107,16 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
                       set({ porPapel });
                     }}
                   >
-                    <option value="">O padrão</option>
+                    <option value="">Padrão ({valor.limite})</option>
                     {limites.map((n) => (
                       <option key={n} value={n}>
-                        {n}
+                        {n} aparelho{n === 1 ? "" : "s"}
                       </option>
                     ))}
                   </SelectField>
-                </div>
-              );
-            })}
-            {papeisComLimite.length > 0 && <p className="text-[12px] text-muted">{papeisComLimite.length} papel(éis) com limite próprio.</p>}
+                );
+              })}
+            </div>
           </div>
         )}
       </section>
@@ -323,7 +321,7 @@ export function TermoUsoAdmin() {
           <Callout kind="warn">As configurações mudaram depois da última publicação — as cláusulas automáticas da versão vigente estão desatualizadas. Publique uma versão nova.</Callout>
         )}
         <TextField label="Título" value={titulo} maxLength={120} onChange={(e) => setTitulo(e.target.value)} />
-        <EditorTexto rotulo="Texto do termo" valor={texto} onChange={setTexto} maxLength={MAX_TEXTO_ADM} rows={16} />
+        <EditorRico rotulo="Texto do termo" valor={texto} onChange={setTexto} maxLength={MAX_TEXTO_ADM} />
         <p className="text-[12px] text-muted">As cláusulas automáticas (aparelhos, sessão, registros, LGPD…) entram no fim, na publicação. Veja na prévia.</p>
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" variant="secondary" icon={<IconEye className="h-4 w-4" />} loading={ocupado === "previa"} disabled={!!ocupado} onClick={verPrevia}>
@@ -387,7 +385,7 @@ export function TermoUsoAdmin() {
               onChange={setIds}
             />
           )}
-          <SelectField label="Prazo para aceitar (depois disso, o sistema só abre com o aceite)" value={String(carencia)} onChange={(e) => setCarencia(Number(e.target.value))}>
+          <SelectField label="Prazo para aceitar" hint="Depois do prazo, o sistema só abre com o aceite." value={String(carencia)} onChange={(e) => setCarencia(Number(e.target.value))}>
             {[0, 1, 3, 7, 15, MAX_CARENCIA_DIAS].map((n) => (
               <option key={n} value={n}>
                 {n === 0 ? "Imediato — no próximo acesso" : `${n} dia${n === 1 ? "" : "s"}`}
