@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.156.0",
+    data: "2026-10-22",
+    titulo: "A marca também transita",
+    mudancas: [
+      { tipo: "melhoria", area: "Menu", texto: "Tocar na marca do sistema (logo e nome) abre a página pública, com o realce ao passar o mouse.", link: "/" },
+      { tipo: "melhoria", area: "Página pública", texto: "Logado, a marca leva às Configurações (ADM) ou ao sistema.", link: "/painel/configuracoes" },
+    ],
+  },
+  {
     versao: "1.155.2",
     data: "2026-10-22",
     titulo: "Página pública: menu e consulta",

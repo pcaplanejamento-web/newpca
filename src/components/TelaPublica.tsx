@@ -63,7 +63,12 @@ export function TelaPublica({
   const secoes: SecaoMenu[] = [{ chave: "pca", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) }];
   const ativo = (item: { href: string }) => item.href === href(vista);
   const marca = (
-    <Link href="/" className="flex min-w-0 items-center">
+    <Link
+      href={painel?.href ?? "/"}
+      title={painel?.dica}
+      aria-label={painel?.dica}
+      className="flex min-w-0 items-center rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
+    >
       <MarcaSistema identidade={identidade} />
     </Link>
   );

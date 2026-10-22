@@ -2670,7 +2670,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não
   soma nada); ambíguo/sem equivalente = não mexe; auditoria "adaptada ao QDD novo". Excluir uma visão diz quais PCAs voltam ao orçamento
   inteiro (confirmação e auditoria).
-- **ATALHOS (v1.155.0):** o ÚLTIMO item do cabeçalho do painel é o botão "Site" (`IconWeb` → `/`; no celular só o ícone); a página pública lê a sessão (`getUsuarioAtual`, falha = deslogado) e, logado, mostra por ÚLTIMO o botão "Configurar" (ADM → `/painel/configuracoes`) ou "Sistema" (→ `/painel`) — `TelaPublica.painel {href, rotulo, dica}` (as Configurações são só do ADM).
+- **ATALHOS (v1.155.0):** o ÚLTIMO item do cabeçalho do painel é o botão "Site" (`IconWeb` → `/`; no celular só o ícone); a página pública lê a sessão (`getUsuarioAtual`, falha = deslogado) e, logado, mostra por ÚLTIMO o botão "Configurar" (ADM → `/painel/configuracoes`) ou "Sistema" (→ `/painel`) — `TelaPublica.painel {href, rotulo, dica}` (as Configurações são só do ADM). v1.156.0: a MARCA (logo + nomes) faz o mesmo — no painel leva a `/`, na pública ao `painel.href` — com o realce do cartão da conta (`hover:bg-surface-2`).
 - **TELA PÚBLICA COM MENU + ABAS PUBLICADAS (v1.151.0, sem migração — blob `configuracoes.publico`):** o menu lateral virou
   UM componente (**`MenuLateral`**/`GavetaMenu`/`ItensMenu`, `MenuLateral.tsx` — o `AppShell` e a tela pública usam o
   mesmo; `EVENTO_ALTERNAR_MENU` mora em `menu-lateral.ts`). `/` = **`TelaPublica`** (marca no topo do menu, as abas
