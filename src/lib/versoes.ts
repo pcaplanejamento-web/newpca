@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.163.0",
+    data: "2026-10-22",
+    titulo: "Excluídos antigos na lixeira da Mesa",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A lixeira da Mesa também mostra os protocolos, DFDs e itens excluídos antes dela existir, lidos do histórico de alterações, na Mesa em que estavam (a do sistema ou a do PCA). Eles aparecem com o selo \"Sem retrato\" e trazem só o que o histórico registrou.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.162.0",
     data: "2026-10-22",
     titulo: "Excluídos da Mesa",
