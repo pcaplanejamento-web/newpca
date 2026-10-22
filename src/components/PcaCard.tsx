@@ -83,17 +83,20 @@ export function PcaCard({
   onClick,
   href,
   soImagem = false,
+  marcado = false,
 }: {
   pca: PcaCardDados;
   onClick?: () => void;
   href?: string;
   /** Só a CAPA (sem as pílulas e os números) — a escolha do ADM para os cartões da tela pública. */
   soImagem?: boolean;
+  /** O PCA escolhido: o anel accent na própria capa (sobe junto no hover). */
+  marcado?: boolean;
 }) {
   const parte = pca.fonte === "lista" ? `${num(pca.partes)} planilha(s)` : `${num(pca.partes)} protocolo(s)`;
   const IconeFonte = pca.fonte === "lista" ? IconDatabase : IconFile;
   const conteudo = (
-    <PcaCapa capa={pca.capa} ano={pca.ano} className="shadow-soft transition-transform duration-[var(--motion-duration)] group-hover:-translate-y-0.5">
+    <PcaCapa capa={pca.capa} ano={pca.ano} className={`shadow-flutuante transition-[transform,box-shadow] duration-[var(--motion-duration)] group-hover:-translate-y-0.5 group-hover:shadow-erguida ${marcado ? "ring-2 ring-accent" : ""}`}>
       {!soImagem && (
         <>
           <div className="absolute inset-x-[4cqw] top-[4cqw] flex items-start justify-between gap-2">

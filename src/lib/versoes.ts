@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.1",
+    data: "2026-10-22",
+    titulo: "Cartões de PCA com marcação estável e sombra suave",
+    mudancas: [
+      { tipo: "correcao", area: "Cabeçalho", texto: "A marcação do PCA escolhido acompanha o cartão ao passar o mouse, e os cartões ganharam uma sombra suave.", link: "/" },
+    ],
+  },
+  {
     versao: "1.158.0",
     data: "2026-10-22",
     titulo: "Seletor de PCA em cartões também no sistema",

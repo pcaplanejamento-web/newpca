@@ -42,7 +42,6 @@ export function PcaSeletor({
   if (pcas.length === 0) return null;
   const ativo = pcas.find((p) => p.id === atual) ?? (todos ? null : pcas[0]);
   const total = pcas.length + (todos ? 1 : 0);
-  const marcado = (sel: boolean) => `rounded-card ${sel ? "ring-2 ring-accent" : ""}`;
   return (
     <Dropdown
       papel="dialog"
@@ -85,16 +84,14 @@ export function PcaSeletor({
             <button
               type="button"
               onClick={() => onEscolher?.(null)}
-              className={`flex aspect-[4/5] flex-col items-center justify-center gap-2 border-2 border-dashed border-border-2 bg-surface text-sm font-semibold text-muted hover:border-accent/50 hover:text-accent ${marcado(ativo == null)}`}
+              className={`flex aspect-[4/5] flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-2 bg-surface text-sm font-semibold text-muted shadow-flutuante transition-[transform,box-shadow] duration-[var(--motion-duration)] hover:-translate-y-0.5 hover:border-accent/50 hover:text-accent hover:shadow-erguida ${ativo == null ? "ring-2 ring-accent" : ""}`}
             >
               <IconBox className="h-7 w-7" />
               Todos os PCAs
             </button>
           )}
           {pcas.map((p) => (
-            <div key={p.id} className={marcado(p.id === ativo?.id)}>
-              <PcaCard pca={p} soImagem={soImagem} href={href?.(p.id)} onClick={href ? undefined : () => onEscolher?.(p.id)} />
-            </div>
+            <PcaCard key={p.id} pca={p} soImagem={soImagem} marcado={p.id === ativo?.id} href={href?.(p.id)} onClick={href ? undefined : () => onEscolher?.(p.id)} />
           ))}
         </div>
       )}
