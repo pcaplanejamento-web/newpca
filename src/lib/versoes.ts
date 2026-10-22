@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.4",
+    data: "2026-10-22",
+    titulo: "Orçamento do PCA mais leve no servidor",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "A aba Orçamento do PCA sempre abre pela visão padrão já pronta no servidor; a troca de visão acontece só no navegador. Evita o erro do servidor ao abrir um endereço com a visão.",
+        link: "/painel/pca?aba=orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.158.3",
     data: "2026-10-22",
     titulo: "Visão do orçamento instantânea e KPIs fixas",
