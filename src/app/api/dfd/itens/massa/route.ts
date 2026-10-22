@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     const n = plano.atualizar.length + plano.remover.length;
     if (n === 0) continue;
     try {
-      await aplicarPlanoItens(d.id, plano, a.u.id);
+      await aplicarPlanoItens(d.id, plano, a.u.id, { id: a.u.id, nome: a.u.nome });
       alterados += n;
       const itensAlterados = diffItensMassa(sel, plano);
       await registrarAuditoria({

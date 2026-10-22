@@ -3758,6 +3758,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.
 
+## Excluídos da Mesa (v1.162.0, migração `0125`)
+- Tabela `mesa_excluidos` (tipo protocolo|dfd|item, alvo, nº, planejamento, protocolo, unidade, PCA, valor, `motivo`, `retrato`
+  JSON, quem/quando, `restaurado_em`). O retrato é gravado por BUILDERS `insert().select()` (`mesa-excluidos-sql.ts`, testados
+  no D1 real) no MESMO `db.batch` da exclusão, ANTES do DELETE: `excluirProtocolo` (capa + os DFDs com motivo `cascata`),
+  `excluirDfd` (`exclusao`/`reenvio`; o desfazer não guarda), `aplicarPlanoItens` (`massa`) e `reescreverDfdItens` (os itens
+  que saem no "Salvar" — `edicao`). Leitura pura `mesa-excluidos-core.ts`; D1 `mesa-excluidos.ts` (`listarExcluidos`,
+  `getExcluido`, `excluidoVisivel` = o escopo da Mesa, `visualDoRetrato`); retenção 180 dias no cron dos e-mails. Rotas
+  `GET /api/mesa/excluidos?pca=&tipo=` e `GET /api/mesa/excluidos/[id]`. Tela: `ExcluidosMesa` (lixeira na barra das duas
+  Mesas). Exclusões anteriores à v1.162.0 não têm retrato. Próximas: acréscimo/supressão no histórico e Restaurar.
+
 ## Documentos (v1.136.0, migração `0116`)
 - Módulo **`documentos`** (`ABA_KEYS`, `IconDocumentos`, ações visualizar · manipular [renomear] · importar · exportar
   [baixar] · excluir; a `0116` deu a tela aos grupos com o Catálogo e as mesmas ações aos papéis). Tabela `documentos`

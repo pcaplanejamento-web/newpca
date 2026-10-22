@@ -15,6 +15,7 @@ import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import { filtroAnoPcaProtocolo } from "./dfd-sql";
 import type { ProtocoloMetaPayload } from "./dfd-validation";
 import { getDb } from "./db";
+import { type AtorExclusao, comandoRetratoDfds, comandoRetratoProtocolo } from "./mesa-excluidos-sql";
 import { memoPorVersao } from "./versao-dados";
 
 /**
@@ -456,11 +457,13 @@ export async function categoriaDoProtocolo(id: number | null | undefined): Promi
  * cascade; e os remove de qualquer edição de PCA via `pca_dfds.dfdId` cascade) e então o
  * protocolo. Ordem importa: apagar os DFDs ANTES (senão a FK `set null` os deixaria órfãos).
  */
-export async function excluirProtocolo(id: number, ator: number | null = null): Promise<void> {
+export async function excluirProtocolo(id: number, ator: number | null = null, quem?: AtorExclusao): Promise<void> {
   const db = getDb();
   // Protocolo em um PCA: os DFDs saem dele — os nºs dos itens guardam o retrato e são BAIXADOS (nunca reaproveitados).
   const pcasAfetados = await pcasDosDfds({ protocoloId: id });
   const stmts = [
+    // Lixeira da Mesa: a capa + um retrato por DFD (com os itens), ANTES dos DELETEs, no mesmo lote.
+    ...(quem ? [comandoRetratoProtocolo(db, id, "exclusao", quem), comandoRetratoDfds(db, { protocoloId: id }, "cascata", quem)] : []),
     retratarNumeros(db, { protocoloId: id }),
     ...baixarNumeros(db, { protocoloId: id }, null, MOTIVO_NUMERO.protocoloExcluido, ator),
     db.delete(dfds).where(eq(dfds.protocoloId, id)),

@@ -1965,3 +1965,36 @@ export const documentoPartes = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.documentoId, t.ordem] })],
 );
+
+/**
+ * LIXEIRA DA MESA (migração `0125`): o RETRATO completo de cada protocolo (capa), DFD (com os itens) e item excluído,
+ * gravado no MESMO lote da exclusão (`mesa-excluidos-sql.ts`). Sem FK: o alvo já não existe. Consulta na opção
+ * "Excluídos" das Mesas; a retenção limpa no cron dos e-mails.
+ */
+export const mesaExcluidos = sqliteTable(
+  "mesa_excluidos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tipo: text("tipo", { enum: ["protocolo", "dfd", "item"] }).notNull(),
+    alvoId: integer("alvo_id").notNull(),
+    numero: text("numero"),
+    planejamento: text("planejamento"),
+    protocoloId: integer("protocolo_id"),
+    protocoloNumero: text("protocolo_numero"),
+    dfdId: integer("dfd_id"),
+    reparticaoId: integer("reparticao_id"),
+    pcaId: integer("pca_id"),
+    valor: real("valor"),
+    motivo: text("motivo").notNull(),
+    retrato: text("retrato"),
+    excluidoPor: integer("excluido_por"),
+    excluidoNome: text("excluido_nome"),
+    excluidoEm: text("excluido_em").default(sql`(CURRENT_TIMESTAMP)`),
+    restauradoEm: text("restaurado_em"),
+  },
+  (t) => [
+    index("mesa_excluidos_tipo_idx").on(t.tipo, t.excluidoEm),
+    index("mesa_excluidos_protocolo_idx").on(t.protocoloId),
+    index("mesa_excluidos_dfd_idx").on(t.dfdId),
+  ],
+);

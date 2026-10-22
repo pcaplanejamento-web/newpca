@@ -16,6 +16,7 @@ import { erro, ok } from "@/lib/http";
 import { derivarDaPessoa } from "@/lib/notificacoes";
 import { resendDaConfig } from "@/lib/resend-config";
 import { limparSegurancaVencida } from "@/lib/seguranca-acesso";
+import { limparExcluidosVencidos } from "@/lib/mesa-excluidos";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ const PESSOAS_POR_PASSADA = 4;
 export async function POST(req: Request) {
   if (!(await cronAutorizado(req))) return erro("Não autorizado.", 401);
   await limparSegurancaVencida().catch((e) => console.error("[cron] higiene do acesso:", (e as Error).message));
+  await limparExcluidosVencidos(); // a lixeira da Mesa (180 dias)
   const db = getDb();
   // A LIMPEZA AUTOMÁTICA (o ADM liga/desliga e define os prazos em Configurações → Notificações) e a fila do e-mail.
   const retencao = await getRetencao();

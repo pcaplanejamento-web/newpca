@@ -198,6 +198,8 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "dfd/itens": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema")) },
   "dfd/itens/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha")) },
   "dfd/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha")) },
+  "mesa/excluidos": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema — a lixeira")) },
+  "mesa/excluidos/[id]": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "a Mesa de onde saiu (a do PCA guardado)")) },
   "mesa/execucao": { GET: naMesa(tela("dfd", "visualizar", "o Dashboard da Mesa do sistema (sem o desempenho por pessoa: só as correções, sem pessoas)")) },
   "protocolo": { POST: naMesa(recurso(MESA, "importar", "recusa(", "novo = Mesa do sistema; reenvio/mesmo nº = a Mesa em que ele está")) },
   "protocolo/[id]": {

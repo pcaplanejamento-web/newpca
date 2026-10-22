@@ -109,6 +109,7 @@ import { BotaoExportar, EscolherColunasXlsx } from "@/components/ExportarTabelas
 import { GruposOrcamento } from "@/components/GruposOrcamento";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
+import { ExcluidosMesa } from "@/components/ExcluidosMesa";
 import { RecorteMesa } from "@/components/RecorteMesa";
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
@@ -1968,6 +1969,10 @@ function AtualizarEDadosCompletosDemo() {
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
         <span className="text-[12px] text-faint">BotaoDadosCompletos — na barra da Mesa: o texto inteiro e todas as listas dentro das células.</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <ExcluidosMesa pcaId={null} siglas={new Map()} />
+        <span className="text-[12px] text-faint">ExcluidosMesa — a lixeira da Mesa: protocolos, DFDs e itens excluídos, com o retrato de cada um (só leitura).</span>
       </div>
       <DadosCompletos value={ligado}>
         <div className="grid max-w-xl gap-2 rounded-card border border-border p-3 text-[13px] text-text">

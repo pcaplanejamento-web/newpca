@@ -10,6 +10,7 @@ import { normPrioridade, type Prioridade } from "./normalize";
 import { baixarNumeros, baixarNumerosPendentes, retratarNumeros } from "./pca-itens-sql";
 import { MOTIVO_NUMERO } from "./pca-numeracao-core";
 import { numeracaoDaGravacao, pcasDosDfds, sincronizarAtivosPca, sincronizarDfdNoPca } from "./pca-sincronia";
+import { type AtorExclusao, comandoRetratoDfds, comandoRetratoItens, type MotivoExclusao } from "./mesa-excluidos-sql";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
 import { lotesDeIds } from "./reparticoes";
 import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
@@ -165,7 +166,7 @@ export type DfdDetalhe = DfdResumo & {
 };
 
 /** Lê o JSON de `secoes` com tolerância a dados inválidos. */
-function parseSecoes(json: string | null): DfdSecaoRow[] {
+export function parseSecoes(json: string | null): DfdSecaoRow[] {
   if (!json) return [];
   try {
     const arr: unknown = JSON.parse(json);
@@ -615,9 +616,11 @@ const COL_ITEM: Record<keyof PatchItem, string> = {
  * itens, no mesmo lote) — nunca de um retrato lido antes: uma edição concorrente no mesmo DFD não deixa o
  * total divergir dos itens. Cada DELETE só roda se, depois de TODAS as remoções, sobrar ≥ 1 item.
  */
-export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens, ator: number | null = null): Promise<void> {
+export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens, ator: number | null = null, quem?: AtorExclusao): Promise<void> {
   const db = getDb();
   const stmts: unknown[] = [];
+  // Lixeira da Mesa: o retrato dos itens removidos, ANTES do DELETE (mesmo lote).
+  if (plano.remover.length > 0 && quem) stmts.push(comandoRetratoItens(db, dfdId, plano.remover, "massa", quem));
   const campos = [...new Set(plano.atualizar.flatMap((a) => Object.keys(a.patch)))] as (keyof PatchItem)[];
   if (campos.length > 0) {
     // Parâmetros por item: 2 por campo (WHEN id THEN valor) + 1 no IN; + o dfdId.
@@ -820,14 +823,20 @@ export async function atualizarDfdCampos(
  * (Σ dos itens) e `totalItens` do cabeçalho. Só código/descrição/unidade/quantidade/valores
  * do item mudam; a capa e as seções seguem por `atualizarDfdCampos`.
  */
-export async function reescreverDfdItens(dfdId: number, itens: DfdItemPayload[], ator: number | null = null): Promise<void> {
+export async function reescreverDfdItens(
+  dfdId: number,
+  itens: DfdItemPayload[],
+  ator: number | null = null,
+  removidos?: { ids: number[]; quem: AtorExclusao },
+): Promise<void> {
   const db = getDb();
   // Protocolo incorporado: o item editado mantém o nº do PCA; o novo ganha o próximo; o removido o baixa.
   const num = await numeracaoDaGravacao(dfdId, itens, 0);
   const stmts = insertsItens(db, dfdId, itens, 0, num?.porLinha);
   // Itens + totais do cabeçalho no MESMO lote (atômico — dois "Salvar" simultâneos nunca deixam o total de um com os itens do outro).
   type Stmt = Parameters<typeof db.batch>[0][number];
-  const lote: Stmt[] = [...(num?.antes ?? []), db.delete(dfdItens).where(eq(dfdItens.dfdId, dfdId)), ...stmts, ...(num?.depois ?? []), comandoTotaisDfd(db, dfdId)];
+  const lixeira = removidos && removidos.ids.length > 0 ? [comandoRetratoItens(db, dfdId, removidos.ids, "edicao", removidos.quem)] : [];
+  const lote: Stmt[] = [...lixeira, ...(num?.antes ?? []), db.delete(dfdItens).where(eq(dfdItens.dfdId, dfdId)), ...stmts, ...(num?.depois ?? []), comandoTotaisDfd(db, dfdId)];
   await db.batch(lote as [Stmt, ...Stmt[]]);
   await sincronizarDfdNoPca(dfdId, ator, "todos");
 }
@@ -940,15 +949,23 @@ export async function getReparticaoDfdNumero(
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */
-export async function excluirDfd(id: number, ator: number | null = null): Promise<{ ok: true }> {
+export async function excluirDfd(
+  id: number,
+  ator: number | null = null,
+  lixeira?: { quem: AtorExclusao; motivo: MotivoExclusao },
+): Promise<{ ok: true }> {
   const db = getDb();
   // Sai de todo PCA: os nºs dos itens guardam o retrato e são BAIXADOS; os vínculos caem em cascata.
   const pcasAfetados = await pcasDosDfds({ dfdId: id });
-  await db.batch([
+  type Stmt = Parameters<typeof db.batch>[0][number];
+  const lote: Stmt[] = [
+    // Lixeira da Mesa: o retrato completo (com os itens) ANTES do DELETE, no mesmo lote.
+    ...(lixeira ? [comandoRetratoDfds(db, { dfdId: id }, lixeira.motivo, lixeira.quem)] : []),
     retratarNumeros(db, { dfdId: id }),
     ...baixarNumeros(db, { dfdId: id }, null, MOTIVO_NUMERO.dfdExcluido, ator),
     db.delete(dfds).where(eq(dfds.id, id)), // cascade apaga dfd_itens e pca_dfds
-  ]);
+  ];
+  await db.batch(lote as [Stmt, ...Stmt[]]);
   for (const pca of pcasAfetados) await sincronizarAtivosPca(pca, ator);
   return { ok: true };
 }

@@ -126,7 +126,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const negado = recusa(a.acesso, telaDoRecurso(proto.pcaId), "excluir");
   if (negado) return negado;
   // Em um PCA (enviado ou incorporado) também: os DFDs saem do PCA e os nºs dos itens são baixados.
-  await excluirProtocolo(id, a.u.id);
+  await excluirProtocolo(id, a.u.id, { id: a.u.id, nome: a.u.nome });
   await registrarAuditoria({
     usuario: a.u,
     acao: "excluir",

@@ -67,6 +67,7 @@ import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
+import { ExcluidosMesa } from "./ExcluidosMesa";
 import { PermissaoExportar } from "./ExportarTabelas";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
@@ -690,6 +691,7 @@ export function DfdsView({
   // lazy: só com a visão DFDs aberta, em fatias; cada linha mostra "Conferindo…" até chegar. Os
   // resultados ficam em cache pela chave do DFD (`chaveConf`): depois de um `router.refresh()` só os
   // DFDs que MUDARAM são reconferidos. Regras/órgãos/unidades novos (contexto) zeram o cache.
+  const siglasExcluidos = useMemo(() => new Map(reparticoes.map((r) => [r.id, r.codigo])), [reparticoes]);
   const ctxConf = useMemo(
     () => JSON.stringify([regras, orgaos, reparticoes.map((r) => [r.id, r.orgaoId ?? null, r.responsaveis])]),
     [regras, orgaos, reparticoes],
@@ -2415,6 +2417,7 @@ export function DfdsView({
             onClick={reverificarTudo}
           />
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
+          {vista !== "dashboard" && <ExcluidosMesa pcaId={pcaDaMesa ?? null} siglas={siglasExcluidos} />}
           {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao(false).rotulo} onEscolher={(id) => rodarAutomacao(id, false)} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
           {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}

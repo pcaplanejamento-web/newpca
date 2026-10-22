@@ -81,8 +81,9 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     : (recusa(a.acesso, tela, "excluir") ?? (origem === "reenvio" ? recusa(a.acesso, tela, "importar") : null));
   if (negado) return negado;
   // DFD de protocolo em um PCA (enviado ou incorporado) também é excluído: sai do PCA e os nºs dos itens são baixados.
-  await excluirDfd(id, a.u.id);
   const reenvio = origem === "reenvio";
+  // A gravação DESFEITA (importação pela metade) não vai à lixeira: nunca existiu inteira.
+  await excluirDfd(id, a.u.id, desfeita ? undefined : { quem: { id: a.u.id, nome: a.u.nome }, motivo: reenvio ? "reenvio" : "exclusao" });
   await registrarAuditoria({
     usuario: a.u,
     acao: "excluir",
@@ -242,7 +243,20 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // Editar ITENS (banner do item destravado): reescreve `dfd_itens` + recomputa o
   // `valorTotal` do cabeçalho. Escopo por unidade já garantido acima. Mesma regra do
   // import: todo item precisa de valor unitário (> 0).
-  if (p.data.itens !== undefined) await reescreverDfdItens(id, p.data.itens, a.u.id);
+  if (p.data.itens !== undefined) {
+    // Lixeira da Mesa: os itens que SAEM na regravação (o pareamento da comparação — o mesmo do histórico).
+    const removidos = antes
+      ? await detalheSeguro(async () => {
+          const c = compararDfd(antes, comparavelDepois(antes, p.data, undefined), () => "");
+          return c.itens.flatMap((x) => {
+            const g = x.tipo === "removido" && x.chave?.startsWith("r:") ? Number(x.chave.slice(2)) : -1;
+            const idItem = antes.itens[g]?.id;
+            return typeof idItem === "number" ? [idItem] : [];
+          });
+        }, [] as number[])
+      : [];
+    await reescreverDfdItens(id, p.data.itens, a.u.id, { ids: removidos, quem: { id: a.u.id, nome: a.u.nome } });
+  }
 
   // HISTÓRICO: UMA linha com TUDO o que mudou (cabeçalho, seções, assinaturas e itens — a MESMA régua da
   // comparação do reenvio), com o protocolo do DFD como origem.

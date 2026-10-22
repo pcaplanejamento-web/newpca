@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.162.0",
+    data: "2026-10-22",
+    titulo: "Excluídos da Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "O botão da lixeira na barra da Mesa do sistema e da Mesa do PCA mostra os protocolos, DFDs e itens excluídos, com quem excluiu, quando e o motivo. Tocar numa linha mostra o que era (só leitura).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Toda exclusão — protocolo (com os DFDs), DFD, item removido em massa ou na edição, DFD fora do reenvio — passa a guardar o retrato completo por 180 dias.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.161.3",
     data: "2026-10-22",
     titulo: "Filtro da Mesa do PCA acompanha o cabeçalho",
