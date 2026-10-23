@@ -28,7 +28,7 @@ import {
 } from "../src/lib/empenhos-core.ts";
 import {
   comandoDividirPeriodo,
-  comandoExcluirPasso,
+  comandoExcluirPassos,
   comandosExcluirLote,
   comandosGuardarPagina,
   MAX_JSON_GUARDA,
@@ -317,15 +317,17 @@ test("empenhos (D1 real): página grande = vários comandos (cada JSON abaixo do
   assert.deepEqual(comandosGuardarPagina(b.db, lote, 1, []), []);
 });
 
-test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote; o passo lido não se exclui avulso", async () => {
+test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote; passos saem vários de uma vez", async () => {
   const b = banco();
   const lote = b.novoLote();
   await guardar(b, lote, 1, [reg("1"), reg("2")], 2);
   b.raw.prepare("INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado) VALUES (?, '2026-01-01', '2026-01-07', 1, 'erro')").run(lote);
   const passos = b.raw.prepare("SELECT id, estado FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(lote) as { id: number; estado: string }[];
-  assert.equal((await comandoExcluirPasso(b.db, lote, passos[0].id)).length, 0, "o passo lido fica");
-  assert.equal((await comandoExcluirPasso(b.db, lote + 99, passos[1].id)).length, 0, "de outro lote, não");
-  assert.equal((await comandoExcluirPasso(b.db, lote, passos[1].id)).length, 1);
+  assert.equal((await comandoExcluirPassos(b.db, lote + 99, [passos[1].id])).length, 0, "de outro lote, não");
+  assert.equal((await comandoExcluirPassos(b.db, lote, passos.map((x) => x.id))).length, 2, "o lido e o com erro, juntos");
+  await b.db.batch([comandoRecontarLote(b.db, lote)]);
+  const l = b.raw.prepare("SELECT paginas, recebidos, unicos FROM centi_lotes WHERE id = ?").get(lote) as { paginas: number; recebidos: number; unicos: number };
+  assert.deepEqual({ ...l }, { paginas: 0, recebidos: 0, unicos: 2 }, "recontado: o staging fica para a releitura");
   // Um empenho já promovido por este lote fica — só perde a referência.
   b.raw.prepare("INSERT INTO empenhos (chave, ano, numero, orgao_gestor, lote_id) VALUES ('2026|P|9', 2026, '9', 'P', ?)").run(lote);
   const r = (await b.db.batch(comandosExcluirLote(b.db, lote) as never)) as unknown[][];

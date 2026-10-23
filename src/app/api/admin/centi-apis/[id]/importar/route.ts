@@ -3,7 +3,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { baixarSeguro } from "@/lib/busca-segura";
 import { getApiCenti, registrarLeitura } from "@/lib/centi-apis";
 import { importavel, urlDaApi } from "@/lib/centi-apis-core";
-import { importarCentiApiSchema } from "@/lib/centi-apis-validation";
+import { excluirImportacaoSchema, importarCentiApiSchema } from "@/lib/centi-apis-validation";
 import { getDb } from "@/lib/db";
 import { criarLote, getLote, listarLotes, listarPassos, loteEmAndamento, paraPasso } from "@/lib/empenhos";
 import {
@@ -26,7 +26,7 @@ import {
 } from "@/lib/empenhos-core";
 import {
   comandoDividirPeriodo,
-  comandoExcluirPasso,
+  comandoExcluirPassos,
   comandoRecontarLote,
   comandoRegistrarPasso,
   comandosExcluirLote,
@@ -220,8 +220,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 /**
- * EXCLUI DO BANCO uma tentativa: `?lote=` = a importação inteira (passos, staging e o lote — os empenhos já promovidos
- * ficam); `?lote=&passo=` = um passo NÃO lido (erro ou dividido).
+ * EXCLUI DO BANCO, vários de uma vez: `{lotes}` = importações inteiras (passos, staging e o lote — os empenhos promovidos
+ * ficam); `{lote, passos}` = passos de uma importação (a que ainda lê é recontada; o período volta a faltar).
  */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
@@ -229,28 +229,32 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const a = await apiImportavel(ctx);
   if ("resp" in a) return a.resp;
   const { api } = a;
-  const busca = new URL(req.url).searchParams;
-  const loteId = intId(busca.get("lote") ?? "");
-  if (!loteId) return erro("Informe a importação.");
-  const lote = await getLote(loteId, api.chave);
-  if (!lote) return erro("Importação não encontrada.", 404);
+  const p = await parseCorpo(excluirImportacaoSchema, req);
+  if ("resp" in p) return p.resp;
   const db = getDb();
-  const passoId = busca.get("passo") ? intId(busca.get("passo") ?? "") : null;
-  if (busca.get("passo") && !passoId) return erro("Passo inválido.");
-  if (passoId) {
-    const res = await comandoExcluirPasso(db, lote.id, passoId);
-    if (!res.length) return erro("Só se exclui o passo que não foi lido (com erro ou dividido).", 409);
-    await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}: passo ${passoId} da importação ${lote.id} excluído` });
-    return ok({ lote: await getLote(lote.id, api.chave) });
+  if ("passos" in p.data) {
+    const lote = await getLote(p.data.lote, api.chave);
+    if (!lote) return erro("Importação não encontrada.", 404);
+    const ids = [...new Set(p.data.passos)];
+    const res = (await db.batch([comandoExcluirPassos(db, lote.id, ids), ...(lote.estado === "lendo" ? [comandoRecontarLote(db, lote.id)] : [])] as never)) as unknown[][];
+    const excluidos = res[0].length;
+    await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}: ${excluidos} passo(s) da importação ${lote.id} excluído(s)` });
+    return ok({ excluidos, lote: await getLote(lote.id, api.chave) });
   }
-  const res = await db.batch(comandosExcluirLote(db, lote.id) as never);
-  if (!(res as unknown[][])[3]?.length) return erro("A importação não foi excluída.", 409);
-  await registrarAuditoria({
-    usuario: g.u,
-    acao: "excluir",
-    entidade: "centi_api",
-    entidadeId: api.id,
-    resumo: `${api.nome} ${lote.ano}: importação ${lote.id} (${lote.estado}) excluída do banco com os passos${lote.estado === "promovido" ? " — os empenhos que ela gravou ficam" : ""}`,
-  });
-  return ok({ excluido: lote.id });
+  let excluidos = 0;
+  for (const id of new Set(p.data.lotes)) {
+    const lote = await getLote(id, api.chave);
+    if (!lote) continue;
+    const res = (await db.batch(comandosExcluirLote(db, lote.id) as never)) as unknown[][];
+    if (!res[3]?.length) continue;
+    excluidos++;
+    await registrarAuditoria({
+      usuario: g.u,
+      acao: "excluir",
+      entidade: "centi_api",
+      entidadeId: api.id,
+      resumo: `${api.nome} ${lote.ano}: importação ${lote.id} (${lote.estado}) excluída do banco com os passos${lote.estado === "promovido" ? " — os empenhos que ela gravou ficam" : ""}`,
+    });
+  }
+  return ok({ excluidos });
 }

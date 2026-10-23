@@ -674,11 +674,12 @@ async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>)
   return j;
 }
 
-/** EXCLUI DO BANCO uma tentativa: a importação inteira ou (com `passoId`) um passo não lido. */
-async function excluirTentativa(apiId: number, loteId: number, passoId?: number): Promise<void> {
-  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar?lote=${loteId}${passoId ? `&passo=${passoId}` : ""}`, { method: "DELETE" });
-  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+/** EXCLUI DO BANCO, vários de uma vez: importações inteiras (`{lotes}`) ou passos de uma importação (`{lote, passos}`). */
+async function excluirTentativas(apiId: number, corpo: { lotes: number[] } | { lote: number; passos: number[] }): Promise<number> {
+  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; excluidos?: number };
   if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+  return j.excluidos ?? 0;
 }
 
 async function lerPassos(apiId: number, loteId: number): Promise<PassoLote[]> {
@@ -718,6 +719,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
   const [agora, setAgora] = useState<Agora | null>(null);
   const [rodando, setRodando] = useState(false);
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
+  const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
   const parar = useRef(false);
   const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -840,35 +842,53 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     void carregar();
   }
 
-  async function excluirLote(l: LoteCenti) {
+  /** Exclui do banco as importações escolhidas (a que está lendo agora fica de fora). */
+  async function excluirLotes(ls: LoteCenti[]): Promise<boolean> {
+    const alvo = ls.filter((l) => !(rodando && atual?.id === l.id));
+    if (!alvo.length) return false;
+    const uma = alvo.length === 1 ? alvo[0] : null;
     const ok = await confirmar({
-      titulo: `Excluir a importação de ${l.ano}?`,
-      texto: `A tentativa de ${dataHoraBR(l.iniciadoEm)} sai do banco com os ${l.paginas} passo(s) lido(s) e o que foi guardado dela.${l.estado === "promovido" ? " Os empenhos que ela gravou continuam." : ""}`,
+      titulo: uma ? `Excluir a importação de ${uma.ano}?` : `Excluir ${alvo.length} importações?`,
+      texto: `${uma ? `A tentativa de ${dataHoraBR(uma.iniciadoEm)} sai` : "As tentativas saem"} do banco com os passos e o que foi lido.${alvo.some((l) => l.estado === "promovido") ? " Os empenhos gravados pelas importações concluídas continuam." : ""}`,
       confirmar: "Excluir",
       perigo: true,
     });
-    if (!ok) return;
+    if (!ok) return false;
     try {
-      await excluirTentativa(api.id, l.id);
-      toast.success("Importação excluída do banco.");
-      if (atual?.id === l.id) {
+      const n = await excluirTentativas(api.id, { lotes: alvo.map((l) => l.id) });
+      toast.success(`${num(n)} importaç${n === 1 ? "ão excluída" : "ões excluídas"} do banco.`);
+      const ids = new Set(alvo.map((l) => l.id));
+      if (atual && ids.has(atual.id)) {
         setAtual(null);
         setPassos([]);
       }
-      if (historico?.id === l.id) setHistorico(null);
+      if (historico && ids.has(historico.id)) setHistorico(null);
+      setSelLotes(new Set());
       void carregar();
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao excluir.");
+      return false;
     }
   }
 
-  /** Exclui um passo NÃO lido (o local, que não chegou ao servidor, sai só da tela). */
-  async function excluirPasso(l: LoteCenti, p: PassoLote): Promise<boolean> {
-    if (!(await confirmar({ titulo: "Excluir este passo?", texto: `${rotuloPeriodo(p)} · página ${p.pagina} sai do banco.`, confirmar: "Excluir", perigo: true }))) return false;
+  /** Exclui passos de uma importação (os locais, que não chegaram ao servidor, saem só da tela). */
+  async function excluirPassos(l: LoteCenti, ps: PassoLote[]): Promise<boolean> {
+    const lidos = ps.filter((p) => p.estado === "ok").length;
+    const ok = await confirmar({
+      titulo: ps.length === 1 ? "Excluir este passo?" : `Excluir ${ps.length} passos?`,
+      texto: `${ps.length === 1 ? `${rotuloPeriodo(ps[0])} · página ${ps[0].pagina} sai` : "Os passos saem"} do banco.${lidos && l.estado === "lendo" ? " Os períodos lidos voltam a faltar e são lidos de novo ao continuar." : ""}`,
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (!ok) return false;
     try {
-      if (p.id > 0) await excluirTentativa(api.id, l.id, p.id);
-      if (atual?.id === l.id) setPassos((lista) => lista.filter((x) => x.id !== p.id));
-      toast.success("Passo excluído.");
+      const ids = ps.filter((p) => p.id > 0).map((p) => p.id);
+      if (ids.length) await excluirTentativas(api.id, { lote: l.id, passos: ids });
+      const fora = new Set(ps.map((p) => p.id));
+      if (atual?.id === l.id) setPassos((lista) => lista.filter((x) => !fora.has(x.id)));
+      toast.success(`${num(ps.length)} passo${ps.length === 1 ? " excluído" : "s excluídos"}.`);
+      void carregar();
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao excluir.");
@@ -918,28 +938,6 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
         ),
     },
     { key: "quem", header: "Por", nowrap: true, value: (l) => l.iniciadoPor, render: (l) => <span className="text-muted">{l.iniciadoPor}</span> },
-    {
-      key: "acoes",
-      header: "",
-      nowrap: true,
-      filter: "none",
-      total: false,
-      value: () => "",
-      render: (l) => (
-        <Button
-          size="xs"
-          variant="icon"
-          aria-label={`Excluir a importação de ${l.ano} (${dataHoraBR(l.iniciadoEm)})`}
-          title="Excluir do banco"
-          disabled={rodando && atual?.id === l.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            void excluirLote(l);
-          }}
-          icon={<IconTrash className="h-4 w-4" />}
-        />
-      ),
-    },
   ];
 
   return (
@@ -969,8 +967,9 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
             </p>
             <p>Toque numa importação do histórico para ver os passos dela.</p>
             <p>
-              A <strong>lixeira</strong> exclui do banco a tentativa inteira (os passos e o que ela leu); os empenhos que uma
-              importação concluída gravou continuam. Dentro dos passos, o passo com erro também pode ser excluído.
+              Marque as importações do histórico (ou os passos) e use <strong>Excluir selecionadas</strong> para tirá-las do
+              banco; os empenhos que uma importação concluída gravou continuam. O passo lido que sai volta a faltar e é lido de
+              novo ao continuar.
             </p>
           </A>
         </span>
@@ -1028,7 +1027,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
             <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />
             <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
           </div>
-          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} onExcluir={rodando ? undefined : (p) => excluirPasso(atual, p)} />
+          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} onExcluir={rodando ? undefined : (ps) => excluirPassos(atual, ps)} />
         </div>
       )}
       {lotes && lotes.length > 0 && (
@@ -1039,6 +1038,16 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           density="compact"
           onRowClick={(l) => setHistorico(l)}
           exportar={{ nome: `Importações ${api.nome}` }}
+          selectable
+          selected={selLotes}
+          onSelected={(s) => setSelLotes(s as Set<number>)}
+          acoesRodape={
+            selLotes.size > 0 ? (
+              <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} onClick={() => void excluirLotes(lotes.filter((l) => selLotes.has(l.id)))}>
+                Excluir selecionadas ({num(selLotes.size)})
+              </Button>
+            ) : undefined
+          }
           resumo={(l) => `${l.length} importaç${l.length === 1 ? "ão" : "ões"}`}
         />
       )}
@@ -1047,8 +1056,8 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           api={api}
           lote={historico}
           onClose={() => setHistorico(null)}
-          onExcluir={rodando && atual?.id === historico.id ? undefined : () => void excluirLote(historico)}
-          onExcluirPasso={rodando && atual?.id === historico.id ? undefined : (p) => excluirPasso(historico, p)}
+          onExcluir={rodando && atual?.id === historico.id ? undefined : () => void excluirLotes([historico])}
+          onExcluirPasso={rodando && atual?.id === historico.id ? undefined : (ps) => excluirPassos(historico, ps)}
         />
       )}
       {confirmacao}
@@ -1079,8 +1088,10 @@ function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
 }
 
 /** Os PASSOS de um lote (o mais recente primeiro), com o detalhe de cada um ao tocar — ao vivo e no histórico. */
-function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: string; onExcluir?: (p: PassoLote) => Promise<boolean> }) {
+function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: string; onExcluir?: (ps: PassoLote[]) => Promise<boolean> }) {
   const [aberto, setAberto] = useState<PassoLote | null>(null);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [excluindo, setExcluindo] = useState(false);
   const linhas = useMemo(() => [...passos].reverse(), [passos]);
   const colunas: Column<PassoLote>[] = [
     { key: "em", header: "Hora", nowrap: true, value: (p) => dataHoraBR(p.em), render: (p) => <span className="tabular-nums">{dataHoraBR(p.em).slice(11)}</span> },
@@ -1120,6 +1131,26 @@ function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: 
         density="compact"
         onRowClick={setAberto}
         exportar={{ nome }}
+        selectable={!!onExcluir}
+        selected={sel}
+        onSelected={(s) => setSel(s as Set<number>)}
+        acoesRodape={
+          onExcluir && sel.size > 0 ? (
+            <Button
+              size="sm"
+              variant="danger"
+              loading={excluindo}
+              icon={<IconTrash className="h-4 w-4" />}
+              onClick={async () => {
+                setExcluindo(true);
+                if (await onExcluir(passos.filter((p) => sel.has(p.id)))) setSel(new Set());
+                setExcluindo(false);
+              }}
+            >
+              Excluir selecionados ({num(sel.size)})
+            </Button>
+          ) : undefined
+        }
         vazio="Nenhum pedido feito ainda."
         resumo={(l) => `${l.length} passo${l.length === 1 ? "" : "s"} · ${l.filter((p) => p.estado === "erro").length} com erro`}
       />
@@ -1128,9 +1159,9 @@ function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: 
           passo={aberto}
           onClose={() => setAberto(null)}
           onExcluir={
-            onExcluir && aberto.estado !== "ok"
+            onExcluir
               ? async () => {
-                  if (await onExcluir(aberto)) setAberto(null);
+                  if (await onExcluir([aberto])) setAberto(null);
                 }
               : undefined
           }
@@ -1228,7 +1259,7 @@ function PassosDoHistorico({
   lote: LoteCenti;
   onClose: () => void;
   onExcluir?: () => void;
-  onExcluirPasso?: (p: PassoLote) => Promise<boolean>;
+  onExcluirPasso?: (ps: PassoLote[]) => Promise<boolean>;
 }) {
   const [passos, setPassos] = useState<PassoLote[] | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
@@ -1272,9 +1303,10 @@ function PassosDoHistorico({
             nome={`Passos ${api.nome} ${lote.ano}`}
             onExcluir={
               onExcluirPasso
-                ? async (p) => {
-                    const ok = await onExcluirPasso(p);
-                    if (ok) setPassos((l) => (l ? l.filter((x) => x.id !== p.id) : l));
+                ? async (ps) => {
+                    const ok = await onExcluirPasso(ps);
+                    const fora = new Set(ps.map((p) => p.id));
+                    if (ok) setPassos((l) => (l ? l.filter((x) => !fora.has(x.id)) : l));
                     return ok;
                   }
                 : undefined

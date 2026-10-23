@@ -203,10 +203,13 @@ export function comandosExcluirLote(db: Db, loteId: number) {
   ];
 }
 
-/** Exclui UM passo que NÃO foi lido (erro ou dividido) — o passo lido é parte dos dados do lote e fica. */
-export function comandoExcluirPasso(db: Db, loteId: number, passoId: number) {
+/**
+ * Exclui PASSOS do lote (vários de uma vez — os ids num parâmetro JSON). O passo lido também sai: o período dele volta a
+ * faltar e é lido de novo ao continuar (o que já está no staging fica — a releitura não duplica).
+ */
+export function comandoExcluirPassos(db: Db, loteId: number, ids: number[]) {
   return db
     .delete(centiLotePassos)
-    .where(and(eq(centiLotePassos.id, passoId), eq(centiLotePassos.loteId, loteId), notInArray(centiLotePassos.estado, ["ok"])))
+    .where(and(eq(centiLotePassos.loteId, loteId), sql`${centiLotePassos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`))
     .returning({ id: centiLotePassos.id });
 }

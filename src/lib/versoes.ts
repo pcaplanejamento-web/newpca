@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.185.1",
+    data: "2026-10-23",
+    titulo: "Excluir várias importações e passos de uma vez",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "Os passos e o histórico das importações da Centi têm a coluna de seleção: marque quantos quiser e use “Excluir selecionados” para tirá-los do banco. O passo lido que sai volta a faltar e é lido de novo ao continuar.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.185.0",
     data: "2026-10-23",
     titulo: "Empenhos lidos de verdade e exclusão das tentativas",

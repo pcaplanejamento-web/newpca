@@ -44,3 +44,9 @@ export const importarCentiApiSchema = z.discriminatedUnion("acao", [
   z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive() }),
   z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
 ]);
+
+/** Excluir do banco: PASSOS de uma importação ou IMPORTAÇÕES inteiras (vários de uma vez). */
+export const excluirImportacaoSchema = z.union([
+  z.strictObject({ lote: z.number().int().positive(), passos: z.array(z.number().int().positive()).min(1).max(5000) }),
+  z.strictObject({ lotes: z.array(z.number().int().positive()).min(1).max(200) }),
+]);
