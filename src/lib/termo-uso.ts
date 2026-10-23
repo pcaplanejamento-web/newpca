@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { papeis, reparticoes, termosAceites, termosEmissoes, termosPendencias, termosUso, usuarioGrupos, usuarios } from "@/db/schema";
 import { aceiteDeTeste, type ConfigAcessoConta, pessoasDasRegras } from "./acesso-conta-core";
 import { getAcessoConta } from "./acesso-conta";
@@ -246,7 +246,25 @@ export async function aceitarTermo(t: TermoUso, a: Assinante, cfg?: ConfigAcesso
       teste,
     }),
   );
-  return ins[0] ? { id: ins[0].id, codigo } : null;
+  if (ins[0]) return { id: ins[0].id, codigo };
+  // Já aceito (outra aba, o cadastro, dois cliques): a pendência saiu no mesmo lote — vale o aceite que existe.
+  const [ja] = await db
+    .select({ id: termosAceites.id, codigo: termosAceites.codigo })
+    .from(termosAceites)
+    .where(and(eq(termosAceites.usuarioId, a.usuarioId), eq(termosAceites.termoId, t.id)))
+    .limit(1);
+  return ja ?? null;
+}
+
+/** O nome ATUAL do aparelho do aceite (renomear acompanha); sem aparelho ligado, o gravado no aceite. */
+const nomeAparelhoAtual = sql<string>`COALESCE((SELECT ap.nome FROM aparelhos AS ap WHERE ap.id = ${termosAceites.aparelhoId}), ${termosAceites.aparelhoNome})`;
+
+/** Liga ao aparelho recém-nomeado os aceites da pessoa feitos sem aparelho (o do cadastro). O selo não usa o id. */
+export async function ligarAceitesAoAparelho(usuarioId: number, aparelhoId: number) {
+  await getDb()
+    .update(termosAceites)
+    .set({ aparelhoId })
+    .where(and(eq(termosAceites.usuarioId, usuarioId), isNull(termosAceites.aparelhoId)));
 }
 
 /** A pendência MAIS URGENTE da pessoa (o termo que ela tem de ler agora). */
@@ -268,7 +286,7 @@ export type AceiteRegistro = typeof termosAceites.$inferSelect;
 /** Os aceites da pessoa (o mais recente primeiro). */
 export async function aceitesDe(usuarioId: number) {
   return getDb()
-    .select({ id: termosAceites.id, versao: termosAceites.versao, em: termosAceites.em, metodo: termosAceites.metodo, codigo: termosAceites.codigo, teste: termosAceites.teste, aparelhoNome: termosAceites.aparelhoNome })
+    .select({ id: termosAceites.id, versao: termosAceites.versao, em: termosAceites.em, metodo: termosAceites.metodo, codigo: termosAceites.codigo, teste: termosAceites.teste, aparelhoNome: nomeAparelhoAtual })
     .from(termosAceites)
     .where(eq(termosAceites.usuarioId, usuarioId))
     .orderBy(desc(termosAceites.em));
@@ -314,7 +332,7 @@ export async function situacaoDaVersao(termoId: number) {
   const db = getDb();
   const [aceites, pendentes] = await Promise.all([
     db
-      .select({ id: termosAceites.id, usuarioId: termosAceites.usuarioId, nome: termosAceites.nome, matricula: termosAceites.matricula, unidade: termosAceites.unidade, em: termosAceites.em, metodo: termosAceites.metodo, ip: termosAceites.ip, aparelho: termosAceites.aparelhoNome, teste: termosAceites.teste, codigo: termosAceites.codigo })
+      .select({ id: termosAceites.id, usuarioId: termosAceites.usuarioId, nome: termosAceites.nome, matricula: termosAceites.matricula, unidade: termosAceites.unidade, em: termosAceites.em, metodo: termosAceites.metodo, ip: termosAceites.ip, aparelho: nomeAparelhoAtual, teste: termosAceites.teste, codigo: termosAceites.codigo })
       .from(termosAceites)
       .where(eq(termosAceites.termoId, termoId))
       .orderBy(desc(termosAceites.em)),

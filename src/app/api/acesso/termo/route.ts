@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   const aparelhoId = g.u.pendencia.aparelhoId;
   const [ap] = aparelhoId ? await getDb().select({ nome: aparelhos.nome }).from(aparelhos).where(eq(aparelhos.id, aparelhoId)).limit(1) : [];
   const r = await aceitarTermo(t, { usuarioId: g.u.id, ip: ipDe(req), userAgent: req.headers.get("user-agent"), aparelhoId, aparelhoNome: ap?.nome ?? "", metodo: d.metodo }, cfg);
-  if (!r) return erro("Este termo já foi aceito por você.", 409);
+  if (!r) return erro("Não foi possível registrar o aceite.", 409);
   await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "termo_uso", entidadeId: t.id, resumo: `Termo de Uso versão ${t.versao} aceito (${d.metodo}) — código ${r.codigo}` });
   return ok({ aceiteId: r.id, codigo: r.codigo });
 }
