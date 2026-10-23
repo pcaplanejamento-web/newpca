@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.175.0",
+    data: "2026-10-23",
+    titulo: "Termo de uso e aparelho: entrada mais rápida e aceite que fecha sozinho",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "O administrador escolhe em quanto tempo o aviso \"Termo de Uso aceito\" fecha sozinho (ou se não fecha); a contagem aparece no botão Continuar e pausa enquanto o comprovante é gerado.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Acesso", texto: "Depois de confirmar o aparelho, o Termo de Uso aparece na hora, sem recarregar; a entrada com pendência carrega menos coisas e fica mais rápida.", link: "/painel" },
+      { tipo: "correcao", area: "Acesso", texto: "Se a confirmação do aparelho ou o termo não carregarem, aparece um aviso com \"Tentar de novo\" e \"Sair\" — nunca mais uma tela em branco.", link: "/painel" },
+      { tipo: "melhoria", area: "Acesso", texto: "Enter confirma o aparelho e assina o termo; os botões não ficam presos carregando nem disparam duas vezes.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.174.1",
     data: "2026-10-23",
     titulo: "Seleções de aparelhos e termo no tamanho padrão",

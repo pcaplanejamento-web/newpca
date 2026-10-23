@@ -60,6 +60,9 @@ const ap = (usuarioId: number, hash: string, limite: number) => ({ usuarioId, ha
 describe("configuração de acesso da conta", () => {
   it("lê com segurança e decide para quem vale", () => {
     assert.deepEqual(lerConfigAcessoConta(null), ACESSO_CONTA_PADRAO);
+    assert.equal(lerConfigAcessoConta({ fecharAceiteS: 30 }).fecharAceiteS, 30);
+    assert.equal(lerConfigAcessoConta({ fecharAceiteS: 0 }).fecharAceiteS, 0);
+    assert.equal(lerConfigAcessoConta({ fecharAceiteS: 7 }).fecharAceiteS, ACESSO_CONTA_PADRAO.fecharAceiteS);
     const c = lerConfigAcessoConta({ modo: "teste", testadores: [2, "2", -1, 5], limite: 99, trocaDias: 7, porPapel: { 3: 4, x: 2, 9: 50 } });
     assert.deepEqual(c.testadores, [2, 5]);
     assert.equal(c.limite, 2);

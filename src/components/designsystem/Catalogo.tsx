@@ -3620,7 +3620,7 @@ export function Catalogo() {
         <DemoEditorRico />
       </Secao>
 
-      <Secao titulo="Termo de Uso e aparelhos — CamposAcessoConta, LeituraTermo, CartaoAparelho (Configurações → Termo de uso; os banners BannerTermo e BannerAparelho abrem por cima do painel)">
+      <Secao titulo="Termo de Uso e aparelhos — CamposAcessoConta, LeituraTermo, CartaoAparelho (Configurações → Termo de uso; os banners BannerTermo — o aceito fecha sozinho no tempo do ADM —, BannerAparelho e FalhaAcesso, com o BotaoSairAcesso, abrem por cima do painel)">
         <DemoTermoAparelhos />
       </Secao>
 

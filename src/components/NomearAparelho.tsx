@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 import { NOME_APARELHO_MAX } from "@/lib/acesso-conta-core";
 import type { EstadoAparelhos } from "@/lib/aparelhos";
 import { dataBR, dataHoraBR } from "@/lib/termo-uso-core";
@@ -52,10 +52,28 @@ export function CartaoAparelho({ a, selos, acoes, marcado = false }: { a: Aparel
   );
 }
 
-async function sair(router: ReturnType<typeof useRouter>) {
-  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-  router.replace("/login");
-  router.refresh();
+/** O "Sair" dos banners obrigatórios do acesso (aparelho, termo, falha ao carregar): encerra a sessão e volta ao login. */
+export function BotaoSairAcesso({ disabled = false }: { disabled?: boolean }) {
+  const router = useRouter();
+  const [saindo, setSaindo] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      loading={saindo}
+      disabled={disabled}
+      icon={<IconLogout className="h-4 w-4" />}
+      onClick={async () => {
+        setSaindo(true);
+        await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+        router.replace("/login");
+        router.refresh();
+      }}
+    >
+      Sair
+    </Button>
+  );
 }
 
 /**
@@ -63,13 +81,13 @@ async function sair(router: ReturnType<typeof useRouter>) {
  * Com a conta LOTADA, a pessoa escolhe qual aparelho retirar (a troca é atômica e inicia o prazo sem novas trocas); em
  * TRAVA, nenhum aparelho novo entra — dá para pedir a liberação ao administrador.
  */
-export function BannerAparelho({ estado, nome: pessoa }: { estado: EstadoAparelhos; nome: string }) {
+export function BannerAparelho({ estado, nome: pessoa, onConcluido }: { estado: EstadoAparelhos; nome: string; onConcluido?: () => void }) {
   const router = useRouter();
+  const [recarregando, recarregar] = useTransition();
   const conhecido = estado.lista.find((a) => a.id === estado.conhecido);
   const [nome, setNome] = useState(conhecido?.nome ?? estado.sugestao);
   const [retirar, setRetirar] = useState<number[]>([]);
   const [gravando, setGravando] = useState(false);
-  const [saindo, setSaindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [pedido, setPedido] = useState<string | null>(null);
   const s = estado.situacao;
@@ -79,6 +97,7 @@ export function BannerAparelho({ estado, nome: pessoa }: { estado: EstadoAparelh
   const primeiro = pessoa.split(" ")[0];
 
   async function liberar() {
+    if (gravando || recarregando) return;
     if (lotado && retirar.length < precisa) return setErro(`Escolha ${precisa} aparelho(s) para retirar.`);
     setGravando(true);
     setErro(null);
@@ -90,9 +109,12 @@ export function BannerAparelho({ estado, nome: pessoa }: { estado: EstadoAparelh
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível liberar o aparelho.");
-      router.refresh();
+      // O termo pendente já veio junto: segue direto para ele, sem recarregar; senão o painel monta de novo.
+      if (onConcluido) onConcluido();
+      else recarregar(() => router.refresh());
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível liberar o aparelho.");
+    } finally {
       setGravando(false);
     }
   }
@@ -113,20 +135,8 @@ export function BannerAparelho({ estado, nome: pessoa }: { estado: EstadoAparelh
   }
 
   const titulo = travado ? "Troca de aparelho bloqueada" : conhecido ? "Confirme este aparelho" : lotado ? "Troque um aparelho" : "Dê um nome a este aparelho";
-  const botaoSair = (
-    <Button
-      variant="ghost"
-      size="sm"
-      loading={saindo}
-      onClick={() => {
-        setSaindo(true);
-        sair(router);
-      }}
-      icon={<IconLogout className="h-4 w-4" />}
-    >
-      Sair
-    </Button>
-  );
+  const ocupado = gravando || recarregando;
+  const idForm = "form-aparelho";
 
   return (
     <Modal
@@ -137,22 +147,30 @@ export function BannerAparelho({ estado, nome: pessoa }: { estado: EstadoAparelh
       titulo={titulo}
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {botaoSair}
+          <BotaoSairAcesso disabled={ocupado} />
           {travado ? (
             !pedido && (
-              <Button size="sm" variant="accent" loading={gravando} onClick={pedirLiberacao}>
+              <Button size="sm" variant="accent" loading={ocupado} onClick={pedirLiberacao}>
                 Pedir liberação ao administrador
               </Button>
             )
           ) : (
-            <Button size="sm" variant="accent" loading={gravando} disabled={!nome.trim() || (lotado && retirar.length < precisa)} onClick={liberar} icon={<IconArrowRight className="h-4 w-4" />}>
+            <Button type="submit" form={idForm} size="sm" variant="accent" loading={ocupado} disabled={!nome.trim() || (lotado && retirar.length < precisa)} icon={<IconArrowRight className="h-4 w-4" />}>
               {lotado ? "Trocar e liberar o acesso" : "Liberar o acesso"}
             </Button>
           )}
         </div>
       }
     >
-      <div className="space-y-[var(--gap-block)]">
+      <form
+        id={idForm}
+        noValidate
+        className="space-y-[var(--gap-block)]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!travado) liberar();
+        }}
+      >
         {travado ? (
           <>
             <Callout kind="warn" icon={<IconLock className="h-4 w-4" />}>
@@ -213,7 +231,7 @@ export function BannerAparelho({ estado, nome: pessoa }: { estado: EstadoAparelh
           </>
         )}
         {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
-      </div>
+      </form>
     </Modal>
   );
 }

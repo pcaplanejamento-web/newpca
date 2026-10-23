@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type ConfigAcessoConta, LIMITE_MAX, LIMITE_MIN, type ModoImplantacao, OPCOES_TROCA_DIAS } from "@/lib/acesso-conta-core";
+import { type ConfigAcessoConta, LIMITE_MAX, LIMITE_MIN, type ModoImplantacao, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "@/lib/acesso-conta-core";
 import { baixarDocumentoPdf } from "@/lib/documento-pdf";
 import { blocosDoTexto, dataHoraBR, MAX_TEXTO_ADM } from "@/lib/termo-uso-core";
 import { TextoTermo } from "./AceiteTermo";
@@ -73,7 +73,7 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
       </section>
       <section className="space-y-3">
         <p className="text-[13px] font-semibold text-text-2">Aparelhos por conta</p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <SelectField compacto label="Limite padrão" value={String(valor.limite)} onChange={(e) => set({ limite: Number(e.target.value) })}>
             {limites.map((n) => (
               <option key={n} value={n}>
@@ -85,6 +85,13 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
             {OPCOES_TROCA_DIAS.map((d) => (
               <option key={d} value={d}>
                 {d === 0 ? "Sem prazo" : `${d} dia${d === 1 ? "" : "s"}`}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField compacto label="Aceite fecha em" title="O banner “Termo de Uso aceito” fecha sozinho depois desse tempo" value={String(valor.fecharAceiteS)} onChange={(e) => set({ fecharAceiteS: Number(e.target.value) })}>
+            {OPCOES_FECHAR_ACEITE.map((s) => (
+              <option key={s} value={s}>
+                {s === 0 ? "Não fecha sozinho" : `${s} segundos`}
               </option>
             ))}
           </SelectField>

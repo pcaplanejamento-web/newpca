@@ -46,11 +46,12 @@ export default async function PainelLayout({
   // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
   if (usuario.trocarSenha) redirect("/nova-senha");
   // TERMO DE USO + APARELHOS (obrigatórios): o aparelho sem nome ou o termo pendente — o BANNER flutuante por cima do
-  // painel, sem a tela (nada da tela é montado nem pedido antes de resolver).
+  // painel, sem a tela (nada da tela é montado nem pedido antes de resolver). Os dois em paralelo: liberado o aparelho, o
+  // termo aparece na hora, sem recarregar.
   const bloqueio = destinoBloqueio(usuario.pendencia);
   const [pendAparelho, pendTermo] = await Promise.all([
     usuario.pendencia.nomearAparelho ? estadoAparelhos(usuario, (await headers()).get("user-agent")).catch(() => null) : null,
-    !usuario.pendencia.nomearAparelho && usuario.pendencia.termo !== "ok" ? dadosDoAceite(usuario).catch(() => null) : null,
+    usuario.pendencia.termo !== "ok" ? dadosDoAceite(usuario).catch(() => null) : null,
   ]);
 
   const [aparencia, pcas, versao, protecaoCfg, modulos, nomesSiglas] = await Promise.all([
@@ -72,13 +73,13 @@ export default async function PainelLayout({
     getPcaFiltro(pcas),
     bloqueio ? 0 : contarNaoLidas(usuario, grupos),
     // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o ADM sempre vê.)
-    presencaDoGrupo(usuario.id, ativo?.id ?? null, grupos, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
-    getConfigChat(),
+    bloqueio ? null : presencaDoGrupo(usuario.id, ativo?.id ?? null, grupos, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
+    bloqueio ? null : getConfigChat(),
     getConfigEscopo(),
   ]);
   // Grupos → Acesso por aba: nas abas em TODAS os dados vêm de todas as unidades (o cabeçalho segue o do grupo e a coluna
   // Unidade fica à vista); nas de SOMA, o seletor do cabeçalho trava.
-  const acessos = !usuario.admin && ativo ? await acessosDoGrupo(ativo.id) : { todas: [], somas: [] };
+  const acessos = !usuario.admin && ativo && !bloqueio ? await acessosDoGrupo(ativo.id) : { todas: [], somas: [] };
   const telasTodas = acessos.todas;
   const unidadeDe = (r: { id: number; codigo: string; nome: string } | null) =>
     r && !ehGeral(r) ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
@@ -108,7 +109,7 @@ export default async function PainelLayout({
     >
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
-      <PendenciasAcesso aparelho={pendAparelho} termo={pendTermo} nome={usuario.nome} />
+      <PendenciasAcesso bloqueio={!!bloqueio} aparelho={pendAparelho} termo={pendTermo} nome={usuario.nome} />
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
         <ComponentesPapel retirados={componentesDoAcesso(acesso)} exibicao={usuario.papel.detalhes.exibicao}>

@@ -20,6 +20,8 @@ export type ConfigAcessoConta = {
   trocaDias: number;
   /** O Administrador fica de fora do limite (padrão; no teste, o ADM testador segue as regras). */
   isentarAdm: boolean;
+  /** Segundos até o banner "Termo de Uso aceito" fechar sozinho (0 = não fecha sozinho). */
+  fecharAceiteS: number;
   /** O encarregado pelo tratamento de dados pessoais (LGPD art. 41) — vai às cláusulas automáticas. */
   encarregado: { nome: string; email: string; telefone: string };
 };
@@ -29,6 +31,7 @@ export const LIMITE_MAX = 10;
 export const TROCA_MAX_DIAS = 180;
 export const MAX_TESTADORES = 200;
 export const OPCOES_TROCA_DIAS = [0, 1, 7, 15, 30, 60, 90, 180] as const;
+export const OPCOES_FECHAR_ACEITE = [0, 5, 10, 15, 30, 60] as const;
 
 export const ACESSO_CONTA_PADRAO: ConfigAcessoConta = {
   modo: "desligado",
@@ -38,6 +41,7 @@ export const ACESSO_CONTA_PADRAO: ConfigAcessoConta = {
   porPapel: {},
   trocaDias: 30,
   isentarAdm: true,
+  fecharAceiteS: 10,
   encarregado: { nome: "", email: "", telefone: "" },
 };
 
@@ -72,6 +76,7 @@ export function lerConfigAcessoConta(v: unknown): ConfigAcessoConta {
     porPapel,
     trocaDias: inteiro(o.trocaDias, 0, TROCA_MAX_DIAS, ACESSO_CONTA_PADRAO.trocaDias),
     isentarAdm: typeof o.isentarAdm === "boolean" ? o.isentarAdm : true,
+    fecharAceiteS: (OPCOES_FECHAR_ACEITE as readonly number[]).includes(Number(o.fecharAceiteS)) ? Number(o.fecharAceiteS) : ACESSO_CONTA_PADRAO.fecharAceiteS,
     encarregado: { nome: texto(enc.nome, 120), email: texto(enc.email, 160), telefone: texto(enc.telefone, 40) },
   };
 }

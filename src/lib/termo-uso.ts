@@ -338,9 +338,10 @@ export async function termoDoCadastro(versao: number | undefined, hash: string |
 export async function dadosDoAceite(u: { id: number; email: string }): Promise<import("@/components/AceiteTermo").DadosAceiteTermo | null> {
   const p = await pendenciaDe(u.id);
   if (!p?.termo.textoFinal || !p.termo.hash) return null;
-  const [integ, sistema, [conta]] = await Promise.all([
+  const [integ, sistema, cfg, [conta]] = await Promise.all([
     getIntegracoes(),
     nomeDoSistema(),
+    getAcessoConta(),
     getDb().select({ senhaHash: usuarios.senhaHash }).from(usuarios).where(eq(usuarios.id, u.id)).limit(1),
   ]);
   return {
@@ -348,6 +349,7 @@ export async function dadosDoAceite(u: { id: number; email: string }): Promise<i
     metodos: { senha: !!conta?.senhaHash && conta.senhaHash !== SENHA_INUTILIZAVEL, codigo: resendConfigurado(integ) },
     email: u.email,
     sistema,
+    fecharEmS: cfg.fecharAceiteS,
   };
 }
 

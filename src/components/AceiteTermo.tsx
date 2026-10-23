@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
 import { FRASE_ACEITE } from "@/lib/termo-uso-core";
 import { Button } from "./Button";
@@ -9,8 +9,10 @@ import { Callout } from "./Callout";
 import { ErroAuth } from "./CartaoAuth";
 import { CampoCodigo } from "./CodigoEmail";
 import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconArrowRight, IconCheck, IconDownload, IconLogout, IconMailCheck, IconTermo } from "./icons";
+import { IconArrowRight, IconCheck, IconDownload, IconMailCheck, IconTermo } from "./icons";
 import { Modal } from "./Modal";
+import { BotaoSairAcesso } from "./NomearAparelho";
+import { Progress } from "./Progress";
 import { TextoFormatado } from "./TextoFormatado";
 
 /** O texto do termo (formatado), em partes — o leitor lê até 20 mil caracteres por vez. */
@@ -60,7 +62,8 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
 }
 
 export type TermoParaAceite = { id: number; versao: number; titulo: string; texto: string; hash: string; publicadoEm: string | null };
-export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string };
+/** `fecharEmS` = segundos até o "Termo de Uso aceito" seguir sozinho (Configurações → Termo de uso; 0 = não fecha sozinho). */
+export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string; fecharEmS?: number };
 
 /**
  * O BANNER de ACEITE do Termo de Uso (flutuante): ler até o fim → "Li e concordo" → confirmar a identidade (a senha da
@@ -69,7 +72,8 @@ export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boole
  */
 export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   const router = useRouter();
-  const { termo, metodos, email, sistema } = dados;
+  const { termo, metodos, email, sistema, fecharEmS = 0 } = dados;
+  const [continuando, continuar] = useTransition();
   const metodo: "senha" | "codigo" | "sessao" = metodos.senha ? "senha" : metodos.codigo ? "codigo" : "sessao";
   const [leu, setLeu] = useState(false);
   const [concordo, setConcordo] = useState(false);
@@ -79,7 +83,6 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   const [enviouCodigo, setEnviouCodigo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [gravando, setGravando] = useState(false);
-  const [saindo, setSaindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<{ aceiteId: number; codigo: string } | null>(null);
   const [baixando, setBaixando] = useState(false);
@@ -92,6 +95,7 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível enviar o código.");
       setEnviouCodigo(true);
+      setCodigo("");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível enviar o código.");
     } finally {
@@ -100,6 +104,7 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   }
 
   async function assinar() {
+    if (gravando || enviando) return;
     if (!leu) return setErro("Leia o termo até o fim.");
     if (!concordo) return setErro("Marque “Li e concordo” para assinar.");
     if (metodo === "codigo" && !enviouCodigo) return pedirCodigo();
@@ -140,8 +145,24 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
     }
   }
 
-  // Concluído: o painel é montado de novo, sem a pendência.
-  const concluir = () => router.refresh();
+  // Concluído: o painel é montado de novo, sem a pendência (uma vez só — o tempo e o botão chamam o mesmo).
+  const concluiu = useRef(false);
+  const concluir = () => {
+    if (concluiu.current) return;
+    concluiu.current = true;
+    continuar(() => router.refresh());
+  };
+  // O FECHAMENTO AUTOMÁTICO do aceite (o tempo do ADM): conta de segundo em segundo e PAUSA enquanto o comprovante é gerado.
+  const [restante, setRestante] = useState(fecharEmS);
+  const pausado = baixando || continuando;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: o relógio só depende do aceite, da pausa e do que falta
+  useEffect(() => {
+    if (!feito || fecharEmS <= 0 || pausado) return;
+    if (restante <= 0) return concluir();
+    const t = window.setTimeout(() => setRestante((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [feito, pausado, restante]);
+  const idForm = "form-termo";
 
   const pronto =
     leu && concordo && (metodo === "senha" ? senha.length > 0 : metodo === "codigo" ? !enviouCodigo || codigo.length === 6 : frase.trim().length > 0);
@@ -154,40 +175,24 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
       titulo={feito ? "Termo de Uso aceito" : `${termo.titulo} — versão ${termo.versao}`}
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {feito ? (
-            <span />
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              loading={saindo}
-              icon={<IconLogout className="h-4 w-4" />}
-              onClick={async () => {
-                setSaindo(true);
-                await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-                router.replace("/login");
-                router.refresh();
-              }}
-            >
-              Sair
-            </Button>
-          )}
+          {feito ? <span /> : <BotaoSairAcesso disabled={gravando || enviando} />}
           {feito ? (
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" loading={baixando} onClick={baixar} icon={<IconDownload className="h-4 w-4" />}>
                 Baixar comprovante
               </Button>
-              <Button size="sm" variant="accent" onClick={concluir} icon={<IconArrowRight className="h-4 w-4" />}>
-                Continuar
+              <Button size="sm" variant="accent" loading={continuando} onClick={concluir} icon={<IconArrowRight className="h-4 w-4" />}>
+                {fecharEmS > 0 && !pausado ? `Continuar (${restante})` : "Continuar"}
               </Button>
             </div>
           ) : (
             <Button
+              type="submit"
+              form={idForm}
               size="sm"
               variant="accent"
               loading={gravando || enviando}
               disabled={!pronto}
-              onClick={assinar}
               icon={metodo === "codigo" && !enviouCodigo ? <IconMailCheck className="h-4 w-4" /> : <IconTermo className="h-4 w-4" />}
             >
               {metodo === "codigo" && !enviouCodigo ? "Enviar código" : "Assinar"}
@@ -202,10 +207,26 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
             Assinatura registrada (versão {termo.versao}). Código de verificação: <strong className="font-mono">{feito.codigo}</strong>
           </Callout>
           <p className="text-[13px] text-muted">O comprovante traz o termo integral e o registro da sua assinatura eletrônica. Ele fica também no seu Perfil → Segurança.</p>
+          {fecharEmS > 0 && (
+            <div className="space-y-1">
+              <Progress value={((fecharEmS - restante) / fecharEmS) * 100} label="Tempo até continuar" />
+              <p className="text-[12px] text-muted" aria-live="polite">
+                {baixando ? "Gerando o comprovante — a contagem continua em seguida." : `O sistema abre sozinho em ${restante} segundo${restante === 1 ? "" : "s"}.`}
+              </p>
+            </div>
+          )}
           {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
         </div>
       ) : (
-        <div className="space-y-[var(--gap-block)]">
+        <form
+          id={idForm}
+          noValidate
+          className="space-y-[var(--gap-block)]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pronto) assinar();
+          }}
+        >
           <p className="text-[13px] text-muted">
             O aceite do Termo de Uso é obrigatório para usar o sistema: leia o termo até o fim e assine.
           </p>
@@ -237,7 +258,7 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
             navegador, o aparelho e o resumo criptográfico do texto aceito.
           </p>
           {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
-        </div>
+        </form>
       )}
     </Modal>
   );
