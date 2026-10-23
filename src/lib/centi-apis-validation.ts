@@ -36,7 +36,7 @@ const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
 /** A IMPORTAÇÃO MANUAL de uma API (passo a passo, conduzida pela tela): iniciar um lote, ler UMA página, concluir
  * (conferir e promover) ou cancelar. */
 export const importarCentiApiSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor }),
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades"]).optional() }),
   z.strictObject({
     acao: z.literal("pagina"),
     lote: z.number().int().positive(),
@@ -54,3 +54,20 @@ export const excluirImportacaoSchema = z.union([
   z.strictObject({ lote: z.number().int().positive(), passos: z.array(z.number().int().positive()).min(1).max(5000) }),
   z.strictObject({ lotes: z.array(z.number().int().positive()).min(1).max(200) }),
 ]);
+
+/**
+ * VÍNCULOS das unidades da Centi com o cadastro (vários de uma vez — a sugestão em lote): `orgaoId` null = sem vínculo
+ * (os registros gravados dela SAEM); `reparticaoId` = uma unidade DO órgão.
+ */
+export const vincularUnidadesCentiSchema = z.strictObject({
+  vinculos: z
+    .array(
+      z.strictObject({
+        id: z.number().int().positive(),
+        orgaoId: z.number().int().positive().nullable(),
+        reparticaoId: z.number().int().positive().nullable(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});

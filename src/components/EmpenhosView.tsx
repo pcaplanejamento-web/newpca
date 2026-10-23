@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
-import { type AnoEmpenhos, type EmpenhoNaTela, empenhosDoPacote, type OrgaosEmpenhos, type PacoteEmpenhos, resumoEmpenhos } from "@/lib/empenhos-tela-core";
+import { type AnoEmpenhos, type EmpenhoNaTela, empenhosDoPacote, type EscopoEmpenhos, escopoVazio, type PacoteEmpenhos, resumoEmpenhos } from "@/lib/empenhos-tela-core";
 import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { BotaoAtualizar } from "./BotaoAtualizar";
@@ -82,7 +82,7 @@ const chaveRecorte = (r: Recorte) => `${r.ano}:${r.removidos ? 1 : 0}`;
 
 /**
  * Tela EMPENHOS (tela de módulo): os empenhos da Centi de um ANO, importados em Integrações → APIs da Centi — só os dos
- * ÓRGÃOS da unidade do cabeçalho (o "Órgão gestor" da Centi = a sigla do órgão cadastrado; `orgaos` null = todos).
+ * vinculados à unidade do cabeçalho (cada unidade da Centi é VINCULADA ao cadastro pelo ADM; `escopo` null = todos).
  * SÓ LEITURA. Os KPIs acompanham os filtros da tabela (`onOrdenadas`); a tabela é a padrão (`scrollInterno` + `compact`,
  * filtros conectados, edições salvas `empenhos:`, XLSX/PDF). O ano chega COMPACTO (`empenhos-tela-core.ts`) e fica
  * guardado nesta aba — trocar de ano e voltar não pede de novo; "Recarregar" pede. Tocar numa linha = o detalhe.
@@ -93,8 +93,8 @@ export function EmpenhosView({
   edicoes,
   podePublicar,
   importar,
-  orgaos = null,
-  semCadastro = [],
+  escopo = null,
+  semVinculo = 0,
 }: {
   anos: AnoEmpenhos[];
   anoInicial: number | null;
@@ -103,10 +103,10 @@ export function EmpenhosView({
   podePublicar: boolean;
   /** O atalho para a importação (Integrações — só o ADM). */
   importar: boolean;
-  /** Os órgãos gestores à vista (`null` = todos). */
-  orgaos?: OrgaosEmpenhos;
-  /** ADM: os órgãos gestores da Centi sem órgão cadastrado de mesma sigla (os grupos não os veem). */
-  semCadastro?: readonly string[];
+  /** As unidades e os órgãos à vista (`null` = todos). */
+  escopo?: EscopoEmpenhos;
+  /** ADM: quantas unidades da Centi estão sem vínculo ao cadastro (os registros delas não são gravados). */
+  semVinculo?: number;
 }) {
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
@@ -181,10 +181,9 @@ export function EmpenhosView({
           <h1 className="flex items-center gap-2 text-xl font-bold text-text">
             <IconEmpenho className="h-5 w-5" /> Empenhos
           </h1>
-          {(ano || orgaos) && (
+          {ano && (
             <p className="text-sm text-muted">
               {[
-                orgaos ? (orgaos.length ? orgaos.join(", ") : "Nenhum órgão") : null,
                 ano ? `Centi · ${recorte?.removidos ? `${num(ano.removidos)} removidos na Centi` : `${num(ano.n)} empenhos`}` : null,
                 ano?.atualizadoEm ? `importados em ${dataHoraBR(ano.atualizadoEm)}` : null,
               ]
@@ -216,8 +215,9 @@ export function EmpenhosView({
             <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
             <p>“Removidos na Centi” (rodapé) = os que a Centi não traz mais: ficam guardados, fora das somas.</p>
             <p>
-              Você vê os empenhos dos órgãos da unidade escolhida no cabeçalho (na “Geral”, de todas as suas). O “Órgão gestor” da
-              Centi é a sigla do órgão cadastrado em Órgãos e Unidades.
+              Cada unidade da Centi é vinculada pelo ADM a um órgão (e, se for o caso, a uma unidade) de Órgãos e Unidades — só os
+              empenhos de unidade vinculada são gravados. Você vê os vinculados à unidade escolhida no cabeçalho (na “Geral”, a
+              todas as suas); o vinculado só ao órgão aparece para as unidades daquele órgão.
             </p>
           </Ajuda>
           {recorte && (
@@ -226,19 +226,19 @@ export function EmpenhosView({
         </div>
       </header>
 
-      {semCadastro.length > 0 && (
+      {semVinculo > 0 && (
         <Callout kind="warn">
-          Órgãos gestores da Centi sem órgão cadastrado com a mesma sigla: {semCadastro.join(", ")}. Só o ADM vê esses empenhos —
-          corrija a sigla do órgão em Órgãos e Unidades.
+          {num(semVinculo)} unidade{semVinculo === 1 ? "" : "s"} da Centi sem vínculo ao cadastro — os empenhos dela{semVinculo === 1 ? "" : "s"} não são
+          gravados. Vincule em Integrações → APIs da Centi → Empenhos → Unidades da Centi e importe de novo.
         </Callout>
       )}
 
       {!recorte ? (
         <Callout kind="info">
-          {orgaos
-            ? orgaos.length
-              ? "Nenhum empenho dos órgãos da sua unidade foi importado ainda."
-              : "Nenhum empenho para a unidade escolhida no cabeçalho — o órgão dela não aparece nos empenhos da Centi."
+          {escopo
+            ? escopoVazio(escopo)
+              ? "Nenhum empenho para a unidade escolhida no cabeçalho."
+              : "Nenhum empenho vinculado à sua unidade foi importado ainda."
             : "Nenhum empenho importado ainda. Importe em Integrações → APIs da Centi → Empenhos."}
         </Callout>
       ) : (

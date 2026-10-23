@@ -288,6 +288,7 @@ TrilhaCabecalho.tsx
 TrocarQuadro.tsx
 Turnstile.tsx
 UnidadeUnica.tsx
+UnidadesCenti.tsx
 UnidadesMedidaView.tsx
 UsuarioDetalhe.tsx
 UsuariosAdmin.tsx

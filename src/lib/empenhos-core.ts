@@ -360,7 +360,10 @@ export function conferirLote(s: SituacaoLote): { completo: true } | { completo: 
   };
 }
 
-export type EstadoLote = "lendo" | "promovido" | "parcial" | "falhou" | "cancelado";
+export type EstadoLote = "lendo" | "promovido" | "parcial" | "falhou" | "cancelado" | "unidades";
+
+/** `dados` = importa os registros (só os de unidade vinculada) · `unidades` = só PUXA as unidades da Centi, sem gravar nada. */
+export type ModoLote = "dados" | "unidades";
 
 export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue" | "emerald" | "amber" | "red" | "slate" }> = {
   lendo: { rotulo: "Lendo", tom: "blue" },
@@ -368,6 +371,7 @@ export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue
   parcial: { rotulo: "Parcial", tom: "amber" },
   falhou: { rotulo: "Falhou", tom: "red" },
   cancelado: { rotulo: "Cancelado", tom: "slate" },
+  unidades: { rotulo: "Unidades lidas", tom: "blue" },
 };
 
 /** Sem atividade há mais que isto, o lote "lendo" é considerado abandonado (outro pode começar). */
@@ -382,6 +386,7 @@ export type LoteCenti = {
   id: number;
   ano: number;
   estado: EstadoLote;
+  modo: ModoLote;
   paginas: number;
   recebidos: number;
   unicos: number;
@@ -394,6 +399,8 @@ export type LoteCenti = {
   inseridos: number | null;
   atualizados: number | null;
   removidos: number | null;
+  /** Os registros de unidade SEM vínculo — lidos e conferidos, NÃO gravados. */
+  fora: number | null;
   mensagem: string | null;
   iniciadoPor: string;
   iniciadoEm: string;

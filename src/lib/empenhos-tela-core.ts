@@ -113,38 +113,25 @@ export function anoEscolhido(anos: readonly AnoEmpenhos[], pedido: unknown): num
 }
 
 /**
- * ESCOPO POR ÓRGÃO: o "Órgão gestor" da Centi é a SIGLA do órgão (ex.: "FMC") — casa com a sigla do órgão cadastrado,
- * sem caixa, acento, espaço nem pontuação. `null` = todos os órgãos (ADM, a "Geral", o módulo fora do filtro da unidade);
- * `[]` = nenhum (a pessoa não vê nada).
+ * ESCOPO: cada empenho está VINCULADO ao cadastro (a unidade da Centi → um órgão e, opcional, uma unidade dele —
+ * `centi_unidades`). A pessoa vê o empenho vinculado a uma das SUAS unidades ou, quando o vínculo é só ao órgão, a um
+ * órgão de uma das suas unidades. `null` = todos (ADM, a "Geral", o módulo fora do filtro da unidade); vazio = nenhum.
  */
-export type OrgaosEmpenhos = readonly string[] | null;
+export type EscopoEmpenhos = { unidades: readonly number[]; orgaos: readonly number[] } | null;
 
-export function chaveOrgaoGestor(s: string | null | undefined): string {
-  return String(s ?? "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
-}
-
-/** Os textos de "Órgão gestor" gravados (como vieram) que casam com as siglas dos órgãos da pessoa. */
-export function gestoresDasSiglas(gestores: readonly string[], siglas: readonly string[]): string[] {
-  const ok = new Set(siglas.map(chaveOrgaoGestor).filter(Boolean));
-  return gestores.filter((g) => ok.has(chaveOrgaoGestor(g))).sort();
-}
-
-/** Os órgãos gestores SEM órgão cadastrado de mesma sigla (o ADM corrige a sigla — senão só ele os vê). */
-export function gestoresSemOrgao(gestores: readonly string[], siglas: readonly string[]): string[] {
-  const ok = new Set(siglas.map(chaveOrgaoGestor).filter(Boolean));
-  return gestores.filter((g) => !ok.has(chaveOrgaoGestor(g))).sort();
-}
+/** O escopo não deixa ver nada. */
+export const escopoVazio = (e: EscopoEmpenhos): boolean => e !== null && e.unidades.length === 0 && e.orgaos.length === 0;
 
 /** O empenho entra no escopo? */
-export function empenhoNoEscopo(orgaos: OrgaosEmpenhos, orgaoGestor: string): boolean {
-  return orgaos === null || orgaos.includes(orgaoGestor);
+export function empenhoNoEscopo(escopo: EscopoEmpenhos, e: { orgaoId: number | null; reparticaoId: number | null }): boolean {
+  if (escopo === null) return true;
+  if (e.reparticaoId != null) return escopo.unidades.includes(e.reparticaoId);
+  return e.orgaoId != null && escopo.orgaos.includes(e.orgaoId);
 }
 
 /** Texto estável do escopo (chave de memória e da tela). */
-export function chaveOrgaosEmpenhos(orgaos: OrgaosEmpenhos): string {
-  return orgaos === null ? "*" : [...orgaos].sort().join("|");
+export function chaveEscopoEmpenhos(escopo: EscopoEmpenhos): string {
+  if (escopo === null) return "*";
+  const ord = (l: readonly number[]) => [...l].sort((a, b) => a - b).join(",");
+  return `u${ord(escopo.unidades)}|o${ord(escopo.orgaos)}`;
 }

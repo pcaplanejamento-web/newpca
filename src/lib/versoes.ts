@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.198.0",
+    data: "2026-10-23",
+    titulo: "Empenhos: só as unidades vinculadas ao cadastro",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "Unidades da Centi: cada Órgão gestor + Unidade orçamentária que a Centi devolve é VINCULADO a um órgão de Órgãos e Unidades (o órgão inteiro ou uma unidade dele). Só os empenhos de unidade vinculada são gravados — os outros são lidos e conferidos com a Centi, mas descartados. O mesmo vínculo vale para liquidações e pagamentos.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "novo", area: "Integrações", texto: "“Puxar unidades” lê o ano só para registrar as unidades da Centi, sem gravar nenhum empenho; “Vincular pela sigla” liga de uma vez as que têm a sigla de um órgão cadastrado.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Banco limpo: os empenhos de unidade sem vínculo saíram; tirar o vínculo apaga os gravados daquela unidade (com confirmação), e excluir um órgão ou unidade do cadastro desfaz os vínculos dele. Cada pessoa vê os empenhos vinculados às suas unidades (o vinculado só ao órgão, às unidades daquele órgão).", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.197.1",
     data: "2026-10-23",
     titulo: "Aparelhos: todos nomeiam, inclusive o Administrador",

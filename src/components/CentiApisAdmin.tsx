@@ -56,6 +56,7 @@ import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { Switch } from "./Switch";
+import { UnidadesCenti } from "./UnidadesCenti";
 import { toast } from "./Toast";
 
 /**
@@ -219,6 +220,8 @@ function EditorApi({
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<ResultadoTeste | null>(null);
   const [importando, setImportando] = useState(false);
+  /** Muda quando uma leitura termina — a tabela das unidades da Centi recarrega. */
+  const [lido, setLido] = useState(0);
   const { confirmar, confirmacao } = useConfirmacao();
   const muda = <K extends keyof EdicaoApi>(k: K, valor: EdicaoApi[K]) => {
     setV((x) => ({ ...x, [k]: valor }));
@@ -654,7 +657,8 @@ function EditorApi({
             </div>
           )}
         </SecaoBanner>
-        {importavel(api.chave) && <ImportacaoManual api={api} alterado={alterado} onOcupado={setImportando} />}
+        {importavel(api.chave) && <ImportacaoManual api={api} alterado={alterado} onOcupado={setImportando} onLido={() => setLido((n) => n + 1)} />}
+        {importavel(api.chave) && <UnidadesCenti orgaos={orgaos} unidades={unidades} versao={lido} />}
       </div>
       {confirmacao}
     </Modal>
@@ -704,7 +708,7 @@ const ESPERA_TENTATIVAS = [2000, 4000, 8000];
 const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
 /** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
-const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.inseridos ?? 0) - (l.atualizados ?? 0));
+const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
 const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
 
 /** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
@@ -722,7 +726,7 @@ type Agora = { periodo: Periodo; pagina: number; tentativa: number; espera?: num
  * gravados quando todo o ano foi lido e a contagem confere com o total que a Centi informa. Interromper, fechar a
  * página ou uma falha deixam a tabela final como estava.
  */
-function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterado: boolean; onOcupado: (b: boolean) => void }) {
+function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti; alterado: boolean; onOcupado: (b: boolean) => void; onLido: () => void }) {
   const anos = anosDaApi(anoAtual(), api.anos);
   const [ano, setAno] = useState(anos[0]);
   const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
@@ -795,7 +799,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     }
   }
 
-  async function importar(retomar: LoteCenti | null) {
+  async function importar(retomar: LoteCenti | null, modo: "dados" | "unidades" = "dados") {
     parar.current = false;
     condutor.current = crypto.randomUUID();
     setRodando(true);
@@ -803,7 +807,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     let lote = retomar;
     let onde = "";
     try {
-      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current })).lote;
+      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current, modo })).lote;
       setAtual(lote);
       const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
       setPassos(anteriores);
@@ -838,8 +842,10 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       }
       const fim = conclusao.lote;
       setAtual(fim);
-      if (fim.estado === "promovido") {
-        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} marcados como removidos.`);
+      if (fim.estado === "unidades") {
+        toast.success(fim.mensagem ?? "Unidades da Centi lidas — vincule-as em “Unidades da Centi”.");
+      } else if (fim.estado === "promovido") {
+        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} marcados como removidos${fim.fora ? `, ${num(fim.fora)} de unidade sem vínculo descartados` : ""}.`);
       } else {
         toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
       }
@@ -861,6 +867,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     } finally {
       setRodando(false);
       void carregar();
+      onLido();
     }
   }
 
@@ -965,6 +972,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
         l.estado === "promovido" ? (
           <span className="text-text-2">
             {num(l.inseridos)} novos · {num(l.atualizados)} atualizados · {num(semMudanca(l))} sem mudança · {num(l.removidos)} removidos
+            {l.fora ? ` · ${num(l.fora)} sem vínculo (não gravados)` : ""}
           </span>
         ) : (
           <CelulaTexto texto={l.mensagem ?? (l.estado === "lendo" ? "Em andamento" : "—")} />
@@ -985,9 +993,14 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
               Interromper
             </Button>
           ) : (
-            <Button size="sm" onClick={() => void importar(null)} disabled={alterado || !!emAndamento} icon={<IconDownload className="h-4 w-4" />}>
-              Importar {ano}
-            </Button>
+            <>
+              <Button size="sm" variant="secondary" onClick={() => void importar(null, "unidades")} disabled={alterado || !!emAndamento}>
+                Puxar unidades {ano}
+              </Button>
+              <Button size="sm" onClick={() => void importar(null)} disabled={alterado || !!emAndamento} icon={<IconDownload className="h-4 w-4" />}>
+                Importar {ano}
+              </Button>
+            </>
           )}
           <A titulo="Importar">
             <p>
@@ -1008,6 +1021,11 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
             <p>
               Uma <strong>aba por vez</strong> conduz a importação. Cada importação guarda a versão do leitor; quando o sistema
               melhora a leitura, ele avisa os anos lidos pela versão anterior para você importar de novo.
+            </p>
+            <p>
+              Só os empenhos de unidade da Centi <strong>vinculada</strong> ao cadastro (em “Unidades da Centi”) são gravados — os
+              outros são lidos e conferidos, mas descartados. <strong>Puxar unidades</strong> lê o ano só para registrar as
+              unidades, sem gravar nenhum empenho.
             </p>
             <p>Toque numa importação do histórico para ver os passos dela.</p>
             <p>

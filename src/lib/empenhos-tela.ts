@@ -1,9 +1,9 @@
-import { eq, inArray } from "drizzle-orm";
+import { count, eq, inArray, isNull } from "drizzle-orm";
 import { cache } from "react";
-import { centiLotes, empenhos, orgaos, reparticoes } from "@/db/schema";
+import { centiLotes, centiUnidades, empenhos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import { type AnoEmpenhos, chaveOrgaosEmpenhos, gestoresDasSiglas, gestoresSemOrgao, type OrgaosEmpenhos } from "./empenhos-tela-core";
-import { consultaAnosEmpenhos, consultaGestoresEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "./empenhos-tela-sql";
+import { type AnoEmpenhos, chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
+import { consultaAnosEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "./empenhos-tela-sql";
 import { unidadeDoModulo } from "./escopo-cabecalho";
 import { criarMemoVersao } from "./memo-versao-core";
 
@@ -15,41 +15,38 @@ import { criarMemoVersao } from "./memo-versao-core";
 const memo = criarMemoVersao({ max: 12, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
 
 /**
- * Os ÓRGÃOS GESTORES que a pessoa vê (por requisição): a unidade do cabeçalho — ou as unidades que ela acessa, com
- * Empenhos fora do "Filtro da unidade" — vira o ÓRGÃO de cada unidade e, pela SIGLA, os "Órgão gestor" da Centi.
- * `null` = todos (ADM, "Geral"); `[]` = nenhum.
+ * O ESCOPO dos empenhos da pessoa (por requisição): a unidade do cabeçalho — ou as unidades que ela acessa, com Empenhos
+ * fora do "Filtro da unidade" — e os ÓRGÃOS dessas unidades (para o empenho vinculado só ao órgão). `null` = todos.
  */
-export const orgaosDosEmpenhos = cache(async (): Promise<OrgaosEmpenhos> => {
+export const escopoDosEmpenhos = cache(async (): Promise<EscopoEmpenhos> => {
   const { id } = await unidadeDoModulo("empenhos");
   if (id === null) return null;
-  if (id === false) return [];
+  if (id === false) return { unidades: [], orgaos: [] };
   const ids = typeof id === "number" ? [id] : [...id];
-  if (!ids.length) return [];
-  const db = getDb();
-  const [siglas, gestores] = await Promise.all([
-    db.select({ s: orgaos.sigla }).from(reparticoes).innerJoin(orgaos, eq(orgaos.id, reparticoes.orgaoId)).where(inArray(reparticoes.id, ids.slice(0, 90))),
-    consultaGestoresEmpenhos(db),
-  ]);
-  return gestoresDasSiglas(gestores, siglas.map((r) => r.s));
+  if (!ids.length) return { unidades: [], orgaos: [] };
+  const l = await getDb()
+    .select({ id: reparticoes.id, orgaoId: reparticoes.orgaoId })
+    .from(reparticoes)
+    .where(inArray(reparticoes.id, ids.slice(0, 90)));
+  return { unidades: l.map((r) => r.id), orgaos: [...new Set(l.map((r) => r.orgaoId).filter((o): o is number => o != null))] };
 });
 
-export async function anosEmpenhos(escopo: OrgaosEmpenhos): Promise<AnoEmpenhos[]> {
+export async function anosEmpenhos(escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
   return consultaAnosEmpenhos(getDb(), escopo);
 }
 
-/** Os "Órgão gestor" da Centi sem órgão cadastrado de mesma sigla (o aviso do ADM — os grupos não os veem). */
-export async function gestoresSemCadastro(): Promise<string[]> {
-  const db = getDb();
-  const [gestores, siglas] = await Promise.all([consultaGestoresEmpenhos(db), db.select({ s: orgaos.sigla }).from(orgaos)]);
-  return gestoresSemOrgao(gestores, siglas.map((r) => r.s));
+/** Quantas unidades da Centi estão SEM vínculo ao cadastro (o aviso do ADM — os registros delas não são gravados). */
+export async function unidadesCentiSemVinculo(): Promise<number> {
+  const [r] = await getDb().select({ n: count() }).from(centiUnidades).where(isNull(centiUnidades.orgaoId));
+  return r?.n ?? 0;
 }
 
 /** O pacote do ano como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */
-export async function pacoteEmpenhos(ano: number, removidos: boolean, escopo: OrgaosEmpenhos): Promise<string | null> {
+export async function pacoteEmpenhos(ano: number, removidos: boolean, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
   const ver = await consultaVersaoEmpenhos(db, ano);
   try {
-    return await memo.obter(`${ano}:${removidos ? 1 : 0}:${chaveOrgaosEmpenhos(escopo)}`, ver, async () => {
+    return await memo.obter(`${ano}:${removidos ? 1 : 0}:${chaveEscopoEmpenhos(escopo)}`, ver, async () => {
       const t = await textoPacoteEmpenhos(db, ano, removidos, escopo);
       if (t == null) throw new Error("Os empenhos mudaram durante a leitura.");
       return t;
