@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.189.0",
+    data: "2026-10-23",
+    titulo: "Verificação do comprovante: interna e pública melhorada",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba “Verificar comprovante”: pelo código, o registro COMPLETO da assinatura do Termo de Uso (nome, matrícula, cargo, unidade, e-mail, método, aparelho, IP), se o selo confere, o comprovante na tela e a conferência do arquivo PDF.", link: "/painel/configuracoes?aba=verificar-termo" },
+      { tipo: "melhoria", area: "Termo de uso", texto: "A verificação pública ganhou a entrada para digitar o código e, com o código não encontrado, o campo para tentar de novo.", link: "/termo/verificar" },
+    ],
+  },
+  {
     versao: "1.188.1",
     data: "2026-10-23",
     titulo: "Empenhos: valores abaixo de R$ 1.000 corrigidos — importe 2026 de novo",

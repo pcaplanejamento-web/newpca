@@ -17,6 +17,7 @@ import {
   type Clausula,
   clausulasAutomaticas,
   codigoDeBytes,
+  codigoNormal,
   type ContextoClausulas,
   type DadosAceite,
   hashTexto,
@@ -368,4 +369,19 @@ export async function exigirDaConta(usuarioId: number): Promise<void> {
   } catch {
     // A sessão confere de novo na próxima publicação/troca de modo.
   }
+}
+
+export type ResultadoArquivoTermo = "original" | "alterado" | "registro-alterado" | "nao-encontrado";
+
+/** Confere o ARQUIVO do comprovante: refaz o PDF do registro e compara o SHA-256 (o mesmo na verificação pública e na interna). */
+export async function conferirArquivoTermo(codigoBruto: string, hash: string, origem: string): Promise<ResultadoArquivoTermo> {
+  const codigo = codigoNormal(codigoBruto);
+  const a = codigo ? await aceitePorCodigo(codigo) : null;
+  if (!a) return "nao-encontrado";
+  if (!(await seloConfere(a))) return "registro-alterado";
+  const t = await termoPorId(a.termoId);
+  if (!t?.textoFinal) return "nao-encontrado";
+  const { pdfDoComprovante, sha256Arquivo } = await import("./comprovante-termo-pdf");
+  const original = await sha256Arquivo(await pdfDoComprovante(a, { textoFinal: t.textoFinal, publicadoEm: t.publicadoEm }, origem));
+  return original === hash ? "original" : "alterado";
 }

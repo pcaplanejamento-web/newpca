@@ -293,6 +293,7 @@ VendoAgora.tsx
 VerificacaoRobo.tsx
 VerificacaoView.tsx
 VerificarArquivoTermo.tsx
+VerificarComprovanteAdmin.tsx
 VinculosDaUnidade.tsx
 VinculosResponsaveis.tsx
 VinculosTarefa.tsx

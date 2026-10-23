@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { pdfDoComprovante, sha256Arquivo } from "@/lib/comprovante-termo-pdf";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarTentativa } from "@/lib/seguranca-acesso";
-import { codigoNormal } from "@/lib/termo-uso-core";
-import { aceitePorCodigo, seloConfere, termoPorId } from "@/lib/termo-uso";
+import { conferirArquivoTermo } from "@/lib/termo-uso";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +16,5 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-real-ip") ?? "local";
   if (await contarTentativa("verificarTermoIp", ip)) return erro("Muitas consultas seguidas. Tente de novo em alguns minutos.", 429);
-  const codigo = codigoNormal(p.data.codigo);
-  const a = codigo ? await aceitePorCodigo(codigo) : null;
-  if (!a) return ok({ resultado: "nao-encontrado" });
-  if (!(await seloConfere(a))) return ok({ resultado: "registro-alterado" });
-  const t = await termoPorId(a.termoId);
-  if (!t?.textoFinal) return ok({ resultado: "nao-encontrado" });
-  const original = await sha256Arquivo(await pdfDoComprovante(a, { textoFinal: t.textoFinal, publicadoEm: t.publicadoEm }, new URL(req.url).origin));
-  return ok({ resultado: original === p.data.hash ? "original" : "alterado" });
+  return ok({ resultado: await conferirArquivoTermo(p.data.codigo, p.data.hash, new URL(req.url).origin) });
 }

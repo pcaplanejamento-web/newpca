@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { Callout } from "@/components/Callout";
 import { IconTermo } from "@/components/icons";
 import { MarcaLink } from "@/components/MarcaSistema";
-import { VerificarArquivoTermo } from "@/components/VerificarArquivoTermo";
+import { FormCodigoTermo, VerificarArquivoTermo } from "@/components/VerificarArquivoTermo";
 import { iniciais } from "@/lib/acesso-conta-core";
 import { getAparencia } from "@/lib/aparencia";
 import { contarTentativa } from "@/lib/seguranca-acesso";
@@ -55,7 +55,10 @@ export default async function VerificarTermoPage({ params }: { params: Promise<{
           ) : a ? (
             <Callout kind="danger">O registro deste código foi ALTERADO depois da assinatura — o comprovante não é válido.</Callout>
           ) : (
-            <Callout kind="danger">Código não encontrado. Confira se foi digitado exatamente como está no comprovante.</Callout>
+            <>
+              <Callout kind="danger">Código não encontrado. Confira se foi digitado exatamente como está no comprovante.</Callout>
+              <FormCodigoTermo inicial={codigo ?? ""} />
+            </>
           )}
         </section>
       </div>
