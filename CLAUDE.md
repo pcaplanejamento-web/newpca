@@ -323,7 +323,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     desfazer; grava "@apelido" como texto — `mencoesDoTexto` lê igual). **`mensagem`** (v1.170.0 — o campo do CHAT, implica `compacto`): uma linha que
     cresce até 140px, a barra escondida atrás do botão **"Aa"** (`IconFormatacao`), as sugestões de @menção ACIMA do campo
     e **`controle`** (`Ref<ControleEditor>` → `focar()` = o cursor no fim: trocar de conversa, responder, o texto pronto);
-    no chat, Enter envia e Shift+Enter quebra a linha (`onTecla`), a menção insere `textoMencaoChat` (chat-core). A @menção
+    no chat, Enter envia e Shift+Enter quebra a linha (`onTecla`), a menção insere `textoMencaoChat` (chat-core); a prévia da lista e o trecho citado ao responder vão em `textoPlano` (sem a marcação). A @menção
     só abre no começo ou depois de um espaço ("email@x" não). **A BARRA no toque:** ordem pelo USO (negrito · itálico ·
     listas · link | estilo do parágrafo | citação · código · separador · limpar); no compacto e abaixo do `lg` é UMA linha
     que rola de lado (`.barra-rolavel`: sem barra de rolagem, encaixe por grupo, a borda com mais ferramentas esmaecida e
@@ -621,7 +621,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `lerMensagemChatAba` (`{t:"msg"|"digitando"|"lida"}`), `contarNaJanela` (30/min), `lerMensagemRecebida` (o `autor` do
   privado só com foto interna), `juntarMensagem` (a mesma pelo id atualiza no lugar — confirmação/eco; teto 300),
   `quantosLeram` ("lida por N"), `cartoesDoTexto` (links do sistema — protocolo/DFD/tarefa/PCA — viram cartões, sem
-  consulta; nunca o caminho dentro de link de outro site), `mencaoEmCurso`, `novoIdMensagem`, `rotuloDiaChat`/`horaChat`
+  consulta; nunca o caminho dentro de link de outro site), `textoMencaoChat`, `novoIdMensagem`, `rotuloDiaChat`/`horaChat`
   (Brasília).
 - **Caminho:** **grupo** pelo socket do grupo — o `PresencaGrupo` valida (texto, 30/min por aba, o autor = o anexo — nunca o
   que a aba diz, `x-chat-grupo`) e retransmite `{t:"msg", conversa:"grupo", id, de, em, texto, resp}` a TODAS as abas (a

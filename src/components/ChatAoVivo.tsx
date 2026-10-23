@@ -41,6 +41,7 @@ import {
 } from "@/lib/chat-core";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { textoPlano } from "@/lib/texto-formatado";
 import { Avatar } from "./Avatar";
 import { type ControleEditor, EditorRico } from "./EditorRico";
 import { EVENTO_ABRIR_CHAT, EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
@@ -697,7 +698,7 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
               </span>
             }
             titulo={`Grupo · ${canal.grupoNome ?? "grupo ativo"}`}
-            previa={ultGrupo ? `${ultGrupo.minha ? "Você" : chat.nomeDe(ultGrupo.de)}: ${ultGrupo.texto}` : "Todos do grupo"}
+            previa={ultGrupo ? `${ultGrupo.minha ? "Você" : chat.nomeDe(ultGrupo.de)}: ${textoPlano(ultGrupo.texto)}` : "Todos do grupo"}
             hora={ultGrupo?.em}
             naoLidas={grupo?.naoLidas ?? 0}
             digitando={(grupo?.digitando.size ?? 0) > 0}
@@ -713,7 +714,7 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
                 onClick={() => onAbrir(k)}
                 icone={<FotoBolhaPequena fotos={outros.slice(0, 3).map((x) => ({ nome: pessoaDe(x)?.nome ?? "?", foto: pessoaDe(x)?.foto }))} />}
                 titulo={rotuloConversa(c.nome, c.membros ?? [], chat.meuId, chat.nomeDe)}
-                previa={ultima ? `${ultima.minha ? "Você" : chat.nomeDe(ultima.de)}: ${ultima.texto}` : `${c.membros?.length ?? 0} pessoas · conversa em grupo`}
+                previa={ultima ? `${ultima.minha ? "Você" : chat.nomeDe(ultima.de)}: ${textoPlano(ultima.texto)}` : `${c.membros?.length ?? 0} pessoas · conversa em grupo`}
                 hora={ultima?.em}
                 naoLidas={c.naoLidas}
                 digitando={c.digitando.size > 0}
@@ -728,7 +729,7 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
               onClick={() => onAbrir(k)}
               icone={<Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="lg" presenca={canal.estados.get(id)?.estado} pulsar={canal.estados.get(id)?.estado === "online"} />}
               titulo={p ? nomeExibicao(p) : chat.nomeDe(id)}
-              previa={ultima ? `${ultima.minha ? "Você: " : ""}${ultima.texto}` : ""}
+              previa={ultima ? `${ultima.minha ? "Você: " : ""}${textoPlano(ultima.texto)}` : ""}
               hora={ultima?.em}
               naoLidas={c.naoLidas}
               digitando={c.digitando.size > 0}
@@ -1090,7 +1091,7 @@ function ConversaChat({
                 privado={conversa !== "grupo"}
                 nomeDe={chat.nomeDe}
                 onResponder={() => {
-                  setResp({ id: m.id, de: m.de, trecho: m.texto.replace(/\s+/g, " ").slice(0, MAX_TRECHO_RESPOSTA) });
+                  setResp({ id: m.id, de: m.de, trecho: textoPlano(m.texto).slice(0, MAX_TRECHO_RESPOSTA) });
                   campo.current?.focar();
                 }}
                 onTentar={() => void chat.enviar(conversa, m.texto, m.resp, m.id)}

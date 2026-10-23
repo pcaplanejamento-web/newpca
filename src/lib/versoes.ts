@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.171.1",
+    data: "2026-10-23",
+    titulo: "Chat: prévia e resposta sem a marcação do texto",
+    mudancas: [
+      { tipo: "correcao", area: "Chat", texto: "A prévia da última mensagem na lista de conversas e o trecho citado ao responder aparecem em texto simples, sem os símbolos da formatação (asteriscos, colchetes do link).", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.171.0",
     data: "2026-10-23",
     titulo: "O editor de texto também no calendário, no comunicado, nas automações e na tela de acesso",

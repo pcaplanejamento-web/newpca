@@ -230,12 +230,6 @@ export function quantosLeram(ids: readonly string[], lidaAte: ReadonlyMap<number
   return n;
 }
 
-/** A @menção que está sendo digitada no fim do texto (antes do cursor) — `null` sem "@" ativo. */
-export function mencaoEmCurso(antesDoCursor: string): string | null {
-  const m = /(?:^|\s)@([\p{L}\p{N}._-]{0,30})$/u.exec(antesDoCursor);
-  return m ? m[1] : null;
-}
-
 /** O texto que a @menção do chat insere: "@" + o apelido (ou o 1º nome), sem espaços. */
 export function textoMencaoChat(p: { nome: string; apelido?: string | null }): string {
   return `@${(p.apelido || p.nome.split(" ")[0]).replace(/\s+/g, "")}`;

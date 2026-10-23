@@ -16,7 +16,6 @@ import {
   lerResposta,
   limparTextoChat,
   MAX_TEXTO_CHAT,
-  mencaoEmCurso,
   textoMencaoChat,
   novoIdMensagem,
   quantosLeram,
@@ -137,11 +136,7 @@ describe("chat ao vivo: texto e mensagens", () => {
     assert.deepEqual(cartoesDoTexto("https://outro.site/painel/pca/3", "governarv.com.br"), []);
     assert.equal(cartoesDoTexto("/painel/mesa?abrir=dfd:5")[0].href, "/painel/mesa?abrir=dfd:5");
   });
-  it("@menção em curso", () => {
-    assert.equal(mencaoEmCurso("oi @an"), "an");
-    assert.equal(mencaoEmCurso("@"), "");
-    assert.equal(mencaoEmCurso("email@x"), null);
-    assert.equal(mencaoEmCurso("oi @ana "), null);
+  it("texto da @menção do chat", () => {
     assert.equal(textoMencaoChat({ nome: "Ana Paula Lima", apelido: null }), "@Ana");
     assert.equal(textoMencaoChat({ nome: "Bruno", apelido: "Bru Costa" }), "@BruCosta");
   });
