@@ -1029,8 +1029,38 @@ export const acessos = sqliteTable(
     /** O identificador CURTO do aparelho (o começo do hash — distingue os aparelhos sem revelar o cookie). */
     aparelho: text("aparelho").notNull(),
     novo: integer("novo", { mode: "boolean" }).notNull().default(false),
+    /** O começo do hash da sessão (liga o login à atividade e à saída). */
+    sessao: text("sessao"),
+    /** A última atividade da sessão (a saída estimada enquanto não há saída gravada). */
+    ultimoEm: text("ultimo_em"),
+    saidaEm: text("saida_em"),
+    /** sair · inatividade · vencida */
+    saidaMotivo: text("saida_motivo"),
   },
-  (t) => [index("acessos_usuario_idx").on(t.usuarioId, t.id)],
+  (t) => [index("acessos_usuario_idx").on(t.usuarioId, t.id), index("acessos_sessao_idx").on(t.sessao)],
+);
+/** As CÓPIAS e CAPTURAS de tela de cada pessoa: onde estava (tela e os itens abertos) e o que copiou (até 500 caracteres). */
+export const eventosProtecao = sqliteTable(
+  "eventos_protecao",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    em: text("em").notNull(),
+    /** copia · captura · impressao */
+    tipo: text("tipo").notNull(),
+    rota: text("rota").notNull(),
+    tela: text("tela").notNull(),
+    itens: text("itens").notNull().default(""),
+    texto: text("texto"),
+    tamanho: integer("tamanho").notNull().default(0),
+    /** teclado (o atalho do navegador) · sistema (um botão "Copiar") */
+    origem: text("origem").notNull().default("teclado"),
+    navegador: text("navegador").notNull().default(""),
+    ip: text("ip"),
+  },
+  (t) => [index("eventos_protecao_usuario_idx").on(t.usuarioId, t.id)],
 );
 export type Configuracao = typeof configuracoes.$inferSelect;
 export type Grupo = typeof grupos.$inferSelect;
@@ -2316,7 +2346,7 @@ export const centiUnidades = sqliteTable(
 );
 
 /**
- * As AÇÕES de cada unidade orçamentária da Centi (migração `0140` — o catálogo que as leituras trazem) e, por ação, a
+ * As AÇÕES de cada unidade orçamentária da Centi (migração `0141` — o catálogo que as leituras trazem) e, por ação, a
  * UNIDADE do cadastro a que ela pertence (`reparticao_id`, escolhida em Órgãos e Unidades — uma ação em UMA unidade).
  * O vínculo do empenho: a ação vinculada › a unidade orçamentária vinculada › o órgão do órgão gestor.
  */
@@ -2340,7 +2370,7 @@ export const centiAcoes = sqliteTable(
 );
 
 /**
- * Os registros SEM VÍNCULO de uma importação aberta (migração `0140`): só a CHAVE — para a conferência com a Centi contar
+ * Os registros SEM VÍNCULO de uma importação aberta (migração `0141`): só a CHAVE — para a conferência com a Centi contar
  * cada um uma vez (uma página repetida não engana); nenhum dado deles é guardado. Sai ao fechar a importação (cascade).
  */
 export const centiStagingFora = sqliteTable(

@@ -21,7 +21,7 @@ function banco() {
   for (const m of ["0129_centi_apis", "0130_centi_apis_escopo", "0131_empenhos", "0132_centi_lote_passos", "0134_empenhos_conferencia"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
   // O cadastro mínimo que a 0138 (unidades da Centi e os gatilhos) precisa.
   raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer)");
-  for (const m of ["0138_centi_unidades", "0139_centi_vinculo_cadastro", "0140_centi_vinculo_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
+  for (const m of ["0138_centi_unidades", "0139_centi_vinculo_cadastro", "0141_centi_vinculo_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const ins = raw.prepare(
     `INSERT INTO empenhos (chave, ano, numero, data, orgao_gestor, fornecedor, cpf_cnpj, elemento, fonte, valor_empenhado, valor_anulado, valor_liquidado, valor_pago, saldo_pagar, removido_em, orgao_id, reparticao_id)

@@ -58,3 +58,8 @@ export function useNivelAberto(tipo: string, id: number | null | undefined, rotu
     };
   }, [tipo, id, rotulo]);
 }
+
+/** O retrato atual (fora do React — o registro de cópias/capturas lê na hora do evento). */
+export function retratoTrilha() {
+  return retrato;
+}

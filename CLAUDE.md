@@ -255,6 +255,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     pessoa) e `GET /api/admin/usuarios/[id]/acessos` (ADM) → `historicoDeAcesso`. Tela: **`HistoricoAcessos`/`TabelaAcessos`**
     (DS — `StatMini` Último acesso · Logins · Aparelhos + a `DataTable` compacta exportável) no Perfil ("Histórico de
     acesso") e no banner do usuário; coluna **"Último acesso"** em Usuários.
+  - **SAÍDA + CÓPIAS E PRINTS (v1.201.0, migração `0140`, aditiva — `acessos.sessao/ultimo_em/saida_em/saida_motivo` + tabela `eventos_protecao`):** o acesso liga à sessão por `sessaoCurta` (16 primeiros do hash); `ultimo_em` anda no lote do `visto_em` (`comandoAtividadeAcesso`) e a SAÍDA é gravada no sair/sair de todas (`encerrarComSaida`, "sair") e na inatividade (`comandoSaidaAcessos`, "inatividade"); `duracaoAcesso` (sem saída = estimada pela última atividade), `tempoNosUltimosDias`. **`RegistroProtecao`** (layout do painel, sem UI; Proteção de dados → `registrar`, padrão LIGADO, para todos) ouve copy/cut (o texto), os atalhos de captura (`atalhoDeCaptura`) e `beforeprint` e manda por `sendBeacon` a tela (`ondeDaRota`) e os banners abertos (`retratoTrilha`) a `POST /api/perfil/eventos` (`eventoProtecaoSchema`, limite `eventosProtecao` 60/min, texto ≤ 500 — `textoDoEvento`; fora da auditoria); o `copiarTexto` do sistema registra com origem "sistema". Até 500 eventos por pessoa, 180 dias (limpeza em `limparSegurancaVencida`). Tela: `TabelaAcessos` com Saída · Duração, "Tempo de uso (30 dias)" e a aba "Cópias e prints". Print por aplicativo externo ou foto do celular o navegador não vê.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
@@ -4591,7 +4592,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Tela: no **`BannerCadastro`** (campo de escolha com `acoes` — o rodapé da `Selecao`) de **`OrgaosAdmin`** ("Órgão gestor na
   Centi" — `opcoesOrgaoGestor`) e de **`ReparticoesAdmin`** ("Unidade orçamentária na Centi" — `opcoesUnidadeOrcamentaria`:
   as livres; com o órgão gestor do órgão, só as dele — a página `/painel/orgaos/[id]` passa `centiOrgaoGestor`); trocar/tirar
-  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0; v1.201.0: a escolha NA CÉLULA pela `Selecao` do
+  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0; v1.202.0: a escolha NA CÉLULA pela `Selecao` do
   sistema — `classeCelulaCenti`, texto INTEIRO, nunca abreviado — a mesma gravação/confirmação do banner; nas unidades, só a unidade orçamentária quando o órgão tem o órgão gestor;
   sem vínculo = "Sem correspondência" em âmbar, filtrável; o texto da unidade vem do `GET
   /api/admin/reparticoes` — junção com `centi_unidades`). Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
@@ -4599,7 +4600,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`centi_lotes.modo`; `importarCentiApiSchema.modo`) pela API de empenhos: lê o ano, registra as unidades e fecha com estado
   `unidades` sem gravar empenho (fora da rotação da automática). A leitura conduzida pelo navegador é UMA só,
   **`leitura-centi-cliente.ts`** (`lerAnoNaCenti`, `pedirImportacao`, `lerPassos` — também a do `ImportacaoManual`). O
-  **NADA FORA DO VÍNCULO NO BANCO (v1.201.0, migração `0140`):** a configuração vem ANTES (Órgãos e Unidades) e a leitura
+  **NADA FORA DO VÍNCULO NO BANCO (v1.202.0, migração `0141`):** a configuração vem ANTES (Órgãos e Unidades) e a leitura
   (`lerPaginaDoLote`) decide por ela o que entra — `consultaMapaVinculo` + `linhaVinculada` (puro): só o vinculado vai ao
   staging; do sem vínculo fica só a CHAVE em `centi_staging_fora` (a conferência conta cada registro uma vez — `unicos` =
   staging + chaves, `fora` = chaves; a `soma` = a dos passos lidos, todos os registros) e sai ao fechar a importação.
@@ -4608,7 +4609,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastro escolhida (`reparticao_id`; uma ação em UMA unidade — `motivoAcoesCenti` 409); `PATCH /api/admin/reparticoes/[id]`
   `{centiAcoes}` (a lista inteira) → `comandosVincularAcoes` (+ `comandosRefazerVinculoEmpenhos`). Régua ÚNICA do vínculo:
   a ação › a unidade orçamentária › o órgão do órgão gestor — `vinculoSql` (promoção) = a VIEW `centi_vinculo_empenhos`
-  (gatilhos da `0140`, que substituem os da `0139` e soltam as ações da unidade excluída). Tela: coluna **"Ações (Centi)"**
+  (gatilhos da `0141`, que substituem os da `0139` e soltam as ações da unidade excluída). Tela: coluna **"Ações (Centi)"**
   (`SeletorMultiplo suspenso completo` — os escolhidos por inteiro; grava 800 ms após o último toque, confirma ao tirar) e a
   seção no banner da unidade. ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`):
   o empenho vinculado a uma unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`,

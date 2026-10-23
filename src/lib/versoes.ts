@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.201.0",
+    versao: "1.202.0",
     data: "2026-10-23",
     titulo: "Empenhos: só o vinculado entra no banco e vínculo por ações",
     mudancas: [
@@ -58,6 +58,16 @@ export const VERSOES: readonly Versao[] = [
         link: "/painel/orgaos",
       },
       { tipo: "melhoria", area: "Empenhos", texto: "Saiu o aviso das unidades da Centi sem vínculo: unidade sem vínculo é escolha do cadastro — os empenhos dela não são importados.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.201.0",
+    data: "2026-10-23",
+    titulo: "Cópias, prints e tempo de cada acesso no histórico",
+    mudancas: [
+      { tipo: "novo", area: "Perfil", texto: "O histórico de acesso mostra a saída e quanto tempo durou cada acesso (estimado pela última atividade quando a pessoa não saiu), e o tempo de uso dos últimos 30 dias.", link: "/painel/perfil?aba=acessos" },
+      { tipo: "novo", area: "Usuários", texto: "Cada cópia de texto (com até 500 caracteres do que foi copiado), captura de tela pelo teclado e impressão fica registrada no usuário, com a tela e os documentos abertos — aba \"Cópias e prints\" do histórico.", link: "/painel/usuarios" },
+      { tipo: "melhoria", area: "Configurações", texto: "Proteção de dados → \"Registrar cópias, capturas e impressões\" (ligado por padrão) e o Termo de uso passa a citar esses registros.", link: "/painel/configuracoes?aba=protecao" },
     ],
   },
   {

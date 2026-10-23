@@ -92,7 +92,7 @@ export async function contagemUnidadesDoLote(db: Db, loteId: number): Promise<{ 
 
 /**
  * O VÍNCULO de um registro (empenho gravado ou do staging) — a ação vinculada › a unidade orçamentária vinculada › o órgão
- * do órgão gestor: a MESMA régua da VIEW `centi_vinculo_empenhos` dos gatilhos (migração `0140`). `orgao` nulo = sem vínculo.
+ * do órgão gestor: a MESMA régua da VIEW `centi_vinculo_empenhos` dos gatilhos (migração `0141`). `orgao` nulo = sem vínculo.
  */
 export function vinculoSql(tabela: "empenhos" | "empenhos_staging"): { orgao: SQL; reparticao: SQL } {
   const T = `"${tabela}"`;

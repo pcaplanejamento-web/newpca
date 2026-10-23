@@ -1,4 +1,4 @@
--- VÍNCULO POR AÇÕES + NADA FORA DO VÍNCULO NO BANCO (v1.201.0).
+-- VÍNCULO POR AÇÕES + NADA FORA DO VÍNCULO NO BANCO (v1.202.0).
 -- 1) `centi_acoes` = as AÇÕES de cada unidade orçamentária da Centi (o catálogo que as leituras trazem) e, por ação, a
 --    UNIDADE do cadastro a que ela pertence (`reparticao_id`, escolhido em Órgãos e Unidades — uma ação em UMA unidade).
 --    O vínculo do empenho: a ação vinculada › a unidade orçamentária vinculada › o órgão do órgão gestor

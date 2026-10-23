@@ -35,6 +35,7 @@ export function CamposProtecao({ valor, papeis, onChange }: { valor: ConfigProte
         />
         {semPapel && <p className="text-[12px] text-[var(--warn)]">Escolha ao menos um papel — sem papel, ninguém é bloqueado no sistema.</p>}
       </div>
+      <Switch dica="Grava no histórico de acesso de cada pessoa as cópias de texto, as capturas e as impressões, com a tela e o que estava aberto" checked={valor.registrar} onChange={(registrar) => onChange({ ...valor, registrar })} label="Registrar cópias, capturas e impressões" />
       <Switch dica="Aplica os mesmos bloqueios na tela pública do PCA (sem login)" checked={valor.publica} onChange={(publica) => onChange({ ...valor, publica })} label="Aplicar também na tela pública" />
     </div>
   );

@@ -3,9 +3,10 @@
 // `protecao` — sem migração; tudo desligado por padrão (nada muda até o ADM ligar).
 
 export type Bloqueios = { selecao: boolean; print: boolean; foco: boolean; marca: boolean };
-export type ConfigProtecao = Bloqueios & { papeis: number[]; publica: boolean };
+/** `registrar` = grava no usuário as cópias, capturas e impressões (vale para TODOS; padrão ligado). */
+export type ConfigProtecao = Bloqueios & { papeis: number[]; publica: boolean; registrar: boolean };
 
-export const PROTECAO_PADRAO: ConfigProtecao = { selecao: false, print: false, foco: false, marca: false, papeis: [], publica: false };
+export const PROTECAO_PADRAO: ConfigProtecao = { selecao: false, print: false, foco: false, marca: false, papeis: [], publica: false, registrar: true };
 
 /** Qualquer JSON → a config válida (ids de papel inteiros positivos, sem repetir, até 200). */
 export function lerConfigProtecao(v: unknown): ConfigProtecao {
@@ -14,7 +15,7 @@ export function lerConfigProtecao(v: unknown): ConfigProtecao {
   const papeis = Array.isArray(o.papeis)
     ? [...new Set(o.papeis.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n > 0))].slice(0, 200)
     : [];
-  return { selecao: o.selecao === true, print: o.print === true, foco: o.foco === true, marca: o.marca === true, papeis, publica: o.publica === true };
+  return { selecao: o.selecao === true, print: o.print === true, foco: o.foco === true, marca: o.marca === true, papeis, publica: o.publica === true, registrar: o.registrar !== false };
 }
 
 function bloqueiosDe(cfg: ConfigProtecao): Bloqueios | null {
@@ -84,12 +85,13 @@ export function svgMarcaDagua(texto: string, opacidade: number = OPACIDADE_MARCA
   return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
 }
 
-const ROTULOS: Record<keyof Bloqueios | "publica", string> = {
+const ROTULOS: Record<keyof Bloqueios | "publica" | "registrar", string> = {
   selecao: "bloquear seleção e cópia",
   print: "bloquear impressão e captura",
   foco: "ocultar ao sair da janela",
   marca: "marca d'água com quem vê",
   publica: "também na tela pública",
+  registrar: "registrar cópias, capturas e impressões",
 };
 
 /** O resumo da mudança para a auditoria. */

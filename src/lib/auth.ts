@@ -13,6 +13,8 @@ import {
   SEM_PENDENCIA,
 } from "./acesso-conta-core";
 import { getAcessoConta } from "./acesso-conta";
+import { sessaoCurta } from "./acessos-core";
+import { comandoAtividadeAcesso, comandoSaidaAcessos } from "./acessos-sql";
 import { COOKIE_CONTAS, lerContas, MAX_CONTAS, textoContas } from "./contas-core";
 import { getDb } from "./db";
 import { type Capacidades, coerceCapacidades } from "./papeis-core";
@@ -180,7 +182,7 @@ export async function sessaoAtualId(): Promise<number | null> {
 export async function encerrarSessaoAtual(): Promise<UsuarioSessao | null> {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
-  if (token) await getDb().delete(sessoes).where(eq(sessoes.tokenHash, await sha256Hex(token)));
+  if (token) await encerrarComSaida([await sha256Hex(token)]);
   jar.delete(COOKIE);
   for (const c of COOKIES_CONTEXTO) jar.delete(c);
   const contas = lerContas(jar.get(COOKIE_CONTAS)?.value);
@@ -200,8 +202,15 @@ export async function encerrarTodasSessoes(): Promise<void> {
   const jar = await cookies();
   const tokens = [jar.get(COOKIE)?.value, ...lerContas(jar.get(COOKIE_CONTAS)?.value)].filter((t): t is string => !!t);
   const hashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
-  if (hashes.length) await getDb().delete(sessoes).where(inArray(sessoes.tokenHash, hashes));
+  await encerrarComSaida(hashes);
   for (const c of [COOKIE, COOKIE_CONTAS, ...COOKIES_CONTEXTO]) jar.delete(c);
+}
+
+/** Apaga as sessões e grava a SAÍDA ("sair") nos acessos delas — num lote. */
+async function encerrarComSaida(hashes: string[]) {
+  if (hashes.length === 0) return;
+  const db = getDb();
+  await db.batch([db.delete(sessoes).where(inArray(sessoes.tokenHash, hashes)), comandoSaidaAcessos(db, hashes.map(sessaoCurta), new Date().toISOString(), "sair")]);
 }
 
 /** O papel da pessoa: o `papel_id`; sem ele (legado), o papel do sistema de mesma chave que o `role`. */
@@ -314,7 +323,11 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
   const agora = Date.now();
   const visto = vistoEm ?? criadoEmSessao;
   if (sessaoInativa(visto, agora, cfg.inatividadeMin)) {
-    await getDb().delete(sessoes).where(eq(sessoes.id, sessaoId)).catch(() => {});
+    const db = getDb();
+    // A saída do acesso = a última atividade (a pessoa parou ali).
+    await db
+      .batch([db.delete(sessoes).where(eq(sessoes.id, sessaoId)), comandoSaidaAcessos(db, [sessaoCurta(tokenHash)], visto ?? new Date(agora).toISOString(), "inatividade")])
+      .catch(() => {});
     return null;
   }
   if (renovarAtividade(visto, agora, cfg.inatividadeMin)) {
@@ -322,7 +335,11 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
     const iso = new Date(agora).toISOString();
     // A atividade da sessão e o ÚLTIMO ACESSO da pessoa (o histórico de acesso) no mesmo lote.
     await db
-      .batch([db.update(sessoes).set({ vistoEm: iso }).where(eq(sessoes.id, sessaoId)), db.update(usuarios).set({ ultimoAcessoEm: iso }).where(eq(usuarios.id, row.id))])
+      .batch([
+        db.update(sessoes).set({ vistoEm: iso }).where(eq(sessoes.id, sessaoId)),
+        db.update(usuarios).set({ ultimoAcessoEm: iso }).where(eq(usuarios.id, row.id)),
+        comandoAtividadeAcesso(db, sessaoCurta(tokenHash), iso),
+      ])
       .catch(() => {});
   }
   const pessoa = sessaoDaLinha(row);

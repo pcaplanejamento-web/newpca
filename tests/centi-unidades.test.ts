@@ -82,7 +82,7 @@ function banco() {
   raw.exec(`INSERT INTO empenhos (chave, ano, numero, orgao_gestor) VALUES ('2026|PMRV|1', 2026, '1', 'P.M.R.V'), ('2026|FMS|1', 2026, '1', 'FMS'), ('2026|XYZ|1', 2026, '1', 'XYZ')`);
   raw.exec(readFileSync(new URL("../drizzle/0138_centi_unidades.sql", import.meta.url), "utf8"));
   raw.exec(readFileSync(new URL("../drizzle/0139_centi_vinculo_cadastro.sql", import.meta.url), "utf8"));
-  raw.exec(readFileSync(new URL("../drizzle/0140_centi_vinculo_acoes.sql", import.meta.url), "utf8"));
+  raw.exec(readFileSync(new URL("../drizzle/0141_centi_vinculo_acoes.sql", import.meta.url), "utf8"));
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const lote = () => Number(raw.prepare("INSERT INTO centi_lotes (api_chave, ano) VALUES ('empenhos', 2026) RETURNING id").get()?.id);
   const n = (q: string) => (raw.prepare(q).get() as { n: number }).n;
