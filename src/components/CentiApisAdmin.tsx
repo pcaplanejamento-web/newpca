@@ -289,8 +289,9 @@ function EditorApi({
   const opcoesUnidades = unidades
     .filter((u) => !v.orgaos.length || (u.orgaoId != null && v.orgaos.includes(u.orgaoId)))
     .map((u) => ({ valor: String(u.id), rotulo: u.codigo, detalhe: u.nome, grupo: (u.orgaoId != null && nomeOrgao.get(u.orgaoId)) || "Sem órgão" }));
+  const comPeriodoTeste = usaPeriodo(v.parametros);
   const rotuloPedido = (p: Record<string, number>) =>
-    p.orgao != null ? `${porCodigo.get(p.orgao)?.sigla ?? "Órgão"} (ID ${p.orgao})` : p.fonte != null ? `Fonte ${p.fonte}` : "O ano inteiro";
+    p.orgao != null ? `${porCodigo.get(p.orgao)?.sigla ?? "Órgão"} (ID ${p.orgao})` : p.fonte != null ? `Fonte ${p.fonte}` : comPeriodoTeste ? "1ª semana do ano (01/01 a 07/01)" : "O ano inteiro";
   const colunasAmostra: Column<Record<string, string>>[] = (teste?.campos ?? []).slice(0, 12).map((c) => ({
     key: c,
     header: c,

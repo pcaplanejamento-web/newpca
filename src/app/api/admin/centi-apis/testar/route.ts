@@ -7,8 +7,8 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Até 8 MB de resposta (a 1ª página dos empenhos de um ano cabe com folga) e 30 s. */
-const MAX_BYTES = 8_000_000;
+/** Até 12 MB de resposta (o teste lê a 1ª semana do ano — em 2026, 5,7 MB) e 30 s. */
+const MAX_BYTES = 12_000_000;
 const TEMPO_MS = 30_000;
 
 /**

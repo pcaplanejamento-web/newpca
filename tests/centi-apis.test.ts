@@ -86,7 +86,7 @@ test("APIs da Centi: os órgãos do CADASTRO viram os pedidos (nenhum escolhido 
   assert.deepEqual(pedidosDoAno(POR_ORGAO, 2026, CADASTRO), [{ ano: 2026, orgao: 2 }, { ano: 2026, orgao: 3 }]);
   assert.deepEqual(pedidosDoAno({ ...base, divisao: "fonte", lista: [100, 101] }, 2026, CADASTRO), [{ ano: 2026, fonte: 100 }, { ano: 2026, fonte: 101 }]);
   assert.deepEqual(pedidosDoAno(base, 2025, CADASTRO), [{ ano: 2025 }]);
-  assert.deepEqual(previaPedido({ ...base, parametros: '{"dataInicio":"{inicio}","dataFim":"{fim}"}' }, 2026, CADASTRO).corpo, { dataInicio: "01/01/2026", dataFim: "31/01/2026" }, "o teste lê janeiro");
+  assert.deepEqual(previaPedido({ ...base, parametros: '{"dataInicio":"{inicio}","dataFim":"{fim}"}' }, 2026, CADASTRO).corpo, { dataInicio: "01/01/2026", dataFim: "07/01/2026" }, "o teste lê a 1ª semana");
   const p = previaPedido(POR_ORGAO, 2026, CADASTRO, 1);
   assert.deepEqual(p.corpo, { ano: 2026, idOrgao: 3 });
   assert.equal(p.pedidos.length, 2);

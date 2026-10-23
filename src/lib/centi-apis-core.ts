@@ -243,9 +243,10 @@ export function motivoApiInvalida(e: EdicaoApi, implementada: boolean, cadastro:
   return null;
 }
 
-/** O pedido do TESTE: o período é JANEIRO (o ano inteiro não cabe numa resposta — a importação também lê mês a mês). */
+/** O pedido do TESTE: a 1ª SEMANA do ano (01/01 a 07/01) — o ano inteiro e até um mês passam do tamanho de uma resposta;
+ * a importação também lê semana a semana. */
 export function varsDoTeste(vars: Record<string, number>): Record<string, number | string> {
-  return typeof vars.ano === "number" ? { ...vars, inicio: `01/01/${vars.ano}`, fim: `31/01/${vars.ano}` } : vars;
+  return typeof vars.ano === "number" ? { ...vars, inicio: `01/01/${vars.ano}`, fim: `07/01/${vars.ano}` } : vars;
 }
 
 /** A PRÉVIA de um pedido do ano (o 1º, por padrão — só para mostrar; nada é enviado). */

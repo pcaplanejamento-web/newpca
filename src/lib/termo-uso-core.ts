@@ -110,7 +110,8 @@ export function clausulasAutomaticas(c: ContextoClausulas): Clausula[] {
     texto:
       "O aceite deste termo é feito por assinatura eletrônica simples (Lei nº 14.063/2020, art. 4º, I), com a confirmação da identidade do usuário (senha da conta ou código enviado ao e-mail institucional) e o registro da data, hora, endereço IP, navegador e aparelho utilizados, além do resumo criptográfico (SHA-256) do texto aceito. O comprovante pode ser baixado a qualquer momento no Perfil e conferido pelo código de verificação. Sempre que este termo for atualizado, o usuário poderá ser chamado a ler e aceitar a nova versão para continuar utilizando o sistema.",
   });
-  return out;
+  const off = new Set(a.clausulasOff ?? []);
+  return out.filter((cl) => !off.has(cl.id));
 }
 
 /** As opções de dias de trava aceitas (para a tela do ADM). */
