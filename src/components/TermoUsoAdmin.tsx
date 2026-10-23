@@ -249,7 +249,7 @@ type Situacao = {
 
 type Adesao = {
   vigente: { id: number; versao: number; publicadoEm: string | null } | null;
-  pessoas: { id: number; nome: string; matricula: string | null; email: string; aceitoEm: string | null; teste: boolean; aparelhos: number; pendente: boolean }[];
+  pessoas: { id: number; nome: string; matricula: string | null; email: string; aceitoEm: string | null; teste: boolean; aparelhos: number; nomesAparelhos: string | null; aparelhoEm: string | null; pendente: boolean }[];
 };
 
 const situacaoAdesao = (p: Adesao["pessoas"][number]) => (p.aceitoEm ? (p.teste ? "Aceitou (teste)" : "Aceitou") : p.pendente ? "Pendente" : "Sem exigência");
@@ -272,6 +272,8 @@ export function TermoUsoAdmin() {
   const [versaoAberta, setVersaoAberta] = useState<Situacao | null>(null);
   const [marcados, setMarcados] = useState<Set<string | number>>(new Set());
   const [adesao, setAdesao] = useState<Adesao | null>(null);
+  const [marcadosAdesao, setMarcadosAdesao] = useState<Set<string | number>>(new Set());
+  const [abaVersao, setAbaVersao] = useState<"aceites" | "pendentes" | "emissoes">("aceites");
   const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(() => {
@@ -428,6 +430,29 @@ export function TermoUsoAdmin() {
     }
   }
 
+  /** EXIGIR NOVO CADASTRO DO APARELHO: apaga os aparelhos dos marcados (ou de todos) — nomeiam de novo no próximo pedido. */
+  async function refazerAparelhos(todos: boolean) {
+    const usuarioIds = todos ? null : [...marcadosAdesao].map(Number);
+    const sim = await confirmar({
+      titulo: todos ? "Exigir novo cadastro do aparelho de TODOS?" : `Exigir novo cadastro do aparelho de ${usuarioIds?.length} pessoa(s)?`,
+      texto: "Os aparelhos cadastrados são APAGADOS e a trava da troca sai. No próximo pedido, cada pessoa nomeia o aparelho de novo (o acesso fica travado até nomear). Não há como desfazer.",
+      confirmar: "Exigir novo cadastro",
+      perigo: true,
+    });
+    if (!sim) return;
+    setOcupado("refazer");
+    try {
+      const r = await chamar<{ apagados: number; pessoas: number }>("/api/admin/termo", "POST", { acao: "refazerAparelhos", usuarioIds });
+      toast.success(`${r.apagados} aparelho(s) de ${r.pessoas} pessoa(s) apagado(s) — o cadastro será pedido de novo.`);
+      setMarcadosAdesao(new Set());
+      carregarAdesao();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
   async function revogar() {
     if (!versaoAberta || !marcados.size) return;
     const ids = [...marcados].map(Number);
@@ -457,6 +482,7 @@ export function TermoUsoAdmin() {
   async function abrirVersao(v: Versao) {
     try {
       setMarcados(new Set());
+      setAbaVersao("aceites");
       setVersaoAberta(await chamar<Situacao>(`/api/admin/termo/${v.id}`));
     } catch (e) {
       toast.error((e as Error).message);
@@ -504,6 +530,11 @@ export function TermoUsoAdmin() {
                 Lembrar pendentes
               </Button>
             )}
+            {adesao && (
+              <Button size="sm" variant="secondary" loading={ocupado === "refazer"} disabled={!!ocupado || !adesao.pessoas.some((p) => p.aparelhos)} onClick={() => refazerAparelhos(true)}>
+                Novo cadastro de aparelho (todos)
+              </Button>
+            )}
             <Button size="sm" variant="secondary" icon={<IconEye className="h-4 w-4" />} loading={ocupado === "adesao"} disabled={!!ocupado} onClick={carregarAdesao}>
               {adesao ? "Atualizar" : "Ver adesão"}
             </Button>
@@ -522,10 +553,22 @@ export function TermoUsoAdmin() {
                   { key: "m", header: "Matrícula", render: (p) => p.matricula || "—", value: (p) => p.matricula ?? "", nowrap: true },
                   { key: "s", header: "Situação", render: (p) => <Badge tone={p.aceitoEm ? "emerald" : p.pendente ? "amber" : "slate"}>{situacaoAdesao(p)}</Badge>, value: situacaoAdesao, nowrap: true },
                   { key: "e", header: "Aceito em", render: (p) => (p.aceitoEm ? dataHoraBR(p.aceitoEm) : "—"), value: (p) => p.aceitoEm ?? "", filter: "date", nowrap: true },
-                  { key: "a", header: "Aparelhos", render: (p) => p.aparelhos || "Nenhum", value: (p) => String(p.aparelhos), numero: (p) => p.aparelhos, nowrap: true },
+                  { key: "a", header: "Aparelhos", render: (p) => p.aparelhos || <Badge tone="amber">Sem cadastro</Badge>, value: (p) => (p.aparelhos ? String(p.aparelhos) : "Sem cadastro"), numero: (p) => p.aparelhos, nowrap: true },
+                  { key: "an", header: "Nome do aparelho", render: (p) => p.nomesAparelhos || "—", value: (p) => p.nomesAparelhos ?? "", align: "left" },
+                  { key: "ae", header: "Cadastrado em", render: (p) => (p.aparelhoEm ? dataHoraBR(p.aparelhoEm) : "—"), value: (p) => p.aparelhoEm ?? "", filter: "date", nowrap: true },
                 ]}
                 rows={adesao.pessoas}
                 getKey={(p) => p.id}
+                selectable
+                selected={marcadosAdesao}
+                onSelected={setMarcadosAdesao}
+                acoesRodape={
+                  marcadosAdesao.size ? (
+                    <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} loading={ocupado === "refazer"} disabled={!!ocupado} onClick={() => refazerAparelhos(false)}>
+                      Novo cadastro de aparelho ({marcadosAdesao.size})
+                    </Button>
+                  ) : undefined
+                }
                 density="compact"
                 pageSize={10}
                 exportar={{ nome: "Adesão ao Termo de Uso" }}
@@ -700,63 +743,79 @@ export function TermoUsoAdmin() {
                 Exigir o aceite de novo
               </Button>
             </div>
-            <DataTable
-              columns={[
-                { key: "n", header: "Pessoa", render: (a) => a.nome, value: (a) => a.nome, align: "left" },
-                { key: "m", header: "Matrícula", render: (a) => a.matricula || "—", value: (a) => a.matricula, nowrap: true },
-                { key: "u", header: "Unidade", render: (a) => a.unidade || "—", value: (a) => a.unidade },
-                { key: "e", header: "Aceito em", render: (a) => dataHoraBR(a.em), value: (a) => a.em, filter: "date", nowrap: true },
-                { key: "me", header: "Confirmação", render: (a) => a.metodo, value: (a) => a.metodo, nowrap: true },
-                { key: "ap", header: "Aparelho", render: (a) => a.aparelho || "—", value: (a) => a.aparelho },
-                { key: "ip", header: "IP", render: (a) => a.ip || "—", value: (a) => a.ip, nowrap: true },
-                { key: "t", header: "Tipo", render: (a) => (a.teste ? <Badge tone="amber">Teste</Badge> : <Badge tone="emerald">Oficial</Badge>), value: (a) => (a.teste ? "Teste" : "Oficial"), nowrap: true },
-                { key: "c", header: "Código", render: (a) => <span className="font-mono text-[12px]">{a.codigo}</span>, value: (a) => a.codigo, nowrap: true },
+            <Segmented
+              ariaLabel="Registros da versão"
+              value={abaVersao}
+              onChange={setAbaVersao}
+              options={[
+                { value: "aceites", label: `Assinaturas (${versaoAberta.aceites.length})` },
+                { value: "pendentes", label: `Pendentes (${versaoAberta.pendentes.length})` },
+                { value: "emissoes", label: `Emissões do PDF (${versaoAberta.emissoes.length})` },
               ]}
-              rows={versaoAberta.aceites}
-              getKey={(a) => a.id}
-              selectable={versaoAberta.termo.estado === "publicado"}
-              selected={marcados}
-              onSelected={setMarcados}
-              acoesRodape={
-                marcados.size ? (
-                  <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} loading={ocupado === "revogar"} disabled={!!ocupado} onClick={revogar}>
-                    Excluir {marcados.size} assinatura(s)
-                  </Button>
-                ) : undefined
-              }
-              density="compact"
-              pageSize={10}
-              exportar={{ nome: `Aceites do Termo v${versaoAberta.termo.versao}` }}
-              vazio="Ninguém aceitou esta versão ainda."
             />
-            <DataTable
-              columns={[
-                { key: "n", header: "Pendente", render: (p) => p.nome, value: (p) => p.nome, align: "left" },
-                { key: "m", header: "Matrícula", render: (p) => p.matricula || "—", value: (p) => p.matricula ?? "", nowrap: true },
-                { key: "p", header: "Exigido em", render: (p) => dataHoraBR(p.prazo), value: (p) => p.prazo, filter: "date", nowrap: true },
-              ]}
-              rows={versaoAberta.pendentes}
-              getKey={(p) => p.usuarioId}
-              density="compact"
-              pageSize={10}
-              exportar={{ nome: `Pendentes do Termo v${versaoAberta.termo.versao}` }}
-              vazio="Ninguém deve esta versão."
-            />
-            <DataTable
-              columns={[
-                { key: "n", header: "Emitido por", render: (x) => x.nome, value: (x) => x.nome, align: "left" },
-                { key: "p", header: "Comprovante de", render: (x) => versaoAberta.aceites.find((a) => a.id === x.aceiteId)?.nome ?? "—", value: (x) => versaoAberta.aceites.find((a) => a.id === x.aceiteId)?.nome ?? "" },
-                { key: "e", header: "Emitido em", render: (x) => dataHoraBR(x.em), value: (x) => x.em, filter: "date", nowrap: true },
-                { key: "mo", header: "Modo", render: (x) => (x.modo === "baixar" ? "Baixou" : "Visualizou"), value: (x) => (x.modo === "baixar" ? "Baixou" : "Visualizou"), nowrap: true },
-                { key: "ip", header: "IP", render: (x) => x.ip || "—", value: (x) => x.ip, nowrap: true },
-              ]}
-              rows={versaoAberta.emissoes}
-              getKey={(x) => x.id}
-              density="compact"
-              pageSize={10}
-              exportar={{ nome: `Emissões do comprovante — Termo v${versaoAberta.termo.versao}` }}
-              vazio="Ninguém emitiu o PDF de um comprovante desta versão."
-            />
+            {abaVersao === "aceites" && (
+              <DataTable
+                columns={[
+                  { key: "n", header: "Pessoa", render: (a) => a.nome, value: (a) => a.nome, align: "left" },
+                  { key: "m", header: "Matrícula", render: (a) => a.matricula || "—", value: (a) => a.matricula, nowrap: true },
+                  { key: "u", header: "Unidade", render: (a) => <span title={a.unidade}>{(a.unidade || "—").split(" — ")[0]}</span>, value: (a) => a.unidade, nowrap: true },
+                  { key: "e", header: "Aceito em", render: (a) => dataHoraBR(a.em), value: (a) => a.em, filter: "date", nowrap: true },
+                  { key: "me", header: "Confirmação", render: (a) => a.metodo, value: (a) => a.metodo, nowrap: true },
+                  { key: "ap", header: "Aparelho", render: (a) => a.aparelho || "—", value: (a) => a.aparelho },
+                  { key: "ip", header: "IP", render: (a) => a.ip || "—", value: (a) => a.ip, nowrap: true },
+                  { key: "t", header: "Tipo", render: (a) => (a.teste ? <Badge tone="amber">Teste</Badge> : <Badge tone="emerald">Oficial</Badge>), value: (a) => (a.teste ? "Teste" : "Oficial"), nowrap: true },
+                  { key: "c", header: "Código", render: (a) => <span className="font-mono text-[12px]">{a.codigo}</span>, value: (a) => a.codigo, nowrap: true },
+                ]}
+                rows={versaoAberta.aceites}
+                getKey={(a) => a.id}
+                selectable={versaoAberta.termo.estado === "publicado"}
+                selected={marcados}
+                onSelected={setMarcados}
+                acoesRodape={
+                  marcados.size ? (
+                    <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} loading={ocupado === "revogar"} disabled={!!ocupado} onClick={revogar}>
+                      Excluir {marcados.size} assinatura(s)
+                    </Button>
+                  ) : undefined
+                }
+                density="compact"
+                pageSize={10}
+                exportar={{ nome: `Aceites do Termo v${versaoAberta.termo.versao}` }}
+                vazio="Ninguém aceitou esta versão ainda."
+              />
+            )}
+            {abaVersao === "pendentes" && (
+              <DataTable
+                columns={[
+                  { key: "n", header: "Pendente", render: (p) => p.nome, value: (p) => p.nome, align: "left" },
+                  { key: "m", header: "Matrícula", render: (p) => p.matricula || "—", value: (p) => p.matricula ?? "", nowrap: true },
+                  { key: "p", header: "Exigido em", render: (p) => dataHoraBR(p.prazo), value: (p) => p.prazo, filter: "date", nowrap: true },
+                ]}
+                rows={versaoAberta.pendentes}
+                getKey={(p) => p.usuarioId}
+                density="compact"
+                pageSize={10}
+                exportar={{ nome: `Pendentes do Termo v${versaoAberta.termo.versao}` }}
+                vazio="Ninguém deve esta versão."
+              />
+            )}
+            {abaVersao === "emissoes" && (
+              <DataTable
+                columns={[
+                  { key: "n", header: "Emitido por", render: (x) => x.nome, value: (x) => x.nome, align: "left" },
+                  { key: "p", header: "Comprovante de", render: (x) => versaoAberta.aceites.find((a) => a.id === x.aceiteId)?.nome ?? "—", value: (x) => versaoAberta.aceites.find((a) => a.id === x.aceiteId)?.nome ?? "" },
+                  { key: "e", header: "Emitido em", render: (x) => dataHoraBR(x.em), value: (x) => x.em, filter: "date", nowrap: true },
+                  { key: "mo", header: "Modo", render: (x) => (x.modo === "baixar" ? "Baixou" : "Visualizou"), value: (x) => (x.modo === "baixar" ? "Baixou" : "Visualizou"), nowrap: true },
+                  { key: "ip", header: "IP", render: (x) => x.ip || "—", value: (x) => x.ip, nowrap: true },
+                ]}
+                rows={versaoAberta.emissoes}
+                getKey={(x) => x.id}
+                density="compact"
+                pageSize={10}
+                exportar={{ nome: `Emissões do comprovante — Termo v${versaoAberta.termo.versao}` }}
+                vazio="Ninguém emitiu o PDF de um comprovante desta versão."
+              />
+            )}
           </div>
         )}
       </Modal>

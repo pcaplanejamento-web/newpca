@@ -189,18 +189,33 @@ export function fimDaTrava(agoraMs: number, dias: number): string | null {
   return dias > 0 ? new Date(agoraMs + dias * 86_400_000).toISOString() : null;
 }
 
-export const NOME_APARELHO_MIN = 2;
+export const NOME_APARELHO_MIN = 3;
 export const NOME_APARELHO_MAX = 40;
 
-/** O nome do aparelho, limpo (sem controles/invisíveis, espaços juntos) — `null` = inválido. */
-export function nomeAparelhoValido(nome: unknown): string | null {
-  if (typeof nome !== "string") return null;
-  const n = nome
+const limparNomeAparelho = (nome: string) =>
+  nome
     // biome-ignore lint/suspicious/noControlCharactersInRegex: tirar os caracteres de controle é o objetivo
     .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  return n.length >= NOME_APARELHO_MIN && n.length <= NOME_APARELHO_MAX ? n : null;
+
+/** Por que o nome do aparelho NÃO vale (null = vale) — a MESMA régua na tela e no servidor: obrigatório, 3–40 caracteres,
+ * só letras/números/espaço e `- ( ) . / ,`, ao menos 3 letras, sem o mesmo caractere 4 vezes seguidas e sem ser só repetição. */
+export function motivoNomeAparelho(nome: unknown): string | null {
+  if (typeof nome !== "string" || !limparNomeAparelho(nome)) return "Informe o nome do aparelho (ex.: Notebook do trabalho).";
+  const n = limparNomeAparelho(nome);
+  if (n.length < NOME_APARELHO_MIN || n.length > NOME_APARELHO_MAX) return `O nome precisa ter de ${NOME_APARELHO_MIN} a ${NOME_APARELHO_MAX} caracteres.`;
+  if (!/^[\p{L}\p{N} ().,/-]+$/u.test(n)) return "Use só letras, números, espaço e - ( ) . / ,";
+  const letras = n.match(/\p{L}/gu) ?? [];
+  if (letras.length < 3) return "O nome precisa ter ao menos 3 letras (ex.: Celular pessoal).";
+  if (/(.)\1{3,}/u.test(n.toLowerCase())) return "Não repita o mesmo caractere tantas vezes.";
+  if (new Set(letras.map((l) => l.toLowerCase())).size < 2) return "Escreva um nome que identifique o aparelho (ex.: PC da recepção).";
+  return null;
+}
+
+/** O nome do aparelho, limpo (sem controles/invisíveis, espaços juntos) — `null` = inválido (`motivoNomeAparelho`). */
+export function nomeAparelhoValido(nome: unknown): string | null {
+  return motivoNomeAparelho(nome) ? null : limparNomeAparelho(nome as string);
 }
 
 /** Iniciais públicas de um nome ("Ana Maria Souza" → "A. M. S.") — a verificação pública nunca mostra o nome inteiro. */

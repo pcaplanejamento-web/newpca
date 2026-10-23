@@ -1,3 +1,4 @@
+import { comandosRefazerAparelhos } from "@/lib/aparelhos-sql";
 import { and, eq, sql } from "drizzle-orm";
 import { usuarios } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
@@ -85,6 +86,18 @@ export async function POST(req: Request) {
     );
     await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "termo_uso", entidadeId: vigente.id, resumo: `Lembrete do aceite da versão ${vigente.versao} enviado a ${pend.length} pessoa(s)` });
     return ok({ avisados: pend.length });
+  }
+
+  if (d.acao === "refazerAparelhos") {
+    const [apagados] = await db.batch(comandosRefazerAparelhos(db, d.usuarioIds));
+    const pessoas = new Set(apagados.map((a) => a.u)).size;
+    await registrarAuditoria({
+      usuario: g.u,
+      acao: "excluir",
+      entidade: "aparelho",
+      resumo: `Novo cadastro do aparelho exigido de ${d.usuarioIds ? `${d.usuarioIds.length} pessoa(s)` : "todos"}: ${apagados.length} aparelho(s) de ${pessoas} pessoa(s) apagado(s)`,
+    });
+    return ok({ apagados: apagados.length, pessoas });
   }
 
   // A CONFIGURAÇÃO (implantação + aparelhos + encarregado).

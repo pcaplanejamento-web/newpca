@@ -111,6 +111,17 @@ export function comandoContaAparelhos(db: Db, usuarioId: number, d: { limite?: n
     .onConflictDoUpdate({ target: aparelhosConta.usuarioId, set });
 }
 
+/** EXIGIR NOVO CADASTRO (ADM): apaga os aparelhos das pessoas (`null` = de todos) — as sessões ficam, sem aparelho, e
+ * a pessoa nomeia o aparelho de novo no próximo pedido. A trava da troca também sai. */
+export function comandosRefazerAparelhos(db: Db, usuarioIds: number[] | null) {
+  if (usuarioIds === null) return [db.delete(aparelhos).returning({ u: aparelhos.usuarioId }), db.update(aparelhosConta).set({ trocaAte: null })] as const;
+  const alvo = sql`(SELECT value FROM json_each(${JSON.stringify(usuarioIds)}))`;
+  return [
+    db.delete(aparelhos).where(sql`${aparelhos.usuarioId} IN ${alvo}`).returning({ u: aparelhos.usuarioId }),
+    db.update(aparelhosConta).set({ trocaAte: null }).where(sql`${aparelhosConta.usuarioId} IN ${alvo}`),
+  ] as const;
+}
+
 /** Passar do TESTE para o ATIVO: os aparelhos de teste saem (todos nomeiam do zero). */
 export function comandosLimparTesteAparelhos(db: Db) {
   return [db.delete(aparelhos).where(eq(aparelhos.teste, true)), db.update(aparelhosConta).set({ trocaAte: null })] as const;

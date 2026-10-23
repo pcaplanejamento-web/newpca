@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.194.0",
+    data: "2026-10-23",
+    titulo: "Cadastro do aparelho controlado pelo ADM",
+    mudancas: [
+      { tipo: "melhoria", area: "Acesso", texto: "O nome do aparelho é obrigatório e conferido: 3 a 40 caracteres, com letras, sem repetições nem símbolos soltos.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "novo", area: "Configurações", texto: "Na Adesão do Termo de uso: o nome e a data do cadastro de cada aparelho e \u201cNovo cadastro de aparelho\u201d para os marcados ou para todos.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Configurações", texto: "O banner da versão do termo separa Assinaturas, Pendentes e Emissões do PDF em abas.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.193.1",
     data: "2026-10-23",
     titulo: "Cabeçalho abre na Geral",

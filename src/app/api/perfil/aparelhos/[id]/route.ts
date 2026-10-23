@@ -1,5 +1,5 @@
 import { exigirUsuario, intId } from "@/lib/api-auth";
-import { nomeAparelhoValido, NOME_APARELHO_MAX, NOME_APARELHO_MIN } from "@/lib/acesso-conta-core";
+import { motivoNomeAparelho, nomeAparelhoValido } from "@/lib/acesso-conta-core";
 import { renomearAparelhoSchema } from "@/lib/acesso-validation";
 import { comandoRenomearAparelho, comandosRetirarAparelhos } from "@/lib/aparelhos-sql";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -17,7 +17,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const corpo = await parseCorpo(renomearAparelhoSchema, req);
   if ("resp" in corpo) return corpo.resp;
   const nome = nomeAparelhoValido(corpo.data.nome);
-  if (!nome) return erro(`O nome do aparelho precisa ter de ${NOME_APARELHO_MIN} a ${NOME_APARELHO_MAX} caracteres.`, 422);
+  if (!nome) return erro(motivoNomeAparelho(corpo.data.nome) ?? "Nome inválido.", 422);
   const r = await comandoRenomearAparelho(getDb(), g.u.id, id, nome);
   if (!r.length) return erro("Aparelho não encontrado.", 404);
   await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "aparelho", entidadeId: id, resumo: `Aparelho renomeado para "${nome}"` });

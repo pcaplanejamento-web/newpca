@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
-import { NOME_APARELHO_MAX } from "@/lib/acesso-conta-core";
+import { motivoNomeAparelho, NOME_APARELHO_MAX } from "@/lib/acesso-conta-core";
 import type { EstadoAparelhos } from "@/lib/aparelhos";
 import { dataBR, dataHoraBR } from "@/lib/termo-uso-core";
 import { Badge } from "./Badge";
@@ -86,6 +86,8 @@ export function BannerAparelho({ estado, nome: pessoa, onConcluido }: { estado: 
   const [recarregando, recarregar] = useTransition();
   const conhecido = estado.lista.find((a) => a.id === estado.conhecido);
   const [nome, setNome] = useState(conhecido?.nome ?? estado.sugestao);
+  const [tocado, setTocado] = useState(false);
+  const motivoNome = motivoNomeAparelho(nome);
   const [retirar, setRetirar] = useState<number[]>([]);
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -155,7 +157,7 @@ export function BannerAparelho({ estado, nome: pessoa, onConcluido }: { estado: 
               </Button>
             )
           ) : (
-            <Button type="submit" form={idForm} size="sm" variant="accent" loading={ocupado} disabled={!nome.trim() || (lotado && retirar.length < precisa)} icon={<IconArrowRight className="h-4 w-4" />}>
+            <Button type="submit" form={idForm} size="sm" variant="accent" loading={ocupado} disabled={!!motivoNome || (lotado && retirar.length < precisa)} icon={<IconArrowRight className="h-4 w-4" />}>
               {lotado ? "Trocar e liberar o acesso" : "Liberar o acesso"}
             </Button>
           )}
@@ -197,10 +199,14 @@ export function BannerAparelho({ estado, nome: pessoa, onConcluido }: { estado: 
               label="Nome do aparelho"
               icon={<IconAparelho className="h-5 w-5" />}
               value={nome}
-              onChange={(e) => setNome(e.target.value)}
+              onChange={(e) => {
+                setNome(e.target.value);
+                setTocado(true);
+              }}
               maxLength={NOME_APARELHO_MAX}
+              error={tocado && motivoNome ? motivoNome : undefined}
               placeholder="Ex.: Notebook do trabalho"
-              hint="De 2 a 40 caracteres — o nome que vai aparecer no seu Perfil e para o administrador."
+              hint="Obrigatório: de 3 a 40 caracteres, com letras — o nome que vai aparecer no seu Perfil e para o administrador."
               autoFocus
             />
             {lotado && (

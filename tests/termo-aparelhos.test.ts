@@ -15,6 +15,7 @@ import {
   iniciais,
   lerConfigAcessoConta,
   limiteEfetivo,
+  motivoNomeAparelho,
   nomeAparelhoValido,
   regrasValemPara,
   repeteAoEntrar,
@@ -92,6 +93,8 @@ describe("configuração de acesso da conta", () => {
     assert.equal(situacaoNovoAparelho({ total: 0, limite: 2, trocaAte: "2026-11-01T00:00:00Z", agoraMs: agora }).tipo, "livre");
     assert.equal(nomeAparelhoValido("  Notebook​ da   sala "), "Notebook da sala");
     assert.equal(nomeAparelhoValido("a"), null);
+    for (const ruim of ["", "   ", "123456", "aaaa", "kkkkkk", "xx", "PC!!", "a1b2", "ababab@", "zzzz do x"]) assert.ok(motivoNomeAparelho(ruim), ruim);
+    for (const bom of ["Notebook do trabalho", "PC da recepção", "Celular (pessoal)", "Sala 12 - Mesa 3"]) assert.equal(motivoNomeAparelho(bom), null, bom);
     assert.equal(iniciais("Ana Maria de Souza"), "A. M. S.");
     assert.equal(destinoBloqueio({ nomearAparelho: true, termo: "pendente", aparelhoId: null }), "aparelho");
     assert.equal(destinoBloqueio({ nomearAparelho: false, termo: "pendente", aparelhoId: 1 }), "termo");

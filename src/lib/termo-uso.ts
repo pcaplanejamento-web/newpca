@@ -352,6 +352,8 @@ export async function adesaoAoTermo(cfg: ConfigAcessoConta) {
       aceitoEm: sql<string | null>`(SELECT ta.em FROM termos_aceites ta WHERE ta.usuario_id = usuarios.id AND ta.termo_id = ${v})`,
       teste: sql<number | null>`(SELECT ta.teste FROM termos_aceites ta WHERE ta.usuario_id = usuarios.id AND ta.termo_id = ${v})`,
       aparelhos: sql<number>`(SELECT COUNT(*) FROM aparelhos ap WHERE ap.usuario_id = usuarios.id)`,
+      nomesAparelhos: sql<string | null>`(SELECT group_concat(ap.nome, ' · ') FROM aparelhos ap WHERE ap.usuario_id = usuarios.id)`,
+      aparelhoEm: sql<string | null>`(SELECT MAX(ap.criado_em) FROM aparelhos ap WHERE ap.usuario_id = usuarios.id)`,
       pendente: sql<number>`EXISTS (SELECT 1 FROM termos_pendencias tp WHERE tp.usuario_id = usuarios.id AND tp.termo_id = ${v})`,
     })
     .from(usuarios)

@@ -1,5 +1,5 @@
 import { exigirUsuarioLivre } from "@/lib/api-auth";
-import { nomeAparelhoValido, NOME_APARELHO_MAX, NOME_APARELHO_MIN } from "@/lib/acesso-conta-core";
+import { motivoNomeAparelho, nomeAparelhoValido } from "@/lib/acesso-conta-core";
 import { nomearAparelhoSchema } from "@/lib/acesso-validation";
 import { nomearAparelhoDaSessao } from "@/lib/aparelhos";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const corpo = await parseCorpo(nomearAparelhoSchema, req);
   if ("resp" in corpo) return corpo.resp;
   const nome = nomeAparelhoValido(corpo.data.nome);
-  if (!nome) return erro(`O nome do aparelho precisa ter de ${NOME_APARELHO_MIN} a ${NOME_APARELHO_MAX} caracteres.`, 422);
+  if (!nome) return erro(motivoNomeAparelho(corpo.data.nome) ?? "Nome inválido.", 422);
   const r = await nomearAparelhoDaSessao(g.u, req, nome, corpo.data.removerIds ?? []);
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error, situacao: r.situacao }, { status: r.status });
   const troca = (corpo.data.removerIds ?? []).length > 0;
