@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
+  apiDosCampos,
+  camposDaApi,
   type EdicaoApi,
   estadoApi,
   lerLista,
@@ -149,4 +151,14 @@ test("APIs da Centi: a migração semeia as 5 APIs desligadas, com cadastros vá
   for (const id of [12, 13, 14, 17, 19, 20]) assert.ok(!liq.includes(id), `órgão ${id} não existe`);
   assert.equal(lerLista(linhas[3].lista).length, 66);
   assert.throws(() => db.exec("INSERT INTO centi_apis (chave, nome, endpoint) VALUES ('empenhos', 'x', 'y')"));
+});
+
+test("APIs da Centi: ida e volta pelos campos do banner (sim/não, lista e números)", () => {
+  const e: EdicaoApi = { ...base, divisao: "orgao", parametros: '{"idOrgao":"{orgao}"}', lista: [2, 21, 28], ativa: true, diasUteis: false, paginado: false };
+  const c = camposDaApi(e);
+  assert.equal(c.lista, "2; 21; 28");
+  assert.equal(c.ativa, "1");
+  assert.deepEqual(apiDosCampos(c), e);
+  assert.deepEqual(apiDosCampos({ ...c, lista: " 3,4 4;; 5 x " }).lista, [3, 4, 5]);
+  assert.equal(apiDosCampos({ ...c, divisao: "outra" }).divisao, "ano");
 });

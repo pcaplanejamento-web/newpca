@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.179.1",
+    data: "2026-10-23",
+    titulo: "APIs da Centi no padrão dos cadastros",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "O cadastro de cada API da Centi abre no banner padrão dos cadastros (cadeado em cada campo, salva só o que mudou e pede confirmação ao fechar com alteração), a tabela ganhou XLSX/PDF e a ajuda (?) no rodapé, e a aba só é carregada quando aberta.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.179.0",
     data: "2026-10-23",
     titulo: "Integrações: cadastro das APIs da Centi",

@@ -206,3 +206,54 @@ export function rotuloFrequencia(min: number, diasUteis: boolean, inicio: string
   const f = FREQUENCIAS.find((x) => x.valor === min)?.rotulo ?? `A cada ${min} min`;
   return `${f}${diasUteis ? ", dias úteis" : ""}, ${inicio}–${fim}`;
 }
+
+/** Os valores do banner de cadastro (`BannerCadastro` — tudo texto): os sim/não viram "1"/"0" e a lista "2; 3; 21". */
+export function camposDaApi(a: EdicaoApi): Record<string, string> {
+  return {
+    nome: a.nome,
+    descricao: a.descricao,
+    urlBase: a.urlBase,
+    endpoint: a.endpoint,
+    uf: a.uf,
+    tenant: a.tenant,
+    divisao: a.divisao,
+    paginado: a.paginado ? "1" : "0",
+    parametros: a.parametros,
+    lista: a.lista.join("; "),
+    ativa: a.ativa ? "1" : "0",
+    frequenciaMin: String(a.frequenciaMin),
+    diasUteis: a.diasUteis ? "1" : "0",
+    horaInicio: a.horaInicio,
+    horaFim: a.horaFim,
+    anos: String(a.anos),
+  };
+}
+
+/** De volta: os valores do banner → a edição (a lista aceita ";", "," ou espaço; o que não é número sai). */
+export function apiDosCampos(r: Record<string, string>): EdicaoApi {
+  const t = (k: string) => (r[k] ?? "").trim();
+  return {
+    nome: t("nome"),
+    descricao: t("descricao"),
+    urlBase: t("urlBase"),
+    endpoint: t("endpoint"),
+    uf: t("uf"),
+    tenant: t("tenant"),
+    divisao: lerDivisao(t("divisao")),
+    paginado: t("paginado") === "1",
+    parametros: t("parametros"),
+    lista: lerLista(t("lista").split(/[;,\s]+/).filter(Boolean)),
+    ativa: t("ativa") === "1",
+    frequenciaMin: Number(t("frequenciaMin")),
+    diasUteis: t("diasUteis") === "1",
+    horaInicio: t("horaInicio"),
+    horaFim: t("horaFim"),
+    anos: Number(t("anos")),
+  };
+}
+
+/** A edição gravada de uma API (o que o banner começa mostrando). */
+export function edicaoDaApi(a: ApiCenti): EdicaoApi {
+  const { nome, descricao, urlBase, endpoint, uf, tenant, divisao, paginado, parametros, lista, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, anos } = a;
+  return { nome, descricao, urlBase, endpoint, uf, tenant, divisao, paginado, parametros, lista, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, anos };
+}

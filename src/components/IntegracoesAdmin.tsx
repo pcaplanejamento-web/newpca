@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
@@ -7,14 +8,20 @@ import { CATALOGO_INTEGRACOES, type IntegracoesView } from "@/lib/integracoes-co
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { CentiApisAdmin } from "./CentiApisAdmin";
 import { Checkbox, PasswordField, TextField } from "./Field";
 import { IconActivity, IconAlert, IconDatabase, IconGoogle, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
 import { IntegracaoGoogle, type ValorGoogle } from "./IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "./IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "./IntegracaoTrello";
 import { Segmented } from "./Segmented";
+import { SkeletonCartao } from "./Skeleton";
 import { toast } from "./Toast";
+
+/** A aba "APIs da Centi" só é baixada quando aberta. */
+const CentiApisAdmin = dynamic(() => import("./CentiApisAdmin").then((m) => m.CentiApisAdmin), {
+  ssr: false,
+  loading: () => <SkeletonCartao linhas={5} />,
+});
 
 // Tela de Integrações do ADM (admin-only): Cloudflare (Turnstile + monitoramento), o Trello (conta institucional) e o
 // Resend (e-mails).

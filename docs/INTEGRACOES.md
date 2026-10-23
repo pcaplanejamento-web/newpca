@@ -133,6 +133,23 @@ Segurança: fluxo Authorization Code + **PKCE** + **state** (cookie httpOnly de 
 (host fixo `oauth2.googleapis.com`) e o `id_token` é validado (emissor, público = o Client ID, validade, e-mail
 verificado). Erros voltam como `/login?erro=…` (o motivo técnico só no log do Worker).
 
+## APIs da Centi (portal de transparência)
+
+Integrações → aba **APIs da Centi** (`/painel/integracoes?aba=centi`). É o cadastro das APIs **públicas** do portal da
+Centi (`https://api.centi.com.br/portal/{endpoint}/go/rioverde`, sem login): Empenhos (`getempenhos`, ano inteiro,
+paginada), Liquidações (`getliquidacoes`, por órgão), Pagamentos (`GetOrdempaPamento`, por órgão, paginada), Contratos
+(`ListaCredores`, por fonte) e Receita (`ObterReceitaOrcamentariaDetalhada`, por órgão).
+
+- Tocar numa API abre o cadastro (cadeado por campo): endereço, parâmetros em JSON com os marcadores `{ano}`, `{orgao}`,
+  `{fonte}` e `{pagina}`, a lista de órgãos (idOrgao do portal) ou de fontes, a frequência, o horário e os anos mantidos.
+  O pé do banner mostra a **prévia do 1º pedido** do ano (nada é enviado).
+- Hoje é **só o cadastro**: nenhuma API é chamada. Cada uma fica "Em preparação" e a opção **Ligada** só aparece quando a
+  importação dela existir (o servidor recusa ligar antes — 409). A URL base só aceita HTTPS do domínio `centi.com.br`.
+- Os órgãos já vêm com a lista certa do portal: 2–11, 15, 16, 18, 21–25 e 28.
+- Próximos passos (um por versão): botão **Testar** (1 página, nada gravado) → importação manual dos empenhos conferida
+  com o `TotalRegistros` → tela Empenhos → atualização automática (desligada por padrão) → liquidações, pagamentos e o
+  Dashboard da execução.
+
 ## Limite de pedidos da pesquisa (WAF da Cloudflare)
 
 Barra o abuso da pesquisa do sistema ANTES do Worker rodar (o pedido bloqueado não conta nas 100 mil requisições/dia nem
