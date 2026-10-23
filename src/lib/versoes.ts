@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.193.0",
+    data: "2026-10-23",
+    titulo: "Tela de Empenhos",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "Administração → Empenhos: os empenhos da Centi de cada ano numa tabela com filtros, edições salvas e XLSX/PDF; os totais do topo (empenhado, anulado, liquidado, pago, a pagar) acompanham os filtros.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "Tocar num empenho abre o detalhe inteiro: valores, classificação da despesa, histórico e a importação que o gravou.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "“Removidos na Centi”, no rodapé da tabela, mostra os empenhos que a Centi não traz mais (guardados, fora das somas).", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.192.0",
     data: "2026-10-23",
     titulo: "Adesão ao termo, assinaturas revogáveis e quem emitiu o PDF",
@@ -3750,6 +3760,7 @@ const PREFIXOS_ADMIN = [
   "/painel/orgaos",
   "/painel/integracoes",
   "/painel/automacao",
+  "/painel/empenhos",
   "/painel/armazenamento",
   "/painel/auditoria",
   "/painel/aparencia",

@@ -268,6 +268,7 @@ import {
   type TarefaResumo,
   type CampoTarefa,
 } from "@/lib/tarefas-core";
+import { EmpenhoDetalhe } from "@/components/EmpenhoDetalhe";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -4990,6 +4991,36 @@ export function Catalogo() {
 
       <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (o card “Novo quadro”, na altura dos cards), SeletorFundo (o fundo do quadro como o do Trello: prévia, fotos 16:9 + pesquisa com sugestões, DEGRADÊS em círculos — predefinidos, próprio e “Sem fundo”), CapaQuadro (a capa 16:9 no card do quadro), MolduraQuadro + FaixaQuadro + PilulaVistas + MenuQuadro + MembrosQuadro (o quadro no padrão do Trello: moldura arredondada com a imagem NÍTIDA e ENQUADRÁVEL — ponto focal + zoom —, cartão com CAPA colorida, listas RECOLHÍVEIS e contagem “N de M” com filtro, faixa translúcida no topo com as fotos/filtro/menu “…”, a pílula de vistas flutuante no rodapé), TextoNoLugar (o NOME do quadro e da lista: um clique edita no lugar), ItensArquivados (os cartões e as listas arquivados — restaurar/excluir), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover/EXCLUIR a lista) + CopiarMoverLista + ExcluirLista (qualquer lista: mover os cartões para outra ou excluir tudo junto), FundoQuadro (a IMAGEM DE FUNDO do quadro por link — enquadrar arrastando + zoom, avisos de proporção/resolução e fotos sugeridas — imagem ou pin do Pinterest, sem enviar arquivo), CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o “Mudar de quadros” do Trello: busca e as MESMAS seções da tela de Tarefas, com as pastas) + SecoesDeQuadros/SecaoQuadros/GradeQuadros (Favoritos · Recentes · “Seus quadros”, minimizáveis, com o QuadroCard; arrastar em Favoritos/Recentes = ARRASTO NEGADO: o card sacode e avisa) + GradePastas/PastaQuadro (as PASTAS de quadros: o desenho de uma pasta na célula do QuadroCard — aba, folhas com as capas e a frente na cor; entreabre no hover; abre NO LUGAR empurrando os cards; ARRASTAR reordena e põe/tira quadros da pasta — no toque, segurar ~400 ms; Alt+←/→) + EditorConjunto/MenuConjunto (criar/editar/excluir a pasta) + ChipsEscolha (chips de escolha que quebram linha), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (visual do Trello: nome editável, ARRASTAR pelo cabeçalho, WIP em âmbar + Adicionar um cartão) + NovaLista (a coluna “+ Adicionar outra lista” no fim do quadro), FiltroLista + PdfLista (o funil e o PDF no pé de cada lista: membros, unidade e protocolo/DFD/item), CartaoTarefa (+ ChipsVinculosMesa — os números do protocolo/DFD/item em selos; visual do Trello — etiquetas cheias, prazo e checklist em selo; com o mouse: contorno, círculo, editar e DUPLICAR; prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), TextoFormatado + CampoTextoFormatado (texto formatado: lido formatado, editado no lugar no EditorRico compacto), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculosTarefa (vários vínculos: tarefa ↔ tarefa nos dois sentidos, protocolo/DFD/PCA/orçamento), ImportarTrello (o JSON do Trello → prévia, membros casados com as pessoas, importação em lotes retomável — botão “Importar do Trello” abaixo), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
+      </Secao>
+
+      <Secao titulo="EmpenhoDetalhe (um empenho da Centi — só leitura; o histórico chega depois) · a tela é a EmpenhosAdmin (Administração → Empenhos)">
+        <div className="max-w-3xl">
+          <EmpenhoDetalhe
+            empenho={{
+              id: 1,
+              numero: "320932",
+              data: "2026-01-07",
+              orgaoGestor: "FUNDO MUNICIPAL SAUDE RIO VERDE",
+              unidadeOrcamentaria: "FUNDO MUNICIPAL DE SAÚDE",
+              fornecedor: "FORNECEDOR EXEMPLO LTDA",
+              cpfCnpj: "00.000.000/0001-00",
+              modalidade: "Pregão - Registro de Preço",
+              licitacao: "117/2024",
+              funcao: "SAUDE",
+              subfuncao: "Assistencia Hospitalar e Ambulator.",
+              programa: "PROGRAMA SAÚDE AO ALCANCE DE TODOS",
+              acao: "MANTER O PROGRAMA DE ASSISTÊNCIA HOSPITALAR E AMBULATORIAL",
+              elemento: "3.3.90.30.00 - MATERIAL DE CONSUMO",
+              subelemento: "36 - MATERIAL HOSPITALAR",
+              fonte: "1.07 - TRANSFERÊNCIA DE RECURSOS DO SUS",
+              valorEmpenhado: 3042,
+              valorAnulado: 0,
+              valorLiquidado: 3042,
+              valorPago: 3042,
+              saldoPagar: 0,
+            }}
+          />
+        </div>
       </Secao>
 
       <Secao titulo="OrcamentoItemDetalhe (detalhe do lançamento do orçamento — só leitura)">

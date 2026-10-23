@@ -143,6 +143,7 @@ const PALAVRAS: Record<string, string> = {
   "/painel/armazenamento": "banco dados tamanho saúde sessões expurgar online worker",
   "/painel/auditoria": "histórico alterações registro log quem mudou",
   "/painel/automacao": "centi extensão fluxos robô baixar dfds cm002",
+  "/painel/empenhos": "despesa execução centi empenhado liquidado pago fornecedor fonte elemento",
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",

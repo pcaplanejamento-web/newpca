@@ -112,6 +112,8 @@ EdicoesTabela.tsx
 EditorRico.tsx
 EditorVinculoOrcamento.tsx
 EditorVisaoOrcamento.tsx
+EmpenhoDetalhe.tsx
+EmpenhosAdmin.tsx
 EnviarAoPca.tsx
 ErroCarga.tsx
 EscopoCabecalhoAdmin.tsx

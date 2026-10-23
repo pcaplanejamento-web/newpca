@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  ReceiptText,
   CaseSensitive,
   Redo2,
   RemoveFormatting,
@@ -410,3 +411,5 @@ export const IconRedo = Redo2;
 export const IconLimparFormato = RemoveFormatting;
 /** Mostrar/esconder as ferramentas de formatação (o "Aa" do campo de mensagem do chat). */
 export const IconFormatacao = CaseSensitive;
+/** Empenhos da Centi (Administração → Empenhos). */
+export const IconEmpenho = ReceiptText;

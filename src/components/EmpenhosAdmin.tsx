@@ -1,0 +1,266 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
+import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
+import { type AnoEmpenhos, type EmpenhoNaTela, empenhosDoPacote, type PacoteEmpenhos, resumoEmpenhos } from "@/lib/empenhos-tela-core";
+import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
+import { Ajuda } from "./Ajuda";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { Button } from "./Button";
+import { Callout } from "./Callout";
+import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaTexto } from "./CelulaLista";
+import { type Column, DataTable } from "./DataTable";
+import { EsqueletoTabela } from "./DataTableEsqueleto";
+import { EmpenhoDetalhe } from "./EmpenhoDetalhe";
+import { ErroCarga } from "./ErroCarga";
+import { SelectField } from "./Field";
+import { IconEmpenho, IconUpload } from "./icons";
+import { Modal } from "./Modal";
+import { StatMini } from "./StatMini";
+
+/** A chave das edições salvas da tabela (Administração — só o ADM grava). */
+export const CHAVE_TABELA_EMPENHOS = "admin:empenhos:tabela";
+
+/** As colunas que a tabela abre ESCONDIDAS (a edição da tabela as mostra). */
+const OCULTAS = ["cpfCnpj", "licitacao", "funcao", "subfuncao", "programa", "subelemento", "unidadeOrcamentaria"];
+
+const colTexto = (key: keyof EmpenhoNaTela, header: string, minWidth: number): Column<EmpenhoNaTela> => ({
+  key,
+  header,
+  minWidth,
+  value: (e) => String(e[key] ?? ""),
+  render: (e) => <CelulaTexto texto={e[key] as string | null} />,
+});
+
+const colValor = (key: "valorEmpenhado" | "valorAnulado" | "valorLiquidado" | "valorPago" | "saldoPagar", header: string, forte = false): Column<EmpenhoNaTela> => ({
+  key,
+  header,
+  align: "right",
+  nowrap: true,
+  filter: "range",
+  numero: (e) => e[key],
+  render: (e) => <span className={`tabular-nums ${forte ? "font-semibold text-text" : "text-text-2"}`}>{brl(e[key])}</span>,
+});
+
+const COLUNAS: Column<EmpenhoNaTela>[] = [
+  {
+    key: "numero",
+    header: "Nº",
+    nowrap: true,
+    value: (e) => e.numero,
+    render: (e) => (
+      <CelulaCopiavel copiar={e.numero} rotulo="Copiar nº do empenho">
+        <span className="font-mono text-[13px] text-text">{e.numero}</span>
+      </CelulaCopiavel>
+    ),
+  },
+  { key: "data", header: "Data", nowrap: true, filter: "date", value: (e) => e.data ?? "", render: (e) => <span className="tabular-nums">{dataBR(e.data)}</span> },
+  colTexto("orgaoGestor", "Órgão gestor", 200),
+  colTexto("unidadeOrcamentaria", "Unidade orçamentária", 200),
+  colTexto("fornecedor", "Fornecedor", 220),
+  { key: "cpfCnpj", header: "CPF/CNPJ", nowrap: true, value: (e) => e.cpfCnpj ?? "", render: (e) => <span className="font-mono text-[13px] text-muted">{e.cpfCnpj || "—"}</span> },
+  colTexto("modalidade", "Modalidade", 170),
+  { key: "licitacao", header: "Licitação", nowrap: true, value: (e) => e.licitacao ?? "", render: (e) => <span className="tabular-nums text-text-2">{e.licitacao || "—"}</span> },
+  colTexto("funcao", "Função", 140),
+  colTexto("subfuncao", "Subfunção", 170),
+  colTexto("programa", "Programa", 210),
+  colTexto("acao", "Ação", 230),
+  colTexto("elemento", "Elemento", 220),
+  colTexto("subelemento", "Subelemento", 190),
+  colTexto("fonte", "Fonte", 230),
+  colValor("valorEmpenhado", "Empenhado", true),
+  colValor("valorAnulado", "Anulado"),
+  colValor("valorLiquidado", "Liquidado"),
+  colValor("valorPago", "Pago"),
+  colValor("saldoPagar", "A pagar"),
+];
+
+type Recorte = { ano: number; removidos: boolean };
+const chaveRecorte = (r: Recorte) => `${r.ano}:${r.removidos ? 1 : 0}`;
+
+/**
+ * Tela EMPENHOS (Administração — só o ADM): os empenhos da Centi de um ANO, importados em Integrações → APIs da Centi.
+ * SÓ LEITURA. Os KPIs acompanham os filtros da tabela (`onOrdenadas`); a tabela é a padrão (`scrollInterno` + `compact`,
+ * filtros conectados, edições salvas `admin:empenhos:`, XLSX/PDF). O ano chega COMPACTO (`empenhos-tela-core.ts`) e fica
+ * guardado nesta aba — trocar de ano e voltar não pede de novo; "Recarregar" pede. Tocar numa linha = o detalhe.
+ */
+export function EmpenhosAdmin({
+  anos,
+  anoInicial,
+  edicoes,
+}: {
+  anos: AnoEmpenhos[];
+  anoInicial: number | null;
+  edicoes: { lista: EdicaoTabela[]; padroes: Record<string, unknown> };
+}) {
+  const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
+  const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
+  const [vista, setVista] = useState<EmpenhoNaTela[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [aberto, setAberto] = useState<EmpenhoNaTela | null>(null);
+  const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
+  const [eds, setEds] = useState(edicoes);
+  const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
+  const pedido = useRef(0);
+
+  const carregar = useCallback(async (r: Recorte, fresco = false) => {
+    const k = chaveRecorte(r);
+    const n = ++pedido.current;
+    setErro(null);
+    const guardado = fresco ? undefined : guardados.current.get(k);
+    if (guardado) {
+      setLinhas(guardado);
+      return;
+    }
+    setCarregando(true);
+    if (!fresco) setLinhas(null);
+    try {
+      const resp = await fetch(`/api/admin/empenhos?ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
+      const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
+      if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
+      const lista = empenhosDoPacote(j.pacote);
+      guardados.current.set(k, lista);
+      if (n === pedido.current) setLinhas(lista);
+    } catch (e) {
+      if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os empenhos.");
+    } finally {
+      if (n === pedido.current) setCarregando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (recorte) void carregar(recorte);
+  }, [recorte, carregar]);
+
+  // O ano na URL (voltar/compartilhar abre no mesmo) — sem pedir a página de novo.
+  useEffect(() => {
+    if (!recorte) return;
+    const u = new URL(window.location.href);
+    u.searchParams.set("ano", String(recorte.ano));
+    window.history.replaceState(window.history.state, "", u);
+  }, [recorte]);
+
+  // O detalhe: o que a tabela tem na hora; o histórico e o registro chegam depois.
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    setCompleto(undefined);
+    fetch(`/api/admin/empenhos/${aberto.id}`)
+      .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto }>)
+      .then((j) => vivo && setCompleto(j.ok && j.empenho ? j.empenho : null))
+      .catch(() => vivo && setCompleto(null));
+    return () => {
+      vivo = false;
+    };
+  }, [aberto]);
+
+  const ano = anos.find((a) => a.ano === recorte?.ano);
+  const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
+  const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <header className="linha-topico flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
+            <IconEmpenho className="h-5 w-5" /> Empenhos
+          </h1>
+          {ano && (
+            <p className="text-sm text-muted">
+              Centi · {recorte?.removidos ? `${num(ano.removidos)} removidos na Centi` : `${num(ano.n)} empenhos`}
+              {ano.atualizadoEm ? ` · importados em ${dataHoraBR(ano.atualizadoEm)}` : ""}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {anos.length > 0 && recorte && (
+            <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
+              {anos.map((a) => (
+                <option key={a.ano} value={a.ano}>
+                  {a.ano}
+                </option>
+              ))}
+            </SelectField>
+          )}
+          <Button size="sm" variant="secondary" href="/painel/integracoes?aba=centi" icon={<IconUpload className="h-4 w-4" />}>
+            Importar
+          </Button>
+          <Ajuda titulo="Empenhos" botao="sm">
+            <p>
+              Os empenhos da Centi, importados em Integrações → APIs da Centi → Empenhos. Só leitura: para atualizar, importe o ano de
+              novo — só o que mudou na Centi é regravado.
+            </p>
+            <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
+            <p>“Removidos na Centi” (rodapé) = os que a Centi não traz mais: ficam guardados, fora das somas.</p>
+          </Ajuda>
+          {recorte && (
+            <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />
+          )}
+        </div>
+      </header>
+
+      {!recorte ? (
+        <Callout kind="info">Nenhum empenho importado ainda. Importe em Integrações → APIs da Centi → Empenhos.</Callout>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-6">
+            <StatMini label="Empenhos" value={linhas ? num(r.n) : "…"} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidos na Centi" : undefined} />
+            <StatMini label="Empenhado" value={linhas ? brl(r.empenhado) : "…"} tone="accent" />
+            <StatMini label="Anulado" value={linhas ? brl(r.anulado) : "…"} tone={r.anulado ? "warn" : "default"} />
+            <StatMini label="Liquidado" value={linhas ? brl(r.liquidado) : "…"} />
+            <StatMini label="Pago" value={linhas ? brl(r.pago) : "…"} tone="ok" />
+            <StatMini label="A pagar" value={linhas ? brl(r.aPagar) : "…"} />
+          </div>
+
+          {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => void carregar(recorte, true)} />}
+
+          {linhas == null ? (
+            !erro && <EsqueletoTabela cheia />
+          ) : (
+            <DataTable
+              visao={chaveRecorte(recorte)}
+              columns={COLUNAS}
+              rows={linhas}
+              getKey={(e) => e.id}
+              scrollInterno
+              density="compact"
+              minWidth={3400}
+              ocultasPadrao={OCULTAS}
+              ordemInicial={{ key: "data", dir: "desc" }}
+              onRowClick={setAberto}
+              activeKey={aberto?.id ?? null}
+              onOrdenadas={setVista}
+              edicoes={{ chave: CHAVE_TABELA_EMPENHOS, lista: eds.lista, padroes: eds.padroes, podePublicar: true, onMudar: (lista, padroes) => setEds({ lista, padroes }) }}
+              exportar={{ nome: `Empenhos ${recorte.ano}${recorte.removidos ? " - removidos" : ""}` }}
+              acoesRodape={
+                ano && ano.removidos > 0 ? (
+                  <Button
+                    size="sm"
+                    variant={recorte.removidos ? "primary" : "secondary"}
+                    aria-pressed={recorte.removidos}
+                    title={recorte.removidos ? "Voltar aos empenhos vigentes" : "Os empenhos que a Centi não traz mais"}
+                    onClick={() => setRecorte({ ano: recorte.ano, removidos: !recorte.removidos })}
+                  >
+                    Removidos na Centi ({num(ano.removidos)})
+                  </Button>
+                ) : undefined
+              }
+              vazio={recorte.removidos ? "Nenhum empenho removido na Centi neste ano." : "Nenhum empenho neste ano."}
+              resumo={(l) => {
+                const s = resumoEmpenhos(l);
+                return `${num(s.n)} ${s.n === 1 ? "empenho" : "empenhos"} · Empenhado ${brl(s.empenhado)} · Pago ${brl(s.pago)}`;
+              }}
+            />
+          )}
+        </>
+      )}
+
+      <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Empenho ${aberto.numero}` : "Empenho"} size="lg">
+        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} /> : <div />}
+      </Modal>
+    </div>
+  );
+}
