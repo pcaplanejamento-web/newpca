@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.189.2",
+    data: "2026-10-23",
+    titulo: "Assinar o termo segue até abrir o sistema",
+    mudancas: [{ tipo: "correcao", area: "Termo de uso", texto: "Com o “Termo de Uso aceito” desligado, o botão Assinar continua carregando até o sistema abrir — antes parava e o banner ficava na tela sem nada acontecer.", link: "/painel/configuracoes?aba=termo" }],
+  },
+  {
     versao: "1.189.1",
     data: "2026-10-23",
     titulo: "Opções do termo organizadas",

@@ -288,8 +288,8 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
               form={idForm}
               size="sm"
               variant="accent"
-              loading={gravando || enviando}
-              disabled={!pronto}
+              loading={gravando || enviando || saindo}
+              disabled={!pronto || saindo}
               icon={metodo === "codigo" && !enviouCodigo ? <IconMailCheck className="h-4 w-4" /> : <IconTermo className="h-4 w-4" />}
             >
               {metodo === "codigo" && !enviouCodigo ? "Enviar código" : "Assinar"}
