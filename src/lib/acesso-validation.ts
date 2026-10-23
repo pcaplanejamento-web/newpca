@@ -32,6 +32,8 @@ export const configAcessoContaSchema = z.strictObject({
   isentarAdm: z.boolean(),
   fecharAceiteS: z.number().int().refine((v) => (OPCOES_FECHAR_ACEITE as readonly number[]).includes(v), "Tempo de fechamento inválido.").optional(),
   encarregado: z.strictObject({ nome: z.string().max(120), email: z.string().max(160), telefone: z.string().max(40) }),
+  telaAceito: z.boolean().optional(),
+  baixarComprovante: z.boolean().optional(),
   clausulasOff: z.array(z.enum(CLAUSULAS_AUTO.map((c) => c.id) as [string, ...string[]])).max(CLAUSULAS_AUTO.length).optional(),
 });
 

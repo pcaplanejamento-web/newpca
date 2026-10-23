@@ -334,7 +334,7 @@ export async function termoDoCadastro(versao: number | undefined, hash: string |
 
 
 /** Os dados do BANNER de aceite da pessoa (o termo pendente mais urgente + como ela confirma a identidade). */
-export async function dadosDoAceite(u: { id: number; email: string }): Promise<import("@/components/AceiteTermo").DadosAceiteTermo | null> {
+export async function dadosDoAceite(u: { id: number; email: string; admin?: boolean }): Promise<import("@/components/AceiteTermo").DadosAceiteTermo | null> {
   const p = await pendenciaDe(u.id);
   if (!p?.termo.textoFinal || !p.termo.hash) return null;
   const [integ, sistema, cfg, [conta]] = await Promise.all([
@@ -349,6 +349,8 @@ export async function dadosDoAceite(u: { id: number; email: string }): Promise<i
     email: u.email,
     sistema,
     fecharEmS: cfg.fecharAceiteS,
+    telaAceito: cfg.telaAceito,
+    baixar: cfg.baixarComprovante || !!u.admin,
   };
 }
 

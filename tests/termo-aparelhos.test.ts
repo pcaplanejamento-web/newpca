@@ -311,3 +311,11 @@ describe("cláusulas automáticas desligadas pelo ADM", () => {
     assert.equal(ids.includes("aparelhos"), true);
   });
 });
+
+it("acessoConta: tela de aceite e baixar comprovante ligados por padrão; desligáveis", () => {
+  assert.equal(lerConfigAcessoConta({}).telaAceito, true);
+  assert.equal(lerConfigAcessoConta({}).baixarComprovante, true);
+  assert.equal(lerConfigAcessoConta({ telaAceito: false, baixarComprovante: false }).telaAceito, false);
+  assert.equal(lerConfigAcessoConta({ baixarComprovante: false }).baixarComprovante, false);
+  assert.equal(lerConfigAcessoConta({ baixarComprovante: "x" }).baixarComprovante, true);
+});

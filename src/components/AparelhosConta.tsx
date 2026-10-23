@@ -12,6 +12,10 @@ import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
 import { IconCheck, IconDownload, IconLock, IconPencil, IconTermo, IconTrash } from "./icons";
 import { CartaoAparelho } from "./NomearAparelho";
+import type { DocumentoResumo } from "@/lib/documentos";
+import dynamic from "next/dynamic";
+
+const VisualizadorPdf = dynamic(() => import("./DocumentosView").then((m) => m.VisualizadorPdf), { ssr: false });
 import { SkeletonLinhas } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
@@ -28,6 +32,8 @@ type Dados = {
   trocaAte: string | null;
   valem: boolean;
   termos: Termo[];
+  /** Pode BAIXAR o comprovante (senão, só visualiza). */
+  baixar?: boolean;
 };
 
 async function chamar<T>(url: string, metodo = "GET", corpo?: unknown): Promise<T> {
@@ -45,6 +51,7 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
   const url = admin ? `/api/admin/usuarios/${usuarioId}/aparelhos` : "/api/perfil/aparelhos";
   const [d, setD] = useState<Dados | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [vendo, setVendo] = useState<Termo | null>(null);
   const [editando, setEditando] = useState<{ id: number; nome: string } | null>(null);
   const [ocupado, setOcupado] = useState<number | string | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -120,6 +127,9 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
   return (
     <div className="space-y-[var(--gap-block)]">
       {confirmacao}
+      {vendo && (
+        <VisualizadorPdf doc={{ id: vendo.id, nome: `Comprovante — termo de uso v${vendo.versao}`, nomeArquivo: `termo-de-uso-v${vendo.versao}.pdf` } as DocumentoResumo} url={`/api/termo/aceites/${vendo.id}/pdf`} onFechar={() => setVendo(null)} />
+      )}
       {!d.valem && <Callout kind="info">As regras de aparelhos ainda não estão em vigor (Configurações → Termo de uso).</Callout>}
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-3">
         <StatMini label="Aparelhos vinculados" value={`${d.lista.length} de ${d.limite}`} hint={lotado ? "Limite atingido" : `${d.limite - d.lista.length} vaga(s)`} tone={lotado ? "warn" : "default"} />
@@ -205,8 +215,8 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
               </div>
               <div className="truncate font-mono text-[11.5px] text-faint">{t.codigo}</div>
             </div>
-            <Button size="sm" variant="secondary" loading={ocupado === `t${t.id}`} onClick={() => baixar(t)} icon={<IconDownload className="h-4 w-4" />}>
-              Comprovante
+            <Button size="sm" variant="secondary" loading={ocupado === `t${t.id}`} onClick={() => (admin || d.baixar !== false ? baixar(t) : setVendo(t))} icon={admin || d.baixar !== false ? <IconDownload className="h-4 w-4" /> : <IconTermo className="h-4 w-4" />}>
+              {admin || d.baixar !== false ? "Comprovante" : "Ver comprovante"}
             </Button>
           </div>
         ))}

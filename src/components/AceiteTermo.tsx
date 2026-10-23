@@ -1,5 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
@@ -11,6 +13,9 @@ import { CampoCodigo } from "./CodigoEmail";
 import { Checkbox, PasswordField, TextField } from "./Field";
 import { IconArrowDown, IconArrowRight, IconCheck, IconDownload, IconMailCheck, IconTermo } from "./icons";
 import { Modal } from "./Modal";
+import type { DocumentoResumo } from "@/lib/documentos";
+
+const VisualizadorPdf = dynamic(() => import("./DocumentosView").then((m) => m.VisualizadorPdf), { ssr: false });
 import { BotaoSairAcesso } from "./NomearAparelho";
 import { Progress } from "./Progress";
 import { DocumentoFormatado } from "./TextoFormatado";
@@ -106,7 +111,7 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
           aria-hidden={noFim}
           aria-label="Ir ao fim do termo"
           title="Ir ao fim do termo"
-          className={`absolute right-3 bottom-3 inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-[opacity,transform] duration-200 motion-reduce:transition-none hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none ${noFim ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
+          className={`absolute right-6 bottom-3 inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-[opacity,transform] duration-200 motion-reduce:transition-none hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none ${noFim ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
         >
           <IconArrowDown size={20} aria-hidden="true" />
         </button>
@@ -117,7 +122,7 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
 
 export type TermoParaAceite = { id: number; versao: number; texto: string; hash: string; publicadoEm: string | null };
 /** `fecharEmS` = segundos até o "Termo de Uso aceito" seguir sozinho (Configurações → Termo de uso; 0 = não fecha sozinho). */
-export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string; fecharEmS?: number };
+export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string; fecharEmS?: number; telaAceito?: boolean; baixar?: boolean };
 
 /**
  * O BANNER de ACEITE do Termo de Uso (flutuante): ler até o fim → "Li e concordo" → confirmar a identidade (a senha da
@@ -126,7 +131,7 @@ export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boole
  */
 export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   const router = useRouter();
-  const { termo, metodos, email, sistema, fecharEmS = 0 } = dados;
+  const { termo, metodos, email, sistema, fecharEmS = 0, telaAceito = true, baixar: podeBaixar = true } = dados;
   const [continuando, continuar] = useTransition();
   const metodo: "senha" | "codigo" | "sessao" = metodos.senha ? "senha" : metodos.codigo ? "codigo" : "sessao";
   const [leu, setLeu] = useState(false);
@@ -139,6 +144,7 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [feito, setFeito] = useState<{ aceiteId: number; codigo: string } | null>(null);
+  const [vendo, setVendo] = useState(false);
   const [baixando, setBaixando] = useState(false);
 
   async function pedirCodigo() {
@@ -179,6 +185,10 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; aceiteId?: number; codigo?: string };
       if (!r.ok || !j.ok || !j.aceiteId || !j.codigo) throw new Error(j.error ?? "Não foi possível assinar o termo.");
+      if (!telaAceito) {
+        concluir();
+        return;
+      }
       setFeito({ aceiteId: j.aceiteId, codigo: j.codigo });
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível assinar o termo.");
@@ -243,6 +253,9 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
 
   const pronto =
     leu && concordo && (metodo === "senha" ? senha.length > 0 : metodo === "codigo" ? !enviouCodigo || codigo.length === 6 : frase.trim().length > 0);
+  const verComprovante = vendo && feito && (
+  <VisualizadorPdf doc={{ id: feito.aceiteId, nome: `Comprovante — termo de uso v${termo.versao}`, nomeArquivo: `termo-de-uso-v${termo.versao}.pdf` } as DocumentoResumo} url={`/api/termo/aceites/${feito.aceiteId}/pdf`} onFechar={() => setVendo(false)} />
+  );
   return (
     <Modal
       open
@@ -253,11 +266,18 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-2">
           {feito ? <span /> : <BotaoSairAcesso disabled={gravando || enviando} />}
-          {feito ? (
+          {verComprovante}
+      {feito ? (
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" loading={baixando} onClick={baixar} icon={<IconDownload className="h-4 w-4" />}>
-                Baixar comprovante
-              </Button>
+              {podeBaixar ? (
+                <Button size="sm" variant="secondary" loading={baixando} onClick={baixar} icon={<IconDownload className="h-4 w-4" />}>
+                  Baixar comprovante
+                </Button>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={() => setVendo(true)} icon={<IconTermo className="h-4 w-4" />}>
+                  Ver comprovante
+                </Button>
+              )}
               <Button size="sm" variant="accent" loading={saindo} disabled={saindo} onClick={concluir} icon={<IconArrowRight className="h-4 w-4" />}>
                 {fecharEmS > 0 && !pausado ? `Continuar (${restante})` : "Continuar"}
               </Button>

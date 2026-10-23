@@ -22,6 +22,10 @@ export type ConfigAcessoConta = {
   isentarAdm: boolean;
   /** Segundos até o banner "Termo de Uso aceito" fechar sozinho (0 = não fecha sozinho). */
   fecharAceiteS: number;
+  /** Mostra o banner "Termo de Uso aceito" depois de assinar (desligado = segue direto ao sistema). */
+  telaAceito: boolean;
+  /** A pessoa pode BAIXAR o comprovante assinado (desligado = só visualiza; o ADM sempre baixa). */
+  baixarComprovante: boolean;
   /** O encarregado pelo tratamento de dados pessoais (LGPD art. 41) — vai às cláusulas automáticas. */
   encarregado: { nome: string; email: string; telefone: string };
   /** As cláusulas automáticas DESLIGADAS pelo ADM (ids de `CLAUSULAS_AUTO`) — saem do termo publicado. */
@@ -44,6 +48,8 @@ export const ACESSO_CONTA_PADRAO: ConfigAcessoConta = {
   trocaDias: 30,
   isentarAdm: true,
   fecharAceiteS: 10,
+  telaAceito: true,
+  baixarComprovante: true,
   encarregado: { nome: "", email: "", telefone: "" },
   clausulasOff: [],
 };
@@ -93,6 +99,8 @@ export function lerConfigAcessoConta(v: unknown): ConfigAcessoConta {
     trocaDias: inteiro(o.trocaDias, 0, TROCA_MAX_DIAS, ACESSO_CONTA_PADRAO.trocaDias),
     isentarAdm: typeof o.isentarAdm === "boolean" ? o.isentarAdm : true,
     fecharAceiteS: (OPCOES_FECHAR_ACEITE as readonly number[]).includes(Number(o.fecharAceiteS)) ? Number(o.fecharAceiteS) : ACESSO_CONTA_PADRAO.fecharAceiteS,
+    telaAceito: o.telaAceito !== false,
+    baixarComprovante: o.baixarComprovante !== false,
     encarregado: { nome: texto(enc.nome, 120), email: texto(enc.email, 160), telefone: texto(enc.telefone, 40) },
     clausulasOff: Array.isArray(o.clausulasOff) ? [...new Set(o.clausulasOff.filter((x): x is string => typeof x === "string" && IDS_CLAUSULAS.includes(x)))] : [],
   };

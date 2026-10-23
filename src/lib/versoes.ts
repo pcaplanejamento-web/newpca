@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.188.0",
+    data: "2026-10-23",
+    titulo: "Termo de uso: tela de aceite e download opcionais",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Configurações → Termo de uso: desligar o banner “Termo de Uso aceito” (a pessoa segue direto ao sistema depois de assinar) e o download do comprovante (fica só a visualização na tela; o Administrador sempre baixa).", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Termo de uso", texto: "A seta “Ir ao fim do termo” não fica mais por cima da barra de rolagem.", link: "/painel/perfil?aba=seguranca" },
+    ],
+  },
+  {
     versao: "1.187.2",
     data: "2026-10-23",
     titulo: "Exclusão das importações só com seleção",
