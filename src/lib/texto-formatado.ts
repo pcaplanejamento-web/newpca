@@ -22,17 +22,42 @@ export type Inline =
 export const ALINHAMENTOS = ["esquerda", "centro", "direita", "justificado"] as const;
 export type Alinhamento = (typeof ALINHAMENTOS)[number];
 
+/** A FONTE do bloco: `sans` (a do sistema — sem marca), `serif` (de documento) ou `mono` (de máquina). */
+export const FONTES = ["sans", "serif", "mono"] as const;
+export type Fonte = (typeof FONTES)[number];
+
 export type Bloco =
-  | { t: "par"; f: Inline[]; al?: Alinhamento }
-  | { t: "titulo"; n: 1 | 2 | 3; f: Inline[]; al?: Alinhamento }
-  | { t: "lista"; ordenada: boolean; itens: Inline[][]; inicio?: number; al?: Alinhamento }
-  | { t: "citacao"; f: Inline[]; al?: Alinhamento }
+  | { t: "par"; f: Inline[]; al?: Alinhamento; fo?: Fonte }
+  | { t: "titulo"; n: 1 | 2 | 3; f: Inline[]; al?: Alinhamento; fo?: Fonte }
+  | { t: "lista"; ordenada: boolean; itens: Inline[][]; inicio?: number; al?: Alinhamento; fo?: Fonte }
+  | { t: "citacao"; f: Inline[]; al?: Alinhamento; fo?: Fonte }
   | { t: "separador" };
 
-// Marcas repetidas ("[[centro]] [[direita]] …") valem pela ÚLTIMA.
-const RE_ALINHAMENTO = /^(?:\[\[(centro|direita|justificado)\]\]\s?)+/;
+// As MARCAS do bloco na frente da 1ª linha: alinhamento e fonte ("[[centro]] [[serif]] …"); repetidas valem pela ÚLTIMA.
+const RE_ALINHAMENTO = /^(?:\[\[(?:centro|direita|justificado|serif|mono)\]\]\s?)+/;
+const RE_MARCA = /\[\[(centro|direita|justificado|serif|mono)\]\]/g;
+/** As marcas de uma linha → alinhamento, fonte e o resto da linha. */
+export function lerMarcas(linha: string): { al?: Alinhamento; fo?: Fonte; resto: string } {
+  const m = RE_ALINHAMENTO.exec(linha);
+  if (!m) return { resto: linha };
+  let al: Alinhamento | undefined;
+  let fo: Fonte | undefined;
+  for (const [, x] of m[0].matchAll(RE_MARCA)) {
+    if (x === "serif" || x === "mono") fo = x;
+    else al = x as Alinhamento;
+  }
+  return { al, fo, resto: linha.slice(m[0].length) };
+}
 /** A marca de alinhamento na frente de uma linha ("" para a esquerda). */
 export const marcaAlinhamento = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? `[[${al}]] ` : "");
+/** As marcas do bloco (alinhamento + fonte) na frente de uma linha. */
+export const marcasBloco = (al: Alinhamento | undefined, fo: Fonte | undefined) => `${marcaAlinhamento(al)}${fo && fo !== "sans" ? `[[${fo}]] ` : ""}`;
+/** A fonte em CSS (`font-family`) — a mesma no editor, na leitura e no e-mail. */
+export const CSS_FONTE: Record<Fonte, string> = {
+  sans: "inherit",
+  serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
+  mono: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, "Courier New", monospace',
+};
 /** A linha sem a marca de alinhamento (quem lê o texto linha a linha — o PDF do termo). */
 export const semAlinhamento = (linha: string) => linha.replace(RE_ALINHAMENTO, "");
 /** O texto inteiro sem as marcas de alinhamento (quem lê o texto cru). */
@@ -90,10 +115,12 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
   const linhas = (texto ?? "").slice(0, MAX_TEXTO).replace(/\r\n?/g, "\n").split("\n");
   const out: Bloco[] = [];
   let par: string[] = [];
-  let lista: { ordenada: boolean; itens: string[]; inicio: number; al?: Alinhamento } | null = null;
+  let lista: { ordenada: boolean; itens: string[]; inicio: number; al?: Alinhamento; fo?: Fonte } | null = null;
   let cit: string[] = [];
   let alPar: Alinhamento | undefined;
   let alCit: Alinhamento | undefined;
+  let foPar: Fonte | undefined;
+  let foCit: Fonte | undefined;
   const fecharPar = () => {
     if (!par.length) return;
     const f: Inline[] = [];
@@ -101,7 +128,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
       if (k) f.push({ t: "quebra" });
       f.push(...lerInline(l));
     });
-    out.push(alPar ? { t: "par", f, al: alPar } : { t: "par", f });
+    out.push({ t: "par", f, ...(alPar ? { al: alPar } : {}), ...(foPar ? { fo: foPar } : {}) });
     par = [];
   };
   const fecharLista = () => {
@@ -112,6 +139,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
         itens: lista.itens.map((x) => lerInline(x)),
         ...(lista.ordenada && lista.inicio !== 1 ? { inicio: lista.inicio } : {}),
         ...(lista.al ? { al: lista.al } : {}),
+        ...(lista.fo ? { fo: lista.fo } : {}),
       });
     lista = null;
   };
@@ -122,7 +150,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
       if (k) f.push({ t: "quebra" });
       f.push(...lerInline(l));
     });
-    out.push(alCit ? { t: "citacao", f, al: alCit } : { t: "citacao", f });
+    out.push({ t: "citacao", f, ...(alCit ? { al: alCit } : {}), ...(foCit ? { fo: foCit } : {}) });
     cit = [];
   };
   const fecharTudo = () => {
@@ -131,9 +159,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
     fecharCit();
   };
   for (const bruta of linhas) {
-    const marca = RE_ALINHAMENTO.exec(bruta);
-    const al = marca ? (marca[1] as Alinhamento) : undefined;
-    const linha = marca ? bruta.slice(marca[0].length) : bruta;
+    const { al, fo, resto: linha } = lerMarcas(bruta);
     if (!linha.trim()) {
       fecharTudo();
       continue;
@@ -147,7 +173,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
     if (titulo) {
       fecharTudo();
       const t = { t: "titulo" as const, n: titulo[1].length as 1 | 2 | 3, f: lerInline(titulo[2].trim()) };
-      out.push(al ? { ...t, al } : t);
+      out.push({ ...t, ...(al ? { al } : {}), ...(fo ? { fo } : {}) });
       continue;
     }
     const num = RE_NUMERADA.exec(linha);
@@ -157,7 +183,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
       fecharPar();
       fecharCit();
       if (lista && lista.ordenada !== ordenada) fecharLista();
-      if (!lista) lista = { ordenada, itens: [], inicio: num ? Number(/\d+/.exec(linha)?.[0] ?? 1) : 1, al };
+      if (!lista) lista = { ordenada, itens: [], inicio: num ? Number(/\d+/.exec(linha)?.[0] ?? 1) : 1, al, fo };
       lista.itens.push(((num ?? item) as RegExpExecArray)[1]);
       continue;
     }
@@ -165,13 +191,19 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
     if (c) {
       fecharPar();
       fecharLista();
-      if (!cit.length) alCit = al;
+      if (!cit.length) {
+        alCit = al;
+        foCit = fo;
+      }
       cit.push(c[1]);
       continue;
     }
     fecharLista();
     fecharCit();
-    if (!par.length) alPar = al;
+    if (!par.length) {
+      alPar = al;
+      foPar = fo;
+    }
     par.push(linha);
   }
   fecharTudo();

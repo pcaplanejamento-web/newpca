@@ -1,7 +1,9 @@
 "use client";
 
 import { Fragment, type ReactNode, useMemo, useState } from "react";
-import { type Alinhamento, type Bloco, CSS_ALINHAMENTO, type Inline, lerTextoFormatado } from "@/lib/texto-formatado";
+import type { CSSProperties } from "react";
+import { type Alinhamento, type Bloco, CSS_ALINHAMENTO, CSS_FONTE, type Fonte, type Inline, lerTextoFormatado } from "@/lib/texto-formatado";
+import { CONTEUDO } from "./texto-rico-estilo";
 import { EditorRico } from "./EditorRico";
 import { IconPencil } from "./icons";
 import { LinkExterno } from "./LinkExterno";
@@ -52,26 +54,31 @@ function Trechos({ f }: { f: Inline[] }) {
 }
 
 /** O alinhamento do bloco (só quando não é o padrão, à esquerda). */
-const alinhar = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? { textAlign: CSS_ALINHAMENTO[al] as "center" | "right" | "justify" } : undefined);
+const alinhar = (al: Alinhamento | undefined, fo?: Fonte): CSSProperties | undefined => {
+  const css: CSSProperties = {};
+  if (al && al !== "esquerda") css.textAlign = CSS_ALINHAMENTO[al] as "center" | "right" | "justify";
+  if (fo && fo !== "sans") css.fontFamily = CSS_FONTE[fo];
+  return Object.keys(css).length ? css : undefined;
+};
 
 function BlocoTexto({ b }: { b: Bloco }) {
   switch (b.t) {
     case "par":
       return (
-        <p style={alinhar(b.al)}>
+        <p style={alinhar(b.al, b.fo)}>
           <Trechos f={b.f} />
         </p>
       );
     case "titulo":
       return (
-        <p style={alinhar(b.al)} className={`font-bold text-text ${b.n === 1 ? "text-[16px]" : b.n === 2 ? "text-[14.5px]" : "text-[13.5px]"}`}>
+        <p style={alinhar(b.al, b.fo)} className={`font-bold text-text ${b.n === 1 ? "text-[16px]" : b.n === 2 ? "text-[14.5px]" : "text-[13.5px]"}`}>
           <Trechos f={b.f} />
         </p>
       );
     case "lista": {
       const Tag = b.ordenada ? "ol" : "ul";
       return (
-        <Tag start={b.ordenada ? b.inicio : undefined} style={alinhar(b.al)} className={`space-y-0.5 pl-5 ${b.ordenada ? "list-decimal" : "list-disc"}`}>
+        <Tag start={b.ordenada ? b.inicio : undefined} style={alinhar(b.al, b.fo)} className={`space-y-0.5 pl-5 ${b.ordenada ? "list-decimal" : "list-disc"}`}>
           {b.itens.map((f, i) => (
             <li key={i}>
               <Trechos f={f} />
@@ -82,13 +89,66 @@ function BlocoTexto({ b }: { b: Bloco }) {
     }
     case "citacao":
       return (
-        <blockquote style={alinhar(b.al)} className="border-l-2 border-border-2 pl-3 text-muted">
+        <blockquote style={alinhar(b.al, b.fo)} className="border-l-2 border-border-2 pl-3 text-muted">
           <Trechos f={b.f} />
         </blockquote>
       );
     case "separador":
       return <hr className="border-border" />;
   }
+}
+
+/** Um bloco como DOCUMENTO: as tags do editor (h1/h2/h3, p, listas, citação) com as classes dele — idêntico ao editado. */
+function BlocoDocumento({ b }: { b: Bloco }) {
+  switch (b.t) {
+    case "par":
+      return (
+        <p style={alinhar(b.al, b.fo)}>
+          <Trechos f={b.f} />
+        </p>
+      );
+    case "titulo": {
+      const Tag = (["h1", "h2", "h3"] as const)[b.n - 1];
+      return (
+        <Tag style={alinhar(b.al, b.fo)}>
+          <Trechos f={b.f} />
+        </Tag>
+      );
+    }
+    case "lista": {
+      const Tag = b.ordenada ? "ol" : "ul";
+      return (
+        <Tag start={b.ordenada ? b.inicio : undefined} style={alinhar(b.al, b.fo)}>
+          {b.itens.map((f, i) => (
+            <li key={i}>
+              <Trechos f={f} />
+            </li>
+          ))}
+        </Tag>
+      );
+    }
+    case "citacao":
+      return (
+        <blockquote style={alinhar(b.al, b.fo)}>
+          <Trechos f={b.f} />
+        </blockquote>
+      );
+    case "separador":
+      return <hr />;
+  }
+}
+
+/** O texto formatado como DOCUMENTO (o Termo de Uso): as MESMAS classes e tags do editor — o lido = o editado. `partes` =
+ * o texto em partes (o leitor lê até 20 mil caracteres por vez). */
+export function DocumentoFormatado({ partes, className = "" }: { partes: string[]; className?: string }) {
+  const blocos = useMemo(() => partes.flatMap((p) => lerTextoFormatado(p)), [partes]);
+  return (
+    <div className={`break-words ${CONTEUDO} ${className}`}>
+      {blocos.map((b, i) => (
+        <BlocoDocumento key={i} b={b} />
+      ))}
+    </div>
+  );
 }
 
 /**

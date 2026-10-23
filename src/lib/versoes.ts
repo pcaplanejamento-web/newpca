@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.181.0",
+    data: "2026-10-23",
+    titulo: "Editor de texto: fontes e colagem sem negrito indevido",
+    mudancas: [
+      { tipo: "novo", area: "Editor de texto", texto: "Escolha a fonte de cada parágrafo (padrão do sistema, serifada de documento ou de máquina de escrever); a fonte do texto colado do Word/Docs é reconhecida.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Editor de texto", texto: "Colar texto não deixa mais tudo em negrito: os estilos que o navegador injetava saem, e o documento todo em negrito volta ao normal (os títulos são reconhecidos).", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Termo de Uso", texto: "O termo lido pelas pessoas e a prévia ficam idênticos ao que o ADM editou — mesmos títulos, tamanhos, alinhamentos e fontes.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.180.0",
     data: "2026-10-23",
     titulo: "APIs da Centi: edição direta, órgãos do cadastro e teste",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
 import { FRASE_ACEITE, rotuloVersaoTermo } from "@/lib/termo-uso-core";
 import { Button } from "./Button";
@@ -13,17 +13,13 @@ import { IconArrowRight, IconCheck, IconDownload, IconMailCheck, IconTermo } fro
 import { Modal } from "./Modal";
 import { BotaoSairAcesso } from "./NomearAparelho";
 import { Progress } from "./Progress";
-import { TextoFormatado } from "./TextoFormatado";
+import { DocumentoFormatado } from "./TextoFormatado";
 
 /** O texto do termo (formatado), em partes — o leitor lê até 20 mil caracteres por vez. */
 export function TextoTermo({ texto, className = "" }: { texto: string; className?: string }) {
-  return (
-    <div className={`space-y-3 text-[14px] leading-relaxed text-text-2 ${className}`}>
-      {partesDoTermo(texto).map((p, i) => (
-        <TextoFormatado key={i} texto={p} />
-      ))}
-    </div>
-  );
+  // Como DOCUMENTO: as mesmas classes e tags do editor — o termo lido fica idêntico ao que o ADM editou.
+  const partes = useMemo(() => partesDoTermo(texto), [texto]);
+  return <DocumentoFormatado partes={partes} className={className} />;
 }
 
 /** A caixa ROLÁVEL do termo: avisa quando a pessoa chegou ao fim (o aceite só destrava depois de ler tudo). */

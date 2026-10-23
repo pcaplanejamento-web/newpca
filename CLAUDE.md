@@ -348,7 +348,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     o alerta do sistema e o resumo usam `textoDoAviso`/`textoSimples` — `AVISOS_LONGOS` = até 4 linhas) · AJUDA das automações
     (`ConfigFluxo` → `AjudaDoFluxo` formatada) · descrição da vitrine e aviso da TELA DE ACESSO (`TextosAcessoAdmin` →
     `VitrineAcesso`/`TelaAcesso` formatados). `label`/`hint` = o rótulo visível e a dica, como nos outros campos (o rótulo vira o
-    nome acessível — `aria-labelledby`). Texto cru sem as marcas de alinhamento: **`semMarcas`** (o chat cola com ela). Texto puro onde não há formatação: **`textoPlano`** (uma linha) e **`textoSimples`**
+    nome acessível — `aria-labelledby`). FONTE por bloco (`[[serif]]`/`[[mono]]` junto do alinhamento — `lerMarcas`, `CSS_FONTE`, `fonteDaFamilia` identifica a do colado; menu "Aa" na barra) e `limparDom` tira os estilos que o navegador injeta (o editado = o gravado); o Termo é lido pelo `DocumentoFormatado` com as MESMAS classes do editor (`texto-rico-estilo.ts`). Texto cru sem as marcas: **`semMarcas`** (o chat cola com ela). Texto puro onde não há formatação: **`textoPlano`** (uma linha) e **`textoSimples`**
     (com as linhas e o endereço dos links — `texto-formatado.ts`, testados). FICAM em campo simples (não usar o editor): o
     texto do DFD e da capa do protocolo (documento oficial — despacho, PDF, reenvio), a descrição do item do catálogo
     (comparada com os itens dos DFDs) e as configurações das automações (sintaxe própria, uma regra por linha). Texto novo

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { modeloTermo } from "../src/lib/termo-uso-core.ts";
 import { lerTextoFormatado, semMarcas, textoSimples } from "../src/lib/texto-formatado.ts";
-import { estiloDoBloco, htmlDoTexto, type NoRico, organizarColado, pareceTitulo, textoDoHtml } from "../src/lib/texto-rico-core.ts";
+import { estiloDoBloco, fonteDaFamilia, htmlDoTexto, type NoRico, organizarColado, pareceTitulo, textoDoHtml } from "../src/lib/texto-rico-core.ts";
 
 // Um "DOM" mínimo para os testes: lê o HTML simples que o editor produz (tags, href, entidades).
 type No = NoRico & { childNodes: No[] };
@@ -164,5 +164,30 @@ describe("auditoria do editor e da colagem (v1.178.1)", () => {
 describe("colado com <br> no meio da frase", () => {
   it("junta a linha quebrada pela largura; mantém a quebra real", () => {
     assert.equal(organizarColado("O sistema registra\no acesso.\nNova linha.", false), "O sistema registra o acesso.\nNova linha.");
+  });
+});
+
+describe("fontes e colagem em negrito (v1.180.0)", () => {
+  it("fonte e alinhamento vão e voltam", () => {
+    const md = "[[centro]] [[serif]] Texto de documento\n\n[[mono]] Código";
+    const b = lerTextoFormatado(md);
+    assert.equal(b[0].t === "par" && b[0].fo, "serif");
+    assert.equal(b[0].t === "par" && b[0].al, "centro");
+    assert.equal(ida(md), md);
+    assert.equal(semMarcas(md), "Texto de documento\n\nCódigo");
+  });
+  it("identifica a fonte colada (Word/Docs)", () => {
+    assert.equal(fonteDaFamilia('"Times New Roman", serif'), "serif");
+    assert.equal(fonteDaFamilia("Courier New"), "mono");
+    assert.equal(fonteDaFamilia("Calibri, sans-serif"), "sans");
+    assert.equal(textoDoHtml(parse('<p><span style="font-family:Georgia">Olá</span></p>')), "[[serif]] Olá");
+  });
+  it("tudo em negrito ao colar: o negrito sai dos parágrafos e o título é reconhecido", () => {
+    const t = "**1. Natureza e objeto**\n\n**1.1. O sistema apoia o PCA.**\n\n**1.2. Não substitui os oficiais.**";
+    assert.equal(organizarColado(t, false), "## 1. Natureza e objeto\n\n1.1. O sistema apoia o PCA.\n\n1.2. Não substitui os oficiais.");
+  });
+  it("ênfase pontual fica", () => {
+    const t = "Texto com **destaque** no meio.\n\nOutro parágrafo.\n\n**Só este**";
+    assert.ok(organizarColado(t, false).includes("**destaque**"));
   });
 });

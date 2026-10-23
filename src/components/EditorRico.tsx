@@ -4,8 +4,8 @@ import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, u
 import { num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import { type Alinhamento, semMarcas } from "@/lib/texto-formatado";
-import { ESTILOS_BLOCO, type EstiloBloco, estiloDoBloco, escaparHtml, htmlDoTexto, organizarColado, textoDoHtml } from "@/lib/texto-rico-core";
+import { type Alinhamento, CSS_FONTE, type Fonte, semMarcas } from "@/lib/texto-formatado";
+import { ESTILOS_BLOCO, type EstiloBloco, estiloDoBloco, escaparHtml, fonteDaFamilia, htmlDoTexto, organizarColado, textoDoHtml } from "@/lib/texto-rico-core";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
@@ -32,21 +32,76 @@ import {
   IconUndo,
 } from "./icons";
 import { SetaDropdown } from "./SetaDropdown";
+import { CONTEUDO, CONTEUDO_COMPACTO } from "./texto-rico-estilo";
 
 /** As classes do CONTEÚDO (a mesma aparência no editor e na folha) — títulos, listas, citação, código, links. */
-const ESTRUTURA =
-  "text-text [&_h1]:font-bold [&_h1]:leading-tight [&_h2]:font-bold [&_h3]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5 [&_blockquote]:my-3 [&_blockquote]:border-l-[3px] [&_blockquote]:border-border-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted [&_hr]:my-5 [&_hr]:border-border [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] [&_a]:text-accent [&_a]:underline [&_strong]:font-bold [&_>*:first-child]:mt-0";
-const CONTEUDO = `${ESTRUTURA} text-[15px] leading-[1.7] [&_h1]:mb-2 [&_h1]:mt-5 [&_h1]:text-[22px] [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-[18px] [&_h3]:mb-1.5 [&_h3]:mt-4 [&_h3]:text-[16px] [&_p]:my-2`;
-/** O mesmo conteúdo num CAMPO (descrição, nota, comentário): fonte e respiros menores. */
-const CONTEUDO_COMPACTO = `${ESTRUTURA} text-[13.5px] leading-relaxed [&_h1]:mb-1 [&_h1]:mt-3 [&_h1]:text-[17px] [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-[15.5px] [&_h3]:mb-1 [&_h3]:mt-2.5 [&_h3]:text-[14px] [&_p]:my-1.5`;
-
 /** O termo de @menção logo antes do cursor (as mesmas letras de `mencoesDoTexto`). */
 /** O "@termo" logo antes do cursor (no começo ou depois de um espaço — "email@x" não é menção). */
 const RE_MENCAO = /(?:^|\s)@([\p{L}\p{N}._-]{0,40})$/u;
 type Mencao = { no: Text; ini: number; fim: number; termo: string };
 
-type Estado = { negrito: boolean; italico: boolean; lista: boolean; numerada: boolean; bloco: EstiloBloco; al: Alinhamento };
-const ESTADO_INICIAL: Estado = { negrito: false, italico: false, lista: false, numerada: false, bloco: "p", al: "esquerda" };
+type Estado = { negrito: boolean; italico: boolean; lista: boolean; numerada: boolean; bloco: EstiloBloco; al: Alinhamento; fo: Fonte };
+const ESTADO_INICIAL: Estado = { negrito: false, italico: false, lista: false, numerada: false, bloco: "p", al: "esquerda", fo: "sans" };
+
+/** As FONTES de escrita (por bloco): a do sistema, uma serifada (de documento) e uma de máquina. */
+const OPCOES_FONTE: { fo: Fonte; rotulo: string }[] = [
+  { fo: "sans", rotulo: "Padrão do sistema" },
+  { fo: "serif", rotulo: "Serifada (documento)" },
+  { fo: "mono", rotulo: "Máquina de escrever" },
+];
+const RE_BLOCO_DOM = /^(P|LI|H[1-6]|BLOCKQUOTE|DIV|UL|OL)$/;
+/** O bloco do DOM em que um nó está (dentro do editor). */
+function blocoDoNo(n: Node | null, raiz: HTMLElement): HTMLElement | null {
+  while (n && n !== raiz && !(n instanceof HTMLElement && RE_BLOCO_DOM.test(n.nodeName))) n = n.parentNode;
+  return n instanceof HTMLElement && n !== raiz ? n : null;
+}
+const fonteAtual = (raiz: HTMLElement | null): Fonte => {
+  let b = raiz ? blocoDoNo(document.getSelection()?.anchorNode ?? null, raiz) : null;
+  while (b && raiz && b !== raiz) {
+    const f = b.style.fontFamily ? fonteDaFamilia(b.style.fontFamily) : undefined;
+    if (f) return f;
+    b = b.parentElement;
+  }
+  return "sans";
+};
+
+/**
+ * LIMPA o que o navegador injeta ao colar/editar (o <span style="font-weight:700"> herdado de um título, cores, tamanhos):
+ * o editor mostra SÓ o que o formato grava — o que se vê ao editar é o que fica salvo e o que as pessoas leem.
+ * Os blocos mantêm só o alinhamento e a fonte; o cursor fica onde estava.
+ */
+function limparDom(raiz: HTMLElement) {
+  const sel = document.getSelection();
+  const guardado = sel && sel.rangeCount ? { no: sel.anchorNode, off: sel.anchorOffset, fno: sel.focusNode, foff: sel.focusOffset } : null;
+  let mexeu = false;
+  for (const e of Array.from(raiz.querySelectorAll<HTMLElement>("span, font, b, strong, i, em, [style]"))) {
+    const nome = e.nodeName;
+    const peso = e.style.fontWeight;
+    const desembrulhar = nome === "SPAN" || nome === "FONT" || ((nome === "B" || nome === "STRONG") && /^(normal|[1-5]00)$/.test(peso));
+    if (desembrulhar) {
+      e.replaceWith(...Array.from(e.childNodes));
+      mexeu = true;
+      continue;
+    }
+    if (!e.hasAttribute("style")) continue;
+    const al = e.style.textAlign;
+    const fam = e.style.fontFamily;
+    const manter = RE_BLOCO_DOM.test(nome);
+    const novo = manter ? [al ? `text-align:${al}` : "", fam ? `font-family:${fam}` : ""].filter(Boolean).join(";") : "";
+    if (novo !== (e.getAttribute("style") ?? "")) {
+      if (novo) e.setAttribute("style", novo);
+      else e.removeAttribute("style");
+      mexeu = true;
+    }
+  }
+  if (mexeu && guardado?.no && guardado.fno && raiz.contains(guardado.no) && raiz.contains(guardado.fno)) {
+    try {
+      sel?.setBaseAndExtent(guardado.no, guardado.off, guardado.fno, guardado.foff);
+    } catch {
+      /* o nó saiu do lugar — o cursor fica onde o navegador pôs */
+    }
+  }
+}
 
 /** O ALINHAMENTO do parágrafo: o comando do navegador e o ícone de cada um. */
 const OPCOES_ALINHAMENTO: { al: Alinhamento; rotulo: string; atalho: string; cmd: string; Icone: typeof IconAlinharEsquerda }[] = [
@@ -254,6 +309,7 @@ export function EditorRico({
       numerada: document.queryCommandState("insertOrderedList"),
       bloco: estiloDoBloco(String(document.queryCommandValue("formatBlock") ?? "")),
       al: alinhamentoAtual(),
+      fo: fonteAtual(ref.current),
     });
   }, [menciona]);
 
@@ -283,6 +339,33 @@ export function EditorRico({
     if (disabled) return;
     restaurar();
     exec(cmd, arg);
+    emitir();
+    atualizarEstado();
+  };
+
+  /** A FONTE dos blocos da seleção (o parágrafo do cursor ou todos os que a seleção toca; numa lista, a lista). */
+  const aplicarFonte = (fo: Fonte) => {
+    const el = ref.current;
+    if (disabled || !el) return;
+    restaurar();
+    const sel = document.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    const alvos = new Set<HTMLElement>();
+    const juntar = (b: HTMLElement | null) => {
+      if (!b) return;
+      const lista = b.nodeName === "LI" ? b.parentElement : null;
+      alvos.add(lista && lista !== el ? lista : b);
+    };
+    juntar(blocoDoNo(r.startContainer, el));
+    for (const b of Array.from(el.querySelectorAll<HTMLElement>("p, h1, h2, h3, li, blockquote"))) if (r.intersectsNode(b)) juntar(b);
+    if (!alvos.size) {
+      // Texto solto (sem bloco): vira um parágrafo antes.
+      exec("formatBlock", "<p>");
+      juntar(blocoDoNo(document.getSelection()?.anchorNode ?? null, el));
+    }
+    for (const a of alvos) a.style.fontFamily = fo === "sans" ? "" : CSS_FONTE[fo];
+    for (const a of alvos) if (!a.getAttribute("style")) a.removeAttribute("style");
     emitir();
     atualizarEstado();
   };
@@ -318,6 +401,7 @@ export function EditorRico({
     exec("removeFormat");
     exec("justifyLeft");
     aplicar("formatBlock", "<p>");
+    aplicarFonte("sans");
   };
 
   const casa = mencao && menciona ? predicadoBusca(mencao.termo) : null;
@@ -473,6 +557,44 @@ export function EditorRico({
             </Dropdown>
             <Divisor />
             <Dropdown
+              ariaLabel="Fonte"
+              title="Fonte do parágrafo"
+              papel="dialog"
+              bloqueado={disabled}
+              triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-1 rounded-control px-2 text-[13px] text-text hover:bg-surface-2 lg:h-8"
+              trigger={
+                <>
+                  <span style={{ fontFamily: CSS_FONTE[estado.fo] }} className="font-semibold">
+                    Aa
+                  </span>
+                  <SetaDropdown className="h-3.5 w-3.5" />
+                </>
+              }
+            >
+              {(fechar) => (
+                <div className="flex flex-col">
+                  {OPCOES_FONTE.map(({ fo, rotulo: r }) => (
+                    <button
+                      key={fo}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        fechar();
+                        aplicarFonte(fo);
+                      }}
+                      className={`flex h-11 items-center gap-3 rounded-control px-3 text-left text-[14px] lg:h-9 ${estado.fo === fo ? "bg-accent-soft text-accent" : "text-text hover:bg-surface-2"}`}
+                    >
+                      <span style={{ fontFamily: CSS_FONTE[fo] }} className="w-6 text-[15px] font-semibold">
+                        Aa
+                      </span>
+                      <span style={{ fontFamily: CSS_FONTE[fo] }}>{r}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Dropdown>
+            <Divisor />
+            <Dropdown
               ariaLabel="Alinhamento"
               title="Alinhamento do parágrafo"
               papel="dialog"
@@ -590,6 +712,7 @@ export function EditorRico({
             }}
             onBlur={() => setFocado(false)}
             onInput={() => {
+              if (ref.current?.querySelector("span, font, [style*='font-weight'], [style*='color'], [style*='font-size']")) limparDom(ref.current);
               setSemSugestao(false);
               setAtiva(0);
               emitir();
@@ -607,7 +730,14 @@ export function EditorRico({
                 ? organizarColado(textoDoHtml(new DOMParser().parseFromString(html, "text/html").body), false, !mensagem)
                 : organizarColado(e.clipboardData.getData("text/plain"), true, !mensagem);
               const texto = mensagem ? semMarcas(org) : org;
-              if (texto) aplicar("insertHTML", htmlDoTexto(texto));
+              if (!texto) return;
+              // Colar dentro de um título/citação vazio: o bloco volta a parágrafo antes (o navegador levaria o estilo
+              // do título — o negrito — para todo o texto colado).
+              const b = ref.current && blocoDoNo(document.getSelection()?.anchorNode ?? null, ref.current);
+              if (b && /^(H[1-6]|BLOCKQUOTE)$/.test(b.nodeName) && !(b.textContent ?? "").trim()) exec("formatBlock", "<p>");
+              aplicar("insertHTML", htmlDoTexto(texto));
+              if (ref.current) limparDom(ref.current);
+              emitir();
             }}
             className={`outline-none ${mensagem ? `min-h-9 min-w-0 flex-1 py-1.5 ${CONTEUDO_COMPACTO}` : compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30vh] ${CONTEUDO}`}`}
           />
