@@ -18,7 +18,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   return ok({
     aceite: { ...dados, usuarioId: a.usuarioId },
     texto: t.textoFinal,
-    titulo: t.titulo,
+    publicadoEm: t.publicadoEm,
     integro: await seloConfere(a),
     urlVerificacao: `${new URL(req.url).origin}/termo/verificar/${a.codigo}`,
   });

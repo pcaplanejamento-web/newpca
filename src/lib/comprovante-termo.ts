@@ -1,5 +1,5 @@
 import { baixarDocumentoPdf } from "./documento-pdf";
-import { blocosComprovante, type DadosAceite } from "./termo-uso-core";
+import { blocosComprovante, type DadosAceite, rotuloVersaoTermo } from "./termo-uso-core";
 
 /** Baixa o COMPROVANTE do aceite (o termo integral + o registro da assinatura) — os dados vêm de `/api/termo/aceites/[id]`. */
 export async function baixarComprovanteTermo(aceiteId: number, sistema?: string): Promise<void> {
@@ -9,14 +9,14 @@ export async function baixarComprovanteTermo(aceiteId: number, sistema?: string)
     error?: string;
     aceite?: DadosAceite & { selo: string; id: number };
     texto?: string;
-    titulo?: string;
+    publicadoEm?: string | null;
     urlVerificacao?: string;
   };
   if (!r.ok || !j.ok || !j.aceite || !j.texto) throw new Error(j.error ?? "Não foi possível gerar o comprovante.");
   const a = j.aceite;
   await baixarDocumentoPdf(
     `termo-de-uso-v${a.versao}-${a.codigo}.pdf`,
-    { titulo: `${j.titulo ?? "Termo de Uso"} — versão ${a.versao} (comprovante de aceite)`, blocos: blocosComprovante(j.texto, { ...a, urlVerificacao: j.urlVerificacao ?? "" }) },
+    { titulo: `${rotuloVersaoTermo(a.versao, j.publicadoEm)} (comprovante de aceite)`, blocos: blocosComprovante(j.texto, { ...a, urlVerificacao: j.urlVerificacao ?? "" }) },
     { usuario: a.nome, sistema },
   );
 }

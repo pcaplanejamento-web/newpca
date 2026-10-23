@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.176.0",
+    data: "2026-10-23",
+    titulo: "Termo de Uso identificado pela versão e pela data",
+    mudancas: [
+      { tipo: "melhoria", area: "Configurações", texto: "O Termo de Uso não tem mais título próprio: cada termo é identificado pela versão e pela data e hora da publicação, no editor, nas versões, no aceite, no cadastro e no comprovante em PDF.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.175.0",
     data: "2026-10-23",
     titulo: "Termo de uso e aparelho: entrada mais rápida e aceite que fecha sozinho",

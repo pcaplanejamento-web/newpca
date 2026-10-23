@@ -188,13 +188,27 @@ Este termo pode ser atualizado a qualquer tempo. Cada versão é identificada po
 Os casos omissos serão resolvidos pela Administração, à luz da legislação aplicável. Fica eleito o foro da Comarca de Rio Verde — GO para dirimir questões decorrentes deste termo.`;
 }
 
-/** O texto FINAL congelado na publicação: o título, a versão, o texto do ADM e as cláusulas automáticas numeradas. */
-export function montarTermo(t: { titulo: string; versao: number; publicadoEm: string; textoAdm: string; clausulas: Clausula[] }): string {
-  const data = dataBR(t.publicadoEm);
+/** O nome do documento — fixo: cada termo é identificado pela VERSÃO e pela data/hora dela, sem título próprio. */
+export const NOME_TERMO = "Termo de Uso";
+
+/** "Termo de Uso — versão 3 · 23/10/2026 14:05" (a data/hora da publicação, em Brasília); sem publicação, "(rascunho)". */
+export function rotuloVersaoTermo(versao: number, publicadoEm?: string | null): string {
+  return `${NOME_TERMO} — versão ${versao}${publicadoEm ? ` · ${dataHoraCurtaBR(publicadoEm)}` : " (rascunho)"}`;
+}
+
+/** "23/10/2026 14:05" (Brasília), sem os segundos. */
+function dataHoraCurtaBR(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${dataBR(iso)} ${d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
+}
+
+/** O texto FINAL congelado na publicação: a versão com a data/hora, o texto do ADM e as cláusulas automáticas numeradas. */
+export function montarTermo(t: { versao: number; publicadoEm: string; textoAdm: string; clausulas: Clausula[] }): string {
   const auto = t.clausulas.map((c, i) => `### A.${i + 1}. ${c.titulo}\n\n${c.texto}`).join("\n\n");
   return [
-    `# ${t.titulo.trim() || "Termo de Uso"}`,
-    `Versão ${t.versao} — publicada em ${data}.`,
+    `# ${NOME_TERMO}`,
+    `Versão ${t.versao} — publicada em ${dataHoraCurtaBR(t.publicadoEm)} (horário de Brasília).`,
     t.textoAdm.trim(),
     t.clausulas.length ? `## Cláusulas definidas pelas configurações do sistema\n\n${auto}` : "",
   ]

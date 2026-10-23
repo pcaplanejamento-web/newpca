@@ -32,10 +32,10 @@ export async function POST(req: Request) {
 
   if (d.acao === "previa") {
     const r = await rascunho();
-    return ok(await previaDoTermo({ titulo: d.titulo, textoAdm: d.textoAdm, versao: r.versao }));
+    return ok(await previaDoTermo({ textoAdm: d.textoAdm, versao: r.versao }));
   }
   if (d.acao === "salvar") {
-    const id = await salvarRascunho({ titulo: d.titulo, textoAdm: d.textoAdm });
+    const id = await salvarRascunho({ textoAdm: d.textoAdm });
     await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "termo_uso", entidadeId: id, resumo: "Rascunho do Termo de Uso salvo" });
     return ok({ id });
   }

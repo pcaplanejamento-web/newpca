@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ConfigAcessoConta, LIMITE_MAX, LIMITE_MIN, type ModoImplantacao, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "@/lib/acesso-conta-core";
 import { baixarDocumentoPdf } from "@/lib/documento-pdf";
-import { blocosDoTexto, dataHoraBR, MAX_TEXTO_ADM } from "@/lib/termo-uso-core";
+import { blocosDoTexto, dataHoraBR, MAX_TEXTO_ADM, rotuloVersaoTermo } from "@/lib/termo-uso-core";
 import { TextoTermo } from "./AceiteTermo";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -22,8 +22,8 @@ import { Switch } from "./Switch";
 import { EditorRico } from "./EditorRico";
 import { toast } from "./Toast";
 
-type Versao = { id: number; versao: number; titulo: string; estado: string; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
-type Dados = { config: ConfigAcessoConta; rascunho: { id: number | null; versao: number; titulo: string; textoAdm: string }; versoes: Versao[]; vigenteId: number | null; desatualizado: boolean };
+type Versao = { id: number; versao: number; estado: string; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
+type Dados = { config: ConfigAcessoConta; rascunho: { id: number | null; versao: number; textoAdm: string }; versoes: Versao[]; vigenteId: number | null; desatualizado: boolean };
 type Pessoa = { id: number; nome: string; email: string; status: string };
 type Ref = { id: number; nome: string };
 type Publico = "todos" | "papeis" | "grupos" | "pessoas";
@@ -143,14 +143,13 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
 }
 
 /** Baixa o TEXTO INTEGRAL de uma versão em PDF (a "impressão" do ADM — o bloqueio de impressão não afeta). */
-async function baixarTermo(titulo: string, versao: number, texto: string) {
-  await baixarDocumentoPdf(`termo-de-uso-v${versao}.pdf`, { titulo: `${titulo} — versão ${versao}`, blocos: blocosDoTexto(texto) });
+async function baixarTermo(versao: number, publicadoEm: string | null, texto: string) {
+  await baixarDocumentoPdf(`termo-de-uso-v${versao}.pdf`, { titulo: rotuloVersaoTermo(versao, publicadoEm), blocos: blocosDoTexto(texto) });
 }
 
 const COLUNAS: Column<Versao>[] = [
   { key: "v", header: "Versão", render: (v) => `v${v.versao}`, value: (v) => String(v.versao), nowrap: true },
   { key: "e", header: "Estado", render: (v) => <Badge tone={v.estado === "publicado" ? "emerald" : "amber"}>{v.estado === "publicado" ? "Publicada" : "Rascunho"}</Badge>, value: (v) => v.estado, nowrap: true },
-  { key: "t", header: "Título", render: (v) => v.titulo, value: (v) => v.titulo, align: "left" },
   { key: "p", header: "Publicada em", render: (v) => (v.publicadoEm ? dataHoraBR(v.publicadoEm) : "—"), value: (v) => v.publicadoEm ?? "", nowrap: true },
   { key: "por", header: "Por", render: (v) => v.publicadoPor ?? "—", value: (v) => v.publicadoPor ?? "" },
   { key: "a", header: "Aceites", render: (v) => `${v.aceites}${v.aceitesTeste ? ` (+${v.aceitesTeste} teste)` : ""}`, numero: (v) => v.aceites, nowrap: true },
@@ -158,7 +157,7 @@ const COLUNAS: Column<Versao>[] = [
 ];
 
 type Situacao = {
-  termo: { id: number; versao: number; titulo: string; texto: string | null; hash: string | null };
+  termo: { id: number; versao: number; publicadoEm: string | null; texto: string | null; hash: string | null };
   aceites: { id: number; usuarioId: number | null; nome: string; matricula: string; unidade: string; em: string; metodo: string; ip: string; aparelho: string; teste: boolean; codigo: string }[];
   pendentes: { usuarioId: number; nome: string; matricula: string | null; prazo: string }[];
 };
@@ -168,7 +167,6 @@ type Situacao = {
 export function TermoUsoAdmin() {
   const [d, setD] = useState<Dados | null>(null);
   const [cfg, setCfg] = useState<ConfigAcessoConta | null>(null);
-  const [titulo, setTitulo] = useState("");
   const [texto, setTexto] = useState("");
   const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [papeis, setPapeis] = useState<Ref[]>([]);
@@ -187,7 +185,6 @@ export function TermoUsoAdmin() {
       .then((j) => {
         setD(j);
         setCfg(j.config);
-        setTitulo(j.rascunho.titulo);
         setTexto(j.rascunho.textoAdm);
         setErro(null);
       })
@@ -205,7 +202,7 @@ export function TermoUsoAdmin() {
   }, [carregar]);
 
   const cfgMudou = useMemo(() => !!d && !!cfg && JSON.stringify(d.config) !== JSON.stringify(cfg), [d, cfg]);
-  const textoMudou = !!d && (titulo !== d.rascunho.titulo || texto !== d.rascunho.textoAdm || !d.rascunho.id);
+  const textoMudou = !!d && (texto !== d.rascunho.textoAdm || !d.rascunho.id);
 
   if (erro && !d) return <ErroCarga msg={erro} onTentar={carregar} />;
   if (!d || !cfg) return <SkeletonLinhas linhas={6} />;
@@ -236,7 +233,7 @@ export function TermoUsoAdmin() {
   async function salvarTexto() {
     setOcupado("texto");
     try {
-      await chamar("/api/admin/termo", "POST", { acao: "salvar", titulo, textoAdm: texto });
+      await chamar("/api/admin/termo", "POST", { acao: "salvar", textoAdm: texto });
       toast.success("Rascunho salvo.");
       carregar();
     } catch (e) {
@@ -249,7 +246,7 @@ export function TermoUsoAdmin() {
   async function verPrevia() {
     setOcupado("previa");
     try {
-      const j = await chamar<{ texto: string }>("/api/admin/termo", "POST", { acao: "previa", titulo: titulo || "Termo de Uso", textoAdm: texto });
+      const j = await chamar<{ texto: string }>("/api/admin/termo", "POST", { acao: "previa", textoAdm: texto });
       setPrevia(j.texto);
     } catch (e) {
       toast.error((e as Error).message);
@@ -268,7 +265,7 @@ export function TermoUsoAdmin() {
         await chamar("/api/admin/termo", "POST", { acao: "exigir", termoId: publicar.termoId, publico: alvo });
         toast.success("Aceite exigido.");
       } else {
-        if (textoMudou) await chamar("/api/admin/termo", "POST", { acao: "salvar", titulo, textoAdm: texto });
+        if (textoMudou) await chamar("/api/admin/termo", "POST", { acao: "salvar", textoAdm: texto });
         const j = await chamar<{ versao: number }>("/api/admin/termo", "POST", { acao: "publicar", publico: alvo });
         toast.success(`Versão ${j.versao} publicada.`);
       }
@@ -329,17 +326,16 @@ export function TermoUsoAdmin() {
         {d.desatualizado && (
           <Callout kind="warn">As configurações mudaram depois da última publicação — as cláusulas automáticas da versão vigente estão desatualizadas. Publique uma versão nova.</Callout>
         )}
-        <TextField label="Título" value={titulo} maxLength={120} onChange={(e) => setTitulo(e.target.value)} />
         <EditorRico rotulo="Texto do termo" valor={texto} onChange={setTexto} maxLength={MAX_TEXTO_ADM} />
         <p className="text-[12px] text-muted">As cláusulas automáticas (aparelhos, sessão, registros, LGPD…) entram no fim, na publicação. Veja na prévia.</p>
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" variant="secondary" icon={<IconEye className="h-4 w-4" />} loading={ocupado === "previa"} disabled={!!ocupado} onClick={verPrevia}>
             Prévia completa
           </Button>
-          <Button size="sm" variant="secondary" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "texto"} disabled={!textoMudou || !!ocupado || titulo.trim().length < 3 || !texto.trim()} onClick={salvarTexto}>
+          <Button size="sm" variant="secondary" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "texto"} disabled={!textoMudou || !!ocupado || !texto.trim()} onClick={salvarTexto}>
             Salvar rascunho
           </Button>
-          <Button size="sm" icon={<IconTermo className="h-4 w-4" />} disabled={!!ocupado || titulo.trim().length < 3 || !texto.trim()} onClick={() => setPublicar({ termoId: null })}>
+          <Button size="sm" icon={<IconTermo className="h-4 w-4" />} disabled={!!ocupado || !texto.trim()} onClick={() => setPublicar({ termoId: null })}>
             Publicar versão {d.rascunho.versao}
           </Button>
         </div>
@@ -418,11 +414,11 @@ export function TermoUsoAdmin() {
       <Modal
         open={versaoAberta != null}
         onClose={() => setVersaoAberta(null)}
-        titulo={versaoAberta ? `${versaoAberta.termo.titulo} — versão ${versaoAberta.termo.versao}` : ""}
+        titulo={versaoAberta ? rotuloVersaoTermo(versaoAberta.termo.versao, versaoAberta.termo.publicadoEm) : ""}
         size="full"
         acoesCabecalho={
           versaoAberta?.termo.texto ? (
-            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => versaoAberta.termo.texto && baixarTermo(versaoAberta.termo.titulo, versaoAberta.termo.versao, versaoAberta.termo.texto).catch((e) => toast.error((e as Error).message))}>
+            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => versaoAberta.termo.texto && baixarTermo(versaoAberta.termo.versao, versaoAberta.termo.publicadoEm, versaoAberta.termo.texto).catch((e) => toast.error((e as Error).message))}>
               PDF
             </Button>
           ) : null

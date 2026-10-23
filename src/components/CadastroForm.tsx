@@ -1,5 +1,6 @@
 "use client";
 
+import { rotuloVersaoTermo } from "@/lib/termo-uso-core";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
@@ -69,14 +70,14 @@ export function CadastroForm({
   const [criando, setCriando] = useState(false);
   const [pendente, setPendente] = useState(false);
   // O TERMO DE USO em vigor (implantação ativa): obrigatório ANTES de enviar o código — lido até o fim no banner.
-  const [termo, setTermo] = useState<{ versao: number; hash: string; titulo: string; texto: string } | null>(null);
+  const [termo, setTermo] = useState<{ versao: number; hash: string; texto: string; publicadoEm: string | null } | null>(null);
   const [termoAberto, setTermoAberto] = useState(false);
   const [termoLido, setTermoLido] = useState(false);
   const [aceitou, setAceitou] = useState(false);
   useEffect(() => {
     if (semCodigo) return;
     fetch("/api/termo/vigente", { cache: "no-store" })
-      .then((r) => r.json() as Promise<{ exigido?: boolean; termo?: { versao: number; hash: string; titulo: string; texto: string } }>)
+      .then((r) => r.json() as Promise<{ exigido?: boolean; termo?: { versao: number; hash: string; texto: string; publicadoEm: string | null } }>)
       .then((j) => setTermo(j.exigido && j.termo ? j.termo : null))
       .catch(() => {});
   }, [semCodigo]);
@@ -359,7 +360,7 @@ export function CadastroForm({
         <Modal
           open={termoAberto}
           onClose={() => setTermoAberto(false)}
-          titulo={`${termo.titulo} — versão ${termo.versao}`}
+          titulo={rotuloVersaoTermo(termo.versao, termo.publicadoEm)}
           size="xl"
           rodape={
             <div className="flex items-center justify-end gap-2">

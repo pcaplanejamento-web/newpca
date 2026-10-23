@@ -42,8 +42,8 @@ const publicoSchema = z.discriminatedUnion("tipo", [
 ]);
 
 export const termoAdminSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("salvar"), titulo: z.string().trim().min(3).max(120), textoAdm: z.string().min(1).max(MAX_TEXTO_ADM) }),
-  z.strictObject({ acao: z.literal("previa"), titulo: z.string().trim().min(1).max(120), textoAdm: z.string().max(MAX_TEXTO_ADM) }),
+  z.strictObject({ acao: z.literal("salvar"), textoAdm: z.string().min(1).max(MAX_TEXTO_ADM) }),
+  z.strictObject({ acao: z.literal("previa"), textoAdm: z.string().max(MAX_TEXTO_ADM) }),
   z.strictObject({ acao: z.literal("publicar"), publico: publicoSchema }),
   z.strictObject({ acao: z.literal("exigir"), termoId: id, publico: publicoSchema }),
   z.strictObject({ acao: z.literal("config"), config: configAcessoContaSchema, confirmarAtivo: z.boolean().optional() }),

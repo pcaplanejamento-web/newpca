@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
-import { FRASE_ACEITE } from "@/lib/termo-uso-core";
+import { FRASE_ACEITE, rotuloVersaoTermo } from "@/lib/termo-uso-core";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ErroAuth } from "./CartaoAuth";
@@ -61,7 +61,7 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
   );
 }
 
-export type TermoParaAceite = { id: number; versao: number; titulo: string; texto: string; hash: string; publicadoEm: string | null };
+export type TermoParaAceite = { id: number; versao: number; texto: string; hash: string; publicadoEm: string | null };
 /** `fecharEmS` = segundos até o "Termo de Uso aceito" seguir sozinho (Configurações → Termo de uso; 0 = não fecha sozinho). */
 export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string; fecharEmS?: number };
 
@@ -172,7 +172,7 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
       onClose={() => {}}
       bloqueado
       size="xl"
-      titulo={feito ? "Termo de Uso aceito" : `${termo.titulo} — versão ${termo.versao}`}
+      titulo={feito ? "Termo de Uso aceito" : rotuloVersaoTermo(termo.versao, termo.publicadoEm)}
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-2">
           {feito ? <span /> : <BotaoSairAcesso disabled={gravando || enviando} />}

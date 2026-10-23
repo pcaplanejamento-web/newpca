@@ -291,7 +291,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `troca_ate` — só se a retirada abre a vaga; o aparelho da própria sessão nunca sai); em trava nenhum aparelho NOVO entra,
     mesmo com vaga (`situacaoNovoAparelho`); "Pedir liberação" avisa os ADMs (tipo `seguranca`, 3/dia); o ADM libera a troca e
     muda o limite no banner do usuário. Retirar outro aparelho no Perfil não trava. Só o cookie identifica (nunca IP + navegador).
-  - **Termo** (`termo-uso-core.ts` puro + `termos-sql.ts` + D1 `termo-uso.ts`): rascunho (o `modeloTermo` profissional como
+  - **Termo** (`termo-uso-core.ts` puro + `termos-sql.ts` + D1 `termo-uso.ts`): rascunho (SEM título — o nome é fixo `NOME_TERMO` e cada termo é identificado por `rotuloVersaoTermo` = versão · data/hora da publicação; a coluna `termos_uso.titulo` fica gravada com o nome fixo; o `modeloTermo` profissional como
     início) → **publicar** congela o texto final (`montarTermo` = texto do ADM + as **cláusulas automáticas**
     `clausulasAutomaticas` das configurações reais: aparelhos, sessão/inatividade, registros, proteção de dados, presença/chat,
     e-mails, LGPD com o encarregado, aceite eletrônico) + o SHA-256 (`hashTexto`); o público (todos · papéis · grupos · pessoas;

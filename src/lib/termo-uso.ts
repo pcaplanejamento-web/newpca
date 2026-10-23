@@ -22,6 +22,7 @@ import {
   hashTexto,
   modeloTermo,
   montarTermo,
+  NOME_TERMO,
   seloAceite,
 } from "./termo-uso-core";
 import { comandoPendencias, comandoPublicar, comandosAceitar, consultaTermoVigente, type PublicoTermo } from "./termos-sql";
@@ -77,7 +78,6 @@ export async function listarVersoes() {
     .select({
       id: termosUso.id,
       versao: termosUso.versao,
-      titulo: termosUso.titulo,
       estado: termosUso.estado,
       publicadoEm: termosUso.publicadoEm,
       publicadoPor: termosUso.publicadoPor,
@@ -91,33 +91,32 @@ export async function listarVersoes() {
 }
 
 /** O rascunho (o da próxima versão); sem nenhum, o MODELO pronto para o ADM adaptar (ainda não gravado). */
-export async function rascunho(): Promise<{ id: number | null; versao: number; titulo: string; textoAdm: string }> {
+export async function rascunho(): Promise<{ id: number | null; versao: number; textoAdm: string }> {
   const db = getDb();
   const [r] = await db.select().from(termosUso).where(eq(termosUso.estado, "rascunho")).limit(1);
-  if (r) return { id: r.id, versao: r.versao, titulo: r.titulo, textoAdm: r.textoAdm };
+  if (r) return { id: r.id, versao: r.versao, textoAdm: r.textoAdm };
   const [ultimo] = await db.select().from(termosUso).orderBy(desc(termosUso.versao)).limit(1);
   return {
     id: null,
     versao: (ultimo?.versao ?? 0) + 1,
-    titulo: ultimo?.titulo ?? "Termo de Uso",
     textoAdm: ultimo?.textoAdm ?? modeloTermo(await nomeDoSistema()),
   };
 }
 
-export async function salvarRascunho(d: { titulo: string; textoAdm: string }): Promise<number> {
+export async function salvarRascunho(d: { textoAdm: string }): Promise<number> {
   const db = getDb();
   const atual = await rascunho();
   const agora = new Date().toISOString();
   if (atual.id) {
-    await db.update(termosUso).set({ titulo: d.titulo, textoAdm: d.textoAdm, atualizadoEm: agora }).where(eq(termosUso.id, atual.id));
+    await db.update(termosUso).set({ textoAdm: d.textoAdm, atualizadoEm: agora }).where(eq(termosUso.id, atual.id));
     return atual.id;
   }
-  const [n] = await db.insert(termosUso).values({ versao: atual.versao, titulo: d.titulo, textoAdm: d.textoAdm, estado: "rascunho" }).returning({ id: termosUso.id });
+  const [n] = await db.insert(termosUso).values({ versao: atual.versao, titulo: NOME_TERMO, textoAdm: d.textoAdm, estado: "rascunho" }).returning({ id: termosUso.id });
   return n.id;
 }
 
 /** A prévia do texto final (o rascunho + as cláusulas de AGORA). */
-export async function previaDoTermo(d: { titulo: string; textoAdm: string; versao: number }): Promise<{ texto: string; clausulas: Clausula[] }> {
+export async function previaDoTermo(d: { textoAdm: string; versao: number }): Promise<{ texto: string; clausulas: Clausula[] }> {
   const clausulas = clausulasAutomaticas(await contextoClausulas());
   return { texto: montarTermo({ ...d, publicadoEm: new Date().toISOString(), clausulas }), clausulas };
 }
@@ -155,7 +154,7 @@ export async function publicarTermo(por: string, publico: PublicoEscolha): Promi
   const agora = new Date();
   const em = agora.toISOString();
   const clausulas = clausulasAutomaticas(await contextoClausulas());
-  const textoFinal = montarTermo({ titulo: r.titulo, versao: r.versao, publicadoEm: em, textoAdm: r.textoAdm, clausulas });
+  const textoFinal = montarTermo({ versao: r.versao, publicadoEm: em, textoAdm: r.textoAdm, clausulas });
   const hash = await hashTexto(textoFinal);
   const db = getDb();
   const [feito] = await db.batch([comandoPublicar(db, r.id, { textoFinal, hash, clausulas: JSON.stringify(clausulas), em, por })]);
@@ -345,7 +344,7 @@ export async function dadosDoAceite(u: { id: number; email: string }): Promise<i
     getDb().select({ senhaHash: usuarios.senhaHash }).from(usuarios).where(eq(usuarios.id, u.id)).limit(1),
   ]);
   return {
-    termo: { id: p.termo.id, versao: p.termo.versao, titulo: p.termo.titulo, texto: p.termo.textoFinal, hash: p.termo.hash, publicadoEm: p.termo.publicadoEm },
+    termo: { id: p.termo.id, versao: p.termo.versao, texto: p.termo.textoFinal, hash: p.termo.hash, publicadoEm: p.termo.publicadoEm },
     metodos: { senha: !!conta?.senhaHash && conta.senhaHash !== SENHA_INUTILIZAVEL, codigo: resendConfigurado(integ) },
     email: u.email,
     sistema,

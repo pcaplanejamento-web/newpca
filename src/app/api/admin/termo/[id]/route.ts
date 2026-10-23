@@ -12,5 +12,5 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id) return erro("Versão inválida.", 400);
   const t = await termoPorId(id);
   if (!t) return erro("Versão não encontrada.", 404);
-  return ok({ termo: { id: t.id, versao: t.versao, titulo: t.titulo, estado: t.estado, texto: t.textoFinal, hash: t.hash, publicadoEm: t.publicadoEm, publicadoPor: t.publicadoPor }, ...(await situacaoDaVersao(id)) });
+  return ok({ termo: { id: t.id, versao: t.versao, estado: t.estado, texto: t.textoFinal, hash: t.hash, publicadoEm: t.publicadoEm, publicadoPor: t.publicadoPor }, ...(await situacaoDaVersao(id)) });
 }

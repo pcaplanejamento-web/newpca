@@ -40,6 +40,7 @@ import {
   hashTexto,
   modeloTermo,
   montarTermo,
+  rotuloVersaoTermo,
   seloAceite,
 } from "../src/lib/termo-uso-core.ts";
 import { comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
@@ -128,8 +129,8 @@ describe("termo de uso — núcleo", () => {
     assert.notEqual(await assinaturaClausulas(cl), await assinaturaClausulas(sem));
   });
   it("monta, faz hash e sela", async () => {
-    const texto = montarTermo({ titulo: "Termo", versao: 2, publicadoEm: "2026-10-22T12:00:00Z", textoAdm: modeloTermo("PCA"), clausulas: clausulasAutomaticas(ctx) });
-    assert.match(texto, /^# Termo\n\nVersão 2 — publicada em 22\/10\/2026/);
+    const texto = montarTermo({ versao: 2, publicadoEm: "2026-10-22T12:00:00Z", textoAdm: modeloTermo("PCA"), clausulas: clausulasAutomaticas(ctx) });
+    assert.match(texto, /^# Termo de Uso\n\nVersão 2 — publicada em 22\/10\/2026 09:00 \(horário de Brasília\)/);
     assert.match(texto, /### A\.1\. Aparelhos vinculados/);
     assert.equal(await hashTexto("a\r\nb"), await hashTexto("a\nb"));
     const d = { codigo: "X", versao: 2, hash: "h", usuarioId: 1, nome: "Ana", matricula: "1", cargo: "", unidade: "", email: "a@x", ip: "", navegador: "", aparelho: "", metodo: "senha", em: "2026", teste: false };
@@ -269,4 +270,11 @@ it("aparelho: o cookie copiado para OUTRO navegador não é o mesmo aparelho", a
   assert.equal(mesmoNavegador("Chrome no Windows", "Chrome no Windows"), true);
   assert.equal(mesmoNavegador("", "Firefox no Linux"), true);
   assert.equal(mesmoNavegador("Chrome no Windows", "Firefox no Linux"), false);
+});
+
+describe("versão do termo sem título", () => {
+  it("identifica pela versão e pela data/hora de Brasília", () => {
+    assert.equal(rotuloVersaoTermo(3, "2026-10-23T17:05:00Z"), "Termo de Uso — versão 3 · 23/10/2026 14:05");
+    assert.equal(rotuloVersaoTermo(4, null), "Termo de Uso — versão 4 (rascunho)");
+  });
 });
