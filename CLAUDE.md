@@ -4,6 +4,19 @@ Guia para IA e pessoas que editam este repositório. Contexto de **produto** fic
 [`docs/`](./docs) (ROADMAP, PROTOCOLOS, DESIGN, FASE1-AUTENTICACAO, AUDITORIA). Este
 arquivo cobre **como** mexer no código sem quebrar nada.
 
+## REGRA FIRME Nº 1 — antes de criar QUALQUER componente, revisar se já existe um que funcione (obrigatório, sempre)
+Vale para toda conversa, toda sessão e toda pessoa. É PROIBIDO criar componente (`.tsx` em `src/components`), hook, tela
+ou peça de interface sem antes:
+1. **Procurar o que já existe**: o catálogo do design-system (`/painel/design-system` — `designsystem/Catalogo.tsx`), a
+   seção "UI — Design System" deste arquivo e `src/components` (grep pelo PAPEL: banner, tabela, seletor, campo, cartão,
+   aviso, confirmação, ajuda…). Ex.: cadastro = `BannerCadastro` + `SecaoBanner`; tabela = `DataTable`; confirmação =
+   `useConfirmacao`; ajuda = `Ajuda`; falha de carga = `ErroCarga`.
+2. **Reutilizar ou ESTENDER** o existente (uma prop nova) — nunca uma cópia parecida.
+3. Só se nenhum servir, criar — e REGISTRAR o arquivo em `tests/fixtures/componentes-registrados.txt` (+ o catálogo do
+   design-system quando for de interface). O teste **`tests/componentes-registrados.test.ts` bloqueia o deploy** quando
+   aparece um componente fora do registro (e quando o registro cita um que não existe mais).
+Na resposta ao usuário, diga quais componentes existentes foram revisados/reutilizados.
+
 ## O que é
 Plataforma interna do PCA (Plano de Contratações Anual) da Prefeitura de Rio Verde.
 **Next.js 16** (App Router, React 19, `force-dynamic`) + **Tailwind v4** + **Cloudflare
@@ -4495,7 +4508,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
   (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
 - **APIS DA CENTI — o cadastro (v1.179.0, migração `0129`; passo 1 da EXECUÇÃO DA DESPESA):** Integrações ganhou as abas
-  **Serviços | APIs da Centi** (`?aba=centi`; `CentiApisAdmin`, só ADM). Tabela `centi_apis` (chave única, endpoint, url
+  **Serviços | APIs da Centi** (`?aba=centi`; `CentiApisAdmin`, só ADM, baixado SÓ ao abrir a aba — `next/dynamic`; a
+  tabela padrão compacta com XLSX/PDF e o (?) no rodapé; tocar abre o **`BannerCadastro`** — cadeado por campo, só o que
+  mudou, `camposDaApi`/`apiDosCampos` no núcleo — com a prévia do pedido numa `SecaoBanner`). Tabela `centi_apis` (chave única, endpoint, url
   base/uf/município, `divisao` ano|orgao|fonte + `lista` dos idOrgao/fontes, `paginado`, `parametros` JSON com os marcadores
   `{ano}`/`{orgao}`/`{fonte}`/`{pagina}`, frequência/horário/dias úteis/anos, `implementada`/`ativa`, a última leitura);
   semeada com empenhos, liquidações, pagamentos, contratos e receita — todas DESLIGADAS e "Em preparação" (`implementada`

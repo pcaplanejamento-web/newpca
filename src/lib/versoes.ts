@@ -35,13 +35,21 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.179.1",
+    versao: "1.179.2",
     data: "2026-10-23",
     titulo: "Editor de texto: colagem e alinhamento em listas",
     mudancas: [
       { tipo: "melhoria", area: "Colagem", texto: "Linhas quebradas no meio da frase (texto colado com formatação) voltam a ser um parágrafo.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "correcao", area: "Editor de texto", texto: "O botão de alinhamento mostra o alinhamento certo também dentro de listas.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "correcao", area: "Editor de texto", texto: "O menu de alinhamento tem a largura dos próprios botões, sem espaço sobrando.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
+    versao: "1.179.1",
+    data: "2026-10-23",
+    titulo: "APIs da Centi no padrão dos cadastros",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "O cadastro de cada API da Centi abre no banner padrão dos cadastros (cadeado em cada campo, salva só o que mudou e pede confirmação ao fechar com alteração), a tabela ganhou XLSX/PDF e a ajuda (?) no rodapé, e a aba só é carregada quando aberta.", link: "/painel/integracoes?aba=centi" },
     ],
   },
   {

@@ -11,6 +11,16 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Execução da despesa (empenhos, liquidações e pagamentos pela API pública da Centi) — em andamento
+Trazer para o sistema o que o Dattago faz, sem as falhas dele (página do meio que falha contada como completa; chave da
+deduplicação diferente da do banco; erro de gravação engolido; o que some na origem nunca sai; pagamento sem id gravado
+como 0; órgãos 21–25 e 28 nunca lidos). Em passos pequenos, cada um uma versão conferida no ar antes do próximo:
+1. **Cadastro das APIs** em Integrações → "APIs da Centi" (v1.179.0) — **entregue**.
+2. Botão Testar (1 página, nada gravado).
+3. Importação MANUAL dos empenhos em lote separado, promovida só quando a contagem bate com o `TotalRegistros`.
+4. Tela Empenhos (só ADM) · 5. Atualização automática (desligada por padrão) · 6. Abrir aos grupos.
+7–9. Liquidações e Pagamentos · 10. Dashboard da execução · 11. Ligação com o Orçamento e o PCA (por último).
+
 ### Termo de Uso assinado + aparelhos vinculados à conta (v1.167.0) — entregue
 Configurações → Termo de uso: implantação Desligado · Teste (testadores, repetir a cada login) · Ativo; texto do ADM + cláusulas
 automáticas; versões com público e carência; aceite por senha/código/declaração com selo e comprovante em PDF; verificação
