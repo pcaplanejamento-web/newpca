@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, type ReactNode, useMemo, useRef, useState } from "react";
-import { type AcaoTexto, aplicarAcaoTexto, type Bloco, type Inline, lerTextoFormatado } from "@/lib/texto-formatado";
-import { IconBold, IconCode, IconHeading, IconItalic, IconLink, IconList, IconListOrdered, IconPencil, IconQuote } from "./icons";
+import { Fragment, type ReactNode, useMemo, useState } from "react";
+import { type Bloco, type Inline, lerTextoFormatado } from "@/lib/texto-formatado";
+import { EditorRico } from "./EditorRico";
+import { IconPencil } from "./icons";
 import { LinkExterno } from "./LinkExterno";
-import { Segmented } from "./Segmented";
 
 function Trechos({ f }: { f: Inline[] }) {
   return (
@@ -104,118 +104,9 @@ export function TextoFormatado({ texto, vazio = null, className = "" }: { texto:
   );
 }
 
-const ACOES: { acao: AcaoTexto; rotulo: string; icone: ReactNode }[] = [
-  { acao: "titulo", rotulo: "Título", icone: <IconHeading className="h-4 w-4" /> },
-  { acao: "negrito", rotulo: "Negrito (Ctrl+B)", icone: <IconBold className="h-4 w-4" /> },
-  { acao: "italico", rotulo: "Itálico (Ctrl+I)", icone: <IconItalic className="h-4 w-4" /> },
-  { acao: "lista", rotulo: "Lista", icone: <IconList className="h-4 w-4" /> },
-  { acao: "numerada", rotulo: "Lista numerada", icone: <IconListOrdered className="h-4 w-4" /> },
-  { acao: "citacao", rotulo: "Citação", icone: <IconQuote className="h-4 w-4" /> },
-  { acao: "codigo", rotulo: "Código", icone: <IconCode className="h-4 w-4" /> },
-  { acao: "link", rotulo: "Link", icone: <IconLink className="h-4 w-4" /> },
-];
-
-/**
- * EDITOR de texto formatado: a barra (título · negrito · itálico · listas · citação · código · link — envolve a seleção
- * ou insere a marcação; Ctrl+B/Ctrl+I) sobre a caixa de texto e a alternância **Escrever | Visualizar** (a prévia é o
- * mesmo `TextoFormatado`). Controlado (`valor`/`onChange`).
- */
-export function EditorTexto({
-  valor,
-  onChange,
-  rotulo,
-  placeholder,
-  maxLength,
-  rows = 5,
-  disabled = false,
-  autoFocus = false,
-}: {
-  valor: string;
-  onChange: (v: string) => void;
-  /** O nome acessível da caixa de texto. */
-  rotulo: string;
-  placeholder?: string;
-  maxLength?: number;
-  rows?: number;
-  disabled?: boolean;
-  autoFocus?: boolean;
-}) {
-  const [modo, setModo] = useState<"escrever" | "ver">("escrever");
-  const campo = useRef<HTMLTextAreaElement>(null);
-  const agir = (acao: AcaoTexto) => {
-    const el = campo.current;
-    const r = aplicarAcaoTexto(valor, el?.selectionStart ?? valor.length, el?.selectionEnd ?? valor.length, acao);
-    if (maxLength && r.texto.length > maxLength) return;
-    onChange(r.texto);
-    requestAnimationFrame(() => {
-      campo.current?.focus();
-      campo.current?.setSelectionRange(r.ini, r.fim);
-    });
-  };
-  return (
-    <div className="rounded-control border border-border-2 bg-surface transition-[border-color,box-shadow] duration-[var(--motion-duration)] focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/20">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-1 py-1">
-        {modo === "escrever" &&
-          ACOES.map((a) => (
-            <button
-              key={a.acao}
-              type="button"
-              disabled={disabled}
-              aria-label={a.rotulo}
-              title={a.rotulo}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => agir(a.acao)}
-              className="grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 hover:text-text disabled:opacity-40 lg:h-8 lg:w-8"
-            >
-              {a.icone}
-            </button>
-          ))}
-        <div className="ml-auto">
-          <Segmented<"escrever" | "ver">
-            ariaLabel="Escrever ou visualizar"
-            value={modo}
-            onChange={setModo}
-            options={[
-              { value: "escrever", label: "Escrever" },
-              { value: "ver", label: "Visualizar" },
-            ]}
-          />
-        </div>
-      </div>
-      {modo === "escrever" ? (
-        <textarea
-          ref={campo}
-          value={valor}
-          rows={rows}
-          maxLength={maxLength}
-          disabled={disabled}
-          // biome-ignore lint/a11y/noAutofocus: abre para escrever depois de a pessoa tocar em "editar".
-          autoFocus={autoFocus}
-          aria-label={rotulo}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (!(e.ctrlKey || e.metaKey)) return;
-            const k = e.key.toLowerCase();
-            if (k === "b" || k === "i") {
-              e.preventDefault();
-              agir(k === "b" ? "negrito" : "italico");
-            }
-          }}
-          className="block w-full resize-y bg-transparent px-3 py-2 text-[13px] leading-relaxed text-text outline-none placeholder:text-faint"
-        />
-      ) : (
-        <div className="min-h-[6rem] px-3 py-2">
-          <TextoFormatado texto={valor} vazio={<p className="text-[12.5px] text-faint">Nada para visualizar.</p>} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 /**
  * Um CAMPO de texto formatado que se LÊ formatado e se EDITA no lugar (a descrição e as notas da tarefa, como no Trello):
- * tocar no texto (ou em "Editar") abre o `EditorTexto`; "Pronto" volta à leitura. Vazio = o convite `vazio` (abre o
+ * tocar no texto (ou em "Editar") abre o `EditorRico compacto` (o mesmo editor do sistema); "Pronto" volta à leitura. Vazio = o convite `vazio` (abre o
  * editor). Controlado — o valor é do host (o rascunho da tarefa).
  */
 export function CampoTextoFormatado({
@@ -242,7 +133,7 @@ export function CampoTextoFormatado({
   if (editando && !disabled)
     return (
       <div className="space-y-2">
-        <EditorTexto valor={valor} onChange={onChange} rotulo={rotulo} placeholder={placeholder} maxLength={maxLength} autoFocus />
+        <EditorRico compacto autoFocus valor={valor} onChange={onChange} rotulo={rotulo} placeholder={placeholder} maxLength={maxLength} />
         <button
           type="button"
           onClick={() => setEditando(false)}

@@ -53,6 +53,15 @@ describe("editor visual (texto ↔ HTML)", () => {
     ])
       assert.equal(ida(md), md);
   });
+  it("o texto das tarefas (notas e comentários) vai e volta igual", () => {
+    for (const md of [
+      "Combinado com @Ana e @bruno.costa: conferir amanhã.",
+      "Veja https://rioverde.go.gov.br/pca antes.",
+      "1. abrir o protocolo\n2. conferir os DFDs\n3. **enviar**",
+      "primeira linha\nsegunda linha do mesmo parágrafo",
+    ])
+      assert.equal(ida(md), md);
+  });
   it("o HTML colado vira só o que o formato conhece", () => {
     const colado = parse(
       '<h1>Título <span style="x">grande</span></h1><div><b>Neg </b>e <i>ita</i><br>linha</div><ul><li>a<ul><li>b</li></ul></li></ul><table><tr><td>célula</td></tr></table><p><a href="javascript:alert(1)">mal</a> <a href="https://ok.br">bom</a></p><script>x</script>',

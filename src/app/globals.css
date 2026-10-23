@@ -1263,6 +1263,13 @@ html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:f
    vez — a seleção encolhia e depois esticava. A lista do menu rola pela roda/toque/teclado, sem a barra. */
 .menu-lateral .menu-rolagem { scrollbar-width: none; }
 .menu-lateral .menu-rolagem::-webkit-scrollbar { display: none; }
+/* A LINHA DE FERRAMENTAS do editor de texto (EditorRico): rola de lado pelo dedo/roda, encaixa nos grupos e esmaece a
+   borda em que há mais ferramentas (as setas do componente levam até elas) — sem a barra de rolagem por cima dos botões. */
+.barra-rolavel { scrollbar-width: none; scroll-snap-type: x proximity; scroll-padding-inline: 0.5rem; overscroll-behavior-x: contain; }
+.barra-rolavel::-webkit-scrollbar { display: none; }
+.barra-rolavel[data-fim] { mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent); }
+.barra-rolavel[data-inicio] { mask-image: linear-gradient(to right, transparent, #000 3rem); }
+.barra-rolavel[data-inicio][data-fim] { mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent); }
 html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible), :has([aria-expanded="true"])) {
   width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 100ms;
 }

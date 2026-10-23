@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LinhaHistorico } from "@/lib/auditoria-core";
 import { dataHoraBR } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { ComentarioTarefa } from "@/lib/tarefas";
 import { textoMencao } from "@/lib/tarefas-core";
-import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
+import { EditorRico } from "./EditorRico";
 import { EventoHistorico } from "./Historico";
 import { IconEnviar, IconPencil, IconTrash } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
 import { TextoFormatado } from "./TextoFormatado";
-
-/** O termo de @menção sendo digitado logo antes do cursor (`null` = não está citando). */
-const termoMencao = (texto: string, cursor: number) => /@([\p{L}\p{N}._-]{0,40})$/u.exec(texto.slice(0, cursor))?.[1] ?? null;
 
 /** A preferência do aparelho: mostrar os DETALHES (o histórico de alterações) no fluxo de atividade. */
 const CHAVE_DETALHES = "tarefas:atividade-detalhes";
@@ -54,9 +51,7 @@ export function AtividadeTarefa({
   onExcluir: (c: ComentarioTarefa) => void;
 }) {
   const [texto, setTexto] = useState("");
-  const [cursor, setCursor] = useState(0);
   const [enviando, setEnviando] = useState(false);
-  const [semSugestao, setSemSugestao] = useState(false);
   const [editando, setEditando] = useState<{ id: number; texto: string } | null>(null);
   const [detalhes, setDetalhes] = useState(false);
   // A preferência lida DEPOIS da montagem (o HTML do servidor não sabe) — conveniência do aparelho.
@@ -87,29 +82,14 @@ export function AtividadeTarefa({
     if (detalhes) for (const l of historico.linhas ?? []) itens.push({ tipo: "h", quando: hora(l.criadoEm), l });
     return itens.sort((a, b) => b.quando.localeCompare(a.quando));
   }, [comentarios, historico.linhas, detalhes]);
-  const campo = useRef<HTMLTextAreaElement>(null);
   const porId = new Map(pessoas.map((p) => [p.id, p]));
-  const termo = termoMencao(texto, cursor);
-  const casa = termo != null ? predicadoBusca(termo) : null;
-  const sugestoes = termo == null || semSugestao ? [] : pessoas.filter((p) => !casa || casa([nomeExibicao(p), p.nome])).slice(0, 6);
-
-  const mencionar = (p: Pessoa) => {
-    const antes = texto.slice(0, cursor).replace(/@[\p{L}\p{N}._-]*$/u, `${textoMencao(p)} `);
-    const novo = antes + texto.slice(cursor);
-    setTexto(novo);
-    setCursor(antes.length);
-    requestAnimationFrame(() => {
-      campo.current?.focus();
-      campo.current?.setSelectionRange(antes.length, antes.length);
-    });
-  };
+  const menciona = useMemo(() => ({ pessoas, texto: textoMencao }), [pessoas]);
   const enviar = async () => {
     const t = texto.trim();
     if (!t || enviando) return;
     setEnviando(true);
     if (await onEnviar(t)) {
       setTexto("");
-      setCursor(0);
     }
     setEnviando(false);
   };
@@ -117,53 +97,25 @@ export function AtividadeTarefa({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {!somenteLeitura && (
-      <div className="relative shrink-0">
-        {sugestoes.length > 0 && (
-          <ul aria-label="Mencionar pessoa" className="absolute top-full right-0 left-0 z-10 mt-1 overflow-hidden rounded-card border border-border bg-surface shadow-soft">
-            {sugestoes.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => mencionar(p)}
-                  className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-[13px] text-text hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none lg:min-h-9"
-                >
-                  <Avatar nome={p.nome} foto={p.foto} size="xs" />
-                  <span className="truncate">{nomeExibicao(p)}</span>
-                  <span className="ml-auto truncate text-[11px] text-faint">{textoMencao(p)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={campo}
-            value={texto}
-            rows={2}
+      <div className="flex shrink-0 items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <EditorRico
+            compacto
+            valor={texto}
+            onChange={setTexto}
+            rotulo="Escrever comentário"
+            placeholder="Escrever um comentário… (@ menciona alguém)"
             maxLength={5000}
             disabled={enviando}
-            aria-label="Escrever comentário"
-            placeholder="Escrever um comentário… (@ menciona alguém)"
-            onChange={(e) => {
-              setTexto(e.target.value);
-              setCursor(e.target.selectionStart ?? e.target.value.length);
-              setSemSugestao(false);
+            menciona={menciona}
+            onTecla={(e) => {
+              if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return false;
+              enviar();
+              return true;
             }}
-            onSelect={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                enviar();
-              } else if (e.key === "Escape" && sugestoes.length) {
-                e.stopPropagation();
-                setSemSugestao(true);
-              }
-            }}
-            className="min-w-0 flex-1 resize-none rounded-control border border-border-2 bg-surface-2 px-3 py-2 text-[13px] text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
           />
-          <Button variant="accent" size="sm" loading={enviando} disabled={!texto.trim()} aria-label="Enviar comentário" icon={<IconEnviar className="h-4 w-4" />} onClick={enviar} />
         </div>
+        <Button variant="accent" size="sm" loading={enviando} disabled={!texto.trim()} aria-label="Enviar comentário" icon={<IconEnviar className="h-4 w-4" />} onClick={enviar} />
       </div>
       )}
       <div className="flex items-center justify-between gap-2">
@@ -209,13 +161,14 @@ export function AtividadeTarefa({
                 </div>
                 {editando?.id === c.id ? (
                   <div className="mt-1 space-y-2">
-                    <textarea
-                      value={editando.texto}
-                      rows={3}
+                    <EditorRico
+                      compacto
+                      autoFocus
+                      valor={editando.texto}
+                      onChange={(v) => setEditando({ id: c.id, texto: v })}
+                      rotulo="Editar comentário"
                       maxLength={5000}
-                      aria-label="Editar comentário"
-                      onChange={(e) => setEditando({ id: c.id, texto: e.target.value })}
-                      className="w-full resize-y rounded-control border border-accent bg-surface px-3 py-2 text-[13px] text-text outline-none ring-4 ring-accent/20"
+                      menciona={menciona}
                     />
                     <div className="flex gap-2">
                       <Button

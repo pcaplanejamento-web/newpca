@@ -17,7 +17,7 @@ automáticas; versões com público e carência; aceite por senha/código/declar
 pública pelo código. Aparelhos: nome no 1º acesso, limite (padrão/papel/pessoa), troca atômica e prazo sem troca; o ADM libera.
 v1.168.0: termo e aparelho em BANNERS flutuantes (sem páginas), canais ao vivo conferem o aparelho, o aparelho no "Online
 agora", cartões de aparelho com o status da troca e o editor visual do texto (`EditorRico`).
-**Próximo:** o alerta de login suspeito usar a tabela `aparelhos`; o `EditorRico` nas descrições/notas das tarefas.
+**Próximo:** o alerta de login suspeito usar a tabela `aparelhos`. (v1.169.0: o `EditorRico` virou o editor único — descrição, notas e comentários das tarefas.)
 
 ### Acesso às unidades por aba (v1.161.0/1) — entregue
 Na aba em Todas o cabeçalho segue com as unidades do grupo; a tabela filtra pela coluna Unidade.

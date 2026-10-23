@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { aplicarAcaoTexto, lerInline, lerTextoFormatado, textoPlano } from "../src/lib/texto-formatado.ts";
+import { lerInline, lerTextoFormatado, textoPlano } from "../src/lib/texto-formatado.ts";
 
 describe("texto formatado (markdown restrito)", () => {
   it("inline: negrito, itálico, código, link http(s), url solta e @menção; link de outro esquema vira texto", () => {
@@ -26,15 +26,5 @@ describe("texto formatado (markdown restrito)", () => {
     assert.deepEqual(b[3].t === "par" && b[3].f.map((n) => n.t), ["texto", "quebra", "texto"]);
     assert.deepEqual(lerTextoFormatado(null), []);
     assert.equal(textoPlano("**Oi** _você_\n- a\n- b"), "Oi você a · b");
-  });
-
-  it("editor: envolve a seleção ou insere a marcação; lista alterna o prefixo nas linhas", () => {
-    assert.deepEqual(aplicarAcaoTexto("abc", 1, 2, "negrito"), { texto: "a**b**c", ini: 3, fim: 4 });
-    assert.deepEqual(aplicarAcaoTexto("", 0, 0, "italico"), { texto: "*texto*", ini: 1, fim: 6 });
-    const l = aplicarAcaoTexto("um\ndois", 0, 5, "lista");
-    assert.equal(l.texto, "- um\n- dois");
-    assert.equal(aplicarAcaoTexto(l.texto, 0, l.texto.length, "lista").texto, "um\ndois");
-    assert.equal(aplicarAcaoTexto("a\nb", 0, 3, "numerada").texto, "1. a\n2. b");
-    assert.equal(aplicarAcaoTexto("site", 0, 4, "link").texto, "[site](https://)");
   });
 });

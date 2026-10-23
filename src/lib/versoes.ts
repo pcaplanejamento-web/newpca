@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.169.0",
+    data: "2026-10-23",
+    titulo: "O mesmo editor de texto em todo o sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "A descrição e as notas das tarefas agora são escritas como se veem, no mesmo editor do Termo de Uso: títulos, negrito, itálico, listas, citação, links, desfazer e refazer.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Os comentários também usam o mesmo editor, com a @menção das pessoas do grupo dentro dele (↑/↓ e Enter escolhem) e Ctrl+Enter para enviar.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Configurações", texto: "O editor ganhou a versão compacta para campos, usada nas tarefas; o texto gravado continua o mesmo.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Tarefas", texto: "No celular e no tablet, a barra do editor fica numa linha só: as ferramentas mais usadas primeiro (negrito, itálico, listas, link), arraste de lado ou toque nas setas para ver as demais, e Desfazer e Refazer ficam fixos à direita.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.168.0",
     data: "2026-10-22",
     titulo: "Termo e aparelho em banners flutuantes, aparelho no Online e editor de texto visual",

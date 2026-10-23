@@ -315,7 +315,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (Ctrl+K, só http/https), listas, separador, desfazer/refazer, limpar formatação, atalhos (Ctrl+B/I/K/Z/Y, Ctrl+Alt+0–3,
     Ctrl+Shift+7/8) e a contagem de caracteres. Grava o MESMO texto formatado de sempre — núcleo puro **`texto-rico-core.ts`**
     (`htmlDoTexto`/`textoDoHtml`, testado: o modelo do termo vai e volta igual; o itálico sai como `_x_`, sem ambiguidade junto do
-    negrito); o colado de outro programa passa pelos dois conversores (fica só o que o formato conhece; scripts/estilos saem). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
+    negrito); o colado de outro programa passa pelos dois conversores (fica só o que o formato conhece; scripts/estilos saem).
+    **O MESMO editor em TODO o sistema (v1.169.0):** termo de uso (documento) e, com **`compacto`** (sem a folha, 13,5px, cresce
+    com o texto, contagem só perto do limite), a descrição, as notas e os comentários das tarefas; `autoFocus`, `onTecla(e)`
+    (o host trata a tecla antes — true = tratada) e **`menciona {pessoas, texto}`** (@menção dentro do editor: o termo antes do
+    cursor abre as pessoas, ↑/↓/Enter/Tab escolhem, Esc fecha sem fechar o banner, a inserção por `insertText` mantém o
+    desfazer; grava "@apelido" como texto — `mencoesDoTexto` lê igual). **A BARRA no toque:** ordem pelo USO (negrito · itálico ·
+    listas · link | estilo do parágrafo | citação · código · separador · limpar); no compacto e abaixo do `lg` é UMA linha
+    que rola de lado (`.barra-rolavel`: sem barra de rolagem, encaixe por grupo, a borda com mais ferramentas esmaecida e
+    as setas `SetaBarra` "Mais ferramentas"/"Ferramentas anteriores" que rolam 70%); Desfazer/Refazer FIXOS à direita, fora
+    da rolagem; os botões não tiram o foco do texto (o teclado do celular continua aberto); no desktop o documento quebra a linha. Texto novo de editar = o `EditorRico`, nunca uma textarea com marcação (o chat fica de fora: é mensagem rápida). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
@@ -3545,10 +3554,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     - **Texto formatado** — núcleo PURO **`texto-formatado.ts`** (testado): markdown RESTRITO → árvore (`lerTextoFormatado`:
       títulos `#`, listas `-`/`1.`, citação `>`, separador `---`, parágrafos com quebra; `lerInline`: `**negrito**`,
       `*itálico*`/`_itálico_`, `` `código` ``, `[texto](https://…)`, URLs soltas e `@menção` — links SÓ http/https),
-      `textoPlano` e `aplicarAcaoTexto` (a barra do editor). Componentes (`TextoFormatado.tsx`): **`TextoFormatado`**
-      (desenha por elementos React — nunca HTML cru), **`EditorTexto`** (barra título · negrito · itálico · listas ·
-      citação · código · link, Ctrl+B/I, **Escrever | Visualizar**) e **`CampoTextoFormatado`** (lido formatado; tocar ou o
-      lápis edita no lugar; "Pronto" volta) — na DESCRIÇÃO, nas NOTAS e nos COMENTÁRIOS.
+      `textoPlano`. Componentes (`TextoFormatado.tsx`): **`TextoFormatado`** (desenha por elementos React — nunca HTML cru)
+      e **`CampoTextoFormatado`** (lido formatado; tocar ou o lápis edita no lugar no **`EditorRico compacto`**; "Pronto"
+      volta) — na DESCRIÇÃO e nas NOTAS; os COMENTÁRIOS (escrever e editar) usam o MESMO `EditorRico compacto` com a
+      @menção (`menciona`) e Ctrl/⌘+Enter (`onTecla`). O antigo `EditorTexto` (textarea + Escrever | Visualizar) saiu (v1.169.0).
     - **`AtividadeTarefa`** (ex-`ComentariosTarefa`): **Comentários e atividade** num fluxo só — escrever no TOPO (@menção,
       Ctrl/⌘+Enter), os comentários do mais novo ao mais antigo e, com **Mostrar detalhes** (lembrado no aparelho,
       `tarefas:atividade-detalhes`), as alterações do histórico intercaladas (`EventoHistorico`, exportado do `Historico`;
@@ -5151,3 +5160,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
    qualquer sessão/chat; o que outra sessão publicou sem versão entra na próxima).
 4. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
    do que mudou. Mudanças limpas, cirúrgicas, sem código morto.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
