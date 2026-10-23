@@ -1,8 +1,8 @@
-import { and, count, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { centiLotePassos, centiLotes, empenhos, empenhosStaging } from "../db/schema.ts";
-import type { LinhaEmpenho, PassoLote, Periodo } from "./empenhos-core.ts";
+import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoLote, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
 
 /**
  * EMPENHOS — os comandos da importação como BUILDERS do Drizzle (testados pelo driver D1 REAL sobre `node:sqlite`,
@@ -38,7 +38,6 @@ const CAMPOS = [
   "historico",
 ] as const satisfies readonly (keyof LinhaEmpenho)[];
 
-/** Guarda as linhas de UMA página no staging do lote (a chave repetida no lote fica com a 1ª). */
 /** Teto de caracteres do JSON de UM comando de guarda — o D1 recusa texto acima de 2 MB (com folga para os acentos). */
 export const MAX_JSON_GUARDA = 600_000;
 
@@ -100,6 +99,7 @@ export function comandoRecontarLote(db: Db, loteId: number) {
       recebidos: sql`(SELECT COALESCE(SUM(${centiLotePassos.recebidos}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
       recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
       unicos: sql`(SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId})`,
+      soma: sql`(SELECT SUM(${empenhosStaging.valorEmpenhado}) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId})`,
       totalInformado: sql`(SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}))`,
       vistoEm: sql`CURRENT_TIMESTAMP`,
     })
@@ -125,25 +125,87 @@ export async function jaNoLote(db: Db, loteId: number, chaves: string[]): Promis
   return r?.n ?? 0;
 }
 
-/** Quantos empenhos o lote cria, atualiza e marca como removidos (antes de promover — o resumo do lote). */
-export async function contagemDaPromocao(db: Db, loteId: number, ano: number) {
+/** Os campos comparados para saber se um empenho MUDOU (todos menos a chave). */
+const COMPARADOS = CAMPOS.filter((c) => c !== "chave");
+
+/** "Mudou": algum campo diferente (`IS NOT` — nulo conta), o empenho estava removido ou foi lido por outro leitor. */
+function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: SQL): SQL {
+  return sql.join(
+    [...COMPARADOS.map((c) => sql`${atual(c)} IS NOT ${novo(c)}`), sql`${atual("removidoEm")} IS NOT NULL`, sql`${atual("leitor")} IS NOT ${leitorNovo}`],
+    sql` OR `,
+  );
+}
+const colEmp = (c: string) => sql.raw(`"empenhos"."${colunaSql(c)}"`);
+
+/** Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor mudou) e marca como removidos — o resumo do lote. */
+export async function contagemDaPromocao(db: Db, loteId: number, ano: number, leitor: number) {
   const [novos] = await db
     .select({ n: count() })
     .from(empenhosStaging)
     .where(and(eq(empenhosStaging.loteId, loteId), sql`NOT EXISTS (SELECT 1 FROM ${empenhos} WHERE ${empenhos.chave} = ${empenhosStaging.chave})`));
-  const [todos] = await db.select({ n: count() }).from(empenhosStaging).where(eq(empenhosStaging.loteId, loteId));
+  const [alterados] = await db
+    .select({ n: count() })
+    .from(empenhosStaging)
+    .innerJoin(empenhos, eq(empenhos.chave, empenhosStaging.chave))
+    .where(and(eq(empenhosStaging.loteId, loteId), mudou(colEmp, (c) => sql.raw(`"empenhos_staging"."${colunaSql(c)}"`), sql`${leitor}`)));
   const [removidos] = await db
     .select({ n: count() })
     .from(empenhos)
     .where(and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)))));
-  return { inseridos: novos.n, atualizados: todos.n - novos.n, removidos: removidos.n };
+  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n };
+}
+
+const VALORES = ["valorEmpenhado", "valorAnulado", "valorLiquidado", "valorPago", "saldoPagar"] as const;
+
+/** Quantos empenhos do lote têm valor SUSPEITO (negativo ou acima do limite) — a conclusão não promove. */
+export async function valoresSuspeitos(db: Db, loteId: number): Promise<number> {
+  const fora = (c: SQL | (typeof empenhosStaging)[(typeof VALORES)[number]]) => sql`(${c} < 0 OR ${c} > ${LIMITE_VALOR_EMPENHO})`;
+  const [r] = await db
+    .select({ n: count() })
+    .from(empenhosStaging)
+    .where(
+      and(
+        eq(empenhosStaging.loteId, loteId),
+        or(...VALORES.map((v) => fora(empenhosStaging[v]))),
+      ),
+    );
+  return r?.n ?? 0;
+}
+
+/** A última importação CONCLUÍDA do mesmo ano (a base da conferência de queda), sem o próprio lote. */
+export async function ultimoPromovido(db: Db, apiChave: string, ano: number, exceto: number) {
+  const [l] = await db
+    .select({ soma: centiLotes.soma, unicos: centiLotes.unicos })
+    .from(centiLotes)
+    .where(and(eq(centiLotes.apiChave, apiChave), eq(centiLotes.ano, ano), eq(centiLotes.estado, "promovido"), ne(centiLotes.id, exceto)))
+    .orderBy(desc(centiLotes.id))
+    .limit(1);
+  return l ?? null;
+}
+
+/**
+ * TRAVA de quem conduz o lote (uma aba por vez): a aba com o token entra se o lote está livre, já é dela ou a trava
+ * venceu (`SEGUNDOS_CONDUCAO` sem notícia); cada página renova. Devolve a linha quando conseguiu.
+ */
+export function comandoConduzir(db: Db, loteId: number, condutor: string) {
+  return db
+    .update(centiLotes)
+    .set({ condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .where(
+      and(
+        eq(centiLotes.id, loteId),
+        eq(centiLotes.estado, "lendo"),
+        or(isNull(centiLotes.condutor), eq(centiLotes.condutor, condutor), isNull(centiLotes.conduzindoAte), sql`${centiLotes.conduzindoAte} < datetime('now')`),
+      ),
+    )
+    .returning({ id: centiLotes.id });
 }
 
 /**
  * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos (o que reaparece perde o `removido_em`), marca
  * `removido_em` no que o ano tinha e a Centi não trouxe mais (nada é apagado), fecha o lote e limpa o staging.
  */
-export function comandosPromover(db: Db, loteId: number, ano: number, contagem: { inseridos: number; atualizados: number; removidos: number }) {
+export function comandosPromover(db: Db, loteId: number, ano: number, leitor: number, contagem: { inseridos: number; atualizados: number; removidos: number }) {
   const sel = db
     .select({
       id: sql<number>`NULL`.as("id"),
@@ -152,17 +214,19 @@ export function comandosPromover(db: Db, loteId: number, ano: number, contagem: 
       removidoEm: sql<string | null>`NULL`.as("removido_em"),
       criadoEm: sql<string>`CURRENT_TIMESTAMP`.as("criado_em"),
       atualizadoEm: sql<string>`CURRENT_TIMESTAMP`.as("atualizado_em"),
+      leitor: sql<number>`${leitor}`.as("leitor"),
     })
     .from(empenhosStaging)
     .where(eq(empenhosStaging.loteId, loteId));
   const atualizar = Object.fromEntries(
-    [...CAMPOS.filter((c) => c !== "chave"), "loteId", "removidoEm"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
+    [...COMPARADOS, "loteId", "removidoEm", "leitor"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
   );
   return [
     db
       .insert(empenhos)
       .select(sel as never)
-      .onConflictDoUpdate({ target: empenhos.chave, set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` } }),
+      // Só regrava o que MUDOU (o "atualizado" do resumo é real; o empenho igual guarda a data e o lote de antes).
+      .onConflictDoUpdate({ target: empenhos.chave, set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` }, setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`) }),
     db
       .update(empenhos)
       .set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` })
@@ -171,7 +235,7 @@ export function comandosPromover(db: Db, loteId: number, ano: number, contagem: 
       ),
     db
       .update(centiLotes)
-      .set({ estado: "promovido", ...contagem, mensagem: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
+      .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
       .where(eq(centiLotes.id, loteId)),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
   ] as const;
@@ -180,7 +244,7 @@ export function comandosPromover(db: Db, loteId: number, ano: number, contagem: 
 /** Fecha o lote sem promover (parcial, falhou ou cancelado) e limpa o staging — a tabela final não muda. */
 export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "falhou" | "cancelado", mensagem: string) {
   return [
-    db.update(centiLotes).set({ estado, mensagem, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
+    db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
   ] as const;
 }

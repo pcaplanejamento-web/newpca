@@ -12,6 +12,19 @@ import { MESES_PERIODO } from "./periodo.ts";
 /** Teto de páginas de um lote (proteção: uma API que repete a mesma página nunca prende o lote). */
 export const MAX_PAGINAS = 500;
 
+/**
+ * A VERSÃO DO LEITOR (`linhaEmpenho` + `valor` + `lerPaginaEmpenhos`). Mudou a forma de ler um campo? Some 1: cada lote e
+ * cada empenho guardam a versão que os leu, o sistema avisa os anos lidos por um leitor anterior e a próxima importação
+ * regrava todos (a versão entra na comparação do "mudou") — sem apagar nada por migração.
+ */
+export const LEITOR_EMPENHOS = 1;
+
+/** Um empenho com valor negativo ou acima disto é SUSPEITO (erro de leitura) — a conclusão não promove o lote. */
+export const LIMITE_VALOR_EMPENHO = 1_000_000_000;
+
+/** Por quanto tempo a aba que conduz o lote o segura sem dar notícia (cada página renova). */
+export const SEGUNDOS_CONDUCAO = 120;
+
 export type LinhaEmpenho = {
   chave: string;
   ano: number;
@@ -122,6 +135,8 @@ export type PaginaLida = {
   /** Repetidos DENTRO da página (a mesma chave). */
   repetidos: number;
   total: number | null;
+  /** Σ do valor empenhado das linhas aceitas da página. */
+  soma: number;
   /** A Centi mandou o JSON com aspas/controles sem escape nos textos — a leitura consertou. */
   reparado: boolean;
 };
@@ -152,13 +167,14 @@ export function lerPaginaEmpenhos(textoResposta: string, ano: number): PaginaLid
   }
   const bruto = regs[0]?.TotalRegistros ?? (j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, unknown>).TotalRegistros : undefined);
   const total = bruto != null && Number.isFinite(Number(bruto)) ? Number(bruto) : null;
-  return { recebidos: regs.length, linhas, recusados, repetidos, total, reparado: lido.reparado };
+  const soma = linhas.reduce((t, l) => t + l.valorEmpenhado, 0);
+  return { recebidos: regs.length, linhas, recusados, repetidos, total, soma, reparado: lido.reparado };
 }
 
 /**
  * O PERÍODO de um pedido (datas AAAA-MM-DD, inclusive). A Centi devolve o ano inteiro de uma vez — grande demais para
  * uma resposta (só janeiro de 2026 veio com 8 MB) —, então o ano é lido SEMANA A SEMANA (1–7, 8–14, 15–21, 22–fim de cada
- * mês: respostas de ~2 MB, que o Worker lê e o D1 guarda) e o período ainda grande demais é dividido ao meio, até um dia. Cada período tem o PRÓPRIO total informado pela Centi; a conferência soma os totais.
+ * mês: respostas de ~0,7 MB — até 1 MB, leve para o Worker) e o período ainda grande demais é dividido ao meio, até um dia. Cada período tem o PRÓPRIO total informado pela Centi; a conferência soma os totais.
  */
 export type Periodo = { inicio: string; fim: string };
 
@@ -296,6 +312,7 @@ export type PassoLote = {
   recusados: number;
   repetidos: number;
   total: number | null;
+  soma: number | null;
   mensagem: string | null;
   corpo: string | null;
   em: string;
@@ -370,6 +387,10 @@ export type LoteCenti = {
   unicos: number;
   recusados: number;
   totalInformado: number | null;
+  soma: number | null;
+  leitor: number;
+  /** Outra aba (ou outra pessoa) está conduzindo o lote agora. */
+  conduzido: boolean;
   inseridos: number | null;
   atualizados: number | null;
   removidos: number | null;
@@ -379,3 +400,22 @@ export type LoteCenti = {
   vistoEm: string;
   concluidoEm: string | null;
 };
+
+/** Os valores de um empenho fora do esperado (a mensagem da conclusão) — `n` = quantos no lote. */
+export function motivoValoresSuspeitos(n: number): string | null {
+  if (!n) return null;
+  return `${n} empenho(s) com valor negativo ou acima de R$ ${LIMITE_VALOR_EMPENHO.toLocaleString("pt-BR")} — a leitura parece errada; nada foi gravado. Confira os passos e importe de novo.`;
+}
+
+/**
+ * QUEDA suspeita em relação à última importação concluída do MESMO ano: os empenhos de um ano só crescem (anulações são
+ * raras), então a soma abaixo de 80% ou os registros abaixo de 90% da anterior pedem a confirmação de quem importa.
+ */
+export function quedaSuspeita(anterior: { soma: number | null; unicos: number } | null, atual: { soma: number | null; unicos: number }): string | null {
+  if (!anterior) return null;
+  const partes: string[] = [];
+  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  if (anterior.soma != null && anterior.soma > 0 && (atual.soma ?? 0) < anterior.soma * 0.8) partes.push(`a soma empenhada caiu de ${brl(anterior.soma)} para ${brl(atual.soma ?? 0)}`);
+  if (anterior.unicos > 0 && atual.unicos < anterior.unicos * 0.9) partes.push(`os empenhos caíram de ${anterior.unicos.toLocaleString("pt-BR")} para ${atual.unicos.toLocaleString("pt-BR")}`);
+  return partes.length ? `Em relação à última importação concluída, ${partes.join(" e ")}.` : null;
+}

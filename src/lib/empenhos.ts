@@ -1,13 +1,17 @@
-import { and, desc, eq, sql } from "drizzle-orm";
-import { centiLotePassos, centiLotes } from "@/db/schema";
+import { and, count, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
-import { type EstadoLote, type EstadoPasso, type LoteCenti, MINUTOS_LOTE_PARADO, type PassoLote } from "./empenhos-core";
+import { type EstadoLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação das APIs da Centi (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
+/** "AAAA-MM-DD HH:MM:SS" (UTC, o formato do `datetime()` do SQLite) de agora. */
+const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
+
+/** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
 function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
-  const { apiChave: _, estado, ...resto } = l;
-  return { ...resto, estado: estado as EstadoLote };
+  const { apiChave: _, estado, condutor, conduzindoAte, ...resto } = l;
+  return { ...resto, estado: estado as EstadoLote, conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
 }
 
 export async function listarLotes(apiChave: string, limite = 20): Promise<LoteCenti[]> {
@@ -40,8 +44,12 @@ export async function loteEmAndamento(apiChave: string): Promise<LoteCenti | nul
   return l ? paraLote(l) : null;
 }
 
-export async function criarLote(apiChave: string, ano: number, quem: string): Promise<LoteCenti> {
-  const [l] = await getDb().insert(centiLotes).values({ apiChave, ano, iniciadoPor: quem }).returning();
+/** Cria o lote JÁ conduzido pela aba que o pediu (o token dela), com a versão atual do leitor. */
+export async function criarLote(apiChave: string, ano: number, quem: string, condutor: string): Promise<LoteCenti> {
+  const [l] = await getDb()
+    .insert(centiLotes)
+    .values({ apiChave, ano, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .returning();
   return paraLote(l);
 }
 
@@ -54,4 +62,14 @@ export async function listarPassos(loteId: number, limite = 3000): Promise<Passo
 /** A linha do banco → o passo da tela (o estado tipado, o fim do período booleano). */
 export function paraPasso({ loteId: _, estado, fimPeriodo, ...resto }: typeof centiLotePassos.$inferSelect): PassoLote {
   return { ...resto, estado: estado as EstadoPasso, fimPeriodo: fimPeriodo === 1 };
+}
+
+/** Os anos com empenhos lidos por um LEITOR ANTERIOR (o sistema pede para importar de novo — nada é apagado). */
+export async function anosDesatualizados(): Promise<{ ano: number; n: number }[]> {
+  return getDb()
+    .select({ ano: empenhos.ano, n: count() })
+    .from(empenhos)
+    .where(and(isNull(empenhos.removidoEm), lt(empenhos.leitor, LEITOR_EMPENHOS)))
+    .groupBy(empenhos.ano)
+    .orderBy(desc(empenhos.ano));
 }

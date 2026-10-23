@@ -24,6 +24,7 @@ import {
   anosDaApi,
   diaBR,
   diasDoPeriodo,
+  LEITOR_EMPENHOS,
   type LoteCenti,
   type PassoLote,
   type Periodo,
@@ -36,7 +37,7 @@ import {
   type TipoErro,
   usaPeriodo,
 } from "@/lib/empenhos-core";
-import { dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
+import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { BotaoCopiar } from "./BotaoCopiar";
@@ -664,6 +665,9 @@ type RespostaPasso = {
 };
 
 /** Chama a rota da importação manual; devolve o JSON ou lança com a mensagem do servidor. */
+/** O SISTEMA respondeu e recusou (4xx) — não adianta repetir (ex.: outra aba conduz o lote). */
+class RecusaImportacao extends Error {}
+
 async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>): Promise<T> {
   const r = await fetch(`/api/admin/centi-apis/${apiId}/importar`, {
     method: "POST",
@@ -671,6 +675,7 @@ async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>)
     body: JSON.stringify(corpo),
   });
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T;
+  if (r.status >= 400 && r.status < 500) throw new RecusaImportacao(j.error ?? `Recusado (${r.status}).`);
   if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
   return j;
 }
@@ -693,6 +698,8 @@ async function lerPassos(apiId: number, loteId: number): Promise<PassoLote[]> {
 const ESPERA_TENTATIVAS = [2000, 4000, 8000];
 const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
+/** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
+const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.inseridos ?? 0) - (l.atualizados ?? 0));
 const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
 
 /** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
@@ -721,7 +728,10 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
   const [rodando, setRodando] = useState(false);
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
+  const [desatualizados, setDesatualizados] = useState<{ ano: number; n: number }[]>([]);
   const parar = useRef(false);
+  /** O token DESTA aba — o servidor deixa uma aba por vez conduzir o lote. */
+  const condutor = useRef("");
   const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
   const comPeriodo = usaPeriodo(api.parametros);
@@ -729,10 +739,11 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
   const carregar = useCallback(async () => {
     try {
       const r = await fetch(`/api/admin/centi-apis/${api.id}/importar`);
-      const j = (await r.json()) as { ok?: boolean; lotes?: LoteCenti[]; emAndamento?: LoteCenti | null };
+      const j = (await r.json()) as { ok?: boolean; lotes?: LoteCenti[]; emAndamento?: LoteCenti | null; desatualizados?: { ano: number; n: number }[] };
       if (j.ok) {
         setLotes(j.lotes ?? []);
         setEmAndamento(j.emAndamento ?? null);
+        setDesatualizados(j.desatualizados ?? []);
       }
     } catch {
       setLotes((l) => l ?? []);
@@ -759,8 +770,9 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       setAgora({ periodo, pagina, tentativa: t + 1 });
       let r: RespostaPasso;
       try {
-        r = await pedirImportacao<RespostaPasso>(api.id, { acao: "pagina", lote: lote.id, inicio: periodo.inicio, fim: periodo.fim, pagina });
+        r = await pedirImportacao<RespostaPasso>(api.id, { acao: "pagina", lote: lote.id, condutor: condutor.current, inicio: periodo.inicio, fim: periodo.fim, pagina });
       } catch (e) {
+        if (e instanceof RecusaImportacao) throw e;
         // Sem resposta do SISTEMA (rede, sessão) — o passo não chegou ao servidor: fica registrado só na tela.
         const mensagem = `Sem resposta do sistema: ${e instanceof Error ? e.message : "falha de rede"}`;
         anotar({ ...passoVazio(local.current--, periodo, pagina), estado: "erro", mensagem });
@@ -780,12 +792,13 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
 
   async function importar(retomar: LoteCenti | null) {
     parar.current = false;
+    condutor.current = crypto.randomUUID();
     setRodando(true);
     setPassos([]);
     let lote = retomar;
     let onde = "";
     try {
-      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano })).lote;
+      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current })).lote;
       setAtual(lote);
       const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
       setPassos(anteriores);
@@ -803,25 +816,39 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       }
       setAgora(null);
       if (parar.current) {
-        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, motivo: "Interrompida pelo administrador." });
+        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida pelo administrador." });
         toast.info("Importação interrompida — nada foi gravado nos empenhos.");
         return;
       }
-      const fim = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "concluir", lote: lote.id })).lote;
+      let conclusao = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(api.id, { acao: "concluir", lote: lote.id, condutor: condutor.current });
+      if (conclusao.queda) {
+        // A QUEDA em relação à última importação concluída: só grava com a confirmação de quem importa.
+        const seguir = await confirmar({ titulo: "Os números caíram — gravar mesmo assim?", texto: `${conclusao.queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar importação", perigo: true });
+        if (!seguir) {
+          await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: `Cancelada: ${conclusao.queda}`.slice(0, 300) });
+          toast.info("Importação cancelada — os empenhos ficam como estavam.");
+          return;
+        }
+        conclusao = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(api.id, { acao: "concluir", lote: lote.id, condutor: condutor.current, aceitarQueda: true });
+      }
+      const fim = conclusao.lote;
       setAtual(fim);
       if (fim.estado === "promovido") {
-        toast.success(`Empenhos ${fim.ano} importados e conferidos: ${fim.inseridos} novos, ${fim.atualizados} atualizados, ${fim.removidos} marcados como removidos.`);
+        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} marcados como removidos.`);
       } else {
         toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
       }
     } catch (e) {
       setAgora(null);
       const msg = e instanceof Error ? e.message : "Falha na importação.";
-      if (lote && parar.current) {
-        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, motivo: "Interrompida pelo administrador." }).catch(() => {});
+      if (e instanceof RecusaImportacao) {
+        // Recusado pelo sistema (ex.: outra aba conduz o lote) — o lote é de quem o conduz: não cancela.
+        toast.error(msg);
+      } else if (lote && parar.current) {
+        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida pelo administrador." }).catch(() => {});
         toast.info("Importação interrompida — nada foi gravado nos empenhos.");
       } else if (lote) {
-        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, falhou: true, motivo: `${onde ? `${onde}: ` : ""}${msg}`.slice(0, 300) }).catch(() => {});
+        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, falhou: true, motivo: `${onde ? `${onde}: ` : ""}${msg}`.slice(0, 300) }).catch(() => {});
         toast.error(`A importação falhou${onde ? ` em ${onde}` : ""}: ${msg} Nada foi gravado nos empenhos — veja os passos.`);
       } else {
         toast.error(msg);
@@ -932,12 +959,14 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       render: (l) =>
         l.estado === "promovido" ? (
           <span className="text-text-2">
-            {l.inseridos} novos · {l.atualizados} atualizados · {l.removidos} removidos
+            {num(l.inseridos)} novos · {num(l.atualizados)} atualizados · {num(semMudanca(l))} sem mudança · {num(l.removidos)} removidos
           </span>
         ) : (
           <CelulaTexto texto={l.mensagem ?? (l.estado === "lendo" ? "Em andamento" : "—")} />
         ),
     },
+    { key: "soma", header: "Soma empenhada", nowrap: true, align: "right", filter: "range", numero: (l) => l.soma, render: (l) => <span className="tabular-nums">{l.soma != null ? brl(l.soma) : "—"}</span> },
+    { key: "leitor", header: "Leitor", nowrap: true, total: false, value: (l) => String(l.leitor), render: (l) => (l.leitor < LEITOR_EMPENHOS ? <Badge tone="amber">v{l.leitor} (anterior)</Badge> : <span className="tabular-nums text-muted">v{l.leitor}</span>) },
     { key: "quem", header: "Por", nowrap: true, value: (l) => l.iniciadoPor, render: (l) => <span className="text-muted">{l.iniciadoPor}</span> },
   ];
 
@@ -966,6 +995,15 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
               Centi informa em cada período. Faltou registro, a Centi falhou ou você interrompeu: o lote fica parcial e os
               empenhos continuam como estavam. O que sumir da Centi é marcado como <strong>removido</strong> (nada é apagado).
             </p>
+            <p>
+              A conclusão também confere os <strong>valores</strong>: nenhum negativo ou acima de R$ 1 bilhão, e a soma empenhada
+              e o número de empenhos não podem cair muito em relação à última importação concluída do ano (você confirma antes
+              de gravar). Reimportar regrava só o que <strong>mudou</strong> — o resumo diz quantos vieram iguais.
+            </p>
+            <p>
+              Uma <strong>aba por vez</strong> conduz a importação. Cada importação guarda a versão do leitor; quando o sistema
+              melhora a leitura, ele avisa os anos lidos pela versão anterior para você importar de novo.
+            </p>
             <p>Toque numa importação do histórico para ver os passos dela.</p>
             <p>
               Marque as importações do histórico (ou os passos) e use <strong>Excluir selecionadas</strong> para tirá-las do
@@ -983,7 +1021,19 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           pode recusar por ser grande demais.
         </Callout>
       )}
-      {emAndamento && !rodando && (
+      {desatualizados.length > 0 && !rodando && (
+        <Callout kind="warn">
+          {desatualizados.map((d) => `${d.ano} (${num(d.n)} empenhos)`).join(", ")}: lido{desatualizados.length === 1 ? "" : "s"} por uma versão anterior do
+          leitor. Importe de novo para atualizar — nada é apagado; o que mudou é regravado.
+        </Callout>
+      )}
+      {emAndamento && !rodando && emAndamento.conduzido && (
+        <Callout kind="info">
+          A importação de {emAndamento.ano} está em andamento em outra aba ({num(emAndamento.unicos)} registros lidos). Acompanhe por lá — se aquela aba
+          foi fechada, ela fica livre para continuar aqui em até 2 minutos.
+        </Callout>
+      )}
+      {emAndamento && !rodando && !emAndamento.conduzido && (
         <Callout kind="warn">
           <span className="flex flex-wrap items-center justify-between gap-2">
             Há uma importação de {emAndamento.ano} parada ({num(emAndamento.unicos)} registros lidos).
@@ -1022,10 +1072,11 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
               }
             />
           )}
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
             <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
             <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />
             <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />
+            <StatMini label="Soma empenhada" value={atual.soma != null ? brl(atual.soma) : "—"} hint="Dos registros distintos" />
             <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
           </div>
           <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} onExcluir={rodando ? undefined : (ps) => excluirPassos(atual, ps)} />
@@ -1082,6 +1133,7 @@ function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
     recusados: 0,
     repetidos: 0,
     total: null,
+    soma: null,
     mensagem: null,
     corpo: null,
     em: new Date().toISOString(),
@@ -1125,6 +1177,7 @@ function PassosDoLote({
     { key: "recebidos", header: "Registros", nowrap: true, value: (p) => String(p.recebidos), render: (p) => <span className="tabular-nums">{num(p.recebidos)}</span> },
     { key: "novos", header: "Novos", nowrap: true, value: (p) => String(p.novos), render: (p) => <span className="tabular-nums">{num(p.novos)}</span> },
     { key: "total", header: "Total do período", nowrap: true, total: false, value: (p) => num(p.total), render: (p) => <span className="tabular-nums">{num(p.total)}</span> },
+    { key: "soma", header: "Soma empenhada", nowrap: true, align: "right", filter: "range", numero: (p) => p.soma, render: (p) => <span className="tabular-nums">{p.soma != null ? brl(p.soma) : "—"}</span> },
     { key: "bytes", header: "Tamanho", nowrap: true, total: false, value: (p) => (p.bytes ? formatBytes(p.bytes) : "—"), render: (p) => <span className="tabular-nums">{p.bytes ? formatBytes(p.bytes) : "—"}</span> },
     { key: "ms", header: "Tempo", nowrap: true, total: false, value: (p) => tempo(p.ms), render: (p) => <span className="tabular-nums">{tempo(p.ms)}</span> },
     {
@@ -1323,10 +1376,11 @@ function PassosDoHistorico({
       }
     >
       <div className="space-y-[var(--gap-block)]">
-        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
           <StatMini label="Situação" value={est?.rotulo ?? lote.estado} />
           <StatMini label="Conferência" value={`${num(lote.unicos + lote.recusados)} de ${lote.totalInformado != null ? num(lote.totalInformado) : "?"}`} />
           <StatMini label="Páginas lidas" value={num(lote.paginas)} />
+          <StatMini label="Soma empenhada" value={lote.soma != null ? brl(lote.soma) : "—"} hint={`Leitor v${lote.leitor}`} />
           <StatMini label="Erros" value={passos ? num(passos.filter((p) => p.estado === "erro").length) : "…"} />
         </div>
         {lote.mensagem && <Callout kind={lote.estado === "falhou" ? "danger" : "warn"}>{lote.mensagem}</Callout>}

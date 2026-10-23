@@ -30,19 +30,23 @@ export const testarCentiApiSchema = z.strictObject({
   pedido: z.number().int().min(0).max(LIMITES_API.lista).default(0),
 });
 
+/** O token da ABA que conduz o lote (uma aba por vez — `comandoConduzir`). */
+const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
+
 /** A IMPORTAÇÃO MANUAL de uma API (passo a passo, conduzida pela tela): iniciar um lote, ler UMA página, concluir
  * (conferir e promover) ou cancelar. */
 export const importarCentiApiSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100) }),
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor }),
   z.strictObject({
     acao: z.literal("pagina"),
     lote: z.number().int().positive(),
+    condutor,
     inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     pagina: z.number().int().min(1).max(500),
   }),
-  z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive() }),
-  z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
+  z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive(), condutor, aceitarQueda: z.boolean().optional() }),
+  z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), condutor: condutor.optional(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
 ]);
 
 /** Excluir do banco: PASSOS de uma importação ou IMPORTAÇÕES inteiras (vários de uma vez). */
