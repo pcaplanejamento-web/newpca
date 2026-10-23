@@ -111,7 +111,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
           ? opcoesOrgaoGestor(centi.lista, (lista ?? []).map((o) => o.centiOrgaoGestor), gestorAtual)
           : [{ valor: "", rotulo: "Sem vínculo" }, ...(gestorAtual ? [{ valor: gestorAtual, rotulo: gestorAtual }] : [])],
         acoes: centi.acoes,
-        dica: "Os empenhos desse órgão gestor passam a ser deste órgão; a unidade orçamentária escolhida numa unidade vai para a unidade.",
+        dica: "Vínculo da API de empenhos da Centi. Os empenhos desse órgão gestor passam a ser deste órgão; a unidade orçamentária escolhida numa unidade vai para a unidade.",
       },
     ],
     [centi.lista, centi.acoes, lista, gestorAtual],

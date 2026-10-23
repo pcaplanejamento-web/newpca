@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.200.1",
+    data: "2026-10-23",
+    titulo: "Vínculo da API de empenhos indicado no cadastro",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "Os campos “Órgão gestor na Centi” e “Unidade orçamentária na Centi” dizem que o vínculo é o da API de empenhos da Centi.", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.200.0",
     data: "2026-10-23",
     titulo: "Órgãos e unidades sem correspondência na Centi",

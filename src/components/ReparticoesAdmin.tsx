@@ -107,8 +107,8 @@ export function ReparticoesAdmin({
           : [{ valor: "", rotulo: "Sem vínculo" }, ...(atualCenti != null ? [{ valor: String(atualCenti), rotulo: linhaAberta?.centiUnidade ?? "Carregando…" }] : [])],
         acoes: centi.acoes,
         dica: centiOrgaoGestor
-          ? `Só as do órgão gestor ${centiOrgaoGestor} (o do órgão). Os empenhos dela passam a ser desta unidade.`
-          : "Os empenhos dela passam a ser desta unidade. Escolha o órgão gestor no órgão para filtrar a lista.",
+          ? `Vínculo da API de empenhos da Centi. Só as do órgão gestor ${centiOrgaoGestor} (o do órgão). Os empenhos dela passam a ser desta unidade.`
+          : "Vínculo da API de empenhos da Centi. Os empenhos dela passam a ser desta unidade. Escolha o órgão gestor no órgão para filtrar a lista.",
       },
     ],
     [centi.lista, centi.acoes, atualCenti, linhaAberta?.centiUnidade, centiOrgaoGestor, idAberta],
