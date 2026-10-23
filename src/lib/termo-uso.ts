@@ -350,3 +350,19 @@ export async function dadosDoAceite(u: { id: number; email: string }): Promise<i
     sistema,
   };
 }
+
+/**
+ * A conta que passa a ENTRAR (criada, aprovada, reativada, restaurada) depois da publicação recebe a pendência da versão
+ * vigente — sem isso ela entraria sem aceitar. No teste, só os testadores. Best-effort: nunca derruba a gravação da conta.
+ */
+export async function exigirDaConta(usuarioId: number): Promise<void> {
+  try {
+    const cfg = await getAcessoConta({ fresco: true });
+    if (cfg.modo === "desligado" || (cfg.modo === "teste" && !cfg.testadores.includes(usuarioId))) return;
+    const [t] = await consultaTermoVigente(getDb());
+    if (!t) return;
+    await comandoPendencias(getDb(), t.id, { ids: [usuarioId] }, new Date().toISOString()).run();
+  } catch {
+    // A sessão confere de novo na próxima publicação/troca de modo.
+  }
+}

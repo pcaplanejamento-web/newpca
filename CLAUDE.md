@@ -284,6 +284,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `sessoes.aparelho_id`, o menor prazo das pendências, o `acessoConta` do blob e se é ADM — testado no SQLite,
     `tests/worker-acesso-sql.test.ts`) e mandam o NOME do aparelho à presença (`x-presenca-aparelho` → anexo do DO →
     `aparelhosPresentes` → `ap` na mensagem → `InfoPresenca.aparelhos`): o "Online agora" mostra em que aparelho cada pessoa está.
+  - **Sem brechas (v1.174.0):** a conta que passa a entrar depois da publicação (cadastro ativo, aprovar, reativar, restaurar) recebe a pendência da versão vigente (`exigirDaConta`, `termo-uso.ts`); a pendência só conta de termo PUBLICADO (sessão e `worker.ts`); bloqueado não vê a prévia do PCA (`vePreviaPca`), o `/api/auth/me` devolve só nome + `bloqueio` e o layout não carrega cartões de PCA nem a contagem do sino; o aparelho só é conhecido no MESMO navegador em que foi nomeado (`mesmoNavegador`, `aparelhos.navegador`) — o cookie copiado para outro navegador ganha cookie NOVO no nomear e avisa os ADMs (`alertarAparelhoCopiado`). Ensaio no ATIVO: os testadores aparecem também no modo Ativo e "Só os testadores" no Exigir/Publicar.
   - **Aparelhos** (`aparelhos-sql.ts`, trava NO SQL, testados no D1 real; D1 `aparelhos.ts`): limite = o da pessoa
     (`aparelhos_conta.limite`) › o do papel (`porPapel`) › o padrão (1–10); nomear entra só com vaga (`INSERT … SELECT … WHERE
     COUNT < limite`); lotado = TROCA atômica (encerra as sessões dos retirados, retira, registra o novo, liga a sessão e grava

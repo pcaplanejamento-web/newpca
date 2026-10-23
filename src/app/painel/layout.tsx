@@ -63,14 +63,14 @@ export default async function PainelLayout({
     nomesDasSiglas().catch(() => ({})),
   ]);
   // Os cartões do seletor de PCA do cabeçalho, na ordem e no acesso do filtro (os números memorizados por versão).
-  const porId = pcas.length ? new Map((await listarPcasCards(null).catch(() => [])).map((c) => [c.id, c])) : new Map();
+  const porId = pcas.length && !bloqueio ? new Map((await listarPcasCards(null).catch(() => [])).map((c) => [c.id, c])) : new Map();
   const cartoesPca = pcas.flatMap((p) => porId.get(p.id) ?? []);
   // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
   const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
   const [contexto, pcaFiltro, notificacoes, presenca, configChat, escopoCab] = await Promise.all([
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
-    contarNaoLidas(usuario, grupos),
+    bloqueio ? 0 : contarNaoLidas(usuario, grupos),
     // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o ADM sempre vê.)
     presencaDoGrupo(usuario.id, ativo?.id ?? null, grupos, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
     getConfigChat(),
@@ -98,7 +98,7 @@ export default async function PainelLayout({
       pcaFiltroId={pcaFiltro?.id ?? null}
       cartoesPca={cartoesPca}
       identidade={aparencia.identidade}
-      notificacoes={notificacoes ?? 0}
+      notificacoes={bloqueio ? 0 : (notificacoes ?? 0)}
       versaoDados={versao}
       presenca={bloqueio ? null : presenca}
       // O chat ao vivo vive no canal da presença: sem ela, sem o chat.

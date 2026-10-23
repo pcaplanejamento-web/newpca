@@ -9,6 +9,7 @@ import { papelDoUsuarioSql } from "@/lib/auth";
 import { adminUsuarioSchema } from "@/lib/auth-validation";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { exigirDaConta } from "@/lib/termo-uso";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { todosOsGruposComAbas } from "@/lib/acesso";
@@ -46,6 +47,7 @@ export async function PATCH(
     if (!r) return erro("Usuário não encontrado.", 404);
     if ((await comandoRestaurarUsuario(getDb(), id)).length === 0) return erro("Este usuário não está arquivado — recarregue a tela.", 409);
     await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "usuario", entidadeId: id, resumo: `Usuário ${r.nome} restaurado (estava arquivado)`, depois: { status: "ativo" } });
+    await exigirDaConta(id);
     return ok();
   }
 
@@ -178,6 +180,7 @@ export async function PATCH(
   // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo e o aviso ligado pelo ADM em
   // Configurações → Notificações; depois da resposta).
   const aprovou = antes.status === "pendente" && status === "ativo";
+  if (status === "ativo" && antes.status !== "ativo") await exigirDaConta(id);
   if (aprovou && (await getConfigNotificacoes()).acesso.email) {
     const destino = email ?? antes.email;
     const quem = nome ?? antes.nome;

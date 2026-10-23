@@ -260,3 +260,10 @@ describe("canais ao vivo e o aparelho no online", () => {
     assert.deepEqual(l?.estados.get(1)?.aparelhos, ["PC", "Celular"]);
   });
 });
+
+it("aparelho: o cookie copiado para OUTRO navegador não é o mesmo aparelho", async () => {
+  const { mesmoNavegador } = await import("../src/lib/acesso-conta-core.ts");
+  assert.equal(mesmoNavegador("Chrome no Windows", "Chrome no Windows"), true);
+  assert.equal(mesmoNavegador("", "Firefox no Linux"), true);
+  assert.equal(mesmoNavegador("Chrome no Windows", "Firefox no Linux"), false);
+});

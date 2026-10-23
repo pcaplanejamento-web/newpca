@@ -15,7 +15,7 @@ import { comandoCadastroPendente, comandoCadastroPrimeiro } from "@/lib/papeis-s
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 import { depoisDaResposta } from "@/lib/segundo-plano";
 import { contarTentativa, ipDe, respostaLimite, verificarCaptcha } from "@/lib/seguranca-acesso";
-import { aceitarTermo, termoDoCadastro } from "@/lib/termo-uso";
+import { aceitarTermo, termoDoCadastro, exigirDaConta } from "@/lib/termo-uso";
 import { matriculaEmUso, MSG_MATRICULA_EM_USO, violouMatriculaUnica } from "@/lib/usuarios-unicos";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +78,7 @@ export async function POST(req: Request) {
     });
 
     if (u.status === "ativo") {
+      if (!aceite) await exigirDaConta(u.id);
       await definirCookieSessao(await criarSessao(u.id));
       return ok({ autenticado: true });
     }

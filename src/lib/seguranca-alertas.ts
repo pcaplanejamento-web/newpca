@@ -130,3 +130,23 @@ export async function historicoDeAcesso(usuarioId: number): Promise<{ ultimoAces
   ]);
   return { ultimoAcesso: u?.ultimo ?? null, acessos: lista };
 }
+
+/** O cookie de um aparelho apareceu em OUTRO navegador (cópia do cookie?) → aviso aos ADMs; o aparelho é pedido de novo. */
+export async function alertarAparelhoCopiado(req: Request, u: Pessoa, aparelho: string): Promise<void> {
+  try {
+    const nav = resumoNavegador(req.headers.get("user-agent"));
+    const ip = req.headers.get("cf-connecting-ip") ?? "desconhecido";
+    await notificar(
+      (await idsDosAdmins()).map((usuarioId) => ({
+        usuarioId,
+        tipo: "seguranca" as const,
+        titulo: `Aparelho usado em outro navegador: ${u.nome}`,
+        texto: `A identificação do aparelho "${aparelho}" chegou de ${nav} (IP ${ip}). O sistema pediu um aparelho novo — confira se a conta não foi copiada.`,
+        link: "/painel/usuarios",
+        chave: `aparelho-copiado:${u.id}:${Math.floor(Date.now() / 3_600_000)}`,
+      })),
+    );
+  } catch (e) {
+    console.error("[seguranca] alerta de aparelho copiado falhou:", (e as Error).message);
+  }
+}

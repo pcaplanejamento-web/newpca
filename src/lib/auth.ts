@@ -1,5 +1,5 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import {
   aparelhosValemPara,
@@ -20,7 +20,7 @@ import { type DetalhesPapel, detalhesDoJson } from "./papeis-detalhes-core";
 import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
 import { urlFoto } from "./pessoa";
 import { getConfigSeguranca } from "./seguranca";
-import { renovarAtividade, sessaoInativa } from "./seguranca-core";
+import { renovarAtividade, resumoNavegador, sessaoInativa } from "./seguranca-core";
 
 import { papeis, sessoes, usuarios } from "@/db/schema";
 
@@ -280,6 +280,8 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
   const tokenHash = await sha256Hex(token);
   const idAp = jar.get(COOKIE_APARELHO)?.value;
   const hashAp = idAparelhoValido(idAp) ? await hashDoAparelho(idAp) : "";
+  // O aparelho só é CONHECIDO no MESMO navegador em que foi nomeado — o cookie copiado para outro navegador não liga sozinho.
+  const navAp = resumoNavegador((await headers()).get("user-agent"));
   const [[linha], cfg, cfgConta] = await Promise.all([
     getDb()
     .select({
@@ -289,8 +291,8 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
       criadoEmSessao: sessoes.criadoEm,
       aparelhoSessao: sessoes.aparelhoId,
       // O aparelho deste navegador já nomeado pela pessoa (pelo cookie) e o MENOR prazo de termo pendente — na MESMA consulta.
-      aparelhoConhecido: sql<number | null>`(SELECT ap.id FROM aparelhos AS ap WHERE ap.usuario_id = ${usuarios.id} AND ap.hash = ${hashAp})`,
-      termoPrazo: sql<string | null>`(SELECT MIN(tp.prazo) FROM termos_pendencias AS tp WHERE tp.usuario_id = ${usuarios.id})`,
+      aparelhoConhecido: sql<number | null>`(SELECT ap.id FROM aparelhos AS ap WHERE ap.usuario_id = ${usuarios.id} AND ap.hash = ${hashAp} AND (ap.navegador = '' OR ap.navegador = ${navAp}))`,
+      termoPrazo: sql<string | null>`(SELECT MIN(tp.prazo) FROM termos_pendencias AS tp JOIN termos_uso AS tu ON tu.id = tp.termo_id AND tu.estado = 'publicado' WHERE tp.usuario_id = ${usuarios.id})`,
     })
     .from(sessoes)
     .innerJoin(usuarios, eq(sessoes.usuarioId, usuarios.id))

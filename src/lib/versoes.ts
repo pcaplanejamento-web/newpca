@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.174.0",
+    data: "2026-10-23",
+    titulo: "Termo de uso e aparelhos sem brechas",
+    mudancas: [
+      { tipo: "correcao", area: "Acesso", texto: "A conta criada, aprovada, reativada ou restaurada depois da publicação também precisa aceitar o Termo de Uso para entrar.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Acesso", texto: "Quem está com o termo ou o aparelho pendente não vê a prévia do PCA, os dados da conta, os cartões de PCA nem os avisos do sino antes de concluir.", link: "/painel" },
+      { tipo: "melhoria", area: "Acesso", texto: "O aparelho só é reconhecido no navegador em que foi registrado: a identificação copiada para outro navegador pede um aparelho novo e avisa os administradores.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "novo", area: "Configurações", texto: "Ensaio com o sistema ativo: os testadores podem ser escolhidos também no modo Ativo, e \"Só os testadores\" exige a versão nova primeiro só deles.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.173.0",
     data: "2026-10-23",
     titulo: "Restaurar da lixeira da Mesa",

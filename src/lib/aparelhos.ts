@@ -8,6 +8,7 @@ import {
   hashDoAparelho,
   idAparelhoValido,
   limiteEfetivo,
+  mesmoNavegador,
   repeteAoEntrar,
   type SituacaoNovoAparelho,
   situacaoNovoAparelho,
@@ -19,6 +20,7 @@ import { sessaoAtualId } from "./auth";
 import { getDb } from "./db";
 import { toHex } from "./password";
 import { resumoNavegador } from "./seguranca-core";
+import { alertarAparelhoCopiado } from "./seguranca-alertas";
 
 // APARELHOS DA CONTA no banco — a situação da pessoa e o nomear/trocar (os comandos com a trava no SQL: aparelhos-sql.ts).
 
@@ -27,10 +29,10 @@ export type AparelhoLista = Awaited<ReturnType<typeof listarAparelhos>>[number];
 export const listarAparelhos = (usuarioId: number) => consultaAparelhos(getDb(), usuarioId);
 
 /** O cookie do aparelho deste navegador (criado aqui quando falta — só numa ROTA, nunca numa página). */
-export async function cookieDoAparelho(criar: boolean): Promise<string | null> {
+export async function cookieDoAparelho(criar: boolean, renovar = false): Promise<string | null> {
   const jar = await cookies();
   const atual = jar.get(COOKIE_APARELHO)?.value;
-  if (idAparelhoValido(atual)) return atual;
+  if (!renovar && idAparelhoValido(atual)) return atual;
   if (!criar) return null;
   const id = toHex(crypto.getRandomValues(new Uint8Array(16)));
   jar.set(COOKIE_APARELHO, id, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 2 * 365 * 86_400 });
@@ -61,7 +63,9 @@ export async function estadoAparelhos(u: UsuarioSessao, userAgent: string | null
   const c = cfg ?? (await getAcessoConta());
   const [lista, conta, idCookie] = await Promise.all([listarAparelhos(u.id), contaDe(u.id), cookieDoAparelho(false)]);
   const hash = idCookie ? await hashDoAparelho(idCookie) : null;
-  const conhecido = hash ? ((await getDb().query.aparelhos.findFirst({ where: (a, { and, eq: e }) => and(e(a.usuarioId, u.id), e(a.hash, hash)), columns: { id: true } }))?.id ?? null) : null;
+  const doCookie = hash ? await getDb().query.aparelhos.findFirst({ where: (a, { and, eq: e }) => and(e(a.usuarioId, u.id), e(a.hash, hash)), columns: { id: true, navegador: true, nome: true } }) : undefined;
+  // Conhecido só no MESMO navegador em que foi nomeado (o cookie copiado para outro navegador vira aparelho novo).
+  const conhecido = doCookie && mesmoNavegador(doCookie.navegador, resumoNavegador(userAgent)) ? doCookie.id : null;
   const limite = limiteEfetivo(c, u.papel.id, conta.limite);
   const repetir = repeteAoEntrar(c, u);
   return {
@@ -92,8 +96,16 @@ export async function nomearAparelhoDaSessao(
   const cfg = await getAcessoConta();
   const sessaoId = await sessaoAtualId();
   if (!sessaoId) return { ok: false, status: 401, error: "Sessão encerrada — entre de novo." };
-  const idCookie = await cookieDoAparelho(true);
-  const hash = await hashDoAparelho(idCookie as string);
+  let idCookie = await cookieDoAparelho(true);
+  let hash = await hashDoAparelho(idCookie as string);
+  // O cookie de um aparelho desta conta chegou de OUTRO navegador: um cookie NOVO (este navegador vira outro aparelho) +
+  // o aviso aos ADMs — copiar o cookie nunca passa do limite de aparelhos.
+  const copiado = await getDb().query.aparelhos.findFirst({ where: (a, { and, eq: e }) => and(e(a.usuarioId, u.id), e(a.hash, hash)), columns: { navegador: true, nome: true } });
+  if (copiado && !mesmoNavegador(copiado.navegador, resumoNavegador(req.headers.get("user-agent")))) {
+    idCookie = await cookieDoAparelho(true, true);
+    hash = await hashDoAparelho(idCookie as string);
+    await alertarAparelhoCopiado(req, u, copiado.nome);
+  }
   const db = getDb();
   const em = new Date().toISOString();
   const estado = await estadoAparelhos(u, req.headers.get("user-agent"), cfg);

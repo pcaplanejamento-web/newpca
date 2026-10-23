@@ -44,7 +44,7 @@ async function aoVivo(req: Request, env: Env): Promise<Response> {
   const linha = await env.DB.prepare(
     `SELECT s.usuario_id AS id, s.aparelho_id AS aparelho_id,
        (SELECT ap.nome FROM aparelhos ap WHERE ap.id = s.aparelho_id) AS aparelho_nome,
-       (SELECT MIN(tp.prazo) FROM termos_pendencias tp WHERE tp.usuario_id = s.usuario_id) AS termo_prazo,
+       (SELECT MIN(tp.prazo) FROM termos_pendencias tp JOIN termos_uso tu ON tu.id = tp.termo_id AND tu.estado = 'publicado' WHERE tp.usuario_id = s.usuario_id) AS termo_prazo,
        (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.acessoConta') END FROM configuracoes c WHERE c.id = 1) AS acesso_conta,
        COALESCE((SELECT pa.chave = 'admin' FROM papeis pa WHERE pa.id = u.papel_id), 0) AS admin
      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1`,
@@ -85,7 +85,7 @@ async function presenca(req: Request, env: Env): Promise<Response> {
           FROM papeis pa WHERE pa.id = u.papel_id) AS visivel,
        s.aparelho_id AS aparelho_id,
        (SELECT ap.nome FROM aparelhos ap WHERE ap.id = s.aparelho_id) AS aparelho_nome,
-       (SELECT MIN(tp.prazo) FROM termos_pendencias tp WHERE tp.usuario_id = s.usuario_id) AS termo_prazo,
+       (SELECT MIN(tp.prazo) FROM termos_pendencias tp JOIN termos_uso tu ON tu.id = tp.termo_id AND tu.estado = 'publicado' WHERE tp.usuario_id = s.usuario_id) AS termo_prazo,
        (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.acessoConta') END FROM configuracoes c WHERE c.id = 1) AS acesso_conta,
        COALESCE((SELECT pa.chave = 'admin' FROM papeis pa WHERE pa.id = u.papel_id), 0) AS admin
      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id

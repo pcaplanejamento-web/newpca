@@ -227,3 +227,8 @@ export function canalRecusado(d: { cfgJson: string | null; id: number; admin: bo
   if (estadoTermo(d.termoPrazo) === "pendente") return "Termo de Uso pendente.";
   return null;
 }
+
+/** O aparelho só é o MESMO no navegador em que foi nomeado (o gravado vazio = antigo, vale). */
+export function mesmoNavegador(gravado: string | null | undefined, atual: string): boolean {
+  return !gravado || gravado === atual;
+}

@@ -50,22 +50,24 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
       <section className="space-y-3">
         <p className="text-[13px] font-semibold text-text-2">Implantação</p>
         <Segmented ariaLabel="Implantação" value={valor.modo} options={MODOS} onChange={(modo) => set({ modo })} />
-        {valor.modo === "teste" && (
+        {valor.modo !== "desligado" && (
           <div className="space-y-3">
             <SeletorMultiplo
-              rotulo="Testadores"
+              rotulo={valor.modo === "ativo" ? "Testadores (ensaio de versões novas)" : "Testadores"}
               suspenso
               textoVazio="Ninguém"
               opcoes={pessoas.filter((p) => p.status === "ativo").map((p) => ({ valor: String(p.id), rotulo: p.nome, detalhe: p.email }))}
               selecionados={valor.testadores.map(String)}
               onChange={(v) => set({ testadores: v.map(Number) })}
             />
+            {valor.modo === "teste" && (
             <Switch
               checked={valor.repetirAoEntrar}
               onChange={(repetirAoEntrar) => set({ repetirAoEntrar })}
               label="Repetir a cada login"
               dica="Cada login do testador começa do zero: aceita o termo e nomeia o aparelho de novo (sem prazo de troca)"
             />
+            )}
           </div>
         )}
       </section>
@@ -360,6 +362,20 @@ export function TermoUsoAdmin() {
         <div className="space-y-4">
           {cfg.modo === "desligado" && <Callout kind="info">A implantação está desligada: a versão fica publicada, mas ninguém precisa aceitá-la até o Teste ou o Ativo.</Callout>}
           {cfg.modo === "teste" && <Callout kind="info">Modo de teste: só os testadores escolhidos recebem a pendência.</Callout>}
+          {cfg.modo === "ativo" && cfg.testadores.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted">
+              <span className="flex-1">Ensaio: exija primeiro só dos testadores; depois, use "Exigir de novo" para Todos.</span>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setPublico("pessoas");
+                  setIds(cfg.testadores.map(String));
+                }}
+              >
+                Só os testadores
+              </Button>
+            </div>
+          )}
           <Segmented
             ariaLabel="Quem precisa aceitar"
             value={publico}

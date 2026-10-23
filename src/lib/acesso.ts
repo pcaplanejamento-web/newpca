@@ -1,3 +1,4 @@
+import { destinoBloqueio } from "./acesso-conta-core";
 import { type ComponentesRetirados, retirado } from "./papeis-componentes-core";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -245,5 +246,6 @@ export function gruposComTela(a: Acesso, tela: Tela): number[] | null {
  * papel visualiza — o ADM sempre). O publicado é de qualquer visitante. */
 export async function vePreviaPca(): Promise<boolean> {
   const a = await getAcesso();
-  return !!a && podeTela(a, "pca").visualizar;
+  // Bloqueado (termo/aparelho pendente) não vê a prévia — a mesma régua das guardas.
+  return !!a && !destinoBloqueio(a.u.pendencia) && podeTela(a, "pca").visualizar;
 }
