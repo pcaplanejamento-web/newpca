@@ -9,7 +9,7 @@ import { Callout } from "./Callout";
 import { ErroAuth } from "./CartaoAuth";
 import { CampoCodigo } from "./CodigoEmail";
 import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconArrowRight, IconCheck, IconDownload, IconMailCheck, IconTermo } from "./icons";
+import { IconArrowDown, IconArrowRight, IconCheck, IconDownload, IconMailCheck, IconTermo } from "./icons";
 import { Modal } from "./Modal";
 import { BotaoSairAcesso } from "./NomearAparelho";
 import { Progress } from "./Progress";
@@ -28,10 +28,13 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
   const avisou = useRef(false);
   const fim = useRef(onFim);
   fim.current = onFim;
+  const [noFim, setNoFim] = useState(false);
   const conferir = () => {
     const el = ref.current;
-    if (!el || avisou.current) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
+    if (!el) return;
+    const chegou = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+    setNoFim(chegou);
+    if (chegou && !avisou.current) {
       avisou.current = true;
       fim.current();
     }
@@ -43,17 +46,36 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
     const t = window.setTimeout(conferir, 50);
     return () => window.clearTimeout(t);
   }, [texto]);
+  const irAoFim = () => {
+    const el = ref.current;
+    if (!el) return;
+    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce";
+    el.scrollTo({ top: el.scrollHeight, behavior: reduzir ? "auto" : "smooth" });
+  };
   return (
-    <section
-      ref={ref}
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: a caixa rola pelo teclado (setas) — o leitor precisa chegar ao fim do termo
-      tabIndex={0}
-      onScroll={conferir}
-      aria-label="Texto do Termo de Uso"
-      className={`${altura} overflow-y-auto rounded-card border border-border bg-surface-2 p-[var(--pad-card)] focus-visible:shadow-ring focus-visible:outline-none`}
-    >
-      <TextoTermo texto={texto} />
-    </section>
+    <div className="relative">
+      <section
+        ref={ref}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a caixa rola pelo teclado (setas) — o leitor precisa chegar ao fim do termo
+        tabIndex={0}
+        onScroll={conferir}
+        aria-label="Texto do Termo de Uso"
+        className={`${altura} overflow-y-auto rounded-card border border-border bg-surface-2 p-[var(--pad-card)] focus-visible:shadow-ring focus-visible:outline-none`}
+      >
+        <TextoTermo texto={texto} />
+      </section>
+      {!noFim && (
+        <button
+          type="button"
+          onClick={irAoFim}
+          aria-label="Ir ao fim do termo"
+          title="Ir ao fim do termo"
+          className="absolute right-3 bottom-3 inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-transform hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none"
+        >
+          <IconArrowDown size={20} aria-hidden="true" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -249,7 +271,10 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
           <p className="text-[13px] text-muted">
             O aceite do Termo de Uso é obrigatório para usar o sistema: leia o termo até o fim e assine.
           </p>
-          <LeituraTermo texto={termo.texto} onFim={() => setLeu(true)} />
+          <LeituraTermo texto={termo.texto} onFim={() => {
+            setLeu(true);
+            setConcordo(true);
+          }} />
           {!leu && <p className="text-[12px] text-muted">Role o texto até o fim para liberar a assinatura.</p>}
           <Checkbox label="Li e concordo com todas as condições deste Termo de Uso." checked={concordo} disabled={!leu} onChange={(e) => setConcordo(e.target.checked)} />
           {metodo === "senha" && (

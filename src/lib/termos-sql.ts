@@ -89,3 +89,16 @@ export function comandoLimparHistoricoTermo(db: Db, id: number) {
     .where(and(eq(auditoria.entidade, "termo_uso"), eq(auditoria.entidadeId, id), sql`NOT EXISTS (SELECT 1 FROM termos_uso WHERE id = ${id})`))
     .returning({ id: auditoria.id });
 }
+
+/** As MENÇÕES à versão excluída nos cadastros feitos no teste ("— Termo de Uso versão N aceito (código C)") saem do
+ * resumo — um comando por código de aceite de TESTE, no MESMO lote, depois do `comandoExcluirTermo` (só com a versão
+ * já fora). O código é único (128 bits): o trecho nunca casa outro registro. */
+export function comandosLimparMencoesTermo(db: Db, id: number, versao: number, codigos: string[]) {
+  return codigos.map((c) => {
+    const trecho = ` — Termo de Uso versão ${versao} aceito (código ${c})`;
+    return db
+      .update(auditoria)
+      .set({ resumo: sql`replace(${auditoria.resumo}, ${trecho}, '')` })
+      .where(and(sql`instr(${auditoria.resumo}, ${trecho}) > 0`, sql`NOT EXISTS (SELECT 1 FROM termos_uso WHERE id = ${id})`));
+  });
+}

@@ -43,7 +43,7 @@ import {
   rotuloVersaoTermo,
   seloAceite,
 } from "../src/lib/termo-uso-core.ts";
-import { comandoExcluirTermo, comandoLimparHistoricoTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
+import { comandoExcluirTermo, comandoLimparHistoricoTermo, comandosLimparMencoesTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 function banco() {
@@ -245,8 +245,10 @@ describe("termo no D1 real", () => {
     db.exec(`INSERT INTO termos_uso (id, versao, titulo, texto_adm) VALUES (3, 3, 'Termo', 'texto')`);
     await orm.batch(comandosAceitar(orm, { ...aceite, termoId: 3, versao: 3, codigo: "T3", teste: true }));
     await comandoPendencias(orm, 3, { todos: true }, "2026-12-01").run();
-    db.exec(`INSERT INTO auditoria (usuario_nome, acao, entidade, entidade_id, resumo) VALUES ('ADM', 'criar', 'termo_uso', 3, 'publicado'), ('ADM', 'criar', 'termo_uso', 1, 'outra')`);
-    const [saiu, hist] = await orm.batch([comandoExcluirTermo(orm, 3), comandoLimparHistoricoTermo(orm, 3)]);
+    db.exec(`INSERT INTO auditoria (usuario_nome, acao, entidade, entidade_id, resumo) VALUES ('ADM', 'criar', 'termo_uso', 3, 'publicado'), ('ADM', 'criar', 'termo_uso', 1, 'outra'), ('Bia', 'criar', 'usuario', 9, 'Bia criou uma conta (ativa) — Termo de Uso versão 3 aceito (código T3)'), ('Rui', 'criar', 'usuario', 8, 'Rui criou uma conta (ativa) — Termo de Uso versão 1 aceito (código R1)')`);
+    const [saiu, hist] = await orm.batch([comandoExcluirTermo(orm, 3), comandoLimparHistoricoTermo(orm, 3), ...comandosLimparMencoesTermo(orm, 3, 3, ["T3"])]);
+    assert.equal(db.prepare("SELECT resumo FROM auditoria WHERE usuario_nome = 'Bia'").get()?.resumo, "Bia criou uma conta (ativa)", "a menção no cadastro sai");
+    assert.match(String(db.prepare("SELECT resumo FROM auditoria WHERE usuario_nome = 'Rui'").get()?.resumo), /código R1/, "a de outra versão fica");
     assert.equal(saiu.length, 1, "só teste sai");
     assert.equal(hist.length, 1);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_aceites WHERE termo_id = 3").get()?.n, 0);

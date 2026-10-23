@@ -3,7 +3,9 @@ import { erro, ok } from "@/lib/http";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { situacaoDaVersao, termoPorId } from "@/lib/termo-uso";
-import { comandoExcluirTermo, comandoLimparHistoricoTermo } from "@/lib/termos-sql";
+import { and, eq } from "drizzle-orm";
+import { termosAceites } from "@/db/schema";
+import { comandoExcluirTermo, comandoLimparHistoricoTermo, comandosLimparMencoesTermo } from "@/lib/termos-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +33,15 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const t = await termoPorId(id);
   if (!t) return erro("Versão não encontrada.", 404);
   const db = getDb();
-  const [feito] = await db.batch([comandoExcluirTermo(db, id), comandoLimparHistoricoTermo(db, id)]);
+  const codigos = (await db.select({ c: termosAceites.codigo }).from(termosAceites).where(and(eq(termosAceites.termoId, id), eq(termosAceites.teste, true)))).map((r) => r.c);
+  const [feito] = await db.batch([comandoExcluirTermo(db, id), comandoLimparHistoricoTermo(db, id), ...comandosLimparMencoesTermo(db, id, t.versao, codigos)]);
   if (!feito.length) return erro("Esta versão já foi aceita fora do teste e não pode ser excluída: os aceites são a prova das assinaturas. Publique uma versão nova.", 409);
   await registrarAuditoria({
     usuario: g.u,
     acao: "excluir",
     entidade: "termo_uso",
     entidadeId: null,
-    resumo: t.estado === "rascunho" ? `Rascunho da versão ${t.versao} do Termo de Uso descartado` : `Versão ${t.versao} do Termo de Uso excluída (sem aceites reais — os de teste e o histórico dela foram apagados)`,
+    resumo: t.estado === "rascunho" ? "Rascunho do Termo de Uso descartado" : "Uma versão de teste do Termo de Uso foi excluída (sem aceites reais — os de teste e as menções a ela no histórico foram apagados)",
   });
   return ok();
 }

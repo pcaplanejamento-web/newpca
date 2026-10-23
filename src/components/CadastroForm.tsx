@@ -379,7 +379,11 @@ export function CadastroForm({
             </div>
           }
         >
-          <LeituraTermo texto={termo.texto} onFim={() => setTermoLido(true)} altura="max-h-[60vh]" />
+          <LeituraTermo texto={termo.texto} onFim={() => {
+              setTermoLido(true);
+              setAceitou(true);
+            }}
+            altura="max-h-[60vh]" />
         </Modal>
       )}
 

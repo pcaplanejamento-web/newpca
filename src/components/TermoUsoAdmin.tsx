@@ -217,7 +217,7 @@ export function TermoUsoAdmin() {
       titulo: rascunhoV ? `Descartar o rascunho da versão ${v.versao}?` : `Excluir a versão ${v.versao}?`,
       texto: rascunhoV
         ? "O texto em edição é apagado; o próximo rascunho começa da última versão publicada."
-        : `${v.teste ? `Esta versão foi usada só em teste: os ${v.teste} aceite(s) de teste, os comprovantes deles, as pendências de todas as pessoas e o histórico da versão são apagados para sempre` : "Ninguém aceitou esta versão. As pendências dela saem junto"}${vigente ? " e a versão publicada anterior volta a vigorar (sem nenhuma, o aceite deixa de ser exigido)" : ""}.`,
+        : `${v.teste ? `Esta versão foi usada só em teste: os ${v.teste} aceite(s) de teste, os comprovantes deles, as pendências de todas as pessoas e todas as menções a ela no histórico (inclusive nos cadastros feitos no teste) são apagados para sempre` : "Ninguém aceitou esta versão. As pendências dela saem junto"}${vigente ? " e a versão publicada anterior volta a vigorar (sem nenhuma, o aceite deixa de ser exigido)" : ""}.`,
       confirmar: rascunhoV ? "Descartar" : "Excluir",
       perigo: true,
     });
