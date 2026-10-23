@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "./Button";
 import { IconCheck, IconClipboard, IconCopy } from "./icons";
+import { registrarEvento } from "./RegistroProtecao";
 import { toast } from "./Toast";
 
 /** Copia um texto para a área de transferência: API do navegador e, sem permissão, o fallback clássico
@@ -10,6 +11,8 @@ import { toast } from "./Toast";
 export async function copiarTexto(texto: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(texto);
+    // O "Copiar" do sistema também entra no histórico (a cópia pelo fallback já passa pelo ouvinte de `copy`).
+    registrarEvento("copia", texto, "sistema");
     return true;
   } catch {
     const el = document.createElement("textarea");

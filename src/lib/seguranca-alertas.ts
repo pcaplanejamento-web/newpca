@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { comandosRegistrarAcesso, consultaAcessos } from "./acessos-sql";
+import { comandosRegistrarAcesso, comandosRegistrarEvento, consultaAcessos, consultaEventos, type NovoEvento } from "./acessos-sql";
 import { cookies } from "next/headers";
 import { acessos, preferenciasTabela, usuarios } from "@/db/schema";
 import { getDb } from "./db";
@@ -8,7 +8,7 @@ import { notificar } from "./notificacoes";
 import { sha256Hex, toHex } from "./password";
 import { salvarPreferenciaTabela } from "./preferencias-tabela";
 import { getConfigSeguranca } from "./seguranca";
-import type { AcessoRegistro } from "./acessos-core";
+import { type AcessoRegistro, type EventoRegistro, sessaoCurta } from "./acessos-core";
 import { avaliarAparelho, lerAparelhos, resumoNavegador } from "./seguranca-core";
 import { getAcessoConta } from "./acesso-conta";
 import { termoVigente } from "./termo-uso";
@@ -36,7 +36,7 @@ export const CHAVE_APARELHOS = "seguranca:aparelhos";
 type Pessoa = { id: number; nome: string; email: string };
 
 /** Depois de um login bem-sucedido (senha ou Google): aparelho novo → aviso aos ADMs e à própria pessoa. */
-export async function aposEntrar(req: Request, u: Pessoa, canal: "senha" | "Google"): Promise<void> {
+export async function aposEntrar(req: Request, u: Pessoa, canal: "senha" | "Google", token: string): Promise<void> {
   await repetirTesteAoEntrar(u.id);
   try {
     const cfg = await getConfigSeguranca();
@@ -74,7 +74,7 @@ export async function aposEntrar(req: Request, u: Pessoa, canal: "senha" | "Goog
         .limit(1);
       if (visto) novo = false;
     }
-    await db.batch(comandosRegistrarAcesso(db, { usuarioId: u.id, em: new Date().toISOString(), canal: canal === "Google" ? "google" : "senha", navegador, ip, aparelho: hash.slice(0, 6), novo }));
+    await db.batch(comandosRegistrarAcesso(db, { usuarioId: u.id, em: new Date().toISOString(), canal: canal === "Google" ? "google" : "senha", navegador, ip, aparelho: hash.slice(0, 6), novo, sessao: sessaoCurta(await sha256Hex(token)) }));
     if (!novo || !cfg.alertaAparelho) return;
     const quando = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
     const onde = `${navegador} · IP ${ip ?? "desconhecido"}`;
@@ -122,13 +122,22 @@ export async function alertarBloqueio(req: Request, u: Pessoa): Promise<void> {
 }
 
 /** O histórico de acesso de uma pessoa + o último acesso (o Perfil e o banner do usuário). */
-export async function historicoDeAcesso(usuarioId: number): Promise<{ ultimoAcesso: string | null; acessos: AcessoRegistro[] }> {
+export async function historicoDeAcesso(
+  usuarioId: number,
+): Promise<{ ultimoAcesso: string | null; acessos: AcessoRegistro[]; eventos: EventoRegistro[] }> {
   const db = getDb();
-  const [lista, [u]] = await Promise.all([
+  const [lista, eventos, [u]] = await Promise.all([
     consultaAcessos(db, usuarioId),
+    consultaEventos(db, usuarioId).catch(() => []),
     db.select({ ultimo: usuarios.ultimoAcessoEm }).from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1),
   ]);
-  return { ultimoAcesso: u?.ultimo ?? null, acessos: lista };
+  return { ultimoAcesso: u?.ultimo ?? null, acessos: lista, eventos };
+}
+
+/** Grava uma CÓPIA/CAPTURA de tela da pessoa (best-effort — nunca derruba o pedido). */
+export async function registrarEventoProtecao(e: NovoEvento): Promise<void> {
+  const db = getDb();
+  await db.batch(comandosRegistrarEvento(db, e)).catch((err) => console.error("[protecao] evento não gravado:", (err as Error).message));
 }
 
 /** O cookie de um aparelho apareceu em OUTRO navegador (cópia do cookie?) → aviso aos ADMs; o aparelho é pedido de novo. */

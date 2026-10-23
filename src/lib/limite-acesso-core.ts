@@ -27,6 +27,8 @@ export const LIMITES_ACESSO = {
   chatPrivado: { max: 30, janelaS: 60 },
   /** RECONFERÊNCIAS completas da Mesa ("Reverificar tudo" — cada fatia conta) da MESMA pessoa. */
   conferenciaFresca: { max: 300, janelaS: 10 * 60 },
+  /** Cópias/capturas/impressões registradas da MESMA pessoa (best-effort; o excesso não é gravado). */
+  eventosProtecao: { max: 60, janelaS: 60 },
   /** TERMO DE USO: tentativas de assinar (senha/código/frase errados) da MESMA pessoa. */
   aceiteTermo: { max: 10, janelaS: 15 * 60 },
   /** A verificação PÚBLICA do comprovante pelo código (por IP). */

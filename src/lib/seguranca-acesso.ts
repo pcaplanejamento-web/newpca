@@ -1,3 +1,4 @@
+import { comandoLimparEventos } from "./acessos-sql";
 import { NextResponse } from "next/server";
 import { interpretarSiteverify } from "./cloudflare-core";
 import { getDb } from "./db";
@@ -106,5 +107,5 @@ export async function limparSegurancaVencida(): Promise<void> {
   const t = agoraS();
   const maiorJanela = Math.max(...Object.values(LIMITES_ACESSO).map((r) => r.janelaS));
   const db = getDb();
-  await db.batch([comandoLimparTentativas(db, t - maiorJanela), comandoLimparDesafios(db, t)]);
+  await db.batch([comandoLimparTentativas(db, t - maiorJanela), comandoLimparDesafios(db, t), comandoLimparEventos(db, t * 1000)]);
 }

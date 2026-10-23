@@ -83,8 +83,9 @@ export async function GET(req: Request) {
       const u = (porSub ?? porEmail) as NonNullable<typeof porSub>;
       if (decisao.vincular) await db.update(usuarios).set({ googleSub: sub, googleEmail: email }).where(eq(usuarios.id, u.id));
       if (u.status !== "ativo") return ir(`/login?erro=${u.status === "pendente" ? "pendente" : "inativo"}`, email);
-      await definirCookieSessao(await criarSessao(u.id));
-      await aposEntrar(req, u, "Google");
+      const token = await criarSessao(u.id);
+      await definirCookieSessao(token);
+      await aposEntrar(req, u, "Google", token);
       await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema com o Google (${email})` });
       return ir("/painel", email);
     }

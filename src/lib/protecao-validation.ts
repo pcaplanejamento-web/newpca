@@ -8,4 +8,5 @@ export const configProtecaoSchema = z.strictObject({
   marca: z.boolean().optional().default(false),
   papeis: z.array(z.number().int().positive()).max(200),
   publica: z.boolean(),
+  registrar: z.boolean().optional().default(true),
 });

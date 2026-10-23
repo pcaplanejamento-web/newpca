@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     await zerarTentativas("loginEmail", email);
     const token = await criarSessao(u.id);
     await definirCookieSessao(token);
-    await aposEntrar(req, u, "senha");
+    await aposEntrar(req, u, "senha", token);
     await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema` });
     return NextResponse.json({
       ok: true,

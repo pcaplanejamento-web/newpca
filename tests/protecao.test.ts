@@ -7,7 +7,8 @@ test("lerConfigProtecao: lixo = tudo desligado; ids inválidos/repetidos saem", 
   assert.deepEqual(lerConfigProtecao(null), PROTECAO_PADRAO);
   assert.deepEqual(lerConfigProtecao("x"), PROTECAO_PADRAO);
   const c = lerConfigProtecao({ selecao: true, print: "sim", papeis: [3, 3, -1, 2.5, "4", 7], publica: true });
-  assert.deepEqual(c, { selecao: true, print: false, foco: false, marca: false, papeis: [3, 7], publica: true });
+  assert.deepEqual(c, { selecao: true, print: false, foco: false, marca: false, papeis: [3, 7], publica: true, registrar: true });
+  assert.equal(lerConfigProtecao({ registrar: false }).registrar, false);
 });
 
 test("protecaoDoPapel: só nos papéis escolhidos e com algum bloqueio", () => {

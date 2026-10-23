@@ -22,6 +22,7 @@ import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { getModulos } from "@/lib/modulos";
 import { secoesDosModulos } from "@/lib/modulos-core";
 import { getConfigProtecao } from "@/lib/protecao";
+import { RegistroProtecao } from "@/components/RegistroProtecao";
 import { protecaoDoPapel } from "@/lib/protecao-core";
 import { contarNaoLidas } from "@/lib/notificacoes";
 import { getConfigChat, getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
@@ -107,6 +108,7 @@ export default async function PainelLayout({
       // O GRUPO ativo também libera (ou não) o chat — Grupos → "Chat liberado".
       chat={bloqueio ? null : presenca === undefined || configChat === null ? undefined : presenca && ativo?.chat && chatLigado(configChat) ? configChat : null}
     >
+      <RegistroProtecao ligado={!bloqueio && protecaoCfg.registrar} />
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <PendenciasAcesso bloqueio={!!bloqueio} aparelho={pendAparelho} termo={pendTermo} nome={usuario.nome} />

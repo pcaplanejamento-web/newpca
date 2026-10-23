@@ -231,6 +231,7 @@ RangeFilterHeader.tsx
 RecorrenciaTarefa.tsx
 RecorteImagem.tsx
 RecorteMesa.tsx
+RegistroProtecao.tsx
 RecuperarSenhaForm.tsx
 ReferenciaSistema.tsx
 RelatorioErros.tsx

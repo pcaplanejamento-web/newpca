@@ -61,7 +61,7 @@ export function clausulasAutomaticas(c: ContextoClausulas): Clausula[] {
     id: "registros",
     titulo: "Registros de acesso e auditoria",
     texto:
-      "Para segurança e prestação de contas, o sistema registra os acessos (data e hora, navegador, endereço IP e aparelho) e mantém histórico permanente das inclusões, alterações e exclusões de dados, com a identificação de quem as realizou. Os registros podem ser consultados pelo Administrador e utilizados em apurações administrativas, auditorias e pelos órgãos de controle. O próprio usuário pode consultar o seu histórico de acesso no Perfil.",
+      "Para segurança e prestação de contas, o sistema registra os acessos (entrada, saída e tempo de uso, navegador, endereço IP e aparelho), as cópias de texto, as capturas de tela e as impressões feitas no sistema (a tela, os documentos abertos e o texto copiado) e mantém histórico permanente das inclusões, alterações e exclusões de dados, com a identificação de quem as realizou. Os registros podem ser consultados pelo Administrador e utilizados em apurações administrativas, auditorias e pelos órgãos de controle. O próprio usuário pode consultar o seu histórico de acesso no Perfil.",
   });
   if (c.protecao.ligada) {
     const medidas: string[] = [];
