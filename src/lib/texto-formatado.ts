@@ -29,11 +29,14 @@ export type Bloco =
   | { t: "citacao"; f: Inline[]; al?: Alinhamento }
   | { t: "separador" };
 
-const RE_ALINHAMENTO = /^\[\[(centro|direita|justificado)\]\]\s?/;
+// Marcas repetidas ("[[centro]] [[direita]] …") valem pela ÚLTIMA.
+const RE_ALINHAMENTO = /^(?:\[\[(centro|direita|justificado)\]\]\s?)+/;
 /** A marca de alinhamento na frente de uma linha ("" para a esquerda). */
 export const marcaAlinhamento = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? `[[${al}]] ` : "");
 /** A linha sem a marca de alinhamento (quem lê o texto linha a linha — o PDF do termo). */
 export const semAlinhamento = (linha: string) => linha.replace(RE_ALINHAMENTO, "");
+/** O texto inteiro sem as marcas de alinhamento (quem lê o texto cru). */
+export const semMarcas = (texto: string) => texto.split("\n").map(semAlinhamento).join("\n");
 /** O alinhamento em CSS (`text-align`). */
 export const CSS_ALINHAMENTO: Record<Alinhamento, string> = { esquerda: "left", centro: "center", direita: "right", justificado: "justify" };
 

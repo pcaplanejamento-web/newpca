@@ -106,6 +106,8 @@ function inline(n: NoRico): string {
   switch (nome) {
     case "STRONG":
     case "B":
+      // O Google Docs envolve TUDO num <b style="font-weight:normal"> — não é negrito.
+      if (/font-weight:\s*(normal|[1-5]00)\b/i.test(n.getAttribute?.("style") ?? "")) return dentro();
       return envolver(dentro(), "**");
     case "EM":
     case "I":
@@ -205,7 +207,8 @@ export function alinhamentoDe(n: NoRico): Alinhamento | undefined {
 /** Os blocos (texto formatado) de um nó do editor; `herdado` = o alinhamento do bloco de fora (um <div> alinhado). */
 function blocos(n: NoRico, out: string[], herdado?: Alinhamento) {
   let pendente = "";
-  const marcar = (texto: string, f?: NoRico) => `${marcaAlinhamento((f && alinhamentoDe(f)) ?? herdado)}${texto}`;
+  const marcar = (texto: string, f?: NoRico | Alinhamento) =>
+    `${marcaAlinhamento((typeof f === "string" ? f : f && alinhamentoDe(f)) ?? herdado)}${texto}`;
   const fecharPendente = () => {
     const ls = linhasDe(pendente);
     if (ls.length) out.push(marcar(ls.join("\n")));
@@ -226,12 +229,16 @@ function blocos(n: NoRico, out: string[], herdado?: Alinhamento) {
         .filter((l) => l.nodeName.toUpperCase() === "LI")
         .flatMap(itensDoLi);
       const inicio = Math.max(1, Math.min(999, Number.parseInt(f.getAttribute?.("start") ?? "1", 10) || 1));
-      const li = filhos(f).find((l) => l.nodeName.toUpperCase() === "LI");
+      const lis = filhos(f).filter((l) => l.nodeName.toUpperCase() === "LI");
+      const li = lis[0];
+      // Alinhamento da lista: o do <ol>/<ul>, senão o dos itens quando TODOS têm o mesmo (o do 1º sozinho não vale).
+      const alItens = lis.map((l) => alinhamentoDe(l) ?? alinhamentoDe(filhos(l).find(ehBloco) ?? l));
+      const alLista = alinhamentoDe(f) ?? (alItens.every((a) => a === alItens[0]) ? alItens[0] : undefined);
       const tipo = nome === "OL" ? tipoDaNumeracao(f, li) : "decimal";
       if (itens.length && tipo !== "decimal") {
         // Romanos e letras (colados de outro programa) ficam como estão escritos — "I.", "a)" —, um parágrafo por item.
-        for (const [i, t] of itens.entries()) out.push(marcar(`${rotuloItem(tipo, inicio + i)} ${t}`, alinhamentoDe(f) ? f : li));
-      } else if (itens.length) out.push(marcar(itens.map((t, i) => (nome === "OL" ? `${inicio + i}. ${t}` : `- ${t}`)).join("\n"), alinhamentoDe(f) ? f : li));
+        for (const [i, t] of itens.entries()) out.push(marcar(`${rotuloItem(tipo, inicio + i)} ${t}`, alItens[i] ?? alLista));
+      } else if (itens.length) out.push(marcar(itens.map((t, i) => (nome === "OL" ? `${inicio + i}. ${t}` : `- ${t}`)).join("\n"), alLista));
     } else if (nome === "BLOCKQUOTE") {
       const dentro: string[] = [];
       blocos(f, dentro);
@@ -292,7 +299,7 @@ export function pareceTitulo(linha: string): boolean {
  * em qualquer origem, os blocos de UMA linha que são títulos de seção viram Título 2 (só num texto com 3+ blocos — uma
  * mensagem curta não vira título). O número dos itens fica como escrito (a lista numerada guarda o começo).
  */
-export function organizarColado(texto: string, plano: boolean): string {
+export function organizarColado(texto: string, plano: boolean, titulos = true): string {
   const linhas = texto.replace(/\r\n?/g, "\n").replace(/ /g, " ").split("\n");
   const blocos: string[][] = [];
   let atual: string[] = [];
@@ -318,12 +325,15 @@ export function organizarColado(texto: string, plano: boolean): string {
     atual.push(l);
   }
   fechar();
-  const comTitulos = blocos.length >= 3;
+  const comTitulos = titulos && blocos.length >= 3;
   return blocos
     .map((b) => {
       if (comTitulos && b.length === 1) {
         const marca = /^\[\[\w+\]\]\s?/.exec(b[0])?.[0] ?? "";
-        const resto = b[0].slice(marca.length);
+        let resto = b[0].slice(marca.length);
+        // O título colado do Word/Docs vem em negrito ("**1. Objeto**").
+        const neg = /^\*\*([^*]+)\*\*$/.exec(resto.trim());
+        if (neg) resto = neg[1];
         if (!/^(#|>|[-*•]\s)/.test(resto) && pareceTitulo(resto)) return `${marca}## ${resto.trim()}`;
       }
       return b.join("\n");
