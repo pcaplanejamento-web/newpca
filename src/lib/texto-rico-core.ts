@@ -322,6 +322,14 @@ export function organizarColado(texto: string, plano: boolean, titulos = true): 
       } else atual[atual.length - 1] = /-$/.test(ant) && /^\p{Ll}/u.test(l) ? `${ant.slice(0, -1)}${l}` : `${ant} ${l}`;
       continue;
     }
+    // Colado COM formatação: a quebra (<br>) no meio de uma frase — a seguinte começa em minúscula — foi da largura.
+    if (!plano && atual.length) {
+      const ant = atual[atual.length - 1];
+      if (!/[.;:!?)"”]$/.test(ant) && /^\p{Ll}/u.test(l) && !RE_INICIO_ESTRUTURA.test(ant) && !RE_INICIO_ESTRUTURA.test(l)) {
+        atual[atual.length - 1] = /-$/.test(ant) ? `${ant.slice(0, -1)}${l}` : `${ant} ${l}`;
+        continue;
+      }
+    }
     atual.push(l);
   }
   fechar();

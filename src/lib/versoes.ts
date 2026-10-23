@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.178.2",
+    data: "2026-10-23",
+    titulo: "Editor de texto: colagem e alinhamento em listas",
+    mudancas: [
+      { tipo: "melhoria", area: "Colagem", texto: "Linhas quebradas no meio da frase (texto colado com formatação) voltam a ser um parágrafo.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Editor de texto", texto: "O botão de alinhamento mostra o alinhamento certo também dentro de listas.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.178.1",
     data: "2026-10-23",
     titulo: "Auditoria do editor de texto e da colagem",

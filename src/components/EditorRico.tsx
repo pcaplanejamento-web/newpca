@@ -55,8 +55,17 @@ const OPCOES_ALINHAMENTO: { al: Alinhamento; rotulo: string; atalho: string; cmd
   { al: "direita", rotulo: "Alinhar à direita", atalho: "Ctrl+Shift+R", cmd: "justifyRight", Icone: IconAlinharDireita },
   { al: "justificado", rotulo: "Justificar", atalho: "Ctrl+Shift+J", cmd: "justifyFull", Icone: IconJustificar },
 ];
-const alinhamentoAtual = (): Alinhamento =>
-  document.queryCommandState("justifyCenter") ? "centro" : document.queryCommandState("justifyRight") ? "direita" : document.queryCommandState("justifyFull") ? "justificado" : "esquerda";
+const alinhamentoAtual = (): Alinhamento => {
+  // O bloco (ou o item de lista) em que o cursor está — o `queryCommandState` falha dentro de listas.
+  let n: Node | null = document.getSelection()?.anchorNode ?? null;
+  while (n && !(n instanceof HTMLElement && /^(P|LI|H[1-6]|BLOCKQUOTE|DIV)$/.test(n.nodeName))) n = n.parentNode;
+  const css = n instanceof HTMLElement ? getComputedStyle(n).textAlign : "";
+  if (css === "center") return "centro";
+  if (css === "right" || css === "end") return "direita";
+  if (css === "justify") return "justificado";
+  if (css) return "esquerda";
+  return document.queryCommandState("justifyCenter") ? "centro" : document.queryCommandState("justifyRight") ? "direita" : document.queryCommandState("justifyFull") ? "justificado" : "esquerda";
+};
 
 function exec(cmd: string, arg?: string) {
   // O `execCommand` segue o único jeito de editar com o desfazer nativo do navegador (Ctrl+Z) em todos os navegadores.

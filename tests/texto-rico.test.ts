@@ -160,3 +160,9 @@ describe("auditoria do editor e da colagem (v1.178.1)", () => {
     assert.ok(!organizarColado(t, false, false).includes("##"));
   });
 });
+
+describe("colado com <br> no meio da frase", () => {
+  it("junta a linha quebrada pela largura; mantém a quebra real", () => {
+    assert.equal(organizarColado("O sistema registra\no acesso.\nNova linha.", false), "O sistema registra o acesso.\nNova linha.");
+  });
+});
