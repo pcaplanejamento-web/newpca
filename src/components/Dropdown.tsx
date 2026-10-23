@@ -87,7 +87,8 @@ export function Dropdown({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const gap = 6;
-    const w = Math.min(width ?? Math.max(224, r.width), vw - 16);
+    // `width={0}` = o painel na largura do PRÓPRIO conteúdo (barras de ícones).
+    const w = Math.min(width === 0 ? (panelRef.current?.offsetWidth ?? r.width) : (width ?? Math.max(224, r.width)), vw - 16);
     let left = align === "end" ? r.right - w : r.left;
     left = Math.max(8, Math.min(left, vw - w - 8));
     const espacoAbaixo = vh - r.bottom - 8;
@@ -173,7 +174,7 @@ export function Dropdown({
     : {
         ref: panelRef,
         className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
-        style: { top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
+        style: { top: pos.top, left: pos.left, width: width === 0 ? "max-content" : pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
       };
   // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora).
   const conteudo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;

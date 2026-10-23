@@ -476,6 +476,7 @@ export function EditorRico({
               ariaLabel="Alinhamento"
               title="Alinhamento do parágrafo"
               papel="dialog"
+              width={0}
               bloqueado={disabled}
               triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-0.5 rounded-control px-2 text-text hover:bg-surface-2 lg:h-8"
               trigger={
@@ -489,7 +490,7 @@ export function EditorRico({
               }
             >
               {(fechar) => (
-                <div className="flex gap-0.5 p-1">
+                <div className="flex gap-0.5">
                   {OPCOES_ALINHAMENTO.map(({ al, rotulo: r, atalho, cmd, Icone }) => (
                     <BotaoBarra
                       key={al}

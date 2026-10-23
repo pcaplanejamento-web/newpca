@@ -41,6 +41,7 @@ export const VERSOES: readonly Versao[] = [
     mudancas: [
       { tipo: "melhoria", area: "Colagem", texto: "Linhas quebradas no meio da frase (texto colado com formatação) voltam a ser um parágrafo.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "correcao", area: "Editor de texto", texto: "O botão de alinhamento mostra o alinhamento certo também dentro de listas.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Editor de texto", texto: "O menu de alinhamento tem a largura dos próprios botões, sem espaço sobrando.", link: "/painel/configuracoes?aba=termo" },
     ],
   },
   {
