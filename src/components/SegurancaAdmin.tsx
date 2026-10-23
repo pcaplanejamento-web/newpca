@@ -17,7 +17,7 @@ export function CamposSeguranca({ valor, onChange }: { valor: ConfigSeguranca; o
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="max-w-xs">
-        <SelectField label="Encerrar a sessão parada há" value={String(valor.inatividadeMin)} onChange={(e) => onChange({ ...valor, inatividadeMin: Number(e.target.value) })}>
+        <SelectField compacto label="Encerrar a sessão parada há" value={String(valor.inatividadeMin)} onChange={(e) => onChange({ ...valor, inatividadeMin: Number(e.target.value) })}>
           {OPCOES_INATIVIDADE.map((m) => (
             <option key={m} value={m}>
               {rotuloInatividade(m)}

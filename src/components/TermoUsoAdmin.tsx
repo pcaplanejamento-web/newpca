@@ -74,14 +74,14 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
       <section className="space-y-3">
         <p className="text-[13px] font-semibold text-text-2">Aparelhos por conta</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <SelectField label="Limite padrão" value={String(valor.limite)} onChange={(e) => set({ limite: Number(e.target.value) })}>
+          <SelectField compacto label="Limite padrão" value={String(valor.limite)} onChange={(e) => set({ limite: Number(e.target.value) })}>
             {limites.map((n) => (
               <option key={n} value={n}>
                 {n} aparelho{n === 1 ? "" : "s"}
               </option>
             ))}
           </SelectField>
-          <SelectField label="Sem nova troca por" value={String(valor.trocaDias)} onChange={(e) => set({ trocaDias: Number(e.target.value) })}>
+          <SelectField compacto label="Sem nova troca por" value={String(valor.trocaDias)} onChange={(e) => set({ trocaDias: Number(e.target.value) })}>
             {OPCOES_TROCA_DIAS.map((d) => (
               <option key={d} value={d}>
                 {d === 0 ? "Sem prazo" : `${d} dia${d === 1 ? "" : "s"}`}
@@ -99,6 +99,7 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
                 const atual = valor.porPapel[String(p.id)];
                 return (
                   <SelectField
+                    compacto
                     key={p.id}
                     label={p.nome}
                     value={atual ? String(atual) : ""}

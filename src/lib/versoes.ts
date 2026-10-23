@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.174.1",
+    data: "2026-10-23",
+    titulo: "Seleções de aparelhos e termo no tamanho padrão",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "As seleções de limite de aparelhos, prazo de troca, limite por papel e tempo de sessão ficaram no tamanho padrão dos controles, com o rótulo dentro da caixa.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Usuários", texto: "No banner do usuário, o \"Limite desta pessoa\" fica alinhado e na mesma altura do botão de troca.", link: "/painel/usuarios" },
+    ],
+  },
+  {
     versao: "1.174.0",
     data: "2026-10-23",
     titulo: "Termo de uso e aparelhos sem brechas",

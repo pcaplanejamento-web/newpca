@@ -132,9 +132,9 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
         />
       </div>
       {admin && (
-        <div className="flex flex-wrap items-end gap-3 rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
-          <div className="w-full sm:w-64">
-            <SelectField label="Limite desta pessoa" value={d.limiteProprio ? String(d.limiteProprio) : ""} onChange={(e) => conta({ limite: e.target.value ? Number(e.target.value) : null })} disabled={ocupado === "conta"}>
+        <div className="flex flex-wrap items-center gap-3 rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
+          <div className="w-full sm:w-72">
+            <SelectField compacto label="Limite desta pessoa" value={d.limiteProprio ? String(d.limiteProprio) : ""} onChange={(e) => conta({ limite: e.target.value ? Number(e.target.value) : null })} disabled={ocupado === "conta"}>
               <option value="">Do papel / padrão</option>
               {Array.from({ length: LIMITE_MAX - LIMITE_MIN + 1 }, (_, i) => LIMITE_MIN + i).map((n) => (
                 <option key={n} value={n}>
