@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.183.0",
+    data: "2026-10-23",
+    titulo: "Termo de Uso: excluir a versão usada só em teste",
+    mudancas: [
+      { tipo: "novo", area: "Termo de Uso", texto: "A versão aceita só em teste pode ser excluída: saem os aceites de teste (e os comprovantes), as pendências de todas as pessoas e o histórico da versão, num passo só. A versão com aceite real continua protegida.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.182.0",
     data: "2026-10-23",
     titulo: "Importação manual dos empenhos, conferida com a Centi",

@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { termosAceites, termosPendencias, termosUso, usuarios } from "../db/schema.ts";
+import { auditoria, termosAceites, termosPendencias, termosUso, usuarios } from "../db/schema.ts";
 
 // TERMO DE USO — os comandos (testados no driver D1 real — tests/termo-aparelhos.test.ts).
 
@@ -77,6 +77,15 @@ export function consultaTermoVigente(db: Db) {
 export function comandoExcluirTermo(db: Db, id: number) {
   return db
     .delete(termosUso)
-    .where(and(eq(termosUso.id, id), sql`NOT EXISTS (SELECT 1 FROM termos_aceites AS ta WHERE ta.termo_id = ${termosUso.id})`))
+    .where(and(eq(termosUso.id, id), sql`NOT EXISTS (SELECT 1 FROM termos_aceites AS ta WHERE ta.termo_id = ${termosUso.id} AND ta.teste = 0)`))
     .returning({ id: termosUso.id, versao: termosUso.versao, estado: termosUso.estado });
+}
+
+/** Os vestígios da versão EXCLUÍDA no histórico (rascunho, publicação, exigências e os aceites de TESTE) — só roda
+ * quando a versão saiu de fato (no MESMO lote, depois do `comandoExcluirTermo`); com aceite real, nada é apagado. */
+export function comandoLimparHistoricoTermo(db: Db, id: number) {
+  return db
+    .delete(auditoria)
+    .where(and(eq(auditoria.entidade, "termo_uso"), eq(auditoria.entidadeId, id), sql`NOT EXISTS (SELECT 1 FROM termos_uso WHERE id = ${id})`))
+    .returning({ id: auditoria.id });
 }

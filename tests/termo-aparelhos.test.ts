@@ -43,7 +43,7 @@ import {
   rotuloVersaoTermo,
   seloAceite,
 } from "../src/lib/termo-uso-core.ts";
-import { comandoExcluirTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
+import { comandoExcluirTermo, comandoLimparHistoricoTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 function banco() {
@@ -241,6 +241,20 @@ describe("termo no D1 real", () => {
     await comandoPendencias(orm, 2, { todos: true }, "2026-12-01").run();
     assert.equal((await orm.batch([comandoExcluirTermo(orm, 2)]))[0].length, 1, "sem aceite sai");
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE termo_id = 2").get()?.n, 0, "as pendências saem junto");
+    // versão usada SÓ EM TESTE: sai com os aceites de teste, as pendências e o histórico dela
+    db.exec(`INSERT INTO termos_uso (id, versao, titulo, texto_adm) VALUES (3, 3, 'Termo', 'texto')`);
+    await orm.batch(comandosAceitar(orm, { ...aceite, termoId: 3, versao: 3, codigo: "T3", teste: true }));
+    await comandoPendencias(orm, 3, { todos: true }, "2026-12-01").run();
+    db.exec(`INSERT INTO auditoria (usuario_nome, acao, entidade, entidade_id, resumo) VALUES ('ADM', 'criar', 'termo_uso', 3, 'publicado'), ('ADM', 'criar', 'termo_uso', 1, 'outra')`);
+    const [saiu, hist] = await orm.batch([comandoExcluirTermo(orm, 3), comandoLimparHistoricoTermo(orm, 3)]);
+    assert.equal(saiu.length, 1, "só teste sai");
+    assert.equal(hist.length, 1);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_aceites WHERE termo_id = 3").get()?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE termo_id = 3").get()?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM auditoria WHERE entidade = 'termo_uso'").get()?.n, 1, "o histórico de outra versão fica");
+    // com aceite real, nada é apagado — nem o histórico
+    const [n1, n2] = await orm.batch([comandoExcluirTermo(orm, 1), comandoLimparHistoricoTermo(orm, 1)]);
+    assert.equal(n1.length + n2.length, 0);
   });
 });
 

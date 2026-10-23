@@ -208,7 +208,7 @@ export function TermoUsoAdmin() {
   if (!d || !cfg) return <SkeletonLinhas linhas={6} />;
 
   /** EXCLUIR uma versão: o rascunho (descartar) ou a publicada que ninguém aceitou — a que tem aceite fica (prova). */
-  async function excluirVersao(v: { id: number; versao: number; estado: string; aceites: number }) {
+  async function excluirVersao(v: { id: number; versao: number; estado: string; aceites: number; teste?: number }) {
     if (!d) return;
     if (v.aceites > 0) return toast.error("Esta versão já foi aceita e não pode ser excluída: os aceites são a prova das assinaturas.");
     const rascunhoV = v.estado === "rascunho";
@@ -217,7 +217,7 @@ export function TermoUsoAdmin() {
       titulo: rascunhoV ? `Descartar o rascunho da versão ${v.versao}?` : `Excluir a versão ${v.versao}?`,
       texto: rascunhoV
         ? "O texto em edição é apagado; o próximo rascunho começa da última versão publicada."
-        : `Ninguém aceitou esta versão. As pendências dela saem junto${vigente ? " e a versão publicada anterior volta a vigorar (sem nenhuma, o aceite deixa de ser exigido)" : ""}.`,
+        : `${v.teste ? `Esta versão foi usada só em teste: os ${v.teste} aceite(s) de teste, os comprovantes deles, as pendências de todas as pessoas e o histórico da versão são apagados para sempre` : "Ninguém aceitou esta versão. As pendências dela saem junto"}${vigente ? " e a versão publicada anterior volta a vigorar (sem nenhuma, o aceite deixa de ser exigido)" : ""}.`,
       confirmar: rascunhoV ? "Descartar" : "Excluir",
       perigo: true,
     });
@@ -469,9 +469,17 @@ export function TermoUsoAdmin() {
                 variant="danger"
                 icon={<IconTrash className="h-4 w-4" />}
                 loading={ocupado === `excluir-${versaoAberta.termo.id}`}
-                disabled={!!ocupado || versaoAberta.aceites.length > 0}
-                title={versaoAberta.aceites.length > 0 ? "Versão já aceita: os aceites são a prova das assinaturas e não podem ser apagados" : "Excluir esta versão (ninguém a aceitou)"}
-                onClick={() => excluirVersao({ id: versaoAberta.termo.id, versao: versaoAberta.termo.versao, estado: versaoAberta.termo.estado ?? "publicado", aceites: versaoAberta.aceites.length })}
+                disabled={!!ocupado || versaoAberta.aceites.some((a) => !a.teste)}
+                title={versaoAberta.aceites.some((a) => !a.teste) ? "Versão já aceita: os aceites são a prova das assinaturas e não podem ser apagados" : versaoAberta.aceites.length ? "Excluir esta versão usada só em teste (apaga os aceites de teste e todo o histórico dela)" : "Excluir esta versão (ninguém a aceitou)"}
+                onClick={() =>
+                  excluirVersao({
+                    id: versaoAberta.termo.id,
+                    versao: versaoAberta.termo.versao,
+                    estado: versaoAberta.termo.estado ?? "publicado",
+                    aceites: versaoAberta.aceites.filter((a) => !a.teste).length,
+                    teste: versaoAberta.aceites.filter((a) => a.teste).length,
+                  })
+                }
               >
                 Excluir
               </Button>
