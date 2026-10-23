@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.195.2",
+    data: "2026-10-23",
+    titulo: "Termo: assinaturas com os dados atuais do cadastro",
+    mudancas: [
+      { tipo: "correcao", area: "Termo de uso", texto: "A tabela das assinaturas mostra o nome, a matrícula e a unidade ATUAIS de cada pessoa — mudou o cadastro, muda no termo. O comprovante assinado segue com os dados do momento do aceite.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.195.1",
     data: "2026-10-23",
     titulo: "Termo: aceite único e o nome atual do aparelho",
