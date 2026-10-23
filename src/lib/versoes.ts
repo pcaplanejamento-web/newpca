@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.188.1",
+    data: "2026-10-23",
+    titulo: "Empenhos: valores abaixo de R$ 1.000 corrigidos — importe 2026 de novo",
+    mudancas: [
+      { tipo: "correcao", area: "Integrações", texto: "A auditoria com os 21.536 empenhos de 2026 achou um erro: a Centi manda os valores com três casas (“100,000” = R$ 100) e o leitor lia como cem mil. Corrigido e conferido campo a campo contra um segundo leitor — nenhuma diferença. Os empenhos importados com o erro foram apagados: importe 2026 de novo.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.188.0",
     data: "2026-10-23",
     titulo: "Termo de uso: tela de aceite e download opcionais",

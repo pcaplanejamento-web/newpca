@@ -81,6 +81,13 @@ test("empenhos: valores, datas e a chave (a MESMA da tabela)", () => {
   assert.equal(valor(1234.5), 1234.5);
   assert.equal(valor("1.234,56"), 1234.56);
   assert.equal(valor("1,234.56"), 1234.56);
+  // A Centi manda SEMPRE três casas com a vírgula decimal: "100,000" é R$ 100 (nunca cem mil).
+  assert.equal(valor("100,000"), 100);
+  assert.equal(valor("0,500"), 0.5);
+  assert.equal(valor("12,345"), 12.345);
+  assert.equal(valor("3.042,000"), 3042);
+  assert.equal(valor("1.234.567,890"), 1234567.89);
+  assert.equal(valor("-50,000"), -50);
   assert.equal(valor(""), 0);
   assert.equal(valor(null), 0);
   assert.equal(valor(Number.NaN), 0);

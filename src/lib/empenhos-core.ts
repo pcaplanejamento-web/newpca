@@ -45,10 +45,20 @@ function texto(v: unknown): string | null {
   return t ? t : null;
 }
 
-/** Valor em R$: número como veio; texto em pt-BR ou en-US. Vazio/inválido = 0. */
+/**
+ * Valor em R$: número como veio; texto da Centi em pt-BR, SEMPRE com a vírgula decimal ("100,000" = R$ 100 — três casas;
+ * "1.021,070" = R$ 1.021,07). Só a vírgula = a vírgula É o decimal (nunca milhar: a régua genérica de planilha leria
+ * "100,000" como cem mil). Com ponto e vírgula, o último é o decimal; só pontos, a régua de planilha. Vazio/inválido = 0.
+ */
 export function valor(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  return parseValorPlanilha(v) ?? 0;
+  const t = String(v ?? "").trim();
+  if (t.includes(",") && !t.includes(".")) {
+    const neg = /^\(.*\)$/.test(t) || t.startsWith("-");
+    const n = Number.parseFloat(t.replace(/[^\d,]/g, "").replace(",", "."));
+    return Number.isFinite(n) ? (neg ? -Math.abs(n) : n) : 0;
+  }
+  return parseValorPlanilha(t) ?? 0;
 }
 
 /** Data da Centi (dd/mm/aaaa, com ou sem hora, ou ISO) → AAAA-MM-DD; inválida = null. */
