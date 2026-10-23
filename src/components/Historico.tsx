@@ -61,6 +61,7 @@ const TOM_ORIGEM: Record<OrigemAuditoria, Tone> = {
   trello: "blue",
   centi: "orange",
   exclusao: "red",
+  restauracao: "emerald",
 };
 const ROTULOS_HISTORICO = ["Antes", "Depois"] as const;
 const FILTROS: FiltroHistorico[] = ["tudo", "capa", "dfds", "itens"];

@@ -173,7 +173,8 @@ export type OrigemAuditoria =
   | "recorrencia" // próxima ocorrência de uma tarefa recorrente
   | "trello" // sincronização com o Trello (o que veio de lá e os conflitos resolvidos)
   | "centi" // a Automação Centi (execuções, escritas na Centi, freio de emergência)
-  | "exclusao";
+  | "exclusao"
+  | "restauracao"; // restauração da lixeira da Mesa
 
 export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
   protocolacao: "Protocolação",
@@ -189,6 +190,7 @@ export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
   trello: "Sincronização com o Trello",
   exclusao: "Exclusão",
   centi: "Automação Centi",
+  restauracao: "Restauração da lixeira",
 };
 
 /**

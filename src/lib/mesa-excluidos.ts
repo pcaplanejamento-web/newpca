@@ -24,6 +24,7 @@ export type Excluido = {
   excluidoPor: number | null;
   excluidoNome: string | null;
   excluidoEm: string | null;
+  restauradoEm?: string | null;
 };
 
 /** Teto da lista (as mais recentes) — a retenção mantém a tabela pequena. */
@@ -47,6 +48,7 @@ const COLUNAS = {
   excluidoPor: mesaExcluidos.excluidoPor,
   excluidoNome: mesaExcluidos.excluidoNome,
   excluidoEm: mesaExcluidos.excluidoEm,
+  restauradoEm: mesaExcluidos.restauradoEm,
 };
 
 /** Os excluídos de UMA Mesa: a do PCA (`pcaId`) ou a do sistema (`null`). */
@@ -54,7 +56,7 @@ export async function listarExcluidos(pcaId: number | null, tipo: Excluido["tipo
   return (await getDb()
     .select(COLUNAS)
     .from(mesaExcluidos)
-    .where(and(eq(mesaExcluidos.tipo, tipo), pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId)))
+    .where(and(eq(mesaExcluidos.tipo, tipo), isNull(mesaExcluidos.restauradoEm), pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId)))
     .orderBy(desc(mesaExcluidos.id))
     .limit(MAX_EXCLUIDOS)) as Excluido[];
 }
@@ -74,7 +76,7 @@ export async function dfdsDoProtocoloExcluido(protocoloId: number): Promise<(Exc
   return (await getDb()
     .select({ ...COLUNAS, retrato: mesaExcluidos.retrato })
     .from(mesaExcluidos)
-    .where(and(eq(mesaExcluidos.tipo, "dfd"), eq(mesaExcluidos.protocoloId, protocoloId), eq(mesaExcluidos.motivo, "cascata")))
+    .where(and(eq(mesaExcluidos.tipo, "dfd"), eq(mesaExcluidos.protocoloId, protocoloId), eq(mesaExcluidos.motivo, "cascata"), isNull(mesaExcluidos.restauradoEm)))
     .orderBy(mesaExcluidos.id)) as (Excluido & { retrato: string | null })[];
 }
 
@@ -256,7 +258,7 @@ export async function itensDosDfdsExcluidos(pcaId: number | null): Promise<ItemD
   const rows = await getDb()
     .select({ ...COLUNAS, retrato: mesaExcluidos.retrato })
     .from(mesaExcluidos)
-    .where(and(eq(mesaExcluidos.tipo, "dfd"), pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId)))
+    .where(and(eq(mesaExcluidos.tipo, "dfd"), isNull(mesaExcluidos.restauradoEm), pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId)))
     .orderBy(desc(mesaExcluidos.id))
     .limit(MAX_EXCLUIDOS);
   const out: ItemDoDfdExcluido[] = [];
@@ -289,7 +291,7 @@ export async function linhasParaLimpeza(pcaId: number | null) {
   return getDb()
     .select({ id: mesaExcluidos.id, tipo: mesaExcluidos.tipo, protocoloId: mesaExcluidos.protocoloId, motivo: mesaExcluidos.motivo, reparticaoId: mesaExcluidos.reparticaoId, excluidoPor: mesaExcluidos.excluidoPor })
     .from(mesaExcluidos)
-    .where(pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId));
+    .where(and(isNull(mesaExcluidos.restauradoEm), pcaId == null ? isNull(mesaExcluidos.pcaId) : eq(mesaExcluidos.pcaId, pcaId)));
 }
 
 /** A LIMPEZA definitiva: apaga as linhas da lixeira e descarta as exclusões antigas, num lote. */

@@ -213,7 +213,10 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema — a lixeira")),
     DELETE: naMesa(recurso(MESA, "excluir", "recusa(", "limpar a lixeira da Mesa (apaga de vez)")),
   },
-  "mesa/excluidos/[id]": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "a Mesa de onde saiu (a do PCA guardado)")) },
+  "mesa/excluidos/[id]": {
+    GET: naMesa(recurso(MESA, "visualizar", "recusa(", "a Mesa de onde saiu (a do PCA guardado)")),
+    POST: naMesa(recurso(MESA, "importar", "recusa(", "restaurar da lixeira — a Mesa de onde saiu")),
+  },
   "mesa/execucao": { GET: naMesa(tela("dfd", "visualizar", "o Dashboard da Mesa do sistema (sem o desempenho por pessoa: só as correções, sem pessoas)")) },
   "protocolo": { POST: naMesa(recurso(MESA, "importar", "recusa(", "novo = Mesa do sistema; reenvio/mesmo nº = a Mesa em que ele está")) },
   "protocolo/[id]": {

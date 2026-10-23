@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db";
 import { erro, ok } from "@/lib/http";
 import { dfdsDoProtocoloExcluido, excluidoVisivel, getExcluido, visualDoRetrato } from "@/lib/mesa-excluidos";
 import { lerRetratoDfd, lerRetratoItem, lerRetratoProtocolo } from "@/lib/mesa-excluidos-core";
+import { analisarRestauracao } from "@/lib/mesa-restauracao";
+import { registrarAuditoria } from "@/lib/auditoria";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const reps = ids.length ? await getDb().select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(inArray(reparticoes.id, ids)) : [];
   const rep = (rid: number | null) => reps.find((r) => r.id === rid) ?? null;
   const dfdLido = e.tipo === "dfd" ? lerRetratoDfd(retrato) : null;
+  const plano = await analisarRestauracao(id, esc, g.u.id);
   return ok({
+    restauracao: plano.ok ? { pode: true, resumo: plano.resumo } : { pode: false, motivo: plano.erro },
     excluido: linha,
     sigla: rep(e.reparticaoId)?.codigo ?? null,
     dfd: dfdLido ? visualDoRetrato(dfdLido, rep(e.reparticaoId)) : null,
@@ -55,4 +59,37 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       return { ...d, sigla: rep(d.reparticaoId)?.codigo ?? null, tipoDfd: x?.tipo ?? null, totalItens: x?.itens.length ?? 0 };
     }),
   });
+}
+
+// RESTAURAR (o retrato volta à Mesa com o MESMO id; a régua em `mesa-restauracao.ts`). Exige Importar na Mesa de onde saiu.
+export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const g = await exigirSessao();
+  if ("erro" in g) return g.erro;
+  const id = intId((await ctx.params).id);
+  if (!id) return erro("ID inválido.");
+  const e = await getExcluido(id);
+  if (!e) return erro("Não encontrado.", 404);
+  const negado = recusa(g.acesso, e.pcaId ? "pca" : "dfd", "importar");
+  if (negado) return negado;
+  if (e.pcaId && !podePca(g.acesso, e.pcaId)) return erro("Sem acesso a este PCA.", 403);
+  const esc = await escopoMesa();
+  if (!esc) return erro("Sem acesso.", 403);
+  const plano = await analisarRestauracao(id, esc, g.u.id);
+  if (!plano.ok) return erro(plano.erro, plano.status);
+  try {
+    await plano.executar({ id: g.u.id, nome: g.u.nome });
+  } catch {
+    return erro("Não foi possível restaurar: algo mudou na Mesa. Atualize e tente de novo.", 409);
+  }
+  const r = plano.resumo;
+  await registrarAuditoria({
+    usuario: g.u,
+    acao: "criar",
+    entidade: r.tipo === "protocolo" ? "protocolo" : "dfd",
+    entidadeId: r.tipo === "item" ? (e.dfdId ?? null) : e.alvoId,
+    protocoloId: e.protocoloId ?? null,
+    origem: "restauracao",
+    resumo: `Restaurado da lixeira: ${r.tipo === "protocolo" ? `protocolo ${r.numero} com ${r.voltam.length} DFD(s)` : r.tipo === "dfd" ? `DFD ${r.numero} em ${r.destino}` : `item ${r.numero ?? ""} em ${r.destino}`}`,
+  });
+  return ok({ resumo: r });
 }

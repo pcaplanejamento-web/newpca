@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.173.0",
+    data: "2026-10-23",
+    titulo: "Restaurar da lixeira da Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Restaurar na lixeira da Mesa: o protocolo volta com os DFDs que saíram junto (o esvaziado, com o DFD que o esvaziou) e o mesmo número e histórico; o DFD excluído antes fica na lixeira e pode voltar sozinho depois.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A restauração nunca cria número repetido nem protocolo vazio: o DFD/item volta ao protocolo/DFD que existe (mesmo, reimportado pelo Id da capa ou pelo nº) e, no PCA incorporado, com o mesmo nº do item.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.172.0",
     data: "2026-10-23",
     titulo: "Termo de Uso obrigatório para entrar no sistema",

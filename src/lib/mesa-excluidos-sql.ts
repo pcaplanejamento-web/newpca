@@ -1,7 +1,7 @@
 import { and, eq, lt, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { dfdItens, dfdProtocolos, dfds, mesaExcluidos, mesaLixeiraDescartados } from "../db/schema.ts";
+import { dfdItens, dfdProtocolos, dfds, mesaExcluidos, mesaLixeiraDescartados, pcaItens } from "../db/schema.ts";
 
 /**
  * LIXEIRA DA MESA — os comandos como BUILDERS (testados pelo driver D1 real dentro de `db.batch`). Cada um LÊ O
@@ -146,4 +146,38 @@ export function comandosDescartarAntigos(db: Db, chaves: string[]) {
  */
 export function consultaDfdsRestantes(db: Db, protocoloId: number) {
   return db.select({ n: sql<number>`COUNT(*)` }).from(dfds).where(eq(dfds.protocoloId, protocoloId));
+}
+
+// ---------------------------------------------------------------- RESTAURAR (builders — num lote só)
+export type ProtocoloRestaurado = typeof dfdProtocolos.$inferInsert & { id: number };
+export type DfdRestaurado = typeof dfds.$inferInsert & { id: number };
+export type ItemRestaurado = Omit<typeof dfdItens.$inferInsert, "dfdId">;
+
+/** O protocolo volta com o MESMO id (AUTOINCREMENT nunca reaproveita) — o histórico e os DFDs antigos seguem ligados. */
+export function comandoInserirProtocolo(db: Db, p: ProtocoloRestaurado) {
+  return db.insert(dfdProtocolos).values(p);
+}
+export function comandoInserirDfd(db: Db, d: DfdRestaurado) {
+  return db.insert(dfds).values(d);
+}
+/** Os itens de um DFD em INSERTs de 6 linhas (14 colunas → ≤ 100 parâmetros). */
+export function comandosInserirItens(db: Db, dfdId: number, itens: ItemRestaurado[]) {
+  const out = [];
+  for (let i = 0; i < itens.length; i += 6) out.push(db.insert(dfdItens).values(itens.slice(i, i + 6).map((it) => ({ ...it, dfdId }))));
+  return out;
+}
+/**
+ * Os nºs do PCA voltam aos itens restaurados (a regra: o item restaurado volta com o MESMO sequencial). Só o nº que NÃO
+ * está ligado a outro item (nunca reaproveitado — é o do próprio item); religado ao item novo pelo nº gravado no item.
+ */
+export function comandoReativarSequenciais(db: Db, pcaId: number, dfdId: number, protocoloId: number | null, sequenciais: number[]) {
+  const linha = sql`(SELECT i.id FROM dfd_itens i WHERE i.dfd_id = ${dfdId} AND i.pca_id = ${pcaItens.pcaId} AND i.pca_sequencial = ${pcaItens.sequencial} ORDER BY i.id LIMIT 1)`;
+  return db
+    .update(pcaItens)
+    .set({ baixadoEm: null, ativo: true, motivo: null, inativadoEm: null, inativadoPor: null, dfdId, protocoloId, dfdItemId: linha })
+    .where(and(eq(pcaItens.pcaId, pcaId), sql`${pcaItens.dfdItemId} IS NULL`, sql`${pcaItens.sequencial} IN (SELECT value FROM json_each(${JSON.stringify(sequenciais)}))`, sql`EXISTS ${linha}`));
+}
+/** Marca as linhas da lixeira como restauradas (saem da lista; a retenção as apaga depois). */
+export function comandoMarcarRestaurados(db: Db, ids: number[]) {
+  return db.update(mesaExcluidos).set({ restauradoEm: sql`CURRENT_TIMESTAMP` }).where(sql`${mesaExcluidos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`);
 }

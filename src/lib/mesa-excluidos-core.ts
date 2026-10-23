@@ -352,3 +352,50 @@ export function planoLimpeza(
   const prots = new Set(linhas.filter((l) => pedidas.has(l.id) && l.tipo === "protocolo" && l.protocoloId != null).map((l) => l.protocoloId));
   return linhas.filter((l) => pedidas.has(l.id) || (l.tipo === "dfd" && l.motivo === "cascata" && prots.has(l.protocoloId))).map((l) => l.id);
 }
+
+// ---------------------------------------------------------------- RESTAURAR
+/** Uma linha da lixeira, o mínimo para decidir a restauração. */
+export type LinhaRestauracao = { id: number; tipo: string; protocoloId: number | null; motivo: string };
+
+/**
+ * Os DFDs que VOLTAM com o protocolo: os que saíram JUNTO com ele (a cascata). Cada exclusão é independente — o DFD
+ * excluído ANTES (motivo próprio) não volta. Exceção: o protocolo excluído por ter ficado VAZIO (sem cascata) volta com o
+ * DFD que o esvaziou (o último excluído dele antes do protocolo); sem nenhum, a restauração é recusada (`[]`) — nunca se
+ * restaura um protocolo vazio.
+ */
+export function dfdsQueVoltamComProtocolo(protocolo: LinhaRestauracao, linhas: LinhaRestauracao[]): number[] {
+  const doProt = linhas.filter((l) => l.tipo === "dfd" && l.protocoloId != null && l.protocoloId === protocolo.protocoloId);
+  const cascata = doProt.filter((l) => l.motivo === "cascata").map((l) => l.id);
+  if (cascata.length > 0 || protocolo.motivo !== "esvaziado") return cascata;
+  const antes = doProt.filter((l) => l.id < protocolo.id).sort((a, b) => b.id - a.id);
+  return antes.length > 0 ? [antes[0].id] : [];
+}
+
+/** O DFD excluído ANTES do protocolo (a linha própria, que fica na lixeira quando o protocolo volta). */
+export function excluidosAntesDoProtocolo(protocolo: LinhaRestauracao, linhas: LinhaRestauracao[]): number[] {
+  const voltam = new Set(dfdsQueVoltamComProtocolo(protocolo, linhas));
+  return linhas
+    .filter((l) => l.tipo === "dfd" && l.protocoloId === protocolo.protocoloId && l.motivo !== "cascata" && l.id < protocolo.id && !voltam.has(l.id))
+    .map((l) => l.id);
+}
+
+/** O destino de um DFD/item que volta sozinho, pela ordem: o mesmo id vivo · o vivo de mesmo Id da capa (reimportado) ·
+ * o vivo de mesmo nº. `lixeira` = o protocolo de origem está na lixeira (a mensagem manda restaurá-lo antes). */
+export type DestinoProtocolo = { id: number; numero: string; pcaId: number | null; incorporado: boolean };
+export function destinoDoDfd(
+  original: { protocoloId: number | null; protocoloNumero: string | null; idExterno: string | null },
+  vivos: { porId: DestinoProtocolo | null; porIdExterno: DestinoProtocolo | null; porNumero: DestinoProtocolo | null },
+  lixeira: boolean,
+): { destino: DestinoProtocolo | null } | { erro: string } {
+  if (original.protocoloId == null) return { destino: null };
+  const d = vivos.porId ?? vivos.porIdExterno ?? vivos.porNumero;
+  if (d) return { destino: d };
+  const n = original.protocoloNumero ?? `#${original.protocoloId}`;
+  return { erro: lixeira ? `O protocolo ${n} está na lixeira: restaure-o primeiro.` : `O protocolo ${n} não existe mais na Mesa.` };
+}
+
+/** Os nºs do PCA que voltam com os itens: só quando o destino está INCORPORADO no MESMO PCA do retrato. */
+export function sequenciaisQueVoltam(itens: { pcaId: number | null; pcaSequencial: number | null }[], destino: DestinoProtocolo | null): number[] {
+  if (!destino?.incorporado || destino.pcaId == null) return [];
+  return [...new Set(itens.filter((i) => i.pcaId === destino.pcaId && i.pcaSequencial != null).map((i) => i.pcaSequencial as number))];
+}

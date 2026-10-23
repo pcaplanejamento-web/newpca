@@ -51,6 +51,7 @@ type Detalhe = {
   /** Extras do retrato do DFD (o que o `DfdView` não mostra). */
   dfdExtra: Record<string, string | null> | null;
   dfds: DfdCascata[];
+  restauracao?: { pode: true; resumo: { tipo: Tipo; numero: string | null; destino: string | null; voltam: string[]; ficam: number; sequenciais: number } } | { pode: false; motivo: string };
 };
 
 const TIPOS: { value: Tipo; label: string }[] = [
@@ -205,6 +206,33 @@ export function ExcluidosMesa({ pcaId, siglas, podeLimpar = false }: { pcaId: nu
     };
   }, [atual]);
 
+  const [restaurando, setRestaurando] = useState(false);
+  async function restaurar() {
+    const r = detalhe?.restauracao;
+    if (!r?.pode || !detalhe || restaurando) return;
+    const z = r.resumo;
+    const o =
+      z.tipo === "protocolo"
+        ? `O protocolo ${z.numero} volta com ${z.voltam.length} DFD(s) (${z.voltam.join(", ")}) para ${z.destino}.${z.ficam ? ` ${z.ficam} DFD(s) excluído(s) ANTES ficam na lixeira.` : ""}`
+        : z.tipo === "dfd"
+          ? `O DFD ${z.numero} volta para ${z.destino}, com os itens.`
+          : `O item volta para ${z.destino}.`;
+    const seq = z.sequenciais ? ` ${z.sequenciais} item(ns) voltam com o mesmo nº do PCA.` : "";
+    if (!(await confirmar({ titulo: "Restaurar da lixeira?", texto: o + seq, confirmar: "Restaurar" }))) return;
+    setRestaurando(true);
+    try {
+      const j = (await (await fetch(`/api/mesa/excluidos/${detalhe.excluido.id}`, { method: "POST" })).json()) as { ok: boolean; error?: string };
+      if (!j.ok) return setAviso({ kind: "danger", texto: j.error ?? "Não foi possível restaurar." });
+      setAviso({ kind: "ok", texto: "Restaurado na Mesa." });
+      setAtual(null);
+      setRecarga((x) => x + 1);
+    } catch {
+      setAviso({ kind: "danger", texto: "Sem conexão." });
+    } finally {
+      setRestaurando(false);
+    }
+  }
+
   const colunas = useMemo<Column<Linha>[]>(() => {
     const sigla = (l: Linha) => (l.reparticaoId != null ? (siglas.get(l.reparticaoId) ?? "—") : "—");
     const base: Column<Linha>[] = [
@@ -270,7 +298,23 @@ export function ExcluidosMesa({ pcaId, siglas, podeLimpar = false }: { pcaId: nu
             largura: 52,
             titulo,
             cabecalho: cabecalhoDetalhe(detalhe, linhaAtual),
-            acoesCabecalho: <AjudaRegistro />,
+            acoesCabecalho: (
+              <>
+                {detalhe?.restauracao && !lerChaveItemDoDfd(atual ?? "") && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={restaurando}
+                    disabled={!detalhe.restauracao.pode}
+                    title={detalhe.restauracao.pode ? "Volta à Mesa com o mesmo número e histórico" : detalhe.restauracao.motivo}
+                    onClick={restaurar}
+                  >
+                    Restaurar
+                  </Button>
+                )}
+                <AjudaRegistro />
+              </>
+            ),
             onClose: () => setAtual(null),
             children: linhaAtual?.antigo ? (
               <DetalheAntigo a={linhaAtual.antigo} linha={linhaAtual} />
