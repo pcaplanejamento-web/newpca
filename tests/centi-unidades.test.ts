@@ -4,12 +4,11 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { acoesDasLinhas, linhaVinculada, opcoesAcoes, opcoesOrgaoGestor, opcoesUnidadeOrcamentaria, paresDasLinhas, rotuloUnidadeCenti, type UnidadeCenti } from "../src/lib/centi-unidades-core.ts";
+import { acoesDasLinhas, linhaVinculada, motivoVinculoCenti, opcoesAcoes, opcoesOrgaoGestor, opcoesUnidadeOrcamentaria, paresDasLinhas, rotuloUnidadeCenti, type UnidadeCenti } from "../src/lib/centi-unidades-core.ts";
 import {
   comandoRegistrarAcoes,
   comandoRegistrarUnidades,
   comandosVincularAcoes,
-  consultaAcoesCenti,
   consultaMapaVinculo,
   consultaUnidadesCenti,
   contagemUnidadesDoLote,
@@ -30,6 +29,7 @@ const u = (id: number, orgaoGestor: string, unidade = "", reparticaoId: number |
   vinculadoEm: null,
   vinculadoPor: null,
   gravados: 0,
+  escolhidaPor: reparticaoId == null ? [] : [reparticaoId],
 });
 
 test("unidades da Centi: os pares da página e as opções dos dropdowns do cadastro", () => {
@@ -83,6 +83,7 @@ function banco() {
   raw.exec(readFileSync(new URL("../drizzle/0138_centi_unidades.sql", import.meta.url), "utf8"));
   raw.exec(readFileSync(new URL("../drizzle/0139_centi_vinculo_cadastro.sql", import.meta.url), "utf8"));
   raw.exec(readFileSync(new URL("../drizzle/0141_centi_vinculo_acoes.sql", import.meta.url), "utf8"));
+  raw.exec(readFileSync(new URL("../drizzle/0142_centi_unidade_acoes.sql", import.meta.url), "utf8"));
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const lote = () => Number(raw.prepare("INSERT INTO centi_lotes (api_chave, ano) VALUES ('empenhos', 2026) RETURNING id").get()?.id);
   const n = (q: string) => (raw.prepare(q).get() as { n: number }).n;
@@ -160,79 +161,107 @@ test("unidades da Centi (D1 real): registrar, promover SÓ o vinculado e o vínc
   assert.throws(() => b.raw.exec("UPDATE orgaos SET centi_orgao_gestor = 'FMS' WHERE id = 3"));
 });
 
-test("vínculo POR AÇÃO + NADA FORA DO VÍNCULO NO BANCO: a leitura só guarda o vinculado; o resto vira só a chave", async () => {
+test("regra do vínculo: primeiro a unidade orçamentária, depois as ações DELA; inteira em uma só; dividida sem repetir", () => {
+  const uos = [{ id: 1, escolhidaPor: [20] }, { id: 2, escolhidaPor: [] }];
+  const acoes = [
+    { id: 11, centiUnidadeId: 1, reparticaoId: 20 },
+    { id: 12, centiUnidadeId: 1, reparticaoId: null },
+    { id: 21, centiUnidadeId: 2, reparticaoId: null },
+  ];
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: null, acoes: [] }, uos, acoes), null, "sem vínculo vale");
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: null, acoes: [12] }, uos, acoes)?.status, 422, "ação sem unidade orçamentária");
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: 2, acoes: [12] }, uos, acoes)?.status, 422, "ação de outra unidade orçamentária");
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: 2, acoes: [] }, uos, acoes), null, "a livre, inteira");
+  assert.ok(motivoVinculoCenti({ reparticaoId: 10, unidadeId: 1, acoes: [] }, uos, acoes)?.esperaAcoes, "dividida: espera as ações desta unidade");
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: 1, acoes: [12] }, uos, acoes), null, "divide com a outra, sem repetir");
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: 1, acoes: [11] }, uos, acoes)?.outra, 20, "a ação da outra unidade, não");
+  // A 20 tem a unidade orçamentária INTEIRA (sem ações): ninguém mais a divide.
+  const inteira = [{ id: 11, centiUnidadeId: 1, reparticaoId: null }, ...acoes.slice(1)];
+  assert.equal(motivoVinculoCenti({ reparticaoId: 10, unidadeId: 1, acoes: [12] }, uos, inteira)?.outra, 20);
+  // As opções: só as ações da unidade orçamentária escolhida e livres (ou desta unidade).
+  const lista = [
+    { id: 11, centiUnidadeId: 1, orgaoGestor: "FMS", unidade: "02.01", acao: "2.045", reparticaoId: 20, registros: 1, ultimoAno: 2026 },
+    { id: 12, centiUnidadeId: 1, orgaoGestor: "FMS", unidade: "02.01", acao: "2.046", reparticaoId: null, registros: 1, ultimoAno: 2026 },
+    { id: 21, centiUnidadeId: 2, orgaoGestor: "FMS", unidade: "02.02", acao: "2.050", reparticaoId: null, registros: 1, ultimoAno: 2026 },
+  ];
+  assert.deepEqual(opcoesAcoes(lista, 10, 1).map((o) => o.rotulo), ["2.046"]);
+  assert.deepEqual(opcoesAcoes(lista, 20, 1).map((o) => o.rotulo), ["2.045", "2.046"]);
+  assert.deepEqual(opcoesAcoes(lista, 10, null), [], "sem unidade orçamentária, nenhuma ação");
+});
+
+test("unidade + ações CONCATENADAS no banco: inteira = todas; dividida = só as escolhidas; nada fora do vínculo fica", async () => {
   const b = banco();
   const regs = [
     { Numero: "11", OrgaoGestor: "FMS", UnidadeOrcamentaria: "02.01", Acao: "2.045 - MANUTENÇÃO", ValorEmpenhado: 10 },
     { Numero: "12", OrgaoGestor: "FMS", UnidadeOrcamentaria: "02.01", Acao: "2.046 - ATENÇÃO BÁSICA", ValorEmpenhado: 20 },
     { Numero: "13", OrgaoGestor: "FMS", UnidadeOrcamentaria: "02.01", Acao: "2.046 - ATENÇÃO BÁSICA", ValorEmpenhado: 30 },
+    // A MESMA ação em OUTRA unidade orçamentária não é a mesma (o par unidade + ação).
+    { Numero: "14", OrgaoGestor: "FMS", UnidadeOrcamentaria: "02.02", Acao: "2.046 - ATENÇÃO BÁSICA", ValorEmpenhado: 40 },
   ];
   const p = lerPaginaEmpenhos(JSON.stringify(regs), 2026);
-  // O catálogo das unidades e AÇÕES (o ADM escolhe por elas) — mesmo sem vínculo nenhum.
-  const l1 = b.lote();
-  await b.db.batch([comandoRegistrarUnidades(b.db, l1, 2026, paresDasLinhas(p.linhas)), comandoRegistrarAcoes(b.db, l1, 2026, acoesDasLinhas(p.linhas))] as never);
-  const acoes = (await consultaAcoesCenti(b.db)).filter((a) => a.orgaoGestor === "FMS");
-  assert.deepEqual(
-    acoes.map((a) => [a.acao, a.registros]),
-    [
-      ["2.045 - MANUTENÇÃO", 1],
-      ["2.046 - ATENÇÃO BÁSICA", 2],
-    ],
-  );
-  // Sem vínculo: a leitura NÃO guarda nada — só as chaves, para a conferência contar (unicos) sem repetir.
-  let mapa = await consultaMapaVinculo(b.db);
-  assert.equal(p.linhas.filter((l) => linhaVinculada(mapa, l)).length, 0);
-  const fora = p.linhas.map((l) => l.chave);
-  await b.db.batch([...comandosGuardarFora(b.db, l1, fora), ...comandosGuardarFora(b.db, l1, fora), comandoRecontarLote(b.db, l1)] as never);
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos_staging"), 0, "nenhum dado dos sem vínculo");
-  assert.deepEqual({ ...(b.raw.prepare(`SELECT unicos, fora FROM centi_lotes WHERE id = ${l1}`).get() as object) }, { unicos: 3, fora: 3 }, "a página repetida não conta duas vezes");
+  /** Uma importação inteira como a leitura faz (filtra pelo vínculo de AGORA) e conclui. */
+  const importar = async () => {
+    const l = b.lote();
+    await b.db.batch([comandoRegistrarUnidades(b.db, l, 2026, paresDasLinhas(p.linhas)), comandoRegistrarAcoes(b.db, l, 2026, acoesDasLinhas(p.linhas))] as never);
+    const mapa = await consultaMapaVinculo(b.db);
+    await b.db.batch([
+      ...comandosGuardarPagina(b.db, l, 1, p.linhas.filter((x) => linhaVinculada(mapa, x))),
+      ...comandosGuardarFora(b.db, l, p.linhas.filter((x) => !linhaVinculada(mapa, x)).map((x) => x.chave)),
+      ...comandosGuardarFora(b.db, l, p.linhas.filter((x) => !linhaVinculada(mapa, x)).map((x) => x.chave)),
+      comandoRecontarLote(b.db, l),
+    ] as never);
+    assert.equal(b.n(`SELECT unicos n FROM centi_lotes WHERE id = ${l}`), 4, "a conferência conta cada registro uma vez");
+    await b.db.batch(comandosPromover(b.db, l, 2026, 1, await contagemDaPromocao(b.db, l, 2026, 1)) as never);
+    assert.equal(b.n("SELECT COUNT(*) n FROM empenhos_staging") + b.n("SELECT COUNT(*) n FROM centi_staging_fora"), 0, "nada temporário fica");
+  };
+  const fms = () => b.raw.prepare("SELECT numero, orgao_id, reparticao_id FROM empenhos WHERE orgao_gestor = 'FMS' ORDER BY numero").all().map((x) => ({ ...x }));
 
-  // A unidade 20 escolhe UMA ação (2.046): só os empenhos dela são guardados, com a unidade 20.
-  const a046 = acoes.find((a) => a.acao.startsWith("2.046"));
-  assert.ok(a046);
-  await b.db.batch(comandosVincularAcoes(b.db, 20, [a046.id]) as never);
-  assert.deepEqual(
-    opcoesAcoes(await consultaAcoesCenti(b.db), 10, "FMS").map((o) => o.rotulo),
-    ["2.045 - MANUTENÇÃO"],
-    "a ação de outra unidade não é oferecida",
-  );
-  mapa = await consultaMapaVinculo(b.db);
-  const guardar = p.linhas.filter((l) => linhaVinculada(mapa, l));
-  assert.deepEqual(guardar.map((l) => l.numero), ["12", "13"]);
-  const l2 = b.lote();
-  await b.db.batch([
-    ...comandosGuardarPagina(b.db, l2, 1, guardar),
-    ...comandosGuardarFora(b.db, l2, p.linhas.filter((l) => !linhaVinculada(mapa, l)).map((l) => l.chave)),
-    comandoRecontarLote(b.db, l2),
-  ] as never);
-  const c = await contagemDaPromocao(b.db, l2, 2026, 1);
-  assert.equal(c.inseridos, 2);
-  assert.equal(c.fora, 1);
-  await b.db.batch(comandosPromover(b.db, l2, 2026, 1, c) as never);
-  assert.deepEqual(
-    b.raw.prepare("SELECT numero, orgao_id, reparticao_id FROM empenhos WHERE orgao_gestor = 'FMS' ORDER BY numero").all().map((x) => ({ ...x })),
-    [
-      { numero: "12", orgao_id: 2, reparticao_id: 20 },
-      { numero: "13", orgao_id: 2, reparticao_id: 20 },
-    ],
-  );
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos_staging") + b.n(`SELECT COUNT(*) n FROM centi_staging_fora WHERE lote_id = ${l2}`), 0, "fechou: nada temporário fica");
+  await importar();
+  assert.deepEqual(fms(), [], "sem vínculo, nada é gravado (nem passa pelo staging)");
+  const un = (u: string) => (b.raw.prepare(`SELECT id FROM centi_unidades WHERE orgao_gestor = 'FMS' AND unidade = '${u}'`).get() as { id: number }).id;
+  const acao = (u: string, a: string) => (b.raw.prepare(`SELECT ca.id FROM centi_acoes ca WHERE ca.centi_unidade_id = ${un(u)} AND ca.acao LIKE '${a}%'`).get() as { id: number }).id;
 
-  // A AÇÃO vale mais que a unidade orçamentária: a unidade 10 escolhe a unidade 02.01, a 2.046 segue na 20.
-  const un = (await consultaUnidadesCenti(b.db)).find((x) => x.unidade === "02.01");
-  assert.ok(un);
-  b.raw.exec(`UPDATE reparticoes SET centi_unidade_id = ${un.id} WHERE id = 10`);
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos WHERE orgao_gestor = 'FMS' AND reparticao_id = 20"), 2);
-  // A unidade muda de órgão: os empenhos da ação acompanham.
-  b.raw.exec("UPDATE reparticoes SET orgao_id = 3 WHERE id = 20");
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos WHERE reparticao_id = 20 AND orgao_id = 3"), 2);
-  // Tirar a ação: os empenhos dela passam à unidade 10 (a unidade orçamentária); excluir a 10, saem do banco.
-  await b.db.batch(comandosVincularAcoes(b.db, 20, []) as never);
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos WHERE orgao_gestor = 'FMS' AND reparticao_id = 10 AND orgao_id = 1"), 2);
-  await b.db.batch(comandosVincularAcoes(b.db, 20, [a046.id]) as never);
-  b.raw.exec("DELETE FROM reparticoes WHERE id = 20");
-  assert.equal(b.n(`SELECT COUNT(*) n FROM centi_acoes WHERE reparticao_id IS NOT NULL`), 0, "a unidade excluída solta as ações");
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos WHERE orgao_gestor = 'FMS' AND reparticao_id = 10"), 2);
-  b.raw.exec("UPDATE reparticoes SET centi_unidade_id = NULL WHERE id = 10");
-  assert.equal(b.n("SELECT COUNT(*) n FROM empenhos WHERE orgao_gestor = 'FMS'"), 0, "sem vínculo, nada fica no banco");
+  // A unidade 20 escolhe a 02.01 sem ações = INTEIRA: todas as ações dela (não a 02.02).
+  b.raw.exec(`UPDATE reparticoes SET centi_unidade_id = ${un("02.01")} WHERE id = 20`);
+  await importar();
+  assert.deepEqual(fms(), [
+    { numero: "11", orgao_id: 2, reparticao_id: 20 },
+    { numero: "12", orgao_id: 2, reparticao_id: 20 },
+    { numero: "13", orgao_id: 2, reparticao_id: 20 },
+  ]);
+
+  // Divide por ações: a 20 fica só com a 2.046 (a 2.045 SAI do banco — sem outro vínculo).
+  await b.db.batch(comandosVincularAcoes(b.db, 20, [acao("02.01", "2.046")]) as never);
+  assert.deepEqual(fms().map((x) => x.numero), ["12", "13"]);
+  // A unidade 10 fica com a 2.045 da MESMA unidade orçamentária; a importação traz de volta só o que tem vínculo.
+  b.raw.exec(`UPDATE reparticoes SET centi_unidade_id = ${un("02.01")} WHERE id = 10`);
+  await b.db.batch(comandosVincularAcoes(b.db, 10, [acao("02.01", "2.045")]) as never);
+  await importar();
+  assert.deepEqual(fms(), [
+    { numero: "11", orgao_id: 1, reparticao_id: 10 },
+    { numero: "12", orgao_id: 2, reparticao_id: 20 },
+    { numero: "13", orgao_id: 2, reparticao_id: 20 },
+  ]);
+
+  // A 20 troca de unidade orçamentária: as ações da anterior são SOLTAS (não valem na nova) e o que era dela sai.
+  b.raw.exec(`UPDATE reparticoes SET centi_unidade_id = ${un("02.02")} WHERE id = 20`);
+  assert.equal(b.n("SELECT COUNT(*) n FROM centi_acoes WHERE reparticao_id = 20"), 0);
+  await importar();
+  assert.deepEqual(fms(), [
+    { numero: "11", orgao_id: 1, reparticao_id: 10 },
+    { numero: "14", orgao_id: 2, reparticao_id: 20 },
+  ]);
+  // Excluir a unidade 10: as ações soltas e os empenhos delas saem.
+  b.raw.exec("DELETE FROM reparticoes WHERE id = 10");
+  assert.equal(b.n("SELECT COUNT(*) n FROM centi_acoes WHERE reparticao_id IS NOT NULL"), 0);
+  assert.deepEqual(fms().map((x) => x.numero), ["14"]);
+  // O órgão escolhe o órgão gestor: o que nenhuma unidade tem fica com o ÓRGÃO.
+  b.raw.exec("UPDATE orgaos SET centi_orgao_gestor = 'FMS' WHERE id = 3");
+  await importar();
+  assert.deepEqual(fms(), [
+    { numero: "11", orgao_id: 3, reparticao_id: null },
+    { numero: "12", orgao_id: 3, reparticao_id: null },
+    { numero: "13", orgao_id: 3, reparticao_id: null },
+    { numero: "14", orgao_id: 2, reparticao_id: 20 },
+  ]);
 });

@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.203.0",
+    data: "2026-10-23",
+    titulo: "Unidade orçamentária e ações vinculadas juntas",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Órgãos e Unidades",
+        texto: "Na unidade, primeiro a unidade orçamentária da Centi e depois as ações DELA (a lista só mostra as ações da unidade orçamentária escolhida). Sem ação escolhida, valem todas; com ações, só elas — o vínculo é sempre o par unidade orçamentária + ação.",
+        link: "/painel/orgaos",
+      },
+      {
+        tipo: "novo",
+        area: "Órgãos e Unidades",
+        texto: "A mesma unidade orçamentária pode ser dividida por ações entre várias unidades (cada ação em uma só); inteira, fica com uma unidade só.",
+        link: "/painel/orgaos",
+      },
+      {
+        tipo: "correcao",
+        area: "Órgãos e Unidades",
+        texto: "Trocar a unidade orçamentária solta as ações da anterior e a unidade e as ações são gravadas juntas, num passo só.",
+        link: "/painel/orgaos",
+      },
+    ],
+  },
+  {
     versao: "1.202.0",
     data: "2026-10-23",
     titulo: "Empenhos: só o vinculado entra no banco e vínculo por ações",

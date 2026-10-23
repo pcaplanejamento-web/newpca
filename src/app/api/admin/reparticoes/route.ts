@@ -2,7 +2,7 @@ import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { centiUnidades, orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { motivoUnidadeCenti } from "@/lib/centi-unidades";
+import { vinculoCentiDaUnidade } from "@/lib/centi-unidades";
 import { getDb } from "@/lib/db";
 import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -58,8 +58,9 @@ export async function POST(req: Request) {
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
-  const centi = await motivoUnidadeCenti(corpo.data.centiUnidadeId, null);
-  if (centi) return erro(centi.msg, centi.status);
+  // A unidade nova escolhe só a unidade orçamentária (INTEIRA) — as ações vêm depois, na unidade gravada.
+  const centi = await vinculoCentiDaUnidade(null, { centiUnidadeId: corpo.data.centiUnidadeId });
+  if ("erro" in centi) return erro(centi.erro.msg, centi.erro.status);
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
   const [row] = await db

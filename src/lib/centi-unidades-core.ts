@@ -20,6 +20,8 @@ export type UnidadeCenti = {
   vinculadoPor: string | null;
   /** Os empenhos GRAVADOS dela (só existem com o vínculo). */
   gravados: number;
+  /** As unidades do cadastro que a escolheram — `reparticaoId` é a que a tem INTEIRA; as outras a dividem por ações. */
+  escolhidaPor: number[];
 };
 
 /** Uma opção do dropdown do cadastro (o valor guardado e o texto). */
@@ -75,14 +77,49 @@ export function rotuloAcaoCenti(a: Pick<AcaoCenti, "acao">): string {
 }
 
 /**
- * As AÇÕES que a unidade do cadastro pode escolher: as que nenhuma OUTRA unidade escolheu; com o órgão dela ligado a um
- * órgão gestor, só as desse órgão gestor. As escolhidas agora sempre entram. Agrupadas pela unidade orçamentária.
+ * As AÇÕES que a unidade do cadastro pode escolher: SÓ as da unidade orçamentária escolhida por ela (primeiro a unidade,
+ * depois as ações) e que nenhuma OUTRA unidade escolheu. Sem unidade orçamentária, nenhuma.
  */
-export function opcoesAcoes(lista: readonly AcaoCenti[], reparticaoId: number | null, gestorDoOrgao: string | null): { valor: string; rotulo: string; grupo: string; contagem: number }[] {
+export function opcoesAcoes(lista: readonly AcaoCenti[], reparticaoId: number | null, unidadeId: number | null): { valor: string; rotulo: string; contagem: number }[] {
+  if (unidadeId == null) return [];
   return lista
-    .filter((a) => a.reparticaoId === reparticaoId || (a.reparticaoId == null && (!gestorDoOrgao || a.orgaoGestor === gestorDoOrgao)))
-    .map((a) => ({ valor: String(a.id), rotulo: rotuloAcaoCenti(a), grupo: rotuloUnidadeCenti(a), contagem: a.registros }))
-    .sort((x, y) => x.grupo.localeCompare(y.grupo, "pt-BR", { numeric: true }) || x.rotulo.localeCompare(y.rotulo, "pt-BR", { numeric: true }));
+    .filter((a) => a.centiUnidadeId === unidadeId && (a.reparticaoId == null || a.reparticaoId === reparticaoId))
+    .map((a) => ({ valor: String(a.id), rotulo: rotuloAcaoCenti(a), contagem: a.registros }))
+    .sort((x, y) => x.rotulo.localeCompare(y.rotulo, "pt-BR", { numeric: true }));
+}
+
+/** A escolha da unidade do cadastro: a unidade orçamentária e, dela, as ações (vazia = a unidade orçamentária inteira). */
+export type EscolhaCenti = { reparticaoId: number; unidadeId: number | null; acoes: readonly number[] };
+
+/**
+ * A REGRA do vínculo (a mesma na tela e no servidor — 409/422): as ações só depois da unidade orçamentária e só DELA; uma
+ * ação em UMA unidade; a unidade orçamentária INTEIRA (sem ações) em uma unidade só e, nesse caso, ninguém mais a divide;
+ * dividida por ações, cada unidade fica com as suas. `outra` = a unidade do cadastro do conflito (o servidor diz o nome);
+ * `esperaAcoes` = a escolha está certa, só faltam as ações desta unidade (a tela espera, não grava).
+ */
+export function motivoVinculoCenti(
+  e: EscolhaCenti,
+  unidades: readonly Pick<UnidadeCenti, "id" | "escolhidaPor">[],
+  acoes: readonly Pick<AcaoCenti, "id" | "centiUnidadeId" | "reparticaoId">[],
+): { msg: string; status: 409 | 422; outra?: number; esperaAcoes?: true } | null {
+  if (e.unidadeId == null) return e.acoes.length ? { msg: "Escolha primeiro a unidade orçamentária — as ações são dela.", status: 422 } : null;
+  const uo = unidades.find((u) => u.id === e.unidadeId);
+  if (!uo) return { msg: "Unidade orçamentária não encontrada na Centi — use “Buscar na Centi” na lista.", status: 422 };
+  const porId = new Map(acoes.map((a) => [a.id, a]));
+  for (const id of e.acoes) {
+    const a = porId.get(id);
+    if (!a) return { msg: "Ação não encontrada na Centi — use “Buscar na Centi” na lista.", status: 422 };
+    if (a.centiUnidadeId !== e.unidadeId) return { msg: "A ação escolhida não é da unidade orçamentária desta unidade.", status: 422 };
+    if (a.reparticaoId != null && a.reparticaoId !== e.reparticaoId) return { msg: "Esta ação já está vinculada a outra unidade.", status: 409, outra: a.reparticaoId };
+  }
+  const outras = uo.escolhidaPor.filter((r) => r !== e.reparticaoId);
+  if (!outras.length) return null;
+  // As outras que DIVIDEM por ações (têm ação desta unidade orçamentária); as demais a têm INTEIRA.
+  const dividem = new Set(acoes.filter((a) => a.centiUnidadeId === e.unidadeId && a.reparticaoId != null).map((a) => a.reparticaoId as number));
+  const inteira = outras.find((r) => !dividem.has(r));
+  if (inteira != null) return { msg: "Esta unidade orçamentária já está vinculada INTEIRA a outra unidade — para dividi-la, escolha as ações em cada uma.", status: 409, outra: inteira };
+  if (!e.acoes.length) return { msg: "Esta unidade orçamentária está dividida por ações com outra unidade — escolha as ações desta unidade.", status: 409, outra: outras[0], esperaAcoes: true };
+  return null;
 }
 
 /** O texto da unidade da Centi ("FMC · 02.01 - FUNDO …"; sem unidade, só o órgão gestor). */
@@ -93,13 +130,14 @@ export function rotuloUnidadeCenti(u: Pick<UnidadeCenti, "orgaoGestor" | "unidad
 const porTexto = (a: OpcaoCenti, b: OpcaoCenti) => a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true });
 
 /**
- * As UNIDADES ORÇAMENTÁRIAS que a unidade do cadastro pode escolher: as que nenhuma OUTRA unidade escolheu; com o órgão
- * dela ligado a um órgão gestor, só as desse órgão gestor. A escolhida agora sempre entra. "" = sem vínculo.
+ * As UNIDADES ORÇAMENTÁRIAS que a unidade do cadastro pode escolher: as que nenhuma OUTRA unidade tem INTEIRA (a dividida
+ * por ações entra, com o aviso — esta unidade fica com as ações dela); com o órgão dela ligado a um órgão gestor, só as
+ * desse órgão gestor. A escolhida agora sempre entra. "" = sem vínculo.
  */
 export function opcoesUnidadeOrcamentaria(lista: readonly UnidadeCenti[], atual: number | null, gestorDoOrgao: string | null, reparticaoId: number | null): OpcaoCenti[] {
   const r = lista
     .filter((u) => u.id === atual || ((u.reparticaoId == null || u.reparticaoId === reparticaoId) && (!gestorDoOrgao || u.orgaoGestor === gestorDoOrgao)))
-    .map((u) => ({ valor: String(u.id), rotulo: rotuloUnidadeCenti(u) }))
+    .map((u) => ({ valor: String(u.id), rotulo: `${rotuloUnidadeCenti(u)}${u.id !== atual && u.escolhidaPor.some((r) => r !== reparticaoId) ? " — dividida por ações" : ""}` }))
     .sort(porTexto);
   return [{ valor: "", rotulo: "Sem vínculo" }, ...r];
 }

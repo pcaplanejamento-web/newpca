@@ -4607,11 +4607,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   A promoção confere de NOVO (o vínculo pode ter mudado) e APAGA do ano o sem vínculo. **VÍNCULO POR AÇÕES:**
   `centi_acoes` = o catálogo das ações de cada unidade orçamentária (`comandoRegistrarAcoes`, na leitura) + a unidade do
   cadastro escolhida (`reparticao_id`; uma ação em UMA unidade — `motivoAcoesCenti` 409); `PATCH /api/admin/reparticoes/[id]`
-  `{centiAcoes}` (a lista inteira) → `comandosVincularAcoes` (+ `comandosRefazerVinculoEmpenhos`). Régua ÚNICA do vínculo:
-  a ação › a unidade orçamentária › o órgão do órgão gestor — `vinculoSql` (promoção) = a VIEW `centi_vinculo_empenhos`
-  (gatilhos da `0141`, que substituem os da `0139` e soltam as ações da unidade excluída). Tela: coluna **"Ações (Centi)"**
-  (`SeletorMultiplo suspenso completo` — os escolhidos por inteiro; grava 800 ms após o último toque, confirma ao tirar) e a
-  seção no banner da unidade. ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`):
+  `{centiUnidadeId, centiAcoes}` (JUNTOS) → `vinculoCentiDaUnidade` (`centi-unidades.ts` — o estado final + a regra pura
+  **`motivoVinculoCenti`**, `centi-unidades-core.ts`, a MESMA na tela) → o UPDATE da unidade + `comandosVincularAcoes` +
+  `comandosRefazerVinculos` num lote ATÔMICO. **UNIDADE + AÇÕES CONCATENADAS (v1.203.0, migração `0142`):** PRIMEIRO a unidade
+  orçamentária (`reparticoes.centi_unidade_id`, sem índice único) e DEPOIS ações DELA (`opcoesAcoes(lista, unidade, uo)`):
+  sem ação = a unidade orçamentária INTEIRA (todas as ações); com ações = SÓ elas (o par unidade orçamentária + ação). A
+  mesma unidade orçamentária pode ser DIVIDIDA por ações entre unidades (ações sem repetir); inteira, em uma só (409);
+  dividida por outra e sem ações = `esperaAcoes` (a tela espera as ações, nada é gravado). `centi_unidades.reparticao_id`
+  = a unidade que a tem INTEIRA; trocar a unidade orçamentária SOLTA as ações da anterior (gatilhos da `0142`). Régua
+  ÚNICA do vínculo: a ação › a unidade orçamentária inteira › o órgão do órgão gestor — `vinculoSql` (promoção) = a VIEW
+  `centi_vinculo_empenhos`. Tela: colunas **"Unidade orçamentária (Centi)"** (`Selecao`) e **"Ações (Centi)"**
+  (`SeletorMultiplo suspenso completo`, nenhuma = "Todas"; grava 800 ms após o último toque, confirma o que sai) e a seção
+  "Empenhos (API da Centi)" no banner da unidade (`SelectField` + `SeletorMultiplo campo`). ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`):
   o empenho vinculado a uma unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`,
   `empenhoNoEscopo`); sem aviso de unidade sem vínculo (é escolha do cadastro). Liquidações e pagamentos seguem a MESMA
   régua (o catálogo e o vínculo são globais). Testes: `tests/centi-unidades.test.ts` (migrações, filtro na leitura, ações,

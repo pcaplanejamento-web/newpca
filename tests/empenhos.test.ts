@@ -58,7 +58,7 @@ function banco() {
   raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer)");
   raw.exec(readFileSync(new URL("../drizzle/0138_centi_unidades.sql", import.meta.url), "utf8"));
   raw.exec("INSERT INTO orgaos (id, sigla) VALUES (1, 'PMRV'); INSERT INTO centi_unidades (orgao_gestor, unidade, orgao_id) VALUES ('PREFEITURA', '', 1)");
-  for (const m of ["0139_centi_vinculo_cadastro", "0141_centi_vinculo_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
+  for (const m of ["0139_centi_vinculo_cadastro", "0141_centi_vinculo_acoes", "0142_centi_unidade_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const novoLote = (ano = 2026) => Number(raw.prepare("INSERT INTO centi_lotes (api_chave, ano) VALUES ('empenhos', ?) RETURNING id").get(ano)?.id);
   return { raw, db, novoLote };

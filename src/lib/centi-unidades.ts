@@ -1,7 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { centiUnidades, orgaos, reparticoes } from "@/db/schema";
-import { rotuloAcaoCenti } from "./centi-unidades-core";
-import { consultaAcoesCenti } from "./centi-unidades-sql";
+import { motivoVinculoCenti } from "./centi-unidades-core";
+import { consultaAcoesCenti, consultaUnidadesCenti } from "./centi-unidades-sql";
 import { getDb } from "./db";
 
 /**
@@ -21,28 +21,28 @@ export async function motivoOrgaoGestor(gestor: string | null | undefined, orgao
   return outro ? { msg: `O órgão gestor "${gestor}" já está vinculado ao órgão ${outro.sigla}.`, status: 409 } : null;
 }
 
-export async function motivoUnidadeCenti(id: number | null | undefined, reparticaoId: number | null): Promise<{ msg: string; status: number } | null> {
-  if (id == null) return null;
+/**
+ * O VÍNCULO da unidade com a Centi DEPOIS da gravação (a unidade orçamentária e as ações dela) e a conferência pela regra
+ * única (`motivoVinculoCenti`). Ausente no pedido = não muda; trocar a unidade orçamentária sem mandar as ações = nenhuma
+ * (a nova inteira). `reparticaoId` null = unidade nova. Devolve o erro (409/422) ou o estado final.
+ */
+export async function vinculoCentiDaUnidade(
+  reparticaoId: number | null,
+  pedido: { centiUnidadeId?: number | null; centiAcoes?: number[] },
+): Promise<{ erro: { msg: string; status: number } } | { unidadeId: number | null; acoes: number[]; mexeu: boolean }> {
   const db = getDb();
-  const [lida] = await db.select({ id: centiUnidades.id }).from(centiUnidades).where(eq(centiUnidades.id, id)).limit(1);
-  if (!lida) return { msg: "Unidade orçamentária não encontrada na Centi — use “Buscar na Centi” na lista.", status: 422 };
-  const [outra] = await db
-    .select({ codigo: reparticoes.codigo })
-    .from(reparticoes)
-    .where(reparticaoId == null ? eq(reparticoes.centiUnidadeId, id) : and(eq(reparticoes.centiUnidadeId, id), ne(reparticoes.id, reparticaoId)))
-    .limit(1);
-  return outra ? { msg: `Esta unidade orçamentária já está vinculada à unidade ${outra.codigo}.`, status: 409 } : null;
-}
-
-/** As AÇÕES pedidas para a unidade: todas já lidas da Centi (422) e nenhuma de OUTRA unidade (409 — uma ação em UMA). */
-export async function motivoAcoesCenti(ids: number[], reparticaoId: number): Promise<{ msg: string; status: number } | null> {
-  if (!ids.length) return null;
-  const db = getDb();
-  const lista = await consultaAcoesCenti(db);
-  const porId = new Map(lista.map((a) => [a.id, a]));
-  if (ids.some((i) => !porId.has(i))) return { msg: "Ação não encontrada na Centi — use “Buscar na Centi” na lista.", status: 422 };
-  const outra = ids.map((i) => porId.get(i)).find((a) => a && a.reparticaoId != null && a.reparticaoId !== reparticaoId);
-  if (!outra) return null;
-  const [r] = await db.select({ codigo: reparticoes.codigo }).from(reparticoes).where(eq(reparticoes.id, outra.reparticaoId as number)).limit(1);
-  return { msg: `A ação "${rotuloAcaoCenti(outra)}" já está vinculada à unidade ${r?.codigo ?? "outra"}.`, status: 409 };
+  const [atual] = reparticaoId == null ? [] : await db.select({ u: reparticoes.centiUnidadeId }).from(reparticoes).where(eq(reparticoes.id, reparticaoId)).limit(1);
+  const unidadeAtual = atual?.u ?? null;
+  const mexeu = pedido.centiUnidadeId !== undefined || pedido.centiAcoes !== undefined;
+  if (!mexeu) return { unidadeId: unidadeAtual, acoes: [], mexeu };
+  const [unidades, acoes] = await Promise.all([consultaUnidadesCenti(db), consultaAcoesCenti(db)]);
+  const unidadeId = pedido.centiUnidadeId === undefined ? unidadeAtual : pedido.centiUnidadeId;
+  const atuais = reparticaoId == null ? [] : acoes.filter((a) => a.reparticaoId === reparticaoId).map((a) => a.id);
+  const escolhidas = [...new Set(pedido.centiAcoes ?? (unidadeId === unidadeAtual ? atuais : []))];
+  const m = motivoVinculoCenti({ reparticaoId: reparticaoId ?? 0, unidadeId, acoes: escolhidas }, unidades, acoes);
+  if (m) {
+    const [o] = m.outra != null ? await db.select({ codigo: reparticoes.codigo }).from(reparticoes).where(eq(reparticoes.id, m.outra)).limit(1) : [];
+    return { erro: { msg: o ? `${m.msg} (unidade ${o.codigo})` : m.msg, status: m.status } };
+  }
+  return { unidadeId, acoes: escolhidas, mexeu };
 }

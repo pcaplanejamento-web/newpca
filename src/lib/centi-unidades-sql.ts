@@ -72,10 +72,12 @@ export async function consultaUnidadesCenti(db: Db): Promise<UnidadeCenti[]> {
       vinculadoEm: centiUnidades.vinculadoEm,
       vinculadoPor: centiUnidades.vinculadoPor,
       gravados: sql<number>`(SELECT COUNT(*) FROM "empenhos" WHERE ${casaEmpenho})`,
+      // As unidades do cadastro que a escolheram (inteira ou dividida por ações).
+      escolhidaPor: sql<string>`(SELECT json_group_array(r."id") FROM "reparticoes" r WHERE r."centi_unidade_id" = ${CU("id")})`,
     })
     .from(centiUnidades)
     .orderBy(sql`${centiUnidades.orgaoId} IS NOT NULL`, centiUnidades.orgaoGestor, centiUnidades.unidade);
-  return l.map((u) => ({ ...u, gravados: Number(u.gravados) }));
+  return l.map((u) => ({ ...u, gravados: Number(u.gravados), escolhidaPor: JSON.parse(u.escolhidaPor || "[]") as number[] }));
 }
 
 /** Quantas unidades o lote viu e quantas delas estão sem vínculo (o resumo de "Puxar unidades"). */
@@ -172,8 +174,9 @@ export async function consultaAcoesCenti(db: Db): Promise<AcaoCenti[]> {
 }
 
 /**
- * VINCULA as ações à unidade do cadastro (`ids` = a lista INTEIRA da unidade: as que saíram voltam a ficar sem unidade)
- * e, no MESMO lote, refaz o vínculo dos empenhos gravados — o que ficou sem vínculo SAI do banco.
+ * VINCULA as ações (da unidade orçamentária da unidade — conferido antes, `motivoVinculoCenti`) à unidade do cadastro
+ * (`ids` = a lista INTEIRA: as que saíram voltam a ficar sem unidade; vazia = a unidade orçamentária INTEIRA) e, no MESMO
+ * lote, refaz todo o vínculo — o empenho que ficou sem vínculo SAI do banco.
  */
 export function comandosVincularAcoes(db: Db, reparticaoId: number, ids: number[]) {
   const agora = sql`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
@@ -187,14 +190,35 @@ export function comandosVincularAcoes(db: Db, reparticaoId: number, ids: number[
       .update(centiAcoes)
       .set({ reparticaoId, vinculadoEm: agora })
       .where(and(sql`${centiAcoes.id} IN ${lista}`, sql`${centiAcoes.reparticaoId} IS NOT ${reparticaoId}`)),
-    ...comandosRefazerVinculoEmpenhos(db),
+    ...comandosRefazerVinculos(db),
   ] as const;
 }
 
-/** Refaz o vínculo dos empenhos gravados pela régua única (o sem vínculo SAI; os demais acompanham o órgão/unidade). */
-export function comandosRefazerVinculoEmpenhos(db: Db) {
+/** A unidade do cadastro que tem a unidade orçamentária INTEIRA (escolheu-a sem nenhuma ação) — a mesma régua dos gatilhos. */
+const INTEIRA = `(SELECT r."id" FROM "reparticoes" r WHERE r."centi_unidade_id" = "centi_unidades"."id" AND NOT EXISTS (SELECT 1 FROM "centi_acoes" a WHERE a."reparticao_id" = r."id" AND a."centi_unidade_id" = r."centi_unidade_id") ORDER BY r."id" LIMIT 1)`;
+const ORGAO_DA_UNIDADE = `COALESCE((SELECT r."orgao_id" FROM "reparticoes" r WHERE r."id" = ${INTEIRA}), (SELECT o."id" FROM "orgaos" o WHERE o."centi_orgao_gestor" = "centi_unidades"."orgao_gestor"))`;
+
+/**
+ * REFAZ todo o vínculo pela régua única (o MESMO corpo dos gatilhos da `0142`), num lote: solta a ação de unidade que não
+ * tem (mais) aquela unidade orçamentária; recalcula a unidade orçamentária (a unidade que a tem INTEIRA, senão o órgão do
+ * órgão gestor); o empenho sem vínculo SAI do banco e os demais acompanham o órgão/unidade.
+ */
+export function comandosRefazerVinculos(db: Db) {
+  const agora = sql`strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
   const v = vinculoSql("empenhos");
   return [
+    db
+      .update(centiAcoes)
+      .set({ reparticaoId: null, vinculadoEm: agora })
+      .where(
+        sql.raw(
+          `"centi_acoes"."reparticao_id" IS NOT NULL AND "centi_acoes"."centi_unidade_id" IS NOT (SELECT r."centi_unidade_id" FROM "reparticoes" r WHERE r."id" = "centi_acoes"."reparticao_id")`,
+        ),
+      ),
+    db
+      .update(centiUnidades)
+      .set({ reparticaoId: sql.raw(INTEIRA), orgaoId: sql.raw(ORGAO_DA_UNIDADE), vinculadoEm: agora, vinculadoPor: "Órgãos e Unidades" })
+      .where(sql.raw(`"centi_unidades"."reparticao_id" IS NOT ${INTEIRA} OR "centi_unidades"."orgao_id" IS NOT ${ORGAO_DA_UNIDADE}`)),
     db.delete(empenhos).where(sql`${v.orgao} IS NULL`),
     db
       .update(empenhos)
