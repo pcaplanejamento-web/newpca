@@ -2099,3 +2099,39 @@ export const aparelhosConta = sqliteTable("aparelhos_conta", {
   limite: integer("limite"),
   trocaAte: text("troca_ate"),
 });
+
+/** APIS DA CENTI — o cadastro das APIs do portal de transparência (migração `0129`; Integrações → "APIs da Centi").
+ * Só o cadastro: `implementada` = a importação dela já existe (só então `ativa` pode ser ligada). Núcleo puro em
+ * `centi-apis-core.ts`. `lista` = os órgãos (idOrgao) ou as fontes, em JSON. */
+export const centiApis = sqliteTable(
+  "centi_apis",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    chave: text("chave").notNull(),
+    nome: text("nome").notNull(),
+    descricao: text("descricao").notNull().default(""),
+    urlBase: text("url_base").notNull().default("https://api.centi.com.br/portal"),
+    endpoint: text("endpoint").notNull(),
+    uf: text("uf").notNull().default("go"),
+    tenant: text("tenant").notNull().default("rioverde"),
+    divisao: text("divisao").notNull().default("ano"),
+    paginado: integer("paginado", { mode: "boolean" }).notNull().default(false),
+    parametros: text("parametros").notNull().default("{}"),
+    lista: text("lista").notNull().default("[]"),
+    ativa: integer("ativa", { mode: "boolean" }).notNull().default(false),
+    implementada: integer("implementada", { mode: "boolean" }).notNull().default(false),
+    frequenciaMin: integer("frequencia_min").notNull().default(120),
+    diasUteis: integer("dias_uteis", { mode: "boolean" }).notNull().default(true),
+    horaInicio: text("hora_inicio").notNull().default("07:00"),
+    horaFim: text("hora_fim").notNull().default("19:00"),
+    anos: integer("anos").notNull().default(2),
+    ordem: integer("ordem").notNull().default(0),
+    ultimaExecucao: text("ultima_execucao"),
+    ultimoStatus: text("ultimo_status"),
+    ultimaContagem: integer("ultima_contagem"),
+    ultimoTotal: integer("ultimo_total"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("centi_apis_chave_uq").on(t.chave)],
+);
