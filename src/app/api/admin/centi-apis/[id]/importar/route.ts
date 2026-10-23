@@ -5,7 +5,7 @@ import { getApiCenti, registrarLeitura } from "@/lib/centi-apis";
 import { importavel, urlDaApi } from "@/lib/centi-apis-core";
 import { excluirImportacaoSchema, importarCentiApiSchema } from "@/lib/centi-apis-validation";
 import { getDb } from "@/lib/db";
-import { criarLote, getLote, listarLotes, listarPassos, loteEmAndamento, paraPasso } from "@/lib/empenhos";
+import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento, paraPasso } from "@/lib/empenhos";
 import {
   anoInteiro,
   anosDaApi,
@@ -15,16 +15,20 @@ import {
   diasDoPeriodo,
   dividirPeriodo,
   lacunasDoAno,
+  LEITOR_EMPENHOS,
   lerPaginaEmpenhos,
+  motivoValoresSuspeitos,
   type PassoLote,
   type Periodo,
   periodosLidos,
+  quedaSuspeita,
   rotuloPeriodo,
   tipoDoErro,
   totalDoPeriodo,
   usaPeriodo,
 } from "@/lib/empenhos-core";
 import {
+  comandoConduzir,
   comandoDividirPeriodo,
   comandoExcluirPassos,
   comandoRecontarLote,
@@ -36,6 +40,8 @@ import {
   contagemDaPromocao,
   jaNoLote,
   lidoNoPeriodo,
+  ultimoPromovido,
+  valoresSuspeitos,
 } from "@/lib/empenhos-sql";
 import type { centiLotePassos } from "@/db/schema";
 import { dataIsoBrasilia } from "@/lib/format";
@@ -46,10 +52,10 @@ export const dynamic = "force-dynamic";
 type Linha = typeof centiLotePassos.$inferSelect;
 
 /**
- * Até 2 MB por resposta (a semana; o que passa disso é dividido ao meio — ler e consertar mais que isso pesa demais para o
- * Worker) e, no período de UM dia (que não se divide), até 12 MB. 30 s por pedido.
+ * Até 1 MB por resposta (a semana média tem ~0,7 MB; o que passa disso é dividido ao meio — ler e consertar mais pesa no
+ * limite de CPU do Worker) e, no período de UM dia (que não se divide), até 12 MB. 30 s por pedido.
  */
-const MAX_BYTES = 2_000_000;
+const MAX_BYTES = 1_000_000;
 const MAX_BYTES_DIA = 12_000_000;
 const TEMPO_MS = 30_000;
 
@@ -74,7 +80,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.api.chave), emAndamento: await loteEmAndamento(a.api.chave) });
+  return ok({ lotes: await listarLotes(a.api.chave), emAndamento: await loteEmAndamento(a.api.chave), desatualizados: await anosDesatualizados(), leitor: LEITOR_EMPENHOS });
 }
 
 /** O status HTTP citado na mensagem do erro ("… respondeu 503."). */
@@ -101,12 +107,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos mantidos desta API.`, 422);
     const andando = await loteEmAndamento(api.chave);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
-    return ok({ lote: await criarLote(api.chave, corpo.ano, g.u.nome) });
+    return ok({ lote: await criarLote(api.chave, corpo.ano, g.u.nome, corpo.condutor) });
   }
 
   const lote = await getLote(corpo.lote, api.chave);
   if (!lote) return erro("Importação não encontrada.", 404);
   if (lote.estado !== "lendo") return erro("Esta importação já foi encerrada.", 409);
+  // UMA ABA POR VEZ: a que conduz renova a trava a cada pedido; outra só entra quando ela vence (2 min sem notícia).
+  if (corpo.condutor || corpo.acao !== "cancelar") {
+    const [conduz] = await comandoConduzir(db, lote.id, corpo.condutor ?? "");
+    if (!conduz) return erro("Esta importação está em andamento em outra aba (ou outra pessoa a conduz) — acompanhe por lá ou espere 2 minutos sem atividade dela.", 409);
+  } else if (lote.conduzido) {
+    return erro("Esta importação está em andamento em outra aba — interrompa por lá.", 409);
+  }
+  // O leitor que começou o lote é o que o termina (nada de páginas lidas por versões diferentes no mesmo lote).
+  if (lote.leitor !== LEITOR_EMPENHOS && corpo.acao !== "cancelar") {
+    return erro("Esta importação começou com uma versão anterior do leitor — cancele e importe de novo.", 409);
+  }
 
   if (corpo.acao === "pagina") {
     const periodo: Periodo = { inicio: corpo.inicio, fim: corpo.fim };
@@ -155,6 +172,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         recusados: 0,
         repetidos: 0,
         total: null,
+        soma: null,
         mensagem: metades ? `${mensagem} — ${rotuloPeriodo(periodo)} será lido em duas partes: ${rotuloPeriodo(metades[0])} e ${rotuloPeriodo(metades[1])}.` : mensagem,
       };
       const res = await db.batch([comandoRegistrarPasso(db, lote.id, passo).returning(), ...(metades ? [comandoDividirPeriodo(db, lote.id, periodo), comandoRecontarLote(db, lote.id)] : [])] as never);
@@ -177,6 +195,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       recusados: pagina.recusados,
       repetidos: pagina.repetidos,
       total,
+      soma: pagina.soma,
       mensagem: pagina.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
     };
     const res = await db.batch([
@@ -206,15 +225,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     await registrarAuditoria({ usuario: g.u, acao: "importar", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}: importação PARCIAL — ${conf.motivo} (nada foi gravado)` });
     return ok({ lote: await getLote(lote.id, api.chave) });
   }
-  const contagem = await contagemDaPromocao(db, lote.id, lote.ano);
-  await db.batch(comandosPromover(db, lote.id, lote.ano, contagem) as never);
+  // Os VALORES: negativo ou acima do limite = a leitura está errada — não promove.
+  const suspeitos = motivoValoresSuspeitos(await valoresSuspeitos(db, lote.id));
+  if (suspeitos) {
+    await db.batch(comandosFecharLote(db, lote.id, "parcial", suspeitos) as never);
+    await registrarLeitura(api.id, "parcial", lote.unicos + lote.recusados, lote.totalInformado);
+    await registrarAuditoria({ usuario: g.u, acao: "importar", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}: importação PARCIAL — ${suspeitos}` });
+    return ok({ lote: await getLote(lote.id, api.chave) });
+  }
+  // A QUEDA em relação à última importação concluída do ano pede a confirmação de quem importa (o lote segue aberto).
+  const queda = quedaSuspeita(await ultimoPromovido(db, api.chave, lote.ano, lote.id), lote);
+  if (queda && !corpo.aceitarQueda) return ok({ lote, queda });
+  const contagem = await contagemDaPromocao(db, lote.id, lote.ano, lote.leitor);
+  await db.batch(comandosPromover(db, lote.id, lote.ano, lote.leitor, contagem) as never);
   await registrarLeitura(api.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: g.u,
     acao: "importar",
     entidade: "centi_api",
     entidadeId: api.id,
-    resumo: `${api.nome} ${lote.ano}: ${lote.unicos} conferidos com a Centi — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${contagem.removidos} marcados como removidos`,
+    resumo: `${api.nome} ${lote.ano}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} marcados como removidos${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return ok({ lote: await getLote(lote.id, api.chave) });
 }

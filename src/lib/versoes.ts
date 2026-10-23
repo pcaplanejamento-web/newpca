@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.191.0",
+    versao: "1.192.0",
     data: "2026-10-23",
     titulo: "Adesão ao termo, assinaturas revogáveis e quem emitiu o PDF",
     mudancas: [
@@ -44,6 +44,17 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "novo", area: "Termo de uso", texto: "Cada versão mostra quem emitiu (visualizou ou baixou) o PDF de cada comprovante, com data e IP.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "melhoria", area: "Termo de uso", texto: "Em Pessoas escolhidas, acrescente todo um papel ou grupo de uma vez; a lista vazia não é salva, quem sai da lista deixa de dever e mudar a lista no Ativo pede confirmação.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "melhoria", area: "Termo de uso", texto: "A seta “Ir ao fim do termo” pulsa de leve para ser vista (parada com reduzir movimento).", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
+    versao: "1.191.0",
+    data: "2026-10-23",
+    titulo: "Importação de empenhos mais segura",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "A importação confere também a SOMA empenhada: nenhum valor negativo ou acima de R$ 1 bilhão, e uma queda grande em relação à última importação do ano pede a sua confirmação antes de gravar. A soma aparece em cada passo e no histórico.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "Reimportar regrava só o que mudou — o resumo mostra quantos empenhos vieram iguais.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "Cada importação guarda a versão do leitor; o sistema avisa os anos lidos por uma versão anterior para importar de novo.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "Uma aba por vez conduz a importação (a outra aba vê que está em andamento) e cada resposta da Centi tem até 1 MB — leitura mais leve para o servidor.", link: "/painel/integracoes?aba=centi" },
     ],
   },
   {

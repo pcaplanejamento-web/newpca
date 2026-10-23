@@ -2170,6 +2170,13 @@ export const centiLotes = sqliteTable(
     unicos: integer("unicos").notNull().default(0),
     recusados: integer("recusados").notNull().default(0),
     totalInformado: integer("total_informado"),
+    /** Σ do valor empenhado dos registros distintos lidos (migração `0134`) — conferido na conclusão. */
+    soma: real("soma"),
+    /** A versão do leitor que leu o lote (`LEITOR_EMPENHOS`). */
+    leitor: integer("leitor").notNull().default(0),
+    /** Quem conduz o lote agora (o token da aba) e até quando — uma aba por vez. */
+    condutor: text("condutor"),
+    conduzindoAte: text("conduzindo_ate"),
     inseridos: integer("inseridos"),
     atualizados: integer("atualizados"),
     removidos: integer("removidos"),
@@ -2203,6 +2210,7 @@ export const centiLotePassos = sqliteTable(
     recusados: integer("recusados").notNull().default(0),
     repetidos: integer("repetidos").notNull().default(0),
     total: integer("total"),
+    soma: real("soma"),
     mensagem: text("mensagem"),
     corpo: text("corpo"),
     em: text("em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
@@ -2261,6 +2269,8 @@ export const empenhos = sqliteTable(
     removidoEm: text("removido_em"),
     criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** A versão do leitor que leu o empenho (migração `0134`). */
+    leitor: integer("leitor").notNull().default(0),
   },
   (t) => [uniqueIndex("empenhos_chave_uq").on(t.chave), index("empenhos_ano_idx").on(t.ano, t.orgaoGestor)],
 );

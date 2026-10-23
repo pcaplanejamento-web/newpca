@@ -1,4 +1,4 @@
--- v1.191.0: quem EMITIU (abriu ou baixou) o PDF do comprovante de cada aceite do Termo de Uso.
+-- v1.192.0: quem EMITIU (abriu ou baixou) o PDF do comprovante de cada aceite do Termo de Uso.
 CREATE TABLE `termos_emissoes` (
   `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   `aceite_id` integer NOT NULL REFERENCES `termos_aceites`(`id`) ON DELETE cascade,
