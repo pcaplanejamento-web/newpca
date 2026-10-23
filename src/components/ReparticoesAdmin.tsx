@@ -33,8 +33,9 @@ type Rep = {
   /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
   orgaoProprio: boolean;
   oculto: boolean;
-  /** A UNIDADE ORÇAMENTÁRIA da Centi desta unidade (`centi_unidades.id`). */
+  /** A UNIDADE ORÇAMENTÁRIA da Centi desta unidade (`centi_unidades.id`) e o texto dela ("FMS · 02.01 - …"). */
   centiUnidadeId: number | null;
+  centiUnidade: string | null;
 };
 
 export type AbaUnidades = "unidades" | "responsaveis";
@@ -92,7 +93,8 @@ export function ReparticoesAdmin({
   // As unidades orçamentárias da Centi (o vínculo): carregadas só com o banner aberto.
   const centi = useUnidadesCenti(aberto != null);
   const idAberta = typeof aberto === "number" ? aberto : null;
-  const atualCenti = lista?.find((u) => u.id === idAberta)?.centiUnidadeId ?? null;
+  const linhaAberta = lista?.find((u) => u.id === idAberta);
+  const atualCenti = linhaAberta?.centiUnidadeId ?? null;
   const campos = useMemo<CampoCadastro[]>(
     () => [
       ...CAMPOS,
@@ -102,14 +104,14 @@ export function ReparticoesAdmin({
         span: true,
         opcoes: centi.lista
           ? opcoesUnidadeOrcamentaria(centi.lista, atualCenti, centiOrgaoGestor, idAberta)
-          : [{ valor: "", rotulo: "Sem vínculo" }, ...(atualCenti != null ? [{ valor: String(atualCenti), rotulo: "Carregando…" }] : [])],
+          : [{ valor: "", rotulo: "Sem vínculo" }, ...(atualCenti != null ? [{ valor: String(atualCenti), rotulo: linhaAberta?.centiUnidade ?? "Carregando…" }] : [])],
         acoes: centi.acoes,
         dica: centiOrgaoGestor
           ? `Só as do órgão gestor ${centiOrgaoGestor} (o do órgão). Os empenhos dela passam a ser desta unidade.`
           : "Os empenhos dela passam a ser desta unidade. Escolha o órgão gestor no órgão para filtrar a lista.",
       },
     ],
-    [centi.lista, centi.acoes, atualCenti, centiOrgaoGestor, idAberta],
+    [centi.lista, centi.acoes, atualCenti, linhaAberta?.centiUnidade, centiOrgaoGestor, idAberta],
   );
 
   const carregar = useCallback(async () => {
@@ -301,6 +303,23 @@ export function ReparticoesAdmin({
           </span>
         );
       },
+    },
+    {
+      key: "centi",
+      header: "Empenhos (Centi)",
+      align: "left",
+      minWidth: 180,
+      value: (u) => u.centiUnidade ?? "Sem correspondência",
+      render: (u) =>
+        u.centiUnidade ? (
+          <span className="line-clamp-1 text-[12px] text-text-2" title={u.centiUnidade}>
+            {u.centiUnidade}
+          </span>
+        ) : (
+          <Badge tone="amber" dot>
+            Sem correspondência
+          </Badge>
+        ),
     },
     {
       key: "conf",

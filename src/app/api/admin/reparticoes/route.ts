@@ -1,5 +1,5 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { orgaos, reparticoes } from "@/db/schema";
+import { centiUnidades, orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { motivoUnidadeCenti } from "@/lib/centi-unidades";
@@ -31,8 +31,11 @@ export async function GET(req: Request) {
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
       centiUnidadeId: reparticoes.centiUnidadeId,
+      // O texto da unidade orçamentária da Centi (a coluna "Empenhos (Centi)" — sem ela, "Sem correspondência").
+      centiUnidade: sql<string | null>`CASE WHEN ${centiUnidades.id} IS NULL THEN NULL WHEN ${centiUnidades.unidade} = '' THEN ${centiUnidades.orgaoGestor} ELSE ${centiUnidades.orgaoGestor} || ' · ' || ${centiUnidades.unidade} END`,
     })
     .from(reparticoes)
+    .leftJoin(centiUnidades, eq(centiUnidades.id, reparticoes.centiUnidadeId))
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).

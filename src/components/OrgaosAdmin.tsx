@@ -367,6 +367,20 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       ),
     },
     {
+      key: "centi",
+      header: "Empenhos (Centi)",
+      nowrap: true,
+      value: (o) => o.centiOrgaoGestor ?? "Sem correspondência",
+      render: (o) =>
+        o.centiOrgaoGestor ? (
+          <span className="font-mono text-[12px] text-text-2">{o.centiOrgaoGestor}</span>
+        ) : (
+          <Badge tone="amber" dot>
+            Sem correspondência
+          </Badge>
+        ),
+    },
+    {
       key: "conf",
       header: "Conferência",
       nowrap: true,

@@ -4591,7 +4591,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Tela: no **`BannerCadastro`** (campo de escolha com `acoes` — o rodapé da `Selecao`) de **`OrgaosAdmin`** ("Órgão gestor na
   Centi" — `opcoesOrgaoGestor`) e de **`ReparticoesAdmin`** ("Unidade orçamentária na Centi" — `opcoesUnidadeOrcamentaria`:
   as livres; com o órgão gestor do órgão, só as dele — a página `/painel/orgaos/[id]` passa `centiOrgaoGestor`); trocar/tirar
-  com empenhos gravados confirma. Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
+  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0 — o órgão gestor / a unidade
+  orçamentária; sem vínculo = selo âmbar "Sem correspondência", filtrável; o texto da unidade vem do `GET
+  /api/admin/reparticoes` — junção com `centi_unidades`). Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
   /api/admin/centi-unidades` só com o banner aberto) + a ação **"Buscar na Centi (ano)"** = lote `modo` "unidades"
   (`centi_lotes.modo`; `importarCentiApiSchema.modo`) pela API de empenhos: lê o ano, registra as unidades e fecha com estado
   `unidades` sem gravar empenho (fora da rotação da automática). A leitura conduzida pelo navegador é UMA só,
