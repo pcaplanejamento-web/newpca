@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.193.1",
+    data: "2026-10-23",
+    titulo: "Cabeçalho abre na Geral",
+    mudancas: [
+      { tipo: "correcao", area: "Cabeçalho", texto: "Quem acessa duas ou mais unidades passa a entrar na \"Geral\" (todas as suas unidades somadas), e não mais na unidade do cadastro.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.193.0",
     data: "2026-10-23",
     titulo: "Tela de Empenhos",

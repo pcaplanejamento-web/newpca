@@ -151,12 +151,8 @@ export async function getReparticaoContexto(
   const jar = await cookies();
   const escolhida = Number(jar.get(COOKIE_REP)?.value);
   const doCookie = lista.find((r) => r.id === escolhida);
-  if (doCookie || !u || lista.length < 2) return { lista, ativa: doCookie ?? lista[0] };
-  // Sem unidade escolhida no cabeçalho: começa na unidade do CADASTRO da pessoa (a principal primeiro), quando ela está
-  // entre as do grupo — e não na 1ª da lista (a "Geral", que mostraria tudo).
-  const cadastro = await unidadesDeCadastro(u.id).catch(() => []);
-  const sua = cadastro.map((c) => lista.find((r) => r.id === c.id)).find((r) => r);
-  return { lista, ativa: sua ?? lista[0] };
+  // Sem unidade escolhida no cabeçalho: começa na 1ª da lista — com 2+ unidades, a "Geral" (as do grupo somadas).
+  return { lista, ativa: doCookie ?? lista[0] };
 }
 
 export type UnidadesDaSessao = {
