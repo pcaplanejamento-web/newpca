@@ -4577,6 +4577,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nova lê só a versão. No cliente, `empenhosDoPacote` decodifica e cada ano/recorte fica guardado na aba. Núcleo puro
   `empenhos-tela-core.ts`; testes `tests/empenhos-tela.test.ts` (no D1 real: nulos/aspas/acentos, removidos, 3 pedaços sem
   perda nem repetição, versão).
+- **EMPENHOS POR ÓRGÃO (v1.197.0, sem migração; passo 6):** o "Órgão gestor" da Centi é a SIGLA do órgão — `orgaosDosEmpenhos`
+  (`empenhos-tela.ts`, `cache` por requisição) = `unidadeDoModulo("empenhos")` (módulo novo do Filtro da unidade, padrão
+  ligado; tela `empenhos`) → os órgãos das unidades → os "Órgão gestor" gravados de mesma sigla (`gestoresDasSiglas`,
+  `chaveOrgaoGestor` sem caixa/acento/pontuação — `empenhos-tela-core.ts`); `null` = todos (ADM/"Geral"), `[]` = nenhum.
+  O pacote (`textoPacoteEmpenhos(…, orgaos)` — `orgao_gestor IN json_each(?)`, o dicionário também só do recorte; memo pela
+  chave `chaveOrgaosEmpenhos`), os anos (`consultaAnosEmpenhos(db, orgaos)`) e o detalhe (`empenhoNoEscopo`, fora = 404)
+  seguem o escopo; a página remonta a `EmpenhosView` pela `key` do escopo e mostra os órgãos no subtítulo. Ao ADM, o aviso
+  dos órgãos gestores sem órgão cadastrado (`gestoresSemCadastro`). Testes em `tests/empenhos-tela.test.ts`.
 - **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
   DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
   conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,

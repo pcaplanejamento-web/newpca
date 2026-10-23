@@ -4,8 +4,19 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { anoEscolhido, EMPENHOS_POR_PEDACO, empenhosDoPacote, type PacoteEmpenhos, resumoEmpenhos } from "../src/lib/empenhos-tela-core.ts";
-import { consultaAnosEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "../src/lib/empenhos-tela-sql.ts";
+import {
+  anoEscolhido,
+  chaveOrgaoGestor,
+  chaveOrgaosEmpenhos,
+  EMPENHOS_POR_PEDACO,
+  empenhoNoEscopo,
+  empenhosDoPacote,
+  gestoresDasSiglas,
+  gestoresSemOrgao,
+  type PacoteEmpenhos,
+  resumoEmpenhos,
+} from "../src/lib/empenhos-tela-core.ts";
+import { consultaAnosEmpenhos, consultaGestoresEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "../src/lib/empenhos-tela-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 function banco() {
@@ -92,4 +103,44 @@ test("tela de empenhos: a VERSÃO do ano = a última importação promovida (a m
   b.raw.exec("UPDATE centi_lotes SET concluido_em = '2026-10-20 12:00:00' WHERE id = 1");
   b.ins.run("2026|A|1", 2026, "1", null, "A", null, null, null, null, 1, 0, 0, 0, 1, null);
   assert.equal((await consultaAnosEmpenhos(b.db))[0].atualizadoEm, "2026-10-20 12:00:00");
+});
+
+test("escopo por órgão: o “Órgão gestor” da Centi casa com a SIGLA do órgão cadastrado (sem caixa, acento, espaço)", () => {
+  assert.equal(chaveOrgaoGestor(" f.m.s "), "FMS");
+  assert.equal(chaveOrgaoGestor("Saúde"), "SAUDE");
+  const gestores = ["FMC", "FMS", "PMRV", "SEMAÇÃO"];
+  assert.deepEqual(gestoresDasSiglas(gestores, ["fms", "Semacao", "OUTRO"]), ["FMS", "SEMAÇÃO"]);
+  assert.deepEqual(gestoresDasSiglas(gestores, []), []);
+  assert.deepEqual(gestoresSemOrgao(gestores, ["FMS", "PMRV"]), ["FMC", "SEMAÇÃO"]);
+  assert.ok(empenhoNoEscopo(null, "X"));
+  assert.ok(empenhoNoEscopo(["FMS"], "FMS"));
+  assert.ok(!empenhoNoEscopo(["FMS"], "PMRV"));
+  assert.ok(!empenhoNoEscopo([], "FMS"));
+  assert.equal(chaveOrgaosEmpenhos(null), "*");
+  assert.equal(chaveOrgaosEmpenhos(["PMRV", "FMS"]), "FMS|PMRV");
+  assert.notEqual(chaveOrgaosEmpenhos([]), chaveOrgaosEmpenhos(null));
+});
+
+test("escopo por órgão no banco: o pacote e os anos só com os órgãos gestores da pessoa; nenhum = vazio", async () => {
+  const b = banco();
+  b.ins.run("2026|PMRV|1", 2026, "1", "2026-01-02", "PMRV", "A", null, "3.3.90.30 - MATERIAL", null, 100, 0, 0, 0, 100, null);
+  b.ins.run("2026|FMS|2", 2026, "2", "2026-01-03", "FMS", "B", null, "3.3.90.39 - SERVIÇOS", null, 30, 0, 0, 0, 30, null);
+  b.ins.run("2026|FMS|3", 2026, "3", "2026-01-04", "FMS", "C", null, null, null, 7, 0, 0, 0, 7, "2026-05-01");
+  b.ins.run("2025|PMRV|9", 2025, "9", "2025-12-30", "PMRV", "X", null, null, null, 1, 0, 0, 0, 1, null);
+
+  assert.deepEqual(await consultaGestoresEmpenhos(b.db), ["FMS", "PMRV"]);
+  const fms = await textoPacoteEmpenhos(b.db, 2026, false, ["FMS"]);
+  assert.ok(fms != null);
+  const p = JSON.parse(fms) as PacoteEmpenhos;
+  assert.deepEqual(empenhosDoPacote(p).map((e) => e.numero), ["2"]);
+  // O dicionário também é só do recorte (nada de outro órgão vaza no texto).
+  assert.ok(!fms.includes("MATERIAL") && !fms.includes("PMRV"));
+  const rem = JSON.parse((await textoPacoteEmpenhos(b.db, 2026, true, ["FMS"])) ?? "") as PacoteEmpenhos;
+  assert.deepEqual(empenhosDoPacote(rem).map((e) => e.numero), ["3"]);
+  assert.deepEqual(JSON.parse((await textoPacoteEmpenhos(b.db, 2026, false, [])) ?? ""), { n: 0, dic: {}, linhas: [] });
+  assert.equal(empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, 2026, false, null)) ?? "")).length, 2);
+
+  assert.deepEqual((await consultaAnosEmpenhos(b.db, ["FMS"])).map((a) => [a.ano, a.n, a.removidos]), [[2026, 1, 1]]);
+  assert.deepEqual(await consultaAnosEmpenhos(b.db, []), []);
+  assert.equal((await consultaAnosEmpenhos(b.db, null)).length, 2);
 });

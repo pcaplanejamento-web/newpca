@@ -10,6 +10,7 @@ export const configEscopoSchema = z.strictObject({
     tarefas: z.boolean(),
     calendario: z.boolean(),
     automacao: z.boolean(),
+    empenhos: z.boolean(),
   }),
   catalogo: z.enum(MODOS_CATALOGO),
   orcamentoSemVinculo: z.boolean(),
