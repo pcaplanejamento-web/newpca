@@ -35,12 +35,22 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.186.1",
+    versao: "1.187.1",
     data: "2026-10-23",
     titulo: "Excluir várias importações e passos de uma vez; o Testar volta a funcionar",
     mudancas: [
       { tipo: "melhoria", area: "Integrações", texto: "Os passos e o histórico das importações da Centi têm a coluna de seleção: marque quantos quiser e use “Excluir selecionados” para tirá-los do banco. O passo lido que sai volta a faltar e é lido de novo ao continuar.", link: "/painel/integracoes?aba=centi" },
       { tipo: "correcao", area: "Integrações", texto: "O “Testar agora” não para mais em “grande demais”: ele lê a 1ª semana do ano (01/01 a 07/01) — janeiro inteiro passava de 8 MB — e entende a resposta real da Centi.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
+    versao: "1.187.0",
+    data: "2026-10-23",
+    titulo: "Comprovante do Termo de Uso com carimbo de assinatura e verificação do arquivo",
+    mudancas: [
+      { tipo: "novo", area: "Termo de Uso", texto: "O comprovante em PDF traz o carimbo da assinatura em todas as páginas e o painel de autenticidade na página final.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "novo", area: "Termo de Uso", texto: "A verificação pública confere o próprio arquivo: qualquer alteração no PDF, inclusive por inteligência artificial, é detectada.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "melhoria", area: "Termo de Uso", texto: "O comprovante é gerado pelo servidor, sempre igual a partir do registro guardado.", link: "/painel/perfil?aba=seguranca" },
     ],
   },
   {

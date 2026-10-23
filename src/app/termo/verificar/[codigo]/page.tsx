@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { Callout } from "@/components/Callout";
 import { IconTermo } from "@/components/icons";
 import { MarcaLink } from "@/components/MarcaSistema";
+import { VerificarArquivoTermo } from "@/components/VerificarArquivoTermo";
 import { iniciais } from "@/lib/acesso-conta-core";
 import { getAparencia } from "@/lib/aparencia";
 import { contarTentativa } from "@/lib/seguranca-acesso";
@@ -49,6 +50,7 @@ export default async function VerificarTermoPage({ params }: { params: Promise<{
                 <dt className="text-muted">Resumo do texto</dt>
                 <dd className="break-all font-mono text-[12px] text-text-2">{a.hash}</dd>
               </dl>
+              <VerificarArquivoTermo codigo={a.codigo} />
             </>
           ) : a ? (
             <Callout kind="danger">O registro deste código foi ALTERADO depois da assinatura — o comprovante não é válido.</Callout>
