@@ -4,7 +4,7 @@ import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, u
 import { num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import type { Alinhamento } from "@/lib/texto-formatado";
+import { type Alinhamento, semMarcas } from "@/lib/texto-formatado";
 import { ESTILOS_BLOCO, type EstiloBloco, estiloDoBloco, escaparHtml, htmlDoTexto, organizarColado, textoDoHtml } from "@/lib/texto-rico-core";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
@@ -307,6 +307,7 @@ export function EditorRico({
     restaurar();
     exec("unlink");
     exec("removeFormat");
+    exec("justifyLeft");
     aplicar("formatBlock", "<p>");
   };
 
@@ -591,9 +592,11 @@ export function EditorRico({
               e.preventDefault();
               const html = e.clipboardData.getData("text/html");
               // O texto é ORGANIZADO: parágrafos refeitos (o sem formatação), títulos de seção reconhecidos, números mantidos.
-              const texto = html
-                ? organizarColado(textoDoHtml(new DOMParser().parseFromString(html, "text/html").body), false)
-                : organizarColado(e.clipboardData.getData("text/plain"), true);
+              // No chat (`mensagem`): sem títulos e sem alinhamento.
+              const org = html
+                ? organizarColado(textoDoHtml(new DOMParser().parseFromString(html, "text/html").body), false, !mensagem)
+                : organizarColado(e.clipboardData.getData("text/plain"), true, !mensagem);
+              const texto = mensagem ? semMarcas(org) : org;
               if (texto) aplicar("insertHTML", htmlDoTexto(texto));
             }}
             className={`outline-none ${mensagem ? `min-h-9 min-w-0 flex-1 py-1.5 ${CONTEUDO_COMPACTO}` : compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30vh] ${CONTEUDO}`}`}

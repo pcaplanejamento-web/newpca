@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.178.1",
+    data: "2026-10-23",
+    titulo: "Auditoria do editor de texto e da colagem",
+    mudancas: [
+      { tipo: "correcao", area: "Editor de texto", texto: "“Limpar formatação” também tira o alinhamento; marcas de alinhamento repetidas não se acumulam.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Editor de texto", texto: "Lista colada só fica alinhada quando todos os itens têm o mesmo alinhamento.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Colagem", texto: "Texto colado do Google Docs não vira todo negrito, e o título em negrito do Word/Docs (“1. Objeto”) é reconhecido como título.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Chat", texto: "Colar no chat não cria títulos nem alinhamentos na mensagem.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.178.0",
     data: "2026-10-23",
     titulo: "Alinhamento no editor e texto colado organizado",

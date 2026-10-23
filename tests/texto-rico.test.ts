@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { modeloTermo } from "../src/lib/termo-uso-core.ts";
-import { lerTextoFormatado, textoSimples } from "../src/lib/texto-formatado.ts";
+import { lerTextoFormatado, semMarcas, textoSimples } from "../src/lib/texto-formatado.ts";
 import { estiloDoBloco, htmlDoTexto, type NoRico, organizarColado, pareceTitulo, textoDoHtml } from "../src/lib/texto-rico-core.ts";
 
 // Um "DOM" mínimo para os testes: lê o HTML simples que o editor produz (tags, href, entidades).
@@ -136,5 +136,27 @@ describe("organizar o texto colado", () => {
     assert.equal(organizarColado("1. Sim", true), "1. Sim");
     assert.equal(pareceTitulo("1. Este termo vale."), false);
     assert.equal(pareceTitulo("DISPOSIÇÕES FINAIS"), true);
+  });
+});
+
+describe("auditoria do editor e da colagem (v1.178.1)", () => {
+  it("marca repetida vale pela última e semMarcas limpa o texto cru", () => {
+    const b = lerTextoFormatado("[[centro]] [[direita]] Texto");
+    assert.equal(b[0].t === "par" && b[0].al, "direita");
+    assert.equal(semMarcas("[[centro]] A\n[[justificado]] B"), "A\nB");
+  });
+  it("lista: alinhamento só quando todos os itens concordam", () => {
+    const mesmo = textoDoHtml(parse('<ul><li style="text-align:center">a</li><li style="text-align:center">b</li></ul>'));
+    assert.equal(mesmo, "[[centro]] - a\n- b");
+    const misto = textoDoHtml(parse('<ul><li style="text-align:center">a</li><li>b</li></ul>'));
+    assert.equal(misto, "- a\n- b");
+  });
+  it("Google Docs: <b font-weight:normal> não vira negrito", () => {
+    assert.equal(textoDoHtml(parse('<b id="docs-internal-guid-x" style="font-weight:normal"><p>Texto</p></b>')), "Texto");
+  });
+  it("título em negrito colado vira Título 2; no chat não", () => {
+    const t = "**1. Objeto e aceitação**\n\nTexto um.\n\nTexto dois.";
+    assert.match(organizarColado(t, false), /^## 1\. Objeto e aceitação/);
+    assert.ok(!organizarColado(t, false, false).includes("##"));
   });
 });
