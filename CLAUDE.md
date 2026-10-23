@@ -313,10 +313,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `CartaoAparelho` sólido por aparelho).
   - **EDITOR VISUAL (`EditorRico`, v1.168.0):** escreve-se COMO SE VÊ (contentEditable, a folha branca sobre o fundo cinza, como
     num editor de documentos): estilos de parágrafo (Texto normal · Título 1/2/3 · Citação), negrito, itálico, código, link
-    (Ctrl+K, só http/https), listas, separador, desfazer/refazer, limpar formatação, atalhos (Ctrl+B/I/K/Z/Y, Ctrl+Alt+0–3,
+    (Ctrl+K, só http/https), listas, separador, ALINHAMENTO (v1.178.0 — o menu da barra e Ctrl+Shift+L/E/R/J; gravado como a marca `[[centro]]`/`[[direita]]`/`[[justificado]]` na frente do bloco — `marcaAlinhamento`/`semAlinhamento`/`CSS_ALINHAMENTO`, `texto-formatado.ts`; lido do `text-align`/`align` do editor e do colado — `alinhamentoDe`; a lista numerada guarda o número em que começa, `Bloco.inicio`), desfazer/refazer, limpar formatação, atalhos (Ctrl+B/I/K/Z/Y, Ctrl+Alt+0–3,
     Ctrl+Shift+7/8) e a contagem de caracteres. Grava o MESMO texto formatado de sempre — núcleo puro **`texto-rico-core.ts`**
     (`htmlDoTexto`/`textoDoHtml`, testado: o modelo do termo vai e volta igual; o itálico sai como `_x_`, sem ambiguidade junto do
-    negrito); o colado de outro programa passa pelos dois conversores (fica só o que o formato conhece; scripts/estilos saem).
+    negrito); o colado de outro programa passa pelos dois conversores e é ORGANIZADO (`organizarColado`: o texto sem formatação volta a parágrafos — quebra só no fim da frase ou no início de um item; bloco de UMA linha que `pareceTitulo` vira Título 2 num texto com 3+ blocos; listas romanas/letras coladas ficam como escritas) (fica só o que o formato conhece; scripts/estilos saem).
     **O MESMO editor em TODO o sistema (v1.169.0):** termo de uso (documento) e, com **`compacto`** (sem a folha, 13,5px, cresce
     com o texto, contagem só perto do limite), a descrição, as notas e os comentários das tarefas; `autoFocus`, `onTecla(e)`
     (o host trata a tecla antes — true = tratada) e **`menciona {pessoas, texto}`** (@menção dentro do editor: o termo antes do

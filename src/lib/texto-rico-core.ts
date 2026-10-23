@@ -4,7 +4,7 @@
 // pelos dois conversores (só o que o formato conhece fica: títulos, parágrafos, listas, citação, separador, negrito,
 // itálico, código e links http/https).
 
-import { type Bloco, type Inline, lerTextoFormatado } from "./texto-formatado.ts";
+import { type Alinhamento, type Bloco, CSS_ALINHAMENTO, type Inline, lerTextoFormatado, marcaAlinhamento } from "./texto-formatado.ts";
 
 export const escaparHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -33,18 +33,22 @@ function inlineHtml(f: Inline[]): string {
     .join("");
 }
 
+/** O atributo de estilo do alinhamento ("" à esquerda). */
+const estiloAl = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? ` style="text-align:${CSS_ALINHAMENTO[al]}"` : "");
+
 function blocoHtml(b: Bloco): string {
   switch (b.t) {
     case "par":
-      return `<p>${inlineHtml(b.f) || "<br>"}</p>`;
+      return `<p${estiloAl(b.al)}>${inlineHtml(b.f) || "<br>"}</p>`;
     case "titulo":
-      return `<h${b.n}>${inlineHtml(b.f)}</h${b.n}>`;
+      return `<h${b.n}${estiloAl(b.al)}>${inlineHtml(b.f)}</h${b.n}>`;
     case "lista": {
       const tag = b.ordenada ? "ol" : "ul";
-      return `<${tag}>${b.itens.map((i) => `<li>${inlineHtml(i) || "<br>"}</li>`).join("")}</${tag}>`;
+      const inicio = b.ordenada && b.inicio && b.inicio !== 1 ? ` start="${b.inicio}"` : "";
+      return `<${tag}${inicio}${estiloAl(b.al)}>${b.itens.map((i) => `<li>${inlineHtml(i) || "<br>"}</li>`).join("")}</${tag}>`;
     }
     case "citacao":
-      return `<blockquote>${inlineHtml(b.f)}</blockquote>`;
+      return `<blockquote${estiloAl(b.al)}>${inlineHtml(b.f)}</blockquote>`;
     case "separador":
       return "<hr>";
   }
@@ -146,12 +150,65 @@ function itensDoLi(li: NoRico): string[] {
   return [...(texto ? [texto] : []), ...internos];
 }
 
-/** Os blocos (texto formatado) de um nó do editor. */
-function blocos(n: NoRico, out: string[]) {
+type TipoNumeracao = "decimal" | "romano" | "romano-min" | "letra" | "letra-min";
+
+/** A numeração de uma lista colada: o `type` ("I", "i", "A", "a") ou o `list-style-type` (da lista ou do 1º item). */
+function tipoDaNumeracao(ol: NoRico, li?: NoRico): TipoNumeracao {
+  const tipo = ol.getAttribute?.("type") ?? "";
+  const estilo = `${ol.getAttribute?.("style") ?? ""};${li?.getAttribute?.("style") ?? ""}`.toLowerCase();
+  if (tipo === "I" || estilo.includes("upper-roman")) return "romano";
+  if (tipo === "i" || estilo.includes("lower-roman")) return "romano-min";
+  if (tipo === "A" || estilo.includes("upper-alpha") || estilo.includes("upper-latin")) return "letra";
+  if (tipo === "a" || estilo.includes("lower-alpha") || estilo.includes("lower-latin")) return "letra-min";
+  return "decimal";
+}
+
+/** "I." / "iv." / "a)" — o rótulo do n-ésimo item. */
+function rotuloItem(tipo: TipoNumeracao, n: number): string {
+  if (tipo === "letra" || tipo === "letra-min") {
+    let s = "";
+    for (let k = n; k > 0; k = Math.floor((k - 1) / 26)) s = String.fromCharCode(97 + ((k - 1) % 26)) + s;
+    return `${tipo === "letra" ? s.toUpperCase() : s})`;
+  }
+  const tabela: [number, string][] = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  let resto = n;
+  let s = "";
+  for (const [v, r] of tabela) {
+    while (resto >= v) {
+      s += r;
+      resto -= v;
+    }
+  }
+  return `${tipo === "romano" ? s : s.toLowerCase()}.`;
+}
+
+/** O alinhamento de um elemento (o `text-align` do estilo ou o atributo `align` — o editor e o colado de outros programas). */
+export function alinhamentoDe(n: NoRico): Alinhamento | undefined {
+  if (n.nodeType !== 1) return undefined;
+  const estilo = /text-align\s*:\s*([a-z-]+)/i.exec(n.getAttribute?.("style") ?? "")?.[1] ?? n.getAttribute?.("align") ?? "";
+  switch (estilo.toLowerCase()) {
+    case "center":
+      return "centro";
+    case "right":
+    case "end":
+      return "direita";
+    case "justify":
+      return "justificado";
+    case "left":
+    case "start":
+      return "esquerda";
+    default:
+      return undefined;
+  }
+}
+
+/** Os blocos (texto formatado) de um nó do editor; `herdado` = o alinhamento do bloco de fora (um <div> alinhado). */
+function blocos(n: NoRico, out: string[], herdado?: Alinhamento) {
   let pendente = "";
+  const marcar = (texto: string, f?: NoRico) => `${marcaAlinhamento((f && alinhamentoDe(f)) ?? herdado)}${texto}`;
   const fecharPendente = () => {
     const ls = linhasDe(pendente);
-    if (ls.length) out.push(ls.join("\n"));
+    if (ls.length) out.push(marcar(ls.join("\n")));
     pendente = "";
   };
   for (const f of filhos(n)) {
@@ -163,24 +220,30 @@ function blocos(n: NoRico, out: string[]) {
     const nome = f.nodeName.toUpperCase();
     if (/^H[1-6]$/.test(nome)) {
       const t = linhasDe(inline(f)).join(" ");
-      if (t) out.push(`${"#".repeat(Math.min(3, Number(nome[1])))} ${t}`);
+      if (t) out.push(marcar(`${"#".repeat(Math.min(3, Number(nome[1])))} ${t}`, f));
     } else if (nome === "UL" || nome === "OL") {
       const itens = filhos(f)
         .filter((l) => l.nodeName.toUpperCase() === "LI")
         .flatMap(itensDoLi);
-      if (itens.length) out.push(itens.map((t, i) => (nome === "OL" ? `${i + 1}. ${t}` : `- ${t}`)).join("\n"));
+      const inicio = Math.max(1, Math.min(999, Number.parseInt(f.getAttribute?.("start") ?? "1", 10) || 1));
+      const li = filhos(f).find((l) => l.nodeName.toUpperCase() === "LI");
+      const tipo = nome === "OL" ? tipoDaNumeracao(f, li) : "decimal";
+      if (itens.length && tipo !== "decimal") {
+        // Romanos e letras (colados de outro programa) ficam como estão escritos — "I.", "a)" —, um parágrafo por item.
+        for (const [i, t] of itens.entries()) out.push(marcar(`${rotuloItem(tipo, inicio + i)} ${t}`, alinhamentoDe(f) ? f : li));
+      } else if (itens.length) out.push(marcar(itens.map((t, i) => (nome === "OL" ? `${inicio + i}. ${t}` : `- ${t}`)).join("\n"), alinhamentoDe(f) ? f : li));
     } else if (nome === "BLOCKQUOTE") {
       const dentro: string[] = [];
       blocos(f, dentro);
       const ls = dentro.join("\n").split("\n").filter((l) => l.trim());
-      if (ls.length) out.push(ls.map((l) => `> ${l.replace(/^>\s?/, "")}`).join("\n"));
+      if (ls.length) out.push(marcar(ls.map((l) => `> ${l.replace(/^(\[\[\w+\]\]\s?)?>\s?/, "")}`).join("\n"), f));
     } else if (nome === "HR") {
       out.push("---");
     } else if (filhos(f).some(ehBloco)) {
-      blocos(f, out);
+      blocos(f, out, alinhamentoDe(f) ?? herdado);
     } else {
       const ls = linhasDe(inline(f));
-      if (ls.length) out.push(ls.join("\n"));
+      if (ls.length) out.push(marcar(ls.join("\n"), f));
     }
   }
   fecharPendente();
@@ -207,4 +270,63 @@ export type EstiloBloco = (typeof ESTILOS_BLOCO)[number]["valor"];
 export function estiloDoBloco(v: string): EstiloBloco {
   const t = v.toLowerCase().replace(/[<>]/g, "");
   return t === "h1" || t === "h2" || t === "h3" || t === "blockquote" ? t : "p";
+}
+
+const RE_INICIO_ESTRUTURA = /^(?:#{1,3}\s|[-*•]\s|>|\d{1,3}(?:\.\d{1,3})*[.)]\s|[IVXLC]{1,6}[.)\-–]\s|[a-z][)]\s|\[\[)/;
+const RE_TITULO_NUMERADO = /^\d{1,2}[.)]\s+\p{Lu}[^\n]{0,86}$/u;
+const RE_TITULO_PALAVRA = /^(?:CAP[IÍ]TULO|SE[CÇ][AÃ]O|ANEXO|T[IÍ]TULO)\b/u;
+
+/** A linha é um TÍTULO de seção? "1. Objeto e aceitação", "CAPÍTULO II", uma linha curta toda em maiúsculas — sem
+ * pontuação de fim de frase (".;:," — "1. Este termo vale." é um item, não um título). */
+export function pareceTitulo(linha: string): boolean {
+  const s = linha.trim();
+  if (!s || s.length > 90 || /[.;:,]$/.test(s)) return false;
+  if (RE_TITULO_NUMERADO.test(s) || RE_TITULO_PALAVRA.test(s)) return true;
+  const letras = s.replace(/[^\p{L}]/gu, "");
+  return letras.length >= 4 && letras === letras.toLocaleUpperCase("pt-BR") && s.split(/\s+/).length <= 10;
+}
+
+/**
+ * ORGANIZA o texto COLADO (de um documento, PDF, e-mail…): no texto SEM formatação (`plano`), as linhas quebradas pela
+ * largura voltam a ser um parágrafo — a quebra fica onde a frase termina ou onde começa um item ("1.1.", "I.", "a)", "-");
+ * em qualquer origem, os blocos de UMA linha que são títulos de seção viram Título 2 (só num texto com 3+ blocos — uma
+ * mensagem curta não vira título). O número dos itens fica como escrito (a lista numerada guarda o começo).
+ */
+export function organizarColado(texto: string, plano: boolean): string {
+  const linhas = texto.replace(/\r\n?/g, "\n").replace(/ /g, " ").split("\n");
+  const blocos: string[][] = [];
+  let atual: string[] = [];
+  const fechar = () => {
+    if (atual.length) blocos.push(atual);
+    atual = [];
+  };
+  for (const bruta of linhas) {
+    const l = plano ? bruta.replace(/[ \t]+/g, " ").trim() : bruta.trimEnd();
+    if (!l.trim()) {
+      fechar();
+      continue;
+    }
+    if (plano && atual.length) {
+      const ant = atual[atual.length - 1];
+      const quebraReal = /[.;:!?)"”]$/.test(ant) || RE_INICIO_ESTRUTURA.test(l) || pareceTitulo(ant) || pareceTitulo(l);
+      if (quebraReal) {
+        fechar();
+        atual.push(l);
+      } else atual[atual.length - 1] = /-$/.test(ant) && /^\p{Ll}/u.test(l) ? `${ant.slice(0, -1)}${l}` : `${ant} ${l}`;
+      continue;
+    }
+    atual.push(l);
+  }
+  fechar();
+  const comTitulos = blocos.length >= 3;
+  return blocos
+    .map((b) => {
+      if (comTitulos && b.length === 1) {
+        const marca = /^\[\[\w+\]\]\s?/.exec(b[0])?.[0] ?? "";
+        const resto = b[0].slice(marca.length);
+        if (!/^(#|>|[-*•]\s)/.test(resto) && pareceTitulo(resto)) return `${marca}## ${resto.trim()}`;
+      }
+      return b.join("\n");
+    })
+    .join("\n\n");
 }

@@ -4,12 +4,16 @@ import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, u
 import { num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import { ESTILOS_BLOCO, type EstiloBloco, estiloDoBloco, escaparHtml, htmlDoTexto, textoDoHtml } from "@/lib/texto-rico-core";
+import type { Alinhamento } from "@/lib/texto-formatado";
+import { ESTILOS_BLOCO, type EstiloBloco, estiloDoBloco, escaparHtml, htmlDoTexto, organizarColado, textoDoHtml } from "@/lib/texto-rico-core";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { TextField } from "./Field";
 import {
+  IconAlinharCentro,
+  IconAlinharDireita,
+  IconAlinharEsquerda,
   IconBold,
   IconCheck,
   IconChevronLeft,
@@ -17,6 +21,7 @@ import {
   IconCode,
   IconFormatacao,
   IconItalic,
+  IconJustificar,
   IconLimparFormato,
   IconLink,
   IconList,
@@ -40,8 +45,18 @@ const CONTEUDO_COMPACTO = `${ESTRUTURA} text-[13.5px] leading-relaxed [&_h1]:mb-
 const RE_MENCAO = /(?:^|\s)@([\p{L}\p{N}._-]{0,40})$/u;
 type Mencao = { no: Text; ini: number; fim: number; termo: string };
 
-type Estado = { negrito: boolean; italico: boolean; lista: boolean; numerada: boolean; bloco: EstiloBloco };
-const ESTADO_INICIAL: Estado = { negrito: false, italico: false, lista: false, numerada: false, bloco: "p" };
+type Estado = { negrito: boolean; italico: boolean; lista: boolean; numerada: boolean; bloco: EstiloBloco; al: Alinhamento };
+const ESTADO_INICIAL: Estado = { negrito: false, italico: false, lista: false, numerada: false, bloco: "p", al: "esquerda" };
+
+/** O ALINHAMENTO do parágrafo: o comando do navegador e o ícone de cada um. */
+const OPCOES_ALINHAMENTO: { al: Alinhamento; rotulo: string; atalho: string; cmd: string; Icone: typeof IconAlinharEsquerda }[] = [
+  { al: "esquerda", rotulo: "Alinhar à esquerda", atalho: "Ctrl+Shift+L", cmd: "justifyLeft", Icone: IconAlinharEsquerda },
+  { al: "centro", rotulo: "Centralizar", atalho: "Ctrl+Shift+E", cmd: "justifyCenter", Icone: IconAlinharCentro },
+  { al: "direita", rotulo: "Alinhar à direita", atalho: "Ctrl+Shift+R", cmd: "justifyRight", Icone: IconAlinharDireita },
+  { al: "justificado", rotulo: "Justificar", atalho: "Ctrl+Shift+J", cmd: "justifyFull", Icone: IconJustificar },
+];
+const alinhamentoAtual = (): Alinhamento =>
+  document.queryCommandState("justifyCenter") ? "centro" : document.queryCommandState("justifyRight") ? "direita" : document.queryCommandState("justifyFull") ? "justificado" : "esquerda";
 
 function exec(cmd: string, arg?: string) {
   // O `execCommand` segue o único jeito de editar com o desfazer nativo do navegador (Ctrl+Z) em todos os navegadores.
@@ -229,6 +244,7 @@ export function EditorRico({
       lista: document.queryCommandState("insertUnorderedList"),
       numerada: document.queryCommandState("insertOrderedList"),
       bloco: estiloDoBloco(String(document.queryCommandValue("formatBlock") ?? "")),
+      al: alinhamentoAtual(),
     });
   }, [menciona]);
 
@@ -348,6 +364,10 @@ export function EditorRico({
     } else if (e.altKey && e.key === "0") {
       e.preventDefault();
       bloco("p");
+    } else if (e.shiftKey && ["KeyL", "KeyE", "KeyR", "KeyJ"].includes(e.code)) {
+      e.preventDefault();
+      const op = OPCOES_ALINHAMENTO.find((o) => o.atalho.endsWith(e.code.slice(3)));
+      if (op) aplicar(op.cmd);
     } else if (e.shiftKey && (e.code === "Digit7" || e.code === "Digit8")) {
       e.preventDefault();
       aplicar(e.code === "Digit7" ? "insertOrderedList" : "insertUnorderedList");
@@ -437,6 +457,42 @@ export function EditorRico({
                       {b.rotulo}
                       {b.valor === estado.bloco && <IconCheck className="h-4 w-4 shrink-0" />}
                     </button>
+                  ))}
+                </div>
+              )}
+            </Dropdown>
+            <Divisor />
+            <Dropdown
+              ariaLabel="Alinhamento"
+              title="Alinhamento do parágrafo"
+              papel="dialog"
+              bloqueado={disabled}
+              triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-0.5 rounded-control px-2 text-text hover:bg-surface-2 lg:h-8"
+              trigger={
+                <>
+                  {(() => {
+                    const Icone = OPCOES_ALINHAMENTO.find((o) => o.al === estado.al)?.Icone ?? IconAlinharEsquerda;
+                    return <Icone className="h-4 w-4" />;
+                  })()}
+                  <SetaDropdown className="h-3.5 w-3.5" />
+                </>
+              }
+            >
+              {(fechar) => (
+                <div className="flex gap-0.5 p-1">
+                  {OPCOES_ALINHAMENTO.map(({ al, rotulo: r, atalho, cmd, Icone }) => (
+                    <BotaoBarra
+                      key={al}
+                      rotulo={r}
+                      atalho={atalho}
+                      ativo={estado.al === al}
+                      onClick={() => {
+                        fechar();
+                        aplicar(cmd);
+                      }}
+                    >
+                      <Icone className="h-4 w-4" />
+                    </BotaoBarra>
                   ))}
                 </div>
               )}
@@ -534,7 +590,10 @@ export function EditorRico({
               // O colado passa pelos dois conversores: fica só o que o formato conhece (sem estilos e scripts de fora).
               e.preventDefault();
               const html = e.clipboardData.getData("text/html");
-              const texto = html ? textoDoHtml(new DOMParser().parseFromString(html, "text/html").body) : e.clipboardData.getData("text/plain");
+              // O texto é ORGANIZADO: parágrafos refeitos (o sem formatação), títulos de seção reconhecidos, números mantidos.
+              const texto = html
+                ? organizarColado(textoDoHtml(new DOMParser().parseFromString(html, "text/html").body), false)
+                : organizarColado(e.clipboardData.getData("text/plain"), true);
               if (texto) aplicar("insertHTML", htmlDoTexto(texto));
             }}
             className={`outline-none ${mensagem ? `min-h-9 min-w-0 flex-1 py-1.5 ${CONTEUDO_COMPACTO}` : compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30vh] ${CONTEUDO}`}`}

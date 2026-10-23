@@ -143,7 +143,10 @@ import {
   Quote,
   Code,
   Hourglass,
+  AlignCenter,
+  AlignJustify,
   AlignLeft,
+  AlignRight,
   SquarePlus,
   Move,
   ZoomIn,
@@ -236,6 +239,10 @@ export const IconEye = Eye;
 export const IconEyeOff = EyeOff;
 export const IconArrowRight = ArrowRight;
 export const IconUndo = Undo2;
+export const IconAlinharEsquerda = AlignLeft;
+export const IconAlinharCentro = AlignCenter;
+export const IconAlinharDireita = AlignRight;
+export const IconJustificar = AlignJustify;
 export const IconArrowUp = ArrowUp;
 export const IconArrowDown = ArrowDown;
 export const IconTrocar = ArrowLeftRight;

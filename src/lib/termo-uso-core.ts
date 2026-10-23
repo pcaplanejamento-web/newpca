@@ -4,6 +4,7 @@
 
 import { type ConfigAcessoConta, OPCOES_TROCA_DIAS } from "./acesso-conta-core.ts";
 import type { BlocoDoc } from "./documento-pdf-core.ts";
+import { semAlinhamento } from "./texto-formatado.ts";
 
 /** Teto do texto do ADM e do texto final (o leitor formatado lê até 20 mil caracteres por bloco; o final é lido por partes). */
 export const MAX_TEXTO_ADM = 40_000;
@@ -312,7 +313,7 @@ export function blocosDoTexto(texto: string): BlocoDoc[] {
     lista = [];
   };
   for (const l of texto.replace(/\r\n?/g, "\n").split("\n")) {
-    const s = l.trim();
+    const s = semAlinhamento(l.trim());
     if (!s) {
       fechar();
       continue;

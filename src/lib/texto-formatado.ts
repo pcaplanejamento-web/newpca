@@ -3,7 +3,9 @@
  * ÁRVORE; quem desenha é o componente `TextoFormatado` (elementos React — nunca HTML cru). Sem banco e sem JSX.
  *
  * Blocos (por linha): `# `/`## `/`### ` título · `- `/`* ` lista · `1. ` lista numerada · `> ` citação · `---`
- * separador · o resto é parágrafo (linhas seguidas = quebra de linha; linha em branco separa parágrafos).
+ * separador · o resto é parágrafo (linhas seguidas = quebra de linha; linha em branco separa parágrafos). O ALINHAMENTO vai
+ * na frente da 1ª linha do bloco — `[[centro]]`, `[[direita]]`, `[[justificado]]` (sem marca = à esquerda); a lista
+ * numerada guarda o número em que COMEÇA (`3. x` continua do 3).
  * No texto: `**negrito**`, `*itálico*`/`_itálico_`, `` `código` ``, `[texto](https://…)`, endereços http(s) soltos e
  * `@menção`. Links só http/https.
  */
@@ -17,12 +19,23 @@ export type Inline =
   | { t: "mencao"; v: string }
   | { t: "quebra" };
 
+export const ALINHAMENTOS = ["esquerda", "centro", "direita", "justificado"] as const;
+export type Alinhamento = (typeof ALINHAMENTOS)[number];
+
 export type Bloco =
-  | { t: "par"; f: Inline[] }
-  | { t: "titulo"; n: 1 | 2 | 3; f: Inline[] }
-  | { t: "lista"; ordenada: boolean; itens: Inline[][] }
-  | { t: "citacao"; f: Inline[] }
+  | { t: "par"; f: Inline[]; al?: Alinhamento }
+  | { t: "titulo"; n: 1 | 2 | 3; f: Inline[]; al?: Alinhamento }
+  | { t: "lista"; ordenada: boolean; itens: Inline[][]; inicio?: number; al?: Alinhamento }
+  | { t: "citacao"; f: Inline[]; al?: Alinhamento }
   | { t: "separador" };
+
+const RE_ALINHAMENTO = /^\[\[(centro|direita|justificado)\]\]\s?/;
+/** A marca de alinhamento na frente de uma linha ("" para a esquerda). */
+export const marcaAlinhamento = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? `[[${al}]] ` : "");
+/** A linha sem a marca de alinhamento (quem lê o texto linha a linha — o PDF do termo). */
+export const semAlinhamento = (linha: string) => linha.replace(RE_ALINHAMENTO, "");
+/** O alinhamento em CSS (`text-align`). */
+export const CSS_ALINHAMENTO: Record<Alinhamento, string> = { esquerda: "left", centro: "center", direita: "right", justificado: "justify" };
 
 /** Teto de texto lido (o resto é ignorado — os campos já têm teto menor). */
 const MAX_TEXTO = 20_000;
@@ -74,8 +87,10 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
   const linhas = (texto ?? "").slice(0, MAX_TEXTO).replace(/\r\n?/g, "\n").split("\n");
   const out: Bloco[] = [];
   let par: string[] = [];
-  let lista: { ordenada: boolean; itens: string[] } | null = null;
+  let lista: { ordenada: boolean; itens: string[]; inicio: number; al?: Alinhamento } | null = null;
   let cit: string[] = [];
+  let alPar: Alinhamento | undefined;
+  let alCit: Alinhamento | undefined;
   const fecharPar = () => {
     if (!par.length) return;
     const f: Inline[] = [];
@@ -83,11 +98,18 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
       if (k) f.push({ t: "quebra" });
       f.push(...lerInline(l));
     });
-    out.push({ t: "par", f });
+    out.push(alPar ? { t: "par", f, al: alPar } : { t: "par", f });
     par = [];
   };
   const fecharLista = () => {
-    if (lista) out.push({ t: "lista", ordenada: lista.ordenada, itens: lista.itens.map((x) => lerInline(x)) });
+    if (lista)
+      out.push({
+        t: "lista",
+        ordenada: lista.ordenada,
+        itens: lista.itens.map((x) => lerInline(x)),
+        ...(lista.ordenada && lista.inicio !== 1 ? { inicio: lista.inicio } : {}),
+        ...(lista.al ? { al: lista.al } : {}),
+      });
     lista = null;
   };
   const fecharCit = () => {
@@ -97,7 +119,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
       if (k) f.push({ t: "quebra" });
       f.push(...lerInline(l));
     });
-    out.push({ t: "citacao", f });
+    out.push(alCit ? { t: "citacao", f, al: alCit } : { t: "citacao", f });
     cit = [];
   };
   const fecharTudo = () => {
@@ -105,7 +127,10 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
     fecharLista();
     fecharCit();
   };
-  for (const linha of linhas) {
+  for (const bruta of linhas) {
+    const marca = RE_ALINHAMENTO.exec(bruta);
+    const al = marca ? (marca[1] as Alinhamento) : undefined;
+    const linha = marca ? bruta.slice(marca[0].length) : bruta;
     if (!linha.trim()) {
       fecharTudo();
       continue;
@@ -118,7 +143,8 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
     const titulo = RE_TITULO.exec(linha);
     if (titulo) {
       fecharTudo();
-      out.push({ t: "titulo", n: titulo[1].length as 1 | 2 | 3, f: lerInline(titulo[2].trim()) });
+      const t = { t: "titulo" as const, n: titulo[1].length as 1 | 2 | 3, f: lerInline(titulo[2].trim()) };
+      out.push(al ? { ...t, al } : t);
       continue;
     }
     const num = RE_NUMERADA.exec(linha);
@@ -128,7 +154,7 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
       fecharPar();
       fecharCit();
       if (lista && lista.ordenada !== ordenada) fecharLista();
-      if (!lista) lista = { ordenada, itens: [] };
+      if (!lista) lista = { ordenada, itens: [], inicio: num ? Number(/\d+/.exec(linha)?.[0] ?? 1) : 1, al };
       lista.itens.push(((num ?? item) as RegExpExecArray)[1]);
       continue;
     }
@@ -136,11 +162,13 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
     if (c) {
       fecharPar();
       fecharLista();
+      if (!cit.length) alCit = al;
       cit.push(c[1]);
       continue;
     }
     fecharLista();
     fecharCit();
+    if (!par.length) alPar = al;
     par.push(linha);
   }
   fecharTudo();
@@ -174,7 +202,7 @@ export function textoPlano(texto: string | null | undefined): string {
 export function textoSimples(texto: string | null | undefined): string {
   return lerTextoFormatado(texto)
     .map((b) => {
-      if (b.t === "lista") return b.itens.map((f, i) => `${b.ordenada ? `${i + 1}.` : "•"} ${plano(f, " ", true)}`).join("\n");
+      if (b.t === "lista") return b.itens.map((f, i) => `${b.ordenada ? `${(b.inicio ?? 1) + i}.` : "•"} ${plano(f, " ", true)}`).join("\n");
       if (b.t === "separador") return "—";
       return plano(b.f, "\n", true);
     })

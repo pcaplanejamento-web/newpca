@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { modeloTermo } from "../src/lib/termo-uso-core.ts";
-import { estiloDoBloco, htmlDoTexto, type NoRico, textoDoHtml } from "../src/lib/texto-rico-core.ts";
+import { lerTextoFormatado, textoSimples } from "../src/lib/texto-formatado.ts";
+import { estiloDoBloco, htmlDoTexto, type NoRico, organizarColado, pareceTitulo, textoDoHtml } from "../src/lib/texto-rico-core.ts";
 
 // Um "DOM" mínimo para os testes: lê o HTML simples que o editor produz (tags, href, entidades).
 type No = NoRico & { childNodes: No[] };
@@ -81,5 +82,59 @@ describe("editor visual (texto ↔ HTML)", () => {
     assert.equal(estiloDoBloco("<H2>"), "h2");
     assert.equal(estiloDoBloco("div"), "p");
     assert.equal(estiloDoBloco("blockquote"), "blockquote");
+  });
+});
+
+describe("alinhamento e lista que começa num número", () => {
+  it("vai e volta pelo editor", () => {
+    const md = "[[centro]] ## Título\n\n[[justificado]] Um parágrafo\nem duas linhas\n\n[[direita]] > citação\n\n3. três\n4. quatro\n\nfim";
+    assert.equal(ida(md), md);
+    const b = lerTextoFormatado(md);
+    assert.equal(b[0].t === "titulo" && b[0].al, "centro");
+    assert.equal(b[1].t === "par" && b[1].al, "justificado");
+    assert.equal(b[3].t === "lista" && b[3].inicio, 3);
+    assert.match(textoSimples(md), /3\. três\n4\. quatro/);
+  });
+  it("lê o text-align e o align do colado (também de um div alinhado)", () => {
+    assert.equal(textoDoHtml(parse('<p style="text-align: center;">a</p><div align="right"><p>b</p></div><p style="text-align:left">c</p>')), "[[centro]] a\n\n[[direita]] b\n\nc");
+  });
+  it("lista romana e de letras colada fica como escrita", () => {
+    assert.equal(textoDoHtml(parse('<ol style="list-style-type:upper-roman"><li>um</li><li>dois</li></ol><ol type="a"><li>x</li></ol>')), "I. um\n\nII. dois\n\na) x");
+  });
+});
+
+describe("organizar o texto colado", () => {
+  const colado = [
+    "1. Objeto e aceitação",
+    "",
+    "1.1. Este Termo estabelece as condições de utilização do Sistema.",
+    "",
+    "2. Definições",
+    "",
+    "I. Sistema: a plataforma.",
+    "",
+    "II. Usuário: o agente público.",
+    "",
+    "10. Alterações deste Termo",
+    "",
+    "10.1. Este Termo pode ser atualizado.",
+  ].join("\n");
+  it("os títulos de seção viram Título 2 e os itens ficam como escritos", () => {
+    const t = organizarColado(colado, true);
+    assert.equal(
+      t,
+      "## 1. Objeto e aceitação\n\n1.1. Este Termo estabelece as condições de utilização do Sistema.\n\n## 2. Definições\n\nI. Sistema: a plataforma.\n\nII. Usuário: o agente público.\n\n## 10. Alterações deste Termo\n\n10.1. Este Termo pode ser atualizado.",
+    );
+    const blocos = lerTextoFormatado(t);
+    assert.equal(blocos.filter((b) => b.t === "titulo").length, 3);
+    assert.equal(blocos.filter((b) => b.t === "lista").length, 0, "nada vira lista renumerada");
+  });
+  it("junta as linhas quebradas pela largura e separa nos itens", () => {
+    assert.equal(organizarColado("O Sistema deve ser utilizado\nexclusivamente para o serviço.\nI. compartilhar a senha;\nII. inserir infor-\nmações falsas;", true), "O Sistema deve ser utilizado exclusivamente para o serviço.\n\nI. compartilhar a senha;\n\nII. inserir informações falsas;");
+  });
+  it("mensagem curta não vira título", () => {
+    assert.equal(organizarColado("1. Sim", true), "1. Sim");
+    assert.equal(pareceTitulo("1. Este termo vale."), false);
+    assert.equal(pareceTitulo("DISPOSIÇÕES FINAIS"), true);
   });
 });

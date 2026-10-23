@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, type ReactNode, useMemo, useState } from "react";
-import { type Bloco, type Inline, lerTextoFormatado } from "@/lib/texto-formatado";
+import { type Alinhamento, type Bloco, CSS_ALINHAMENTO, type Inline, lerTextoFormatado } from "@/lib/texto-formatado";
 import { EditorRico } from "./EditorRico";
 import { IconPencil } from "./icons";
 import { LinkExterno } from "./LinkExterno";
@@ -51,24 +51,27 @@ function Trechos({ f }: { f: Inline[] }) {
   );
 }
 
+/** O alinhamento do bloco (só quando não é o padrão, à esquerda). */
+const alinhar = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? { textAlign: CSS_ALINHAMENTO[al] as "center" | "right" | "justify" } : undefined);
+
 function BlocoTexto({ b }: { b: Bloco }) {
   switch (b.t) {
     case "par":
       return (
-        <p>
+        <p style={alinhar(b.al)}>
           <Trechos f={b.f} />
         </p>
       );
     case "titulo":
       return (
-        <p className={`font-bold text-text ${b.n === 1 ? "text-[16px]" : b.n === 2 ? "text-[14.5px]" : "text-[13.5px]"}`}>
+        <p style={alinhar(b.al)} className={`font-bold text-text ${b.n === 1 ? "text-[16px]" : b.n === 2 ? "text-[14.5px]" : "text-[13.5px]"}`}>
           <Trechos f={b.f} />
         </p>
       );
     case "lista": {
       const Tag = b.ordenada ? "ol" : "ul";
       return (
-        <Tag className={`space-y-0.5 pl-5 ${b.ordenada ? "list-decimal" : "list-disc"}`}>
+        <Tag start={b.ordenada ? b.inicio : undefined} style={alinhar(b.al)} className={`space-y-0.5 pl-5 ${b.ordenada ? "list-decimal" : "list-disc"}`}>
           {b.itens.map((f, i) => (
             <li key={i}>
               <Trechos f={f} />
@@ -79,7 +82,7 @@ function BlocoTexto({ b }: { b: Bloco }) {
     }
     case "citacao":
       return (
-        <blockquote className="border-l-2 border-border-2 pl-3 text-muted">
+        <blockquote style={alinhar(b.al)} className="border-l-2 border-border-2 pl-3 text-muted">
           <Trechos f={b.f} />
         </blockquote>
       );

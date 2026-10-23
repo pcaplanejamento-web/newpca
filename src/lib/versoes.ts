@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.178.0",
+    data: "2026-10-23",
+    titulo: "Alinhamento no editor e texto colado organizado",
+    mudancas: [
+      { tipo: "novo", area: "Editor de texto", texto: "O editor de texto do sistema ganhou o alinhamento do parágrafo (esquerda, centro, direita, justificado — também por Ctrl+Shift+L/E/R/J). Vale em todo lugar que usa o editor e aparece igual na leitura e nos e-mails.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Editor de texto", texto: "Ao colar um texto, o sistema o organiza: refaz os parágrafos quebrados, transforma os títulos de seção (\"1. Objeto e aceitação\") em títulos, mantém os números dos itens (\"1.1.\", \"I.\", \"a)\") e preserva o alinhamento vindo do outro programa.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.177.0",
     data: "2026-10-23",
     titulo: "Excluir versões do Termo de Uso",

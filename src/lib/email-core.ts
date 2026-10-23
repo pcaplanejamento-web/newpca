@@ -5,7 +5,7 @@
  */
 
 import type { TipoNotificacao } from "./tarefas-core.ts";
-import { type Bloco, type Inline, lerTextoFormatado, textoSimples } from "./texto-formatado.ts";
+import { type Alinhamento, type Bloco, CSS_ALINHAMENTO, type Inline, lerTextoFormatado, textoSimples } from "./texto-formatado.ts";
 
 export const NOME_SISTEMA_PADRAO = "Plataforma PCA — Rio Verde";
 
@@ -56,18 +56,22 @@ function inlineEmail(f: Inline[]): string {
     .join("");
 }
 
+/** O `text-align` do bloco no estilo inline ("" à esquerda). */
+const alEmail = (al: Alinhamento | undefined) => (al && al !== "esquerda" ? `;text-align:${CSS_ALINHAMENTO[al]}` : "");
+
 function blocoEmail(b: Bloco): string {
   switch (b.t) {
     case "par":
-      return `<p style="${P_EMAIL}">${inlineEmail(b.f)}</p>`;
+      return `<p style="${P_EMAIL}${alEmail(b.al)}">${inlineEmail(b.f)}</p>`;
     case "titulo":
-      return `<p style="margin:16px 0 8px;font-size:${b.n === 1 ? 18 : b.n === 2 ? 16 : 15}px;font-weight:700;color:#111827">${inlineEmail(b.f)}</p>`;
+      return `<p style="margin:16px 0 8px;font-size:${b.n === 1 ? 18 : b.n === 2 ? 16 : 15}px;font-weight:700;color:#111827${alEmail(b.al)}">${inlineEmail(b.f)}</p>`;
     case "lista": {
       const tag = b.ordenada ? "ol" : "ul";
-      return `<${tag} style="margin:0 0 12px;padding-left:22px;font-size:15px;line-height:1.55;color:#374151">${b.itens.map((i) => `<li>${inlineEmail(i)}</li>`).join("")}</${tag}>`;
+      const inicio = b.ordenada && b.inicio && b.inicio !== 1 ? ` start="${b.inicio}"` : "";
+      return `<${tag}${inicio} style="margin:0 0 12px;padding-left:22px;font-size:15px;line-height:1.55;color:#374151${alEmail(b.al)}">${b.itens.map((i) => `<li>${inlineEmail(i)}</li>`).join("")}</${tag}>`;
     }
     case "citacao":
-      return `<blockquote style="margin:0 0 12px;padding-left:12px;border-left:3px solid #d1d5db;color:#6b7280;font-size:15px;line-height:1.55">${inlineEmail(b.f)}</blockquote>`;
+      return `<blockquote style="margin:0 0 12px;padding-left:12px;border-left:3px solid #d1d5db;color:#6b7280;font-size:15px;line-height:1.55${alEmail(b.al)}">${inlineEmail(b.f)}</blockquote>`;
     case "separador":
       return '<hr style="border:0;border-top:1px solid #e5e7eb;margin:16px 0">';
   }
