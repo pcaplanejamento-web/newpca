@@ -292,6 +292,7 @@ UsuariosAdmin.tsx
 VendoAgora.tsx
 VerificacaoRobo.tsx
 VerificacaoView.tsx
+VerificarArquivoTermo.tsx
 VinculosDaUnidade.tsx
 VinculosResponsaveis.tsx
 VinculosTarefa.tsx

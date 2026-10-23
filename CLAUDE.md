@@ -317,7 +317,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (o termo num `Modal`, `LeituraTermo` destrava no fim) antes do código; a rota confere versão + hash (409 se mudou) e grava o
     aceite com a conta. **Comprovante:** `GET /api/termo/aceites/[id]` (a pessoa ou o ADM) → PDF no navegador
     (`baixarComprovanteTermo`, `blocosComprovante`); verificação PÚBLICA `/termo/verificar/[código]` (limite por IP; só
-    válido/versão/data/INICIAIS). O ADM baixa o texto integral de cada versão em PDF (a Proteção de dados não afeta).
+    válido/versão/data/INICIAIS). **Comprovante blindado (v1.187.0):** o PDF é gerado no SERVIDOR (`GET /api/termo/aceites/[id]/pdf` → `pdfDoComprovante`, `comprovante-termo-pdf.ts`; gerador sem DOM `documento-pdf-gerar.ts`) de forma DETERMINÍSTICA (data dos metadados = a do aceite) com o CARIMBO de assinatura em todas as páginas (`montarDocumento` `carimbo`, `carimboComprovante`) e o bloco `quadro` (painel de autenticidade) na página final; a verificação pública aceita o ARQUIVO (`VerificarArquivoTermo` → `POST /api/termo/verificar` {codigo, hash}: o servidor refaz o PDF e compara o SHA-256 — qualquer edição, inclusive por IA, = "alterado"). Mudar o produtor fixo `SISTEMA_COMPROVANTE` ou o layout invalida os PDFs já baixados. O ADM baixa o texto integral de cada versão em PDF (a Proteção de dados não afeta).
   - **Telas:** Configurações → **Termo de uso** (`TermoUsoAdmin` + `CamposAcessoConta`; o texto no **`EditorRico`** — ver
     abaixo), os banners (`BannerAparelho` + `CartaoAparelho` em `NomearAparelho.tsx`; `BannerTermo`, `TextoTermo`,
     `LeituraTermo` em `AceiteTermo.tsx`), Perfil → Segurança → "Meus aparelhos e termos" e o banner do

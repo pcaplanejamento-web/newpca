@@ -141,6 +141,8 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "perfil/aparelhos": { GET: pessoal("os aparelhos e os termos aceitos da própria conta") },
   "perfil/aparelhos/[id]": { PATCH: pessoal("renomear um aparelho da própria conta"), DELETE: pessoal("retirar outro aparelho da própria conta") },
   "termo/aceites/[id]": { GET: pessoal("o comprovante do aceite (a própria pessoa ou o ADM)") },
+  "termo/aceites/[id]/pdf": { GET: pessoal("o PDF do comprovante do aceite (a própria pessoa ou o ADM)") },
+  "termo/verificar": { POST: publica("conferir o ARQUIVO do comprovante pelo SHA-256 (limite por IP)") },
   "termo/vigente": { GET: publica("o Termo de Uso em vigor, para o cadastro") },
   "admin/termo": { GET: ADMIN, POST: ADMIN },
   "admin/termo/[id]": { GET: ADMIN, DELETE: ADMIN },

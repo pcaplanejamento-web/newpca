@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.187.0",
+    data: "2026-10-23",
+    titulo: "Comprovante do Termo de Uso com carimbo de assinatura e verificação do arquivo",
+    mudancas: [
+      { tipo: "novo", area: "Termo de Uso", texto: "O comprovante em PDF traz o carimbo da assinatura em todas as páginas e o painel de autenticidade na página final.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "novo", area: "Termo de Uso", texto: "A verificação pública confere o próprio arquivo: qualquer alteração no PDF, inclusive por inteligência artificial, é detectada.", link: "/painel/perfil?aba=seguranca" },
+      { tipo: "melhoria", area: "Termo de Uso", texto: "O comprovante é gerado pelo servidor, sempre igual a partir do registro guardado.", link: "/painel/perfil?aba=seguranca" },
+    ],
+  },
+  {
     versao: "1.186.0",
     data: "2026-10-23",
     titulo: "Termo de Uso: cláusulas automáticas opcionais e rolagem suave",

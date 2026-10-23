@@ -347,7 +347,7 @@ export function blocosDoTexto(texto: string): BlocoDoc[] {
 /** O COMPROVANTE em PDF: o termo integral + o registro da assinatura eletrônica. */
 export function blocosComprovante(termoTexto: string, a: DadosAceite & { selo: string; urlVerificacao: string }): BlocoDoc[] {
   const blocos: BlocoDoc[] = [];
-  if (a.teste) blocos.push({ tipo: "nota", texto: "TESTE — este aceite foi feito na fase de teste e não tem valor como aceite oficial.", cor: "@danger" });
+  if (a.teste) blocos.push({ tipo: "nota", texto: "TESTE — este aceite foi feito na fase de teste e não tem valor como aceite oficial.", cor: "var(--danger)" });
   blocos.push(...blocosDoTexto(termoTexto));
   blocos.push({ tipo: "secao", texto: "Registro de assinatura eletrônica" });
   blocos.push({
@@ -376,6 +376,41 @@ export function blocosComprovante(termoTexto: string, a: DadosAceite & { selo: s
       ["Código de verificação", a.codigo],
     ].map(([r, v]) => ({ celulas: [r, v] })),
   });
-  blocos.push({ tipo: "nota", texto: `Confira a autenticidade em ${a.urlVerificacao} informando o código ${a.codigo}.`, cor: "@muted" });
+  blocos.push({
+    tipo: "quadro",
+    titulo: "ASSINATURA ELETRÔNICA — REGISTRO DE AUTENTICIDADE",
+    cor: "@titulo",
+    itens: [
+      { rotulo: "Assinado por", valor: `${a.nome}${a.matricula ? ` · matrícula ${a.matricula}` : ""}` },
+      { rotulo: "Data e hora", valor: `${dataHoraBR(a.em)} (horário de Brasília)` },
+      { rotulo: "Identidade confirmada", valor: ROTULO_METODO[a.metodo] ?? a.metodo },
+      { rotulo: "Código de verificação", valor: a.codigo },
+      { rotulo: "Selo do registro", valor: a.selo },
+      { rotulo: "Resumo do texto aceito", valor: a.hash },
+      { rotulo: "Verificação", valor: a.urlVerificacao },
+    ],
+    nota: NOTA_INTEGRIDADE,
+  });
   return blocos;
+}
+
+/**
+ * Por que o arquivo não pode ser adulterado sem que se perceba: o sistema GERA o comprovante sempre igual (os mesmos bytes)
+ * a partir do registro guardado; a verificação pública refaz o arquivo e compara a impressão digital (SHA-256) do PDF
+ * enviado — qualquer mudança, por pessoa ou por ferramenta de inteligência artificial, numa letra, numa cor ou num
+ * metadado, é detectada.
+ */
+export const NOTA_INTEGRIDADE =
+  "Este comprovante é gerado pelo sistema sempre da mesma forma a partir do registro guardado. Para conferir, envie o ARQUIVO na página de verificação: a impressão digital (SHA-256) do PDF é comparada com a do original. Qualquer alteração — texto, número, imagem ou metadado, feita à mão ou por ferramenta de inteligência artificial — invalida o comprovante. O registro também é protegido pelo selo SHA-256 de todos os dados da assinatura.";
+
+/** O CARIMBO de assinatura que vai em TODAS as páginas do comprovante. */
+export function carimboComprovante(a: { nome: string; em: string; codigo: string; selo: string; urlVerificacao: string; teste?: boolean | number }) {
+  return {
+    titulo: `${a.teste ? "TESTE · " : ""}ASSINADO ELETRONICAMENTE · Lei nº 14.063/2020, art. 4º, I · página {pagina} de {total}`,
+    linhas: [
+      `${a.nome} · ${dataHoraBR(a.em)} (Brasília) · código ${a.codigo} · selo ${a.selo.slice(0, 16)}…`,
+      `Confira o arquivo em ${a.urlVerificacao} — qualquer alteração neste PDF o invalida.`,
+    ],
+    cor: a.teste ? "var(--danger)" : "@titulo",
+  };
 }

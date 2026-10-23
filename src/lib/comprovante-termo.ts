@@ -1,24 +1,14 @@
-import { baixarDocumentoPdf } from "./documento-pdf";
-import { blocosComprovante, type DadosAceite, rotuloVersaoTermo } from "./termo-uso-core";
+import { baixarNoNavegador } from "./arquivo-navegador";
 
-/** Baixa o COMPROVANTE do aceite (o termo integral + o registro da assinatura) — os dados vêm de `/api/termo/aceites/[id]`. */
-export async function baixarComprovanteTermo(aceiteId: number, sistema?: string): Promise<void> {
-  const r = await fetch(`/api/termo/aceites/${aceiteId}`, { cache: "no-store" });
-  const j = (await r.json().catch(() => ({}))) as {
-    ok?: boolean;
-    error?: string;
-    aceite?: DadosAceite & { selo: string; id: number };
-    texto?: string;
-    publicadoEm?: string | null;
-    urlVerificacao?: string;
-  };
-  if (!r.ok || !j.ok || !j.aceite || !j.texto) throw new Error(j.error ?? "Não foi possível gerar o comprovante.");
-  const a = j.aceite;
-  await baixarDocumentoPdf(
-    `termo-de-uso-v${a.versao}-${a.codigo}.pdf`,
-    { titulo: `${rotuloVersaoTermo(a.versao, j.publicadoEm)} (comprovante de aceite)`, blocos: blocosComprovante(j.texto, { ...a, urlVerificacao: j.urlVerificacao ?? "" }) },
-    { usuario: a.nome, sistema },
-  );
+/** Baixa o COMPROVANTE do aceite — o PDF é gerado no SERVIDOR (sempre igual, conferível pela verificação do arquivo). */
+export async function baixarComprovanteTermo(aceiteId: number, _sistema?: string): Promise<void> {
+  const r = await fetch(`/api/termo/aceites/${aceiteId}/pdf`, { cache: "no-store" });
+  if (!r.ok) {
+    const j = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Não foi possível gerar o comprovante.");
+  }
+  const nome = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") ?? "")?.[1] ?? "comprovante-termo-de-uso.pdf";
+  baixarNoNavegador(nome, await r.blob());
 }
 
 /** O texto do termo em partes de até ~18 mil caracteres (o leitor formatado lê 20 mil por vez), cortadas nos títulos. */

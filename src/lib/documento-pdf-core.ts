@@ -34,7 +34,9 @@ export type BlocoDoc =
   | { tipo: "lista"; itens: string[] }
   | { tipo: "destaques"; itens: DestaqueDoc[] }
   | { tipo: "nota"; texto: string; cor: string }
-  | { tipo: "tabela"; colunas: ColunaDoc[]; linhas: LinhaDoc[]; vazio?: string };
+  | { tipo: "tabela"; colunas: ColunaDoc[]; linhas: LinhaDoc[]; vazio?: string }
+  /** QUADRO emoldurado (ex.: o painel da assinatura): título + pares rótulo/valor + nota; nunca se parte entre páginas. */
+  | { tipo: "quadro"; titulo: string; itens: { rotulo: string; valor: string }[]; nota?: string; cor: string };
 
 export type OpDoc =
   | { t: "texto"; x: number; y: number; tam: number; negrito: boolean; cor: string; texto: string }
@@ -45,7 +47,7 @@ export type OpDoc =
 export const PAGINA_A4 = { largura: 595.28, altura: 841.89, margem: 40 };
 const TOPO = 26; // o título do documento + a linha, no alto de cada página
 const RODAPE = 22;
-const TAM = { titulo: 16, secao: 12, subsecao: 9.5, texto: 8.5, tabela: 7.5, rotulo: 7, valor: 11.5, cabecalhoPagina: 7.5, rodape: 7 };
+const TAM = { titulo: 16, secao: 12, subsecao: 9.5, texto: 8.5, tabela: 7.5, rotulo: 7, valor: 11.5, cabecalhoPagina: 7.5, rodape: 7, carimbo: 6.5 };
 const LH = (tam: number) => tam * 1.32;
 const PAD = 4;
 /** Espaço que um título precisa ver abaixo de si (senão vai à página seguinte junto com o conteúdo). */
@@ -66,6 +68,8 @@ export function limparBlocos(blocos: BlocoDoc[], limpo: (s: string) => string): 
           linhas: b.linhas.map((l) => ({ ...l, celulas: l.celulas.map(limpo) })),
           vazio: b.vazio ? limpo(b.vazio) : b.vazio,
         };
+      case "quadro":
+        return { ...b, titulo: limpo(b.titulo), itens: b.itens.map((i) => ({ rotulo: limpo(i.rotulo), valor: limpo(i.valor) })), nota: b.nota ? limpo(b.nota) : b.nota };
       case "subsecao":
         return { ...b, texto: limpo(b.texto), detalhe: b.detalhe ? limpo(b.detalhe) : b.detalhe };
       default:
@@ -74,12 +78,16 @@ export function limparBlocos(blocos: BlocoDoc[], limpo: (s: string) => string): 
   });
 }
 
-/** Monta as páginas. `titulo` vai no alto de cada página; `rodape` à esquerda do "Página N de M". */
-export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titulo: string; rodape: string }): OpDoc[][] {
+/**
+ * Monta as páginas. `titulo` vai no alto de cada página; `rodape` à esquerda do "Página N de M". `carimbo` = o CARIMBO
+ * de assinatura em TODAS as páginas (uma faixa emoldurada acima do rodapé; "{pagina}" e "{total}" são trocados).
+ */
+export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titulo: string; rodape: string; carimbo?: { titulo: string; linhas: string[]; cor: string } }): OpDoc[][] {
   const { largura: W, altura: H, margem: M } = PAGINA_A4;
   const util = W - 2 * M;
   const inicio = M + TOPO;
-  const fim = H - M - RODAPE;
+  const hCarimbo = opcoes.carimbo ? (opcoes.carimbo.linhas.length + 1) * LH(TAM.carimbo) + 2 * PAD + 6 : 0;
+  const fim = H - M - RODAPE - hCarimbo;
   const paginas: OpDoc[][] = [];
   let ops: OpDoc[] = [];
   let y = inicio;
@@ -188,6 +196,43 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
           texto(l, M + 12, y + PAD + 1 + k * LH(TAM.texto) + TAM.texto, TAM.texto, false, "@texto");
         });
         y += h + 8;
+        break;
+      }
+      case "quadro": {
+        const larguraRot = Math.max(...b.itens.map((i) => medir(i.rotulo, TAM.texto, false)), 0) + 10;
+        const larguraVal = util - 24 - larguraRot;
+        const pares = b.itens.map((i) => quebrarTexto(i.valor, larguraVal, TAM.texto, medir, true));
+        const notaLs = b.nota ? quebrarTexto(b.nota, util - 24, TAM.rotulo, medir) : [];
+        const h = 2 * PAD + 8 + LH(TAM.subsecao) + 6 + pares.reduce((s2, ls) => s2 + ls.length * LH(TAM.texto), 0) + (notaLs.length ? 6 + notaLs.length * LH(TAM.rotulo) : 0) + 4;
+        if (!noTopo()) y += 6;
+        garantir(h);
+        const topo = y;
+        ops.push({ t: "retangulo", x: M, y: topo, w: util, h, cor: "@destaque" });
+        for (const [x1, y1, x2, y2] of [
+          [M, topo, M + util, topo],
+          [M, topo + h, M + util, topo + h],
+          [M, topo, M, topo + h],
+          [M + util, topo, M + util, topo + h],
+        ])
+          ops.push({ t: "linha", x1, y1, x2, y2, cor: b.cor, espessura: 1.2 });
+        ops.push({ t: "retangulo", x: M, y: topo, w: 4, h, cor: b.cor });
+        let yy = topo + PAD + 6;
+        texto(b.titulo, M + 14, yy + TAM.subsecao, TAM.subsecao, true, b.cor);
+        yy += LH(TAM.subsecao) + 6;
+        b.itens.forEach((i, k) => {
+          texto(i.rotulo, M + 14, yy + TAM.texto, TAM.texto, false, "@muted");
+          pares[k].forEach((l, n) => {
+            texto(l, M + 14 + larguraRot, yy + n * LH(TAM.texto) + TAM.texto, TAM.texto, true, "@texto");
+          });
+          yy += pares[k].length * LH(TAM.texto);
+        });
+        if (notaLs.length) {
+          yy += 6;
+          notaLs.forEach((l, n) => {
+            texto(l, M + 14, yy + n * LH(TAM.rotulo) + TAM.rotulo, TAM.rotulo, false, "@muted");
+          });
+        }
+        y = topo + h + 8;
         break;
       }
       case "tabela": {
@@ -302,6 +347,24 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
     const pg = `Página ${i + 1} de ${total}`;
     const wpg = medir(pg, TAM.rodape);
     const base = H - M + 4;
+    const c = opcoes.carimbo;
+    if (c) {
+      const topo = H - M - RODAPE - hCarimbo + 4;
+      const h = hCarimbo - 6;
+      p.push({ t: "retangulo", x: M, y: topo, w: util, h, cor: "@destaque" });
+      for (const [x1, y1, x2, y2] of [
+        [M, topo, M + util, topo],
+        [M, topo + h, M + util, topo + h],
+        [M, topo, M, topo + h],
+        [M + util, topo, M + util, topo + h],
+      ])
+        p.push({ t: "linha", x1, y1, x2, y2, cor: c.cor, espessura: 0.8 });
+      p.push({ t: "retangulo", x: M, y: topo, w: 3, h, cor: c.cor });
+      const troca = (s2: string) => s2.replaceAll("{pagina}", String(i + 1)).replaceAll("{total}", String(total));
+      [c.titulo, ...c.linhas].forEach((l, k) => {
+        p.push({ t: "texto", x: M + 10, y: topo + PAD + k * LH(TAM.carimbo) + TAM.carimbo, tam: TAM.carimbo, negrito: k === 0, cor: k === 0 ? c.cor : "@texto", texto: cortar(troca(l), util - 16, TAM.carimbo, medir, k === 0) });
+      });
+    }
     p.push(
       { t: "linha", x1: M, y1: H - M - 8, x2: M + util, y2: H - M - 8, cor: "@borda", espessura: 0.5 },
       { t: "texto", x: M, y: base, tam: TAM.rodape, negrito: false, cor: "@muted", texto: cortar(opcoes.rodape, util - wpg - 16, TAM.rodape, medir, false) },
