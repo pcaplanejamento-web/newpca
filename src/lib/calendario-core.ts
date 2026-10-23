@@ -5,6 +5,7 @@
  * segunda, ocultar o fim de semana), a PREVISÃO do PCA como eventos e a exportação/assinatura `.ics` (RFC 5545).
  */
 import { MESES } from "./normalize.ts";
+import { textoSimples } from "./texto-formatado.ts";
 import { type DadosEvento, dadosDoEventoGravado, dataValida, diasEntre, type EventoCalendario, type EventoPca, type EventoTarefa, fimDoEvento, horaDeMinutos, horaValida, linkTarefa, minutosDe, rotuloTicket, somarDias } from "./tarefas-core.ts";
 
 // ─── Mover um evento cadastrado (arrastar no calendário) ─────────────────────────────────────────────────────
@@ -463,7 +464,7 @@ export function gerarIcs(eventos: EventoCalendario[], opts: { nome: string; agor
     const variosDias = !e.diaInteiro && horaValida(e.horaInicio) && horaValida(e.horaFim) && e.fim > e.inicio;
     const desc = e.pca
       ? `${e.pca.pcaNome} · DFD ${e.pca.numero}${e.pca.planejamento ? ` (Planej. ${e.pca.planejamento})` : ""}${e.pca.sigla ? ` · ${e.pca.sigla}` : ""}`
-      : `${rotuloTicket(e.ticket)} ${e.tarefaTitulo}${e.descricao ? `\n\n${e.descricao}` : ""}`;
+      : `${rotuloTicket(e.ticket)} ${e.tarefaTitulo}${e.descricao ? `\n\n${textoSimples(e.descricao)}` : ""}`;
     l.push("BEGIN:VEVENT", `UID:${e.chave}@${dom}`, `DTSTAMP:${opts.agora}`);
     if (comHora) {
       const fim = horaValida(e.horaFim) && minutosDe(e.horaFim) > minutosDe(e.horaInicio as string) ? e.horaFim : null;

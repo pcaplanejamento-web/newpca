@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import { type AjudaFluxo, ajudaVazia, MAX_AJUDA } from "@/lib/fluxo-core";
 import { Ajuda, TopicoAjuda } from "../Ajuda";
 import { Button } from "../Button";
-import { TextArea, TextField } from "../Field";
+import { EditorRico } from "../EditorRico";
+import { TextField } from "../Field";
 import { IconFluxo, IconInfo, IconPlay } from "../icons";
 import { Modal } from "../Modal";
+import { TextoFormatado } from "../TextoFormatado";
 
 const TOPICOS: { chave: keyof AjudaFluxo; titulo: string; icone: ReactNode; dica: string }[] = [
   { chave: "funciona", titulo: "Como funciona", icone: <IconFluxo className="size-4" />, dica: "O que a automação faz e de onde vêm os dados." },
@@ -24,7 +26,7 @@ export function AjudaDoFluxo({ titulo, ajuda }: { titulo: string; ajuda: AjudaFl
         <div className="space-y-3">
           {TOPICOS.filter((t) => ajuda[t.chave]).map((t) => (
             <TopicoAjuda key={t.chave} icone={t.icone} titulo={t.titulo}>
-              <span className="whitespace-pre-line">{ajuda[t.chave]}</span>
+              <TextoFormatado texto={ajuda[t.chave]} />
             </TopicoAjuda>
           ))}
         </div>
@@ -67,7 +69,7 @@ export function ConfigFluxo({
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
         <p className="text-sm font-semibold text-text">Ajuda (?)</p>
         {TOPICOS.map((t) => (
-          <TextArea key={t.chave} label={t.titulo} hint={t.dica} rows={3} maxLength={MAX_AJUDA} value={ajuda[t.chave]} onChange={(e) => onAjuda({ ...ajuda, [t.chave]: e.target.value })} />
+          <EditorRico key={t.chave} compacto label={t.titulo} rotulo={t.titulo} hint={t.dica} maxLength={MAX_AJUDA} valor={ajuda[t.chave]} onChange={(v) => onAjuda({ ...ajuda, [t.chave]: v })} />
         ))}
       </div>
     </Modal>

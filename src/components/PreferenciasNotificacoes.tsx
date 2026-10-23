@@ -3,6 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { AVISOS_DIRETOS, CATALOGO_AVISOS, type ChaveAviso, type ConfigResolvida, type PrefsEmail, type PrefsPessoa, querEmail } from "@/lib/notificacoes-config-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import { textoDoAviso } from "@/lib/notificacoes-tela-core";
 import { ChipsIcone } from "./ChipsIcone";
 import { TextField } from "./Field";
 import { IconAlertaSistema, IconBell, IconMail, IconSemAvisos, IconSom, IconSpinner, IconClose } from "./icons";
@@ -87,10 +88,10 @@ export function tocarSom() {
 }
 
 /** O ALERTA do sistema operacional (a aba em segundo plano) — só com a permissão dada. Tocar leva ao aviso. */
-export function alertaSistema(n: { id: number; titulo: string; texto: string | null; link: string | null }, abrir: () => void) {
+export function alertaSistema(n: { id: number; tipo: string; titulo: string; texto: string | null; link: string | null }, abrir: () => void) {
   try {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    const a = new Notification(n.titulo, { body: n.texto ?? undefined, tag: `aviso-${n.id}`, icon: "/favicon.ico" });
+    const a = new Notification(n.titulo, { body: textoDoAviso(n) ?? undefined, tag: `aviso-${n.id}`, icon: "/favicon.ico" });
     a.onclick = () => {
       window.focus();
       abrir();

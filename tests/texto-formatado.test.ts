@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { lerInline, lerTextoFormatado, textoPlano } from "../src/lib/texto-formatado.ts";
+import { lerInline, lerTextoFormatado, textoPlano, textoSimples } from "../src/lib/texto-formatado.ts";
 
 describe("texto formatado (markdown restrito)", () => {
   it("inline: negrito, itálico, código, link http(s), url solta e @menção; link de outro esquema vira texto", () => {
@@ -26,5 +26,11 @@ describe("texto formatado (markdown restrito)", () => {
     assert.deepEqual(b[3].t === "par" && b[3].f.map((n) => n.t), ["texto", "quebra", "texto"]);
     assert.deepEqual(lerTextoFormatado(null), []);
     assert.equal(textoPlano("**Oi** _você_\n- a\n- b"), "Oi você a · b");
+  });
+
+  it("texto simples: sem a marcação, com as linhas", () => {
+    assert.equal(textoSimples("## Pauta\n\n**Levar** o _DFD_\nlinha 2\n\n1. um\n2. dois\n\n- a\n\n---\n\n[site](https://x.gov.br) e https://y.br"), "Pauta\n\nLevar o DFD\nlinha 2\n\n1. um\n2. dois\n\n• a\n\n—\n\nsite (https://x.gov.br) e https://y.br");
+    assert.equal(textoSimples(""), "");
+    assert.equal(textoPlano("[site](https://x.gov.br)"), "site");
   });
 });

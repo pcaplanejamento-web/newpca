@@ -19,7 +19,8 @@ import {
 } from "@/lib/tarefas-core";
 import { Button } from "./Button";
 import { ColorField } from "./ColorField";
-import { SelectField, TextArea, TextField } from "./Field";
+import { EditorRico } from "./EditorRico";
+import { SelectField, TextField } from "./Field";
 import { IconBell, IconCalendar, IconClock, IconCopy, IconPencil, IconPlus, IconRepetir, IconTrash, IconUsers } from "./icons";
 import { Segmented } from "./Segmented";
 import { SeletorPessoas } from "./SeletorPessoas";
@@ -251,7 +252,7 @@ export function EditorEvento({
         />
         <Switch checked={valor.privado} disabled={disabled} onChange={(v) => set("privado", v)} label="Privado (os outros veem só “Ocupado”)" />
       </div>
-      <TextArea label="Descrição (opcional)" rows={3} value={valor.descricao} maxLength={2000} disabled={disabled} onChange={(e) => set("descricao", e.target.value)} />
+      <EditorRico compacto label="Descrição (opcional)" rotulo="Descrição do evento" valor={valor.descricao} maxLength={2000} disabled={disabled} onChange={(v) => set("descricao", v)} />
       <div className="space-y-2">
         <Switch checked={valor.cor != null} disabled={disabled} onChange={(v) => set("cor", v ? "#2563eb" : null)} label="Cor própria (sem ela, a cor do quadro)" />
         {valor.cor != null && <ColorField label="Cor do evento" value={valor.cor} onChange={(c) => set("cor", c)} />}

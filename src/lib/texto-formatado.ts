@@ -147,15 +147,37 @@ export function lerTextoFormatado(texto: string | null | undefined): Bloco[] {
   return out;
 }
 
-/** O texto SEM a marcação (a prévia de uma linha — ex.: o título de um aviso). */
+/** Os trechos SEM a marcação; `quebra` = o que entra no lugar da quebra de linha; `enderecos` = o link vira "texto
+ * (endereço)" quando os dois diferem (onde o link não é clicável). */
+function plano(f: Inline[], quebra: string, enderecos = false): string {
+  return f
+    .map((n) => {
+      if (n.t === "texto" || n.t === "codigo" || n.t === "mencao") return n.v;
+      if (n.t === "quebra") return quebra;
+      const dentro = plano(n.f, quebra, enderecos);
+      return enderecos && n.t === "link" && dentro !== n.href ? `${dentro} (${n.href})` : dentro;
+    })
+    .join("");
+}
+
+/** O texto SEM a marcação NUMA LINHA (a prévia — ex.: o texto de um aviso no sino). */
 export function textoPlano(texto: string | null | undefined): string {
-  const plano = (f: Inline[]): string =>
-    f
-      .map((n) => (n.t === "texto" || n.t === "codigo" || n.t === "mencao" ? n.v : n.t === "quebra" ? " " : "f" in n ? plano(n.f) : ""))
-      .join("");
+  const linha = (f: Inline[]) => plano(f, " ");
   return lerTextoFormatado(texto)
-    .map((b) => (b.t === "lista" ? b.itens.map(plano).join(" · ") : b.t === "separador" ? "" : plano(b.f)))
+    .map((b) => (b.t === "lista" ? b.itens.map(linha).join(" · ") : b.t === "separador" ? "" : linha(b.f)))
     .filter(Boolean)
     .join(" ")
+    .trim();
+}
+
+/** O texto SEM a marcação mantendo as LINHAS (o .ics do calendário, a versão em texto do e-mail, a notificação do sistema). */
+export function textoSimples(texto: string | null | undefined): string {
+  return lerTextoFormatado(texto)
+    .map((b) => {
+      if (b.t === "lista") return b.itens.map((f, i) => `${b.ordenada ? `${i + 1}.` : "•"} ${plano(f, " ", true)}`).join("\n");
+      if (b.t === "separador") return "—";
+      return plano(b.f, "\n", true);
+    })
+    .join("\n\n")
     .trim();
 }

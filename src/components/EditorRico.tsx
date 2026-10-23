@@ -1,6 +1,6 @@
 "use client";
 
-import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
 import { num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
@@ -112,6 +112,8 @@ export function EditorRico({
   onTecla,
   mensagem = false,
   controle,
+  label,
+  hint,
 }: {
   valor: string;
   onChange: (v: string) => void;
@@ -129,7 +131,12 @@ export function EditorRico({
   /** O campo de mensagem do chat (implica `compacto`). */
   mensagem?: boolean;
   controle?: Ref<ControleEditor>;
+  /** O rótulo VISÍVEL acima do campo (num formulário, como o dos outros campos); sem ele, só o `rotulo` acessível. */
+  label?: string;
+  /** A dica abaixo do campo. */
+  hint?: ReactNode;
 }) {
+  const idLabel = useId();
   if (mensagem) compacto = true;
   const [barraAberta, setBarraAberta] = useState(!mensagem);
   const ref = useRef<HTMLDivElement>(null);
@@ -354,6 +361,11 @@ export function EditorRico({
 
   return (
     <div className="relative">
+    {label && (
+      <p id={idLabel} className="mb-2 block text-[13.5px] font-bold text-text">
+        {label}
+      </p>
+    )}
     <div className={`overflow-hidden rounded-card border bg-surface transition-shadow ${focado ? "border-accent shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : "border-border-2"}`}>
       {/* A BARRA: as ferramentas mais usadas primeiro (negrito, itálico, listas, link), depois o estilo do parágrafo e o
           resto. No toque (e no modo compacto) fica numa LINHA que rola de lado — com encaixe por grupo, as bordas esmaecidas
@@ -491,14 +503,15 @@ export function EditorRico({
       <div className={`overflow-y-auto ${compacto ? "" : "bg-surface-2 px-2 py-4 sm:px-6"} ${alturaFolha}`}>
         <div className={mensagem ? "relative flex items-end gap-1 py-1 pr-1 pl-3" : compacto ? "relative px-3 py-2" : "relative mx-auto max-w-[52rem] rounded-card bg-surface px-5 py-6 shadow-ring sm:px-10 sm:py-10"}>
           {vazio && !focado && (
-            <p className={`pointer-events-none absolute text-faint ${mensagem ? "top-1/2 left-3 -translate-y-1/2 text-[14px] lg:text-[13.5px]" : compacto ? "left-3 top-2 text-[13.5px]" : "left-5 top-6 text-[15px] sm:left-10 sm:top-10"}`}>{placeholder}</p>
+            <p className={`pointer-events-none absolute text-faint ${mensagem ? "top-1/2 left-3 -translate-y-1/2 text-[14px] lg:text-[13.5px]" : compacto ? "top-2 right-3 left-3 line-clamp-3 text-[13.5px]" : "left-5 top-6 text-[15px] sm:left-10 sm:top-10"}`}>{placeholder}</p>
           )}
           {/* biome-ignore lint/a11y/useSemanticElements: o editor visual é um contentEditable (um <textarea> não mostra a formatação) */}
           <div
             ref={ref}
             role="textbox"
             aria-multiline="true"
-            aria-label={rotulo}
+            aria-label={label ? undefined : rotulo}
+            aria-labelledby={label ? idLabel : undefined}
             tabIndex={disabled ? -1 : 0}
             contentEditable={!disabled}
             suppressContentEditableWarning
@@ -551,6 +564,7 @@ export function EditorRico({
       </div>
       )}
     </div>
+      {hint && <p className="mt-1.5 text-[12px] text-muted">{hint}</p>}
       {sugestoes.length > 0 && (
         <ul aria-label="Mencionar pessoa" className={`absolute right-0 left-0 z-20 ${mensagem ? "bottom-full mb-1" : "top-full mt-1"} overflow-hidden rounded-card border border-border bg-surface shadow-soft`}>
           {sugestoes.map((p, i) => (

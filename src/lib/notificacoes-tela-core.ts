@@ -4,6 +4,18 @@
  * As datas do banco vêm em UTC ("AAAA-MM-DD HH:MM:SS" — o CURRENT_TIMESTAMP do SQLite); o dia é o de Brasília.
  */
 
+import { textoSimples } from "./texto-formatado.ts";
+
+/** Os avisos de VÁRIAS linhas no sino (a versão nova — a lista do que mudou — e o comunicado do ADM). */
+export const AVISOS_LONGOS: readonly string[] = ["versao", "comunicado"];
+
+/** O texto do aviso como se LÊ fora do editor (sino, dica, alerta do sistema): o COMUNICADO do ADM é texto formatado —
+ * sai sem a marcação, com as linhas; os demais, como vieram. */
+export function textoDoAviso(n: { tipo: string; texto: string | null }): string | null {
+  if (n.tipo !== "comunicado" || !n.texto) return n.texto;
+  return textoSimples(n.texto) || null;
+}
+
 export type AvisoTela = { id: number; tipo: string; tarefaId: number | null; lida: boolean; criadoEm: string | null };
 
 /** O instante (ms) de uma data do banco (UTC, com ou sem "T"/"Z"); inválida = `null`. */

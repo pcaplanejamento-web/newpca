@@ -5,6 +5,7 @@ import { useState } from "react";
 import { LIMITES_ACESSO, MAX_DESTAQUES_ACESSO, TEXTOS_ACESSO_PADRAO, type TextosAcesso, textosAcesso } from "@/lib/acesso-core";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { EditorRico } from "./EditorRico";
 import { TextArea, TextField } from "./Field";
 import { IconRefresh, IconSave } from "./icons";
 import type { Identidade } from "./MarcaSistema";
@@ -26,7 +27,8 @@ export function TextosAcessoAdmin({ gravado, identidade }: { gravado?: Partial<T
   });
   const [salvando, setSalvando] = useState(false);
   const L = LIMITES_ACESSO;
-  const campo = (k: "rotulo" | "titulo" | "descricao" | "rodape" | "aviso") => (e: { target: { value: string } }) => setT((x) => ({ ...x, [k]: e.target.value }));
+  const campo = (k: "rotulo" | "titulo" | "rodape") => (e: { target: { value: string } }) => setT((x) => ({ ...x, [k]: e.target.value }));
+  const texto = (k: "descricao" | "aviso") => (v: string) => setT((x) => ({ ...x, [k]: v }));
   const destaque = (i: number, k: "titulo" | "texto", v: string) =>
     setT((x) => ({ ...x, destaques: x.destaques.map((d, j) => (j === i ? { ...d, [k]: v } : d)) }));
 
@@ -58,7 +60,7 @@ export function TextosAcessoAdmin({ gravado, identidade }: { gravado?: Partial<T
         </Callout>
         <TextField label="Rótulo" value={t.rotulo} onChange={campo("rotulo")} maxLength={L.rotulo} placeholder={TEXTOS_ACESSO_PADRAO.rotulo} />
         <TextArea label="Manchete" rows={2} value={t.titulo} onChange={campo("titulo")} maxLength={L.titulo} hint="Enter quebra a linha." />
-        <TextArea label="Descrição" rows={3} value={t.descricao} onChange={campo("descricao")} maxLength={L.descricao} />
+        <EditorRico compacto label="Descrição" rotulo="Descrição da vitrine" valor={t.descricao} onChange={texto("descricao")} maxLength={L.descricao} placeholder={TEXTOS_ACESSO_PADRAO.descricao} />
         {t.destaques.map((d, i) => (
           <fieldset key={`d${i + 1}`} className="grid grid-cols-1 gap-3 rounded-card border border-border p-[var(--pad-card)] sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <legend className="px-1 text-[12px] font-semibold text-muted">Destaque {i + 1}</legend>
@@ -73,7 +75,7 @@ export function TextosAcessoAdmin({ gravado, identidade }: { gravado?: Partial<T
           maxLength={L.rodape}
           hint={`Aparece depois de “© ${new Date().getFullYear()}”.`}
         />
-        <TextArea label="Aviso abaixo do formulário" rows={2} value={t.aviso} onChange={campo("aviso")} maxLength={L.aviso} />
+        <EditorRico compacto label="Aviso abaixo do formulário" rotulo="Aviso abaixo do formulário" valor={t.aviso} onChange={texto("aviso")} maxLength={L.aviso} placeholder={TEXTOS_ACESSO_PADRAO.aviso} />
         <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="secondary"

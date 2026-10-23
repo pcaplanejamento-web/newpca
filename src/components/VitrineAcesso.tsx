@@ -3,6 +3,7 @@ import type { TextosAcesso } from "@/lib/acesso-core";
 import { ConstelacaoAnimada } from "./ConstelacaoAnimada";
 import { IconBadgeCheck, IconClipboard, IconLayers } from "./icons";
 import { type Identidade, MarcaLink, MarcaSistema } from "./MarcaSistema";
+import { TextoFormatado } from "./TextoFormatado";
 
 // A VITRINE das telas de acesso: o painel IMERSIVO ao lado do formulário (só a partir do `lg` — no celular, o formulário
 // ocupa a tela). Fundo escuro por token (`--vitrine-*`), a constelação animada e os TEXTOS do ADM (Configurações → Tela
@@ -37,7 +38,7 @@ export function VitrineAcesso({ identidade, textos, previa = false }: { identida
           >
             {textos.titulo}
           </h2>
-          <p className="mt-5 max-w-lg whitespace-pre-line text-[15px] leading-relaxed text-[var(--vitrine-muted)]">{textos.descricao}</p>
+          <TextoFormatado texto={textos.descricao} className="mt-5 max-w-lg !text-[15px] !text-[var(--vitrine-muted)] [&_blockquote]:!text-[var(--vitrine-muted)] [&_code]:!bg-white/10 [&_code]:!text-[var(--vitrine-texto)] [&_a]:!text-[var(--vitrine-ponto)] [&_strong]:!text-[var(--vitrine-texto)]" />
           {textos.destaques.length > 0 && (
             <ul className="mt-9 space-y-5">
               {textos.destaques.map((d, i) => (

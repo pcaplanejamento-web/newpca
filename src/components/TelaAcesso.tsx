@@ -10,6 +10,7 @@ import type { ConfigCaptcha } from "./CodigoEmail";
 import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
+import { TextoFormatado } from "./TextoFormatado";
 import { VitrineAcesso } from "./VitrineAcesso";
 
 // Os formulários de criar conta e de redefinir a senha só são baixados quando o modo é aberto.
@@ -99,13 +100,13 @@ export function TelaAcesso({
             )}
           </div>
           {/* No cadastro em tela BAIXA (desktop ≤ 960px de altura) o aviso sai: o formulário e o captcha cabem sem rolar. */}
-          <p
+          <div
             className={`mt-auto pt-5 text-center text-[12px] leading-relaxed text-faint lg:pb-6 lg:[@media(max-height:720px)]:pt-3 lg:[@media(max-height:720px)]:pb-4 ${
               modo === "cadastro" ? "lg:[@media(max-height:960px)]:hidden" : ""
             }`}
           >
-            {textos.aviso}
-          </p>
+            <TextoFormatado texto={textos.aviso} className="!text-[12px] !text-faint [&_ol]:list-inside [&_ol]:!pl-0 [&_ul]:list-inside [&_ul]:!pl-0" />
+          </div>
         </div>
       </section>
       <VitrineAcesso identidade={identidade} textos={textos} />

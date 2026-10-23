@@ -10,6 +10,7 @@ import {
   emailAcessoLiberado,
   emailDaNotificacao,
   escaparHtml,
+  htmlEmailDoTexto,
   lerPrefsEmail,
   querEmail,
   urlAbsoluta,
@@ -112,6 +113,21 @@ describe("e-mails — modelos e preferências", () => {
     assert.ok(c.html.includes("https://governarv.com.br/painel/tarefas/3?tarefa=9"));
     assert.ok(c.texto.includes("Por Ana."));
     assert.equal(escaparHtml(`"'`), "&quot;&#39;");
+  });
+
+  it("o COMUNICADO do ADM vai formatado no e-mail (escapado, links só http/https) e sem a marcação no texto", () => {
+    const html = htmlEmailDoTexto("**Atenção** <script>x</script>\n\n- um\n- dois\n\n[site](https://x.gov.br) [mal](javascript:alert(1))");
+    assert.match(html, /<strong>Atenção<\/strong> &lt;script&gt;x&lt;\/script&gt;/);
+    assert.match(html, /<ul[^>]*><li>um<\/li><li>dois<\/li><\/ul>/);
+    assert.match(html, /<a href="https:\/\/x.gov.br"/);
+    assert.doesNotMatch(html, /href="javascript/);
+    const c = emailDaNotificacao({ tipo: "comunicado", titulo: "Aviso", texto: "**Prazo** amanhã\n\n1. Conferir", link: null, atorNome: "ADM" }, ctx);
+    assert.match(c.html, /<strong>Prazo<\/strong> amanhã/);
+    assert.match(c.html, /<ol/);
+    assert.match(c.texto, /Prazo amanhã\n\n1\. Conferir/);
+    assert.doesNotMatch(c.texto, /\*\*/);
+    // Os demais avisos seguem em texto simples (o "**" de um título não vira negrito).
+    assert.match(emailDaNotificacao({ tipo: "atribuida", titulo: "T", texto: "**x**", link: null }, ctx).html, /\*\*x\*\*/);
   });
 
   it("link externo ou de protocolo relativo não vira link: volta ao painel", () => {

@@ -5,6 +5,7 @@
  */
 
 import type { TipoNotificacao } from "./tarefas-core.ts";
+import { type Bloco, type Inline, lerTextoFormatado, textoSimples } from "./texto-formatado.ts";
 
 export const NOME_SISTEMA_PADRAO = "Plataforma PCA — Rio Verde";
 
@@ -28,6 +29,55 @@ function umaLinha(s: string, max = 150): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+const P_EMAIL = "margin:0 0 12px;font-size:15px;line-height:1.55;color:#374151";
+
+/** Os trechos do texto formatado em HTML de e-mail (tudo escapado; links só http/https — o leitor já os confere). */
+function inlineEmail(f: Inline[]): string {
+  return f
+    .map((n) => {
+      switch (n.t) {
+        case "texto":
+        case "mencao":
+          return escaparHtml(n.v);
+        case "quebra":
+          return "<br>";
+        case "negrito":
+          return `<strong>${inlineEmail(n.f)}</strong>`;
+        case "italico":
+          return `<em>${inlineEmail(n.f)}</em>`;
+        case "codigo":
+          return `<code style="font-family:'SFMono-Regular',Consolas,monospace;background:#f3f4f6;padding:1px 4px;border-radius:4px">${escaparHtml(n.v)}</code>`;
+        case "link":
+          return `<a href="${escaparHtml(n.href)}" style="color:#2563eb">${inlineEmail(n.f)}</a>`;
+        default:
+          return "";
+      }
+    })
+    .join("");
+}
+
+function blocoEmail(b: Bloco): string {
+  switch (b.t) {
+    case "par":
+      return `<p style="${P_EMAIL}">${inlineEmail(b.f)}</p>`;
+    case "titulo":
+      return `<p style="margin:16px 0 8px;font-size:${b.n === 1 ? 18 : b.n === 2 ? 16 : 15}px;font-weight:700;color:#111827">${inlineEmail(b.f)}</p>`;
+    case "lista": {
+      const tag = b.ordenada ? "ol" : "ul";
+      return `<${tag} style="margin:0 0 12px;padding-left:22px;font-size:15px;line-height:1.55;color:#374151">${b.itens.map((i) => `<li>${inlineEmail(i)}</li>`).join("")}</${tag}>`;
+    }
+    case "citacao":
+      return `<blockquote style="margin:0 0 12px;padding-left:12px;border-left:3px solid #d1d5db;color:#6b7280;font-size:15px;line-height:1.55">${inlineEmail(b.f)}</blockquote>`;
+    case "separador":
+      return '<hr style="border:0;border-top:1px solid #e5e7eb;margin:16px 0">';
+  }
+}
+
+/** O TEXTO FORMATADO (o do editor do sistema) em HTML de e-mail, com estilos inline. */
+export function htmlEmailDoTexto(texto: string): string {
+  return lerTextoFormatado(texto).map(blocoEmail).join("");
+}
+
 const RODAPE_PADRAO = "Você recebeu este e-mail porque participa da plataforma. Ajuste os avisos por e-mail no seu Perfil (Perfil → E-mail).";
 
 /**
@@ -36,13 +86,15 @@ const RODAPE_PADRAO = "Você recebeu este e-mail porque participa da plataforma.
  */
 export function layoutEmail(
   ctx: ContextoEmail,
-  m: { assunto: string; titulo: string; paragrafos: string[]; destaque?: string; botao?: { rotulo: string; url: string }; rodape?: string; lista?: { titulo: string; texto?: string | null; url: string }[]; descadastro?: string },
+  m: { assunto: string; titulo: string; paragrafos: string[]; corpo?: string; destaque?: string; botao?: { rotulo: string; url: string }; rodape?: string; lista?: { titulo: string; texto?: string | null; url: string }[]; descadastro?: string },
 ): ConteudoEmail {
   const nome = escaparHtml(ctx.nomeSistema || NOME_SISTEMA_PADRAO);
   const paras = m.paragrafos
     .filter((p) => p.trim())
-    .map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.55;color:#374151">${escaparHtml(p)}</p>`)
+    .map((p) => `<p style="${P_EMAIL}">${escaparHtml(p)}</p>`)
     .join("");
+  // O CORPO em texto formatado (o comunicado do ADM): negrito, listas, links — antes dos parágrafos simples.
+  const corpo = m.corpo?.trim() ? htmlEmailDoTexto(m.corpo) : "";
   // O DESTAQUE (ex.: o código de confirmação): grande, espaçado e fácil de copiar.
   const destaque = m.destaque
     ? `<p style="margin:8px 0 16px;font-family:'SFMono-Regular',Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:8px;color:#111827">${escaparHtml(m.destaque)}</p>`
@@ -60,12 +112,13 @@ export function layoutEmail(
         )
         .join("")}</table>`
     : "";
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(m.assunto)}</title></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,Roboto,Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px"><tr><td style="padding:18px 24px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#6b7280">${nome}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:#111827">${escaparHtml(m.titulo)}</h1>${paras}${lista}${destaque}${botao}</td></tr><tr><td style="padding:14px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.5;color:#9ca3af">${rodape}</td></tr></table></td></tr></table></body></html>`;
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(m.assunto)}</title></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,Roboto,Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px"><tr><td style="padding:18px 24px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#6b7280">${nome}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:#111827">${escaparHtml(m.titulo)}</h1>${corpo}${paras}${lista}${destaque}${botao}</td></tr><tr><td style="padding:14px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.5;color:#9ca3af">${rodape}</td></tr></table></td></tr></table></body></html>`;
   const texto = [
     ctx.nomeSistema || NOME_SISTEMA_PADRAO,
     "",
     m.titulo,
     "",
+    ...(m.corpo?.trim() ? [textoSimples(m.corpo), ""] : []),
     ...m.paragrafos.filter((p) => p.trim()),
     ...(m.lista?.length ? ["", ...m.lista.map((i) => `• ${i.titulo}${i.texto ? ` — ${i.texto}` : ""}\n  ${i.url}`)] : []),
     ...(m.destaque ? ["", m.destaque] : []),
@@ -114,7 +167,9 @@ export function emailDaNotificacao(
   return layoutEmail(ctx, {
     assunto: n.titulo || ROTULO_TIPO_EMAIL[n.tipo],
     titulo: n.titulo || ROTULO_TIPO_EMAIL[n.tipo],
-    paragrafos: [n.texto ?? "", n.atorNome ? `Por ${n.atorNome}.` : ""],
+    // O comunicado do ADM é texto formatado (o editor do sistema); os demais avisos, texto simples.
+    corpo: n.tipo === "comunicado" ? (n.texto ?? "") : undefined,
+    paragrafos: [n.tipo === "comunicado" ? "" : (n.texto ?? ""), n.atorNome ? `Por ${n.atorNome}.` : ""],
     botao: { rotulo: "Abrir no sistema", url },
     descadastro: descadastro ? urlAbsoluta(ctx.urlSistema, descadastro) : undefined,
   });
@@ -131,7 +186,7 @@ export function emailResumo(
     assunto: `${n} aviso${n === 1 ? "" : "s"} na plataforma`,
     titulo: `Você tem ${n} aviso${n === 1 ? "" : "s"}`,
     paragrafos: [],
-    lista: itens.slice(0, 50).map((i) => ({ titulo: i.titulo || ROTULO_TIPO_EMAIL[i.tipo], texto: i.texto, url: urlAbsoluta(ctx.urlSistema, i.link) })),
+    lista: itens.slice(0, 50).map((i) => ({ titulo: i.titulo || ROTULO_TIPO_EMAIL[i.tipo], texto: i.tipo === "comunicado" ? textoSimples(i.texto) : i.texto, url: urlAbsoluta(ctx.urlSistema, i.link) })),
     botao: { rotulo: "Abrir as notificações", url: urlAbsoluta(ctx.urlSistema, "/painel") },
     rodape: "Resumo dos seus avisos. Ajuste o horário ou volte ao e-mail imediato no seu Perfil (Perfil → Notificações).",
     descadastro: descadastro ? urlAbsoluta(ctx.urlSistema, descadastro) : undefined,

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { esperaReconexao } from "@/lib/ao-vivo-core";
 import type { Notificacao, PaginaNotificacoes } from "@/lib/notificacoes";
-import { MAX_AVISOS_NA_TELA, dataHoraCompleta, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, tituloComContagem } from "@/lib/notificacoes-tela-core";
+import { AVISOS_LONGOS, MAX_AVISOS_NA_TELA, dataHoraCompleta, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, textoDoAviso, tituloComContagem } from "@/lib/notificacoes-tela-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { TipoNotificacao } from "@/lib/tarefas-core";
 import { versaoDoAviso } from "@/lib/versoes";
@@ -142,6 +142,7 @@ export function ItemNotificacao({
 }) {
   const [menu, setMenu] = useState<"adiar" | "silenciar" | null>(null);
   const podeSilenciar = onSilenciar && (n.tarefaId != null || n.quadroId != null);
+  const texto = textoDoAviso(n);
   return (
     <div className="animate-fade-in-up" style={{ animationDelay: `${Math.min(ordem, 10) * 25}ms` }}>
       <div className="group/aviso relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2.5 rounded-control px-2 py-1.5 transition-colors focus-within:bg-surface-2 hover:bg-surface-2">
@@ -150,21 +151,21 @@ export function ItemNotificacao({
           data-aviso={n.id}
           data-pendente={!n.lida && !n.travada ? "" : undefined}
           onClick={() => onAbrir(n)}
-          title={`${n.titulo}${n.texto ? ` — ${n.texto}` : ""}\n${dataHoraCompleta(n.criadoEm)}${abrivel(n) ? "\nClique para abrir" : ""}`}
+          title={`${n.titulo}${texto ? ` — ${texto}` : ""}\n${dataHoraCompleta(n.criadoEm)}${abrivel(n) ? "\nClique para abrir" : ""}`}
           className="absolute inset-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span className="sr-only">
             {n.lida ? "" : "Não lida: "}
             {n.titulo}
-            {n.texto ? ` — ${n.texto}` : ""} ({tempoRelativo(n.criadoEm, agora)})
+            {texto ? ` — ${texto}` : ""} ({tempoRelativo(n.criadoEm, agora)})
           </span>
         </button>
         <MarcaAviso n={n} />
         <span className="pointer-events-none min-w-0" aria-hidden="true">
           <span className={`line-clamp-2 block text-[13px] leading-snug ${n.lida ? "text-text-2" : "font-semibold text-text"}`}>{n.titulo}</span>
-          {n.texto && (
-            // A versão nova traz a LISTA do que mudou (uma linha por mudança).
-            <span className={`mt-0.5 block text-[12px] text-muted ${n.tipo === "versao" ? "line-clamp-4 whitespace-pre-line" : "line-clamp-1"}`}>{n.texto}</span>
+          {texto && (
+            // A versão nova (a LISTA do que mudou) e o comunicado do ADM vão em até 4 linhas.
+            <span className={`mt-0.5 block text-[12px] text-muted ${AVISOS_LONGOS.includes(n.tipo) ? "line-clamp-4 whitespace-pre-line" : "line-clamp-1"}`}>{texto}</span>
           )}
           <span className="mt-0.5 block text-[11px] text-faint">{tempoRelativo(n.criadoEm, agora)}</span>
         </span>

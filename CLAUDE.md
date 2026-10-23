@@ -328,7 +328,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     listas · link | estilo do parágrafo | citação · código · separador · limpar); no compacto e abaixo do `lg` é UMA linha
     que rola de lado (`.barra-rolavel`: sem barra de rolagem, encaixe por grupo, a borda com mais ferramentas esmaecida e
     as setas `SetaBarra` "Mais ferramentas"/"Ferramentas anteriores" que rolam 70%); Desfazer/Refazer FIXOS à direita, fora
-    da rolagem; os botões não tiram o foco do texto (o teclado do celular continua aberto); no desktop o documento quebra a linha. Texto novo de editar = o `EditorRico`, nunca uma textarea com marcação — inclusive o chat (`mensagem`). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
+    da rolagem; os botões não tiram o foco do texto (o teclado do celular continua aberto); no desktop o documento quebra a linha. **Onde está (v1.171.0):** Termo de uso · descrição, notas e comentários das tarefas · chat · descrição do EVENTO do
+    calendário (`EditorEvento`; lido no `EventoBanner` por `TextoFormatado`; o `.ics` leva `textoSimples`) · COMUNICADO do ADM
+    (`NotificacoesAdmin`; o e-mail sai formatado — `layoutEmail.corpo` → `htmlEmailDoTexto`, estilos inline, escapado; o sino,
+    o alerta do sistema e o resumo usam `textoDoAviso`/`textoSimples` — `AVISOS_LONGOS` = até 4 linhas) · AJUDA das automações
+    (`ConfigFluxo` → `AjudaDoFluxo` formatada) · descrição da vitrine e aviso da TELA DE ACESSO (`TextosAcessoAdmin` →
+    `VitrineAcesso`/`TelaAcesso` formatados). `label`/`hint` = o rótulo visível e a dica, como nos outros campos (o rótulo vira o
+    nome acessível — `aria-labelledby`). Texto puro onde não há formatação: **`textoPlano`** (uma linha) e **`textoSimples`**
+    (com as linhas e o endereço dos links — `texto-formatado.ts`, testados). FICAM em campo simples (não usar o editor): o
+    texto do DFD e da capa do protocolo (documento oficial — despacho, PDF, reenvio), a descrição do item do catálogo
+    (comparada com os itens dos DFDs) e as configurações das automações (sintaxe própria, uma regra por linha). Texto novo
+    de editar = o `EditorRico`, nunca uma textarea com marcação. Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o

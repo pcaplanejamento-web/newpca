@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.171.0",
+    data: "2026-10-23",
+    titulo: "O editor de texto também no calendário, no comunicado, nas automações e na tela de acesso",
+    mudancas: [
+      { tipo: "melhoria", area: "Calendário", texto: "A descrição do evento é escrita no editor do sistema (negrito, listas, links) e aparece formatada no banner do evento; o arquivo .ics leva o texto sem a marcação.", link: "/painel/calendario" },
+      { tipo: "melhoria", area: "Notificações", texto: "O comunicado do administrador é escrito no editor: vai formatado no e-mail e, no sino, em até quatro linhas sem a formatação.", link: "/painel/configuracoes?aba=notificacoes" },
+      { tipo: "melhoria", area: "Automação", texto: "A ajuda de cada automação (como funciona, como executa e o resultado) é escrita no editor e aparece formatada no (?).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Configurações", texto: "A descrição da vitrine e o aviso da tela de acesso são escritos no editor e aparecem formatados no login.", link: "/painel/configuracoes?aba=acesso" },
+    ],
+  },
+  {
     versao: "1.170.0",
     data: "2026-10-23",
     titulo: "Chat com o mesmo editor de texto",

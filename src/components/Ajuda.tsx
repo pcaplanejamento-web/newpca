@@ -56,7 +56,7 @@ export function TopicoAjuda({ icone, titulo, children }: { icone?: ReactNode; ti
       {icone && <span className="mt-0.5 shrink-0 text-accent">{icone}</span>}
       <div className="min-w-0">
         <p className="font-medium text-text">{titulo}</p>
-        <p className="text-muted">{children}</p>
+        <div className="text-muted">{children}</div>
       </div>
     </div>
   );

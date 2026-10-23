@@ -109,7 +109,7 @@ describe("calendário profissional", () => {
     const t = { id: 1, quadroId: 1, ticket: 5, titulo: "Pregão; limpeza", inicio: null, prazo: "2026-09-25", concluidaEm: null, recorrencia: null };
     const ev = eventosDoCalendario(
       [t],
-      [{ id: 3, tarefaId: 1, titulo: "Reunião, pauta", data: "2026-09-24", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: null, local: "Sala 2", descricao: "Linha 1\nLinha 2", cor: null, lembreteMin: 15, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] }],
+      [{ id: 3, tarefaId: 1, titulo: "Reunião, pauta", data: "2026-09-24", dataFim: null, diaInteiro: false, horaInicio: "09:30", horaFim: null, local: "Sala 2", descricao: "**Levar** o DFD\nLinha 2", cor: null, lembreteMin: 15, recorrencia: null, linkReuniao: null, ocupado: true, privado: false, criadoPor: null, convidados: [] }],
       "2026-09-01",
       "2026-09-30",
     );
@@ -120,6 +120,9 @@ describe("calendário profissional", () => {
     assert.match(ics, /DTSTART:20260924T123000Z\r\nDTEND:20260924T133000Z/);
     assert.match(ics, /SUMMARY:Reunião\\, pauta/);
     assert.match(ics, /TRIGGER:-PT15M/);
+    // A descrição (texto formatado do editor) vai SEM a marcação, com as linhas.
+    assert.match(ics.replace(/\r\n /g, ""), /Levar o DFD\\nLinha 2/);
+    assert.doesNotMatch(ics, /\*\*/);
     assert.match(ics, /UID:e3@governarv.com.br/);
     assert.equal(escaparIcs("a;b,c\\d\ne"), "a\\;b\\,c\\\\d\\ne");
     const longa = dobrarIcs(`DESCRIPTION:${"á".repeat(80)}`);

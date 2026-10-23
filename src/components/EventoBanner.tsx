@@ -23,6 +23,7 @@ import { Callout } from "./Callout";
 import { IconBell, IconCalendar, IconClock, IconCopy, IconKanban, IconMapa, IconPencil, IconRepetir, IconTrash, IconUsers, IconVideo } from "./icons";
 import { LinkExterno } from "./LinkExterno";
 import { Segmented } from "./Segmented";
+import { TextoFormatado } from "./TextoFormatado";
 
 const COR_RESPOSTA: Record<RespostaConvite, string> = { pendente: "var(--muted)", sim: "var(--ok)", nao: "var(--danger)", talvez: "var(--warn)" };
 
@@ -160,7 +161,11 @@ export function EventoBanner({
             </dd>
           </div>
         )}
-        {e.descricao && <dd className="whitespace-pre-wrap break-words rounded-control bg-surface-2 px-3 py-2 text-text-2">{e.descricao}</dd>}
+        {e.descricao && (
+          <dd className="rounded-control bg-surface-2 px-3 py-2">
+            <TextoFormatado texto={e.descricao} />
+          </dd>
+        )}
       </dl>
       {e.linkReuniao && (
         <LinkExterno href={e.linkReuniao} icon={<IconVideo className="h-4 w-4" />}>

@@ -9,7 +9,7 @@ import { esperaReconexao, lerCookie, origemDoProprioSite } from "../src/lib/ao-v
 import { CATALOGO_AVISOS, compactarNotificacoes, emailsDaPessoa, lerPrefsEmail, noSino, querEmail, resolverNotificacoes } from "../src/lib/notificacoes-config-core.ts";
 import { comandoMarcarLidas, comandosExcluirNotificacoes, comandosRetencaoNotificacoes, consultaDispensadas } from "../src/lib/notificacoes-sql.ts";
 const TETO_NOTIFICACOES = 200;
-import { dataHoraCompleta, grupoDoDia, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, tituloComContagem } from "../src/lib/notificacoes-tela-core.ts";
+import { dataHoraCompleta, grupoDoDia, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, textoDoAviso, tituloComContagem } from "../src/lib/notificacoes-tela-core.ts";
 import { TIPOS_NOTIFICACAO } from "../src/lib/tarefas-core.ts";
 import { comandosNotificacoes } from "../src/lib/tarefas-sql.ts";
 import { configNotificacoesSchema, notificacoesDeleteSchema, notificacoesListaSchema, notificacoesPatchSchema } from "../src/lib/notificacoes-validation.ts";
@@ -315,5 +315,11 @@ describe("notificações — validação dos pedidos novos", () => {
     assert.equal(v.comunicadoSchema.safeParse({ titulo: "Manutenção", link: "/painel" }).success, true);
     assert.equal(v.comunicadoSchema.safeParse({ titulo: "Manutenção", link: "https://mal.com" }).success, false);
     assert.equal(v.retencaoSchema.safeParse({ auto: true, lidasDias: 0, naoLidasDias: 10, teto: 50 }).success, false);
+  });
+
+  it("o texto do aviso no sino: o comunicado sem a marcação (com as linhas); os demais como vieram", () => {
+    assert.equal(textoDoAviso({ tipo: "comunicado", texto: "**Prazo** hoje\n\n- a" }), "Prazo hoje\n\n• a");
+    assert.equal(textoDoAviso({ tipo: "comunicado", texto: null }), null);
+    assert.equal(textoDoAviso({ tipo: "atribuida", texto: "**x**" }), "**x**");
   });
 });

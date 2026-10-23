@@ -9,7 +9,8 @@ import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { ErroCarga } from "./ErroCarga";
 import { type Column, DataTable } from "./DataTable";
-import { TextArea, TextField } from "./Field";
+import { EditorRico } from "./EditorRico";
+import { TextField } from "./Field";
 import { IconBell, IconLimpar, IconMail, IconMegafone, IconRefresh, IconSave, IconUndo, IconUserX } from "./icons";
 import { visualAviso } from "./notificacoesVisual";
 import { Segmented } from "./Segmented";
@@ -278,7 +279,7 @@ function ComunicadoAdmin() {
     <div className="space-y-3 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       {confirmacao}
       <TextField label="Título" value={titulo} maxLength={120} onChange={(e) => setTitulo(e.target.value)} />
-      <TextArea label="Texto" rows={3} value={texto} maxLength={500} onChange={(e) => setTexto(e.target.value)} />
+      <EditorRico compacto label="Texto" rotulo="Texto do comunicado" valor={texto} maxLength={500} onChange={setTexto} hint="Vai formatado no e-mail; no sino, sem a formatação." />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <TextField label="Link (opcional)" placeholder="/painel/mesa" value={link} error={linkOk ? undefined : "Uma página do sistema (começa com /)."} onChange={(e) => setLink(e.target.value)} />
         <div>
@@ -286,7 +287,7 @@ function ComunicadoAdmin() {
         </div>
       </div>
       <div className="flex justify-end">
-        <Button size="sm" icon={<IconMegafone className="h-4 w-4" />} loading={enviando} disabled={titulo.trim().length < 3 || !linkOk} onClick={enviar} title="Enviar o comunicado ao sino das pessoas">
+        <Button size="sm" icon={<IconMegafone className="h-4 w-4" />} loading={enviando} disabled={titulo.trim().length < 3 || texto.length > 500 || !linkOk} onClick={enviar} title="Enviar o comunicado ao sino das pessoas">
           Enviar
         </Button>
       </div>
