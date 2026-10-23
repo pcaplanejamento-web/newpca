@@ -43,7 +43,7 @@ import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./u
  * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e o que o PAPEL
  * permite nas duas Mesas (cada protocolo segue a sua).
  */
-export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pca" = "dfd") {
+export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pca" | "verificacao" = "dfd") {
   // O acesso já foi lido pela página (memorizado na requisição): o GRUPO ATIVO dele evita reler os grupos da pessoa.
   const acesso = await getAcesso();
   // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).

@@ -135,6 +135,14 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       excluir: "Excluir documentos.",
     },
   },
+  empenhos: {
+    na: "em Empenhos",
+    a: "a Empenhos",
+    acoes: {
+      visualizar: "Abrir Empenhos e consultar os empenhos importados da Centi (só leitura).",
+      exportar: "Baixar a tabela em XLSX e PDF.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;

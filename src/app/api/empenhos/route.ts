@@ -1,15 +1,15 @@
-import { exigirAdmin } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { pacoteEmpenhos } from "@/lib/empenhos-tela";
 import { erro } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Os empenhos de um ANO (só ADM) no pacote compacto (`empenhos-tela-core.ts`) — `?removidos=1` = os que a Centi não traz
+ * Os empenhos de um ANO no pacote compacto (`empenhos-tela-core.ts`) — `?removidos=1` = os que a Centi não traz
  * mais. O corpo é o texto montado pelo banco, devolvido como está (o Worker não lê as dezenas de milhares de linhas).
  */
 export async function GET(req: Request) {
-  const g = await exigirAdmin();
+  const g = await exigirAcesso("empenhos", "visualizar");
   if ("erro" in g) return g.erro;
   const u = new URL(req.url);
   const ano = Number(u.searchParams.get("ano"));

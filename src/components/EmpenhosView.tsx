@@ -21,7 +21,7 @@ import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
 
 /** A chave das edições salvas da tabela (Administração — só o ADM grava). */
-export const CHAVE_TABELA_EMPENHOS = "admin:empenhos:tabela";
+export const CHAVE_TABELA_EMPENHOS = "empenhos:tabela";
 
 /** As colunas que a tabela abre ESCONDIDAS (a edição da tabela as mostra). */
 const OCULTAS = ["cpfCnpj", "licitacao", "funcao", "subfuncao", "programa", "subelemento", "unidadeOrcamentaria"];
@@ -83,17 +83,23 @@ const chaveRecorte = (r: Recorte) => `${r.ano}:${r.removidos ? 1 : 0}`;
 /**
  * Tela EMPENHOS (Administração — só o ADM): os empenhos da Centi de um ANO, importados em Integrações → APIs da Centi.
  * SÓ LEITURA. Os KPIs acompanham os filtros da tabela (`onOrdenadas`); a tabela é a padrão (`scrollInterno` + `compact`,
- * filtros conectados, edições salvas `admin:empenhos:`, XLSX/PDF). O ano chega COMPACTO (`empenhos-tela-core.ts`) e fica
+ * filtros conectados, edições salvas `empenhos:`, XLSX/PDF). O ano chega COMPACTO (`empenhos-tela-core.ts`) e fica
  * guardado nesta aba — trocar de ano e voltar não pede de novo; "Recarregar" pede. Tocar numa linha = o detalhe.
  */
-export function EmpenhosAdmin({
+export function EmpenhosView({
   anos,
   anoInicial,
   edicoes,
+  podePublicar,
+  importar,
 }: {
   anos: AnoEmpenhos[];
   anoInicial: number | null;
   edicoes: { lista: EdicaoTabela[]; padroes: Record<string, unknown> };
+  /** Configurar em Empenhos: publicar edições da tabela para todos. */
+  podePublicar: boolean;
+  /** O atalho para a importação (Integrações — só o ADM). */
+  importar: boolean;
 }) {
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
@@ -118,7 +124,7 @@ export function EmpenhosAdmin({
     setCarregando(true);
     if (!fresco) setLinhas(null);
     try {
-      const resp = await fetch(`/api/admin/empenhos?ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
+      const resp = await fetch(`/api/empenhos?ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
       const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
       if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
       const lista = empenhosDoPacote(j.pacote);
@@ -148,7 +154,7 @@ export function EmpenhosAdmin({
     if (!aberto) return;
     let vivo = true;
     setCompleto(undefined);
-    fetch(`/api/admin/empenhos/${aberto.id}`)
+    fetch(`/api/empenhos/${aberto.id}`)
       .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto }>)
       .then((j) => vivo && setCompleto(j.ok && j.empenho ? j.empenho : null))
       .catch(() => vivo && setCompleto(null));
@@ -185,9 +191,11 @@ export function EmpenhosAdmin({
               ))}
             </SelectField>
           )}
-          <Button size="sm" variant="secondary" href="/painel/integracoes?aba=centi" icon={<IconUpload className="h-4 w-4" />}>
-            Importar
-          </Button>
+          {importar && (
+            <Button size="sm" variant="secondary" href="/painel/integracoes?aba=centi" icon={<IconUpload className="h-4 w-4" />}>
+              Importar
+            </Button>
+          )}
           <Ajuda titulo="Empenhos" botao="sm">
             <p>
               Os empenhos da Centi, importados em Integrações → APIs da Centi → Empenhos. Só leitura: para atualizar, importe o ano de
@@ -233,7 +241,7 @@ export function EmpenhosAdmin({
               onRowClick={setAberto}
               activeKey={aberto?.id ?? null}
               onOrdenadas={setVista}
-              edicoes={{ chave: CHAVE_TABELA_EMPENHOS, lista: eds.lista, padroes: eds.padroes, podePublicar: true, onMudar: (lista, padroes) => setEds({ lista, padroes }) }}
+              edicoes={{ chave: CHAVE_TABELA_EMPENHOS, lista: eds.lista, padroes: eds.padroes, podePublicar, onMudar: (lista, padroes) => setEds({ lista, padroes }) }}
               exportar={{ nome: `Empenhos ${recorte.ano}${recorte.removidos ? " - removidos" : ""}` }}
               acoesRodape={
                 ano && ano.removidos > 0 ? (

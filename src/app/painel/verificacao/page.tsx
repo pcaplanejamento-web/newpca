@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function VerificacaoPage() {
   const r = await acessoPagina("verificacao");
   if (r.bloqueio) return r.bloqueio;
-  const c = await contextoBanners(r.acesso.u);
+  const c = await contextoBanners(r.acesso.u, "verificacao");
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
       <VerificacaoView reparticoes={c.reparticoes} pcas={c.pcas} regras={c.regras} orgaos={c.orgaos} />

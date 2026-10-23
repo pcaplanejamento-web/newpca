@@ -2,8 +2,8 @@ import { eq, sql } from "drizzle-orm";
 import { configuracoes } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
 import { getDb } from "./db";
-import { type ConfigEscopo, filtroDoModulo, lerConfigEscopo, type ModuloEscopo } from "./escopo-cabecalho-core";
-import { type FiltroId, idDoFiltro } from "./escopo-unidades-core";
+import { type ConfigEscopo, lerConfigEscopo, type ModuloEscopo } from "./escopo-cabecalho-core";
+import { type FiltroId, filtroDoEscopo, idDoFiltro } from "./escopo-unidades-core";
 import { type GrupoResumo, unidadesDaSessao } from "./grupos";
 import { lerBlobConfiguracoes } from "./integracoes";
 
@@ -64,7 +64,8 @@ export async function unidadeDoModulo(
   aba?: string,
 ): Promise<UnidadeDoModulo> {
   const [un, cfg] = await Promise.all([unidadesDaSessao(u, grupoAtivo, TELA_DO_MODULO[modulo], aba), getConfigEscopo()]);
-  const id = filtroDoModulo(cfg, modulo, idDoFiltro(un.filtro));
+  // Módulo que não obedece ao cabeçalho = as unidades que a pessoa ACESSA (nunca todas para quem não tem acesso a todas).
+  const id = cfg.modulos[modulo] ? idDoFiltro(un.filtro) : idDoFiltro(filtroDoEscopo(un.escopo));
   const ativa = typeof id === "number" ? un.ativa : null;
   return { id, sigla: ativa?.codigo ?? null, nome: ativa?.nome ?? null, cfg };
 }
@@ -75,7 +76,7 @@ export async function unidadeDoModulo(
  */
 export async function unidadeDaMesaDoPca(u?: UsuarioSessao | null): Promise<FiltroId> {
   const [un, cfg] = await Promise.all([unidadesDaSessao(u, undefined, "pca", "mesa"), getConfigEscopo()]);
-  return filtroDoModulo(cfg, "pca", idDoFiltro(un.filtro));
+  return cfg.modulos.pca ? idDoFiltro(un.filtro) : idDoFiltro(filtroDoEscopo(un.escopo));
 }
 
 /** O Catálogo no modo "usados": a unidade do cabeçalho (só os itens/históricos cujo código ela usa); `todos` = sem filtro. */

@@ -113,7 +113,7 @@ EditorRico.tsx
 EditorVinculoOrcamento.tsx
 EditorVisaoOrcamento.tsx
 EmpenhoDetalhe.tsx
-EmpenhosAdmin.tsx
+EmpenhosView.tsx
 EnviarAoPca.tsx
 ErroCarga.tsx
 EscopoCabecalhoAdmin.tsx
