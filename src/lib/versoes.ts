@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.186.0",
+    data: "2026-10-23",
+    titulo: "Termo de Uso: cláusulas automáticas opcionais e rolagem suave",
+    mudancas: [
+      { tipo: "novo", area: "Termo de Uso", texto: "Cada cláusula gerada pelo sistema pode ser desligada; a escolha vale na próxima publicação.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Termo de Uso", texto: "A seta que leva ao fim do termo rola de forma suave, sem trancos, e some aos poucos.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.185.0",
     data: "2026-10-23",
     titulo: "Empenhos lidos de verdade e exclusão das tentativas",

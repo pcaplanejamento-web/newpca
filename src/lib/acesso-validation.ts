@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIMITE_MAX, LIMITE_MIN, MAX_TESTADORES, MODOS_IMPLANTACAO, NOME_APARELHO_MAX, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "./acesso-conta-core";
+import { CLAUSULAS_AUTO, LIMITE_MAX, LIMITE_MIN, MAX_TESTADORES, MODOS_IMPLANTACAO, NOME_APARELHO_MAX, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "./acesso-conta-core";
 import { MAX_TEXTO_ADM } from "./termo-uso-core";
 
 // TERMO DE USO + APARELHOS — as entradas das rotas.
@@ -32,6 +32,7 @@ export const configAcessoContaSchema = z.strictObject({
   isentarAdm: z.boolean(),
   fecharAceiteS: z.number().int().refine((v) => (OPCOES_FECHAR_ACEITE as readonly number[]).includes(v), "Tempo de fechamento inválido.").optional(),
   encarregado: z.strictObject({ nome: z.string().max(120), email: z.string().max(160), telefone: z.string().max(40) }),
+  clausulasOff: z.array(z.enum(CLAUSULAS_AUTO.map((c) => c.id) as [string, ...string[]])).max(CLAUSULAS_AUTO.length).optional(),
 });
 
 const publicoSchema = z.discriminatedUnion("tipo", [

@@ -24,6 +24,8 @@ export type ConfigAcessoConta = {
   fecharAceiteS: number;
   /** O encarregado pelo tratamento de dados pessoais (LGPD art. 41) — vai às cláusulas automáticas. */
   encarregado: { nome: string; email: string; telefone: string };
+  /** As cláusulas automáticas DESLIGADAS pelo ADM (ids de `CLAUSULAS_AUTO`) — saem do termo publicado. */
+  clausulasOff: string[];
 };
 
 export const LIMITE_MIN = 1;
@@ -43,7 +45,21 @@ export const ACESSO_CONTA_PADRAO: ConfigAcessoConta = {
   isentarAdm: true,
   fecharAceiteS: 10,
   encarregado: { nome: "", email: "", telefone: "" },
+  clausulasOff: [],
 };
+
+/** As cláusulas automáticas que o ADM pode desligar (a ordem do termo). */
+export const CLAUSULAS_AUTO = [
+  { id: "aparelhos", titulo: "Aparelhos vinculados à conta" },
+  { id: "sessao", titulo: "Sessão e credenciais" },
+  { id: "registros", titulo: "Registros de acesso e auditoria" },
+  { id: "protecao", titulo: "Proteção das informações exibidas" },
+  { id: "presenca", titulo: "Presença e comunicação interna" },
+  { id: "email", titulo: "Comunicações por e-mail" },
+  { id: "lgpd", titulo: "Tratamento de dados pessoais (LGPD)" },
+  { id: "aceite", titulo: "Aceite eletrônico e novas versões" },
+] as const;
+const IDS_CLAUSULAS: readonly string[] = CLAUSULAS_AUTO.map((c) => c.id);
 
 const inteiro = (v: unknown, min: number, max: number, padrao: number) => {
   const n = Number(v);
@@ -78,6 +94,7 @@ export function lerConfigAcessoConta(v: unknown): ConfigAcessoConta {
     isentarAdm: typeof o.isentarAdm === "boolean" ? o.isentarAdm : true,
     fecharAceiteS: (OPCOES_FECHAR_ACEITE as readonly number[]).includes(Number(o.fecharAceiteS)) ? Number(o.fecharAceiteS) : ACESSO_CONTA_PADRAO.fecharAceiteS,
     encarregado: { nome: texto(enc.nome, 120), email: texto(enc.email, 160), telefone: texto(enc.telefone, 40) },
+    clausulasOff: Array.isArray(o.clausulasOff) ? [...new Set(o.clausulasOff.filter((x): x is string => typeof x === "string" && IDS_CLAUSULAS.includes(x)))] : [],
   };
 }
 

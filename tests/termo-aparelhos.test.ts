@@ -299,3 +299,15 @@ describe("versão do termo sem título", () => {
     assert.equal(rotuloVersaoTermo(4, null), "Termo de Uso — versão 4 (rascunho)");
   });
 });
+
+describe("cláusulas automáticas desligadas pelo ADM", () => {
+  it("saem do termo e só ids conhecidos valem", async () => {
+    const { clausulasAutomaticas } = await import("../src/lib/termo-uso-core.ts");
+    const acesso = lerConfigAcessoConta({ clausulasOff: ["registros", "xpto", "registros"] });
+    assert.deepEqual(acesso.clausulasOff, ["registros"]);
+    const ctx = { nomeSistema: "S", acesso, inatividadeMin: 0, protecao: { ligada: false, copia: false, impressao: false, ocultar: false, marcaDagua: false }, presenca: false, chat: false, email: false, google: false };
+    const ids = clausulasAutomaticas(ctx).map((c) => c.id);
+    assert.equal(ids.includes("registros"), false);
+    assert.equal(ids.includes("aparelhos"), true);
+  });
+});

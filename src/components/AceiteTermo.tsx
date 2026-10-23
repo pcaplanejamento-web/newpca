@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
 import { FRASE_ACEITE, rotuloVersaoTermo } from "@/lib/termo-uso-core";
 import { Button } from "./Button";
@@ -16,11 +16,11 @@ import { Progress } from "./Progress";
 import { DocumentoFormatado } from "./TextoFormatado";
 
 /** O texto do termo (formatado), em partes — o leitor lê até 20 mil caracteres por vez. */
-export function TextoTermo({ texto, className = "" }: { texto: string; className?: string }) {
+export const TextoTermo = memo(function TextoTermo({ texto, className = "" }: { texto: string; className?: string }) {
   // Como DOCUMENTO: as mesmas classes e tags do editor — o termo lido fica idêntico ao que o ADM editou.
   const partes = useMemo(() => partesDoTermo(texto), [texto]);
   return <DocumentoFormatado partes={partes} className={className} />;
-}
+});
 
 /** A caixa ROLÁVEL do termo: avisa quando a pessoa chegou ao fim (o aceite só destrava depois de ler tudo). */
 export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto: string; onFim: () => void; altura?: string }) {
@@ -29,12 +29,18 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
   const fim = useRef(onFim);
   fim.current = onFim;
   const [noFim, setNoFim] = useState(false);
+  const noFimRef = useRef(false);
+  const animando = useRef<number | null>(null);
   const conferir = () => {
     const el = ref.current;
     if (!el) return;
     const chegou = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
-    setNoFim(chegou);
-    if (chegou && !avisou.current) {
+    if (chegou !== noFimRef.current) {
+      noFimRef.current = chegou;
+      setNoFim(chegou);
+    }
+    // Durante a rolagem automática, o aviso de fim espera o último quadro (o banner re-renderiza parado).
+    if (chegou && !avisou.current && animando.current === null) {
       avisou.current = true;
       fim.current();
     }
@@ -46,11 +52,36 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
     const t = window.setTimeout(conferir, 50);
     return () => window.clearTimeout(t);
   }, [texto]);
+  const parar = () => {
+    if (animando.current !== null) cancelAnimationFrame(animando.current);
+    animando.current = null;
+  };
+  useEffect(() => parar, []);
   const irAoFim = () => {
     const el = ref.current;
     if (!el) return;
+    parar();
+    const inicio = el.scrollTop;
+    const destino = el.scrollHeight - el.clientHeight;
     const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce";
-    el.scrollTo({ top: el.scrollHeight, behavior: reduzir ? "auto" : "smooth" });
+    if (reduzir || destino <= inicio) {
+      el.scrollTop = destino;
+      conferir();
+      return;
+    }
+    const dur = Math.min(1100, Math.max(450, (destino - inicio) * 0.35));
+    const t0 = performance.now();
+    const passo = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2;
+      el.scrollTop = inicio + (destino - inicio) * e;
+      if (p < 1) animando.current = requestAnimationFrame(passo);
+      else {
+        animando.current = null;
+        conferir();
+      }
+    };
+    animando.current = requestAnimationFrame(passo);
   };
   return (
     <div className="relative">
@@ -59,22 +90,27 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a caixa rola pelo teclado (setas) — o leitor precisa chegar ao fim do termo
         tabIndex={0}
         onScroll={conferir}
+        onWheel={parar}
+        onPointerDown={parar}
+        onKeyDown={parar}
         aria-label="Texto do Termo de Uso"
         className={`${altura} overflow-y-auto rounded-card border border-border bg-surface-2 p-[var(--pad-card)] focus-visible:shadow-ring focus-visible:outline-none`}
       >
         <TextoTermo texto={texto} />
       </section>
-      {!noFim && (
+      {
         <button
           type="button"
           onClick={irAoFim}
+          tabIndex={noFim ? -1 : 0}
+          aria-hidden={noFim}
           aria-label="Ir ao fim do termo"
           title="Ir ao fim do termo"
-          className="absolute right-3 bottom-3 inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-transform hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none"
+          className={`absolute right-3 bottom-3 inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-[opacity,transform] duration-200 motion-reduce:transition-none hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none ${noFim ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
         >
           <IconArrowDown size={20} aria-hidden="true" />
         </button>
-      )}
+      }
     </div>
   );
 }

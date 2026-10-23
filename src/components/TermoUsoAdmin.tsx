@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type ConfigAcessoConta, LIMITE_MAX, LIMITE_MIN, type ModoImplantacao, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "@/lib/acesso-conta-core";
+import { CLAUSULAS_AUTO, type ConfigAcessoConta, LIMITE_MAX, LIMITE_MIN, type ModoImplantacao, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "@/lib/acesso-conta-core";
 import { baixarDocumentoPdf } from "@/lib/documento-pdf";
 import { blocosDoTexto, dataHoraBR, MAX_TEXTO_ADM, rotuloVersaoTermo } from "@/lib/termo-uso-core";
 import { TextoTermo } from "./AceiteTermo";
@@ -97,6 +97,23 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
           </SelectField>
         </div>
         <Switch checked={valor.isentarAdm} onChange={(isentarAdm) => set({ isentarAdm })} label="Administrador fora do limite" dica="O Administrador não tem limite de aparelhos (no teste, o ADM testador segue as regras)" />
+        <div className="space-y-1">
+          <p className="font-medium text-[13px] text-text">Cláusulas geradas pelo sistema</p>
+          <p className="text-[12px] text-muted">Desligue as que não devem entrar no termo. Valem na próxima publicação (as de proteção, presença e e-mail só entram com o recurso ligado).</p>
+          <div className="grid gap-x-4 sm:grid-cols-2">
+            {CLAUSULAS_AUTO.map((c) => {
+              const off = valor.clausulasOff ?? [];
+              return (
+                <Switch
+                  key={c.id}
+                  checked={!off.includes(c.id)}
+                  onChange={(liga) => set({ clausulasOff: liga ? off.filter((x) => x !== c.id) : [...off, c.id] })}
+                  label={c.titulo}
+                />
+              );
+            })}
+          </div>
+        </div>
         {papeis.length > 0 && (
           <div className="space-y-2">
             <p className="text-[13px] font-semibold text-text-2">Limite por papel</p>

@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     acao: "editar",
     entidade: "termo_uso",
     entidadeId: 0,
-    resumo: `Termo/aparelhos: implantação ${antes.modo} → ${salva.modo}; testadores ${salva.testadores.length}; repetir ${salva.repetirAoEntrar ? "sim" : "não"}; limite ${salva.limite}; troca ${salva.trocaDias} dia(s); ADM isento ${salva.isentarAdm ? "sim" : "não"}; aceite fecha em ${salva.fecharAceiteS ? `${salva.fecharAceiteS} s` : "não fecha sozinho"}`,
+    resumo: `Termo/aparelhos: implantação ${antes.modo} → ${salva.modo}; testadores ${salva.testadores.length}; repetir ${salva.repetirAoEntrar ? "sim" : "não"}; limite ${salva.limite}; troca ${salva.trocaDias} dia(s); ADM isento ${salva.isentarAdm ? "sim" : "não"}; aceite fecha em ${salva.fecharAceiteS ? `${salva.fecharAceiteS} s` : "não fecha sozinho"}; cláusulas desligadas: ${salva.clausulasOff.join(", ") || "nenhuma"}`,
   });
   return ok({ config: salva });
 }
