@@ -1,7 +1,7 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { baixarSeguro } from "@/lib/busca-segura";
 import { orgaosDoCadastro } from "@/lib/centi-apis";
-import { lerParametros, montarCorpo, motivoApiInvalida, pedidosDoAno, type ResultadoTeste, resumoResposta, urlDaApi } from "@/lib/centi-apis-core";
+import { lerParametros, montarCorpo, motivoApiInvalida, pedidosDoAno, type ResultadoTeste, resumoResposta, urlDaApi, varsDoTeste } from "@/lib/centi-apis-core";
 import { testarCentiApiSchema } from "@/lib/centi-apis-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   const params = lerParametros(edicao.parametros);
   const vars = pedidosDoAno(edicao, ano, cadastro)[pedido];
   if (!params.ok || !vars) return erro("Esse pedido não existe para a configuração atual.", 422);
-  const corpo = montarCorpo(params.valor, vars);
+  const corpo = montarCorpo(params.valor, varsDoTeste(vars));
   const url = urlDaApi(edicao);
   const inicio = Date.now();
   try {

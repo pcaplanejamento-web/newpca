@@ -154,18 +154,26 @@ export function marcadoresUsados(parametros: unknown): string[] {
   return [...achados].sort();
 }
 
-const MARCADORES = ["ano", "orgao", "fonte", "pagina"];
+const MARCADORES = ["ano", "inicio", "fim", "orgao", "fonte", "pagina"];
 
-/** Troca os marcadores pelos valores do pedido (o texto que é SÓ o marcador vira o valor com o tipo dele). */
-export function montarCorpo(parametros: unknown, vars: Record<string, number>): unknown {
+/**
+ * Troca os marcadores pelos valores do pedido (o texto que é SÓ o marcador vira o valor com o tipo dele). Com o {ano},
+ * o período {inicio}/{fim} (dd/mm/aaaa) é o ano inteiro quando o pedido não diz outro — a importação o divide em meses.
+ */
+export function montarCorpo(parametros: unknown, vars: Record<string, number | string>): unknown {
+  if (typeof vars.ano === "number" && vars.inicio == null) vars = { inicio: `01/01/${vars.ano}`, fim: `31/12/${vars.ano}`, ...vars };
+  return trocarMarcadores(parametros, vars);
+}
+
+function trocarMarcadores(parametros: unknown, vars: Record<string, number | string>): unknown {
   if (typeof parametros === "string") {
     const so = parametros.match(/^\{([a-z]+)\}$/);
     if (so && so[1] in vars) return vars[so[1]];
     return parametros.replace(/\{([a-z]+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
   }
-  if (Array.isArray(parametros)) return parametros.map((p) => montarCorpo(p, vars));
+  if (Array.isArray(parametros)) return parametros.map((p) => trocarMarcadores(p, vars));
   if (parametros && typeof parametros === "object") {
-    return Object.fromEntries(Object.entries(parametros).map(([k, v]) => [k, montarCorpo(v, vars)]));
+    return Object.fromEntries(Object.entries(parametros).map(([k, v]) => [k, trocarMarcadores(v, vars)]));
   }
   return parametros;
 }
@@ -220,7 +228,7 @@ export function motivoApiInvalida(e: EdicaoApi, implementada: boolean, cadastro:
   const p = lerParametros(e.parametros);
   if (!p.ok) return p.motivo;
   const desconhecido = marcadoresUsados(p.valor).find((m) => !MARCADORES.includes(m));
-  if (desconhecido) return `Marcador desconhecido: {${desconhecido}} (use {ano}, {orgao}, {fonte} ou {pagina}).`;
+  if (desconhecido) return `Marcador desconhecido: {${desconhecido}} (use {ano}, {inicio}, {fim}, {orgao}, {fonte} ou {pagina}).`;
   const divisao = DIVISOES.find((d) => d.valor === e.divisao);
   if (divisao?.marcador && !e.parametros.includes(divisao.marcador)) return `Com "${divisao.rotulo}", os parâmetros precisam do marcador ${divisao.marcador}.`;
   if (e.divisao === "orgao" && codigosDosOrgaos(e.orgaos, cadastro).length === 0) {
@@ -235,6 +243,11 @@ export function motivoApiInvalida(e: EdicaoApi, implementada: boolean, cadastro:
   return null;
 }
 
+/** O pedido do TESTE: o período é JANEIRO (o ano inteiro não cabe numa resposta — a importação também lê mês a mês). */
+export function varsDoTeste(vars: Record<string, number>): Record<string, number | string> {
+  return typeof vars.ano === "number" ? { ...vars, inicio: `01/01/${vars.ano}`, fim: `31/01/${vars.ano}` } : vars;
+}
+
 /** A PRÉVIA de um pedido do ano (o 1º, por padrão — só para mostrar; nada é enviado). */
 export function previaPedido(e: EdicaoApi, ano: number, cadastro: OrgaoDoCadastro[], indice = 0) {
   const p = lerParametros(e.parametros);
@@ -242,7 +255,7 @@ export function previaPedido(e: EdicaoApi, ano: number, cadastro: OrgaoDoCadastr
   const vars = pedidos[Math.min(Math.max(0, indice), pedidos.length - 1)];
   return {
     url: urlDaApi(e),
-    corpo: p.ok && vars ? montarCorpo(p.valor, vars) : null,
+    corpo: p.ok && vars ? montarCorpo(p.valor, varsDoTeste(vars)) : null,
     erro: p.ok ? (vars ? null : "Nenhum pedido: escolha os órgãos (com o ID da Centi) ou as fontes.") : p.motivo,
     pedidos,
   };

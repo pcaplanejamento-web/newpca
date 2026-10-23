@@ -19,10 +19,27 @@ import {
   rotuloFrequencia,
   type UnidadeDoCadastro,
 } from "@/lib/centi-apis-core";
-import { anosDaApi, continuarLendo, type LoteCenti, ROTULO_ESTADO_LOTE } from "@/lib/empenhos-core";
-import { dataHoraBR, dataIsoBrasilia } from "@/lib/format";
+import {
+  anoInteiro,
+  anosDaApi,
+  diaBR,
+  diasDoPeriodo,
+  type LoteCenti,
+  type PassoLote,
+  type Periodo,
+  periodoEmCurso,
+  periodosAPedir,
+  periodosLidos,
+  ROTULO_ESTADO_LOTE,
+  ROTULO_ESTADO_PASSO,
+  rotuloPeriodo,
+  type TipoErro,
+  usaPeriodo,
+} from "@/lib/empenhos-core";
+import { dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
+import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
@@ -33,7 +50,7 @@ import { CelulaTexto } from "./CelulaLista";
 import { IconChevronDown, IconDownload, IconPlay } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
-import { SecaoBanner } from "./SecaoBanner";
+import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -540,9 +557,10 @@ function EditorApi({
                   <A titulo="Parâmetros">
                     <p>O que vai no corpo do pedido, em JSON. Os marcadores são trocados a cada pedido:</p>
                     <p>
-                      <code>{"{ano}"}</code> o ano · <code>{"{orgao}"}</code> o ID do órgão na Centi · <code>{"{fonte}"}</code> a fonte ·{" "}
-                      <code>{"{pagina}"}</code> a página.
+                      <code>{"{ano}"}</code> o ano · <code>{"{inicio}"}</code> e <code>{"{fim}"}</code> o período (dd/mm/aaaa) ·{" "}
+                      <code>{"{orgao}"}</code> o ID do órgão na Centi · <code>{"{fonte}"}</code> a fonte · <code>{"{pagina}"}</code> a página.
                     </p>
+                    <p>Com o período, a importação lê o ano mês a mês — e divide o mês que vier grande demais.</p>
                     <p>A página é acrescentada sozinha nas APIs que devolvem páginas.</p>
                   </A>
                 }
@@ -636,7 +654,13 @@ function EditorApi({
   );
 }
 
-type RespostaPagina = { lote: LoteCenti; pagina: { recebidos: number; novos: number } };
+type RespostaPasso = {
+  lote: LoteCenti;
+  passo: PassoLote;
+  continuar?: boolean;
+  erro?: { tipo: TipoErro; mensagem: string };
+  dividir?: [Periodo, Periodo] | null;
+};
 
 /** Chama a rota da importação manual; devolve o JSON ou lança com a mensagem do servidor. */
 async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>): Promise<T> {
@@ -650,12 +674,32 @@ async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>)
   return j;
 }
 
+async function lerPassos(apiId: number, loteId: number): Promise<PassoLote[]> {
+  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar?lote=${loteId}`);
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; passos?: PassoLote[] };
+  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+  return j.passos ?? [];
+}
+
 const ESPERA_TENTATIVAS = [2000, 4000, 8000];
+const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
+const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
+
+/** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
+function fracaoDoAno(ano: number, passos: PassoLote[]): number {
+  const dias = periodosLidos(passos).reduce((s, p) => s + diasDoPeriodo(p), 0);
+  return Math.min(1, dias / diasDoPeriodo(anoInteiro(ano)));
+}
+
+/** O que acontece agora (a linha acima da barra). */
+type Agora = { periodo: Periodo; pagina: number; tentativa: number; espera?: number };
 
 /**
- * A IMPORTAÇÃO MANUAL (passo 3): lê a API página a página com o cadastro SALVO, guarda num lote separado e só grava nos
- * empenhos quando a contagem confere com o total que a Centi informa. Interromper, fechar a página ou uma falha deixam a
- * tabela final como estava.
+ * A IMPORTAÇÃO MANUAL (passo 3): lê o ano MÊS A MÊS (o mês grande demais é dividido ao meio), página a página, com o
+ * cadastro SALVO; cada pedido vira um PASSO à vista na hora — lido ou com o erro em detalhe — e os empenhos só são
+ * gravados quando todo o ano foi lido e a contagem confere com o total que a Centi informa. Interromper, fechar a
+ * página ou uma falha deixam a tabela final como estava.
  */
 function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterado: boolean; onOcupado: (b: boolean) => void }) {
   const anos = anosDaApi(anoAtual(), api.anos);
@@ -663,9 +707,14 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
   const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
   const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
   const [atual, setAtual] = useState<LoteCenti | null>(null);
+  const [passos, setPassos] = useState<PassoLote[]>([]);
+  const [agora, setAgora] = useState<Agora | null>(null);
   const [rodando, setRodando] = useState(false);
+  const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const parar = useRef(false);
+  const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
+  const comPeriodo = usaPeriodo(api.parametros);
 
   const carregar = useCallback(async () => {
     try {
@@ -691,48 +740,62 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     return () => window.removeEventListener("beforeunload", aviso);
   }, [rodando, onOcupado]);
 
-  async function pagina(lote: number, n: number): Promise<RespostaPagina> {
-    let ultimo: unknown;
-    for (let t = 0; t <= ESPERA_TENTATIVAS.length; t++) {
+  const anotar = (p: PassoLote) => setPassos((l) => [...l, p]);
+
+  /** Um passo (o pedido de uma página), repetindo a falha de rede com espera. Devolve o resultado ou lança o erro final. */
+  async function passo(lote: LoteCenti, periodo: Periodo, pagina: number): Promise<RespostaPasso> {
+    for (let t = 0; ; t++) {
       if (parar.current) throw new Error("Interrompida.");
+      setAgora({ periodo, pagina, tentativa: t + 1 });
+      let r: RespostaPasso;
       try {
-        return await pedirImportacao<RespostaPagina>(api.id, { acao: "pagina", lote, pagina: n });
+        r = await pedirImportacao<RespostaPasso>(api.id, { acao: "pagina", lote: lote.id, inicio: periodo.inicio, fim: periodo.fim, pagina });
       } catch (e) {
-        ultimo = e;
-        if (t < ESPERA_TENTATIVAS.length) await new Promise((ok) => setTimeout(ok, ESPERA_TENTATIVAS[t]));
+        // Sem resposta do SISTEMA (rede, sessão) — o passo não chegou ao servidor: fica registrado só na tela.
+        const mensagem = `Sem resposta do sistema: ${e instanceof Error ? e.message : "falha de rede"}`;
+        anotar({ ...passoVazio(local.current--, periodo, pagina), estado: "erro", mensagem });
+        if (t >= ESPERA_TENTATIVAS.length) throw new Error(mensagem);
+        setAgora({ periodo, pagina, tentativa: t + 1, espera: ESPERA_TENTATIVAS[t] });
+        await esperar(ESPERA_TENTATIVAS[t]);
+        continue;
       }
+      anotar(r.passo);
+      setAtual(r.lote);
+      if (!r.erro || r.dividir) return r;
+      if (r.erro.tipo !== "rede" || t >= ESPERA_TENTATIVAS.length) throw new Error(r.erro.mensagem);
+      setAgora({ periodo, pagina, tentativa: t + 1, espera: ESPERA_TENTATIVAS[t] });
+      await esperar(ESPERA_TENTATIVAS[t]);
     }
-    throw ultimo instanceof Error ? ultimo : new Error("Falha ao ler a página.");
   }
 
   async function importar(retomar: LoteCenti | null) {
     parar.current = false;
     setRodando(true);
+    setPassos([]);
     let lote = retomar;
+    let onde = "";
     try {
       if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano })).lote;
       setAtual(lote);
-      let n = lote.paginas + 1;
-      for (;;) {
-        if (parar.current) {
-          await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, motivo: "Interrompida pelo administrador." });
-          toast.info("Importação interrompida — nada foi gravado nos empenhos.");
-          return;
-        }
-        let r: RespostaPagina;
-        try {
-          r = await pagina(lote.id, n);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Falha ao ler a página.";
-          if (parar.current) continue;
-          await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, falhou: true, motivo: `Página ${n}: ${msg}`.slice(0, 300) }).catch(() => {});
-          toast.error(`A importação falhou na página ${n}: ${msg} Nada foi gravado nos empenhos.`);
-          return;
-        }
+      const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
+      setPassos(anteriores);
+      // A FILA: o período começado (na próxima página) e o que falta do ano, mês a mês.
+      const emCurso = periodoEmCurso(anteriores);
+      const fila: { periodo: Periodo; pagina: number }[] = emCurso ? [emCurso] : [];
+      for (const p of periodosAPedir(lote.ano, [...periodosLidos(anteriores), ...(emCurso ? [emCurso.periodo] : [])], comPeriodo)) fila.push({ periodo: p, pagina: 1 });
+      for (let item = fila.shift(); item; item = fila.shift()) {
+        if (parar.current) break;
+        onde = `${rotuloPeriodo(item.periodo)}, página ${item.pagina}`;
+        const r = await passo(lote, item.periodo, item.pagina);
         lote = r.lote;
-        setAtual(lote);
-        if (!continuarLendo(lote, r.pagina)) break;
-        n++;
+        if (r.dividir) fila.unshift(...r.dividir.map((periodo) => ({ periodo, pagina: 1 })));
+        else if (r.continuar) fila.unshift({ periodo: item.periodo, pagina: item.pagina + 1 });
+      }
+      setAgora(null);
+      if (parar.current) {
+        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, motivo: "Interrompida pelo administrador." });
+        toast.info("Importação interrompida — nada foi gravado nos empenhos.");
+        return;
       }
       const fim = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "concluir", lote: lote.id })).lote;
       setAtual(fim);
@@ -742,7 +805,17 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
         toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha na importação.");
+      setAgora(null);
+      const msg = e instanceof Error ? e.message : "Falha na importação.";
+      if (lote && parar.current) {
+        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, motivo: "Interrompida pelo administrador." }).catch(() => {});
+        toast.info("Importação interrompida — nada foi gravado nos empenhos.");
+      } else if (lote) {
+        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, falhou: true, motivo: `${onde ? `${onde}: ` : ""}${msg}`.slice(0, 300) }).catch(() => {});
+        toast.error(`A importação falhou${onde ? ` em ${onde}` : ""}: ${msg} Nada foi gravado nos empenhos — veja os passos.`);
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setRodando(false);
       void carregar();
@@ -760,10 +833,10 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     void carregar();
   }
 
-  const progresso = atual?.totalInformado ? Math.min(100, ((atual.unicos + atual.recusados) / atual.totalInformado) * 100) : 0;
+  const erros = passos.filter((p) => p.estado === "erro").length;
   const colunas: Column<LoteCenti>[] = [
     { key: "quando", header: "Quando", nowrap: true, value: (l) => dataHoraBR(l.iniciadoEm), render: (l) => <span className="tabular-nums">{dataHoraBR(l.iniciadoEm)}</span> },
-    { key: "ano", header: "Ano", nowrap: true, value: (l) => String(l.ano), render: (l) => <span className="tabular-nums">{l.ano}</span> },
+    { key: "ano", header: "Ano", nowrap: true, total: false, value: (l) => String(l.ano), render: (l) => <span className="tabular-nums">{l.ano}</span> },
     {
       key: "estado",
       header: "Situação",
@@ -782,7 +855,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       value: (l) => `${l.unicos + l.recusados} de ${l.totalInformado ?? "?"}`,
       render: (l) => (
         <span className="tabular-nums">
-          {(l.unicos + l.recusados).toLocaleString("pt-BR")} de {l.totalInformado != null ? l.totalInformado.toLocaleString("pt-BR") : "?"}
+          {num(l.unicos + l.recusados)} de {l.totalInformado != null ? num(l.totalInformado) : "?"}
         </span>
       ),
     },
@@ -820,23 +893,35 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           )}
           <A titulo="Importar">
             <p>
-              Lê a API <strong>página a página</strong> com o cadastro salvo e guarda tudo num lote separado. Os empenhos só são
-              gravados quando a contagem <strong>confere</strong> com o total que a própria Centi informa.
+              Lê o ano <strong>mês a mês</strong> (o mês que vier grande demais é dividido ao meio), página a página, com o
+              cadastro salvo, e guarda tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque num
+              para ver o detalhe (o pedido enviado, a resposta, o tempo, o erro).
             </p>
             <p>
-              Faltou registro, a Centi falhou ou você interrompeu: o lote fica parcial e os empenhos continuam como estavam. O que
-              sumir da Centi é marcado como <strong>removido</strong> (nada é apagado).
+              Os empenhos só são gravados quando o ano inteiro foi lido e a contagem <strong>confere</strong> com o total que a
+              Centi informa em cada período. Faltou registro, a Centi falhou ou você interrompeu: o lote fica parcial e os
+              empenhos continuam como estavam. O que sumir da Centi é marcado como <strong>removido</strong> (nada é apagado).
             </p>
+            <p>Toque numa importação do histórico para ver os passos dela.</p>
           </A>
         </span>
       }
     >
       {alterado && <Callout kind="warn">Salve as alterações antes de importar — a importação usa o cadastro salvo.</Callout>}
+      {!comPeriodo && (
+        <Callout kind="warn">
+          Os parâmetros não usam <code>{"{inicio}"}</code> e <code>{"{fim}"}</code>: o ano só pode ser lido inteiro, e a Centi
+          pode recusar por ser grande demais.
+        </Callout>
+      )}
       {emAndamento && !rodando && (
         <Callout kind="warn">
           <span className="flex flex-wrap items-center justify-between gap-2">
-            Há uma importação de {emAndamento.ano} parada na página {emAndamento.paginas}.
+            Há uma importação de {emAndamento.ano} parada ({num(emAndamento.unicos)} registros lidos).
             <span className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setHistorico(emAndamento)}>
+                Ver passos
+              </Button>
               <Button size="sm" variant="secondary" onClick={() => void cancelarParada(emAndamento)}>
                 Cancelar
               </Button>
@@ -856,17 +941,197 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           ))}
         </SelectField>
       </div>
-      {rodando && atual && (
-        <Progress
-          value={progresso}
-          continuo={!atual.totalInformado}
-          label={`Página ${atual.paginas} · ${(atual.unicos + atual.recusados).toLocaleString("pt-BR")}${atual.totalInformado ? ` de ${atual.totalInformado.toLocaleString("pt-BR")}` : ""} registros`}
-        />
+      {(rodando || passos.length > 0) && atual && (
+        <div className="space-y-3">
+          {rodando && (
+            <Progress
+              value={fracaoDoAno(atual.ano, passos) * 100}
+              label={
+                agora
+                  ? `${rotuloPeriodo(agora.periodo)} · página ${agora.pagina}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ""}`
+                  : "Conferindo…"
+              }
+            />
+          )}
+          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+            <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
+            <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />
+            <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />
+            <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
+          </div>
+          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} />
+        </div>
       )}
       {lotes && lotes.length > 0 && (
-        <DataTable columns={colunas} rows={lotes} getKey={(l) => l.id} density="compact" exportar={{ nome: `Importações ${api.nome}` }} resumo={(l) => `${l.length} importaç${l.length === 1 ? "ão" : "ões"}`} />
+        <DataTable
+          columns={colunas}
+          rows={lotes}
+          getKey={(l) => l.id}
+          density="compact"
+          onRowClick={(l) => setHistorico(l)}
+          exportar={{ nome: `Importações ${api.nome}` }}
+          resumo={(l) => `${l.length} importaç${l.length === 1 ? "ão" : "ões"}`}
+        />
       )}
+      {historico && <PassosDoHistorico api={api} lote={historico} onClose={() => setHistorico(null)} />}
       {confirmacao}
     </SecaoBanner>
+  );
+}
+
+function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
+  return {
+    id,
+    inicio: periodo.inicio,
+    fim: periodo.fim,
+    pagina,
+    estado: "erro",
+    fimPeriodo: false,
+    status: null,
+    bytes: null,
+    ms: null,
+    recebidos: 0,
+    novos: 0,
+    recusados: 0,
+    repetidos: 0,
+    total: null,
+    mensagem: null,
+    corpo: null,
+    em: new Date().toISOString(),
+  };
+}
+
+/** Os PASSOS de um lote (o mais recente primeiro), com o detalhe de cada um ao tocar — ao vivo e no histórico. */
+function PassosDoLote({ passos, nome }: { passos: PassoLote[]; nome: string }) {
+  const [aberto, setAberto] = useState<PassoLote | null>(null);
+  const linhas = useMemo(() => [...passos].reverse(), [passos]);
+  const colunas: Column<PassoLote>[] = [
+    { key: "em", header: "Hora", nowrap: true, value: (p) => dataHoraBR(p.em), render: (p) => <span className="tabular-nums">{dataHoraBR(p.em).slice(11)}</span> },
+    { key: "periodo", header: "Período", nowrap: true, value: (p) => rotuloPeriodo(p), render: (p) => rotuloPeriodo(p) },
+    { key: "pagina", header: "Página", nowrap: true, total: false, value: (p) => String(p.pagina), render: (p) => <span className="tabular-nums">{p.pagina}</span> },
+    {
+      key: "estado",
+      header: "Situação",
+      nowrap: true,
+      value: (p) => ROTULO_ESTADO_PASSO[p.estado].rotulo,
+      render: (p) => (
+        <Badge tone={ROTULO_ESTADO_PASSO[p.estado].tom} dot>
+          {ROTULO_ESTADO_PASSO[p.estado].rotulo}
+        </Badge>
+      ),
+    },
+    { key: "recebidos", header: "Registros", nowrap: true, value: (p) => String(p.recebidos), render: (p) => <span className="tabular-nums">{num(p.recebidos)}</span> },
+    { key: "novos", header: "Novos", nowrap: true, value: (p) => String(p.novos), render: (p) => <span className="tabular-nums">{num(p.novos)}</span> },
+    { key: "total", header: "Total do período", nowrap: true, total: false, value: (p) => num(p.total), render: (p) => <span className="tabular-nums">{num(p.total)}</span> },
+    { key: "bytes", header: "Tamanho", nowrap: true, total: false, value: (p) => (p.bytes ? formatBytes(p.bytes) : "—"), render: (p) => <span className="tabular-nums">{p.bytes ? formatBytes(p.bytes) : "—"}</span> },
+    { key: "ms", header: "Tempo", nowrap: true, total: false, value: (p) => tempo(p.ms), render: (p) => <span className="tabular-nums">{tempo(p.ms)}</span> },
+    {
+      key: "mensagem",
+      header: "Detalhe",
+      align: "left",
+      minWidth: 220,
+      value: (p) => p.mensagem ?? "",
+      render: (p) => (p.mensagem ? <CelulaTexto texto={p.mensagem} /> : <span className="text-muted">{p.fimPeriodo ? "Fim do período" : "—"}</span>),
+    },
+  ];
+  return (
+    <>
+      <DataTable
+        columns={colunas}
+        rows={linhas}
+        getKey={(p) => p.id}
+        density="compact"
+        onRowClick={setAberto}
+        exportar={{ nome }}
+        vazio="Nenhum pedido feito ainda."
+        resumo={(l) => `${l.length} passo${l.length === 1 ? "" : "s"} · ${l.filter((p) => p.estado === "erro").length} com erro`}
+      />
+      {aberto && <DetalhePasso passo={aberto} onClose={() => setAberto(null)} />}
+    </>
+  );
+}
+
+/** O DETALHE de um passo: o resultado ou o erro inteiro, os números e o pedido enviado à Centi. */
+function DetalhePasso({ passo: p, onClose }: { passo: PassoLote; onClose: () => void }) {
+  const campos: [string, ReactNode][] = [
+    ["Período", `${diaBR(p.inicio)} a ${diaBR(p.fim)}`],
+    ["Página", p.pagina],
+    ["Quando", dataHoraBR(p.em)],
+    ["Resposta (HTTP)", p.status ?? "—"],
+    ["Tamanho", p.bytes ? formatBytes(p.bytes) : "—"],
+    ["Tempo", tempo(p.ms)],
+    ["Registros recebidos", num(p.recebidos)],
+    ["Novos no lote", num(p.novos)],
+    ["Recusados (sem número)", num(p.recusados)],
+    ["Repetidos no pedido", num(p.repetidos)],
+    ["Total do período (Centi)", num(p.total)],
+    ["Fim do período", p.estado === "ok" ? (p.fimPeriodo ? "Sim" : "Não — há mais páginas") : "—"],
+  ];
+  return (
+    <Modal open onClose={onClose} size="lg" titulo={`${rotuloPeriodo(p)} · página ${p.pagina}`}>
+      <div className="space-y-[var(--gap-block)]">
+        <SecaoBanner
+          titulo="Resultado"
+          acao={
+            <Badge tone={ROTULO_ESTADO_PASSO[p.estado].tom} dot>
+              {ROTULO_ESTADO_PASSO[p.estado].rotulo}
+            </Badge>
+          }
+        >
+          {p.mensagem && <Callout kind={p.estado === "erro" ? "danger" : "warn"}>{p.mensagem}</Callout>}
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {campos.map(([rotulo, valor]) => (
+              <div key={rotulo}>
+                <dt className="text-[12px] text-muted">{rotulo}</dt>
+                <ValorCampo>
+                  <span className="tabular-nums">{valor}</span>
+                </ValorCampo>
+              </div>
+            ))}
+          </dl>
+        </SecaoBanner>
+        <SecaoBanner titulo="Pedido enviado à Centi" acao={p.corpo ? <BotaoCopiar texto={p.corpo} rotulo="Copiar" /> : undefined}>
+          {p.corpo ? (
+            <pre className="whitespace-pre-wrap break-all rounded-control bg-surface-2 p-3 font-mono text-[12px] text-muted">{JSON.stringify(JSON.parse(p.corpo), null, 2)}</pre>
+          ) : (
+            <p className="text-[12.5px] text-muted">O pedido não chegou ao servidor do sistema (falha de rede ou de sessão).</p>
+          )}
+        </SecaoBanner>
+      </div>
+    </Modal>
+  );
+}
+
+/** Os passos de uma importação do HISTÓRICO (carregados ao abrir). */
+function PassosDoHistorico({ api, lote, onClose }: { api: ApiCenti; lote: LoteCenti; onClose: () => void }) {
+  const [passos, setPassos] = useState<PassoLote[] | null>(null);
+  const [falha, setFalha] = useState<string | null>(null);
+  const carregar = useCallback(() => {
+    setFalha(null);
+    lerPassos(api.id, lote.id)
+      .then(setPassos)
+      .catch((e) => setFalha(e instanceof Error ? e.message : "Falha ao carregar."));
+  }, [api.id, lote.id]);
+  useEffect(carregar, [carregar]);
+  const est = ROTULO_ESTADO_LOTE[lote.estado];
+  return (
+    <Modal open onClose={onClose} size="xl" titulo={`Importação de ${lote.ano} — ${dataHoraBR(lote.iniciadoEm)}`}>
+      <div className="space-y-[var(--gap-block)]">
+        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+          <StatMini label="Situação" value={est?.rotulo ?? lote.estado} />
+          <StatMini label="Conferência" value={`${num(lote.unicos + lote.recusados)} de ${lote.totalInformado != null ? num(lote.totalInformado) : "?"}`} />
+          <StatMini label="Páginas lidas" value={num(lote.paginas)} />
+          <StatMini label="Erros" value={passos ? num(passos.filter((p) => p.estado === "erro").length) : "…"} />
+        </div>
+        {lote.mensagem && <Callout kind={lote.estado === "falhou" ? "danger" : "warn"}>{lote.mensagem}</Callout>}
+        {falha ? (
+          <ErroCarga msg={falha} onTentar={carregar} />
+        ) : passos ? (
+          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${lote.ano}`} />
+        ) : (
+          <SkeletonLinhas />
+        )}
+      </div>
+    </Modal>
   );
 }

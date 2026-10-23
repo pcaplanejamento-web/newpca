@@ -34,7 +34,13 @@ export const testarCentiApiSchema = z.strictObject({
  * (conferir e promover) ou cancelar. */
 export const importarCentiApiSchema = z.discriminatedUnion("acao", [
   z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100) }),
-  z.strictObject({ acao: z.literal("pagina"), lote: z.number().int().positive(), pagina: z.number().int().min(1).max(500) }),
+  z.strictObject({
+    acao: z.literal("pagina"),
+    lote: z.number().int().positive(),
+    inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    pagina: z.number().int().min(1).max(500),
+  }),
   z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive() }),
   z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
 ]);

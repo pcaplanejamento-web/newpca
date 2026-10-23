@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { centiLotes } from "@/db/schema";
+import { centiLotePassos, centiLotes } from "@/db/schema";
 import { getDb } from "./db";
-import { type EstadoLote, type LoteCenti, MINUTOS_LOTE_PARADO } from "./empenhos-core";
+import { type EstadoLote, type EstadoPasso, type LoteCenti, MINUTOS_LOTE_PARADO, type PassoLote } from "./empenhos-core";
 
 /** Os LOTES de importação das APIs da Centi (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
@@ -43,4 +43,15 @@ export async function loteEmAndamento(apiChave: string): Promise<LoteCenti | nul
 export async function criarLote(apiChave: string, ano: number, quem: string): Promise<LoteCenti> {
   const [l] = await getDb().insert(centiLotes).values({ apiChave, ano, iniciadoPor: quem }).returning();
   return paraLote(l);
+}
+
+/** Os PASSOS de um lote (na ordem em que aconteceram) — a tela ao vivo, a retomada e o detalhe do histórico. */
+export async function listarPassos(loteId: number, limite = 3000): Promise<PassoLote[]> {
+  const l = await getDb().select().from(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)).orderBy(centiLotePassos.id).limit(limite);
+  return l.map(paraPasso);
+}
+
+/** A linha do banco → o passo da tela (o estado tipado, o fim do período booleano). */
+export function paraPasso({ loteId: _, estado, fimPeriodo, ...resto }: typeof centiLotePassos.$inferSelect): PassoLote {
+  return { ...resto, estado: estado as EstadoPasso, fimPeriodo: fimPeriodo === 1 };
 }

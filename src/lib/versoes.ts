@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.184.0",
+    data: "2026-10-23",
+    titulo: "Importação dos empenhos acompanhada ao vivo, mês a mês",
+    mudancas: [
+      { tipo: "correcao", area: "Integrações", texto: "A importação não para mais em “A API da Centi é grande demais”: o ano é lido mês a mês e o mês que vier grande demais é dividido ao meio, até um dia. A conferência soma o total que a Centi informa em cada período; o Testar lê janeiro.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "novo", area: "Integrações", texto: "Cada pedido à Centi aparece na hora em Passos — período, página, registros, novos, total do período, tamanho, tempo e o erro. Tocar num passo mostra o detalhe completo, inclusive o pedido enviado.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "novo", area: "Integrações", texto: "Toque numa importação do histórico para ver os passos dela; a importação parada mostra “Ver passos” e continua de onde parou.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.183.1",
     data: "2026-10-23",
     titulo: "Termo de Uso: leitura mais rápida e exclusão sem rastros",

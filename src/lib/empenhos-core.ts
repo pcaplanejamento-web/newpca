@@ -7,6 +7,7 @@
  */
 import { lerParametros, montarCorpo, registrosDaResposta } from "./centi-apis-core.ts";
 import { parseValorPlanilha } from "./parse-orcamento-comum.ts";
+import { MESES_PERIODO } from "./periodo.ts";
 
 /** Teto de páginas de um lote (proteção: uma API que repete a mesma página nunca prende o lote). */
 export const MAX_PAGINAS = 500;
@@ -145,23 +146,175 @@ export function lerPaginaEmpenhos(textoResposta: string, ano: number): PaginaLid
   return { recebidos: regs.length, linhas, recusados, repetidos, total };
 }
 
-/** O corpo do pedido de uma página: os parâmetros com o ano e, a partir da 2ª página, a `pagina` (a 1ª vai sem ela —
- * como a Centi espera). Os parâmetros com o marcador {pagina} recebem o número em todas. */
-export function corpoDaPagina(parametros: string, ano: number, pagina: number): unknown {
+/**
+ * O PERÍODO de um pedido (datas AAAA-MM-DD, inclusive). A Centi devolve o ano inteiro de uma vez — grande demais para
+ * uma resposta (mais de 12 MB) —, então o ano é lido MÊS A MÊS (como o Dattago) e o mês ainda grande demais é dividido
+ * ao meio, até um dia. Cada período tem o PRÓPRIO total informado pela Centi; a conferência soma os totais.
+ */
+export type Periodo = { inicio: string; fim: string };
+
+const DIA_MS = 86_400_000;
+const paraMs = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
+const paraIso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const diaSeguinte = (iso: string) => paraIso(paraMs(iso) + DIA_MS);
+
+/** AAAA-MM-DD → dd/mm/aaaa (o formato que a Centi espera). */
+export function diaBR(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+}
+
+export function anoInteiro(ano: number): Periodo {
+  return { inicio: `${ano}-01-01`, fim: `${ano}-12-31` };
+}
+
+/** Os parâmetros usam o período ({inicio} e {fim})? Sem eles, o ano só pode ser lido inteiro. */
+export function usaPeriodo(parametros: string): boolean {
+  return parametros.includes("{inicio}") && parametros.includes("{fim}");
+}
+
+/** Os dias do período (inclusive). */
+export function diasDoPeriodo(p: Periodo): number {
+  return Math.round((paraMs(p.fim) - paraMs(p.inicio)) / DIA_MS) + 1;
+}
+
+/** Corta um intervalo nas viradas de mês. */
+function emMeses(p: Periodo): Periodo[] {
+  const r: Periodo[] = [];
+  let ini = p.inicio;
+  while (ini <= p.fim) {
+    const d = new Date(paraMs(ini));
+    const ultimo = paraIso(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    const fim = ultimo < p.fim ? ultimo : p.fim;
+    r.push({ inicio: ini, fim });
+    ini = diaSeguinte(fim);
+  }
+  return r;
+}
+
+/** O que falta ler do ano: as LACUNAS entre os períodos já lidos, na ordem. */
+export function lacunasDoAno(ano: number, lidos: Periodo[]): Periodo[] {
+  const ano0 = anoInteiro(ano);
+  const r: Periodo[] = [];
+  let cursor = ano0.inicio;
+  for (const p of [...lidos].sort((a, b) => a.inicio.localeCompare(b.inicio))) {
+    if (p.inicio > cursor) r.push({ inicio: cursor, fim: paraIso(paraMs(p.inicio) - DIA_MS) });
+    const depois = diaSeguinte(p.fim);
+    if (depois > cursor) cursor = depois;
+  }
+  if (cursor <= ano0.fim) r.push({ inicio: cursor, fim: ano0.fim });
+  return r;
+}
+
+/** Os períodos a pedir: o que falta do ano, mês a mês (sem o {inicio}/{fim}, o ano inteiro de uma vez). */
+export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean): Periodo[] {
+  if (!comPeriodo) return lidos.length ? [] : [anoInteiro(ano)];
+  return lacunasDoAno(ano, lidos).flatMap(emMeses);
+}
+
+/** Divide o período ao meio (o de um dia não se divide). */
+export function dividirPeriodo(p: Periodo): [Periodo, Periodo] | null {
+  const dias = diasDoPeriodo(p);
+  if (dias < 2) return null;
+  const meio = paraIso(paraMs(p.inicio) + (Math.ceil(dias / 2) - 1) * DIA_MS);
+  return [
+    { inicio: p.inicio, fim: meio },
+    { inicio: diaSeguinte(meio), fim: p.fim },
+  ];
+}
+
+/** "Mai/2026" (o mês inteiro), "05/05/2026" (um dia), "01/05 a 15/05/2026" (outro intervalo), "2026 inteiro". */
+export function rotuloPeriodo(p: Periodo): string {
+  const ano = p.inicio.slice(0, 4);
+  if (p.inicio === `${ano}-01-01` && p.fim === `${ano}-12-31`) return `${ano} inteiro`;
+  if (p.inicio === p.fim) return diaBR(p.inicio);
+  if (p.inicio.endsWith("-01") && p.inicio.slice(0, 7) === p.fim.slice(0, 7) && diaSeguinte(p.fim).endsWith("-01")) {
+    return `${MESES_PERIODO[Number(p.inicio.slice(5, 7)) - 1]}/${ano}`;
+  }
+  return `${diaBR(p.inicio).slice(0, 5)} a ${diaBR(p.fim)}`;
+}
+
+/** O corpo do pedido de uma página: os parâmetros com o ano e o período e, a partir da 2ª página, a `pagina` (a 1ª vai
+ * sem ela — como a Centi espera). Os parâmetros com o marcador {pagina} recebem o número em todas. */
+export function corpoDaPagina(parametros: string, ano: number, pagina: number, periodo: Periodo = anoInteiro(ano)): unknown {
   const p = lerParametros(parametros);
   if (!p.ok) throw new Error(p.motivo);
-  const corpo = montarCorpo(p.valor, { ano, pagina }) as Record<string, unknown>;
+  const corpo = montarCorpo(p.valor, { ano, pagina, inicio: diaBR(periodo.inicio), fim: diaBR(periodo.fim) }) as Record<string, unknown>;
   if (pagina > 1 && !parametros.includes("{pagina}")) return { ...corpo, pagina };
   return corpo;
 }
 
+/** O total do PERÍODO informado pela página (o período sem nenhum registro tem total 0 — a Centi não manda o campo). */
+export function totalDoPeriodo(p: PaginaLida, pagina: number): number | null {
+  if (p.total != null) return p.total;
+  return pagina === 1 && p.recebidos === 0 ? 0 : null;
+}
+
 export type SituacaoLote = { recebidos: number; unicos: number; recusados: number; totalInformado: number | null; paginas: number };
 
-/** Ler mais uma página? Para quando chegou ao total informado, quando a página veio vazia ou sem nada novo, ou no teto. */
-export function continuarLendo(s: SituacaoLote, ultima: { recebidos: number; novos: number }): boolean {
-  if (ultima.recebidos === 0 || ultima.novos === 0) return false;
-  if (s.paginas >= MAX_PAGINAS) return false;
-  return s.totalInformado == null || s.recebidos < s.totalInformado;
+/** Ler mais uma página do PERÍODO? Para quando chegou ao total dele, quando a página veio vazia (ou, sem o total, sem
+ * nada novo) ou no teto. `recebidos`/`paginas` = o que o período já leu, contando esta página. */
+export function continuarPeriodo(s: { recebidos: number; paginas: number; total: number | null }, ultima: { recebidos: number; novos: number }): boolean {
+  if (ultima.recebidos === 0 || s.paginas >= MAX_PAGINAS) return false;
+  if (s.total == null) return ultima.novos > 0;
+  return s.recebidos < s.total;
+}
+
+/** Que tipo de erro: `grande` = dividir o período · `resposta` = a Centi respondeu algo que não é a lista (não adianta
+ * repetir) · `rede` = repetir com espera (tempo esgotado, a Centi fora, 5xx). */
+export type TipoErro = "grande" | "resposta" | "rede";
+export function tipoDoErro(mensagem: string): TipoErro {
+  if (/grande demais/i.test(mensagem)) return "grande";
+  if (/não é JSON|lista de registros|respondeu 4\d\d/i.test(mensagem)) return "resposta";
+  return "rede";
+}
+
+/** Um PASSO do lote (um pedido à Centi) — o que a tela mostra ao vivo e o histórico guarda. */
+export type EstadoPasso = "ok" | "erro" | "dividido";
+export type PassoLote = {
+  id: number;
+  inicio: string;
+  fim: string;
+  pagina: number;
+  estado: EstadoPasso;
+  fimPeriodo: boolean;
+  status: number | null;
+  bytes: number | null;
+  ms: number | null;
+  recebidos: number;
+  novos: number;
+  recusados: number;
+  repetidos: number;
+  total: number | null;
+  mensagem: string | null;
+  corpo: string | null;
+  em: string;
+};
+
+export const ROTULO_ESTADO_PASSO: Record<EstadoPasso, { rotulo: string; tom: "emerald" | "red" | "amber" }> = {
+  ok: { rotulo: "Lida", tom: "emerald" },
+  erro: { rotulo: "Erro", tom: "red" },
+  dividido: { rotulo: "Dividida", tom: "amber" },
+};
+
+type PassoMin = Pick<PassoLote, "inicio" | "fim" | "estado" | "fimPeriodo" | "pagina">;
+
+/** Os períodos CONCLUÍDOS (a última página lida marcou o fim do período) — o que a retomada e a conferência usam. */
+export function periodosLidos(passos: PassoMin[]): Periodo[] {
+  const vistos = new Map<string, Periodo>();
+  for (const p of passos) if (p.estado === "ok" && p.fimPeriodo) vistos.set(`${p.inicio}|${p.fim}`, { inicio: p.inicio, fim: p.fim });
+  return [...vistos.values()];
+}
+
+/** Onde retomar: o período começado e não concluído (e a próxima página), se houver. */
+export function periodoEmCurso(passos: PassoMin[]): { periodo: Periodo; pagina: number } | null {
+  const feitos = new Set(periodosLidos(passos).map((p) => `${p.inicio}|${p.fim}`));
+  let em: { periodo: Periodo; pagina: number } | null = null;
+  for (const p of passos) {
+    if (p.estado !== "ok" || feitos.has(`${p.inicio}|${p.fim}`)) continue;
+    const mesmo = em && em.periodo.inicio === p.inicio && em.periodo.fim === p.fim;
+    if (!mesmo || p.pagina + 1 > (em?.pagina ?? 0)) em = { periodo: { inicio: p.inicio, fim: p.fim }, pagina: p.pagina + 1 };
+  }
+  return em;
 }
 
 /**

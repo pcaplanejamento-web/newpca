@@ -2165,6 +2165,34 @@ export const centiLotes = sqliteTable(
   (t) => [index("centi_lotes_api_ano_idx").on(t.apiChave, t.ano, t.id)],
 );
 
+/** Os PASSOS de um lote (migração `0132`): cada pedido à Centi — período + página — com o resultado ou o erro. */
+export const centiLotePassos = sqliteTable(
+  "centi_lote_passos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    loteId: integer("lote_id")
+      .notNull()
+      .references(() => centiLotes.id, { onDelete: "cascade" }),
+    inicio: text("inicio").notNull(),
+    fim: text("fim").notNull(),
+    pagina: integer("pagina").notNull(),
+    estado: text("estado").notNull(),
+    fimPeriodo: integer("fim_periodo").notNull().default(0),
+    status: integer("status"),
+    bytes: integer("bytes"),
+    ms: integer("ms"),
+    recebidos: integer("recebidos").notNull().default(0),
+    novos: integer("novos").notNull().default(0),
+    recusados: integer("recusados").notNull().default(0),
+    repetidos: integer("repetidos").notNull().default(0),
+    total: integer("total"),
+    mensagem: text("mensagem"),
+    corpo: text("corpo"),
+    em: text("em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
+);
+
 /** As colunas de um empenho (as MESMAS no staging e na tabela final — ver `empenhos-core.ts`). */
 const colunasEmpenho = () => ({
   chave: text("chave").notNull(),

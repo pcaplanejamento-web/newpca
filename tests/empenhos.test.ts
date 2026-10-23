@@ -6,16 +6,37 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import {
   chaveEmpenho,
+  anoInteiro,
   conferirLote,
-  continuarLendo,
+  continuarPeriodo,
   corpoDaPagina,
   dataIso,
   lerPaginaEmpenhos,
   linhaEmpenho,
+  dividirPeriodo,
+  lacunasDoAno,
   MAX_PAGINAS,
+  type Periodo,
+  periodoEmCurso,
+  periodosAPedir,
+  periodosLidos,
+  rotuloPeriodo,
+  tipoDoErro,
+  totalDoPeriodo,
+  usaPeriodo,
   valor,
 } from "../src/lib/empenhos-core.ts";
-import { comandoContarPagina, comandoGuardarPagina, comandosFecharLote, comandosPromover, contagemDaPromocao } from "../src/lib/empenhos-sql.ts";
+import {
+  comandoDividirPeriodo,
+  comandoGuardarPagina,
+  comandoRecontarLote,
+  comandoRegistrarPasso,
+  comandosFecharLote,
+  comandosPromover,
+  contagemDaPromocao,
+  jaNoLote,
+  lidoNoPeriodo,
+} from "../src/lib/empenhos-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 const reg = (numero: string, extra: Record<string, unknown> = {}) => ({ Numero: numero, OrgaoGestor: "PREFEITURA", ValorEmpenhado: 100, ...extra });
@@ -23,16 +44,34 @@ const reg = (numero: string, extra: Record<string, unknown> = {}) => ({ Numero: 
 function banco() {
   const raw = new DatabaseSync(":memory:");
   raw.exec("PRAGMA foreign_keys = ON");
-  raw.exec(readFileSync(new URL("../drizzle/0131_empenhos.sql", import.meta.url), "utf8"));
+  for (const m of ["0129_centi_apis", "0130_centi_apis_escopo", "0131_empenhos", "0132_centi_lote_passos"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const novoLote = (ano = 2026) => Number(raw.prepare("INSERT INTO centi_lotes (api_chave, ano) VALUES ('empenhos', ?) RETURNING id").get(ano)?.id);
   return { raw, db, novoLote };
 }
 
-async function guardar(b: ReturnType<typeof banco>, lote: number, pagina: number, regs: Record<string, unknown>[], total: number | null = null) {
+/** Uma página lida como a rota faz: o passo + o staging + a recontagem, num lote. */
+async function guardar(b: ReturnType<typeof banco>, lote: number, pagina: number, regs: Record<string, unknown>[], total: number | null = null, periodo: Periodo = anoInteiro(2026), fimPeriodo = true) {
   const p = lerPaginaEmpenhos(JSON.stringify(regs.map((r, i) => (i === 0 && total != null ? { ...r, TotalRegistros: total } : r))), 2026);
-  await b.db.batch([comandoGuardarPagina(b.db, lote, pagina, p.linhas), comandoContarPagina(b.db, lote, pagina, p.recebidos, p.recusados, p.total)]);
-  return p;
+  const novos = p.linhas.length - (await jaNoLote(b.db, lote, p.linhas.map((l) => l.chave)));
+  const passo = {
+    ...periodo,
+    pagina,
+    estado: "ok" as const,
+    fimPeriodo,
+    status: 200,
+    bytes: 10,
+    ms: 5,
+    recebidos: p.recebidos,
+    novos,
+    recusados: p.recusados,
+    repetidos: p.repetidos,
+    total: totalDoPeriodo(p, pagina),
+    mensagem: null,
+    corpo: "{}",
+  };
+  await b.db.batch([comandoRegistrarPasso(b.db, lote, passo), comandoGuardarPagina(b.db, lote, pagina, p.linhas), comandoRecontarLote(b.db, lote)]);
+  return { ...p, novos };
 }
 
 test("empenhos: valores, datas e a chave (a MESMA da tabela)", () => {
@@ -73,21 +112,81 @@ test("empenhos: leitura da página — total, recusados e repetidos contados; re
   assert.throws(() => lerPaginaEmpenhos('{"x":1}', 2026), /lista de registros/);
 });
 
-test("empenhos: o corpo de cada página (a 1ª sem `pagina`, como a Centi espera)", () => {
-  const params = '{"dataInicio":"01/01/{ano}","dataFim":"31/12/{ano}"}';
+test("empenhos: o corpo de cada página (a 1ª sem `pagina`) e o PERÍODO nos marcadores", () => {
+  const params = '{"dataInicio":"{inicio}","dataFim":"{fim}"}';
   assert.deepEqual(corpoDaPagina(params, 2026, 1), { dataInicio: "01/01/2026", dataFim: "31/12/2026" });
-  assert.deepEqual(corpoDaPagina(params, 2026, 3), { dataInicio: "01/01/2026", dataFim: "31/12/2026", pagina: 3 });
+  assert.deepEqual(corpoDaPagina(params, 2026, 3, { inicio: "2026-05-01", fim: "2026-05-31" }), { dataInicio: "01/05/2026", dataFim: "31/05/2026", pagina: 3 });
+  assert.deepEqual(corpoDaPagina('{"dataInicio":"01/01/{ano}","dataFim":"31/12/{ano}"}', 2026, 1), { dataInicio: "01/01/2026", dataFim: "31/12/2026" }, "o formato antigo continua valendo");
   assert.deepEqual(corpoDaPagina('{"p":"{pagina}","a":"{ano}"}', 2025, 1), { p: 1, a: 2025 });
   assert.throws(() => corpoDaPagina("{", 2026, 1), /JSON/);
+  assert.equal(usaPeriodo(params), true);
+  assert.equal(usaPeriodo('{"ano":"{ano}"}'), false);
 });
 
-test("empenhos: quando continuar e a CONFERÊNCIA (falha no meio ou página repetida nunca é 'completo')", () => {
+test("empenhos: o ano MÊS A MÊS, o mês grande dividido ao meio até um dia, e o que falta ler", () => {
+  const meses = periodosAPedir(2026, [], true);
+  assert.equal(meses.length, 12);
+  assert.deepEqual(meses[1], { inicio: "2026-02-01", fim: "2026-02-28" });
+  assert.deepEqual(periodosAPedir(2028, [], true)[1], { inicio: "2028-02-01", fim: "2028-02-29" }, "bissexto");
+  assert.deepEqual(periodosAPedir(2026, [], false), [anoInteiro(2026)]);
+  assert.deepEqual(periodosAPedir(2026, [anoInteiro(2026)], false), []);
+  assert.deepEqual(dividirPeriodo({ inicio: "2026-05-01", fim: "2026-05-31" }), [
+    { inicio: "2026-05-01", fim: "2026-05-16" },
+    { inicio: "2026-05-17", fim: "2026-05-31" },
+  ]);
+  assert.deepEqual(dividirPeriodo({ inicio: "2026-05-30", fim: "2026-05-31" }), [
+    { inicio: "2026-05-30", fim: "2026-05-30" },
+    { inicio: "2026-05-31", fim: "2026-05-31" },
+  ]);
+  assert.equal(dividirPeriodo({ inicio: "2026-05-31", fim: "2026-05-31" }), null);
+  // Lidos: jan inteiro, a 1ª metade de maio → faltam fev–abr, 17–31/05 e jun–dez (cortados nos meses).
+  const lidos = [
+    { inicio: "2026-01-01", fim: "2026-01-31" },
+    { inicio: "2026-05-01", fim: "2026-05-16" },
+  ];
+  assert.deepEqual(lacunasDoAno(2026, lidos), [
+    { inicio: "2026-02-01", fim: "2026-04-30" },
+    { inicio: "2026-05-17", fim: "2026-12-31" },
+  ]);
+  const falta = periodosAPedir(2026, lidos, true);
+  assert.equal(falta.length, 3 + 1 + 7);
+  assert.deepEqual(falta[3], { inicio: "2026-05-17", fim: "2026-05-31" });
+  assert.deepEqual(lacunasDoAno(2026, meses), []);
+  assert.equal(rotuloPeriodo({ inicio: "2026-05-01", fim: "2026-05-31" }), "Mai/2026");
+  assert.equal(rotuloPeriodo({ inicio: "2026-05-17", fim: "2026-05-31" }), "17/05 a 31/05/2026");
+  assert.equal(rotuloPeriodo({ inicio: "2026-05-17", fim: "2026-05-17" }), "17/05/2026");
+  assert.equal(rotuloPeriodo(anoInteiro(2026)), "2026 inteiro");
+  assert.equal(tipoDoErro("A API da Centi é grande demais (máx. 12 MB)."), "grande");
+  assert.equal(tipoDoErro("A resposta da Centi não é JSON."), "resposta");
+  assert.equal(tipoDoErro("A API da Centi respondeu 400."), "resposta");
+  assert.equal(tipoDoErro("A API da Centi respondeu 503."), "rede");
+  assert.equal(tipoDoErro("The operation was aborted due to timeout"), "rede");
+});
+
+test("empenhos: a retomada — períodos concluídos, o em curso na próxima página, os divididos não contam", () => {
+  const passo = (inicio: string, fim: string, pagina: number, estado: "ok" | "erro" | "dividido", fimPeriodo = false) => ({ inicio, fim, pagina, estado, fimPeriodo });
+  const passos = [
+    passo("2026-01-01", "2026-01-31", 1, "ok", true),
+    passo("2026-02-01", "2026-02-28", 1, "dividido"),
+    passo("2026-02-01", "2026-02-14", 1, "ok"),
+    passo("2026-02-01", "2026-02-14", 2, "erro"),
+    passo("2026-02-01", "2026-02-14", 2, "ok"),
+  ];
+  assert.deepEqual(periodosLidos(passos), [{ inicio: "2026-01-01", fim: "2026-01-31" }]);
+  assert.deepEqual(periodoEmCurso(passos), { periodo: { inicio: "2026-02-01", fim: "2026-02-14" }, pagina: 3 });
+  assert.equal(periodoEmCurso(passos.slice(0, 1)), null);
+});
+
+test("empenhos: quando continuar no período e a CONFERÊNCIA (falha no meio ou página repetida nunca é 'completo')", () => {
   const sit = (recebidos: number, unicos: number, totalInformado: number | null, paginas = 1, recusados = 0) => ({ recebidos, unicos, recusados, totalInformado, paginas });
-  assert.equal(continuarLendo(sit(100, 100, 300), { recebidos: 100, novos: 100 }), true);
-  assert.equal(continuarLendo(sit(300, 300, 300, 3), { recebidos: 100, novos: 100 }), false);
-  assert.equal(continuarLendo(sit(100, 100, 300, 2), { recebidos: 0, novos: 0 }), false);
-  assert.equal(continuarLendo(sit(200, 100, null, 2), { recebidos: 100, novos: 0 }), false);
-  assert.equal(continuarLendo(sit(10, 10, 9999, MAX_PAGINAS), { recebidos: 10, novos: 10 }), false);
+  assert.equal(continuarPeriodo({ recebidos: 100, paginas: 1, total: 300 }, { recebidos: 100, novos: 100 }), true);
+  assert.equal(continuarPeriodo({ recebidos: 300, paginas: 3, total: 300 }, { recebidos: 100, novos: 100 }), false);
+  assert.equal(continuarPeriodo({ recebidos: 100, paginas: 2, total: 300 }, { recebidos: 0, novos: 0 }), false);
+  assert.equal(continuarPeriodo({ recebidos: 200, paginas: 2, total: null }, { recebidos: 100, novos: 0 }), false);
+  assert.equal(continuarPeriodo({ recebidos: 200, paginas: 2, total: 900 }, { recebidos: 100, novos: 0 }), true, "com o total, uma página já vista (depois de dividir) não para o período");
+  assert.equal(continuarPeriodo({ recebidos: 10, paginas: MAX_PAGINAS, total: 9999 }, { recebidos: 10, novos: 10 }), false);
+  assert.equal(totalDoPeriodo(lerPaginaEmpenhos("[]", 2026), 1), 0, "o período vazio tem total 0");
+  assert.equal(totalDoPeriodo(lerPaginaEmpenhos("[]", 2026), 2), null);
   assert.deepEqual(conferirLote(sit(300, 300, 300, 3)), { completo: true });
   assert.deepEqual(conferirLote(sit(300, 298, 300, 3, 2)), { completo: true }, "os recusados (sem número) também contam no total da Centi");
   const repetida = conferirLote(sit(300, 200, 300, 3));
@@ -95,6 +194,47 @@ test("empenhos: quando continuar e a CONFERÊNCIA (falha no meio ou página repe
   assert.match((repetida as { motivo: string }).motivo, /200 distintos de 300 .*100 vieram repetidos/);
   assert.match((conferirLote(sit(200, 200, 300, 2)) as { motivo: string }).motivo, /200 distintos de 300/);
   assert.match((conferirLote(sit(200, 200, null, 2)) as { motivo: string }).motivo, /não informou/);
+});
+
+test("empenhos (D1 real): o TOTAL soma os períodos; o período dividido sai da conta e a releitura não duplica", async () => {
+  const b = banco();
+  const lote = b.novoLote();
+  const jan = { inicio: "2026-01-01", fim: "2026-01-31" };
+  const fev = { inicio: "2026-02-01", fim: "2026-02-28" };
+  await guardar(b, lote, 1, [reg("1"), reg("2")], 2, jan);
+  // Fevereiro: a 1ª página com recusado, e o mês é DIVIDIDO (grande demais na 2ª).
+  await guardar(b, lote, 1, [reg("3"), reg("")], 5, fev, false);
+  let l = b.raw.prepare("SELECT * FROM centi_lotes WHERE id = ?").get(lote) as Record<string, number>;
+  assert.equal(l.total_informado, 7);
+  assert.equal(l.recusados, 1);
+  await b.db.batch([comandoDividirPeriodo(b.db, lote, fev), comandoRecontarLote(b.db, lote)]);
+  l = b.raw.prepare("SELECT * FROM centi_lotes WHERE id = ?").get(lote) as Record<string, number>;
+  assert.equal(l.total_informado, 2, "o fevereiro inteiro deixou de contar");
+  assert.equal(l.recusados, 0);
+  assert.equal(l.paginas, 1);
+  // As metades: o "3" já estava no lote (não é novo); o total soma de novo.
+  const r = await guardar(b, lote, 1, [reg("3"), reg("")], 2, { inicio: "2026-02-01", fim: "2026-02-14" });
+  assert.equal(r.novos, 0);
+  await guardar(b, lote, 1, [reg("4"), reg("5"), reg("6")], 3, { inicio: "2026-02-15", fim: "2026-02-28" });
+  l = b.raw.prepare("SELECT * FROM centi_lotes WHERE id = ?").get(lote) as Record<string, number>;
+  assert.equal(l.total_informado, 7);
+  assert.equal(l.unicos, 6);
+  assert.equal(l.recusados, 1);
+  assert.deepEqual(conferirLote({ recebidos: l.recebidos, unicos: l.unicos, recusados: l.recusados, totalInformado: l.total_informado, paginas: l.paginas }), { completo: true });
+  assert.deepEqual(await lidoNoPeriodo(b.db, lote, jan), { paginas: 1, recebidos: 2, total: 2 });
+  assert.deepEqual(await lidoNoPeriodo(b.db, lote, fev), { paginas: 0, recebidos: 0, total: null });
+  // Um período lido sem o total deixa o total do lote desconhecido (nunca uma soma que "bate" por faltar um período).
+  await guardar(b, lote, 1, [reg("7")], null, { inicio: "2026-03-01", fim: "2026-03-31" });
+  assert.equal((b.raw.prepare("SELECT total_informado t FROM centi_lotes WHERE id = ?").get(lote) as { t: number | null }).t, null);
+});
+
+test("empenhos (D1 real): a migração passa os parâmetros do ano inteiro para o período", () => {
+  const b = banco();
+  const r = b.raw.prepare("SELECT chave, parametros FROM centi_apis ORDER BY ordem").all() as { chave: string; parametros: string }[];
+  const p = Object.fromEntries(r.map((x) => [x.chave, x.parametros]));
+  assert.equal(p.empenhos, '{"dataInicio":"{inicio}","dataFim":"{fim}"}');
+  assert.equal(p.liquidacoes, '{"dataInicio":"{inicio}","dataFim":"{fim}","idOrgao":"{orgao}"}');
+  assert.equal(p.pagamentos, '{"ano":"{ano}","idOrgao":"{orgao}"}');
 });
 
 test("empenhos (D1 real): páginas no staging, chave repetida no lote fica uma, contagem do lote", async () => {

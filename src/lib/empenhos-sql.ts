@@ -1,8 +1,8 @@
 import { and, count, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotes, empenhos, empenhosStaging } from "../db/schema.ts";
-import type { LinhaEmpenho } from "./empenhos-core.ts";
+import { centiLotePassos, centiLotes, empenhos, empenhosStaging } from "../db/schema.ts";
+import type { LinhaEmpenho, PassoLote, Periodo } from "./empenhos-core.ts";
 
 /**
  * EMPENHOS — os comandos da importação como BUILDERS do Drizzle (testados pelo driver D1 REAL sobre `node:sqlite`,
@@ -54,19 +54,55 @@ export function comandoGuardarPagina(db: Db, loteId: number, pagina: number, lin
   return db.insert(empenhosStaging).select(sel as never).onConflictDoNothing();
 }
 
-/** Atualiza o lote depois de uma página: soma recebidos/recusados, recalcula os únicos e guarda o total informado. */
-export function comandoContarPagina(db: Db, loteId: number, pagina: number, recebidos: number, recusados: number, total: number | null) {
+/** Registra um PASSO do lote (um pedido à Centi, lido ou com erro) — o que a tela acompanha ao vivo. */
+export function comandoRegistrarPasso(db: Db, loteId: number, p: Omit<PassoLote, "id" | "em">) {
+  return db.insert(centiLotePassos).values({ loteId, ...p, fimPeriodo: p.fimPeriodo ? 1 : 0 });
+}
+
+/** O período grande demais é DIVIDIDO: as páginas dele já lidas deixam de contar (a leitura recomeça nas metades). */
+export function comandoDividirPeriodo(db: Db, loteId: number, periodo: Periodo) {
+  return db
+    .update(centiLotePassos)
+    .set({ estado: "dividido" })
+    .where(and(eq(centiLotePassos.loteId, loteId), eq(centiLotePassos.inicio, periodo.inicio), eq(centiLotePassos.fim, periodo.fim), eq(centiLotePassos.estado, "ok")));
+}
+
+/**
+ * RECONTA o lote pelos passos lidos (os divididos não contam): páginas, recebidos, recusados, os únicos do staging e o
+ * TOTAL informado = a soma do total de cada período (desconhecido enquanto algum período lido não tiver o total).
+ */
+export function comandoRecontarLote(db: Db, loteId: number) {
+  const ok = sql`${centiLotePassos.loteId} = ${loteId} AND ${centiLotePassos.estado} = 'ok'`;
   return db
     .update(centiLotes)
     .set({
-      paginas: sql`MAX(${centiLotes.paginas}, ${pagina})`,
-      recebidos: sql`${centiLotes.recebidos} + ${recebidos}`,
-      recusados: sql`${centiLotes.recusados} + ${recusados}`,
+      paginas: sql`(SELECT COUNT(*) FROM ${centiLotePassos} WHERE ${ok})`,
+      recebidos: sql`(SELECT COALESCE(SUM(${centiLotePassos.recebidos}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
+      recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
       unicos: sql`(SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId})`,
-      totalInformado: total == null ? centiLotes.totalInformado : sql`COALESCE(${centiLotes.totalInformado}, ${total})`,
+      totalInformado: sql`(SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}))`,
       vistoEm: sql`CURRENT_TIMESTAMP`,
     })
     .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo")));
+}
+
+/** O que o período já leu (as páginas lidas e os registros) — para decidir se continua. */
+export async function lidoNoPeriodo(db: Db, loteId: number, periodo: Periodo) {
+  const [r] = await db
+    .select({ paginas: count(), recebidos: sql<number>`COALESCE(SUM(${centiLotePassos.recebidos}), 0)`, total: sql<number | null>`MAX(${centiLotePassos.total})` })
+    .from(centiLotePassos)
+    .where(and(eq(centiLotePassos.loteId, loteId), eq(centiLotePassos.inicio, periodo.inicio), eq(centiLotePassos.fim, periodo.fim), eq(centiLotePassos.estado, "ok")));
+  return { paginas: r?.paginas ?? 0, recebidos: Number(r?.recebidos ?? 0), total: r?.total == null ? null : Number(r.total) };
+}
+
+/** Quantas destas chaves o lote JÁ tem no staging (os "novos" de uma página = as que faltavam). Um parâmetro só. */
+export async function jaNoLote(db: Db, loteId: number, chaves: string[]): Promise<number> {
+  if (!chaves.length) return 0;
+  const [r] = await db
+    .select({ n: count() })
+    .from(empenhosStaging)
+    .where(and(eq(empenhosStaging.loteId, loteId), sql`${empenhosStaging.chave} IN (SELECT value FROM json_each(${JSON.stringify(chaves)}))`));
+  return r?.n ?? 0;
 }
 
 /** Quantos empenhos o lote cria, atualiza e marca como removidos (antes de promover — o resumo do lote). */
