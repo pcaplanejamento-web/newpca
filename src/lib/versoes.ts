@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.195.0",
+    data: "2026-10-23",
+    titulo: "Empenhos vira uma tela do sistema",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "Empenhos saiu da Administração e virou uma tela comum: o ADM a põe num módulo (Configurações → Módulos) e libera aos grupos; o papel decide quem consulta e quem exporta.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "As edições salvas da tabela de empenhos continuam valendo; a importação segue em Integrações → APIs da Centi (só o ADM).", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.194.1",
     data: "2026-10-23",
     titulo: "Acesso às unidades por aba revisado",
@@ -3788,7 +3797,6 @@ const PREFIXOS_ADMIN = [
   "/painel/orgaos",
   "/painel/integracoes",
   "/painel/automacao",
-  "/painel/empenhos",
   "/painel/armazenamento",
   "/painel/auditoria",
   "/painel/aparencia",
