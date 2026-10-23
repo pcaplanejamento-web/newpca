@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.190.0",
+    data: "2026-10-23",
+    titulo: "Termo obrigatório para todos ou para pessoas escolhidas",
+    mudancas: [
+      { tipo: "novo", area: "Termo de uso", texto: "No modo Ativo, o ADM escolhe quem precisa aceitar o termo e nomear o aparelho: Todos (quem entrar depois também) ou Pessoas escolhidas. Quem já aceitou a versão vigente e já nomeou o aparelho não é travado.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Termo de uso", texto: "A confirmação de ativar conta só as pessoas que de fato passam a aceitar, e trocar a lista de escolhidas já cria as pendências de quem entrou nela.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.189.2",
     data: "2026-10-23",
     titulo: "Assinar o termo segue até abrir o sistema",

@@ -281,7 +281,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `termos_pendencias`, `aparelhos`, `aparelhos_conta` + `sessoes.aparelho_id` set null; config no blob `configuracoes.acessoConta`):**
   - **Implantação** (`acesso-conta-core.ts`, puro e testado — `tests/termo-aparelhos.test.ts`): `modo` desligado (PADRÃO — nada
     muda) · teste (só os `testadores`; `repetirAoEntrar` = cada login pede o aceite e o nome do aparelho de novo, sem trava; os
-    aceites ficam `teste=1` e o PDF leva "TESTE") · ativo (todos; passar a ativo pede confirmação com a contagem e apaga os
+    aceites ficam `teste=1` e o PDF leva "TESTE") · ativo (v1.190.0: `alcance` todos — quem entrar depois também — | escolhidos = `exigidos` + testadores; `pessoasDasRegras` dá o público das pendências; passar a ativo pede confirmação com a contagem e apaga os
     aceites/aparelhos/pendências do teste, depois exige a versão vigente de todos). **`regrasValemPara`** é o ÚNICO ponto que
     decide; `aparelhosValemPara` (o ADM fica fora do limite com `isentarAdm`, menos no teste). Loader `acesso-conta.ts` (cache 60 s).
   - **Sessão sem consulta a mais:** `getUsuarioAtual` lê na MESMA consulta o aparelho da sessão, o aparelho conhecido pelo cookie
