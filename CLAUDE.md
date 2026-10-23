@@ -4577,30 +4577,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nova lê só a versão. No cliente, `empenhosDoPacote` decodifica e cada ano/recorte fica guardado na aba. Núcleo puro
   `empenhos-tela-core.ts`; testes `tests/empenhos-tela.test.ts` (no D1 real: nulos/aspas/acentos, removidos, 3 pedaços sem
   perda nem repetição, versão).
-- **UNIDADES DA CENTI VINCULADAS AO CADASTRO (v1.198.0, migração `0138`; substitui o escopo pela sigla da v1.197.0):**
-  tabela `centi_unidades` (par EXATO `orgao_gestor` + `unidade` [Unidade orçamentária, "" = vazia], único; `orgao_id` +
-  `reparticao_id` = o VÍNCULO [o órgão inteiro, ou uma unidade DELE]; `registros`/`ultimo_lote`/`ultimo_ano`/`visto_em`;
-  `vinculado_em` ISO com ms + `vinculado_por`) — GLOBAL: vale para empenhos e, depois, liquidações e pagamentos. Sem FK:
-  GATILHOS da `0138` — unidade/órgão excluído do cadastro = vínculo desfeito e os empenhos dele APAGADOS; unidade que muda
-  de órgão leva vínculos e empenhos. `empenhos.orgao_id`/`reparticao_id` (gravados na promoção). Cada página lida registra
-  as unidades (`comandoRegistrarUnidades`, `centi-unidades-sql.ts`, no MESMO lote do staging). O staging guarda TUDO (a
-  conferência com a Centi não muda); a PROMOÇÃO (`comandosPromover`) grava SÓ o de unidade vinculada (junção com
-  `centi_unidades`), marca removido só pelas chaves vinculadas, APAGA do ano o que ficou sem vínculo e conta os descartados
-  em `centi_lotes.fora` (`contagemDaPromocao` → `fora`). Lote `modo` "unidades" (`centi_lotes.modo`; "Puxar unidades" na
-  Importação — `importarCentiApiSchema.modo`) = lê o ano, registra as unidades e fecha com estado `unidades` sem gravar
-  empenho (fora da rotação da automática — `ultimaLeituraPorAno` só `dados`). Vínculo: `PUT /api/admin/centi-unidades`
-  (`exigirAdmin`, ≤ 500, `vincularUnidadesCentiSchema`; conferido contra o cadastro VISÍVEL — `motivoVinculoInvalido`, a
-  unidade tem de ser do órgão; o mesmo vínculo = nada) → `comandosVincular` (3 comandos num lote, um parâmetro JSON:
-  grava, APAGA os empenhos do que ficou sem vínculo, passa os demais ao vínculo novo; auditoria). Núcleo puro
-  `centi-unidades-core.ts` (`paresDasLinhas`, `valorVinculo`/`lerValorVinculo`, `sugestoesPorSigla` — UM órgão de mesma
-  sigla, nunca adivinha). Tela: **`UnidadesCenti`** (no editor das APIs importáveis: `StatMini` + `DataTable` com o
-  `SeletorCelula` do vínculo — órgão inteiro = id NEGATIVO —, "Vincular N pela sigla", tirar o vínculo confirma com a
-  contagem). ESCOPO da tela (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`, `empenhos-tela.ts`):
-  o empenho vinculado a uma unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`,
-  `empenhos-tela-sql.ts`; `empenhoNoEscopo`, `chaveEscopoEmpenhos`). A VERSÃO do ano = última promoção + `MAX(vinculado_em)`
-  (vincular relê a memória). A `0138` ligou pela sigla os já gravados (UM órgão) e apagou os sem órgão. Ao ADM, o aviso das
-  unidades sem vínculo (`unidadesCentiSemVinculo`). Testes: `tests/centi-unidades.test.ts` (migração, promoção, vínculo e
-  gatilhos no D1 real) + `empenhos-tela`/`empenhos`.
+- **UNIDADES DA CENTI VINCULADAS AO CADASTRO (v1.198.0 → v1.199.0, migrações `0138` + `0139`; substitui o escopo pela
+  sigla da v1.197.0):** `centi_unidades` = o CATÁLOGO dos pares EXATOS `orgao_gestor` + `unidade` [Unidade orçamentária,
+  "" = vazia] que as leituras trazem (`comandoRegistrarUnidades`, `centi-unidades-sql.ts`, no MESMO lote do staging de
+  cada página; a nova já nasce no órgão do órgão gestor) — GLOBAL: vale para empenhos e, depois, liquidações e pagamentos.
+  **O VÍNCULO MORA NO CADASTRO (v1.199.0):** a UNIDADE guarda `reparticoes.centi_unidade_id` (a sua unidade orçamentária)
+  e o ÓRGÃO guarda `orgaos.centi_orgao_gestor` — cada um ÚNICO no sistema (índices parciais; `motivoUnidadeCenti`/
+  `motivoOrgaoGestor`, `centi-unidades.ts` → 409/422 nas rotas `POST/PATCH /api/admin/orgaos*` e `/api/admin/reparticoes*`,
+  campos opcionais `centiOrgaoGestor`/`centiUnidadeId` dos schemas — ausente = não muda). `centi_unidades.orgao_id`/
+  `reparticao_id` = o vínculo CALCULADO (a unidade escolhida; senão o órgão do órgão gestor), recalculado pelos GATILHOS da
+  `0139` (insert/update/delete de órgão e unidade quando o vínculo ou o órgão da unidade muda), que no mesmo passo APAGAM
+  os empenhos que ficaram sem vínculo e acompanham o órgão/unidade dos demais (`vinculado_em` ISO com ms entra na VERSÃO).
+  Tela: no **`BannerCadastro`** (campo de escolha com `acoes` — o rodapé da `Selecao`) de **`OrgaosAdmin`** ("Órgão gestor na
+  Centi" — `opcoesOrgaoGestor`) e de **`ReparticoesAdmin`** ("Unidade orçamentária na Centi" — `opcoesUnidadeOrcamentaria`:
+  as livres; com o órgão gestor do órgão, só as dele — a página `/painel/orgaos/[id]` passa `centiOrgaoGestor`); trocar/tirar
+  com empenhos gravados confirma. Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
+  /api/admin/centi-unidades` só com o banner aberto) + a ação **"Buscar na Centi (ano)"** = lote `modo` "unidades"
+  (`centi_lotes.modo`; `importarCentiApiSchema.modo`) pela API de empenhos: lê o ano, registra as unidades e fecha com estado
+  `unidades` sem gravar empenho (fora da rotação da automática). A leitura conduzida pelo navegador é UMA só,
+  **`leitura-centi-cliente.ts`** (`lerAnoNaCenti`, `pedirImportacao`, `lerPassos` — também a do `ImportacaoManual`). O
+  staging guarda TUDO (a conferência com a Centi não muda); a PROMOÇÃO grava SÓ o vinculado (junção com `centi_unidades`),
+  marca removido só pelas chaves vinculadas, APAGA do ano o sem vínculo e conta os descartados em `centi_lotes.fora`.
+  ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`): o empenho vinculado a uma
+  unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`, `empenhoNoEscopo`). Ao ADM, o aviso
+  das unidades sem vínculo (`unidadesCentiSemVinculo`). Testes: `tests/centi-unidades.test.ts` (migrações, promoção, os
+  gatilhos e os índices únicos no D1 real) + `empenhos-tela`/`empenhos`.
 - **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
   DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
   conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,

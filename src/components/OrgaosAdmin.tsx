@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { opcoesOrgaoGestor } from "@/lib/centi-unidades-core";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { conferenciaDoOrgao, planoRealinhar, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -19,6 +20,7 @@ import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
+import { useUnidadesCenti } from "./UnidadesCenti";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
 import { Selecao } from "./Selecao";
 
@@ -31,6 +33,8 @@ type Orgao = {
   numeroInteressado: string | null;
   /** O ID da entidade do órgão na Centi (ex.: "02"). */
   entidadeCenti: string | null;
+  /** O ÓRGÃO GESTOR da Centi deste órgão (o vínculo dos empenhos). */
+  centiOrgaoGestor: string | null;
   oculto: boolean;
   /** Funciona TAMBÉM como unidade (tem a unidade própria). */
   tambemUnidade: boolean;
@@ -66,6 +70,7 @@ const valoresDe = (o: Orgao | null): Record<string, string> => ({
   orgaoEntidade: o?.orgaoEntidade ?? "",
   numeroInteressado: o?.numeroInteressado ?? "",
   entidadeCenti: o?.entidadeCenti ?? "",
+  centiOrgaoGestor: o?.centiOrgaoGestor ?? "",
   assinatura: o?.assinaturaUnica ? "unica" : "unidade",
 });
 
@@ -92,6 +97,25 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
   // As EDIÇÕES SALVAS da tabela (guardadas aqui: trocar de aba remonta a tabela, que volta com as edições novas).
   const [ed, setEd] = useState(edicoes);
   const [exonerados, setExonerados] = useState(false);
+  // Os órgãos gestores da Centi (o vínculo): carregados só com o banner aberto.
+  const centi = useUnidadesCenti(aberto != null);
+  const gestorAtual = typeof aberto === "number" ? (lista?.find((o) => o.id === aberto)?.centiOrgaoGestor ?? null) : null;
+  const campos = useMemo<CampoCadastro[]>(
+    () => [
+      ...CAMPOS,
+      {
+        chave: "centiOrgaoGestor",
+        label: "Órgão gestor na Centi",
+        span: true,
+        opcoes: centi.lista
+          ? opcoesOrgaoGestor(centi.lista, (lista ?? []).map((o) => o.centiOrgaoGestor), gestorAtual)
+          : [{ valor: "", rotulo: "Sem vínculo" }, ...(gestorAtual ? [{ valor: gestorAtual, rotulo: gestorAtual }] : [])],
+        acoes: centi.acoes,
+        dica: "Os empenhos desse órgão gestor passam a ser deste órgão; a unidade orçamentária escolhida numa unidade vai para a unidade.",
+      },
+    ],
+    [centi.lista, centi.acoes, lista, gestorAtual],
+  );
 
   const carregar = useCallback(async () => {
     try {
@@ -169,6 +193,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       orgaoEntidade: v.orgaoEntidade || null,
       numeroInteressado: v.numeroInteressado || null,
       entidadeCenti: v.entidadeCenti || null,
+      centiOrgaoGestor: v.centiOrgaoGestor || null,
       assinaturaUnica: v.assinatura === "unica",
       oculto: extra.oculto ?? o?.oculto ?? false,
     };
@@ -182,6 +207,21 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
     }
     if (!orgao) return false;
     const novo = corpo(orgao, { ...valoresDe(orgao), ...patch });
+    // Trocar ou tirar o órgão gestor: os empenhos dele (fora das unidades) deixam de ser deste órgão e saem do banco.
+    const gravados =
+      orgao.centiOrgaoGestor && "centiOrgaoGestor" in patch
+        ? (centi.lista ?? []).filter((u) => u.orgaoGestor === orgao.centiOrgaoGestor && u.reparticaoId == null).reduce((t, u) => t + u.gravados, 0)
+        : 0;
+    if (
+      gravados > 0 &&
+      !(await confirmar({
+        titulo: "Trocar o órgão gestor da Centi?",
+        texto: `Os ${gravados.toLocaleString("pt-BR")} empenho(s) gravados de ${orgao.centiOrgaoGestor} que não estão numa unidade saem do banco (importar de novo os traz de volta).`,
+        confirmar: "Trocar",
+        perigo: true,
+      }))
+    )
+      return false;
     // A regra de assinatura mudou: os responsáveis vão ao lugar que vale pela regra nova (o servidor faz no mesmo lote).
     let destinosVinculos: number[] | undefined;
     if (novo.assinaturaUnica !== orgao.assinaturaUnica && ctx.planilha) {
@@ -408,7 +448,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
             </div>
           ) : undefined
         }
-        campos={CAMPOS}
+        campos={campos}
         inicial={valoresDe(orgao)}
         ocupado={ocupado}
         onSalvar={salvar}

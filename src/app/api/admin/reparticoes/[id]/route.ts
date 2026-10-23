@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { motivoUnidadeCenti } from "@/lib/centi-unidades";
 import { realinharVinculos } from "@/lib/responsaveis";
 import { getDb } from "@/lib/db";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
@@ -32,6 +33,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado, { reparticaoId: id })))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
+  const centi = await motivoUnidadeCenti(corpo.data.centiUnidadeId, id);
+  if (centi) return erro(centi.msg, centi.status);
   await getDb()
     .update(reparticoes)
     .set({
@@ -41,12 +44,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
+      // O vínculo com a Centi (os gatilhos da 0139 recalculam o que é gravado e tiram do banco o que ficou sem vínculo).
+      ...(corpo.data.centiUnidadeId === undefined ? {} : { centiUnidadeId: corpo.data.centiUnidadeId }),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
   // A unidade pode ter mudado de órgão: os responsáveis dela seguem a regra de assinatura do órgão (o lugar que vale).
   await realinharVinculos();
-  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome, centiUnidadeId: corpo.data.centiUnidadeId ?? undefined } });
   return ok();
 }
 

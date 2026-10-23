@@ -3,6 +3,7 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { motivoOrgaoGestor } from "@/lib/centi-unidades";
 import { estruturaPorOrgao, numeroInteressadoEmUso, ORDEM_ORGAOS } from "@/lib/orgaos";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
@@ -20,6 +21,7 @@ export async function GET() {
       assinaturaUnica: orgaos.assinaturaUnica,
       numeroInteressado: orgaos.numeroInteressado,
       entidadeCenti: orgaos.entidadeCenti,
+      centiOrgaoGestor: orgaos.centiOrgaoGestor,
       oculto: orgaos.oculto,
     })
     .from(orgaos)
@@ -44,6 +46,8 @@ export async function POST(req: Request) {
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
+  const centi = await motivoOrgaoGestor(corpo.data.centiOrgaoGestor, null);
+  if (centi) return erro(centi.msg, centi.status);
   const db = getDb();
   const [row] = await db
     .insert(orgaos)
@@ -53,6 +57,7 @@ export async function POST(req: Request) {
       orgaoEntidade: corpo.data.orgaoEntidade ?? null,
       numeroInteressado,
       entidadeCenti: corpo.data.entidadeCenti?.trim() || null,
+      centiOrgaoGestor: corpo.data.centiOrgaoGestor ?? null,
       assinaturaUnica: corpo.data.assinaturaUnica,
       oculto: corpo.data.oculto,
     })

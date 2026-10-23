@@ -136,6 +136,8 @@ export const reparticaoSchema = z.object({
   // Toda unidade pertence a um ÓRGÃO (obrigatório).
   orgaoId: z.number({ error: "Escolha o órgão da unidade." }).int().positive(),
   oculto: z.boolean().default(false),
+  /** A UNIDADE ORÇAMENTÁRIA da Centi desta unidade (`centi_unidades.id`); null = sem vínculo; ausente = não muda. */
+  centiUnidadeId: z.number().int().positive().nullable().optional(),
 });
 
 export const reordenarSchema = z.object({
@@ -163,6 +165,8 @@ export const orgaoSchema = z.object({
     .regex(/^\d{0,4}$/, "O ID da entidade na Centi é só o número (ex.: 02).")
     .optional()
     .nullable(),
+  /** O ÓRGÃO GESTOR da Centi deste órgão (o texto como a Centi o devolve); null = sem vínculo; ausente = não muda. */
+  centiOrgaoGestor: z.string().trim().min(1).max(200).nullable().optional(),
   assinaturaUnica: z.boolean().default(false),
   oculto: z.boolean().default(false),
   /** Ao DESLIGAR a assinatura única de um órgão com várias unidades e sem unidade própria: as unidades que recebem os

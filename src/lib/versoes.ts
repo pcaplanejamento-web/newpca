@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.199.0",
+    data: "2026-10-23",
+    titulo: "Vínculo com a Centi no cadastro de Órgãos e Unidades",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "No banner de cada UNIDADE, o campo “Unidade orçamentária na Centi” (a lista que a API da Centi traz): escolhida, os empenhos dela passam a ser da unidade. Cada unidade orçamentária vale para uma unidade só.", link: "/painel/orgaos" },
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "No banner de cada ÓRGÃO, o campo “Órgão gestor na Centi”: os empenhos desse órgão gestor que não estão numa unidade passam a ser do órgão. “Buscar na Centi” (no fim da lista) lê o ano só para trazer as unidades — nenhum empenho é gravado.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Integrações", texto: "Saíram de Integrações a tabela “Unidades da Centi” e o “Puxar unidades”: o vínculo mora no cadastro. Os vínculos já feitos passaram para os órgãos e as unidades.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.198.0",
     data: "2026-10-23",
     titulo: "Empenhos: só as unidades vinculadas ao cadastro",

@@ -54,20 +54,3 @@ export const excluirImportacaoSchema = z.union([
   z.strictObject({ lote: z.number().int().positive(), passos: z.array(z.number().int().positive()).min(1).max(5000) }),
   z.strictObject({ lotes: z.array(z.number().int().positive()).min(1).max(200) }),
 ]);
-
-/**
- * VÍNCULOS das unidades da Centi com o cadastro (vários de uma vez — a sugestão em lote): `orgaoId` null = sem vínculo
- * (os registros gravados dela SAEM); `reparticaoId` = uma unidade DO órgão.
- */
-export const vincularUnidadesCentiSchema = z.strictObject({
-  vinculos: z
-    .array(
-      z.strictObject({
-        id: z.number().int().positive(),
-        orgaoId: z.number().int().positive().nullable(),
-        reparticaoId: z.number().int().positive().nullable(),
-      }),
-    )
-    .min(1)
-    .max(500),
-});

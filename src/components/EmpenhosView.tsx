@@ -215,8 +215,8 @@ export function EmpenhosView({
             <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
             <p>“Removidos na Centi” (rodapé) = os que a Centi não traz mais: ficam guardados, fora das somas.</p>
             <p>
-              Cada unidade da Centi é vinculada pelo ADM a um órgão (e, se for o caso, a uma unidade) de Órgãos e Unidades — só os
-              empenhos de unidade vinculada são gravados. Você vê os vinculados à unidade escolhida no cabeçalho (na “Geral”, a
+              O vínculo com a Centi é escolhido em Órgãos e Unidades: o órgão escolhe o seu órgão gestor e a unidade, a sua unidade
+              orçamentária — só os empenhos vinculados são gravados. Você vê os vinculados à unidade escolhida no cabeçalho (na “Geral”, a
               todas as suas); o vinculado só ao órgão aparece para as unidades daquele órgão.
             </p>
           </Ajuda>
@@ -229,7 +229,7 @@ export function EmpenhosView({
       {semVinculo > 0 && (
         <Callout kind="warn">
           {num(semVinculo)} unidade{semVinculo === 1 ? "" : "s"} da Centi sem vínculo ao cadastro — os empenhos dela{semVinculo === 1 ? "" : "s"} não são
-          gravados. Vincule em Integrações → APIs da Centi → Empenhos → Unidades da Centi e importe de novo.
+          gravados. Escolha o órgão gestor no banner do órgão (ou a unidade orçamentária no banner da unidade) em Órgãos e Unidades e importe de novo.
         </Callout>
       )}
 

@@ -27,17 +27,14 @@ import {
   LEITOR_EMPENHOS,
   type LoteCenti,
   type PassoLote,
-  type Periodo,
-  periodoEmCurso,
-  periodosAPedir,
   periodosLidos,
   ROTULO_ESTADO_LOTE,
   ROTULO_ESTADO_PASSO,
   rotuloPeriodo,
-  type TipoErro,
   usaPeriodo,
 } from "@/lib/empenhos-core";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
+import { type Agora, lerAnoNaCenti, lerPassos, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { BotaoCopiar } from "./BotaoCopiar";
@@ -56,7 +53,6 @@ import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { Switch } from "./Switch";
-import { UnidadesCenti } from "./UnidadesCenti";
 import { toast } from "./Toast";
 
 /**
@@ -220,8 +216,6 @@ function EditorApi({
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<ResultadoTeste | null>(null);
   const [importando, setImportando] = useState(false);
-  /** Muda quando uma leitura termina — a tabela das unidades da Centi recarrega. */
-  const [lido, setLido] = useState(0);
   const { confirmar, confirmacao } = useConfirmacao();
   const muda = <K extends keyof EdicaoApi>(k: K, valor: EdicaoApi[K]) => {
     setV((x) => ({ ...x, [k]: valor }));
@@ -657,36 +651,11 @@ function EditorApi({
             </div>
           )}
         </SecaoBanner>
-        {importavel(api.chave) && <ImportacaoManual api={api} alterado={alterado} onOcupado={setImportando} onLido={() => setLido((n) => n + 1)} />}
-        {importavel(api.chave) && <UnidadesCenti orgaos={orgaos} unidades={unidades} versao={lido} />}
+        {importavel(api.chave) && <ImportacaoManual api={api} alterado={alterado} onOcupado={setImportando} />}
       </div>
       {confirmacao}
     </Modal>
   );
-}
-
-type RespostaPasso = {
-  lote: LoteCenti;
-  passo: PassoLote;
-  continuar?: boolean;
-  erro?: { tipo: TipoErro; mensagem: string };
-  dividir?: [Periodo, Periodo] | null;
-};
-
-/** Chama a rota da importação manual; devolve o JSON ou lança com a mensagem do servidor. */
-/** O SISTEMA respondeu e recusou (4xx) — não adianta repetir (ex.: outra aba conduz o lote). */
-class RecusaImportacao extends Error {}
-
-async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>): Promise<T> {
-  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(corpo),
-  });
-  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T;
-  if (r.status >= 400 && r.status < 500) throw new RecusaImportacao(j.error ?? `Recusado (${r.status}).`);
-  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
-  return j;
 }
 
 /** EXCLUI DO BANCO, vários de uma vez: importações inteiras (`{lotes}`) ou passos de uma importação (`{lote, passos}`). */
@@ -697,15 +666,6 @@ async function excluirTentativas(apiId: number, corpo: { lotes: number[] } | { l
   return j.excluidos ?? 0;
 }
 
-async function lerPassos(apiId: number, loteId: number): Promise<PassoLote[]> {
-  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar?lote=${loteId}`);
-  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; passos?: PassoLote[] };
-  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
-  return j.passos ?? [];
-}
-
-const ESPERA_TENTATIVAS = [2000, 4000, 8000];
-const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
 /** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
 const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
@@ -717,8 +677,6 @@ function fracaoDoAno(ano: number, passos: PassoLote[]): number {
   return Math.min(1, dias / diasDoPeriodo(anoInteiro(ano)));
 }
 
-/** O que acontece agora (a linha acima da barra). */
-type Agora = { periodo: Periodo; pagina: number; tentativa: number; espera?: number };
 
 /**
  * A IMPORTAÇÃO MANUAL (passo 3): lê o ano SEMANA A SEMANA (o período grande demais é dividido ao meio), página a página, com o
@@ -726,7 +684,7 @@ type Agora = { periodo: Periodo; pagina: number; tentativa: number; espera?: num
  * gravados quando todo o ano foi lido e a contagem confere com o total que a Centi informa. Interromper, fechar a
  * página ou uma falha deixam a tabela final como estava.
  */
-function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti; alterado: boolean; onOcupado: (b: boolean) => void; onLido: () => void }) {
+function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterado: boolean; onOcupado: (b: boolean) => void }) {
   const anos = anosDaApi(anoAtual(), api.anos);
   const [ano, setAno] = useState(anos[0]);
   const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
@@ -772,34 +730,7 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
 
   const anotar = (p: PassoLote) => setPassos((l) => [...l, p]);
 
-  /** Um passo (o pedido de uma página), repetindo a falha de rede com espera. Devolve o resultado ou lança o erro final. */
-  async function passo(lote: LoteCenti, periodo: Periodo, pagina: number): Promise<RespostaPasso> {
-    for (let t = 0; ; t++) {
-      if (parar.current) throw new Error("Interrompida.");
-      setAgora({ periodo, pagina, tentativa: t + 1 });
-      let r: RespostaPasso;
-      try {
-        r = await pedirImportacao<RespostaPasso>(api.id, { acao: "pagina", lote: lote.id, condutor: condutor.current, inicio: periodo.inicio, fim: periodo.fim, pagina });
-      } catch (e) {
-        if (e instanceof RecusaImportacao) throw e;
-        // Sem resposta do SISTEMA (rede, sessão) — o passo não chegou ao servidor: fica registrado só na tela.
-        const mensagem = `Sem resposta do sistema: ${e instanceof Error ? e.message : "falha de rede"}`;
-        anotar({ ...passoVazio(local.current--, periodo, pagina), estado: "erro", mensagem });
-        if (t >= ESPERA_TENTATIVAS.length) throw new Error(mensagem);
-        setAgora({ periodo, pagina, tentativa: t + 1, espera: ESPERA_TENTATIVAS[t] });
-        await esperar(ESPERA_TENTATIVAS[t]);
-        continue;
-      }
-      anotar(r.passo);
-      setAtual(r.lote);
-      if (!r.erro || r.dividir) return r;
-      if (r.erro.tipo !== "rede" || t >= ESPERA_TENTATIVAS.length) throw new Error(r.erro.mensagem);
-      setAgora({ periodo, pagina, tentativa: t + 1, espera: ESPERA_TENTATIVAS[t] });
-      await esperar(ESPERA_TENTATIVAS[t]);
-    }
-  }
-
-  async function importar(retomar: LoteCenti | null, modo: "dados" | "unidades" = "dados") {
+  async function importar(retomar: LoteCenti | null) {
     parar.current = false;
     condutor.current = crypto.randomUUID();
     setRodando(true);
@@ -807,23 +738,25 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
     let lote = retomar;
     let onde = "";
     try {
-      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current, modo })).lote;
+      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current })).lote;
       setAtual(lote);
       const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
       setPassos(anteriores);
-      // A FILA: o período começado (na próxima página) e o que falta do ano, semana a semana.
-      const emCurso = periodoEmCurso(anteriores);
-      const fila: { periodo: Periodo; pagina: number }[] = emCurso ? [emCurso] : [];
-      for (const p of periodosAPedir(lote.ano, [...periodosLidos(anteriores), ...(emCurso ? [emCurso.periodo] : [])], comPeriodo)) fila.push({ periodo: p, pagina: 1 });
-      for (let item = fila.shift(); item; item = fila.shift()) {
-        if (parar.current) break;
-        onde = `${rotuloPeriodo(item.periodo)}, página ${item.pagina}`;
-        const r = await passo(lote, item.periodo, item.pagina);
-        lote = r.lote;
-        if (r.dividir) fila.unshift(...r.dividir.map((periodo) => ({ periodo, pagina: 1 })));
-        else if (r.continuar) fila.unshift({ periodo: item.periodo, pagina: item.pagina + 1 });
-      }
-      setAgora(null);
+      lote = await lerAnoNaCenti({
+        apiId: api.id,
+        lote,
+        anteriores,
+        condutor: condutor.current,
+        comPeriodo,
+        parar: () => parar.current,
+        onPasso: anotar,
+        onLote: setAtual,
+        onAgora: setAgora,
+        idLocal: () => local.current--,
+        onde: (t) => {
+          onde = t;
+        },
+      });
       if (parar.current) {
         await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida pelo administrador." });
         toast.info("Importação interrompida — nada foi gravado nos empenhos.");
@@ -843,7 +776,7 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
       const fim = conclusao.lote;
       setAtual(fim);
       if (fim.estado === "unidades") {
-        toast.success(fim.mensagem ?? "Unidades da Centi lidas — vincule-as em “Unidades da Centi”.");
+        toast.success(fim.mensagem ?? "Unidades orçamentárias da Centi lidas.");
       } else if (fim.estado === "promovido") {
         toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} marcados como removidos${fim.fora ? `, ${num(fim.fora)} de unidade sem vínculo descartados` : ""}.`);
       } else {
@@ -867,7 +800,6 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
     } finally {
       setRodando(false);
       void carregar();
-      onLido();
     }
   }
 
@@ -993,14 +925,9 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
               Interromper
             </Button>
           ) : (
-            <>
-              <Button size="sm" variant="secondary" onClick={() => void importar(null, "unidades")} disabled={alterado || !!emAndamento}>
-                Puxar unidades {ano}
-              </Button>
-              <Button size="sm" onClick={() => void importar(null)} disabled={alterado || !!emAndamento} icon={<IconDownload className="h-4 w-4" />}>
-                Importar {ano}
-              </Button>
-            </>
+            <Button size="sm" onClick={() => void importar(null)} disabled={alterado || !!emAndamento} icon={<IconDownload className="h-4 w-4" />}>
+              Importar {ano}
+            </Button>
           )}
           <A titulo="Importar">
             <p>
@@ -1023,9 +950,8 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
               melhora a leitura, ele avisa os anos lidos pela versão anterior para você importar de novo.
             </p>
             <p>
-              Só os empenhos de unidade da Centi <strong>vinculada</strong> ao cadastro (em “Unidades da Centi”) são gravados — os
-              outros são lidos e conferidos, mas descartados. <strong>Puxar unidades</strong> lê o ano só para registrar as
-              unidades, sem gravar nenhum empenho.
+              Só os empenhos de unidade orçamentária <strong>vinculada</strong> ao cadastro são gravados — o vínculo é escolhido
+              no banner de cada órgão e unidade, em Órgãos e Unidades. Os outros são lidos e conferidos, mas descartados.
             </p>
             <p>Toque numa importação do histórico para ver os passos dela.</p>
             <p>
@@ -1140,28 +1066,6 @@ function ImportacaoManual({ api, alterado, onOcupado, onLido }: { api: ApiCenti;
   );
 }
 
-function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
-  return {
-    id,
-    inicio: periodo.inicio,
-    fim: periodo.fim,
-    pagina,
-    estado: "erro",
-    fimPeriodo: false,
-    status: null,
-    bytes: null,
-    ms: null,
-    recebidos: 0,
-    novos: 0,
-    recusados: 0,
-    repetidos: 0,
-    total: null,
-    soma: null,
-    mensagem: null,
-    corpo: null,
-    em: new Date().toISOString(),
-  };
-}
 
 /** Os PASSOS de um lote (o mais recente primeiro), com o detalhe de cada um ao tocar — ao vivo e no histórico. */
 function PassosDoLote({

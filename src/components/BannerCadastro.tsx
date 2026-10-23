@@ -7,7 +7,7 @@ import { cellCls } from "./formStyles";
 import { IconSave } from "./icons";
 import { Modal } from "./Modal";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
-import { Selecao } from "./Selecao";
+import { type AcaoSelecao, Selecao } from "./Selecao";
 
 /** Um campo do cadastro: texto (com filtro opcional) ou escolha entre opções. */
 export type CampoCadastro = {
@@ -23,6 +23,8 @@ export type CampoCadastro = {
   filtro?: (v: string) => string;
   /** Escolha (o `<select>` destravado); o valor só-leitura mostra o rótulo da opção. */
   opcoes?: { valor: string; rotulo: string }[];
+  /** Botões no rodapé da lista da escolha (ex.: "Buscar na Centi"). */
+  acoes?: AcaoSelecao[];
   /** A explicação abaixo do campo. */
   dica?: string;
 };
@@ -127,7 +129,7 @@ export function BannerCadastro({
                 <LinhaCampo key={c.chave} label={c.label} span={c.span} editavel={!novo} aberto={abertos.has(c.chave)} bloqueado={false} onLock={() => alternar(c.chave)}>
                   {aberto ? (
                     c.opcoes ? (
-                      <Selecao className={cellCls} value={v} onChange={(e) => set(e.target.value)} aria-label={c.label} disabled={ocupado}>
+                      <Selecao className={cellCls} value={v} onChange={(e) => set(e.target.value)} aria-label={c.label} disabled={ocupado} acoes={c.acoes}>
                         {c.opcoes.map((o) => (
                           <option key={o.valor} value={o.valor}>
                             {o.rotulo}

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { opcoesUnidadeOrcamentaria } from "@/lib/centi-unidades-core";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
@@ -18,6 +19,7 @@ import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
+import { useUnidadesCenti } from "./UnidadesCenti";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
 
 type Rep = {
@@ -31,6 +33,8 @@ type Rep = {
   /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
   orgaoProprio: boolean;
   oculto: boolean;
+  /** A UNIDADE ORÇAMENTÁRIA da Centi desta unidade (`centi_unidades.id`). */
+  centiUnidadeId: number | null;
 };
 
 export type AbaUnidades = "unidades" | "responsaveis";
@@ -47,6 +51,7 @@ const valoresDe = (u: Rep | null): Record<string, string> => ({
   nome: u?.nome ?? "",
   numeroInteressado: u?.numeroInteressado ?? "",
   setorRequisitante: u?.setorRequisitante ?? "",
+  centiUnidade: u?.centiUnidadeId != null ? String(u.centiUnidadeId) : "",
 });
 
 /**
@@ -59,6 +64,7 @@ export function ReparticoesAdmin({
   orgaoSigla,
   orgaoNome,
   assinaturaUnica,
+  centiOrgaoGestor,
   abaInicial,
 }: {
   orgaoId: number;
@@ -66,6 +72,8 @@ export function ReparticoesAdmin({
   orgaoNome: string;
   /** O órgão está em "assinatura única": os responsáveis vêm do órgão, não da unidade. */
   assinaturaUnica: boolean;
+  /** O órgão gestor da Centi do órgão (as unidades escolhem só entre as unidades orçamentárias dele). */
+  centiOrgaoGestor: string | null;
   abaInicial: AbaUnidades;
 }) {
   const router = useRouter();
@@ -81,6 +89,28 @@ export function ReparticoesAdmin({
   }, lista != null);
   const [ocupado, setOcupado] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
+  // As unidades orçamentárias da Centi (o vínculo): carregadas só com o banner aberto.
+  const centi = useUnidadesCenti(aberto != null);
+  const idAberta = typeof aberto === "number" ? aberto : null;
+  const atualCenti = lista?.find((u) => u.id === idAberta)?.centiUnidadeId ?? null;
+  const campos = useMemo<CampoCadastro[]>(
+    () => [
+      ...CAMPOS,
+      {
+        chave: "centiUnidade",
+        label: "Unidade orçamentária na Centi",
+        span: true,
+        opcoes: centi.lista
+          ? opcoesUnidadeOrcamentaria(centi.lista, atualCenti, centiOrgaoGestor, idAberta)
+          : [{ valor: "", rotulo: "Sem vínculo" }, ...(atualCenti != null ? [{ valor: String(atualCenti), rotulo: "Carregando…" }] : [])],
+        acoes: centi.acoes,
+        dica: centiOrgaoGestor
+          ? `Só as do órgão gestor ${centiOrgaoGestor} (o do órgão). Os empenhos dela passam a ser desta unidade.`
+          : "Os empenhos dela passam a ser desta unidade. Escolha o órgão gestor no órgão para filtrar a lista.",
+      },
+    ],
+    [centi.lista, centi.acoes, atualCenti, centiOrgaoGestor, idAberta],
+  );
 
   const carregar = useCallback(async () => {
     try {
@@ -155,6 +185,7 @@ export function ReparticoesAdmin({
     setorRequisitante: v.setorRequisitante || null,
     orgaoId, // a unidade pertence ao órgão desta tela
     oculto: extra.oculto ?? u?.oculto ?? false,
+    centiUnidadeId: v.centiUnidade ? Number(v.centiUnidade) : null,
   });
 
   async function salvar(patch: Record<string, string>): Promise<boolean> {
@@ -164,6 +195,18 @@ export function ReparticoesAdmin({
       return ok;
     }
     if (!unidade) return false;
+    // Trocar ou tirar a unidade orçamentária: os empenhos dela deixam de ser desta unidade (sem outro vínculo, saem).
+    const gravados = unidade.centiUnidadeId != null && "centiUnidade" in patch ? (centi.lista?.find((x) => x.id === unidade.centiUnidadeId)?.gravados ?? 0) : 0;
+    if (
+      gravados > 0 &&
+      !(await confirmar({
+        titulo: "Trocar a unidade orçamentária da Centi?",
+        texto: `Os ${gravados.toLocaleString("pt-BR")} empenho(s) gravados da unidade orçamentária atual deixam de ser desta unidade — sem o órgão gestor ligado ao órgão, saem do banco (importar de novo os traz de volta).`,
+        confirmar: "Trocar",
+        perigo: true,
+      }))
+    )
+      return false;
     return acao(`/api/admin/reparticoes/${unidade.id}`, { method: "PATCH", body: JSON.stringify(corpo(unidade, { ...valoresDe(unidade), ...patch })) }, "Unidade atualizada.");
   }
 
@@ -372,7 +415,7 @@ export function ReparticoesAdmin({
             </div>
           ) : undefined
         }
-        campos={CAMPOS}
+        campos={campos}
         inicial={valoresDe(unidade)}
         ocupado={ocupado}
         onSalvar={salvar}

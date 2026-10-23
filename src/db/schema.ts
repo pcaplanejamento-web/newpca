@@ -335,6 +335,7 @@ export const orgaos = sqliteTable(
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultado (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    centiOrgaoGestor: text("centi_orgao_gestor"), // o "Órgão gestor" da Centi deste órgão (único — migração 0139; `centi_unidades`)
   },
   (t) => [index("orgaos_ordem_idx").on(t.ordem)],
 );
@@ -356,6 +357,7 @@ export const reparticoes = sqliteTable(
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultada (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    centiUnidadeId: integer("centi_unidade_id"), // a UNIDADE ORÇAMENTÁRIA da Centi desta unidade (única — migração 0139; `centi_unidades.id`)
   },
   (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId)],
 );
@@ -2289,9 +2291,9 @@ export const empenhos = sqliteTable(
 
 /**
  * As UNIDADES DA CENTI (migração `0138`): cada par "Órgão gestor" + "Unidade orçamentária" que as APIs devolvem
- * (empenhos — e, depois, liquidações e pagamentos), VINCULADO pelo ADM a um órgão do cadastro (e, opcionalmente, a uma
- * unidade dele). Só o que é de unidade vinculada é gravado. Sem chave estrangeira: os gatilhos da `0138` desfazem o
- * vínculo quando o órgão/unidade sai do cadastro e acompanham a unidade que muda de órgão.
+ * (empenhos — e, depois, liquidações e pagamentos). O VÍNCULO é escolhido NO CADASTRO (migração `0139`: a unidade guarda
+ * `centi_unidade_id`, o órgão guarda `centi_orgao_gestor`); `orgao_id`/`reparticao_id` aqui são o vínculo CALCULADO
+ * (a unidade escolhida; senão o órgão do órgão gestor), mantido pelos GATILHOS da `0139`. Só o vinculado é gravado.
  */
 export const centiUnidades = sqliteTable(
   "centi_unidades",
