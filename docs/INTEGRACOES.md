@@ -149,9 +149,13 @@ paginada), Liquidações (`getliquidacoes`, por órgão), Pagamentos (`GetOrdemp
 - **Testar:** escolha o ano e o pedido e toque em **Testar agora** — o sistema faz UM pedido de verdade com o que está na
   tela (mesmo sem salvar) e mostra a resposta, o tempo, quantos registros vieram, o total que a API informa e uma amostra.
   Nada é gravado.
-- Nenhuma API é lida sozinha ainda: cada uma fica "Em preparação" e "Ligada" só funciona quando a importação dela existir.
-- Próximos passos (um por versão): importação manual dos empenhos conferida com o `TotalRegistros` → tela Empenhos →
-  atualização automática (desligada por padrão) → liquidações, pagamentos e o Dashboard da execução.
+- **Importar (Empenhos):** escolha o ano e toque em **Importar** — o sistema lê página a página com o cadastro SALVO e
+  só grava os empenhos quando a contagem confere com o total que a Centi informa (senão o lote fica "Parcial" e nada
+  muda). O histórico mostra cada importação (situação, conferência, novos/atualizados/removidos). O que some da Centi é
+  marcado como removido — nada é apagado. Uma importação parada pode ser continuada ou cancelada.
+- Nenhuma API é lida sozinha ainda: "Ligada" (a atualização automática) chega num passo próprio.
+- Próximos passos (um por versão): tela Empenhos → atualização automática (desligada por padrão) → liquidações,
+  pagamentos e o Dashboard da execução.
 
 ## Limite de pedidos da pesquisa (WAF da Cloudflare)
 

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.182.0",
+    data: "2026-10-23",
+    titulo: "Importação manual dos empenhos, conferida com a Centi",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "Em APIs da Centi → Empenhos, a seção Importar lê os empenhos do ano página a página e só os grava quando a contagem confere com o total que a própria Centi informa. Faltou registro, a Centi falhou ou a importação foi interrompida: nada muda nos empenhos gravados.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "O editor das APIs ficou proporcional: todos os campos com o mesmo tamanho, os órgãos e as unidades no dropdown padrão do sistema (com busca, marcar todos e limpar) e os botões Testar e Importar no título de cada seção.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "novo", area: "Integrações", texto: "Histórico das importações com a situação (Importado, Parcial, Falhou, Cancelado), a conferência (quantos de quantos) e o resultado (novos, atualizados e removidos). O que some da Centi é marcado como removido — nada é apagado.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.181.0",
     data: "2026-10-23",
     titulo: "Editor de texto: fontes e colagem sem negrito indevido",

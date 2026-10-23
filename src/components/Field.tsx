@@ -31,7 +31,7 @@ const alturaCls = (denso?: boolean) => (denso ? "h-11 [@media(max-height:820px)]
  * O RÓTULO do campo. No modo DENSO o erro vai na MESMA linha do rótulo (à direita, cortado; o texto inteiro na dica) — o
  * formulário nunca cresce nem se mexe quando um erro aparece; nos demais modos, a mensagem fica abaixo da caixa (`Rodape`).
  */
-function Rotulo({ label, fid, denso, error, errId, extra }: { label?: string; fid: string; denso?: boolean; error?: string; errId: string; extra?: ReactNode }) {
+export function Rotulo({ label, fid, denso, error, errId, extra }: { label?: string; fid: string; denso?: boolean; error?: string; errId: string; extra?: ReactNode }) {
   if (!label && !(denso && error)) return null;
   if (!denso)
     return (
@@ -74,6 +74,9 @@ function Rodape({ denso, error, hint, errId }: { denso?: boolean; error?: string
 
 const WRAP =
   "flex items-center gap-2.5 rounded-control border bg-surface-2 px-3.5 transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent/20";
+
+/** A CAIXA de um campo (moldura + altura) — para um gatilho que precisa parecer um campo (ex.: `SeletorMultiplo campo`). */
+export const classeCaixaCampo = (denso?: boolean) => `${WRAP} ${alturaCls(denso)} border-border-2`;
 /** A seta da seleção DENTRO da moldura do campo (o respiro já é da moldura): rente ao fim, o texto antes dela. */
 const SETA_NA_CAIXA = "!pr-0";
 const INPUT =

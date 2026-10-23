@@ -4517,7 +4517,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sem ele, o órgão não entra — a tela avisa). Tela: a `DataTable` compacta (XLSX/PDF + o (?) no rodapé); tocar abre o
   editor DIRETO (`Modal` + `SecaoBanner`: O que ler · Quando atualizar · Endereço e parâmetros [recolhido] · Testar), com a
   `Ajuda compacta` em CADA campo (`rotuloExtra` — estendido a `SelectField`, `TextArea` [+ `mono`] e `CampoLista`), os
-  órgãos/unidades no `SeletorMultiplo suspenso` (unidades agrupadas por órgão) e a confirmação ao descartar. **TESTAR:**
+  órgãos/unidades no `SeletorMultiplo campo` (unidades agrupadas por órgão) e a confirmação ao descartar. **TESTAR:**
   `POST /api/admin/centi-apis/testar` (`exigirAdmin`, a edição EM CURSO + ano + qual pedido) faz UM pedido real pela
   `baixarSeguro` (estendida: `post` = corpo JSON, `comErro` = devolve o corpo e o `status` do erro; HTTPS público,
   redirecionamento revalidado, 30 s, 8 MB) e devolve o `ResultadoTeste` (`resumoResposta`: status, tempo, registros, o
@@ -4531,6 +4531,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Falhas do Dattago a NÃO repetir: página do meio que falha contada como "completo"; dedupe com chave ≠ da do banco (o lote
   inteiro recusado); erro de gravação engolido; o que some na origem nunca sai; sem id → 0 (colisão); órgãos 2..20 em vez
   da lista real (21–25 e 28 nunca lidos).
+- **`SeletorMultiplo campo`** (v1.182.0): o modo de FORMULÁRIO — o rótulo em cima (`Rotulo`, exportado do `Field`, com o
+  `extra` = a `Ajuda compacta`) e a caixa do `TextField`/`SelectField` (`classeCaixaCampo(denso)`, exportada do `Field`) com o
+  resumo dos escolhidos ("PMRV, FMS +1"; nenhum = `textoVazio`); abre o MESMO painel do `suspenso`. Use-o quando a escolha
+  múltipla fica entre campos de formulário (proporções iguais) — as opções com o rótulo curto e o nome no `detalhe` (a
+  busca procura nos dois).
+- **EMPENHOS — importação MANUAL conferida (v1.182.0, migração `0131`; passo 3 da EXECUÇÃO DA DESPESA):** tabelas
+  `centi_lotes` (um por importação: api, ano, estado lendo|promovido|parcial|falhou|cancelado, páginas, recebidos,
+  ÚNICOS, recusados, `total_informado`, inseridos/atualizados/removidos, mensagem, quem, `visto_em`), `empenhos_staging`
+  (PK lote + chave) e `empenhos` (chave ÚNICA = ano|órgão gestor|número — `chaveEmpenho`; `removido_em`, `lote_id`). Em
+  APIs da Centi → Empenhos, a seção **Importar** (`ImportacaoManual`, no `CentiApisAdmin`; só para `IMPORTAVEIS`,
+  `centi-apis-core.ts`) conduz pela rota `GET/POST /api/admin/centi-apis/[id]/importar` (`exigirAdmin`;
+  `importarCentiApiSchema`: `iniciar` {ano dentro dos anos mantidos; um lote "lendo" por API — o parado há 30 min vira
+  "falhou"} · `pagina` {lê UMA página com o cadastro SALVO pela `baixarSeguro` — a 1ª sem `pagina`, as demais com ela
+  (`corpoDaPagina`) —, `lerPaginaEmpenhos` → a página INTEIRA num parâmetro JSON (`comandoGuardarPagina`, `json_each` +
+  o `WHERE 1` do upsert) + `comandoContarPagina`, num lote} · `concluir` {a CONFERÊNCIA `conferirLote`: completo só com
+  ÚNICOS + recusados ≥ `TotalRegistros` — uma página repetida não engana; completo → `contagemDaPromocao` +
+  `comandosPromover` num lote atômico (upsert pela chave, o que voltou perde o `removido_em`, o que o ANO tinha e a Centi
+  não trouxe ganha `removido_em` — nada é apagado —, fecha o lote e limpa o staging); senão `comandosFecharLote` "parcial"
+  e a tabela final não muda} · `cancelar` {interrompido ou `falhou`}). A tela repete a página até 3× (2/4/8 s), mostra o
+  `Progress` (únicos + recusados ÷ total), trava o banner e avisa ao sair da página; "Continuar" retoma o lote parado na
+  página seguinte. `registrarLeitura` atualiza a "Última leitura" da API; auditoria `centi_api` (fora da versão `dados`).
+  Núcleo puro **`empenhos-core.ts`** (`linhaEmpenho` — sem número = RECUSADO, nunca "0"; `valor` pt-BR/en via
+  `parseValorPlanilha`; `dataIso`; `continuarLendo`; `MAX_PAGINAS`=500); builders **`empenhos-sql.ts`** e D1 `empenhos.ts`
+  (`listarLotes`, `loteEmAndamento`, `criarLote`); testes `tests/empenhos.test.ts` (no driver D1 real: 500 linhas num
+  comando, promoção, removido/reativado, outro ano intocado, lote parcial sem efeito). Próximo: passo 4 — a tela Empenhos.
 - **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
   "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
   modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",

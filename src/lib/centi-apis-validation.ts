@@ -29,3 +29,12 @@ export const testarCentiApiSchema = z.strictObject({
   ano: z.number().int().min(2000).max(2100),
   pedido: z.number().int().min(0).max(LIMITES_API.lista).default(0),
 });
+
+/** A IMPORTAÇÃO MANUAL de uma API (passo a passo, conduzida pela tela): iniciar um lote, ler UMA página, concluir
+ * (conferir e promover) ou cancelar. */
+export const importarCentiApiSchema = z.discriminatedUnion("acao", [
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100) }),
+  z.strictObject({ acao: z.literal("pagina"), lote: z.number().int().positive(), pagina: z.number().int().min(1).max(500) }),
+  z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive() }),
+  z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
+]);

@@ -132,11 +132,15 @@ test("APIs da Centi: o resumo da resposta do teste (lista direta ou dentro de um
   assert.match(resumoResposta('{"ok":true}').mensagem ?? "", /lista de registros/);
 });
 
-test("APIs da Centi: estado na tela", () => {
-  assert.equal(estadoApi({ ativa: false, implementada: false, ultimoStatus: null }).rotulo, "Em preparação");
-  assert.equal(estadoApi({ ativa: false, implementada: true, ultimoStatus: null }).rotulo, "Desligada");
-  assert.equal(estadoApi({ ativa: true, implementada: true, ultimoStatus: "falhou" }).rotulo, "Com erro");
-  assert.equal(estadoApi({ ativa: true, implementada: true, ultimoStatus: "completo" }).rotulo, "Ativa");
+test("APIs da Centi: estado na tela (a de importação manual não diz 'Em preparação')", () => {
+  const e = (chave: string, ativa: boolean, implementada: boolean, ultimoStatus: string | null) => estadoApi({ chave, ativa, implementada, ultimoStatus }).rotulo;
+  assert.equal(e("liquidacoes", false, false, null), "Em preparação");
+  assert.equal(e("empenhos", false, false, null), "Importação manual");
+  assert.equal(e("empenhos", false, false, "completo"), "Importação manual");
+  assert.equal(e("empenhos", false, false, "parcial"), "Última importação incompleta");
+  assert.equal(e("empenhos", false, true, null), "Desligada");
+  assert.equal(e("empenhos", true, true, "falhou"), "Com erro");
+  assert.equal(e("empenhos", true, true, "completo"), "Ativa");
 });
 
 test("APIs da Centi: o Zod recusa campos a mais e tetos estourados; o teste pede ano e pedido válidos", () => {

@@ -74,3 +74,11 @@ export async function unidadesDoCadastro(): Promise<UnidadeDoCadastro[]> {
     .where(and(eq(reparticoes.oculto, false), ne(reparticoes.codigo, "GERAL")))
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.nome));
 }
+
+/** A última leitura da API (a coluna "Última leitura" e o estado na tela). */
+export async function registrarLeitura(id: number, status: "completo" | "parcial" | "falhou", contagem: number, total: number | null): Promise<void> {
+  await getDb()
+    .update(centiApis)
+    .set({ ultimaExecucao: sql`CURRENT_TIMESTAMP`, ultimoStatus: status, ultimaContagem: contagem, ultimoTotal: total })
+    .where(eq(centiApis.id, id));
+}

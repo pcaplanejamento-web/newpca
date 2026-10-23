@@ -17,7 +17,7 @@ deduplicação diferente da do banco; erro de gravação engolido; o que some na
 como 0; órgãos 21–25 e 28 nunca lidos). Em passos pequenos, cada um uma versão conferida no ar antes do próximo:
 1. **Cadastro das APIs** em Integrações → "APIs da Centi" (v1.179.0) — **entregue**.
 2. **Testar** (um pedido real, nada gravado) + órgãos/unidades do cadastro + edição direta com (?) (v1.180.0) — **entregue**.
-3. Importação MANUAL dos empenhos em lote separado, promovida só quando a contagem bate com o `TotalRegistros`.
+3. **Importação MANUAL dos empenhos** em lote separado, promovida só quando a contagem bate com o `TotalRegistros` (v1.182.0) — **entregue**.
 4. Tela Empenhos (só ADM) · 5. Atualização automática (desligada por padrão) · 6. Abrir aos grupos.
 7–9. Liquidações e Pagamentos · 10. Dashboard da execução · 11. Ligação com o Orçamento e o PCA (por último).
 

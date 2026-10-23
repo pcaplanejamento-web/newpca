@@ -248,9 +248,20 @@ export function previaPedido(e: EdicaoApi, ano: number, cadastro: OrgaoDoCadastr
   };
 }
 
+/** As APIs cuja importação MANUAL já existe (as demais seguem "Em preparação"). */
+export const IMPORTAVEIS = ["empenhos"] as const;
+
+export function importavel(chave: string): boolean {
+  return (IMPORTAVEIS as readonly string[]).includes(chave);
+}
+
 /** O estado da API na tela. */
-export function estadoApi(a: Pick<ApiCenti, "ativa" | "implementada" | "ultimoStatus">): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" } {
-  if (!a.implementada) return { rotulo: "Em preparação", tom: "slate" };
+export function estadoApi(a: Pick<ApiCenti, "chave" | "ativa" | "implementada" | "ultimoStatus">): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
+  if (!a.implementada) {
+    if (!importavel(a.chave)) return { rotulo: "Em preparação", tom: "slate" };
+    if (a.ultimoStatus === "parcial" || a.ultimoStatus === "falhou") return { rotulo: "Última importação incompleta", tom: "amber" };
+    return { rotulo: "Importação manual", tom: "blue" };
+  }
   if (!a.ativa) return { rotulo: "Desligada", tom: "slate" };
   if (a.ultimoStatus === "falhou") return { rotulo: "Com erro", tom: "red" };
   if (a.ultimoStatus === "parcial") return { rotulo: "Parcial", tom: "amber" };

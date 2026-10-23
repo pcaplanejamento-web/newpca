@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, type ReactNode, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useId, useMemo, useState } from "react";
 import { num } from "@/lib/format";
 import { opcoesDaBusca } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
-import { Checkbox, SearchField } from "./Field";
+import { Checkbox, classeCaixaCampo, Rotulo, SearchField } from "./Field";
 import { IconChevronDown } from "./icons";
 import { SetaDropdown } from "./SetaDropdown";
 
@@ -31,6 +31,7 @@ export function SeletorMultiplo({
   disabled = false,
   suspenso = false,
   textoVazio = "Todos",
+  campo,
 }: {
   rotulo: string;
   opcoes: OpcaoMultipla[];
@@ -39,8 +40,12 @@ export function SeletorMultiplo({
   disabled?: boolean;
   suspenso?: boolean;
   textoVazio?: string;
+  /** CAMPO de formulário: o rótulo EM CIMA e a caixa do `TextField`/`SelectField` (mesma altura — `denso`), mostrando os
+   * escolhidos; abre o MESMO painel do `suspenso`. `extra` = ao lado do rótulo (ex.: a `Ajuda compacta`). */
+  campo?: { denso?: boolean; extra?: ReactNode };
 }) {
   const [aberto, setAberto] = useState(false);
+  const fid = useId();
   const n = selecionados.length;
   const gatilho = (seta: ReactNode) => (
     <>
@@ -50,6 +55,34 @@ export function SeletorMultiplo({
     </>
   );
   const corpo = <CorpoSelecao rotulo={rotulo} opcoes={opcoes} selecionados={selecionados} onChange={onChange} disabled={disabled} textoVazio={textoVazio} />;
+
+  if (campo) {
+    const nomes = opcoes.filter((o) => selecionados.includes(o.valor)).map((o) => o.rotulo ?? o.valor);
+    const resumo = n === 0 ? textoVazio : n <= 2 ? nomes.join(", ") : `${nomes.slice(0, 2).join(", ")} +${num(n - 2)}`;
+    return (
+      <div className="min-w-0">
+        <Rotulo label={rotulo} fid={fid} denso={campo.denso} errId={`${fid}-erro`} extra={campo.extra} />
+        <Dropdown
+          papel="dialog"
+          ariaLabel={rotulo}
+          title={`${rotulo}: ${n === 0 ? textoVazio : nomes.join(", ")}`}
+          bloqueado={disabled}
+          width={420}
+          className="block w-full min-w-0"
+          triggerClassName="w-full"
+          id={fid}
+          trigger={
+            <span className={`${classeCaixaCampo(campo.denso)} w-full ${disabled ? "opacity-60" : ""}`}>
+              <span className={`min-w-0 flex-1 truncate text-left text-[15px] ${n > 0 ? "text-text" : "text-muted"}`}>{resumo}</span>
+              <SetaDropdown className="h-4 w-4 shrink-0 text-muted" />
+            </span>
+          }
+        >
+          {corpo}
+        </Dropdown>
+      </div>
+    );
+  }
 
   if (suspenso)
     return (

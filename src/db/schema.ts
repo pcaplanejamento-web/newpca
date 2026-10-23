@@ -2138,3 +2138,84 @@ export const centiApis = sqliteTable(
   },
   (t) => [uniqueIndex("centi_apis_chave_uq").on(t.chave)],
 );
+
+/** Um LOTE de importação de uma API da Centi (migração `0131`): as páginas lidas vão ao staging e só são PROMOVIDAS
+ * com a contagem conferida (`recebidos` × `total_informado`). `estado`: lendo | promovido | parcial | falhou | cancelado. */
+export const centiLotes = sqliteTable(
+  "centi_lotes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    apiChave: text("api_chave").notNull(),
+    ano: integer("ano").notNull(),
+    estado: text("estado").notNull().default("lendo"),
+    paginas: integer("paginas").notNull().default(0),
+    recebidos: integer("recebidos").notNull().default(0),
+    unicos: integer("unicos").notNull().default(0),
+    recusados: integer("recusados").notNull().default(0),
+    totalInformado: integer("total_informado"),
+    inseridos: integer("inseridos"),
+    atualizados: integer("atualizados"),
+    removidos: integer("removidos"),
+    mensagem: text("mensagem"),
+    iniciadoPor: text("iniciado_por").notNull().default(""),
+    iniciadoEm: text("iniciado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    concluidoEm: text("concluido_em"),
+  },
+  (t) => [index("centi_lotes_api_ano_idx").on(t.apiChave, t.ano, t.id)],
+);
+
+/** As colunas de um empenho (as MESMAS no staging e na tabela final — ver `empenhos-core.ts`). */
+const colunasEmpenho = () => ({
+  chave: text("chave").notNull(),
+  ano: integer("ano").notNull(),
+  srcId: integer("src_id"),
+  numero: text("numero").notNull(),
+  data: text("data"),
+  orgaoGestor: text("orgao_gestor").notNull().default(""),
+  unidadeOrcamentaria: text("unidade_orcamentaria"),
+  fornecedor: text("fornecedor"),
+  cpfCnpj: text("cpf_cnpj"),
+  modalidade: text("modalidade"),
+  licitacao: text("licitacao"),
+  funcao: text("funcao"),
+  subfuncao: text("subfuncao"),
+  programa: text("programa"),
+  acao: text("acao"),
+  elemento: text("elemento"),
+  subelemento: text("subelemento"),
+  fonte: text("fonte"),
+  valorEmpenhado: real("valor_empenhado").notNull().default(0),
+  valorAnulado: real("valor_anulado").notNull().default(0),
+  valorLiquidado: real("valor_liquidado").notNull().default(0),
+  valorPago: real("valor_pago").notNull().default(0),
+  saldoPagar: real("saldo_pagar").notNull().default(0),
+  historico: text("historico"),
+});
+
+/** As páginas lidas de um lote de empenhos, antes da conferência (migração `0131`; uma linha por chave no lote). */
+export const empenhosStaging = sqliteTable(
+  "empenhos_staging",
+  {
+    loteId: integer("lote_id")
+      .notNull()
+      .references(() => centiLotes.id, { onDelete: "cascade" }),
+    pagina: integer("pagina").notNull(),
+    ...colunasEmpenho(),
+  },
+  (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
+);
+
+/** Os EMPENHOS da Centi (migração `0131`) — chave = ano|órgão gestor|número; o que some na Centi ganha `removido_em`. */
+export const empenhos = sqliteTable(
+  "empenhos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ...colunasEmpenho(),
+    loteId: integer("lote_id").references(() => centiLotes.id, { onDelete: "set null" }),
+    removidoEm: text("removido_em"),
+    criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("empenhos_chave_uq").on(t.chave), index("empenhos_ano_idx").on(t.ano, t.orgaoGestor)],
+);

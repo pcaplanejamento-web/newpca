@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ApiCenti,
   DIVISOES,
@@ -9,6 +9,7 @@ import {
   edicaoDaApi,
   estadoApi,
   FREQUENCIAS,
+  importavel,
   motivoApiInvalida,
   OPCOES_ANOS,
   type OrgaoDoCadastro,
@@ -18,6 +19,7 @@ import {
   rotuloFrequencia,
   type UnidadeDoCadastro,
 } from "@/lib/centi-apis-core";
+import { anosDaApi, continuarLendo, type LoteCenti, ROTULO_ESTADO_LOTE } from "@/lib/empenhos-core";
 import { dataHoraBR, dataIsoBrasilia } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -27,8 +29,10 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { CampoLista, SelectField, TextArea, TextField } from "./Field";
-import { IconChevronDown, IconPlay } from "./icons";
+import { CelulaTexto } from "./CelulaLista";
+import { IconChevronDown, IconDownload, IconPlay } from "./icons";
 import { Modal } from "./Modal";
+import { Progress } from "./Progress";
 import { SecaoBanner } from "./SecaoBanner";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
@@ -196,6 +200,7 @@ function EditorApi({
   const [pedido, setPedido] = useState(0);
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<ResultadoTeste | null>(null);
+  const [importando, setImportando] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
   const muda = <K extends keyof EdicaoApi>(k: K, valor: EdicaoApi[K]) => {
     setV((x) => ({ ...x, [k]: valor }));
@@ -261,12 +266,12 @@ function EditorApi({
 
   const opcoesOrgaos = orgaos.map((o) => ({
     valor: String(o.id),
-    rotulo: `${o.sigla} — ${o.nome}`,
-    detalhe: o.codigoCenti != null ? `ID na Centi ${o.codigoCenti}` : "Sem o ID da Centi — não entra nos pedidos",
+    rotulo: o.sigla,
+    detalhe: `${o.nome} · ${o.codigoCenti != null ? `ID na Centi ${o.codigoCenti}` : "sem o ID da Centi — não entra nos pedidos"}`,
   }));
   const opcoesUnidades = unidades
     .filter((u) => !v.orgaos.length || (u.orgaoId != null && v.orgaos.includes(u.orgaoId)))
-    .map((u) => ({ valor: String(u.id), rotulo: `${u.codigo} — ${u.nome}`, grupo: (u.orgaoId != null && nomeOrgao.get(u.orgaoId)) || "Sem órgão" }));
+    .map((u) => ({ valor: String(u.id), rotulo: u.codigo, detalhe: u.nome, grupo: (u.orgaoId != null && nomeOrgao.get(u.orgaoId)) || "Sem órgão" }));
   const rotuloPedido = (p: Record<string, number>) =>
     p.orgao != null ? `${porCodigo.get(p.orgao)?.sigla ?? "Órgão"} (ID ${p.orgao})` : p.fonte != null ? `Fonte ${p.fonte}` : "O ano inteiro";
   const colunasAmostra: Column<Record<string, string>>[] = (teste?.campos ?? []).slice(0, 12).map((c) => ({
@@ -281,7 +286,7 @@ function EditorApi({
     <Modal
       open
       onClose={() => void fechar()}
-      bloqueado={salvando}
+      bloqueado={salvando || importando}
       size="xl"
       titulo={`API da Centi — ${api.nome}`}
       acoesCabecalho={
@@ -306,6 +311,7 @@ function EditorApi({
         <SecaoBanner titulo="O que ler">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <TextField
+              denso
               label="Nome"
               value={v.nome}
               onChange={(e) => muda("nome", e.target.value)}
@@ -313,6 +319,7 @@ function EditorApi({
               rotuloExtra={<A titulo="Nome">Como a API aparece nas telas do sistema.</A>}
             />
             <SelectField
+              denso
               label="Como o ano é pedido"
               value={v.divisao}
               onChange={(e) => muda("divisao", e.target.value as DivisaoApi)}
@@ -347,45 +354,46 @@ function EditorApi({
             rotuloExtra={<A titulo="Descrição">O que esta API traz — aparece para quem consultar o cadastro.</A>}
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex min-w-0 items-center gap-1">
-              <div className="min-w-0 flex-1">
-                <SeletorMultiplo
-                  rotulo="Órgãos"
-                  opcoes={opcoesOrgaos}
-                  selecionados={v.orgaos.map(String)}
-                  onChange={(l) => {
-                    const ids = l.map(Number);
-                    setV((x) => ({ ...x, orgaos: ids, unidades: ids.length ? x.unidades.filter((u) => ids.includes(unidades.find((y) => y.id === u)?.orgaoId ?? -1)) : x.unidades }));
-                    setTeste(null);
-                  }}
-                  suspenso
-                  textoVazio="Todos"
-                />
-              </div>
-              <A titulo="Órgãos">
-                <p>Os órgãos do cadastro do sistema (Órgãos e Unidades). Nenhum escolhido = todos.</p>
-                <p>
-                  Nas APIs pedidas por órgão, cada órgão vira um pedido com o <strong>ID da entidade na Centi</strong>{" "}
-                  cadastrado nele — o órgão sem esse ID não entra. Nas demais, só o que for desses órgãos será guardado.
-                </p>
-              </A>
-            </div>
-            <div className="flex min-w-0 items-center gap-1">
-              <div className="min-w-0 flex-1">
-                <SeletorMultiplo
-                  rotulo="Unidades"
-                  opcoes={opcoesUnidades}
-                  selecionados={v.unidades.map(String)}
-                  onChange={(l) => muda("unidades", l.map(Number))}
-                  suspenso
-                  textoVazio="Todas"
-                />
-              </div>
-              <A titulo="Unidades">
-                As unidades do cadastro (dos órgãos escolhidos). Nenhuma escolhida = todas. Só o que for dessas unidades será
-                guardado — a API sempre traz o órgão inteiro.
-              </A>
-            </div>
+            <SeletorMultiplo
+              rotulo="Órgãos"
+              opcoes={opcoesOrgaos}
+              selecionados={v.orgaos.map(String)}
+              onChange={(l) => {
+                const ids = l.map(Number);
+                setV((x) => ({ ...x, orgaos: ids, unidades: ids.length ? x.unidades.filter((u) => ids.includes(unidades.find((y) => y.id === u)?.orgaoId ?? -1)) : x.unidades }));
+                setTeste(null);
+              }}
+              textoVazio="Todos"
+              campo={{
+                denso: true,
+                extra: (
+                  <A titulo="Órgãos">
+                    <p>Os órgãos do cadastro do sistema (Órgãos e Unidades). Nenhum escolhido = todos.</p>
+                    <p>
+                      Nas APIs pedidas por órgão, cada órgão vira um pedido com o <strong>ID da entidade na Centi</strong> cadastrado
+                      nele — o órgão sem esse ID não entra. Nas demais, a API sempre traz tudo; a escolha vai filtrar as telas da
+                      execução (próximos passos).
+                    </p>
+                  </A>
+                ),
+              }}
+            />
+            <SeletorMultiplo
+              rotulo="Unidades"
+              opcoes={opcoesUnidades}
+              selecionados={v.unidades.map(String)}
+              onChange={(l) => muda("unidades", l.map(Number))}
+              textoVazio="Todas"
+              campo={{
+                denso: true,
+                extra: (
+                  <A titulo="Unidades">
+                    As unidades do cadastro (dos órgãos escolhidos). Nenhuma escolhida = todas. A API sempre traz o órgão inteiro; a
+                    escolha vai filtrar as telas da execução (próximos passos).
+                  </A>
+                ),
+              }}
+            />
           </div>
           {semCodigo.length > 0 && (
             <Callout kind="warn">
@@ -411,6 +419,7 @@ function EditorApi({
         <SecaoBanner titulo="Quando atualizar">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SelectField
+              denso
               label="Frequência"
               value={String(v.frequenciaMin)}
               onChange={(e) => muda("frequenciaMin", Number(e.target.value))}
@@ -423,6 +432,7 @@ function EditorApi({
               ))}
             </SelectField>
             <TextField
+              denso
               label="Das"
               type="time"
               value={v.horaInicio}
@@ -430,6 +440,7 @@ function EditorApi({
               rotuloExtra={<A titulo="Horário">A leitura só acontece entre esses horários (Brasília).</A>}
             />
             <TextField
+              denso
               label="Até"
               type="time"
               value={v.horaFim}
@@ -437,6 +448,7 @@ function EditorApi({
               rotuloExtra={<A titulo="Horário">A leitura só acontece entre esses horários (Brasília).</A>}
             />
             <SelectField
+              denso
               label="Anos mantidos"
               value={String(v.anos)}
               onChange={(e) => muda("anos", Number(e.target.value))}
@@ -485,6 +497,7 @@ function EditorApi({
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_0.6fr_1fr]">
                 <TextField
+                  denso
                   label="URL base"
                   value={v.urlBase}
                   onChange={(e) => muda("urlBase", e.target.value)}
@@ -492,6 +505,7 @@ function EditorApi({
                   rotuloExtra={<A titulo="URL base">O endereço do portal da Centi. Só HTTPS do domínio centi.com.br.</A>}
                 />
                 <TextField
+                  denso
                   label="Endpoint"
                   value={v.endpoint}
                   onChange={(e) => muda("endpoint", e.target.value)}
@@ -499,6 +513,7 @@ function EditorApi({
                   rotuloExtra={<A titulo="Endpoint">O nome da API no portal (ex.: getempenhos).</A>}
                 />
                 <TextField
+                  denso
                   label="UF"
                   value={v.uf}
                   onChange={(e) => muda("uf", e.target.value)}
@@ -507,6 +522,7 @@ function EditorApi({
                   rotuloExtra={<A titulo="UF">A sigla do estado no endereço (go).</A>}
                 />
                 <TextField
+                  denso
                   label="Município"
                   value={v.tenant}
                   onChange={(e) => muda("tenant", e.target.value)}
@@ -540,17 +556,27 @@ function EditorApi({
         <SecaoBanner
           titulo="Testar"
           acao={
-            <A titulo="Testar">
-              Faz <strong>um</strong> pedido de verdade à Centi com o que está na tela (mesmo sem salvar) e mostra o que voltou:
-              quantos registros, o total que a API informa, os campos e uma amostra. Nada é gravado.
-            </A>
+            <span className="flex items-center gap-1">
+              <Button size="sm" variant="secondary" onClick={testar} loading={testando} disabled={!!previa.erro} icon={<IconPlay className="h-4 w-4" />}>
+                Testar agora
+              </Button>
+              <A titulo="Testar">
+                Faz <strong>um</strong> pedido de verdade à Centi com o que está na tela (mesmo sem salvar) e mostra o que voltou:
+                quantos registros, o total que a API informa, os campos e uma amostra. Nada é gravado.
+              </A>
+            </span>
           }
         >
-          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto]">
-            <SelectField label="Ano" value={String(ano)} onChange={(e) => {
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+            <SelectField
+              denso
+              label="Ano"
+              value={String(ano)}
+              onChange={(e) => {
                 setAno(Number(e.target.value));
                 setTeste(null);
-              }}>
+              }}
+            >
               {[anoAtual(), anoAtual() - 1, anoAtual() - 2].map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -558,6 +584,7 @@ function EditorApi({
               ))}
             </SelectField>
             <SelectField
+              denso
               label="Pedido"
               value={String(pedidoAtual)}
               onChange={(e) => {
@@ -572,9 +599,6 @@ function EditorApi({
                 </option>
               ))}
             </SelectField>
-            <Button variant="secondary" onClick={testar} loading={testando} disabled={!!previa.erro} icon={<IconPlay className="h-4 w-4" />}>
-              Testar agora
-            </Button>
           </div>
           {previa.erro ? (
             <p className="text-[12.5px] text-[color:var(--danger)]">{previa.erro}</p>
@@ -605,8 +629,244 @@ function EditorApi({
             </div>
           )}
         </SecaoBanner>
+        {importavel(api.chave) && <ImportacaoManual api={api} alterado={alterado} onOcupado={setImportando} />}
       </div>
       {confirmacao}
     </Modal>
+  );
+}
+
+type RespostaPagina = { lote: LoteCenti; pagina: { recebidos: number; novos: number } };
+
+/** Chama a rota da importação manual; devolve o JSON ou lança com a mensagem do servidor. */
+async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>): Promise<T> {
+  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(corpo),
+  });
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T;
+  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+  return j;
+}
+
+const ESPERA_TENTATIVAS = [2000, 4000, 8000];
+
+/**
+ * A IMPORTAÇÃO MANUAL (passo 3): lê a API página a página com o cadastro SALVO, guarda num lote separado e só grava nos
+ * empenhos quando a contagem confere com o total que a Centi informa. Interromper, fechar a página ou uma falha deixam a
+ * tabela final como estava.
+ */
+function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterado: boolean; onOcupado: (b: boolean) => void }) {
+  const anos = anosDaApi(anoAtual(), api.anos);
+  const [ano, setAno] = useState(anos[0]);
+  const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
+  const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
+  const [atual, setAtual] = useState<LoteCenti | null>(null);
+  const [rodando, setRodando] = useState(false);
+  const parar = useRef(false);
+  const { confirmar, confirmacao } = useConfirmacao();
+
+  const carregar = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/admin/centi-apis/${api.id}/importar`);
+      const j = (await r.json()) as { ok?: boolean; lotes?: LoteCenti[]; emAndamento?: LoteCenti | null };
+      if (j.ok) {
+        setLotes(j.lotes ?? []);
+        setEmAndamento(j.emAndamento ?? null);
+      }
+    } catch {
+      setLotes((l) => l ?? []);
+    }
+  }, [api.id]);
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  useEffect(() => {
+    onOcupado(rodando);
+    if (!rodando) return;
+    const aviso = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [rodando, onOcupado]);
+
+  async function pagina(lote: number, n: number): Promise<RespostaPagina> {
+    let ultimo: unknown;
+    for (let t = 0; t <= ESPERA_TENTATIVAS.length; t++) {
+      if (parar.current) throw new Error("Interrompida.");
+      try {
+        return await pedirImportacao<RespostaPagina>(api.id, { acao: "pagina", lote, pagina: n });
+      } catch (e) {
+        ultimo = e;
+        if (t < ESPERA_TENTATIVAS.length) await new Promise((ok) => setTimeout(ok, ESPERA_TENTATIVAS[t]));
+      }
+    }
+    throw ultimo instanceof Error ? ultimo : new Error("Falha ao ler a página.");
+  }
+
+  async function importar(retomar: LoteCenti | null) {
+    parar.current = false;
+    setRodando(true);
+    let lote = retomar;
+    try {
+      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano })).lote;
+      setAtual(lote);
+      let n = lote.paginas + 1;
+      for (;;) {
+        if (parar.current) {
+          await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, motivo: "Interrompida pelo administrador." });
+          toast.info("Importação interrompida — nada foi gravado nos empenhos.");
+          return;
+        }
+        let r: RespostaPagina;
+        try {
+          r = await pagina(lote.id, n);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Falha ao ler a página.";
+          if (parar.current) continue;
+          await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, falhou: true, motivo: `Página ${n}: ${msg}`.slice(0, 300) }).catch(() => {});
+          toast.error(`A importação falhou na página ${n}: ${msg} Nada foi gravado nos empenhos.`);
+          return;
+        }
+        lote = r.lote;
+        setAtual(lote);
+        if (!continuarLendo(lote, r.pagina)) break;
+        n++;
+      }
+      const fim = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "concluir", lote: lote.id })).lote;
+      setAtual(fim);
+      if (fim.estado === "promovido") {
+        toast.success(`Empenhos ${fim.ano} importados e conferidos: ${fim.inseridos} novos, ${fim.atualizados} atualizados, ${fim.removidos} marcados como removidos.`);
+      } else {
+        toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na importação.");
+    } finally {
+      setRodando(false);
+      void carregar();
+    }
+  }
+
+  async function interromper() {
+    if (await confirmar({ titulo: "Interromper a importação?", texto: "O que já foi lido é descartado; os empenhos ficam como estavam.", confirmar: "Interromper", perigo: true })) {
+      parar.current = true;
+    }
+  }
+
+  async function cancelarParada(l: LoteCenti) {
+    await pedirImportacao(api.id, { acao: "cancelar", lote: l.id, motivo: "Cancelada pelo administrador." }).catch((e) => toast.error(e instanceof Error ? e.message : "Falha."));
+    void carregar();
+  }
+
+  const progresso = atual?.totalInformado ? Math.min(100, ((atual.unicos + atual.recusados) / atual.totalInformado) * 100) : 0;
+  const colunas: Column<LoteCenti>[] = [
+    { key: "quando", header: "Quando", nowrap: true, value: (l) => dataHoraBR(l.iniciadoEm), render: (l) => <span className="tabular-nums">{dataHoraBR(l.iniciadoEm)}</span> },
+    { key: "ano", header: "Ano", nowrap: true, value: (l) => String(l.ano), render: (l) => <span className="tabular-nums">{l.ano}</span> },
+    {
+      key: "estado",
+      header: "Situação",
+      nowrap: true,
+      value: (l) => ROTULO_ESTADO_LOTE[l.estado]?.rotulo ?? l.estado,
+      render: (l) => (
+        <Badge tone={ROTULO_ESTADO_LOTE[l.estado]?.tom ?? "slate"} dot>
+          {ROTULO_ESTADO_LOTE[l.estado]?.rotulo ?? l.estado}
+        </Badge>
+      ),
+    },
+    {
+      key: "conferencia",
+      header: "Conferência",
+      nowrap: true,
+      value: (l) => `${l.unicos + l.recusados} de ${l.totalInformado ?? "?"}`,
+      render: (l) => (
+        <span className="tabular-nums">
+          {(l.unicos + l.recusados).toLocaleString("pt-BR")} de {l.totalInformado != null ? l.totalInformado.toLocaleString("pt-BR") : "?"}
+        </span>
+      ),
+    },
+    {
+      key: "resultado",
+      header: "Resultado",
+      align: "left",
+      minWidth: 220,
+      value: (l) => l.mensagem ?? "",
+      render: (l) =>
+        l.estado === "promovido" ? (
+          <span className="text-text-2">
+            {l.inseridos} novos · {l.atualizados} atualizados · {l.removidos} removidos
+          </span>
+        ) : (
+          <CelulaTexto texto={l.mensagem ?? (l.estado === "lendo" ? "Em andamento" : "—")} />
+        ),
+    },
+    { key: "quem", header: "Por", nowrap: true, value: (l) => l.iniciadoPor, render: (l) => <span className="text-muted">{l.iniciadoPor}</span> },
+  ];
+
+  return (
+    <SecaoBanner
+      titulo="Importar"
+      acao={
+        <span className="flex items-center gap-1">
+          {rodando ? (
+            <Button size="sm" variant="danger" onClick={() => void interromper()}>
+              Interromper
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => void importar(null)} disabled={alterado || !!emAndamento} icon={<IconDownload className="h-4 w-4" />}>
+              Importar {ano}
+            </Button>
+          )}
+          <A titulo="Importar">
+            <p>
+              Lê a API <strong>página a página</strong> com o cadastro salvo e guarda tudo num lote separado. Os empenhos só são
+              gravados quando a contagem <strong>confere</strong> com o total que a própria Centi informa.
+            </p>
+            <p>
+              Faltou registro, a Centi falhou ou você interrompeu: o lote fica parcial e os empenhos continuam como estavam. O que
+              sumir da Centi é marcado como <strong>removido</strong> (nada é apagado).
+            </p>
+          </A>
+        </span>
+      }
+    >
+      {alterado && <Callout kind="warn">Salve as alterações antes de importar — a importação usa o cadastro salvo.</Callout>}
+      {emAndamento && !rodando && (
+        <Callout kind="warn">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            Há uma importação de {emAndamento.ano} parada na página {emAndamento.paginas}.
+            <span className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={() => void cancelarParada(emAndamento)}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={() => void importar(emAndamento)} disabled={alterado}>
+                Continuar
+              </Button>
+            </span>
+          </span>
+        </Callout>
+      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,10rem)]">
+        <SelectField denso label="Ano" value={String(ano)} onChange={(e) => setAno(Number(e.target.value))} disabled={rodando}>
+          {anos.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+      {rodando && atual && (
+        <Progress
+          value={progresso}
+          continuo={!atual.totalInformado}
+          label={`Página ${atual.paginas} · ${(atual.unicos + atual.recusados).toLocaleString("pt-BR")}${atual.totalInformado ? ` de ${atual.totalInformado.toLocaleString("pt-BR")}` : ""} registros`}
+        />
+      )}
+      {lotes && lotes.length > 0 && (
+        <DataTable columns={colunas} rows={lotes} getKey={(l) => l.id} density="compact" exportar={{ nome: `Importações ${api.nome}` }} resumo={(l) => `${l.length} importaç${l.length === 1 ? "ão" : "ões"}`} />
+      )}
+      {confirmacao}
+    </SecaoBanner>
   );
 }

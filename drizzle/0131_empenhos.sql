@@ -1,0 +1,86 @@
+-- EXECUÇÃO DA DESPESA — passo 3: a importação MANUAL dos empenhos (aditiva; tabelas novas, nada existente muda).
+-- Cada importação é um LOTE: as páginas lidas da Centi vão para `empenhos_staging` (chave única por lote) e só são
+-- PROMOVIDAS para `empenhos` quando a contagem confere com o total que a própria Centi informa (TotalRegistros). O que
+-- some da Centi não é apagado: ganha `removido_em`.
+CREATE TABLE `centi_lotes` (
+  `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  `api_chave` text NOT NULL,
+  `ano` integer NOT NULL,
+  `estado` text DEFAULT 'lendo' NOT NULL,
+  `paginas` integer DEFAULT 0 NOT NULL,
+  `recebidos` integer DEFAULT 0 NOT NULL,
+  `unicos` integer DEFAULT 0 NOT NULL,
+  `recusados` integer DEFAULT 0 NOT NULL,
+  `total_informado` integer,
+  `inseridos` integer,
+  `atualizados` integer,
+  `removidos` integer,
+  `mensagem` text,
+  `iniciado_por` text DEFAULT '' NOT NULL,
+  `iniciado_em` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+  `visto_em` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+  `concluido_em` text
+);
+CREATE INDEX `centi_lotes_api_ano_idx` ON `centi_lotes` (`api_chave`, `ano`, `id`);
+CREATE TABLE `empenhos_staging` (
+  `lote_id` integer NOT NULL REFERENCES `centi_lotes`(`id`) ON DELETE cascade,
+  `chave` text NOT NULL,
+  `pagina` integer NOT NULL,
+  `ano` integer NOT NULL,
+  `src_id` integer,
+  `numero` text NOT NULL,
+  `data` text,
+  `orgao_gestor` text DEFAULT '' NOT NULL,
+  `unidade_orcamentaria` text,
+  `fornecedor` text,
+  `cpf_cnpj` text,
+  `modalidade` text,
+  `licitacao` text,
+  `funcao` text,
+  `subfuncao` text,
+  `programa` text,
+  `acao` text,
+  `elemento` text,
+  `subelemento` text,
+  `fonte` text,
+  `valor_empenhado` real DEFAULT 0 NOT NULL,
+  `valor_anulado` real DEFAULT 0 NOT NULL,
+  `valor_liquidado` real DEFAULT 0 NOT NULL,
+  `valor_pago` real DEFAULT 0 NOT NULL,
+  `saldo_pagar` real DEFAULT 0 NOT NULL,
+  `historico` text,
+  PRIMARY KEY (`lote_id`, `chave`)
+);
+CREATE TABLE `empenhos` (
+  `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  `chave` text NOT NULL,
+  `ano` integer NOT NULL,
+  `src_id` integer,
+  `numero` text NOT NULL,
+  `data` text,
+  `orgao_gestor` text DEFAULT '' NOT NULL,
+  `unidade_orcamentaria` text,
+  `fornecedor` text,
+  `cpf_cnpj` text,
+  `modalidade` text,
+  `licitacao` text,
+  `funcao` text,
+  `subfuncao` text,
+  `programa` text,
+  `acao` text,
+  `elemento` text,
+  `subelemento` text,
+  `fonte` text,
+  `valor_empenhado` real DEFAULT 0 NOT NULL,
+  `valor_anulado` real DEFAULT 0 NOT NULL,
+  `valor_liquidado` real DEFAULT 0 NOT NULL,
+  `valor_pago` real DEFAULT 0 NOT NULL,
+  `saldo_pagar` real DEFAULT 0 NOT NULL,
+  `historico` text,
+  `lote_id` integer REFERENCES `centi_lotes`(`id`) ON DELETE set null,
+  `removido_em` text,
+  `criado_em` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+  `atualizado_em` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL
+);
+CREATE UNIQUE INDEX `empenhos_chave_uq` ON `empenhos` (`chave`);
+CREATE INDEX `empenhos_ano_idx` ON `empenhos` (`ano`, `orgao_gestor`);
