@@ -38,7 +38,7 @@ async function chamar<T>(url: string, metodo = "GET", corpo?: unknown): Promise<
 const MODOS: { value: ModoImplantacao; label: string; dica: string }[] = [
   { value: "desligado", label: "Desligado", dica: "Nenhuma regra nova vale — dá para escrever e conferir o termo" },
   { value: "teste", label: "Teste", dica: "Termo e aparelhos valem só para os testadores escolhidos" },
-  { value: "ativo", label: "Ativo", dica: "Termo e aparelhos valem para toda a plataforma" },
+  { value: "ativo", label: "Ativo", dica: "Termo e aparelhos valem para todos ou para as pessoas escolhidas" },
 ];
 
 /** Os CAMPOS da implantação e dos aparelhos (controlados) — a tela do ADM e o catálogo. */
@@ -50,6 +50,29 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
       <section className="space-y-3">
         <p className="text-[13px] font-semibold text-text-2">Implantação</p>
         <Segmented ariaLabel="Implantação" value={valor.modo} options={MODOS} onChange={(modo) => set({ modo })} />
+        {valor.modo === "ativo" && (
+          <div className="space-y-3">
+            <Segmented
+              ariaLabel="Quem precisa aceitar"
+              value={valor.alcance}
+              options={[
+                { value: "todos", label: "Todos", dica: "Todos os usuários — e quem entrar depois — aceitam o termo e nomeiam o aparelho (quem já fez não é travado)" },
+                { value: "escolhidos", label: "Pessoas escolhidas", dica: "Só as pessoas escolhidas (e os testadores) aceitam o termo e nomeiam o aparelho" },
+              ]}
+              onChange={(alcance) => set({ alcance })}
+            />
+            {valor.alcance === "escolhidos" && (
+              <SeletorMultiplo
+                rotulo="Pessoas que devem aceitar"
+                suspenso
+                textoVazio="Ninguém"
+                opcoes={pessoas.filter((p) => p.status === "ativo").map((p) => ({ valor: String(p.id), rotulo: p.nome, detalhe: p.email }))}
+                selecionados={valor.exigidos.map(String)}
+                onChange={(v) => set({ exigidos: v.map(Number) })}
+              />
+            )}
+          </div>
+        )}
         {valor.modo !== "desligado" && (
           <div className="space-y-3">
             <SeletorMultiplo
@@ -268,7 +291,7 @@ export function TermoUsoAdmin() {
       if (c?.precisaConfirmar) {
         const sim = await confirmar({
           titulo: "Liberar para toda a plataforma?",
-          texto: `${c.afetados ?? 0} pessoa(s) ativa(s) passam a ter de aceitar o termo vigente e nomear os aparelhos. Os aceites e aparelhos do teste são apagados.`,
+          texto: `${c.afetados ?? 0} pessoa(s) ativa(s) passam a ter de aceitar (quem já aceitou esta versão não é travado) o termo vigente e nomear os aparelhos. Os aceites e aparelhos do teste são apagados.`,
           confirmar: "Liberar",
           perigo: true,
         });

@@ -10,6 +10,10 @@ export type ConfigAcessoConta = {
   modo: ModoImplantacao;
   /** Os usuários do TESTE. */
   testadores: number[];
+  /** No ATIVO: as regras valem para TODOS (quem entrar depois também) ou só para as pessoas ESCOLHIDAS (+ os testadores). */
+  alcance: "todos" | "escolhidos";
+  /** As pessoas escolhidas no ATIVO com `alcance` = "escolhidos". */
+  exigidos: number[];
   /** No teste: cada login do testador começa do zero (aceita o termo e nomeia o aparelho de novo; sem trava). */
   repetirAoEntrar: boolean;
   /** Aparelhos por conta (padrão) — 1 a 10. */
@@ -36,12 +40,15 @@ export const LIMITE_MIN = 1;
 export const LIMITE_MAX = 10;
 export const TROCA_MAX_DIAS = 180;
 export const MAX_TESTADORES = 200;
+export const MAX_EXIGIDOS = 5000;
 export const OPCOES_TROCA_DIAS = [0, 1, 7, 15, 30, 60, 90, 180] as const;
 export const OPCOES_FECHAR_ACEITE = [0, 5, 10, 15, 30, 60] as const;
 
 export const ACESSO_CONTA_PADRAO: ConfigAcessoConta = {
   modo: "desligado",
   testadores: [],
+  alcance: "todos",
+  exigidos: [],
   repetirAoEntrar: false,
   limite: 2,
   porPapel: {},
@@ -78,9 +85,8 @@ const texto = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[
 export function lerConfigAcessoConta(v: unknown): ConfigAcessoConta {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
   const modo = (MODOS_IMPLANTACAO as readonly string[]).includes(o.modo as string) ? (o.modo as ModoImplantacao) : "desligado";
-  const testadores = Array.isArray(o.testadores)
-    ? [...new Set(o.testadores.map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, MAX_TESTADORES)
-    : [];
+  const ids = (v: unknown, max: number) => (Array.isArray(v) ? [...new Set(v.map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, max) : []);
+  const testadores = ids(o.testadores, MAX_TESTADORES);
   const porPapel: Record<string, number> = {};
   if (o.porPapel && typeof o.porPapel === "object") {
     for (const [k, val] of Object.entries(o.porPapel as Record<string, unknown>)) {
@@ -93,6 +99,8 @@ export function lerConfigAcessoConta(v: unknown): ConfigAcessoConta {
   return {
     modo,
     testadores,
+    alcance: o.alcance === "escolhidos" ? "escolhidos" : "todos",
+    exigidos: ids(o.exigidos, MAX_EXIGIDOS),
     repetirAoEntrar: o.repetirAoEntrar === true,
     limite: inteiro(o.limite, LIMITE_MIN, LIMITE_MAX, ACESSO_CONTA_PADRAO.limite),
     porPapel,
@@ -110,8 +118,15 @@ export type PessoaRegra = { id: number; admin: boolean };
 
 /** As regras novas (termo e aparelhos) valem para a pessoa? O ÚNICO ponto que decide — layout, guardas, login, cadastro. */
 export function regrasValemPara(cfg: ConfigAcessoConta, u: PessoaRegra): boolean {
-  if (cfg.modo === "ativo") return true;
+  if (cfg.modo === "ativo") return cfg.alcance === "todos" || cfg.exigidos.includes(u.id) || cfg.testadores.includes(u.id);
   return cfg.modo === "teste" && cfg.testadores.includes(u.id);
+}
+
+/** As pessoas a quem as regras valem (null = todas) — o público das pendências ao ativar, ao trocar a lista e ao publicar. */
+export function pessoasDasRegras(cfg: ConfigAcessoConta): number[] | null {
+  if (cfg.modo === "desligado") return [];
+  if (cfg.modo === "teste") return cfg.testadores;
+  return cfg.alcance === "todos" ? null : [...new Set([...cfg.exigidos, ...cfg.testadores])];
 }
 
 /** Pessoa em teste com "repetir a cada login". */

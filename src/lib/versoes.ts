@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.190.0",
+    versao: "1.191.0",
     data: "2026-10-23",
     titulo: "Importação de empenhos mais segura",
     mudancas: [
@@ -43,6 +43,15 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "Integrações", texto: "Reimportar regrava só o que mudou — o resumo mostra quantos empenhos vieram iguais.", link: "/painel/integracoes?aba=centi" },
       { tipo: "melhoria", area: "Integrações", texto: "Cada importação guarda a versão do leitor; o sistema avisa os anos lidos por uma versão anterior para importar de novo.", link: "/painel/integracoes?aba=centi" },
       { tipo: "melhoria", area: "Integrações", texto: "Uma aba por vez conduz a importação (a outra aba vê que está em andamento) e cada resposta da Centi tem até 1 MB — leitura mais leve para o servidor.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
+    versao: "1.190.0",
+    data: "2026-10-23",
+    titulo: "Termo obrigatório para todos ou para pessoas escolhidas",
+    mudancas: [
+      { tipo: "novo", area: "Termo de uso", texto: "No modo Ativo, o ADM escolhe quem precisa aceitar o termo e nomear o aparelho: Todos (quem entrar depois também) ou Pessoas escolhidas. Quem já aceitou a versão vigente e já nomeou o aparelho não é travado.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "correcao", area: "Termo de uso", texto: "A confirmação de ativar conta só as pessoas que de fato passam a aceitar, e trocar a lista de escolhidas já cria as pendências de quem entrou nela.", link: "/painel/configuracoes?aba=termo" },
     ],
   },
   {

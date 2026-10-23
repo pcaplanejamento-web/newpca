@@ -1,8 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { usuarios } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { gravarAcessoConta, getAcessoConta } from "@/lib/acesso-conta";
-import { lerConfigAcessoConta } from "@/lib/acesso-conta-core";
+import { lerConfigAcessoConta, pessoasDasRegras } from "@/lib/acesso-conta-core";
 import { termoAdminSchema } from "@/lib/acesso-validation";
 import { comandosLimparTesteAparelhos } from "@/lib/aparelhos-sql";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -58,14 +58,22 @@ export async function POST(req: Request) {
   const nova = lerConfigAcessoConta(d.config);
   const paraAtivo = nova.modo === "ativo" && antes.modo !== "ativo";
   if (paraAtivo && !d.confirmarAtivo) {
-    const [c] = await db.select({ n: sql<number>`COUNT(*)` }).from(usuarios).where(eq(usuarios.status, "ativo"));
+    const alvo = pessoasDasRegras(nova);
+    const [c] = await db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(usuarios)
+      .where(alvo ? and(eq(usuarios.status, "ativo"), sql`${usuarios.id} IN (SELECT value FROM json_each(${JSON.stringify(alvo)}))`) : eq(usuarios.status, "ativo"));
     return NextResponse.json({ ok: false, error: "Confirme a liberação para toda a plataforma.", precisaConfirmar: true, afetados: c?.n ?? 0 }, { status: 409 });
   }
   if (paraAtivo) await db.batch([...comandosLimparTesteTermo(db), ...comandosLimparTesteAparelhos(db)]);
   const salva = await gravarAcessoConta(nova, g.u.id);
   // As pendências da versão vigente para quem as regras passaram a valer (no teste, os testadores; no ativo, todos).
   const vigente = await termoVigente();
-  if (vigente && salva.modo !== "desligado" && (paraAtivo || salva.modo !== antes.modo || salva.testadores.join() !== antes.testadores.join())) {
+  if (vigente && salva.modo !== "desligado" && (paraAtivo ||
+      salva.modo !== antes.modo ||
+      salva.alcance !== antes.alcance ||
+      salva.exigidos.join() !== antes.exigidos.join() ||
+      salva.testadores.join() !== antes.testadores.join())) {
     await exigirAceite(vigente.id, { tipo: "todos" }, salva);
   }
   await registrarAuditoria({
@@ -73,7 +81,7 @@ export async function POST(req: Request) {
     acao: "editar",
     entidade: "termo_uso",
     entidadeId: 0,
-    resumo: `Termo/aparelhos: implantação ${antes.modo} → ${salva.modo}; testadores ${salva.testadores.length}; repetir ${salva.repetirAoEntrar ? "sim" : "não"}; limite ${salva.limite}; troca ${salva.trocaDias} dia(s); ADM isento ${salva.isentarAdm ? "sim" : "não"}; aceite fecha em ${salva.fecharAceiteS ? `${salva.fecharAceiteS} s` : "não fecha sozinho"}; tela de aceite ${salva.telaAceito ? "sim" : "não"}; baixar comprovante ${salva.baixarComprovante ? "sim" : "só visualizar"}; cláusulas desligadas: ${salva.clausulasOff.join(", ") || "nenhuma"}`,
+    resumo: `Termo/aparelhos: implantação ${antes.modo} → ${salva.modo}; alcance ${salva.alcance === "todos" ? "todos" : `${salva.exigidos.length} pessoa(s)`}; testadores ${salva.testadores.length}; repetir ${salva.repetirAoEntrar ? "sim" : "não"}; limite ${salva.limite}; troca ${salva.trocaDias} dia(s); ADM isento ${salva.isentarAdm ? "sim" : "não"}; aceite fecha em ${salva.fecharAceiteS ? `${salva.fecharAceiteS} s` : "não fecha sozinho"}; tela de aceite ${salva.telaAceito ? "sim" : "não"}; baixar comprovante ${salva.baixarComprovante ? "sim" : "só visualizar"}; cláusulas desligadas: ${salva.clausulasOff.join(", ") || "nenhuma"}`,
   });
   return ok({ config: salva });
 }

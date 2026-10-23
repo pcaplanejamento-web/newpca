@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { CLAUSULAS_AUTO, LIMITE_MAX, LIMITE_MIN, MAX_TESTADORES, MODOS_IMPLANTACAO, NOME_APARELHO_MAX, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "./acesso-conta-core";
+import { CLAUSULAS_AUTO, LIMITE_MAX, LIMITE_MIN, MAX_EXIGIDOS,
+  MAX_TESTADORES, MODOS_IMPLANTACAO, NOME_APARELHO_MAX, OPCOES_FECHAR_ACEITE, OPCOES_TROCA_DIAS } from "./acesso-conta-core";
 import { MAX_TEXTO_ADM } from "./termo-uso-core";
 
 // TERMO DE USO + APARELHOS — as entradas das rotas.
@@ -25,6 +26,8 @@ export const aceitarTermoSchema = z.strictObject({
 export const configAcessoContaSchema = z.strictObject({
   modo: z.enum(MODOS_IMPLANTACAO),
   testadores: z.array(id).max(MAX_TESTADORES),
+  alcance: z.enum(["todos", "escolhidos"]).optional(),
+  exigidos: z.array(id).max(MAX_EXIGIDOS).optional(),
   repetirAoEntrar: z.boolean(),
   limite: z.number().int().min(LIMITE_MIN).max(LIMITE_MAX),
   porPapel: z.record(z.string().regex(/^\d+$/), z.number().int().min(LIMITE_MIN).max(LIMITE_MAX)),

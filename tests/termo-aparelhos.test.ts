@@ -319,3 +319,18 @@ it("acessoConta: tela de aceite e baixar comprovante ligados por padrão; deslig
   assert.equal(lerConfigAcessoConta({ baixarComprovante: false }).baixarComprovante, false);
   assert.equal(lerConfigAcessoConta({ baixarComprovante: "x" }).baixarComprovante, true);
 });
+
+it("ativo com pessoas escolhidas: só os escolhidos (e testadores) são travados; todos = todos", async () => {
+  const { lerConfigAcessoConta, regrasValemPara, pessoasDasRegras } = await import("../src/lib/acesso-conta-core.ts");
+  const todos = lerConfigAcessoConta({ modo: "ativo" });
+  assert.equal(todos.alcance, "todos");
+  assert.equal(regrasValemPara(todos, { id: 9, admin: false }), true);
+  assert.equal(pessoasDasRegras(todos), null);
+  const esc = lerConfigAcessoConta({ modo: "ativo", alcance: "escolhidos", exigidos: [2, 2, 3], testadores: [5] });
+  assert.deepEqual(esc.exigidos, [2, 3]);
+  assert.equal(regrasValemPara(esc, { id: 2, admin: false }), true);
+  assert.equal(regrasValemPara(esc, { id: 5, admin: false }), true);
+  assert.equal(regrasValemPara(esc, { id: 9, admin: true }), false);
+  assert.deepEqual(pessoasDasRegras(esc), [2, 3, 5]);
+  assert.deepEqual(pessoasDasRegras(lerConfigAcessoConta({ modo: "desligado" })), []);
+});

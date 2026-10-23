@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { papeis, reparticoes, termosAceites, termosPendencias, termosUso, usuarioGrupos, usuarios } from "@/db/schema";
-import { aceiteDeTeste, type ConfigAcessoConta } from "./acesso-conta-core";
+import { aceiteDeTeste, type ConfigAcessoConta, pessoasDasRegras } from "./acesso-conta-core";
 import { getAcessoConta } from "./acesso-conta";
 import { getAparencia } from "./aparencia";
 import { getDb } from "./db";
@@ -144,7 +144,9 @@ async function idsDoPublico(p: PublicoEscolha, cfg: ConfigAcessoConta): Promise<
   else if (p.tipo === "grupos" && p.ids.length) ids = (await db.select({ id: usuarioGrupos.usuarioId }).from(usuarioGrupos).where(inArray(usuarioGrupos.grupoId, p.ids))).map((r) => r.id);
   else if (p.tipo === "pessoas") ids = p.ids;
   else if (p.tipo !== "todos") ids = [];
-  if (cfg.modo === "teste") return { ids: (ids ?? cfg.testadores).filter((i) => cfg.testadores.includes(i)) };
+  // O público ∩ as pessoas a quem as regras valem (teste = os testadores; ativo com escolhidos = os escolhidos).
+  const valem = pessoasDasRegras(cfg);
+  if (valem) return { ids: (ids ?? valem).filter((i) => valem.includes(i)) };
   return ids ? { ids } : { todos: true };
 }
 
@@ -362,7 +364,8 @@ export async function dadosDoAceite(u: { id: number; email: string; admin?: bool
 export async function exigirDaConta(usuarioId: number): Promise<void> {
   try {
     const cfg = await getAcessoConta({ fresco: true });
-    if (cfg.modo === "desligado" || (cfg.modo === "teste" && !cfg.testadores.includes(usuarioId))) return;
+    const valem = pessoasDasRegras(cfg);
+    if (valem && !valem.includes(usuarioId)) return;
     const [t] = await consultaTermoVigente(getDb());
     if (!t) return;
     await comandoPendencias(getDb(), t.id, { ids: [usuarioId] }, new Date().toISOString()).run();
