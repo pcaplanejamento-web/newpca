@@ -140,15 +140,18 @@ Centi (`https://api.centi.com.br/portal/{endpoint}/go/rioverde`, sem login): Emp
 paginada), Liquidações (`getliquidacoes`, por órgão), Pagamentos (`GetOrdempaPamento`, por órgão, paginada), Contratos
 (`ListaCredores`, por fonte) e Receita (`ObterReceitaOrcamentariaDetalhada`, por órgão).
 
-- Tocar numa API abre o cadastro (cadeado por campo): endereço, parâmetros em JSON com os marcadores `{ano}`, `{orgao}`,
-  `{fonte}` e `{pagina}`, a lista de órgãos (idOrgao do portal) ou de fontes, a frequência, o horário e os anos mantidos.
-  O pé do banner mostra a **prévia do 1º pedido** do ano (nada é enviado).
-- Hoje é **só o cadastro**: nenhuma API é chamada. Cada uma fica "Em preparação" e a opção **Ligada** só aparece quando a
-  importação dela existir (o servidor recusa ligar antes — 409). A URL base só aceita HTTPS do domínio `centi.com.br`.
-- Os órgãos já vêm com a lista certa do portal: 2–11, 15, 16, 18, 21–25 e 28.
-- Próximos passos (um por versão): botão **Testar** (1 página, nada gravado) → importação manual dos empenhos conferida
-  com o `TotalRegistros` → tela Empenhos → atualização automática (desligada por padrão) → liquidações, pagamentos e o
-  Dashboard da execução.
+- Tocar numa API abre o editor, com o (?) em cada campo: **O que ler** (nome, como o ano é pedido, os **órgãos e as
+  unidades do cadastro** — nenhum escolhido = todos —, as fontes e se a API devolve páginas), **Quando atualizar**
+  (frequência, horário, dias úteis, anos e "Ligada") e **Endereço e parâmetros** (URL, endpoint, UF, município e o JSON com
+  os marcadores `{ano}`, `{orgao}`, `{fonte}` e `{pagina}`).
+- **Órgão = o ID da entidade na Centi.** Nas APIs pedidas por órgão, cada órgão escolhido vira um pedido com o "ID da
+  entidade na Centi" cadastrado nele (Órgãos e Unidades). O órgão sem esse ID não entra — o editor avisa.
+- **Testar:** escolha o ano e o pedido e toque em **Testar agora** — o sistema faz UM pedido de verdade com o que está na
+  tela (mesmo sem salvar) e mostra a resposta, o tempo, quantos registros vieram, o total que a API informa e uma amostra.
+  Nada é gravado.
+- Nenhuma API é lida sozinha ainda: cada uma fica "Em preparação" e "Ligada" só funciona quando a importação dela existir.
+- Próximos passos (um por versão): importação manual dos empenhos conferida com o `TotalRegistros` → tela Empenhos →
+  atualização automática (desligada por padrão) → liquidações, pagamentos e o Dashboard da execução.
 
 ## Limite de pedidos da pesquisa (WAF da Cloudflare)
 

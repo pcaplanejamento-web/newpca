@@ -13,10 +13,19 @@ export const centiApiSchema = z.strictObject({
   paginado: z.boolean(),
   parametros: z.string().trim().min(2).max(LIMITES_API.parametros),
   lista: z.array(z.number().int().positive().max(1_000_000)).max(LIMITES_API.lista),
+  orgaos: z.array(z.number().int().positive()).max(LIMITES_API.escopo),
+  unidades: z.array(z.number().int().positive()).max(LIMITES_API.escopo),
   ativa: z.boolean(),
   frequenciaMin: z.number().int(),
   diasUteis: z.boolean(),
   horaInicio: z.string().trim(),
   horaFim: z.string().trim(),
   anos: z.number().int(),
+});
+
+/** O TESTE de uma API (a edição em curso, ainda não salva): o ano e qual dos pedidos do ano (o 1º, por padrão). */
+export const testarCentiApiSchema = z.strictObject({
+  edicao: centiApiSchema,
+  ano: z.number().int().min(2000).max(2100),
+  pedido: z.number().int().min(0).max(LIMITES_API.lista).default(0),
 });

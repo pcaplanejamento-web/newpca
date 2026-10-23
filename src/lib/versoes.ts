@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.180.0",
+    data: "2026-10-23",
+    titulo: "APIs da Centi: edição direta, órgãos do cadastro e teste",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "Testar a API: o botão faz um pedido de verdade à Centi com o que está na tela (mesmo sem salvar) e mostra a resposta, o tempo, quantos registros vieram, o total que a API informa e uma amostra dos dados. Nada é gravado.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "Os órgãos e as unidades de cada API são escolhidos do cadastro do sistema (Órgãos e Unidades); nas APIs pedidas por órgão, o pedido usa o ID da entidade na Centi de cada órgão.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "O cadastro da API é editado direto, em seções (O que ler · Quando atualizar · Endereço e parâmetros · Testar), com o (?) explicando cada campo.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.179.2",
     data: "2026-10-23",
     titulo: "Editor de texto: colagem e alinhamento em listas",

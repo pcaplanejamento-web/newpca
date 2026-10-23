@@ -2102,7 +2102,7 @@ export const aparelhosConta = sqliteTable("aparelhos_conta", {
 
 /** APIS DA CENTI — o cadastro das APIs do portal de transparência (migração `0129`; Integrações → "APIs da Centi").
  * Só o cadastro: `implementada` = a importação dela já existe (só então `ativa` pode ser ligada). Núcleo puro em
- * `centi-apis-core.ts`. `lista` = os órgãos (idOrgao) ou as fontes, em JSON. */
+ * `centi-apis-core.ts`. `lista` = as fontes (contratos), em JSON. */
 export const centiApis = sqliteTable(
   "centi_apis",
   {
@@ -2132,6 +2132,9 @@ export const centiApis = sqliteTable(
     ultimoTotal: integer("ultimo_total"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    // O escopo pelo cadastro (migração `0130`): ids de órgãos/unidades, '[]' = todos.
+    orgaos: text("orgaos").notNull().default("[]"),
+    unidades: text("unidades").notNull().default("[]"),
   },
   (t) => [uniqueIndex("centi_apis_chave_uq").on(t.chave)],
 );

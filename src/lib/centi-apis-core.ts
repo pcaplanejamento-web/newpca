@@ -1,12 +1,13 @@
 /**
  * APIS DA CENTI — o cadastro das APIs públicas do portal de transparência (Integrações → "APIs da Centi"). Núcleo
- * PURO (sem banco/DOM, testado em `tests/centi-apis.test.ts`): os tipos, a validação e a PRÉVIA do pedido. Nada aqui
- * chama a Centi — o cadastro só descreve COMO cada API será lida quando a importação dela existir.
+ * PURO (sem banco/DOM, testado em `tests/centi-apis.test.ts`): os tipos, a validação, os pedidos de um ano e a leitura
+ * da resposta do TESTE. Nada aqui chama a Centi.
  *
  * O pedido é `POST {urlBase}/{endpoint}/{uf}/{tenant}` com o corpo = os `parametros`, em que os marcadores `{ano}`,
- * `{orgao}`, `{fonte}` e `{pagina}` são trocados pelos valores da tarefa (o valor INTEIRO "{ano}" vira número; dentro
- * de um texto, a troca é textual — "01/01/{ano}"). A `divisao` diz como o ano é dividido em tarefas: o ano inteiro,
- * um pedido por órgão ou um por fonte (os itens da `lista`); `paginado` = a API devolve páginas (`pagina`).
+ * `{orgao}`, `{fonte}` e `{pagina}` são trocados pelos valores do pedido (o texto que é SÓ o marcador vira número; dentro
+ * de um texto, a troca é textual — "01/01/{ano}"). A `divisao` diz como o ano é dividido: o ano inteiro, um pedido por
+ * ÓRGÃO (o idOrgao = o "ID da entidade na Centi" de cada órgão ESCOLHIDO do cadastro — nenhum escolhido = todos os que
+ * têm o código) ou um por FONTE (a `lista`). Os órgãos e as unidades escolhidos também dizem o que será guardado.
  */
 
 export type DivisaoApi = "ano" | "orgao" | "fonte";
@@ -27,12 +28,12 @@ export const FREQUENCIAS: { valor: number; rotulo: string }[] = [
 ];
 
 export const OPCOES_ANOS: { valor: number; rotulo: string }[] = [
-  { valor: 1, rotulo: "Só o ano atual" },
-  { valor: 2, rotulo: "O ano atual e o anterior" },
-  { valor: 3, rotulo: "Os 3 últimos anos" },
+  { valor: 1, rotulo: "Só o atual" },
+  { valor: 2, rotulo: "Atual e anterior" },
+  { valor: 3, rotulo: "Últimos 3 anos" },
 ];
 
-export const LIMITES_API = { nome: 60, descricao: 400, endpoint: 80, uf: 4, tenant: 40, parametros: 2000, lista: 200 } as const;
+export const LIMITES_API = { nome: 60, descricao: 400, endpoint: 80, uf: 4, tenant: 40, parametros: 2000, lista: 200, escopo: 500 } as const;
 
 /** Só o host oficial da Centi (e os subdomínios dela) — nunca outro site. */
 export const HOSTS_PERMITIDOS = ["centi.com.br"] as const;
@@ -49,7 +50,11 @@ export type ApiCenti = {
   divisao: DivisaoApi;
   paginado: boolean;
   parametros: string;
+  /** As fontes (divisão por fonte). */
   lista: number[];
+  /** Os órgãos e as unidades do CADASTRO (ids) — vazio = todos. */
+  orgaos: number[];
+  unidades: number[];
   ativa: boolean;
   implementada: boolean;
   frequenciaMin: number;
@@ -67,14 +72,46 @@ export type ApiCenti = {
 /** Os campos que o ADM edita. */
 export type EdicaoApi = Pick<
   ApiCenti,
-  "nome" | "descricao" | "urlBase" | "endpoint" | "uf" | "tenant" | "divisao" | "paginado" | "parametros" | "lista" | "ativa" | "frequenciaMin" | "diasUteis" | "horaInicio" | "horaFim" | "anos"
+  | "nome"
+  | "descricao"
+  | "urlBase"
+  | "endpoint"
+  | "uf"
+  | "tenant"
+  | "divisao"
+  | "paginado"
+  | "parametros"
+  | "lista"
+  | "orgaos"
+  | "unidades"
+  | "ativa"
+  | "frequenciaMin"
+  | "diasUteis"
+  | "horaInicio"
+  | "horaFim"
+  | "anos"
 >;
+
+/** Um órgão do cadastro com o código dele na Centi (o idOrgao do portal; sem código = não entra nos pedidos). */
+export type OrgaoDoCadastro = { id: number; sigla: string; nome: string; codigoCenti: number | null };
+export type UnidadeDoCadastro = { id: number; codigo: string; nome: string; orgaoId: number | null };
+
+export function edicaoDaApi(a: ApiCenti): EdicaoApi {
+  const { nome, descricao, urlBase, endpoint, uf, tenant, divisao, paginado, parametros, lista, orgaos, unidades, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, anos } = a;
+  return { nome, descricao, urlBase, endpoint, uf, tenant, divisao, paginado, parametros, lista, orgaos, unidades, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, anos };
+}
 
 export function lerDivisao(v: unknown): DivisaoApi {
   return v === "orgao" || v === "fonte" ? v : "ano";
 }
 
-/** A lista gravada (JSON de inteiros positivos, sem repetir). Inválida = vazia. */
+/** O "ID da entidade na Centi" do cadastro ("02") → o número do portal (2); vazio/inválido = null. */
+export function codigoCenti(v: string | null | undefined): number | null {
+  const n = Number((v ?? "").trim());
+  return (v ?? "").trim() && Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** Uma lista gravada (JSON de inteiros positivos, sem repetir). Inválida = vazia. */
 export function lerLista(v: unknown): number[] {
   let bruto: unknown = v;
   if (typeof v === "string") {
@@ -119,7 +156,7 @@ export function marcadoresUsados(parametros: unknown): string[] {
 
 const MARCADORES = ["ano", "orgao", "fonte", "pagina"];
 
-/** Troca os marcadores pelos valores da tarefa (o texto que é SÓ o marcador vira o valor com o tipo dele). */
+/** Troca os marcadores pelos valores do pedido (o texto que é SÓ o marcador vira o valor com o tipo dele). */
 export function montarCorpo(parametros: unknown, vars: Record<string, number>): unknown {
   if (typeof parametros === "string") {
     const so = parametros.match(/^\{([a-z]+)\}$/);
@@ -138,7 +175,7 @@ function hostPermitido(host: string): boolean {
   return HOSTS_PERMITIDOS.some((p) => h === p || h.endsWith(`.${p}`));
 }
 
-/** A URL base: HTTPS, host da Centi, sem usuário/senha, busca nem âncora. */
+/** A URL base: HTTPS, host da Centi, sem usuário/senha, porta, busca nem âncora. */
 export function urlBaseValida(url: string): boolean {
   try {
     const u = new URL(url);
@@ -153,23 +190,43 @@ export function urlDaApi(a: Pick<ApiCenti, "urlBase" | "endpoint" | "uf" | "tena
   return `${a.urlBase.replace(/\/+$/, "")}/${a.endpoint}/${a.uf}/${a.tenant}`;
 }
 
+/** Os códigos (idOrgao) dos órgãos escolhidos — nenhum escolhido = todos os do cadastro que têm o código. */
+export function codigosDosOrgaos(escolhidos: number[], cadastro: OrgaoDoCadastro[]): number[] {
+  const usar = escolhidos.length ? cadastro.filter((o) => escolhidos.includes(o.id)) : cadastro;
+  return [...new Set(usar.map((o) => o.codigoCenti).filter((c): c is number => c != null))].sort((a, b) => a - b);
+}
+
+/** Os órgãos escolhidos SEM código na Centi (não entram nos pedidos — a tela avisa). */
+export function orgaosSemCodigo(escolhidos: number[], cadastro: OrgaoDoCadastro[]): OrgaoDoCadastro[] {
+  return cadastro.filter((o) => escolhidos.includes(o.id) && o.codigoCenti == null);
+}
+
+/** Os valores de cada pedido de um ano (sem as páginas). */
+export function pedidosDoAno(e: Pick<EdicaoApi, "divisao" | "lista" | "orgaos">, ano: number, cadastro: OrgaoDoCadastro[]): Record<string, number>[] {
+  if (e.divisao === "orgao") return codigosDosOrgaos(e.orgaos, cadastro).map((orgao) => ({ ano, orgao }));
+  if (e.divisao === "fonte") return e.lista.map((fonte) => ({ ano, fonte }));
+  return [{ ano }];
+}
+
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const SEGMENTO = /^[A-Za-z0-9_-]+$/;
 
 /** O motivo de a edição não valer (null = vale) — a MESMA régua na tela e no servidor. */
-export function motivoApiInvalida(e: EdicaoApi, implementada: boolean): string | null {
+export function motivoApiInvalida(e: EdicaoApi, implementada: boolean, cadastro: OrgaoDoCadastro[]): string | null {
   if (!e.nome.trim()) return "Informe o nome da API.";
   if (!urlBaseValida(e.urlBase)) return "A URL base tem de ser HTTPS do domínio da Centi (centi.com.br).";
   if (!SEGMENTO.test(e.endpoint)) return "O endpoint só aceita letras, números, - e _.";
   if (!SEGMENTO.test(e.uf) || !SEGMENTO.test(e.tenant)) return "UF e município só aceitam letras, números, - e _.";
   const p = lerParametros(e.parametros);
   if (!p.ok) return p.motivo;
-  const usados = marcadoresUsados(p.valor);
-  const desconhecido = usados.find((m) => !MARCADORES.includes(m));
+  const desconhecido = marcadoresUsados(p.valor).find((m) => !MARCADORES.includes(m));
   if (desconhecido) return `Marcador desconhecido: {${desconhecido}} (use {ano}, {orgao}, {fonte} ou {pagina}).`;
-  const marcador = DIVISOES.find((d) => d.valor === e.divisao)?.marcador;
-  if (marcador && !e.parametros.includes(marcador)) return `Com "${DIVISOES.find((d) => d.valor === e.divisao)?.rotulo}", os parâmetros precisam do marcador ${marcador}.`;
-  if (e.divisao !== "ano" && e.lista.length === 0) return e.divisao === "orgao" ? "Informe os órgãos (idOrgao)." : "Informe as fontes.";
+  const divisao = DIVISOES.find((d) => d.valor === e.divisao);
+  if (divisao?.marcador && !e.parametros.includes(divisao.marcador)) return `Com "${divisao.rotulo}", os parâmetros precisam do marcador ${divisao.marcador}.`;
+  if (e.divisao === "orgao" && codigosDosOrgaos(e.orgaos, cadastro).length === 0) {
+    return "Nenhum órgão escolhido tem o ID da entidade na Centi (Órgãos e Unidades).";
+  }
+  if (e.divisao === "fonte" && e.lista.length === 0) return "Informe as fontes.";
   if (!FREQUENCIAS.some((f) => f.valor === e.frequenciaMin)) return "Frequência inválida.";
   if (!OPCOES_ANOS.some((o) => o.valor === e.anos)) return "Quantidade de anos inválida.";
   if (!HORA.test(e.horaInicio) || !HORA.test(e.horaFim)) return "Horário inválido (use HH:MM).";
@@ -178,19 +235,17 @@ export function motivoApiInvalida(e: EdicaoApi, implementada: boolean): string |
   return null;
 }
 
-/** Quantos pedidos um ano custa (sem contar as páginas). */
-export function pedidosPorAno(a: Pick<ApiCenti, "divisao" | "lista">): number {
-  return a.divisao === "ano" ? 1 : a.lista.length;
-}
-
-/** A PRÉVIA do 1º pedido de um ano (só para mostrar; nada é enviado). */
-export function previaPedido(a: Pick<ApiCenti, "urlBase" | "endpoint" | "uf" | "tenant" | "divisao" | "lista" | "paginado" | "parametros">, ano: number) {
-  const p = lerParametros(a.parametros);
-  const vars: Record<string, number> = { ano };
-  if (a.divisao === "orgao" && a.lista[0] != null) vars.orgao = a.lista[0];
-  if (a.divisao === "fonte" && a.lista[0] != null) vars.fonte = a.lista[0];
-  if (a.paginado) vars.pagina = 1;
-  return { url: urlDaApi(a), corpo: p.ok ? montarCorpo(p.valor, vars) : null, erro: p.ok ? null : p.motivo };
+/** A PRÉVIA de um pedido do ano (o 1º, por padrão — só para mostrar; nada é enviado). */
+export function previaPedido(e: EdicaoApi, ano: number, cadastro: OrgaoDoCadastro[], indice = 0) {
+  const p = lerParametros(e.parametros);
+  const pedidos = pedidosDoAno(e, ano, cadastro);
+  const vars = pedidos[Math.min(Math.max(0, indice), pedidos.length - 1)];
+  return {
+    url: urlDaApi(e),
+    corpo: p.ok && vars ? montarCorpo(p.valor, vars) : null,
+    erro: p.ok ? (vars ? null : "Nenhum pedido: escolha os órgãos (com o ID da Centi) ou as fontes.") : p.motivo,
+    pedidos,
+  };
 }
 
 /** O estado da API na tela. */
@@ -207,53 +262,62 @@ export function rotuloFrequencia(min: number, diasUteis: boolean, inicio: string
   return `${f}${diasUteis ? ", dias úteis" : ""}, ${inicio}–${fim}`;
 }
 
-/** Os valores do banner de cadastro (`BannerCadastro` — tudo texto): os sim/não viram "1"/"0" e a lista "2; 3; 21". */
-export function camposDaApi(a: EdicaoApi): Record<string, string> {
-  return {
-    nome: a.nome,
-    descricao: a.descricao,
-    urlBase: a.urlBase,
-    endpoint: a.endpoint,
-    uf: a.uf,
-    tenant: a.tenant,
-    divisao: a.divisao,
-    paginado: a.paginado ? "1" : "0",
-    parametros: a.parametros,
-    lista: a.lista.join("; "),
-    ativa: a.ativa ? "1" : "0",
-    frequenciaMin: String(a.frequenciaMin),
-    diasUteis: a.diasUteis ? "1" : "0",
-    horaInicio: a.horaInicio,
-    horaFim: a.horaFim,
-    anos: String(a.anos),
-  };
+// ---------------------------------------------------------------------------------------------------------------
+// O TESTE: lê a resposta da 1ª página (nada é gravado)
+// ---------------------------------------------------------------------------------------------------------------
+
+export type ResultadoTeste = {
+  ok: boolean;
+  status: number;
+  ms: number;
+  url: string;
+  corpo: unknown;
+  /** Quantos registros vieram nesta página. */
+  itens: number;
+  /** O total que a própria API informa (`TotalRegistros`), quando informa. */
+  total: number | null;
+  campos: string[];
+  /** Os primeiros registros, com os valores encurtados. */
+  amostra: Record<string, string>[];
+  /** O que deu errado (ou o aviso do que veio). */
+  mensagem: string | null;
+};
+
+export const AMOSTRA_TESTE = 5;
+const MAX_VALOR = 160;
+
+/** A lista de registros de uma resposta: a própria lista, ou a 1ª lista de objetos dentro dela (`data`, `result`…). */
+export function registrosDaResposta(j: unknown): Record<string, unknown>[] | null {
+  const ehLista = (v: unknown): v is Record<string, unknown>[] => Array.isArray(v) && v.every((x) => x && typeof x === "object" && !Array.isArray(x));
+  if (ehLista(j)) return j;
+  if (j && typeof j === "object") {
+    for (const v of Object.values(j)) if (ehLista(v) && v.length) return v;
+    for (const v of Object.values(j)) if (ehLista(v)) return v;
+  }
+  return null;
 }
 
-/** De volta: os valores do banner → a edição (a lista aceita ";", "," ou espaço; o que não é número sai). */
-export function apiDosCampos(r: Record<string, string>): EdicaoApi {
-  const t = (k: string) => (r[k] ?? "").trim();
-  return {
-    nome: t("nome"),
-    descricao: t("descricao"),
-    urlBase: t("urlBase"),
-    endpoint: t("endpoint"),
-    uf: t("uf"),
-    tenant: t("tenant"),
-    divisao: lerDivisao(t("divisao")),
-    paginado: t("paginado") === "1",
-    parametros: t("parametros"),
-    lista: lerLista(t("lista").split(/[;,\s]+/).filter(Boolean)),
-    ativa: t("ativa") === "1",
-    frequenciaMin: Number(t("frequenciaMin")),
-    diasUteis: t("diasUteis") === "1",
-    horaInicio: t("horaInicio"),
-    horaFim: t("horaFim"),
-    anos: Number(t("anos")),
-  };
+function curto(v: unknown): string {
+  if (v == null) return "";
+  const t = typeof v === "object" ? JSON.stringify(v) : String(v);
+  return t.length > MAX_VALOR ? `${t.slice(0, MAX_VALOR - 1)}…` : t;
 }
 
-/** A edição gravada de uma API (o que o banner começa mostrando). */
-export function edicaoDaApi(a: ApiCenti): EdicaoApi {
-  const { nome, descricao, urlBase, endpoint, uf, tenant, divisao, paginado, parametros, lista, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, anos } = a;
-  return { nome, descricao, urlBase, endpoint, uf, tenant, divisao, paginado, parametros, lista, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, anos };
+/** Resume a resposta do teste: quantos vieram, o total informado, os campos e uma amostra. */
+export function resumoResposta(texto: string): Pick<ResultadoTeste, "itens" | "total" | "campos" | "amostra" | "mensagem"> {
+  let j: unknown;
+  try {
+    j = JSON.parse(texto);
+  } catch {
+    const inicio = texto.trim().slice(0, 120);
+    return { itens: 0, total: null, campos: [], amostra: [], mensagem: inicio ? `A resposta não é JSON: "${inicio}…"` : "A resposta veio vazia." };
+  }
+  const regs = registrosDaResposta(j);
+  if (!regs) return { itens: 0, total: null, campos: [], amostra: [], mensagem: "A resposta não traz uma lista de registros." };
+  const campos: string[] = [];
+  for (const r of regs.slice(0, 20)) for (const k of Object.keys(r)) if (!campos.includes(k)) campos.push(k);
+  const bruto = regs[0]?.TotalRegistros ?? (j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, unknown>).TotalRegistros : undefined);
+  const total = bruto != null && Number.isFinite(Number(bruto)) ? Number(bruto) : null;
+  const amostra = regs.slice(0, AMOSTRA_TESTE).map((r) => Object.fromEntries(campos.map((c) => [c, curto(r[c])])));
+  return { itens: regs.length, total, campos, amostra, mensagem: regs.length ? null : "A API respondeu, mas sem registros para esse pedido." };
 }

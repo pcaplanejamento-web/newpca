@@ -121,6 +121,7 @@ export function SelectField({
   compacto = false,
   textoEscolhido,
   acoes,
+  rotuloExtra,
   children,
   ...rest
 }: {
@@ -134,6 +135,8 @@ export function SelectField({
   textoEscolhido?: string;
   /** Botões no RODAPÉ da lista aberta (ex.: "Editar esta visão", "+ Nova visão"). */
   acoes?: AcaoSelecao[];
+  /** Ao lado do rótulo (ex.: a `Ajuda compacta` — o "(?)"). */
+  rotuloExtra?: ReactNode;
   children: ReactNode;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
   const auto = useId();
@@ -156,7 +159,7 @@ export function SelectField({
   const errId = `${fid}-erro`;
   return (
     <div className="min-w-0">
-      <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
+      <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} extra={rotuloExtra} />
       <div ref={caixa} className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         <Selecao
           id={fid}
@@ -281,26 +284,28 @@ export function TextArea({
   error,
   id,
   rows = 4,
+  rotuloExtra,
+  mono = false,
   ...rest
 }: {
   label?: string;
   hint?: ReactNode;
   error?: string;
   rows?: number;
+  /** Ao lado do rótulo (ex.: a `Ajuda compacta` — o "(?)"). */
+  rotuloExtra?: ReactNode;
+  /** Texto em fonte monoespaçada (ex.: JSON). */
+  mono?: boolean;
 } & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className" | "rows">) {
   const auto = useId();
   const fid = id ?? auto;
   return (
     <div>
-      {label && (
-        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
-          {label}
-        </label>
-      )}
+      <Rotulo label={label} fid={fid} error={error} errId={`${fid}-erro`} extra={rotuloExtra} />
       <textarea
         id={fid}
         rows={rows}
-        className={`w-full resize-y rounded-control border bg-surface-2 px-3.5 py-2.5 text-[15px] leading-snug text-text outline-none transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20 ${
+        className={`w-full resize-y rounded-control border bg-surface-2 px-3.5 py-2.5 ${mono ? "font-mono text-[13px]" : "text-[15px]"} leading-snug text-text outline-none transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20 ${
           error ? "border-[var(--sit-devolvido)]" : "border-border-2"
         }`}
         {...rest}
@@ -328,6 +333,7 @@ export function CampoLista({
   disabled = false,
   maxItem = 60,
   id,
+  rotuloExtra,
 }: {
   label?: string;
   valores: string[];
@@ -337,6 +343,8 @@ export function CampoLista({
   /** Tamanho máximo de CADA valor. */
   maxItem?: number;
   id?: string;
+  /** Ao lado do rótulo (ex.: a `Ajuda compacta` — o "(?)"). */
+  rotuloExtra?: ReactNode;
 }) {
   const auto = useId();
   const fid = id ?? auto;
@@ -354,11 +362,7 @@ export function CampoLista({
   };
   return (
     <div>
-      {label && (
-        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
-          {label}
-        </label>
-      )}
+      <Rotulo label={label} fid={fid} errId={`${fid}-erro`} extra={rotuloExtra} />
       <div className={`${WRAP} min-h-[54px] flex-wrap border-border-2 py-2 ${disabled ? "opacity-80" : ""}`}>
         {valores.map((v) => (
           <span

@@ -3,16 +3,17 @@ import { urlAgendaValida } from "./ics-core";
 /**
  * BUSCA SEGURA de um endereço público (só escopo de request): só HTTPS e nunca a rede interna (`urlAgendaValida` — também
  * em CADA redirecionamento, seguido à mão), com tempo e tamanho limitados (lidos em streaming). Lança `Error` com a
- * mensagem para a pessoa (`quem` = "A agenda", "O site"…). Usada pelas agendas externas e pela imagem de fundo do quadro.
+ * mensagem para a pessoa (`quem` = "A agenda", "O site"…). Usada pelas agendas externas, pela imagem de fundo do quadro e
+ * pelo TESTE das APIs da Centi (`post` = o corpo JSON; `comErro` = devolve também a resposta de erro, com o `status`).
  */
 
 const TEMPO_MS = 8000;
 const MAX_REDIRECIONAMENTOS = 3;
 
 /** `bytes` = o corpo cru (só com `binario`); `nome` = o arquivo do Content-Disposition. */
-export type Baixado = { texto: string; tipo: string; url: string; bytes?: Uint8Array; nome?: string };
+export type Baixado = { texto: string; tipo: string; url: string; status: number; bytes?: Uint8Array; nome?: string };
 
-export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; tempoMs?: number }): Promise<Baixado> {
+export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
   const url = urlAgendaValida(bruta);
   if (!url) throw new Error("Link inválido: use um endereço https:// público.");
   const grande = `${o.quem} é grande demais (máx. ${Math.round(o.maxBytes / 1_000_000) || 1} MB).`;
@@ -23,7 +24,13 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
   try {
     let r: Response | null = null;
     for (let salto = 0; ; salto++) {
-      r = await fetch(destino, { signal: ctl.signal, headers: { accept: o.accept }, redirect: "manual" });
+      r = await fetch(destino, {
+        signal: ctl.signal,
+        redirect: "manual",
+        ...(o.post == null
+          ? { headers: { accept: o.accept } }
+          : { method: "POST", body: o.post, headers: { accept: o.accept, "content-type": "application/json" } }),
+      });
       if (r.status < 300 || r.status >= 400) break;
       const local = r.headers.get("location");
       const proximo = local ? urlAgendaValida(new URL(local, destino).toString()) : null;
@@ -31,12 +38,12 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
       if (salto >= MAX_REDIRECIONAMENTOS) throw new Error(`${o.quem} redireciona demais.`);
       destino = proximo;
     }
-    if (!r.ok) throw new Error(`${o.quem} respondeu ${r.status}.`);
+    if (!r.ok && !o.comErro) throw new Error(`${o.quem} respondeu ${r.status}.`);
     const tipo = (r.headers.get("content-type") ?? "").toLowerCase();
     // Uma imagem não precisa ser lida: o tipo basta.
     if (tipo.startsWith("image/")) {
       await r.body?.cancel();
-      return { texto: "", tipo, url: destino };
+      return { texto: "", tipo, url: destino, status: r.status };
     }
     if (Number(r.headers.get("content-length") ?? 0) > o.maxBytes) throw new Error(grande);
     const leitor = r.body?.getReader();
@@ -64,10 +71,10 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
       }
       const disp = r.headers.get("content-disposition") ?? "";
       const nome = /filename\*=UTF-8''([^;]+)/i.exec(disp)?.[1] ?? /filename="?([^";]+)"?/i.exec(disp)?.[1];
-      return { texto: "", tipo, url: destino, bytes, nome: nome ? decodeURIComponent(nome) : undefined };
+      return { texto: "", tipo, url: destino, status: r.status, bytes, nome: nome ? decodeURIComponent(nome) : undefined };
     }
     texto += dec.decode();
-    return { texto, tipo, url: destino };
+    return { texto, tipo, url: destino, status: r.status };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") throw new Error(`${o.quem} demorou demais para responder.`);
     if (e instanceof Error && (e.message.startsWith(o.quem) || e.message.startsWith("Link"))) throw e;

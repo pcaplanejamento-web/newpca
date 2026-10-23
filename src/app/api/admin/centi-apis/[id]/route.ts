@@ -1,7 +1,7 @@
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
-import { atualizarApiCenti, getApiCenti } from "@/lib/centi-apis";
+import { atualizarApiCenti, getApiCenti, orgaosDoCadastro } from "@/lib/centi-apis";
 import { motivoApiInvalida } from "@/lib/centi-apis-core";
 import { centiApiSchema } from "@/lib/centi-apis-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -18,7 +18,9 @@ const ROTULOS = {
   divisao: "divisão",
   paginado: "paginada",
   parametros: "parâmetros",
-  lista: "lista",
+  lista: "fontes",
+  orgaos: "órgãos",
+  unidades: "unidades",
   ativa: "ligada",
   frequenciaMin: "frequência (min)",
   diasUteis: "só dias úteis",
@@ -37,7 +39,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("resp" in p) return p.resp;
   const antes = await getApiCenti(id);
   if (!antes) return erro("API não encontrada.", 404);
-  const motivo = motivoApiInvalida(p.data, antes.implementada);
+  const motivo = motivoApiInvalida(p.data, antes.implementada, await orgaosDoCadastro());
   if (motivo) return erro(motivo, p.data.ativa && !antes.implementada ? 409 : 422);
   await atualizarApiCenti(id, p.data);
   const campos = Object.keys(ROTULOS) as (keyof typeof ROTULOS)[];
