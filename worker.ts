@@ -25,6 +25,7 @@ async function sha256(texto: string): Promise<string> {
 const ROTAS_CRON: Record<string, [string, string]> = {
   "*/5 * * * *": ["trello", "/api/integracoes/trello/cron"],
   "2-59/5 * * * *": ["email", "/api/integracoes/email/cron"],
+  "4-59/5 * * * *": ["empenhos", "/api/integracoes/empenhos/cron"],
 };
 
 /** As colunas do TERMO DE USO + APARELHOS lidas na mesma consulta da sessão. */

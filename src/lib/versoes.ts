@@ -35,11 +35,29 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.195.3",
+    versao: "1.197.1",
     data: "2026-10-23",
     titulo: "Aparelhos: todos nomeiam, inclusive o Administrador",
     mudancas: [
       { tipo: "correcao", area: "Termo de uso", texto: "O cadastro do aparelho aparece para todas as pessoas, inclusive o Administrador. \"Administrador fora do limite\" agora só tira o limite e a trava de troca do ADM.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
+    versao: "1.197.0",
+    data: "2026-10-23",
+    titulo: "Empenhos por órgão: cada grupo vê os seus",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "A tela Empenhos mostra só os empenhos dos órgãos da unidade escolhida no cabeçalho (na “Geral”, de todas as suas unidades). O “Órgão gestor” da Centi é a sigla do órgão cadastrado; o ADM vê todos.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Configurações", texto: "Empenhos entra no Filtro da unidade: desligado, a tela mostra os empenhos de todas as unidades da pessoa.", link: "/painel/configuracoes?aba=escopo" },
+      { tipo: "melhoria", area: "Empenhos", texto: "O ADM é avisado na tela dos órgãos gestores da Centi sem órgão cadastrado de mesma sigla (os grupos não os veem até corrigir a sigla).", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.196.0",
+    data: "2026-10-23",
+    titulo: "Empenhos: atualização automática",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "A API de Empenhos pode ser LIGADA no cadastro (desligada por padrão): no horário, nos dias e na frequência escolhidos, o sistema importa sozinho os anos mantidos, um por vez, com a mesma conferência da importação manual. Uma queda suspeita nunca passa sozinha — a importação fecha como parcial para você confirmar.", link: "/painel/integracoes?aba=centi" },
     ],
   },
   {

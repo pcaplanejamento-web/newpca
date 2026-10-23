@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
 import { type EstadoLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
@@ -72,4 +72,14 @@ export async function anosDesatualizados(): Promise<{ ano: number; n: number }[]
     .where(and(isNull(empenhos.removidoEm), lt(empenhos.leitor, LEITOR_EMPENHOS)))
     .groupBy(empenhos.ano)
     .orderBy(desc(empenhos.ano));
+}
+
+/** Quando cada ano foi lido pela última vez (o início do último lote encerrado) — o rodízio da atualização automática. */
+export async function ultimaLeituraPorAno(apiChave: string): Promise<Map<number, string>> {
+  const l = await getDb()
+    .select({ ano: centiLotes.ano, em: sql<string>`MAX(${centiLotes.iniciadoEm})` })
+    .from(centiLotes)
+    .where(and(eq(centiLotes.apiChave, apiChave), ne(centiLotes.estado, "lendo")))
+    .groupBy(centiLotes.ano);
+  return new Map(l.map((x) => [x.ano, x.em]));
 }

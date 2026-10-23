@@ -379,6 +379,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
 
   // ── Internas (sem sessão, com segredo/assinatura) ───────────────────────────────────────────────────────
   "integracoes/email/cron": { POST: interna("cron dos e-mails (cabeçalho secreto)") },
+  "integracoes/empenhos/cron": { POST: interna("cron da atualização automática dos empenhos (cabeçalho secreto)") },
   "integracoes/trello/cron": { POST: interna("cron do Trello (cabeçalho secreto)") },
   "integracoes/trello/webhook/[token]": { POST: interna("aviso do Trello (HMAC)") },
 };

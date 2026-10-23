@@ -111,3 +111,40 @@ export function anoEscolhido(anos: readonly AnoEmpenhos[], pedido: unknown): num
   if (Number.isInteger(n) && anos.some((a) => a.ano === n)) return n;
   return anos[0]?.ano ?? null;
 }
+
+/**
+ * ESCOPO POR ÓRGÃO: o "Órgão gestor" da Centi é a SIGLA do órgão (ex.: "FMC") — casa com a sigla do órgão cadastrado,
+ * sem caixa, acento, espaço nem pontuação. `null` = todos os órgãos (ADM, a "Geral", o módulo fora do filtro da unidade);
+ * `[]` = nenhum (a pessoa não vê nada).
+ */
+export type OrgaosEmpenhos = readonly string[] | null;
+
+export function chaveOrgaoGestor(s: string | null | undefined): string {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+/** Os textos de "Órgão gestor" gravados (como vieram) que casam com as siglas dos órgãos da pessoa. */
+export function gestoresDasSiglas(gestores: readonly string[], siglas: readonly string[]): string[] {
+  const ok = new Set(siglas.map(chaveOrgaoGestor).filter(Boolean));
+  return gestores.filter((g) => ok.has(chaveOrgaoGestor(g))).sort();
+}
+
+/** Os órgãos gestores SEM órgão cadastrado de mesma sigla (o ADM corrige a sigla — senão só ele os vê). */
+export function gestoresSemOrgao(gestores: readonly string[], siglas: readonly string[]): string[] {
+  const ok = new Set(siglas.map(chaveOrgaoGestor).filter(Boolean));
+  return gestores.filter((g) => !ok.has(chaveOrgaoGestor(g))).sort();
+}
+
+/** O empenho entra no escopo? */
+export function empenhoNoEscopo(orgaos: OrgaosEmpenhos, orgaoGestor: string): boolean {
+  return orgaos === null || orgaos.includes(orgaoGestor);
+}
+
+/** Texto estável do escopo (chave de memória e da tela). */
+export function chaveOrgaosEmpenhos(orgaos: OrgaosEmpenhos): string {
+  return orgaos === null ? "*" : [...orgaos].sort().join("|");
+}

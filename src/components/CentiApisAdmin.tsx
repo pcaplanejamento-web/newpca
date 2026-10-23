@@ -491,9 +491,14 @@ function EditorApi({
                 onChange={(x) => muda("ativa", x)}
                 disabled={!api.implementada}
                 label="Ligada"
-                dica={api.implementada ? "Liga a atualização automática desta API." : "Disponível quando a importação desta API existir."}
+                dica={api.implementada ? "Liga a atualização automática desta API (desligada por padrão)." : "Disponível quando a importação desta API existir."}
               />
-              <A titulo="Ligada">Liga a atualização automática. Só fica disponível quando a importação desta API existir.</A>
+              <A titulo="Ligada">
+                Liga a atualização automática: no horário e na frequência acima, o sistema importa sozinho os anos mantidos (um por vez, em
+                rodízio), poucas páginas a cada 5 minutos, com a MESMA conferência da importação manual. Uma queda suspeita nunca passa
+                sozinha — a importação fecha como parcial e você confirma numa importação manual. Só fica disponível quando a importação
+                desta API existir.
+              </A>
             </div>
           </div>
         </SecaoBanner>

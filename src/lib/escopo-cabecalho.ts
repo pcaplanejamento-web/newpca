@@ -53,6 +53,7 @@ const TELA_DO_MODULO: Record<ModuloEscopo, string> = {
   tarefas: "tarefas",
   calendario: "calendario",
   automacao: "dfd",
+  empenhos: "empenhos",
 };
 
 /** A unidade do CABEÇALHO que filtra um módulo (a config do ADM decide se o módulo obedece). */

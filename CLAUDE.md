@@ -283,7 +283,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     muda) · teste (só os `testadores`; `repetirAoEntrar` = cada login pede o aceite e o nome do aparelho de novo, sem trava; os
     aceites ficam `teste=1` e o PDF leva "TESTE") · ativo (v1.190.0: `alcance` todos — quem entrar depois também — | escolhidos = `exigidos` + testadores; `pessoasDasRegras` dá o público das pendências; passar a ativo pede confirmação com a contagem e apaga os
     aceites/aparelhos/pendências do teste, depois exige a versão vigente de todos). **`regrasValemPara`** é o ÚNICO ponto que
-    decide; `aparelhosValemPara` = todos nomeiam o aparelho (v1.195.3); `semLimiteDeAparelhos` = o ADM sem limite/trava com `isentarAdm`, menos no teste. Loader `acesso-conta.ts` (cache 60 s).
+    decide; `aparelhosValemPara` = todos nomeiam o aparelho (v1.197.1); `semLimiteDeAparelhos` = o ADM sem limite/trava com `isentarAdm`, menos no teste. Loader `acesso-conta.ts` (cache 60 s).
   - **Sessão sem consulta a mais:** `getUsuarioAtual` lê na MESMA consulta o aparelho da sessão, o aparelho conhecido pelo cookie
     `pca_aparelho` (`hashDoAparelho` = SHA-256 de `aparelho:<cookie>`) e o MENOR prazo das pendências → `UsuarioSessao.pendencia`
     {nomearAparelho, termo ok|pendente (`estadoTermo` — v1.172.0: OBRIGATÓRIO como o aparelho, sem carência; qualquer pendência bloqueia, o ADM também), aparelhoId}. A sessão de um aparelho
@@ -4577,6 +4577,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nova lê só a versão. No cliente, `empenhosDoPacote` decodifica e cada ano/recorte fica guardado na aba. Núcleo puro
   `empenhos-tela-core.ts`; testes `tests/empenhos-tela.test.ts` (no D1 real: nulos/aspas/acentos, removidos, 3 pedaços sem
   perda nem repetição, versão).
+- **EMPENHOS POR ÓRGÃO (v1.197.0, sem migração; passo 6):** o "Órgão gestor" da Centi é a SIGLA do órgão — `orgaosDosEmpenhos`
+  (`empenhos-tela.ts`, `cache` por requisição) = `unidadeDoModulo("empenhos")` (módulo novo do Filtro da unidade, padrão
+  ligado; tela `empenhos`) → os órgãos das unidades → os "Órgão gestor" gravados de mesma sigla (`gestoresDasSiglas`,
+  `chaveOrgaoGestor` sem caixa/acento/pontuação — `empenhos-tela-core.ts`); `null` = todos (ADM/"Geral"), `[]` = nenhum.
+  O pacote (`textoPacoteEmpenhos(…, orgaos)` — `orgao_gestor IN json_each(?)`, o dicionário também só do recorte; memo pela
+  chave `chaveOrgaosEmpenhos`), os anos (`consultaAnosEmpenhos(db, orgaos)`) e o detalhe (`empenhoNoEscopo`, fora = 404)
+  seguem o escopo; a página remonta a `EmpenhosView` pela `key` do escopo e mostra os órgãos no subtítulo. Ao ADM, o aviso
+  dos órgãos gestores sem órgão cadastrado (`gestoresSemCadastro`). Testes em `tests/empenhos-tela.test.ts`.
+- **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
+  DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
+  conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,
+  `fecharLoteEmpenhos`, `PedidoInvalido`) — a MESMA na importação manual e na automática. Gatilho próprio `4-59/5` no
+  `worker.ts`/`wrangler.jsonc` → `POST /api/integracoes/empenhos/cron` (`cronAutorizado`) → **`atualizarEmpenhosAuto`**
+  (`empenhos-auto.ts`): por API LIGADA, continua o lote que lê ou, na hora (`apiNaHora`: horário de Brasília, dia útil com os
+  feriados — `diaUtil`/`feriadosNoIntervalo` —, a frequência desde a última leitura), cria o do ano da vez (`anoDaVez`: o
+  nunca lido, senão o lido há mais tempo — `ultimaLeituraPorAno`); lê `PAGINAS_POR_PASSADA`=3 páginas por passada pelo
+  `proximoPedido` (a página seguinte do período começado; os DIVIDIDOS viram as metades) com o condutor `CONDUTOR_AUTO` na
+  trava (`comandoConduzir` — uma aba conduzindo = a passada pula; a aba entra 2 min depois da última página dela). Erro de
+  rede = tenta na próxima passada, até `MAX_ERROS_AUTO`=3 (`errosSeguidos`) → falhou; resposta inválida = falhou na hora;
+  QUEDA suspeita NUNCA passa sozinha (o lote fecha "parcial" e a pessoa confirma numa importação manual). Autor = "Atualização
+  automática" (`QUEM_AUTO`; auditoria sem usuário). `estadoApi`: a API importável desligada segue "Importação manual".
+  Testes: `tests/empenhos-auto.test.ts`.
 - **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
   "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
   modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",

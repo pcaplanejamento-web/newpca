@@ -5,7 +5,7 @@ import type { FiltroId } from "./escopo-unidades-core";
  * A unidade "Geral" (ou nenhuma escolhida pelo ADM) = sem filtro, como sempre.
  */
 
-export const MODULOS_ESCOPO = ["pca", "orcamento", "catalogo", "tarefas", "calendario", "automacao"] as const;
+export const MODULOS_ESCOPO = ["pca", "orcamento", "catalogo", "tarefas", "calendario", "automacao", "empenhos"] as const;
 export type ModuloEscopo = (typeof MODULOS_ESCOPO)[number];
 
 /** Catálogo: `usados` = só os itens/históricos cujo código aparece nos DFDs da unidade; `todos` = o catálogo inteiro. */
@@ -23,7 +23,7 @@ export type ConfigEscopo = {
 };
 
 export const CONFIG_ESCOPO_PADRAO: ConfigEscopo = Object.freeze({
-  modulos: Object.freeze({ pca: true, orcamento: true, catalogo: true, tarefas: true, calendario: true, automacao: true }),
+  modulos: Object.freeze({ pca: true, orcamento: true, catalogo: true, tarefas: true, calendario: true, automacao: true, empenhos: true }),
   catalogo: "usados",
   orcamentoSemVinculo: false,
   tarefasSemVinculo: true,
@@ -36,6 +36,7 @@ export const ROTULO_MODULO_ESCOPO: Record<ModuloEscopo, string> = {
   tarefas: "Tarefas",
   calendario: "Calendário",
   automacao: "Automação",
+  empenhos: "Empenhos",
 };
 
 const bool = (v: unknown, padrao: boolean) => (typeof v === "boolean" ? v : padrao);
