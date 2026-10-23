@@ -255,7 +255,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     pessoa) e `GET /api/admin/usuarios/[id]/acessos` (ADM) → `historicoDeAcesso`. Tela: **`HistoricoAcessos`/`TabelaAcessos`**
     (DS — `StatMini` Último acesso · Logins · Aparelhos + a `DataTable` compacta exportável) no Perfil ("Histórico de
     acesso") e no banner do usuário; coluna **"Último acesso"** em Usuários.
-  - **SAÍDA + CÓPIAS E PRINTS (v1.198.0, migração `0138`, aditiva — `acessos.sessao/ultimo_em/saida_em/saida_motivo` + tabela `eventos_protecao`):** o acesso liga à sessão por `sessaoCurta` (16 primeiros do hash); `ultimo_em` anda no lote do `visto_em` (`comandoAtividadeAcesso`) e a SAÍDA é gravada no sair/sair de todas (`encerrarComSaida`, "sair") e na inatividade (`comandoSaidaAcessos`, "inatividade"); `duracaoAcesso` (sem saída = estimada pela última atividade), `tempoNosUltimosDias`. **`RegistroProtecao`** (layout do painel, sem UI; Proteção de dados → `registrar`, padrão LIGADO, para todos) ouve copy/cut (o texto), os atalhos de captura (`atalhoDeCaptura`) e `beforeprint` e manda por `sendBeacon` a tela (`ondeDaRota`) e os banners abertos (`retratoTrilha`) a `POST /api/perfil/eventos` (`eventoProtecaoSchema`, limite `eventosProtecao` 60/min, texto ≤ 500 — `textoDoEvento`; fora da auditoria); o `copiarTexto` do sistema registra com origem "sistema". Até 500 eventos por pessoa, 180 dias (limpeza em `limparSegurancaVencida`). Tela: `TabelaAcessos` com Saída · Duração, "Tempo de uso (30 dias)" e a aba "Cópias e prints". Print por aplicativo externo ou foto do celular o navegador não vê.
+  - **SAÍDA + CÓPIAS E PRINTS (v1.201.0, migração `0140`, aditiva — `acessos.sessao/ultimo_em/saida_em/saida_motivo` + tabela `eventos_protecao`):** o acesso liga à sessão por `sessaoCurta` (16 primeiros do hash); `ultimo_em` anda no lote do `visto_em` (`comandoAtividadeAcesso`) e a SAÍDA é gravada no sair/sair de todas (`encerrarComSaida`, "sair") e na inatividade (`comandoSaidaAcessos`, "inatividade"); `duracaoAcesso` (sem saída = estimada pela última atividade), `tempoNosUltimosDias`. **`RegistroProtecao`** (layout do painel, sem UI; Proteção de dados → `registrar`, padrão LIGADO, para todos) ouve copy/cut (o texto), os atalhos de captura (`atalhoDeCaptura`) e `beforeprint` e manda por `sendBeacon` a tela (`ondeDaRota`) e os banners abertos (`retratoTrilha`) a `POST /api/perfil/eventos` (`eventoProtecaoSchema`, limite `eventosProtecao` 60/min, texto ≤ 500 — `textoDoEvento`; fora da auditoria); o `copiarTexto` do sistema registra com origem "sistema". Até 500 eventos por pessoa, 180 dias (limpeza em `limparSegurancaVencida`). Tela: `TabelaAcessos` com Saída · Duração, "Tempo de uso (30 dias)" e a aba "Cópias e prints". Print por aplicativo externo ou foto do celular o navegador não vê.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
@@ -4578,14 +4578,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nova lê só a versão. No cliente, `empenhosDoPacote` decodifica e cada ano/recorte fica guardado na aba. Núcleo puro
   `empenhos-tela-core.ts`; testes `tests/empenhos-tela.test.ts` (no D1 real: nulos/aspas/acentos, removidos, 3 pedaços sem
   perda nem repetição, versão).
-- **EMPENHOS POR ÓRGÃO (v1.197.0, sem migração; passo 6):** o "Órgão gestor" da Centi é a SIGLA do órgão — `orgaosDosEmpenhos`
-  (`empenhos-tela.ts`, `cache` por requisição) = `unidadeDoModulo("empenhos")` (módulo novo do Filtro da unidade, padrão
-  ligado; tela `empenhos`) → os órgãos das unidades → os "Órgão gestor" gravados de mesma sigla (`gestoresDasSiglas`,
-  `chaveOrgaoGestor` sem caixa/acento/pontuação — `empenhos-tela-core.ts`); `null` = todos (ADM/"Geral"), `[]` = nenhum.
-  O pacote (`textoPacoteEmpenhos(…, orgaos)` — `orgao_gestor IN json_each(?)`, o dicionário também só do recorte; memo pela
-  chave `chaveOrgaosEmpenhos`), os anos (`consultaAnosEmpenhos(db, orgaos)`) e o detalhe (`empenhoNoEscopo`, fora = 404)
-  seguem o escopo; a página remonta a `EmpenhosView` pela `key` do escopo e mostra os órgãos no subtítulo. Ao ADM, o aviso
-  dos órgãos gestores sem órgão cadastrado (`gestoresSemCadastro`). Testes em `tests/empenhos-tela.test.ts`.
+- **UNIDADES DA CENTI VINCULADAS AO CADASTRO (v1.198.0 → v1.199.0, migrações `0138` + `0139`; substitui o escopo pela
+  sigla da v1.197.0):** `centi_unidades` = o CATÁLOGO dos pares EXATOS `orgao_gestor` + `unidade` [Unidade orçamentária,
+  "" = vazia] que as leituras trazem (`comandoRegistrarUnidades`, `centi-unidades-sql.ts`, no MESMO lote do staging de
+  cada página; a nova já nasce no órgão do órgão gestor) — GLOBAL: vale para empenhos e, depois, liquidações e pagamentos.
+  **O VÍNCULO MORA NO CADASTRO (v1.199.0):** a UNIDADE guarda `reparticoes.centi_unidade_id` (a sua unidade orçamentária)
+  e o ÓRGÃO guarda `orgaos.centi_orgao_gestor` — cada um ÚNICO no sistema (índices parciais; `motivoUnidadeCenti`/
+  `motivoOrgaoGestor`, `centi-unidades.ts` → 409/422 nas rotas `POST/PATCH /api/admin/orgaos*` e `/api/admin/reparticoes*`,
+  campos opcionais `centiOrgaoGestor`/`centiUnidadeId` dos schemas — ausente = não muda). `centi_unidades.orgao_id`/
+  `reparticao_id` = o vínculo CALCULADO (a unidade escolhida; senão o órgão do órgão gestor), recalculado pelos GATILHOS da
+  `0139` (insert/update/delete de órgão e unidade quando o vínculo ou o órgão da unidade muda), que no mesmo passo APAGAM
+  os empenhos que ficaram sem vínculo e acompanham o órgão/unidade dos demais (`vinculado_em` ISO com ms entra na VERSÃO).
+  Tela: no **`BannerCadastro`** (campo de escolha com `acoes` — o rodapé da `Selecao`) de **`OrgaosAdmin`** ("Órgão gestor na
+  Centi" — `opcoesOrgaoGestor`) e de **`ReparticoesAdmin`** ("Unidade orçamentária na Centi" — `opcoesUnidadeOrcamentaria`:
+  as livres; com o órgão gestor do órgão, só as dele — a página `/painel/orgaos/[id]` passa `centiOrgaoGestor`); trocar/tirar
+  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0; v1.200.2: a escolha NA CÉLULA — `SeletorCelula alerta`,
+  a mesma gravação/confirmação do banner; nas unidades, só a unidade orçamentária quando o órgão tem o órgão gestor;
+  sem vínculo = "Sem correspondência" em âmbar, filtrável; o texto da unidade vem do `GET
+  /api/admin/reparticoes` — junção com `centi_unidades`). Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
+  /api/admin/centi-unidades` só com o banner aberto) + a ação **"Buscar na Centi (ano)"** = lote `modo` "unidades"
+  (`centi_lotes.modo`; `importarCentiApiSchema.modo`) pela API de empenhos: lê o ano, registra as unidades e fecha com estado
+  `unidades` sem gravar empenho (fora da rotação da automática). A leitura conduzida pelo navegador é UMA só,
+  **`leitura-centi-cliente.ts`** (`lerAnoNaCenti`, `pedirImportacao`, `lerPassos` — também a do `ImportacaoManual`). O
+  staging guarda TUDO (a conferência com a Centi não muda); a PROMOÇÃO grava SÓ o vinculado (junção com `centi_unidades`),
+  marca removido só pelas chaves vinculadas, APAGA do ano o sem vínculo e conta os descartados em `centi_lotes.fora`.
+  ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`): o empenho vinculado a uma
+  unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`, `empenhoNoEscopo`). Ao ADM, o aviso
+  das unidades sem vínculo (`unidadesCentiSemVinculo`). Testes: `tests/centi-unidades.test.ts` (migrações, promoção, os
+  gatilhos e os índices únicos no D1 real) + `empenhos-tela`/`empenhos`.
 - **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
   DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
   conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,

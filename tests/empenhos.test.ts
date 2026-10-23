@@ -54,6 +54,10 @@ function banco() {
   const raw = new DatabaseSync(":memory:");
   raw.exec("PRAGMA foreign_keys = ON");
   for (const m of ["0129_centi_apis", "0130_centi_apis_escopo", "0131_empenhos", "0132_centi_lote_passos", "0134_empenhos_conferencia"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
+  // O cadastro mínimo que a 0138 precisa + a unidade da Centi dos registros de teste ("PREFEITURA") VINCULADA ao órgão 1.
+  raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer)");
+  raw.exec(readFileSync(new URL("../drizzle/0138_centi_unidades.sql", import.meta.url), "utf8"));
+  raw.exec("INSERT INTO orgaos (id, sigla) VALUES (1, 'PMRV'); INSERT INTO centi_unidades (orgao_gestor, unidade, orgao_id) VALUES ('PREFEITURA', '', 1)");
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const novoLote = (ano = 2026) => Number(raw.prepare("INSERT INTO centi_lotes (api_chave, ano) VALUES ('empenhos', ?) RETURNING id").get(ano)?.id);
   return { raw, db, novoLote };
@@ -355,7 +359,7 @@ test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e
   const l1 = b.novoLote();
   await guardar(b, l1, 1, [reg("1"), reg("2"), reg("3")], 3);
   const c1 = await contagemDaPromocao(b.db, l1, 2026, 1);
-  assert.deepEqual(c1, { inseridos: 3, atualizados: 0, removidos: 0 });
+  assert.deepEqual(c1, { inseridos: 3, atualizados: 0, removidos: 0, fora: 0 });
   await b.db.batch(comandosPromover(b.db, l1, 2026, 1, c1) as never);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos").get() as { n: number }).n, 3);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos_staging").get() as { n: number }).n, 0);
@@ -365,7 +369,7 @@ test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e
   await guardar(b, l2, 1, [reg("1", { ValorEmpenhado: 999 }), reg("2"), reg("4")], 3);
   const c2 = await contagemDaPromocao(b.db, l2, 2026, 1);
   // Só o 1 MUDOU (o 2 veio igual — não conta nem é regravado).
-  assert.deepEqual(c2, { inseridos: 1, atualizados: 1, removidos: 1 });
+  assert.deepEqual(c2, { inseridos: 1, atualizados: 1, removidos: 1, fora: 0 });
   await b.db.batch(comandosPromover(b.db, l2, 2026, 1, c2) as never);
   const e = Object.fromEntries((b.raw.prepare("SELECT numero, valor_empenhado, removido_em, lote_id FROM empenhos").all() as Record<string, unknown>[]).map((x) => [x.numero, x]));
   assert.equal(e["1"].valor_empenhado, 999);
@@ -385,7 +389,7 @@ test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e
 
 test("empenhos (D1 real): outro ano nunca é marcado como removido; lote fechado sem promover não toca na tabela", async () => {
   const b = banco();
-  b.raw.exec("INSERT INTO empenhos (chave, ano, numero, orgao_gestor) VALUES ('2025|PREFEITURA|1', 2025, '1', 'PREFEITURA')");
+  b.raw.exec("INSERT INTO empenhos (chave, ano, numero, orgao_gestor, orgao_id) VALUES ('2025|PREFEITURA|1', 2025, '1', 'PREFEITURA', 1)");
   const l = b.novoLote();
   await guardar(b, l, 1, [reg("9")], 1);
   await b.db.batch(comandosPromover(b.db, l, 2026, 1, await contagemDaPromocao(b.db, l, 2026, 1)) as never);
@@ -449,9 +453,9 @@ test("empenhos (D1 real): o LEITOR novo regrava tudo; o mesmo leitor com dados i
   await b.db.batch(comandosPromover(b.db, l1, 2026, 1, await contagemDaPromocao(b.db, l1, 2026, 1)) as never);
   const l2 = b.novoLote();
   await guardar(b, l2, 1, [reg("1"), reg("2")], 2);
-  assert.deepEqual(await contagemDaPromocao(b.db, l2, 2026, 1), { inseridos: 0, atualizados: 0, removidos: 0 });
+  assert.deepEqual(await contagemDaPromocao(b.db, l2, 2026, 1), { inseridos: 0, atualizados: 0, removidos: 0, fora: 0 });
   const c = await contagemDaPromocao(b.db, l2, 2026, 2);
-  assert.deepEqual(c, { inseridos: 0, atualizados: 2, removidos: 0 }, "a versão do leitor entra na comparação");
+  assert.deepEqual(c, { inseridos: 0, atualizados: 2, removidos: 0, fora: 0 }, "a versão do leitor entra na comparação");
   await b.db.batch(comandosPromover(b.db, l2, 2026, 2, c) as never);
   assert.deepEqual(
     b.raw.prepare("SELECT leitor, lote_id FROM empenhos ORDER BY numero").all().map((x) => ({ ...x })),

@@ -1,7 +1,8 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { orgaos, reparticoes } from "@/db/schema";
+import { centiUnidades, orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { motivoUnidadeCenti } from "@/lib/centi-unidades";
 import { getDb } from "@/lib/db";
 import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -29,8 +30,12 @@ export async function GET(req: Request) {
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
+      centiUnidadeId: reparticoes.centiUnidadeId,
+      // O texto da unidade orçamentária da Centi (a coluna "Empenhos (Centi)" — sem ela, "Sem correspondência").
+      centiUnidade: sql<string | null>`CASE WHEN ${centiUnidades.id} IS NULL THEN NULL WHEN ${centiUnidades.unidade} = '' THEN ${centiUnidades.orgaoGestor} ELSE ${centiUnidades.orgaoGestor} || ' · ' || ${centiUnidades.unidade} END`,
     })
     .from(reparticoes)
+    .leftJoin(centiUnidades, eq(centiUnidades.id, reparticoes.centiUnidadeId))
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
@@ -51,6 +56,8 @@ export async function POST(req: Request) {
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
+  const centi = await motivoUnidadeCenti(corpo.data.centiUnidadeId, null);
+  if (centi) return erro(centi.msg, centi.status);
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
   const [row] = await db
@@ -63,6 +70,7 @@ export async function POST(req: Request) {
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
+      centiUnidadeId: corpo.data.centiUnidadeId ?? null,
     })
     .returning({ id: reparticoes.id });
   await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "reparticao", entidadeId: row?.id ?? null, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) criada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });

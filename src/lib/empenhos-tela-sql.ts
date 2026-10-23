@@ -1,6 +1,6 @@
 import { type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { type AnoEmpenhos, CAMPOS_DICIONARIO, type OrgaosEmpenhos, COLUNA_SQL, COLUNA_VALOR, EMPENHOS_POR_PEDACO, VALORES_EMPENHO } from "./empenhos-tela-core.ts";
+import { type AnoEmpenhos, CAMPOS_DICIONARIO, type EscopoEmpenhos, COLUNA_SQL, COLUNA_VALOR, EMPENHOS_POR_PEDACO, escopoVazio, VALORES_EMPENHO } from "./empenhos-tela-core.ts";
 
 /**
  * As CONSULTAS da tela de empenhos (testadas no D1 real sobre `node:sqlite` — `tests/empenhos-tela.test.ts`). O JSON
@@ -13,23 +13,36 @@ import { type AnoEmpenhos, CAMPOS_DICIONARIO, type OrgaosEmpenhos, COLUNA_SQL, C
 // biome-ignore lint/suspicious/noExplicitAny: o schema do Drizzle não importa aqui (o mesmo banco de `getDb`).
 type Db = DrizzleD1Database<any>;
 
-/** O recorte: o ano, vigentes × removidos e — com `orgaos` — só os órgãos gestores da pessoa (um parâmetro JSON). */
-const onde = (ano: number, removidos: boolean, orgaos: OrgaosEmpenhos): SQL => {
-  const base = removidos ? sql`ano = ${ano} AND removido_em IS NOT NULL` : sql`ano = ${ano} AND removido_em IS NULL`;
-  return orgaos === null ? base : sql.join([base, sql` AND orgao_gestor IN (SELECT value FROM json_each(${JSON.stringify(orgaos)}))`], sql.raw(""));
-};
+/**
+ * O ESCOPO da pessoa: o empenho vinculado a uma das suas unidades ou — vínculo só ao órgão — a um órgão delas (dois
+ * parâmetros JSON). `prefixo` = o alias da tabela.
+ */
+const doEscopo = (escopo: EscopoEmpenhos, prefixo = ""): SQL =>
+  escopo === null
+    ? sql`1`
+    : sql.join(
+        [
+          sql.raw(`(${prefixo}reparticao_id IN (SELECT value FROM json_each(`),
+          sql`${JSON.stringify(escopo.unidades)}`,
+          sql.raw(`)) OR (${prefixo}reparticao_id IS NULL AND ${prefixo}orgao_id IN (SELECT value FROM json_each(`),
+          sql`${JSON.stringify(escopo.orgaos)}`,
+          sql.raw("))))"),
+        ],
+        sql.raw(""),
+      );
 
-/** Os "Órgão gestor" distintos gravados (poucos — o escopo casa cada um com a sigla do órgão cadastrado). */
-export async function consultaGestoresEmpenhos(db: Db): Promise<string[]> {
-  const l = await db.all<{ g: string }>(sql`SELECT DISTINCT orgao_gestor AS g FROM empenhos ORDER BY 1`);
-  return l.map((r) => String(r.g));
-}
+/** O recorte: o ano, vigentes × removidos e o escopo da pessoa. */
+const onde = (ano: number, removidos: boolean, escopo: EscopoEmpenhos): SQL => {
+  const base = removidos ? sql`ano = ${ano} AND removido_em IS NOT NULL` : sql`ano = ${ano} AND removido_em IS NULL`;
+  return escopo === null ? base : sql.join([base, sql.raw(" AND "), doEscopo(escopo)], sql.raw(""));
+};
 
 /**
  * A VERSÃO dos empenhos do ano = a última importação PROMOVIDA dele — os empenhos só mudam na promoção de um lote (um
  * lote só, atômico: os empenhos e o estado "promovido" no MESMO comando), então a versão nova chega junto dos dados.
  */
-const versaoSql = (ano: number): SQL => sql`(SELECT IFNULL(MAX(id), 0) FROM centi_lotes WHERE ano = ${ano} AND estado = 'promovido')`;
+const versaoSql = (ano: number): SQL =>
+  sql`((SELECT IFNULL(MAX(id), 0) FROM centi_lotes WHERE ano = ${ano} AND estado = 'promovido') || ':' || (SELECT IFNULL(MAX(vinculado_em), '') FROM centi_unidades))`;
 
 export async function consultaVersaoEmpenhos(db: Db, ano: number): Promise<string> {
   const [r] = await db.all<{ ver: number }>(sql.join([sql.raw("SELECT "), versaoSql(ano), sql.raw(" AS ver")], sql.raw("")));
@@ -39,16 +52,16 @@ export async function consultaVersaoEmpenhos(db: Db, ano: number): Promise<strin
 const versao = (ano: number): SQL => sql.join([versaoSql(ano), sql.raw(" AS ver")], sql.raw(""));
 
 /** `WITH base AS (os empenhos do recorte, numerados pelo id), d0 AS (…), …` — o MESMO prefixo nas consultas. */
-function prefixo(ano: number, removidos: boolean, orgaos: OrgaosEmpenhos): SQL {
+function prefixo(ano: number, removidos: boolean, escopo: EscopoEmpenhos): SQL {
   const dics = CAMPOS_DICIONARIO.map(
     (c, k) => `d${k} AS (SELECT v, row_number() OVER (ORDER BY v) - 1 AS i FROM (SELECT DISTINCT ${COLUNA_SQL[c]} AS v FROM base))`,
   ).join(", ");
-  return sql.join([sql.raw("WITH base AS (SELECT *, row_number() OVER (ORDER BY id) AS rn FROM empenhos WHERE "), onde(ano, removidos, orgaos), sql.raw(`), ${dics} `)], sql.raw(""));
+  return sql.join([sql.raw("WITH base AS (SELECT *, row_number() OVER (ORDER BY id) AS rn FROM empenhos WHERE "), onde(ano, removidos, escopo), sql.raw(`), ${dics} `)], sql.raw(""));
 }
 
 /** Os anos com empenhos: quantos (vigentes), a soma empenhada, quantos removidos na Centi e a última promoção. */
-export async function consultaAnosEmpenhos(db: Db, orgaos: OrgaosEmpenhos = null): Promise<AnoEmpenhos[]> {
-  const so = orgaos === null ? sql`` : sql`WHERE e.orgao_gestor IN (SELECT value FROM json_each(${JSON.stringify(orgaos)}))`;
+export async function consultaAnosEmpenhos(db: Db, escopo: EscopoEmpenhos = null): Promise<AnoEmpenhos[]> {
+  const so = escopo === null ? sql`` : sql.join([sql.raw("WHERE "), doEscopo(escopo, "e.")], sql.raw(""));
   const l = await db.all<{ ano: number; n: number; soma: number | null; removidos: number; atualizado: string | null }>(sql`
     SELECT e.ano AS ano,
       SUM(CASE WHEN e.removido_em IS NULL THEN 1 ELSE 0 END) AS n,
@@ -60,19 +73,19 @@ export async function consultaAnosEmpenhos(db: Db, orgaos: OrgaosEmpenhos = null
 }
 
 /** A contagem (`n`), a versão e o DICIONÁRIO de todos os campos num JSON só (`j`): {"fonte":[[0,"1.00 - …"],…],…}. */
-function sqlDicionario(ano: number, removidos: boolean, orgaos: OrgaosEmpenhos): SQL {
+function sqlDicionario(ano: number, removidos: boolean, escopo: EscopoEmpenhos): SQL {
   const campos = CAMPOS_DICIONARIO.map((c, k) => `'${c}', (SELECT json_group_array(json_array(i, v)) FROM d${k})`).join(", ");
-  return sql.join([prefixo(ano, removidos, orgaos), sql.raw(`SELECT (SELECT COUNT(*) FROM base) AS n, json_object(${campos}) AS j, `), versao(ano)], sql.raw(""));
+  return sql.join([prefixo(ano, removidos, escopo), sql.raw(`SELECT (SELECT COUNT(*) FROM base) AS n, json_object(${campos}) AS j, `), versao(ano)], sql.raw(""));
 }
 
 /** Um PEDAÇO das tuplas [id, número, números do dicionário…, valores…], já em JSON. */
-function sqlPedaco(ano: number, removidos: boolean, orgaos: OrgaosEmpenhos, pedaco: number): SQL {
+function sqlPedaco(ano: number, removidos: boolean, escopo: EscopoEmpenhos, pedaco: number): SQL {
   const tupla = ["e.id", "e.numero", ...CAMPOS_DICIONARIO.map((_, k) => `d${k}.i`), ...VALORES_EMPENHO.map((v) => `e.${COLUNA_VALOR[v]}`)].join(", ");
   const juncoes = CAMPOS_DICIONARIO.map((c, k) => `LEFT JOIN d${k} ON d${k}.v IS e.${COLUNA_SQL[c]}`).join(" ");
   const de = pedaco * EMPENHOS_POR_PEDACO;
   return sql.join(
     [
-      prefixo(ano, removidos, orgaos),
+      prefixo(ano, removidos, escopo),
       sql.raw(`SELECT (SELECT json_group_array(json_array(${tupla})) FROM (SELECT * FROM base WHERE rn > `),
       sql`${de} AND rn <= ${de + EMPENHOS_POR_PEDACO}`,
       sql.raw(`) e ${juncoes}) AS j, `),
@@ -83,11 +96,11 @@ function sqlPedaco(ano: number, removidos: boolean, orgaos: OrgaosEmpenhos, peda
 }
 
 /** Uma leitura completa: o dicionário e os pedaços — `null` quando os empenhos mudaram no meio (versões diferentes). */
-async function lerPacote(db: Db, ano: number, removidos: boolean, orgaos: OrgaosEmpenhos): Promise<string | null> {
-  const [d] = await db.all<{ n: number; j: string; ver: string }>(sqlDicionario(ano, removidos, orgaos));
+async function lerPacote(db: Db, ano: number, removidos: boolean, escopo: EscopoEmpenhos): Promise<string | null> {
+  const [d] = await db.all<{ n: number; j: string; ver: string }>(sqlDicionario(ano, removidos, escopo));
   const n = Number(d?.n ?? 0);
   const pedacos = Math.ceil(n / EMPENHOS_POR_PEDACO);
-  const textos = await Promise.all(Array.from({ length: pedacos }, (_, p) => db.all<{ j: string; ver: string }>(sqlPedaco(ano, removidos, orgaos, p))));
+  const textos = await Promise.all(Array.from({ length: pedacos }, (_, p) => db.all<{ j: string; ver: string }>(sqlPedaco(ano, removidos, escopo, p))));
   if (textos.some((r) => String(r[0]?.ver) !== String(d?.ver))) return null;
   const corpo = textos
     .map((r) => (r[0]?.j ?? "[]").slice(1, -1))
@@ -100,10 +113,10 @@ async function lerPacote(db: Db, ano: number, removidos: boolean, orgaos: Orgaos
  * O PACOTE de um ano já como TEXTO JSON ({"n","dic","linhas"}) — o Worker não lê nem refaz nada: só costura os textos do
  * banco. Os empenhos mudaram no meio (uma importação concluída agora)? Lê de novo, até 3 vezes; depois, `null`.
  */
-export async function textoPacoteEmpenhos(db: Db, ano: number, removidos: boolean, orgaos: OrgaosEmpenhos = null): Promise<string | null> {
-  if (orgaos !== null && orgaos.length === 0) return '{"n":0,"dic":{},"linhas":[]}';
+export async function textoPacoteEmpenhos(db: Db, ano: number, removidos: boolean, escopo: EscopoEmpenhos = null): Promise<string | null> {
+  if (escopoVazio(escopo)) return '{"n":0,"dic":{},"linhas":[]}';
   for (let i = 0; i < 3; i++) {
-    const t = await lerPacote(db, ano, removidos, orgaos);
+    const t = await lerPacote(db, ano, removidos, escopo);
     if (t != null) return t;
   }
   return null;

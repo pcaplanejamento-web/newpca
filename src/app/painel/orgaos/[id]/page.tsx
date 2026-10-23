@@ -1,7 +1,10 @@
+import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { ReparticoesAdmin } from "@/components/ReparticoesAdmin";
 import { getUsuarioAtual } from "@/lib/auth";
+import { orgaos } from "@/db/schema";
+import { getDb } from "@/lib/db";
 import { listarOrgaos } from "@/lib/orgaos";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +19,17 @@ export default async function OrgaoUnidadesPage({ params, searchParams }: { para
   if (!Number.isInteger(orgaoId) || orgaoId <= 0) notFound();
   const orgao = (await listarOrgaos()).find((o) => o.id === orgaoId);
   if (!orgao) notFound();
-  const { aba } = await searchParams;
+  const [{ aba }, [centi]] = await Promise.all([
+    searchParams,
+    getDb().select({ gestor: orgaos.centiOrgaoGestor }).from(orgaos).where(eq(orgaos.id, orgaoId)).limit(1),
+  ]);
   return (
     <ReparticoesAdmin
       orgaoId={orgao.id}
       orgaoSigla={orgao.sigla}
       orgaoNome={orgao.nome}
       assinaturaUnica={orgao.assinaturaUnica}
+      centiOrgaoGestor={centi?.gestor ?? null}
       abaInicial={aba === "responsaveis" ? "responsaveis" : "unidades"}
     />
   );

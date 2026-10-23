@@ -1,5 +1,5 @@
 import { exigirAcesso, intId } from "@/lib/api-auth";
-import { empenhoCompleto, orgaosDosEmpenhos } from "@/lib/empenhos-tela";
+import { empenhoCompleto, escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { empenhoNoEscopo } from "@/lib/empenhos-tela-core";
 import { erro, ok } from "@/lib/http";
 
@@ -13,6 +13,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (id == null) return erro("Empenho inválido.", 422);
   const empenho = await empenhoCompleto(id);
   // Fora dos órgãos da pessoa responde como inexistente (não revela).
-  if (!empenho || !empenhoNoEscopo(await orgaosDosEmpenhos(), empenho.orgaoGestor)) return erro("Empenho não encontrado.", 404);
+  if (!empenho || !empenhoNoEscopo(await escopoDosEmpenhos(), empenho)) return erro("Empenho não encontrado.", 404);
   return ok({ empenho });
 }

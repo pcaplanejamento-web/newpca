@@ -58,7 +58,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos mantidos desta API.`, 422);
     const andando = await loteEmAndamento(api.chave);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
-    return ok({ lote: await criarLote(api.chave, corpo.ano, g.u.nome, corpo.condutor) });
+    return ok({ lote: await criarLote(api.chave, corpo.ano, g.u.nome, corpo.condutor, corpo.modo) });
   }
 
   const lote = await getLote(corpo.lote, api.chave);

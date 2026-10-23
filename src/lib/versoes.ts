@@ -35,13 +35,62 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.198.0",
+    versao: "1.201.0",
     data: "2026-10-23",
     titulo: "Cópias, prints e tempo de cada acesso no histórico",
     mudancas: [
       { tipo: "novo", area: "Perfil", texto: "O histórico de acesso mostra a saída e quanto tempo durou cada acesso (estimado pela última atividade quando a pessoa não saiu), e o tempo de uso dos últimos 30 dias.", link: "/painel/perfil?aba=acessos" },
       { tipo: "novo", area: "Usuários", texto: "Cada cópia de texto (com até 500 caracteres do que foi copiado), captura de tela pelo teclado e impressão fica registrada no usuário, com a tela e os documentos abertos — aba \"Cópias e prints\" do histórico.", link: "/painel/usuarios" },
       { tipo: "melhoria", area: "Configurações", texto: "Proteção de dados → \"Registrar cópias, capturas e impressões\" (ligado por padrão) e o Termo de uso passa a citar esses registros.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
+    versao: "1.200.2",
+    data: "2026-10-23",
+    titulo: "Vínculo com a Centi escolhido na própria célula",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Órgãos e Unidades",
+        texto: "A coluna Empenhos (Centi) virou um seletor na célula: escolha ou troque o órgão gestor (órgãos) e a unidade orçamentária (unidades) sem abrir o banner; nas unidades aparece só a unidade orçamentária, sem repetir o órgão gestor.",
+        link: "/painel/orgaos",
+      },
+    ],
+  },
+  {
+    versao: "1.200.1",
+    data: "2026-10-23",
+    titulo: "Vínculo da API de empenhos indicado no cadastro",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "Os campos “Órgão gestor na Centi” e “Unidade orçamentária na Centi” dizem que o vínculo é o da API de empenhos da Centi.", link: "/painel/orgaos" },
+    ],
+  },
+  {
+    versao: "1.200.0",
+    data: "2026-10-23",
+    titulo: "Órgãos e unidades sem correspondência na Centi",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "Coluna “Empenhos (Centi)” na tabela de órgãos (o órgão gestor) e na de unidades (a unidade orçamentária): o que ainda não tem correspondência com a API de empenhos aparece em âmbar, “Sem correspondência” — filtre pela coluna para ver só esses.", link: "/painel/orgaos" },
+    ],
+  },
+  {
+    versao: "1.199.0",
+    data: "2026-10-23",
+    titulo: "Vínculo com a Centi no cadastro de Órgãos e Unidades",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "No banner de cada UNIDADE, o campo “Unidade orçamentária na Centi” (a lista que a API da Centi traz): escolhida, os empenhos dela passam a ser da unidade. Cada unidade orçamentária vale para uma unidade só.", link: "/painel/orgaos" },
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "No banner de cada ÓRGÃO, o campo “Órgão gestor na Centi”: os empenhos desse órgão gestor que não estão numa unidade passam a ser do órgão. “Buscar na Centi” (no fim da lista) lê o ano só para trazer as unidades — nenhum empenho é gravado.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Integrações", texto: "Saíram de Integrações a tabela “Unidades da Centi” e o “Puxar unidades”: o vínculo mora no cadastro. Os vínculos já feitos passaram para os órgãos e as unidades.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
+    versao: "1.198.0",
+    data: "2026-10-23",
+    titulo: "Empenhos: só as unidades vinculadas ao cadastro",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "Unidades da Centi: cada Órgão gestor + Unidade orçamentária que a Centi devolve é VINCULADO a um órgão de Órgãos e Unidades (o órgão inteiro ou uma unidade dele). Só os empenhos de unidade vinculada são gravados — os outros são lidos e conferidos com a Centi, mas descartados. O mesmo vínculo vale para liquidações e pagamentos.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "novo", area: "Integrações", texto: "“Puxar unidades” lê o ano só para registrar as unidades da Centi, sem gravar nenhum empenho; “Vincular pela sigla” liga de uma vez as que têm a sigla de um órgão cadastrado.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Banco limpo: os empenhos de unidade sem vínculo saíram; tirar o vínculo apaga os gravados daquela unidade (com confirmação), e excluir um órgão ou unidade do cadastro desfaz os vínculos dele. Cada pessoa vê os empenhos vinculados às suas unidades (o vinculado só ao órgão, às unidades daquele órgão).", link: "/painel/empenhos" },
     ],
   },
   {

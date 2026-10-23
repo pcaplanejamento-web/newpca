@@ -36,7 +36,7 @@ const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
 /** A IMPORTAÇÃO MANUAL de uma API (passo a passo, conduzida pela tela): iniciar um lote, ler UMA página, concluir
  * (conferir e promover) ou cancelar. */
 export const importarCentiApiSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor }),
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades"]).optional() }),
   z.strictObject({
     acao: z.literal("pagina"),
     lote: z.number().int().positive(),

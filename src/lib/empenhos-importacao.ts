@@ -3,6 +3,8 @@ import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
 import { baixarSeguro } from "./busca-segura";
 import { registrarLeitura } from "./centi-apis";
+import { paresDasLinhas } from "./centi-unidades-core";
+import { comandoRegistrarUnidades, contagemUnidadesDoLote } from "./centi-unidades-sql";
 import { type ApiCenti, urlDaApi } from "./centi-apis-core";
 import { getDb } from "./db";
 import { listarPassos, paraPasso } from "./empenhos";
@@ -145,7 +147,14 @@ export async function lerPaginaDoLote(api: ApiCenti, lote: LoteCenti, periodo: P
     soma: lida.soma,
     mensagem: lida.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
   };
-  const res = await db.batch([comandoRegistrarPasso(db, lote.id, passo).returning(), ...comandosGuardarPagina(db, lote.id, pagina, lida.linhas), comandoRecontarLote(db, lote.id)] as never);
+  // As UNIDADES da página entram no registro (o ADM as vincula ao cadastro) — também na leitura só das unidades.
+  const pares = paresDasLinhas(lida.linhas);
+  const res = await db.batch([
+    comandoRegistrarPasso(db, lote.id, passo).returning(),
+    ...comandosGuardarPagina(db, lote.id, pagina, lida.linhas),
+    comandoRecontarLote(db, lote.id),
+    ...(pares.length ? [comandoRegistrarUnidades(db, lote.id, lote.ano, pares)] : []),
+  ] as never);
   return { passo: paraPasso((res as Linha[][])[0][0]), continuar };
 }
 
@@ -156,7 +165,7 @@ export async function fecharLoteEmpenhos(api: ApiCenti, lote: LoteCenti, estado:
   if (estado === "falhou") await registrarLeitura(api.id, "falhou", lote.unicos + lote.recusados, lote.totalInformado);
 }
 
-export type Conclusao = { estado: "promovido" | "parcial"; motivo?: string } | { estado: "queda"; queda: string };
+export type Conclusao = { estado: "promovido" | "parcial" | "unidades"; motivo?: string } | { estado: "queda"; queda: string };
 
 /**
  * CONCLUI o lote: a CONFERÊNCIA decide — todo o ano lido (nenhum período faltando), a contagem batendo com a Centi e os
@@ -174,6 +183,14 @@ export async function concluirLoteEmpenhos(api: ApiCenti, lote: LoteCenti, opcoe
     return { estado: "parcial", motivo };
   };
   const lacunas = lacunasDoAno(lote.ano, periodosLidos(await listarPassos(lote.id)));
+  if (lote.modo === "unidades") {
+    // Só PUXAR as unidades: nada é gravado nos empenhos — o lote fecha com o que foi visto.
+    const u = await contagemUnidadesDoLote(db, lote.id);
+    const msg = `${u.total} unidade(s) da Centi lida(s) em ${lote.ano}, ${u.semVinculo} sem vínculo${lacunas.length ? ` — ${lacunas.length} período(s) não lido(s)` : ""}. Nenhum empenho foi gravado.`;
+    await db.batch(comandosFecharLote(db, lote.id, "unidades", msg) as never);
+    await registrarAuditoria({ usuario: opcoes.usuario, acao: "importar", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}${quem}: unidades puxadas — ${msg}` });
+    return { estado: "unidades", motivo: msg };
+  }
   const conf = lacunas.length
     ? { completo: false as const, motivo: `Períodos não lidos: ${lacunas.slice(0, 6).map(rotuloPeriodo).join(", ")}${lacunas.length > 6 ? ` e mais ${lacunas.length - 6}` : ""}.` }
     : conferirLote(lote);
@@ -191,7 +208,7 @@ export async function concluirLoteEmpenhos(api: ApiCenti, lote: LoteCenti, opcoe
     acao: "importar",
     entidade: "centi_api",
     entidadeId: api.id,
-    resumo: `${api.nome} ${lote.ano}${quem}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} marcados como removidos${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${api.nome} ${lote.ano}${quem}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} marcados como removidos, ${contagem.fora} de unidade sem vínculo descartados${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }

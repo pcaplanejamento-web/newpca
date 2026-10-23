@@ -335,6 +335,7 @@ export const orgaos = sqliteTable(
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultado (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    centiOrgaoGestor: text("centi_orgao_gestor"), // o "Órgão gestor" da Centi deste órgão (único — migração 0139; `centi_unidades`)
   },
   (t) => [index("orgaos_ordem_idx").on(t.ordem)],
 );
@@ -356,6 +357,7 @@ export const reparticoes = sqliteTable(
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultada (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    centiUnidadeId: integer("centi_unidade_id"), // a UNIDADE ORÇAMENTÁRIA da Centi desta unidade (única — migração 0139; `centi_unidades.id`)
   },
   (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId)],
 );
@@ -2215,6 +2217,10 @@ export const centiLotes = sqliteTable(
     iniciadoEm: text("iniciado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     concluidoEm: text("concluido_em"),
+    /** `dados` = importa os registros · `unidades` = só registra as UNIDADES da Centi, sem gravar nada (migração `0138`). */
+    modo: text("modo").notNull().default("dados"),
+    /** Registros lidos de unidade SEM vínculo (não gravados) na promoção. */
+    fora: integer("fora"),
   },
   (t) => [index("centi_lotes_api_ano_idx").on(t.apiChave, t.ano, t.id)],
 );
@@ -2301,6 +2307,40 @@ export const empenhos = sqliteTable(
     atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     /** A versão do leitor que leu o empenho (migração `0134`). */
     leitor: integer("leitor").notNull().default(0),
+    /** O VÍNCULO da unidade da Centi no cadastro (migração `0138` — `centi_unidades`; mantido pelos gatilhos). */
+    orgaoId: integer("orgao_id"),
+    reparticaoId: integer("reparticao_id"),
   },
-  (t) => [uniqueIndex("empenhos_chave_uq").on(t.chave), index("empenhos_ano_idx").on(t.ano, t.orgaoGestor)],
+  (t) => [
+    uniqueIndex("empenhos_chave_uq").on(t.chave),
+    index("empenhos_ano_idx").on(t.ano, t.orgaoGestor),
+    index("empenhos_unidade_idx").on(t.orgaoGestor, t.unidadeOrcamentaria),
+    index("empenhos_vinculo_idx").on(t.orgaoId, t.reparticaoId),
+  ],
+);
+
+/**
+ * As UNIDADES DA CENTI (migração `0138`): cada par "Órgão gestor" + "Unidade orçamentária" que as APIs devolvem
+ * (empenhos — e, depois, liquidações e pagamentos). O VÍNCULO é escolhido NO CADASTRO (migração `0139`: a unidade guarda
+ * `centi_unidade_id`, o órgão guarda `centi_orgao_gestor`); `orgao_id`/`reparticao_id` aqui são o vínculo CALCULADO
+ * (a unidade escolhida; senão o órgão do órgão gestor), mantido pelos GATILHOS da `0139`. Só o vinculado é gravado.
+ */
+export const centiUnidades = sqliteTable(
+  "centi_unidades",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    orgaoGestor: text("orgao_gestor").notNull(),
+    unidade: text("unidade").notNull().default(""),
+    orgaoId: integer("orgao_id"),
+    reparticaoId: integer("reparticao_id"),
+    /** Os registros vistos na última leitura que trouxe a unidade. */
+    registros: integer("registros").notNull().default(0),
+    ultimoLote: integer("ultimo_lote"),
+    ultimoAno: integer("ultimo_ano"),
+    vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** Quando o vínculo mudou por último (ISO com ms) — entra na VERSÃO dos empenhos (a tela relê). */
+    vinculadoEm: text("vinculado_em"),
+    vinculadoPor: text("vinculado_por"),
+  },
+  (t) => [uniqueIndex("centi_unidades_par_uq").on(t.orgaoGestor, t.unidade)],
 );

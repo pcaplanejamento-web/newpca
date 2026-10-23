@@ -1,7 +1,7 @@
 import { and, count, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
-import { type EstadoLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
+import { type EstadoLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação das APIs da Centi (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
@@ -10,8 +10,8 @@ const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 
 /** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
 function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
-  const { apiChave: _, estado, condutor, conduzindoAte, ...resto } = l;
-  return { ...resto, estado: estado as EstadoLote, conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
+  const { apiChave: _, estado, modo, condutor, conduzindoAte, ...resto } = l;
+  return { ...resto, estado: estado as EstadoLote, modo: modo === "unidades" ? "unidades" : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
 }
 
 export async function listarLotes(apiChave: string, limite = 20): Promise<LoteCenti[]> {
@@ -44,11 +44,14 @@ export async function loteEmAndamento(apiChave: string): Promise<LoteCenti | nul
   return l ? paraLote(l) : null;
 }
 
-/** Cria o lote JÁ conduzido pela aba que o pediu (o token dela), com a versão atual do leitor. */
-export async function criarLote(apiChave: string, ano: number, quem: string, condutor: string): Promise<LoteCenti> {
+/**
+ * Cria o lote JÁ conduzido pela aba que o pediu (o token dela), com a versão atual do leitor. `modo` "unidades" = só
+ * PUXA as unidades da Centi (nada é gravado nos empenhos).
+ */
+export async function criarLote(apiChave: string, ano: number, quem: string, condutor: string, modo: ModoLote = "dados"): Promise<LoteCenti> {
   const [l] = await getDb()
     .insert(centiLotes)
-    .values({ apiChave, ano, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .values({ apiChave, ano, modo, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
     .returning();
   return paraLote(l);
 }
@@ -79,7 +82,7 @@ export async function ultimaLeituraPorAno(apiChave: string): Promise<Map<number,
   const l = await getDb()
     .select({ ano: centiLotes.ano, em: sql<string>`MAX(${centiLotes.iniciadoEm})` })
     .from(centiLotes)
-    .where(and(eq(centiLotes.apiChave, apiChave), ne(centiLotes.estado, "lendo")))
+    .where(and(eq(centiLotes.apiChave, apiChave), ne(centiLotes.estado, "lendo"), eq(centiLotes.modo, "dados")))
     .groupBy(centiLotes.ano);
   return new Map(l.map((x) => [x.ano, x.em]));
 }

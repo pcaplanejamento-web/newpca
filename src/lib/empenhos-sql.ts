@@ -1,7 +1,7 @@
-import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotePassos, centiLotes, empenhos, empenhosStaging } from "../db/schema.ts";
+import { centiLotePassos, centiLotes, centiUnidades, empenhos, empenhosStaging } from "../db/schema.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoLote, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
 
 /**
@@ -128,31 +128,64 @@ export async function jaNoLote(db: Db, loteId: number, chaves: string[]): Promis
 /** Os campos comparados para saber se um empenho MUDOU (todos menos a chave). */
 const COMPARADOS = CAMPOS.filter((c) => c !== "chave");
 
-/** "Mudou": algum campo diferente (`IS NOT` — nulo conta), o empenho estava removido ou foi lido por outro leitor. */
-function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: SQL): SQL {
+/** "Mudou": algum campo diferente (`IS NOT` — nulo conta), o vínculo mudou, o empenho estava removido ou foi lido por outro leitor. */
+function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: SQL, orgaoNovo: SQL, reparticaoNovo: SQL): SQL {
   return sql.join(
-    [...COMPARADOS.map((c) => sql`${atual(c)} IS NOT ${novo(c)}`), sql`${atual("removidoEm")} IS NOT NULL`, sql`${atual("leitor")} IS NOT ${leitorNovo}`],
+    [
+      ...COMPARADOS.map((c) => sql`${atual(c)} IS NOT ${novo(c)}`),
+      sql`${atual("orgaoId")} IS NOT ${orgaoNovo}`,
+      sql`${atual("reparticaoId")} IS NOT ${reparticaoNovo}`,
+      sql`${atual("removidoEm")} IS NOT NULL`,
+      sql`${atual("leitor")} IS NOT ${leitorNovo}`,
+    ],
     sql` OR `,
   );
 }
 const colEmp = (c: string) => sql.raw(`"empenhos"."${colunaSql(c)}"`);
+const colStg = (c: string) => sql.raw(`"empenhos_staging"."${colunaSql(c)}"`);
 
-/** Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor mudou) e marca como removidos — o resumo do lote. */
+/**
+ * A UNIDADE DA CENTI do registro do staging, VINCULADA ao cadastro (`centi_unidades` — o par exato órgão gestor +
+ * unidade). Só esses registros chegam à tabela final; os outros são lidos, conferidos e descartados.
+ */
+const juncaoVinculada = and(
+  eq(centiUnidades.orgaoGestor, empenhosStaging.orgaoGestor),
+  eq(centiUnidades.unidade, sql`IFNULL(${empenhosStaging.unidadeOrcamentaria}, '')`),
+  isNotNull(centiUnidades.orgaoId),
+);
+const stagingVinculado = sql`EXISTS (SELECT 1 FROM "centi_unidades" WHERE "centi_unidades"."orgao_gestor" = "empenhos_staging"."orgao_gestor" AND "centi_unidades"."unidade" = IFNULL("empenhos_staging"."unidade_orcamentaria", '') AND "centi_unidades"."orgao_id" IS NOT NULL)`;
+/** O empenho gravado cuja unidade da Centi NÃO está (mais) vinculada — sai na promoção (banco limpo). */
+const empenhoSemVinculo = sql`NOT EXISTS (SELECT 1 FROM "centi_unidades" WHERE "centi_unidades"."orgao_gestor" = "empenhos"."orgao_gestor" AND "centi_unidades"."unidade" = IFNULL("empenhos"."unidade_orcamentaria", '') AND "centi_unidades"."orgao_id" IS NOT NULL)`;
+
+/** As chaves do lote que SERÃO gravadas (as de unidade vinculada). */
+const chavesVinculadas = (db: Db, loteId: number) =>
+  db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado));
+
+/**
+ * Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor ou o vínculo mudou), marca como removidos — e quantos
+ * registros ficam FORA (unidade da Centi sem vínculo: não são gravados) — o resumo do lote.
+ */
 export async function contagemDaPromocao(db: Db, loteId: number, ano: number, leitor: number) {
   const [novos] = await db
     .select({ n: count() })
     .from(empenhosStaging)
+    .innerJoin(centiUnidades, juncaoVinculada)
     .where(and(eq(empenhosStaging.loteId, loteId), sql`NOT EXISTS (SELECT 1 FROM ${empenhos} WHERE ${empenhos.chave} = ${empenhosStaging.chave})`));
   const [alterados] = await db
     .select({ n: count() })
     .from(empenhosStaging)
+    .innerJoin(centiUnidades, juncaoVinculada)
     .innerJoin(empenhos, eq(empenhos.chave, empenhosStaging.chave))
-    .where(and(eq(empenhosStaging.loteId, loteId), mudou(colEmp, (c) => sql.raw(`"empenhos_staging"."${colunaSql(c)}"`), sql`${leitor}`)));
+    .where(and(eq(empenhosStaging.loteId, loteId), mudou(colEmp, colStg, sql`${leitor}`, sql`${centiUnidades.orgaoId}`, sql`${centiUnidades.reparticaoId}`)));
   const [removidos] = await db
     .select({ n: count() })
     .from(empenhos)
-    .where(and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)))));
-  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n };
+    .where(and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, chavesVinculadas(db, loteId))));
+  const [fora] = await db
+    .select({ n: count() })
+    .from(empenhosStaging)
+    .where(and(eq(empenhosStaging.loteId, loteId), sql`NOT ${stagingVinculado}`));
+  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: fora.n };
 }
 
 const VALORES = ["valorEmpenhado", "valorAnulado", "valorLiquidado", "valorPago", "saldoPagar"] as const;
@@ -202,10 +235,12 @@ export function comandoConduzir(db: Db, loteId: number, condutor: string) {
 }
 
 /**
- * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos (o que reaparece perde o `removido_em`), marca
- * `removido_em` no que o ano tinha e a Centi não trouxe mais (nada é apagado), fecha o lote e limpa o staging.
+ * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos de unidade VINCULADA (com o órgão/unidade do
+ * cadastro; o que reaparece perde o `removido_em`), marca `removido_em` no que o ano tinha e a Centi não trouxe mais,
+ * APAGA o que ficou sem vínculo (banco limpo), fecha o lote e limpa o staging — os registros de unidade sem vínculo
+ * foram conferidos e são descartados aqui.
  */
-export function comandosPromover(db: Db, loteId: number, ano: number, leitor: number, contagem: { inseridos: number; atualizados: number; removidos: number }) {
+export function comandosPromover(db: Db, loteId: number, ano: number, leitor: number, contagem: { inseridos: number; atualizados: number; removidos: number; fora: number }) {
   const sel = db
     .select({
       id: sql<number>`NULL`.as("id"),
@@ -215,24 +250,30 @@ export function comandosPromover(db: Db, loteId: number, ano: number, leitor: nu
       criadoEm: sql<string>`CURRENT_TIMESTAMP`.as("criado_em"),
       atualizadoEm: sql<string>`CURRENT_TIMESTAMP`.as("atualizado_em"),
       leitor: sql<number>`${leitor}`.as("leitor"),
+      orgaoId: centiUnidades.orgaoId,
+      reparticaoId: centiUnidades.reparticaoId,
     })
     .from(empenhosStaging)
+    .innerJoin(centiUnidades, juncaoVinculada)
     .where(eq(empenhosStaging.loteId, loteId));
   const atualizar = Object.fromEntries(
-    [...COMPARADOS, "loteId", "removidoEm", "leitor"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
+    [...COMPARADOS, "loteId", "removidoEm", "leitor", "orgaoId", "reparticaoId"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
   );
   return [
     db
       .insert(empenhos)
       .select(sel as never)
       // Só regrava o que MUDOU (o "atualizado" do resumo é real; o empenho igual guarda a data e o lote de antes).
-      .onConflictDoUpdate({ target: empenhos.chave, set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` }, setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`) }),
+      .onConflictDoUpdate({
+        target: empenhos.chave,
+        set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` },
+        setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
+      }),
     db
       .update(empenhos)
       .set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` })
-      .where(
-        and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)))),
-      ),
+      .where(and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, chavesVinculadas(db, loteId)))),
+    db.delete(empenhos).where(and(eq(empenhos.ano, ano), empenhoSemVinculo)),
     db
       .update(centiLotes)
       .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
@@ -242,7 +283,7 @@ export function comandosPromover(db: Db, loteId: number, ano: number, leitor: nu
 }
 
 /** Fecha o lote sem promover (parcial, falhou ou cancelado) e limpa o staging — a tabela final não muda. */
-export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "falhou" | "cancelado", mensagem: string) {
+export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "falhou" | "cancelado" | "unidades", mensagem: string) {
   return [
     db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
