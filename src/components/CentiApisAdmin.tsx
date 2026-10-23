@@ -1089,9 +1089,22 @@ function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
 }
 
 /** Os PASSOS de um lote (o mais recente primeiro), com o detalhe de cada um ao tocar — ao vivo e no histórico. */
-function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: string; onExcluir?: (ps: PassoLote[]) => Promise<boolean> }) {
+function PassosDoLote({
+  passos,
+  nome,
+  onExcluir,
+  selecao,
+}: {
+  passos: PassoLote[];
+  nome: string;
+  onExcluir?: (ps: PassoLote[]) => Promise<boolean>;
+  /** A seleção controlada de fora (a ação de excluir fica com quem controla — ex.: o rodapé do banner). */
+  selecao?: { sel: Set<number>; onSel: (s: Set<number>) => void };
+}) {
   const [aberto, setAberto] = useState<PassoLote | null>(null);
-  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [selLocal, setSelLocal] = useState<Set<number>>(new Set());
+  const sel = selecao?.sel ?? selLocal;
+  const setSel = selecao?.onSel ?? setSelLocal;
   const [excluindo, setExcluindo] = useState(false);
   const linhas = useMemo(() => [...passos].reverse(), [passos]);
   const colunas: Column<PassoLote>[] = [
@@ -1132,12 +1145,13 @@ function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: 
         density="compact"
         onRowClick={setAberto}
         exportar={{ nome }}
-        selectable={!!onExcluir}
+        selectable={!!onExcluir || !!selecao}
         selected={sel}
         onSelected={(s) => setSel(s as Set<number>)}
         acoesRodape={
-          onExcluir && sel.size > 0 ? (
+          onExcluir && !selecao && sel.size > 0 ? (
             <Button
+              className="animate-fade-in-up"
               size="sm"
               variant="danger"
               loading={excluindo}
@@ -1264,6 +1278,23 @@ function PassosDoHistorico({
 }) {
   const [passos, setPassos] = useState<PassoLote[] | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [excluindo, setExcluindo] = useState(false);
+  // Todos marcados = a importação inteira sai; senão, só os passos marcados.
+  const todos = !!passos?.length && passos.every((p) => sel.has(p.id));
+  async function excluirMarcados() {
+    if (!passos) return;
+    if (todos) return onExcluir?.();
+    if (!onExcluirPasso) return;
+    setExcluindo(true);
+    const ps = passos.filter((p) => sel.has(p.id));
+    if (await onExcluirPasso(ps)) {
+      const fora = new Set(ps.map((p) => p.id));
+      setPassos((l) => (l ? l.filter((x) => !fora.has(x.id)) : l));
+      setSel(new Set());
+    }
+    setExcluindo(false);
+  }
   const carregar = useCallback(() => {
     setFalha(null);
     lerPassos(api.id, lote.id)
@@ -1279,10 +1310,13 @@ function PassosDoHistorico({
       size="xl"
       titulo={`Importação de ${lote.ano} — ${dataHoraBR(lote.iniciadoEm)}`}
       rodape={
-        onExcluir ? (
-          <div className="flex justify-end">
-            <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} onClick={onExcluir}>
-              Excluir importação
+        sel.size > 0 && (todos ? onExcluir : onExcluirPasso) ? (
+          <div className="flex animate-fade-in-up items-center justify-end gap-3">
+            <span className="text-[12.5px] text-muted">
+              {todos ? "Todos os passos marcados — a importação inteira sai do banco." : `${num(sel.size)} de ${num(passos?.length ?? 0)} passos marcados.`}
+            </span>
+            <Button size="sm" variant="danger" loading={excluindo} icon={<IconTrash className="h-4 w-4" />} onClick={() => void excluirMarcados()}>
+              {todos ? "Excluir importação" : `Excluir selecionados (${num(sel.size)})`}
             </Button>
           </div>
         ) : undefined
@@ -1302,6 +1336,7 @@ function PassosDoHistorico({
           <PassosDoLote
             passos={passos}
             nome={`Passos ${api.nome} ${lote.ano}`}
+            selecao={onExcluirPasso || onExcluir ? { sel, onSel: setSel } : undefined}
             onExcluir={
               onExcluirPasso
                 ? async (ps) => {

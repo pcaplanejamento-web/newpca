@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.187.2",
+    data: "2026-10-23",
+    titulo: "Exclusão das importações só com seleção",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "Nos passos de uma importação, o botão de excluir só aparece (suavemente) com algo marcado: com parte dos passos, “Excluir selecionados”; com todos, “Excluir importação”.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.187.1",
     data: "2026-10-23",
     titulo: "Excluir várias importações e passos de uma vez; o Testar volta a funcionar",
