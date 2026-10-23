@@ -419,3 +419,81 @@ export function quedaSuspeita(anterior: { soma: number | null; unicos: number } 
   if (anterior.unicos > 0 && atual.unicos < anterior.unicos * 0.9) partes.push(`os empenhos caíram de ${anterior.unicos.toLocaleString("pt-BR")} para ${atual.unicos.toLocaleString("pt-BR")}`);
   return partes.length ? `Em relação à última importação concluída, ${partes.join(" e ")}.` : null;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// A ATUALIZAÇÃO AUTOMÁTICA (cron) — a mesma leitura da importação manual, conduzida pelo servidor em poucas páginas por
+// passada; DESLIGADA por padrão (a API só entra com `ativa` no cadastro).
+// ---------------------------------------------------------------------------------------------------------------
+
+/** O condutor da atualização automática (o token da trava do lote — uma aba nunca o usa) e quem aparece como autor. */
+export const CONDUTOR_AUTO = "atualizacao-automatica";
+export const QUEM_AUTO = "Atualização automática";
+/** Páginas lidas por passada (o cron roda a cada 5 min) — cabe no limite de consultas e de CPU do Worker. */
+export const PAGINAS_POR_PASSADA = 3;
+/** Erros seguidos no MESMO pedido (um por passada) antes de a atualização automática desistir do lote. */
+export const MAX_ERROS_AUTO = 3;
+
+const chaveP = (p: Periodo) => `${p.inicio}|${p.fim}`;
+
+/**
+ * O PRÓXIMO pedido do lote: a página seguinte do período começado; senão o 1º período que falta — o período DIVIDIDO
+ * (grande demais) dá lugar às metades, até um dia. null = o ano todo lido (é a hora de concluir).
+ */
+export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boolean): { periodo: Periodo; pagina: number } | null {
+  const emCurso = periodoEmCurso(passos);
+  if (emCurso) return emCurso;
+  const lidos = periodosLidos(passos);
+  const lidosSet = new Set(lidos.map(chaveP));
+  const divididos = new Set(passos.filter((p) => p.estado === "dividido").map(chaveP));
+  const abrir = (p: Periodo): Periodo | null => {
+    if (lidosSet.has(chaveP(p))) return null;
+    const metades = divididos.has(chaveP(p)) ? dividirPeriodo(p) : null;
+    if (!metades) return p;
+    for (const m of metades) {
+      const r = abrir(m);
+      if (r) return r;
+    }
+    return null;
+  };
+  for (const p of periodosAPedir(ano, lidos, comPeriodo)) {
+    const r = abrir(p);
+    if (r) return { periodo: r, pagina: 1 };
+  }
+  return null;
+}
+
+/** Quantos ERROS seguidos (os últimos passos) o MESMO pedido já teve. */
+export function errosSeguidos(passos: PassoMin[], pedido: { periodo: Periodo; pagina: number }): number {
+  let n = 0;
+  for (let i = passos.length - 1; i >= 0; i--) {
+    const p = passos[i];
+    if (p.estado !== "erro" || p.inicio !== pedido.periodo.inicio || p.fim !== pedido.periodo.fim || p.pagina !== pedido.pagina) break;
+    n++;
+  }
+  return n;
+}
+
+/** "AAAA-MM-DD HH:MM:SS" (UTC, o do SQLite) → ms. */
+const msSql = (s: string) => Date.parse(`${s.replace(" ", "T")}Z`);
+
+/**
+ * É a HORA de começar uma atualização? Dentro do horário (Brasília), só em dia útil quando o cadastro pede, e passada a
+ * frequência desde a última leitura concluída. O lote que já está lendo segue sem esperar a janela.
+ */
+export function apiNaHora(
+  api: { frequenciaMin: number; diasUteis: boolean; horaInicio: string; horaFim: string; ultimaExecucao: string | null },
+  agora: { ms: number; hora: string; diaUtil: boolean },
+): boolean {
+  if (agora.hora < api.horaInicio || agora.hora > api.horaFim) return false;
+  if (api.diasUteis && !agora.diaUtil) return false;
+  if (!api.ultimaExecucao) return true;
+  const ultima = msSql(api.ultimaExecucao);
+  return !Number.isFinite(ultima) || agora.ms - ultima >= api.frequenciaMin * 60_000;
+}
+
+/** O ANO da vez entre os mantidos: o que nunca foi lido (o mais recente primeiro); senão o lido há mais tempo. */
+export function anoDaVez(anos: number[], ultimaPorAno: Map<number, string>): number {
+  const nunca = anos.find((a) => !ultimaPorAno.has(a));
+  if (nunca != null) return nunca;
+  return [...anos].sort((a, b) => (ultimaPorAno.get(a) ?? "").localeCompare(ultimaPorAno.get(b) ?? "") || b - a)[0];
+}

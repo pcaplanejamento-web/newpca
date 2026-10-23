@@ -139,7 +139,8 @@ test("APIs da Centi: estado na tela (a de importação manual não diz 'Em prepa
   assert.equal(e("empenhos", false, false, null), "Importação manual");
   assert.equal(e("empenhos", false, false, "completo"), "Importação manual");
   assert.equal(e("empenhos", false, false, "parcial"), "Última importação incompleta");
-  assert.equal(e("empenhos", false, true, null), "Desligada");
+  assert.equal(e("empenhos", false, true, null), "Importação manual");
+  assert.equal(e("contratos", false, true, null), "Desligada");
   assert.equal(e("empenhos", true, true, "falhou"), "Com erro");
   assert.equal(e("empenhos", true, true, "completo"), "Ativa");
 });

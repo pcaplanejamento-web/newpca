@@ -271,12 +271,11 @@ export function importavel(chave: string): boolean {
 
 /** O estado da API na tela. */
 export function estadoApi(a: Pick<ApiCenti, "chave" | "ativa" | "implementada" | "ultimoStatus">): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
-  if (!a.implementada) {
-    if (!importavel(a.chave)) return { rotulo: "Em preparação", tom: "slate" };
+  if (!a.ativa) {
+    if (!importavel(a.chave)) return { rotulo: a.implementada ? "Desligada" : "Em preparação", tom: "slate" };
     if (a.ultimoStatus === "parcial" || a.ultimoStatus === "falhou") return { rotulo: "Última importação incompleta", tom: "amber" };
     return { rotulo: "Importação manual", tom: "blue" };
   }
-  if (!a.ativa) return { rotulo: "Desligada", tom: "slate" };
   if (a.ultimoStatus === "falhou") return { rotulo: "Com erro", tom: "red" };
   if (a.ultimoStatus === "parcial") return { rotulo: "Parcial", tom: "amber" };
   return { rotulo: "Ativa", tom: "emerald" };
