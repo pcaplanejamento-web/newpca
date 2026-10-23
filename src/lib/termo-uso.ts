@@ -22,7 +22,6 @@ import {
   hashTexto,
   modeloTermo,
   montarTermo,
-  prazoDaCarencia,
   seloAceite,
 } from "./termo-uso-core";
 import { comandoPendencias, comandoPublicar, comandosAceitar, consultaTermoVigente, type PublicoTermo } from "./termos-sql";
@@ -80,7 +79,6 @@ export async function listarVersoes() {
       versao: termosUso.versao,
       titulo: termosUso.titulo,
       estado: termosUso.estado,
-      carenciaDias: termosUso.carenciaDias,
       publicadoEm: termosUso.publicadoEm,
       publicadoPor: termosUso.publicadoPor,
       hash: termosUso.hash,
@@ -150,8 +148,8 @@ async function idsDoPublico(p: PublicoEscolha, cfg: ConfigAcessoConta): Promise<
   return ids ? { ids } : { todos: true };
 }
 
-/** PUBLICA o rascunho: congela o texto final + o hash e cria as pendências do público com a carência. */
-export async function publicarTermo(por: string, publico: PublicoEscolha, carenciaDias: number): Promise<TermoUso | null> {
+/** PUBLICA o rascunho: congela o texto final + o hash e cria as pendências do público (o sistema só abre com o aceite). */
+export async function publicarTermo(por: string, publico: PublicoEscolha): Promise<TermoUso | null> {
   const r = await rascunho();
   if (!r.id) return null;
   const agora = new Date();
@@ -160,17 +158,17 @@ export async function publicarTermo(por: string, publico: PublicoEscolha, carenc
   const textoFinal = montarTermo({ titulo: r.titulo, versao: r.versao, publicadoEm: em, textoAdm: r.textoAdm, clausulas });
   const hash = await hashTexto(textoFinal);
   const db = getDb();
-  const [feito] = await db.batch([comandoPublicar(db, r.id, { textoFinal, hash, clausulas: JSON.stringify(clausulas), carenciaDias, em, por })]);
+  const [feito] = await db.batch([comandoPublicar(db, r.id, { textoFinal, hash, clausulas: JSON.stringify(clausulas), em, por })]);
   if (!feito.length) return null;
-  await exigirAceite(r.id, publico, carenciaDias);
+  await exigirAceite(r.id, publico);
   return termoPorId(r.id);
 }
 
-/** Exige a versão (de novo) do público — quem já aceitou oficialmente fica de fora. */
-export async function exigirAceite(termoId: number, publico: PublicoEscolha, carenciaDias: number, cfg?: ConfigAcessoConta): Promise<void> {
+/** Exige a versão (de novo) do público — quem já aceitou oficialmente fica de fora; vale no próximo pedido (bloqueia). */
+export async function exigirAceite(termoId: number, publico: PublicoEscolha, cfg?: ConfigAcessoConta): Promise<void> {
   const alvo = await idsDoPublico(publico, cfg ?? (await getAcessoConta({ fresco: true })));
   if (!alvo || ("ids" in alvo && !alvo.ids.length)) return;
-  await comandoPendencias(getDb(), termoId, alvo, prazoDaCarencia(Date.now(), carenciaDias)).run();
+  await comandoPendencias(getDb(), termoId, alvo, new Date().toISOString()).run();
 }
 
 /** O RETRATO da pessoa no momento do aceite. */
@@ -347,7 +345,6 @@ export async function dadosDoAceite(u: { id: number; email: string }): Promise<i
   ]);
   return {
     termo: { id: p.termo.id, versao: p.termo.versao, titulo: p.termo.titulo, texto: p.termo.textoFinal, hash: p.termo.hash, publicadoEm: p.termo.publicadoEm },
-    prazo: p.prazo,
     metodos: { senha: !!conta?.senhaHash && conta.senhaHash !== SENHA_INUTILIZAVEL, codigo: resendConfigurado(integ) },
     email: u.email,
     sistema,

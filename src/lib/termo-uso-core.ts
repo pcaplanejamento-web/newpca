@@ -274,12 +274,6 @@ export function codigoNormal(c: string): string | null {
 
 export { type EstadoTermo, estadoTermo } from "./acesso-conta-core.ts";
 
-export const MAX_CARENCIA_DIAS = 30;
-/** O prazo das pendências de uma publicação (0 dias = já vale: bloqueia no próximo acesso). */
-export function prazoDaCarencia(agoraMs: number, diasCarencia: number): string {
-  return new Date(agoraMs + Math.max(0, Math.min(MAX_CARENCIA_DIAS, diasCarencia)) * 86_400_000).toISOString();
-}
-
 /** O método do aceite por extenso. */
 export const ROTULO_METODO: Record<string, string> = {
   senha: "Senha da conta",

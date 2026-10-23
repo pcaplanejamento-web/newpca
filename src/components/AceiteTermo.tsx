@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { baixarComprovanteTermo, partesDoTermo } from "@/lib/comprovante-termo";
-import { dataBR, FRASE_ACEITE } from "@/lib/termo-uso-core";
+import { FRASE_ACEITE } from "@/lib/termo-uso-core";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ErroAuth } from "./CartaoAuth";
@@ -59,35 +59,17 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
   );
 }
 
-/** O aviso no painel durante a CARÊNCIA: há uma versão nova do termo para aceitar (o botão abre o banner do aceite). */
-export function AvisoTermoPendente({ prazo, onAbrir }: { prazo?: string; onAbrir: () => void }) {
-  return (
-    <div className="mb-[var(--gap-block)]">
-      <Callout kind="warn" icon={<IconTermo className="h-4 w-4" />}>
-        <span className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Há uma versão nova do <strong>Termo de Uso</strong> para você ler e aceitar{prazo ? ` até ${dataBR(prazo)}` : ""}.
-          </span>
-          <Button size="sm" variant="secondary" onClick={onAbrir} icon={<IconTermo className="h-4 w-4" />}>
-            Ler e aceitar
-          </Button>
-        </span>
-      </Callout>
-    </div>
-  );
-}
-
 export type TermoParaAceite = { id: number; versao: number; titulo: string; texto: string; hash: string; publicadoEm: string | null };
-export type DadosAceiteTermo = { termo: TermoParaAceite; prazo: string; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string };
+export type DadosAceiteTermo = { termo: TermoParaAceite; metodos: { senha: boolean; codigo: boolean }; email: string; sistema?: string };
 
 /**
  * O BANNER de ACEITE do Termo de Uso (flutuante): ler até o fim → "Li e concordo" → confirmar a identidade (a senha da
  * conta; sem senha, o código enviado ao e-mail; sem nenhum dos dois, a declaração digitada) → assinar → o comprovante em
- * PDF. `bloqueado` = o prazo venceu: sem fechar (só "Sair"); senão, "Ler depois" fecha.
+ * PDF. OBRIGATÓRIO, como o nome do aparelho: sem fechar — o sistema só abre com o aceite (ou "Sair").
  */
-export function BannerTermo({ dados, bloqueado, aberto, onFechar }: { dados: DadosAceiteTermo; bloqueado: boolean; aberto: boolean; onFechar: () => void }) {
+export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   const router = useRouter();
-  const { termo, prazo, metodos, email, sistema } = dados;
+  const { termo, metodos, email, sistema } = dados;
   const metodo: "senha" | "codigo" | "sessao" = metodos.senha ? "senha" : metodos.codigo ? "codigo" : "sessao";
   const [leu, setLeu] = useState(false);
   const [concordo, setConcordo] = useState(false);
@@ -159,27 +141,22 @@ export function BannerTermo({ dados, bloqueado, aberto, onFechar }: { dados: Dad
   }
 
   // Concluído: o painel é montado de novo, sem a pendência.
-  const concluir = () => {
-    onFechar();
-    router.refresh();
-  };
+  const concluir = () => router.refresh();
 
   const pronto =
     leu && concordo && (metodo === "senha" ? senha.length > 0 : metodo === "codigo" ? !enviouCodigo || codigo.length === 6 : frase.trim().length > 0);
-  const fechavel = !bloqueado && !feito && !gravando;
-
   return (
     <Modal
-      open={aberto}
-      onClose={fechavel ? onFechar : () => {}}
-      bloqueado={!fechavel}
+      open
+      onClose={() => {}}
+      bloqueado
       size="xl"
       titulo={feito ? "Termo de Uso aceito" : `${termo.titulo} — versão ${termo.versao}`}
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-2">
           {feito ? (
             <span />
-          ) : bloqueado ? (
+          ) : (
             <Button
               variant="ghost"
               size="sm"
@@ -193,10 +170,6 @@ export function BannerTermo({ dados, bloqueado, aberto, onFechar }: { dados: Dad
               }}
             >
               Sair
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={onFechar}>
-              Ler depois
             </Button>
           )}
           {feito ? (
@@ -234,7 +207,7 @@ export function BannerTermo({ dados, bloqueado, aberto, onFechar }: { dados: Dad
       ) : (
         <div className="space-y-[var(--gap-block)]">
           <p className="text-[13px] text-muted">
-            {bloqueado ? "Para continuar usando o sistema, leia o termo até o fim e assine." : `Leia e aceite até ${dataBR(prazo)} — depois dessa data o sistema só abre com o aceite.`}
+            O aceite do Termo de Uso é obrigatório para usar o sistema: leia o termo até o fim e assine.
           </p>
           <LeituraTermo texto={termo.texto} onFim={() => setLeu(true)} />
           {!leu && <p className="text-[12px] text-muted">Role o texto até o fim para liberar a assinatura.</p>}

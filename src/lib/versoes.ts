@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.172.0",
+    data: "2026-10-23",
+    titulo: "Termo de Uso obrigatório para entrar no sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Acesso", texto: "O aceite do Termo de Uso passou a ser obrigatório como o registro do aparelho: com uma versão pendente, o sistema só abre depois do aceite — sem prazo de carência nem “Ler depois”, também para o Administrador.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.171.1",
     data: "2026-10-23",
     titulo: "Chat: prévia e resposta sem a marcação do texto",

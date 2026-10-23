@@ -32,7 +32,7 @@ type AcessoDaSessao = { aparelho_id: number | null; aparelho_nome: string | null
 
 /** A sessão sem o aparelho nomeado (ou com o termo vencido), com as regras valendo, não abre canal — a régua do painel. */
 function recusaDoAcesso(l: { id: number } & AcessoDaSessao): string | null {
-  return canalRecusado({ cfgJson: l.acesso_conta, id: l.id, admin: l.admin === 1, aparelhoId: l.aparelho_id, termoPrazo: l.termo_prazo, agoraMs: Date.now() });
+  return canalRecusado({ cfgJson: l.acesso_conta, id: l.id, admin: l.admin === 1, aparelhoId: l.aparelho_id, termoPrazo: l.termo_prazo });
 }
 
 /** O canal AO VIVO: só do próprio site, só com a sessão válida de uma pessoa ATIVA — e vai à caixa DELA. */

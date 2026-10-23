@@ -273,11 +273,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     decide; `aparelhosValemPara` (o ADM fica fora do limite com `isentarAdm`, menos no teste). Loader `acesso-conta.ts` (cache 60 s).
   - **Sessão sem consulta a mais:** `getUsuarioAtual` lê na MESMA consulta o aparelho da sessão, o aparelho conhecido pelo cookie
     `pca_aparelho` (`hashDoAparelho` = SHA-256 de `aparelho:<cookie>`) e o MENOR prazo das pendências → `UsuarioSessao.pendencia`
-    {nomearAparelho, termo ok|carencia|bloqueado (`estadoTermo`; o ADM nunca bloqueado), aparelhoId}. A sessão de um aparelho
+    {nomearAparelho, termo ok|pendente (`estadoTermo` — v1.172.0: OBRIGATÓRIO como o aparelho, sem carência; qualquer pendência bloqueia, o ADM também), aparelhoId}. A sessão de um aparelho
     conhecido é ligada sozinha (menos no "repetir"). **Bloqueio em BANNERS FLUTUANTES (v1.168.0 — não há mais páginas
     `/acesso/*`):** o layout do `/painel` monta o **`PendenciasAcesso`** (`destinoBloqueio` → "aparelho" | "termo"): o
     **`BannerAparelho`** (nomear / trocar / trava com "Pedir liberação" — sem fechar, só "Sair") e o **`BannerTermo`** (o aceite;
-    vencido = sem fechar; na carência o `AvisoTermoPendente` no topo abre o banner e "Ler depois" fecha). Bloqueado, a tela NÃO é
+    obrigatório: sem fechar, só "Sair"). Bloqueado, a tela NÃO é
     montada (`children` = nada) e a presença/chat não abrem; concluir = `router.refresh()`. As guardas
     `exigirUsuario`/`exigirSessao` respondem 403 `{bloqueio}` — só `exigirUsuarioLivre` (acesso, termo, contas, erros,
     perfil/senha) passa. Os **canais ao vivo** (`worker.ts`) recusam a mesma sessão (`canalRecusado`, na MESMA consulta da sessão:
@@ -294,7 +294,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     início) → **publicar** congela o texto final (`montarTermo` = texto do ADM + as **cláusulas automáticas**
     `clausulasAutomaticas` das configurações reais: aparelhos, sessão/inatividade, registros, proteção de dados, presença/chat,
     e-mails, LGPD com o encarregado, aceite eletrônico) + o SHA-256 (`hashTexto`); o público (todos · papéis · grupos · pessoas;
-    no teste ∩ testadores) recebe a pendência com a carência 0–30 dias; "Exigir de novo" numa versão; aviso de termo
+    no teste ∩ testadores) recebe a pendência, que já bloqueia no próximo pedido (a coluna `carencia_dias` ficou DORMENTE; `termos_pendencias.prazo` = quando foi exigido); "Exigir de novo" numa versão; aviso de termo
     DESATUALIZADO quando as cláusulas de agora diferem (`assinaturaClausulas`). **Aceite** (`POST /api/acesso/termo`): o hash
     lido = o vigente, a identidade pela senha, pelo código do e-mail (finalidade `termo` — `POST /api/acesso/termo/codigo`) ou,
     sem nenhum dos dois, a frase "LI E CONCORDO"; grava o retrato (nome, matrícula, cargo, unidade, e-mail — sem CPF), IP,
@@ -306,7 +306,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     válido/versão/data/INICIAIS). O ADM baixa o texto integral de cada versão em PDF (a Proteção de dados não afeta).
   - **Telas:** Configurações → **Termo de uso** (`TermoUsoAdmin` + `CamposAcessoConta`; o texto no **`EditorRico`** — ver
     abaixo), os banners (`BannerAparelho` + `CartaoAparelho` em `NomearAparelho.tsx`; `BannerTermo`, `TextoTermo`,
-    `LeituraTermo`, `AvisoTermoPendente` em `AceiteTermo.tsx`), Perfil → Segurança → "Meus aparelhos e termos" e o banner do
+    `LeituraTermo` em `AceiteTermo.tsx`), Perfil → Segurança → "Meus aparelhos e termos" e o banner do
     usuário (**`AparelhosConta`**, `admin`: `StatMini` Aparelhos x de N · Limite com a ORIGEM — `origemDoLimite` pessoa/papel/
     padrão · Troca Liberada/Bloqueada até a data, o prazo após troca; o ADM muda o limite e "Liberar troca agora"; um
     `CartaoAparelho` sólido por aparelho).

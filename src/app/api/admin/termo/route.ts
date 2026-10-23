@@ -40,16 +40,16 @@ export async function POST(req: Request) {
     return ok({ id });
   }
   if (d.acao === "publicar") {
-    const t = await publicarTermo(g.u.nome, d.publico, d.carenciaDias);
+    const t = await publicarTermo(g.u.nome, d.publico);
     if (!t) return erro("Salve o rascunho antes de publicar (ou ele já foi publicado).", 409);
-    await registrarAuditoria({ usuario: g.u, acao: "criar", entidade: "termo_uso", entidadeId: t.id, resumo: `Termo de Uso versão ${t.versao} publicado — público: ${d.publico.tipo}; carência: ${d.carenciaDias} dia(s)` });
+    await registrarAuditoria({ usuario: g.u, acao: "criar", entidade: "termo_uso", entidadeId: t.id, resumo: `Termo de Uso versão ${t.versao} publicado — público: ${d.publico.tipo}` });
     return ok({ id: t.id, versao: t.versao });
   }
   if (d.acao === "exigir") {
     const t = await termoPorId(d.termoId);
     if (t?.estado !== "publicado") return erro("Versão não encontrada.", 404);
-    await exigirAceite(t.id, d.publico, d.carenciaDias);
-    await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "termo_uso", entidadeId: t.id, resumo: `Aceite da versão ${t.versao} exigido — público: ${d.publico.tipo}; carência: ${d.carenciaDias} dia(s)` });
+    await exigirAceite(t.id, d.publico);
+    await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "termo_uso", entidadeId: t.id, resumo: `Aceite da versão ${t.versao} exigido — público: ${d.publico.tipo}` });
     return ok();
   }
 
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   // As pendências da versão vigente para quem as regras passaram a valer (no teste, os testadores; no ativo, todos).
   const vigente = await termoVigente();
   if (vigente && salva.modo !== "desligado" && (paraAtivo || salva.modo !== antes.modo || salva.testadores.join() !== antes.testadores.join())) {
-    await exigirAceite(vigente.id, { tipo: "todos" }, vigente.carenciaDias, salva);
+    await exigirAceite(vigente.id, { tipo: "todos" }, salva);
   }
   await registrarAuditoria({
     usuario: g.u,

@@ -185,8 +185,8 @@ export async function hashDoAparelho(cookieId: string): Promise<string> {
 export type PendenciaAcesso = {
   /** O aparelho desta sessão ainda não tem nome. */
   nomearAparelho: boolean;
-  /** O termo: em dia · na carência (aviso) · vencido (bloqueia). */
-  termo: "ok" | "carencia" | "bloqueado";
+  /** O termo: em dia · pendente (bloqueia até o aceite, como o aparelho sem nome). */
+  termo: EstadoTermo;
   /** O aparelho nomeado da sessão (null = ainda sem nome). */
   aparelhoId: number | null;
 };
@@ -195,25 +195,25 @@ export const SEM_PENDENCIA: PendenciaAcesso = { nomearAparelho: false, termo: "o
 /** A pessoa precisa resolver algo ANTES de usar o sistema (o painel mostra o banner; a API responde 403)? */
 export function destinoBloqueio(p: PendenciaAcesso): "aparelho" | "termo" | null {
   if (p.nomearAparelho) return "aparelho";
-  if (p.termo === "bloqueado") return "termo";
+  if (p.termo === "pendente") return "termo";
   return null;
 }
 
-export type EstadoTermo = "ok" | "carencia" | "bloqueado";
+export type EstadoTermo = "ok" | "pendente";
 
-/** O estado da pessoa pelo MENOR prazo das pendências (null = nenhuma). O ADM nunca é bloqueado — fica na carência. */
-export function estadoTermo(prazoMin: string | null | undefined, agoraMs: number, admin = false): EstadoTermo {
-  if (!prazoMin) return "ok";
-  const t = Date.parse(prazoMin);
-  const vencido = !Number.isFinite(t) || t <= agoraMs;
-  return vencido && !admin ? "bloqueado" : "carencia";
+/**
+ * O termo é OBRIGATÓRIO como o aparelho: qualquer pendência (a versão vigente ainda não aceita) bloqueia o sistema até o
+ * aceite — para todos, o Administrador também (`pendencia` = a data da pendência mais antiga; null = nenhuma).
+ */
+export function estadoTermo(pendencia: string | null | undefined): EstadoTermo {
+  return pendencia ? "pendente" : "ok";
 }
 
 /**
  * Os CANAIS AO VIVO (`worker.ts` — notificações e presença) com as regras valendo: a sessão sem o aparelho nomeado (quando o
  * limite vale para a pessoa) ou com o termo vencido é RECUSADA — a mesma régua do painel. `cfgJson` = o `acessoConta` do blob.
  */
-export function canalRecusado(d: { cfgJson: string | null; id: number; admin: boolean; aparelhoId: number | null; termoPrazo: string | null; agoraMs: number }): string | null {
+export function canalRecusado(d: { cfgJson: string | null; id: number; admin: boolean; aparelhoId: number | null; termoPrazo: string | null }): string | null {
   let bruto: unknown = null;
   try {
     bruto = d.cfgJson ? JSON.parse(d.cfgJson) : null;
@@ -224,6 +224,6 @@ export function canalRecusado(d: { cfgJson: string | null; id: number; admin: bo
   const quem = { id: d.id, admin: d.admin };
   if (!regrasValemPara(cfg, quem)) return null;
   if (aparelhosValemPara(cfg, quem) && d.aparelhoId == null) return "Aparelho sem nome.";
-  if (estadoTermo(d.termoPrazo, d.agoraMs, d.admin) === "bloqueado") return "Termo de Uso pendente.";
+  if (estadoTermo(d.termoPrazo) === "pendente") return "Termo de Uso pendente.";
   return null;
 }

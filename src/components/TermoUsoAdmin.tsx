@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ConfigAcessoConta, LIMITE_MAX, LIMITE_MIN, type ModoImplantacao, OPCOES_TROCA_DIAS } from "@/lib/acesso-conta-core";
 import { baixarDocumentoPdf } from "@/lib/documento-pdf";
-import { blocosDoTexto, dataHoraBR, MAX_CARENCIA_DIAS, MAX_TEXTO_ADM } from "@/lib/termo-uso-core";
+import { blocosDoTexto, dataHoraBR, MAX_TEXTO_ADM } from "@/lib/termo-uso-core";
 import { TextoTermo } from "./AceiteTermo";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -22,7 +22,7 @@ import { Switch } from "./Switch";
 import { EditorRico } from "./EditorRico";
 import { toast } from "./Toast";
 
-type Versao = { id: number; versao: number; titulo: string; estado: string; carenciaDias: number; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
+type Versao = { id: number; versao: number; titulo: string; estado: string; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
 type Dados = { config: ConfigAcessoConta; rascunho: { id: number | null; versao: number; titulo: string; textoAdm: string }; versoes: Versao[]; vigenteId: number | null; desatualizado: boolean };
 type Pessoa = { id: number; nome: string; email: string; status: string };
 type Ref = { id: number; nome: string };
@@ -169,7 +169,6 @@ export function TermoUsoAdmin() {
   const [publicar, setPublicar] = useState<{ termoId: number | null } | null>(null);
   const [publico, setPublico] = useState<Publico>("todos");
   const [ids, setIds] = useState<string[]>([]);
-  const [carencia, setCarencia] = useState(7);
   const [versaoAberta, setVersaoAberta] = useState<Situacao | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
 
@@ -256,11 +255,11 @@ export function TermoUsoAdmin() {
     setOcupado("publicar");
     try {
       if (publicar.termoId) {
-        await chamar("/api/admin/termo", "POST", { acao: "exigir", termoId: publicar.termoId, publico: alvo, carenciaDias: carencia });
+        await chamar("/api/admin/termo", "POST", { acao: "exigir", termoId: publicar.termoId, publico: alvo });
         toast.success("Aceite exigido.");
       } else {
         if (textoMudou) await chamar("/api/admin/termo", "POST", { acao: "salvar", titulo, textoAdm: texto });
-        const j = await chamar<{ versao: number }>("/api/admin/termo", "POST", { acao: "publicar", publico: alvo, carenciaDias: carencia });
+        const j = await chamar<{ versao: number }>("/api/admin/termo", "POST", { acao: "publicar", publico: alvo });
         toast.success(`Versão ${j.versao} publicada.`);
       }
       setPublicar(null);
@@ -385,14 +384,10 @@ export function TermoUsoAdmin() {
               onChange={setIds}
             />
           )}
-          <SelectField label="Prazo para aceitar" hint="Depois do prazo, o sistema só abre com o aceite." value={String(carencia)} onChange={(e) => setCarencia(Number(e.target.value))}>
-            {[0, 1, 3, 7, 15, MAX_CARENCIA_DIAS].map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? "Imediato — no próximo acesso" : `${n} dia${n === 1 ? "" : "s"}`}
-              </option>
-            ))}
-          </SelectField>
-          <p className="text-[12px] text-muted">Quem já aceitou esta versão não precisa aceitar de novo. O Administrador nunca é bloqueado — só recebe o aviso.</p>
+          <p className="text-[12px] text-muted">
+            O aceite é obrigatório: no próximo acesso, o sistema só abre depois que a pessoa aceitar — o Administrador também. Quem já aceitou esta versão não
+            precisa aceitar de novo.
+          </p>
         </div>
       </Modal>
 
@@ -455,7 +450,7 @@ export function TermoUsoAdmin() {
               columns={[
                 { key: "n", header: "Pendente", render: (p) => p.nome, value: (p) => p.nome, align: "left" },
                 { key: "m", header: "Matrícula", render: (p) => p.matricula || "—", value: (p) => p.matricula ?? "", nowrap: true },
-                { key: "p", header: "Prazo", render: (p) => dataHoraBR(p.prazo), value: (p) => p.prazo, filter: "date", nowrap: true },
+                { key: "p", header: "Exigido em", render: (p) => dataHoraBR(p.prazo), value: (p) => p.prazo, filter: "date", nowrap: true },
               ]}
               rows={versaoAberta.pendentes}
               getKey={(p) => p.usuarioId}

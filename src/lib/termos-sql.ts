@@ -30,10 +30,10 @@ export function comandoPendencias(db: Db, termoId: number, publico: PublicoTermo
 }
 
 /** PUBLICAR o rascunho (só se ainda é rascunho — dois cliques nunca publicam duas vezes). */
-export function comandoPublicar(db: Db, id: number, d: { textoFinal: string; hash: string; clausulas: string; carenciaDias: number; em: string; por: string }) {
+export function comandoPublicar(db: Db, id: number, d: { textoFinal: string; hash: string; clausulas: string; em: string; por: string }) {
   return db
     .update(termosUso)
-    .set({ estado: "publicado", textoFinal: d.textoFinal, hash: d.hash, clausulasAuto: d.clausulas, carenciaDias: d.carenciaDias, publicadoEm: d.em, publicadoPor: d.por, atualizadoEm: d.em })
+    .set({ estado: "publicado", textoFinal: d.textoFinal, hash: d.hash, clausulasAuto: d.clausulas, publicadoEm: d.em, publicadoPor: d.por, atualizadoEm: d.em })
     .where(and(eq(termosUso.id, id), eq(termosUso.estado, "rascunho")))
     .returning({ id: termosUso.id });
 }

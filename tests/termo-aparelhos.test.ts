@@ -89,8 +89,9 @@ describe("configuração de acesso da conta", () => {
     assert.equal(nomeAparelhoValido("  Notebook​ da   sala "), "Notebook da sala");
     assert.equal(nomeAparelhoValido("a"), null);
     assert.equal(iniciais("Ana Maria de Souza"), "A. M. S.");
-    assert.equal(destinoBloqueio({ nomearAparelho: true, termo: "bloqueado", aparelhoId: null }), "aparelho");
-    assert.equal(destinoBloqueio({ nomearAparelho: false, termo: "carencia", aparelhoId: 1 }), null);
+    assert.equal(destinoBloqueio({ nomearAparelho: true, termo: "pendente", aparelhoId: null }), "aparelho");
+    assert.equal(destinoBloqueio({ nomearAparelho: false, termo: "pendente", aparelhoId: 1 }), "termo");
+    assert.equal(destinoBloqueio({ nomearAparelho: false, termo: "ok", aparelhoId: 1 }), null);
   });
   it("hash do aparelho é estável e não revela o cookie", async () => {
     const h = await hashDoAparelho("0123456789abcdef0123456789abcdef");
@@ -142,11 +143,8 @@ describe("termo de uso — núcleo", () => {
     assert.match(c, /^[A-Z2-9]{4}(-[A-Z2-9]{1,4})+$/);
     assert.equal(codigoNormal(c.toLowerCase().replace(/-/g, "")), c);
     assert.equal(codigoNormal("abc"), null);
-    const agora = Date.parse("2026-10-22T12:00:00Z");
-    assert.equal(estadoTermo(null, agora), "ok");
-    assert.equal(estadoTermo("2026-10-25T00:00:00Z", agora), "carencia");
-    assert.equal(estadoTermo("2026-10-20T00:00:00Z", agora), "bloqueado");
-    assert.equal(estadoTermo("2026-10-20T00:00:00Z", agora, true), "carencia");
+    assert.equal(estadoTermo(null), "ok");
+    assert.equal(estadoTermo("2026-10-25T00:00:00Z"), "pendente", "obrigatório: qualquer pendência bloqueia");
     assert.equal(fraseConfere(" li e  concordo "), true);
     assert.equal(fraseConfere("concordo"), false);
   });
@@ -211,7 +209,7 @@ describe("termo no D1 real", () => {
   it("publica uma vez, cria as pendências, aceita e repete no teste", async () => {
     const { db, orm } = banco();
     db.exec(`INSERT INTO termos_uso (id, versao, titulo, texto_adm) VALUES (1, 1, 'Termo', 'texto')`);
-    const pub = { textoFinal: "final", hash: "h", clausulas: "[]", carenciaDias: 0, em: "2026-10-22", por: "ADM" };
+    const pub = { textoFinal: "final", hash: "h", clausulas: "[]", em: "2026-10-22", por: "ADM" };
     assert.equal((await orm.batch([comandoPublicar(orm, 1, pub)]))[0].length, 1);
     assert.equal((await orm.batch([comandoPublicar(orm, 1, pub)]))[0].length, 0, "não publica duas vezes");
     await comandoPendencias(orm, 1, { todos: true }, "2026-10-30").run();
@@ -238,14 +236,15 @@ describe("termo no D1 real", () => {
 });
 
 describe("canais ao vivo e o aparelho no online", () => {
-  it("o canal recusa a sessão sem aparelho ou com o termo vencido — só com as regras valendo", () => {
-    const base = { id: 2, admin: false, aparelhoId: null, termoPrazo: null, agoraMs: Date.parse("2026-10-22T12:00:00Z") };
+  it("o canal recusa a sessão sem aparelho ou com o termo pendente — só com as regras valendo", () => {
+    const base = { id: 2, admin: false, aparelhoId: null, termoPrazo: null };
     assert.equal(canalRecusado({ ...base, cfgJson: null }), null);
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}' }), "Aparelho sem nome.");
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}', aparelhoId: 3 }), null);
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}', aparelhoId: 3, termoPrazo: "2026-10-01" }), "Termo de Uso pendente.");
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"teste","testadores":[9]}' }), null);
-    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: "2026-10-01" }), null, "ADM isento e nunca bloqueado");
+    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: null }), null, "ADM isento do aparelho");
+    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: "2026-10-01" }), "Termo de Uso pendente.", "o termo vale também para o ADM");
     assert.equal(canalRecusado({ ...base, cfgJson: "{inválido" }), null);
   });
   it("os aparelhos de cada pessoa presente chegam à tela", () => {

@@ -334,7 +334,7 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
     await getDb().update(sessoes).set({ aparelhoId }).where(eq(sessoes.id, sessaoId)).catch(() => {});
   }
   const nomearAparelho = aparelhosValemPara(cfgConta, quem) && aparelhoId == null;
-  return { ...pessoa, pendencia: { nomearAparelho, termo: estadoTermo(termoPrazo, agora, pessoa.admin), aparelhoId } };
+  return { ...pessoa, pendencia: { nomearAparelho, termo: estadoTermo(termoPrazo), aparelhoId } };
 });
 
 /** Quantos usuários existem (para o bootstrap do primeiro admin). */

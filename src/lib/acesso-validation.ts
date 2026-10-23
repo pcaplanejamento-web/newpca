@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LIMITE_MAX, LIMITE_MIN, MAX_TESTADORES, MODOS_IMPLANTACAO, NOME_APARELHO_MAX, OPCOES_TROCA_DIAS } from "./acesso-conta-core";
-import { MAX_CARENCIA_DIAS, MAX_TEXTO_ADM } from "./termo-uso-core";
+import { MAX_TEXTO_ADM } from "./termo-uso-core";
 
 // TERMO DE USO + APARELHOS — as entradas das rotas.
 
@@ -43,8 +43,8 @@ const publicoSchema = z.discriminatedUnion("tipo", [
 export const termoAdminSchema = z.discriminatedUnion("acao", [
   z.strictObject({ acao: z.literal("salvar"), titulo: z.string().trim().min(3).max(120), textoAdm: z.string().min(1).max(MAX_TEXTO_ADM) }),
   z.strictObject({ acao: z.literal("previa"), titulo: z.string().trim().min(1).max(120), textoAdm: z.string().max(MAX_TEXTO_ADM) }),
-  z.strictObject({ acao: z.literal("publicar"), publico: publicoSchema, carenciaDias: z.number().int().min(0).max(MAX_CARENCIA_DIAS) }),
-  z.strictObject({ acao: z.literal("exigir"), termoId: id, publico: publicoSchema, carenciaDias: z.number().int().min(0).max(MAX_CARENCIA_DIAS) }),
+  z.strictObject({ acao: z.literal("publicar"), publico: publicoSchema }),
+  z.strictObject({ acao: z.literal("exigir"), termoId: id, publico: publicoSchema }),
   z.strictObject({ acao: z.literal("config"), config: configAcessoContaSchema, confirmarAtivo: z.boolean().optional() }),
 ]);
 
