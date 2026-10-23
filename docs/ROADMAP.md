@@ -18,7 +18,8 @@ como 0; órgãos 21–25 e 28 nunca lidos). Em passos pequenos, cada um uma vers
 1. **Cadastro das APIs** em Integrações → "APIs da Centi" (v1.179.0) — **entregue**.
 2. **Testar** (um pedido real, nada gravado) + órgãos/unidades do cadastro + edição direta com (?) (v1.180.0) — **entregue**.
 3. **Importação MANUAL dos empenhos** em lote separado, promovida só quando a contagem bate com o `TotalRegistros` (v1.182.0) — **entregue**.
-4. Tela Empenhos (só ADM) · 5. Atualização automática (desligada por padrão) · 6. Abrir aos grupos.
+4. **Tela Empenhos** (v1.193.0; tela de módulo, aberta aos grupos pelo papel, desde a v1.195.0) — **entregue**.
+5. **Atualização automática** (cron a cada 5 min, desligada por padrão; mesma conferência da manual; queda nunca passa sozinha — v1.196.0) — **entregue**.
 7–9. Liquidações e Pagamentos · 10. Dashboard da execução · 11. Ligação com o Orçamento e o PCA (por último).
 
 ### Termo de Uso assinado + aparelhos vinculados à conta (v1.167.0) — entregue

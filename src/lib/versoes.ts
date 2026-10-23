@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.196.0",
+    data: "2026-10-23",
+    titulo: "Empenhos: atualização automática",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "A API de Empenhos pode ser LIGADA no cadastro (desligada por padrão): no horário, nos dias e na frequência escolhidos, o sistema importa sozinho os anos mantidos, um por vez, com a mesma conferência da importação manual. Uma queda suspeita nunca passa sozinha — a importação fecha como parcial para você confirmar.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.195.2",
     data: "2026-10-23",
     titulo: "Termo: assinaturas com os dados atuais do cadastro",

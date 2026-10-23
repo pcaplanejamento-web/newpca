@@ -4577,6 +4577,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nova lê só a versão. No cliente, `empenhosDoPacote` decodifica e cada ano/recorte fica guardado na aba. Núcleo puro
   `empenhos-tela-core.ts`; testes `tests/empenhos-tela.test.ts` (no D1 real: nulos/aspas/acentos, removidos, 3 pedaços sem
   perda nem repetição, versão).
+- **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
+  DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
+  conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,
+  `fecharLoteEmpenhos`, `PedidoInvalido`) — a MESMA na importação manual e na automática. Gatilho próprio `4-59/5` no
+  `worker.ts`/`wrangler.jsonc` → `POST /api/integracoes/empenhos/cron` (`cronAutorizado`) → **`atualizarEmpenhosAuto`**
+  (`empenhos-auto.ts`): por API LIGADA, continua o lote que lê ou, na hora (`apiNaHora`: horário de Brasília, dia útil com os
+  feriados — `diaUtil`/`feriadosNoIntervalo` —, a frequência desde a última leitura), cria o do ano da vez (`anoDaVez`: o
+  nunca lido, senão o lido há mais tempo — `ultimaLeituraPorAno`); lê `PAGINAS_POR_PASSADA`=3 páginas por passada pelo
+  `proximoPedido` (a página seguinte do período começado; os DIVIDIDOS viram as metades) com o condutor `CONDUTOR_AUTO` na
+  trava (`comandoConduzir` — uma aba conduzindo = a passada pula; a aba entra 2 min depois da última página dela). Erro de
+  rede = tenta na próxima passada, até `MAX_ERROS_AUTO`=3 (`errosSeguidos`) → falhou; resposta inválida = falhou na hora;
+  QUEDA suspeita NUNCA passa sozinha (o lote fecha "parcial" e a pessoa confirma numa importação manual). Autor = "Atualização
+  automática" (`QUEM_AUTO`; auditoria sem usuário). `estadoApi`: a API importável desligada segue "Importação manual".
+  Testes: `tests/empenhos-auto.test.ts`.
 - **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
   "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
   modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",
