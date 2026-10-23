@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.177.0",
+    data: "2026-10-23",
+    titulo: "Excluir versões do Termo de Uso",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "O administrador pode descartar o rascunho e excluir uma versão publicada que ninguém aceitou (as pendências saem junto). A versão já aceita fica para sempre: os aceites são a prova das assinaturas.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.176.0",
     data: "2026-10-23",
     titulo: "Termo de Uso identificado pela versão e pela data",

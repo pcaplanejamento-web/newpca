@@ -43,7 +43,7 @@ import {
   rotuloVersaoTermo,
   seloAceite,
 } from "../src/lib/termo-uso-core.ts";
-import { comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
+import { comandoExcluirTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 function banco() {
@@ -236,6 +236,11 @@ describe("termo no D1 real", () => {
     assert.equal(de2.length, 0, "o oficial não é refeito");
     await comandoPendencias(orm, 1, { todos: true }, "2026-12-01").run();
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE usuario_id = 2").get()?.n, 0, "quem já aceitou não volta a dever");
+    assert.equal((await orm.batch([comandoExcluirTermo(orm, 1)]))[0].length, 0, "versão aceita nunca é excluída");
+    db.exec(`INSERT INTO termos_uso (id, versao, titulo, texto_adm) VALUES (2, 2, 'Termo', 'texto')`);
+    await comandoPendencias(orm, 2, { todos: true }, "2026-12-01").run();
+    assert.equal((await orm.batch([comandoExcluirTermo(orm, 2)]))[0].length, 1, "sem aceite sai");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE termo_id = 2").get()?.n, 0, "as pendências saem junto");
   });
 });
 

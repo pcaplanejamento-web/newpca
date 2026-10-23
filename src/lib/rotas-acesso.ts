@@ -139,7 +139,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "termo/aceites/[id]": { GET: pessoal("o comprovante do aceite (a própria pessoa ou o ADM)") },
   "termo/vigente": { GET: publica("o Termo de Uso em vigor, para o cadastro") },
   "admin/termo": { GET: ADMIN, POST: ADMIN },
-  "admin/termo/[id]": { GET: ADMIN },
+  "admin/termo/[id]": { GET: ADMIN, DELETE: ADMIN },
   "admin/usuarios/[id]/aparelhos": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "auth/contas": { GET: pessoal("as outras contas guardadas neste navegador"), POST: pessoal("trocar de conta ou sair de todas") },
   "auth/cadastro": { POST: publica("criar a conta (código do e-mail)") },

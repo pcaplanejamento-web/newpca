@@ -69,3 +69,14 @@ export function comandosLimparTesteTermo(db: Db) {
 export function consultaTermoVigente(db: Db) {
   return db.select().from(termosUso).where(eq(termosUso.estado, "publicado")).orderBy(sql`${termosUso.versao} DESC`).limit(1);
 }
+
+/**
+ * EXCLUIR uma versão — a trava no PRÓPRIO SQL: só a que NINGUÉM aceitou (nem no teste). O aceite é a prova da assinatura
+ * eletrônica e nunca sai por aqui (a FK em cascata o apagaria). As pendências da versão caem pela cascata.
+ */
+export function comandoExcluirTermo(db: Db, id: number) {
+  return db
+    .delete(termosUso)
+    .where(and(eq(termosUso.id, id), sql`NOT EXISTS (SELECT 1 FROM termos_aceites AS ta WHERE ta.termo_id = ${termosUso.id})`))
+    .returning({ id: termosUso.id, versao: termosUso.versao, estado: termosUso.estado });
+}

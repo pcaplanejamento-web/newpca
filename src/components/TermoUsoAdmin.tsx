@@ -13,7 +13,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
-import { IconAparelho, IconDownload, IconEye, IconSave, IconTermo } from "./icons";
+import { IconAparelho, IconDownload, IconEye, IconSave, IconTermo, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { SeletorMultiplo } from "./SeletorMultiplo";
@@ -157,7 +157,7 @@ const COLUNAS: Column<Versao>[] = [
 ];
 
 type Situacao = {
-  termo: { id: number; versao: number; publicadoEm: string | null; texto: string | null; hash: string | null };
+  termo: { id: number; versao: number; estado?: string; publicadoEm: string | null; texto: string | null; hash: string | null };
   aceites: { id: number; usuarioId: number | null; nome: string; matricula: string; unidade: string; em: string; metodo: string; ip: string; aparelho: string; teste: boolean; codigo: string }[];
   pendentes: { usuarioId: number; nome: string; matricula: string | null; prazo: string }[];
 };
@@ -206,6 +206,34 @@ export function TermoUsoAdmin() {
 
   if (erro && !d) return <ErroCarga msg={erro} onTentar={carregar} />;
   if (!d || !cfg) return <SkeletonLinhas linhas={6} />;
+
+  /** EXCLUIR uma versão: o rascunho (descartar) ou a publicada que ninguém aceitou — a que tem aceite fica (prova). */
+  async function excluirVersao(v: { id: number; versao: number; estado: string; aceites: number }) {
+    if (!d) return;
+    if (v.aceites > 0) return toast.error("Esta versão já foi aceita e não pode ser excluída: os aceites são a prova das assinaturas.");
+    const rascunhoV = v.estado === "rascunho";
+    const vigente = v.id === d.vigenteId;
+    const sim = await confirmar({
+      titulo: rascunhoV ? `Descartar o rascunho da versão ${v.versao}?` : `Excluir a versão ${v.versao}?`,
+      texto: rascunhoV
+        ? "O texto em edição é apagado; o próximo rascunho começa da última versão publicada."
+        : `Ninguém aceitou esta versão. As pendências dela saem junto${vigente ? " e a versão publicada anterior volta a vigorar (sem nenhuma, o aceite deixa de ser exigido)" : ""}.`,
+      confirmar: rascunhoV ? "Descartar" : "Excluir",
+      perigo: true,
+    });
+    if (!sim) return;
+    setOcupado(`excluir-${v.id}`);
+    try {
+      await chamar(`/api/admin/termo/${v.id}`, "DELETE");
+      toast.success(rascunhoV ? "Rascunho descartado." : `Versão ${v.versao} excluída.`);
+      setVersaoAberta(null);
+      carregar();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
 
   async function salvarConfig(confirmarAtivo = false) {
     if (!cfg) return;
@@ -335,6 +363,18 @@ export function TermoUsoAdmin() {
           <Button size="sm" variant="secondary" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "texto"} disabled={!textoMudou || !!ocupado || !texto.trim()} onClick={salvarTexto}>
             Salvar rascunho
           </Button>
+          {d.rascunho.id && (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<IconTrash className="h-4 w-4" />}
+              loading={ocupado === `excluir-${d.rascunho.id}`}
+              disabled={!!ocupado}
+              onClick={() => d.rascunho.id && excluirVersao({ id: d.rascunho.id, versao: d.rascunho.versao, estado: "rascunho", aceites: 0 })}
+            >
+              Descartar rascunho
+            </Button>
+          )}
           <Button size="sm" icon={<IconTermo className="h-4 w-4" />} disabled={!!ocupado || !texto.trim()} onClick={() => setPublicar({ termoId: null })}>
             Publicar versão {d.rascunho.versao}
           </Button>
@@ -417,10 +457,25 @@ export function TermoUsoAdmin() {
         titulo={versaoAberta ? rotuloVersaoTermo(versaoAberta.termo.versao, versaoAberta.termo.publicadoEm) : ""}
         size="full"
         acoesCabecalho={
-          versaoAberta?.termo.texto ? (
-            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => versaoAberta.termo.texto && baixarTermo(versaoAberta.termo.versao, versaoAberta.termo.publicadoEm, versaoAberta.termo.texto).catch((e) => toast.error((e as Error).message))}>
-              PDF
-            </Button>
+          versaoAberta ? (
+            <div className="flex items-center gap-2">
+              {versaoAberta.termo.texto && (
+                <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => versaoAberta.termo.texto && baixarTermo(versaoAberta.termo.versao, versaoAberta.termo.publicadoEm, versaoAberta.termo.texto).catch((e) => toast.error((e as Error).message))}>
+                  PDF
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="danger"
+                icon={<IconTrash className="h-4 w-4" />}
+                loading={ocupado === `excluir-${versaoAberta.termo.id}`}
+                disabled={!!ocupado || versaoAberta.aceites.length > 0}
+                title={versaoAberta.aceites.length > 0 ? "Versão já aceita: os aceites são a prova das assinaturas e não podem ser apagados" : "Excluir esta versão (ninguém a aceitou)"}
+                onClick={() => excluirVersao({ id: versaoAberta.termo.id, versao: versaoAberta.termo.versao, estado: versaoAberta.termo.estado ?? "publicado", aceites: versaoAberta.aceites.length })}
+              >
+                Excluir
+              </Button>
+            </div>
           ) : null
         }
       >
