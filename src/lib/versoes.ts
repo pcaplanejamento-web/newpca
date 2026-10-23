@@ -45,6 +45,15 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.179.3",
+    data: "2026-10-23",
+    titulo: "Termo de Uso aceito: Continuar a qualquer momento",
+    mudancas: [
+      { tipo: "correcao", area: "Termo de Uso", texto: "Clicar em “Continuar” antes do fim da contagem abre o sistema na hora — o banner não fica mais preso; se a tela não atualizar, a página recarrega sozinha.", link: "/painel" },
+      { tipo: "melhoria", area: "Termo de Uso", texto: "A barra da contagem do aceite avança de forma contínua e suave.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.179.2",
     data: "2026-10-23",
     titulo: "Editor de texto: colagem e alinhamento em listas",

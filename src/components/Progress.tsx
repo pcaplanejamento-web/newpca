@@ -3,8 +3,9 @@
  * `bg-accent`) → acompanha o tema. Acessível (`role="progressbar"`). Usada nos
  * imports em lotes (planilha, DFD, protocolo). Responsiva (largura 100%).
  */
-export function Progress({ value, label }: { value: number; label?: string }) {
-  const pct = Math.max(0, Math.min(100, Math.round(value)));
+export function Progress({ value, label, continuo = false }: { value: number; label?: string; continuo?: boolean }) {
+  const exato = Math.max(0, Math.min(100, value));
+  const pct = Math.round(exato);
   return (
     <div>
       <div
@@ -16,11 +17,12 @@ export function Progress({ value, label }: { value: number; label?: string }) {
         className="h-2 w-full overflow-hidden rounded-full bg-track"
       >
         <div
-          className="h-full rounded-full bg-accent transition-all duration-300"
-          style={{ width: `${pct}%` }}
+          // `continuo` = o valor muda a cada quadro (um relógio): sem transição e sem arredondar — anda liso.
+          className={`h-full rounded-full bg-accent ${continuo ? "" : "transition-all duration-300"}`}
+          style={{ width: `${continuo ? exato : pct}%` }}
         />
       </div>
-      {label && <p className="mt-1.5 text-xs text-muted">{label}</p>}
+      {label && !continuo && <p className="mt-1.5 text-xs text-muted">{label}</p>}
     </div>
   );
 }
