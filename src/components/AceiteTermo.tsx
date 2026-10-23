@@ -68,7 +68,7 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
     parar();
     const inicio = el.scrollTop;
     const destino = el.scrollHeight - el.clientHeight;
-    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce";
+    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches || ["off", "reduced"].includes(document.documentElement.dataset.motion ?? "");
     if (reduzir || destino <= inicio) {
       el.scrollTop = destino;
       conferir();
@@ -111,9 +111,10 @@ export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto:
           aria-hidden={noFim}
           aria-label="Ir ao fim do termo"
           title="Ir ao fim do termo"
-          className={`absolute right-6 bottom-3 inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-[opacity,transform] duration-200 motion-reduce:transition-none hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none ${noFim ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
+          className={`absolute right-6 bottom-3 isolate inline-flex size-11 items-center justify-center rounded-full bg-text text-bg shadow-flutuante transition-[opacity,transform] duration-200 motion-reduce:transition-none hover:scale-105 focus-visible:shadow-ring focus-visible:outline-none ${noFim ? "pointer-events-none scale-90 opacity-0" : "opacity-100"}`}
         >
-          <IconArrowDown size={20} aria-hidden="true" />
+          {!noFim && <span aria-hidden="true" className="seta-termo-onda pointer-events-none absolute inset-0 rounded-full" />}
+          <IconArrowDown size={20} aria-hidden="true" className={noFim ? "" : "seta-termo-icone"} />
         </button>
       }
     </div>

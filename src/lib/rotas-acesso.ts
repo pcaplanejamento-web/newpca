@@ -146,6 +146,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "termo/vigente": { GET: publica("o Termo de Uso em vigor, para o cadastro") },
   "admin/termo": { GET: ADMIN, POST: ADMIN },
   "admin/termo/[id]": { GET: ADMIN, DELETE: ADMIN },
+  "admin/termo/adesao": { GET: ADMIN },
   "admin/termo/verificar": { GET: ADMIN, POST: ADMIN },
   "admin/usuarios/[id]/aparelhos": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "auth/contas": { GET: pessoal("as outras contas guardadas neste navegador"), POST: pessoal("trocar de conta ou sair de todas") },

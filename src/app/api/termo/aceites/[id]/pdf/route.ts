@@ -3,6 +3,9 @@ import { pdfDoComprovante } from "@/lib/comprovante-termo-pdf";
 import { getAcessoConta } from "@/lib/acesso-conta";
 import { erro } from "@/lib/http";
 import { aceitePorId, termoPorId } from "@/lib/termo-uso";
+import { getDb } from "@/lib/db";
+import { ipDe } from "@/lib/seguranca-acesso";
+import { comandoRegistrarEmissao } from "@/lib/termos-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   // Sem permissão de baixar, o PDF só é servido para VISUALIZAR (inline) — o ADM sempre baixa.
   const podeBaixar = g.u.admin || (await getAcessoConta()).baixarComprovante;
   const bytes = await pdfDoComprovante(a, { textoFinal: t.textoFinal, publicadoEm: t.publicadoEm }, new URL(req.url).origin);
+  // Quem emitiu o PDF (best-effort: o registro nunca impede o comprovante).
+  await comandoRegistrarEmissao(getDb(), { aceiteId: a.id, usuarioId: g.u.id, nome: g.u.nome, ip: ipDe(req), modo: podeBaixar ? "baixar" : "ver", em: new Date().toISOString() })
+    .run()
+    .catch(() => {});
   return new Response(bytes as Uint8Array<ArrayBuffer>, {
     headers: {
       "Content-Type": "application/pdf",

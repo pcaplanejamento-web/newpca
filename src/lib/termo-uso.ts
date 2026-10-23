@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { papeis, reparticoes, termosAceites, termosPendencias, termosUso, usuarioGrupos, usuarios } from "@/db/schema";
+import { papeis, reparticoes, termosAceites, termosEmissoes, termosPendencias, termosUso, usuarioGrupos, usuarios } from "@/db/schema";
 import { aceiteDeTeste, type ConfigAcessoConta, pessoasDasRegras } from "./acesso-conta-core";
 import { getAcessoConta } from "./acesso-conta";
 import { getAparencia } from "./aparencia";
@@ -325,7 +325,42 @@ export async function situacaoDaVersao(termoId: number) {
       .where(eq(termosPendencias.termoId, termoId))
       .orderBy(usuarios.nome),
   ]);
-  return { aceites, pendentes };
+  const emissoes = aceites.length
+    ? await db
+        .select({ id: termosEmissoes.id, aceiteId: termosEmissoes.aceiteId, nome: termosEmissoes.nome, ip: termosEmissoes.ip, modo: termosEmissoes.modo, em: termosEmissoes.em })
+        .from(termosEmissoes)
+        .innerJoin(termosAceites, eq(termosAceites.id, termosEmissoes.aceiteId))
+        .where(eq(termosAceites.termoId, termoId))
+        .orderBy(desc(termosEmissoes.em))
+        .limit(2000)
+    : [];
+  return { aceites, pendentes, emissoes };
+}
+
+/** A ADESÃO à versão vigente: cada pessoa ativa a quem as regras valem — aceitou (quando), aparelhos nomeados, pendente. */
+export async function adesaoAoTermo(cfg: ConfigAcessoConta) {
+  const db = getDb();
+  const vigente = await termoVigente();
+  const v = vigente?.id ?? 0;
+  const alvo = pessoasDasRegras(cfg);
+  const pessoas = await db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      matricula: usuarios.matricula,
+      email: usuarios.email,
+      aceitoEm: sql<string | null>`(SELECT ta.em FROM termos_aceites ta WHERE ta.usuario_id = usuarios.id AND ta.termo_id = ${v})`,
+      teste: sql<number | null>`(SELECT ta.teste FROM termos_aceites ta WHERE ta.usuario_id = usuarios.id AND ta.termo_id = ${v})`,
+      aparelhos: sql<number>`(SELECT COUNT(*) FROM aparelhos ap WHERE ap.usuario_id = usuarios.id)`,
+      pendente: sql<number>`EXISTS (SELECT 1 FROM termos_pendencias tp WHERE tp.usuario_id = usuarios.id AND tp.termo_id = ${v})`,
+    })
+    .from(usuarios)
+    .where(alvo ? and(eq(usuarios.status, "ativo"), sql`usuarios.id IN (SELECT value FROM json_each(${JSON.stringify(alvo)}))`) : eq(usuarios.status, "ativo"))
+    .orderBy(usuarios.nome);
+  return {
+    vigente: vigente ? { id: vigente.id, versao: vigente.versao, publicadoEm: vigente.publicadoEm } : null,
+    pessoas: pessoas.map((p) => ({ ...p, teste: !!p.teste, pendente: !!p.pendente, aparelhos: Number(p.aparelhos) || 0 })),
+  };
 }
 
 /** O cadastro com o aceite do termo: a versão e o hash conferem com o vigente? (o termo trocou entre ler e confirmar) */

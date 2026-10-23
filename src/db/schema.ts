@@ -2072,6 +2072,23 @@ export const termosPendencias = sqliteTable(
   (t) => [primaryKey({ columns: [t.usuarioId, t.termoId] })],
 );
 
+/** Quem EMITIU o PDF do comprovante de um aceite (a própria pessoa ou o ADM) — `modo` baixar | ver. */
+export const termosEmissoes = sqliteTable(
+  "termos_emissoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    aceiteId: integer("aceite_id")
+      .notNull()
+      .references(() => termosAceites.id, { onDelete: "cascade" }),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    nome: text("nome").notNull(),
+    ip: text("ip").notNull().default(""),
+    modo: text("modo").notNull(),
+    em: text("em").notNull(),
+  },
+  (t) => [index("termos_emissoes_aceite_idx").on(t.aceiteId)],
+);
+
 /** Os APARELHOS nomeados de cada conta (o hash do cookie `pca_aparelho`). */
 export const aparelhos = sqliteTable(
   "aparelhos",

@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { auditoria, termosAceites, termosPendencias, termosUso, usuarios } from "../db/schema.ts";
+import { auditoria, termosAceites, termosEmissoes, termosPendencias, termosUso, usuarios } from "../db/schema.ts";
 
 // TERMO DE USO — os comandos (testados no driver D1 real — tests/termo-aparelhos.test.ts).
 
@@ -101,4 +101,22 @@ export function comandosLimparMencoesTermo(db: Db, id: number, versao: number, c
       .set({ resumo: sql`replace(${auditoria.resumo}, ${trecho}, '')` })
       .where(and(sql`instr(${auditoria.resumo}, ${trecho}) > 0`, sql`NOT EXISTS (SELECT 1 FROM termos_uso WHERE id = ${id})`));
   });
+}
+
+/** Tira as PENDÊNCIAS de quem saiu das regras (ativo com escolhidos, teste): só ficam as das pessoas da lista. */
+export function comandoTirarPendenciasFora(db: Db, manter: number[]) {
+  return db.delete(termosPendencias).where(sql`${termosPendencias.usuarioId} NOT IN (SELECT value FROM json_each(${JSON.stringify(manter)}))`);
+}
+
+/** REVOGA aceites de uma versão (apaga do banco, com as emissões do PDF — cascata) e devolve quem saiu. */
+export function comandoRevogarAceites(db: Db, termoId: number, aceiteIds: number[]) {
+  return db
+    .delete(termosAceites)
+    .where(and(eq(termosAceites.termoId, termoId), sql`${termosAceites.id} IN (SELECT value FROM json_each(${JSON.stringify(aceiteIds)}))`))
+    .returning({ id: termosAceites.id, usuarioId: termosAceites.usuarioId, codigo: termosAceites.codigo, teste: termosAceites.teste, nome: termosAceites.nome });
+}
+
+/** REGISTRA quem emitiu o PDF do comprovante (abriu ou baixou). */
+export function comandoRegistrarEmissao(db: Db, e: { aceiteId: number; usuarioId: number; nome: string; ip: string; modo: "baixar" | "ver"; em: string }) {
+  return db.insert(termosEmissoes).values(e);
 }

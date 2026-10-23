@@ -1282,3 +1282,30 @@ html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:fo
 /* IMAGENS PROTEGIDAS (logo, fotos, capas): não se arrastam, não se selecionam e o toque longo não oferece salvar/copiar.
    O dragstart/contextmenu é barrado em ProtegerImagens (layout raiz). */
 img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+/* A seta "Ir ao fim do termo" (LeituraTermo): uma onda que se expande do botão e a seta que desce de leve — chama o olhar
+   sem mexer no layout (só transform/opacity, fora do fluxo e sem capturar o toque). Parada com "reduzir movimento". */
+@keyframes seta-termo-onda {
+  0% { transform: scale(1); opacity: 0.45; }
+  70%, 100% { transform: scale(1.75); opacity: 0; }
+}
+@keyframes seta-termo-desce {
+  0%, 100% { transform: translateY(-1px); }
+  50% { transform: translateY(3px); }
+}
+.seta-termo-onda {
+  background: var(--text);
+  animation: seta-termo-onda 1.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+  z-index: -1;
+}
+.seta-termo-icone {
+  animation: seta-termo-desce 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .seta-termo-onda, .seta-termo-icone { animation: none; }
+  .seta-termo-onda { opacity: 0; }
+}
+[data-motion="off"] :is(.seta-termo-onda, .seta-termo-icone),
+[data-motion="reduced"] :is(.seta-termo-onda, .seta-termo-icone) { animation: none; }
+[data-motion="off"] .seta-termo-onda,
+[data-motion="reduced"] .seta-termo-onda { opacity: 0; }

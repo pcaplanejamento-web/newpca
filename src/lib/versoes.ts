@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.191.0",
+    data: "2026-10-23",
+    titulo: "Adesão ao termo, assinaturas revogáveis e quem emitiu o PDF",
+    mudancas: [
+      { tipo: "novo", area: "Termo de uso", texto: "Painel de Adesão: quem aceitou a versão vigente, quem está pendente e quem não nomeou aparelho — exportável, com “Lembrar pendentes” (aviso no sino).", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Termo de uso", texto: "Na versão aberta, marque assinaturas e exclua-as: saem do banco e o aceite é exigido de novo dessas pessoas.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Termo de uso", texto: "Cada versão mostra quem emitiu (visualizou ou baixou) o PDF de cada comprovante, com data e IP.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Termo de uso", texto: "Em Pessoas escolhidas, acrescente todo um papel ou grupo de uma vez; a lista vazia não é salva, quem sai da lista deixa de dever e mudar a lista no Ativo pede confirmação.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Termo de uso", texto: "A seta “Ir ao fim do termo” pulsa de leve para ser vista (parada com reduzir movimento).", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.190.0",
     data: "2026-10-23",
     titulo: "Termo obrigatório para todos ou para pessoas escolhidas",

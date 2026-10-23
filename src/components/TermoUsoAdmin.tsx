@@ -18,13 +18,14 @@ import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
+import { StatMini } from "./StatMini";
 import { Switch } from "./Switch";
 import { EditorRico } from "./EditorRico";
 import { toast } from "./Toast";
 
 type Versao = { id: number; versao: number; estado: string; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
 type Dados = { config: ConfigAcessoConta; rascunho: { id: number | null; versao: number; textoAdm: string }; versoes: Versao[]; vigenteId: number | null; desatualizado: boolean };
-type Pessoa = { id: number; nome: string; email: string; status: string };
+type Pessoa = { id: number; nome: string; email: string; status: string; papelId?: number | null; grupos?: number[] };
 type Ref = { id: number; nome: string };
 type Publico = "todos" | "papeis" | "grupos" | "pessoas";
 
@@ -42,7 +43,7 @@ const MODOS: { value: ModoImplantacao; label: string; dica: string }[] = [
 ];
 
 /** Os CAMPOS da implantação e dos aparelhos (controlados) — a tela do ADM e o catálogo. */
-export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor: ConfigAcessoConta; onChange: (v: ConfigAcessoConta) => void; pessoas: Pessoa[]; papeis: Ref[] }) {
+export function CamposAcessoConta({ valor, onChange, pessoas, papeis, grupos = [] }: { valor: ConfigAcessoConta; onChange: (v: ConfigAcessoConta) => void; pessoas: Pessoa[]; papeis: Ref[]; grupos?: Ref[] }) {
   const set = (p: Partial<ConfigAcessoConta>) => onChange({ ...valor, ...p });
   const limites = Array.from({ length: LIMITE_MAX - LIMITE_MIN + 1 }, (_, i) => LIMITE_MIN + i);
   return (
@@ -61,6 +62,45 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis }: { valor:
               ]}
               onChange={(alcance) => set({ alcance })}
             />
+            {valor.alcance === "escolhidos" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SelectField
+                  compacto
+                  label="Acrescentar o papel"
+                  value=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    const novos = pessoas.filter((p) => p.status === "ativo" && p.papelId === id).map((p) => p.id);
+                    set({ exigidos: [...new Set([...valor.exigidos, ...novos])] });
+                  }}
+                >
+                  <option value="">Escolha um papel…</option>
+                  {papeis.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome} ({pessoas.filter((x) => x.status === "ativo" && x.papelId === p.id).length})
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  compacto
+                  label="Acrescentar o grupo"
+                  value=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    const novos = pessoas.filter((p) => p.status === "ativo" && p.grupos?.includes(id)).map((p) => p.id);
+                    set({ exigidos: [...new Set([...valor.exigidos, ...novos])] });
+                  }}
+                >
+                  <option value="">Escolha um grupo…</option>
+                  {grupos.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.nome} ({pessoas.filter((x) => x.status === "ativo" && x.grupos?.includes(g.id)).length})
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+            )}
+            {valor.alcance === "escolhidos" && !valor.exigidos.length && <Callout kind="warn">Escolha ao menos uma pessoa — sem ninguém, a configuração não é salva.</Callout>}
             {valor.alcance === "escolhidos" && (
               <SeletorMultiplo
                 rotulo="Pessoas que devem aceitar"
@@ -204,7 +244,15 @@ type Situacao = {
   termo: { id: number; versao: number; estado?: string; publicadoEm: string | null; texto: string | null; hash: string | null };
   aceites: { id: number; usuarioId: number | null; nome: string; matricula: string; unidade: string; em: string; metodo: string; ip: string; aparelho: string; teste: boolean; codigo: string }[];
   pendentes: { usuarioId: number; nome: string; matricula: string | null; prazo: string }[];
+  emissoes: { id: number; aceiteId: number; nome: string; ip: string; modo: string; em: string }[];
 };
+
+type Adesao = {
+  vigente: { id: number; versao: number; publicadoEm: string | null } | null;
+  pessoas: { id: number; nome: string; matricula: string | null; email: string; aceitoEm: string | null; teste: boolean; aparelhos: number; pendente: boolean }[];
+};
+
+const situacaoAdesao = (p: Adesao["pessoas"][number]) => (p.aceitoEm ? (p.teste ? "Aceitou (teste)" : "Aceitou") : p.pendente ? "Pendente" : "Sem exigência");
 
 /** Configurações → TERMO DE USO (ADM): a implantação (Desligado · Teste · Ativo), os aparelhos por conta, o texto com as
  * cláusulas automáticas, a publicação com o público e a carência, e as versões com quem aceitou. */
@@ -222,6 +270,8 @@ export function TermoUsoAdmin() {
   const [publico, setPublico] = useState<Publico>("todos");
   const [ids, setIds] = useState<string[]>([]);
   const [versaoAberta, setVersaoAberta] = useState<Situacao | null>(null);
+  const [marcados, setMarcados] = useState<Set<string | number>>(new Set());
+  const [adesao, setAdesao] = useState<Adesao | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(() => {
@@ -287,12 +337,14 @@ export function TermoUsoAdmin() {
       toast.success("Configuração salva — vale em até 1 minuto.");
       carregar();
     } catch (e) {
-      const c = (e as { corpo?: { precisaConfirmar?: boolean; afetados?: number } }).corpo;
+      const c = (e as { corpo?: { precisaConfirmar?: boolean; afetados?: number; ativando?: boolean } }).corpo;
       if (c?.precisaConfirmar) {
         const sim = await confirmar({
-          titulo: "Liberar para toda a plataforma?",
-          texto: `${c.afetados ?? 0} pessoa(s) ativa(s) passam a ter de aceitar (quem já aceitou esta versão não é travado) o termo vigente e nomear os aparelhos. Os aceites e aparelhos do teste são apagados.`,
-          confirmar: "Liberar",
+          titulo: c.ativando ? "Liberar o termo e os aparelhos?" : "Mudar quem precisa aceitar?",
+          texto: c.ativando
+            ? `${c.afetados ?? 0} pessoa(s) ativa(s) passam a ter de aceitar o termo vigente e nomear os aparelhos (quem já aceitou esta versão não é travado). Os aceites e aparelhos do teste são apagados.`
+            : `${c.afetados ?? 0} pessoa(s) ativa(s) ficam sujeitas ao aceite sem ainda ter aceitado a versão vigente — elas são travadas no próximo pedido. Quem sair da lista deixa de dever.`,
+          confirmar: c.ativando ? "Liberar" : "Confirmar",
           perigo: true,
         });
         if (sim) return salvarConfig(true);
@@ -350,8 +402,61 @@ export function TermoUsoAdmin() {
     }
   }
 
+  async function carregarAdesao() {
+    setOcupado("adesao");
+    try {
+      setAdesao(await chamar<Adesao>("/api/admin/termo/adesao"));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function lembrarPendentes() {
+    const n = adesao?.pessoas.filter((p) => p.pendente).length ?? 0;
+    const sim = await confirmar({ titulo: "Lembrar os pendentes?", texto: `${n} pessoa(s) recebem um aviso no sino (e por e-mail, se o ADM o liga em Notificações) para aceitar o termo.`, confirmar: "Lembrar" });
+    if (!sim) return;
+    setOcupado("lembrar");
+    try {
+      const r = await chamar<{ avisados: number }>("/api/admin/termo", "POST", { acao: "lembrar" });
+      toast.success(`${r.avisados} pessoa(s) avisada(s).`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function revogar() {
+    if (!versaoAberta || !marcados.size) return;
+    const ids = [...marcados].map(Number);
+    const reais = versaoAberta.aceites.filter((a) => ids.includes(a.id) && !a.teste).length;
+    const sim = await confirmar({
+      titulo: `Excluir ${ids.length} assinatura(s)?`,
+      texto: `As assinaturas são APAGADAS do banco (com o registro de quem emitiu o PDF) e o aceite desta versão é exigido de novo dessas pessoas no próximo pedido.${reais ? ` ${reais} delas são oficiais — os comprovantes já baixados deixam de ser válidos na verificação.` : ""} Não há como desfazer.`,
+      confirmar: "Excluir e exigir de novo",
+      perigo: true,
+    });
+    if (!sim) return;
+    setOcupado("revogar");
+    try {
+      const r = await chamar<{ revogados: number; exigidos: number }>("/api/admin/termo", "POST", { acao: "revogar", termoId: versaoAberta.termo.id, aceiteIds: ids });
+      toast.success(`${r.revogados} assinatura(s) excluída(s); ${r.exigidos} pessoa(s) devem aceitar de novo.`);
+      setMarcados(new Set());
+      setVersaoAberta(await chamar<Situacao>(`/api/admin/termo/${versaoAberta.termo.id}`));
+      carregar();
+      if (adesao) carregarAdesao();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
   async function abrirVersao(v: Versao) {
     try {
+      setMarcados(new Set());
       setVersaoAberta(await chamar<Situacao>(`/api/admin/termo/${v.id}`));
     } catch (e) {
       toast.error((e as Error).message);
@@ -382,13 +487,54 @@ export function TermoUsoAdmin() {
             </TopicoAjuda>
           </Ajuda>
         </div>
-        <CamposAcessoConta valor={cfg} onChange={setCfg} pessoas={pessoas} papeis={papeis} />
+        <CamposAcessoConta valor={cfg} onChange={setCfg} pessoas={pessoas} papeis={papeis} grupos={grupos} />
         <div className="flex justify-end">
-          <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "config"} disabled={!cfgMudou || !!ocupado} onClick={() => salvarConfig()}>
+          <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "config"} disabled={!cfgMudou || !!ocupado || (cfg.modo === "ativo" && cfg.alcance === "escolhidos" && !cfg.exigidos.length)} onClick={() => salvarConfig()}>
             Salvar
           </Button>
         </div>
       </div>
+
+      {cfg.modo !== "desligado" && (
+        <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="flex-1 text-[15px] font-semibold text-text">Adesão {adesao?.vigente ? `— versão ${adesao.vigente.versao}` : ""}</p>
+            {adesao && (
+              <Button size="sm" variant="secondary" loading={ocupado === "lembrar"} disabled={!!ocupado || !adesao.pessoas.some((p) => p.pendente)} onClick={lembrarPendentes}>
+                Lembrar pendentes
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" icon={<IconEye className="h-4 w-4" />} loading={ocupado === "adesao"} disabled={!!ocupado} onClick={carregarAdesao}>
+              {adesao ? "Atualizar" : "Ver adesão"}
+            </Button>
+          </div>
+          {adesao && (
+            <>
+              <div className="grid gap-[var(--gap-block)] sm:grid-cols-4">
+                <StatMini label="Pessoas" value={adesao.pessoas.length} />
+                <StatMini label="Aceitaram" value={adesao.pessoas.filter((p) => p.aceitoEm).length} />
+                <StatMini label="Pendentes" value={adesao.pessoas.filter((p) => p.pendente).length} tone={adesao.pessoas.some((p) => p.pendente) ? "warn" : "default"} />
+                <StatMini label="Sem aparelho" value={adesao.pessoas.filter((p) => !p.aparelhos).length} />
+              </div>
+              <DataTable
+                columns={[
+                  { key: "n", header: "Pessoa", render: (p) => p.nome, value: (p) => p.nome, align: "left" },
+                  { key: "m", header: "Matrícula", render: (p) => p.matricula || "—", value: (p) => p.matricula ?? "", nowrap: true },
+                  { key: "s", header: "Situação", render: (p) => <Badge tone={p.aceitoEm ? "emerald" : p.pendente ? "amber" : "slate"}>{situacaoAdesao(p)}</Badge>, value: situacaoAdesao, nowrap: true },
+                  { key: "e", header: "Aceito em", render: (p) => (p.aceitoEm ? dataHoraBR(p.aceitoEm) : "—"), value: (p) => p.aceitoEm ?? "", filter: "date", nowrap: true },
+                  { key: "a", header: "Aparelhos", render: (p) => p.aparelhos || "Nenhum", value: (p) => String(p.aparelhos), numero: (p) => p.aparelhos, nowrap: true },
+                ]}
+                rows={adesao.pessoas}
+                getKey={(p) => p.id}
+                density="compact"
+                pageSize={10}
+                exportar={{ nome: "Adesão ao Termo de Uso" }}
+                vazio={adesao.vigente ? "Ninguém sujeito às regras." : "Nenhum termo publicado."}
+              />
+            </>
+          )}
+        </div>
+      )}
 
       <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <div className="flex flex-wrap items-center gap-2">
@@ -568,6 +714,16 @@ export function TermoUsoAdmin() {
               ]}
               rows={versaoAberta.aceites}
               getKey={(a) => a.id}
+              selectable={versaoAberta.termo.estado === "publicado"}
+              selected={marcados}
+              onSelected={setMarcados}
+              acoesRodape={
+                marcados.size ? (
+                  <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} loading={ocupado === "revogar"} disabled={!!ocupado} onClick={revogar}>
+                    Excluir {marcados.size} assinatura(s)
+                  </Button>
+                ) : undefined
+              }
               density="compact"
               pageSize={10}
               exportar={{ nome: `Aceites do Termo v${versaoAberta.termo.versao}` }}
@@ -585,6 +741,21 @@ export function TermoUsoAdmin() {
               pageSize={10}
               exportar={{ nome: `Pendentes do Termo v${versaoAberta.termo.versao}` }}
               vazio="Ninguém deve esta versão."
+            />
+            <DataTable
+              columns={[
+                { key: "n", header: "Emitido por", render: (x) => x.nome, value: (x) => x.nome, align: "left" },
+                { key: "p", header: "Comprovante de", render: (x) => versaoAberta.aceites.find((a) => a.id === x.aceiteId)?.nome ?? "—", value: (x) => versaoAberta.aceites.find((a) => a.id === x.aceiteId)?.nome ?? "" },
+                { key: "e", header: "Emitido em", render: (x) => dataHoraBR(x.em), value: (x) => x.em, filter: "date", nowrap: true },
+                { key: "mo", header: "Modo", render: (x) => (x.modo === "baixar" ? "Baixou" : "Visualizou"), value: (x) => (x.modo === "baixar" ? "Baixou" : "Visualizou"), nowrap: true },
+                { key: "ip", header: "IP", render: (x) => x.ip || "—", value: (x) => x.ip, nowrap: true },
+              ]}
+              rows={versaoAberta.emissoes}
+              getKey={(x) => x.id}
+              density="compact"
+              pageSize={10}
+              exportar={{ nome: `Emissões do comprovante — Termo v${versaoAberta.termo.versao}` }}
+              vazio="Ninguém emitiu o PDF de um comprovante desta versão."
             />
           </div>
         )}

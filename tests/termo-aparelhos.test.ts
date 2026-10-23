@@ -43,7 +43,7 @@ import {
   rotuloVersaoTermo,
   seloAceite,
 } from "../src/lib/termo-uso-core.ts";
-import { comandoExcluirTermo, comandoLimparHistoricoTermo, comandosLimparMencoesTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo } from "../src/lib/termos-sql.ts";
+import { comandoExcluirTermo, comandoLimparHistoricoTermo, comandosLimparMencoesTermo, comandoPendenciaJa, comandoPendencias, comandoPublicar, comandosAceitar, comandosLimparTesteTermo, comandoRegistrarEmissao, comandoRevogarAceites, comandoTirarPendenciasFora } from "../src/lib/termos-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 function banco() {
@@ -333,4 +333,28 @@ it("ativo com pessoas escolhidas: só os escolhidos (e testadores) são travados
   assert.equal(regrasValemPara(esc, { id: 9, admin: true }), false);
   assert.deepEqual(pessoasDasRegras(esc), [2, 3, 5]);
   assert.deepEqual(pessoasDasRegras(lerConfigAcessoConta({ modo: "desligado" })), []);
+});
+
+describe("revogar, emissões e pendências fora da lista (D1 real)", () => {
+  it("revoga os aceites com as emissões, devolve quem saiu e tira as pendências fora da lista", async () => {
+    const { db, orm } = banco();
+    db.exec(`INSERT INTO termos_uso (id, versao, titulo, texto_adm, estado) VALUES (1, 1, 'Termo', 'texto', 'publicado')`);
+    const base = { termoId: 1, versao: 1, hash: "h", email: "x@x", metodo: "senha", selo: "s", em: "2026-10-22", teste: false };
+    await orm.batch(comandosAceitar(orm, { ...base, usuarioId: 1, nome: "Ana", codigo: "A1" }));
+    await orm.batch(comandosAceitar(orm, { ...base, usuarioId: 2, nome: "Bruno", codigo: "B1" }));
+    const ids = (db.prepare("SELECT id FROM termos_aceites ORDER BY usuario_id").all() as { id: number }[]).map((r) => r.id);
+    await comandoRegistrarEmissao(orm, { aceiteId: ids[0], usuarioId: 1, nome: "Ana", ip: "1.1.1.1", modo: "baixar", em: "2026-10-23" }).run();
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_emissoes").get()?.n, 1);
+    const [saiu] = await orm.batch([comandoRevogarAceites(orm, 1, [ids[0], 9999])]);
+    assert.deepEqual(saiu.map((a) => a.usuarioId), [1], "só o da versão e da lista");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_emissoes").get()?.n, 0, "as emissões saem em cascata");
+    assert.equal((await orm.batch([comandoRevogarAceites(orm, 2, [ids[1]])]))[0].length, 0, "outra versão não revoga");
+    await comandoPendencias(orm, 1, { todos: true }, "2026-10-23").run();
+    assert.equal(db.prepare("SELECT usuario_id FROM termos_pendencias").get()?.usuario_id, 1, "quem perdeu a assinatura deve de novo");
+    db.exec(`INSERT INTO termos_pendencias (usuario_id, termo_id, prazo) VALUES (2, 1, 'x')`);
+    await comandoTirarPendenciasFora(orm, [2]).run();
+    assert.deepEqual((db.prepare("SELECT usuario_id FROM termos_pendencias").all() as { usuario_id: number }[]).map((r) => r.usuario_id), [2]);
+    await comandoTirarPendenciasFora(orm, []).run();
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias").get()?.n, 0);
+  });
 });
