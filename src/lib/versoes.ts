@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.195.1",
+    data: "2026-10-23",
+    titulo: "Termo: aceite único e o nome atual do aparelho",
+    mudancas: [
+      { tipo: "correcao", area: "Termo de uso", texto: "Quem já aceitou a versão vigente (inclusive no cadastro) nunca é bloqueado de novo: aceitar outra vez vale o aceite que existe e tira a pendência.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Termo de uso", texto: "Os aceites mostram o nome ATUAL do aparelho (renomear acompanha) e o aceite do cadastro é ligado ao aparelho quando ele é nomeado.", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "melhoria", area: "Termo de uso", texto: "Tabela das assinaturas com no máximo duas linhas por pessoa: aparelho e IP encurtados (inteiros na dica) e a confirmação por extenso.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.195.0",
     data: "2026-10-23",
     titulo: "Empenhos vira uma tela do sistema",

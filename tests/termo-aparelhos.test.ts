@@ -237,6 +237,9 @@ describe("termo no D1 real", () => {
     await orm.batch(comandosAceitar(orm, { ...aceite, codigo: "C3", teste: false }));
     const [, de2] = await orm.batch(comandosAceitar(orm, { ...aceite, codigo: "C4", teste: false }));
     assert.equal(de2.length, 0, "o oficial não é refeito");
+    db.exec(`INSERT INTO termos_pendencias (usuario_id, termo_id, prazo) VALUES (2, 1, '2026-12-01')`);
+    await orm.batch(comandosAceitar(orm, { ...aceite, codigo: "C5", teste: false }));
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE usuario_id = 2").get()?.n, 0, "aceitar de novo tira a pendência que sobrou");
     await comandoPendencias(orm, 1, { todos: true }, "2026-12-01").run();
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM termos_pendencias WHERE usuario_id = 2").get()?.n, 0, "quem já aceitou não volta a dever");
     assert.equal((await orm.batch([comandoExcluirTermo(orm, 1)]))[0].length, 0, "versão aceita nunca é excluída");

@@ -23,6 +23,8 @@ import { Switch } from "./Switch";
 import { EditorRico } from "./EditorRico";
 import { toast } from "./Toast";
 
+const ROTULO_METODO: Record<string, string> = { codigo: "Código por e-mail", senha: "Senha", sessao: "Declaração" };
+
 type Versao = { id: number; versao: number; estado: string; publicadoEm: string | null; publicadoPor: string | null; hash: string | null; aceites: number; aceitesTeste: number; pendentes: number };
 type Dados = { config: ConfigAcessoConta; rascunho: { id: number | null; versao: number; textoAdm: string }; versoes: Versao[]; vigenteId: number | null; desatualizado: boolean };
 type Pessoa = { id: number; nome: string; email: string; status: string; papelId?: number | null; grupos?: number[] };
@@ -756,13 +758,13 @@ export function TermoUsoAdmin() {
             {abaVersao === "aceites" && (
               <DataTable
                 columns={[
-                  { key: "n", header: "Pessoa", render: (a) => a.nome, value: (a) => a.nome, align: "left" },
+                  { key: "n", header: "Pessoa", render: (a) => <span className="line-clamp-2 min-w-[12rem] text-left" title={a.nome}>{a.nome}</span>, value: (a) => a.nome, align: "left", minWidth: 200 },
                   { key: "m", header: "Matrícula", render: (a) => a.matricula || "—", value: (a) => a.matricula, nowrap: true },
                   { key: "u", header: "Unidade", render: (a) => <span title={a.unidade}>{(a.unidade || "—").split(" — ")[0]}</span>, value: (a) => a.unidade, nowrap: true },
                   { key: "e", header: "Aceito em", render: (a) => dataHoraBR(a.em), value: (a) => a.em, filter: "date", nowrap: true },
-                  { key: "me", header: "Confirmação", render: (a) => a.metodo, value: (a) => a.metodo, nowrap: true },
-                  { key: "ap", header: "Aparelho", render: (a) => a.aparelho || "—", value: (a) => a.aparelho },
-                  { key: "ip", header: "IP", render: (a) => a.ip || "—", value: (a) => a.ip, nowrap: true },
+                  { key: "me", header: "Confirmação", render: (a) => ROTULO_METODO[a.metodo] ?? a.metodo, value: (a) => ROTULO_METODO[a.metodo] ?? a.metodo, nowrap: true },
+                  { key: "ap", header: "Aparelho", render: (a) => <span className="block max-w-[12rem] truncate" title={a.aparelho}>{a.aparelho || "—"}</span>, value: (a) => a.aparelho, nowrap: true },
+                  { key: "ip", header: "IP", render: (a) => <span className="block max-w-[9rem] truncate font-mono text-[12px]" title={a.ip}>{a.ip || "—"}</span>, value: (a) => a.ip, nowrap: true },
                   { key: "t", header: "Tipo", render: (a) => (a.teste ? <Badge tone="amber">Teste</Badge> : <Badge tone="emerald">Oficial</Badge>), value: (a) => (a.teste ? "Teste" : "Oficial"), nowrap: true },
                   { key: "c", header: "Código", render: (a) => <span className="font-mono text-[12px]">{a.codigo}</span>, value: (a) => a.codigo, nowrap: true },
                 ]}
