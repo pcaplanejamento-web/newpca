@@ -146,22 +146,45 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
   }
 
   // Concluído: o painel é montado de novo, sem a pendência (uma vez só — o tempo e o botão chamam o mesmo).
-  const concluiu = useRef(false);
+  // Se o banner seguir na tela depois do refresh (a resposta ainda trouxe a pendência), recarrega a página inteira —
+  // nunca fica preso com o botão sem efeito.
+  const [saindo, setSaindo] = useState(false);
+  const saiu = useRef(false);
   const concluir = () => {
-    if (concluiu.current) return;
-    concluiu.current = true;
+    if (saiu.current) return;
+    saiu.current = true;
+    setSaindo(true);
     continuar(() => router.refresh());
   };
-  // O FECHAMENTO AUTOMÁTICO do aceite (o tempo do ADM): conta de segundo em segundo e PAUSA enquanto o comprovante é gerado.
-  const [restante, setRestante] = useState(fecharEmS);
-  const pausado = baixando || continuando;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: o relógio só depende do aceite, da pausa e do que falta
   useEffect(() => {
-    if (!feito || fecharEmS <= 0 || pausado) return;
-    if (restante <= 0) return concluir();
-    const t = window.setTimeout(() => setRestante((s) => s - 1), 1000);
+    if (!saindo || continuando) return;
+    const t = window.setTimeout(() => window.location.reload(), 1500);
     return () => window.clearTimeout(t);
-  }, [feito, pausado, restante]);
+  }, [saindo, continuando]);
+  // O FECHAMENTO AUTOMÁTICO do aceite (o tempo do ADM): um relógio por quadro (a barra anda liso) que PAUSA enquanto o
+  // comprovante é gerado; clicar em "Continuar" antes encerra o relógio.
+  const totalMs = fecharEmS * 1000;
+  const [decorrido, setDecorrido] = useState(0);
+  const pausado = baixando || saindo;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: o relógio só depende do aceite e da pausa
+  useEffect(() => {
+    if (!feito || totalMs <= 0 || pausado) return;
+    let ultimo = performance.now();
+    let id = 0;
+    const passo = (agora: number) => {
+      const dt = agora - ultimo;
+      ultimo = agora;
+      setDecorrido((d) => {
+        const n = Math.min(totalMs, d + dt);
+        if (n >= totalMs) window.setTimeout(concluir, 0);
+        return n;
+      });
+      id = requestAnimationFrame(passo);
+    };
+    id = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(id);
+  }, [feito, pausado, totalMs]);
+  const restante = Math.max(0, Math.ceil((totalMs - decorrido) / 1000));
   const idForm = "form-termo";
 
   const pronto =
@@ -181,7 +204,7 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
               <Button size="sm" variant="secondary" loading={baixando} onClick={baixar} icon={<IconDownload className="h-4 w-4" />}>
                 Baixar comprovante
               </Button>
-              <Button size="sm" variant="accent" loading={continuando} onClick={concluir} icon={<IconArrowRight className="h-4 w-4" />}>
+              <Button size="sm" variant="accent" loading={saindo} disabled={saindo} onClick={concluir} icon={<IconArrowRight className="h-4 w-4" />}>
                 {fecharEmS > 0 && !pausado ? `Continuar (${restante})` : "Continuar"}
               </Button>
             </div>
@@ -209,9 +232,9 @@ export function BannerTermo({ dados }: { dados: DadosAceiteTermo }) {
           <p className="text-[13px] text-muted">O comprovante traz o termo integral e o registro da sua assinatura eletrônica. Ele fica também no seu Perfil → Segurança.</p>
           {fecharEmS > 0 && (
             <div className="space-y-1">
-              <Progress value={((fecharEmS - restante) / fecharEmS) * 100} label="Tempo até continuar" />
+              <Progress continuo value={(decorrido / totalMs) * 100} label="Tempo até continuar" />
               <p className="text-[12px] text-muted" aria-live="polite">
-                {baixando ? "Gerando o comprovante — a contagem continua em seguida." : `O sistema abre sozinho em ${restante} segundo${restante === 1 ? "" : "s"}.`}
+                {saindo ? "Abrindo o sistema…" : baixando ? "Gerando o comprovante — a contagem continua em seguida." : `O sistema abre sozinho em ${restante} segundo${restante === 1 ? "" : "s"}.`}
               </p>
             </div>
           )}
