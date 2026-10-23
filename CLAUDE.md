@@ -353,7 +353,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (com as linhas e o endereço dos links — `texto-formatado.ts`, testados). FICAM em campo simples (não usar o editor): o
     texto do DFD e da capa do protocolo (documento oficial — despacho, PDF, reenvio), a descrição do item do catálogo
     (comparada com os itens dos DFDs) e as configurações das automações (sintaxe própria, uma regra por linha). Texto novo
-    de editar = o `EditorRico`, nunca uma textarea com marcação. Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
+    de editar = o `EditorRico`, nunca uma textarea com marcação. Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados). **v1.195.1:** `aceitarTermo` com aceite já existente devolve o existente (a pendência sai no mesmo lote — nunca 409 a quem já aceitou); as listas de aceites mostram o nome ATUAL do aparelho (`nomeAparelhoAtual` = COALESCE do `aparelhos.nome`; o comprovante segue com o retrato do selo) e nomear o aparelho liga a ele os aceites sem aparelho (`ligarAceitesAoAparelho` — o do cadastro).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
