@@ -332,8 +332,9 @@ export async function situacaoDaVersao(termoId: number) {
   const db = getDb();
   const [aceites, pendentes] = await Promise.all([
     db
-      .select({ id: termosAceites.id, usuarioId: termosAceites.usuarioId, nome: termosAceites.nome, matricula: termosAceites.matricula, unidade: termosAceites.unidade, em: termosAceites.em, metodo: termosAceites.metodo, ip: termosAceites.ip, aparelho: nomeAparelhoAtual, teste: termosAceites.teste, codigo: termosAceites.codigo })
+      .select({ id: termosAceites.id, usuarioId: termosAceites.usuarioId, nome: sql<string>`COALESCE(${usuarios.nome}, ${termosAceites.nome})`, matricula: sql<string>`COALESCE(${usuarios.matricula}, ${termosAceites.matricula})`, unidade: sql<string>`COALESCE((SELECT r.codigo || ' — ' || r.nome FROM reparticoes AS r WHERE r.id = ${usuarios.reparticaoId}), ${termosAceites.unidade})`, em: termosAceites.em, metodo: termosAceites.metodo, ip: termosAceites.ip, aparelho: nomeAparelhoAtual, teste: termosAceites.teste, codigo: termosAceites.codigo })
       .from(termosAceites)
+      .leftJoin(usuarios, eq(usuarios.id, termosAceites.usuarioId))
       .where(eq(termosAceites.termoId, termoId))
       .orderBy(desc(termosAceites.em)),
     db
