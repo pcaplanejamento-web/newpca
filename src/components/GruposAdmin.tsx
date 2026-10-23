@@ -443,7 +443,7 @@ export function GruposAdmin() {
             </div>
           </section>
           <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
-            <AcessoPorAba telas={telasGrupo} escopo={escopo} somas={fontesAbas} onEscopo={setEscopo} onSomas={setFontesAbas} />
+            <AcessoPorAba telas={telasGrupo.filter((t) => t !== "documentos")} escopo={escopo} somas={fontesAbas} onEscopo={setEscopo} onSomas={setFontesAbas} />
           </section>
           {(telasGrupo.includes("pca") || telasGrupo.includes("orcamento")) && (
           <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">

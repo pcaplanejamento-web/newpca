@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.194.1",
+    data: "2026-10-23",
+    titulo: "Acesso às unidades por aba revisado",
+    mudancas: [
+      { tipo: "correcao", area: "Grupos", texto: "Telas que não seguem o filtro do cabeçalho passam a mostrar só as unidades que a pessoa acessa (antes mostravam todas).", link: "/painel/grupos" },
+      { tipo: "correcao", area: "Verificação", texto: "A Verificação passa a seguir a própria configuração de acesso às unidades do grupo.", link: "/painel/verificacao" },
+      { tipo: "melhoria", area: "Grupos", texto: "Documentos saiu do acesso por aba (não depende de unidade).", link: "/painel/grupos" },
+    ],
+  },
+  {
     versao: "1.194.0",
     data: "2026-10-23",
     titulo: "Cadastro do aparelho controlado pelo ADM",
