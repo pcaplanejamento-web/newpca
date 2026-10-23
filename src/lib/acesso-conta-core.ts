@@ -139,10 +139,16 @@ export const aceiteDeTeste = (cfg: ConfigAcessoConta) => cfg.modo === "teste";
 
 /** O limite de aparelhos vale para a pessoa? (O ADM isento fica de fora — menos quando está no teste.) */
 export function aparelhosValemPara(cfg: ConfigAcessoConta, u: PessoaRegra): boolean {
-  if (!regrasValemPara(cfg, u)) return false;
-  if (u.admin && cfg.isentarAdm && cfg.modo !== "teste") return false;
-  return true;
+  return regrasValemPara(cfg, u);
 }
+
+/** O Administrador fora do LIMITE de aparelhos (`isentarAdm`; no teste, o ADM testador segue as regras) — ele nomeia igual. */
+export function semLimiteDeAparelhos(cfg: ConfigAcessoConta, u: PessoaRegra): boolean {
+  return u.admin && cfg.isentarAdm && cfg.modo !== "teste";
+}
+
+/** O limite que vale para o ADM isento (na prática, sem limite). */
+export const LIMITE_ISENTO = 1000;
 
 /** O limite efetivo: o da pessoa › o do papel › o padrão. */
 export function limiteEfetivo(cfg: ConfigAcessoConta, papelId: number | null, daPessoa: number | null | undefined): number {

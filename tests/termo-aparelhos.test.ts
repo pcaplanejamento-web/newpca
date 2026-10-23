@@ -10,6 +10,7 @@ import {
   ACESSO_CONTA_PADRAO,
   canalRecusado,
   aparelhosValemPara,
+  semLimiteDeAparelhos,
   destinoBloqueio,
   hashDoAparelho,
   iniciais,
@@ -74,8 +75,10 @@ describe("configuração de acesso da conta", () => {
     assert.equal(regrasValemPara(ACESSO_CONTA_PADRAO, { id: 2, admin: false }), false);
     // ADM isento no ativo, mas o ADM testador segue as regras
     const ativo = { ...c, modo: "ativo" as const };
-    assert.equal(aparelhosValemPara(ativo, { id: 9, admin: true }), false);
-    assert.equal(aparelhosValemPara({ ...c, testadores: [9] }, { id: 9, admin: true }), true);
+    assert.equal(aparelhosValemPara(ativo, { id: 9, admin: true }), true);
+    assert.equal(semLimiteDeAparelhos(ativo, { id: 9, admin: true }), true);
+    assert.equal(semLimiteDeAparelhos({ ...c, testadores: [9] }, { id: 9, admin: true }), false);
+    assert.equal(semLimiteDeAparelhos(ativo, { id: 2, admin: false }), false);
     assert.equal(repeteAoEntrar({ ...c, repetirAoEntrar: true }, { id: 2, admin: false }), true);
     assert.equal(repeteAoEntrar({ ...ativo, repetirAoEntrar: true }, { id: 2, admin: false }), false);
   });
@@ -274,8 +277,8 @@ describe("canais ao vivo e o aparelho no online", () => {
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}', aparelhoId: 3 }), null);
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"ativo"}', aparelhoId: 3, termoPrazo: "2026-10-01" }), "Termo de Uso pendente.");
     assert.equal(canalRecusado({ ...base, cfgJson: '{"modo":"teste","testadores":[9]}' }), null);
-    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: null }), null, "ADM isento do aparelho");
-    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: "2026-10-01" }), "Termo de Uso pendente.", "o termo vale também para o ADM");
+    assert.equal(canalRecusado({ ...base, admin: true, cfgJson: '{"modo":"ativo"}', termoPrazo: null }), "Aparelho sem nome.", "o ADM também nomeia o aparelho");
+    assert.equal(canalRecusado({ ...base, admin: true, aparelhoId: 5, cfgJson: '{"modo":"ativo"}', termoPrazo: "2026-10-01" }), "Termo de Uso pendente.", "o termo vale também para o ADM");
     assert.equal(canalRecusado({ ...base, cfgJson: "{inválido" }), null);
   });
   it("os aparelhos de cada pessoa presente chegam à tela", () => {

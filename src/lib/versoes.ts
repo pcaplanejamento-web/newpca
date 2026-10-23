@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.195.3",
+    data: "2026-10-23",
+    titulo: "Aparelhos: todos nomeiam, inclusive o Administrador",
+    mudancas: [
+      { tipo: "correcao", area: "Termo de uso", texto: "O cadastro do aparelho aparece para todas as pessoas, inclusive o Administrador. \"Administrador fora do limite\" agora só tira o limite e a trava de troca do ADM.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
     versao: "1.195.2",
     data: "2026-10-23",
     titulo: "Termo: assinaturas com os dados atuais do cadastro",

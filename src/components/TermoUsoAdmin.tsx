@@ -164,7 +164,7 @@ export function CamposAcessoConta({ valor, onChange, pessoas, papeis, grupos = [
         <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
         <Switch checked={valor.telaAceito} onChange={(telaAceito) => set({ telaAceito })} label="Mostrar “Termo de Uso aceito”" dica="Depois de assinar, mostra o banner com o código e o comprovante; desligado, a pessoa segue direto ao sistema" />
         <Switch checked={valor.baixarComprovante} onChange={(baixarComprovante) => set({ baixarComprovante })} label="Permitir baixar o comprovante" dica="Desligado, o comprovante assinado só é visualizado na tela (o Administrador sempre baixa)" />
-        <Switch checked={valor.isentarAdm} onChange={(isentarAdm) => set({ isentarAdm })} label="Administrador fora do limite" dica="O Administrador não tem limite de aparelhos (no teste, o ADM testador segue as regras)" />
+        <Switch checked={valor.isentarAdm} onChange={(isentarAdm) => set({ isentarAdm })} label="Administrador fora do limite" dica="O Administrador também nomeia o aparelho, mas não tem limite nem trava de troca (no teste, o ADM testador segue as regras)" />
         </div>
         <div className="space-y-1">
           <p className="font-medium text-[13px] text-text">Cláusulas geradas pelo sistema</p>

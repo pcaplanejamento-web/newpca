@@ -8,6 +8,8 @@ import {
   hashDoAparelho,
   idAparelhoValido,
   limiteEfetivo,
+  LIMITE_ISENTO,
+  semLimiteDeAparelhos,
   mesmoNavegador,
   repeteAoEntrar,
   type SituacaoNovoAparelho,
@@ -66,7 +68,8 @@ export async function estadoAparelhos(u: UsuarioSessao, userAgent: string | null
   const doCookie = hash ? await getDb().query.aparelhos.findFirst({ where: (a, { and, eq: e }) => and(e(a.usuarioId, u.id), e(a.hash, hash)), columns: { id: true, navegador: true, nome: true } }) : undefined;
   // Conhecido só no MESMO navegador em que foi nomeado (o cookie copiado para outro navegador vira aparelho novo).
   const conhecido = doCookie && mesmoNavegador(doCookie.navegador, resumoNavegador(userAgent)) ? doCookie.id : null;
-  const limite = limiteEfetivo(c, u.papel.id, conta.limite);
+  const isento = semLimiteDeAparelhos(c, u);
+  const limite = isento ? LIMITE_ISENTO : limiteEfetivo(c, u.papel.id, conta.limite);
   const repetir = repeteAoEntrar(c, u);
   return {
     lista,
@@ -74,10 +77,10 @@ export async function estadoAparelhos(u: UsuarioSessao, userAgent: string | null
     limiteProprio: conta.limite,
     trocaAte: conta.trocaAte,
     conhecido,
-    situacao: situacaoNovoAparelho({ total: lista.length, limite, trocaAte: conta.trocaAte, agoraMs: Date.now(), semTrava: repetir }),
+    situacao: situacaoNovoAparelho({ total: lista.length, limite, trocaAte: conta.trocaAte, agoraMs: Date.now(), semTrava: repetir || isento }),
     sugestao: resumoNavegador(userAgent),
     repetir,
-    trocaDias: repetir ? 0 : c.trocaDias,
+    trocaDias: repetir || isento ? 0 : c.trocaDias,
   };
 }
 
@@ -126,7 +129,7 @@ export async function nomearAparelhoDaSessao(
   const ids = [...new Set(removerIds)].filter((id) => estado.lista.some((a) => a.id === id));
   if (!ids.length || estado.lista.length - ids.length >= estado.limite)
     return { ok: false, status: 422, error: `Escolha ${Math.max(1, estado.lista.length - estado.limite + 1)} aparelho(s) para retirar.`, situacao: s };
-  const trava = estado.repetir ? null : fimDaTrava(Date.now(), cfg.trocaDias);
+  const trava = estado.repetir || estado.trocaDias === 0 ? null : fimDaTrava(Date.now(), cfg.trocaDias);
   const r = await db.batch(comandosTrocarAparelho(db, novo, sessaoId, ids, trava));
   const ins = r[2];
   if (ins[0]) return { ok: true, aparelhoId: ins[0].id };

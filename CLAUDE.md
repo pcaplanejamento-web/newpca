@@ -283,7 +283,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     muda) · teste (só os `testadores`; `repetirAoEntrar` = cada login pede o aceite e o nome do aparelho de novo, sem trava; os
     aceites ficam `teste=1` e o PDF leva "TESTE") · ativo (v1.190.0: `alcance` todos — quem entrar depois também — | escolhidos = `exigidos` + testadores; `pessoasDasRegras` dá o público das pendências; passar a ativo pede confirmação com a contagem e apaga os
     aceites/aparelhos/pendências do teste, depois exige a versão vigente de todos). **`regrasValemPara`** é o ÚNICO ponto que
-    decide; `aparelhosValemPara` (o ADM fica fora do limite com `isentarAdm`, menos no teste). Loader `acesso-conta.ts` (cache 60 s).
+    decide; `aparelhosValemPara` = todos nomeiam o aparelho (v1.195.3); `semLimiteDeAparelhos` = o ADM sem limite/trava com `isentarAdm`, menos no teste. Loader `acesso-conta.ts` (cache 60 s).
   - **Sessão sem consulta a mais:** `getUsuarioAtual` lê na MESMA consulta o aparelho da sessão, o aparelho conhecido pelo cookie
     `pca_aparelho` (`hashDoAparelho` = SHA-256 de `aparelho:<cookie>`) e o MENOR prazo das pendências → `UsuarioSessao.pendencia`
     {nomearAparelho, termo ok|pendente (`estadoTermo` — v1.172.0: OBRIGATÓRIO como o aparelho, sem carência; qualquer pendência bloqueia, o ADM também), aparelhoId}. A sessão de um aparelho
