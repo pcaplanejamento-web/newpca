@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.185.0",
+    data: "2026-10-23",
+    titulo: "Empenhos lidos de verdade e exclusão das tentativas",
+    mudancas: [
+      { tipo: "correcao", area: "Integrações", texto: "A importação dos empenhos lê a resposta real da Centi: ela vem com o JSON dentro de um texto e com aspas sem escape nos históricos (ex.: “BRASIL CUP CAPOEIRA”). A leitura conserta isso sem perder nada — janeiro de 2026 veio inteiro, 5.110 empenhos.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "melhoria", area: "Integrações", texto: "O ano é lido semana a semana (respostas de até 2 MB); o período maior é dividido ao meio e o passo aparece como “Dividida”, não como erro. Quando a resposta não traz registros, o passo diz o que veio.", link: "/painel/integracoes?aba=centi" },
+      { tipo: "novo", area: "Integrações", texto: "Cada tentativa de importação pode ser excluída do banco (a lixeira no histórico ou “Excluir importação” nos passos), e cada passo com erro também. Os empenhos já gravados por uma importação concluída continuam.", link: "/painel/integracoes?aba=centi" },
+    ],
+  },
+  {
     versao: "1.184.0",
     data: "2026-10-23",
     titulo: "Importação dos empenhos acompanhada ao vivo, mês a mês",

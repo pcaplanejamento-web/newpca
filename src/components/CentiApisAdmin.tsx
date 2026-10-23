@@ -47,7 +47,7 @@ import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { CampoLista, SelectField, TextArea, TextField } from "./Field";
 import { CelulaTexto } from "./CelulaLista";
-import { IconChevronDown, IconDownload, IconPlay } from "./icons";
+import { IconChevronDown, IconDownload, IconPlay, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
@@ -560,7 +560,7 @@ function EditorApi({
                       <code>{"{ano}"}</code> o ano · <code>{"{inicio}"}</code> e <code>{"{fim}"}</code> o período (dd/mm/aaaa) ·{" "}
                       <code>{"{orgao}"}</code> o ID do órgão na Centi · <code>{"{fonte}"}</code> a fonte · <code>{"{pagina}"}</code> a página.
                     </p>
-                    <p>Com o período, a importação lê o ano mês a mês — e divide o mês que vier grande demais.</p>
+                    <p>Com o período, a importação lê o ano semana a semana — e divide o período que vier grande demais.</p>
                     <p>A página é acrescentada sozinha nas APIs que devolvem páginas.</p>
                   </A>
                 }
@@ -674,6 +674,13 @@ async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>)
   return j;
 }
 
+/** EXCLUI DO BANCO uma tentativa: a importação inteira ou (com `passoId`) um passo não lido. */
+async function excluirTentativa(apiId: number, loteId: number, passoId?: number): Promise<void> {
+  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar?lote=${loteId}${passoId ? `&passo=${passoId}` : ""}`, { method: "DELETE" });
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+}
+
 async function lerPassos(apiId: number, loteId: number): Promise<PassoLote[]> {
   const r = await fetch(`/api/admin/centi-apis/${apiId}/importar?lote=${loteId}`);
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; passos?: PassoLote[] };
@@ -696,7 +703,7 @@ function fracaoDoAno(ano: number, passos: PassoLote[]): number {
 type Agora = { periodo: Periodo; pagina: number; tentativa: number; espera?: number };
 
 /**
- * A IMPORTAÇÃO MANUAL (passo 3): lê o ano MÊS A MÊS (o mês grande demais é dividido ao meio), página a página, com o
+ * A IMPORTAÇÃO MANUAL (passo 3): lê o ano SEMANA A SEMANA (o período grande demais é dividido ao meio), página a página, com o
  * cadastro SALVO; cada pedido vira um PASSO à vista na hora — lido ou com o erro em detalhe — e os empenhos só são
  * gravados quando todo o ano foi lido e a contagem confere com o total que a Centi informa. Interromper, fechar a
  * página ou uma falha deixam a tabela final como estava.
@@ -779,7 +786,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       setAtual(lote);
       const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
       setPassos(anteriores);
-      // A FILA: o período começado (na próxima página) e o que falta do ano, mês a mês.
+      // A FILA: o período começado (na próxima página) e o que falta do ano, semana a semana.
       const emCurso = periodoEmCurso(anteriores);
       const fila: { periodo: Periodo; pagina: number }[] = emCurso ? [emCurso] : [];
       for (const p of periodosAPedir(lote.ano, [...periodosLidos(anteriores), ...(emCurso ? [emCurso.periodo] : [])], comPeriodo)) fila.push({ periodo: p, pagina: 1 });
@@ -833,6 +840,42 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
     void carregar();
   }
 
+  async function excluirLote(l: LoteCenti) {
+    const ok = await confirmar({
+      titulo: `Excluir a importação de ${l.ano}?`,
+      texto: `A tentativa de ${dataHoraBR(l.iniciadoEm)} sai do banco com os ${l.paginas} passo(s) lido(s) e o que foi guardado dela.${l.estado === "promovido" ? " Os empenhos que ela gravou continuam." : ""}`,
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (!ok) return;
+    try {
+      await excluirTentativa(api.id, l.id);
+      toast.success("Importação excluída do banco.");
+      if (atual?.id === l.id) {
+        setAtual(null);
+        setPassos([]);
+      }
+      if (historico?.id === l.id) setHistorico(null);
+      void carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao excluir.");
+    }
+  }
+
+  /** Exclui um passo NÃO lido (o local, que não chegou ao servidor, sai só da tela). */
+  async function excluirPasso(l: LoteCenti, p: PassoLote): Promise<boolean> {
+    if (!(await confirmar({ titulo: "Excluir este passo?", texto: `${rotuloPeriodo(p)} · página ${p.pagina} sai do banco.`, confirmar: "Excluir", perigo: true }))) return false;
+    try {
+      if (p.id > 0) await excluirTentativa(api.id, l.id, p.id);
+      if (atual?.id === l.id) setPassos((lista) => lista.filter((x) => x.id !== p.id));
+      toast.success("Passo excluído.");
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao excluir.");
+      return false;
+    }
+  }
+
   const erros = passos.filter((p) => p.estado === "erro").length;
   const colunas: Column<LoteCenti>[] = [
     { key: "quando", header: "Quando", nowrap: true, value: (l) => dataHoraBR(l.iniciadoEm), render: (l) => <span className="tabular-nums">{dataHoraBR(l.iniciadoEm)}</span> },
@@ -875,6 +918,28 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
         ),
     },
     { key: "quem", header: "Por", nowrap: true, value: (l) => l.iniciadoPor, render: (l) => <span className="text-muted">{l.iniciadoPor}</span> },
+    {
+      key: "acoes",
+      header: "",
+      nowrap: true,
+      filter: "none",
+      total: false,
+      value: () => "",
+      render: (l) => (
+        <Button
+          size="xs"
+          variant="icon"
+          aria-label={`Excluir a importação de ${l.ano} (${dataHoraBR(l.iniciadoEm)})`}
+          title="Excluir do banco"
+          disabled={rodando && atual?.id === l.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            void excluirLote(l);
+          }}
+          icon={<IconTrash className="h-4 w-4" />}
+        />
+      ),
+    },
   ];
 
   return (
@@ -893,7 +958,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           )}
           <A titulo="Importar">
             <p>
-              Lê o ano <strong>mês a mês</strong> (o mês que vier grande demais é dividido ao meio), página a página, com o
+              Lê o ano <strong>semana a semana</strong> (o período que vier grande demais é dividido ao meio), página a página, com o
               cadastro salvo, e guarda tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque num
               para ver o detalhe (o pedido enviado, a resposta, o tempo, o erro).
             </p>
@@ -903,6 +968,10 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
               empenhos continuam como estavam. O que sumir da Centi é marcado como <strong>removido</strong> (nada é apagado).
             </p>
             <p>Toque numa importação do histórico para ver os passos dela.</p>
+            <p>
+              A <strong>lixeira</strong> exclui do banco a tentativa inteira (os passos e o que ela leu); os empenhos que uma
+              importação concluída gravou continuam. Dentro dos passos, o passo com erro também pode ser excluído.
+            </p>
           </A>
         </span>
       }
@@ -959,7 +1028,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
             <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />
             <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
           </div>
-          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} />
+          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} onExcluir={rodando ? undefined : (p) => excluirPasso(atual, p)} />
         </div>
       )}
       {lotes && lotes.length > 0 && (
@@ -973,7 +1042,15 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
           resumo={(l) => `${l.length} importaç${l.length === 1 ? "ão" : "ões"}`}
         />
       )}
-      {historico && <PassosDoHistorico api={api} lote={historico} onClose={() => setHistorico(null)} />}
+      {historico && (
+        <PassosDoHistorico
+          api={api}
+          lote={historico}
+          onClose={() => setHistorico(null)}
+          onExcluir={rodando && atual?.id === historico.id ? undefined : () => void excluirLote(historico)}
+          onExcluirPasso={rodando && atual?.id === historico.id ? undefined : (p) => excluirPasso(historico, p)}
+        />
+      )}
       {confirmacao}
     </SecaoBanner>
   );
@@ -1002,7 +1079,7 @@ function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
 }
 
 /** Os PASSOS de um lote (o mais recente primeiro), com o detalhe de cada um ao tocar — ao vivo e no histórico. */
-function PassosDoLote({ passos, nome }: { passos: PassoLote[]; nome: string }) {
+function PassosDoLote({ passos, nome, onExcluir }: { passos: PassoLote[]; nome: string; onExcluir?: (p: PassoLote) => Promise<boolean> }) {
   const [aberto, setAberto] = useState<PassoLote | null>(null);
   const linhas = useMemo(() => [...passos].reverse(), [passos]);
   const colunas: Column<PassoLote>[] = [
@@ -1046,13 +1123,26 @@ function PassosDoLote({ passos, nome }: { passos: PassoLote[]; nome: string }) {
         vazio="Nenhum pedido feito ainda."
         resumo={(l) => `${l.length} passo${l.length === 1 ? "" : "s"} · ${l.filter((p) => p.estado === "erro").length} com erro`}
       />
-      {aberto && <DetalhePasso passo={aberto} onClose={() => setAberto(null)} />}
+      {aberto && (
+        <DetalhePasso
+          passo={aberto}
+          onClose={() => setAberto(null)}
+          onExcluir={
+            onExcluir && aberto.estado !== "ok"
+              ? async () => {
+                  if (await onExcluir(aberto)) setAberto(null);
+                }
+              : undefined
+          }
+        />
+      )}
     </>
   );
 }
 
 /** O DETALHE de um passo: o resultado ou o erro inteiro, os números e o pedido enviado à Centi. */
-function DetalhePasso({ passo: p, onClose }: { passo: PassoLote; onClose: () => void }) {
+function DetalhePasso({ passo: p, onClose, onExcluir }: { passo: PassoLote; onClose: () => void; onExcluir?: () => Promise<void> }) {
+  const [excluindo, setExcluindo] = useState(false);
   const campos: [string, ReactNode][] = [
     ["Período", `${diaBR(p.inicio)} a ${diaBR(p.fim)}`],
     ["Página", p.pagina],
@@ -1068,7 +1158,31 @@ function DetalhePasso({ passo: p, onClose }: { passo: PassoLote; onClose: () => 
     ["Fim do período", p.estado === "ok" ? (p.fimPeriodo ? "Sim" : "Não — há mais páginas") : "—"],
   ];
   return (
-    <Modal open onClose={onClose} size="lg" titulo={`${rotuloPeriodo(p)} · página ${p.pagina}`}>
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      titulo={`${rotuloPeriodo(p)} · página ${p.pagina}`}
+      rodape={
+        onExcluir ? (
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="danger"
+              loading={excluindo}
+              icon={<IconTrash className="h-4 w-4" />}
+              onClick={async () => {
+                setExcluindo(true);
+                await onExcluir();
+                setExcluindo(false);
+              }}
+            >
+              Excluir passo
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="space-y-[var(--gap-block)]">
         <SecaoBanner
           titulo="Resultado"
@@ -1103,7 +1217,19 @@ function DetalhePasso({ passo: p, onClose }: { passo: PassoLote; onClose: () => 
 }
 
 /** Os passos de uma importação do HISTÓRICO (carregados ao abrir). */
-function PassosDoHistorico({ api, lote, onClose }: { api: ApiCenti; lote: LoteCenti; onClose: () => void }) {
+function PassosDoHistorico({
+  api,
+  lote,
+  onClose,
+  onExcluir,
+  onExcluirPasso,
+}: {
+  api: ApiCenti;
+  lote: LoteCenti;
+  onClose: () => void;
+  onExcluir?: () => void;
+  onExcluirPasso?: (p: PassoLote) => Promise<boolean>;
+}) {
   const [passos, setPassos] = useState<PassoLote[] | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const carregar = useCallback(() => {
@@ -1115,7 +1241,21 @@ function PassosDoHistorico({ api, lote, onClose }: { api: ApiCenti; lote: LoteCe
   useEffect(carregar, [carregar]);
   const est = ROTULO_ESTADO_LOTE[lote.estado];
   return (
-    <Modal open onClose={onClose} size="xl" titulo={`Importação de ${lote.ano} — ${dataHoraBR(lote.iniciadoEm)}`}>
+    <Modal
+      open
+      onClose={onClose}
+      size="xl"
+      titulo={`Importação de ${lote.ano} — ${dataHoraBR(lote.iniciadoEm)}`}
+      rodape={
+        onExcluir ? (
+          <div className="flex justify-end">
+            <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} onClick={onExcluir}>
+              Excluir importação
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="space-y-[var(--gap-block)]">
         <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
           <StatMini label="Situação" value={est?.rotulo ?? lote.estado} />
@@ -1127,7 +1267,19 @@ function PassosDoHistorico({ api, lote, onClose }: { api: ApiCenti; lote: LoteCe
         {falha ? (
           <ErroCarga msg={falha} onTentar={carregar} />
         ) : passos ? (
-          <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${lote.ano}`} />
+          <PassosDoLote
+            passos={passos}
+            nome={`Passos ${api.nome} ${lote.ano}`}
+            onExcluir={
+              onExcluirPasso
+                ? async (p) => {
+                    const ok = await onExcluirPasso(p);
+                    if (ok) setPassos((l) => (l ? l.filter((x) => x.id !== p.id) : l));
+                    return ok;
+                  }
+                : undefined
+            }
+          />
         ) : (
           <SkeletonLinhas />
         )}

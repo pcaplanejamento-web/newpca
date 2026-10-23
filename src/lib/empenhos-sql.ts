@@ -39,19 +39,39 @@ const CAMPOS = [
 ] as const satisfies readonly (keyof LinhaEmpenho)[];
 
 /** Guarda as linhas de UMA página no staging do lote (a chave repetida no lote fica com a 1ª). */
-export function comandoGuardarPagina(db: Db, loteId: number, pagina: number, linhas: LinhaEmpenho[]) {
-  const json = JSON.stringify(linhas.map((l) => CAMPOS.map((c) => l[c])));
-  // As chaves na MESMA ordem das colunas da tabela (exigência do insert…select).
-  const sel = db
-    .select({
-      loteId: sql<number>`${loteId}`.as("lote_id"),
-      pagina: sql<number>`${pagina}`.as("pagina"),
-      ...Object.fromEntries(CAMPOS.map((c, i) => [c, sql`json_extract(value, ${`$[${i}]`})`.as(c)])),
-    })
-    .from(sql`json_each(${json})`)
-    // O WHERE desfaz a ambiguidade do SQLite entre "SELECT … ON CONFLICT" e a junção (exigido no upsert com SELECT).
-    .where(sql`1`);
-  return db.insert(empenhosStaging).select(sel as never).onConflictDoNothing();
+/** Teto de caracteres do JSON de UM comando de guarda — o D1 recusa texto acima de 2 MB (com folga para os acentos). */
+export const MAX_JSON_GUARDA = 600_000;
+
+/** Guarda a página no STAGING: as linhas em pedaços de até `MAX_JSON_GUARDA` caracteres, cada um num parâmetro JSON. */
+export function comandosGuardarPagina(db: Db, loteId: number, pagina: number, linhas: LinhaEmpenho[]) {
+  const pedacos: string[][] = [];
+  let atual: string[] = [];
+  let tamanho = 0;
+  for (const l of linhas) {
+    const j = JSON.stringify(CAMPOS.map((c) => l[c]));
+    if (atual.length && tamanho + j.length > MAX_JSON_GUARDA) {
+      pedacos.push(atual);
+      atual = [];
+      tamanho = 0;
+    }
+    atual.push(j);
+    tamanho += j.length + 1;
+  }
+  if (atual.length) pedacos.push(atual);
+  return pedacos.map((p) => {
+    const json = `[${p.join(",")}]`;
+    // As chaves na MESMA ordem das colunas da tabela (exigência do insert…select).
+    const sel = db
+      .select({
+        loteId: sql<number>`${loteId}`.as("lote_id"),
+        pagina: sql<number>`${pagina}`.as("pagina"),
+        ...Object.fromEntries(CAMPOS.map((c, i) => [c, sql`json_extract(value, ${`$[${i}]`})`.as(c)])),
+      })
+      .from(sql`json_each(${json})`)
+      // O WHERE desfaz a ambiguidade do SQLite entre "SELECT … ON CONFLICT" e a junção (exigido no upsert com SELECT).
+      .where(sql`1`);
+    return db.insert(empenhosStaging).select(sel as never).onConflictDoNothing();
+  });
 }
 
 /** Registra um PASSO do lote (um pedido à Centi, lido ou com erro) — o que a tela acompanha ao vivo. */
@@ -168,4 +188,25 @@ export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "
 /** A coluna SQL de um campo (camelCase → snake_case). */
 function colunaSql(c: string): string {
   return c.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+}
+
+/**
+ * EXCLUI a tentativa de importação DO BANCO: os passos, o staging e o próprio lote. Os empenhos que ela já promoveu
+ * ficam (são os dados do município) — só perdem a referência ao lote.
+ */
+export function comandosExcluirLote(db: Db, loteId: number) {
+  return [
+    db.update(empenhos).set({ loteId: null }).where(eq(empenhos.loteId, loteId)),
+    db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
+    db.delete(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)),
+    db.delete(centiLotes).where(eq(centiLotes.id, loteId)).returning({ id: centiLotes.id }),
+  ];
+}
+
+/** Exclui UM passo que NÃO foi lido (erro ou dividido) — o passo lido é parte dos dados do lote e fica. */
+export function comandoExcluirPasso(db: Db, loteId: number, passoId: number) {
+  return db
+    .delete(centiLotePassos)
+    .where(and(eq(centiLotePassos.id, passoId), eq(centiLotePassos.loteId, loteId), notInArray(centiLotePassos.estado, ["ok"])))
+    .returning({ id: centiLotePassos.id });
 }

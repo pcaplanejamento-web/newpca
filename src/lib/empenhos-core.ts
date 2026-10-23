@@ -5,7 +5,7 @@
  * recusado), o registro sem número gravado como "0" (colisão — aqui é RECUSADO e contado) e a importação contada como
  * completa sem bater com o total que a própria Centi informa.
  */
-import { lerParametros, montarCorpo, registrosDaResposta } from "./centi-apis-core.ts";
+import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta } from "./centi-apis-core.ts";
 import { parseValorPlanilha } from "./parse-orcamento-comum.ts";
 import { MESES_PERIODO } from "./periodo.ts";
 
@@ -112,18 +112,17 @@ export type PaginaLida = {
   /** Repetidos DENTRO da página (a mesma chave). */
   repetidos: number;
   total: number | null;
+  /** A Centi mandou o JSON com aspas/controles sem escape nos textos — a leitura consertou. */
+  reparado: boolean;
 };
 
 /** Lê uma página da resposta (JSON). Lança `Error` se a resposta não for uma lista de registros. */
 export function lerPaginaEmpenhos(textoResposta: string, ano: number): PaginaLida {
-  let j: unknown;
-  try {
-    j = JSON.parse(textoResposta);
-  } catch {
-    throw new Error("A resposta da Centi não é JSON.");
-  }
+  const lido = lerJsonCenti(textoResposta);
+  if (!lido.ok) throw new Error(`A resposta da Centi não é JSON (${lido.erro}) — ${esqueletoResposta(textoResposta)}.`);
+  const j = lido.valor;
   const regs = registrosDaResposta(j);
-  if (!regs) throw new Error("A resposta da Centi não traz uma lista de registros.");
+  if (!regs) throw new Error(`A resposta da Centi não traz uma lista de registros — veio ${esqueletoResposta(textoResposta, j)}.`);
   const vistas = new Set<string>();
   const linhas: LinhaEmpenho[] = [];
   let recusados = 0;
@@ -143,13 +142,13 @@ export function lerPaginaEmpenhos(textoResposta: string, ano: number): PaginaLid
   }
   const bruto = regs[0]?.TotalRegistros ?? (j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, unknown>).TotalRegistros : undefined);
   const total = bruto != null && Number.isFinite(Number(bruto)) ? Number(bruto) : null;
-  return { recebidos: regs.length, linhas, recusados, repetidos, total };
+  return { recebidos: regs.length, linhas, recusados, repetidos, total, reparado: lido.reparado };
 }
 
 /**
  * O PERÍODO de um pedido (datas AAAA-MM-DD, inclusive). A Centi devolve o ano inteiro de uma vez — grande demais para
- * uma resposta (mais de 12 MB) —, então o ano é lido MÊS A MÊS (como o Dattago) e o mês ainda grande demais é dividido
- * ao meio, até um dia. Cada período tem o PRÓPRIO total informado pela Centi; a conferência soma os totais.
+ * uma resposta (só janeiro de 2026 veio com 8 MB) —, então o ano é lido SEMANA A SEMANA (1–7, 8–14, 15–21, 22–fim de cada
+ * mês: respostas de ~2 MB, que o Worker lê e o D1 guarda) e o período ainda grande demais é dividido ao meio, até um dia. Cada período tem o PRÓPRIO total informado pela Centi; a conferência soma os totais.
  */
 export type Periodo = { inicio: string; fim: string };
 
@@ -177,13 +176,15 @@ export function diasDoPeriodo(p: Periodo): number {
   return Math.round((paraMs(p.fim) - paraMs(p.inicio)) / DIA_MS) + 1;
 }
 
-/** Corta um intervalo nas viradas de mês. */
-function emMeses(p: Periodo): Periodo[] {
+/** Corta um intervalo nas SEMANAS de cada mês (1–7, 8–14, 15–21, 22–último dia) — nunca atravessa a virada do mês. */
+function emSemanas(p: Periodo): Periodo[] {
   const r: Periodo[] = [];
   let ini = p.inicio;
   while (ini <= p.fim) {
     const d = new Date(paraMs(ini));
-    const ultimo = paraIso(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    const dia = d.getUTCDate();
+    const corte = dia <= 7 ? 7 : dia <= 14 ? 14 : dia <= 21 ? 21 : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    const ultimo = paraIso(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), corte));
     const fim = ultimo < p.fim ? ultimo : p.fim;
     r.push({ inicio: ini, fim });
     ini = diaSeguinte(fim);
@@ -205,10 +206,10 @@ export function lacunasDoAno(ano: number, lidos: Periodo[]): Periodo[] {
   return r;
 }
 
-/** Os períodos a pedir: o que falta do ano, mês a mês (sem o {inicio}/{fim}, o ano inteiro de uma vez). */
+/** Os períodos a pedir: o que falta do ano, semana a semana (sem o {inicio}/{fim}, o ano inteiro de uma vez). */
 export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean): Periodo[] {
   if (!comPeriodo) return lidos.length ? [] : [anoInteiro(ano)];
-  return lacunasDoAno(ano, lidos).flatMap(emMeses);
+  return lacunasDoAno(ano, lidos).flatMap(emSemanas);
 }
 
 /** Divide o período ao meio (o de um dia não se divide). */

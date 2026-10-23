@@ -28,7 +28,10 @@ import {
 } from "../src/lib/empenhos-core.ts";
 import {
   comandoDividirPeriodo,
-  comandoGuardarPagina,
+  comandoExcluirPasso,
+  comandosExcluirLote,
+  comandosGuardarPagina,
+  MAX_JSON_GUARDA,
   comandoRecontarLote,
   comandoRegistrarPasso,
   comandosFecharLote,
@@ -70,7 +73,7 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, pagina: number
     mensagem: null,
     corpo: "{}",
   };
-  await b.db.batch([comandoRegistrarPasso(b.db, lote, passo), comandoGuardarPagina(b.db, lote, pagina, p.linhas), comandoRecontarLote(b.db, lote)]);
+  await b.db.batch([comandoRegistrarPasso(b.db, lote, passo), ...comandosGuardarPagina(b.db, lote, pagina, p.linhas), comandoRecontarLote(b.db, lote)]);
   return { ...p, novos };
 }
 
@@ -109,7 +112,30 @@ test("empenhos: leitura da página — total, recusados e repetidos contados; re
   assert.equal(p.total, 1530);
   assert.equal(lerPaginaEmpenhos(JSON.stringify({ data: [reg("9")] }), 2026).linhas.length, 1);
   assert.throws(() => lerPaginaEmpenhos("<html>", 2026), /não é JSON/);
-  assert.throws(() => lerPaginaEmpenhos('{"x":1}', 2026), /lista de registros/);
+  assert.throws(() => lerPaginaEmpenhos('{"x":1}', 2026), /lista de registros — veio um objeto com x \(number\)/);
+});
+
+test("empenhos: a resposta REAL da Centi — o JSON dentro de um texto e aspas sem escape no histórico", () => {
+  // Como a Centi devolveu janeiro de 2026: uma string JSON com o array dentro, quebras \r\n e, no histórico, aspas cruas.
+  const interno =
+    '[\r\n  {\r\n    "$type": "X.EmpenhoItem, Wcf",\r\n    "Id": 325241,\r\n    "Numero": "325241",\r\n    "OrgaoGestor": "FMC",\r\n' +
+    '    "ValorEmpenhado": "1.021,070",\r\n    "Historico": "CONDUZIR ATLETAS PARA O "BRASIL CUP CAPOEIRA" QUE SERÁ, EM "JATAÍ", NO GINÁSIO",\r\n' +
+    '    "Elemento": "3.3.90.36.00 - OUTROS",\r\n    "TotalRegistros": 2\r\n  },\r\n  {"Numero": "2", "OrgaoGestor": "FMC", "Historico": "TERMINA COM "ASPAS"", "TotalRegistros": 2}\r\n]';
+  const texto = JSON.stringify(interno);
+  const p = lerPaginaEmpenhos(texto, 2026);
+  assert.equal(p.recebidos, 2);
+  assert.equal(p.total, 2);
+  assert.equal(p.reparado, true);
+  assert.equal(p.linhas[0].historico, 'CONDUZIR ATLETAS PARA O "BRASIL CUP CAPOEIRA" QUE SERÁ, EM "JATAÍ", NO GINÁSIO');
+  assert.equal(p.linhas[0].valorEmpenhado, 1021.07);
+  assert.equal(p.linhas[0].elemento, "3.3.90.36.00 - OUTROS");
+  assert.equal(p.linhas[1].historico, 'TERMINA COM "ASPAS"');
+  // JSON bom não é "consertado"; o texto com JSON dentro também é lido; lista em qualquer nível; lista vazia vale.
+  assert.equal(lerPaginaEmpenhos(JSON.stringify([reg("1")]), 2026).reparado, false);
+  assert.equal(lerPaginaEmpenhos(JSON.stringify(JSON.stringify([reg("1")])), 2026).linhas.length, 1);
+  assert.equal(lerPaginaEmpenhos(`\ufeff${JSON.stringify({ d: { Result: { $values: [reg("1"), reg("2")] } } })}`, 2026).linhas.length, 2);
+  assert.equal(lerPaginaEmpenhos(JSON.stringify({ data: [] }), 2026).recebidos, 0);
+  assert.equal(lerPaginaEmpenhos("[]", 2026).recebidos, 0);
 });
 
 test("empenhos: o corpo de cada página (a 1ª sem `pagina`) e o PERÍODO nos marcadores", () => {
@@ -123,11 +149,18 @@ test("empenhos: o corpo de cada página (a 1ª sem `pagina`) e o PERÍODO nos ma
   assert.equal(usaPeriodo('{"ano":"{ano}"}'), false);
 });
 
-test("empenhos: o ano MÊS A MÊS, o mês grande dividido ao meio até um dia, e o que falta ler", () => {
+test("empenhos: o ano SEMANA A SEMANA, o período grande dividido ao meio até um dia, e o que falta ler", () => {
   const meses = periodosAPedir(2026, [], true);
-  assert.equal(meses.length, 12);
-  assert.deepEqual(meses[1], { inicio: "2026-02-01", fim: "2026-02-28" });
-  assert.deepEqual(periodosAPedir(2028, [], true)[1], { inicio: "2028-02-01", fim: "2028-02-29" }, "bissexto");
+  assert.equal(meses.length, 48);
+  assert.deepEqual(meses.slice(0, 5), [
+    { inicio: "2026-01-01", fim: "2026-01-07" },
+    { inicio: "2026-01-08", fim: "2026-01-14" },
+    { inicio: "2026-01-15", fim: "2026-01-21" },
+    { inicio: "2026-01-22", fim: "2026-01-31" },
+    { inicio: "2026-02-01", fim: "2026-02-07" },
+  ]);
+  assert.deepEqual(periodosAPedir(2026, [], true)[7], { inicio: "2026-02-22", fim: "2026-02-28" });
+  assert.deepEqual(periodosAPedir(2028, [], true)[7], { inicio: "2028-02-22", fim: "2028-02-29" }, "bissexto");
   assert.deepEqual(periodosAPedir(2026, [], false), [anoInteiro(2026)]);
   assert.deepEqual(periodosAPedir(2026, [anoInteiro(2026)], false), []);
   assert.deepEqual(dividirPeriodo({ inicio: "2026-05-01", fim: "2026-05-31" }), [
@@ -149,8 +182,11 @@ test("empenhos: o ano MÊS A MÊS, o mês grande dividido ao meio até um dia, e
     { inicio: "2026-05-17", fim: "2026-12-31" },
   ]);
   const falta = periodosAPedir(2026, lidos, true);
-  assert.equal(falta.length, 3 + 1 + 7);
-  assert.deepEqual(falta[3], { inicio: "2026-05-17", fim: "2026-05-31" });
+  assert.equal(falta.length, 12 + 2 + 28);
+  assert.deepEqual(falta.slice(12, 14), [
+    { inicio: "2026-05-17", fim: "2026-05-21" },
+    { inicio: "2026-05-22", fim: "2026-05-31" },
+  ]);
   assert.deepEqual(lacunasDoAno(2026, meses), []);
   assert.equal(rotuloPeriodo({ inicio: "2026-05-01", fim: "2026-05-31" }), "Mai/2026");
   assert.equal(rotuloPeriodo({ inicio: "2026-05-17", fim: "2026-05-31" }), "17/05 a 31/05/2026");
@@ -265,6 +301,37 @@ test("empenhos (D1 real): 500 linhas numa página = um comando só (json_each), 
   assert.equal(n.n, 500);
   assert.equal(n.p, 500_125);
   assert.equal((b.raw.prepare("SELECT historico FROM empenhos_staging WHERE numero = '7'").get() as { historico: string }).historico, `Aquisição "6" — d'água`);
+});
+
+test("empenhos (D1 real): página grande = vários comandos (cada JSON abaixo do teto do D1), sem perder nenhuma linha", async () => {
+  const b = banco();
+  const lote = b.novoLote();
+  const longo = "X".repeat(2000);
+  const regs = Array.from({ length: 900 }, (_, i) => reg(String(i + 1), { Historico: longo }));
+  const p = lerPaginaEmpenhos(JSON.stringify(regs), 2026);
+  const cmds = comandosGuardarPagina(b.db, lote, 1, p.linhas);
+  assert.ok(cmds.length >= 3, `${cmds.length} comandos`);
+  for (const c of cmds) assert.ok((c.toSQL().params as unknown[]).some((v) => typeof v === "string" && v.length <= MAX_JSON_GUARDA + 3000));
+  await b.db.batch(cmds as never);
+  assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos_staging").get() as { n: number }).n, 900);
+  assert.deepEqual(comandosGuardarPagina(b.db, lote, 1, []), []);
+});
+
+test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote; o passo lido não se exclui avulso", async () => {
+  const b = banco();
+  const lote = b.novoLote();
+  await guardar(b, lote, 1, [reg("1"), reg("2")], 2);
+  b.raw.prepare("INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado) VALUES (?, '2026-01-01', '2026-01-07', 1, 'erro')").run(lote);
+  const passos = b.raw.prepare("SELECT id, estado FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(lote) as { id: number; estado: string }[];
+  assert.equal((await comandoExcluirPasso(b.db, lote, passos[0].id)).length, 0, "o passo lido fica");
+  assert.equal((await comandoExcluirPasso(b.db, lote + 99, passos[1].id)).length, 0, "de outro lote, não");
+  assert.equal((await comandoExcluirPasso(b.db, lote, passos[1].id)).length, 1);
+  // Um empenho já promovido por este lote fica — só perde a referência.
+  b.raw.prepare("INSERT INTO empenhos (chave, ano, numero, orgao_gestor, lote_id) VALUES ('2026|P|9', 2026, '9', 'P', ?)").run(lote);
+  const r = (await b.db.batch(comandosExcluirLote(b.db, lote) as never)) as unknown[][];
+  assert.equal(r[3].length, 1);
+  for (const t of ["centi_lotes", "centi_lote_passos", "empenhos_staging"]) assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n, 0, t);
+  assert.deepEqual(b.raw.prepare("SELECT numero, lote_id FROM empenhos").all().map((x) => ({ ...x })), [{ numero: "9", lote_id: null }]);
 });
 
 test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e reativa o que voltou", async () => {

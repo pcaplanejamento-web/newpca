@@ -12,6 +12,7 @@ import {
   conferirLote,
   continuarPeriodo,
   corpoDaPagina,
+  diasDoPeriodo,
   dividirPeriodo,
   lacunasDoAno,
   lerPaginaEmpenhos,
@@ -25,10 +26,12 @@ import {
 } from "@/lib/empenhos-core";
 import {
   comandoDividirPeriodo,
-  comandoGuardarPagina,
+  comandoExcluirPasso,
   comandoRecontarLote,
   comandoRegistrarPasso,
+  comandosExcluirLote,
   comandosFecharLote,
+  comandosGuardarPagina,
   comandosPromover,
   contagemDaPromocao,
   jaNoLote,
@@ -42,8 +45,12 @@ export const dynamic = "force-dynamic";
 
 type Linha = typeof centiLotePassos.$inferSelect;
 
-/** Até 12 MB por resposta e 30 s — o ano inteiro não cabe: a tela pede MÊS A MÊS e divide o mês grande demais. */
-const MAX_BYTES = 12_000_000;
+/**
+ * Até 2 MB por resposta (a semana; o que passa disso é dividido ao meio — ler e consertar mais que isso pesa demais para o
+ * Worker) e, no período de UM dia (que não se divide), até 12 MB. 30 s por pedido.
+ */
+const MAX_BYTES = 2_000_000;
+const MAX_BYTES_DIA = 12_000_000;
 const TEMPO_MS = 30_000;
 
 async function apiImportavel(ctx: { params: Promise<{ id: string }> }) {
@@ -121,7 +128,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     let falha: string | null = null;
     let pagina: ReturnType<typeof lerPaginaEmpenhos> | null = null;
     try {
-      const r = await baixarSeguro(urlDaApi(api), { accept: "application/json", maxBytes: MAX_BYTES, quem: "A API da Centi", tempoMs: TEMPO_MS, post: enviado });
+      const r = await baixarSeguro(urlDaApi(api), { accept: "application/json", maxBytes: diasDoPeriodo(periodo) > 1 ? MAX_BYTES : MAX_BYTES_DIA, quem: "A API da Centi", tempoMs: TEMPO_MS, post: enviado });
       texto = r.texto;
       status = r.status;
       pagina = lerPaginaEmpenhos(texto, lote.ano);
@@ -138,7 +145,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const metades = tipo === "grande" && usaPeriodo(api.parametros) ? dividirPeriodo(periodo) : null;
       const passo: Omit<PassoLote, "id" | "em"> = {
         ...base,
-        estado: "erro",
+        estado: metades ? "dividido" : "erro",
         fimPeriodo: false,
         status: status ?? statusDaMensagem(mensagem),
         bytes,
@@ -170,9 +177,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       recusados: pagina.recusados,
       repetidos: pagina.repetidos,
       total,
-      mensagem: null,
+      mensagem: pagina.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
     };
-    const res = await db.batch([comandoRegistrarPasso(db, lote.id, passo).returning(), comandoGuardarPagina(db, lote.id, corpo.pagina, pagina.linhas), comandoRecontarLote(db, lote.id)] as never);
+    const res = await db.batch([
+      comandoRegistrarPasso(db, lote.id, passo).returning(),
+      ...comandosGuardarPagina(db, lote.id, corpo.pagina, pagina.linhas),
+      comandoRecontarLote(db, lote.id),
+    ] as never);
     return ok({ lote: await getLote(lote.id, api.chave), passo: paraPasso((res as Linha[][])[0][0]), continuar });
   }
 
@@ -206,4 +217,40 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     resumo: `${api.nome} ${lote.ano}: ${lote.unicos} conferidos com a Centi — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${contagem.removidos} marcados como removidos`,
   });
   return ok({ lote: await getLote(lote.id, api.chave) });
+}
+
+/**
+ * EXCLUI DO BANCO uma tentativa: `?lote=` = a importação inteira (passos, staging e o lote — os empenhos já promovidos
+ * ficam); `?lote=&passo=` = um passo NÃO lido (erro ou dividido).
+ */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const g = await exigirAdmin();
+  if ("erro" in g) return g.erro;
+  const a = await apiImportavel(ctx);
+  if ("resp" in a) return a.resp;
+  const { api } = a;
+  const busca = new URL(req.url).searchParams;
+  const loteId = intId(busca.get("lote") ?? "");
+  if (!loteId) return erro("Informe a importação.");
+  const lote = await getLote(loteId, api.chave);
+  if (!lote) return erro("Importação não encontrada.", 404);
+  const db = getDb();
+  const passoId = busca.get("passo") ? intId(busca.get("passo") ?? "") : null;
+  if (busca.get("passo") && !passoId) return erro("Passo inválido.");
+  if (passoId) {
+    const res = await comandoExcluirPasso(db, lote.id, passoId);
+    if (!res.length) return erro("Só se exclui o passo que não foi lido (com erro ou dividido).", 409);
+    await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}: passo ${passoId} da importação ${lote.id} excluído` });
+    return ok({ lote: await getLote(lote.id, api.chave) });
+  }
+  const res = await db.batch(comandosExcluirLote(db, lote.id) as never);
+  if (!(res as unknown[][])[3]?.length) return erro("A importação não foi excluída.", 409);
+  await registrarAuditoria({
+    usuario: g.u,
+    acao: "excluir",
+    entidade: "centi_api",
+    entidadeId: api.id,
+    resumo: `${api.nome} ${lote.ano}: importação ${lote.id} (${lote.estado}) excluída do banco com os passos${lote.estado === "promovido" ? " — os empenhos que ela gravou ficam" : ""}`,
+  });
+  return ok({ excluido: lote.id });
 }
