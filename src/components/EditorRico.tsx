@@ -1,6 +1,6 @@
 "use client";
 
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
@@ -15,6 +15,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCode,
+  IconFormatacao,
   IconItalic,
   IconLimparFormato,
   IconLink,
@@ -35,7 +36,8 @@ const CONTEUDO = `${ESTRUTURA} text-[15px] leading-[1.7] [&_h1]:mb-2 [&_h1]:mt-5
 const CONTEUDO_COMPACTO = `${ESTRUTURA} text-[13.5px] leading-relaxed [&_h1]:mb-1 [&_h1]:mt-3 [&_h1]:text-[17px] [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-[15.5px] [&_h3]:mb-1 [&_h3]:mt-2.5 [&_h3]:text-[14px] [&_p]:my-1.5`;
 
 /** O termo de @menção logo antes do cursor (as mesmas letras de `mencoesDoTexto`). */
-const RE_MENCAO = /@([\p{L}\p{N}._-]{0,40})$/u;
+/** O "@termo" logo antes do cursor (no começo ou depois de um espaço — "email@x" não é menção). */
+const RE_MENCAO = /(?:^|\s)@([\p{L}\p{N}._-]{0,40})$/u;
 type Mencao = { no: Text; ini: number; fim: number; termo: string };
 
 type Estado = { negrito: boolean; italico: boolean; lista: boolean; numerada: boolean; bloco: EstiloBloco };
@@ -90,8 +92,12 @@ function SetaBarra({ lado, onClick }: { lado: "inicio" | "fim"; onClick: () => v
  * TEXTO FORMATADO de sempre (`texto-rico-core.ts`) — o colado de outros programas fica só com o que o formato conhece.
  * É o MESMO editor em todo o sistema: `compacto` = um campo (descrição e notas da tarefa, comentários), sem a folha;
  * `menciona` = digitar "@" sugere as pessoas (↑/↓, Enter insere "@apelido"); `onTecla` = o host trata a tecla antes
- * (true = tratada — ex.: Ctrl+Enter envia o comentário).
+ * (true = tratada — ex.: Ctrl+Enter envia o comentário). `mensagem` = o campo do CHAT: uma linha que cresce, a barra
+ * escondida atrás do "Aa" e as sugestões de @menção ACIMA (o campo fica no pé da janela); `controle.focar()` põe o
+ * cursor no fim (trocar de conversa, responder, o texto pronto do "Conversar sobre…").
  */
+export type ControleEditor = { focar: () => void };
+
 export function EditorRico({
   valor,
   onChange,
@@ -104,6 +110,8 @@ export function EditorRico({
   autoFocus = false,
   menciona,
   onTecla,
+  mensagem = false,
+  controle,
 }: {
   valor: string;
   onChange: (v: string) => void;
@@ -118,7 +126,12 @@ export function EditorRico({
   autoFocus?: boolean;
   menciona?: { pessoas: Pessoa[]; texto: (p: Pessoa) => string };
   onTecla?: (e: KeyboardEvent<HTMLDivElement>) => boolean;
+  /** O campo de mensagem do chat (implica `compacto`). */
+  mensagem?: boolean;
+  controle?: Ref<ControleEditor>;
 }) {
+  if (mensagem) compacto = true;
+  const [barraAberta, setBarraAberta] = useState(!mensagem);
   const ref = useRef<HTMLDivElement>(null);
   const ultimo = useRef<string | null>(null);
   const selecao = useRef<Range | null>(null);
@@ -139,6 +152,7 @@ export function EditorRico({
     const fim = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
     setBordas((b) => (b.inicio === inicio && b.fim === fim ? b : { inicio, fim }));
   }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a barra escondida (o "Aa" do chat) volta como outro elemento — medir de novo.
   useEffect(() => {
     const el = barra.current;
     if (!el) return;
@@ -146,14 +160,14 @@ export function EditorRico({
     const ro = new ResizeObserver(medirBarra);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [medirBarra]);
+  }, [medirBarra, barraAberta]);
   const rolarBarra = (dir: 1 | -1) => {
     const el = barra.current;
     if (!el) return;
     const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "reduce";
     el.scrollBy({ left: dir * Math.max(120, el.clientWidth * 0.7), behavior: suave ? "smooth" : "auto" });
   };
-  const alturaFolha = altura ?? (compacto ? "max-h-[50vh]" : "min-h-[50vh] max-h-[70vh]");
+  const alturaFolha = altura ?? (mensagem ? "max-h-[140px]" : compacto ? "max-h-[50vh]" : "min-h-[50vh] max-h-[70vh]");
 
   // O valor de FORA (carga, "voltar ao modelo") redesenha a folha; o que o próprio editor emitiu, não (o cursor fica).
   useEffect(() => {
@@ -164,10 +178,10 @@ export function EditorRico({
     setVazio(!valor.trim());
   }, [valor]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: só ao montar.
-  useEffect(() => {
+  /** Foca o texto com o cursor no FIM. */
+  const focarNoFim = useCallback(() => {
     const el = ref.current;
-    if (!autoFocus || !el || disabled) return;
+    if (!el || disabled) return;
     el.focus();
     const r = document.createRange();
     r.selectNodeContents(el);
@@ -175,6 +189,11 @@ export function EditorRico({
     const sel = document.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(r);
+  }, [disabled]);
+  useImperativeHandle(controle, () => ({ focar: focarNoFim }), [focarNoFim]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só ao montar.
+  useEffect(() => {
+    if (autoFocus) focarNoFim();
   }, []);
 
   const emitir = useCallback(() => {
@@ -195,7 +214,7 @@ export function EditorRico({
     if (menciona) {
       const no = sel.anchorNode;
       const m = sel.isCollapsed && no?.nodeType === 3 ? RE_MENCAO.exec((no as Text).data.slice(0, sel.anchorOffset)) : null;
-      setMencao(m && no ? { no: no as Text, ini: sel.anchorOffset - m[0].length, fim: sel.anchorOffset, termo: m[1] } : null);
+      setMencao(m && no ? { no: no as Text, ini: sel.anchorOffset - m[1].length - 1, fim: sel.anchorOffset, termo: m[1] } : null);
     }
     setEstado({
       negrito: document.queryCommandState("bold"),
@@ -339,6 +358,7 @@ export function EditorRico({
       {/* A BARRA: as ferramentas mais usadas primeiro (negrito, itálico, listas, link), depois o estilo do parágrafo e o
           resto. No toque (e no modo compacto) fica numa LINHA que rola de lado — com encaixe por grupo, as bordas esmaecidas
           e as setas quando há mais ferramentas — e o Desfazer/Refazer FIXOS à direita, sempre ao alcance. */}
+      {barraAberta && (
       <div role="toolbar" aria-label={`Formatação — ${rotulo}`} className="flex items-center border-b border-border bg-surface">
         <div className="relative min-w-0 flex-1">
           <div
@@ -437,6 +457,7 @@ export function EditorRico({
             </BotaoBarra>
         </span>
       </div>
+      )}
       {link != null && (
         <div className="flex flex-wrap items-end gap-2 border-b border-border bg-surface-2 px-3 py-2">
           <div className="min-w-0 flex-1">
@@ -468,9 +489,9 @@ export function EditorRico({
       )}
       {/* A FOLHA: o fundo cinza com a página branca no centro, como num editor de documentos (no compacto, o campo direto). */}
       <div className={`overflow-y-auto ${compacto ? "" : "bg-surface-2 px-2 py-4 sm:px-6"} ${alturaFolha}`}>
-        <div className={compacto ? "relative px-3 py-2" : "relative mx-auto max-w-[52rem] rounded-card bg-surface px-5 py-6 shadow-ring sm:px-10 sm:py-10"}>
+        <div className={mensagem ? "relative flex items-end gap-1 py-1 pr-1 pl-3" : compacto ? "relative px-3 py-2" : "relative mx-auto max-w-[52rem] rounded-card bg-surface px-5 py-6 shadow-ring sm:px-10 sm:py-10"}>
           {vazio && !focado && (
-            <p className={`pointer-events-none absolute text-faint ${compacto ? "left-3 top-2 text-[13.5px]" : "left-5 top-6 text-[15px] sm:left-10 sm:top-10"}`}>{placeholder}</p>
+            <p className={`pointer-events-none absolute text-faint ${mensagem ? "top-1/2 left-3 -translate-y-1/2 text-[14px] lg:text-[13.5px]" : compacto ? "left-3 top-2 text-[13.5px]" : "left-5 top-6 text-[15px] sm:left-10 sm:top-10"}`}>{placeholder}</p>
           )}
           {/* biome-ignore lint/a11y/useSemanticElements: o editor visual é um contentEditable (um <textarea> não mostra a formatação) */}
           <div
@@ -503,8 +524,21 @@ export function EditorRico({
               const texto = html ? textoDoHtml(new DOMParser().parseFromString(html, "text/html").body) : e.clipboardData.getData("text/plain");
               if (texto) aplicar("insertHTML", htmlDoTexto(texto));
             }}
-            className={`outline-none ${compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30vh] ${CONTEUDO}`}`}
+            className={`outline-none ${mensagem ? `min-h-9 min-w-0 flex-1 py-1.5 ${CONTEUDO_COMPACTO}` : compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30vh] ${CONTEUDO}`}`}
           />
+          {mensagem && (
+            <button
+              type="button"
+              aria-pressed={barraAberta}
+              aria-label={barraAberta ? "Esconder a formatação" : "Mostrar a formatação"}
+              title={barraAberta ? "Esconder a formatação" : "Formatação: negrito, itálico, listas, link…"}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setBarraAberta((v) => !v)}
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-control transition-colors lg:h-9 lg:w-9 ${barraAberta ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text"}`}
+            >
+              <IconFormatacao className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
       {contagem && (
@@ -518,7 +552,7 @@ export function EditorRico({
       )}
     </div>
       {sugestoes.length > 0 && (
-        <ul aria-label="Mencionar pessoa" className="absolute top-full right-0 left-0 z-20 mt-1 overflow-hidden rounded-card border border-border bg-surface shadow-soft">
+        <ul aria-label="Mencionar pessoa" className={`absolute right-0 left-0 z-20 ${mensagem ? "bottom-full mb-1" : "top-full mt-1"} overflow-hidden rounded-card border border-border bg-surface shadow-soft`}>
           {sugestoes.map((p, i) => (
             <li key={p.id}>
               <button

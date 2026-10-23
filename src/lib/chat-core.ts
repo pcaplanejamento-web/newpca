@@ -236,6 +236,11 @@ export function mencaoEmCurso(antesDoCursor: string): string | null {
   return m ? m[1] : null;
 }
 
+/** O texto que a @menção do chat insere: "@" + o apelido (ou o 1º nome), sem espaços. */
+export function textoMencaoChat(p: { nome: string; apelido?: string | null }): string {
+  return `@${(p.apelido || p.nome.split(" ")[0]).replace(/\s+/g, "")}`;
+}
+
 /** O nome da conversa em grupo: o dado por quem criou ou os primeiros nomes dos outros ("Ana, Bruno e Carla", "+N"). */
 export function rotuloConversa(nome: string | undefined, membros: readonly number[], meuId: number, nomeDe: (id: number) => string): string {
   if (nome) return nome;

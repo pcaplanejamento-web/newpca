@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  CaseSensitive,
   Redo2,
   RemoveFormatting,
   FileSignature,
@@ -400,3 +401,5 @@ export const IconAparelho = MonitorSmartphone;
 export const IconRedo = Redo2;
 /** Limpar a formatação (o editor de texto). */
 export const IconLimparFormato = RemoveFormatting;
+/** Mostrar/esconder as ferramentas de formatação (o "Aa" do campo de mensagem do chat). */
+export const IconFormatacao = CaseSensitive;

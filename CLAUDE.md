@@ -320,11 +320,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     com o texto, contagem só perto do limite), a descrição, as notas e os comentários das tarefas; `autoFocus`, `onTecla(e)`
     (o host trata a tecla antes — true = tratada) e **`menciona {pessoas, texto}`** (@menção dentro do editor: o termo antes do
     cursor abre as pessoas, ↑/↓/Enter/Tab escolhem, Esc fecha sem fechar o banner, a inserção por `insertText` mantém o
-    desfazer; grava "@apelido" como texto — `mencoesDoTexto` lê igual). **A BARRA no toque:** ordem pelo USO (negrito · itálico ·
+    desfazer; grava "@apelido" como texto — `mencoesDoTexto` lê igual). **`mensagem`** (v1.170.0 — o campo do CHAT, implica `compacto`): uma linha que
+    cresce até 140px, a barra escondida atrás do botão **"Aa"** (`IconFormatacao`), as sugestões de @menção ACIMA do campo
+    e **`controle`** (`Ref<ControleEditor>` → `focar()` = o cursor no fim: trocar de conversa, responder, o texto pronto);
+    no chat, Enter envia e Shift+Enter quebra a linha (`onTecla`), a menção insere `textoMencaoChat` (chat-core). A @menção
+    só abre no começo ou depois de um espaço ("email@x" não). **A BARRA no toque:** ordem pelo USO (negrito · itálico ·
     listas · link | estilo do parágrafo | citação · código · separador · limpar); no compacto e abaixo do `lg` é UMA linha
     que rola de lado (`.barra-rolavel`: sem barra de rolagem, encaixe por grupo, a borda com mais ferramentas esmaecida e
     as setas `SetaBarra` "Mais ferramentas"/"Ferramentas anteriores" que rolam 70%); Desfazer/Refazer FIXOS à direita, fora
-    da rolagem; os botões não tiram o foco do texto (o teclado do celular continua aberto); no desktop o documento quebra a linha. Texto novo de editar = o `EditorRico`, nunca uma textarea com marcação (o chat fica de fora: é mensagem rápida). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
+    da rolagem; os botões não tiram o foco do texto (o teclado do celular continua aberto); no desktop o documento quebra a linha. Texto novo de editar = o `EditorRico`, nunca uma textarea com marcação — inclusive o chat (`mensagem`). Auditoria: entidades `termo_uso`/`aparelho` (fora da versão dos dados).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
@@ -626,7 +630,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nome no grupo, agrupados por autor em 5 min), separador de dia, responder (citação), **@menção** com sugestão (Enter insere),
   `TextoFormatado` (negrito, código, links), cartões dos links do sistema, ✓ enviada / ✓✓ lida ("lida por N" no grupo),
   "enviando…", "Tentar de novo" (falha ou sem confirmação em 8 s) e "não entregue" (privado), **`Digitando`** (três pontos —
-  `ponto-digitando`), "↓ Novas mensagens" rolado para cima; Enter envia, Shift+Enter quebra. Mensagem com o painel fechado =
+  `ponto-digitando`), "↓ Novas mensagens" rolado para cima; Enter envia, Shift+Enter quebra (o campo é o `EditorRico mensagem` — "Aa" mostra a formatação, v1.170.0). Mensagem com o painel fechado =
   som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
   zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
 

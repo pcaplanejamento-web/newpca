@@ -535,6 +535,7 @@ function DemoSeguranca() {
 function DemoEditorRico() {
   const [t, setT] = useState("## Título\n\nTexto com **negrito**, _itálico_ e [link](https://rioverde.go.gov.br).\n\n- um item\n- outro item");
   const [c, setC] = useState("Combinado com @Ana: **conferir o DFD 1209**.");
+  const [m, setM] = useState("");
   const pessoas = [
     { id: 1, nome: "Ana Paula Lima", apelido: "Ana", foto: null },
     { id: 2, nome: "Bruno Costa", apelido: null, foto: null },
@@ -543,6 +544,7 @@ function DemoEditorRico() {
     <div className="space-y-[var(--gap-block)]">
       <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30vh] max-h-[50vh]" />
       <EditorRico compacto rotulo="Comentário" valor={c} onChange={setC} maxLength={5000} placeholder="Escrever um comentário… (@ menciona alguém)" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
+      <EditorRico mensagem rotulo="Mensagem do chat" valor={m} onChange={setM} maxLength={2000} placeholder="Mensagem…" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
     </div>
   );
 }
@@ -3615,7 +3617,7 @@ export function Catalogo() {
         <DemoProtecao />
       </Secao>
 
-      <Secao titulo="Editor visual de texto — EditorRico (como num editor de documentos: estilos de parágrafo, negrito, itálico, código, link, listas, citação, separador, desfazer/refazer, limpar; grava o texto formatado — o MESMO editor em todo o sistema: termo de uso e, na variante compacto com @menção, descrição, notas e comentários das tarefas)">
+      <Secao titulo="Editor visual de texto — EditorRico (como num editor de documentos: estilos de parágrafo, negrito, itálico, código, link, listas, citação, separador, desfazer/refazer, limpar; grava o texto formatado — o MESMO editor em todo o sistema: termo de uso e, na variante compacto com @menção, descrição, notas e comentários das tarefas; na variante mensagem, o campo do chat com o “Aa”)">
         <DemoEditorRico />
       </Secao>
 

@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.170.0",
+    data: "2026-10-23",
+    titulo: "Chat com o mesmo editor de texto",
+    mudancas: [
+      { tipo: "melhoria", area: "Chat", texto: "O campo de mensagem do chat agora é o mesmo editor do sistema: o botão “Aa” mostra a formatação (negrito, itálico, listas, link…); Enter envia e Shift+Enter quebra a linha.", link: "/painel" },
+      { tipo: "melhoria", area: "Chat", texto: "Digitar “@” sugere as pessoas da conversa logo acima do campo; ↑/↓ e Enter escolhem.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.169.0",
     data: "2026-10-23",
     titulo: "O mesmo editor de texto em todo o sistema",

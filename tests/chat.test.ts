@@ -17,6 +17,7 @@ import {
   limparTextoChat,
   MAX_TEXTO_CHAT,
   mencaoEmCurso,
+  textoMencaoChat,
   novoIdMensagem,
   quantosLeram,
   rotuloDiaChat,
@@ -141,6 +142,8 @@ describe("chat ao vivo: texto e mensagens", () => {
     assert.equal(mencaoEmCurso("@"), "");
     assert.equal(mencaoEmCurso("email@x"), null);
     assert.equal(mencaoEmCurso("oi @ana "), null);
+    assert.equal(textoMencaoChat({ nome: "Ana Paula Lima", apelido: null }), "@Ana");
+    assert.equal(textoMencaoChat({ nome: "Bruno", apelido: "Bru Costa" }), "@BruCosta");
   });
   it("id, dia e hora (Brasília)", () => {
     assert.match(novoIdMensagem(), /^[a-z0-9]{16,24}$/);

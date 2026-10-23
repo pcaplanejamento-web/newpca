@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, type KeyboardEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   type CartaoLink,
   type ConfigChat,
@@ -21,6 +21,7 @@ import {
   migrarPosicoes,
   type PosicoesBolhas,
   rotuloConversa,
+  textoMencaoChat,
   DIGITANDO_DURA_MS,
   horaChat,
   idDaConversa,
@@ -31,7 +32,6 @@ import {
   MAX_TEXTO_CHAT,
   MAX_TRECHO_RESPOSTA,
   type MensagemChat,
-  mencaoEmCurso,
   naoLidasAoCarregar,
   naoLidasDe,
   novoIdMensagem,
@@ -42,6 +42,7 @@ import {
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
+import { type ControleEditor, EditorRico } from "./EditorRico";
 import { EVENTO_ABRIR_CHAT, EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
 import { IconArrowDown, IconChat, IconCheck, IconChevronLeft, IconClose, IconEnviar, IconFixar, IconLidas, IconMenos, IconPlus, IconResponder, IconUsers } from "./icons";
 import { tocarSom } from "./PreferenciasNotificacoes";
@@ -954,9 +955,8 @@ function ConversaChat({
   const membros = c?.membros ?? [];
   const [texto, setTexto] = useState("");
   const [resp, setResp] = useState<RespostaChat | null>(null);
-  const [cursor, setCursor] = useState(0);
   const lista = useRef<HTMLDivElement>(null);
-  const campo = useRef<HTMLTextAreaElement>(null);
+  const campo = useRef<ControleEditor>(null);
   const [embaixo, setEmbaixo] = useState(true);
   const [novas, setNovas] = useState(false);
   const permitido = conversa === "grupo" ? config.grupo : config.privado;
@@ -974,7 +974,7 @@ function ConversaChat({
   // biome-ignore lint/correctness/useExhaustiveDependencies: ao trocar de conversa.
   useEffect(() => {
     lista.current?.scrollTo({ top: lista.current.scrollHeight });
-    campo.current?.focus();
+    campo.current?.focar();
     setTexto("");
     setResp(null);
   }, [conversa]);
@@ -984,20 +984,17 @@ function ConversaChat({
   useEffect(() => {
     if (!rascunho?.texto) return;
     setTexto(rascunho.texto);
-    setCursor(rascunho.texto.length);
-    requestAnimationFrame(() => {
-      campo.current?.focus();
-      campo.current?.setSelectionRange(rascunho.texto.length, rascunho.texto.length);
-    });
+    // Depois do redesenho do editor com o texto novo.
+    requestAnimationFrame(() => campo.current?.focar());
   }, [rascunho?.n]);
   const ids = useMemo(() => msgs.map((m) => m.id), [msgs]);
-  const mencao = mencaoEmCurso(texto.slice(0, cursor));
-  const sugestoes = useMemo(() => {
-    if (mencao == null || !canal) return [];
-    const q = mencao.toLowerCase();
+  // As pessoas da @menção: as da conversa (na conversa em grupo, os membros), menos eu.
+  const mencionaveis = useMemo(() => {
+    if (!canal) return [];
     const base = emGrupo ? membros.map((id) => canal.pessoas.find((p) => p.id === id) ?? chat.autores.get(id)).filter((p): p is Pessoa => !!p) : canal.pessoas;
-    return base.filter((p) => p.id !== canal.usuarioId && `${p.apelido ?? ""} ${p.nome}`.toLowerCase().includes(q)).slice(0, 5);
-  }, [mencao, canal, emGrupo, membros, chat.autores]);
+    return base.filter((p) => p.id !== canal.usuarioId);
+  }, [canal, emGrupo, membros, chat.autores]);
+  const menciona = useMemo(() => ({ pessoas: mencionaveis, texto: textoMencaoChat }), [mencionaveis]);
 
   const enviar = () => {
     if (!limparTextoChat(texto) || !permitido) return;
@@ -1006,25 +1003,6 @@ function ConversaChat({
     setResp(null);
     setEmbaixo(true);
   };
-  const inserirMencao = (p: Pessoa) => {
-    const nome = (p.apelido || p.nome.split(" ")[0]).replace(/\s+/g, "");
-    const antes = texto.slice(0, cursor).replace(/@[\p{L}\p{N}._-]*$/u, `@${nome} `);
-    const novo = antes + texto.slice(cursor);
-    setTexto(novo);
-    setCursor(antes.length);
-    requestAnimationFrame(() => {
-      campo.current?.focus();
-      campo.current?.setSelectionRange(antes.length, antes.length);
-    });
-  };
-  const tecla = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      if (sugestoes.length) inserirMencao(sugestoes[0]);
-      else enviar();
-    }
-  };
-
   const digitandoNomes = [...(c?.digitando.keys() ?? [])].map((id) => chat.nomeDe(id));
   const titulo =
     conversa === "grupo"
@@ -1113,7 +1091,7 @@ function ConversaChat({
                 nomeDe={chat.nomeDe}
                 onResponder={() => {
                   setResp({ id: m.id, de: m.de, trecho: m.texto.replace(/\s+/g, " ").slice(0, MAX_TRECHO_RESPOSTA) });
-                  campo.current?.focus();
+                  campo.current?.focar();
                 }}
                 onTentar={() => void chat.enviar(conversa, m.texto, m.resp, m.id)}
               />
@@ -1135,16 +1113,6 @@ function ConversaChat({
         </button>
       )}
       <div className="relative shrink-0 border-t border-border p-2 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] lg:pb-2">
-        {sugestoes.length > 0 && (
-          <fieldset aria-label="Mencionar" className="absolute m-0 min-w-0 p-0 right-2 bottom-full left-2 mb-1 overflow-hidden rounded-control border border-border bg-surface shadow-soft">
-            {sugestoes.map((p, i) => (
-              <button key={p.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => inserirMencao(p)} className={`flex min-h-10 w-full items-center gap-2 px-2.5 text-left text-[13px] hover:bg-surface-2 ${i === 0 ? "bg-surface-2" : ""}`}>
-                  <Avatar nome={p.nome} foto={p.foto} size="xs" />
-                  {nomeExibicao(p)}
-                </button>
-            ))}
-          </fieldset>
-        )}
         {resp && (
           <div className="mb-1.5 flex items-start gap-2 rounded-control border-l-2 border-accent bg-surface-2 px-2.5 py-1.5">
             <IconResponder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
@@ -1159,24 +1127,27 @@ function ConversaChat({
         )}
         {permitido ? (
           <div className="flex items-end gap-2">
-            <textarea
-              ref={campo}
-              value={texto}
-              rows={1}
-              maxLength={MAX_TEXTO_CHAT}
-              placeholder={conversa === "grupo" ? "Mensagem para o grupo…" : "Mensagem…"}
-              aria-label="Mensagem"
-              onChange={(e) => {
-                setTexto(e.target.value);
-                setCursor(e.target.selectionStart ?? e.target.value.length);
-                if (e.target.value.trim()) chat.digitando(conversa);
-                e.target.style.height = "auto";
-                e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
-              }}
-              onSelect={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
-              onKeyDown={tecla}
-              className="max-h-[140px] min-h-11 flex-1 resize-none rounded-control border border-border bg-surface px-3 py-2.5 text-[14px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:min-h-10 lg:text-[13.5px]"
-            />
+            <div className="min-w-0 flex-1">
+              <EditorRico
+                mensagem
+                controle={campo}
+                valor={texto}
+                onChange={(v) => {
+                  setTexto(v);
+                  if (v.trim()) chat.digitando(conversa);
+                }}
+                rotulo="Mensagem"
+                placeholder={conversa === "grupo" ? "Mensagem para o grupo…" : "Mensagem…"}
+                maxLength={MAX_TEXTO_CHAT}
+                menciona={menciona}
+                onTecla={(e) => {
+                  // Enter envia; Shift+Enter quebra a linha (a sugestão de @menção aberta usa o Enter antes).
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
+                  enviar();
+                  return true;
+                }}
+              />
+            </div>
             <button
               type="button"
               onClick={enviar}
