@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.189.1",
+    data: "2026-10-23",
+    titulo: "Opções do termo organizadas",
+    mudancas: [{ tipo: "correcao", area: "Configurações", texto: "As chaves “Mostrar Termo de Uso aceito”, “Permitir baixar o comprovante” e “Administrador fora do limite” ficam numa grade com espaço entre elas (uma por linha no celular).", link: "/painel/configuracoes?aba=termo" }],
+  },
+  {
     versao: "1.189.0",
     data: "2026-10-23",
     titulo: "Verificação do comprovante: interna e pública melhorada",
