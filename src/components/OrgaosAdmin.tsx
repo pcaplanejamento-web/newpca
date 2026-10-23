@@ -16,6 +16,7 @@ import { type Column, DataTable } from "./DataTable";
 import { selectCls } from "./formStyles";
 import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
 import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
+import { SeletorCelula } from "./SeletorCelula";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
@@ -97,8 +98,9 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
   // As EDIÇÕES SALVAS da tabela (guardadas aqui: trocar de aba remonta a tabela, que volta com as edições novas).
   const [ed, setEd] = useState(edicoes);
   const [exonerados, setExonerados] = useState(false);
-  // Os órgãos gestores da Centi (o vínculo): carregados só com o banner aberto.
-  const centi = useUnidadesCenti(aberto != null);
+  // Os órgãos gestores da Centi (o vínculo): escolhidos na célula da coluna "Empenhos (Centi)" e no banner.
+  const centi = useUnidadesCenti(true);
+  const [gravandoCenti, setGravandoCenti] = useState<number | null>(null);
   const gestorAtual = typeof aberto === "number" ? (lista?.find((o) => o.id === aberto)?.centiOrgaoGestor ?? null) : null;
   const campos = useMemo<CampoCadastro[]>(
     () => [
@@ -199,24 +201,24 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
     };
   }
 
-  async function salvar(patch: Record<string, string>): Promise<boolean> {
-    if (aberto === "novo") {
+  async function salvar(patch: Record<string, string>, alvo: Orgao | null = orgao): Promise<boolean> {
+    if (!alvo && aberto === "novo") {
       const ok = await acao("/api/admin/orgaos", { method: "POST", body: JSON.stringify(corpo(null, patch)) }, "Órgão cadastrado.");
       if (ok) setAberto(null);
       return ok;
     }
-    if (!orgao) return false;
-    const novo = corpo(orgao, { ...valoresDe(orgao), ...patch });
+    if (!alvo) return false;
+    const novo = corpo(alvo, { ...valoresDe(alvo), ...patch });
     // Trocar ou tirar o órgão gestor: os empenhos dele (fora das unidades) deixam de ser deste órgão e saem do banco.
     const gravados =
-      orgao.centiOrgaoGestor && "centiOrgaoGestor" in patch
-        ? (centi.lista ?? []).filter((u) => u.orgaoGestor === orgao.centiOrgaoGestor && u.reparticaoId == null).reduce((t, u) => t + u.gravados, 0)
+      alvo.centiOrgaoGestor && "centiOrgaoGestor" in patch
+        ? (centi.lista ?? []).filter((u) => u.orgaoGestor === alvo.centiOrgaoGestor && u.reparticaoId == null).reduce((t, u) => t + u.gravados, 0)
         : 0;
     if (
       gravados > 0 &&
       !(await confirmar({
         titulo: "Trocar o órgão gestor da Centi?",
-        texto: `Os ${gravados.toLocaleString("pt-BR")} empenho(s) gravados de ${orgao.centiOrgaoGestor} que não estão numa unidade saem do banco (importar de novo os traz de volta).`,
+        texto: `Os ${gravados.toLocaleString("pt-BR")} empenho(s) gravados de ${alvo.centiOrgaoGestor} que não estão numa unidade saem do banco (importar de novo os traz de volta).`,
         confirmar: "Trocar",
         perigo: true,
       }))
@@ -224,21 +226,21 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       return false;
     // A regra de assinatura mudou: os responsáveis vão ao lugar que vale pela regra nova (o servidor faz no mesmo lote).
     let destinosVinculos: number[] | undefined;
-    if (novo.assinaturaUnica !== orgao.assinaturaUnica && ctx.planilha) {
+    if (novo.assinaturaUnica !== alvo.assinaturaUnica && ctx.planilha) {
       const p = ctx.planilha;
       const plano = planoRealinhar(
-        { ...p, orgaos: p.orgaos.map((o) => (o.id === orgao.id ? { ...o, assinaturaUnica: novo.assinaturaUnica } : o)) },
+        { ...p, orgaos: p.orgaos.map((o) => (o.id === alvo.id ? { ...o, assinaturaUnica: novo.assinaturaUnica } : o)) },
         p.vinculos,
       );
-      const ambiguo = plano.ambiguos.find((a) => a.orgaoId === orgao.id);
+      const ambiguo = plano.ambiguos.find((a) => a.orgaoId === alvo.id);
       const daqui = (id: number) => {
         const v = p.vinculos.find((x) => x.id === id);
-        return !!v && (v.orgaoId === orgao.id || p.unidades.some((u) => u.id === v.reparticaoId && u.orgaoId === orgao.id));
+        return !!v && (v.orgaoId === alvo.id || p.unidades.some((u) => u.id === v.reparticaoId && u.orgaoId === alvo.id));
       };
       const movidos = plano.passos.filter((x) => daqui(x.id)).length;
       if (ambiguo || movidos) {
         const ok = await confirmar({
-          titulo: novo.assinaturaUnica ? `Assinatura única em ${orgao.sigla}?` : `Assinatura por unidade em ${orgao.sigla}?`,
+          titulo: novo.assinaturaUnica ? `Assinatura única em ${alvo.sigla}?` : `Assinatura por unidade em ${alvo.sigla}?`,
           texto: ambiguo
             ? `Os ${ambiguo.vinculos.length} responsável(is) do órgão passam a valer em CADA uma das ${ambiguo.unidades.length} unidades (copiados para todas). Depois, ajuste unidade a unidade se precisar.`
             : novo.assinaturaUnica
@@ -250,7 +252,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
         if (ambiguo) destinosVinculos = ambiguo.unidades;
       }
     }
-    return acao(`/api/admin/orgaos/${orgao.id}`, { method: "PATCH", body: JSON.stringify({ ...novo, destinosVinculos }) }, "Órgão atualizado.");
+    return acao(`/api/admin/orgaos/${alvo.id}`, { method: "PATCH", body: JSON.stringify({ ...novo, destinosVinculos }) }, "Órgão atualizado.");
   }
 
   const ocultar = (o: Orgao) =>
@@ -371,14 +373,28 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       header: "Empenhos (Centi)",
       nowrap: true,
       value: (o) => o.centiOrgaoGestor ?? "Sem correspondência",
-      render: (o) =>
-        o.centiOrgaoGestor ? (
-          <span className="font-mono text-[12px] text-text-2">{o.centiOrgaoGestor}</span>
-        ) : (
-          <Badge tone="amber" dot>
-            Sem correspondência
-          </Badge>
-        ),
+      render: (o) => {
+        const ops = opcoesOrgaoGestor(centi.lista ?? [], lista.map((x) => x.centiOrgaoGestor), o.centiOrgaoGestor).slice(1);
+        const idx = o.centiOrgaoGestor ? ops.findIndex((x) => x.valor === o.centiOrgaoGestor) : -1;
+        return (
+          <SeletorCelula
+            valor={idx >= 0 ? idx + 1 : null}
+            opcoes={ops.map((x, i) => ({ id: i + 1, nome: x.rotulo }))}
+            vazio="Sem correspondência"
+            alerta
+            salvando={gravandoCenti === o.id}
+            ariaLabel={`Órgão gestor na Centi (API de empenhos) de ${o.sigla}`}
+            onChange={async (id) => {
+              setGravandoCenti(o.id);
+              try {
+                await salvar({ centiOrgaoGestor: id == null ? "" : (ops[id - 1]?.valor ?? "") }, o);
+              } finally {
+                setGravandoCenti(null);
+              }
+            }}
+          />
+        );
+      },
     },
     {
       key: "conf",

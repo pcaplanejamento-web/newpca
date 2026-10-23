@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.200.2",
+    data: "2026-10-23",
+    titulo: "Vínculo com a Centi escolhido na própria célula",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Órgãos e Unidades",
+        texto: "A coluna Empenhos (Centi) virou um seletor na célula: escolha ou troque o órgão gestor (órgãos) e a unidade orçamentária (unidades) sem abrir o banner; nas unidades aparece só a unidade orçamentária, sem repetir o órgão gestor.",
+        link: "/painel/orgaos",
+      },
+    ],
+  },
+  {
     versao: "1.200.1",
     data: "2026-10-23",
     titulo: "Vínculo da API de empenhos indicado no cadastro",

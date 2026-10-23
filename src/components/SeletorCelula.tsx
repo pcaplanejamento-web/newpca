@@ -20,6 +20,7 @@ export function SeletorCelula({
   atual,
   vazio = "—",
   salvando = false,
+  alerta = false,
   ariaLabel,
 }: {
   valor: number | null;
@@ -30,14 +31,17 @@ export function SeletorCelula({
   /** Texto de "nenhum" (valor `null`). */
   vazio?: string;
   salvando?: boolean;
+  /** Sem valor = ALERTA (o "nenhum" em âmbar com o ponto — ex.: o vínculo com a Centi que falta). */
+  alerta?: boolean;
   ariaLabel: string;
 }) {
   const naLista = valor != null ? opcoes.find((o) => o.id === valor) : undefined;
   const sel = naLista ?? (valor != null ? (atual ?? { id: valor, nome: `#${valor}` }) : null);
+  const cor = sel?.cor ?? (!sel && alerta ? "var(--warn)" : undefined);
   const visual = (
-    <span className="inline-flex max-w-[14rem] items-center gap-1.5 truncate text-[12px] font-medium" style={sel?.cor ? { color: sel.cor } : undefined}>
-      {sel?.cor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: sel.cor }} />}
-      <span className={`truncate ${sel ? (sel.cor ? "" : "text-text-2") : "text-faint"}`}>{sel?.nome ?? vazio}</span>
+    <span className="inline-flex max-w-[14rem] items-center gap-1.5 truncate text-[12px] font-medium" style={cor ? { color: cor } : undefined}>
+      {cor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} />}
+      <span className={`truncate ${cor ? "" : sel ? "text-text-2" : "text-faint"}`}>{sel?.nome ?? vazio}</span>
     </span>
   );
   if (!onChange) return visual;
