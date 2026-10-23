@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { CATALOGO_INTEGRACOES, type IntegracoesView } from "@/lib/integracoes-core";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { CentiApisAdmin } from "./CentiApisAdmin";
 import { Checkbox, PasswordField, TextField } from "./Field";
 import { IconActivity, IconAlert, IconDatabase, IconGoogle, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
 import { IntegracaoGoogle, type ValorGoogle } from "./IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "./IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "./IntegracaoTrello";
+import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 
 // Tela de Integrações do ADM (admin-only): Cloudflare (Turnstile + monitoramento), o Trello (conta institucional) e o
@@ -58,8 +60,16 @@ function Cartao({
   );
 }
 
-export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView }) {
+type AbaIntegracoes = "servicos" | "centi";
+
+export function IntegracoesAdmin({ integracoes, abaInicial = "servicos" }: { integracoes: IntegracoesView; abaInicial?: AbaIntegracoes }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [aba, setAba] = useState<AbaIntegracoes>(abaInicial);
+  function trocarAba(a: AbaIntegracoes) {
+    setAba(a);
+    window.history.replaceState(null, "", a === "centi" ? `${pathname}?aba=centi` : pathname);
+  }
   const [tsAtivo, setTsAtivo] = useState(integracoes.turnstile.ativo);
   const [siteKey, setSiteKey] = useState(integracoes.turnstile.siteKey);
   const [secret, setSecret] = useState(""); // sempre começa vazio (write-only)
@@ -169,10 +179,28 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
             Conecte serviços externos. Ative e configure cada um; nada muda no sistema até você ligar.
           </p>
         </div>
-        <Button onClick={salvar} loading={salvando}>
-          Salvar
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            value={aba}
+            onChange={trocarAba}
+            ariaLabel="Integrações"
+            options={[
+              { value: "servicos", label: "Serviços", dica: "Captcha, monitoramento, Trello, e-mail e login com Google" },
+              { value: "centi", label: "APIs da Centi", curto: "Centi", dica: "O cadastro das APIs do portal de transparência da Centi" },
+            ]}
+          />
+          {aba === "servicos" && (
+            <Button onClick={salvar} loading={salvando}>
+              Salvar
+            </Button>
+          )}
+        </div>
       </div>
+
+      {aba === "centi" ? (
+        <CentiApisAdmin />
+      ) : (
+      <>
 
       {semChaveMestra && (
         <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />}>
@@ -295,6 +323,8 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
           ))}
         </div>
       </section>
+      )}
+      </>
       )}
     </div>
   );

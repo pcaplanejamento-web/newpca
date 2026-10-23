@@ -7,11 +7,12 @@ import { temChaveMestra } from "@/lib/integracoes-segredos";
 
 export const dynamic = "force-dynamic";
 
-export default async function IntegracoesPage() {
+export default async function IntegracoesPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const atual = await getUsuarioAtual();
   if (!atual?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem acessar as integrações." />;
   }
   const integracoes = toView(await getIntegracoes(), temChaveMestra());
-  return <IntegracoesAdmin integracoes={integracoes} />;
+  const aba = (await searchParams).aba === "centi" ? "centi" : "servicos";
+  return <IntegracoesAdmin integracoes={integracoes} abaInicial={aba} />;
 }

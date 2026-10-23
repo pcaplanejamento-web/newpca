@@ -35,13 +35,21 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.178.2",
+    versao: "1.179.1",
     data: "2026-10-23",
     titulo: "Editor de texto: colagem e alinhamento em listas",
     mudancas: [
       { tipo: "melhoria", area: "Colagem", texto: "Linhas quebradas no meio da frase (texto colado com formatação) voltam a ser um parágrafo.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "correcao", area: "Editor de texto", texto: "O botão de alinhamento mostra o alinhamento certo também dentro de listas.", link: "/painel/configuracoes?aba=termo" },
       { tipo: "correcao", area: "Editor de texto", texto: "O menu de alinhamento tem a largura dos próprios botões, sem espaço sobrando.", link: "/painel/configuracoes?aba=termo" },
+    ],
+  },
+  {
+    versao: "1.179.0",
+    data: "2026-10-23",
+    titulo: "Integrações: cadastro das APIs da Centi",
+    mudancas: [
+      { tipo: "novo", area: "Integrações", texto: "Nova aba \"APIs da Centi\" com o cadastro das APIs públicas do portal de transparência (empenhos, liquidações, pagamentos, contratos e receita): endereço, parâmetros, se o ano é pedido inteiro, por órgão ou por fonte, a frequência e a prévia do pedido. É só o cadastro — nada é buscado na Centi; cada API fica \"Em preparação\" até a importação dela chegar, começando pelos empenhos.", link: "/painel/integracoes?aba=centi" },
     ],
   },
   {

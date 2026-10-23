@@ -5,11 +5,11 @@ import { test } from "node:test";
 import { ROTULO_ENTIDADE } from "../src/lib/auditoria-core.ts";
 import { areaDaRota, contaNosDados, FORA_DOS_DADOS, versaoDaRota } from "../src/lib/versao-dados-core.ts";
 
-test("versão dados: só tarefas, agenda e o acesso da conta ficam fora; o resto (e o desconhecido) conta", () => {
+test("versão dados: só tarefas, agenda, o acesso da conta e o cadastro das APIs da Centi ficam fora; o resto (e o desconhecido) conta", () => {
   for (const e of Object.keys(ROTULO_ENTIDADE)) {
     const fora = (FORA_DOS_DADOS as readonly string[]).includes(e);
     assert.equal(contaNosDados(e), !fora, e);
-    if (fora) assert.match(e, /^(tarefa|agenda_externa|trello_integracao|feriado|termo_uso|aparelho)/, e);
+    if (fora) assert.match(e, /^(tarefa|agenda_externa|trello_integracao|feriado|termo_uso|aparelho|centi_api)/, e);
   }
   for (const e of ["dfd", "dfd_item", "protocolo", "catalogo", "configuracao", "orcamento", "pca", "edicao_tabela", "automacao", "inventada"]) {
     assert.equal(contaNosDados(e), true, e);

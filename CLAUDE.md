@@ -4494,6 +4494,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `redirect_uri_mismatch`, `invalid_grant`…) e a tela diz o que fazer (`DETALHE_ERRO_GOOGLE` → `mensagemErroLogin`/
   `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
   (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
+- **APIS DA CENTI — o cadastro (v1.179.0, migração `0129`; passo 1 da EXECUÇÃO DA DESPESA):** Integrações ganhou as abas
+  **Serviços | APIs da Centi** (`?aba=centi`; `CentiApisAdmin`, só ADM). Tabela `centi_apis` (chave única, endpoint, url
+  base/uf/município, `divisao` ano|orgao|fonte + `lista` dos idOrgao/fontes, `paginado`, `parametros` JSON com os marcadores
+  `{ano}`/`{orgao}`/`{fonte}`/`{pagina}`, frequência/horário/dias úteis/anos, `implementada`/`ativa`, a última leitura);
+  semeada com empenhos, liquidações, pagamentos, contratos e receita — todas DESLIGADAS e "Em preparação" (`implementada`
+  = 0: só se liga quando a importação dela existir — 409). Núcleo puro **`centi-apis-core.ts`** (`montarCorpo`,
+  `urlBaseValida` — só HTTPS de `centi.com.br`, `motivoApiInvalida` = a régua da tela e do servidor, `previaPedido`,
+  `estadoApi`; testado em `tests/centi-apis.test.ts`), D1 `centi-apis.ts`, rotas `GET /api/admin/centi-apis` e `PATCH
+  …/[id]` (`exigirAdmin`, auditoria `centi_api` — FORA da versão `dados`: editar o cadastro não recarrega Mesa/PCA). NADA
+  chama a Centi ainda. Plano em passos (cada um uma versão, conferida no ar antes do próximo): 2 Testar (1 página, nada
+  gravado) · 3 importação MANUAL de empenhos em lote/staging com a conferência × `TotalRegistros` · 4 tela Empenhos (só
+  ADM) · 5 cron desligado por padrão · 6 abrir aos grupos · 7–9 liquidações/pagamentos · 10 Dashboard · 11 Orçamento/PCA.
+  Falhas do Dattago a NÃO repetir: página do meio que falha contada como "completo"; dedupe com chave ≠ da do banco (o lote
+  inteiro recusado); erro de gravação engolido; o que some na origem nunca sai; sem id → 0 (colisão); órgãos 2..20 em vez
+  da lista real (21–25 e 28 nunca lidos).
 - **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
   "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
   modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",
