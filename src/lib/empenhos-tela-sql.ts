@@ -42,7 +42,7 @@ const onde = (ano: number, removidos: boolean, escopo: EscopoEmpenhos): SQL => {
  * lote só, atômico: os empenhos e o estado "promovido" no MESMO comando), então a versão nova chega junto dos dados.
  */
 const versaoSql = (ano: number): SQL =>
-  sql`((SELECT IFNULL(MAX(id), 0) FROM centi_lotes WHERE ano = ${ano} AND estado = 'promovido') || ':' || (SELECT IFNULL(MAX(vinculado_em), '') FROM centi_unidades))`;
+  sql`((SELECT IFNULL(MAX(id), 0) FROM centi_lotes WHERE ano = ${ano} AND estado = 'promovido') || ':' || (SELECT IFNULL(MAX(vinculado_em), '') FROM centi_unidades) || ':' || (SELECT IFNULL(MAX(vinculado_em), '') FROM centi_acoes))`;
 
 export async function consultaVersaoEmpenhos(db: Db, ano: number): Promise<string> {
   const [r] = await db.all<{ ver: number }>(sql.join([sql.raw("SELECT "), versaoSql(ano), sql.raw(" AS ver")], sql.raw("")));

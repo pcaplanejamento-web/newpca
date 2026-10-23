@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { opcoesUnidadeOrcamentaria, rotuloUnidadeCenti } from "@/lib/centi-unidades-core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { opcoesAcoes, opcoesUnidadeOrcamentaria, rotuloAcaoCenti } from "@/lib/centi-unidades-core";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
@@ -13,14 +13,15 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
+import { IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconSpinner, IconTrash, IconUsers } from "./icons";
 import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
-import { SeletorCelula } from "./SeletorCelula";
+import { Selecao } from "./Selecao";
+import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
-import { useUnidadesCenti } from "./UnidadesCenti";
+import { classeCelulaCenti, useUnidadesCenti } from "./UnidadesCenti";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
 
 type Rep = {
@@ -37,6 +38,8 @@ type Rep = {
   /** A UNIDADE ORÇAMENTÁRIA da Centi desta unidade (`centi_unidades.id`) e o texto dela ("FMS · 02.01 - …"). */
   centiUnidadeId: number | null;
   centiUnidade: string | null;
+  /** As AÇÕES da Centi vinculadas a esta unidade (`centi_acoes.id`) — a ação vinculada vale mais que a unidade orçamentária. */
+  centiAcoes: number[];
 };
 
 export type AbaUnidades = "unidades" | "responsaveis";
@@ -94,6 +97,9 @@ export function ReparticoesAdmin({
   // As unidades orçamentárias da Centi (o vínculo): escolhidas na célula da coluna "Empenhos (Centi)" e no banner.
   const centi = useUnidadesCenti(true);
   const [gravandoCenti, setGravandoCenti] = useState<number | null>(null);
+  // As AÇÕES escolhidas (por unidade): marcar/desmarcar muda na hora e grava 800 ms depois do último toque.
+  const [acoesRascunho, setAcoesRascunho] = useState<Record<number, string[]>>({});
+  const esperaAcoes = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const idAberta = typeof aberto === "number" ? aberto : null;
   const linhaAberta = lista?.find((u) => u.id === idAberta);
   const atualCenti = linhaAberta?.centiUnidadeId ?? null;
@@ -182,7 +188,7 @@ export function ReparticoesAdmin({
   const ehDual = lista.some((u) => u.orgaoProprio);
   const doOrgao = vigentesDoAlvo(ctx.grupos.get(`o${orgaoId}`) ?? [], ctx.hoje);
 
-  const corpo = (u: Rep | null, v: Record<string, string>, extra: { oculto?: boolean } = {}) => ({
+  const corpo = (u: Rep | null, v: Record<string, string>, extra: { oculto?: boolean; centiAcoes?: number[] } = {}) => ({
     codigo: v.codigo,
     nome: v.nome,
     numeroInteressado: v.numeroInteressado || null,
@@ -190,7 +196,46 @@ export function ReparticoesAdmin({
     orgaoId, // a unidade pertence ao órgão desta tela
     oculto: extra.oculto ?? u?.oculto ?? false,
     centiUnidadeId: v.centiUnidade ? Number(v.centiUnidade) : null,
+    ...(extra.centiAcoes ? { centiAcoes: extra.centiAcoes } : {}),
   });
+
+  const acoesDe = (u: Rep) => acoesRascunho[u.id] ?? u.centiAcoes.map(String);
+  /** Marca/desmarca AÇÕES da Centi da unidade: na tela na hora; grava a lista inteira 800 ms depois do último toque. */
+  function mudarAcoes(u: Rep, valores: string[]) {
+    setAcoesRascunho((r) => ({ ...r, [u.id]: valores }));
+    clearTimeout(esperaAcoes.current.get(u.id));
+    esperaAcoes.current.set(
+      u.id,
+      setTimeout(() => {
+        esperaAcoes.current.delete(u.id);
+        void gravarAcoes(u, valores);
+      }, 800),
+    );
+  }
+  async function gravarAcoes(u: Rep, valores: string[]) {
+    const tiradas = u.centiAcoes.filter((id) => !valores.includes(String(id)));
+    const registros = tiradas.reduce((t, id) => t + (centi.listaAcoes.find((a) => a.id === id)?.registros ?? 0), 0);
+    if (
+      registros > 0 &&
+      !(await confirmar({
+        titulo: "Tirar ações da unidade?",
+        texto: `Os empenhos das ${tiradas.length} ação(ões) tiradas deixam de ser desta unidade — sem outro vínculo (a unidade orçamentária ou o órgão gestor), saem do banco (importar de novo os traz de volta).`,
+        confirmar: "Tirar",
+        perigo: true,
+      }))
+    ) {
+      setAcoesRascunho(({ [u.id]: _, ...r }) => r);
+      return;
+    }
+    setGravandoCenti(u.id);
+    try {
+      await acao(`/api/admin/reparticoes/${u.id}`, { method: "PATCH", body: JSON.stringify(corpo(u, valoresDe(u), { centiAcoes: valores.map(Number) })) }, "Ações da Centi atualizadas.");
+      await centi.recarregar();
+    } finally {
+      setAcoesRascunho(({ [u.id]: _, ...r }) => r);
+      setGravandoCenti(null);
+    }
+  }
 
   async function salvar(patch: Record<string, string>, alvo: Rep | null = unidade): Promise<boolean> {
     if (!alvo && aberto === "novo") {
@@ -256,6 +301,8 @@ export function ReparticoesAdmin({
     });
   }
 
+  const porIdAcao = new Map(centi.listaAcoes.map((a) => [String(a.id), a]));
+  const nomesAcoes = (ids: string[]) => ids.map((i) => { const a = porIdAcao.get(i); return a ? rotuloAcaoCenti(a) : `#${i}`; });
   const vigentes = (u: Rep) => (assinaturaUnica ? null : vigentesDoAlvo(ctx.grupos.get(`u${u.id}`) ?? [], ctx.hoje));
   const colunas: Column<Rep>[] = [
     { key: "pos", header: "#", filter: "none", nowrap: true, total: false, numero: (u) => (posDe.get(u.id) ?? 0) + 1, render: (u) => <span className="tabular-nums text-faint">{(posDe.get(u.id) ?? 0) + 1}</span> },
@@ -308,38 +355,65 @@ export function ReparticoesAdmin({
     },
     {
       key: "centi",
-      header: "Empenhos (Centi)",
+      header: "Unidade orçamentária (Centi)",
       align: "left",
       nowrap: true,
-      value: (u) => u.centiUnidade ?? "Sem correspondência",
+      value: (u) => u.centiUnidade ?? (acoesDe(u).length ? "Pelas ações" : "Sem correspondência"),
       render: (u) => {
-        // Com o órgão gestor do órgão, todas são dele: a célula mostra só a unidade orçamentária (o texto inteiro cabe).
-        const curto = (x: { orgaoGestor: string; unidade: string }) => (centiOrgaoGestor && x.orgaoGestor === centiOrgaoGestor ? x.unidade || x.orgaoGestor : rotuloUnidadeCenti(x));
-        const ops = opcoesUnidadeOrcamentaria(centi.lista ?? [], u.centiUnidadeId, centiOrgaoGestor, u.id).slice(1);
-        const porId = new Map((centi.lista ?? []).map((x) => [x.id, x]));
+        const ops = opcoesUnidadeOrcamentaria(centi.lista ?? [], u.centiUnidadeId, centiOrgaoGestor, u.id);
+        const semVinculo = u.centiUnidadeId == null && !acoesDe(u).length;
+        // A lista do SISTEMA (`Selecao`) com o texto INTEIRO; sem nenhum vínculo, "Sem correspondência" em âmbar.
         return (
-          <SeletorCelula
-            valor={u.centiUnidadeId}
-            opcoes={ops.map((o) => {
-              const x = porId.get(Number(o.valor));
-              return { id: Number(o.valor), nome: x ? curto(x) : o.rotulo };
-            })}
-            atual={u.centiUnidadeId != null ? { id: u.centiUnidadeId, nome: u.centiUnidade ?? "Carregando…" } : null}
-            vazio="Sem correspondência"
-            alerta
-            salvando={gravandoCenti === u.id}
-            ariaLabel={`Unidade orçamentária na Centi (API de empenhos) de ${u.codigo}`}
-            onChange={async (id) => {
-              setGravandoCenti(u.id);
-              try {
-                await salvar({ centiUnidade: id == null ? "" : String(id) }, u);
-              } finally {
-                setGravandoCenti(null);
-              }
-            }}
-          />
+          <span role="none" className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <Selecao
+              className={classeCelulaCenti(semVinculo)}
+              value={u.centiUnidadeId != null ? String(u.centiUnidadeId) : ""}
+              titulo="Unidade orçamentária na Centi"
+              aria-label={`Unidade orçamentária na Centi (API de empenhos) de ${u.codigo}`}
+              disabled={gravandoCenti === u.id}
+              acoes={centi.acoes}
+              onChange={async (e) => {
+                setGravandoCenti(u.id);
+                try {
+                  await salvar({ centiUnidade: e.target.value }, u);
+                } finally {
+                  setGravandoCenti(null);
+                }
+              }}
+            >
+              {u.centiUnidadeId != null && !ops.some((o) => o.valor === String(u.centiUnidadeId)) && <option value={String(u.centiUnidadeId)}>{u.centiUnidade ?? "Carregando…"}</option>}
+              {ops.map((o) => (
+                <option key={o.valor} value={o.valor}>
+                  {o.valor ? o.rotulo : acoesDe(u).length ? "Pelas ações" : "Sem correspondência"}
+                </option>
+              ))}
+            </Selecao>
+            {gravandoCenti === u.id && <IconSpinner className="h-3.5 w-3.5 shrink-0 text-accent" />}
+          </span>
         );
       },
+    },
+    {
+      key: "centiAcoes",
+      header: "Ações (Centi)",
+      align: "left",
+      nowrap: true,
+      value: (u) => nomesAcoes(acoesDe(u)).join("; ") || "Nenhuma",
+      valores: (u) => (acoesDe(u).length ? nomesAcoes(acoesDe(u)) : ["Nenhuma"]),
+      render: (u) => (
+        <span role="none" className="inline-block" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <SeletorMultiplo
+            suspenso
+            completo
+            rotulo={`Ações na Centi de ${u.codigo}`}
+            textoVazio="Nenhuma"
+            opcoes={opcoesAcoes(centi.listaAcoes, u.id, centiOrgaoGestor)}
+            selecionados={acoesDe(u)}
+            disabled={gravandoCenti === u.id}
+            onChange={(v) => mudarAcoes(u, v)}
+          />
+        </span>
+      ),
     },
     {
       key: "conf",
@@ -489,6 +563,20 @@ export function ReparticoesAdmin({
                 alvo={{ reparticaoId: unidade.id }}
                 nota={`O órgão ${orgaoSigla} tem assinatura única: valem os responsáveis do órgão${doOrgao.nomes.length ? ` (hoje: ${doOrgao.nomes.join(", ")})` : " — e ele está sem responsável vigente"}.`}
               />
+            </SecaoBanner>
+            <SecaoBanner titulo="Ações na Centi (API de empenhos)">
+              <SeletorMultiplo
+                campo={{ denso: true }}
+                rotulo="Ações vinculadas a esta unidade"
+                textoVazio="Nenhuma — vale a unidade orçamentária"
+                opcoes={opcoesAcoes(centi.listaAcoes, unidade.id, centiOrgaoGestor)}
+                selecionados={acoesDe(unidade)}
+                disabled={gravandoCenti === unidade.id}
+                onChange={(v) => mudarAcoes(unidade, v)}
+              />
+              <p className="mt-1.5 text-[12px] text-muted">
+                Os empenhos destas ações são desta unidade (vale mais que a unidade orçamentária). Uma ação pertence a uma unidade só. Grava sozinho.
+              </p>
             </SecaoBanner>
             <SecaoBanner titulo="Estrutura">
               {unidade.orgaoProprio ? (

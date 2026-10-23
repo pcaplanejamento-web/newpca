@@ -32,6 +32,7 @@ export function SeletorMultiplo({
   suspenso = false,
   textoVazio = "Todos",
   campo,
+  completo = false,
 }: {
   rotulo: string;
   opcoes: OpcaoMultipla[];
@@ -43,17 +44,27 @@ export function SeletorMultiplo({
   /** CAMPO de formulário: o rótulo EM CIMA e a caixa do `TextField`/`SelectField` (mesma altura — `denso`), mostrando os
    * escolhidos; abre o MESMO painel do `suspenso`. `extra` = ao lado do rótulo (ex.: a `Ajuda compacta`). */
   campo?: { denso?: boolean; extra?: ReactNode };
+  /** No `suspenso`: o gatilho mostra os ESCOLHIDOS por inteiro (sem o rótulo, sem abreviar — ex.: numa célula de tabela). */
+  completo?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const fid = useId();
   const n = selecionados.length;
-  const gatilho = (seta: ReactNode) => (
+  const gatilho = (seta: ReactNode) =>
+    completo ? (
+      <>
+        <span className={`whitespace-nowrap text-left text-[12px] font-medium ${n > 0 ? "text-text-2" : "text-muted"}`}>
+          {n > 0 ? opcoes.filter((o) => selecionados.includes(o.valor)).map((o) => o.rotulo ?? o.valor).join("; ") || `${num(n)} selecionado${n === 1 ? "" : "s"}` : textoVazio}
+        </span>
+        {seta}
+      </>
+    ) : (
     <>
       <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-text">{rotulo}</span>
       <span className={`shrink-0 text-[12px] ${n > 0 ? "font-semibold text-accent" : "text-muted"}`}>{n > 0 ? `${num(n)} selecionado${n === 1 ? "" : "s"}` : textoVazio}</span>
       {seta}
     </>
-  );
+    );
   const corpo = <CorpoSelecao rotulo={rotulo} opcoes={opcoes} selecionados={selecionados} onChange={onChange} disabled={disabled} textoVazio={textoVazio} />;
 
   if (campo) {
@@ -92,11 +103,15 @@ export function SeletorMultiplo({
         title={`${rotulo}: escolher (busca, marcar todos, limpar)`}
         bloqueado={disabled}
         width={420}
-        className="block w-full min-w-0"
-        triggerClassName="w-full"
+        className={completo ? "inline-block" : "block w-full min-w-0"}
+        triggerClassName={completo ? "w-max" : "w-full"}
         trigger={
           <span
-            className={`flex h-11 w-full items-center gap-2 rounded-control border border-border bg-surface px-3 lg:h-[var(--h-control-sm)] ${disabled ? "opacity-60" : ""}`}
+            className={
+              completo
+                ? `flex min-h-11 w-max items-center gap-2 rounded-control px-2 transition-colors hover:bg-surface-2 lg:min-h-[calc(var(--h-control-sm)-6px)] ${disabled ? "opacity-60" : ""}`
+                : `flex h-11 w-full items-center gap-2 rounded-control border border-border bg-surface px-3 lg:h-[var(--h-control-sm)] ${disabled ? "opacity-60" : ""}`
+            }
           >
             {gatilho(<SetaDropdown className="h-4 w-4 shrink-0 text-muted" />)}
           </span>

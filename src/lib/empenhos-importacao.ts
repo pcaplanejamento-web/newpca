@@ -3,8 +3,8 @@ import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
 import { baixarSeguro } from "./busca-segura";
 import { registrarLeitura } from "./centi-apis";
-import { paresDasLinhas } from "./centi-unidades-core";
-import { comandoRegistrarUnidades, contagemUnidadesDoLote } from "./centi-unidades-sql";
+import { acoesDasLinhas, linhaVinculada, paresDasLinhas } from "./centi-unidades-core";
+import { comandoRegistrarAcoes, comandoRegistrarUnidades, consultaMapaVinculo, contagemUnidadesDoLote } from "./centi-unidades-sql";
 import { type ApiCenti, urlDaApi } from "./centi-apis-core";
 import { getDb } from "./db";
 import { listarPassos, paraPasso } from "./empenhos";
@@ -34,6 +34,7 @@ import {
   comandoRecontarLote,
   comandoRegistrarPasso,
   comandosFecharLote,
+  comandosGuardarFora,
   comandosGuardarPagina,
   comandosPromover,
   contagemDaPromocao,
@@ -147,13 +148,21 @@ export async function lerPaginaDoLote(api: ApiCenti, lote: LoteCenti, periodo: P
     soma: lida.soma,
     mensagem: lida.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
   };
-  // As UNIDADES da página entram no registro (o ADM as vincula ao cadastro) — também na leitura só das unidades.
+  // SÓ O VINCULADO ENTRA NO BANCO: o registro de unidade/ação sem vínculo no cadastro (Órgãos e Unidades) não é guardado
+  // — dele fica só a CHAVE até o fim da importação, para a conferência com a Centi. Na leitura só das unidades, nenhum.
+  const mapa = lote.modo === "unidades" ? null : await consultaMapaVinculo(db);
+  const guardar = mapa ? lida.linhas.filter((l) => linhaVinculada(mapa, l)) : [];
+  const soContar = mapa ? lida.linhas.filter((l) => !linhaVinculada(mapa, l)) : lida.linhas;
+  // As UNIDADES e as AÇÕES da página entram no catálogo (o ADM as vincula ao cadastro) — também na leitura só das unidades.
   const pares = paresDasLinhas(lida.linhas);
+  const acoes = acoesDasLinhas(lida.linhas);
   const res = await db.batch([
     comandoRegistrarPasso(db, lote.id, passo).returning(),
-    ...comandosGuardarPagina(db, lote.id, pagina, lida.linhas),
-    comandoRecontarLote(db, lote.id),
+    ...comandosGuardarPagina(db, lote.id, pagina, guardar),
+    ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
     ...(pares.length ? [comandoRegistrarUnidades(db, lote.id, lote.ano, pares)] : []),
+    ...(acoes.length ? [comandoRegistrarAcoes(db, lote.id, lote.ano, acoes)] : []),
+    comandoRecontarLote(db, lote.id),
   ] as never);
   return { passo: paraPasso((res as Linha[][])[0][0]), continuar };
 }
@@ -208,7 +217,7 @@ export async function concluirLoteEmpenhos(api: ApiCenti, lote: LoteCenti, opcoe
     acao: "importar",
     entidade: "centi_api",
     entidadeId: api.id,
-    resumo: `${api.nome} ${lote.ano}${quem}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} marcados como removidos, ${contagem.fora} de unidade sem vínculo descartados${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${api.nome} ${lote.ano}${quem}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} marcados como removidos, ${contagem.fora} sem vínculo no cadastro (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }

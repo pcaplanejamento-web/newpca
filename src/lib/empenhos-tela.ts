@@ -1,6 +1,6 @@
-import { count, eq, inArray, isNull } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { cache } from "react";
-import { centiLotes, centiUnidades, empenhos, reparticoes } from "@/db/schema";
+import { centiLotes, empenhos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type AnoEmpenhos, chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
 import { consultaAnosEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "./empenhos-tela-sql";
@@ -33,12 +33,6 @@ export const escopoDosEmpenhos = cache(async (): Promise<EscopoEmpenhos> => {
 
 export async function anosEmpenhos(escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
   return consultaAnosEmpenhos(getDb(), escopo);
-}
-
-/** Quantas unidades da Centi estão SEM vínculo ao cadastro (o aviso do ADM — os registros delas não são gravados). */
-export async function unidadesCentiSemVinculo(): Promise<number> {
-  const [r] = await getDb().select({ n: count() }).from(centiUnidades).where(isNull(centiUnidades.orgaoId));
-  return r?.n ?? 0;
 }
 
 /** O pacote do ano como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */

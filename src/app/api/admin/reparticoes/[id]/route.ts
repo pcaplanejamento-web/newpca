@@ -2,7 +2,8 @@ import { eq, sql } from "drizzle-orm";
 import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { motivoUnidadeCenti } from "@/lib/centi-unidades";
+import { motivoAcoesCenti, motivoUnidadeCenti } from "@/lib/centi-unidades";
+import { comandosVincularAcoes } from "@/lib/centi-unidades-sql";
 import { realinharVinculos } from "@/lib/responsaveis";
 import { getDb } from "@/lib/db";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
@@ -35,6 +36,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
   const centi = await motivoUnidadeCenti(corpo.data.centiUnidadeId, id);
   if (centi) return erro(centi.msg, centi.status);
+  const acoes = corpo.data.centiAcoes === undefined ? null : [...new Set(corpo.data.centiAcoes)];
+  const centiAcao = acoes ? await motivoAcoesCenti(acoes, id) : null;
+  if (centiAcao) return erro(centiAcao.msg, centiAcao.status);
   await getDb()
     .update(reparticoes)
     .set({
@@ -49,9 +53,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
+  // As AÇÕES da Centi da unidade (a lista inteira) — no mesmo lote, o vínculo dos empenhos gravados é refeito.
+  if (acoes) {
+    const db = getDb();
+    await db.batch(comandosVincularAcoes(db, id, acoes) as never);
+  }
   // A unidade pode ter mudado de órgão: os responsáveis dela seguem a regra de assinatura do órgão (o lugar que vale).
   await realinharVinculos();
-  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome, centiUnidadeId: corpo.data.centiUnidadeId ?? undefined } });
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome, centiUnidadeId: corpo.data.centiUnidadeId ?? undefined, centiAcoes: acoes ?? undefined } });
   return ok();
 }
 

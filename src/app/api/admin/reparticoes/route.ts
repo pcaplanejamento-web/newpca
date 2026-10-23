@@ -32,6 +32,8 @@ export async function GET(req: Request) {
       oculto: reparticoes.oculto,
       centiUnidadeId: reparticoes.centiUnidadeId,
       // O texto da unidade orçamentária da Centi (a coluna "Empenhos (Centi)" — sem ela, "Sem correspondência").
+      // As AÇÕES da Centi vinculadas à unidade (os ids — os textos vêm do catálogo da tela).
+      centiAcoes: sql<string>`(SELECT json_group_array(ca."id") FROM "centi_acoes" ca WHERE ca."reparticao_id" = "reparticoes"."id")`,
       centiUnidade: sql<string | null>`CASE WHEN ${centiUnidades.id} IS NULL THEN NULL WHEN ${centiUnidades.unidade} = '' THEN ${centiUnidades.orgaoGestor} ELSE ${centiUnidades.orgaoGestor} || ' · ' || ${centiUnidades.unidade} END`,
     })
     .from(reparticoes)
@@ -39,7 +41,7 @@ export async function GET(req: Request) {
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
-  return ok({ reparticoes: rows });
+  return ok({ reparticoes: rows.map((r) => ({ ...r, centiAcoes: JSON.parse(r.centiAcoes || "[]") as number[] })) });
 }
 
 export async function POST(req: Request) {

@@ -2,7 +2,7 @@ import { EmpenhosView } from "@/components/EmpenhosView";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { carregarEdicoes } from "@/lib/edicoes-tabela";
-import { anosEmpenhos, escopoDosEmpenhos, unidadesCentiSemVinculo } from "@/lib/empenhos-tela";
+import { anosEmpenhos, escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { anoEscolhido, chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
 
 export const dynamic = "force-dynamic";
@@ -14,18 +14,16 @@ export default async function EmpenhosPage({ searchParams }: { searchParams: Pro
   const r = await acessoPagina("empenhos");
   if (r.bloqueio) return r.bloqueio;
   const escopo = await escopoDosEmpenhos();
-  const [{ ano }, anos, edicoes, semVinculo] = await Promise.all([
+  const [{ ano }, anos, edicoes] = await Promise.all([
     searchParams,
     anosEmpenhos(escopo),
     carregarEdicoes(r.acesso.u.id, "empenhos:"),
-    r.acesso.u.admin ? unidadesCentiSemVinculo() : Promise.resolve(0),
   ]);
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
       <EmpenhosView
         key={chaveEscopoEmpenhos(escopo)}
         escopo={escopo}
-        semVinculo={semVinculo}
         anos={anos}
         anoInicial={anoEscolhido(anos, ano)}
         edicoes={edicoes}

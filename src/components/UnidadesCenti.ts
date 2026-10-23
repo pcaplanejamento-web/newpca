@@ -2,19 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AcaoSelecao } from "./Selecao";
-import type { UnidadeCenti } from "@/lib/centi-unidades-core";
+import type { AcaoCenti, UnidadeCenti } from "@/lib/centi-unidades-core";
 import { anoInteiro, diasDoPeriodo, type LoteCenti, type PassoLote, periodosLidos, usaPeriodo } from "@/lib/empenhos-core";
 import { dataIsoBrasilia } from "@/lib/format";
 import { lerAnoNaCenti, pedirImportacao } from "@/lib/leitura-centi-cliente";
 import { toast } from "./Toast";
 
 /**
- * As UNIDADES ORÇAMENTÁRIAS da Centi para os dropdowns de Órgãos e Unidades (o vínculo é escolhido no banner do órgão e
+ * As UNIDADES ORÇAMENTÁRIAS da Centi (e as AÇÕES de cada uma — `listaAcoes`) para os dropdowns de Órgãos e Unidades (o vínculo é escolhido no banner do órgão e
  * da unidade). Carrega só quando o banner abre (`ativo`) e, com "Buscar na Centi" (a ação no rodapé da lista), lê o ano
  * atual pela API de empenhos SÓ para registrar as unidades — nenhum empenho é gravado (o lote em modo `unidades`).
  */
 export function useUnidadesCenti(ativo: boolean) {
   const [lista, setLista] = useState<UnidadeCenti[] | null>(null);
+  const [listaAcoes, setListaAcoes] = useState<AcaoCenti[]>([]);
   const [api, setApi] = useState<{ id: number; parametros: string } | null>(null);
   const [busca, setBusca] = useState<number | null>(null);
   const parar = useRef(false);
@@ -22,9 +23,10 @@ export function useUnidadesCenti(ativo: boolean) {
   const carregar = useCallback(async () => {
     try {
       const r = await fetch("/api/admin/centi-unidades");
-      const j = (await r.json()) as { ok?: boolean; error?: string; unidades?: UnidadeCenti[]; api?: { id: number; parametros: string } | null };
+      const j = (await r.json()) as { ok?: boolean; error?: string; unidades?: UnidadeCenti[]; acoes?: AcaoCenti[]; api?: { id: number; parametros: string } | null };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar as unidades da Centi.");
       setLista(j.unidades ?? []);
+      setListaAcoes(j.acoes ?? []);
       setApi(j.api ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao carregar as unidades da Centi.");
@@ -91,5 +93,13 @@ export function useUnidadesCenti(ativo: boolean) {
     ? [{ rotulo: busca == null ? `Buscar na Centi (${ano})` : `Buscando na Centi… ${busca}%`, disabled: busca != null, onClick: () => void buscar() }]
     : [];
 
-  return { lista, acoes, buscando: busca != null };
+  return { lista, listaAcoes, acoes, buscando: busca != null, recarregar: carregar };
+}
+
+/**
+ * A caixa do `Selecao` nas células "Empenhos (Centi)" de Órgãos e Unidades: discreta (sem borda, realce ao passar), na
+ * altura da linha compacta, o texto INTEIRO (a coluna cresce — nada é abreviado); sem vínculo, em âmbar.
+ */
+export function classeCelulaCenti(semVinculo: boolean): string {
+  return `min-h-11 w-max max-w-none rounded-control px-2 text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-surface-2 lg:min-h-[calc(var(--h-control-sm)-6px)] ${semVinculo ? "text-warn" : "text-text-2"}`;
 }

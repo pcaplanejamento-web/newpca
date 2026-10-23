@@ -2314,3 +2314,42 @@ export const centiUnidades = sqliteTable(
   },
   (t) => [uniqueIndex("centi_unidades_par_uq").on(t.orgaoGestor, t.unidade)],
 );
+
+/**
+ * As AÇÕES de cada unidade orçamentária da Centi (migração `0140` — o catálogo que as leituras trazem) e, por ação, a
+ * UNIDADE do cadastro a que ela pertence (`reparticao_id`, escolhida em Órgãos e Unidades — uma ação em UMA unidade).
+ * O vínculo do empenho: a ação vinculada › a unidade orçamentária vinculada › o órgão do órgão gestor.
+ */
+export const centiAcoes = sqliteTable(
+  "centi_acoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    centiUnidadeId: integer("centi_unidade_id")
+      .notNull()
+      .references(() => centiUnidades.id, { onDelete: "cascade" }),
+    acao: text("acao").notNull().default(""),
+    reparticaoId: integer("reparticao_id"),
+    registros: integer("registros").notNull().default(0),
+    ultimoLote: integer("ultimo_lote"),
+    ultimoAno: integer("ultimo_ano"),
+    vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** Quando o vínculo da ação mudou (ISO com ms) — entra na VERSÃO dos empenhos. */
+    vinculadoEm: text("vinculado_em"),
+  },
+  (t) => [uniqueIndex("centi_acoes_uq").on(t.centiUnidadeId, t.acao), index("centi_acoes_reparticao_idx").on(t.reparticaoId)],
+);
+
+/**
+ * Os registros SEM VÍNCULO de uma importação aberta (migração `0140`): só a CHAVE — para a conferência com a Centi contar
+ * cada um uma vez (uma página repetida não engana); nenhum dado deles é guardado. Sai ao fechar a importação (cascade).
+ */
+export const centiStagingFora = sqliteTable(
+  "centi_staging_fora",
+  {
+    loteId: integer("lote_id")
+      .notNull()
+      .references(() => centiLotes.id, { onDelete: "cascade" }),
+    chave: text("chave").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
+);

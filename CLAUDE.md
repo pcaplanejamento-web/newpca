@@ -4591,20 +4591,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Tela: no **`BannerCadastro`** (campo de escolha com `acoes` — o rodapé da `Selecao`) de **`OrgaosAdmin`** ("Órgão gestor na
   Centi" — `opcoesOrgaoGestor`) e de **`ReparticoesAdmin`** ("Unidade orçamentária na Centi" — `opcoesUnidadeOrcamentaria`:
   as livres; com o órgão gestor do órgão, só as dele — a página `/painel/orgaos/[id]` passa `centiOrgaoGestor`); trocar/tirar
-  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0; v1.200.2: a escolha NA CÉLULA — `SeletorCelula alerta`,
-  a mesma gravação/confirmação do banner; nas unidades, só a unidade orçamentária quando o órgão tem o órgão gestor;
+  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0; v1.201.0: a escolha NA CÉLULA pela `Selecao` do
+  sistema — `classeCelulaCenti`, texto INTEIRO, nunca abreviado — a mesma gravação/confirmação do banner; nas unidades, só a unidade orçamentária quando o órgão tem o órgão gestor;
   sem vínculo = "Sem correspondência" em âmbar, filtrável; o texto da unidade vem do `GET
   /api/admin/reparticoes` — junção com `centi_unidades`). Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
   /api/admin/centi-unidades` só com o banner aberto) + a ação **"Buscar na Centi (ano)"** = lote `modo` "unidades"
   (`centi_lotes.modo`; `importarCentiApiSchema.modo`) pela API de empenhos: lê o ano, registra as unidades e fecha com estado
   `unidades` sem gravar empenho (fora da rotação da automática). A leitura conduzida pelo navegador é UMA só,
   **`leitura-centi-cliente.ts`** (`lerAnoNaCenti`, `pedirImportacao`, `lerPassos` — também a do `ImportacaoManual`). O
-  staging guarda TUDO (a conferência com a Centi não muda); a PROMOÇÃO grava SÓ o vinculado (junção com `centi_unidades`),
-  marca removido só pelas chaves vinculadas, APAGA do ano o sem vínculo e conta os descartados em `centi_lotes.fora`.
-  ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`): o empenho vinculado a uma
-  unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`, `empenhoNoEscopo`). Ao ADM, o aviso
-  das unidades sem vínculo (`unidadesCentiSemVinculo`). Testes: `tests/centi-unidades.test.ts` (migrações, promoção, os
-  gatilhos e os índices únicos no D1 real) + `empenhos-tela`/`empenhos`.
+  **NADA FORA DO VÍNCULO NO BANCO (v1.201.0, migração `0140`):** a configuração vem ANTES (Órgãos e Unidades) e a leitura
+  (`lerPaginaDoLote`) decide por ela o que entra — `consultaMapaVinculo` + `linhaVinculada` (puro): só o vinculado vai ao
+  staging; do sem vínculo fica só a CHAVE em `centi_staging_fora` (a conferência conta cada registro uma vez — `unicos` =
+  staging + chaves, `fora` = chaves; a `soma` = a dos passos lidos, todos os registros) e sai ao fechar a importação.
+  A promoção confere de NOVO (o vínculo pode ter mudado) e APAGA do ano o sem vínculo. **VÍNCULO POR AÇÕES:**
+  `centi_acoes` = o catálogo das ações de cada unidade orçamentária (`comandoRegistrarAcoes`, na leitura) + a unidade do
+  cadastro escolhida (`reparticao_id`; uma ação em UMA unidade — `motivoAcoesCenti` 409); `PATCH /api/admin/reparticoes/[id]`
+  `{centiAcoes}` (a lista inteira) → `comandosVincularAcoes` (+ `comandosRefazerVinculoEmpenhos`). Régua ÚNICA do vínculo:
+  a ação › a unidade orçamentária › o órgão do órgão gestor — `vinculoSql` (promoção) = a VIEW `centi_vinculo_empenhos`
+  (gatilhos da `0140`, que substituem os da `0139` e soltam as ações da unidade excluída). Tela: coluna **"Ações (Centi)"**
+  (`SeletorMultiplo suspenso completo` — os escolhidos por inteiro; grava 800 ms após o último toque, confirma ao tirar) e a
+  seção no banner da unidade. ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`):
+  o empenho vinculado a uma unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`,
+  `empenhoNoEscopo`); sem aviso de unidade sem vínculo (é escolha do cadastro). Liquidações e pagamentos seguem a MESMA
+  régua (o catálogo e o vínculo são globais). Testes: `tests/centi-unidades.test.ts` (migrações, filtro na leitura, ações,
+  promoção, os gatilhos e os índices únicos no D1 real) + `empenhos-tela`/`empenhos`.
 - **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
   DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
   conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,

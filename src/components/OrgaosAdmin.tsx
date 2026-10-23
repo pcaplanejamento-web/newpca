@@ -14,14 +14,13 @@ import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { selectCls } from "./formStyles";
-import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
+import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconSpinner, IconTrash, IconUsers } from "./icons";
 import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
-import { SeletorCelula } from "./SeletorCelula";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
-import { useUnidadesCenti } from "./UnidadesCenti";
+import { classeCelulaCenti, useUnidadesCenti } from "./UnidadesCenti";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
 import { Selecao } from "./Selecao";
 
@@ -374,25 +373,34 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       nowrap: true,
       value: (o) => o.centiOrgaoGestor ?? "Sem correspondência",
       render: (o) => {
-        const ops = opcoesOrgaoGestor(centi.lista ?? [], lista.map((x) => x.centiOrgaoGestor), o.centiOrgaoGestor).slice(1);
-        const idx = o.centiOrgaoGestor ? ops.findIndex((x) => x.valor === o.centiOrgaoGestor) : -1;
+        const ops = opcoesOrgaoGestor(centi.lista ?? [], lista.map((x) => x.centiOrgaoGestor), o.centiOrgaoGestor);
+        // A lista do SISTEMA (`Selecao`) com o texto INTEIRO; sem vínculo, "Sem correspondência" em âmbar.
         return (
-          <SeletorCelula
-            valor={idx >= 0 ? idx + 1 : null}
-            opcoes={ops.map((x, i) => ({ id: i + 1, nome: x.rotulo }))}
-            vazio="Sem correspondência"
-            alerta
-            salvando={gravandoCenti === o.id}
-            ariaLabel={`Órgão gestor na Centi (API de empenhos) de ${o.sigla}`}
-            onChange={async (id) => {
-              setGravandoCenti(o.id);
-              try {
-                await salvar({ centiOrgaoGestor: id == null ? "" : (ops[id - 1]?.valor ?? "") }, o);
-              } finally {
-                setGravandoCenti(null);
-              }
-            }}
-          />
+          <span role="none" className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <Selecao
+              className={classeCelulaCenti(!o.centiOrgaoGestor)}
+              value={o.centiOrgaoGestor ?? ""}
+              titulo="Órgão gestor na Centi"
+              aria-label={`Órgão gestor na Centi (API de empenhos) de ${o.sigla}`}
+              disabled={gravandoCenti === o.id}
+              acoes={centi.acoes}
+              onChange={async (e) => {
+                setGravandoCenti(o.id);
+                try {
+                  await salvar({ centiOrgaoGestor: e.target.value }, o);
+                } finally {
+                  setGravandoCenti(null);
+                }
+              }}
+            >
+              {ops.map((x) => (
+                <option key={x.valor} value={x.valor}>
+                  {x.valor ? x.rotulo : "Sem correspondência"}
+                </option>
+              ))}
+            </Selecao>
+            {gravandoCenti === o.id && <IconSpinner className="h-3.5 w-3.5 shrink-0 text-accent" />}
+          </span>
         );
       },
     },

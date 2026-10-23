@@ -35,6 +35,32 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.201.0",
+    data: "2026-10-23",
+    titulo: "Empenhos: só o vinculado entra no banco e vínculo por ações",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Integrações",
+        texto: "A importação dos empenhos só grava o que tem vínculo em Órgãos e Unidades: o registro sem vínculo não entra no banco nem por um instante (antes passava pela área temporária) — dele fica só a chave até o fim da importação, para conferir a contagem com a Centi. As importações já abertas foram limpas.",
+        link: "/painel/integracoes?aba=centi",
+      },
+      {
+        tipo: "novo",
+        area: "Órgãos e Unidades",
+        texto: "Nas unidades, os empenhos podem ser vinculados pela unidade orçamentária ou por AÇÕES da Centi — várias de uma vez, na coluna “Ações (Centi)” ou no banner da unidade. A ação vale mais que a unidade orçamentária e pertence a uma unidade só.",
+        link: "/painel/orgaos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Órgãos e Unidades",
+        texto: "As colunas da Centi usam a lista do sistema e mostram o texto inteiro, sem abreviar.",
+        link: "/painel/orgaos",
+      },
+      { tipo: "melhoria", area: "Empenhos", texto: "Saiu o aviso das unidades da Centi sem vínculo: unidade sem vínculo é escolha do cadastro — os empenhos dela não são importados.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.200.2",
     data: "2026-10-23",
     titulo: "Vínculo com a Centi escolhido na própria célula",

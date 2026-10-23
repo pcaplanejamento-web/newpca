@@ -39,6 +39,52 @@ export function paresDasLinhas(linhas: readonly { orgaoGestor: string; unidadeOr
   return [...m.values()];
 }
 
+/** As AÇÕES distintas de uma página lida (`[órgão gestor, unidade, ação, registros]`; o vazio vira ""). */
+export function acoesDasLinhas(linhas: readonly { orgaoGestor: string; unidadeOrcamentaria: string | null; acao: string | null }[]): [string, string, string, number][] {
+  const m = new Map<string, [string, string, string, number]>();
+  for (const l of linhas) {
+    const t: [string, string, string] = [l.orgaoGestor ?? "", l.unidadeOrcamentaria ?? "", l.acao ?? ""];
+    const k = t.join("\u0000");
+    const atual = m.get(k);
+    if (atual) atual[3]++;
+    else m.set(k, [...t, 1]);
+  }
+  return [...m.values()];
+}
+
+/**
+ * O que está VINCULADO ao cadastro, para decidir NA LEITURA o que entra no banco: os órgãos gestores escolhidos por um
+ * órgão, as unidades orçamentárias com vínculo (`gestor\0unidade`) e as ações escolhidas por uma unidade
+ * (`gestor\0unidade\0ação`).
+ */
+export type MapaVinculo = { gestores: ReadonlySet<string>; unidades: ReadonlySet<string>; acoes: ReadonlySet<string> };
+
+/** O registro tem vínculo (a ação › a unidade orçamentária › o órgão gestor)? Sem vínculo, NADA dele é gravado. */
+export function linhaVinculada(m: MapaVinculo, l: { orgaoGestor: string; unidadeOrcamentaria: string | null; acao: string | null }): boolean {
+  const og = l.orgaoGestor ?? "";
+  const un = l.unidadeOrcamentaria ?? "";
+  return m.gestores.has(og) || m.unidades.has(`${og}\u0000${un}`) || m.acoes.has(`${og}\u0000${un}\u0000${l.acao ?? ""}`);
+}
+
+/** Uma AÇÃO da Centi como o cadastro a vê (a unidade orçamentária dela e a unidade do cadastro escolhida). */
+export type AcaoCenti = { id: number; centiUnidadeId: number; orgaoGestor: string; unidade: string; acao: string; reparticaoId: number | null; registros: number; ultimoAno: number | null };
+
+/** O texto de uma ação como a Centi o traz (sem ação, "(sem ação)"). */
+export function rotuloAcaoCenti(a: Pick<AcaoCenti, "acao">): string {
+  return a.acao || "(sem ação)";
+}
+
+/**
+ * As AÇÕES que a unidade do cadastro pode escolher: as que nenhuma OUTRA unidade escolheu; com o órgão dela ligado a um
+ * órgão gestor, só as desse órgão gestor. As escolhidas agora sempre entram. Agrupadas pela unidade orçamentária.
+ */
+export function opcoesAcoes(lista: readonly AcaoCenti[], reparticaoId: number | null, gestorDoOrgao: string | null): { valor: string; rotulo: string; grupo: string; contagem: number }[] {
+  return lista
+    .filter((a) => a.reparticaoId === reparticaoId || (a.reparticaoId == null && (!gestorDoOrgao || a.orgaoGestor === gestorDoOrgao)))
+    .map((a) => ({ valor: String(a.id), rotulo: rotuloAcaoCenti(a), grupo: rotuloUnidadeCenti(a), contagem: a.registros }))
+    .sort((x, y) => x.grupo.localeCompare(y.grupo, "pt-BR", { numeric: true }) || x.rotulo.localeCompare(y.rotulo, "pt-BR", { numeric: true }));
+}
+
 /** O texto da unidade da Centi ("FMC · 02.01 - FUNDO …"; sem unidade, só o órgão gestor). */
 export function rotuloUnidadeCenti(u: Pick<UnidadeCenti, "orgaoGestor" | "unidade">): string {
   return u.unidade ? `${u.orgaoGestor || "—"} · ${u.unidade}` : u.orgaoGestor || "—";

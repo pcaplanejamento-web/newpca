@@ -778,7 +778,7 @@ function ImportacaoManual({ api, alterado, onOcupado }: { api: ApiCenti; alterad
       if (fim.estado === "unidades") {
         toast.success(fim.mensagem ?? "Unidades orçamentárias da Centi lidas.");
       } else if (fim.estado === "promovido") {
-        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} marcados como removidos${fim.fora ? `, ${num(fim.fora)} de unidade sem vínculo descartados` : ""}.`);
+        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} marcados como removidos${fim.fora ? `, ${num(fim.fora)} sem vínculo no cadastro (não gravados)` : ""}.`);
       } else {
         toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
       }

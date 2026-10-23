@@ -138,6 +138,8 @@ export const reparticaoSchema = z.object({
   oculto: z.boolean().default(false),
   /** A UNIDADE ORÇAMENTÁRIA da Centi desta unidade (`centi_unidades.id`); null = sem vínculo; ausente = não muda. */
   centiUnidadeId: z.number().int().positive().nullable().optional(),
+  /** As AÇÕES da Centi desta unidade (`centi_acoes.id` — a lista INTEIRA; vazia = nenhuma); ausente = não muda. */
+  centiAcoes: z.array(z.number().int().positive()).max(500).optional(),
 });
 
 export const reordenarSchema = z.object({

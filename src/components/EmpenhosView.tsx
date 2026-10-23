@@ -94,7 +94,6 @@ export function EmpenhosView({
   podePublicar,
   importar,
   escopo = null,
-  semVinculo = 0,
 }: {
   anos: AnoEmpenhos[];
   anoInicial: number | null;
@@ -105,8 +104,6 @@ export function EmpenhosView({
   importar: boolean;
   /** As unidades e os órgãos à vista (`null` = todos). */
   escopo?: EscopoEmpenhos;
-  /** ADM: quantas unidades da Centi estão sem vínculo ao cadastro (os registros delas não são gravados). */
-  semVinculo?: number;
 }) {
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
@@ -225,13 +222,6 @@ export function EmpenhosView({
           )}
         </div>
       </header>
-
-      {semVinculo > 0 && (
-        <Callout kind="warn">
-          {num(semVinculo)} unidade{semVinculo === 1 ? "" : "s"} da Centi sem vínculo ao cadastro — os empenhos dela{semVinculo === 1 ? "" : "s"} não são
-          gravados. Escolha o órgão gestor no banner do órgão (ou a unidade orçamentária no banner da unidade) em Órgãos e Unidades e importe de novo.
-        </Callout>
-      )}
 
       {!recorte ? (
         <Callout kind="info">
