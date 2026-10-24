@@ -21,6 +21,7 @@ export const cardEmpenhoSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
+  porOrgao: z.boolean().default(false),
 });
 
 /** O card NOVO: o tipo (empenhos | liquidações | pagamentos), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos
@@ -67,7 +68,7 @@ const pedidoPagina = {
 };
 
 export const importarCardSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes", "pagamentos"]).optional() }),
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes", "pagamentos"]).optional(), porOrgao: z.boolean().optional() }),
   // A página pela TELA, em três ações (nenhuma lê o JSON inteiro no servidor — o limite de CPU do plano gratuito): `baixar`
   // devolve a resposta da Centi crua · `falha` registra a leitura que falhou no navegador · `parte` guarda as linhas já
   // lidas, em partes de tamanho fixo (conferidas no servidor — `linhasDaParte`).

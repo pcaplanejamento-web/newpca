@@ -3,7 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
-import { type AnoEmpenhos, type EmpenhoNaTela, empenhosDoPacote, type EscopoEmpenhos, escopoVazio, type PacoteEmpenhos, resumoEmpenhos } from "@/lib/empenhos-tela-core";
+import type { ExecucaoEmpenho } from "@/lib/execucao-empenho-core";
+import {
+  type AnoEmpenhos,
+  type EmpenhoNaTela,
+  empenhosDoPacote,
+  type EscopoEmpenhos,
+  escopoVazio,
+  type PacoteEmpenhos,
+  PROBLEMAS_EMPENHO,
+  problemasDoEmpenho,
+  REGULAR_EMPENHO,
+  resumoEmpenhos,
+} from "@/lib/empenhos-tela-core";
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -16,6 +28,7 @@ import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { EmpenhoDetalhe } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
+import { EstadoPonto } from "./EstadoCelula";
 import { SelectField } from "./Field";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
@@ -82,6 +95,26 @@ const COLUNAS: Column<EmpenhoNaTela>[] = [
   colValor("valorLiquidado", "Liquidado"),
   colValor("valorPago", "Pago"),
   colValor("saldoPagar", "A pagar"),
+  {
+    key: "conferencia",
+    header: "Conferência",
+    nowrap: true,
+    total: false,
+    valores: (e) => {
+      const p = problemasDoEmpenho(e);
+      return p.length ? p.map((x) => PROBLEMAS_EMPENHO[x]) : [REGULAR_EMPENHO];
+    },
+    value: (e) => problemasDoEmpenho(e).map((x) => PROBLEMAS_EMPENHO[x]).join("; ") || REGULAR_EMPENHO,
+    corPdf: (e) => (problemasDoEmpenho(e).length ? "var(--warn)" : null),
+    render: (e) => {
+      const p = problemasDoEmpenho(e);
+      return p.length ? (
+        <EstadoPonto cor="var(--warn)" rotulo={`${PROBLEMAS_EMPENHO[p[0]]}${p.length > 1 ? ` +${p.length - 1}` : ""}`} title={p.map((x) => PROBLEMAS_EMPENHO[x]).join("\n")} />
+      ) : (
+        <EstadoPonto cor="var(--ok)" rotulo={REGULAR_EMPENHO} />
+      );
+    },
+  },
 ];
 
 type Recorte = { ano: number; removidos: boolean };
@@ -121,6 +154,7 @@ export function EmpenhosTabela({
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<EmpenhoNaTela | null>(null);
   const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
+  const [execucao, setExecucao] = useState<ExecucaoEmpenho | null>(null);
   const [eds, setEds] = useState(edicoes);
   const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
   const pedido = useRef(0);
@@ -167,9 +201,14 @@ export function EmpenhosTabela({
     if (!aberto) return;
     let vivo = true;
     setCompleto(undefined);
+    setExecucao(null);
     fetch(`/api/empenhos/${aberto.id}`)
-      .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto }>)
-      .then((j) => vivo && setCompleto(j.ok && j.empenho ? j.empenho : null))
+      .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto; execucao?: ExecucaoEmpenho }>)
+      .then((j) => {
+        if (!vivo) return;
+        setExecucao(j.ok ? (j.execucao ?? null) : null);
+        setCompleto(j.ok && j.empenho ? j.empenho : null);
+      })
       .catch(() => vivo && setCompleto(null));
     return () => {
       vivo = false;
@@ -264,7 +303,7 @@ export function EmpenhosTabela({
       )}
 
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Empenho ${aberto.numero}` : "Empenho"} size="lg">
-        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} /> : <div />}
+        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} execucao={execucao} /> : <div />}
       </Modal>
     </>
   );

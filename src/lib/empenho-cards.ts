@@ -1,8 +1,8 @@
 import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { empenhoCards, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, lerTipoCard, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
-import { comandosCriarCard, consultaCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
+import { type CardEmpenho, cardPorOrgao, type EdicaoCard, lerAnos, lerRegraRemovidos, lerTipoCard, type OrgaoGestorCenti, orgaosDaLeitura, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
+import { comandosCriarCard, consultaCatalogo, consultaConflitosEntreCards, consultaOrgaosGestores, consultaVinculosCard } from "./empenho-cards-sql";
 import type { EscopoEmpenhos } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
 import { idCenti, orgaosDaCenti } from "./liquidacoes-core";
@@ -146,6 +146,14 @@ export async function vinculosDoCard(id: number): Promise<VinculoCard[]> {
   return consultaVinculosCard(getDb(), id);
 }
 
+/** Os outros cards com empenhos deste em outro destino (o aviso da aba Vínculos). */
+export async function conflitosEntreCards(id: number) {
+  const db = getDb();
+  // Com um card de empenhos só, não há com quem conflitar (nem a consulta percorre os empenhos).
+  const [n] = await db.select({ n: sql<number>`COUNT(*)` }).from(empenhoCards).where(eq(empenhoCards.tipo, "empenhos"));
+  return Number(n?.n ?? 0) > 1 ? consultaConflitosEntreCards(db, id) : [];
+}
+
 export async function catalogoCenti() {
   return consultaCatalogo(getDb());
 }
@@ -190,4 +198,22 @@ export async function orgaosLiquidacao(): Promise<OrgaoLiquidacao[]> {
     if (id != null && !por.has(id)) por.set(id, { idOrgao: id, orgaoId: o.id, nome: o.sigla ? `${o.sigla} — ${o.nome}` : o.nome, sigla: o.sigla || o.nome });
   }
   return orgaosDaCenti([...por.keys()].map(String)).map((id) => por.get(id) as OrgaoLiquidacao);
+}
+
+/** O MAPA ID na Centi ↔ órgão gestor (aprendido nas leituras por órgão). */
+export async function mapaOrgaosGestores(): Promise<OrgaoGestorCenti[]> {
+  return consultaOrgaosGestores(getDb());
+}
+
+/**
+ * Os órgãos da Centi que um lote NOVO lê (null = o ano inteiro de todos, um pedido por período): liquidações e pagamentos =
+ * todos os do cadastro com o ID; o catálogo POR ÓRGÃO (`descobrir` — aprende o mapa) = os mesmos; os empenhos do card que
+ * lê por órgão = os IDs dos órgãos gestores dos vínculos — só quando TODOS têm o ID conhecido (`orgaosDaLeitura`).
+ */
+export async function orgaosDoLote(card: CardEmpenho, modo: "dados" | "unidades" | "liquidacoes" | "pagamentos", descobrir = false): Promise<number[] | null> {
+  if (cardPorOrgao(card.tipo) || (modo === "unidades" && descobrir)) return (await orgaosLiquidacao()).map((o) => o.idOrgao);
+  if (modo !== "dados" || !card.porOrgao) return null;
+  const [vinculos, mapa] = await Promise.all([vinculosDoCard(card.id), mapaOrgaosGestores()]);
+  const l = orgaosDaLeitura(vinculos, mapa);
+  return l.vale ? l.ids : null;
 }

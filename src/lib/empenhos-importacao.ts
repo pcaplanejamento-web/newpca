@@ -5,7 +5,7 @@ import { registrarAuditoria } from "./auditoria";
 import { type LinhaDoModo, linhasDaParte, type ModoParte, partesDaPagina, type ResumoPagina, resumoValido, somaDaLinha } from "./importacao-partes-core";
 import { baixarSeguro } from "./busca-segura";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
-import { corpoLiquidacoes, lerPaginaLiquidacoes, orgaoDaPagina } from "./liquidacoes-core";
+import { corpoComOrgao, lerPaginaLiquidacoes, orgaoDaPagina } from "./liquidacoes-core";
 import { corpoPagamentos, lerPaginaPagamentos, mesDoPeriodo } from "./pagamentos-core";
 import {
   comandoRealinharPagamentos,
@@ -25,7 +25,7 @@ import {
   ultimaLiquidacaoPromovida,
 } from "./liquidacoes-sql";
 import { registrarLeituraCard } from "./empenho-cards";
-import { comandoRegistrarCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
+import { comandoRegistrarCatalogo, comandoRegistrarGestores, consultaVinculosCard } from "./empenho-cards-sql";
 import { getDb } from "./db";
 import { listarPassos, paraPasso } from "./empenhos";
 import {
@@ -45,6 +45,7 @@ import {
   type PassoNovo,
   type Periodo,
   periodosLidos,
+  quedaPrimeiraPorOrgao,
   quedaSuspeita,
   rotuloPeriodo,
   type TipoErro,
@@ -66,6 +67,7 @@ import {
   lidoNoPeriodo,
   ultimoPromovido,
   valoresSuspeitos,
+  vigentesDosOrgaos,
 } from "./empenhos-sql";
 
 /**
@@ -137,7 +139,8 @@ export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Peri
   if (!pag && !usaPeriodo(card.parametros) && (periodo.inicio !== doAno.inicio || periodo.fim !== doAno.fim)) {
     throw new PedidoInvalido("Os parâmetros desta API não usam {inicio} e {fim} — o ano só pode ser lido inteiro.");
   }
-  // LIQUIDAÇÕES e PAGAMENTOS: a "página" N do período é o N-ésimo órgão da Centi do lote (a API não pagina e exige o órgão).
+  // POR ÓRGÃO (liquidações, pagamentos e os empenhos do card que lê por órgão): a "página" N do período é o N-ésimo órgão
+  // da Centi do lote (um pedido por órgão — `idOrgao`).
   const idOrgao = porOrgao ? orgaoDaPagina(lote.orgaosCenti, pagina) : null;
   if (porOrgao && idOrgao == null) throw new PedidoInvalido("Página fora dos órgãos da Centi desta importação — cancele e importe de novo.");
   let enviado: string;
@@ -146,7 +149,7 @@ export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Peri
       pag
         ? corpoPagamentos(card.parametros, lote.ano, periodo, idOrgao ?? 0)
         : porOrgao
-          ? corpoLiquidacoes(card.parametros, lote.ano, periodo, idOrgao ?? 0)
+          ? corpoComOrgao(card.parametros, lote.ano, periodo, idOrgao ?? 0)
           : corpoDaPagina(card.parametros, lote.ano, pagina, periodo),
     );
   } catch (e) {
@@ -262,7 +265,10 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     const soContar = mapa ? linhas.filter((l) => !vinculoDaLinha(mapa, l)) : linhas;
     // Os órgãos gestores, as unidades orçamentárias e as ações entram no CATÁLOGO (a base das escolhas dos vínculos).
     const catalogo = catalogoDasLinhas(linhas);
+    // POR ÓRGÃO: o ID pedido e os órgãos gestores que vieram entram no MAPA (a base da leitura por órgão).
+    const gestores = ped.porOrgao && ped.idOrgao != null ? [...new Set(linhas.map((l) => l.orgaoGestor).filter(Boolean))] : [];
     daParte.push(
+      ...(gestores.length ? [comandoRegistrarGestores(db, ped.idOrgao as number, gestores)] : []),
       ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
       ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
       ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, pagina, guardar, soContar.length, alvo) : []),
@@ -286,7 +292,12 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   // LIQUIDAÇÕES e PAGAMENTOS: o total é o DESTE órgão = os distintos + os recusados (contado aqui); o do período = a soma dos
   // órgãos (`comandoRecontarLote`), e o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
   const lido = ped.porOrgao ? null : await lidoNoPeriodo(db, lote.id, periodo);
-  const total = ped.porOrgao ? linhasPagina + r.recusados : (totalDoPeriodo({ total: r.total, recebidos: r.recebidos }, pagina) ?? lido?.total ?? null);
+  // Os EMPENHOS por órgão trazem o total da Centi (`TotalRegistros`) do órgão; sem ele, o que veio.
+  const total = ped.porOrgao
+    ? ped.modo === "empenhos"
+      ? (totalDoPeriodo({ total: r.total, recebidos: r.recebidos }, 1) ?? linhasPagina + r.recusados)
+      : linhasPagina + r.recusados
+    : (totalDoPeriodo({ total: r.total, recebidos: r.recebidos }, pagina) ?? lido?.total ?? null);
   const continuar = ped.porOrgao
     ? pagina < (lote.orgaosCenti?.length ?? 0)
     : continuarPeriodo({ recebidos: (lido?.recebidos ?? 0) + r.recebidos, paginas: (lido?.paginas ?? 0) + 1, total }, { recebidos: r.recebidos, novos });
@@ -359,8 +370,8 @@ export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, per
 }
 
 /** A leitura do JSON pelo modo do pedido (as MESMAS funções da tela). */
-export function lerPaginaDoModo(ped: Pick<Pedido, "pag" | "porOrgao">, texto: string, ano: number) {
-  return ped.pag ? lerPaginaPagamentos(texto, ano) : ped.porOrgao ? lerPaginaLiquidacoes(texto, ano) : lerPaginaEmpenhos(texto, ano);
+export function lerPaginaDoModo(ped: Pick<Pedido, "modo">, texto: string, ano: number) {
+  return ped.modo === "pagamentos" ? lerPaginaPagamentos(texto, ano) : ped.modo === "liquidacoes" ? lerPaginaLiquidacoes(texto, ano) : lerPaginaEmpenhos(texto, ano);
 }
 
 /** Fecha o lote sem promover (cancelado pela pessoa ou falhou) — a falha conta como a última leitura do card. */
@@ -410,18 +421,23 @@ export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, o
   if (suspeitos) return parcial(suspeitos, suspeitos);
   if (lote.modo === "liquidacoes") return concluirLiquidacoes(card, lote, opcoes);
   if (lote.modo === "pagamentos") return concluirPagamentos(card, lote, opcoes);
-  const queda = quedaSuspeita(await ultimoPromovido(db, card.id, lote.ano, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
+  // POR ÓRGÃO: a queda compara com a importação dos mesmos órgãos e o que "sumiu" é só dos órgãos lidos.
+  const orgaos = lote.orgaosCenti;
+  const anterior = await ultimoPromovido(db, card.id, lote.ano, lote.id, orgaos);
+  const contagem = await contagemDaPromocao(db, lote.id, card.id, lote.ano, lote.leitor, orgaos);
+  // A 1ª leitura por órgão não tem com quem comparar: a régua da queda vale sobre os empenhos vigentes desses órgãos (o que
+  // a leitura marcaria como removido) — um mapa errado nunca esvazia o ano sem a pessoa confirmar.
+  const queda = anterior || !orgaos ? quedaSuspeita(anterior, lote, { soma: card.quedaSoma, registros: card.quedaRegistros }) : quedaPrimeiraPorOrgao(await vigentesDosOrgaos(db, card.id, lote.ano, orgaos), contagem.removidos, card.quedaRegistros);
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda };
-  const contagem = await contagemDaPromocao(db, lote.id, card.id, lote.ano, lote.leitor);
   // As LIQUIDAÇÕES e os PAGAMENTOS seguem o empenho de mesmo número: as dos empenhos que chegaram (ou mudaram de unidade) realinham juntas.
-  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, card.removidos, contagem), comandoRealinharLiquidacoes(db), comandoRealinharPagamentos(db)] as never);
+  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, card.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db), comandoRealinharPagamentos(db)] as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"} (não vieram mais), ${contagem.fora} sem vínculo no card (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}${orgaos ? ` (por órgão: ${orgaos.length} órgão(s) da Centi)` : ""}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"} (não vieram mais), ${contagem.fora} sem vínculo no card (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }

@@ -1,8 +1,8 @@
 import { and, asc, eq, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiCatalogo, empenhoCards, empenhoCardVinculos, empenhos } from "../db/schema.ts";
-import type { ItemCatalogo, VinculoCard } from "./empenho-cards-core.ts";
+import { centiCatalogo, centiOrgaosGestores, empenhoCards, empenhoCardVinculos, empenhos } from "../db/schema.ts";
+import type { ItemCatalogo, OrgaoGestorCenti, VinculoCard } from "./empenho-cards-core.ts";
 
 /**
  * Os CARDS de EMPENHOS no banco — BUILDERS do Drizzle (testados no driver D1 REAL sobre `node:sqlite`, dentro de
@@ -146,3 +146,35 @@ export async function consultaCatalogo(db: Db): Promise<ItemCatalogo[]> {
     .orderBy(asc(centiCatalogo.orgaoGestor), asc(centiCatalogo.unidade), asc(centiCatalogo.acao));
 }
 
+
+/** Um card que repete empenhos deste com OUTRO destino: o nome e quantos números. */
+export type ConflitoCard = { cardId: number; nome: string; empenhos: number };
+
+/**
+ * Os outros cards com empenhos de MESMO NÚMERO deste mas com outro órgão/unidade do cadastro (os dois ativos) — as
+ * liquidações e os pagamentos seguem um só (o ativo, com unidade, o mais antigo): o aviso da aba Vínculos.
+ */
+export async function consultaConflitosEntreCards(db: Db, cardId: number): Promise<ConflitoCard[]> {
+  const c = Math.trunc(cardId);
+  const linhas = await db.all<ConflitoCard>(
+    sql.raw(`SELECT o."card_id" AS cardId, k."nome" AS nome, COUNT(DISTINCT o."numero") AS empenhos
+FROM "empenhos" e JOIN "empenhos" o ON o."numero" = e."numero" AND o."card_id" <> e."card_id" AND o."removido_em" IS NULL
+JOIN "empenho_cards" k ON k."id" = o."card_id"
+WHERE e."card_id" = ${c} AND e."removido_em" IS NULL AND (o."orgao_id" IS NOT e."orgao_id" OR o."reparticao_id" IS NOT e."reparticao_id")
+GROUP BY o."card_id", k."nome" ORDER BY empenhos DESC LIMIT 10`),
+  );
+  return linhas.map((l) => ({ cardId: Number(l.cardId), nome: String(l.nome), empenhos: Number(l.empenhos) }));
+}
+
+/** REGISTRA no MAPA os órgãos gestores que vieram num pedido POR ÓRGÃO (o ID pedido ↔ os textos; o visto renova). */
+export function comandoRegistrarGestores(db: Db, idCenti: number, gestores: readonly string[]) {
+  return db
+    .insert(centiOrgaosGestores)
+    .values(gestores.map((orgaoGestor) => ({ idCenti, orgaoGestor })))
+    .onConflictDoUpdate({ target: [centiOrgaosGestores.idCenti, centiOrgaosGestores.orgaoGestor], set: { vistoEm: sql`CURRENT_TIMESTAMP` } });
+}
+
+/** O mapa inteiro (ID na Centi ↔ órgão gestor). */
+export async function consultaOrgaosGestores(db: Db): Promise<OrgaoGestorCenti[]> {
+  return db.select({ idCenti: centiOrgaosGestores.idCenti, orgaoGestor: centiOrgaosGestores.orgaoGestor }).from(centiOrgaosGestores).orderBy(asc(centiOrgaosGestores.idCenti), asc(centiOrgaosGestores.orgaoGestor));
+}

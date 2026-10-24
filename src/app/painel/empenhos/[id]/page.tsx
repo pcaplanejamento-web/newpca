@@ -8,8 +8,8 @@ import { EmpenhosTabela } from "@/components/EmpenhosTabela";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { carregarEdicoes } from "@/lib/edicoes-tabela";
-import { anosDoCard, rotaDoCard } from "@/lib/empenho-cards-core";
-import { cadastroParaVinculos, catalogoCenti, getCard, listarCards, vinculosDoCard } from "@/lib/empenho-cards";
+import { anosDoCard, orgaosDaLeitura, rotaDoCard } from "@/lib/empenho-cards-core";
+import { cadastroParaVinculos, catalogoCenti, conflitosEntreCards, getCard, listarCards, mapaOrgaosGestores, vinculosDoCard } from "@/lib/empenho-cards";
 import { anosEmpenhos, escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { anoEscolhido, chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
 import { dataIsoBrasilia } from "@/lib/format";
@@ -38,7 +38,7 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
   const aba: AbaCard = permitidas.includes(sp.aba as AbaCard) ? (sp.aba as AbaCard) : "empenhos";
   let conteudo: ReactNode;
   if (aba === "vinculos") {
-    const [vinculos, catalogo, cadastro] = await Promise.all([vinculosDoCard(id), catalogoCenti(), cadastroParaVinculos()]);
+    const [vinculos, catalogo, cadastro, conflitos, mapa] = await Promise.all([vinculosDoCard(id), catalogoCenti(), cadastroParaVinculos(), conflitosEntreCards(id), mapaOrgaosGestores()]);
     conteudo = (
       <EmpenhoCardVinculos
         cardId={id}
@@ -46,6 +46,9 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
         vinculos={vinculos}
         catalogo={catalogo}
         cadastro={cadastro}
+        conflitos={conflitos}
+        mapa={mapa}
+        porOrgao={card.porOrgao}
         podeEditar={pode.configurar}
         comPeriodo={usaPeriodo(card.parametros)}
         podeBuscar={pode.importar}
@@ -55,7 +58,8 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
   } else if (aba === "importacao") {
     conteudo = <EmpenhoCardImportacao card={card} podeExcluir={pode.excluir} />;
   } else if (aba === "configuracao") {
-    conteudo = <EmpenhoCardConfig card={card} />;
+    const [vinculos, mapa] = await Promise.all([vinculosDoCard(id), mapaOrgaosGestores()]);
+    conteudo = <EmpenhoCardConfig card={card} leitura={orgaosDaLeitura(vinculos, mapa)} />;
   } else {
     const [anos, edicoes] = await Promise.all([anosEmpenhos(id, escopo), carregarEdicoes(acesso.u.id, "empenhos:")]);
     conteudo = (

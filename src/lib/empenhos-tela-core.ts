@@ -138,3 +138,26 @@ export function chaveEscopoEmpenhos(escopo: EscopoEmpenhos): string {
   const ord = (l: readonly number[]) => [...l].sort((a, b) => a - b).join(",");
   return `u${ord(escopo.unidades)}|o${ord(escopo.orgaos)}`;
 }
+
+/** Os PROBLEMAS internos de um empenho (os valores que a própria Centi informa não fecham entre si), ao centavo. */
+export const PROBLEMAS_EMPENHO = {
+  liquidadoAcima: "Liquidado acima do empenhado",
+  pagoAcima: "Pago acima do liquidado",
+  saldo: "Saldo a pagar não fecha",
+} as const;
+export type ProblemaEmpenho = keyof typeof PROBLEMAS_EMPENHO;
+export const REGULAR_EMPENHO = "Regular";
+
+/**
+ * A CONFERÊNCIA de um empenho (só os valores dele — nada a mais a ler): liquidado ≤ empenhado − anulado, pago ≤ liquidado e
+ * a pagar = empenhado − anulado − pago (a régua da Centi; medido em 2025, 25.334 empenhos: 236 com o liquidado acima, 1 com o
+ * pago acima, 37 com o saldo fora da conta). A diferença abaixo de 1 centavo não conta.
+ */
+export function problemasDoEmpenho(e: Pick<EmpenhoNaTela, "valorEmpenhado" | "valorAnulado" | "valorLiquidado" | "valorPago" | "saldoPagar">): ProblemaEmpenho[] {
+  const c = (n: number) => Math.round(n * 100);
+  const p: ProblemaEmpenho[] = [];
+  if (c(e.valorLiquidado) > c(e.valorEmpenhado - e.valorAnulado)) p.push("liquidadoAcima");
+  if (c(e.valorPago) > c(e.valorLiquidado)) p.push("pagoAcima");
+  if (c(e.saldoPagar) !== c(e.valorEmpenhado - e.valorAnulado - e.valorPago)) p.push("saldo");
+  return p;
+}

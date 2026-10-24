@@ -98,7 +98,7 @@ export function lerPaginaLiquidacoes(textoResposta: string, ano: number): Pagina
 }
 
 /** O corpo do pedido: os parâmetros do card (com o período) + o órgão da Centi. A API não pagina — sempre a 1ª página. */
-export function corpoLiquidacoes(parametros: string, ano: number, periodo: Periodo, idOrgao: number): Record<string, unknown> {
+export function corpoComOrgao(parametros: string, ano: number, periodo: Periodo, idOrgao: number): Record<string, unknown> {
   return { ...(corpoDaPagina(parametros, ano, 1, periodo) as Record<string, unknown>), idOrgao };
 }
 

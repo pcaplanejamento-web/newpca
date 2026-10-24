@@ -1,7 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { cache } from "react";
-import { centiLotes, empenhos, reparticoes } from "@/db/schema";
+import { centiLotes, empenhos, liquidacoes, pagamentos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
+import { type ExecucaoEmpenho, LIMITE_EXECUCAO, semRepetir } from "./execucao-empenho-core";
 import { type AnoEmpenhos, chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
 import { consultaAnosEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "./empenhos-tela-sql";
 import { unidadeDoModulo } from "./escopo-cabecalho";
@@ -61,4 +62,57 @@ export async function empenhoCompleto(id: number): Promise<EmpenhoCompleto | nul
     .where(eq(empenhos.id, id))
     .limit(1);
   return e ? { ...e.empenhos, loteEstado: e.centi_lotes?.estado ?? null, loteConcluidoEm: e.centi_lotes?.concluidoEm ?? null } : null;
+}
+
+/**
+ * A EXECUÇÃO do empenho: as liquidações e os pagamentos VIGENTES ligados pelo número (de qualquer card e ano; o mesmo
+ * registro em dois cards uma vez). `liq`/`pag` = a pessoa vê a tela (senão `null` — a lista nem é lida).
+ */
+export async function execucaoDoEmpenho(numero: string, ver: { liq: boolean; pag: boolean }): Promise<ExecucaoEmpenho> {
+  const db = getDb();
+  const [liqs, pags] = await Promise.all([
+    ver.liq
+      ? db
+          .select({
+            id: liquidacoes.id,
+            chave: liquidacoes.chave,
+            cardId: liquidacoes.cardId,
+            ano: liquidacoes.ano,
+            numero: liquidacoes.numero,
+            data: liquidacoes.data,
+            valor: liquidacoes.valor,
+            valorAnulado: liquidacoes.valorAnulado,
+            valorLiquido: liquidacoes.valorLiquido,
+            valorPago: liquidacoes.valorPago,
+          })
+          .from(liquidacoes)
+          .where(and(eq(liquidacoes.numeroEmpenho, numero), isNull(liquidacoes.removidoEm)))
+          .orderBy(asc(liquidacoes.cardId), asc(liquidacoes.data), asc(liquidacoes.id))
+          .limit(LIMITE_EXECUCAO * 2)
+      : null,
+    ver.pag
+      ? db
+          .select({
+            id: pagamentos.id,
+            chave: pagamentos.chave,
+            cardId: pagamentos.cardId,
+            ano: pagamentos.ano,
+            srcId: pagamentos.srcId,
+            data: pagamentos.data,
+            valor: pagamentos.valor,
+            valorRetencao: pagamentos.valorRetencao,
+            valorLiquido: pagamentos.valorLiquido,
+            anulado: pagamentos.anulado,
+          })
+          .from(pagamentos)
+          .where(and(eq(pagamentos.numeroEmpenho, numero), isNull(pagamentos.removidoEm)))
+          .orderBy(asc(pagamentos.cardId), asc(pagamentos.data), asc(pagamentos.id))
+          .limit(LIMITE_EXECUCAO * 2)
+      : null,
+  ]);
+  return {
+    liquidacoes: liqs ? semRepetir(liqs).slice(0, LIMITE_EXECUCAO) : null,
+    pagamentos: pags ? semRepetir(pags.map((p) => ({ ...p, anulado: p.anulado === 1 }))).slice(0, LIMITE_EXECUCAO) : null,
+    limite: LIMITE_EXECUCAO,
+  };
 }

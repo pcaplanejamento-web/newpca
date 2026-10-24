@@ -2,12 +2,14 @@
 
 import { useAnoDoCard } from "./anoDoCard";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import {
   coberturaDoGrupo,
   type GrupoVinculo,
   gruposDosVinculos,
+  idsPorGestor,
   type ItemCatalogo,
+  type OrgaoGestorCenti,
   motivoVinculosInvalidos,
   rotuloAcaoCenti,
   semVinculo,
@@ -15,6 +17,7 @@ import {
   vinculosDosGrupos,
 } from "@/lib/empenho-cards-core";
 import type { OrgaoVinculo, UnidadeVinculo } from "@/lib/empenho-cards";
+import type { ConflitoCard } from "@/lib/empenho-cards-sql";
 import { anoInteiro, diasDoPeriodo, periodoDoAno, type LoteCenti, rotuloPeriodo } from "@/lib/empenhos-core";
 import { num } from "@/lib/format";
 import { type Agora, lerAnoNaCenti, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
@@ -35,7 +38,9 @@ import { SeletorMultiplo } from "./SeletorMultiplo";
 import { toast } from "./Toast";
 
 type Cadastro = { orgaos: OrgaoVinculo[]; unidades: UnidadeVinculo[] };
-type Vista = "vinculos" | "sem";
+type Vista = "vinculos" | "sem" | "ids";
+/** Uma linha da vista "IDs na Centi": o par do mapa + o órgão do cadastro com o ID e o que os vínculos dizem. */
+type LinhaId = OrgaoGestorCenti & { cadastro: string | null; situacao: string; alerta: boolean };
 /** O que o editor tem aberto: um grupo existente (a chave) ou um NOVO (com o que veio pré-escolhido). */
 type Aberto = { chave: string | null; inicial: Rascunho };
 type Rascunho = { orgaoGestor: string; unidade: string | null; acoes: string[]; destino: string };
@@ -71,6 +76,9 @@ export function EmpenhoCardVinculos({
   vinculos,
   catalogo,
   cadastro,
+  conflitos = [],
+  mapa = [],
+  porOrgao = false,
   podeEditar,
   podeBuscar,
   configurado,
@@ -82,6 +90,12 @@ export function EmpenhoCardVinculos({
   vinculos: VinculoCard[];
   catalogo: ItemCatalogo[];
   cadastro: Cadastro;
+  /** Outros cards com empenhos de mesmo número deste em outro destino (`conflitosEntreCards`). */
+  conflitos?: ConflitoCard[];
+  /** O mapa ID na Centi ↔ órgão gestor (a coluna "ID na Centi" e o "Descobrir os IDs" quando o card lê por órgão). */
+  mapa?: OrgaoGestorCenti[];
+  /** O card lê os empenhos por órgão (Configuração). */
+  porOrgao?: boolean;
   podeEditar: boolean;
   /** Importar no card: "Buscar na Centi" (atualiza o catálogo). */
   podeBuscar: boolean;
@@ -104,6 +118,10 @@ export function EmpenhoCardVinculos({
   const [gravandoLinha, setGravandoLinha] = useState<string | null>(null);
 
   const grupos = useMemo(() => gruposDosVinculos(vinculos), [vinculos]);
+  const idsGestor = useMemo(() => idsPorGestor(mapa), [mapa]);
+  const emConflito = conflitos.reduce((t, c) => t + c.empenhos, 0);
+  /** Os órgãos gestores dos vínculos ainda sem o ID na Centi (a leitura por órgão espera por eles). */
+  const semId = useMemo(() => ordenar(new Set(vinculos.map((v) => v.orgaoGestor).filter((g) => !idsGestor.get(g)?.length))), [vinculos, idsGestor]);
   const fora = useMemo(() => semVinculo(catalogo, vinculos), [catalogo, vinculos]);
   const orgaoPorId = useMemo(() => new Map(cadastro.orgaos.map((o) => [o.id, o])), [cadastro.orgaos]);
   const unidadePorId = useMemo(() => new Map(cadastro.unidades.map((u) => [u.id, u])), [cadastro.unidades]);
@@ -200,14 +218,15 @@ export function EmpenhoCardVinculos({
     if (await gravar(comGrupo(chave, null), "Vínculo excluído.")) setAberto(null);
   }
 
-  /** "Buscar na Centi": lê o ano em modo catálogo (nada é gravado nos empenhos) e atualiza as escolhas. */
-  async function buscar() {
+  /** "Buscar na Centi": lê o ano em modo catálogo (nada é gravado nos empenhos) e atualiza as escolhas. `descobrir` = pede
+   * ÓRGÃO POR ÓRGÃO (os do cadastro com o ID na Centi): o catálogo e o MAPA ID ↔ órgão gestor (a leitura por órgão). */
+  async function buscar(descobrir = false) {
     pararBusca.current = false;
     setBuscando(true);
     const condutor = crypto.randomUUID();
     let lote: LoteCenti | null = null;
     try {
-      lote = (await pedirImportacao<{ lote: LoteCenti }>(cardId, { acao: "iniciar", ano: anoBusca, condutor, modo: "unidades" })).lote;
+      lote = (await pedirImportacao<{ lote: LoteCenti }>(cardId, { acao: "iniciar", ano: anoBusca, condutor, modo: "unidades", ...(descobrir ? { porOrgao: true } : {}) })).lote;
       lote = await lerAnoNaCenti({
         cardId,
         lote,
@@ -222,7 +241,7 @@ export function EmpenhoCardVinculos({
         onde: () => {},
       });
       const fim = await pedirImportacao<{ lote: LoteCenti }>(cardId, { acao: "concluir", lote: lote.id, condutor });
-      toast.success(fim.lote.mensagem ?? "Catálogo da Centi atualizado.");
+      toast.success(descobrir ? `IDs dos órgãos lidos na Centi (${anoBusca}). ${fim.lote.mensagem ?? ""}`.trim() : (fim.lote.mensagem ?? "Catálogo da Centi atualizado."));
       router.refresh();
     } catch (e) {
       const interrompida = pararBusca.current;
@@ -270,6 +289,20 @@ export function EmpenhoCardVinculos({
           <Inteiro texto={g.orgaoGestor} />
         ),
     },
+    ...(porOrgao
+      ? [
+          {
+            key: "idCenti",
+            header: "ID na Centi",
+            nowrap: true,
+            value: (g: GrupoVinculo) => idsGestor.get(g.orgaoGestor)?.join(", ") ?? "Sem ID",
+            render: (g: GrupoVinculo) => {
+              const ids = idsGestor.get(g.orgaoGestor);
+              return ids?.length ? <span className="tabular-nums">{ids.join(", ")}</span> : <Badge tone="amber">Sem ID</Badge>;
+            },
+          } satisfies Column<GrupoVinculo>,
+        ]
+      : []),
     {
       key: "unidade",
       header: "Unidade orçamentária",
@@ -347,6 +380,38 @@ export function EmpenhoCardVinculos({
       render: (g) => <span className="tabular-nums">{num(cobertura.get(g.chave)?.registros ?? 0)}</span>,
     },
   ];
+  // A vista "IDs na Centi": cada par do mapa com o órgão do cadastro que tem aquele ID e se os vínculos concordam.
+  const linhasIds = useMemo<LinhaId[]>(() => {
+    const porCentiId = new Map<number, OrgaoVinculo>();
+    for (const o of cadastro.orgaos) {
+      const n = Number(String(o.centi ?? "").trim());
+      if (Number.isInteger(n) && n > 0 && !porCentiId.has(n)) porCentiId.set(n, o);
+    }
+    return mapa.map((p) => {
+      const o = porCentiId.get(p.idCenti) ?? null;
+      const destinos = new Set(vinculos.filter((v) => v.orgaoGestor === p.orgaoGestor).map((v) => v.orgaoId));
+      const situacao = !o
+        ? "Nenhum órgão do cadastro com este ID"
+        : !destinos.size
+          ? "Sem vínculo neste card"
+          : destinos.has(o.id) && destinos.size === 1
+            ? "Confere"
+            : "Os vínculos levam a outro órgão";
+      return { ...p, cadastro: o ? `${o.sigla} — ${o.nome}` : null, situacao, alerta: situacao !== "Confere" && situacao !== "Sem vínculo neste card" };
+    });
+  }, [mapa, cadastro.orgaos, vinculos]);
+  const colunasIds: Column<LinhaId>[] = [
+    { key: "id", header: "ID na Centi", nowrap: true, value: (l) => String(l.idCenti), render: (l) => <span className="tabular-nums">{l.idCenti}</span> },
+    { key: "gestor", header: "Órgão gestor (Centi)", align: "left", nowrap: true, value: (l) => l.orgaoGestor, render: (l) => <Inteiro texto={l.orgaoGestor} /> },
+    { key: "cadastro", header: "Órgão do cadastro com o ID", align: "left", nowrap: true, value: (l) => l.cadastro ?? "—", render: (l) => <Inteiro texto={l.cadastro ?? "—"} apagado={!l.cadastro} /> },
+    {
+      key: "situacao",
+      header: "Situação",
+      nowrap: true,
+      value: (l) => l.situacao,
+      render: (l) => <Badge tone={l.alerta ? "amber" : l.situacao === "Confere" ? "emerald" : "slate"}>{l.situacao}</Badge>,
+    },
+  ];
   const colunasFora: Column<ItemCatalogo>[] = [
     { key: "gestor", header: "Órgão gestor", align: "left", nowrap: true, value: (c) => c.orgaoGestor, render: (c) => <Inteiro texto={c.orgaoGestor} /> },
     { key: "unidade", header: "Unidade orçamentária", align: "left", nowrap: true, value: (c) => textoUnidade(c.unidade), render: (c) => <Inteiro texto={textoUnidade(c.unidade)} /> },
@@ -365,6 +430,7 @@ export function EmpenhoCardVinculos({
           options={[
             { value: "vinculos", label: `Vínculos (${num(grupos.length)})`, curto: `Vínculos (${num(grupos.length)})`, dica: "O que o card importa e para onde vai" },
             { value: "sem", label: `Na Centi sem vínculo (${num(fora.length)})`, curto: `Sem vínculo (${num(fora.length)})`, dica: "O que a Centi traz e o card deixa de fora" },
+            ...(mapa.length ? [{ value: "ids" as const, label: `IDs na Centi (${num(mapa.length)})`, curto: `IDs (${num(mapa.length)})`, dica: "O ID de cada órgão gestor na Centi e o órgão do cadastro que tem o ID" }] : []),
           ]}
         />
         {podeBuscar && (
@@ -381,7 +447,7 @@ export function EmpenhoCardVinculos({
                 Interromper
               </Button>
             )}
-            <Button size="sm" variant="secondary" onClick={buscar} loading={buscando} disabled={!anos.length || !configurado} icon={<IconDownload className="h-4 w-4" />} title={configurado ? "Lê o ano na Centi e atualiza as escolhas (nada é gravado nos empenhos)" : "Confirme a Configuração do card antes de ler a Centi"} aria-label="Buscar na Centi">
+            <Button size="sm" variant="secondary" onClick={() => void buscar()} loading={buscando} disabled={!anos.length || !configurado} icon={<IconDownload className="h-4 w-4" />} title={configurado ? "Lê o ano na Centi e atualiza as escolhas (nada é gravado nos empenhos)" : "Confirme a Configuração do card antes de ler a Centi"} aria-label="Buscar na Centi">
               Buscar<span className="hidden sm:inline">&nbsp;na Centi</span>
             </Button>
           </>
@@ -399,11 +465,32 @@ export function EmpenhoCardVinculos({
           <p>Só o que um vínculo cobre é gravado. O mais específico vale: uma ação vinculada vale mais que a unidade orçamentária, que vale mais que o órgão gestor inteiro.</p>
           <p>As escolhas vêm do catálogo da Centi. “Buscar na Centi” lê um ano e atualiza o catálogo — nenhum empenho é gravado. “Na Centi sem vínculo” mostra o que o card deixa de fora; toque numa linha para vinculá-la.</p>
           <p>Mudar ou excluir um vínculo vale na hora: os empenhos que ficam sem vínculo saem do banco e os demais mudam de lugar.</p>
+          <p>Com “Ler só os órgãos dos vínculos” ligado (Configuração), a importação pede cada órgão gestor pelo ID dele na Centi. “Descobrir os IDs” lê o ano órgão por órgão e aprende o ID de cada um; “IDs na Centi” mostra o que foi aprendido e se o órgão do cadastro com aquele ID confere com os vínculos.</p>
         </Ajuda>
       </FerramentasAba>
 
       {agora && (
         <Progress value={((diasDoPeriodo({ inicio: anoInteiro(anoBusca).inicio, fim: agora.periodo.inicio }) - 1) / diasDoPeriodo(periodoDoAno(anoBusca))) * 100} label={`Buscando na Centi — ${rotuloPeriodo(agora.periodo)} · página ${agora.pagina}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}`} />
+      )}
+      {porOrgao && semId.length > 0 && vinculos.length > 0 && (
+        <Callout kind="warn">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              {semId.length === 1 ? "1 órgão gestor dos vínculos está" : `${num(semId.length)} órgãos gestores dos vínculos estão`} sem o ID na Centi ({semId.slice(0, 3).join("; ")}
+              {semId.length > 3 ? ` e mais ${num(semId.length - 3)}` : ""}). Até descobrir, a importação lê o ano inteiro de todos os órgãos.
+            </span>
+            {podeBuscar && (
+              <Button size="sm" variant="secondary" onClick={() => void buscar(true)} disabled={buscando || !configurado} title="Lê o ano na Centi órgão por órgão (os do cadastro com o ID) — nada é gravado nos empenhos">
+                Descobrir os IDs
+              </Button>
+            )}
+          </span>
+        </Callout>
+      )}
+      {conflitos.length > 0 && (
+        <Callout kind="warn">
+          {emConflito === 1 ? "1 empenho deste card também está em" : `${num(emConflito)} empenhos deste card também estão em`} {conflitos.map((c) => `“${c.nome}” (${num(c.empenhos)})`).join(", ")} com outro órgão ou unidade. As liquidações e os pagamentos seguem um só: o empenho ativo, com unidade, do card mais antigo. Ajuste os vínculos para que o mesmo empenho vá ao mesmo lugar.
+        </Callout>
       )}
       {!catalogo.length && (
         <Callout kind="info">O catálogo da Centi está vazio — use “Buscar na Centi” para ler os órgãos gestores, as unidades orçamentárias e as ações que a Centi traz.</Callout>
@@ -422,6 +509,18 @@ export function EmpenhoCardVinculos({
           exportar={{ nome: "Vínculos do card" }}
           vazio={podeEditar ? "Nenhum vínculo — o card não importa nada ainda. Use “Novo vínculo” ou toque numa linha de “Na Centi sem vínculo”." : "Nenhum vínculo."}
           resumo={(l) => `${num(l.length)} ${l.length === 1 ? "vínculo" : "vínculos"}`}
+        />
+      ) : vista === "ids" ? (
+        <DataTable
+          visao="ids"
+          columns={colunasIds}
+          rows={linhasIds}
+          getKey={(l) => `${l.idCenti}\u0000${l.orgaoGestor}`}
+          density="compact"
+          scrollInterno
+          exportar={{ nome: "IDs na Centi" }}
+          vazio="Nenhum ID conhecido — use “Descobrir os IDs”."
+          resumo={(l) => `${num(l.length)} ${l.length === 1 ? "ID" : "IDs"} · ${num(l.filter((x) => x.alerta).length)} a conferir`}
         />
       ) : (
         <DataTable

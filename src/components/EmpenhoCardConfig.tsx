@@ -17,6 +17,7 @@ import {
   previaPedido,
   REGRAS_REMOVIDOS,
   type RegraRemovidos,
+  type LeituraPorOrgao,
   rotaDoCard,
 } from "@/lib/empenho-cards-core";
 import { dataIsoBrasilia } from "@/lib/format";
@@ -51,7 +52,7 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
  * curso, sem gravar nada). Edição direta, com o "(?)" em cada campo; "Salvar" na barra das abas (só com alteração) — a
  * régua é `motivoCardInvalido`, a mesma do servidor. Sair com alteração não salva avisa.
  */
-export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
+export function EmpenhoCardConfig({ card, leitura }: { card: CardEmpenho; leitura?: LeituraPorOrgao }) {
   const liq = cardPorOrgao(card.tipo);
   const nomeSoma = card.tipo === "pagamentos" ? "paga" : card.tipo === "liquidacoes" ? "liquidada" : "empenhada";
   const router = useRouter();
@@ -261,6 +262,27 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
           </>
         ) : (
           <p className="break-all font-mono text-[12px] text-muted">POST {previa.url}</p>
+        )}
+        {leitura && (
+          <div className="space-y-2 border-t border-border pt-3">
+            <div className="flex items-center gap-1">
+              <Switch checked={v.porOrgao} onChange={(x) => muda("porOrgao", x)} label="Ler só os órgãos dos vínculos" dica="Um pedido por órgão (pelo ID na Centi), em vez do ano inteiro de todos os órgãos." />
+              <A titulo="Ler por órgão">
+                <p>A Centi filtra os empenhos pelo ID do órgão. Ligado, a importação pede só os órgãos gestores dos vínculos deste card — menos dados baixados e menos gravações no banco.</p>
+                <p>Vale quando TODO órgão gestor dos vínculos tem o ID conhecido (Vínculos → “Descobrir os IDs”). Faltando algum, a importação lê o ano inteiro de todos os órgãos, como sempre — nenhum órgão fica sem atualizar.</p>
+              </A>
+            </div>
+            {v.porOrgao &&
+              (leitura.vale ? (
+                <p className="text-[13px] text-muted">Lê {leitura.ids.length} órgão(s) da Centi: ID {leitura.ids.join(", ")}.</p>
+              ) : (
+                <Callout kind="warn">
+                  {leitura.semId.length
+                    ? `Sem o ID na Centi: ${leitura.semId.slice(0, 4).join("; ")}${leitura.semId.length > 4 ? ` e mais ${leitura.semId.length - 4}` : ""}. Até descobrir (Vínculos → “Descobrir os IDs”), a importação lê o ano inteiro de todos os órgãos.`
+                    : "Crie os vínculos do card para ler por órgão."}
+                </Callout>
+              ))}
+          </div>
         )}
       </SecaoBanner>
 

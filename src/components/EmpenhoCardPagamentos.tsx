@@ -10,6 +10,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { AvisoSemEmpenho } from "./EmpenhoCardLiquidacoes";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
@@ -266,6 +267,7 @@ export function EmpenhoCardPagamentos({ cardId, nome }: { cardId: number; nome: 
             <StatMini label="Pago líquido" value={brl(tot.liquido)} tone="ok" />
             <StatMini label="Anuladas" value={num(tot.anuladas)} tone={tot.anuladas ? "warn" : "default"} hint={tot.anuladas ? brl(tot.valorAnulado) : undefined} />
           </div>
+          <AvisoSemEmpenho linhas={linhas} um="pagamento" varios="pagamentos" />
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={COLUNAS}

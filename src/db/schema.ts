@@ -2182,6 +2182,8 @@ export const empenhoCards = sqliteTable("empenho_cards", {
   configuradoEm: text("configurado_em"),
   /** O TIPO do card (migração `0146`): `empenhos` | `liquidacoes` (a tela Liquidações) | `pagamentos` (`0152`, a tela Pagamentos). */
   tipo: text("tipo").notNull().default("empenhos"),
+  /** Lê os empenhos POR ÓRGÃO (migração `0156`): só os órgãos dos vínculos, pelo ID na Centi (`centi_orgaos_gestores`). */
+  porOrgao: integer("por_orgao", { mode: "boolean" }).notNull().default(false),
   criadoPor: text("criado_por").notNull().default(""),
   criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
@@ -2225,6 +2227,17 @@ export const centiCatalogo = sqliteTable(
     vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [uniqueIndex("centi_catalogo_uq").on(t.orgaoGestor, t.unidade, t.acao)],
+);
+
+/** O MAPA ID na Centi ↔ órgão gestor (migração `0156`): aprendido das leituras de empenhos por órgão. */
+export const centiOrgaosGestores = sqliteTable(
+  "centi_orgaos_gestores",
+  {
+    idCenti: integer("id_centi").notNull(),
+    orgaoGestor: text("orgao_gestor").notNull(),
+    vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [primaryKey({ columns: [t.idCenti, t.orgaoGestor] }), index("centi_orgaos_gestores_texto_idx").on(t.orgaoGestor)],
 );
 
 /** Um LOTE de importação de um card (migração `0131`; o card desde a `0143`): as páginas lidas vão ao staging e só são
@@ -2495,6 +2508,7 @@ export const liquidacoes = sqliteTable(
     index("liquidacoes_reparticao_idx").on(t.reparticaoId),
     index("liquidacoes_orgao_idx").on(t.orgaoId),
     index("liquidacoes_lote_idx").on(t.loteId),
+    index("liquidacoes_numero_empenho_idx").on(t.numeroEmpenho),
   ],
 );
 

@@ -1,11 +1,13 @@
+import { podeTela } from "@/lib/acesso";
 import { exigirAcesso, intId } from "@/lib/api-auth";
-import { empenhoCompleto, escopoDosEmpenhos } from "@/lib/empenhos-tela";
+import { empenhoCompleto, escopoDosEmpenhos, execucaoDoEmpenho } from "@/lib/empenhos-tela";
 import { empenhoNoEscopo } from "@/lib/empenhos-tela-core";
 import { erro, ok } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Um empenho com TUDO (o histórico, a importação que o gravou, o leitor) — o banner da tela Empenhos. */
+/** Um empenho com TUDO (o histórico, a importação que o gravou, o leitor) e a EXECUÇÃO (as liquidações e os pagamentos
+ * dele, cada lista só para quem vê aquela tela) — o banner da tela Empenhos. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await exigirAcesso("empenhos", "visualizar");
   if ("erro" in g) return g.erro;
@@ -14,5 +16,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const empenho = await empenhoCompleto(id);
   // Fora dos órgãos da pessoa responde como inexistente (não revela).
   if (!empenho || !empenhoNoEscopo(await escopoDosEmpenhos(), empenho)) return erro("Empenho não encontrado.", 404);
-  return ok({ empenho });
+  const execucao = await execucaoDoEmpenho(empenho.numero, { liq: podeTela(g.acesso, "liquidacoes").visualizar, pag: podeTela(g.acesso, "pagamentos").visualizar });
+  return ok({ empenho, execucao });
 }

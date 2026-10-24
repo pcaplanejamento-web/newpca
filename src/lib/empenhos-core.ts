@@ -265,8 +265,10 @@ export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolea
 /** O lote é lido mês a mês (os pagamentos)? */
 export const lotePorMes = (l: { modo: ModoLote }): boolean => l.modo === "pagamentos";
 
-/** O lote lê TODOS os órgãos da Centi (a "página" N = o N-ésimo órgão): liquidações e pagamentos. */
-export const lotePorOrgao = (l: { modo: ModoLote }): boolean => l.modo === "liquidacoes" || l.modo === "pagamentos";
+/** O lote lê ÓRGÃO POR ÓRGÃO (a "página" N = o N-ésimo órgão da lista do lote): liquidações e pagamentos (todos os órgãos
+ * com o ID na Centi) e os EMPENHOS do card que lê por órgão (os órgãos dos vínculos — a lista gravada no lote). */
+export const lotePorOrgao = (l: { modo: ModoLote; orgaosCenti?: readonly number[] | null }): boolean =>
+  l.modo === "liquidacoes" || l.modo === "pagamentos" || (l.orgaosCenti?.length ?? 0) > 0;
 
 /** Divide o período ao meio (o de um dia não se divide). */
 export function dividirPeriodo(p: Periodo): [Periodo, Periodo] | null {
@@ -502,6 +504,17 @@ export function motivoValoresSuspeitos(n: number): string | null {
  * (anulações são raras), então a soma abaixo de `limites.soma`% ou os registros abaixo de `limites.registros`% da anterior
  * pedem a confirmação de quem importa (as REGRAS do card; 0 = não confere).
  */
+/**
+ * A QUEDA da 1ª leitura POR ÓRGÃO (sem importação anterior dos mesmos órgãos para comparar): os empenhos que ela marcaria
+ * como removidos sobre os VIGENTES desses órgãos, pela régua dos registros do card (`registros` % devem ficar).
+ */
+export function quedaPrimeiraPorOrgao(vigentes: number, removidos: number, registros: number): string | null {
+  if (registros <= 0 || vigentes <= 0 || removidos <= 0) return null;
+  const ficam = vigentes - removidos;
+  if (ficam >= (vigentes * registros) / 100) return null;
+  return `A primeira leitura por órgão marcaria ${removidos.toLocaleString("pt-BR")} de ${vigentes.toLocaleString("pt-BR")} empenhos como não trazidos pela Centi — confira os IDs na Centi (Vínculos) antes de confirmar.`;
+}
+
 export function quedaSuspeita(
   anterior: { soma: number | null; unicos: number } | null,
   atual: { soma: number | null; unicos: number },

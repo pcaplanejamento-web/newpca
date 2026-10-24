@@ -2,7 +2,7 @@ import { registrarAuditoria } from "./auditoria";
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
 import { anosDoCard, type CardEmpenho, cardPorOrgao } from "./empenho-cards-core";
-import { cardsAtivos, orgaosLiquidacao } from "./empenho-cards";
+import { cardsAtivos, orgaosDoLote } from "./empenho-cards";
 import { criarLote, getLote, listarPassos, loteEmAndamento, ultimaLeituraPorAno } from "./empenhos";
 import {
   hojeIso,
@@ -69,9 +69,10 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
     const anos = anosDoCard(card.anos, agora.ano);
     if (!anos.length) return { situacao: "nenhum ano", trabalhou: false };
     const ano = anoDaVez(anos, await ultimaLeituraPorAno(card.id));
-    // LIQUIDAÇÕES e PAGAMENTOS: o lote lê TODOS os órgãos do cadastro com o "ID na Centi" (a API exige o órgão — um por "página").
-    const orgaos = cardPorOrgao(card.tipo) ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
-    if (orgaos && !orgaos.length) return { situacao: "nenhum órgão com o ID na Centi", trabalhou: false };
+    // POR ÓRGÃO: liquidações e pagamentos leem TODOS os órgãos do cadastro com o "ID na Centi" (a API exige o órgão — um por
+    // "página"); os empenhos do card que lê por órgão, os dos vínculos (sem o ID de algum, o ano inteiro de todos).
+    const orgaos = await orgaosDoLote(card, card.tipo === "empenhos" ? "dados" : card.tipo);
+    if (cardPorOrgao(card.tipo) && !orgaos?.length) return { situacao: "nenhum órgão com o ID na Centi", trabalhou: false };
     lote = await criarLote(card.id, ano, QUEM_AUTO, CONDUTOR_AUTO, card.tipo === "empenhos" ? "dados" : card.tipo, orgaos);
     await registrarAuditoria({ usuario: null, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${ano}: atualização automática começou${orgaos ? ` (${orgaos.length} órgão(s) da Centi)` : ""}` });
   }

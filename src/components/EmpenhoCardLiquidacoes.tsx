@@ -209,6 +209,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
             <StatMini label="Pago" value={brl(tot.pago)} tone="ok" />
             <StatMini label="Saldo" value={brl(tot.saldo)} />
           </div>
+          <AvisoSemEmpenho linhas={linhas} um="liquidação" varios="liquidações" />
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={COLUNAS}
@@ -243,5 +244,17 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
         {aberto ? <LiquidacaoDetalhe key={aberto.id} liquidacao={aberto} completo={completo} /> : <div />}
       </Modal>
     </>
+  );
+}
+
+/** Quantos registros do ano à vista estão SEM o empenho no sistema (em geral, restos a pagar de anos que nenhum card de
+ * empenhos importa) — o aviso com o que fazer. O mesmo nas Liquidações e nos Pagamentos. */
+export function AvisoSemEmpenho({ linhas, um, varios }: { linhas: readonly { anoEmpenho: number | null }[]; um: string; varios: string }) {
+  const n = linhas.reduce((t, x) => t + (x.anoEmpenho == null ? 1 : 0), 0);
+  if (!n) return null;
+  return (
+    <Callout kind="info">
+      {n === 1 ? `1 ${um}` : `${num(n)} ${varios}`} sem o empenho no sistema — em geral, restos a pagar de anos anteriores. Inclua esses anos no card de empenhos (Configuração → Anos) e importe: {n === 1 ? "o registro passa" : "os registros passam"} a seguir o órgão e a unidade do empenho. A coluna “Ano do empenho” filtra “Sem empenho”.
+    </Callout>
   );
 }

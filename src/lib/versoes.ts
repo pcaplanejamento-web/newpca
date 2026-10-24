@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.218.0",
+    data: "2026-10-24",
+    titulo: "Execução dentro do empenho, leitura por órgão e sincronia com o cadastro",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "O detalhe do empenho mostra as liquidações e os pagamentos dele, com as somas conferidas com o liquidado e o pago que a Centi informa. Cada pagamento aponta a liquidação provável (a de mesmo valor).", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "Coluna “Conferência” na tabela de empenhos: marca o liquidado acima do empenhado, o pago acima do liquidado e o saldo a pagar que não fecha.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "Opção “Ler só os órgãos dos vínculos” (Configuração → Integração): a importação pede cada órgão pelo ID na Centi, baixando menos e gravando menos no banco. Os IDs são aprendidos em Vínculos → “Descobrir os IDs” e aparecem em “IDs na Centi”. Faltando o ID de algum órgão, a importação lê o ano inteiro como sempre.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A aba Vínculos avisa quando o mesmo empenho também está em outro card com outro destino.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Liquidações e pagamentos", texto: "Agora a unidade que muda de órgão leva junto as liquidações e os pagamentos dela, e trocar o “ID na Centi” de um órgão leva os registros sem empenho ao órgão certo. Antes, só os empenhos acompanhavam.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Liquidações e pagamentos", texto: "As tabelas avisam quantos registros estão sem o empenho no sistema. Em geral são restos a pagar de anos anteriores, que passam a ser ligados quando esses anos entram no card de empenhos.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.217.0",
     data: "2026-10-24",
     titulo: "Importações mais leves para o banco e mais rápidas na automática",

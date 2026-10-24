@@ -27,6 +27,7 @@ const ROTULOS: Record<string, string> = {
   quedaSoma: "queda da soma",
   quedaRegistros: "queda dos registros",
   removidos: "removidos na Centi",
+  porOrgao: "ler por órgão",
 };
 
 /** CONFIGURA o card (Configurar, na tela do card): a integração, os anos, a programação e as regras — a régua de

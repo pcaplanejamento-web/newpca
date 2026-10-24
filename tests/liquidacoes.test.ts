@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { conferirLote, continuarPeriodo, totalDoPeriodo } from "../src/lib/empenhos-core.ts";
 import { comandoRecontarLote, comandoRegistrarPasso, comandoSoltarLote, comandosExcluirLotes, comandosFecharLote, consultaUltimoPasso, jaNoLote } from "../src/lib/empenhos-sql.ts";
-import { corpoLiquidacoes, idCenti, lerOrgaosCenti, lerPaginaLiquidacoes, linhaLiquidacao, orgaoDaPagina, orgaosDaCenti } from "../src/lib/liquidacoes-core.ts";
+import { corpoComOrgao, idCenti, lerOrgaosCenti, lerPaginaLiquidacoes, linhaLiquidacao, orgaoDaPagina, orgaosDaCenti } from "../src/lib/liquidacoes-core.ts";
 import {
   comandoRealinharLiquidacoes,
   comandosFechoPeriodoLiquidacoes,
@@ -62,7 +62,7 @@ test("liquidações: a linha, a recusa e a leitura do período (sem paginação 
 });
 
 test("liquidações: o pedido leva o órgão da Centi; os órgãos de uma importação = os ID na Centi do cadastro", () => {
-  assert.deepEqual(corpoLiquidacoes('{"dataInicio":"{inicio}","dataFim":"{fim}"}', 2025, { inicio: "2025-03-01", fim: "2025-03-07" }, 2), {
+  assert.deepEqual(corpoComOrgao('{"dataInicio":"{inicio}","dataFim":"{fim}"}', 2025, { inicio: "2025-03-01", fim: "2025-03-07" }, 2), {
     dataInicio: "01/03/2025",
     dataFim: "07/03/2025",
     idOrgao: 2,

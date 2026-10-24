@@ -61,11 +61,9 @@ const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleStr
 const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
 /** O tipo da importação no histórico. */
 const rotuloTipo = (l: LoteCenti) =>
-  l.modo === "liquidacoes" || l.modo === "pagamentos"
-    ? `${l.modo === "pagamentos" ? "Pagamentos" : "Liquidações"}${l.orgaosCenti ? ` · ${l.orgaosCenti.length} órgãos` : ""}`
-    : l.modo === "unidades"
-      ? "Catálogo"
-      : "Empenhos";
+  `${l.modo === "pagamentos" ? "Pagamentos" : l.modo === "liquidacoes" ? "Liquidações" : l.modo === "unidades" ? "Catálogo" : "Empenhos"}${l.orgaosCenti ? ` · ${l.orgaosCenti.length} órgãos` : ""}`;
+/** O que o lote lê, no plural ("Empenhos", "Liquidações"…). */
+const nomeDoLote = (l: LoteCenti) => (l.modo === "pagamentos" ? "Pagamentos" : l.modo === "liquidacoes" ? "Liquidações" : l.modo === "unidades" ? "Catálogo e IDs" : "Empenhos");
 /** O nome da soma do lote (o que a Centi traz). */
 const rotuloSoma = (l: LoteCenti) => (l.modo === "pagamentos" ? "Soma paga (líquido)" : l.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada");
 /** A "página" de um passo: nas LIQUIDAÇÕES, o órgão da Centi lido (a página N do período é o N-ésimo órgão do lote). */
@@ -583,7 +581,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         <div className="space-y-3">
           {rodando && atual.orgaosCenti && (
             <p className="text-[13px] text-muted">
-              {atual.modo === "pagamentos" ? "Pagamentos" : "Liquidações"} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo em cada{" "}
+              {nomeDoLote(atual)} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo em cada{" "}
               {atual.modo === "pagamentos" ? "mês" : "semana"} (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
             </p>
           )}

@@ -85,6 +85,8 @@ export type CardEmpenho = {
   quedaSoma: number;
   quedaRegistros: number;
   removidos: RegraRemovidos;
+  /** Lê os empenhos POR ÓRGÃO (só os órgãos dos vínculos, pelo ID na Centi) — ver `orgaosDaLeitura`. */
+  porOrgao: boolean;
   ultimaExecucao: string | null;
   ultimoStatus: string | null;
   ultimaContagem: number | null;
@@ -135,6 +137,7 @@ export type EdicaoCard = Pick<
   | "quedaSoma"
   | "quedaRegistros"
   | "removidos"
+  | "porOrgao"
 >;
 
 /** O card novo: a API de empenhos do portal, o ano atual, desligado. */
@@ -155,6 +158,7 @@ export const CARD_PADRAO: Omit<EdicaoCard, "nome"> = {
   quedaSoma: 80,
   quedaRegistros: 90,
   removidos: "marcar",
+  porOrgao: false,
 };
 
 /** O card de LIQUIDAÇÕES novo: a API de liquidações do portal (o resto como o de empenhos). */
@@ -168,8 +172,8 @@ export const CARD_PADRAO_PAGAMENTOS: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO
 export const cardPadrao = (tipo: TipoCard): Omit<EdicaoCard, "nome"> => (tipo === "liquidacoes" ? CARD_PADRAO_LIQUIDACOES : tipo === "pagamentos" ? CARD_PADRAO_PAGAMENTOS : CARD_PADRAO);
 
 export function edicaoDoCard(c: CardEmpenho): EdicaoCard {
-  const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos } = c;
-  return { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos };
+  const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, porOrgao } = c;
+  return { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, porOrgao };
 }
 
 export const lerRegraRemovidos = (v: unknown): RegraRemovidos => (v === "apagar" ? "apagar" : "marcar");
@@ -454,4 +458,44 @@ export function coberturaDoGrupo(g: GrupoVinculo, catalogo: readonly ItemCatalog
     }
   }
   return { itens, registros };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// A LEITURA POR ÓRGÃO (o `idOrgao` da Centi): só os órgãos dos vínculos, pelo mapa ID ↔ órgão gestor
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Um par do mapa: o ID do órgão na Centi e o texto do órgão gestor que os empenhos dele trazem. */
+export type OrgaoGestorCenti = { idCenti: number; orgaoGestor: string };
+
+/** Os IDs conhecidos de cada órgão gestor (o mapa → texto: IDs em ordem). */
+export function idsPorGestor(mapa: readonly OrgaoGestorCenti[]): Map<string, number[]> {
+  const m = new Map<string, number[]>();
+  for (const p of mapa) {
+    const l = m.get(p.orgaoGestor) ?? [];
+    if (!l.includes(p.idCenti)) l.push(p.idCenti);
+    m.set(p.orgaoGestor, l);
+  }
+  for (const l of m.values()) l.sort((a, b) => a - b);
+  return m;
+}
+
+/**
+ * Os órgãos que uma importação POR ÓRGÃO lê: os IDs de TODOS os órgãos gestores dos vínculos do card (`ids`) — e os que
+ * ainda não têm o ID conhecido (`semId`). Com algum sem ID (ou nenhum vínculo), a leitura por órgão NÃO vale: a importação
+ * lê o ano inteiro de todos os órgãos (como sempre) — nunca deixa um órgão dos vínculos sem atualizar.
+ */
+export type LeituraPorOrgao = { ids: number[]; semId: string[]; vale: boolean };
+
+export function orgaosDaLeitura(vinculos: readonly Pick<VinculoCard, "orgaoGestor">[], mapa: readonly OrgaoGestorCenti[]): LeituraPorOrgao {
+  const por = idsPorGestor(mapa);
+  const gestores = [...new Set(vinculos.map((v) => v.orgaoGestor))];
+  const ids = new Set<number>();
+  const semId: string[] = [];
+  for (const g of gestores) {
+    const l = por.get(g);
+    if (l?.length) for (const id of l) ids.add(id);
+    else semId.push(g);
+  }
+  const lista = [...ids].sort((a, b) => a - b);
+  return { ids: lista, semId: semId.sort((a, b) => a.localeCompare(b, "pt-BR")), vale: gestores.length > 0 && !semId.length && lista.length > 0 };
 }

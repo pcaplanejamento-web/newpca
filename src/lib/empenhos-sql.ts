@@ -1,7 +1,7 @@
-import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLeituras, centiLotePassos, centiLotes, centiStagingFora, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging, pagamentos, pagamentosStaging } from "../db/schema.ts";
+import { centiLeituras, centiLotePassos, centiLotes, centiOrgaosGestores, centiStagingFora, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging, pagamentos, pagamentosStaging } from "../db/schema.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { vinculoSql } from "./empenho-cards-sql.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoNovo, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
@@ -175,9 +175,9 @@ export function comandoRecontarLote(db: Db, loteId: number) {
       // FORA = só os sem vínculo (as chaves dos IGUAIS ao gravado contam nos únicos, não aqui).
       fora: sql`(SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId} AND ${centiStagingFora.igual} = 0)`,
       soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina}))`,
-      // LIQUIDAÇÕES e PAGAMENTOS: cada "página" é um órgão com o PRÓPRIO total (lidos em paralelo) — o do período é a soma deles (a
-      // última leitura de cada órgão); empenhos: o maior total informado em cada período.
-      totalInformado: sql`(CASE WHEN ${centiLotes.modo} IN ('liquidacoes', 'pagamentos')
+      // POR ÓRGÃO (liquidações, pagamentos e os empenhos lidos por órgão): cada "página" é um órgão com o PRÓPRIO total (lidos em
+      // paralelo) — o do período é a soma deles (a última leitura de cada órgão); empenhos: o maior total informado em cada período.
+      totalInformado: sql`(CASE WHEN ${centiLotes.modo} IN ('liquidacoes', 'pagamentos') OR ${centiLotes.orgaosCenti} IS NOT NULL
         THEN (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT ${centiLotePassos.total} AS t FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina})))
         ELSE (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim})) END)`,
       vistoEm: sql`CURRENT_TIMESTAMP`,
@@ -238,14 +238,18 @@ const chavesVinculadas = (db: Db, loteId: number, card: number) =>
 export const chavesIguais = (db: Db, loteId: number) =>
   db.select({ c: centiStagingFora.chave }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1)));
 
-/** Os empenhos do card e do ano que a Centi não trouxe mais (fora das chaves vinculadas e das iguais do lote). */
-const sumiram = (db: Db, loteId: number, card: number, ano: number) =>
+/**
+ * Os empenhos do card e do ano que a Centi não trouxe mais (fora das chaves vinculadas e das iguais do lote). Na leitura POR
+ * ÓRGÃO (`orgaos`), só os dos órgãos gestores dos IDs lidos (o mapa) — o órgão que não foi pedido nunca "some".
+ */
+const sumiram = (db: Db, loteId: number, card: number, ano: number, orgaos: readonly number[] | null) =>
   and(
     eq(empenhos.cardId, card),
     eq(empenhos.ano, ano),
     isNull(empenhos.removidoEm),
     notInArray(empenhos.chave, chavesVinculadas(db, loteId, card)),
     notInArray(empenhos.chave, chavesIguais(db, loteId)),
+    orgaos ? inArray(empenhos.orgaoGestor, db.select({ g: centiOrgaosGestores.orgaoGestor }).from(centiOrgaosGestores).where(sql`${centiOrgaosGestores.idCenti} IN (SELECT value FROM json_each(${JSON.stringify(orgaos)}))`)) : undefined,
   );
 
 /** O passo mais recente do lote (o que a página acabou de registrar no mesmo lote). */
@@ -318,7 +322,7 @@ export function comandosConferirPagina(db: Db, loteId: number, card: number, lei
  * Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor ou o vínculo mudou), marca como removidos — e quantos
  * registros ficam FORA (unidade da Centi sem vínculo: não são gravados) — o resumo do lote.
  */
-export async function contagemDaPromocao(db: Db, loteId: number, card: number, ano: number, leitor: number) {
+export async function contagemDaPromocao(db: Db, loteId: number, card: number, ano: number, leitor: number, orgaos: readonly number[] | null = null) {
   const vStg = vinculoSql("empenhos_staging", card);
   const [novos] = await db
     .select({ n: count() })
@@ -335,7 +339,7 @@ export async function contagemDaPromocao(db: Db, loteId: number, card: number, a
     .from(empenhosStaging)
     .innerJoin(empenhos, and(eq(empenhos.cardId, card), eq(empenhos.chave, empenhosStaging.chave)))
     .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card), mudou(colEmp, colStg, sql`${leitor}`, vStg.orgao, vStg.reparticao)));
-  const [removidos] = await db.select({ n: count() }).from(empenhos).where(sumiram(db, loteId, card, ano));
+  const [removidos] = await db.select({ n: count() }).from(empenhos).where(sumiram(db, loteId, card, ano, orgaos));
   // FORA = os só contados na leitura + os guardados que perderam o vínculo antes da conclusão (não entram).
   const [perdeu] = await db
     .select({ n: count() })
@@ -362,15 +366,40 @@ export async function valoresSuspeitos(db: Db, loteId: number): Promise<number> 
   return r?.n ?? 0;
 }
 
-/** A última importação CONCLUÍDA do mesmo card e ano (a base da conferência de queda), sem o próprio lote. */
-export async function ultimoPromovido(db: Db, card: number, ano: number, exceto: number) {
+/** A última importação CONCLUÍDA do mesmo card e ano (a base da conferência de queda), sem o próprio lote — e com os MESMOS
+ * órgãos (a leitura por órgão soma só os órgãos lidos: comparar com a do ano inteiro acusaria uma queda falsa). */
+export async function ultimoPromovido(db: Db, card: number, ano: number, exceto: number, orgaos: readonly number[] | null = null) {
   const [l] = await db
     .select({ soma: centiLotes.soma, unicos: centiLotes.unicos })
     .from(centiLotes)
-    .where(and(eq(centiLotes.cardId, card), eq(centiLotes.ano, ano), eq(centiLotes.estado, "promovido"), ne(centiLotes.id, exceto)))
+    .where(
+      and(
+        eq(centiLotes.cardId, card),
+        eq(centiLotes.ano, ano),
+        eq(centiLotes.estado, "promovido"),
+        ne(centiLotes.id, exceto),
+        orgaos ? eq(centiLotes.orgaosCenti, JSON.stringify(orgaos)) : isNull(centiLotes.orgaosCenti),
+      ),
+    )
     .orderBy(desc(centiLotes.id))
     .limit(1);
   return l ?? null;
+}
+
+/** Quantos empenhos VIGENTES do card e do ano são dos órgãos gestores destes IDs (o mapa) — a base da 1ª leitura por órgão. */
+export async function vigentesDosOrgaos(db: Db, card: number, ano: number, orgaos: readonly number[]): Promise<number> {
+  const [r] = await db
+    .select({ n: count() })
+    .from(empenhos)
+    .where(
+      and(
+        eq(empenhos.cardId, card),
+        eq(empenhos.ano, ano),
+        isNull(empenhos.removidoEm),
+        inArray(empenhos.orgaoGestor, db.select({ g: centiOrgaosGestores.orgaoGestor }).from(centiOrgaosGestores).where(sql`${centiOrgaosGestores.idCenti} IN (SELECT value FROM json_each(${JSON.stringify(orgaos)}))`)),
+      ),
+    );
+  return r?.n ?? 0;
 }
 
 /**
@@ -433,6 +462,7 @@ export function comandosPromover(
   leitor: number,
   regra: RegraRemovidos,
   contagem: { inseridos: number; atualizados: number; removidos: number; fora: number },
+  orgaos: readonly number[] | null = null,
 ) {
   const vStg = vinculoSql("empenhos_staging", card);
   const vEmp = vinculoSql("empenhos", card);
@@ -465,8 +495,8 @@ export function comandosPromover(
         setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
       }),
     regra === "apagar"
-      ? db.delete(empenhos).where(sumiram(db, loteId, card, ano))
-      : db.update(empenhos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano)),
+      ? db.delete(empenhos).where(sumiram(db, loteId, card, ano, orgaos))
+      : db.update(empenhos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano, orgaos)),
     db.delete(empenhos).where(and(eq(empenhos.cardId, card), eq(empenhos.ano, ano), sql`${vEmp.orgao} IS NULL`)),
     db
       .update(centiLotes)

@@ -4722,6 +4722,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     pela tela, a semana até 4 MB (`MAX_BYTES_TELA`; a automática segue com 1 MB). Testes: `tests/empenhos*.test.ts`,
     `tests/importacao-partes.test.ts`, `tests/fragmentos-centi.test.ts` + `tests/fixtures/banco-migrado.ts` (o schema final de
     toda a cadeia, recriado por teste).
+  - **SINCRONIA + EXECUÇÃO + LEITURA POR ÓRGÃO (v1.218.0, migrações `0155`/`0156`):**
+    - **Sincronia (`0155`):** o gatilho `empenho_vinculo_reparticao_orgao` também leva `liquidacoes`/`pagamentos` da unidade
+      que muda de órgão; `centi_orgao_id_alterado` (troca do `entidade_centi`) leva ao órgão do ID novo SÓ os sem empenho no
+      sistema (sem órgão com o ID, ficam). Índice `liquidacoes_numero_empenho_idx`. Aviso na aba Vínculos do empenho de mesmo
+      número em OUTRO card com outro destino (`consultaConflitosEntreCards`, `empenho-cards-sql.ts`).
+    - **Execução no empenho:** `GET /api/empenhos/[id]` devolve `execucao` (`execucaoDoEmpenho`, `empenhos-tela.ts`: as
+      liquidações e os pagamentos vigentes pelo número, de qualquer card/ano, sem repetir a chave; cada lista só com Visualizar
+      na tela dela — `podeTela`) → `EmpenhoDetalhe` (bloco Execução: duas `DataTable` + `LinhaConferencia`). Núcleo puro
+      **`execucao-empenho-core.ts`** (testado): `conferirExecucao` (liquidado = Σ (valor − anulado); pago = Σ valor bruto das
+      ordens NÃO anuladas — medido em 2025), `liquidacaoProvavel` (mesmo valor, na ordem das datas, nunca depois do pagamento;
+      só mostrada), `semRepetir`, `LIMITE_EXECUCAO`=300.
+    - **Conferência do empenho** (coluna da `EmpenhosTabela`, sem consulta): `problemasDoEmpenho` (`empenhos-tela-core.ts`) —
+      liquidado ≤ empenhado − anulado, pago ≤ liquidado, a pagar = empenhado − anulado − pago (a régua da Centi), ao centavo.
+    - **Leitura POR ÓRGÃO dos empenhos (`0156` — `empenho_cards.por_orgao`, tabela `centi_orgaos_gestores` id_centi ↔
+      órgão gestor):** a Centi filtra `getempenhos` por `idOrgao` (cada resposta = UM órgão gestor, `TotalRegistros` do
+      órgão). Com o card em "Ler só os órgãos dos vínculos" (Configuração → Integração), `orgaosDoLote` (`empenho-cards.ts`)
+      grava no lote os IDs dos órgãos gestores dos vínculos — SÓ quando TODOS têm o ID conhecido (`orgaosDaLeitura`, puro);
+      senão o ano inteiro de todos, como sempre. O lote segue a mecânica das liquidações (`lotePorOrgao` = também o lote com
+      `orgaos_centi`; `corpoComOrgao`; o total do período = a soma dos órgãos; `comandosFechoPeriodoLiquidacoes`); cada página
+      por órgão registra o mapa (`comandoRegistrarGestores`). Na promoção, o que "sumiu" é só dos órgãos gestores dos IDs
+      lidos (`sumiram(…, orgaos)`) e a queda compara com a importação dos MESMOS órgãos (`ultimoPromovido(…, orgaos)`). O mapa
+      se aprende em Vínculos → "Descobrir os IDs" (lote `unidades` com `porOrgao: true` = todos os órgãos do cadastro com o
+      ID) e aparece na vista "IDs na Centi" (o órgão do cadastro com o ID e se os vínculos concordam); coluna "ID na Centi"
+      nos vínculos. O "Buscar na Centi" segue lendo tudo (o catálogo completo).
+    - **Restos a pagar:** `getempenhos` aceita `numero` com um intervalo de anos (conferido ao vivo); as liquidações/
+      pagamentos sem empenho de 2025 são de 2023/2024 — basta pôr os anos anteriores no card (`AvisoSemEmpenho`, exportado de
+      `EmpenhoCardLiquidacoes.tsx`, nas duas tabelas). `DestinacaoRecurso` fica FORA: um campo novo no "mudou" regravaria
+      todos os empenhos de uma vez (o limite diário de escritas do D1).
 - **`SeletorMultiplo campo`** (v1.182.0): o modo de FORMULÁRIO — o rótulo em cima (`Rotulo`, exportado do `Field`, com o
   `extra` = a `Ajuda compacta`) e a caixa do `TextField`/`SelectField` (`classeCaixaCampo(denso)`, exportada do `Field`) com o
   resumo dos escolhidos ("PMRV, FMS +1"; nenhum = `textoVazio`); abre o MESMO painel do `suspenso`. Use-o quando a escolha

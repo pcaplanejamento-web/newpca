@@ -2,7 +2,7 @@ import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
-import { orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
+import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
@@ -82,9 +82,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const modoDoCard = card.tipo === "empenhos" ? null : card.tipo;
     const modoPedido = corpo.modo === "liquidacoes" || corpo.modo === "pagamentos" ? corpo.modo : null;
     if (modoPedido !== modoDoCard) return erro(modoDoCard ? `Este card importa ${NOME_TIPO[modoDoCard].varios}.` : `${NOME_TIPO[modoPedido ?? "liquidacoes"].titulo} se importam num card de ${NOME_TIPO[modoPedido ?? "liquidacoes"].varios}.`, 422);
-    // LIQUIDAÇÕES e PAGAMENTOS: uma importação lê TODOS os órgãos do cadastro com o "ID na Centi" (a lista fica no lote).
-    const orgaos = cardPorOrgao(card.tipo) ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
-    const vinculos = orgaos ? orgaos.length : (await vinculosDoCard(card.id)).length;
+    // POR ÓRGÃO: liquidações e pagamentos leem TODOS os órgãos do cadastro com o "ID na Centi"; o catálogo pedido por órgão
+    // (descobrir os IDs) também; os empenhos do card que lê por órgão, os dos vínculos (a lista fica no lote).
+    const orgaos = await orgaosDoLote(card, corpo.modo ?? "dados", corpo.porOrgao);
+    if (corpo.porOrgao && !orgaos?.length) return erro("Nenhum órgão com o “ID na Centi” no cadastro (Órgãos e Unidades) — cadastre os IDs antes de descobrir.", 409);
+    const vinculos = cardPorOrgao(card.tipo) ? (orgaos?.length ?? 0) : (await vinculosDoCard(card.id)).length;
     const falta = pendenciasDoCard(card, vinculos).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
