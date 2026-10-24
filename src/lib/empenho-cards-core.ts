@@ -249,7 +249,7 @@ export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm"> & { tipo?
   if (vinculos < 1)
     p.push(
       c.tipo === "liquidacoes"
-        ? { aba: "vinculos", texto: "Escolha ao menos um órgão da Centi (aba Órgãos): a API entrega as liquidações de um órgão por vez." }
+        ? { aba: "configuracao", texto: "Cadastre o “ID na Centi” de ao menos um órgão (Órgãos e Unidades): a importação lê as liquidações de todos os órgãos com o ID." }
         : { aba: "vinculos", texto: "Crie ao menos um vínculo: o que o card importa e para onde vai." },
     );
   return p;

@@ -29,7 +29,10 @@ type Liquidacao = {
   valorLiquido: number;
   valorPago: number;
   saldo: number;
-  orgao: string;
+  /** O órgão como a Centi o escreveu. */
+  orgaoCenti: string;
+  /** O órgão e a unidade do CADASTRO (a sigla) = os do empenho de mesmo número. */
+  orgao: string | null;
   unidade: string | null;
 };
 
@@ -46,8 +49,9 @@ const daTupla = (t: unknown[]): Liquidacao => ({
   valorLiquido: Number(t[9] ?? 0),
   valorPago: Number(t[10] ?? 0),
   saldo: Number(t[11] ?? 0),
-  orgao: String(t[12] ?? ""),
-  unidade: (t[13] as string | null) ?? null,
+  orgaoCenti: String(t[12] ?? ""),
+  orgao: (t[13] as string | null) ?? null,
+  unidade: (t[14] as string | null) ?? null,
 });
 
 const soma = (l: Liquidacao[], k: "valor" | "valorAnulado" | "valorLiquido" | "valorPago" | "saldo") => l.reduce((s, x) => s + x[k], 0);
@@ -70,7 +74,8 @@ const COLUNAS: Column<Liquidacao>[] = [
   { key: "numeroEmpenho", header: "Empenho", nowrap: true, total: false, value: (x) => x.numeroEmpenho, render: (x) => <CelulaCopiavel copiar={x.numeroEmpenho} rotulo="nº do empenho">
           <span className="tabular-nums">{x.numeroEmpenho}</span>
         </CelulaCopiavel> },
-  { key: "unidade", header: "Unidade", nowrap: true, value: (x) => x.unidade ?? "—" },
+  { key: "orgaoSistema", header: "Órgão", nowrap: true, value: (x) => x.orgao ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold text-text-2">{x.orgao ?? "—"}</span> },
+  { key: "unidade", header: "Unidade", nowrap: true, value: (x) => x.unidade ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold text-text-2">{x.unidade ?? "—"}</span> },
   { key: "credor", header: "Credor", minWidth: 220, value: (x) => x.credor ?? "", render: (x) => <CelulaTexto texto={x.credor} /> },
   { key: "cpfCnpj", header: "CPF/CNPJ", nowrap: true, total: false, value: (x) => x.cpfCnpj ?? "" },
   { key: "historico", header: "Histórico", minWidth: 320, value: (x) => x.historico ?? "", render: (x) => <CelulaTexto texto={x.historico} /> },
@@ -79,13 +84,12 @@ const COLUNAS: Column<Liquidacao>[] = [
   colValor("valorLiquido", "Líquido"),
   colValor("valorPago", "Pago"),
   colValor("saldo", "Saldo"),
-  { key: "orgao", header: "Órgão (Centi)", minWidth: 200, value: (x) => x.orgao, render: (x) => <CelulaTexto texto={x.orgao} /> },
+  { key: "orgaoCenti", header: "Órgão (Centi)", minWidth: 200, value: (x) => x.orgaoCenti, render: (x) => <CelulaTexto texto={x.orgaoCenti} /> },
 ];
 
 /**
- * A aba LIQUIDAÇÕES de um card de liquidações: o que está gravado (as liquidações dos órgãos do card, cada uma com o órgão e
- * a unidade de destino — independente dos empenhos),
- * por ano, no escopo da pessoa. Os números do topo acompanham os filtros; "Removidas na Centi" no rodapé.
+ * A aba LIQUIDAÇÕES de um card de liquidações: o que está gravado, com o órgão e a unidade do CADASTRO de cada liquidação
+ * (os do EMPENHO de mesmo número — o número do empenho liga empenhos, liquidações e pagamentos), por ano, no escopo da pessoa. Os números do topo acompanham os filtros; "Removidas na Centi" no rodapé.
  */
 export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome: string }) {
   const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(null);
@@ -156,8 +160,9 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
         <Ajuda titulo="Liquidações do card" botao="sm">
           <p>As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
           <p>
-            Cada liquidação é do <strong>órgão</strong> que a Centi informou e vai para a unidade de destino escolhida na aba Órgãos (senão, o
-            próprio órgão). Você vê as liquidações da sua unidade (ou do seu órgão).
+            A Centi não informa a unidade da liquidação: o <strong>número do empenho</strong> liga a liquidação ao empenho, e as colunas
+            Órgão e Unidade são as do empenho no sistema (o vínculo dele). Sem o empenho importado, fica o órgão do cadastro com o “ID
+            na Centi”, sem unidade. Você vê as liquidações da sua unidade (ou do seu órgão).
           </p>
           <p>Os números do topo acompanham os filtros da tabela. “Removidas na Centi” (rodapé) = as que a Centi não traz mais (pela regra do card).</p>
         </Ajuda>
@@ -166,7 +171,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
       {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
 
       {anos && !anos.length ? (
-        <Callout kind="info">Nenhuma liquidação importada neste card ainda. Escolha os órgãos (aba Órgãos) e importe na aba Importação — um órgão por vez.</Callout>
+        <Callout kind="info">Nenhuma liquidação importada neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez.</Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (

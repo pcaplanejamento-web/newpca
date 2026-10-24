@@ -182,7 +182,6 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   empenhos: { GET: tela("empenhos", "visualizar", "os empenhos de um ano de um card (pacote compacto)") },
   "empenhos/cards": { POST: tela(["empenhos", "liquidacoes"], "configurar", "criar um card — a tela do tipo (empenhos ou liquidações)") },
   "empenhos/cards/[id]": { PATCH: recurso(CARDS, "configurar", undefined, "configurar o card — a tela do card"), DELETE: recurso(CARDS, "excluir", undefined, "excluir o card com os dados dele") },
-  "empenhos/cards/[id]/orgaos": { PUT: recurso(CARDS, "configurar", undefined, "os órgãos do card de liquidações (um órgão da Centi por importação)") },
   "empenhos/cards/[id]/vinculos": { PUT: recurso(CARDS, "configurar", undefined, "os vínculos do card (só os de empenhos)") },
   "empenhos/cards/[id]/testar": { POST: recurso(CARDS, "configurar", undefined, "testar a integração do card (nada é gravado)") },
   "empenhos/cards/[id]/importar": {

@@ -1,10 +1,12 @@
 /**
  * LIQUIDAÇÕES da Centi — o núcleo PURO (testado em `tests/liquidacoes.test.ts`). A MESMA lógica dos empenhos (o ano lido
  * semana a semana, o staging, a conferência e a promoção), com as PARTICULARIDADES da API `getliquidacoes`:
- * - exige o ÓRGÃO da Centi (`idOrgao` — o "ID na Centi" cadastrado no órgão): uma importação = um lote por órgão;
- * - NÃO pagina nem informa o total: cada período vem inteiro numa resposta — o total do período é o que veio;
- * - não traz unidade orçamentária nem ação: TUDO o que a Centi devolve para o órgão é dele — a liquidação é gravada com o
- *   órgão e a unidade do órgão do card (`OrgaoDoCard`), INDEPENDENTE dos empenhos (o número do empenho fica como dado).
+ * - exige o ÓRGÃO da Centi (`idOrgao` — o "ID na Centi" cadastrado no órgão, Órgãos e Unidades): UMA importação lê TODOS
+ *   os órgãos com o ID — a lista fica no lote (`orgaosCenti`) e, em cada período, a "página" N é o N-ésimo órgão;
+ * - NÃO pagina nem informa o total: cada órgão no período vem inteiro numa resposta — o total é o que veio;
+ * - não traz unidade orçamentária nem ação: o NÚMERO DO EMPENHO (`NumeroEmpenho` = o `Numero` do empenho, o Id dele na
+ *   Centi) liga a liquidação ao EMPENHO — o órgão e a unidade do cadastro são os dele; sem o empenho no sistema, o órgão
+ *   do cadastro com o ID na Centi, sem unidade. O mesmo número ligará os pagamentos.
  */
 import { esqueletoResposta, lerJsonCenti, registrosDaResposta } from "./centi-resposta-core.ts";
 import { corpoDaPagina, dataIso, type PaginaLida, type Periodo, valor } from "./empenhos-core.ts";
@@ -104,79 +106,30 @@ export function corpoLiquidacoes(parametros: string, ano: number, periodo: Perio
   return { ...(corpoDaPagina(parametros, ano, 1, periodo) as Record<string, unknown>), idOrgao };
 }
 
-/** Um ÓRGÃO de um card de liquidações: o órgão do cadastro (o "ID na Centi" dele é o `idOrgao` do pedido) e, opcional, a
- * unidade de destino. */
-export type OrgaoDoCard = { orgaoId: number; reparticaoId: number | null };
-
-/** O que se pede à Centi por um órgão do card: o `idOrgao` e para onde vão as liquidações dele. */
-export type PedidoLiquidacao = { idOrgao: number } & OrgaoDoCard;
-
 /** O "ID na Centi" de um órgão do cadastro (texto) como o número do pedido — null = não cadastrado/inválido. */
 export function idCenti(v: string | null | undefined): number | null {
   const n = Number(String(v ?? "").trim());
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-/** Os PEDIDOS do card (um por órgão com o "ID na Centi", na ordem do ID) e os órgãos sem o ID (não são lidos). */
-export function pedidosDoCard(orgaos: readonly OrgaoDoCard[], idCentiDoOrgao: ReadonlyMap<number, string | null>): { pedidos: PedidoLiquidacao[]; semId: number[] } {
-  const pedidos: PedidoLiquidacao[] = [];
-  const semId: number[] = [];
-  for (const o of orgaos) {
-    const id = idCenti(idCentiDoOrgao.get(o.orgaoId));
-    if (id == null) semId.push(o.orgaoId);
-    else if (!pedidos.some((p) => p.idOrgao === id)) pedidos.push({ idOrgao: id, ...o });
-  }
-  return { pedidos: pedidos.sort((a, b) => a.idOrgao - b.idOrgao), semId };
+/** Os ÓRGÃOS da Centi de uma importação: os "ID na Centi" do cadastro, sem repetir, em ordem crescente. */
+export function orgaosDaCenti(cadastro: readonly (string | null | undefined)[]): number[] {
+  return [...new Set(cadastro.map(idCenti).filter((n): n is number => n != null))].sort((a, b) => a - b);
 }
 
-export const MAX_ORGAOS_CARD = 100;
-
-/**
- * A REGRA dos órgãos de um card de liquidações (a MESMA na tela e no servidor): cada órgão uma vez, com o "ID na Centi"
- * cadastrado e sem repetir o ID; a unidade de destino tem de ser do próprio órgão. null = vale.
- */
-export function motivoOrgaosInvalidos(
-  orgaos: readonly OrgaoDoCard[],
-  cadastro: { orgaos: ReadonlyMap<number, { nome: string; centi: string | null }>; unidades: ReadonlyMap<number, number | null> },
-): string | null {
-  if (orgaos.length > MAX_ORGAOS_CARD) return `No máximo ${MAX_ORGAOS_CARD} órgãos por card.`;
-  const vistos = new Set<number>();
-  const ids = new Map<number, string>();
-  for (const o of orgaos) {
-    const c = cadastro.orgaos.get(o.orgaoId);
-    if (!c) return "Um dos órgãos não existe mais no cadastro.";
-    if (vistos.has(o.orgaoId)) return `O órgão ${c.nome} aparece duas vezes.`;
-    vistos.add(o.orgaoId);
-    const id = idCenti(c.centi);
-    if (id == null) return `O órgão ${c.nome} não tem o “ID na Centi” cadastrado (Órgãos e Unidades) — sem ele a Centi não entrega as liquidações.`;
-    const outro = ids.get(id);
-    if (outro) return `${c.nome} e ${outro} têm o mesmo ID na Centi (${id}).`;
-    ids.set(id, c.nome);
-    if (o.reparticaoId != null && cadastro.unidades.get(o.reparticaoId) !== o.orgaoId) return `A unidade de destino de ${c.nome} tem de ser uma unidade desse órgão.`;
+/** A lista de órgãos gravada no lote (JSON) — inválida = null. */
+export function lerOrgaosCenti(v: string | null | undefined): number[] | null {
+  if (!v) return null;
+  try {
+    const l = JSON.parse(v);
+    return Array.isArray(l) && l.length && l.every((n) => Number.isInteger(n) && n > 0) ? (l as number[]) : null;
+  } catch {
+    return null;
   }
-  return null;
 }
+
+/** O órgão da Centi da "página" de um lote de liquidações (1 = o 1º) — null = fora da lista. */
+export const orgaoDaPagina = (orgaos: readonly number[] | null, pagina: number): number | null => orgaos?.[pagina - 1] ?? null;
 
 /** Uma liquidação com valor negativo ou acima disto é SUSPEITA (erro de leitura) — a conclusão não promove o lote. */
 export const LIMITE_VALOR_LIQUIDACAO = 1_000_000_000;
-
-/** Um lote de liquidações do card (a rodada da atualização automática): id (crescente), ano e órgão da Centi. */
-export type LoteDaRodada = { id: number; ano: number; idOrgaoCenti: number | null };
-
-/**
- * A RODADA da atualização automática de um card de liquidações: a API pede um órgão por vez, então uma atualização é uma
- * sequência de lotes (um por órgão, na ordem). A rodada começa pelo 1º órgão; enquanto houver órgão do MESMO ano sem lote
- * depois do lote do 1º, a rodada CONTINUA por ele (sem esperar a frequência). null = nenhuma rodada em curso (a próxima
- * começa quando o card estiver na hora).
- */
-export function proximoOrgaoDaRodada(lotes: readonly LoteDaRodada[], orgaos: readonly number[]): { ano: number; idOrgao: number } | null {
-  if (!orgaos.length) return null;
-  const ordem = [...lotes].sort((a, b) => b.id - a.id);
-  const inicio = ordem.find((l) => l.idOrgaoCenti === orgaos[0]);
-  if (!inicio) return null;
-  for (const o of orgaos.slice(1)) {
-    const ultimo = ordem.find((l) => l.idOrgaoCenti === o && l.ano === inicio.ano);
-    if (!ultimo || ultimo.id < inicio.id) return { ano: inicio.ano, idOrgao: o };
-  }
-  return null;
-}

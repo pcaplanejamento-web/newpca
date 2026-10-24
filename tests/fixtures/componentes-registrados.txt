@@ -333,4 +333,3 @@ fluxos/ProblemasFluxo.tsx
 fluxos/TabelaMesaFluxo.tsx
 fluxos/paineis.tsx
 icons.tsx
-LiquidacaoCardOrgaos.tsx

@@ -230,13 +230,13 @@ test("migração 0143: a API, os vínculos de Órgãos e Unidades, as importaç�
   assert.deepEqual(raw.prepare("SELECT id, configurado_em IS NOT NULL AS c FROM empenho_cards ORDER BY id").all().map((c) => [c.id, c.c]), [[1, 1], [2, 0]]);
 });
 
-test("cards de LIQUIDAÇÕES: o padrão é a API de liquidações e as pendências pedem os órgãos (independente dos empenhos)", () => {
+test("cards de LIQUIDAÇÕES: o padrão é a API de liquidações e as pendências pedem o ID na Centi dos órgãos do cadastro", () => {
   const liq: EdicaoCard = { nome: "Liquidações", ...cardPadrao("liquidacoes") };
   assert.equal(liq.endpoint, "getliquidacoes");
   assert.equal(motivoCardInvalido(liq), null);
   assert.deepEqual(cardPadrao("empenhos"), CARD_PADRAO);
-  assert.deepEqual(pendenciasDoCard({ configuradoEm: null, tipo: "liquidacoes" }, 0).map((p) => p.aba), ["configuracao", "vinculos"]);
-  assert.match(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes" }, 0)[0].texto, /órgão da Centi/);
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: null, tipo: "liquidacoes" }, 0).map((p) => p.aba), ["configuracao", "configuracao"]);
+  assert.match(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes" }, 0)[0].texto, /ID na Centi/);
   assert.deepEqual(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes" }, 2), []);
   assert.equal(rotaDoCard({ id: 7, tipo: "liquidacoes" }, "importacao"), "/painel/liquidacoes/7?aba=importacao");
   assert.equal(telaDoCard({ tipo: lerTipoCard("x") }), "empenhos");

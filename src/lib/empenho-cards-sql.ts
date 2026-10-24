@@ -1,7 +1,7 @@
 import { and, asc, eq, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiCatalogo, empenhoCards, empenhoCardVinculos, empenhos, liquidacaoCardOrgaos, liquidacoes } from "../db/schema.ts";
+import { centiCatalogo, empenhoCards, empenhoCardVinculos, empenhos } from "../db/schema.ts";
 import type { ItemCatalogo, VinculoCard } from "./empenho-cards-core.ts";
 
 /**
@@ -82,18 +82,9 @@ export function comandosCriarCard(db: Db, valores: typeof empenhoCards.$inferIns
   const novo = sql<number>`(SELECT MAX("id") FROM "empenho_cards")`;
   return [
     db.insert(empenhoCards).values({ ...valores, vinculosEm: agoraIso }),
-    ...(copiarDe == null
+    ...(copiarDe == null || tipo === "liquidacoes"
       ? []
-      : tipo === "liquidacoes"
-        ? [
-            db.insert(liquidacaoCardOrgaos).select(
-              db
-                .select({ id: sql<null>`NULL`.as("id"), cardId: novo.as("card_id"), orgaoId: liquidacaoCardOrgaos.orgaoId, reparticaoId: liquidacaoCardOrgaos.reparticaoId })
-                .from(liquidacaoCardOrgaos)
-                .where(eq(liquidacaoCardOrgaos.cardId, copiarDe)) as never,
-            ),
-          ]
-        : [
+      : [
           db.insert(empenhoCardVinculos).select(
             db
               .select({
@@ -155,26 +146,3 @@ export async function consultaCatalogo(db: Db): Promise<ItemCatalogo[]> {
     .orderBy(asc(centiCatalogo.orgaoGestor), asc(centiCatalogo.unidade), asc(centiCatalogo.acao));
 }
 
-/** O destino de uma liquidação gravada pelo órgão da Centi dela: o órgão do card com aquele "ID na Centi". */
-const destinoDa = (card: number, col: "orgao_id" | "reparticao_id") =>
-  sql.raw(
-    `(SELECT r."${col}" FROM "liquidacao_card_orgaos" r JOIN "orgaos" o ON o."id" = r."orgao_id" WHERE r."card_id" = ${Math.trunc(card)} AND CAST(TRIM(o."entidade_centi") AS INTEGER) = "liquidacoes"."id_orgao_centi")`,
-  );
-
-/**
- * GRAVA os ÓRGÃOS de um card de liquidações (a lista INTEIRA, conferida por `motivoOrgaosInvalidos`), num lote atômico: as
- * liquidações do órgão que SAIU do card saem do banco (nada sem destino fica); as dos que ficam acompanham o órgão e a
- * unidade de destino.
- */
-export function comandosGravarOrgaosLiq(db: Db, card: number, orgaos: readonly { orgaoId: number; reparticaoId: number | null }[]) {
-  return [
-    db.delete(liquidacaoCardOrgaos).where(eq(liquidacaoCardOrgaos.cardId, card)),
-    ...(orgaos.length ? [db.insert(liquidacaoCardOrgaos).values(orgaos.map((o) => ({ cardId: card, orgaoId: o.orgaoId, reparticaoId: o.reparticaoId })))] : []),
-    db.delete(liquidacoes).where(and(eq(liquidacoes.cardId, card), sql`${destinoDa(card, "orgao_id")} IS NULL`)),
-    db
-      .update(liquidacoes)
-      .set({ orgaoId: sql`${destinoDa(card, "orgao_id")}`, reparticaoId: sql`${destinoDa(card, "reparticao_id")}` })
-      .where(eq(liquidacoes.cardId, card)),
-    db.update(empenhoCards).set({ vinculosEm: agoraIso, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(eq(empenhoCards.id, card)),
-  ];
-}

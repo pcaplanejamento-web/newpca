@@ -4595,17 +4595,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
     `modo`. A tabela: `EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes` (as tuplas montadas pelo banco —
     `liquidacoes-tela.ts`; escopo = o do empenho).
-  - **LIQUIDAÇÕES INDEPENDENTES (v1.211.0, migração `0148` — tabela `liquidacao_card_orgaos` [card cascade · `orgao_id` ·
-    `reparticao_id` opcional, único card + órgão]; `liquidacoes` reconstruída SEM `empenho_id`, com `orgao_id` NOT NULL +
-    `reparticao_id` [cascade]; `empenho_cards.origem_id` DORMENTE — zerada):** o card de liquidações tem os PRÓPRIOS órgãos (aba
-    **Órgãos** = `LiquidacaoCardOrgaos` → `PUT /api/empenhos/cards/[id]/orgaos`, Configurar; regra pura `motivoOrgaosInvalidos`
-    — órgão com o "ID na Centi" (`orgaos.entidade_centi`), sem repetir órgão nem ID, a unidade do próprio órgão; 409 com lote
-    lendo; `comandosGravarOrgaosLiq` grava a lista, apaga as liquidações do órgão que saiu e leva o destino às gravadas).
-    TUDO o que a Centi devolve para o `idOrgao` é gravado com o destino dele (`destinoDoLote`; `numero_empenho` é só dado).
-    A importação é de UM órgão por vez (o seletor Órgão + Ano; `pedidosDoCard`/`orgaosLiquidacao`); a automática faz a rodada
-    dos órgãos. Escopo da tabela = o órgão/unidade da própria liquidação. **Falha passageira:** a página tenta 5 vezes
-    (`ESPERA_TENTATIVAS` 2/4/8/15/30 s) e, se não voltar, a ação `pausar` (`comandoSoltarLote`) deixa o lote ABERTO e solto —
-    Continuar lê só o que falta (antes o lote era cancelado e perdia o lido). O texto abaixo sobre a origem é HISTÓRICO.
+  - **REGRA FIRME — O NÚMERO DO EMPENHO LIGA EMPENHOS, LIQUIDAÇÕES E PAGAMENTOS:** o `NumeroEmpenho` da liquidação (e, a seguir,
+    do pagamento) = o `Numero` do empenho na Centi (= o Id dele, único) = `empenhos.numero`. A API de liquidações NÃO traz
+    unidade nem ação (conferido na API real): o órgão e a unidade da liquidação são os do EMPENHO de mesmo número no sistema.
+  - **LIQUIDAÇÕES PELO EMPENHO, TODOS OS ÓRGÃOS NUMA IMPORTAÇÃO (v1.212.0, migração `0150` — `centi_lotes.orgaos_centi` JSON,
+    `liquidacoes_staging.id_orgao_centi`, índice `empenhos_numero_idx`; a tabela `liquidacao_card_orgaos` e a aba Órgãos da
+    v1.211.0 SAÍRAM; `centi_lotes.id_orgao_centi` DORMENTE):** o "ID na Centi" do órgão (Órgãos e Unidades, `entidade_centi`) já
+    é o `idOrgao` que a API exige — uma importação lê TODOS os órgãos com o ID (`orgaosLiquidacao()`, `orgaosDaCenti`, a lista
+    fica no lote): em cada período a "página" N é o N-ésimo órgão (`orgaoDaPagina`; `continuar` = N < total; o `total` do passo
+    é ACUMULADO no período — `totalAntesDaPagina` — e o maior total do período é o de todos os órgãos). O DESTINO de cada
+    liquidação = `destinoSql` (`liquidacoes-sql.ts`): o órgão e a unidade do EMPENHO de mesmo número (entre cards: o ativo, com
+    unidade, o mais antigo); sem o empenho, o órgão do cadastro com o ID na Centi da liquidação, sem unidade; sem nenhum = fora
+    (não gravada; "sem vínculo" na conferência). `comandoRealinharLiquidacoes` leva as gravadas ao empenho quando ele chega ou
+    muda (no lote da promoção dos empenhos e no `PUT …/vinculos`). Removidas = só dos órgãos do lote; a queda compara só com
+    importações de todos os órgãos. A tabela: colunas **Órgão** e **Unidade** do cadastro (sigla) + "Órgão (Centi)". A
+    automática cria o mesmo lote (sem rodada). A `0150` encerrou as importações de liquidações abertas e realinhou as gravadas.
+    **Falha passageira:** a página tenta 5 vezes (`ESPERA_TENTATIVAS` 2/4/8/15/30 s) e, se não voltar, a ação `pausar`
+    (`comandoSoltarLote`) deixa o lote ABERTO e solto — Continuar lê só o que falta. Os blocos abaixo sobre a origem, a aba
+    Órgãos e a rodada são HISTÓRICO.
   - **LIQUIDAÇÕES EM TELA PRÓPRIA (v1.209.0, migração `0146` — `empenho_cards.tipo` empenhos|liquidacoes + `origem_id` set
     null):** tela de módulo **`/painel/liquidacoes`** (`ABA_KEYS` `liquidacoes`, `IconLiquidacao`, as MESMAS ações de Empenhos
     no papel — a `0146` copiou as capacidades de `empenhos`, deu a tela aos grupos com Empenhos nas avulsas e a pôs ao lado de

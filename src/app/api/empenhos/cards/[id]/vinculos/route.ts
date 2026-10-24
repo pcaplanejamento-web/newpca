@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { motivoVinculosInvalidos, telaDoCard } from "@/lib/empenho-cards-core";
 import { cadastroDaRegra, vinculosDoCard } from "@/lib/empenho-cards";
 import { comandosGravarVinculos } from "@/lib/empenho-cards-sql";
+import { comandoRealinharLiquidacoes } from "@/lib/liquidacoes-sql";
 import { loteEmAndamento } from "@/lib/empenhos";
 import { vinculosCardSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -24,7 +25,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const id = card.id;
   const negado = recusa(g.acesso, telaDoCard(card), "configurar");
   if (negado) return negado;
-  if (card.tipo !== "empenhos") return erro("O card de liquidações tem os próprios órgãos (aba Órgãos).", 422);
+  if (card.tipo !== "empenhos") return erro("O card de liquidações não tem vínculos: o órgão e a unidade de cada liquidação são os do empenho de mesmo número.", 422);
   const p = await parseCorpo(vinculosCardSchema, req);
   if ("resp" in p) return p.resp;
   const motivo = motivoVinculosInvalidos(p.data.vinculos, await cadastroDaRegra());
@@ -34,7 +35,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   if (lendo && lendo.modo !== "unidades") return erro(`Uma importação de ${lendo.ano} está lendo este card — espere terminar (ou cancele na aba Importação) para mudar os vínculos.`, 409);
   const antes = await vinculosDoCard(id);
   const db = getDb();
-  await db.batch(comandosGravarVinculos(db, id, p.data.vinculos) as never);
+  // As LIQUIDAÇÕES seguem o empenho de mesmo número: mudou a unidade do empenho, muda a delas.
+  await db.batch([...comandosGravarVinculos(db, id, p.data.vinculos), comandoRealinharLiquidacoes(db)] as never);
   await registrarAuditoria({
     usuario: g.u,
     acao: "editar",

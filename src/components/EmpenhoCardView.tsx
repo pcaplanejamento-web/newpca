@@ -45,17 +45,18 @@ export function EmpenhoCardView({
   const lista = `/painel/${c.tipo}`;
   const e = estadoCard(c, c.lendo);
   const pendencias = pendenciasDoCard(c, c.vinculos);
-  // A ORDEM obrigatória: Configuração → Vínculos (no de liquidações, os Órgãos) → Importação.
+  // A ORDEM obrigatória: Configuração → Vínculos → Importação (no de liquidações, só a Configuração: os órgãos são os do
+  // cadastro com o "ID na Centi").
   const etapas = [
     { aba: "configuracao" as const, rotulo: "1. Configuração", feito: !!c.configuradoEm },
-    { aba: "vinculos" as const, rotulo: liq ? "2. Órgãos" : "2. Vínculos", feito: c.vinculos > 0 },
+    ...(liq ? [] : [{ aba: "vinculos" as const, rotulo: "2. Vínculos", feito: c.vinculos > 0 }]),
   ];
 
   async function excluir() {
     const ok = await confirmar({
       titulo: `Excluir o card "${c.nome}"?`,
       texto: liq
-        ? `As ${num(c.empenhos)} liquidações gravadas, os ${num(c.vinculos)} órgãos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
+        ? `As ${num(c.empenhos)} liquidações gravadas e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
         : `Os ${num(c.empenhos)} empenhos gravados, os ${num(c.vinculos)} vínculos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`,
       confirmar: "Excluir",
       perigo: true,
@@ -83,7 +84,7 @@ export function EmpenhoCardView({
     [
       { value: "empenhos", label: "Empenhos" },
       { value: "liquidacoes", label: "Liquidações" },
-      { value: "vinculos", label: liq ? "Órgãos" : "Vínculos" },
+      { value: "vinculos", label: "Vínculos" },
       { value: "importacao", label: "Importação", curto: "Importar" },
       { value: "configuracao", label: "Configuração", curto: "Config." },
     ] as const

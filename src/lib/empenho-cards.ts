@@ -1,16 +1,19 @@
 import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
-import { empenhoCards, liquidacaoCardOrgaos, orgaos, reparticoes } from "@/db/schema";
+import { empenhoCards, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, lerTipoCard, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
 import { comandosCriarCard, consultaCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
 import type { EscopoEmpenhos } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
-import { type OrgaoDoCard, type PedidoLiquidacao, pedidosDoCard } from "./liquidacoes-core";
+import { idCenti, orgaosDaCenti } from "./liquidacoes-core";
 import { ORDEM_ORGAOS } from "./orgaos";
 
 /** Os CARDS de EMPENHOS no D1 (leitura e edição). Os comandos em lote ficam em `empenho-cards-sql.ts`. */
 
 type Linha = typeof empenhoCards.$inferSelect;
+
+/** Quantos órgãos do cadastro têm o "ID na Centi" — os que uma importação de liquidações lê (o "vínculo" do card). */
+const ORGAOS_COM_ID = `(SELECT COUNT(DISTINCT CAST(TRIM(o."entidade_centi") AS INTEGER)) FROM "orgaos" o WHERE CAST(TRIM(o."entidade_centi") AS INTEGER) > 0)`;
 
 function paraCard(l: Linha): CardEmpenho {
   return { ...l, tipo: lerTipoCard(l.tipo), anos: lerAnos(l.anos), removidos: lerRegraRemovidos(l.removidos) };
@@ -19,7 +22,7 @@ function paraCard(l: Linha): CardEmpenho {
 /**
  * Os cards de UM TIPO com os números do que está gravado (no ESCOPO da pessoa): nos de empenhos, os empenhos vigentes e a
  * execução; nos de liquidações, as liquidações vigentes (o escopo é o da própria liquidação). Quantos vínculos (no de
- * liquidações, os ÓRGÃOS do card) e se há uma importação lendo agora.
+ * liquidações, os órgãos do cadastro com o "ID na Centi") e se há uma importação lendo agora.
  */
 export async function listarCards(escopo: EscopoEmpenhos, tipo: TipoCard, id?: number): Promise<ResumoCard[]> {
   const so = (p: string) => (escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, p)], sql.raw("")));
@@ -31,7 +34,7 @@ export async function listarCards(escopo: EscopoEmpenhos, tipo: TipoCard, id?: n
         card: empenhoCards,
         vinculos:
           tipo === "liquidacoes"
-            ? sql<number>`(SELECT COUNT(*) FROM "liquidacao_card_orgaos" v WHERE v."card_id" = "empenho_cards"."id")`
+            ? sql<number>`${sql.raw(ORGAOS_COM_ID)}`
             : sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
         lendo: sql<number>`EXISTS (SELECT 1 FROM "centi_lotes" l WHERE l."card_id" = "empenho_cards"."id" AND l."estado" = 'lendo')`,
       })
@@ -80,7 +83,7 @@ export async function getCard(id: number): Promise<CardEmpenho | null> {
 }
 
 /** Os cards ligados (a atualização automática) — só os CONFIGURADOS e com vínculos (`pendenciasDoCard`; no de
- * liquidações, com órgãos). */
+ * liquidações, algum órgão do cadastro com o "ID na Centi"). */
 export async function cardsAtivos(): Promise<CardEmpenho[]> {
   const l = await getDb()
     .select()
@@ -90,7 +93,7 @@ export async function cardsAtivos(): Promise<CardEmpenho[]> {
         eq(empenhoCards.ativa, true),
         isNotNull(empenhoCards.configuradoEm),
         sql`CASE "empenho_cards"."tipo"
-          WHEN 'liquidacoes' THEN EXISTS (SELECT 1 FROM "liquidacao_card_orgaos" v WHERE v."card_id" = "empenho_cards"."id")
+          WHEN 'liquidacoes' THEN ${sql.raw(ORGAOS_COM_ID)} > 0
           ELSE EXISTS (SELECT 1 FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id") END`,
       ),
     )
@@ -100,7 +103,7 @@ export async function cardsAtivos(): Promise<CardEmpenho[]> {
 
 const valoresDaEdicao = (e: EdicaoCard) => ({ ...e, anos: JSON.stringify(e.anos) });
 
-/** Cria o card do tipo (e copia os vínculos — ou os órgãos, no de liquidações — de `copiarDe`, do mesmo tipo) — devolve o id. */
+/** Cria o card do tipo (e, no de empenhos, copia os vínculos de `copiarDe`) — devolve o id. */
 export async function criarCard(e: EdicaoCard, copiarDe: number | null, quem: string, tipo: TipoCard = "empenhos"): Promise<number> {
   const db = getDb();
   const r = (await db.batch(comandosCriarCard(db, { ...valoresDaEdicao(e), criadoPor: quem, tipo }, copiarDe, tipo) as never)) as { id: number }[][];
@@ -161,41 +164,19 @@ export async function cadastroDaRegra(): Promise<{ orgaos: Set<number>; unidades
   return { orgaos: new Set(c.orgaos.map((o) => o.id)), unidades: new Map(c.unidades.map((u) => [u.id, u.orgaoId])) };
 }
 
-/** Os ÓRGÃOS de um card de liquidações, como gravados. */
-export async function orgaosDoCard(cardId: number): Promise<OrgaoDoCard[]> {
-  return getDb()
-    .select({ orgaoId: liquidacaoCardOrgaos.orgaoId, reparticaoId: liquidacaoCardOrgaos.reparticaoId })
-    .from(liquidacaoCardOrgaos)
-    .where(eq(liquidacaoCardOrgaos.cardId, cardId))
-    .orderBy(asc(liquidacaoCardOrgaos.id));
-}
-
-/** Um pedido de liquidações do card com o nome do órgão (a escolha na Importação) e a sigla (o botão). */
-export type OrgaoLiquidacao = PedidoLiquidacao & { nome: string; sigla: string };
+/** Um órgão da Centi das liquidações: o "ID na Centi" (o `idOrgao` do pedido) e o órgão do cadastro que o tem. */
+export type OrgaoLiquidacao = { idOrgao: number; orgaoId: number; nome: string; sigla: string };
 
 /**
- * Os PEDIDOS de um card de liquidações (a API exige o órgão — um por importação): cada órgão do card com o "ID na Centi"
- * dele (`idOrgao`) e o destino. `semId` = os órgãos do card sem o ID cadastrado (não são lidos).
+ * Os ÓRGÃOS da Centi que uma importação de liquidações lê: TODOS os do cadastro com o "ID na Centi" (Órgãos e Unidades),
+ * um por ID (o de menor id no cadastro), na ordem do ID.
  */
-export async function orgaosLiquidacao(cardId: number): Promise<{ orgaos: OrgaoLiquidacao[]; semId: string[] }> {
-  const doCard = await orgaosDoCard(cardId);
-  if (!doCard.length) return { orgaos: [], semId: [] };
-  const os = await getDb()
-    .select({ id: orgaos.id, nome: orgaos.nome, sigla: orgaos.sigla, centi: orgaos.entidadeCenti })
-    .from(orgaos)
-    .where(sql`${orgaos.id} IN (SELECT value FROM json_each(${JSON.stringify(doCard.map((o) => o.orgaoId))}))`);
-  const nome = new Map(os.map((o) => [o.id, o.sigla ? `${o.sigla} — ${o.nome}` : o.nome]));
-  const sigla = new Map(os.map((o) => [o.id, o.sigla || o.nome]));
-  const { pedidos, semId } = pedidosDoCard(doCard, new Map(os.map((o) => [o.id, o.centi])));
-  return { orgaos: pedidos.map((p) => ({ ...p, nome: nome.get(p.orgaoId) ?? `#${p.orgaoId}`, sigla: sigla.get(p.orgaoId) ?? `#${p.orgaoId}` })), semId: semId.map((id) => nome.get(id) ?? `#${id}`) };
-}
-
-/** O cadastro como a regra dos órgãos de liquidações o confere (`motivoOrgaosInvalidos`). */
-export async function cadastroDosOrgaos(): Promise<{ orgaos: Map<number, { nome: string; centi: string | null }>; unidades: Map<number, number | null> }> {
-  const db = getDb();
-  const [o, u] = await Promise.all([
-    db.select({ id: orgaos.id, nome: orgaos.nome, centi: orgaos.entidadeCenti }).from(orgaos),
-    db.select({ id: reparticoes.id, orgaoId: reparticoes.orgaoId }).from(reparticoes),
-  ]);
-  return { orgaos: new Map(o.map((x) => [x.id, { nome: x.nome, centi: x.centi }])), unidades: new Map(u.map((x) => [x.id, x.orgaoId])) };
+export async function orgaosLiquidacao(): Promise<OrgaoLiquidacao[]> {
+  const os = await getDb().select({ id: orgaos.id, nome: orgaos.nome, sigla: orgaos.sigla, centi: orgaos.entidadeCenti }).from(orgaos).orderBy(asc(orgaos.id));
+  const por = new Map<number, OrgaoLiquidacao>();
+  for (const o of os) {
+    const id = idCenti(o.centi);
+    if (id != null && !por.has(id)) por.set(id, { idOrgao: id, orgaoId: o.id, nome: o.sigla ? `${o.sigla} — ${o.nome}` : o.nome, sigla: o.sigla || o.nome });
+  }
+  return orgaosDaCenti([...por.keys()].map(String)).map((id) => por.get(id) as OrgaoLiquidacao);
 }

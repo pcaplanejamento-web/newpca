@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.212.0",
+    data: "2026-10-24",
+    titulo: "Liquidações ligadas aos empenhos pelo número",
+    mudancas: [
+      { tipo: "melhoria", area: "Liquidações", texto: "Uma importação lê as liquidações de todos os órgãos com o “ID na Centi” (Órgãos e Unidades) de uma vez — a aba Órgãos do card saiu; os passos mostram o órgão lido.", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Liquidações", texto: "A tabela ganhou as colunas Órgão e Unidade do sistema: o número do empenho liga a liquidação ao empenho, e ela segue o órgão e a unidade dele (a Centi não informa a unidade). Sem o empenho importado, fica o órgão do ID na Centi, sem unidade — e passa a seguir o empenho quando ele chegar.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Importar empenhos ou mudar os vínculos de um card leva junto as liquidações desses empenhos para o novo órgão e unidade.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.211.1",
     data: "2026-10-24",
     titulo: "Excluir importações",

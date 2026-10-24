@@ -2,20 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { comandosCriarCard, comandosGravarOrgaosLiq } from "../src/lib/empenho-cards-sql.ts";
 import { conferirLote, continuarPeriodo, totalDoPeriodo } from "../src/lib/empenhos-core.ts";
 import { comandoRecontarLote, comandoRegistrarPasso, comandoSoltarLote, comandosExcluirLotes, comandosFecharLote, consultaUltimoPasso, jaNoLote } from "../src/lib/empenhos-sql.ts";
+import { corpoLiquidacoes, idCenti, lerOrgaosCenti, lerPaginaLiquidacoes, linhaLiquidacao, orgaoDaPagina, orgaosDaCenti } from "../src/lib/liquidacoes-core.ts";
 import {
-  corpoLiquidacoes,
-  idCenti,
-  lerPaginaLiquidacoes,
-  linhaLiquidacao,
-  motivoOrgaosInvalidos,
-  type OrgaoDoCard,
-  pedidosDoCard,
-  proximoOrgaoDaRodada,
-} from "../src/lib/liquidacoes-core.ts";
-import { comandosConferirLiquidacoes, comandosGuardarLiquidacoes, comandosPromoverLiquidacoes, contagemLiquidacoes, liquidacoesSuspeitas, ultimaLiquidacaoPromovida } from "../src/lib/liquidacoes-sql.ts";
+  comandoRealinharLiquidacoes,
+  comandosConferirLiquidacoes,
+  comandosGuardarLiquidacoes,
+  comandosPromoverLiquidacoes,
+  contagemLiquidacoes,
+  liquidacoesSuspeitas,
+  totalAntesDaPagina,
+  ultimaLiquidacaoPromovida,
+} from "../src/lib/liquidacoes-sql.ts";
 import { anosLiquidacoes, COLUNAS_LIQUIDACAO, textoLiquidacoes } from "../src/lib/liquidacoes-tela.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
@@ -49,7 +48,7 @@ test("liquidações: a linha, a recusa e a leitura do período (sem paginação 
   assert.equal(l.linha.saldo, 1000);
   assert.deepEqual(linhaLiquidacao({ ...liq(1, "9"), Id: null }, 2025), { recusado: "sem Id" });
   const semEmpenho = linhaLiquidacao(liq(1, ""), 2025);
-  assert.ok("linha" in semEmpenho && semEmpenho.linha.numeroEmpenho === "", "independente dos empenhos: o número do empenho é só dado");
+  assert.ok("linha" in semEmpenho && semEmpenho.linha.numeroEmpenho === "");
   const p = lerPaginaLiquidacoes(JSON.stringify([liq(1, "9"), liq(1, "9"), liq(2, "10"), { ...liq(3, "11"), Id: 0 }]), 2025);
   assert.equal(p.recebidos, 4);
   assert.equal(p.repetidos, 1);
@@ -62,7 +61,7 @@ test("liquidações: a linha, a recusa e a leitura do período (sem paginação 
   assert.throws(() => lerPaginaLiquidacoes('{"mensagem":"Campo(s) obrigatório(s)"}', 2025), /lista de registros/);
 });
 
-test("liquidações: o pedido leva o órgão da Centi; os pedidos do card pelo ID na Centi; a regra dos órgãos", () => {
+test("liquidações: o pedido leva o órgão da Centi; os órgãos de uma importação = os ID na Centi do cadastro", () => {
   assert.deepEqual(corpoLiquidacoes('{"dataInicio":"{inicio}","dataFim":"{fim}"}', 2025, { inicio: "2025-03-01", fim: "2025-03-07" }, 2), {
     dataInicio: "01/03/2025",
     dataFim: "07/03/2025",
@@ -71,65 +70,46 @@ test("liquidações: o pedido leva o órgão da Centi; os pedidos do card pelo I
   assert.equal(idCenti(" 02 "), 2);
   assert.equal(idCenti("abc"), null);
   assert.equal(idCenti(null), null);
-  const r = pedidosDoCard(
-    [
-      { orgaoId: 3, reparticaoId: null },
-      { orgaoId: 1, reparticaoId: 9 },
-      { orgaoId: 2, reparticaoId: null },
-    ],
-    new Map([
-      [1, "02"],
-      [2, null],
-      [3, "1"],
-    ]),
-  );
-  assert.deepEqual(r, { pedidos: [{ idOrgao: 1, orgaoId: 3, reparticaoId: null }, { idOrgao: 2, orgaoId: 1, reparticaoId: 9 }], semId: [2] }, "na ordem do ID; sem o ID, fora");
-  const cadastro = {
-    orgaos: new Map([
-      [1, { nome: "Prefeitura", centi: "2" }],
-      [2, { nome: "Saúde", centi: "3" }],
-      [3, { nome: "Sem ID", centi: null }],
-      [4, { nome: "Repetido", centi: "3" }],
-    ]),
-    unidades: new Map<number, number | null>([
-      [10, 1],
-      [20, 2],
-    ]),
-  };
-  const m = (l: OrgaoDoCard[]) => motivoOrgaosInvalidos(l, cadastro) ?? "";
-  assert.equal(motivoOrgaosInvalidos([{ orgaoId: 1, reparticaoId: 10 }, { orgaoId: 2, reparticaoId: null }], cadastro), null);
-  assert.match(m([{ orgaoId: 1, reparticaoId: null }, { orgaoId: 1, reparticaoId: null }]), /duas vezes/);
-  assert.match(m([{ orgaoId: 3, reparticaoId: null }]), /ID na Centi/);
-  assert.match(m([{ orgaoId: 2, reparticaoId: null }, { orgaoId: 4, reparticaoId: null }]), /mesmo ID na Centi \(3\)/);
-  assert.match(m([{ orgaoId: 1, reparticaoId: 20 }]), /unidade desse órgão/);
-  assert.match(m([{ orgaoId: 99, reparticaoId: null }]), /não existe/);
+  assert.deepEqual(orgaosDaCenti(["8", null, "02", "8", "x", " 24 "]), [2, 8, 24], "sem repetir, em ordem, sem os inválidos");
+  assert.deepEqual(lerOrgaosCenti("[2,8]"), [2, 8]);
+  assert.equal(lerOrgaosCenti("[]"), null);
+  assert.equal(lerOrgaosCenti("[2,0]"), null);
+  assert.equal(lerOrgaosCenti("x"), null);
+  assert.equal(orgaoDaPagina([2, 8], 1), 2, "a página N do período é o N-ésimo órgão");
+  assert.equal(orgaoDaPagina([2, 8], 2), 8);
+  assert.equal(orgaoDaPagina([2, 8], 3), null);
+  assert.equal(orgaoDaPagina(null, 1), null);
 });
 
-/** O card de liquidações e o destino do órgão 2 da Centi (o órgão 1 do cadastro). */
+/** O card de liquidações (3) e o de empenhos (1). No cadastro: PMRV (ID na Centi 2, unidade SEFAZ) e FMS (ID 3, unidade SAUDE). */
 const LIQ = 3;
-const DESTINO: OrgaoDoCard = { orgaoId: 1, reparticaoId: null };
 
 function banco() {
   const raw = bancoMigrado();
   raw.exec("INSERT INTO orgaos (id, nome, sigla, entidade_centi) VALUES (1, 'Prefeitura', 'PMRV', '2'), (2, 'Saúde', 'FMS', '3')");
-  raw.exec("INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (5, 'SEFAZ', 'Fazenda', 1)");
+  raw.exec("INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (5, 'SEFAZ', 'Fazenda', 1), (6, 'SAUDE', 'Secretaria de Saúde', 2)");
+  raw.exec("INSERT INTO empenho_cards (id, nome) VALUES (1, 'Empenhos')");
   raw.exec("INSERT INTO empenho_cards (id, nome, tipo, endpoint) VALUES (3, 'Liquidações', 'liquidacoes', 'getliquidacoes')");
-  raw.exec("INSERT INTO liquidacao_card_orgaos (card_id, orgao_id) VALUES (3, 1)");
   const db = drizzle(d1Sobre(raw) as never, { schema });
-  const novoLote = (ano = 2025, card = LIQ, idOrgao = 2) =>
-    Number(raw.prepare("INSERT INTO centi_lotes (card_id, ano, modo, id_orgao_centi) VALUES (?, ?, 'liquidacoes', ?) RETURNING id").get(card, ano, idOrgao)?.id);
-  return { raw, db, novoLote };
+  const novoLote = (orgaos: number[] = [2, 3], ano = 2025) =>
+    Number(raw.prepare("INSERT INTO centi_lotes (card_id, ano, modo, orgaos_centi) VALUES (?, ?, 'liquidacoes', ?) RETURNING id").get(LIQ, ano, JSON.stringify(orgaos))?.id);
+  /** Um EMPENHO no sistema (o número liga a liquidação a ele): o vínculo dele dá o órgão e a unidade. */
+  const empenho = (numero: string, orgao: number, unidade: number | null) =>
+    raw.prepare("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, orgao_id, reparticao_id) VALUES (1, ?, 2025, ?, 'G', ?, ?)").run(`2025|G|${numero}`, numero, orgao, unidade);
+  return { raw, db, novoLote, empenho };
 }
 
-/** Lê um período COMO A ROTA FAZ: todas as liquidações do órgão ao staging + a conferência em tempo real; devolve o resultado. */
-async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<string, unknown>[], destino = DESTINO) {
+/** Lê UM órgão no período COMO A ROTA FAZ (a "página" é o órgão): o staging + a conferência em tempo real; o resultado. */
+async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<string, unknown>[], pagina = 1, idOrgao = 2, ultima = true) {
   const p = lerPaginaLiquidacoes(JSON.stringify(regs), 2025);
   const novos = p.linhas.length - (await jaNoLote(b.db, lote, p.linhas.map((l) => l.chave)));
-  const passo = { inicio: "2025-01-01", fim: "2025-12-31", pagina: 1, estado: "ok" as const, fimPeriodo: true, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total: p.total, soma: p.soma, mensagem: null, corpo: "{}" };
+  const periodo = { inicio: "2025-01-01", fim: "2025-12-31" };
+  const total = (await totalAntesDaPagina(b.db, lote, periodo, pagina)) + (p.total ?? 0);
+  const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: ultima, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
-    ...comandosGuardarLiquidacoes(b.db, lote, 1, p.linhas),
-    ...comandosConferirLiquidacoes(b.db, lote, LIQ, destino, 1, p.linhas.map((l) => l.chave)),
+    ...comandosGuardarLiquidacoes(b.db, lote, pagina, idOrgao, p.linhas),
+    ...comandosConferirLiquidacoes(b.db, lote, LIQ, 1, p.linhas.map((l) => l.chave)),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),
   ] as never)) as Record<string, unknown>[][];
@@ -149,54 +129,88 @@ const lote = (b: ReturnType<typeof banco>, id: number) =>
     soma: number;
   };
 
-async function promover(b: ReturnType<typeof banco>, id: number, regra: "marcar" | "apagar" = "marcar", destino = DESTINO) {
-  const c = await contagemLiquidacoes(b.db, id, LIQ, destino, 2025, 2, 1);
-  await b.db.batch(comandosPromoverLiquidacoes(b.db, id, LIQ, destino, 2025, 2, 1, regra, c) as never);
+async function promover(b: ReturnType<typeof banco>, id: number, regra: "marcar" | "apagar" = "marcar", orgaos = [2, 3]) {
+  const c = await contagemLiquidacoes(b.db, id, LIQ, 2025, orgaos, 1);
+  await b.db.batch(comandosPromoverLiquidacoes(b.db, id, LIQ, 2025, orgaos, 1, regra, c) as never);
   return c;
 }
 
 const n = (b: ReturnType<typeof banco>, q: string) => (b.raw.prepare(q).get() as { n: number }).n;
+const gravadas = (b: ReturnType<typeof banco>) =>
+  b.raw.prepare("SELECT chave, numero_empenho AS emp, orgao_id AS org, reparticao_id AS rep, id_orgao_centi AS centi, removido_em IS NOT NULL AS removida FROM liquidacoes ORDER BY CAST(chave AS INTEGER)").all().map((x) => ({ ...x }));
 
-test("liquidações (D1 real): INDEPENDENTES — tudo do órgão é gravado com o destino dele, sem empenho nenhum no banco", async () => {
+test("liquidações (D1 real): o NÚMERO DO EMPENHO dá o órgão e a unidade; sem o empenho, o órgão do ID na Centi; sem nada, fora", async () => {
   const b = banco();
-  assert.equal(n(b, "SELECT COUNT(*) n FROM empenhos"), 0);
+  b.empenho("9", 2, 6);
   const l1 = b.novoLote();
-  assert.deepEqual(await guardar(b, l1, [liq(1, "9"), liq(2, "10"), liq(3, ""), { ...liq(4, "1"), Id: null }]), { novos: 3, alterados: 0, iguais: 0, semVinculo: 0 });
+  // Órgão 2 da Centi: a liquidação do empenho 9 segue o EMPENHO (FMS/SAUDE), a do 10 (sem empenho) fica no órgão do ID 2.
+  assert.deepEqual(await guardar(b, l1, [liq(1, "9"), liq(2, "10"), { ...liq(4, "1"), Id: null }], 1, 2, false), { novos: 2, alterados: 0, iguais: 0, semVinculo: 0 });
+  // Um órgão da Centi SEM cadastro e uma liquidação sem empenho: não tem destino — fica fora (conta na conferência).
+  assert.deepEqual(await guardar(b, l1, [liq(3, "77")], 2, 99, true), { novos: 0, alterados: 0, iguais: 0, semVinculo: 1 });
   const s = lote(b, l1);
   assert.equal(s.unicos, 3);
-  assert.equal(s.fora, 0);
-  assert.equal(s.totalInformado, 4);
-  assert.deepEqual(conferirLote(s), { completo: true }, "distintos + recusados = o total do período");
+  assert.equal(s.totalInformado, 4, "o total ACUMULADO dos órgãos do período (3 do 1º + 1 do 2º)");
+  assert.deepEqual(conferirLote(s), { completo: true });
   assert.equal(await liquidacoesSuspeitas(b.db, l1), 0);
-  assert.deepEqual(await promover(b, l1), { inseridos: 3, atualizados: 0, removidos: 0, fora: 0 });
-  const gravadas = b.raw.prepare("SELECT chave, numero_empenho AS emp, orgao_id AS org, reparticao_id AS rep, id_orgao_centi AS centi FROM liquidacoes ORDER BY chave").all().map((x) => ({ ...x }));
-  assert.deepEqual(gravadas, [
-    { chave: "1", emp: "9", org: 1, rep: null, centi: 2 },
-    { chave: "2", emp: "10", org: 1, rep: null, centi: 2 },
-    { chave: "3", emp: "", org: 1, rep: null, centi: 2 },
+  assert.deepEqual(await promover(b, l1, "marcar", [2, 99]), { inseridos: 2, atualizados: 0, removidos: 0, fora: 1 });
+  assert.deepEqual(gravadas(b), [
+    { chave: "1", emp: "9", org: 2, rep: 6, centi: 2, removida: 0 },
+    { chave: "2", emp: "10", org: 1, rep: null, centi: 2, removida: 0 },
   ]);
   assert.equal(n(b, "SELECT COUNT(*) n FROM liquidacoes_staging"), 0, "staging limpo");
   assert.equal(lote(b, l1).estado, "promovido");
-  assert.deepEqual(await ultimaLiquidacaoPromovida(b.db, LIQ, 2025, 2, 0), { soma: 4770, unicos: 3 }, "a soma de TODAS as lidas (a mesma régua dos empenhos)");
+  assert.deepEqual(await ultimaLiquidacaoPromovida(b.db, LIQ, 2025, 0), { soma: 4770, unicos: 3 }, "a soma de TODAS as lidas, de todos os órgãos (a mesma régua dos empenhos)");
 });
 
-test("liquidações (D1 real): reimportar atualiza o que mudou, marca a que sumiu; a regra 'apagar' tira de vez", async () => {
+test("liquidações (D1 real): REALINHAR — o empenho que chega depois (ou muda de unidade) leva a liquidação junto", async () => {
   const b = banco();
   const l1 = b.novoLote();
   await guardar(b, l1, [liq(1, "9"), liq(2, "10")]);
   await promover(b, l1);
+  assert.deepEqual(gravadas(b).map((x) => [x.org, x.rep]), [
+    [1, null],
+    [1, null],
+  ]);
+  b.empenho("9", 2, 6);
+  await b.db.batch([comandoRealinharLiquidacoes(b.db)] as never);
+  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.org, x.rep]), [
+    ["1", 2, 6],
+    ["2", 1, null],
+  ], "só a do empenho que chegou; a sem empenho fica");
+  b.raw.exec("UPDATE empenhos SET reparticao_id = NULL WHERE numero = '9'");
+  await b.db.batch([comandoRealinharLiquidacoes(b.db)] as never);
+  assert.deepEqual(gravadas(b)[0], { chave: "1", emp: "9", org: 2, rep: null, centi: 2, removida: 0 }, "o empenho vinculado só ao órgão: sem unidade");
+  // Reimportar a mesma liquidação depois do realinhamento: igual (o destino é o mesmo do empenho).
   const l2 = b.novoLote();
-  assert.deepEqual(await guardar(b, l2, [liq(1, "9", { ValorPago: "1.590,00" })]), { novos: 0, alterados: 1, iguais: 0, semVinculo: 0 });
-  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 1, fora: 0 });
-  const rows = b.raw.prepare("SELECT chave, valor_pago AS pago, removido_em IS NOT NULL AS removida FROM liquidacoes ORDER BY chave").all().map((x) => ({ ...x }));
-  assert.deepEqual(rows, [
-    { chave: "1", pago: 1590, removida: 0 },
-    { chave: "2", pago: 590, removida: 1 },
+  assert.deepEqual(await guardar(b, l2, [liq(1, "9"), liq(2, "10")]), { novos: 0, alterados: 0, iguais: 2, semVinculo: 0 });
+});
+
+test("liquidações (D1 real): reimportar atualiza o que mudou, marca a que sumiu (só dos órgãos do lote); 'apagar' tira de vez", async () => {
+  const b = banco();
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "9"), liq(2, "10")], 1, 2, false);
+  await guardar(b, l1, [liq(5, "50")], 2, 3, true);
+  await promover(b, l1);
+  // A liquidação de um órgão da Centi que não está no lote não é tocada.
+  b.raw.exec("INSERT INTO liquidacoes (chave, ano, numero_empenho, id_orgao_centi, orgao_id, card_id) VALUES ('8', 2025, '80', 7, 1, 3)");
+  const l2 = b.novoLote();
+  await guardar(b, l2, [liq(1, "9", { ValorPago: "1.590,00" })], 1, 2, false);
+  assert.deepEqual(await guardar(b, l2, [], 2, 3, true), { novos: 0, alterados: 0, iguais: 0, semVinculo: 0 });
+  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 2, fora: 0 });
+  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.org, x.removida]), [
+    ["1", 1, 0],
+    ["2", 1, 1],
+    ["5", 2, 1],
+    ["8", 1, 0],
   ]);
   const l3 = b.novoLote();
   await guardar(b, l3, [liq(2, "10")]);
   assert.equal((await promover(b, l3, "apagar")).removidos, 1);
-  assert.deepEqual(b.raw.prepare("SELECT chave, removido_em IS NOT NULL AS r FROM liquidacoes ORDER BY chave").all().map((x) => ({ ...x })), [{ chave: "2", r: 0 }], "a 2 voltou (reativada); a 1 sumiu e foi apagada");
+  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.removida]), [
+    ["2", 0],
+    ["5", 1],
+    ["8", 0],
+  ], "a 2 voltou; a 1 sumiu e foi apagada; a 5 já estava removida; a 8 é de outro órgão");
 });
 
 test("liquidações (D1 real): CONFERÊNCIA EM TEMPO REAL — a igual à gravada sai do staging e não some na conclusão", async () => {
@@ -210,40 +224,6 @@ test("liquidações (D1 real): CONFERÊNCIA EM TEMPO REAL — a igual à gravada
   assert.deepEqual({ ...(b.raw.prepare(`SELECT unicos, fora FROM centi_lotes WHERE id = ${l2}`).get() as object) }, { unicos: 3, fora: 0 });
   assert.deepEqual(await promover(b, l2), { inseridos: 1, atualizados: 1, removidos: 0, fora: 0 });
   assert.equal((b.raw.prepare("SELECT lote_id FROM liquidacoes WHERE chave = '1'").get() as { lote_id: number }).lote_id, l1, "a igual não foi reescrita");
-});
-
-test("liquidações (D1 real): a UNIDADE DE DESTINO muda — a liquidação conta como alterada e a gravação acompanha", async () => {
-  const b = banco();
-  const l1 = b.novoLote();
-  await guardar(b, l1, [liq(1, "9")]);
-  await promover(b, l1);
-  const comUnidade = { orgaoId: 1, reparticaoId: 5 };
-  const l2 = b.novoLote();
-  assert.deepEqual(await guardar(b, l2, [liq(1, "9")], comUnidade), { novos: 0, alterados: 1, iguais: 0, semVinculo: 0 }, "o destino entra na comparação");
-  await promover(b, l2, "marcar", comUnidade);
-  assert.equal((b.raw.prepare("SELECT reparticao_id AS r FROM liquidacoes WHERE chave = '1'").get() as { r: number }).r, 5);
-});
-
-test("liquidações (D1 real): os ÓRGÃOS do card — trocar a unidade leva as gravadas; tirar o órgão tira as liquidações dele", async () => {
-  const b = banco();
-  const l1 = b.novoLote();
-  await guardar(b, l1, [liq(1, "9"), liq(2, "10")]);
-  await promover(b, l1);
-  await b.db.batch(comandosGravarOrgaosLiq(b.db, LIQ, [{ orgaoId: 1, reparticaoId: 5 }, { orgaoId: 2, reparticaoId: null }]) as never);
-  assert.deepEqual(
-    b.raw.prepare("SELECT orgao_id AS o, reparticao_id AS r FROM liquidacoes ORDER BY chave").all().map((x) => ({ ...x })),
-    [
-      { o: 1, r: 5 },
-      { o: 1, r: 5 },
-    ],
-  );
-  assert.equal(n(b, "SELECT COUNT(*) n FROM liquidacao_card_orgaos WHERE card_id = 3"), 2);
-  await b.db.batch(comandosGravarOrgaosLiq(b.db, LIQ, [{ orgaoId: 2, reparticaoId: null }]) as never);
-  assert.equal(n(b, "SELECT COUNT(*) n FROM liquidacoes"), 0, "o órgão 1 (ID 2 na Centi) saiu — as liquidações dele também");
-  // Criar um card copiando os órgãos de outro card de liquidações.
-  const r = (await b.db.batch(comandosCriarCard(b.db, { nome: "Cópia", tipo: "liquidacoes" }, LIQ, "liquidacoes") as never)) as { id: number }[][];
-  const novo = Number(r.at(-1)?.[0]?.id);
-  assert.deepEqual(b.raw.prepare(`SELECT orgao_id AS o FROM liquidacao_card_orgaos WHERE card_id = ${novo}`).all().map((x) => ({ ...x })), [{ o: 2 }]);
 });
 
 test("liquidações (D1 real): fechar e excluir o lote limpam o staging; as gravadas ficam sem o lote; pausar solta a trava", async () => {
@@ -267,37 +247,32 @@ test("liquidações (D1 real): fechar e excluir o lote limpam o staging; as grav
   assert.deepEqual({ ...(b.raw.prepare(`SELECT estado, condutor FROM centi_lotes WHERE id = ${l3}`).get() as object) }, { estado: "lendo", condutor: null });
 });
 
-test("liquidações (D1 real): a tela — os anos e as tuplas montadas pelo banco, no escopo da PRÓPRIA liquidação", async () => {
+test("liquidações (D1 real): a QUEDA só compara com importações de todos os órgãos (as antigas, de um órgão, não servem)", async () => {
   const b = banco();
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, modo, id_orgao_centi, estado, soma, unicos) VALUES (3, 2025, 'liquidacoes', 2, 'promovido', 999, 9)");
+  assert.equal(await ultimaLiquidacaoPromovida(b.db, LIQ, 2025, 0), null);
   const l1 = b.novoLote();
-  await guardar(b, l1, [liq(1, "9")], { orgaoId: 1, reparticaoId: 5 });
-  await promover(b, l1, "marcar", { orgaoId: 1, reparticaoId: 5 });
-  const l2 = b.novoLote();
-  await guardar(b, l2, [liq(1, "9", {}), liq(2, "10")], { orgaoId: 1, reparticaoId: 5 });
-  await promover(b, l2, "marcar", { orgaoId: 1, reparticaoId: 5 });
-  b.raw.exec("UPDATE liquidacoes SET reparticao_id = NULL WHERE chave = '2'");
+  await guardar(b, l1, [liq(1, "9")]);
+  await promover(b, l1);
+  assert.deepEqual(await ultimaLiquidacaoPromovida(b.db, LIQ, 2025, 0), { soma: 1590, unicos: 1 });
+});
+
+test("liquidações (D1 real): a tela — Órgão e Unidade do CADASTRO (os do empenho) e o órgão da Centi; escopo da própria liquidação", async () => {
+  const b = banco();
+  b.empenho("9", 1, 5);
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "9"), liq(2, "10")]);
+  await promover(b, l1);
   assert.deepEqual((await anosLiquidacoes(LIQ, null, b.db)).map((x) => ({ ...x })), [{ ano: 2025, n: 2 }]);
   const linhas = JSON.parse(await textoLiquidacoes(LIQ, 2025, false, null, b.db)) as unknown[][];
   assert.equal(linhas.length, 2);
   assert.equal(linhas[0].length, COLUNAS_LIQUIDACAO.length);
-  const u = COLUNAS_LIQUIDACAO.indexOf("unidade");
-  assert.deepEqual(linhas.map((t) => t[u]).sort(), ["PMRV", "SEFAZ"], "a unidade de destino; só o órgão = a sigla do órgão");
+  const col = (c: (typeof COLUNAS_LIQUIDACAO)[number]) => COLUNAS_LIQUIDACAO.indexOf(c);
+  const por = new Map(linhas.map((t) => [t[col("numeroEmpenho")], [t[col("orgao")], t[col("unidade")], t[col("orgaoCenti")]]]));
+  assert.deepEqual(por.get("9"), ["PMRV", "SEFAZ", "PREFEITURA"], "a do empenho 9: o órgão e a unidade dele");
+  assert.deepEqual(por.get("10"), ["PMRV", null, "PREFEITURA"], "sem empenho: o órgão do ID na Centi, sem unidade");
   const so = JSON.parse(await textoLiquidacoes(LIQ, 2025, false, { unidades: [5], orgaos: [] }, b.db)) as unknown[][];
   assert.equal(so.length, 1);
-  assert.equal(so[0][COLUNAS_LIQUIDACAO.indexOf("numeroEmpenho")], "9");
+  assert.equal(so[0][col("numeroEmpenho")], "9");
   assert.equal(JSON.parse(await textoLiquidacoes(LIQ, 2025, true, null, b.db)).length, 0);
-});
-
-test("liquidações: a RODADA da atualização automática — um órgão da Centi após o outro, no mesmo ano", () => {
-  const orgaos = [2, 5, 9];
-  assert.equal(proximoOrgaoDaRodada([], orgaos), null, "sem lote: a rodada começa na hora do card");
-  assert.deepEqual(proximoOrgaoDaRodada([{ id: 10, ano: 2025, idOrgaoCenti: 2 }], orgaos), { ano: 2025, idOrgao: 5 });
-  const meio = [
-    { id: 11, ano: 2025, idOrgaoCenti: 5 },
-    { id: 10, ano: 2025, idOrgaoCenti: 2 },
-  ];
-  assert.deepEqual(proximoOrgaoDaRodada(meio, orgaos), { ano: 2025, idOrgao: 9 });
-  assert.equal(proximoOrgaoDaRodada([{ id: 12, ano: 2025, idOrgaoCenti: 9 }, ...meio], orgaos), null, "rodada completa: espera a próxima hora");
-  assert.deepEqual(proximoOrgaoDaRodada([{ id: 13, ano: 2024, idOrgaoCenti: 2 }, { id: 12, ano: 2025, idOrgaoCenti: 9 }, ...meio], orgaos), { ano: 2024, idOrgao: 5 });
-  assert.equal(proximoOrgaoDaRodada([{ id: 1, ano: 2025, idOrgaoCenti: 2 }], [2]), null, "um órgão só: a rodada é ele");
 });

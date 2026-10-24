@@ -2261,8 +2261,10 @@ export const centiLotes = sqliteTable(
     fora: integer("fora"),
     /** O CARD da importação (migração `0143`). */
     cardId: integer("card_id").references(() => empenhoCards.id, { onDelete: "cascade" }),
-    /** O ÓRGÃO da Centi pedido (migração `0145`) — só nas LIQUIDAÇÕES (`modo` 'liquidacoes': a API exige o órgão). */
+    /** O ÓRGÃO da Centi pedido (migração `0145`) — DORMENTE desde a `0150` (os lotes antigos, de um órgão só). */
     idOrgaoCenti: integer("id_orgao_centi"),
+    /** LIQUIDAÇÕES (migração `0150`): os órgãos da Centi do lote (JSON, na ordem) — a "página" N é o N-ésimo. */
+    orgaosCenti: text("orgaos_centi"),
   },
   (t) => [index("centi_lotes_card_ano_idx").on(t.cardId, t.ano, t.id)],
 );
@@ -2366,6 +2368,8 @@ export const empenhos = sqliteTable(
     index("empenhos_unidade_idx").on(t.orgaoGestor, t.unidadeOrcamentaria),
     index("empenhos_vinculo_idx").on(t.orgaoId, t.reparticaoId),
     index("empenhos_card_numero_idx").on(t.cardId, t.orgaoGestor, t.numero),
+    /** O NÚMERO DO EMPENHO liga empenhos, liquidações e pagamentos (migração `0150`). */
+    index("empenhos_numero_idx").on(t.numero),
     index("empenhos_lote_idx").on(t.loteId),
   ],
 );
@@ -2398,13 +2402,15 @@ export const liquidacoesStaging = sqliteTable(
       .references(() => centiLotes.id, { onDelete: "cascade" }),
     pagina: integer("pagina").notNull(),
     ...colunasLiquidacao(),
+    /** O órgão da Centi que entregou a liquidação (migração `0150`). */
+    idOrgaoCenti: integer("id_orgao_centi"),
   },
   (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
 );
 
 /**
- * As LIQUIDAÇÕES da Centi (migração `0145`) de um CARD — chave = o Id da Centi, única por card. Só existe com o EMPENHO
- * no card (`empenho_id` cascade); o vínculo (órgão/unidade do cadastro) é o do empenho.
+ * As LIQUIDAÇÕES da Centi (migração `0145`) de um CARD — chave = o Id da Centi, única por card. O NÚMERO DO EMPENHO
+ * (`numero_empenho` = `empenhos.numero`) liga a liquidação ao empenho: o órgão e a unidade do cadastro são os dele.
  */
 export const liquidacoes = sqliteTable(
   "liquidacoes",
@@ -2412,7 +2418,7 @@ export const liquidacoes = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     ...colunasLiquidacao(),
     idOrgaoCenti: integer("id_orgao_centi").notNull(),
-    /** O órgão e a unidade do CADASTRO (os do órgão do card — `liquidacao_card_orgaos`; migração `0148`). */
+    /** O órgão e a unidade do CADASTRO = os do EMPENHO de mesmo número (migração `0150`); sem ele, o órgão com o ID na Centi. */
     orgaoId: integer("orgao_id")
       .notNull()
       .references(() => orgaos.id, { onDelete: "cascade" }),
@@ -2433,26 +2439,6 @@ export const liquidacoes = sqliteTable(
     index("liquidacoes_orgao_idx").on(t.orgaoId),
     index("liquidacoes_lote_idx").on(t.loteId),
   ],
-);
-
-/**
- * Os ÓRGÃOS de um card de LIQUIDAÇÕES (migração `0148`): o órgão do cadastro — o "ID na Centi" dele é o `idOrgao` do
- * pedido (a API entrega um órgão por vez) — e, opcional, a unidade de destino. Tudo o que a Centi devolve para o órgão é
- * gravado com eles.
- */
-export const liquidacaoCardOrgaos = sqliteTable(
-  "liquidacao_card_orgaos",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    cardId: integer("card_id")
-      .notNull()
-      .references(() => empenhoCards.id, { onDelete: "cascade" }),
-    orgaoId: integer("orgao_id")
-      .notNull()
-      .references(() => orgaos.id, { onDelete: "cascade" }),
-    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "cascade" }),
-  },
-  (t) => [uniqueIndex("liquidacao_card_orgaos_uq").on(t.cardId, t.orgaoId)],
 );
 
 /**

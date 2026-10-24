@@ -97,10 +97,10 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; card?: CardEmpenho };
       if (!r.ok || !j.ok || !j.card) throw new Error(j.error ?? "Erro ao salvar o card.");
       toast.success(
-        card.configuradoEm ? `Card "${j.card.nome}" salvo.` : liq ? `Configuração confirmada — agora escolha os órgãos do card "${j.card.nome}".` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`,
+        card.configuradoEm ? `Card "${j.card.nome}" salvo.` : liq ? `Configuração confirmada — o card "${j.card.nome}" já pode importar.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`,
       );
       setV(edicaoDoCard(j.card));
-      if (!card.configuradoEm) router.push(rotaDoCard(card, "vinculos"));
+      if (!card.configuradoEm) router.push(rotaDoCard(card, liq ? "importacao" : "vinculos"));
       else router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar o card.");

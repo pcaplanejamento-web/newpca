@@ -33,9 +33,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { url } = previa;
   let corpo = previa.corpo;
   if (a.card.tipo === "liquidacoes") {
-    // A API de liquidações exige o ÓRGÃO da Centi: o teste pede o 1º órgão do card.
-    const { orgaos } = await orgaosLiquidacao(a.card.id);
-    if (!orgaos.length) return erro("Escolha antes os órgãos do card (aba Órgãos) — a API de liquidações pede um órgão por vez.", 422);
+    // A API de liquidações exige o ÓRGÃO da Centi: o teste pede o 1º órgão do cadastro com o "ID na Centi".
+    const orgaos = await orgaosLiquidacao();
+    if (!orgaos.length) return erro("Cadastre antes o “ID na Centi” de ao menos um órgão (Órgãos e Unidades) — a API de liquidações pede o órgão.", 422);
     corpo = { ...(corpo as Record<string, unknown>), idOrgao: orgaos[0].idOrgao };
   }
   const inicio = Date.now();

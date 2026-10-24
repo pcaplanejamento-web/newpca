@@ -3,7 +3,7 @@ import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
 import { anosDoCard, type CardEmpenho } from "./empenho-cards-core";
 import { cardsAtivos, orgaosLiquidacao } from "./empenho-cards";
-import { criarLote, getLote, listarLotes, listarPassos, loteEmAndamento, ultimaLeituraPorAno } from "./empenhos";
+import { criarLote, getLote, listarPassos, loteEmAndamento, ultimaLeituraPorAno } from "./empenhos";
 import {
   hojeIso,
   anoDaVez,
@@ -21,7 +21,6 @@ import {
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, fecharParcial, lerPaginaDoLote, PedidoInvalido } from "./empenhos-importacao";
 import { comandoConduzir, comandosFecharLote } from "./empenhos-sql";
 import { listarFeriados } from "./feriados";
-import { proximoOrgaoDaRodada } from "./liquidacoes-core";
 import { horaAgoraBrasilia } from "./tarefas-core";
 
 /**
@@ -29,8 +28,7 @@ import { horaAgoraBrasilia } from "./tarefas-core";
  * padrão), continua o lote que está lendo ou, na hora certa (horário, dias úteis, frequência do card), começa o do ano da
  * vez — e lê poucas páginas por passada, com a MESMA leitura e a MESMA conferência da importação manual. Nunca aceita uma
  * QUEDA suspeita sozinha (o lote fecha como parcial — a pessoa confirma numa importação manual) e nunca disputa o lote com
- * uma aba (a trava de quem conduz). Nos cards de LIQUIDAÇÕES, uma atualização é uma RODADA: um lote por órgão da Centi, um
- * após o outro (`proximoOrgaoDaRodada`) — a rodada começa na hora do card e segue sem esperar a frequência.
+ * uma aba (a trava de quem conduz). Nos cards de LIQUIDAÇÕES, o lote lê todos os órgãos do cadastro com o "ID na Centi".
  */
 export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card: number; situacao: string }[]> {
   const cards = await cardsAtivos();
@@ -54,27 +52,15 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
   const db = getDb();
   let lote = await loteEmAndamento(card.id);
   if (!lote) {
-    if (card.tipo === "liquidacoes") {
-      const orgaos = (await orgaosLiquidacao(card.id)).orgaos.map((o) => o.idOrgao);
-      if (!orgaos.length) return "nenhum órgão da Centi";
-      // A rodada em curso continua pelo próximo órgão; senão, na hora do card, começa a do ano da vez pelo 1º órgão.
-      let vez = proximoOrgaoDaRodada(await listarLotes(card.id, 200), orgaos);
-      if (!vez) {
-        if (!cardNaHora(card, agora)) return "fora da hora";
-        const anos = anosDoCard(card.anos, agora.ano);
-        if (!anos.length) return "nenhum ano";
-        vez = { ano: anoDaVez(anos, await ultimaLeituraPorAno(card.id)), idOrgao: orgaos[0] };
-        await registrarAuditoria({ usuario: null, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${vez.ano}: atualização automática das liquidações começou (${orgaos.length} órgão(s) da Centi)` });
-      }
-      lote = await criarLote(card.id, vez.ano, QUEM_AUTO, CONDUTOR_AUTO, "liquidacoes", vez.idOrgao);
-    } else {
-      if (!cardNaHora(card, agora)) return "fora da hora";
-      const anos = anosDoCard(card.anos, agora.ano);
-      if (!anos.length) return "nenhum ano";
-      const ano = anoDaVez(anos, await ultimaLeituraPorAno(card.id));
-      lote = await criarLote(card.id, ano, QUEM_AUTO, CONDUTOR_AUTO);
-      await registrarAuditoria({ usuario: null, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${ano}: atualização automática começou` });
-    }
+    if (!cardNaHora(card, agora)) return "fora da hora";
+    const anos = anosDoCard(card.anos, agora.ano);
+    if (!anos.length) return "nenhum ano";
+    const ano = anoDaVez(anos, await ultimaLeituraPorAno(card.id));
+    // LIQUIDAÇÕES: o lote lê TODOS os órgãos do cadastro com o "ID na Centi" (a API exige o órgão — um por "página").
+    const orgaos = card.tipo === "liquidacoes" ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
+    if (orgaos && !orgaos.length) return "nenhum órgão com o ID na Centi";
+    lote = await criarLote(card.id, ano, QUEM_AUTO, CONDUTOR_AUTO, orgaos ? "liquidacoes" : "dados", orgaos);
+    await registrarAuditoria({ usuario: null, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${ano}: atualização automática começou${orgaos ? ` (${orgaos.length} órgão(s) da Centi)` : ""}` });
   }
   if (lote.leitor !== LEITOR_EMPENHOS) {
     // Um lote começado por uma versão anterior do leitor nunca é terminado por outra: a automática encerra o dela.

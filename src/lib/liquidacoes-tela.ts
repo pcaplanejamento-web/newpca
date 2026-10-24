@@ -5,7 +5,7 @@ import { doEscopo } from "./empenhos-tela-sql.ts";
 
 /**
  * A TABELA de LIQUIDAÇÕES de um card (D1; o banco vem de quem chama — testável no SQLite real, `tests/liquidacoes.test.ts`).
- * O escopo da pessoa é o da PRÓPRIA liquidação (o órgão e a unidade do órgão do card). As linhas saem
+ * O escopo da pessoa é o da PRÓPRIA liquidação (o órgão e a unidade do cadastro = os do EMPENHO de mesmo número). As linhas saem
  * do banco já como TEXTO JSON (tuplas, em pedaços de `POR_PEDACO`) — o Worker só junta os pedaços, sem ler cada linha.
  */
 const POR_PEDACO = 2500;
@@ -24,6 +24,7 @@ export const COLUNAS_LIQUIDACAO = [
   "valorLiquido",
   "valorPago",
   "saldo",
+  "orgaoCenti",
   "orgao",
   "unidade",
   "removido",
@@ -56,7 +57,8 @@ export async function textoLiquidacoes(card: number, ano: number, removidos: boo
   const pedacos = await Promise.all(
     Array.from({ length: Math.ceil(n / POR_PEDACO) }, (_, i) =>
       db.all<{ t: string | null }>(sql`SELECT json_group_array(json_array(l.id, l.data, l.numero, l.numero_empenho, l.credor, l.cpf_cnpj, l.historico, l.valor, l.valor_anulado, l.valor_liquido, l.valor_pago, l.saldo, l.orgao,
-        COALESCE((SELECT r.codigo FROM reparticoes r WHERE r.id = l.reparticao_id), (SELECT o.sigla FROM orgaos o WHERE o.id = l.orgao_id)),
+        (SELECT COALESCE(NULLIF(o.sigla, ''), o.nome) FROM orgaos o WHERE o.id = l.orgao_id),
+        (SELECT r.codigo FROM reparticoes r WHERE r.id = l.reparticao_id),
         CASE WHEN l.removido_em IS NULL THEN 0 ELSE 1 END)) AS t
         FROM (SELECT l.id AS lid FROM liquidacoes l WHERE ${onde} ORDER BY l.data DESC, l.id DESC LIMIT ${POR_PEDACO} OFFSET ${i * POR_PEDACO}) x
         JOIN liquidacoes l ON l.id = x.lid`),

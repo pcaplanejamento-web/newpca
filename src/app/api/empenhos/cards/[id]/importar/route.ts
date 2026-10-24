@@ -2,7 +2,7 @@ import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { anosDoCard, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
-import { orgaosDoCard, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
+import { orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
@@ -29,7 +29,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: a.card.tipo === "liquidacoes" ? await orgaosLiquidacao(a.card.id) : null, emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
+  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: a.card.tipo === "liquidacoes" ? await orgaosLiquidacao() : null, emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
 }
 
 /**
@@ -57,17 +57,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     // os empenhos, também os vínculos.
     // O MODO segue o tipo do card: no de liquidações, só liquidações; no de empenhos, os empenhos ou o catálogo.
     if ((corpo.modo === "liquidacoes") !== (card.tipo === "liquidacoes")) return erro(card.tipo === "liquidacoes" ? "Este card importa liquidações." : "Liquidações se importam num card de liquidações.", 422);
-    const vinculos = card.tipo === "liquidacoes" ? (await orgaosDoCard(card.id)).length : (await vinculosDoCard(card.id)).length;
+    // LIQUIDAÇÕES: uma importação lê TODOS os órgãos do cadastro com o "ID na Centi" (a lista fica no lote).
+    const orgaos = card.tipo === "liquidacoes" ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
+    const vinculos = orgaos ? orgaos.length : (await vinculosDoCard(card.id)).length;
     const falta = pendenciasDoCard(card, vinculos).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
-    // LIQUIDAÇÕES: um lote por ÓRGÃO da Centi — só os órgãos do card (o "ID na Centi" do órgão).
-    if (corpo.modo === "liquidacoes") {
-      const { orgaos } = await orgaosLiquidacao(card.id);
-      if (!corpo.idOrgao || !orgaos.some((o) => o.idOrgao === corpo.idOrgao)) return erro("Órgão da Centi fora dos órgãos deste card (aba Órgãos).", 422);
-    }
-    return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, corpo.modo === "liquidacoes" ? (corpo.idOrgao ?? null) : null) });
+    return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, orgaos) });
   }
 
   const lote = await getLote(corpo.lote, card.id);

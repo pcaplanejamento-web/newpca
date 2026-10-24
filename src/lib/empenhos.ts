@@ -1,6 +1,7 @@
 import { and, count, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
+import { lerOrgaosCenti } from "./liquidacoes-core";
 import { type EstadoLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
@@ -10,8 +11,8 @@ const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 
 /** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
 function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
-  const { cardId: _, estado, modo, condutor, conduzindoAte, ...resto } = l;
-  return { ...resto, estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
+  const { cardId: _, idOrgaoCenti: __, orgaosCenti, estado, modo, condutor, conduzindoAte, ...resto } = l;
+  return { ...resto, orgaosCenti: lerOrgaosCenti(orgaosCenti), estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
 }
 
 export async function listarLotes(cardId: number, limite = 20): Promise<LoteCenti[]> {
@@ -48,10 +49,10 @@ export async function loteEmAndamento(cardId: number): Promise<LoteCenti | null>
  * Cria o lote JÁ conduzido pela aba que o pediu (o token dela), com a versão atual do leitor. `modo` "unidades" = só
  * PUXA as unidades da Centi (nada é gravado nos empenhos).
  */
-export async function criarLote(cardId: number, ano: number, quem: string, condutor: string, modo: ModoLote = "dados", idOrgaoCenti: number | null = null): Promise<LoteCenti> {
+export async function criarLote(cardId: number, ano: number, quem: string, condutor: string, modo: ModoLote = "dados", orgaosCenti: number[] | null = null): Promise<LoteCenti> {
   const [l] = await getDb()
     .insert(centiLotes)
-    .values({ cardId, ano, modo, idOrgaoCenti, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .values({ cardId, ano, modo, orgaosCenti: orgaosCenti ? JSON.stringify(orgaosCenti) : null, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
     .returning();
   return paraLote(l);
 }

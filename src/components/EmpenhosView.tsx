@@ -77,10 +77,13 @@ export function EmpenhosView({
               atualização automática e as regras da conferência — independente dos empenhos.
             </p>
             <p>
-              A Centi entrega as liquidações de <strong>um órgão por vez</strong> (o “ID na Centi” cadastrado em Órgãos e Unidades): cada órgão do
-              card é uma importação própria, lida semana a semana.
+              A Centi entrega as liquidações por <strong>órgão</strong>: cada importação lê <strong>todos</strong> os órgãos com o “ID na Centi”
+              cadastrado em Órgãos e Unidades, semana a semana.
             </p>
-            <p>Tudo o que a Centi devolve para o órgão é gravado com ele (e a unidade de destino escolhida na aba Órgãos).</p>
+            <p>
+              A Centi não informa a unidade: o <strong>número do empenho</strong> liga a liquidação ao empenho — o órgão e a unidade dela são os
+              do empenho no sistema.
+            </p>
           </Ajuda>
         ) : (
         <Ajuda titulo="Empenhos" botao="sm">
@@ -184,30 +187,32 @@ export function EmpenhosView({
       >
         <div className="space-y-3">
           <TextField denso label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={60} autoFocus placeholder={liq ? "Ex.: Liquidações da Saúde" : "Ex.: Empenhos da Saúde"} />
+          {!liq && (
           <SelectField
             denso
-            label={liq ? "Copiar os órgãos de" : "Copiar os vínculos de"}
+            label="Copiar os vínculos de"
             value={copiarDe}
             onChange={(e) => setCopiarDe(e.target.value)}
             rotuloExtra={
-              <Ajuda titulo={liq ? "Copiar os órgãos" : "Copiar os vínculos"} compacta>
-                O card novo começa com {liq ? "os mesmos órgãos" : "os mesmos vínculos"} do card escolhido (depois cada um segue o seu). Nenhum = o
-                card começa vazio — escolha na aba {liq ? "Órgãos" : "Vínculos"} o que ele importa.
+              <Ajuda titulo="Copiar os vínculos" compacta>
+                O card novo começa com os mesmos vínculos do card escolhido (depois cada um segue o seu). Nenhum = o card começa vazio —
+                escolha na aba Vínculos o que ele importa.
               </Ajuda>
             }
           >
             <option value="">Nenhum (começar vazio)</option>
             {cards.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.nome} ({num(c.vinculos)} {liq ? "órgãos" : "vínculos"})
+                {c.nome} ({num(c.vinculos)} vínculos)
               </option>
             ))}
           </SelectField>
+          )}
           <p className="text-[12.5px] text-muted">
             {liq ? (
               <>
-                Depois de criar: 1. confirme a <strong>Configuração</strong> (integração, anos, atualização e regras), 2. escolha os <strong>Órgãos</strong>.
-                Só então a importação é liberada.
+                Depois de criar, confirme a <strong>Configuração</strong> (integração, anos, atualização e regras) — a importação lê todos os
+                órgãos com o “ID na Centi” cadastrado em Órgãos e Unidades.
               </>
             ) : (
               <>

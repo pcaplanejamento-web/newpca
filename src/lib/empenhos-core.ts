@@ -426,8 +426,8 @@ export type LoteCenti = {
   ano: number;
   estado: EstadoLote;
   modo: ModoLote;
-  /** O órgão da Centi pedido (só nas liquidações). */
-  idOrgaoCenti: number | null;
+  /** LIQUIDAÇÕES: os órgãos da Centi do lote, na ordem — a "página" N do período é o N-ésimo órgão. */
+  orgaosCenti: number[] | null;
   paginas: number;
   recebidos: number;
   unicos: number;
