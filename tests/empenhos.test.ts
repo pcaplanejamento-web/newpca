@@ -85,11 +85,11 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, pagina: number
   return { ...p, novos };
 }
 
-test("periodoDoAno: ano anterior até 31/12, ano atual até hoje", () => {
+test("periodoDoAno: sempre o ano inteiro, também o atual", () => {
   assert.deepEqual(periodoDoAno(2025, "2026-10-24"), { inicio: "2025-01-01", fim: "2025-12-31" });
-  assert.deepEqual(periodoDoAno(2026, "2026-10-24"), { inicio: "2026-01-01", fim: "2026-10-24" });
-  assert.deepEqual(lacunasDoAno(2026, [], "2026-10-24"), [{ inicio: "2026-01-01", fim: "2026-10-24" }]);
-  assert.equal(periodosAPedir(2026, [], true, "2026-10-24").at(-1)?.fim, "2026-10-24");
+  assert.deepEqual(periodoDoAno(2026, "2026-10-24"), { inicio: "2026-01-01", fim: "2026-12-31" });
+  assert.deepEqual(lacunasDoAno(2026, [], "2026-10-24"), [{ inicio: "2026-01-01", fim: "2026-12-31" }]);
+  assert.equal(periodosAPedir(2026, [], true, "2026-10-24").at(-1)?.fim, "2026-12-31");
 });
 
 test("empenhos: valores, datas e a chave (a MESMA da tabela)", () => {

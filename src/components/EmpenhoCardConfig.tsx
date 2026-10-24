@@ -266,7 +266,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
               Testar agora
             </Button>
             <A titulo="Testar">
-              Faz <strong>um</strong> pedido de verdade à Centi com o que está na tela (mesmo sem salvar) — o ano escolhido de 01/01 até 31/12 (no ano atual, até hoje) — o MESMO ano da Importação e do “Buscar na Centi” — e mostra o
+              Faz <strong>um</strong> pedido de verdade à Centi com o que está na tela (mesmo sem salvar) — o ano escolhido de 01/01 até 31/12 (também no ano atual) — o MESMO ano da Importação e do “Buscar na Centi” — e mostra o
               que voltou: quantos registros, o total que a API informa, os campos e uma amostra. Nada é gravado.
             </A>
           </span>

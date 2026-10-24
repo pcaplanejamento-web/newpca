@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.207.4",
+    data: "2026-10-24",
+    titulo: "Empenhos: sempre o ano inteiro",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos", texto: "A importação, a atualização automática, o Testar e o “Buscar na Centi” leem sempre o ano inteiro (01/01 a 31/12), também no ano atual.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.207.3",
     data: "2026-10-24",
     titulo: "Abas dos empenhos na altura da tela",

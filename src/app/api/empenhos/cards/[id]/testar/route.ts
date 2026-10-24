@@ -8,13 +8,13 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Até 40 MB de resposta (o teste lê o ano até 31/12, ou até hoje no ano atual) e 60 s. */
+/** Até 40 MB de resposta (o teste lê o ano inteiro, até 31/12) e 60 s. */
 const MAX_BYTES = 40_000_000;
 const TEMPO_MS = 60_000;
 
 /**
  * TESTA a integração do card com a configuração EM CURSO (ainda não salva) — Configurar: faz SÓ o pedido do período do
- * ano (até hoje no atual) e devolve o que veio (status, tempo, quantos registros, o total informado, os campos e uma amostra). NADA é gravado.
+ * ano inteiro (até 31/12) e devolve o que veio (status, tempo, quantos registros, o total informado, os campos e uma amostra). NADA é gravado.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAcesso("empenhos", "configurar");

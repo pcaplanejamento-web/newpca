@@ -197,10 +197,9 @@ export function hojeIso(agora: Date = new Date()): string {
   return new Date(agora.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
 }
 
-/** O período que EXISTE do ano: 01/01 até 31/12 nos anos anteriores e até HOJE no ano atual (nada de pedir o futuro). */
-export function periodoDoAno(ano: number, hoje: string = hojeIso()): Periodo {
-  const p = anoInteiro(ano);
-  return hoje < p.fim && hoje >= p.inicio ? { inicio: p.inicio, fim: hoje } : p;
+/** O período lido do ano: SEMPRE o ano inteiro, de 01/01 a 31/12 (também no ano atual). `_hoje` fica por compatibilidade. */
+export function periodoDoAno(ano: number, _hoje?: string): Periodo {
+  return anoInteiro(ano);
 }
 
 /** Os parâmetros usam o período ({inicio} e {fim})? Sem eles, o ano só pode ser lido inteiro. */
@@ -229,7 +228,7 @@ function emSemanas(p: Periodo): Periodo[] {
   return r;
 }
 
-/** O que falta ler do ano (até hoje, no ano atual): as LACUNAS entre os períodos já lidos, na ordem. */
+/** O que falta ler do ano (de 01/01 a 31/12, também no ano atual): as LACUNAS entre os períodos já lidos, na ordem. */
 export function lacunasDoAno(ano: number, lidos: Periodo[], hoje?: string): Periodo[] {
   const ano0 = periodoDoAno(ano, hoje);
   const r: Periodo[] = [];

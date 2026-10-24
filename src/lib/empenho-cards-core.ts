@@ -248,7 +248,7 @@ export function rotuloFrequencia(min: number, diasUteis: boolean, inicio: string
   return `${f}${diasUteis ? ", dias úteis" : ""}, ${inicio}–${fim}`;
 }
 
-/** A PRÉVIA do pedido do TESTE: o período que existe do ano (até 31/12 nos anteriores, até hoje no atual). Nada é enviado. */
+/** A PRÉVIA do pedido do TESTE: o ano inteiro (01/01 a 31/12, também no ano atual). Nada é enviado. */
 export function previaPedido(e: EdicaoCard, ano: number, hoje?: string): { url: string; corpo: unknown; erro: string | null } {
   const p = lerParametros(e.parametros);
   const per = periodoDoAno(ano, hoje);

@@ -56,7 +56,7 @@ test("cards: a régua da configuração (a mesma da tela e do servidor)", () => 
   assert.match(m({ frequenciaMin: 7 }), /Frequência/);
   assert.match(m({ horaInicio: "19:00", horaFim: "07:00" }), /antes do fim/);
   assert.match(m({ quedaSoma: 33 }), /queda/);
-  assert.deepEqual(previaPedido(card, 2026, "2026-10-24").corpo, { dataInicio: "01/01/2026", dataFim: "24/10/2026" });
+  assert.deepEqual(previaPedido(card, 2026, "2026-10-24").corpo, { dataInicio: "01/01/2026", dataFim: "31/12/2026" });
   assert.deepEqual(previaPedido(card, 2025, "2026-10-24").corpo, { dataInicio: "01/01/2025", dataFim: "31/12/2025" });
   const ok = { configuradoEm: "2026-10-24", vinculos: 2 };
   assert.equal(estadoCard({ ativa: true, ultimoStatus: "promovido", ...ok }).rotulo, "Automática");
