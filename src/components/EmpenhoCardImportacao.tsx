@@ -1,10 +1,11 @@
 "use client";
 
+import { useAnoDoCard } from "./anoDoCard";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { anosDoCard, type CardEmpenho, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
-  anoInteiro,
+  periodoDoAno,
   diaBR,
   diasDoPeriodo,
   LEITOR_EMPENHOS,
@@ -55,7 +56,7 @@ const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLoca
 /** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
 function fracaoDoAno(ano: number, passos: PassoLote[]): number {
   const dias = periodosLidos(passos).reduce((s, p) => s + diasDoPeriodo(p), 0);
-  return Math.min(1, dias / diasDoPeriodo(anoInteiro(ano)));
+  return Math.min(1, dias / diasDoPeriodo(periodoDoAno(ano)));
 }
 
 
@@ -72,12 +73,21 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   const anos = anosDoCard(card.anos, anoAtual());
   /** A configuração vem antes de importar (`pendenciasDoCard` — o aviso fica no cabeçalho do card). */
   const bloqueado = pendenciasDoCard(card, card.vinculos).length > 0;
-  const [ano, setAno] = useState(anos[0]);
+  const [ano, setAno] = useAnoDoCard(card.id, anos);
   const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
   const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
   const [atual, setAtual] = useState<LoteCenti | null>(null);
   const [passos, setPassos] = useState<PassoLote[]>([]);
   const [agora, setAgora] = useState<Agora | null>(null);
+  /** Os segundos do pedido em curso — o andamento AO VIVO enquanto a Centi responde (o passo entra na tabela ao chegar). */
+  const [segundos, setSegundos] = useState(0);
+  useEffect(() => {
+    setSegundos(0);
+    if (!agora) return;
+    const t0 = Date.now();
+    const id = setInterval(() => setSegundos(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [agora]);
   const [rodando, setRodando] = useState(false);
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
@@ -386,7 +396,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
               value={fracaoDoAno(atual.ano, passos) * 100}
               label={
                 agora
-                  ? `${rotuloPeriodo(agora.periodo)} · página ${agora.pagina}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ""}`
+                  ? `${rotuloPeriodo(agora.periodo)} · página ${agora.pagina}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ` · aguardando a Centi há ${segundos} s`}`
                   : "Conferindo…"
               }
             />

@@ -16,6 +16,7 @@ import {
   quedaSuspeita,
   dividirPeriodo,
   lacunasDoAno,
+  periodoDoAno,
   MAX_PAGINAS,
   type Periodo,
   periodoEmCurso,
@@ -83,6 +84,13 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, pagina: number
   await b.db.batch([comandoRegistrarPasso(b.db, lote, passo), ...comandosGuardarPagina(b.db, lote, pagina, p.linhas), comandoRecontarLote(b.db, lote)]);
   return { ...p, novos };
 }
+
+test("periodoDoAno: ano anterior até 31/12, ano atual até hoje", () => {
+  assert.deepEqual(periodoDoAno(2025, "2026-10-24"), { inicio: "2025-01-01", fim: "2025-12-31" });
+  assert.deepEqual(periodoDoAno(2026, "2026-10-24"), { inicio: "2026-01-01", fim: "2026-10-24" });
+  assert.deepEqual(lacunasDoAno(2026, [], "2026-10-24"), [{ inicio: "2026-01-01", fim: "2026-10-24" }]);
+  assert.equal(periodosAPedir(2026, [], true, "2026-10-24").at(-1)?.fim, "2026-10-24");
+});
 
 test("empenhos: valores, datas e a chave (a MESMA da tabela)", () => {
   assert.equal(valor(1234.5), 1234.5);
@@ -164,7 +172,7 @@ test("empenhos: o corpo de cada página (a 1ª sem `pagina`) e o PERÍODO nos ma
 });
 
 test("empenhos: o ano SEMANA A SEMANA, o período grande dividido ao meio até um dia, e o que falta ler", () => {
-  const meses = periodosAPedir(2026, [], true);
+  const meses = periodosAPedir(2026, [], true, "2026-12-31");
   assert.equal(meses.length, 48);
   assert.deepEqual(meses.slice(0, 5), [
     { inicio: "2026-01-01", fim: "2026-01-07" },
@@ -173,10 +181,10 @@ test("empenhos: o ano SEMANA A SEMANA, o período grande dividido ao meio até u
     { inicio: "2026-01-22", fim: "2026-01-31" },
     { inicio: "2026-02-01", fim: "2026-02-07" },
   ]);
-  assert.deepEqual(periodosAPedir(2026, [], true)[7], { inicio: "2026-02-22", fim: "2026-02-28" });
-  assert.deepEqual(periodosAPedir(2028, [], true)[7], { inicio: "2028-02-22", fim: "2028-02-29" }, "bissexto");
-  assert.deepEqual(periodosAPedir(2026, [], false), [anoInteiro(2026)]);
-  assert.deepEqual(periodosAPedir(2026, [anoInteiro(2026)], false), []);
+  assert.deepEqual(periodosAPedir(2026, [], true, "2026-12-31")[7], { inicio: "2026-02-22", fim: "2026-02-28" });
+  assert.deepEqual(periodosAPedir(2028, [], true, "2028-12-31")[7], { inicio: "2028-02-22", fim: "2028-02-29" }, "bissexto");
+  assert.deepEqual(periodosAPedir(2026, [], false, "2026-12-31"), [anoInteiro(2026)]);
+  assert.deepEqual(periodosAPedir(2026, [anoInteiro(2026)], false, "2026-12-31"), []);
   assert.deepEqual(dividirPeriodo({ inicio: "2026-05-01", fim: "2026-05-31" }), [
     { inicio: "2026-05-01", fim: "2026-05-16" },
     { inicio: "2026-05-17", fim: "2026-05-31" },
@@ -191,17 +199,17 @@ test("empenhos: o ano SEMANA A SEMANA, o período grande dividido ao meio até u
     { inicio: "2026-01-01", fim: "2026-01-31" },
     { inicio: "2026-05-01", fim: "2026-05-16" },
   ];
-  assert.deepEqual(lacunasDoAno(2026, lidos), [
+  assert.deepEqual(lacunasDoAno(2026, lidos, "2026-12-31"), [
     { inicio: "2026-02-01", fim: "2026-04-30" },
     { inicio: "2026-05-17", fim: "2026-12-31" },
   ]);
-  const falta = periodosAPedir(2026, lidos, true);
+  const falta = periodosAPedir(2026, lidos, true, "2026-12-31");
   assert.equal(falta.length, 12 + 2 + 28);
   assert.deepEqual(falta.slice(12, 14), [
     { inicio: "2026-05-17", fim: "2026-05-21" },
     { inicio: "2026-05-22", fim: "2026-05-31" },
   ]);
-  assert.deepEqual(lacunasDoAno(2026, meses), []);
+  assert.deepEqual(lacunasDoAno(2026, meses, "2026-12-31"), []);
   assert.equal(rotuloPeriodo({ inicio: "2026-05-01", fim: "2026-05-31" }), "Mai/2026");
   assert.equal(rotuloPeriodo({ inicio: "2026-05-17", fim: "2026-05-31" }), "17/05 a 31/05/2026");
   assert.equal(rotuloPeriodo({ inicio: "2026-05-17", fim: "2026-05-17" }), "17/05/2026");

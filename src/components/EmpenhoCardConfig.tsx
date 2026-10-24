@@ -1,5 +1,6 @@
 "use client";
 
+import { useAnoDoCard } from "./anoDoCard";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { ResultadoTeste } from "@/lib/centi-resposta-core";
@@ -53,7 +54,8 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
   const [salvando, setSalvando] = useState(false);
   const [avancado, setAvancado] = useState(false);
-  const [ano, setAno] = useState(anoAtual);
+  const anosSalvos = useMemo(() => anosDoCard(card.anos, anoAtual()), [card.anos]);
+  const [ano, setAno] = useAnoDoCard(card.id, anosSalvos);
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<ResultadoTeste | null>(null);
   const muda = <K extends keyof EdicaoCard>(k: K, valor: EdicaoCard[K]) => {
@@ -255,7 +257,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
               Testar agora
             </Button>
             <A titulo="Testar">
-              Faz <strong>um</strong> pedido de verdade à Centi com o que está na tela (mesmo sem salvar) — a 1ª semana do ano escolhido — e mostra o
+              Faz <strong>um</strong> pedido de verdade à Centi com o que está na tela (mesmo sem salvar) — o ano escolhido de 01/01 até 31/12 (no ano atual, até hoje) — o MESMO ano da Importação e do “Buscar na Centi” — e mostra o
               que voltou: quantos registros, o total que a API informa, os campos e uma amostra. Nada é gravado.
             </A>
           </span>
@@ -271,7 +273,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
               setTeste(null);
             }}
           >
-            {[anoAtual(), anoAtual() - 1, anoAtual() - 2].map((y) => (
+            {anosSalvos.map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>

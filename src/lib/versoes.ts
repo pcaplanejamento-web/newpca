@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.206.1",
+    data: "2026-10-24",
+    titulo: "Empenhos: um só ano, período até hoje e andamento ao vivo",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "Importação, Testar e “Buscar na Centi” usam o MESMO ano (escolher em um vale nos outros); o Testar oferece só os anos do card.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "O período vai até 31/12 nos anos anteriores e até HOJE no ano atual — o teste pede o ano inteiro e a importação não pede semanas futuras.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A Importação mostra ao vivo há quanto tempo espera a resposta da Centi em cada pedido.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Vínculos: a coluna Ações usa o mesmo selo dos vínculos do orçamento (“Todas” ou “N ações”, a lista na dica); edite as ações no banner do vínculo.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.206.0",
     data: "2026-10-24",
     titulo: "Card de empenhos: configurar antes de importar e vínculos na célula",

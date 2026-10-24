@@ -192,6 +192,17 @@ export function anoInteiro(ano: number): Periodo {
   return { inicio: `${ano}-01-01`, fim: `${ano}-12-31` };
 }
 
+/** Hoje (AAAA-MM-DD) no horário de Brasília (UTC−3). */
+export function hojeIso(): string {
+  return new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+}
+
+/** O período que EXISTE do ano: 01/01 até 31/12 nos anos anteriores e até HOJE no ano atual (nada de pedir o futuro). */
+export function periodoDoAno(ano: number, hoje: string = hojeIso()): Periodo {
+  const p = anoInteiro(ano);
+  return hoje < p.fim && hoje >= p.inicio ? { inicio: p.inicio, fim: hoje } : p;
+}
+
 /** Os parâmetros usam o período ({inicio} e {fim})? Sem eles, o ano só pode ser lido inteiro. */
 export function usaPeriodo(parametros: string): boolean {
   return parametros.includes("{inicio}") && parametros.includes("{fim}");
@@ -218,9 +229,9 @@ function emSemanas(p: Periodo): Periodo[] {
   return r;
 }
 
-/** O que falta ler do ano: as LACUNAS entre os períodos já lidos, na ordem. */
-export function lacunasDoAno(ano: number, lidos: Periodo[]): Periodo[] {
-  const ano0 = anoInteiro(ano);
+/** O que falta ler do ano (até hoje, no ano atual): as LACUNAS entre os períodos já lidos, na ordem. */
+export function lacunasDoAno(ano: number, lidos: Periodo[], hoje?: string): Periodo[] {
+  const ano0 = periodoDoAno(ano, hoje);
   const r: Periodo[] = [];
   let cursor = ano0.inicio;
   for (const p of [...lidos].sort((a, b) => a.inicio.localeCompare(b.inicio))) {
@@ -233,9 +244,9 @@ export function lacunasDoAno(ano: number, lidos: Periodo[]): Periodo[] {
 }
 
 /** Os períodos a pedir: o que falta do ano, semana a semana (sem o {inicio}/{fim}, o ano inteiro de uma vez). */
-export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean): Periodo[] {
+export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean, hoje?: string): Periodo[] {
   if (!comPeriodo) return lidos.length ? [] : [anoInteiro(ano)];
-  return lacunasDoAno(ano, lidos).flatMap(emSemanas);
+  return lacunasDoAno(ano, lidos, hoje).flatMap(emSemanas);
 }
 
 /** Divide o período ao meio (o de um dia não se divide). */

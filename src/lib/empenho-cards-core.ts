@@ -5,6 +5,7 @@
  * entram e a que órgão/unidade do cadastro cada um pertence. Só o que um vínculo do card cobre é gravado.
  */
 import { type EnderecoCenti, lerParametros, MARCADORES, marcadoresUsados, montarCorpo, urlBaseValida, urlDaApi } from "./centi-resposta-core.ts";
+import { periodoDoAno } from "./empenhos-core.ts";
 
 /** As frequências da atualização automática (minutos). */
 export const FREQUENCIAS: { valor: number; rotulo: string }[] = [
@@ -233,12 +234,14 @@ export function rotuloFrequencia(min: number, diasUteis: boolean, inicio: string
   return `${f}${diasUteis ? ", dias úteis" : ""}, ${inicio}–${fim}`;
 }
 
-/** A PRÉVIA do pedido do TESTE (a 1ª SEMANA do ano — o ano inteiro passa do tamanho de uma resposta). Nada é enviado. */
-export function previaPedido(e: EdicaoCard, ano: number): { url: string; corpo: unknown; erro: string | null } {
+/** A PRÉVIA do pedido do TESTE: o período que existe do ano (até 31/12 nos anteriores, até hoje no atual). Nada é enviado. */
+export function previaPedido(e: EdicaoCard, ano: number, hoje?: string): { url: string; corpo: unknown; erro: string | null } {
   const p = lerParametros(e.parametros);
+  const per = periodoDoAno(ano, hoje);
+  const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
   return {
     url: urlDoCard(e),
-    corpo: p.ok ? montarCorpo(p.valor, { ano, inicio: `01/01/${ano}`, fim: `07/01/${ano}` }) : null,
+    corpo: p.ok ? montarCorpo(p.valor, { ano, inicio: br(per.inicio), fim: br(per.fim) }) : null,
     erro: p.ok ? null : p.motivo,
   };
 }

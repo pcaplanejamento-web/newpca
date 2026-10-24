@@ -1,5 +1,6 @@
 "use client";
 
+import { useAnoDoCard } from "./anoDoCard";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -14,7 +15,7 @@ import {
   vinculosDosGrupos,
 } from "@/lib/empenho-cards-core";
 import type { OrgaoVinculo, UnidadeVinculo } from "@/lib/empenho-cards";
-import { anoInteiro, diasDoPeriodo, type LoteCenti, rotuloPeriodo } from "@/lib/empenhos-core";
+import { anoInteiro, diasDoPeriodo, periodoDoAno, type LoteCenti, rotuloPeriodo } from "@/lib/empenhos-core";
 import { num } from "@/lib/format";
 import { type Agora, lerAnoNaCenti, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { FerramentasAba } from "./AbasEspaco";
@@ -29,6 +30,7 @@ import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 import { Selecao } from "./Selecao";
+import { Badge } from "./Badge";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { toast } from "./Toast";
 
@@ -91,12 +93,11 @@ export function EmpenhoCardVinculos({
   const [gravando, setGravando] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [agora, setAgora] = useState<Agora | null>(null);
-  const [anoBusca, setAnoBusca] = useState(anos[0] ?? new Date().getFullYear());
+  const [anoBusca, setAnoBusca] = useAnoDoCard(cardId, anos);
   const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
   /** A linha que está gravando (o spinner na célula) e o RASCUNHO das ações em edição (gravado 800 ms após o último toque). */
   const [gravandoLinha, setGravandoLinha] = useState<string | null>(null);
-  const [acoesRascunho, setAcoesRascunho] = useState<Record<string, string[]>>({});
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   useEffect(() => {
     const t = timers.current;
@@ -168,37 +169,12 @@ export function EmpenhoCardVinculos({
       setGravandoLinha(null);
     }
   }
-  /** As ações marcadas na célula: guardadas no rascunho e gravadas 800 ms depois do último toque (marcar várias = 1 gravação). */
-  function mudarAcoes(g: GrupoVinculo, acoes: string[]) {
-    setAcoesRascunho((x) => ({ ...x, [g.chave]: acoes }));
-    const t = timers.current;
-    clearTimeout(t.get(g.chave));
-    t.set(
-      g.chave,
-      setTimeout(() => {
-        t.delete(g.chave);
-        void mudarNaCelula(g, { acoes }, "Ações do vínculo atualizadas.").finally(() =>
-          setAcoesRascunho((x) => {
-            const { [g.chave]: _, ...resto } = x;
-            return resto;
-          }),
-        );
-      }, 800),
-    );
-  }
-
   /** As escolhas das células, tiradas do CATÁLOGO (+ o valor atual, que nunca some da lista). */
   const gestoresCatalogo = useMemo(() => ordenar(new Set(catalogo.map((c) => c.orgaoGestor))), [catalogo]);
   const unidadesDoGestor = (gestor: string, atual: string | null) => {
     const s = new Set(catalogo.filter((c) => c.orgaoGestor === gestor).map((c) => c.unidade));
     if (atual != null) s.add(atual);
     return ordenar(s);
-  };
-  const acoesDaUnidade = (g: GrupoVinculo, marcadas: string[]) => {
-    const m = new Map<string, number>();
-    for (const c of catalogo) if (c.orgaoGestor === g.orgaoGestor && c.unidade === g.unidade) m.set(c.acao, c.registros);
-    for (const a of marcadas) if (!m.has(a)) m.set(a, 0);
-    return ordenar(m.keys()).map((valor) => ({ valor, rotulo: rotuloAcaoCenti(valor), contagem: m.get(valor) }));
   };
   const unidadesPorOrgao = useMemo(() => {
     const m = new Map<number, UnidadeVinculo[]>();
@@ -328,24 +304,11 @@ export function EmpenhoCardVinculos({
       nowrap: true,
       value: (g) => (g.acoes ? g.acoes.map(rotuloAcaoCenti).join("; ") : "Todas"),
       valores: (g) => (g.acoes ? g.acoes.map(rotuloAcaoCenti) : ["Todas"]),
-      render: (g) => {
-        if (!podeEditar) return g.acoes ? <Inteiro texto={g.acoes.map(rotuloAcaoCenti).join("; ")} /> : <Inteiro texto="Todas" apagado />;
-        const marcadas = acoesRascunho[g.chave] ?? g.acoes ?? [];
-        return (
-          <NaCelula gravando={gravandoLinha === g.chave}>
-            <SeletorMultiplo
-              suspenso
-              completo
-              rotulo={`Ações do vínculo ${g.orgaoGestor}`}
-              opcoes={acoesDaUnidade(g, marcadas)}
-              selecionados={marcadas}
-              onChange={(l) => mudarAcoes(g, l)}
-              disabled={ocupado(g) || g.unidade == null}
-              textoVazio={g.unidade == null ? "Todas (escolha a unidade orçamentária para dividir)" : "Todas"}
-            />
-          </NaCelula>
-        );
-      },
+      render: (g) => (
+        <span title={g.acoes ? g.acoes.map(rotuloAcaoCenti).join("\n") : "Todas as ações da unidade orçamentária"}>
+          <Badge tone={g.acoes ? "violet" : "blue"}>{g.acoes ? `${g.acoes.length} ${g.acoes.length === 1 ? "ação" : "ações"}` : "Todas"}</Badge>
+        </span>
+      ),
     },
     {
       key: "destino",
@@ -435,7 +398,7 @@ export function EmpenhoCardVinculos({
       </FerramentasAba>
 
       {agora && (
-        <Progress value={((diasDoPeriodo({ inicio: anoInteiro(anoBusca).inicio, fim: agora.periodo.inicio }) - 1) / diasDoPeriodo(anoInteiro(anoBusca))) * 100} label={`Buscando na Centi — ${rotuloPeriodo(agora.periodo)} · página ${agora.pagina}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}`} />
+        <Progress value={((diasDoPeriodo({ inicio: anoInteiro(anoBusca).inicio, fim: agora.periodo.inicio }) - 1) / diasDoPeriodo(periodoDoAno(anoBusca))) * 100} label={`Buscando na Centi — ${rotuloPeriodo(agora.periodo)} · página ${agora.pagina}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}`} />
       )}
       {!catalogo.length && (
         <Callout kind="info">O catálogo da Centi está vazio — use “Buscar na Centi” para ler os órgãos gestores, as unidades orçamentárias e as ações que a Centi traz.</Callout>
