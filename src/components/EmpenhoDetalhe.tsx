@@ -59,6 +59,8 @@ export function EmpenhoDetalhe({ empenho, completo }: { empenho: EmpenhoNaTela; 
         <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Registro</p>
           <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+            <Campo label="Ano do empenho" valor={String(completo.ano)} />
+            <Campo label="Id na Centi" valor={completo.srcId != null ? String(completo.srcId) : null} />
             <Campo label="Importado em" valor={dataHoraBR(completo.criadoEm)} />
             <Campo label="Atualizado em" valor={dataHoraBR(completo.atualizadoEm)} />
             <Campo label="Importação" valor={completo.loteId ? `nº ${completo.loteId}${completo.loteConcluidoEm ? ` · ${dataHoraBR(completo.loteConcluidoEm)}` : ""}` : "excluída do histórico"} />

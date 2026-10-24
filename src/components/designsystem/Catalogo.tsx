@@ -269,6 +269,7 @@ import {
   type CampoTarefa,
 } from "@/lib/tarefas-core";
 import { EmpenhoDetalhe } from "@/components/EmpenhoDetalhe";
+import { LiquidacaoDetalhe } from "@/components/LiquidacaoDetalhe";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -5020,6 +5021,31 @@ export function Catalogo() {
               valorPago: 3042,
               saldoPagar: 0,
             }}
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="LiquidacaoDetalhe (uma liquidação da Centi — só leitura; o empenho ligado pelo NÚMERO, de qualquer ano, chega depois) · a tabela é a EmpenhoCardLiquidacoes">
+        <div className="max-w-3xl">
+          <LiquidacaoDetalhe
+            liquidacao={{
+              numero: "1520",
+              data: "2026-03-12",
+              numeroEmpenho: "320932",
+              anoEmpenho: 2025,
+              credor: "FORNECEDOR EXEMPLO LTDA",
+              cpfCnpj: "00.000.000/0001-00",
+              historico: "Liquidação da nota fiscal 4471 — material hospitalar.",
+              valor: 3042,
+              valorAnulado: 0,
+              valorLiquido: 3042,
+              valorPago: 1500,
+              saldo: 1542,
+              orgaoCenti: "FUNDO MUNICIPAL SAUDE RIO VERDE",
+              orgao: "FMS",
+              unidade: "FMS",
+            }}
+            completo={null}
           />
         </div>
       </Secao>

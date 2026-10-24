@@ -4595,6 +4595,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
     `modo`. A tabela: `EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes` (as tuplas montadas pelo banco —
     `liquidacoes-tela.ts`; escopo = o do empenho).
+  - **DETALHE + ANO DO EMPENHO (v1.213.0, sem migração):** tocar numa linha da aba Liquidações abre o `LiquidacaoDetalhe` (DS, num
+    `Modal` — o padrão do `EmpenhoDetalhe`) com `GET /api/empenhos/cards/[id]/liquidacoes/[liqId]` → `liquidacaoCompleta`
+    (`liquidacoes-tela.ts`: o registro, o cadastro e o EMPENHO ligado; escopo e card conferidos — fora = 404). O empenho é
+    procurado em TODA a tabela `empenhos` pelo número, de QUALQUER ano e card (`empenhoDa`, a MESMA régua do `destinoSql`:
+    ativo › com unidade › o mais antigo); a tupla da tabela ganhou `anoEmpenho` (coluna "Ano do empenho"; sem empenho = null).
   - **REGRA FIRME — O NÚMERO DO EMPENHO LIGA EMPENHOS, LIQUIDAÇÕES E PAGAMENTOS:** o `NumeroEmpenho` da liquidação (e, a seguir,
     do pagamento) = o `Numero` do empenho na Centi (= o Id dele, único) = `empenhos.numero`. A API de liquidações NÃO traz
     unidade nem ação (conferido na API real): o órgão e a unidade da liquidação são os do EMPENHO de mesmo número no sistema.

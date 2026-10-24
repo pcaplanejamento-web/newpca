@@ -13,6 +13,9 @@ import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
+import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
+import { LiquidacaoDetalhe } from "./LiquidacaoDetalhe";
+import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
 
 /** Uma LIQUIDAÇÃO na tela (a ordem das tuplas = `COLUNAS_LIQUIDACAO` de `liquidacoes-tela.ts`). */
@@ -34,6 +37,8 @@ type Liquidacao = {
   /** O órgão e a unidade do CADASTRO (a sigla) = os do empenho de mesmo número. */
   orgao: string | null;
   unidade: string | null;
+  /** O ANO do empenho ligado pelo número (de qualquer ano — restos a pagar); null = o empenho não está no sistema. */
+  anoEmpenho: number | null;
 };
 
 const daTupla = (t: unknown[]): Liquidacao => ({
@@ -52,6 +57,7 @@ const daTupla = (t: unknown[]): Liquidacao => ({
   orgaoCenti: String(t[12] ?? ""),
   orgao: (t[13] as string | null) ?? null,
   unidade: (t[14] as string | null) ?? null,
+  anoEmpenho: t[16] == null ? null : Number(t[16]),
 });
 
 const soma = (l: Liquidacao[], k: "valor" | "valorAnulado" | "valorLiquido" | "valorPago" | "saldo") => l.reduce((s, x) => s + x[k], 0);
@@ -74,6 +80,7 @@ const COLUNAS: Column<Liquidacao>[] = [
   { key: "numeroEmpenho", header: "Empenho", nowrap: true, total: false, value: (x) => x.numeroEmpenho, render: (x) => <CelulaCopiavel copiar={x.numeroEmpenho} rotulo="nº do empenho">
           <span className="tabular-nums">{x.numeroEmpenho}</span>
         </CelulaCopiavel> },
+  { key: "anoEmpenho", header: "Ano do empenho", nowrap: true, total: false, value: (x) => (x.anoEmpenho != null ? String(x.anoEmpenho) : "Sem empenho"), render: (x) => x.anoEmpenho != null ? <span className="tabular-nums">{x.anoEmpenho}</span> : <span className="text-faint" title="Nenhum empenho com este número importado no sistema (de nenhum ano)">—</span> },
   { key: "orgaoSistema", header: "Órgão", nowrap: true, value: (x) => x.orgao ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold text-text-2">{x.orgao ?? "—"}</span> },
   { key: "unidade", header: "Unidade", nowrap: true, value: (x) => x.unidade ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold text-text-2">{x.unidade ?? "—"}</span> },
   { key: "credor", header: "Credor", minWidth: 220, value: (x) => x.credor ?? "", render: (x) => <CelulaTexto texto={x.credor} /> },
@@ -98,6 +105,22 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
   const [vista, setVista] = useState<Liquidacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [aberto, setAberto] = useState<Liquidacao | null>(null);
+  const [completo, setCompleto] = useState<LiquidacaoCompleta | null | undefined>(undefined);
+
+  // O detalhe: o que a tabela tem na hora; o registro e o empenho ligado chegam depois.
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    setCompleto(undefined);
+    fetch(`/api/empenhos/cards/${cardId}/liquidacoes/${aberto.id}`)
+      .then((r) => r.json() as Promise<{ ok?: boolean; liquidacao?: LiquidacaoCompleta }>)
+      .then((j) => vivo && setCompleto(j.ok && j.liquidacao ? j.liquidacao : null))
+      .catch(() => vivo && setCompleto(null));
+    return () => {
+      vivo = false;
+    };
+  }, [aberto, cardId]);
 
   useEffect(() => {
     let vivo = true;
@@ -128,6 +151,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
         setLinhas((j.linhas ?? []).map(daTupla));
         setVista(null);
+        setAberto(null);
       } catch (e) {
         setErro(e instanceof Error ? e.message : "Não foi possível carregar as liquidações.");
       } finally {
@@ -161,10 +185,11 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
           <p>As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
           <p>
             A Centi não informa a unidade da liquidação: o <strong>número do empenho</strong> liga a liquidação ao empenho, e as colunas
-            Órgão e Unidade são as do empenho no sistema (o vínculo dele). Sem o empenho importado, fica o órgão do cadastro com o “ID
+            Órgão e Unidade são as do empenho no sistema (o vínculo dele) — procurado em TODA a tabela de empenhos, de qualquer ano
+            (restos a pagar); a coluna “Ano do empenho” diz de que ano ele é. Sem o empenho importado, fica o órgão do cadastro com o “ID
             na Centi”, sem unidade. Você vê as liquidações da sua unidade (ou do seu órgão).
           </p>
-          <p>Os números do topo acompanham os filtros da tabela. “Removidas na Centi” (rodapé) = as que a Centi não traz mais (pela regra do card).</p>
+          <p>Toque numa linha para ver a liquidação inteira e o empenho ligado. Os números do topo acompanham os filtros da tabela. “Removidas na Centi” (rodapé) = as que a Centi não traz mais (pela regra do card).</p>
         </Ajuda>
       </FerramentasAba>
 
@@ -194,6 +219,8 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
             minWidth={2200}
             ordemInicial={{ key: "data", dir: "desc" }}
             onOrdenadas={setVista}
+            onRowClick={setAberto}
+            activeKey={aberto?.id ?? null}
             exportar={{ nome: `${nome} - liquidações ${recorte.ano}${recorte.removidos ? " - removidas" : ""}` }}
             acoesRodape={
               <Button
@@ -211,6 +238,10 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
           />
         </>
       )}
+
+      <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Liquidação ${aberto.numero ?? aberto.id}` : "Liquidação"} size="lg">
+        {aberto ? <LiquidacaoDetalhe key={aberto.id} liquidacao={aberto} completo={completo} /> : <div />}
+      </Modal>
     </>
   );
 }

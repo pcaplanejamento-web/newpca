@@ -15,7 +15,7 @@ import {
   totalAntesDaPagina,
   ultimaLiquidacaoPromovida,
 } from "../src/lib/liquidacoes-sql.ts";
-import { anosLiquidacoes, COLUNAS_LIQUIDACAO, textoLiquidacoes } from "../src/lib/liquidacoes-tela.ts";
+import { anosLiquidacoes, COLUNAS_LIQUIDACAO, liquidacaoCompleta, textoLiquidacoes } from "../src/lib/liquidacoes-tela.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -275,4 +275,28 @@ test("liquidações (D1 real): a tela — Órgão e Unidade do CADASTRO (os do e
   assert.equal(so.length, 1);
   assert.equal(so[0][col("numeroEmpenho")], "9");
   assert.equal(JSON.parse(await textoLiquidacoes(LIQ, 2025, true, null, b.db)).length, 0);
+});
+
+test("liquidações (D1 real): o EMPENHO vem de TODA a tabela, de qualquer ano — a coluna Ano do empenho e o banner completo", async () => {
+  const b = banco();
+  // O empenho 77 é de 2023 (restos a pagar) e de OUTRO card; a liquidação é importada em 2025.
+  b.raw.exec("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, orgao_id, reparticao_id, fornecedor, valor_empenhado) VALUES (1, '2023|G|77', 2023, '77', 'G', 1, 5, 'FORN', 500)");
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "77"), liq(2, "88")]);
+  await promover(b, l1);
+  const linhas = JSON.parse(await textoLiquidacoes(LIQ, 2025, false, null, b.db)) as unknown[][];
+  const col = (c: (typeof COLUNAS_LIQUIDACAO)[number]) => COLUNAS_LIQUIDACAO.indexOf(c);
+  const por = new Map(linhas.map((t) => [t[col("numeroEmpenho")], t]));
+  assert.equal(por.get("77")?.[col("anoEmpenho")], 2023, "o ano do empenho, não o da liquidação");
+  assert.equal(por.get("77")?.[col("unidade")], "SEFAZ", "a unidade do empenho de 2023");
+  assert.equal(por.get("88")?.[col("anoEmpenho")], null, "sem empenho no sistema");
+  const id = Number(por.get("77")?.[col("id")]);
+  const c = await liquidacaoCompleta(LIQ, id, null, b.db);
+  assert.equal(c?.numeroEmpenho, "77");
+  assert.equal(c?.empenho?.ano, 2023);
+  assert.equal(c?.empenho?.fornecedor, "FORN");
+  assert.equal(c?.empenho?.valorEmpenhado, 500);
+  assert.equal((await liquidacaoCompleta(LIQ, Number(por.get("88")?.[col("id")]), null, b.db))?.empenho, null);
+  assert.equal(await liquidacaoCompleta(LIQ, id, { unidades: [999], orgaos: [] }, b.db), null, "fora do escopo = inexistente");
+  assert.equal(await liquidacaoCompleta(LIQ + 1, id, null, b.db), null, "de outro card = inexistente");
 });

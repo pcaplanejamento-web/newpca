@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.213.0",
+    data: "2026-10-24",
+    titulo: "Detalhe das liquidações e o ano do empenho",
+    mudancas: [
+      { tipo: "novo", area: "Liquidações", texto: "Toque numa linha da tabela para ver a liquidação inteira num banner: valores, credor, histórico, órgão e unidade do sistema, o registro da importação e o EMPENHO ligado pelo número (valores, fornecedor, ação, elemento, fonte e o card de origem).", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Liquidações", texto: "Coluna “Ano do empenho”: o empenho é procurado em toda a tabela de empenhos, de qualquer ano (restos a pagar) — sem o empenho no sistema, “—”.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "O banner do empenho mostra também o ano e o Id na Centi.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.212.0",
     data: "2026-10-24",
     titulo: "Liquidações ligadas aos empenhos pelo número",

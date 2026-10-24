@@ -190,6 +190,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     DELETE: recurso(CARDS, "excluir", undefined, "excluir importações ou passos do histórico"),
   },
   "empenhos/cards/[id]/liquidacoes": { GET: recurso(CARDS, "visualizar", undefined, "as liquidações de um card (os anos ou as linhas de um ano)") },
+  "empenhos/cards/[id]/liquidacoes/[liqId]": { GET: recurso(CARDS, "visualizar", undefined, "uma liquidação com o empenho ligado pelo número (o banner)") },
   "empenhos/[id]": { GET: tela("empenhos", "visualizar", "um empenho com o histórico") },
   "documentos/[id]/arquivo": { GET: tela("documentos", "visualizar", "ver o PDF; baixar (?baixar=1) exige Exportar") },
   "catalogo/pastas": { POST: tela("catalogo", "manipular") },
