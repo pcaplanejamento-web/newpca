@@ -141,7 +141,7 @@ export async function contagemPagamentos(db: Db, loteId: number, card: number, a
  * cada pagamento guardado da página com a GRAVADA no card pela régua da promoção (`mudou`, com o destino pelo empenho e
  * o leitor), grava o RESULTADO no passo e tira do staging as IGUAIS (fica só a chave). Sem destino = "sem vínculo".
  */
-export function comandosConferirPagamentos(db: Db, loteId: number, card: number, leitor: number, chaves: readonly string[]) {
+export function comandosConferirPagamentos(db: Db, loteId: number, card: number, leitor: number, chaves: readonly string[], passo?: number) {
   const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
   const daPagina = sql`"pagamentos_staging"."lote_id" = ${loteId} AND "pagamentos_staging"."chave" IN ${lista}`;
   const juntos = sql`"pagamentos_staging" JOIN "pagamentos" ON "pagamentos"."card_id" = ${card} AND "pagamentos"."chave" = "pagamentos_staging"."chave"`;
@@ -151,12 +151,12 @@ export function comandosConferirPagamentos(db: Db, loteId: number, card: number,
     db
       .update(centiLotePassos)
       .set({
-        resNovos: sql`(SELECT COUNT(*) FROM "pagamentos_staging" WHERE ${daPagina} AND ${comDestino} AND NOT EXISTS (SELECT 1 FROM "pagamentos" WHERE "pagamentos"."card_id" = ${card} AND "pagamentos"."chave" = "pagamentos_staging"."chave"))`,
-        resAlterados: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND (${difere}))`,
-        resIguais: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND NOT (${difere}))`,
-        resSemVinculo: sql`(SELECT COUNT(*) FROM "pagamentos_staging" WHERE ${daPagina} AND NOT (${comDestino}))`,
+        resNovos: sql`COALESCE(${centiLotePassos.resNovos}, 0) + (SELECT COUNT(*) FROM "pagamentos_staging" WHERE ${daPagina} AND ${comDestino} AND NOT EXISTS (SELECT 1 FROM "pagamentos" WHERE "pagamentos"."card_id" = ${card} AND "pagamentos"."chave" = "pagamentos_staging"."chave"))`,
+        resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND (${difere}))`,
+        resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND NOT (${difere}))`,
+        resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + (SELECT COUNT(*) FROM "pagamentos_staging" WHERE ${daPagina} AND NOT (${comDestino}))`,
       })
-      .where(eq(centiLotePassos.id, ultimoPasso(loteId))),
+      .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId))),
     db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)),
     db
       .insert(centiStagingFora)

@@ -408,6 +408,11 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             configuração salva do card, e guarda tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque
             num para ver o detalhe (o pedido enviado, a resposta, o tempo, o erro).
           </p>
+          <p>
+            O JSON da Centi é lido <strong>aqui no navegador</strong> e chega ao sistema em partes de tamanho fixo — nenhum pedido passa
+            do limite do plano gratuito, qualquer que seja o tamanho do mês. Na <strong>atualização automática</strong> (sem navegador),
+            a resposta grande é baixada e processada em fragmentos, um a cada minuto.
+          </p>
           {tipo === "pagamentos" ? (
             <>
               <p>
@@ -466,6 +471,12 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       </FerramentasAba>
       {liq && orgaosLiq && orgaosLiq.length === 0 && (
         <Callout kind="warn">Nenhum órgão tem o “ID na Centi” — cadastre em Órgãos e Unidades: a importação lê {tipo === "pagamentos" ? "os pagamentos" : "as liquidações"} de todos os órgãos com o ID.</Callout>
+      )}
+      {liq && !rodando && (
+        <Callout kind="info">
+          O órgão e a unidade de cada {tipo === "pagamentos" ? "pagamento" : "liquidação"} vêm do <strong>empenho de mesmo número</strong>: importe os
+          empenhos antes. Os que chegarem depois realinham sozinhos.
+        </Callout>
       )}
       {!comPeriodo && tipo !== "pagamentos" && (
         <Callout kind="warn">

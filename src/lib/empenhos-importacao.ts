@@ -1,6 +1,8 @@
-import type { centiLotePassos } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { centiLotePassos } from "@/db/schema";
 import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
+import { type LinhaDoModo, linhasDaParte, type ModoParte, partesDaPagina, type ResumoPagina, resumoValido, somaDaLinha } from "./importacao-partes-core";
 import { baixarSeguro } from "./busca-segura";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
 import { corpoLiquidacoes, lerPaginaLiquidacoes, orgaoDaPagina } from "./liquidacoes-core";
@@ -77,12 +79,15 @@ import {
 type Linha = typeof centiLotePassos.$inferSelect;
 
 /**
- * Até 1 MB por resposta (a semana média tem ~0,7 MB; o que passa disso é dividido ao meio — ler e consertar mais pesa no
- * limite de CPU do Worker) e, no período de UM dia (que não se divide), até 12 MB. 30 s por pedido.
+ * Até 1 MB por resposta (a semana média tem ~0,7 MB; o que passa disso é dividido ao meio) e, no período de UM dia ou no mês
+ * dos pagamentos (que não se dividem), até 12 MB. Ler e consertar o JSON custa ~20 ms de CPU por MB (medido) e o plano
+ * gratuito dá ~10 ms por requisição — por isso nenhuma requisição lê a resposta inteira: na importação pela TELA o JSON é
+ * lido no NAVEGADOR e chega em PARTES de tamanho fixo (`importacao-partes-core.ts`); na AUTOMÁTICA, a resposta grande é
+ * capturada e processada em fragmentos, uma janela por execução do cron (`empenhos-fragmentos.ts`).
  */
 const MAX_BYTES = 1_000_000;
 const MAX_BYTES_DIA = 12_000_000;
-const TEMPO_MS = 30_000;
+export const TEMPO_MS = 30_000;
 
 /** O pedido não vale (período fora do ano, parâmetros inválidos) — a rota responde com o status. */
 export class PedidoInvalido extends Error {
@@ -94,14 +99,32 @@ export class PedidoInvalido extends Error {
   }
 }
 
-export type ResultadoPagina = { passo: PassoLote; continuar?: boolean; erro?: { tipo: TipoErro; mensagem: string }; dividir?: [Periodo, Periodo] | null };
+export type ResultadoPagina = {
+  passo: PassoLote;
+  continuar?: boolean;
+  erro?: { tipo: TipoErro; mensagem: string };
+  dividir?: [Periodo, Periodo] | null;
+  /** A parte foi guardada e a página ainda não terminou (mande a próxima com o `passo.id`). */
+  parcial?: boolean;
+};
 
 /** O status HTTP citado na mensagem do erro ("… respondeu 503."). */
 const statusDaMensagem = (m: string) => Number(m.match(/respondeu (\d{3})/)?.[1]) || null;
 
-/** Lê UMA página do período com o cadastro SALVO, guarda no staging e registra o PASSO (o erro também é um passo). */
-export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number): Promise<ResultadoPagina> {
-  const db = getDb();
+/** A marca do passo de uma página que ainda recebe as partes (se a leitura parar no meio, o passo fica como erro). */
+const guardando = (parte: number) => `Guardando a página — ${parte} parte(s) recebida(s); se parar aqui, a página é lida de novo.`;
+
+export type Pedido = {
+  modo: ModoParte;
+  pag: boolean;
+  porOrgao: boolean;
+  idOrgao: number | null;
+  base: Pick<PassoNovo, "inicio" | "fim" | "pagina" | "corpo">;
+  maxBytes: number;
+};
+
+/** Confere o pedido de UMA página com o cadastro SALVO (o corpo enviado à Centi é sempre o do servidor). */
+export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number): Pedido {
   // O MODO segue o tipo do card: liquidações e pagamentos só no card do mesmo tipo; os empenhos (e o catálogo) no de empenhos.
   const tipoDoModo = lote.modo === "liquidacoes" || lote.modo === "pagamentos" ? lote.modo : "empenhos";
   if (tipoDoModo !== card.tipo) throw new PedidoInvalido(`Este card (${card.tipo}) não importa ${lote.modo === "dados" || lote.modo === "unidades" ? "empenhos" : lote.modo}.`);
@@ -129,117 +152,218 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
   } catch (e) {
     throw new PedidoInvalido(e instanceof Error ? e.message : "Parâmetros inválidos.");
   }
-  const base = { inicio: periodo.inicio, fim: periodo.fim, pagina, corpo: enviado };
-  const t0 = Date.now();
-  let texto = "";
-  let status: number | null = null;
-  let falha: string | null = null;
-  let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | ReturnType<typeof lerPaginaPagamentos> | null = null;
-  try {
-    const url = urlDoCard(card);
-    // O mês dos pagamentos não se divide: vale o teto do período que não se divide.
-    const maxBytes = pag || diasDoPeriodo(periodo) <= 1 ? MAX_BYTES_DIA : MAX_BYTES;
-    const r = await baixarSeguro(url, { accept: "application/json", maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: enviado });
-    texto = r.texto;
-    status = r.status;
-    lida = pag ? lerPaginaPagamentos(texto, lote.ano) : porOrgao ? lerPaginaLiquidacoes(texto, lote.ano) : lerPaginaEmpenhos(texto, lote.ano);
-  } catch (e) {
-    falha = e instanceof Error ? e.message : "Não foi possível ler a página.";
-  }
-  const ms = Date.now() - t0;
-  const bytes = texto.length || null;
+  // O mês dos pagamentos não se divide: vale o teto do período que não se divide.
+  const maxBytes = pag || diasDoPeriodo(periodo) <= 1 ? MAX_BYTES_DIA : MAX_BYTES;
+  return { modo: tipoDoModo, pag, porOrgao, idOrgao, base: { inicio: periodo.inicio, fim: periodo.fim, pagina, corpo: enviado }, maxBytes };
+}
 
-  if (falha || !lida) {
-    // O ERRO também é um passo — com o detalhe (status, tempo, o corpo enviado), à vista na hora.
-    const mensagem = falha ?? "Resposta inválida da Centi.";
-    const tipo = tipoDoErro(mensagem);
-    const metades = tipo === "grande" && !pag && usaPeriodo(card.parametros) ? dividirPeriodo(periodo) : null;
-    const passo: PassoNovo = {
-      ...base,
-      estado: metades ? "dividido" : "erro",
-      fimPeriodo: false,
-      status: status ?? statusDaMensagem(mensagem),
-      bytes,
-      ms,
-      recebidos: 0,
-      novos: 0,
-      recusados: 0,
-      repetidos: 0,
-      total: null,
-      soma: null,
-      mensagem: metades ? `${mensagem} — ${rotuloPeriodo(periodo)} será lido em duas partes: ${rotuloPeriodo(metades[0])} e ${rotuloPeriodo(metades[1])}.` : mensagem,
-    };
-    const res = await db.batch([comandoRegistrarPasso(db, lote.id, passo).returning(), ...(metades ? [comandoDividirPeriodo(db, lote.id, periodo), comandoRecontarLote(db, lote.id)] : [])] as never);
-    return { passo: paraPasso((res as Linha[][])[0][0]), erro: { tipo, mensagem }, dividir: metades };
-  }
-
-  const lido = await lidoNoPeriodo(db, lote.id, periodo);
-  const novos = lida.linhas.length - (await jaNoLote(db, lote.id, lida.linhas.map((l) => l.chave)));
-  // LIQUIDAÇÕES e PAGAMENTOS: o total é o DESTE órgão (o do período = a soma dos órgãos — `comandoRecontarLote`); os órgãos
-  // são lidos em PARALELO, então o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
-  const total = porOrgao ? (lida.total ?? 0) : (totalDoPeriodo(lida, pagina) ?? lido.total);
-  const continuar = porOrgao
-    ? pagina < (lote.orgaosCenti?.length ?? 0)
-    : continuarPeriodo({ recebidos: lido.recebidos + lida.recebidos, paginas: lido.paginas + 1, total }, { recebidos: lida.recebidos, novos });
+/** O ERRO também é um passo — com o detalhe (status, tempo, o corpo enviado), à vista na hora; o grande demais divide. */
+export async function registrarFalha(
+  card: CardEmpenho,
+  lote: LoteCenti,
+  periodo: Periodo,
+  ped: Pedido,
+  f: { mensagem: string; status: number | null; bytes: number | null; ms: number | null },
+  extras: unknown[] = [],
+): Promise<ResultadoPagina> {
+  const db = getDb();
+  const tipo = tipoDoErro(f.mensagem);
+  const metades = tipo === "grande" && !ped.pag && usaPeriodo(card.parametros) ? dividirPeriodo(periodo) : null;
   const passo: PassoNovo = {
-    ...base,
-    estado: "ok",
-    fimPeriodo: !porOrgao && !continuar,
-    status,
-    bytes,
-    ms,
-    recebidos: lida.recebidos,
-    novos,
-    recusados: lida.recusados,
-    repetidos: lida.repetidos,
-    total,
-    soma: lida.soma,
-    mensagem: lida.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
+    ...ped.base,
+    estado: metades ? "dividido" : "erro",
+    fimPeriodo: false,
+    status: f.status ?? statusDaMensagem(f.mensagem),
+    bytes: f.bytes,
+    ms: f.ms,
+    recebidos: 0,
+    novos: 0,
+    recusados: 0,
+    repetidos: 0,
+    total: null,
+    soma: null,
+    mensagem: metades ? `${f.mensagem} — ${rotuloPeriodo(periodo)} será lido em duas partes: ${rotuloPeriodo(metades[0])} e ${rotuloPeriodo(metades[1])}.` : f.mensagem,
   };
-  if (pag && "orgaos" in lida) {
-    // PAGAMENTOS: a página é de UM órgão da Centi num MÊS; o destino de cada um é o do EMPENHO de mesmo número.
-    const linhas = lida.linhas as ReturnType<typeof lerPaginaPagamentos>["linhas"];
-    const res = await db.batch([
-      comandoRegistrarPasso(db, lote.id, passo),
-      ...comandosGuardarPagamentos(db, lote.id, pagina, idOrgao ?? 0, linhas),
-      ...comandosConferirPagamentos(db, lote.id, card.id, lote.leitor, linhas.map((l) => l.chave)),
-      ...comandosFechoPeriodoLiquidacoes(db, lote.id, periodo, lote.orgaosCenti?.length ?? 0),
-      comandoRecontarLote(db, lote.id),
-      consultaUltimoPasso(db, lote.id),
-    ] as never);
-    return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), continuar };
+  const res = await db.batch([comandoRegistrarPasso(db, lote.id, passo).returning(), ...(metades ? [comandoDividirPeriodo(db, lote.id, periodo), comandoRecontarLote(db, lote.id)] : []), ...extras] as never);
+  return { passo: paraPasso((res as Linha[][])[0][0]), erro: { tipo, mensagem: f.mensagem }, dividir: metades };
+}
+
+/**
+ * BAIXA a resposta da Centi para UMA página (a importação pela TELA): o corpo volta como veio, em pedaços — o servidor não
+ * lê nem decodifica (quase nenhum trabalho de CPU); o navegador lê o JSON. A falha (rede, status, grande demais) já é
+ * registrada como passo aqui.
+ */
+export async function baixarPaginaDoLote(
+  card: CardEmpenho,
+  lote: LoteCenti,
+  periodo: Periodo,
+  pagina: number,
+): Promise<{ ok: true; pedacos: Uint8Array[]; status: number; ms: number } | { ok: false; r: ResultadoPagina }> {
+  const ped = prepararPedido(card, lote, periodo, pagina);
+  const t0 = Date.now();
+  try {
+    const r = await baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", pedacos: true });
+    return { ok: true, pedacos: r.pedacos ?? [], status: r.status, ms: Date.now() - t0 };
+  } catch (e) {
+    const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
+    return { ok: false, r: await registrarFalha(card, lote, periodo, ped, { mensagem, status: null, bytes: null, ms: Date.now() - t0 }) };
   }
-  if ("orgaos" in lida) {
-    // LIQUIDAÇÕES: a página é de UM órgão da Centi; o destino de cada uma é o do EMPENHO de mesmo número.
-    const res = await db.batch([
-      comandoRegistrarPasso(db, lote.id, passo),
-      ...comandosGuardarLiquidacoes(db, lote.id, pagina, idOrgao ?? 0, lida.linhas as ReturnType<typeof lerPaginaLiquidacoes>["linhas"]),
-      // A CONFERÊNCIA EM TEMPO REAL: o resultado da página no passo; as iguais à gravada saem do staging.
-      ...comandosConferirLiquidacoes(db, lote.id, card.id, lote.leitor, lida.linhas.map((l) => l.chave)),
-      ...comandosFechoPeriodoLiquidacoes(db, lote.id, periodo, lote.orgaosCenti?.length ?? 0),
-      comandoRecontarLote(db, lote.id),
-      consultaUltimoPasso(db, lote.id),
-    ] as never);
-    return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), continuar };
+}
+
+/** A leitura da página no NAVEGADOR falhou (a resposta não é a lista): registra o passo de erro (o grande demais divide). */
+export async function falhaDaPagina(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number, f: { mensagem: string; status: number | null; bytes: number | null; ms: number | null }): Promise<ResultadoPagina> {
+  return registrarFalha(card, lote, periodo, prepararPedido(card, lote, periodo, pagina), f);
+}
+
+/** `parte` = quantas partes já vieram antes desta (0 = a 1ª); `ultima` traz o `resumo`. */
+export type ParteLida = { parte: number; ultima: boolean; passo: number | null; linhas: object[]; resumo: ResumoPagina | null };
+
+/**
+ * GUARDA UMA PARTE da página (as linhas já lidas — conferidas antes): cada parte = um lote de comandos de tamanho FIXO,
+ * qualquer que seja o tamanho do mês. A 1ª parte cria o passo; as seguintes acumulam nele (as linhas, a soma, os novos e o
+ * resultado da conferência em tempo real); a ÚLTIMA traz o resumo da leitura, fecha o passo como lido e reconta o lote.
+ */
+export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, p: ParteLida, extras: unknown[] = []): Promise<ResultadoPagina> {
+  const db = getDb();
+  const pagina = ped.base.pagina;
+  const ultima = p.ultima;
+  if (p.parte < 0 || ultima !== (p.resumo != null) || (p.parte === 0) !== (p.passo == null)) throw new PedidoInvalido("Parte fora de ordem — leia a página de novo.");
+  let antes: Linha | null = null;
+  if (p.passo != null) {
+    const [a] = await db
+      .select()
+      .from(centiLotePassos)
+      .where(and(eq(centiLotePassos.id, p.passo), eq(centiLotePassos.loteId, lote.id), eq(centiLotePassos.inicio, periodo.inicio), eq(centiLotePassos.fim, periodo.fim), eq(centiLotePassos.pagina, pagina), eq(centiLotePassos.estado, "erro")));
+    if (!a || a.mensagem !== guardando(p.parte)) throw new PedidoInvalido("A página recomeçou em outro pedido — leia de novo.", 409);
+    antes = a;
   }
-  // SÓ O VINCULADO ENTRA NO BANCO: o registro que nenhum vínculo do card cobre não é guardado — dele fica só a CHAVE até
-  // o fim da importação, para a conferência com a Centi. Na leitura só do catálogo, nenhum.
-  const mapa = lote.modo === "unidades" ? null : mapaDosVinculos(await consultaVinculosCard(db, card.id));
-  const guardar = mapa ? lida.linhas.filter((l) => vinculoDaLinha(mapa, l)) : [];
-  const soContar = mapa ? lida.linhas.filter((l) => !vinculoDaLinha(mapa, l)) : lida.linhas;
-  // Os órgãos gestores, as unidades orçamentárias e as ações da página entram no CATÁLOGO (a base das escolhas dos vínculos).
-  const catalogo = catalogoDasLinhas(lida.linhas);
+  const chaves = p.linhas.map((l) => (l as { chave: string }).chave);
+  const novos = (antes?.novos ?? 0) + p.linhas.length - (await jaNoLote(db, lote.id, chaves));
+  const linhasPagina = (antes?.recebidos ?? 0) + p.linhas.length;
+  const soma = (antes?.soma ?? 0) + p.linhas.reduce((t: number, l) => t + somaDaLinha(ped.modo, l), 0);
+  const alvo = p.passo ?? undefined;
+
+  // Os comandos da parte (guardar + a conferência em tempo real) — os mesmos de sempre, no passo da página.
+  const daParte: unknown[] = [];
+  if (ped.modo === "pagamentos") {
+    daParte.push(
+      ...comandosGuardarPagamentos(db, lote.id, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"pagamentos">[]),
+      ...comandosConferirPagamentos(db, lote.id, card.id, lote.leitor, chaves, alvo),
+    );
+  } else if (ped.modo === "liquidacoes") {
+    daParte.push(
+      ...comandosGuardarLiquidacoes(db, lote.id, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"liquidacoes">[]),
+      ...comandosConferirLiquidacoes(db, lote.id, card.id, lote.leitor, chaves, alvo),
+    );
+  } else {
+    // SÓ O VINCULADO ENTRA NO BANCO: o registro que nenhum vínculo do card cobre não é guardado — dele fica só a CHAVE até
+    // o fim da importação, para a conferência com a Centi. Na leitura só do catálogo, nenhum.
+    const linhas = p.linhas as LinhaDoModo<"empenhos">[];
+    const mapa = lote.modo === "unidades" ? null : mapaDosVinculos(await consultaVinculosCard(db, card.id));
+    const guardar = mapa ? linhas.filter((l) => vinculoDaLinha(mapa, l)) : [];
+    const soContar = mapa ? linhas.filter((l) => !vinculoDaLinha(mapa, l)) : linhas;
+    // Os órgãos gestores, as unidades orçamentárias e as ações entram no CATÁLOGO (a base das escolhas dos vínculos).
+    const catalogo = catalogoDasLinhas(linhas);
+    daParte.push(
+      ...comandosGuardarPagina(db, lote.id, pagina, guardar),
+      ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
+      ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
+      ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, guardar.map((l) => l.chave), soContar.length, alvo) : []),
+    );
+  }
+
+  if (!ultima) {
+    const meio = { recebidos: linhasPagina, novos, soma, mensagem: guardando(p.parte + 1) };
+    const passo: PassoNovo = { ...ped.base, estado: "erro", fimPeriodo: false, status: null, bytes: null, ms: null, recusados: 0, repetidos: 0, total: null, ...meio };
+    const res = await db.batch([
+      ...(p.passo == null ? [comandoRegistrarPasso(db, lote.id, passo)] : [db.update(centiLotePassos).set(meio).where(eq(centiLotePassos.id, p.passo))]),
+      ...daParte,
+      ...extras,
+      consultaUltimoPasso(db, lote.id, alvo),
+    ] as never);
+    return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), parcial: true };
+  }
+
+  const r = p.resumo as ResumoPagina;
+  if (!resumoValido(r, linhasPagina)) throw new PedidoInvalido("O resumo da página não confere com as linhas recebidas — leia de novo.");
+  // LIQUIDAÇÕES e PAGAMENTOS: o total é o DESTE órgão = os distintos + os recusados (contado aqui); o do período = a soma dos
+  // órgãos (`comandoRecontarLote`), e o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
+  const lido = ped.porOrgao ? null : await lidoNoPeriodo(db, lote.id, periodo);
+  const total = ped.porOrgao ? linhasPagina + r.recusados : (totalDoPeriodo({ total: r.total, recebidos: r.recebidos }, pagina) ?? lido?.total ?? null);
+  const continuar = ped.porOrgao
+    ? pagina < (lote.orgaosCenti?.length ?? 0)
+    : continuarPeriodo({ recebidos: (lido?.recebidos ?? 0) + r.recebidos, paginas: (lido?.paginas ?? 0) + 1, total }, { recebidos: r.recebidos, novos });
+  const final = {
+    estado: "ok" as const,
+    fimPeriodo: !ped.porOrgao && !continuar,
+    status: r.status,
+    bytes: r.bytes,
+    ms: r.ms,
+    recebidos: r.recebidos,
+    novos,
+    recusados: r.recusados,
+    repetidos: r.repetidos,
+    total,
+    soma,
+    mensagem: r.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
+  };
+  const fecho = ped.porOrgao ? comandosFechoPeriodoLiquidacoes(db, lote.id, periodo, lote.orgaosCenti?.length ?? 0, alvo) : [];
   const res = await db.batch([
-    comandoRegistrarPasso(db, lote.id, passo),
-    ...comandosGuardarPagina(db, lote.id, pagina, guardar),
-    ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
-    ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
-    // A CONFERÊNCIA EM TEMPO REAL (não no catálogo): o resultado da página no passo; os iguais ao gravado saem do staging.
-    ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, guardar.map((l) => l.chave), soContar.length) : []),
+    ...(p.passo == null ? [comandoRegistrarPasso(db, lote.id, { ...ped.base, ...final })] : []),
+    ...daParte,
+    ...(p.passo == null ? [] : [db.update(centiLotePassos).set({ ...final, fimPeriodo: final.fimPeriodo ? 1 : 0 }).where(eq(centiLotePassos.id, p.passo))]),
+    ...fecho,
     comandoRecontarLote(db, lote.id),
-    consultaUltimoPasso(db, lote.id),
+    ...extras,
+    consultaUltimoPasso(db, lote.id, alvo),
   ] as never);
   return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), continuar };
+}
+
+/** Uma PARTE mandada pelo navegador: confere cada linha (`linhasDaParte`) e guarda. */
+export async function guardarParteDoLote(
+  card: CardEmpenho,
+  lote: LoteCenti,
+  periodo: Periodo,
+  pagina: number,
+  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; resumo: ResumoPagina | null },
+): Promise<ResultadoPagina> {
+  const ped = prepararPedido(card, lote, periodo, pagina);
+  const v = linhasDaParte(ped.modo, lote.ano, p.tuplas);
+  if (!v.ok) throw new PedidoInvalido(`Parte recusada: ${v.motivo}`);
+  if (p.parte < 0 || p.parte >= p.partes) throw new PedidoInvalido("Parte fora de ordem — leia a página de novo.");
+  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, resumo: p.resumo });
+}
+
+/**
+ * Lê e guarda uma página PEQUENA já baixada (o texto inteiro) NO SERVIDOR — a atualização automática, quando a resposta
+ * cabe numa janela (`JANELA`); a maior é fragmentada (`empenhos-fragmentos.ts`). Guarda pelas MESMAS partes da tela.
+ */
+export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, texto: string, status: number | null, ms: number): Promise<ResultadoPagina> {
+  let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | ReturnType<typeof lerPaginaPagamentos>;
+  try {
+    lida = lerPaginaDoModo(ped, texto, lote.ano);
+  } catch (e) {
+    const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
+    return registrarFalha(card, lote, periodo, ped, { mensagem, status, bytes: texto.length || null, ms });
+  }
+  const resumo: ResumoPagina = { status, bytes: texto.length || null, ms, recebidos: lida.recebidos, recusados: lida.recusados, repetidos: lida.repetidos, total: lida.total, reparado: lida.reparado };
+  const partes = partesDaPagina(ped.modo, lida.linhas);
+  let passo: number | null = null;
+  let res: ResultadoPagina | null = null;
+  let feitas = 0;
+  for (let i = 0; i < partes.length; i++) {
+    const linhas = lida.linhas.slice(feitas, feitas + partes[i].length);
+    feitas += linhas.length;
+    res = await gravarParte(card, lote, periodo, ped, { parte: i, ultima: i === partes.length - 1, passo, linhas, resumo: i === partes.length - 1 ? resumo : null });
+    passo = res.passo.id;
+  }
+  return res as ResultadoPagina;
+}
+
+/** A leitura do JSON pelo modo do pedido (as MESMAS funções da tela). */
+export function lerPaginaDoModo(ped: Pick<Pedido, "pag" | "porOrgao">, texto: string, ano: number) {
+  return ped.pag ? lerPaginaPagamentos(texto, ano) : ped.porOrgao ? lerPaginaLiquidacoes(texto, ano) : lerPaginaEmpenhos(texto, ano);
 }
 
 /** Fecha o lote sem promover (cancelado pela pessoa ou falhou) — a falha conta como a última leitura do card. */

@@ -2303,6 +2303,59 @@ export const centiLotePassos = sqliteTable(
   (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
 );
 
+/**
+ * A LEITURA FRAGMENTADA da atualização automática (migração `0153`): a resposta de UMA página CAPTURADA em fragmentos de
+ * texto (`centiBrutos`, ~1 MB por execução, conferidos pela `cauda` = os últimos bytes em hex) e processada uma JANELA por
+ * execução do cron — onde parou (`pos`, em caracteres), o pedaço de registro que ficou (`resto`) e as contagens da página.
+ */
+export const centiLeituras = sqliteTable(
+  "centi_leituras",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    loteId: integer("lote_id")
+      .notNull()
+      .references(() => centiLotes.id, { onDelete: "cascade" }),
+    inicio: text("inicio").notNull(),
+    fim: text("fim").notNull(),
+    pagina: integer("pagina").notNull(),
+    bytesCapturados: integer("bytes_capturados").notNull().default(0),
+    charsCapturados: integer("chars_capturados").notNull().default(0),
+    cauda: text("cauda"),
+    capturado: integer("capturado").notNull().default(0),
+    reinicios: integer("reinicios").notNull().default(0),
+    comprimento: integer("comprimento"),
+    pos: integer("pos").notNull().default(0),
+    forma: text("forma"),
+    resto: text("resto").notNull().default(""),
+    parte: integer("parte").notNull().default(0),
+    passoId: integer("passo_id"),
+    recebidos: integer("recebidos").notNull().default(0),
+    recusados: integer("recusados").notNull().default(0),
+    repetidos: integer("repetidos").notNull().default(0),
+    total: integer("total"),
+    reparado: integer("reparado").notNull().default(0),
+    status: integer("status"),
+    ms: integer("ms"),
+    reservadoAte: text("reservado_ate"),
+    criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("centi_leituras_lote_idx").on(t.loteId)],
+);
+
+export const centiBrutos = sqliteTable(
+  "centi_brutos",
+  {
+    leituraId: integer("leitura_id")
+      .notNull()
+      .references(() => centiLeituras.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull(),
+    ini: integer("ini").notNull(),
+    chars: integer("chars").notNull(),
+    texto: text("texto").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.leituraId, t.ordem] })],
+);
+
 /** As colunas de um empenho (as MESMAS no staging e na tabela final — ver `empenhos-core.ts`). */
 const colunasEmpenho = () => ({
   chave: text("chave").notNull(),

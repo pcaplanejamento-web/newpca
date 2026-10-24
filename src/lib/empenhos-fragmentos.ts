@@ -1,0 +1,227 @@
+import { and, eq, gt, lt, sql } from "drizzle-orm";
+import { centiBrutos, centiLeituras, centiLotePassos } from "@/db/schema";
+import { baixarSeguro } from "./busca-segura";
+import { getDb } from "./db";
+import { type CardEmpenho, urlDoCard } from "./empenho-cards-core";
+import type { LoteCenti, Periodo } from "./empenhos-core";
+import {
+  gravarParte,
+  gravarTextoInteiro,
+  lerPaginaDoModo,
+  type Pedido,
+  PedidoInvalido,
+  prepararPedido,
+  registrarFalha,
+  type ResultadoPagina,
+  TEMPO_MS,
+} from "./empenhos-importacao";
+import { BYTES_CAPTURA, corteUtf8, type FormaResposta, hexDe, JANELA, janelaDosPedacos, MAX_REINICIOS, processarJanela, TAM_CAUDA } from "./fragmentos-centi-core";
+import type { ResumoPagina } from "./importacao-partes-core";
+
+/**
+ * A LEITURA FRAGMENTADA da atualização AUTOMÁTICA (o cron, sem navegador) — cada execução faz UMA coisa pequena e para,
+ * bem abaixo do limite de CPU do plano gratuito do Worker, qualquer que seja o tamanho da resposta da Centi:
+ *  1. a resposta pequena (até `JANELA` bytes) é lida e guardada de uma vez;
+ *  2. a grande é CAPTURADA em fragmentos de texto, ~1 MB por execução (a Centi é chamada de novo e só a faixa seguinte é
+ *     convertida — a CAUDA confere que a resposta é a mesma; se a Centi a mudou no meio, a captura recomeça);
+ *  3. capturada, é PROCESSADA uma janela de `JANELA` caracteres por execução, pelas MESMAS funções e a MESMA gravação em
+ *     partes da importação pela tela (`gravarParte`). O fim da última janela fecha o passo e apaga os fragmentos.
+ * A leitura em andamento mora em `centi_leituras` (+ `centi_brutos`); quem chama (`empenhos-auto.ts`) a continua antes de
+ * pedir a página seguinte.
+ */
+
+type Leitura = typeof centiLeituras.$inferSelect;
+
+/** A leitura em andamento do lote (a automática continua ela antes de pedir outra página). */
+export async function leituraDoLote(loteId: number): Promise<Leitura | null> {
+  const [l] = await getDb().select().from(centiLeituras).where(eq(centiLeituras.loteId, loteId)).orderBy(centiLeituras.id).limit(1);
+  return l ?? null;
+}
+
+/** Reserva a leitura por 90 s (duas execuções nunca avançam a mesma); null = outra execução está nela. */
+async function reservar(id: number): Promise<Leitura | null> {
+  const [l] = await getDb()
+    .update(centiLeituras)
+    .set({ reservadoAte: sql`datetime('now', '+90 seconds')` })
+    .where(and(eq(centiLeituras.id, id), sql`(${centiLeituras.reservadoAte} IS NULL OR ${centiLeituras.reservadoAte} < datetime('now'))`))
+    .returning();
+  return l ?? null;
+}
+
+const apagar = (id: number) => getDb().delete(centiLeituras).where(eq(centiLeituras.id, id));
+const periodoDe = (l: Leitura): Periodo => ({ inicio: l.inicio, fim: l.fim });
+
+/** Baixa a faixa [de, ate) da resposta da página (o que vem antes é lido sem converter). */
+function baixarFaixa(card: CardEmpenho, ped: Pedido, de: number, ate: number) {
+  return baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", faixa: { de, ate } });
+}
+
+export type Avanco = { resultado?: ResultadoPagina; situacao: string };
+
+/**
+ * COMEÇA a página na automática: a resposta pequena é lida e guardada já; a grande abre a leitura fragmentada com o 1º
+ * fragmento capturado.
+ */
+export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number): Promise<Avanco> {
+  const db = getDb();
+  const ped = prepararPedido(card, lote, periodo, pagina);
+  const t0 = Date.now();
+  let r: Awaited<ReturnType<typeof baixarFaixa>>;
+  try {
+    r = await baixarFaixa(card, ped, 0, BYTES_CAPTURA);
+  } catch (e) {
+    const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
+    return { resultado: await registrarFalha(card, lote, periodo, ped, { mensagem, status: null, bytes: null, ms: Date.now() - t0 }), situacao: "erro" };
+  }
+  const ms = Date.now() - t0;
+  const bytes = r.bytes ?? new Uint8Array();
+  if (r.terminou && bytes.length <= JANELA) {
+    const texto = new TextDecoder().decode(bytes);
+    return { resultado: await gravarTextoInteiro(card, lote, periodo, ped, texto, r.status, ms), situacao: "página lida" };
+  }
+  const corte = r.terminou ? bytes.length : corteUtf8(bytes, bytes.length);
+  const texto = new TextDecoder().decode(bytes.subarray(0, corte));
+  const [nova] = await db
+    .insert(centiLeituras)
+    .values({
+      loteId: lote.id,
+      inicio: periodo.inicio,
+      fim: periodo.fim,
+      pagina,
+      bytesCapturados: corte,
+      charsCapturados: texto.length,
+      cauda: hexDe(bytes.subarray(Math.max(0, corte - TAM_CAUDA), corte)),
+      capturado: r.terminou ? 1 : 0,
+      comprimento: r.comprimento ?? null,
+      status: r.status,
+      ms,
+    })
+    .returning({ id: centiLeituras.id });
+  await db.insert(centiBrutos).values({ leituraId: nova.id, ordem: 0, ini: 0, chars: texto.length, texto });
+  return { situacao: `resposta grande: capturando (${Math.round(corte / 1000)} KB)` };
+}
+
+/** CONTINUA a leitura fragmentada: captura o próximo fragmento ou processa a próxima janela. */
+export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta: Leitura): Promise<Avanco> {
+  const l = await reservar(aberta.id);
+  if (!l) return { situacao: "leitura em andamento em outra execução" };
+  let ped: Pedido;
+  try {
+    ped = prepararPedido(card, lote, periodoDe(l), l.pagina);
+  } catch (e) {
+    // O cadastro mudou (parâmetros, órgãos): a leitura não vale mais — quem chama encerra o lote.
+    await apagar(l.id);
+    throw e;
+  }
+  try {
+    return l.capturado ? await processar(card, lote, l, ped) : await capturar(card, lote, l, ped);
+  } catch (e) {
+    // A página mudou por outro caminho (passo excluído, a tela leu de novo): a leitura recomeça do zero na próxima vez.
+    if (e instanceof PedidoInvalido) {
+      await apagar(l.id);
+      return { situacao: `leitura recomeça: ${e.message}` };
+    }
+    throw e;
+  }
+}
+
+async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pedido): Promise<Avanco> {
+  const db = getDb();
+  const de = Math.max(0, l.bytesCapturados - TAM_CAUDA);
+  const t0 = Date.now();
+  let r: Awaited<ReturnType<typeof baixarFaixa>>;
+  try {
+    r = await baixarFaixa(card, ped, de, l.bytesCapturados + BYTES_CAPTURA);
+  } catch (e) {
+    const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
+    return { resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: null, bytes: l.bytesCapturados, ms: Date.now() - t0 }, [apagar(l.id)]), situacao: "erro" };
+  }
+  const bytes = r.bytes ?? new Uint8Array();
+  const nCauda = l.bytesCapturados - de;
+  // A MESMA resposta? A cauda (os últimos bytes já capturados) e o tamanho informado têm de bater.
+  const mesma = hexDe(bytes.subarray(0, nCauda)) === (l.cauda ?? "") && (l.comprimento == null || r.comprimento == null || l.comprimento === r.comprimento);
+  if (!mesma) {
+    if (l.reinicios + 1 >= MAX_REINICIOS) {
+      const mensagem = `A Centi mudou a resposta durante a leitura ${MAX_REINICIOS} vezes — a página será lida de novo mais tarde.`;
+      return { resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: r.status, bytes: null, ms: Date.now() - t0 }, [apagar(l.id)]), situacao: "erro" };
+    }
+    await db.batch([
+      db.delete(centiBrutos).where(eq(centiBrutos.leituraId, l.id)),
+      db
+        .update(centiLeituras)
+        .set({ bytesCapturados: 0, charsCapturados: 0, cauda: null, comprimento: null, capturado: 0, reinicios: l.reinicios + 1, reservadoAte: null })
+        .where(eq(centiLeituras.id, l.id)),
+    ] as never);
+    return { situacao: "a Centi mudou a resposta — a captura recomeça" };
+  }
+  const novo = bytes.subarray(nCauda);
+  const corte = r.terminou ? novo.length : corteUtf8(novo, novo.length);
+  const texto = new TextDecoder().decode(novo.subarray(0, corte));
+  const bytesAgora = l.bytesCapturados + corte;
+  const ultimos = bytes.subarray(0, nCauda + corte);
+  await db.batch([
+    ...(texto.length ? [db.insert(centiBrutos).values({ leituraId: l.id, ordem: l.bytesCapturados, ini: l.charsCapturados, chars: texto.length, texto })] : []),
+    db
+      .update(centiLeituras)
+      .set({
+        bytesCapturados: bytesAgora,
+        charsCapturados: l.charsCapturados + texto.length,
+        cauda: hexDe(ultimos.subarray(Math.max(0, ultimos.length - TAM_CAUDA))),
+        comprimento: r.comprimento ?? l.comprimento,
+        capturado: r.terminou ? 1 : 0,
+        ms: (l.ms ?? 0) + (Date.now() - t0),
+        reservadoAte: null,
+      })
+      .where(eq(centiLeituras.id, l.id)),
+  ] as never);
+  return { situacao: r.terminou ? `capturada (${Math.round(bytesAgora / 1000)} KB) — processando em janelas` : `capturando (${Math.round(bytesAgora / 1000)} KB)` };
+}
+
+async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pedido): Promise<Avanco> {
+  const db = getDb();
+  const pedacos = await db
+    .select({ ini: centiBrutos.ini, texto: sql<string>`substr(${centiBrutos.texto}, max(1, ${l.pos} - ${centiBrutos.ini} + 1), ${JANELA})` })
+    .from(centiBrutos)
+    .where(and(eq(centiBrutos.leituraId, l.id), lt(centiBrutos.ini, l.pos + JANELA), gt(sql`${centiBrutos.ini} + ${centiBrutos.chars}`, l.pos)));
+  const bruto = janelaDosPedacos(l.pos, JANELA, pedacos);
+  const r = processarJanela({ pos: l.pos, tamanho: l.charsCapturados, forma: (l.forma as FormaResposta | null) ?? null, resto: l.resto }, bruto);
+  const falhar = async (mensagem: string) => ({
+    resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: l.status, bytes: l.bytesCapturados, ms: l.ms }, [apagar(l.id)]),
+    situacao: "erro",
+  });
+  if (!r.ok) return falhar(r.erro);
+  let lida: ReturnType<typeof lerPaginaDoModo> | null = null;
+  if (r.registros) {
+    try {
+      lida = lerPaginaDoModo(ped, r.registros, lote.ano);
+    } catch (e) {
+      return falhar(e instanceof Error ? e.message : "Não foi possível ler a página.");
+    }
+  }
+  const contas = {
+    recebidos: l.recebidos + (lida?.recebidos ?? 0),
+    recusados: l.recusados + (lida?.recusados ?? 0),
+    repetidos: l.repetidos + (lida?.repetidos ?? 0),
+    total: l.total ?? lida?.total ?? null,
+    reparado: l.reparado || lida?.reparado ? 1 : 0,
+  };
+  const estado = { pos: r.estado.pos, forma: r.estado.forma, resto: r.estado.resto };
+  const periodo = periodoDe(l);
+  if (r.fim) {
+    const resumo: ResumoPagina = { status: l.status, bytes: l.bytesCapturados, ms: l.ms, recebidos: contas.recebidos, recusados: contas.recusados, repetidos: contas.repetidos, total: contas.total, reparado: !!contas.reparado };
+    const resultado = await gravarParte(card, lote, periodo, ped, { parte: l.parte, ultima: true, passo: l.passoId, linhas: lida?.linhas ?? [], resumo }, [apagar(l.id)]);
+    return { resultado, situacao: "página lida (fragmentada)" };
+  }
+  if (!lida || !lida.linhas.length) {
+    // Nenhum registro terminou nesta janela (ou só recusados/repetidos): só avança — e conta o que veio.
+    await db.update(centiLeituras).set({ ...estado, ...contas, reservadoAte: null }).where(eq(centiLeituras.id, l.id));
+    return { situacao: `processando (${Math.round((100 * r.estado.pos) / Math.max(1, l.charsCapturados))}%)` };
+  }
+  const passoNovo = sql<number>`(SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${centiLotePassos.loteId} = ${lote.id})`;
+  const avancar = db
+    .update(centiLeituras)
+    .set({ ...estado, ...contas, parte: l.parte + 1, passoId: l.passoId ?? passoNovo, reservadoAte: null })
+    .where(eq(centiLeituras.id, l.id));
+  await gravarParte(card, lote, periodo, ped, { parte: l.parte, ultima: false, passo: l.passoId, linhas: lida.linhas, resumo: null }, [avancar]);
+  return { situacao: `processando (${Math.round((100 * r.estado.pos) / Math.max(1, l.charsCapturados))}%)` };
+}

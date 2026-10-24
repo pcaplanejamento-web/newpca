@@ -152,7 +152,7 @@ export async function contagemLiquidacoes(db: Db, loteId: number, card: number, 
  * cada liquidação guardada da página com a GRAVADA no card pela régua da promoção (`mudou`, com o destino pelo empenho e
  * o leitor), grava o RESULTADO no passo e tira do staging as IGUAIS (fica só a chave). Sem destino = "sem vínculo".
  */
-export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number, leitor: number, chaves: readonly string[]) {
+export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number, leitor: number, chaves: readonly string[], passo?: number) {
   const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
   const daPagina = sql`"liquidacoes_staging"."lote_id" = ${loteId} AND "liquidacoes_staging"."chave" IN ${lista}`;
   const juntos = sql`"liquidacoes_staging" JOIN "liquidacoes" ON "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"`;
@@ -162,12 +162,12 @@ export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number
     db
       .update(centiLotePassos)
       .set({
-        resNovos: sql`(SELECT COUNT(*) FROM "liquidacoes_staging" WHERE ${daPagina} AND ${comDestino} AND NOT EXISTS (SELECT 1 FROM "liquidacoes" WHERE "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"))`,
-        resAlterados: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND (${difere}))`,
-        resIguais: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND NOT (${difere}))`,
-        resSemVinculo: sql`(SELECT COUNT(*) FROM "liquidacoes_staging" WHERE ${daPagina} AND NOT (${comDestino}))`,
+        resNovos: sql`COALESCE(${centiLotePassos.resNovos}, 0) + (SELECT COUNT(*) FROM "liquidacoes_staging" WHERE ${daPagina} AND ${comDestino} AND NOT EXISTS (SELECT 1 FROM "liquidacoes" WHERE "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"))`,
+        resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND (${difere}))`,
+        resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND ${comDestino} AND NOT (${difere}))`,
+        resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + (SELECT COUNT(*) FROM "liquidacoes_staging" WHERE ${daPagina} AND NOT (${comDestino}))`,
       })
-      .where(eq(centiLotePassos.id, ultimoPasso(loteId))),
+      .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId))),
     db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)),
     db
       .insert(centiStagingFora)
@@ -281,7 +281,7 @@ export function comandosPromoverLiquidacoes(
  * metades, com todos os órgãos); (2) o período termina quando TODOS os órgãos (páginas 1..n) têm uma leitura válida — o
  * último a chegar, em qualquer ordem, marca o fim no próprio passo.
  */
-export function comandosFechoPeriodoLiquidacoes(db: Db, loteId: number, periodo: { inicio: string; fim: string }, paginas: number) {
+export function comandosFechoPeriodoLiquidacoes(db: Db, loteId: number, periodo: { inicio: string; fim: string }, paginas: number, passo?: number) {
   const doPeriodo = sql`${centiLotePassos.loteId} = ${loteId} AND ${centiLotePassos.inicio} = ${periodo.inicio} AND ${centiLotePassos.fim} = ${periodo.fim}`;
   return [
     db
@@ -293,7 +293,7 @@ export function comandosFechoPeriodoLiquidacoes(db: Db, loteId: number, periodo:
       .set({ fimPeriodo: 1 })
       .where(
         and(
-          eq(centiLotePassos.id, ultimoPasso(loteId)),
+          eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)),
           eq(centiLotePassos.estado, "ok"),
           sql`(SELECT COUNT(DISTINCT o."pagina") FROM ${centiLotePassos} AS o WHERE o."lote_id" = ${loteId} AND o."inicio" = ${periodo.inicio} AND o."fim" = ${periodo.fim} AND o."estado" = 'ok' AND o."pagina" BETWEEN 1 AND ${paginas}) >= ${paginas}`,
         ),

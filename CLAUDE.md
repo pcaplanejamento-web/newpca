@@ -4677,12 +4677,35 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     o IGUAL sai do staging — fica só a chave (`igual` = 1), que conta nos únicos/na conferência e entra em `chavesIguais` (o
     que sumiu exclui). A chave que veio igual e muda numa página seguinte volta ao staging. O `fora` do lote = só os sem
     vínculo (`igual` = 0). Nada igual ao gravado ocupa espaço nem é reescrito; a conclusão recalcula pelos mesmos dados.
-  - **Atualização automática (`empenhos-auto.ts`, gatilho `4-59/5` → `POST /api/integracoes/empenhos/cron`):** por card
-    LIGADO (`cardsAtivos`), continua o lote que lê ou, na hora (`cardNaHora`: horário de Brasília, dia útil, frequência
-    desde a última leitura), cria o do ano da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); 3 páginas
-    por passada (`proximoPedido`), condutor `CONDUTOR_AUTO`, até 3 erros de rede seguidos; a queda suspeita fecha "parcial"
-    (a pessoa confirma numa importação manual). Testes: `tests/empenhos*.test.ts` + `tests/fixtures/banco-migrado.ts` (o
-    schema final de toda a cadeia, recriado por teste).
+  - **REGRA FIRME — NENHUMA REQUISIÇÃO LÊ O JSON INTEIRO DA CENTI (v1.216.0, migração `0153`):** ler e consertar o JSON custa
+    ~20 ms de CPU por MB e converter bytes em texto ~3 ms por MB (medidos); o plano gratuito dá ~10 ms por execução e o mês
+    de pagamentos de um órgão grande tem vários MB. **Pela TELA:** a rota `baixar` devolve a resposta crua (`baixarPaginaDoLote`
+    → `baixarSeguro {pedacos}`, sem decodificar); o navegador lê com as MESMAS `lerPagina*` (`lerPaginaNoNavegador`,
+    `leitura-centi-cliente.ts`) e manda as linhas em PARTES de tamanho fixo (`parte` — núcleo puro `importacao-partes-core.ts`:
+    `partesDaPagina` ≤ `MAX_LINHAS_PARTE`=1500 e ≤ `MAX_BYTES_PARTE`; corpo > `MAX_CORPO_PARTE` = 413); o servidor confere
+    cada tupla (`linhasDaParte`: tipos, tamanhos, ano do lote, a chave REFEITA dos campos, sem repetir) e grava por
+    `gravarParte` — a 1ª parte cria o passo (estado "erro" com a marca `guardando(n)` até a última), as seguintes acumulam
+    nele PELO ID (`comandosConferir*`/`comandosFechoPeriodoLiquidacoes`/`consultaUltimoPasso` aceitam o `passo`; os
+    resultados somam com `COALESCE`), a última traz o resumo (`resumoValido` = recebidos = linhas + recusados + repetidos),
+    fecha o passo e reconta; a soma e o total das liquidações/pagamentos o servidor conta. A leitura que falha no navegador
+    = `falha` (o passo de erro). `jaNoLote` = UMA consulta. **Na AUTOMÁTICA** (sem navegador — `empenhos-fragmentos.ts`, núcleo
+    puro `fragmentos-centi-core.ts`): a resposta até `JANELA` (80 mil) é lida já (`gravarTextoInteiro`); a maior é CAPTURADA
+    em fragmentos de texto, `BYTES_CAPTURA` (1 MB) por execução (`baixarSeguro {faixa}` baixa de novo e só converte a faixa
+    seguinte; `corteUtf8`; a CAUDA — os últimos 32 bytes em hex — e o Content-Length conferem que é a MESMA resposta, senão
+    recomeça, até `MAX_REINICIOS`) em `centi_leituras` + `centi_brutos`; depois é PROCESSADA uma janela de 80 mil caracteres
+    por execução (`processarJanela`: corta no último "},\r\n  {" — reserva genérica "} , {" —, desfaz o TEXTO com o JSON
+    dentro sem cortar escapes, o registro maior que a janela acumula no `resto` até `MAX_RESTO`) pela MESMA `gravarParte`
+    (o estado da leitura avança no MESMO lote — `extras`); `reservar` (90 s) impede duas execuções na mesma leitura;
+    `comandosFecharLote` apaga a leitura que ficou. Medido no pior caso (JIT frio): ~6 ms por janela.
+  - **Atualização automática (`empenhos-auto.ts`, gatilho `* * * * *` → `POST /api/integracoes/empenhos/cron`):** UMA tarefa
+    pequena por execução (uma página pequena, um fragmento ou uma janela), com os cards LIGADOS (`cardsAtivos`) em RODÍZIO pelo
+    minuto — o 1º que trabalhar encerra a execução (`trabalhou`); a leitura fragmentada em andamento vem antes de pedir a
+    próxima página; na hora (`cardNaHora`: horário de Brasília, dia útil, frequência desde a última leitura) cria o lote do ano
+    da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); condutor `CONDUTOR_AUTO`, até 3 erros de rede
+    seguidos; a resposta inválida e a grande demais que não se divide (> 12 MB) encerram o lote (`tratarErro`); a queda
+    suspeita fecha "parcial" (a pessoa confirma numa importação manual). Testes: `tests/empenhos*.test.ts`,
+    `tests/importacao-partes.test.ts`, `tests/fragmentos-centi.test.ts` + `tests/fixtures/banco-migrado.ts` (o schema final de
+    toda a cadeia, recriado por teste).
 - **`SeletorMultiplo campo`** (v1.182.0): o modo de FORMULÁRIO — o rótulo em cima (`Rotulo`, exportado do `Field`, com o
   `extra` = a `Ajuda compacta`) e a caixa do `TextField`/`SelectField` (`classeCaixaCampo(denso)`, exportada do `Field`) com o
   resumo dos escolhidos ("PMRV, FMS +1"; nenhum = `textoVazio`); abre o MESMO painel do `suspenso`. Use-o quando a escolha

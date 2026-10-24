@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { LoteCenti, PassoLote } from "../src/lib/empenhos-core.ts";
-import { lerAnoNaCenti, PARALELO_LIQUIDACOES, passoVazio } from "../src/lib/leitura-centi-cliente.ts";
+import { lerAnoNaCenti, lerPaginaNoNavegador, PARALELO_LIQUIDACOES, passoVazio } from "../src/lib/leitura-centi-cliente.ts";
 
-/** Um servidor falso: responde cada página depois de um atraso; conta quantos pedidos correm ao mesmo tempo. */
+/** Um servidor falso: `baixar` devolve a página CRUA (uma lista vazia) depois de um atraso — conta quantos pedidos correm ao
+ * mesmo tempo —, ou o passo de erro em JSON; `parte` devolve o passo (com o `continuar` da página). */
 function servidor(responder: (c: { inicio: string; fim: string; pagina: number }) => Partial<{ continuar: boolean; dividir: unknown; erro: unknown; status: number }>) {
   const pedidos: string[] = [];
+  const pendentes = new Map<string, Partial<{ continuar: boolean }>>();
   let emCurso = 0;
   let maximo = 0;
+  const json = (status: number, corpo: unknown) => ({ status, ok: status < 400, headers: { get: () => null }, json: async () => corpo });
   globalThis.fetch = (async (_url: string, init: { body: string }) => {
     const c = JSON.parse(init.body);
+    const k = `${c.inicio}|${c.fim}|${c.pagina}`;
+    if (c.acao === "parte") return json(200, { ok: true, lote: LOTE, passo: { ...passoVazio(pedidos.length, c, c.pagina), estado: "ok", id: pedidos.length }, ...pendentes.get(k) });
     pedidos.push(`${c.inicio}|${c.pagina}`);
     emCurso++;
     maximo = Math.max(maximo, emCurso);
@@ -17,11 +22,10 @@ function servidor(responder: (c: { inicio: string; fim: string; pagina: number }
     emCurso--;
     const r = responder(c);
     const status = r.status ?? 200;
-    return {
-      status,
-      ok: status < 400,
-      json: async () => (status >= 400 ? { ok: false, error: "recusado" } : { ok: true, lote: LOTE, passo: { ...passoVazio(pedidos.length, c, c.pagina), estado: "ok" }, ...r }),
-    };
+    if (status >= 400) return json(status, { ok: false, error: "recusado" });
+    if (r.dividir || r.erro) return json(200, { ok: true, lote: LOTE, passo: { ...passoVazio(pedidos.length, c, c.pagina), estado: "dividido" }, ...r });
+    pendentes.set(k, r);
+    return { status: 200, ok: true, headers: { get: (h: string) => (h === "x-centi-status" ? "200" : null) }, text: async () => "[]" };
   }) as never;
   return { pedidos, maximo: () => maximo };
 }
@@ -85,4 +89,28 @@ test("leitura em paralelo: empenhos = várias semanas ao mesmo tempo, as página
   await lerAnoNaCenti(base(lote).o);
   for (const [semana, paginas] of vistas) assert.deepEqual(paginas, [1, 2, 3], `semana ${semana} em sequência`);
   assert.ok(s.maximo() > 1 && s.maximo() <= 4, `semanas em paralelo, até 4 (foram ${s.maximo()})`);
+});
+
+test("página no navegador: o JSON é lido AQUI e vai em partes de tamanho fixo; a leitura que falha vira o passo de erro", async () => {
+  const enviados: Record<string, unknown>[] = [];
+  const regs = Array.from({ length: 3200 }, (_, i) => ({ IdOrdemPagamento: i + 1, IdNotaEmpenho: 9, Orgao: "P", ValorLiquido: 1, PossuiAnulacao: false }));
+  let resposta = JSON.stringify(regs);
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    const c = JSON.parse(init.body);
+    enviados.push(c);
+    if (c.acao === "baixar") return { status: 200, ok: true, headers: { get: (h: string) => (h === "x-centi-status" ? "200" : null) }, text: async () => resposta };
+    return { status: 200, ok: true, headers: { get: () => null }, json: async () => ({ ok: true, lote: c.acao === "parte" && c.resumo == null ? null : LOTE, passo: { ...passoVazio(7, c, 1), id: 7 } }) };
+  }) as never;
+  const base = { lote: 1, condutor: "x", inicio: "2025-03-01", fim: "2025-03-31", pagina: 1 };
+  await lerPaginaNoNavegador(1, "pagamentos", 2025, base);
+  const partes = enviados.filter((c) => c.acao === "parte");
+  assert.equal(partes.length, 3, "3.200 linhas = 3 partes de até 1.500");
+  assert.deepEqual(partes.map((p) => p.passo), [null, 7, 7], "a 1ª cria o passo; as seguintes vão pelo id dele");
+  assert.equal((partes[2].resumo as { recebidos: number }).recebidos, 3200);
+  assert.ok(partes.slice(0, -1).every((p) => p.resumo === null));
+  enviados.length = 0;
+  resposta = "<html>erro</html>";
+  await lerPaginaNoNavegador(1, "pagamentos", 2025, base);
+  assert.deepEqual(enviados.map((c) => c.acao), ["baixar", "falha"]);
+  assert.match(String(enviados[1].mensagem), /não é JSON/);
 });

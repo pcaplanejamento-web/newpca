@@ -11,9 +11,21 @@ const TEMPO_MS = 8000;
 const MAX_REDIRECIONAMENTOS = 3;
 
 /** `bytes` = o corpo cru (só com `binario`); `nome` = o arquivo do Content-Disposition. */
-export type Baixado = { texto: string; tipo: string; url: string; status: number; bytes?: Uint8Array; nome?: string };
+export type Baixado = {
+  texto: string;
+  tipo: string;
+  url: string;
+  status: number;
+  bytes?: Uint8Array;
+  nome?: string;
+  pedacos?: Uint8Array[];
+  lidos?: number;
+  /** Com `faixa`: a resposta acabou dentro da faixa (então `lidos` = o tamanho dela) e o Content-Length, se veio. */
+  terminou?: boolean;
+  comprimento?: number | null;
+};
 
-export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
+export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; pedacos?: boolean; faixa?: { de: number; ate: number }; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
   const url = urlAgendaValida(bruta);
   if (!url) throw new Error("Link inválido: use um endereço https:// público.");
   const grande = `${o.quem} é grande demais (máx. ${Math.round(o.maxBytes / 1_000_000) || 1} MB).`;
@@ -45,9 +57,45 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
       await r.body?.cancel();
       return { texto: "", tipo, url: destino, status: r.status };
     }
-    if (Number(r.headers.get("content-length") ?? 0) > o.maxBytes) throw new Error(grande);
+    const cl = r.headers.get("content-length");
+    const comprimento = cl != null && /^\d+$/.test(cl) ? Number(cl) : null;
+    if ((comprimento ?? 0) > o.maxBytes) throw new Error(grande);
     const leitor = r.body?.getReader();
     if (!leitor) throw new Error(`${o.quem} respondeu sem conteúdo.`);
+    if (o.faixa) {
+      // Só os bytes da FAIXA [de, ate) — o que vem antes é lido e descartado sem converter (quase nenhum trabalho de CPU);
+      // ao chegar ao fim da faixa, a leitura para (o resto da resposta não é baixado).
+      const { de, ate } = o.faixa;
+      const pedacos: Uint8Array[] = [];
+      let lidos = 0;
+      let terminou = false;
+      for (;;) {
+        const { done, value } = await leitor.read();
+        if (done) {
+          terminou = true;
+          break;
+        }
+        const ini = lidos;
+        lidos += value.byteLength;
+        if (lidos > o.maxBytes) {
+          await leitor.cancel();
+          throw new Error(grande);
+        }
+        if (lidos > de && ini < ate) pedacos.push(value.subarray(Math.max(0, de - ini), Math.min(value.byteLength, ate - ini)));
+        if (lidos >= ate) {
+          await leitor.cancel();
+          break;
+        }
+      }
+      const n = pedacos.reduce((t, p) => t + p.byteLength, 0);
+      const bytes = new Uint8Array(n);
+      let i = 0;
+      for (const p of pedacos) {
+        bytes.set(p, i);
+        i += p.byteLength;
+      }
+      return { texto: "", tipo, url: destino, status: r.status, bytes, lidos, terminou, comprimento };
+    }
     const dec = new TextDecoder();
     const partes: Uint8Array[] = [];
     let lidos = 0;
@@ -59,9 +107,11 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
         await leitor.cancel();
         throw new Error(grande);
       }
-      if (o.binario) partes.push(value);
+      if (o.binario || o.pedacos) partes.push(value);
       else texto += dec.decode(value, { stream: true });
     }
+    // Os PEDAÇOS como vieram (sem decodificar nem juntar — quase nenhum trabalho de CPU): quem chama repassa ao navegador.
+    if (o.pedacos) return { texto: "", tipo, url: destino, status: r.status, pedacos: partes, lidos };
     if (o.binario) {
       const bytes = new Uint8Array(lidos);
       let i = 0;

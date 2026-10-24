@@ -1,7 +1,11 @@
-import { type LoteCenti, lotePorMes, lotePorOrgao, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
+import { type LoteCenti, lerPaginaEmpenhos, lotePorMes, lotePorOrgao, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
+import { type ModoParte, partesDaPagina } from "./importacao-partes-core.ts";
+import { lerPaginaLiquidacoes } from "./liquidacoes-core.ts";
+import { lerPaginaPagamentos } from "./pagamentos-core.ts";
 
 /**
- * A LEITURA DE UM ANO NA CENTI conduzida pelo NAVEGADOR (a rota lê uma página por vez — o limite de CPU do Worker): a
+ * A LEITURA DE UM ANO NA CENTI conduzida pelo NAVEGADOR (a rota baixa uma página por vez e o JSON é lido AQUI, guardado em
+ * partes de tamanho fixo — `lerPaginaNoNavegador`; nenhuma requisição passa do limite de CPU do plano gratuito do Worker): a
  * MESMA na importação manual de um card (Empenhos → card → Importação) e no "Buscar na Centi" dos vínculos (o lote em
  * modo `unidades`, que só atualiza o catálogo). Repete a falha de rede com espera; o período grande demais é dividido ao
  * meio. EM PARALELO: cada pedido é uma requisição própria (o próprio limite do Worker) — empenhos: várias SEMANAS ao mesmo
@@ -15,7 +19,8 @@ export const PARALELO_EMPENHOS = 4;
 export const PARALELO_LIQUIDACOES = 6;
 
 export type RespostaPasso = {
-  lote: LoteCenti;
+  /** null na parte do meio de uma página (a contagem do lote só muda na última). */
+  lote: LoteCenti | null;
   passo: PassoLote;
   continuar?: boolean;
   erro?: { tipo: TipoErro; mensagem: string };
@@ -37,6 +42,47 @@ export async function pedirImportacao<T>(cardId: number, corpo: Record<string, u
   if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
   return j;
 }
+
+/**
+ * UMA PÁGINA lida NO NAVEGADOR (o servidor nunca lê o JSON inteiro — o limite de CPU do plano gratuito do Worker): `baixar`
+ * traz a resposta da Centi crua (ou o passo de erro, já registrado); o JSON é lido aqui pelas MESMAS funções do servidor e
+ * as linhas vão em PARTES de tamanho fixo (`parte`); a leitura que falha vira o passo de erro (`falha`).
+ */
+export async function lerPaginaNoNavegador(cardId: number, modo: ModoParte, ano: number, base: { lote: number; condutor: string; inicio: string; fim: string; pagina: number }): Promise<RespostaPasso> {
+  const t0 = performance.now();
+  const r = await fetch(`/api/empenhos/cards/${cardId}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "baixar", ...base }) });
+  const statusCenti = r.headers.get("x-centi-status");
+  if (r.status >= 400 || statusCenti == null) {
+    // O passo de ERRO (já registrado no servidor) ou a recusa — o JSON de sempre.
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & RespostaPasso;
+    if (r.status >= 400 && r.status < 500) throw new RecusaImportacao(j.error ?? `Recusado (${r.status}).`);
+    if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+    return j;
+  }
+  const texto = await r.text();
+  const ms = Math.round(performance.now() - t0);
+  const status = Number(statusCenti) || null;
+  let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | ReturnType<typeof lerPaginaPagamentos>;
+  try {
+    lida = modo === "pagamentos" ? lerPaginaPagamentos(texto, ano) : modo === "liquidacoes" ? lerPaginaLiquidacoes(texto, ano) : lerPaginaEmpenhos(texto, ano);
+  } catch (e) {
+    const mensagem = (e instanceof Error ? e.message : "Resposta inválida da Centi.").slice(0, 500);
+    return pedirImportacao<RespostaPasso>(cardId, { acao: "falha", ...base, mensagem, status, bytes: texto.length || null, ms });
+  }
+  const partes = partesDaPagina(modo, lida.linhas);
+  let passo: number | null = null;
+  let resp: RespostaPasso | null = null;
+  for (let i = 0; i < partes.length; i++) {
+    const ultima = i === partes.length - 1;
+    const resumo = ultima ? { status, bytes: texto.length || null, ms, recebidos: lida.recebidos, recusados: lida.recusados, repetidos: lida.repetidos, total: lida.total, reparado: lida.reparado } : null;
+    resp = await pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i], resumo });
+    passo = resp.passo.id;
+  }
+  return resp as RespostaPasso;
+}
+
+/** O modo das linhas do lote (os empenhos e o catálogo leem a mesma resposta). */
+export const modoDoLote = (l: Pick<LoteCenti, "modo">): ModoParte => (l.modo === "liquidacoes" || l.modo === "pagamentos" ? l.modo : "empenhos");
 
 /** Os passos já gravados de um lote (retomar, o detalhe do histórico). */
 export async function lerPassos(cardId: number, loteId: number): Promise<PassoLote[]> {
@@ -128,8 +174,8 @@ export async function lerAnoNaCenti(o: {
   const parar = () => falhou || o.parar();
   let emCurso = 0;
   // O lote mais NOVO vence (as respostas paralelas chegam fora de ordem): pelo `vistoEm`, a contagem do banco.
-  const aplicarLote = (l: LoteCenti) => {
-    if (l.vistoEm >= lote.vistoEm) {
+  const aplicarLote = (l: LoteCenti | null) => {
+    if (l && l.vistoEm >= lote.vistoEm) {
       lote = l;
       o.onLote(l);
     }
@@ -140,7 +186,7 @@ export async function lerAnoNaCenti(o: {
       o.onAgora({ periodo, pagina, tentativa: t + 1, emCurso });
       let r: RespostaPasso;
       try {
-        r = await pedirImportacao<RespostaPasso>(o.cardId, { acao: "pagina", lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina });
+        r = await lerPaginaNoNavegador(o.cardId, modoDoLote(lote), lote.ano, { lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina });
       } catch (e) {
         if (e instanceof RecusaImportacao) throw e;
         // Sem resposta do SISTEMA (rede, sessão) — o passo não chegou ao servidor: fica registrado só na tela.

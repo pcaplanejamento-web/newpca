@@ -7,7 +7,8 @@ import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
-import { concluirLoteEmpenhos, fecharLoteEmpenhos, lerPaginaDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
+import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
+import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
 import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -33,8 +34,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 }
 
 /**
- * IMPORTAÇÃO MANUAL do card, passo a passo (a tela conduz — Importar): `iniciar` cria o lote · `pagina` lê UMA página da
- * Centi com a configuração SALVA do card e guarda no staging (só o que os vínculos cobrem) · `concluir` CONFERE (recebidos × total informado pela Centi) e só então PROMOVE
+ * IMPORTAÇÃO MANUAL do card, passo a passo (a tela conduz — Importar): `iniciar` cria o lote · `baixar` traz UMA página da
+ * Centi crua (o navegador lê o JSON) · `parte` guarda as linhas lidas em partes de tamanho fixo (só o que os vínculos
+ * cobrem) · `falha` registra a leitura que falhou · `concluir` CONFERE (recebidos × total informado pela Centi) e só então PROMOVE
  * para a tabela final — senão fecha como parcial, sem tocar nela · `cancelar` fecha sem promover.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -45,6 +47,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const negado = recusa(g.acesso, telaDoCard(a.card), "importar");
   if (negado) return negado;
   const { card } = a;
+  // A PARTE tem tamanho fixo (o navegador divide): um corpo maior nem é lido.
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_CORPO_PARTE) return erro("Pedido grande demais — recarregue a página e importe de novo.", 413);
   const p = await parseCorpo(importarCardSchema, req);
   if ("resp" in p) return p.resp;
   const db = getDb();
@@ -85,10 +89,24 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return erro("Esta importação começou com uma versão anterior do leitor — cancele e importe de novo.", 409);
   }
 
-  if (corpo.acao === "pagina") {
+  if (corpo.acao === "baixar" || corpo.acao === "falha" || corpo.acao === "parte") {
+    const periodo = { inicio: corpo.inicio, fim: corpo.fim };
     try {
-      const r = await lerPaginaDoLote(card, lote, { inicio: corpo.inicio, fim: corpo.fim }, corpo.pagina);
-      return ok({ lote: await getLote(lote.id, card.id), ...r });
+      if (corpo.acao === "baixar") {
+        // A resposta da Centi volta CRUA ao navegador (o servidor não lê o JSON — o limite de CPU do plano gratuito);
+        // a falha (rede, status, grande demais) já é o passo registrado, na resposta JSON de sempre.
+        const b = await baixarPaginaDoLote(card, lote, periodo, corpo.pagina);
+        if (!b.ok) return ok({ lote: await getLote(lote.id, card.id), ...b.r });
+        return new Response(new Blob(b.pedacos as BlobPart[]), {
+          headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-centi-status": String(b.status), "x-centi-ms": String(b.ms) },
+        });
+      }
+      const r =
+        corpo.acao === "falha"
+          ? await falhaDaPagina(card, lote, periodo, corpo.pagina, { mensagem: corpo.mensagem, status: corpo.status, bytes: corpo.bytes, ms: corpo.ms })
+          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, resumo: corpo.resumo });
+      // A parte do meio não muda a contagem do lote (só a última reconta): não relê o lote.
+      return ok({ lote: r.parcial ? null : await getLote(lote.id, card.id), ...r });
     } catch (e) {
       if (e instanceof PedidoInvalido) return erro(e.message, e.status);
       throw e;

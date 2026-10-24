@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LIMITES_CARD } from "./empenho-cards-core.ts";
+import { MAX_LINHAS_PARTE } from "./importacao-partes-core.ts";
 
 /** A configuração de um CARD de empenhos. A régua completa é `motivoCardInvalido` (core). */
 export const cardEmpenhoSchema = z.strictObject({
@@ -57,15 +58,48 @@ const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
 /** A IMPORTAÇÃO MANUAL de um card (passo a passo, conduzida pela tela): iniciar um lote (`modo` "unidades" = só o
  * catálogo da Centi), ler UMA página, concluir (conferir e promover), PAUSAR (a leitura parou numa falha: o lote fica aberto
  * e solto para qualquer aba continuar) ou cancelar. */
+const pedidoPagina = {
+  lote: z.number().int().positive(),
+  condutor,
+  inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  pagina: z.number().int().min(1).max(500),
+};
+
 export const importarCardSchema = z.discriminatedUnion("acao", [
   z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes", "pagamentos"]).optional() }),
+  // A página pela TELA, em três ações (nenhuma lê o JSON inteiro no servidor — o limite de CPU do plano gratuito): `baixar`
+  // devolve a resposta da Centi crua · `falha` registra a leitura que falhou no navegador · `parte` guarda as linhas já
+  // lidas, em partes de tamanho fixo (conferidas no servidor — `linhasDaParte`).
+  z.strictObject({ acao: z.literal("baixar"), ...pedidoPagina }),
   z.strictObject({
-    acao: z.literal("pagina"),
-    lote: z.number().int().positive(),
-    condutor,
-    inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    pagina: z.number().int().min(1).max(500),
+    acao: z.literal("falha"),
+    ...pedidoPagina,
+    mensagem: z.string().trim().min(1).max(500),
+    status: z.number().int().min(0).max(999).nullable(),
+    bytes: z.number().int().min(0).nullable(),
+    ms: z.number().int().min(0).nullable(),
+  }),
+  z.strictObject({
+    acao: z.literal("parte"),
+    ...pedidoPagina,
+    parte: z.number().int().min(0).max(10_000),
+    partes: z.number().int().min(1).max(10_000),
+    passo: z.number().int().positive().nullable(),
+    // As tuplas (uma por linha) — o tipo de cada campo é conferido depois, sem o custo do Zod por campo.
+    linhas: z.array(z.unknown()).max(MAX_LINHAS_PARTE),
+    resumo: z
+      .strictObject({
+        status: z.number().int().min(0).max(999).nullable(),
+        bytes: z.number().int().min(0).nullable(),
+        ms: z.number().int().min(0).nullable(),
+        recebidos: z.number().int().min(0),
+        recusados: z.number().int().min(0),
+        repetidos: z.number().int().min(0),
+        total: z.number().int().min(0).nullable(),
+        reparado: z.boolean(),
+      })
+      .nullable(),
   }),
   z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive(), condutor, aceitarQueda: z.boolean().optional() }),
   z.strictObject({ acao: z.literal("pausar"), lote: z.number().int().positive(), condutor }),

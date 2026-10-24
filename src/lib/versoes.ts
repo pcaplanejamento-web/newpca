@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.216.0",
+    data: "2026-10-24",
+    titulo: "Importação leve e automática em fragmentos",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos, liquidações e pagamentos", texto: "A importação pela tela lê o JSON da Centi no navegador e envia ao sistema em partes de tamanho fixo. Nenhum pedido passa do limite do plano gratuito, qualquer que seja o tamanho do mês, e a conferência de cada linha continua no servidor.", link: "/painel/pagamentos" },
+      { tipo: "novo", area: "Pagamentos", texto: "A atualização automática também importa os meses grandes. A resposta é baixada em pedaços de 1 MB e processada em janelas pequenas, uma por minuto. Se a Centi mudar a resposta no meio, a leitura recomeça sozinha.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos e liquidações", texto: "A atualização automática faz uma tarefa pequena por minuto e reveza entre os cards ligados. Assim, um card nunca atrasa os outros.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Liquidações e pagamentos", texto: "A importação avisa que o órgão e a unidade vêm do empenho de mesmo número, por isso os empenhos devem ser importados antes. Os que chegarem depois são realinhados sozinhos.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.215.0",
     data: "2026-10-24",
     titulo: "Pagamentos da Centi",
