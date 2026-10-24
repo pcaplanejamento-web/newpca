@@ -9,7 +9,7 @@
  *   `NumeroEmpenho` das liquidações) liga o pagamento ao EMPENHO — o órgão e a unidade do cadastro são os dele; sem o empenho
  *   no sistema, o órgão do cadastro com o ID na Centi, sem unidade.
  */
-import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta } from "./centi-resposta-core.ts";
+import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta, textoCenti } from "./centi-resposta-core.ts";
 import { dataIso, type PaginaLida, type Periodo, valor } from "./empenhos-core.ts";
 
 /** O endereço da API de pagamentos (no mesmo portal do card — só o endpoint muda). */
@@ -34,11 +34,7 @@ export type LinhaPagamento = {
   motivoAnulacao: string | null;
 };
 
-function texto(v: unknown): string | null {
-  if (v == null) return null;
-  const t = String(v).replace(/\s+/g, " ").trim();
-  return t ? t : null;
-}
+const texto = textoCenti;
 
 /** A CHAVE do pagamento = o Id da ordem de pagamento na Centi (único). */
 export const chavePagamento = (id: number) => String(id);

@@ -8,7 +8,7 @@
  *   Centi) liga a liquidação ao EMPENHO — o órgão e a unidade do cadastro são os dele; sem o empenho no sistema, o órgão
  *   do cadastro com o ID na Centi, sem unidade. O mesmo número ligará os pagamentos.
  */
-import { esqueletoResposta, lerJsonCenti, registrosDaResposta } from "./centi-resposta-core.ts";
+import { esqueletoResposta, lerJsonCenti, registrosDaResposta, textoCenti } from "./centi-resposta-core.ts";
 import { corpoDaPagina, dataIso, type PaginaLida, type Periodo, valor } from "./empenhos-core.ts";
 
 /** O endereço da API de liquidações (no mesmo portal do card — só o endpoint muda). */
@@ -32,11 +32,7 @@ export type LinhaLiquidacao = {
   saldo: number;
 };
 
-function texto(v: unknown): string | null {
-  if (v == null) return null;
-  const t = String(v).replace(/\s+/g, " ").trim();
-  return t ? t : null;
-}
+const texto = textoCenti;
 
 /** A CHAVE da liquidação = o Id da Centi (único; o número da liquidação é o da nota e se repete). */
 export const chaveLiquidacao = (id: number) => String(id);

@@ -5,7 +5,7 @@
  * recusado), o registro sem número gravado como "0" (colisão — aqui é RECUSADO e contado) e a importação contada como
  * completa sem bater com o total que a própria Centi informa.
  */
-import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta } from "./centi-resposta-core.ts";
+import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta, textoCenti } from "./centi-resposta-core.ts";
 import { parseValorPlanilha } from "./parse-orcamento-comum.ts";
 import { MESES_PERIODO } from "./periodo.ts";
 
@@ -52,11 +52,7 @@ export type LinhaEmpenho = {
   historico: string | null;
 };
 
-function texto(v: unknown): string | null {
-  if (v == null) return null;
-  const t = String(v).replace(/\s+/g, " ").trim();
-  return t ? t : null;
-}
+const texto = textoCenti;
 
 /**
  * Valor em R$: número como veio; texto da Centi em pt-BR, SEMPRE com a vírgula decimal ("100,000" = R$ 100 — três casas;

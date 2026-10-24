@@ -251,3 +251,29 @@ export function resumoResposta(texto: string): Pick<ResultadoTeste, "itens" | "t
   const amostra = regs.slice(0, AMOSTRA_TESTE).map((r) => Object.fromEntries(campos.map((c) => [c, curto(r[c])])));
   return { itens: regs.length, total, campos, amostra, mensagem: regs.length ? null : "A API respondeu, mas sem registros para esse pedido." };
 }
+
+/**
+ * O texto de um campo da Centi limpo: os espaços (quebras, tabs, NBSP…) viram UM espaço e as pontas saem; vazio = null.
+ * Caminho RÁPIDO (a maioria dos campos já vem limpa): uma varredura confere que não há espaço duplo, espaço nas pontas nem
+ * outro espaço que o comum — então o texto volta como está, sem a expressão regular (a normalização era o maior custo de
+ * CPU da leitura, acima do próprio JSON.parse).
+ */
+export function textoCenti(v: unknown): string | null {
+  if (v == null) return null;
+  const s = typeof v === "string" ? v : String(v);
+  const n = s.length;
+  if (n === 0) return null;
+  let limpo = s.charCodeAt(0) !== 32 && s.charCodeAt(n - 1) !== 32;
+  for (let i = 0; limpo && i < n; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 32) {
+      if (s.charCodeAt(i + 1) === 32) limpo = false;
+    } else if ((c >= 9 && c <= 13) || c === 160 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a) || c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff) {
+      // Os outros espaços que o \s cobre (\t\n\v\f\r e os Unicode): caminho lento.
+      limpo = false;
+    }
+  }
+  if (limpo) return s;
+  const t = s.replace(/\s+/g, " ").trim();
+  return t ? t : null;
+}

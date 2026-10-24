@@ -115,3 +115,16 @@ test("partes (D1 real): as partes de UMA página acumulam no MESMO passo — mes
   const p2 = raw.prepare("SELECT res_novos AS r FROM centi_lote_passos WHERE lote_id = ? AND pagina = 2").get(lote) as { r: number | null };
   assert.equal(p2.r, null, "a página 2 não recebeu nada da página 1");
 });
+
+test("textoCenti: o caminho rápido devolve o MESMO que a expressão regular (espaços, pontas, NBSP, controles)", async () => {
+  const { textoCenti } = await import("../src/lib/centi-resposta-core.ts");
+  const regex = (v: unknown) => {
+    if (v == null) return null;
+    const s = String(v).replace(/\s+/g, " ").trim();
+    return s || null;
+  };
+  const casos = ["ABC DEF", "  a  b ", "x\ty", "AB C", "", null, undefined, "ÁGUA É", " lead", "trail ", "a\u0001b", "a\r\nb", "a  b", "﻿X", "a b", 123, "Ação — Ñ"];
+  for (const c of casos) assert.equal(textoCenti(c), regex(c), JSON.stringify(c));
+  const limpo = "FORNECEDOR LTDA";
+  assert.equal(textoCenti(limpo), limpo, "o limpo volta como está");
+});

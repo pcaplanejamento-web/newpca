@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.216.1",
+    data: "2026-10-24",
+    titulo: "Importação mais rápida, dentro do plano gratuito",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos, liquidações e pagamentos", texto: "A leitura das linhas da Centi ficou cerca de 35% mais rápida. A limpeza dos textos pula os campos que já vêm limpos, o que acelera a importação pela tela e a automática, sem mudar nenhum dado.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos e liquidações", texto: "Na importação pela tela, cada semana pode ter até 4 MB antes de ser dividida, o que significa menos divisões e menos pedidos. O servidor só repassa a resposta, e o limite por pedido continua o mesmo.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.216.0",
     data: "2026-10-24",
     titulo: "Importação leve e automática em fragmentos",

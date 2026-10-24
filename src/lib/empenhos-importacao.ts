@@ -86,6 +86,9 @@ type Linha = typeof centiLotePassos.$inferSelect;
  * capturada e processada em fragmentos, uma janela por execução do cron (`empenhos-fragmentos.ts`).
  */
 const MAX_BYTES = 1_000_000;
+/** Pela TELA o servidor só repassa os bytes (o navegador lê o JSON): a semana cabe inteira em até 4 MB — menos divisões e
+ * menos pedidos. A automática segue com 1 MB (a resposta grande é baixada de novo a cada fragmento capturado). */
+const MAX_BYTES_TELA = 4_000_000;
 const MAX_BYTES_DIA = 12_000_000;
 export const TEMPO_MS = 30_000;
 
@@ -124,7 +127,7 @@ export type Pedido = {
 };
 
 /** Confere o pedido de UMA página com o cadastro SALVO (o corpo enviado à Centi é sempre o do servidor). */
-export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number): Pedido {
+export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number, tela = false): Pedido {
   // O MODO segue o tipo do card: liquidações e pagamentos só no card do mesmo tipo; os empenhos (e o catálogo) no de empenhos.
   const tipoDoModo = lote.modo === "liquidacoes" || lote.modo === "pagamentos" ? lote.modo : "empenhos";
   if (tipoDoModo !== card.tipo) throw new PedidoInvalido(`Este card (${card.tipo}) não importa ${lote.modo === "dados" || lote.modo === "unidades" ? "empenhos" : lote.modo}.`);
@@ -153,7 +156,7 @@ export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Peri
     throw new PedidoInvalido(e instanceof Error ? e.message : "Parâmetros inválidos.");
   }
   // O mês dos pagamentos não se divide: vale o teto do período que não se divide.
-  const maxBytes = pag || diasDoPeriodo(periodo) <= 1 ? MAX_BYTES_DIA : MAX_BYTES;
+  const maxBytes = pag || diasDoPeriodo(periodo) <= 1 ? MAX_BYTES_DIA : tela ? MAX_BYTES_TELA : MAX_BYTES;
   return { modo: tipoDoModo, pag, porOrgao, idOrgao, base: { inicio: periodo.inicio, fim: periodo.fim, pagina, corpo: enviado }, maxBytes };
 }
 
@@ -199,7 +202,7 @@ export async function baixarPaginaDoLote(
   periodo: Periodo,
   pagina: number,
 ): Promise<{ ok: true; pedacos: Uint8Array[]; status: number; ms: number } | { ok: false; r: ResultadoPagina }> {
-  const ped = prepararPedido(card, lote, periodo, pagina);
+  const ped = prepararPedido(card, lote, periodo, pagina, true);
   const t0 = Date.now();
   try {
     const r = await baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", pedacos: true });
