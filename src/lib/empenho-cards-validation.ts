@@ -1,0 +1,75 @@
+import { z } from "zod";
+import { LIMITES_CARD } from "./empenho-cards-core.ts";
+
+/** A configuração de um CARD de empenhos. A régua completa é `motivoCardInvalido` (core). */
+export const cardEmpenhoSchema = z.strictObject({
+  nome: z.string().trim().min(1).max(LIMITES_CARD.nome),
+  descricao: z.string().trim().max(LIMITES_CARD.descricao),
+  cor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/),
+  urlBase: z.string().trim().max(200),
+  endpoint: z.string().trim().min(1).max(LIMITES_CARD.endpoint),
+  uf: z.string().trim().min(1).max(LIMITES_CARD.uf),
+  tenant: z.string().trim().min(1).max(LIMITES_CARD.tenant),
+  parametros: z.string().trim().min(2).max(LIMITES_CARD.parametros),
+  anos: z.array(z.number().int()).min(1).max(LIMITES_CARD.anos),
+  ativa: z.boolean(),
+  frequenciaMin: z.number().int(),
+  diasUteis: z.boolean(),
+  horaInicio: z.string().trim(),
+  horaFim: z.string().trim(),
+  quedaSoma: z.number().int(),
+  quedaRegistros: z.number().int(),
+  removidos: z.enum(["marcar", "apagar"]),
+});
+
+/** O card NOVO: o nome e, opcional, o card de onde copiar os vínculos (o resto começa no padrão). */
+export const criarCardSchema = z.strictObject({
+  nome: z.string().trim().min(1).max(LIMITES_CARD.nome),
+  copiarDe: z.number().int().positive().nullable().optional(),
+});
+
+/** Os VÍNCULOS do card — a lista INTEIRA (a régua completa é `motivoVinculosInvalidos`, core). */
+export const vinculosCardSchema = z.strictObject({
+  vinculos: z
+    .array(
+      z.strictObject({
+        orgaoGestor: z.string().trim().min(1).max(200),
+        unidade: z.string().max(300).nullable(),
+        acao: z.string().max(400).nullable(),
+        orgaoId: z.number().int().positive(),
+        reparticaoId: z.number().int().positive().nullable(),
+      }),
+    )
+    .max(LIMITES_CARD.vinculos),
+});
+
+/** O TESTE do card (a configuração em curso, ainda não salva) num ano. */
+export const testarCardSchema = z.strictObject({
+  edicao: cardEmpenhoSchema,
+  ano: z.number().int().min(2000).max(2100),
+});
+
+/** O token da ABA que conduz o lote (uma aba por vez — `comandoConduzir`). */
+const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
+
+/** A IMPORTAÇÃO MANUAL de um card (passo a passo, conduzida pela tela): iniciar um lote (`modo` "unidades" = só o
+ * catálogo da Centi), ler UMA página, concluir (conferir e promover) ou cancelar. */
+export const importarCardSchema = z.discriminatedUnion("acao", [
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades"]).optional() }),
+  z.strictObject({
+    acao: z.literal("pagina"),
+    lote: z.number().int().positive(),
+    condutor,
+    inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    pagina: z.number().int().min(1).max(500),
+  }),
+  z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive(), condutor, aceitarQueda: z.boolean().optional() }),
+  z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), condutor: condutor.optional(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
+]);
+
+/** Excluir do banco: PASSOS de uma importação ou IMPORTAÇÕES inteiras (vários de uma vez). */
+export const excluirImportacaoSchema = z.union([
+  z.strictObject({ lote: z.number().int().positive(), passos: z.array(z.number().int().positive()).min(1).max(5000) }),
+  z.strictObject({ lotes: z.array(z.number().int().positive()).min(1).max(200) }),
+]);

@@ -2,7 +2,6 @@ import { eq, sql } from "drizzle-orm";
 import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { motivoOrgaoGestor } from "@/lib/centi-unidades";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { numeroInteressadoEmUso, orgaoTemVinculo } from "@/lib/orgaos";
@@ -21,8 +20,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado, { orgaoId: id })))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
-  const centi = await motivoOrgaoGestor(corpo.data.centiOrgaoGestor, id);
-  if (centi) return erro(centi.msg, centi.status);
   // Os RESPONSÁVEIS acompanham a regra de assinatura no MESMO lote: com a regra nova, cada vínculo vai ao lugar que vale
   // (ligar a única = as unidades → o órgão; desligar = o órgão → a unidade própria, a única unidade ou as escolhidas).
   const { plano, config } = await planejarRealinhamento(
@@ -50,8 +47,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         orgaoEntidade: corpo.data.orgaoEntidade ?? null,
         numeroInteressado,
         ...(corpo.data.entidadeCenti === undefined ? {} : { entidadeCenti: corpo.data.entidadeCenti?.trim() || null }),
-        // O vínculo com a Centi (os gatilhos da 0139 recalculam o que é gravado e tiram do banco o que ficou sem vínculo).
-        ...(corpo.data.centiOrgaoGestor === undefined ? {} : { centiOrgaoGestor: corpo.data.centiOrgaoGestor }),
         assinaturaUnica: corpo.data.assinaturaUnica,
         oculto: corpo.data.oculto,
         atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
@@ -66,7 +61,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     entidade: "orgao",
     entidadeId: id,
     resumo: `Órgão "${corpo.data.nome}" editado${realinhado ? ` — responsáveis realinhados: ${realinhado}` : ""}`,
-    depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, entidadeCenti: corpo.data.entidadeCenti ?? undefined, centiOrgaoGestor: corpo.data.centiOrgaoGestor ?? undefined, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto },
+    depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, entidadeCenti: corpo.data.entidadeCenti ?? undefined, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto },
   });
   return ok({ realinhado });
 }

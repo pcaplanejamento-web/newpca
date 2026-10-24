@@ -4509,134 +4509,80 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `redirect_uri_mismatch`, `invalid_grant`…) e a tela diz o que fazer (`DETALHE_ERRO_GOOGLE` → `mensagemErroLogin`/
   `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
   (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
-- **APIS DA CENTI — cadastro + TESTE (v1.179.0 → v1.180.0, migrações `0129` + `0130`; passos 1–2 da EXECUÇÃO DA DESPESA):**
-  Integrações → abas **Serviços | APIs da Centi** (`?aba=centi`; `CentiApisAdmin`, só ADM, baixado SÓ ao abrir — `next/dynamic`).
-  Tabela `centi_apis` (chave única, endpoint, url base/uf/município, `divisao` ano|orgao|fonte, `lista` = as FONTES,
-  **`orgaos`/`unidades`** = ids do CADASTRO ('[]' = todos — `0130`), `paginado`, `parametros` JSON com `{ano}`/`{orgao}`/
-  `{fonte}`/`{pagina}`, frequência/horário/dias úteis/anos, `implementada`/`ativa`, a última leitura); semeada com
-  empenhos, liquidações, pagamentos, contratos e receita — DESLIGADAS e "Em preparação" (ligar só com a importação pronta —
-  409). Nas APIs por órgão, o idOrgao = o **"ID da entidade na Centi" do órgão** (`orgaos.entidade_centi` → `codigoCenti`;
-  sem ele, o órgão não entra — a tela avisa). Tela: a `DataTable` compacta (XLSX/PDF + o (?) no rodapé); tocar abre o
-  editor DIRETO (`Modal` + `SecaoBanner`: O que ler · Quando atualizar · Endereço e parâmetros [recolhido] · Testar), com a
-  `Ajuda compacta` em CADA campo (`rotuloExtra` — estendido a `SelectField`, `TextArea` [+ `mono`] e `CampoLista`), os
-  órgãos/unidades no `SeletorMultiplo campo` (unidades agrupadas por órgão) e a confirmação ao descartar. **TESTAR:**
-  `POST /api/admin/centi-apis/testar` (`exigirAdmin`, a edição EM CURSO + ano + qual pedido) faz UM pedido real pela
-  `baixarSeguro` (estendida: `post` = corpo JSON, `comErro` = devolve o corpo e o `status` do erro; HTTPS público,
-  redirecionamento revalidado, 30 s, 8 MB) e devolve o `ResultadoTeste` (`resumoResposta`: status, tempo, registros, o
-  `TotalRegistros`, os campos e 5 de amostra) — NADA é gravado. Núcleo puro **`centi-apis-core.ts`** (`montarCorpo`,
-  `urlBaseValida` — só `centi.com.br` —, `codigosDosOrgaos`, `pedidosDoAno`, `motivoApiInvalida(e, implementada,
-  cadastro)` = a régua da tela e do servidor, `previaPedido`, `resumoResposta`; `tests/centi-apis.test.ts`), D1
-  `centi-apis.ts` (`orgaosDoCadastro`, `unidadesDoCadastro`), rotas `GET /api/admin/centi-apis` (+ órgãos/unidades) e
-  `PATCH …/[id]` (auditoria `centi_api`, FORA da versão `dados`). Próximos passos (cada um uma versão conferida no ar): 3
-  importação MANUAL de empenhos em lote/staging, promovida só se a contagem bater com `TotalRegistros` · 4 tela Empenhos (só
-  ADM) · 5 cron desligado por padrão · 6 abrir aos grupos · 7–9 liquidações/pagamentos · 10 Dashboard · 11 Orçamento/PCA.
-  Falhas do Dattago a NÃO repetir: página do meio que falha contada como "completo"; dedupe com chave ≠ da do banco (o lote
-  inteiro recusado); erro de gravação engolido; o que some na origem nunca sai; sem id → 0 (colisão); órgãos 2..20 em vez
-  da lista real (21–25 e 28 nunca lidos).
+- **EMPENHOS EM CARDS (v1.205.0, migração `0143`; substitui o cadastro das APIs da Centi [v1.179–1.180], a tela única de
+  empenhos [v1.193] e o vínculo pelo cadastro de Órgãos e Unidades [v1.198–1.203]):** tela de módulo **`/painel/empenhos`**
+  (`EmpenhosView` — `ABA_KEYS` `empenhos`, ícone `IconEmpenho`; ações do papel: visualizar · importar · exportar · excluir ·
+  configurar — `papeis-catalogo.ts`; a `0143` deu tudo ao Administrador e ao Gestor) = os **CARDS** no padrão do Orçamento
+  (`CartaoEspaco` + `CapaQuadro` na cor do card + `COLUNAS_ESPACOS`; métricas Empenhos · Empenhado · Vínculos [âmbar sem
+  nenhum]; selo `estadoCard`: Importando · Com erro · Parcial · Automática · Manual) + o card **"Novo card"**
+  (`QuadroNovoCard`, Configurar → `Modal`: nome + "Copiar os vínculos de" → `POST /api/empenhos/cards` → abre a
+  Configuração ou, copiando, os Vínculos). Tocar abre o **espaço do card** `/painel/empenhos/[id]` (`EmpenhoCardView`:
+  UMA linha — voltar · cor · nome · estado · Empenhos/Empenhado/Anos/Última leitura · excluir — e `AbasEspaco` **Empenhos ·
+  Vínculos · Importação [Importar] · Configuração [Configurar]**; o servidor monta só a aba `?aba=`; as ferramentas de cada
+  aba na barra — `FerramentasAba`).
+  - **Banco:** `empenho_cards` (nome, descrição, cor, a INTEGRAÇÃO — `url_base`/`endpoint`/`uf`/`tenant`/`parametros` com
+    `{ano}`/`{inicio}`/`{fim}`/`{pagina}` —, `anos` JSON [0/-1/-2 relativos ou fixos ≥ `ANO_MINIMO`=2015 — `lerAnos`/
+    `anosDoCard`], a programação — `ativa`, `frequencia_min`, `dias_uteis`, `hora_inicio`/`hora_fim` —, as REGRAS —
+    `queda_soma`/`queda_registros` % (0 = não confere) e `removidos` marcar|apagar —, a última leitura e `vinculos_em`);
+    `empenho_card_vinculos` (card cascade · `orgao_gestor` · `unidade` NULL = todas · `acao` NULL = todas → `orgao_id`
+    cascade + `reparticao_id` cascade opcional; único card + gestor + IFNULL(unidade) + IFNULL(ação)); `centi_catalogo`
+    (GLOBAL: cada gestor + unidade + ação que as leituras trouxeram, com os registros — `comandoRegistrarCatalogo` na MESMA
+    leitura de cada página); `centi_lotes.card_id` e `empenhos.card_id` (cascade; a chave é única POR CARD — o mesmo empenho
+    pode estar em dois cards). Gatilhos da `0143`: a unidade/órgão excluído leva os empenhos vinculados (e marca
+    `vinculos_em`); a unidade que muda de órgão leva o vínculo e os empenhos. A `0143` migrou a API de empenhos, os vínculos
+    de Órgãos e Unidades, as importações e os empenhos ao 1º card e APAGOU `centi_apis`, `centi_unidades`, `centi_acoes`, a
+    VIEW `centi_vinculo_empenhos`, os gatilhos `centi_vinculo_*` e as colunas `orgaos.centi_orgao_gestor`/
+    `reparticoes.centi_unidade_id`/`centi_lotes.api_chave` (Órgãos e Unidades e Integrações voltaram ao que eram antes).
+  - **Régua do vínculo (núcleo puro `empenho-cards-core.ts`, testado — `tests/empenho-cards.test.ts`):** o MAIS ESPECÍFICO
+    vale — a ação › a unidade orçamentária › o órgão gestor inteiro (`mapaDosVinculos`/`vinculoDaLinha`; no SQL
+    `vinculoSql(tabela, card)` em `empenho-cards-sql.ts`, `ORDER BY acao IS NULL, unidade IS NULL`); sem vínculo = NADA do
+    registro é gravado (só a chave em `centi_staging_fora`, para a conferência contar). `motivoVinculosInvalidos` (a MESMA na
+    tela e no `PUT /api/empenhos/cards/[id]/vinculos` — 422): gestor informado, ação só com a unidade, sem repetir, a unidade
+    do cadastro do órgão escolhido. Grava-se a lista INTEIRA num lote atômico (`comandosGravarVinculos`: apaga, insere em
+    INSERTs de 14, `comandosRefazerEmpenhosCard` — o que ficou sem vínculo SAI, os demais acompanham — e `vinculos_em`).
+    `gruposDosVinculos`/`vinculosDosGrupos` (a tela edita GRUPOS: gestor + unidade + ações + destino), `semVinculo`,
+    `coberturaDoGrupo`. Criar um card copiando outro = `comandosCriarCard` (os vínculos copiados no mesmo lote).
+  - **Aba Vínculos (`EmpenhoCardVinculos`):** `Segmented` **Vínculos (N)** (gestor · unidade orçamentária · ações —
+    `CelulaLista` — · destino · registros cobertos) | **Na Centi sem vínculo (N)** (o catálogo que nenhum vínculo cobre;
+    tocar abre o editor já com o gestor e a unidade); **"Buscar na Centi"** (Importar) = um lote `modo` "unidades" pelo
+    `lerAnoNaCenti` (`leitura-centi-cliente.ts`) que só atualiza o catálogo, com o `Progress`; **"Novo vínculo"** →
+    `EditorVinculo` (`Modal`: `SelectField` gestor/unidade [Todas] · `SeletorMultiplo campo` das ações [nenhuma = todas] ·
+    destino agrupado por órgão; a regra ao vivo; Excluir confirma).
+  - **Aba Importação (`EmpenhoCardImportacao`):** a importação MANUAL conferida de sempre, agora pelo card —
+    `GET/POST/DELETE /api/empenhos/cards/[id]/importar` (`importarCardSchema`: iniciar {ano, condutor, modo dados|unidades} ·
+    pagina {inicio, fim, pagina} · concluir {aceitarQueda} · cancelar; `excluirImportacaoSchema` = passos ou importações).
+    O motor é UM (`empenhos-importacao.ts`: `lerPaginaDoLote(card, …)` — o mapa dos vínculos do card decide o que vai ao
+    staging —, `concluirLoteEmpenhos(card, …)` — a conferência com `TotalRegistros`, a QUEDA pelos limites do card
+    [`quedaSuspeita(anterior, atual, {soma, registros})`] e `comandosPromover(…, regra)` [removidos: marcar `removido_em` ou
+    apagar] —, `fecharLoteEmpenhos`). Mantido de antes: a resposta da Centi lida por `lerJsonCenti`/`repararJsonCenti`/
+    `registrosDaResposta` (`centi-resposta-core.ts`), o ano SEMANA A SEMANA com a divisão do período grande demais, os
+    valores pt-BR de 3 casas (`valor`), a soma por passo/lote, `valoresSuspeitos` (> R$ 1 bi ou negativo = parcial), o
+    `LEITOR_EMPENHOS`, `setWhere` (só o que mudou), o condutor de UMA aba (`comandoConduzir`, 120 s), os passos
+    (`centi_lote_passos`) e o histórico com Excluir.
+  - **Aba Configuração (`EmpenhoCardConfig`):** seções Identificação (nome, `ColorField`, descrição) · Anos
+    (`SeletorMultiplo campo` — `opcoesAnos`) · Atualização automática (`Switch` + frequência/dias úteis/horário) · Regras da
+    conferência (queda — `OPCOES_QUEDA` — e removidos) · Integração (avançado: URL base só `centi.com.br`, endpoint, UF,
+    município, parâmetros JSON) · **Testar** (`POST /api/empenhos/cards/[id]/testar` — a edição EM CURSO, a 1ª semana do ano
+    pela `baixarSeguro`, `resumoResposta`, nada gravado). A régua é `motivoCardInvalido` (tela e `PATCH
+    /api/empenhos/cards/[id]`); Salvar na barra; sair com alteração avisa. Auditoria `empenho_card` (fora da versão `dados`).
+  - **Aba Empenhos (`EmpenhosTabela`):** a tabela de antes, POR CARD — `GET /api/empenhos?card=&ano=&removidos=` →
+    `pacoteEmpenhos(card, ano, removidos, escopo)` (dicionário + tuplas montados no BANCO — `textoPacoteEmpenhos(db, card, …)`,
+    pedaços de `EMPENHOS_POR_PEDACO`; memória do Worker pela VERSÃO = o último lote promovido do card no ano + `vinculos_em`
+    — `consultaVersaoEmpenhos(db, card, ano)`), os 6 `StatMini` sobre as linhas filtradas, a coluna Unidade (a sigla do
+    cadastro; vinculado só ao órgão, a do órgão), edições salvas `empenhos:tabela`, "Removidos na Centi (N)" e o
+    `EmpenhoDetalhe` (`GET /api/empenhos/[id]`). ESCOPO da pessoa (`escopoDosEmpenhos`/`doEscopo`: a unidade dela ou,
+    vinculado só ao órgão, um órgão das unidades dela) também nos números dos cards (`listarCards(escopo)`).
+  - **Atualização automática (`empenhos-auto.ts`, gatilho `4-59/5` → `POST /api/integracoes/empenhos/cron`):** por card
+    LIGADO (`cardsAtivos`), continua o lote que lê ou, na hora (`cardNaHora`: horário de Brasília, dia útil, frequência
+    desde a última leitura), cria o do ano da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); 3 páginas
+    por passada (`proximoPedido`), condutor `CONDUTOR_AUTO`, até 3 erros de rede seguidos; a queda suspeita fecha "parcial"
+    (a pessoa confirma numa importação manual). Testes: `tests/empenhos*.test.ts` + `tests/fixtures/banco-migrado.ts` (o
+    schema final de toda a cadeia, recriado por teste).
 - **`SeletorMultiplo campo`** (v1.182.0): o modo de FORMULÁRIO — o rótulo em cima (`Rotulo`, exportado do `Field`, com o
   `extra` = a `Ajuda compacta`) e a caixa do `TextField`/`SelectField` (`classeCaixaCampo(denso)`, exportada do `Field`) com o
   resumo dos escolhidos ("PMRV, FMS +1"; nenhum = `textoVazio`); abre o MESMO painel do `suspenso`. Use-o quando a escolha
   múltipla fica entre campos de formulário (proporções iguais) — as opções com o rótulo curto e o nome no `detalhe` (a
   busca procura nos dois).
-- **EMPENHOS — importação MANUAL conferida (v1.182.0, migração `0131`; passo 3 da EXECUÇÃO DA DESPESA):** tabelas
-  `centi_lotes` (um por importação: api, ano, estado lendo|promovido|parcial|falhou|cancelado, páginas, recebidos,
-  ÚNICOS, recusados, `total_informado`, inseridos/atualizados/removidos, mensagem, quem, `visto_em`), `empenhos_staging`
-  (PK lote + chave) e `empenhos` (chave ÚNICA = ano|órgão gestor|número — `chaveEmpenho`; `removido_em`, `lote_id`). Em
-  APIs da Centi → Empenhos, a seção **Importar** (`ImportacaoManual`, no `CentiApisAdmin`; só para `IMPORTAVEIS`,
-  `centi-apis-core.ts`) conduz pela rota `GET/POST /api/admin/centi-apis/[id]/importar` (`exigirAdmin`;
-  `importarCentiApiSchema`: `iniciar` {ano dentro dos anos mantidos; um lote "lendo" por API — o parado há 30 min vira
-  "falhou"} · `pagina` {lê UMA página com o cadastro SALVO pela `baixarSeguro` — a 1ª sem `pagina`, as demais com ela
-  (`corpoDaPagina`) —, `lerPaginaEmpenhos` → a página INTEIRA num parâmetro JSON (`comandoGuardarPagina`, `json_each` +
-  o `WHERE 1` do upsert) + `comandoContarPagina`, num lote} · `concluir` {a CONFERÊNCIA `conferirLote`: completo só com
-  ÚNICOS + recusados ≥ `TotalRegistros` — uma página repetida não engana; completo → `contagemDaPromocao` +
-  `comandosPromover` num lote atômico (upsert pela chave, o que voltou perde o `removido_em`, o que o ANO tinha e a Centi
-  não trouxe ganha `removido_em` — nada é apagado —, fecha o lote e limpa o staging); senão `comandosFecharLote` "parcial"
-  e a tabela final não muda} · `cancelar` {interrompido ou `falhou`}). A tela repete a página até 3× (2/4/8 s), mostra o
-  `Progress` (únicos + recusados ÷ total), trava o banner e avisa ao sair da página; "Continuar" retoma o lote parado na
-  página seguinte. `registrarLeitura` atualiza a "Última leitura" da API; auditoria `centi_api` (fora da versão `dados`).
-  Núcleo puro **`empenhos-core.ts`** (`linhaEmpenho` — sem número = RECUSADO, nunca "0"; `valor` pt-BR/en via
-  `parseValorPlanilha`; `dataIso`; `continuarLendo`; `MAX_PAGINAS`=500); builders **`empenhos-sql.ts`** e D1 `empenhos.ts`
-  (`listarLotes`, `loteEmAndamento`, `criarLote`); testes `tests/empenhos.test.ts` (no driver D1 real: 500 linhas num
-  comando, promoção, removido/reativado, outro ano intocado, lote parcial sem efeito). Próximo: passo 4 — a tela Empenhos. **RESPOSTA REAL + EXCLUSÃO (v1.185.0):** a Centi devolve o JSON DENTRO de uma string e com aspas sem escape nos textos livres — `lerJsonCenti` (`centi-apis-core.ts`: lê de novo o texto que contém JSON; sem sucesso, `repararJsonCenti` escapa a aspa que não fecha a string — fecha só antes de `:`/`}`/`]`/fim ou de `,` seguida de chave/valor —, linear) + `registrosDaResposta` (a maior lista de objetos em qualquer nível; lista vazia vale) + `esqueletoResposta` (o raio-x no erro); `PaginaLida.reparado` vira nota do passo. O ano é lido SEMANA A SEMANA (`emSemanas`: 1–7, 8–14, 15–21, 22–fim; até 2 MB por resposta, 12 MB só no período de um dia) e o passo dividido grava `estado:"dividido"`; o staging é gravado em pedaços de até `MAX_JSON_GUARDA` caracteres (`comandosGuardarPagina` — o D1 recusa texto acima de 2 MB). `DELETE /api/admin/centi-apis/[id]/importar` (`excluirImportacaoSchema`, v1.187.1 — vários de uma vez): `{lotes}` (`comandosExcluirLote`: passos, staging e lote; os empenhos promovidos ficam, `lote_id` nulo) e `{lote, passos}` (`comandoExcluirPassos`, ids num parâmetro JSON; qualquer passo — o lido volta a faltar, o staging fica para a releitura; o lote que lê é recontado); a seleção das tabelas de passos e do histórico ("Excluir selecionados"), "Excluir passo" confirmam; nos passos do histórico o botão do rodapé só aparece com algo marcado (todos marcados = "Excluir importação"). **VALORES (v1.188.1, migração `0133` apagou os empenhos lidos antes):** a Centi manda os valores em pt-BR com TRÊS casas ("100,000" = R$ 100) — `valor` (`empenhos-core.ts`) trata a vírgula sozinha como o decimal (a régua genérica `parseValorPlanilha` lê "100,000" como cem mil). A resposta às vezes vem como o array direto, às vezes como uma string com o array — o `lerJsonCenti` lê os dois. Auditoria de referência: as 48 semanas de 2026 = 21.536 registros, 0 diferenças em 19 campos contra o leitor do Dattago. **CONFERÊNCIA REFORÇADA (v1.191.0, migração `0134` — `centi_lote_passos.soma`, `centi_lotes.soma/leitor/condutor/conduzindo_ate`, `empenhos.leitor`):** a SOMA do valor empenhado em cada passo (`PaginaLida.soma`) e no lote (`comandoRecontarLote`, Σ do staging); a conclusão recusa (parcial) valor negativo ou acima de `LIMITE_VALOR_EMPENHO` = R$ 1 bi (`valoresSuspeitos` + `motivoValoresSuspeitos`) e, com a soma abaixo de 80% ou os empenhos abaixo de 90% da última importação CONCLUÍDA do ano (`ultimoPromovido` → `quedaSuspeita`), devolve `{queda}` com o lote aberto — a tela confirma e reenvia `aceitarQueda` (ou cancela). **Leitor:** `LEITOR_EMPENHOS` (some 1 a cada mudança na leitura) gravado no lote e em cada empenho; o lote começado por outra versão só cancela (409); `GET …/importar` devolve `desatualizados` (anos com empenhos de leitor anterior — `anosDesatualizados`) e a tela pede para importar de novo. **Só o que mudou:** a promoção usa `setWhere` (`mudou`: algum campo `IS NOT`, removido ou outro leitor) e `contagemDaPromocao` conta os atualizados DE FATO (a tela mostra "sem mudança"). **Uma aba por vez:** `comandoConduzir` (token da aba — `crypto.randomUUID`, `condutor` no schema; vence em `SEGUNDOS_CONDUCAO`=120 s, renovado a cada pedido; fechar o lote solta) em todo `pagina`/`concluir`/`cancelar`; o token nunca sai da API (`LoteCenti.conduzido`); a recusa (4xx — `RecusaImportacao`) não é repetida nem cancela o lote da outra aba. Resposta de até 1 MB (`MAX_BYTES`; 12 MB no período de um dia). **ACOMPANHADA AO VIVO, MÊS A MÊS (v1.184.0, migração `0132` — tabela `centi_lote_passos` + os parâmetros "01/01/{ano}"/"31/12/{ano}" passaram a `{inicio}`/`{fim}`):** a Centi devolve o ano inteiro grande demais (> 12 MB), então a tela lê o ano MÊS A MÊS (`periodosAPedir`) e o mês "grande demais" é dividido ao meio até um dia (`dividirPeriodo`; a rota marca as páginas dele como `dividido` — `comandoDividirPeriodo`). O `pagina` leva `{inicio, fim, pagina}` e TODO pedido vira um PASSO (`comandoRegistrarPasso`: estado ok|erro|dividido, status, bytes, ms, recebidos, novos — `jaNoLote` —, recusados, repetidos, total do período, mensagem, o corpo enviado; `fim_periodo` pela `continuarPeriodo`); o erro também é devolvido como passo (`{passo, erro:{tipo grande|resposta|rede}, dividir}` — `tipoDoErro`) e a tela repete só o de rede (2/4/8 s). O lote é RECONTADO pelos passos lidos (`comandoRecontarLote`: páginas, recebidos e recusados dos `ok`, únicos do staging e o total = a SOMA do total de cada período — desconhecido se algum período lido não o trouxe). Concluir exige o ano inteiro lido (`lacunasDoAno` sobre `periodosLidos`) antes da conferência. Retomar: `GET …/importar?lote=` → `periodoEmCurso` + o que falta. Tela: o `Progress` pela fração do ANO lida, os `StatMini` e **Passos** (`PassosDoLote`, mais recente primeiro; tocar = `DetalhePasso` com o erro inteiro e o pedido enviado); tocar numa importação do histórico = `PassosDoHistorico`.
-- **TELA EMPENHOS (v1.193.0; TELA DE MÓDULO desde a v1.195.0, migração `0136`; passo 4 da EXECUÇÃO DA DESPESA):**
-  `/painel/empenhos` (`EmpenhosView`, ícone `IconEmpenho`) é uma tela COMUM — `ABA_KEYS` `empenhos`, o ADM a põe num módulo
-  (Configurações → Módulos) e o grupo abre; o papel decide Visualizar/Exportar (`CATALOGO_PAPEIS`; a `0136` deu aos papéis as
-  mesmas ações que tinham no Orçamento e moveu as edições salvas de `admin:empenhos:tabela` → `empenhos:tabela`, tela
-  `empenhos` em `telasDaChave`; publicar edição = Configurar). Página = `acessoPagina("empenhos")` + `PermissaoExportar`;
-  rotas `GET /api/empenhos` e `/api/empenhos/[id]` = `exigirAcesso("empenhos","visualizar")`. = o ano (`SelectField
-  compacto`; `?ano=` — `anoEscolhido`), "Importar" (SÓ o ADM; leva a Integrações → APIs da Centi), 6 `StatMini` (Empenhos · Empenhado · Anulado · Liquidado · Pago · A pagar —
-  `resumoEmpenhos` sobre as linhas FILTRADAS da tabela, `onOrdenadas`) e a `DataTable` padrão (`scrollInterno` compacta,
-  filtros conectados, `ocultasPadrao` das colunas menos usadas, edições salvas `empenhos:tabela`, XLSX/PDF) + no rodapé
-  **"Removidos na Centi (N)"** (`?removidos=1`). Coluna **Unidade** (v1.204.0) = a SIGLA da unidade do cadastro vinculada (`empenhos.reparticao_id`; vinculado só ao órgão, a sigla do órgão) — campo `unidade` do dicionário, calculado no banco (`unidade_sistema` na CTE `base`); o filtro da coluna é o padrão de unidade (sigla + nome — `useDetalheSigla`). Tocar = `EmpenhoDetalhe` (DS) num `Modal`: o que a tabela tem na hora + o
-  histórico e o registro (importação, leitor, datas) por `GET /api/empenhos/[id]` (`empenhoCompleto`). **Carga
-  COMPACTA montada no BANCO** (`GET /api/empenhos?ano=&removidos=` → `pacoteEmpenhos`): cada campo de texto vira um
-  DICIONÁRIO (CTE `dN` = os distintos do ano numerados) e cada empenho uma tupla de números (`empenhos-tela-sql.ts`,
-  `textoPacoteEmpenhos` — o dicionário + pedaços de `EMPENHOS_POR_PEDACO`=6000 em paralelo, cada texto < 2 MB; o Worker só
-  COSTURA os textos e devolve sem ler as linhas); 2026 real: 21.536 empenhos = 10,4 MB cru → 2,37 MB, Σ conferida. A VERSÃO
-  do ano = a última importação PROMOVIDA (`consultaVersaoEmpenhos`) vai em cada consulta: mudou no meio = lê de novo (3×,
-  depois 503); o pacote fica na MEMÓRIA do Worker por versão (`criarMemoVersao`, 6 entradas, 2 h) — reabrir sem importação
-  nova lê só a versão. No cliente, `empenhosDoPacote` decodifica e cada ano/recorte fica guardado na aba. Núcleo puro
-  `empenhos-tela-core.ts`; testes `tests/empenhos-tela.test.ts` (no D1 real: nulos/aspas/acentos, removidos, 3 pedaços sem
-  perda nem repetição, versão).
-- **UNIDADES DA CENTI VINCULADAS AO CADASTRO (v1.198.0 → v1.199.0, migrações `0138` + `0139`; substitui o escopo pela
-  sigla da v1.197.0):** `centi_unidades` = o CATÁLOGO dos pares EXATOS `orgao_gestor` + `unidade` [Unidade orçamentária,
-  "" = vazia] que as leituras trazem (`comandoRegistrarUnidades`, `centi-unidades-sql.ts`, no MESMO lote do staging de
-  cada página; a nova já nasce no órgão do órgão gestor) — GLOBAL: vale para empenhos e, depois, liquidações e pagamentos.
-  **O VÍNCULO MORA NO CADASTRO (v1.199.0):** a UNIDADE guarda `reparticoes.centi_unidade_id` (a sua unidade orçamentária)
-  e o ÓRGÃO guarda `orgaos.centi_orgao_gestor` — cada um ÚNICO no sistema (índices parciais; `motivoUnidadeCenti`/
-  `motivoOrgaoGestor`, `centi-unidades.ts` → 409/422 nas rotas `POST/PATCH /api/admin/orgaos*` e `/api/admin/reparticoes*`,
-  campos opcionais `centiOrgaoGestor`/`centiUnidadeId` dos schemas — ausente = não muda). `centi_unidades.orgao_id`/
-  `reparticao_id` = o vínculo CALCULADO (a unidade escolhida; senão o órgão do órgão gestor), recalculado pelos GATILHOS da
-  `0139` (insert/update/delete de órgão e unidade quando o vínculo ou o órgão da unidade muda), que no mesmo passo APAGAM
-  os empenhos que ficaram sem vínculo e acompanham o órgão/unidade dos demais (`vinculado_em` ISO com ms entra na VERSÃO).
-  Tela: no **`BannerCadastro`** (campo de escolha com `acoes` — o rodapé da `Selecao`) de **`OrgaosAdmin`** ("Órgão gestor na
-  Centi" — `opcoesOrgaoGestor`) e de **`ReparticoesAdmin`** ("Unidade orçamentária na Centi" — `opcoesUnidadeOrcamentaria`:
-  as livres; com o órgão gestor do órgão, só as dele — a página `/painel/orgaos/[id]` passa `centiOrgaoGestor`); trocar/tirar
-  com empenhos gravados confirma. Coluna **"Empenhos (Centi)"** nas duas tabelas (v1.200.0; v1.202.0: a escolha NA CÉLULA pela `Selecao` do
-  sistema — `classeCelulaCenti`, texto INTEIRO, nunca abreviado — a mesma gravação/confirmação do banner; nas unidades, só a unidade orçamentária quando o órgão tem o órgão gestor;
-  sem vínculo = "Sem correspondência" em âmbar, filtrável; o texto da unidade vem do `GET
-  /api/admin/reparticoes` — junção com `centi_unidades`). Hook **`useUnidadesCenti(ativo)`** (`UnidadesCenti.ts` — carrega `GET
-  /api/admin/centi-unidades` só com o banner aberto) + a ação **"Buscar na Centi (ano)"** = lote `modo` "unidades"
-  (`centi_lotes.modo`; `importarCentiApiSchema.modo`) pela API de empenhos: lê o ano, registra as unidades e fecha com estado
-  `unidades` sem gravar empenho (fora da rotação da automática). A leitura conduzida pelo navegador é UMA só,
-  **`leitura-centi-cliente.ts`** (`lerAnoNaCenti`, `pedirImportacao`, `lerPassos` — também a do `ImportacaoManual`). O
-  **NADA FORA DO VÍNCULO NO BANCO (v1.202.0, migração `0141`):** a configuração vem ANTES (Órgãos e Unidades) e a leitura
-  (`lerPaginaDoLote`) decide por ela o que entra — `consultaMapaVinculo` + `linhaVinculada` (puro): só o vinculado vai ao
-  staging; do sem vínculo fica só a CHAVE em `centi_staging_fora` (a conferência conta cada registro uma vez — `unicos` =
-  staging + chaves, `fora` = chaves; a `soma` = a dos passos lidos, todos os registros) e sai ao fechar a importação.
-  A promoção confere de NOVO (o vínculo pode ter mudado) e APAGA do ano o sem vínculo. **VÍNCULO POR AÇÕES:**
-  `centi_acoes` = o catálogo das ações de cada unidade orçamentária (`comandoRegistrarAcoes`, na leitura) + a unidade do
-  cadastro escolhida (`reparticao_id`; uma ação em UMA unidade — `motivoAcoesCenti` 409); `PATCH /api/admin/reparticoes/[id]`
-  `{centiUnidadeId, centiAcoes}` (JUNTOS) → `vinculoCentiDaUnidade` (`centi-unidades.ts` — o estado final + a regra pura
-  **`motivoVinculoCenti`**, `centi-unidades-core.ts`, a MESMA na tela) → o UPDATE da unidade + `comandosVincularAcoes` +
-  `comandosRefazerVinculos` num lote ATÔMICO. **UNIDADE + AÇÕES CONCATENADAS (v1.203.0, migração `0142`):** PRIMEIRO a unidade
-  orçamentária (`reparticoes.centi_unidade_id`, sem índice único) e DEPOIS ações DELA (`opcoesAcoes(lista, unidade, uo)`):
-  sem ação = a unidade orçamentária INTEIRA (todas as ações); com ações = SÓ elas (o par unidade orçamentária + ação). A
-  mesma unidade orçamentária pode ser DIVIDIDA por ações entre unidades (ações sem repetir); inteira, em uma só (409);
-  dividida por outra e sem ações = `esperaAcoes` (a tela espera as ações, nada é gravado). `centi_unidades.reparticao_id`
-  = a unidade que a tem INTEIRA; trocar a unidade orçamentária SOLTA as ações da anterior (gatilhos da `0142`). Régua
-  ÚNICA do vínculo: a ação › a unidade orçamentária inteira › o órgão do órgão gestor — `vinculoSql` (promoção) = a VIEW
-  `centi_vinculo_empenhos`. Tela: colunas **"Unidade orçamentária (Centi)"** (`Selecao`) e **"Ações (Centi)"**
-  (`SeletorMultiplo suspenso completo`, nenhuma = "Todas"; grava 800 ms após o último toque, confirma o que sai) e a seção
-  "Empenhos (API da Centi)" no banner da unidade (`SelectField` + `SeletorMultiplo campo`). ESCOPO da tela Empenhos (`EscopoEmpenhos` = `{unidades, orgaos}` | null — `escopoDosEmpenhos`):
-  o empenho vinculado a uma unidade da pessoa ou, vinculado só ao órgão, a um órgão das unidades dela (`doEscopo`,
-  `empenhoNoEscopo`); sem aviso de unidade sem vínculo (é escolha do cadastro). Liquidações e pagamentos seguem a MESMA
-  régua (o catálogo e o vínculo são globais). Testes: `tests/centi-unidades.test.ts` (migrações, filtro na leitura, ações,
-  promoção, os gatilhos e os índices únicos no D1 real) + `empenhos-tela`/`empenhos`.
-- **ATUALIZAÇÃO AUTOMÁTICA dos empenhos (v1.196.0, migração `0137` = `implementada` 1 na API `empenhos` — continua
-  DESLIGADA até o ADM ligar o `Switch` "Ligada"; passo 5 da EXECUÇÃO DA DESPESA):** a leitura de UMA página e a CONCLUSÃO
-  conferida saíram da rota para **`empenhos-importacao.ts`** (`lerPaginaDoLote`, `concluirLoteEmpenhos`,
-  `fecharLoteEmpenhos`, `PedidoInvalido`) — a MESMA na importação manual e na automática. Gatilho próprio `4-59/5` no
-  `worker.ts`/`wrangler.jsonc` → `POST /api/integracoes/empenhos/cron` (`cronAutorizado`) → **`atualizarEmpenhosAuto`**
-  (`empenhos-auto.ts`): por API LIGADA, continua o lote que lê ou, na hora (`apiNaHora`: horário de Brasília, dia útil com os
-  feriados — `diaUtil`/`feriadosNoIntervalo` —, a frequência desde a última leitura), cria o do ano da vez (`anoDaVez`: o
-  nunca lido, senão o lido há mais tempo — `ultimaLeituraPorAno`); lê `PAGINAS_POR_PASSADA`=3 páginas por passada pelo
-  `proximoPedido` (a página seguinte do período começado; os DIVIDIDOS viram as metades) com o condutor `CONDUTOR_AUTO` na
-  trava (`comandoConduzir` — uma aba conduzindo = a passada pula; a aba entra 2 min depois da última página dela). Erro de
-  rede = tenta na próxima passada, até `MAX_ERROS_AUTO`=3 (`errosSeguidos`) → falhou; resposta inválida = falhou na hora;
-  QUEDA suspeita NUNCA passa sozinha (o lote fecha "parcial" e a pessoa confirma numa importação manual). Autor = "Atualização
-  automática" (`QUEM_AUTO`; auditoria sem usuário). `estadoApi`: a API importável desligada segue "Importação manual".
-  Testes: `tests/empenhos-auto.test.ts`.
 - **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
   "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
   modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",

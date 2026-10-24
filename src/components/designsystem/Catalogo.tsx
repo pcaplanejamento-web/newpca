@@ -4993,7 +4993,7 @@ export function Catalogo() {
         <TarefasDemo />
       </Secao>
 
-      <Secao titulo="EmpenhoDetalhe (um empenho da Centi — só leitura; o histórico chega depois) · a tela é a EmpenhosView (módulo Empenhos)">
+      <Secao titulo="EmpenhoDetalhe (um empenho da Centi — só leitura; o histórico chega depois) · a lista é a EmpenhosView (cards) e a tabela de cada card, a EmpenhosTabela">
         <div className="max-w-3xl">
           <EmpenhoDetalhe
             empenho={{

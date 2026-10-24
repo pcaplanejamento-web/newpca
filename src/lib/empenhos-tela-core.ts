@@ -116,8 +116,8 @@ export function anoEscolhido(anos: readonly AnoEmpenhos[], pedido: unknown): num
 }
 
 /**
- * ESCOPO: cada empenho está VINCULADO ao cadastro (a unidade da Centi → um órgão e, opcional, uma unidade dele —
- * `centi_unidades`). A pessoa vê o empenho vinculado a uma das SUAS unidades ou, quando o vínculo é só ao órgão, a um
+ * ESCOPO: cada empenho está VINCULADO ao cadastro (pelos vínculos do card: um órgão e, opcional, uma unidade dele —
+ * `empenho_card_vinculos`). A pessoa vê o empenho vinculado a uma das SUAS unidades ou, quando o vínculo é só ao órgão, a um
  * órgão de uma das suas unidades. `null` = todos (ADM, a "Geral", o módulo fora do filtro da unidade); vazio = nenhum.
  */
 export type EscopoEmpenhos = { unidades: readonly number[]; orgaos: readonly number[] } | null;

@@ -1,8 +1,9 @@
-import { exigirAdmin } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { baixarSeguro } from "@/lib/busca-segura";
-import { orgaosDoCadastro } from "@/lib/centi-apis";
-import { lerParametros, montarCorpo, motivoApiInvalida, pedidosDoAno, type ResultadoTeste, resumoResposta, urlDaApi, varsDoTeste } from "@/lib/centi-apis-core";
-import { testarCentiApiSchema } from "@/lib/centi-apis-validation";
+import { type ResultadoTeste, resumoResposta } from "@/lib/centi-resposta-core";
+import { motivoCardInvalido, previaPedido } from "@/lib/empenho-cards-core";
+import { getCard } from "@/lib/empenho-cards";
+import { testarCardSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -12,24 +13,20 @@ const MAX_BYTES = 12_000_000;
 const TEMPO_MS = 30_000;
 
 /**
- * TESTA uma API da Centi com a edição EM CURSO (ainda não salva): faz SÓ o pedido escolhido do ano (a 1ª página) e
- * devolve o que veio — status, tempo, quantos registros, o total informado, os campos e uma amostra. NADA é gravado
- * (nem o cadastro, nem os dados, nem a auditoria — é uma leitura).
+ * TESTA a integração do card com a configuração EM CURSO (ainda não salva) — Configurar: faz SÓ o pedido da 1ª semana do
+ * ano e devolve o que veio (status, tempo, quantos registros, o total informado, os campos e uma amostra). NADA é gravado.
  */
-export async function POST(req: Request) {
-  const g = await exigirAdmin();
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const g = await exigirAcesso("empenhos", "configurar");
   if ("erro" in g) return g.erro;
-  const p = await parseCorpo(testarCentiApiSchema, req);
+  const id = intId((await ctx.params).id);
+  if (!id || !(await getCard(id))) return erro("Card não encontrado.", 404);
+  const p = await parseCorpo(testarCardSchema, req);
   if ("resp" in p) return p.resp;
-  const { edicao, ano, pedido } = p.data;
-  const cadastro = await orgaosDoCadastro();
-  const motivo = motivoApiInvalida({ ...edicao, ativa: false }, false, cadastro);
+  const { edicao, ano } = p.data;
+  const motivo = motivoCardInvalido(edicao);
   if (motivo) return erro(motivo, 422);
-  const params = lerParametros(edicao.parametros);
-  const vars = pedidosDoAno(edicao, ano, cadastro)[pedido];
-  if (!params.ok || !vars) return erro("Esse pedido não existe para a configuração atual.", 422);
-  const corpo = montarCorpo(params.valor, varsDoTeste(vars));
-  const url = urlDaApi(edicao);
+  const { url, corpo } = previaPedido(edicao, ano);
   const inicio = Date.now();
   try {
     const r = await baixarSeguro(url, { accept: "application/json", maxBytes: MAX_BYTES, quem: "A API da Centi", tempoMs: TEMPO_MS, post: JSON.stringify(corpo), comErro: true });

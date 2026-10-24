@@ -4,7 +4,7 @@ import { urlAgendaValida } from "./ics-core";
  * BUSCA SEGURA de um endereço público (só escopo de request): só HTTPS e nunca a rede interna (`urlAgendaValida` — também
  * em CADA redirecionamento, seguido à mão), com tempo e tamanho limitados (lidos em streaming). Lança `Error` com a
  * mensagem para a pessoa (`quem` = "A agenda", "O site"…). Usada pelas agendas externas, pela imagem de fundo do quadro e
- * pelo TESTE das APIs da Centi (`post` = o corpo JSON; `comErro` = devolve também a resposta de erro, com o `status`).
+ * pelo TESTE dos cards de empenhos (`post` = o corpo JSON; `comErro` = devolve também a resposta de erro, com o `status`).
  */
 
 const TEMPO_MS = 8000;

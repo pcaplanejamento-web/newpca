@@ -2,8 +2,6 @@ import { eq, sql } from "drizzle-orm";
 import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { vinculoCentiDaUnidade } from "@/lib/centi-unidades";
-import { comandosVincularAcoes } from "@/lib/centi-unidades-sql";
 import { realinharVinculos } from "@/lib/responsaveis";
 import { getDb } from "@/lib/db";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
@@ -34,11 +32,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado, { reparticaoId: id })))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
-  // O vínculo com a Centi DEPOIS da gravação (a unidade orçamentária e as ações DELA), conferido pela regra única.
-  const centi = await vinculoCentiDaUnidade(id, corpo.data);
-  if ("erro" in centi) return erro(centi.erro.msg, centi.erro.status);
-  const db = getDb();
-  const atualizar = db
+  await getDb()
     .update(reparticoes)
     .set({
       codigo: corpo.data.codigo,
@@ -47,16 +41,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
-      // O vínculo com a Centi (os gatilhos recalculam o que é gravado e tiram do banco o que ficou sem vínculo).
-      ...(centi.mexeu ? { centiUnidadeId: centi.unidadeId } : {}),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
-  // A unidade e as AÇÕES (a lista inteira) num lote ATÔMICO — o vínculo dos empenhos gravados é refeito no fim.
-  await db.batch((centi.mexeu ? [atualizar, ...comandosVincularAcoes(db, id, centi.acoes)] : [atualizar]) as never);
   // A unidade pode ter mudado de órgão: os responsáveis dela seguem a regra de assinatura do órgão (o lugar que vale).
   await realinharVinculos();
-  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome, centiUnidadeId: centi.mexeu ? centi.unidadeId : undefined, centiAcoes: centi.mexeu ? centi.acoes : undefined } });
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });
   return ok();
 }
 

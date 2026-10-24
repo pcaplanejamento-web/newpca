@@ -5,7 +5,7 @@
  * recusado), o registro sem número gravado como "0" (colisão — aqui é RECUSADO e contado) e a importação contada como
  * completa sem bater com o total que a própria Centi informa.
  */
-import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta } from "./centi-apis-core.ts";
+import { esqueletoResposta, lerJsonCenti, lerParametros, montarCorpo, registrosDaResposta } from "./centi-resposta-core.ts";
 import { parseValorPlanilha } from "./parse-orcamento-comum.ts";
 import { MESES_PERIODO } from "./periodo.ts";
 
@@ -362,7 +362,8 @@ export function conferirLote(s: SituacaoLote): { completo: true } | { completo: 
 
 export type EstadoLote = "lendo" | "promovido" | "parcial" | "falhou" | "cancelado" | "unidades";
 
-/** `dados` = importa os registros (só os de unidade vinculada) · `unidades` = só PUXA as unidades da Centi, sem gravar nada. */
+/** `dados` = importa os registros (só os vinculados) · `unidades` = só PUXA o catálogo da Centi (órgãos gestores, unidades
+ * orçamentárias e ações), sem gravar nenhum empenho. */
 export type ModoLote = "dados" | "unidades";
 
 export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue" | "emerald" | "amber" | "red" | "slate" }> = {
@@ -371,16 +372,11 @@ export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue
   parcial: { rotulo: "Parcial", tom: "amber" },
   falhou: { rotulo: "Falhou", tom: "red" },
   cancelado: { rotulo: "Cancelado", tom: "slate" },
-  unidades: { rotulo: "Unidades lidas", tom: "blue" },
+  unidades: { rotulo: "Catálogo lido", tom: "blue" },
 };
 
 /** Sem atividade há mais que isto, o lote "lendo" é considerado abandonado (outro pode começar). */
 export const MINUTOS_LOTE_PARADO = 30;
-
-/** Os anos que a API mantém (o atual e os anteriores, conforme o cadastro). */
-export function anosDaApi(anoAtual: number, anos: number): number[] {
-  return Array.from({ length: Math.max(1, anos) }, (_, i) => anoAtual - i);
-}
 
 export type LoteCenti = {
   id: number;
@@ -399,7 +395,7 @@ export type LoteCenti = {
   inseridos: number | null;
   atualizados: number | null;
   removidos: number | null;
-  /** Os registros de unidade SEM vínculo — lidos e conferidos, NÃO gravados. */
+  /** Os registros SEM vínculo no card — lidos e conferidos, NÃO gravados. */
   fora: number | null;
   mensagem: string | null;
   iniciadoPor: string;
@@ -415,21 +411,30 @@ export function motivoValoresSuspeitos(n: number): string | null {
 }
 
 /**
- * QUEDA suspeita em relação à última importação concluída do MESMO ano: os empenhos de um ano só crescem (anulações são
- * raras), então a soma abaixo de 80% ou os registros abaixo de 90% da anterior pedem a confirmação de quem importa.
+ * QUEDA suspeita em relação à última importação concluída do MESMO ano no card: os empenhos de um ano só crescem
+ * (anulações são raras), então a soma abaixo de `limites.soma`% ou os registros abaixo de `limites.registros`% da anterior
+ * pedem a confirmação de quem importa (as REGRAS do card; 0 = não confere).
  */
-export function quedaSuspeita(anterior: { soma: number | null; unicos: number } | null, atual: { soma: number | null; unicos: number }): string | null {
+export function quedaSuspeita(
+  anterior: { soma: number | null; unicos: number } | null,
+  atual: { soma: number | null; unicos: number },
+  limites: { soma: number; registros: number } = { soma: 80, registros: 90 },
+): string | null {
   if (!anterior) return null;
   const partes: string[] = [];
   const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  if (anterior.soma != null && anterior.soma > 0 && (atual.soma ?? 0) < anterior.soma * 0.8) partes.push(`a soma empenhada caiu de ${brl(anterior.soma)} para ${brl(atual.soma ?? 0)}`);
-  if (anterior.unicos > 0 && atual.unicos < anterior.unicos * 0.9) partes.push(`os empenhos caíram de ${anterior.unicos.toLocaleString("pt-BR")} para ${atual.unicos.toLocaleString("pt-BR")}`);
+  if (limites.soma > 0 && anterior.soma != null && anterior.soma > 0 && (atual.soma ?? 0) < (anterior.soma * limites.soma) / 100) {
+    partes.push(`a soma empenhada caiu de ${brl(anterior.soma)} para ${brl(atual.soma ?? 0)}`);
+  }
+  if (limites.registros > 0 && anterior.unicos > 0 && atual.unicos < (anterior.unicos * limites.registros) / 100) {
+    partes.push(`os empenhos caíram de ${anterior.unicos.toLocaleString("pt-BR")} para ${atual.unicos.toLocaleString("pt-BR")}`);
+  }
   return partes.length ? `Em relação à última importação concluída, ${partes.join(" e ")}.` : null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // A ATUALIZAÇÃO AUTOMÁTICA (cron) — a mesma leitura da importação manual, conduzida pelo servidor em poucas páginas por
-// passada; DESLIGADA por padrão (a API só entra com `ativa` no cadastro).
+// passada; DESLIGADA por padrão (o card só entra ligado na Configuração dele).
 // ---------------------------------------------------------------------------------------------------------------
 
 /** O condutor da atualização automática (o token da trava do lote — uma aba nunca o usa) e quem aparece como autor. */
@@ -487,15 +492,15 @@ const msSql = (s: string) => Date.parse(`${s.replace(" ", "T")}Z`);
  * É a HORA de começar uma atualização? Dentro do horário (Brasília), só em dia útil quando o cadastro pede, e passada a
  * frequência desde a última leitura concluída. O lote que já está lendo segue sem esperar a janela.
  */
-export function apiNaHora(
-  api: { frequenciaMin: number; diasUteis: boolean; horaInicio: string; horaFim: string; ultimaExecucao: string | null },
+export function cardNaHora(
+  card: { frequenciaMin: number; diasUteis: boolean; horaInicio: string; horaFim: string; ultimaExecucao: string | null },
   agora: { ms: number; hora: string; diaUtil: boolean },
 ): boolean {
-  if (agora.hora < api.horaInicio || agora.hora > api.horaFim) return false;
-  if (api.diasUteis && !agora.diaUtil) return false;
-  if (!api.ultimaExecucao) return true;
-  const ultima = msSql(api.ultimaExecucao);
-  return !Number.isFinite(ultima) || agora.ms - ultima >= api.frequenciaMin * 60_000;
+  if (agora.hora < card.horaInicio || agora.hora > card.horaFim) return false;
+  if (card.diasUteis && !agora.diaUtil) return false;
+  if (!card.ultimaExecucao) return true;
+  const ultima = msSql(card.ultimaExecucao);
+  return !Number.isFinite(ultima) || agora.ms - ultima >= card.frequenciaMin * 60_000;
 }
 
 /** O ANO da vez entre os mantidos: o que nunca foi lido (o mais recente primeiro); senão o lido há mais tempo. */

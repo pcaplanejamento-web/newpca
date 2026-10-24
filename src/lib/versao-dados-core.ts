@@ -22,6 +22,7 @@ export const FORA_DOS_DADOS = [
   "trello_integracao",
   "feriado",
   "centi_api",
+  "empenho_card",
 ] as const;
 
 /** A entidade da auditoria conta na versão `dados`? */

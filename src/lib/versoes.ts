@@ -35,6 +35,37 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.205.0",
+    data: "2026-10-24",
+    titulo: "Empenhos em cards",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Empenhos",
+        texto: "Tudo da execução da despesa numa tela só, no padrão do Orçamento: cada CARD é uma importação da Centi com a própria configuração e a sua tabela no banco. O card \"+\" cria um card (opcionalmente copiando os vínculos de outro).",
+        link: "/painel/empenhos",
+      },
+      {
+        tipo: "novo",
+        area: "Empenhos",
+        texto: "Dentro de cada card: Empenhos (exatamente o que está gravado), Vínculos (quais órgãos gestores, unidades orçamentárias e ações entram e para qual órgão ou unidade do cadastro vão — o mais específico vale), Importação (manual, conferida, por ano) e Configuração (integração, anos, atualização automática e as regras da conferência — a queda que pede confirmação e o que fazer com o que sumiu da Centi).",
+        link: "/painel/empenhos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Empenhos",
+        texto: "Só o que um vínculo do card cobre é gravado; mudar ou excluir um vínculo vale na hora (o que fica sem vínculo sai do banco). Os empenhos, vínculos e importações que existiam foram para o 1º card.",
+        link: "/painel/empenhos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Administração",
+        texto: "O vínculo com a Centi saiu de Órgãos e Unidades e a aba APIs da Centi saiu de Integrações — agora tudo mora no card de empenhos.",
+        link: "/painel/orgaos",
+      },
+    ],
+  },
+  {
     versao: "1.204.0",
     data: "2026-10-23",
     titulo: "Unidade do sistema nos empenhos",

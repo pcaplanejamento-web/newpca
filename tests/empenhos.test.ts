@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
@@ -46,21 +44,18 @@ import {
   ultimoPromovido,
   valoresSuspeitos,
 } from "../src/lib/empenhos-sql.ts";
+import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 const reg = (numero: string, extra: Record<string, unknown> = {}) => ({ Numero: numero, OrgaoGestor: "PREFEITURA", ValorEmpenhado: 100, ...extra });
 
 function banco() {
-  const raw = new DatabaseSync(":memory:");
-  raw.exec("PRAGMA foreign_keys = ON");
-  for (const m of ["0129_centi_apis", "0130_centi_apis_escopo", "0131_empenhos", "0132_centi_lote_passos", "0134_empenhos_conferencia"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
-  // O cadastro mínimo que a 0138 precisa + a unidade da Centi dos registros de teste ("PREFEITURA") VINCULADA ao órgão 1.
-  raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer)");
-  raw.exec(readFileSync(new URL("../drizzle/0138_centi_unidades.sql", import.meta.url), "utf8"));
-  raw.exec("INSERT INTO orgaos (id, sigla) VALUES (1, 'PMRV'); INSERT INTO centi_unidades (orgao_gestor, unidade, orgao_id) VALUES ('PREFEITURA', '', 1)");
-  for (const m of ["0139_centi_vinculo_cadastro", "0141_centi_vinculo_acoes", "0142_centi_unidade_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
+  const raw = bancoMigrado();
+  // O cadastro mínimo + o card 1 com o órgão gestor dos registros de teste ("PREFEITURA") VINCULADO ao órgão 1.
+  raw.exec("INSERT INTO orgaos (id, nome, sigla) VALUES (1, 'Prefeitura', 'PMRV'); INSERT INTO empenho_cards (id, nome) VALUES (1, 'Empenhos'), (2, 'Outro')");
+  raw.exec("INSERT INTO empenho_card_vinculos (card_id, orgao_gestor, orgao_id) VALUES (1, 'PREFEITURA', 1)");
   const db = drizzle(d1Sobre(raw) as never, { schema });
-  const novoLote = (ano = 2026) => Number(raw.prepare("INSERT INTO centi_lotes (api_chave, ano) VALUES ('empenhos', ?) RETURNING id").get(ano)?.id);
+  const novoLote = (ano = 2026, card = 1) => Number(raw.prepare("INSERT INTO centi_lotes (card_id, ano) VALUES (?, ?) RETURNING id").get(card, ano)?.id);
   return { raw, db, novoLote };
 }
 
@@ -283,15 +278,6 @@ test("empenhos (D1 real): o TOTAL soma os períodos; o período dividido sai da 
   assert.equal((b.raw.prepare("SELECT total_informado t FROM centi_lotes WHERE id = ?").get(lote) as { t: number | null }).t, null);
 });
 
-test("empenhos (D1 real): a migração passa os parâmetros do ano inteiro para o período", () => {
-  const b = banco();
-  const r = b.raw.prepare("SELECT chave, parametros FROM centi_apis ORDER BY ordem").all() as { chave: string; parametros: string }[];
-  const p = Object.fromEntries(r.map((x) => [x.chave, x.parametros]));
-  assert.equal(p.empenhos, '{"dataInicio":"{inicio}","dataFim":"{fim}"}');
-  assert.equal(p.liquidacoes, '{"dataInicio":"{inicio}","dataFim":"{fim}","idOrgao":"{orgao}"}');
-  assert.equal(p.pagamentos, '{"ano":"{ano}","idOrgao":"{orgao}"}');
-});
-
 test("empenhos (D1 real): páginas no staging, chave repetida no lote fica uma, contagem do lote", async () => {
   const b = banco();
   const lote = b.novoLote();
@@ -348,7 +334,7 @@ test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote
   const l = b.raw.prepare("SELECT paginas, recebidos, unicos FROM centi_lotes WHERE id = ?").get(lote) as { paginas: number; recebidos: number; unicos: number };
   assert.deepEqual({ ...l }, { paginas: 0, recebidos: 0, unicos: 2 }, "recontado: o staging fica para a releitura");
   // Um empenho já promovido por este lote fica — só perde a referência.
-  b.raw.prepare("INSERT INTO empenhos (chave, ano, numero, orgao_gestor, lote_id) VALUES ('2026|P|9', 2026, '9', 'P', ?)").run(lote);
+  b.raw.prepare("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, lote_id) VALUES (1, '2026|P|9', 2026, '9', 'P', ?)").run(lote);
   const r = (await b.db.batch(comandosExcluirLote(b.db, lote) as never)) as unknown[][];
   assert.equal(r[4].length, 1);
   for (const t of ["centi_lotes", "centi_lote_passos", "empenhos_staging"]) assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n, 0, t);
@@ -359,19 +345,19 @@ test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e
   const b = banco();
   const l1 = b.novoLote();
   await guardar(b, l1, 1, [reg("1"), reg("2"), reg("3")], 3);
-  const c1 = await contagemDaPromocao(b.db, l1, 2026, 1);
+  const c1 = await contagemDaPromocao(b.db, l1, 1, 2026, 1);
   assert.deepEqual(c1, { inseridos: 3, atualizados: 0, removidos: 0, fora: 0 });
-  await b.db.batch(comandosPromover(b.db, l1, 2026, 1, c1) as never);
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", c1) as never);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos").get() as { n: number }).n, 3);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos_staging").get() as { n: number }).n, 0);
 
   // 2ª importação: o 3 sumiu, o 1 mudou de valor, o 4 é novo.
   const l2 = b.novoLote();
   await guardar(b, l2, 1, [reg("1", { ValorEmpenhado: 999 }), reg("2"), reg("4")], 3);
-  const c2 = await contagemDaPromocao(b.db, l2, 2026, 1);
+  const c2 = await contagemDaPromocao(b.db, l2, 1, 2026, 1);
   // Só o 1 MUDOU (o 2 veio igual — não conta nem é regravado).
   assert.deepEqual(c2, { inseridos: 1, atualizados: 1, removidos: 1, fora: 0 });
-  await b.db.batch(comandosPromover(b.db, l2, 2026, 1, c2) as never);
+  await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 1, "marcar", c2) as never);
   const e = Object.fromEntries((b.raw.prepare("SELECT numero, valor_empenhado, removido_em, lote_id FROM empenhos").all() as Record<string, unknown>[]).map((x) => [x.numero, x]));
   assert.equal(e["1"].valor_empenhado, 999);
   assert.equal(e["1"].lote_id, l2);
@@ -384,16 +370,16 @@ test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e
   // 3ª: o 3 volta — perde o removido_em.
   const l3 = b.novoLote();
   await guardar(b, l3, 1, [reg("1"), reg("2"), reg("3"), reg("4")], 4);
-  await b.db.batch(comandosPromover(b.db, l3, 2026, 1, await contagemDaPromocao(b.db, l3, 2026, 1)) as never);
+  await b.db.batch(comandosPromover(b.db, l3, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l3, 1, 2026, 1)) as never);
   assert.equal((b.raw.prepare("SELECT removido_em FROM empenhos WHERE numero = '3'").get() as { removido_em: string | null }).removido_em, null);
 });
 
 test("empenhos (D1 real): outro ano nunca é marcado como removido; lote fechado sem promover não toca na tabela", async () => {
   const b = banco();
-  b.raw.exec("INSERT INTO empenhos (chave, ano, numero, orgao_gestor, orgao_id) VALUES ('2025|PREFEITURA|1', 2025, '1', 'PREFEITURA', 1)");
+  b.raw.exec("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, orgao_id) VALUES (1, '2025|PREFEITURA|1', 2025, '1', 'PREFEITURA', 1)");
   const l = b.novoLote();
   await guardar(b, l, 1, [reg("9")], 1);
-  await b.db.batch(comandosPromover(b.db, l, 2026, 1, await contagemDaPromocao(b.db, l, 2026, 1)) as never);
+  await b.db.batch(comandosPromover(b.db, l, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l, 1, 2026, 1)) as never);
   assert.equal((b.raw.prepare("SELECT removido_em FROM empenhos WHERE ano = 2025").get() as { removido_em: string | null }).removido_em, null);
 
   const parcial = b.novoLote();
@@ -414,7 +400,7 @@ test("empenhos (D1 real): a SOMA do lote, os valores SUSPEITOS e a QUEDA em rela
   assert.equal((b.raw.prepare("SELECT soma FROM centi_lotes WHERE id = ?").get(l1) as { soma: number }).soma, 150.5);
   assert.equal((b.raw.prepare("SELECT soma FROM centi_lote_passos WHERE lote_id = ?").get(l1) as { soma: number }).soma, 150.5);
   assert.equal(await valoresSuspeitos(b.db, l1), 0);
-  await b.db.batch(comandosPromover(b.db, l1, 2026, 1, await contagemDaPromocao(b.db, l1, 2026, 1)) as never);
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l1, 1, 2026, 1)) as never);
 
   const l2 = b.novoLote();
   await guardar(b, l2, 1, [reg("1", { ValorEmpenhado: "-1,000" }), reg("2", { ValorEmpenhado: "2.000.000.000,000" })], 2);
@@ -422,13 +408,16 @@ test("empenhos (D1 real): a SOMA do lote, os valores SUSPEITOS e a QUEDA em rela
   assert.match(motivoValoresSuspeitos(2) ?? "", /2 empenho/);
   assert.equal(motivoValoresSuspeitos(0), null);
 
-  const ant = await ultimoPromovido(b.db, "empenhos", 2026, l2);
+  const ant = await ultimoPromovido(b.db, 1, 2026, l2);
   assert.deepEqual({ ...ant }, { soma: 150.5, unicos: 2 });
-  assert.equal(await ultimoPromovido(b.db, "empenhos", 2025, l2), null, "outro ano não serve de base");
+  assert.equal(await ultimoPromovido(b.db, 1, 2025, l2), null, "outro ano não serve de base");
   assert.equal(quedaSuspeita(null, { soma: 1, unicos: 1 }), null);
   assert.equal(quedaSuspeita({ soma: 100, unicos: 10 }, { soma: 85, unicos: 10 }), null);
   assert.match(quedaSuspeita({ soma: 100, unicos: 10 }, { soma: 70, unicos: 10 }) ?? "", /soma empenhada caiu/);
   assert.match(quedaSuspeita({ soma: 100, unicos: 100 }, { soma: 100, unicos: 80 }) ?? "", /empenhos caíram de 100 para 80/);
+  // As REGRAS do card: o limite próprio e o 0 (não confere).
+  assert.match(quedaSuspeita({ soma: 100, unicos: 10 }, { soma: 85, unicos: 10 }, { soma: 90, registros: 90 }) ?? "", /soma empenhada caiu/);
+  assert.equal(quedaSuspeita({ soma: 100, unicos: 100 }, { soma: 1, unicos: 1 }, { soma: 0, registros: 0 }), null);
 });
 
 test("empenhos (D1 real): uma ABA por vez conduz o lote; a trava vencida ou o lote fechado mudam isso", async () => {
@@ -451,13 +440,13 @@ test("empenhos (D1 real): o LEITOR novo regrava tudo; o mesmo leitor com dados i
   const b = banco();
   const l1 = b.novoLote();
   await guardar(b, l1, 1, [reg("1"), reg("2")], 2);
-  await b.db.batch(comandosPromover(b.db, l1, 2026, 1, await contagemDaPromocao(b.db, l1, 2026, 1)) as never);
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l1, 1, 2026, 1)) as never);
   const l2 = b.novoLote();
   await guardar(b, l2, 1, [reg("1"), reg("2")], 2);
-  assert.deepEqual(await contagemDaPromocao(b.db, l2, 2026, 1), { inseridos: 0, atualizados: 0, removidos: 0, fora: 0 });
-  const c = await contagemDaPromocao(b.db, l2, 2026, 2);
+  assert.deepEqual(await contagemDaPromocao(b.db, l2, 1, 2026, 1), { inseridos: 0, atualizados: 0, removidos: 0, fora: 0 });
+  const c = await contagemDaPromocao(b.db, l2, 1, 2026, 2);
   assert.deepEqual(c, { inseridos: 0, atualizados: 2, removidos: 0, fora: 0 }, "a versão do leitor entra na comparação");
-  await b.db.batch(comandosPromover(b.db, l2, 2026, 2, c) as never);
+  await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 2, "marcar", c) as never);
   assert.deepEqual(
     b.raw.prepare("SELECT leitor, lote_id FROM empenhos ORDER BY numero").all().map((x) => ({ ...x })),
     [
@@ -466,4 +455,31 @@ test("empenhos (D1 real): o LEITOR novo regrava tudo; o mesmo leitor com dados i
     ],
   );
   assert.equal(LEITOR_EMPENHOS, 1);
+});
+
+test("empenhos (D1 real): a REGRA do card — apagar o que a Centi não traz mais; e a mesma chave em DOIS cards", async () => {
+  const b = banco();
+  const l1 = b.novoLote();
+  await guardar(b, l1, 1, [reg("1"), reg("2")], 2);
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l1, 1, 2026, 1)) as never);
+  const l2 = b.novoLote();
+  await guardar(b, l2, 1, [reg("1")], 1);
+  await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 1, "apagar", await contagemDaPromocao(b.db, l2, 1, 2026, 1)) as never);
+  assert.deepEqual(b.raw.prepare("SELECT numero FROM empenhos WHERE card_id = 1").all().map((x) => ({ ...x })), [{ numero: "1" }], "o 2 saiu do banco");
+  // O card 2 tem o próprio vínculo e a própria tabela: a mesma chave entra de novo, sem tocar no card 1.
+  b.raw.exec("INSERT INTO empenho_card_vinculos (card_id, orgao_gestor, orgao_id) VALUES (2, 'PREFEITURA', 1)");
+  const l3 = b.novoLote(2026, 2);
+  await guardar(b, l3, 1, [reg("1"), reg("5")], 2);
+  await b.db.batch(comandosPromover(b.db, l3, 2, 2026, 1, "marcar", await contagemDaPromocao(b.db, l3, 2, 2026, 1)) as never);
+  assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos WHERE card_id = 2").get() as { n: number }).n, 2);
+  assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos WHERE card_id = 1").get() as { n: number }).n, 1);
+  // Sem vínculo no card, nada entra.
+  const l4 = b.novoLote(2025, 2);
+  await guardar(b, l4, 1, [reg("9", { OrgaoGestor: "OUTRO" })], 1);
+  const c = await contagemDaPromocao(b.db, l4, 2, 2025, 1);
+  assert.deepEqual(c, { inseridos: 0, atualizados: 0, removidos: 0, fora: 1 });
+  // Excluir o card exclui os empenhos e as importações dele (cascata).
+  b.raw.exec("DELETE FROM empenho_cards WHERE id = 2");
+  assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos WHERE card_id = 2").get() as { n: number }).n, 0);
+  assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM centi_lotes WHERE card_id = 2").get() as { n: number }).n, 0);
 });

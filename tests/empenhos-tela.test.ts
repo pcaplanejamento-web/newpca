@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
@@ -14,25 +12,23 @@ import {
   resumoEmpenhos,
 } from "../src/lib/empenhos-tela-core.ts";
 import { consultaAnosEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "../src/lib/empenhos-tela-sql.ts";
+import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 function banco() {
-  const raw = new DatabaseSync(":memory:");
-  for (const m of ["0129_centi_apis", "0130_centi_apis_escopo", "0131_empenhos", "0132_centi_lote_passos", "0134_empenhos_conferencia"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
-  // O cadastro mínimo que a 0138 (unidades da Centi e os gatilhos) precisa.
-  raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer, codigo text)");
-  for (const m of ["0138_centi_unidades", "0139_centi_vinculo_cadastro", "0141_centi_vinculo_acoes", "0142_centi_unidade_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
+  const raw = bancoMigrado();
+  raw.exec("INSERT INTO orgaos (id, nome, sigla) VALUES (1, 'Prefeitura', 'PMRV'), (2, 'Fundo', 'FMS'); INSERT INTO reparticoes (id, orgao_id, codigo, nome) VALUES (10, 1, 'SEMED', 'Educação'), (11, 1, 'SEMAD', 'Administração'); INSERT INTO empenho_cards (id, nome) VALUES (1, 'Empenhos'), (2, 'Outro')");
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const ins = raw.prepare(
-    `INSERT INTO empenhos (chave, ano, numero, data, orgao_gestor, fornecedor, cpf_cnpj, elemento, fonte, valor_empenhado, valor_anulado, valor_liquidado, valor_pago, saldo_pagar, removido_em, orgao_id, reparticao_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO empenhos (card_id, chave, ano, numero, data, orgao_gestor, fornecedor, cpf_cnpj, elemento, fonte, valor_empenhado, valor_anulado, valor_liquidado, valor_pago, saldo_pagar, removido_em, orgao_id, reparticao_id)
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   return { raw, db, ins };
 }
 
 /** O pacote como a rota o devolve (o texto do banco, lido). */
 async function pacote(b: ReturnType<typeof banco>, ano: number, removidos = false): Promise<PacoteEmpenhos> {
-  const t = await textoPacoteEmpenhos(b.db, ano, removidos);
+  const t = await textoPacoteEmpenhos(b.db, 1, ano, removidos);
   assert.ok(t != null);
   return JSON.parse(t) as PacoteEmpenhos;
 }
@@ -61,7 +57,7 @@ test("tela de empenhos: o pacote compacto do banco volta IGUAL ao que está grav
   assert.deepEqual(rem.map((x) => x.numero), ["3"]);
   assert.deepEqual(empenhosDoPacote(await pacote(b, 2024)), []);
 
-  const anos = await consultaAnosEmpenhos(b.db);
+  const anos = await consultaAnosEmpenhos(b.db, 1);
   assert.deepEqual(anos.map((a) => [a.ano, a.n, a.removidos]), [[2026, 2, 1], [2025, 1, 0]]);
   assert.equal(anos[0].soma, 3142.5);
 
@@ -94,21 +90,21 @@ test("tela de empenhos: o ano da URL só vale se existe; senão o mais recente",
   assert.deepEqual(empenhosDoPacote({ n: 1, dic: {}, linhas: [[5, "7"]] })[0].valorPago, 0);
 });
 
-test("tela de empenhos: a VERSÃO do ano = a última importação promovida (a memória do Worker só relê com importação nova)", async () => {
+test("tela de empenhos: a VERSÃO do ano = a última importação promovida DO CARD + a data dos vínculos dele", async () => {
   const b = banco();
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2026), "0::");
-  b.raw.exec("INSERT INTO centi_lotes (api_chave, ano, estado) VALUES ('empenhos', 2026, 'promovido'), ('empenhos', 2026, 'parcial'), ('empenhos', 2025, 'promovido')");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2026), "1::");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2025), "3::");
-  // Mudar um vínculo muda a versão (a tela relê o ano).
-  b.raw.exec("INSERT INTO centi_unidades (orgao_gestor, unidade, vinculado_em) VALUES ('X', '', '2026-10-21T10:00:00.000Z')");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2026), "1:2026-10-21T10:00:00.000Z:");
-  // Mudar o vínculo de uma AÇÃO também.
-  b.raw.exec("INSERT INTO centi_acoes (centi_unidade_id, acao, vinculado_em) VALUES (1, 'A1', '2026-10-22T10:00:00.000Z')");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2026), "1:2026-10-21T10:00:00.000Z:2026-10-22T10:00:00.000Z");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "0:");
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado) VALUES (1, 2026, 'promovido'), (1, 2026, 'parcial'), (1, 2025, 'promovido'), (2, 2026, 'promovido')");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "1:");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2025), "3:");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 2, 2026), "4:", "cada card tem a sua versão");
+  // Mudar os vínculos do card muda a versão (a tela relê o ano).
+  b.raw.exec("UPDATE empenho_cards SET vinculos_em = '2026-10-21T10:00:00.000Z' WHERE id = 1");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "1:2026-10-21T10:00:00.000Z");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 2, 2026), "4:");
   b.raw.exec("UPDATE centi_lotes SET concluido_em = '2026-10-20 12:00:00' WHERE id = 1");
   b.ins.run("2026|A|1", 2026, "1", null, "A", null, null, null, null, 1, 0, 0, 0, 1, null, 1, null);
-  assert.equal((await consultaAnosEmpenhos(b.db))[0].atualizadoEm, "2026-10-20 12:00:00");
+  assert.equal((await consultaAnosEmpenhos(b.db, 1))[0].atualizadoEm, "2026-10-20 12:00:00");
+  assert.deepEqual(await consultaAnosEmpenhos(b.db, 2), [], "o outro card não vê os empenhos do card 1");
 });
 
 test("escopo: o empenho vinculado à UNIDADE da pessoa ou — vínculo só ao órgão — ao ÓRGÃO de uma unidade dela", () => {
@@ -126,8 +122,7 @@ test("escopo: o empenho vinculado à UNIDADE da pessoa ou — vínculo só ao ó
 
 test("coluna Unidade: a sigla da unidade do cadastro vinculada; vinculado só ao órgão, a sigla do órgão; sem vínculo, vazio", async () => {
   const b = banco();
-  b.raw.exec("INSERT INTO orgaos (id, sigla) VALUES (1, 'PMRV'), (2, 'FMS'); INSERT INTO reparticoes (id, orgao_id, codigo) VALUES (10, 1, 'SEMED')");
-  b.ins.run("2026|PMRV|1", 2026, "1", "2026-01-02", "PMRV", "A", null, null, null, 1, 0, 0, 0, 1, null, 1, 10);
+    b.ins.run("2026|PMRV|1", 2026, "1", "2026-01-02", "PMRV", "A", null, null, null, 1, 0, 0, 0, 1, null, 1, 10);
   b.ins.run("2026|FMS|2", 2026, "2", "2026-01-03", "FMS", "B", null, null, null, 1, 0, 0, 0, 1, null, 2, null);
   b.ins.run("2026|X|3", 2026, "3", "2026-01-04", "X", "C", null, null, null, 1, 0, 0, 0, 1, null, null, null);
   const l = empenhosDoPacote(await pacote(b, 2026));
@@ -148,20 +143,20 @@ test("escopo no banco: o pacote e os anos só com os empenhos vinculados às uni
   b.ins.run("2026|FMS|3", 2026, "3", "2026-01-04", "FMS", "C", null, null, null, 7, 0, 0, 0, 7, "2026-05-01", 2, null);
   b.ins.run("2025|PMRV|9", 2025, "9", "2025-12-30", "PMRV", "X", null, null, null, 1, 0, 0, 0, 1, null, 1, 10);
 
-  const fms = await textoPacoteEmpenhos(b.db, 2026, false, { unidades: [20], orgaos: [2] });
+  const fms = await textoPacoteEmpenhos(b.db, 1, 2026, false, { unidades: [20], orgaos: [2] });
   assert.ok(fms != null);
   assert.deepEqual(empenhosDoPacote(JSON.parse(fms) as PacoteEmpenhos).map((e) => e.numero), ["2"]);
   // O dicionário também é só do recorte (nada de outro órgão vaza no texto).
   assert.ok(!fms.includes("MATERIAL") && !fms.includes("PMRV"));
-  const rem = JSON.parse((await textoPacoteEmpenhos(b.db, 2026, true, { unidades: [], orgaos: [2] })) ?? "") as PacoteEmpenhos;
+  const rem = JSON.parse((await textoPacoteEmpenhos(b.db, 1, 2026, true, { unidades: [], orgaos: [2] })) ?? "") as PacoteEmpenhos;
   assert.deepEqual(empenhosDoPacote(rem).map((e) => e.numero), ["3"]);
   // A unidade 11 do órgão 1 não vê o empenho vinculado à unidade 10.
-  assert.equal(empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, 2026, false, { unidades: [11], orgaos: [1] })) ?? "")).length, 0);
-  assert.deepEqual(JSON.parse((await textoPacoteEmpenhos(b.db, 2026, false, { unidades: [], orgaos: [] })) ?? ""), { n: 0, dic: {}, linhas: [] });
-  assert.equal(empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, 2026, false, null)) ?? "")).length, 2);
+  assert.equal(empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, 1, 2026, false, { unidades: [11], orgaos: [1] })) ?? "")).length, 0);
+  assert.deepEqual(JSON.parse((await textoPacoteEmpenhos(b.db, 1, 2026, false, { unidades: [], orgaos: [] })) ?? ""), { n: 0, dic: {}, linhas: [] });
+  assert.equal(empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, 1, 2026, false, null)) ?? "")).length, 2);
 
-  assert.deepEqual((await consultaAnosEmpenhos(b.db, { unidades: [], orgaos: [2] })).map((a) => [a.ano, a.n, a.removidos]), [[2026, 1, 1]]);
-  assert.deepEqual((await consultaAnosEmpenhos(b.db, { unidades: [10], orgaos: [1] })).map((a) => a.ano), [2026, 2025]);
-  assert.deepEqual(await consultaAnosEmpenhos(b.db, { unidades: [], orgaos: [] }), []);
-  assert.equal((await consultaAnosEmpenhos(b.db, null)).length, 2);
+  assert.deepEqual((await consultaAnosEmpenhos(b.db, 1, { unidades: [], orgaos: [2] })).map((a) => [a.ano, a.n, a.removidos]), [[2026, 1, 1]]);
+  assert.deepEqual((await consultaAnosEmpenhos(b.db, 1, { unidades: [10], orgaos: [1] })).map((a) => a.ano), [2026, 2025]);
+  assert.deepEqual(await consultaAnosEmpenhos(b.db, 1, { unidades: [], orgaos: [] }), []);
+  assert.equal((await consultaAnosEmpenhos(b.db, 1, null)).length, 2);
 });

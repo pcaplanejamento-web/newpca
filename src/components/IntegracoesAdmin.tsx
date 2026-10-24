@@ -1,8 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { CATALOGO_INTEGRACOES, type IntegracoesView } from "@/lib/integracoes-core";
 import { Badge, type Tone } from "./Badge";
@@ -13,15 +12,7 @@ import { IconActivity, IconAlert, IconDatabase, IconGoogle, IconKey, IconMail, I
 import { IntegracaoGoogle, type ValorGoogle } from "./IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "./IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "./IntegracaoTrello";
-import { Segmented } from "./Segmented";
-import { SkeletonCartao } from "./Skeleton";
 import { toast } from "./Toast";
-
-/** A aba "APIs da Centi" só é baixada quando aberta. */
-const CentiApisAdmin = dynamic(() => import("./CentiApisAdmin").then((m) => m.CentiApisAdmin), {
-  ssr: false,
-  loading: () => <SkeletonCartao linhas={5} />,
-});
 
 // Tela de Integrações do ADM (admin-only): Cloudflare (Turnstile + monitoramento), o Trello (conta institucional) e o
 // Resend (e-mails).
@@ -67,16 +58,8 @@ function Cartao({
   );
 }
 
-type AbaIntegracoes = "servicos" | "centi";
-
-export function IntegracoesAdmin({ integracoes, abaInicial = "servicos" }: { integracoes: IntegracoesView; abaInicial?: AbaIntegracoes }) {
+export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const [aba, setAba] = useState<AbaIntegracoes>(abaInicial);
-  function trocarAba(a: AbaIntegracoes) {
-    setAba(a);
-    window.history.replaceState(null, "", a === "centi" ? `${pathname}?aba=centi` : pathname);
-  }
   const [tsAtivo, setTsAtivo] = useState(integracoes.turnstile.ativo);
   const [siteKey, setSiteKey] = useState(integracoes.turnstile.siteKey);
   const [secret, setSecret] = useState(""); // sempre começa vazio (write-only)
@@ -186,28 +169,10 @@ export function IntegracoesAdmin({ integracoes, abaInicial = "servicos" }: { int
             Conecte serviços externos. Ative e configure cada um; nada muda no sistema até você ligar.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented
-            value={aba}
-            onChange={trocarAba}
-            ariaLabel="Integrações"
-            options={[
-              { value: "servicos", label: "Serviços", dica: "Captcha, monitoramento, Trello, e-mail e login com Google" },
-              { value: "centi", label: "APIs da Centi", curto: "Centi", dica: "O cadastro das APIs do portal de transparência da Centi" },
-            ]}
-          />
-          {aba === "servicos" && (
-            <Button onClick={salvar} loading={salvando}>
-              Salvar
-            </Button>
-          )}
-        </div>
+        <Button onClick={salvar} loading={salvando}>
+          Salvar
+        </Button>
       </div>
-
-      {aba === "centi" ? (
-        <CentiApisAdmin />
-      ) : (
-      <>
 
       {semChaveMestra && (
         <Callout kind="warn" icon={<IconAlert className="h-5 w-5" />}>
@@ -330,8 +295,6 @@ export function IntegracoesAdmin({ integracoes, abaInicial = "servicos" }: { int
           ))}
         </div>
       </section>
-      )}
-      </>
       )}
     </div>
   );

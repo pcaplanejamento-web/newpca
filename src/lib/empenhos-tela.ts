@@ -8,8 +8,8 @@ import { unidadeDoModulo } from "./escopo-cabecalho";
 import { criarMemoVersao } from "./memo-versao-core";
 
 /**
- * A TELA DE EMPENHOS no D1. O pacote de um ano (~2,4 MB para 21 mil empenhos) fica na MEMÓRIA do Worker enquanto a
- * versão do ano (a última importação promovida) for a mesma — cada leitura completa percorre o ano inteiro; abrir a tela
+ * A TABELA de um CARD de empenhos no D1. O pacote de um ano (~2,4 MB para 21 mil empenhos) fica na MEMÓRIA do Worker enquanto a
+ * versão do ano (a última importação promovida do card e a data dos vínculos dele) for a mesma — cada leitura completa percorre o ano inteiro; abrir a tela
  * de novo sem importação nova não lê nada além da versão.
  */
 const memo = criarMemoVersao({ max: 12, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
@@ -31,17 +31,17 @@ export const escopoDosEmpenhos = cache(async (): Promise<EscopoEmpenhos> => {
   return { unidades: l.map((r) => r.id), orgaos: [...new Set(l.map((r) => r.orgaoId).filter((o): o is number => o != null))] };
 });
 
-export async function anosEmpenhos(escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
-  return consultaAnosEmpenhos(getDb(), escopo);
+export async function anosEmpenhos(card: number, escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
+  return consultaAnosEmpenhos(getDb(), card, escopo);
 }
 
-/** O pacote do ano como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */
-export async function pacoteEmpenhos(ano: number, removidos: boolean, escopo: EscopoEmpenhos): Promise<string | null> {
+/** O pacote do ano do card como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */
+export async function pacoteEmpenhos(card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
-  const ver = await consultaVersaoEmpenhos(db, ano);
+  const ver = await consultaVersaoEmpenhos(db, card, ano);
   try {
-    return await memo.obter(`${ano}:${removidos ? 1 : 0}:${chaveEscopoEmpenhos(escopo)}`, ver, async () => {
-      const t = await textoPacoteEmpenhos(db, ano, removidos, escopo);
+    return await memo.obter(`${card}:${ano}:${removidos ? 1 : 0}:${chaveEscopoEmpenhos(escopo)}`, ver, async () => {
+      const t = await textoPacoteEmpenhos(db, card, ano, removidos, escopo);
       if (t == null) throw new Error("Os empenhos mudaram durante a leitura.");
       return t;
     });

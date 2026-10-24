@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anoDaVez, apiNaHora, errosSeguidos, MAX_ERROS_AUTO, proximoPedido } from "../src/lib/empenhos-core.ts";
+import { anoDaVez, cardNaHora, errosSeguidos, MAX_ERROS_AUTO, proximoPedido } from "../src/lib/empenhos-core.ts";
 
 type P = { inicio: string; fim: string; pagina: number; estado: "ok" | "erro" | "dividido"; fimPeriodo: boolean };
 const ok = (inicio: string, fim: string, pagina = 1, fimPeriodo = true): P => ({ inicio, fim, pagina, estado: "ok", fimPeriodo });
@@ -36,13 +36,13 @@ test("atualização automática: conta os erros seguidos do mesmo pedido (o suce
 test("atualização automática: só começa na hora (horário, dia útil, frequência)", () => {
   const api = { frequenciaMin: 120, diasUteis: true, horaInicio: "07:00", horaFim: "19:00", ultimaExecucao: null as string | null };
   const ms = Date.parse("2026-10-23T15:00:00Z");
-  assert.equal(apiNaHora(api, { ms, hora: "12:00", diaUtil: true }), true);
-  assert.equal(apiNaHora(api, { ms, hora: "06:59", diaUtil: true }), false);
-  assert.equal(apiNaHora(api, { ms, hora: "19:01", diaUtil: true }), false);
-  assert.equal(apiNaHora(api, { ms, hora: "12:00", diaUtil: false }), false);
-  assert.equal(apiNaHora({ ...api, diasUteis: false }, { ms, hora: "12:00", diaUtil: false }), true);
-  assert.equal(apiNaHora({ ...api, ultimaExecucao: "2026-10-23 14:00:00" }, { ms, hora: "12:00", diaUtil: true }), false);
-  assert.equal(apiNaHora({ ...api, ultimaExecucao: "2026-10-23 13:00:00" }, { ms, hora: "12:00", diaUtil: true }), true);
+  assert.equal(cardNaHora(api, { ms, hora: "12:00", diaUtil: true }), true);
+  assert.equal(cardNaHora(api, { ms, hora: "06:59", diaUtil: true }), false);
+  assert.equal(cardNaHora(api, { ms, hora: "19:01", diaUtil: true }), false);
+  assert.equal(cardNaHora(api, { ms, hora: "12:00", diaUtil: false }), false);
+  assert.equal(cardNaHora({ ...api, diasUteis: false }, { ms, hora: "12:00", diaUtil: false }), true);
+  assert.equal(cardNaHora({ ...api, ultimaExecucao: "2026-10-23 14:00:00" }, { ms, hora: "12:00", diaUtil: true }), false);
+  assert.equal(cardNaHora({ ...api, ultimaExecucao: "2026-10-23 13:00:00" }, { ms, hora: "12:00", diaUtil: true }), true);
 });
 
 test("atualização automática: o ano da vez — o nunca lido primeiro, depois o lido há mais tempo", () => {

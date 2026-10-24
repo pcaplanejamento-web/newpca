@@ -2,7 +2,8 @@ import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from 
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { centiLotePassos, centiLotes, centiStagingFora, empenhos, empenhosStaging } from "../db/schema.ts";
-import { vinculoSql } from "./centi-unidades-sql.ts";
+import type { RegraRemovidos } from "./empenho-cards-core.ts";
+import { vinculoSql } from "./empenho-cards-sql.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoLote, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
 
 /**
@@ -176,42 +177,46 @@ const colEmp = (c: string) => sql.raw(`"empenhos"."${colunaSql(c)}"`);
 const colStg = (c: string) => sql.raw(`"empenhos_staging"."${colunaSql(c)}"`);
 
 /**
- * O VÍNCULO do registro (a ação › a unidade orçamentária › o órgão gestor — a régua única, `vinculoSql`). A leitura já só
- * guarda o vinculado; a promoção confere de NOVO (o vínculo pode ter mudado no meio): o que perdeu o vínculo não entra.
+ * O VÍNCULO do registro pelos vínculos do CARD (o mais específico — `vinculoSql`). A leitura já só guarda o vinculado; a
+ * promoção confere de NOVO (os vínculos podem ter mudado no meio): o que perdeu o vínculo não entra.
  */
-const vStg = vinculoSql("empenhos_staging");
-const vEmp = vinculoSql("empenhos");
-const stagingVinculado = sql`${vStg.orgao} IS NOT NULL`;
-/** O empenho gravado sem vínculo — sai na promoção (banco limpo). */
-const empenhoSemVinculo = sql`${vEmp.orgao} IS NULL`;
+const stagingVinculado = (card: number) => sql`${vinculoSql("empenhos_staging", card).orgao} IS NOT NULL`;
 
-/** As chaves do lote que SERÃO gravadas (as de unidade vinculada). */
-const chavesVinculadas = (db: Db, loteId: number) =>
-  db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado));
+/** As chaves do lote que SERÃO gravadas (as vinculadas). */
+const chavesVinculadas = (db: Db, loteId: number, card: number) =>
+  db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card)));
+
+/** Os empenhos do card e do ano que a Centi não trouxe mais (fora das chaves vinculadas do lote). */
+const sumiram = (db: Db, loteId: number, card: number, ano: number) =>
+  and(eq(empenhos.cardId, card), eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, chavesVinculadas(db, loteId, card)));
 
 /**
  * Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor ou o vínculo mudou), marca como removidos — e quantos
  * registros ficam FORA (unidade da Centi sem vínculo: não são gravados) — o resumo do lote.
  */
-export async function contagemDaPromocao(db: Db, loteId: number, ano: number, leitor: number) {
+export async function contagemDaPromocao(db: Db, loteId: number, card: number, ano: number, leitor: number) {
+  const vStg = vinculoSql("empenhos_staging", card);
   const [novos] = await db
     .select({ n: count() })
     .from(empenhosStaging)
-    .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado, sql`NOT EXISTS (SELECT 1 FROM ${empenhos} WHERE ${empenhos.chave} = ${empenhosStaging.chave})`));
+    .where(
+      and(
+        eq(empenhosStaging.loteId, loteId),
+        stagingVinculado(card),
+        sql`NOT EXISTS (SELECT 1 FROM ${empenhos} WHERE ${empenhos.cardId} = ${card} AND ${empenhos.chave} = ${empenhosStaging.chave})`,
+      ),
+    );
   const [alterados] = await db
     .select({ n: count() })
     .from(empenhosStaging)
-    .innerJoin(empenhos, eq(empenhos.chave, empenhosStaging.chave))
-    .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado, mudou(colEmp, colStg, sql`${leitor}`, vStg.orgao, vStg.reparticao)));
-  const [removidos] = await db
-    .select({ n: count() })
-    .from(empenhos)
-    .where(and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, chavesVinculadas(db, loteId))));
+    .innerJoin(empenhos, and(eq(empenhos.cardId, card), eq(empenhos.chave, empenhosStaging.chave)))
+    .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card), mudou(colEmp, colStg, sql`${leitor}`, vStg.orgao, vStg.reparticao)));
+  const [removidos] = await db.select({ n: count() }).from(empenhos).where(sumiram(db, loteId, card, ano));
   // FORA = os só contados na leitura + os guardados que perderam o vínculo antes da conclusão (não entram).
   const [perdeu] = await db
     .select({ n: count() })
     .from(empenhosStaging)
-    .where(and(eq(empenhosStaging.loteId, loteId), sql`NOT (${stagingVinculado})`));
+    .where(and(eq(empenhosStaging.loteId, loteId), sql`NOT (${stagingVinculado(card)})`));
   const [contados] = await db.select({ n: count() }).from(centiStagingFora).where(eq(centiStagingFora.loteId, loteId));
   return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: perdeu.n + contados.n };
 }
@@ -233,12 +238,12 @@ export async function valoresSuspeitos(db: Db, loteId: number): Promise<number> 
   return r?.n ?? 0;
 }
 
-/** A última importação CONCLUÍDA do mesmo ano (a base da conferência de queda), sem o próprio lote. */
-export async function ultimoPromovido(db: Db, apiChave: string, ano: number, exceto: number) {
+/** A última importação CONCLUÍDA do mesmo card e ano (a base da conferência de queda), sem o próprio lote. */
+export async function ultimoPromovido(db: Db, card: number, ano: number, exceto: number) {
   const [l] = await db
     .select({ soma: centiLotes.soma, unicos: centiLotes.unicos })
     .from(centiLotes)
-    .where(and(eq(centiLotes.apiChave, apiChave), eq(centiLotes.ano, ano), eq(centiLotes.estado, "promovido"), ne(centiLotes.id, exceto)))
+    .where(and(eq(centiLotes.cardId, card), eq(centiLotes.ano, ano), eq(centiLotes.estado, "promovido"), ne(centiLotes.id, exceto)))
     .orderBy(desc(centiLotes.id))
     .limit(1);
   return l ?? null;
@@ -263,12 +268,21 @@ export function comandoConduzir(db: Db, loteId: number, condutor: string) {
 }
 
 /**
- * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos de unidade VINCULADA (com o órgão/unidade do
- * cadastro; o que reaparece perde o `removido_em`), marca `removido_em` no que o ano tinha e a Centi não trouxe mais,
- * APAGA o que ficou sem vínculo (banco limpo), fecha o lote e limpa o staging — os registros de unidade sem vínculo
- * foram conferidos e são descartados aqui.
+ * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos VINCULADOS do card (com o órgão/unidade do
+ * cadastro; o que reaparece perde o `removido_em`), trata o que o card tinha no ano e a Centi não trouxe mais pela REGRA
+ * do card (marca `removido_em` ou apaga), APAGA o que ficou sem vínculo (banco limpo), fecha o lote e limpa o staging.
  */
-export function comandosPromover(db: Db, loteId: number, ano: number, leitor: number, contagem: { inseridos: number; atualizados: number; removidos: number; fora: number }) {
+export function comandosPromover(
+  db: Db,
+  loteId: number,
+  card: number,
+  ano: number,
+  leitor: number,
+  regra: RegraRemovidos,
+  contagem: { inseridos: number; atualizados: number; removidos: number; fora: number },
+) {
+  const vStg = vinculoSql("empenhos_staging", card);
+  const vEmp = vinculoSql("empenhos", card);
   const sel = db
     .select({
       id: sql<number>`NULL`.as("id"),
@@ -280,9 +294,10 @@ export function comandosPromover(db: Db, loteId: number, ano: number, leitor: nu
       leitor: sql<number>`${leitor}`.as("leitor"),
       orgaoId: sql<number>`${vStg.orgao}`.as("orgao_id"),
       reparticaoId: sql<number | null>`${vStg.reparticao}`.as("reparticao_id"),
+      cardId: sql<number>`${card}`.as("card_id"),
     })
     .from(empenhosStaging)
-    .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado));
+    .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card)));
   const atualizar = Object.fromEntries(
     [...COMPARADOS, "loteId", "removidoEm", "leitor", "orgaoId", "reparticaoId"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
   );
@@ -292,15 +307,14 @@ export function comandosPromover(db: Db, loteId: number, ano: number, leitor: nu
       .select(sel as never)
       // Só regrava o que MUDOU (o "atualizado" do resumo é real; o empenho igual guarda a data e o lote de antes).
       .onConflictDoUpdate({
-        target: empenhos.chave,
+        target: [empenhos.cardId, empenhos.chave],
         set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` },
         setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
       }),
-    db
-      .update(empenhos)
-      .set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` })
-      .where(and(eq(empenhos.ano, ano), isNull(empenhos.removidoEm), notInArray(empenhos.chave, chavesVinculadas(db, loteId)))),
-    db.delete(empenhos).where(and(eq(empenhos.ano, ano), empenhoSemVinculo)),
+    regra === "apagar"
+      ? db.delete(empenhos).where(sumiram(db, loteId, card, ano))
+      : db.update(empenhos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano)),
+    db.delete(empenhos).where(and(eq(empenhos.cardId, card), eq(empenhos.ano, ano), sql`${vEmp.orgao} IS NULL`)),
     db
       .update(centiLotes)
       .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })

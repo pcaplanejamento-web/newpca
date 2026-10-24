@@ -139,8 +139,11 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
     na: "em Empenhos",
     a: "a Empenhos",
     acoes: {
-      visualizar: "Abrir Empenhos e consultar os empenhos importados da Centi (só leitura).",
+      visualizar: "Abrir Empenhos, os cards e a tabela importada de cada um.",
+      importar: "Importar da Centi em cada card (a importação manual e o catálogo).",
       exportar: "Baixar a tabela em XLSX e PDF.",
+      excluir: "Excluir cards (com os empenhos deles) e importações do histórico.",
+      configurar: "Criar cards e configurar a integração, os anos, a programação, as regras e os vínculos; publicar edições da tabela.",
     },
   },
 };

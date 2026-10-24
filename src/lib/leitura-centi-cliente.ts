@@ -2,9 +2,9 @@ import { type LoteCenti, type PassoLote, type Periodo, periodoEmCurso, periodosA
 
 /**
  * A LEITURA DE UM ANO NA CENTI conduzida pelo NAVEGADOR (a rota lê uma página por vez — o limite de CPU do Worker): a
- * MESMA na importação manual (Integrações → APIs da Centi) e no "Buscar na Centi" das unidades orçamentárias (Órgãos e
- * Unidades — o lote em modo `unidades`, que só registra as unidades). Repete a falha de rede com espera; o período
- * grande demais é dividido ao meio.
+ * MESMA na importação manual de um card (Empenhos → card → Importação) e no "Buscar na Centi" dos vínculos (o lote em
+ * modo `unidades`, que só atualiza o catálogo). Repete a falha de rede com espera; o período grande demais é dividido ao
+ * meio.
  */
 
 export type RespostaPasso = {
@@ -19,8 +19,8 @@ export type RespostaPasso = {
 export class RecusaImportacao extends Error {}
 
 /** Chama a rota da importação; devolve o JSON ou lança com a mensagem do servidor. */
-export async function pedirImportacao<T>(apiId: number, corpo: Record<string, unknown>): Promise<T> {
-  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar`, {
+export async function pedirImportacao<T>(cardId: number, corpo: Record<string, unknown>): Promise<T> {
+  const r = await fetch(`/api/empenhos/cards/${cardId}/importar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(corpo),
@@ -32,8 +32,8 @@ export async function pedirImportacao<T>(apiId: number, corpo: Record<string, un
 }
 
 /** Os passos já gravados de um lote (retomar, o detalhe do histórico). */
-export async function lerPassos(apiId: number, loteId: number): Promise<PassoLote[]> {
-  const r = await fetch(`/api/admin/centi-apis/${apiId}/importar?lote=${loteId}`);
+export async function lerPassos(cardId: number, loteId: number): Promise<PassoLote[]> {
+  const r = await fetch(`/api/empenhos/cards/${cardId}/importar?lote=${loteId}`);
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; passos?: PassoLote[] };
   if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
   return j.passos ?? [];
@@ -74,7 +74,7 @@ const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
  * depois da última página e onde parou ("período, página" — para a mensagem de erro); lança a falha final.
  */
 export async function lerAnoNaCenti(o: {
-  apiId: number;
+  cardId: number;
   lote: LoteCenti;
   anteriores: PassoLote[];
   condutor: string;
@@ -95,7 +95,7 @@ export async function lerAnoNaCenti(o: {
       o.onAgora({ periodo, pagina, tentativa: t + 1 });
       let r: RespostaPasso;
       try {
-        r = await pedirImportacao<RespostaPasso>(o.apiId, { acao: "pagina", lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina });
+        r = await pedirImportacao<RespostaPasso>(o.cardId, { acao: "pagina", lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina });
       } catch (e) {
         if (e instanceof RecusaImportacao) throw e;
         // Sem resposta do SISTEMA (rede, sessão) — o passo não chegou ao servidor: fica registrado só na tela.

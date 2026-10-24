@@ -1,11 +1,11 @@
-import { exigirAdmin, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { getApiCenti } from "@/lib/centi-apis";
-import { importavel } from "@/lib/centi-apis-core";
-import { excluirImportacaoSchema, importarCentiApiSchema } from "@/lib/centi-apis-validation";
 import { getDb } from "@/lib/db";
+import { anosDoCard } from "@/lib/empenho-cards-core";
+import { getCard } from "@/lib/empenho-cards";
+import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
-import { anosDaApi, LEITOR_EMPENHOS } from "@/lib/empenhos-core";
+import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, lerPaginaDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
 import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandosExcluirLote } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
@@ -13,55 +13,54 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-async function apiImportavel(ctx: { params: Promise<{ id: string }> }) {
+async function doCard(ctx: { params: Promise<{ id: string }> }) {
   const id = intId((await ctx.params).id);
   if (!id) return { resp: erro("ID inválido.") };
-  const api = await getApiCenti(id);
-  if (!api) return { resp: erro("API não encontrada.", 404) };
-  if (!importavel(api.chave)) return { resp: erro("A importação desta API ainda não existe.", 409) };
-  return { api };
+  const card = await getCard(id);
+  if (!card) return { resp: erro("Card não encontrado.", 404) };
+  return { card };
 }
 
-/** Os últimos lotes da API (o histórico da importação) + o que está lendo agora; com `?lote=`, os PASSOS daquele lote. */
+/** Os últimos lotes do card (o histórico da importação) + o que está lendo agora; com `?lote=`, os PASSOS daquele lote. */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAdmin();
+  const g = await exigirAcesso("empenhos", "importar");
   if ("erro" in g) return g.erro;
-  const a = await apiImportavel(ctx);
+  const a = await doCard(ctx);
   if ("resp" in a) return a.resp;
   const loteId = intId(new URL(req.url).searchParams.get("lote") ?? "");
   if (loteId) {
-    const lote = await getLote(loteId, a.api.chave);
+    const lote = await getLote(loteId, a.card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.api.chave), emAndamento: await loteEmAndamento(a.api.chave), desatualizados: await anosDesatualizados(), leitor: LEITOR_EMPENHOS });
+  return ok({ lotes: await listarLotes(a.card.id), emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
 }
 
 /**
- * IMPORTAÇÃO MANUAL, passo a passo (a tela conduz): `iniciar` cria o lote · `pagina` lê UMA página da Centi com o
- * cadastro SALVO e guarda no staging · `concluir` CONFERE (recebidos × total informado pela Centi) e só então PROMOVE
+ * IMPORTAÇÃO MANUAL do card, passo a passo (a tela conduz — Importar): `iniciar` cria o lote · `pagina` lê UMA página da
+ * Centi com a configuração SALVA do card e guarda no staging (só o que os vínculos cobrem) · `concluir` CONFERE (recebidos × total informado pela Centi) e só então PROMOVE
  * para a tabela final — senão fecha como parcial, sem tocar nela · `cancelar` fecha sem promover.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAdmin();
+  const g = await exigirAcesso("empenhos", "importar");
   if ("erro" in g) return g.erro;
-  const a = await apiImportavel(ctx);
+  const a = await doCard(ctx);
   if ("resp" in a) return a.resp;
-  const { api } = a;
-  const p = await parseCorpo(importarCentiApiSchema, req);
+  const { card } = a;
+  const p = await parseCorpo(importarCardSchema, req);
   if ("resp" in p) return p.resp;
   const db = getDb();
   const corpo = p.data;
 
   if (corpo.acao === "iniciar") {
-    const anos = anosDaApi(Number(dataIsoBrasilia(new Date().toISOString()).slice(0, 4)), api.anos);
-    if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos mantidos desta API.`, 422);
-    const andando = await loteEmAndamento(api.chave);
+    const anos = anosDoCard(card.anos, Number(dataIsoBrasilia(new Date().toISOString()).slice(0, 4)));
+    if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos deste card (Configuração).`, 422);
+    const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
-    return ok({ lote: await criarLote(api.chave, corpo.ano, g.u.nome, corpo.condutor, corpo.modo) });
+    return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo) });
   }
 
-  const lote = await getLote(corpo.lote, api.chave);
+  const lote = await getLote(corpo.lote, card.id);
   if (!lote) return erro("Importação não encontrada.", 404);
   if (lote.estado !== "lendo") return erro("Esta importação já foi encerrada.", 409);
   // UMA ABA POR VEZ: a que conduz renova a trava a cada pedido; outra só entra quando ela vence (2 min sem notícia).
@@ -78,8 +77,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (corpo.acao === "pagina") {
     try {
-      const r = await lerPaginaDoLote(api, lote, { inicio: corpo.inicio, fim: corpo.fim }, corpo.pagina);
-      return ok({ lote: await getLote(lote.id, api.chave), ...r });
+      const r = await lerPaginaDoLote(card, lote, { inicio: corpo.inicio, fim: corpo.fim }, corpo.pagina);
+      return ok({ lote: await getLote(lote.id, card.id), ...r });
     } catch (e) {
       if (e instanceof PedidoInvalido) return erro(e.message, e.status);
       throw e;
@@ -87,41 +86,41 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   if (corpo.acao === "cancelar") {
-    await fecharLoteEmpenhos(api, lote, corpo.falhou ? "falhou" : "cancelado", corpo.motivo || "Cancelada pelo administrador.");
-    return ok({ lote: await getLote(lote.id, api.chave) });
+    await fecharLoteEmpenhos(card, lote, corpo.falhou ? "falhou" : "cancelado", corpo.motivo || "Cancelada por quem importava.");
+    return ok({ lote: await getLote(lote.id, card.id) });
   }
 
   // concluir: a CONFERÊNCIA decide (a mesma da atualização automática); a QUEDA volta para a pessoa confirmar.
-  const c = await concluirLoteEmpenhos(api, lote, { aceitarQueda: !!corpo.aceitarQueda, usuario: g.u });
+  const c = await concluirLoteEmpenhos(card, lote, { aceitarQueda: !!corpo.aceitarQueda, usuario: g.u });
   if (c.estado === "queda") return ok({ lote, queda: c.queda });
-  return ok({ lote: await getLote(lote.id, api.chave) });
+  return ok({ lote: await getLote(lote.id, card.id) });
 }
 
 /**
- * EXCLUI DO BANCO, vários de uma vez: `{lotes}` = importações inteiras (passos, staging e o lote — os empenhos promovidos
+ * EXCLUI DO BANCO (Excluir), vários de uma vez: `{lotes}` = importações inteiras (passos, staging e o lote — os empenhos promovidos
  * ficam); `{lote, passos}` = passos de uma importação (a que ainda lê é recontada; o período volta a faltar).
  */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAdmin();
+  const g = await exigirAcesso("empenhos", "excluir");
   if ("erro" in g) return g.erro;
-  const a = await apiImportavel(ctx);
+  const a = await doCard(ctx);
   if ("resp" in a) return a.resp;
-  const { api } = a;
+  const { card } = a;
   const p = await parseCorpo(excluirImportacaoSchema, req);
   if ("resp" in p) return p.resp;
   const db = getDb();
   if ("passos" in p.data) {
-    const lote = await getLote(p.data.lote, api.chave);
+    const lote = await getLote(p.data.lote, card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
     const ids = [...new Set(p.data.passos)];
     const res = (await db.batch([comandoExcluirPassos(db, lote.id, ids), ...(lote.estado === "lendo" ? [comandoRecontarLote(db, lote.id)] : [])] as never)) as unknown[][];
     const excluidos = res[0].length;
-    await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "centi_api", entidadeId: api.id, resumo: `${api.nome} ${lote.ano}: ${excluidos} passo(s) da importação ${lote.id} excluído(s)` });
-    return ok({ excluidos, lote: await getLote(lote.id, api.chave) });
+    await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${lote.ano}: ${excluidos} passo(s) da importação ${lote.id} excluído(s)` });
+    return ok({ excluidos, lote: await getLote(lote.id, card.id) });
   }
   let excluidos = 0;
   for (const id of new Set(p.data.lotes)) {
-    const lote = await getLote(id, api.chave);
+    const lote = await getLote(id, card.id);
     if (!lote) continue;
     const res = (await db.batch(comandosExcluirLote(db, lote.id) as never)) as unknown[][];
     if (!res[3]?.length) continue;
@@ -129,9 +128,9 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     await registrarAuditoria({
       usuario: g.u,
       acao: "excluir",
-      entidade: "centi_api",
-      entidadeId: api.id,
-      resumo: `${api.nome} ${lote.ano}: importação ${lote.id} (${lote.estado}) excluída do banco com os passos${lote.estado === "promovido" ? " — os empenhos que ela gravou ficam" : ""}`,
+      entidade: "empenho_card",
+      entidadeId: card.id,
+      resumo: `${card.nome} ${lote.ano}: importação ${lote.id} (${lote.estado}) excluída do banco com os passos${lote.estado === "promovido" ? " — os empenhos que ela gravou ficam" : ""}`,
     });
   }
   return ok({ excluidos });

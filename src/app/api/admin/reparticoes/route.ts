@@ -1,8 +1,7 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { centiUnidades, orgaos, reparticoes } from "@/db/schema";
+import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { vinculoCentiDaUnidade } from "@/lib/centi-unidades";
 import { getDb } from "@/lib/db";
 import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -30,18 +29,12 @@ export async function GET(req: Request) {
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
-      centiUnidadeId: reparticoes.centiUnidadeId,
-      // O texto da unidade orçamentária da Centi (a coluna "Empenhos (Centi)" — sem ela, "Sem correspondência").
-      // As AÇÕES da Centi vinculadas à unidade (os ids — os textos vêm do catálogo da tela).
-      centiAcoes: sql<string>`(SELECT json_group_array(ca."id") FROM "centi_acoes" ca WHERE ca."reparticao_id" = "reparticoes"."id")`,
-      centiUnidade: sql<string | null>`CASE WHEN ${centiUnidades.id} IS NULL THEN NULL WHEN ${centiUnidades.unidade} = '' THEN ${centiUnidades.orgaoGestor} ELSE ${centiUnidades.orgaoGestor} || ' · ' || ${centiUnidades.unidade} END`,
     })
     .from(reparticoes)
-    .leftJoin(centiUnidades, eq(centiUnidades.id, reparticoes.centiUnidadeId))
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
-  return ok({ reparticoes: rows.map((r) => ({ ...r, centiAcoes: JSON.parse(r.centiAcoes || "[]") as number[] })) });
+  return ok({ reparticoes: rows });
 }
 
 export async function POST(req: Request) {
@@ -58,9 +51,6 @@ export async function POST(req: Request) {
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
-  // A unidade nova escolhe só a unidade orçamentária (INTEIRA) — as ações vêm depois, na unidade gravada.
-  const centi = await vinculoCentiDaUnidade(null, { centiUnidadeId: corpo.data.centiUnidadeId });
-  if ("erro" in centi) return erro(centi.erro.msg, centi.erro.status);
   const db = getDb();
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
   const [row] = await db
@@ -73,7 +63,6 @@ export async function POST(req: Request) {
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
-      centiUnidadeId: corpo.data.centiUnidadeId ?? null,
     })
     .returning({ id: reparticoes.id });
   await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "reparticao", entidadeId: row?.id ?? null, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) criada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });

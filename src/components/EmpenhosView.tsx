@@ -1,299 +1,156 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
-import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
-import { type AnoEmpenhos, type EmpenhoNaTela, empenhosDoPacote, type EscopoEmpenhos, escopoVazio, type PacoteEmpenhos, resumoEmpenhos } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { estadoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
+import { brlCompact, num } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
-import { BotaoAtualizar } from "./BotaoAtualizar";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
-import { CelulaCopiavel } from "./BotaoCopiar";
-import { CelulaTexto } from "./CelulaLista";
-import { type Column, DataTable } from "./DataTable";
-import { EsqueletoTabela } from "./DataTableEsqueleto";
-import { EmpenhoDetalhe } from "./EmpenhoDetalhe";
-import { ErroCarga } from "./ErroCarga";
-import { SelectField } from "./Field";
-import { IconEmpenho, IconUpload } from "./icons";
+import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
+import { SelectField, TextField } from "./Field";
+import { IconEmpenho, IconInbox } from "./icons";
 import { Modal } from "./Modal";
-import { StatMini } from "./StatMini";
-
-/** A chave das edições salvas da tabela (publicar para todos = Configurar em Empenhos). */
-export const CHAVE_TABELA_EMPENHOS = "empenhos:tabela";
-
-/** As colunas que a tabela abre ESCONDIDAS (a edição da tabela as mostra). */
-const OCULTAS = ["cpfCnpj", "licitacao", "funcao", "subfuncao", "programa", "subelemento", "unidadeOrcamentaria"];
-
-const colTexto = (key: keyof EmpenhoNaTela, header: string, minWidth: number): Column<EmpenhoNaTela> => ({
-  key,
-  header,
-  minWidth,
-  value: (e) => String(e[key] ?? ""),
-  render: (e) => <CelulaTexto texto={e[key] as string | null} />,
-});
-
-const colValor = (key: "valorEmpenhado" | "valorAnulado" | "valorLiquidado" | "valorPago" | "saldoPagar", header: string, forte = false): Column<EmpenhoNaTela> => ({
-  key,
-  header,
-  align: "right",
-  nowrap: true,
-  filter: "range",
-  numero: (e) => e[key],
-  render: (e) => <span className={`tabular-nums ${forte ? "font-semibold text-text" : "text-text-2"}`}>{brl(e[key])}</span>,
-});
-
-const COLUNAS: Column<EmpenhoNaTela>[] = [
-  {
-    key: "numero",
-    header: "Nº",
-    nowrap: true,
-    value: (e) => e.numero,
-    render: (e) => (
-      <CelulaCopiavel copiar={e.numero} rotulo="Copiar nº do empenho">
-        <span className="font-mono text-[13px] text-text">{e.numero}</span>
-      </CelulaCopiavel>
-    ),
-  },
-  { key: "data", header: "Data", nowrap: true, filter: "date", value: (e) => e.data ?? "", render: (e) => <span className="tabular-nums">{dataBR(e.data)}</span> },
-  {
-    key: "unidade",
-    header: "Unidade",
-    nowrap: true,
-    value: (e) => e.unidade ?? "—",
-    render: (e) => <span className="font-mono text-[12px] font-semibold text-text-2">{e.unidade ?? "—"}</span>,
-  },
-  colTexto("orgaoGestor", "Órgão gestor", 200),
-  colTexto("unidadeOrcamentaria", "Unidade orçamentária", 200),
-  colTexto("fornecedor", "Fornecedor", 220),
-  { key: "cpfCnpj", header: "CPF/CNPJ", nowrap: true, value: (e) => e.cpfCnpj ?? "", render: (e) => <span className="font-mono text-[13px] text-muted">{e.cpfCnpj || "—"}</span> },
-  colTexto("modalidade", "Modalidade", 170),
-  { key: "licitacao", header: "Licitação", nowrap: true, value: (e) => e.licitacao ?? "", render: (e) => <span className="tabular-nums text-text-2">{e.licitacao || "—"}</span> },
-  colTexto("funcao", "Função", 140),
-  colTexto("subfuncao", "Subfunção", 170),
-  colTexto("programa", "Programa", 210),
-  colTexto("acao", "Ação", 230),
-  colTexto("elemento", "Elemento", 220),
-  colTexto("subelemento", "Subelemento", 190),
-  colTexto("fonte", "Fonte", 230),
-  colValor("valorEmpenhado", "Empenhado", true),
-  colValor("valorAnulado", "Anulado"),
-  colValor("valorLiquidado", "Liquidado"),
-  colValor("valorPago", "Pago"),
-  colValor("saldoPagar", "A pagar"),
-];
-
-type Recorte = { ano: number; removidos: boolean };
-const chaveRecorte = (r: Recorte) => `${r.ano}:${r.removidos ? 1 : 0}`;
+import { CapaQuadro, CartaoEspaco, QuadroNovoCard } from "./QuadroCard";
+import { toast } from "./Toast";
 
 /**
- * Tela EMPENHOS (tela de módulo): os empenhos da Centi de um ANO, importados em Integrações → APIs da Centi — só os dos
- * vinculados à unidade do cabeçalho (cada unidade da Centi é VINCULADA ao cadastro pelo ADM; `escopo` null = todos).
- * SÓ LEITURA. Os KPIs acompanham os filtros da tabela (`onOrdenadas`); a tabela é a padrão (`scrollInterno` + `compact`,
- * filtros conectados, edições salvas `empenhos:`, XLSX/PDF). O ano chega COMPACTO (`empenhos-tela-core.ts`) e fica
- * guardado nesta aba — trocar de ano e voltar não pede de novo; "Recarregar" pede. Tocar numa linha = o detalhe.
+ * Módulo EMPENHOS — a LISTA de CARDS (no padrão do Orçamento): cada card é uma importação da Centi com a PRÓPRIA
+ * configuração (integração, anos, programação, regras e vínculos) e a SUA tabela no banco. O card "+" (quem configura)
+ * cria um card — com os vínculos copiados de outro, se escolhido — e abre a Configuração dele. Tocar num card abre o
+ * ESPAÇO do card (`/painel/empenhos/[id]`: Empenhos · Vínculos · Importação · Configuração). 100% design-system.
  */
-export function EmpenhosView({
-  anos,
-  anoInicial,
-  edicoes,
-  podePublicar,
-  importar,
-  escopo = null,
-}: {
-  anos: AnoEmpenhos[];
-  anoInicial: number | null;
-  edicoes: { lista: EdicaoTabela[]; padroes: Record<string, unknown> };
-  /** Configurar em Empenhos: publicar edições da tabela para todos. */
-  podePublicar: boolean;
-  /** O atalho para a importação (Integrações — só o ADM). */
-  importar: boolean;
-  /** As unidades e os órgãos à vista (`null` = todos). */
-  escopo?: EscopoEmpenhos;
-}) {
-  const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
-  const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
-  const [vista, setVista] = useState<EmpenhoNaTela[] | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
-  const [carregando, setCarregando] = useState(false);
-  const [aberto, setAberto] = useState<EmpenhoNaTela | null>(null);
-  const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
-  const [eds, setEds] = useState(edicoes);
-  const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
-  const pedido = useRef(0);
+export function EmpenhosView({ cards, podeCriar }: { cards: ResumoCard[]; podeCriar: boolean }) {
+  const router = useRouter();
+  const [novo, setNovo] = useState(false);
+  const [nome, setNome] = useState("");
+  const [copiarDe, setCopiarDe] = useState("");
+  const [criando, setCriando] = useState(false);
+  const total = cards.reduce((s, c) => s + c.empenhos, 0);
 
-  const carregar = useCallback(async (r: Recorte, fresco = false) => {
-    const k = chaveRecorte(r);
-    const n = ++pedido.current;
-    setErro(null);
-    const guardado = fresco ? undefined : guardados.current.get(k);
-    if (guardado) {
-      setLinhas(guardado);
-      return;
-    }
-    setCarregando(true);
-    if (!fresco) setLinhas(null);
+  async function criar() {
+    if (!nome.trim()) return;
+    setCriando(true);
     try {
-      const resp = await fetch(`/api/empenhos?ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
-      const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
-      if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
-      const lista = empenhosDoPacote(j.pacote);
-      guardados.current.set(k, lista);
-      if (n === pedido.current) setLinhas(lista);
+      const r = await fetch("/api/empenhos/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: nome.trim(), copiarDe: copiarDe ? Number(copiarDe) : null }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number };
+      if (!r.ok || !j.ok || !j.id) throw new Error(j.error ?? "Não foi possível criar o card.");
+      toast.success(`Card "${nome.trim()}" criado — configure a integração e os vínculos.`);
+      router.push(`/painel/empenhos/${j.id}?aba=${copiarDe ? "vinculos" : "configuracao"}`);
     } catch (e) {
-      if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os empenhos.");
-    } finally {
-      if (n === pedido.current) setCarregando(false);
+      toast.error(e instanceof Error ? e.message : "Não foi possível criar o card.");
+      setCriando(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (recorte) void carregar(recorte);
-  }, [recorte, carregar]);
-
-  // O ano na URL (voltar/compartilhar abre no mesmo) — sem pedir a página de novo.
-  useEffect(() => {
-    if (!recorte) return;
-    const u = new URL(window.location.href);
-    u.searchParams.set("ano", String(recorte.ano));
-    window.history.replaceState(window.history.state, "", u);
-  }, [recorte]);
-
-  // O detalhe: o que a tabela tem na hora; o histórico e o registro chegam depois.
-  useEffect(() => {
-    if (!aberto) return;
-    let vivo = true;
-    setCompleto(undefined);
-    fetch(`/api/empenhos/${aberto.id}`)
-      .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto }>)
-      .then((j) => vivo && setCompleto(j.ok && j.empenho ? j.empenho : null))
-      .catch(() => vivo && setCompleto(null));
-    return () => {
-      vivo = false;
-    };
-  }, [aberto]);
-
-  const ano = anos.find((a) => a.ano === recorte?.ano);
-  const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
-  const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  }
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <header className="linha-topico flex flex-wrap items-center justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-bold text-text">
             <IconEmpenho className="h-5 w-5" /> Empenhos
           </h1>
-          {ano && (
-            <p className="text-sm text-muted">
-              {[
-                ano ? `Centi · ${recorte?.removidos ? `${num(ano.removidos)} removidos na Centi` : `${num(ano.n)} empenhos`}` : null,
-                ano?.atualizadoEm ? `importados em ${dataHoraBR(ano.atualizadoEm)}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          )}
+          <p className="text-sm text-muted">
+            {num(cards.length)} {cards.length === 1 ? "card" : "cards"} · {num(total)} {total === 1 ? "empenho" : "empenhos"} gravados · abra um card para ver a tabela,
+            os vínculos e a importação
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {anos.length > 0 && recorte && (
-            <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
-              {anos.map((a) => (
-                <option key={a.ano} value={a.ano}>
-                  {a.ano}
-                </option>
-              ))}
-            </SelectField>
-          )}
-          {importar && (
-            <Button size="sm" variant="secondary" href="/painel/integracoes?aba=centi" icon={<IconUpload className="h-4 w-4" />}>
-              Importar
-            </Button>
-          )}
-          <Ajuda titulo="Empenhos" botao="sm">
-            <p>
-              Os empenhos da Centi, importados em Integrações → APIs da Centi → Empenhos. Só leitura: para atualizar, importe o ano de
-              novo — só o que mudou na Centi é regravado.
-            </p>
-            <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
-            <p>“Removidos na Centi” (rodapé) = os que a Centi não traz mais: ficam guardados, fora das somas.</p>
-            <p>
-              O vínculo com a Centi é escolhido em Órgãos e Unidades: o órgão escolhe o seu órgão gestor e a unidade, a sua unidade
-              orçamentária — só os empenhos vinculados são gravados. Você vê os vinculados à unidade escolhida no cabeçalho (na “Geral”, a
-              todas as suas); o vinculado só ao órgão aparece para as unidades daquele órgão.
-            </p>
-          </Ajuda>
-          {recorte && (
-            <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />
-          )}
-        </div>
-      </header>
+        <Ajuda titulo="Empenhos" botao="sm">
+          <p>
+            Cada <strong>card</strong> é uma importação dos empenhos da Centi com a sua própria configuração: o endereço e os parâmetros da
+            integração, os anos, a atualização automática (horário, frequência, dias úteis), as regras da conferência e os vínculos.
+          </p>
+          <p>
+            Os <strong>vínculos</strong> dizem o que entra: quais órgãos gestores, unidades orçamentárias e ações da Centi o card importa e a
+            que órgão ou unidade do cadastro cada um pertence. Só o que um vínculo cobre é gravado.
+          </p>
+          <p>Cada card tem a sua tabela no banco — a aba Empenhos mostra exatamente o que está gravado. Excluir o card exclui os empenhos dele.</p>
+        </Ajuda>
+      </div>
 
-      {!recorte ? (
-        <Callout kind="info">
-          {escopo
-            ? escopoVazio(escopo)
-              ? "Nenhum empenho para a unidade escolhida no cabeçalho."
-              : "Nenhum empenho vinculado à sua unidade foi importado ainda."
-            : "Nenhum empenho importado ainda. Importe em Integrações → APIs da Centi → Empenhos."}
-        </Callout>
+      {cards.length === 0 && !podeCriar ? (
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
+          <IconInbox className="h-10 w-10 text-faint" />
+          <p className="text-sm text-muted">Nenhum card de empenhos ainda.</p>
+        </div>
       ) : (
-        <>
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-6">
-            <StatMini label="Empenhos" value={linhas ? num(r.n) : "…"} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidos na Centi" : undefined} />
-            <StatMini label="Empenhado" value={linhas ? brl(r.empenhado) : "…"} tone="accent" />
-            <StatMini label="Anulado" value={linhas ? brl(r.anulado) : "…"} tone={r.anulado ? "warn" : "default"} />
-            <StatMini label="Liquidado" value={linhas ? brl(r.liquidado) : "…"} />
-            <StatMini label="Pago" value={linhas ? brl(r.pago) : "…"} tone="ok" />
-            <StatMini label="A pagar" value={linhas ? brl(r.aPagar) : "…"} />
-          </div>
-
-          {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => void carregar(recorte, true)} />}
-
-          {linhas == null ? (
-            !erro && <EsqueletoTabela cheia />
-          ) : (
-            <DataTable
-              visao={chaveRecorte(recorte)}
-              columns={COLUNAS}
-              rows={linhas}
-              getKey={(e) => e.id}
-              scrollInterno
-              density="compact"
-              minWidth={3400}
-              ocultasPadrao={OCULTAS}
-              ordemInicial={{ key: "data", dir: "desc" }}
-              onRowClick={setAberto}
-              activeKey={aberto?.id ?? null}
-              onOrdenadas={setVista}
-              edicoes={{ chave: CHAVE_TABELA_EMPENHOS, lista: eds.lista, padroes: eds.padroes, podePublicar, onMudar: (lista, padroes) => setEds({ lista, padroes }) }}
-              exportar={{ nome: `Empenhos ${recorte.ano}${recorte.removidos ? " - removidos" : ""}` }}
-              acoesRodape={
-                ano && ano.removidos > 0 ? (
-                  <Button
-                    size="sm"
-                    variant={recorte.removidos ? "primary" : "secondary"}
-                    aria-pressed={recorte.removidos}
-                    title={recorte.removidos ? "Voltar aos empenhos vigentes" : "Os empenhos que a Centi não traz mais"}
-                    onClick={() => setRecorte({ ano: recorte.ano, removidos: !recorte.removidos })}
-                  >
-                    Removidos na Centi ({num(ano.removidos)})
-                  </Button>
-                ) : undefined
-              }
-              vazio={recorte.removidos ? "Nenhum empenho removido na Centi neste ano." : "Nenhum empenho neste ano."}
-              resumo={(l) => {
-                const s = resumoEmpenhos(l);
-                return `${num(s.n)} ${s.n === 1 ? "empenho" : "empenhos"} · Empenhado ${brl(s.empenhado)} · Pago ${brl(s.pago)}`;
-              }}
-            />
-          )}
-        </>
+        <div className={`grid gap-[var(--gap-block)] ${COLUNAS_ESPACOS}`}>
+          {cards.map((c) => {
+            const e = estadoCard(c, c.lendo);
+            return (
+              <CartaoEspaco
+                key={c.id}
+                href={`/painel/empenhos/${c.id}`}
+                ariaLabel={`Abrir o card ${c.nome}`}
+                capa={
+                  <CapaQuadro quadro={{ cor: c.cor, fundoUrl: null, fundoAjuste: null, fundoGradiente: null }}>
+                    <span className="absolute inset-0 grid place-items-center text-faint" aria-hidden="true">
+                      <IconEmpenho className="h-9 w-9" style={{ color: c.cor }} />
+                    </span>
+                  </CapaQuadro>
+                }
+                sobretitulo={rotuloAnos(c.anos)}
+                selo={
+                  <Badge tone={e.tom} dot vivo={c.lendo}>
+                    {e.rotulo}
+                  </Badge>
+                }
+                nome={c.nome}
+                metricas={[
+                  { rotulo: "Empenhos", valor: num(c.empenhos) },
+                  { rotulo: "Empenhado", valor: brlCompact(c.soma) },
+                  { rotulo: "Vínculos", valor: num(c.vinculos), cor: c.vinculos ? undefined : "var(--warn)" },
+                ]}
+              />
+            );
+          })}
+          {podeCriar && <QuadroNovoCard onClick={() => setNovo(true)} rotulo="Novo card" />}
+        </div>
       )}
 
-      <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Empenho ${aberto.numero}` : "Empenho"} size="lg">
-        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} /> : <div />}
+      <Modal
+        open={novo}
+        onClose={() => !criando && setNovo(false)}
+        bloqueado={criando}
+        size="md"
+        titulo="Novo card de empenhos"
+        rodape={
+          <div className="flex w-full justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setNovo(false)} disabled={criando}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={criar} loading={criando} disabled={!nome.trim()}>
+              Criar
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <TextField denso label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={60} autoFocus placeholder="Ex.: Empenhos da Saúde" />
+          <SelectField
+            denso
+            label="Copiar os vínculos de"
+            value={copiarDe}
+            onChange={(e) => setCopiarDe(e.target.value)}
+            rotuloExtra={
+              <Ajuda titulo="Copiar os vínculos" compacta>
+                O card novo começa com os mesmos vínculos do card escolhido (depois cada um segue o seu). Nenhum = o card começa sem
+                vínculos — escolha na aba Vínculos o que ele importa.
+              </Ajuda>
+            }
+          >
+            <option value="">Nenhum (começar sem vínculos)</option>
+            {cards.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome} ({num(c.vinculos)} vínculos)
+              </option>
+            ))}
+          </SelectField>
+        </div>
       </Modal>
     </div>
   );

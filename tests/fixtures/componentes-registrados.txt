@@ -60,7 +60,6 @@ CatalogoItemDetalhe.tsx
 CatalogoView.tsx
 CelulaExecucao.tsx
 CelulaLista.tsx
-CentiApisAdmin.tsx
 ChartCard.tsx
 ChatAoVivo.tsx
 ChecklistTarefa.tsx
@@ -112,7 +111,12 @@ EdicoesTabela.tsx
 EditorRico.tsx
 EditorVinculoOrcamento.tsx
 EditorVisaoOrcamento.tsx
+EmpenhoCardConfig.tsx
+EmpenhoCardImportacao.tsx
+EmpenhoCardView.tsx
+EmpenhoCardVinculos.tsx
 EmpenhoDetalhe.tsx
+EmpenhosTabela.tsx
 EmpenhosView.tsx
 EnviarAoPca.tsx
 ErroCarga.tsx
