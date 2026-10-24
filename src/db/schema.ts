@@ -2293,6 +2293,11 @@ export const centiLotePassos = sqliteTable(
     soma: real("soma"),
     mensagem: text("mensagem"),
     corpo: text("corpo"),
+    /** O RESULTADO da página, conferido em tempo real com o banco (migração `0147`; NULL nos passos de antes). */
+    resNovos: integer("res_novos"),
+    resAlterados: integer("res_alterados"),
+    resIguais: integer("res_iguais"),
+    resSemVinculo: integer("res_sem_vinculo"),
     em: text("em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
@@ -2438,6 +2443,8 @@ export const centiStagingFora = sqliteTable(
       .notNull()
       .references(() => centiLotes.id, { onDelete: "cascade" }),
     chave: text("chave").notNull(),
+    /** 1 = a chave de um registro IGUAL ao gravado (conferido em tempo real — os dados não ficam no staging, migração `0147`). */
+    igual: integer("igual").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
 );

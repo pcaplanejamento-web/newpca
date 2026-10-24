@@ -1,9 +1,9 @@
 import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotes, centiStagingFora, empenhos, liquidacoes, liquidacoesStaging } from "../db/schema.ts";
+import { centiLotePassos, centiLotes, centiStagingFora, empenhos, liquidacoes, liquidacoesStaging } from "../db/schema.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
-import { MAX_JSON_GUARDA } from "./empenhos-sql.ts";
+import { chavesIguais, MAX_JSON_GUARDA, ultimoPasso } from "./empenhos-sql.ts";
 import { chaveEmpenhoDaLiquidacao, LIMITE_VALOR_LIQUIDACAO, type LinhaLiquidacao } from "./liquidacoes-core.ts";
 
 /**
@@ -90,6 +90,7 @@ const sumiram = (db: Db, loteId: number, card: number, origem: number, ano: numb
     eq(liquidacoes.idOrgaoCenti, idOrgao),
     isNull(liquidacoes.removidoEm),
     notInArray(liquidacoes.chave, chavesVinculadas(db, loteId, origem)),
+    notInArray(liquidacoes.chave, chavesIguais(db, loteId)),
   );
 
 const COMPARADOS = CAMPOS.filter((c) => c !== "chave");
@@ -130,8 +131,48 @@ export async function contagemLiquidacoes(db: Db, loteId: number, card: number, 
     .select({ n: count() })
     .from(liquidacoesStaging)
     .where(and(eq(liquidacoesStaging.loteId, loteId), sql`NOT (${stagingVinculado(origem)})`));
-  const [contados] = await db.select({ n: count() }).from(centiStagingFora).where(eq(centiStagingFora.loteId, loteId));
+  const [contados] = await db.select({ n: count() }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 0)));
   return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: perdeu.n + contados.n };
+}
+
+/**
+ * A CONFERÊNCIA EM TEMPO REAL de uma página de LIQUIDAÇÕES (a mesma das de empenhos — `comandosConferirPagina`): compara
+ * cada liquidação guardada da página com a GRAVADA no card pela régua da promoção (`mudou`, com o empenho da origem e o
+ * leitor), grava o RESULTADO no passo e tira do staging as IGUAIS (fica só a chave).
+ */
+export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number, origem: number, leitor: number, chaves: readonly string[], semVinculo: number) {
+  const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
+  const daPagina = sql`"liquidacoes_staging"."lote_id" = ${loteId} AND "liquidacoes_staging"."chave" IN ${lista}`;
+  const juntos = sql`"liquidacoes_staging" JOIN "liquidacoes" ON "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"`;
+  const difere = mudou(colLiq, colStg, sql`${leitor}`, empenhoDaLinha(origem));
+  return [
+    db
+      .update(centiLotePassos)
+      .set({
+        resNovos: sql`(SELECT COUNT(*) FROM "liquidacoes_staging" WHERE ${daPagina} AND NOT EXISTS (SELECT 1 FROM "liquidacoes" WHERE "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"))`,
+        resAlterados: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND (${difere}))`,
+        resIguais: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND NOT (${difere}))`,
+        resSemVinculo: semVinculo,
+      })
+      .where(eq(centiLotePassos.id, ultimoPasso(loteId))),
+    db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)),
+    db
+      .insert(centiStagingFora)
+      .select(
+        db
+          .select({ loteId: sql<number>`${loteId}`.as("lote_id"), chave: sql<string>`"liquidacoes_staging"."chave"`.as("chave"), igual: sql<number>`1`.as("igual") })
+          .from(juntos)
+          .where(sql`${daPagina} AND NOT (${difere})`) as never,
+      )
+      .onConflictDoNothing(),
+    db.delete(liquidacoesStaging).where(
+      and(
+        eq(liquidacoesStaging.loteId, loteId),
+        sql`${liquidacoesStaging.chave} IN ${lista}`,
+        sql`EXISTS (SELECT 1 FROM "centi_staging_fora" f WHERE f."lote_id" = ${loteId} AND f."chave" = "liquidacoes_staging"."chave" AND f."igual" = 1)`,
+      ),
+    ),
+  ] as const;
 }
 
 const VALORES = ["valor", "valorAnulado", "valorLiquido", "valorPago", "saldo"] as const;

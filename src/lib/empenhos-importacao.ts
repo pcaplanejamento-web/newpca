@@ -5,6 +5,7 @@ import { baixarSeguro } from "./busca-segura";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
 import { chaveEmpenhoDaLiquidacao, corpoLiquidacoes, lerPaginaLiquidacoes } from "./liquidacoes-core";
 import {
+  comandosConferirLiquidacoes,
   comandosGuardarLiquidacoes,
   comandosPromoverLiquidacoes,
   contagemLiquidacoes,
@@ -29,6 +30,7 @@ import {
   lerPaginaEmpenhos,
   motivoValoresSuspeitos,
   type PassoLote,
+  type PassoNovo,
   type Periodo,
   periodosLidos,
   quedaSuspeita,
@@ -42,10 +44,12 @@ import {
   comandoDividirPeriodo,
   comandoRecontarLote,
   comandoRegistrarPasso,
+  comandosConferirPagina,
   comandosFecharLote,
   comandosGuardarFora,
   comandosGuardarPagina,
   comandosPromover,
+  consultaUltimoPasso,
   contagemDaPromocao,
   jaNoLote,
   lidoNoPeriodo,
@@ -124,7 +128,7 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
     const mensagem = falha ?? "Resposta inválida da Centi.";
     const tipo = tipoDoErro(mensagem);
     const metades = tipo === "grande" && usaPeriodo(card.parametros) ? dividirPeriodo(periodo) : null;
-    const passo: Omit<PassoLote, "id" | "em"> = {
+    const passo: PassoNovo = {
       ...base,
       estado: metades ? "dividido" : "erro",
       fimPeriodo: false,
@@ -147,7 +151,7 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
   const novos = lida.linhas.length - (await jaNoLote(db, lote.id, lida.linhas.map((l) => l.chave)));
   const total = totalDoPeriodo(lida, pagina) ?? lido.total;
   const continuar = continuarPeriodo({ recebidos: lido.recebidos + lida.recebidos, paginas: lido.paginas + 1, total }, { recebidos: lida.recebidos, novos });
-  const passo: Omit<PassoLote, "id" | "em"> = {
+  const passo: PassoNovo = {
     ...base,
     estado: "ok",
     fimPeriodo: !continuar,
@@ -167,13 +171,18 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
     // fica só a chave.
     const doCard = await empenhosNoCard(db, card.origemId ?? 0, lida.linhas);
     const tem = (l: (typeof lida.linhas)[number]) => doCard.has(chaveEmpenhoDaLiquidacao(l.orgao, l.numeroEmpenho));
+    const guardadas = lida.linhas.filter(tem);
+    const fora = lida.linhas.filter((l) => !tem(l)).map((l) => l.chave);
     const res = await db.batch([
-      comandoRegistrarPasso(db, lote.id, passo).returning(),
-      ...comandosGuardarLiquidacoes(db, lote.id, pagina, lida.linhas.filter(tem)),
-      ...comandosGuardarFora(db, lote.id, lida.linhas.filter((l) => !tem(l)).map((l) => l.chave)),
+      comandoRegistrarPasso(db, lote.id, passo),
+      ...comandosGuardarLiquidacoes(db, lote.id, pagina, guardadas),
+      ...comandosGuardarFora(db, lote.id, fora),
+      // A CONFERÊNCIA EM TEMPO REAL: o resultado da página no passo; as iguais à gravada saem do staging.
+      ...comandosConferirLiquidacoes(db, lote.id, card.id, card.origemId ?? 0, lote.leitor, guardadas.map((l) => l.chave), fora.length),
       comandoRecontarLote(db, lote.id),
+      consultaUltimoPasso(db, lote.id),
     ] as never);
-    return { passo: paraPasso((res as Linha[][])[0][0]), continuar };
+    return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), continuar };
   }
   // SÓ O VINCULADO ENTRA NO BANCO: o registro que nenhum vínculo do card cobre não é guardado — dele fica só a CHAVE até
   // o fim da importação, para a conferência com a Centi. Na leitura só do catálogo, nenhum.
@@ -183,13 +192,16 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
   // Os órgãos gestores, as unidades orçamentárias e as ações da página entram no CATÁLOGO (a base das escolhas dos vínculos).
   const catalogo = catalogoDasLinhas(lida.linhas);
   const res = await db.batch([
-    comandoRegistrarPasso(db, lote.id, passo).returning(),
+    comandoRegistrarPasso(db, lote.id, passo),
     ...comandosGuardarPagina(db, lote.id, pagina, guardar),
     ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
     ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
+    // A CONFERÊNCIA EM TEMPO REAL (não no catálogo): o resultado da página no passo; os iguais ao gravado saem do staging.
+    ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, guardar.map((l) => l.chave), soContar.length) : []),
     comandoRecontarLote(db, lote.id),
+    consultaUltimoPasso(db, lote.id),
   ] as never);
-  return { passo: paraPasso((res as Linha[][])[0][0]), continuar };
+  return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), continuar };
 }
 
 /** Fecha o lote sem promover (cancelado pela pessoa ou falhou) — a falha conta como a última leitura do card. */

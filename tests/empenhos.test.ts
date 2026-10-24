@@ -10,6 +10,8 @@ import {
   corpoDaPagina,
   dataIso,
   LEITOR_EMPENHOS,
+  resultadoDosPassos,
+  textoResultado,
   lerPaginaEmpenhos,
   linhaEmpenho,
   motivoValoresSuspeitos,
@@ -37,8 +39,11 @@ import {
   MAX_JSON_GUARDA,
   comandoRecontarLote,
   comandoRegistrarPasso,
+  comandosConferirPagina,
   comandosFecharLote,
+  comandosGuardarFora,
   comandosPromover,
+  consultaUltimoPasso,
   contagemDaPromocao,
   jaNoLote,
   lidoNoPeriodo,
@@ -490,4 +495,82 @@ test("empenhos (D1 real): a REGRA do card — apagar o que a Centi não traz mai
   b.raw.exec("DELETE FROM empenho_cards WHERE id = 2");
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos WHERE card_id = 2").get() as { n: number }).n, 0);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM centi_lotes WHERE card_id = 2").get() as { n: number }).n, 0);
+});
+
+/** Uma página lida COMO A ROTA FAZ HOJE: só o vinculado ("PREFEITURA") vai ao staging, a chave do resto ao "fora", e a
+ * CONFERÊNCIA EM TEMPO REAL no mesmo lote — devolve o passo com o resultado. */
+async function guardarConferindo(b: ReturnType<typeof banco>, lote: number, regs: Record<string, unknown>[], pagina = 1, periodo: Periodo = anoInteiro(2026), leitor = 1) {
+  const p = lerPaginaEmpenhos(JSON.stringify(regs), 2026);
+  const novos = p.linhas.length - (await jaNoLote(b.db, lote, p.linhas.map((l) => l.chave)));
+  const guardar = p.linhas.filter((l) => l.orgaoGestor === "PREFEITURA");
+  const fora = p.linhas.filter((l) => l.orgaoGestor !== "PREFEITURA").map((l) => l.chave);
+  const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: true, status: 200, bytes: 10, ms: 5, recebidos: p.recebidos, novos, recusados: 0, repetidos: 0, total: p.linhas.length, soma: p.soma, mensagem: null, corpo: "{}" };
+  const res = (await b.db.batch([
+    comandoRegistrarPasso(b.db, lote, passo),
+    ...comandosGuardarPagina(b.db, lote, pagina, guardar),
+    ...comandosGuardarFora(b.db, lote, fora),
+    ...comandosConferirPagina(b.db, lote, 1, leitor, guardar.map((l) => l.chave), fora.length),
+    comandoRecontarLote(b.db, lote),
+    consultaUltimoPasso(b.db, lote),
+  ] as never)) as Record<string, unknown>[][];
+  const r = res.at(-1)?.[0] ?? {};
+  return { novos: r.resNovos, alterados: r.resAlterados, iguais: r.resIguais, semVinculo: r.resSemVinculo };
+}
+
+test("empenhos (D1 real): CONFERÊNCIA EM TEMPO REAL — o resultado da página; o IGUAL ao gravado não fica no staging", async () => {
+  const b = banco();
+  const n = (q: string) => (b.raw.prepare(q).get() as { n: number }).n;
+  const l1 = b.novoLote();
+  assert.deepEqual(await guardarConferindo(b, l1, [reg("1"), reg("2")]), { novos: 2, alterados: 0, iguais: 0, semVinculo: 0 });
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l1, 1, 2026, 1)) as never);
+  // 2ª importação: o 1 igual, o 2 alterado, o 3 novo e o 9 sem vínculo.
+  const l2 = b.novoLote();
+  assert.deepEqual(await guardarConferindo(b, l2, [reg("1"), reg("2", { ValorEmpenhado: 200 }), reg("3"), reg("9", { OrgaoGestor: "OUTRO" })]), {
+    novos: 1,
+    alterados: 1,
+    iguais: 1,
+    semVinculo: 1,
+  });
+  assert.equal(n(`SELECT COUNT(*) n FROM empenhos_staging WHERE lote_id = ${l2}`), 2, "só o novo e o alterado ocupam o staging");
+  assert.equal(n(`SELECT COUNT(*) n FROM centi_staging_fora WHERE lote_id = ${l2} AND igual = 1`), 1, "do igual, só a chave");
+  const lote = b.raw.prepare(`SELECT unicos, fora FROM centi_lotes WHERE id = ${l2}`).get() as { unicos: number; fora: number };
+  assert.deepEqual({ ...lote }, { unicos: 4, fora: 1 }, "a conferência conta os 4; o igual não é 'sem vínculo'");
+  const c = await contagemDaPromocao(b.db, l2, 1, 2026, 1);
+  assert.deepEqual(c, { inseridos: 1, atualizados: 1, removidos: 0, fora: 1 }, "o igual não some — a chave dele está no lote");
+  await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 1, "marcar", c) as never);
+  assert.equal((b.raw.prepare("SELECT lote_id FROM empenhos WHERE numero = '1'").get() as { lote_id: number }).lote_id, l1, "o igual não foi reescrito");
+  assert.equal(n(`SELECT COUNT(*) n FROM centi_staging_fora WHERE lote_id = ${l2}`), 0, "o lote limpo");
+  // 3ª: só o 2 (igual ao gravado) — o 1 e o 3 sumiram; o 2 não (veio igual: só a chave).
+  const l3 = b.novoLote();
+  assert.deepEqual(await guardarConferindo(b, l3, [reg("2", { ValorEmpenhado: 200 })]), { novos: 0, alterados: 0, iguais: 1, semVinculo: 0 });
+  assert.equal(n(`SELECT COUNT(*) n FROM empenhos_staging WHERE lote_id = ${l3}`), 0);
+  assert.equal((await contagemDaPromocao(b.db, l3, 1, 2026, 1)).removidos, 2);
+});
+
+test("empenhos (D1 real): a chave que veio igual e MUDA numa página seguinte volta ao staging (conta uma vez)", async () => {
+  const b = banco();
+  const l1 = b.novoLote();
+  await guardarConferindo(b, l1, [reg("1")]);
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", await contagemDaPromocao(b.db, l1, 1, 2026, 1)) as never);
+  const l2 = b.novoLote();
+  assert.equal((await guardarConferindo(b, l2, [reg("1")], 1)).iguais, 1);
+  assert.equal((await guardarConferindo(b, l2, [reg("1", { ValorEmpenhado: 300 })], 2)).alterados, 1);
+  const lote = b.raw.prepare(`SELECT unicos FROM centi_lotes WHERE id = ${l2}`).get() as { unicos: number };
+  assert.equal(lote.unicos, 1, "um registro só");
+  assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM centi_staging_fora WHERE lote_id = ${l2}`).get() as { n: number }).n, 0);
+  assert.deepEqual(await contagemDaPromocao(b.db, l2, 1, 2026, 1), { inseridos: 0, atualizados: 1, removidos: 0, fora: 0 });
+});
+
+test("empenhos: o RESULTADO de cada passo e o resultado até agora (a última leitura de cada página)", () => {
+  const p = (pagina: number, r: [number, number, number, number] | null, estado: "ok" | "erro" = "ok") =>
+    ({ inicio: "2026-01-01", fim: "2026-01-07", pagina, estado, resNovos: r?.[0] ?? null, resAlterados: r?.[1] ?? null, resIguais: r?.[2] ?? null, resSemVinculo: r?.[3] ?? null }) as never;
+  assert.equal(textoResultado(p(1, null)), null);
+  assert.equal(textoResultado(p(1, [1, 2, 3, 4])), "1 novos · 2 alterados · 3 iguais · 4 sem vínculo");
+  assert.deepEqual(resultadoDosPassos([p(1, [1, 0, 0, 0]), p(1, [0, 0, 1, 0]), p(2, [2, 1, 0, 1]), p(3, [9, 9, 9, 9], "erro"), p(4, null)]), {
+    resNovos: 2,
+    resAlterados: 1,
+    resIguais: 1,
+    resSemVinculo: 1,
+    paginas: 2,
+  });
 });

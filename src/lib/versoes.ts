@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.210.0",
+    data: "2026-10-24",
+    titulo: "Conferência em tempo real na importação",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "Cada página lida da Centi é conferida com o banco na hora: a nova coluna Resultado dos passos mostra novos · alterados · iguais · sem vínculo, e o topo da importação soma o resultado até agora.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "O registro igual ao gravado não é guardado nem reescrito: dele fica só a chave para a conferência — a importação ocupa espaço só com o que é novo ou mudou.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Liquidações", texto: "A mesma conferência em tempo real nas liquidações, com a coluna Resultado em cada passo.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A coluna “Novos” dos passos passou a se chamar “Únicos no lote” (os registros que a página trouxe pela 1ª vez nesta importação).", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.209.1",
     data: "2026-10-24",
     titulo: "Auditoria das liquidações",

@@ -4616,6 +4616,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     atualização é uma RODADA — um lote por órgão da Centi, um após o outro (`proximoOrgaoDaRodada`, puro e testado: a rodada
     começa pelo 1º órgão na hora do card e continua sem esperar a frequência). A `0146` moveu as liquidações já importadas
     (v1.208.0) para um card novo "<nome> — liquidações" de cada card de empenhos.
+  - **CONFERÊNCIA EM TEMPO REAL (v1.210.0, migração `0147` — `centi_staging_fora.igual`, `centi_lote_passos.res_novos/
+    res_alterados/res_iguais/res_sem_vinculo`):** cada página é comparada com o GRAVADO no MESMO `db.batch` em que é
+    guardada (`comandosConferirPagina` empenhos / `comandosConferirLiquidacoes`, a MESMA régua `mudou` da promoção — campos,
+    vínculo/empenho, removido, leitor): o passo recebe o RESULTADO (novos · alterados · iguais · sem vínculo — coluna
+    **Resultado** dos passos, `ResultadoPagina`; `ResultadoAteAgora` = `resultadoDosPassos`, a última leitura de cada página) e
+    o IGUAL sai do staging — fica só a chave (`igual` = 1), que conta nos únicos/na conferência e entra em `chavesIguais` (o
+    que sumiu exclui). A chave que veio igual e muda numa página seguinte volta ao staging. O `fora` do lote = só os sem
+    vínculo (`igual` = 0). Nada igual ao gravado ocupa espaço nem é reescrito; a conclusão recalcula pelos mesmos dados.
   - **Atualização automática (`empenhos-auto.ts`, gatilho `4-59/5` → `POST /api/integracoes/empenhos/cron`):** por card
     LIGADO (`cardsAtivos`), continua o lote que lê ou, na hora (`cardNaHora`: horário de Brasília, dia útil, frequência
     desde a última leitura), cria o do ano da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); 3 páginas

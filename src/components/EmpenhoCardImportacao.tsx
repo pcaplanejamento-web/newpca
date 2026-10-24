@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { anosDoCard, type CardEmpenho, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
   periodoDoAno,
+  resultadoDosPassos,
+  textoResultado,
   diaBR,
   diasDoPeriodo,
   LEITOR_EMPENHOS,
@@ -504,6 +506,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             <StatMini label={atual.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada"} value={atual.soma != null ? brl(atual.soma) : "—"} hint="Dos registros distintos" />
             <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
           </div>
+          <ResultadoAteAgora passos={passos} />
           <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} onExcluir={rodando || !podeExcluir ? undefined : (ps) => excluirPassos(atual, ps)} />
         </div>
       )}
@@ -578,9 +581,17 @@ function PassosDoLote({
       ),
     },
     { key: "recebidos", header: "Registros", nowrap: true, value: (p) => String(p.recebidos), render: (p) => <span className="tabular-nums">{num(p.recebidos)}</span> },
-    { key: "novos", header: "Novos", nowrap: true, value: (p) => String(p.novos), render: (p) => <span className="tabular-nums">{num(p.novos)}</span> },
+    { key: "novos", header: "Únicos no lote", nowrap: true, value: (p) => String(p.novos), render: (p) => <span className="tabular-nums">{num(p.novos)}</span> },
     { key: "total", header: "Total do período", nowrap: true, total: false, value: (p) => num(p.total), render: (p) => <span className="tabular-nums">{num(p.total)}</span> },
     { key: "soma", header: "Soma", nowrap: true, align: "right", filter: "range", numero: (p) => p.soma, render: (p) => <span className="tabular-nums">{p.soma != null ? brl(p.soma) : "—"}</span> },
+    {
+      key: "resultado",
+      header: "Resultado",
+      align: "left",
+      nowrap: true,
+      value: (p) => textoResultado(p) ?? "—",
+      render: (p) => <ResultadoPagina r={p} />,
+    },
     { key: "bytes", header: "Tamanho", nowrap: true, total: false, value: (p) => (p.bytes ? formatBytes(p.bytes) : "—"), render: (p) => <span className="tabular-nums">{p.bytes ? formatBytes(p.bytes) : "—"}</span> },
     { key: "ms", header: "Tempo", nowrap: true, total: false, value: (p) => tempo(p.ms), render: (p) => <span className="tabular-nums">{tempo(p.ms)}</span> },
     {
@@ -786,6 +797,7 @@ function PassosDoHistorico({
           <StatMini label={lote.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada"} value={lote.soma != null ? brl(lote.soma) : "—"} hint={`Leitor v${lote.leitor}`} />
           <StatMini label="Erros" value={passos ? num(passos.filter((p) => p.estado === "erro").length) : "…"} />
         </div>
+        {passos && <ResultadoAteAgora passos={passos} />}
         {lote.mensagem && <Callout kind={lote.estado === "falhou" ? "danger" : "warn"}>{lote.mensagem}</Callout>}
         {falha ? (
           <ErroCarga msg={falha} onTentar={carregar} />
@@ -810,5 +822,36 @@ function PassosDoHistorico({
         )}
       </div>
     </Modal>
+  );
+}
+
+/** A célula RESULTADO de um passo: a conferência da página com o banco, em tempo real (novos e alterados serão gravados;
+ * iguais e sem vínculo, não). */
+function ResultadoPagina({ r }: { r: Pick<PassoLote, "resNovos" | "resAlterados" | "resIguais" | "resSemVinculo"> }) {
+  if (textoResultado(r) == null) return <span className="text-muted">—</span>;
+  const parte = (n: number | null, rotulo: string, cor?: string) => (
+    <span className={(n ?? 0) > 0 && cor ? cor : "text-muted"}>
+      {num(n ?? 0)} {rotulo}
+    </span>
+  );
+  return (
+    <span className="inline-flex gap-1.5 tabular-nums" title="Conferido com o banco nesta leitura: novos e alterados vão ser gravados; iguais e sem vínculo, não.">
+      {parte(r.resNovos, "novos", "text-[color:var(--ok)]")}·{parte(r.resAlterados, "alterados", "text-[color:var(--warn)]")}·{parte(r.resIguais, "iguais")}·
+      {parte(r.resSemVinculo, "sem vínculo")}
+    </span>
+  );
+}
+
+/** O RESULTADO ATÉ AGORA do lote (a soma dos passos lidos), em tempo real — o que a conclusão vai gravar. */
+function ResultadoAteAgora({ passos }: { passos: readonly PassoLote[] }) {
+  const r = resultadoDosPassos(passos);
+  if (!r.paginas) return null;
+  return (
+    <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+      <StatMini label="Novos" value={num(r.resNovos)} tone={r.resNovos ? "ok" : "default"} hint="Ainda não estão no banco — serão gravados" />
+      <StatMini label="Alterados" value={num(r.resAlterados)} tone={r.resAlterados ? "warn" : "default"} hint="Mudaram na Centi — serão regravados" />
+      <StatMini label="Iguais" value={num(r.resIguais)} hint="Iguais ao gravado — nada é escrito" />
+      <StatMini label="Sem vínculo" value={num(r.resSemVinculo)} hint="Nenhum vínculo cobre — não gravados" />
+    </div>
   );
 }

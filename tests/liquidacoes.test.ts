@@ -3,9 +3,9 @@ import test from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { conferirLote, continuarPeriodo, totalDoPeriodo } from "../src/lib/empenhos-core.ts";
-import { comandoRecontarLote, comandoRegistrarPasso, comandosExcluirLote, comandosFecharLote, comandosGuardarFora, jaNoLote } from "../src/lib/empenhos-sql.ts";
+import { comandoRecontarLote, comandoRegistrarPasso, comandosExcluirLote, comandosFecharLote, comandosGuardarFora, consultaUltimoPasso, jaNoLote } from "../src/lib/empenhos-sql.ts";
 import { chaveEmpenhoDaLiquidacao, corpoLiquidacoes, lerPaginaLiquidacoes, linhaLiquidacao, orgaosCentiDoCard, proximoOrgaoDaRodada } from "../src/lib/liquidacoes-core.ts";
-import { comandosGuardarLiquidacoes, comandosPromoverLiquidacoes, contagemLiquidacoes, empenhosNoCard, liquidacoesSuspeitas, ultimaLiquidacaoPromovida } from "../src/lib/liquidacoes-sql.ts";
+import { comandosConferirLiquidacoes, comandosGuardarLiquidacoes, comandosPromoverLiquidacoes, contagemLiquidacoes, empenhosNoCard, liquidacoesSuspeitas, ultimaLiquidacaoPromovida } from "../src/lib/liquidacoes-sql.ts";
 import { anosLiquidacoes, COLUNAS_LIQUIDACAO, textoLiquidacoes } from "../src/lib/liquidacoes-tela.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
@@ -215,4 +215,20 @@ test("liquidações: a RODADA da atualização automática — um órgão da Cen
   // Uma rodada NOVA do 1º órgão (outro ano): os lotes antigos dos demais não contam.
   assert.deepEqual(proximoOrgaoDaRodada([{ id: 13, ano: 2024, idOrgaoCenti: 2 }, { id: 12, ano: 2025, idOrgaoCenti: 9 }, ...meio], orgaos), { ano: 2024, idOrgao: 5 });
   assert.equal(proximoOrgaoDaRodada([{ id: 1, ano: 2025, idOrgaoCenti: 2 }], [2]), null, "um órgão só: a rodada é ele");
+});
+
+test("liquidações (D1 real): CONFERÊNCIA EM TEMPO REAL — a igual à gravada sai do staging e não some na conclusão", async () => {
+  const b = banco();
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "9"), liq(2, "10")]);
+  await promover(b, l1);
+  const l2 = b.novoLote();
+  await guardar(b, l2, [liq(1, "9"), liq(2, "10", { ValorPago: "1.590,00" }), liq(3, "11")]);
+  const res = (await b.db.batch([...comandosConferirLiquidacoes(b.db, l2, LIQ, ORIGEM, 1, ["1", "2"], 1), comandoRecontarLote(b.db, l2), consultaUltimoPasso(b.db, l2)] as never)) as Record<string, unknown>[][];
+  const p = res.at(-1)?.[0] ?? {};
+  assert.deepEqual([p.resNovos, p.resAlterados, p.resIguais, p.resSemVinculo], [0, 1, 1, 1]);
+  assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM liquidacoes_staging WHERE lote_id = ${l2}`).get() as { n: number }).n, 1, "só a alterada");
+  assert.deepEqual({ ...(b.raw.prepare(`SELECT unicos, fora FROM centi_lotes WHERE id = ${l2}`).get() as object) }, { unicos: 3, fora: 1 });
+  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 0, fora: 1 });
+  assert.equal((b.raw.prepare("SELECT lote_id FROM liquidacoes WHERE chave = '1'").get() as { lote_id: number }).lote_id, l1, "a igual não foi reescrita");
 });

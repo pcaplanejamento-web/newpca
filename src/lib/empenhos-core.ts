@@ -325,8 +325,41 @@ export type PassoLote = {
   soma: number | null;
   mensagem: string | null;
   corpo: string | null;
+  /** O RESULTADO da página, conferido em tempo real com o banco: novos · alterados · iguais (não ocupam o staging) · sem
+   * vínculo (não gravados). null = passo de antes da conferência em tempo real ou que não leu registros. */
+  resNovos: number | null;
+  resAlterados: number | null;
+  resIguais: number | null;
+  resSemVinculo: number | null;
   em: string;
 };
+
+/** O passo como a leitura o registra (o RESULTADO vem da conferência no banco, no mesmo lote). */
+export type PassoNovo = Omit<PassoLote, "id" | "em" | "resNovos" | "resAlterados" | "resIguais" | "resSemVinculo">;
+
+/** O resultado de uma página (ou a soma das lidas): o texto da coluna Resultado. null = sem resultado. */
+export function textoResultado(r: { resNovos: number | null; resAlterados: number | null; resIguais: number | null; resSemVinculo: number | null }): string | null {
+  if (r.resNovos == null && r.resAlterados == null && r.resIguais == null && r.resSemVinculo == null) return null;
+  const n = (x: number | null) => (x ?? 0).toLocaleString("pt-BR");
+  return `${n(r.resNovos)} novos · ${n(r.resAlterados)} alterados · ${n(r.resIguais)} iguais · ${n(r.resSemVinculo)} sem vínculo`;
+}
+
+/**
+ * O RESULTADO ATÉ AGORA do lote, pela soma dos passos lidos (a última leitura de cada página — a mesma régua da soma do
+ * lote). Os registros que aparecem em dois períodos contam nos dois.
+ */
+export function resultadoDosPassos(passos: readonly PassoLote[]): { resNovos: number; resAlterados: number; resIguais: number; resSemVinculo: number; paginas: number } {
+  const ultimo = new Map<string, PassoLote>();
+  for (const p of passos) if (p.estado === "ok" && p.resNovos != null) ultimo.set(`${p.inicio}|${p.fim}|${p.pagina}`, p);
+  const r = { resNovos: 0, resAlterados: 0, resIguais: 0, resSemVinculo: 0, paginas: ultimo.size };
+  for (const p of ultimo.values()) {
+    r.resNovos += p.resNovos ?? 0;
+    r.resAlterados += p.resAlterados ?? 0;
+    r.resIguais += p.resIguais ?? 0;
+    r.resSemVinculo += p.resSemVinculo ?? 0;
+  }
+  return r;
+}
 
 export const ROTULO_ESTADO_PASSO: Record<EstadoPasso, { rotulo: string; tom: "emerald" | "red" | "amber" }> = {
   ok: { rotulo: "Lida", tom: "emerald" },
