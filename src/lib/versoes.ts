@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.208.0",
+    data: "2026-10-24",
+    titulo: "Liquidações nos cards de empenhos",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "Nova aba Liquidações em cada card: as liquidações dos empenhos do card, por ano, com valor, anulado, líquido, pago e saldo, filtros e exportação.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "Importação → Empenhos | Liquidações: as liquidações são lidas da Centi por órgão (o ID na Centi do órgão), semana a semana, com a mesma conferência, regras de queda e histórico dos empenhos.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Só é gravada a liquidação cujo empenho está no card; ela segue a unidade do empenho e sai junto com ele.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Excluir importações do histórico passou a contar corretamente quantas foram excluídas.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.207.4",
     data: "2026-10-24",
     titulo: "Empenhos: sempre o ano inteiro",

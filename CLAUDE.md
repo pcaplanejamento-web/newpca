@@ -4584,6 +4584,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Sem rolar a página (v1.207.2):** no desktop o conteúdo de cada aba (`AteOFim`, `EmpenhoCardView`) vai até o fim do display (`useAlturaTela`) e rola por dentro; cabeçalho e abas fixos (v1.207.3).
   - **Card da lista = `CartaoFinanceiro` (v1.207.0, `OrcamentoCard.tsx` — a moldura do card do orçamento, também usada pelo `OrcamentoCard`; `SeloAno`):** empenhado líquido, % pago, composição e abrangência; `listarCards` agrega a execução de todos os cards numa consulta (`GRADE_ORCAMENTOS`).
   - **Ano ÚNICO e período real (v1.206.1):** `useAnoDoCard` (`anoDoCard.ts`, no aparelho por card) = o mesmo ano na Importação, no Testar e no "Buscar na Centi"; `periodoDoAno(ano)` (`empenhos-core.ts`) = SEMPRE o ano inteiro, 01/01 a 31/12, também no atual (v1.207.4) — usado pelas lacunas/períodos a pedir e pela prévia do teste (`previaPedido`, o ano inteiro; até 40 MB/60 s); `hojeIso` é a régua ÚNICA do "hoje" (também na automática) e a conclusão usa o dia do INÍCIO do lote; `fecharParcial` é o fechamento parcial único (manual e automática). Vínculos: a coluna Ações = o `Badge` dos vínculos do orçamento; a edição das ações fica no banner.
+  - **LIQUIDAÇÕES (v1.208.0, migração `0145` — `centi_lotes.id_orgao_centi`, tabelas `liquidacoes_staging` + `liquidacoes`
+    [`empenho_id` cascade, único card + chave = o Id da Centi]):** a MESMA lógica dos empenhos (lote, passos, staging,
+    conferência, queda, regra dos removidos), com as particularidades da API `getliquidacoes` (núcleo puro
+    `liquidacoes-core.ts`): exige `idOrgao` e não pagina — o lote tem `modo` 'liquidacoes' + o órgão da Centi (um lote por
+    órgão: o "ID na Centi" — `orgaos.entidade_centi` — dos órgãos de DESTINO dos vínculos, `orgaosLiquidacao`), a resposta
+    de um período é o período inteiro (total = distintos + recusados); não traz unidade nem ação, só o número do EMPENHO →
+    só é guardada a liquidação cujo empenho (órgão gestor + número, de qualquer ano — restos a pagar) está no card
+    (`empenhosNoCard`), e o vínculo é sempre o do empenho. Builders `liquidacoes-sql.ts` (testados no D1 real —
+    `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
+    `modo`. Tela: Importação com `Segmented` Empenhos | Liquidações (os órgãos um após o outro) e a aba **Liquidações**
+    (`EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes`, as tuplas montadas pelo banco —
+    `liquidacoes-tela.ts`; escopo = o do empenho). A atualização automática segue só com os empenhos.
   - **Atualização automática (`empenhos-auto.ts`, gatilho `4-59/5` → `POST /api/integracoes/empenhos/cron`):** por card
     LIGADO (`cardsAtivos`), continua o lote que lê ou, na hora (`cardNaHora`: horário de Brasília, dia útil, frequência
     desde a última leitura), cria o do ano da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); 3 páginas

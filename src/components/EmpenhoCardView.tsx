@@ -15,7 +15,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { IconCheck, IconChevronLeft, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
-export type AbaCard = "empenhos" | "vinculos" | "importacao" | "configuracao";
+export type AbaCard = "empenhos" | "liquidacoes" | "vinculos" | "importacao" | "configuracao";
 
 /**
  * O ESPAÇO de um CARD de empenhos (`/painel/empenhos/[id]`) — no padrão da tela do orçamento: UMA linha de cabeçalho
@@ -77,6 +77,7 @@ export function EmpenhoCardView({
   const opcoes = (
     [
       { value: "empenhos", label: "Empenhos" },
+      { value: "liquidacoes", label: "Liquidações", curto: "Liquid." },
       { value: "vinculos", label: "Vínculos" },
       { value: "importacao", label: "Importação", curto: "Importar" },
       { value: "configuracao", label: "Configuração", curto: "Config." },

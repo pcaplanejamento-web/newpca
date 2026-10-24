@@ -2259,6 +2259,8 @@ export const centiLotes = sqliteTable(
     fora: integer("fora"),
     /** O CARD da importação (migração `0143`). */
     cardId: integer("card_id").references(() => empenhoCards.id, { onDelete: "cascade" }),
+    /** O ÓRGÃO da Centi pedido (migração `0145`) — só nas LIQUIDAÇÕES (`modo` 'liquidacoes': a API exige o órgão). */
+    idOrgaoCenti: integer("id_orgao_centi"),
   },
   (t) => [index("centi_lotes_card_ano_idx").on(t.cardId, t.ano, t.id)],
 );
@@ -2356,6 +2358,68 @@ export const empenhos = sqliteTable(
     index("empenhos_card_ano_idx").on(t.cardId, t.ano, t.removidoEm),
     index("empenhos_unidade_idx").on(t.orgaoGestor, t.unidadeOrcamentaria),
     index("empenhos_vinculo_idx").on(t.orgaoId, t.reparticaoId),
+    index("empenhos_card_numero_idx").on(t.cardId, t.orgaoGestor, t.numero),
+  ],
+);
+
+/** As colunas de uma LIQUIDAÇÃO (as MESMAS no staging e na tabela final — ver `liquidacoes-core.ts`). */
+const colunasLiquidacao = () => ({
+  chave: text("chave").notNull(),
+  ano: integer("ano").notNull(),
+  srcId: integer("src_id"),
+  numero: text("numero"),
+  data: text("data"),
+  numeroEmpenho: text("numero_empenho").notNull(),
+  orgao: text("orgao").notNull().default(""),
+  credor: text("credor"),
+  cpfCnpj: text("cpf_cnpj"),
+  historico: text("historico"),
+  valor: real("valor").notNull().default(0),
+  valorAnulado: real("valor_anulado").notNull().default(0),
+  valorLiquido: real("valor_liquido").notNull().default(0),
+  valorPago: real("valor_pago").notNull().default(0),
+  saldo: real("saldo").notNull().default(0),
+});
+
+/** As liquidações lidas de um lote, antes da conferência (migração `0145`; só as de empenho que está no card). */
+export const liquidacoesStaging = sqliteTable(
+  "liquidacoes_staging",
+  {
+    loteId: integer("lote_id")
+      .notNull()
+      .references(() => centiLotes.id, { onDelete: "cascade" }),
+    pagina: integer("pagina").notNull(),
+    ...colunasLiquidacao(),
+  },
+  (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
+);
+
+/**
+ * As LIQUIDAÇÕES da Centi (migração `0145`) de um CARD — chave = o Id da Centi, única por card. Só existe com o EMPENHO
+ * no card (`empenho_id` cascade); o vínculo (órgão/unidade do cadastro) é o do empenho.
+ */
+export const liquidacoes = sqliteTable(
+  "liquidacoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ...colunasLiquidacao(),
+    idOrgaoCenti: integer("id_orgao_centi").notNull(),
+    empenhoId: integer("empenho_id")
+      .notNull()
+      .references(() => empenhos.id, { onDelete: "cascade" }),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => empenhoCards.id, { onDelete: "cascade" }),
+    loteId: integer("lote_id").references(() => centiLotes.id, { onDelete: "set null" }),
+    removidoEm: text("removido_em"),
+    leitor: integer("leitor").notNull().default(0),
+    criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("liquidacoes_card_chave_uq").on(t.cardId, t.chave),
+    index("liquidacoes_card_ano_idx").on(t.cardId, t.ano, t.idOrgaoCenti, t.removidoEm),
+    index("liquidacoes_empenho_idx").on(t.empenhoId),
   ],
 );
 

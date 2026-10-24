@@ -29,6 +29,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
+import { Segmented } from "./Segmented";
 import { CelulaTexto } from "./CelulaLista";
 import { IconDownload, IconTrash } from "./icons";
 import { Modal } from "./Modal";
@@ -51,6 +52,8 @@ async function excluirTentativas(cardId: number, corpo: { lotes: number[] } | { 
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
 /** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
 const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
+/** O tipo da importação no histórico. */
+const rotuloTipo = (l: LoteCenti) => (l.modo === "liquidacoes" ? `Liquidações · órgão ${l.idOrgaoCenti ?? "?"}` : l.modo === "unidades" ? "Catálogo" : "Empenhos");
 const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
 
 /** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
@@ -92,6 +95,11 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
   const [desatualizados, setDesatualizados] = useState<{ ano: number; n: number }[]>([]);
+  /** O que importar: os EMPENHOS ou as LIQUIDAÇÕES (um lote por órgão da Centi — a API exige o órgão). */
+  const [tipo, setTipo] = useState<"empenhos" | "liquidacoes">("empenhos");
+  const [orgaosLiq, setOrgaosLiq] = useState<{ orgaos: { id: number; nome: string }[]; semId: string[] } | null>(null);
+  /** O órgão da Centi do lote em curso (liquidações) — "2 de 5" na barra. */
+  const [serie, setSerie] = useState<{ nome: string; i: number; n: number } | null>(null);
   const parar = useRef(false);
   /** O token DESTA aba — o servidor deixa uma aba por vez conduzir o lote. */
   const condutor = useRef("");
@@ -102,8 +110,15 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   const carregar = useCallback(async () => {
     try {
       const r = await fetch(`/api/empenhos/cards/${api.id}/importar`);
-      const j = (await r.json()) as { ok?: boolean; lotes?: LoteCenti[]; emAndamento?: LoteCenti | null; desatualizados?: { ano: number; n: number }[] };
+      const j = (await r.json()) as {
+        ok?: boolean;
+        lotes?: LoteCenti[];
+        emAndamento?: LoteCenti | null;
+        desatualizados?: { ano: number; n: number }[];
+        orgaosLiquidacao?: { orgaos: { id: number; nome: string }[]; semId: string[] };
+      };
       if (j.ok) {
+        setOrgaosLiq(j.orgaosLiquidacao ?? null);
         setLotes(j.lotes ?? []);
         setEmAndamento(j.emAndamento ?? null);
         setDesatualizados(j.desatualizados ?? []);
@@ -125,15 +140,33 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
 
   const anotar = (p: PassoLote) => setPassos((l) => [...l, p]);
 
-  async function importar(retomar: LoteCenti | null) {
+  /**
+   * As LIQUIDAÇÕES do ano: um lote por órgão da Centi, um depois do outro (a mesma leitura e conferência dos empenhos).
+   * Para no 1º que não foi gravado (interrompido, falhou ou parcial).
+   */
+  async function importarLiquidacoes() {
+    const lista = orgaosLiq?.orgaos ?? [];
     parar.current = false;
+    for (let i = 0; i < lista.length && !parar.current; i++) {
+      setSerie({ nome: lista[i].nome, i: i + 1, n: lista.length });
+      const ok = await importar(null, lista[i]);
+      if (!ok) break;
+    }
+    setSerie(null);
+  }
+
+  /** Lê UM lote (empenhos, ou as liquidações de um órgão da Centi). true = gravado. */
+  async function importar(retomar: LoteCenti | null, orgao?: { id: number; nome: string }): Promise<boolean> {
+    if (!orgao) parar.current = false;
     condutor.current = crypto.randomUUID();
     setRodando(true);
     setPassos([]);
+    const liq = orgao != null || retomar?.modo === "liquidacoes";
+    const deQuem = orgao ? ` de ${orgao.nome}` : retomar?.idOrgaoCenti ? ` do órgão ${retomar.idOrgaoCenti} da Centi` : "";
     let lote = retomar;
     let onde = "";
     try {
-      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current })).lote;
+      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current, ...(orgao ? { modo: "liquidacoes", idOrgao: orgao.id } : {}) })).lote;
       setAtual(lote);
       const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
       setPassos(anteriores);
@@ -154,8 +187,8 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       });
       if (parar.current) {
         await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida por quem importava." });
-        toast.info("Importação interrompida — nada foi gravado nos empenhos do card.");
-        return;
+        toast.info("Importação interrompida — nada foi gravado.");
+        return false;
       }
       let conclusao = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(api.id, { acao: "concluir", lote: lote.id, condutor: condutor.current });
       if (conclusao.queda) {
@@ -163,8 +196,8 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         const seguir = await confirmar({ titulo: "Os números caíram — gravar mesmo assim?", texto: `${conclusao.queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar importação", perigo: true });
         if (!seguir) {
           await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: `Cancelada: ${conclusao.queda}`.slice(0, 300) });
-          toast.info("Importação cancelada — os empenhos ficam como estavam.");
-          return;
+          toast.info("Importação cancelada — nada mudou.");
+          return false;
         }
         conclusao = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(api.id, { acao: "concluir", lote: lote.id, condutor: condutor.current, aceitarQueda: true });
       }
@@ -172,12 +205,16 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       setAtual(fim);
       if (fim.estado === "unidades") {
         toast.success(fim.mensagem ?? "Catálogo da Centi atualizado.");
+      } else if (fim.estado === "promovido" && liq) {
+        toast.success(`Liquidações ${fim.ano}${deQuem} importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} de empenho fora do card (não gravadas)` : ""}.`);
+        router.refresh();
       } else if (fim.estado === "promovido") {
         toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem vínculo no card (não gravados)` : ""}.`);
         router.refresh();
       } else {
-        toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
+        toast.error(`Importação parcial${deQuem} — nada foi gravado. ${fim.mensagem ?? ""}`);
       }
+      return fim.estado === "promovido" || fim.estado === "unidades";
     } catch (e) {
       setAgora(null);
       const msg = e instanceof Error ? e.message : "Falha na importação.";
@@ -186,13 +223,14 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         toast.error(msg);
       } else if (lote && parar.current) {
         await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida por quem importava." }).catch(() => {});
-        toast.info("Importação interrompida — nada foi gravado nos empenhos do card.");
+        toast.info("Importação interrompida — nada foi gravado.");
       } else if (lote) {
         await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, falhou: true, motivo: `${onde ? `${onde}: ` : ""}${msg}`.slice(0, 300) }).catch(() => {});
-        toast.error(`A importação falhou${onde ? ` em ${onde}` : ""}: ${msg} Nada foi gravado nos empenhos — veja os passos.`);
+        toast.error(`A importação${deQuem} falhou${onde ? ` em ${onde}` : ""}: ${msg} Nada foi gravado — veja os passos.`);
       } else {
         toast.error(msg);
       }
+      return false;
     } finally {
       setRodando(false);
       void carregar();
@@ -315,7 +353,14 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
           <CelulaTexto texto={l.mensagem ?? (l.estado === "lendo" ? "Em andamento" : "—")} />
         ),
     },
-    { key: "soma", header: "Soma empenhada", nowrap: true, align: "right", filter: "range", numero: (l) => l.soma, render: (l) => <span className="tabular-nums">{l.soma != null ? brl(l.soma) : "—"}</span> },
+    {
+      key: "tipo",
+      header: "Tipo",
+      nowrap: true,
+      value: (l) => rotuloTipo(l),
+      render: (l) => <Badge tone={l.modo === "liquidacoes" ? "violet" : l.modo === "unidades" ? "slate" : "blue"}>{rotuloTipo(l)}</Badge>,
+    },
+    { key: "soma", header: "Soma", nowrap: true, align: "right", filter: "range", numero: (l) => l.soma, render: (l) => <span className="tabular-nums">{l.soma != null ? brl(l.soma) : "—"}</span> },
     { key: "leitor", header: "Leitor", nowrap: true, total: false, value: (l) => String(l.leitor), render: (l) => (l.leitor < LEITOR_EMPENHOS ? <Badge tone="amber">v{l.leitor} (anterior)</Badge> : <span className="tabular-nums text-muted">v{l.leitor}</span>) },
     { key: "quem", header: "Por", nowrap: true, value: (l) => l.iniciadoPor, render: (l) => <span className="text-muted">{l.iniciadoPor}</span> },
   ];
@@ -323,6 +368,15 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   return (
     <>
       <FerramentasAba>
+        <Segmented
+          ariaLabel="O que importar"
+          value={tipo}
+          onChange={(v) => setTipo(v as "empenhos" | "liquidacoes")}
+          options={[
+            { value: "empenhos", label: "Empenhos", dica: "Os empenhos do card" },
+            { value: "liquidacoes", label: "Liquidações", curto: "Liquid.", dica: "As liquidações dos empenhos do card — uma importação por órgão da Centi" },
+          ]}
+        />
         <SelectField compacto label="Ano" value={String(ano)} onChange={(e) => setAno(Number(e.target.value))} disabled={rodando}>
           {anos.map((y) => (
             <option key={y} value={y}>
@@ -335,8 +389,23 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             Interromper
           </Button>
         ) : (
-          <Button size="sm" onClick={() => void importar(null)} disabled={!!emAndamento || !anos.length || bloqueado} title={bloqueado ? "Configure o card antes de importar (Configuração e Vínculos)" : emAndamento ? `Há uma importação de ${emAndamento.ano} em andamento — continue ou cancele antes (aviso abaixo)` : undefined} icon={<IconDownload className="h-4 w-4" />}>
-            Importar {ano}
+          <Button
+            size="sm"
+            onClick={() => void (tipo === "liquidacoes" ? importarLiquidacoes() : importar(null))}
+            disabled={!!emAndamento || !anos.length || bloqueado || (tipo === "liquidacoes" && !orgaosLiq?.orgaos.length)}
+            title={
+              bloqueado
+                ? "Configure o card antes de importar (Configuração e Vínculos)"
+                : emAndamento
+                  ? `Há uma importação de ${emAndamento.ano} em andamento — continue ou cancele antes (aviso abaixo)`
+                  : tipo === "liquidacoes" && !orgaosLiq?.orgaos.length
+                    ? "Cadastre o ID na Centi dos órgãos de destino dos vínculos (Órgãos e Unidades)"
+                    : undefined
+            }
+            icon={<IconDownload className="h-4 w-4" />}
+          >
+            Importar {tipo === "liquidacoes" ? "liquidações " : ""}
+            {ano}
           </Button>
         )}
         <Ajuda titulo="Importação" botao="sm">
@@ -359,9 +428,23 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             Só os empenhos que os <strong>vínculos</strong> do card cobrem são gravados; os outros são lidos e conferidos, mas
             descartados. Uma <strong>aba por vez</strong> conduz a importação.
           </p>
+          <p>
+            <strong>Liquidações:</strong> a Centi as entrega por <strong>órgão</strong> (o “ID na Centi” cadastrado em Órgãos e
+            Unidades, dos órgãos de destino dos vínculos) e sem páginas — cada órgão vira uma importação, uma depois da outra,
+            lida semana a semana. Só é gravada a liquidação cujo <strong>empenho</strong> está no card (importe os empenhos
+            antes, inclusive os de anos anteriores, para os restos a pagar); ela segue o vínculo do empenho.
+          </p>
           <p>Toque numa importação do histórico para ver os passos dela; marque e use Excluir para tirá-las do banco (os empenhos gravados continuam).</p>
         </Ajuda>
       </FerramentasAba>
+      {tipo === "liquidacoes" && orgaosLiq && (
+        <Callout kind={orgaosLiq.orgaos.length ? "info" : "warn"}>
+          {orgaosLiq.orgaos.length
+            ? `Liquidações por órgão da Centi: ${orgaosLiq.orgaos.map((o) => `${o.id} (${o.nome})`).join(", ")}.`
+            : "Nenhum órgão de destino dos vínculos tem o ID na Centi cadastrado — as liquidações não podem ser pedidas."}
+          {orgaosLiq.semId.length > 0 && ` Sem o ID na Centi (não lidos): ${orgaosLiq.semId.join(", ")} — cadastre em Órgãos e Unidades.`}
+        </Callout>
+      )}
       {!comPeriodo && (
         <Callout kind="warn">
           Os parâmetros não usam <code>{"{inicio}"}</code> e <code>{"{fim}"}</code>: o ano só pode ser lido inteiro, e a Centi
@@ -400,6 +483,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       )}
       {(rodando || passos.length > 0) && atual && (
         <div className="space-y-3">
+          {rodando && serie && <p className="text-[13px] text-muted">Liquidações de {serie.nome} — órgão {serie.i} de {serie.n}</p>}
           {rodando && (
             <Progress
               value={fracaoDoAno(atual.ano, passos) * 100}
@@ -414,7 +498,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
             <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />
             <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />
-            <StatMini label="Soma empenhada" value={atual.soma != null ? brl(atual.soma) : "—"} hint="Dos registros distintos" />
+            <StatMini label={atual.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada"} value={atual.soma != null ? brl(atual.soma) : "—"} hint="Dos registros distintos" />
             <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
           </div>
           <PassosDoLote passos={passos} nome={`Passos ${api.nome} ${atual.ano}`} onExcluir={rodando || !podeExcluir ? undefined : (ps) => excluirPassos(atual, ps)} />
@@ -493,7 +577,7 @@ function PassosDoLote({
     { key: "recebidos", header: "Registros", nowrap: true, value: (p) => String(p.recebidos), render: (p) => <span className="tabular-nums">{num(p.recebidos)}</span> },
     { key: "novos", header: "Novos", nowrap: true, value: (p) => String(p.novos), render: (p) => <span className="tabular-nums">{num(p.novos)}</span> },
     { key: "total", header: "Total do período", nowrap: true, total: false, value: (p) => num(p.total), render: (p) => <span className="tabular-nums">{num(p.total)}</span> },
-    { key: "soma", header: "Soma empenhada", nowrap: true, align: "right", filter: "range", numero: (p) => p.soma, render: (p) => <span className="tabular-nums">{p.soma != null ? brl(p.soma) : "—"}</span> },
+    { key: "soma", header: "Soma", nowrap: true, align: "right", filter: "range", numero: (p) => p.soma, render: (p) => <span className="tabular-nums">{p.soma != null ? brl(p.soma) : "—"}</span> },
     { key: "bytes", header: "Tamanho", nowrap: true, total: false, value: (p) => (p.bytes ? formatBytes(p.bytes) : "—"), render: (p) => <span className="tabular-nums">{p.bytes ? formatBytes(p.bytes) : "—"}</span> },
     { key: "ms", header: "Tempo", nowrap: true, total: false, value: (p) => tempo(p.ms), render: (p) => <span className="tabular-nums">{tempo(p.ms)}</span> },
     {
@@ -696,7 +780,7 @@ function PassosDoHistorico({
           <StatMini label="Situação" value={est?.rotulo ?? lote.estado} />
           <StatMini label="Conferência" value={`${num(lote.unicos + lote.recusados)} de ${lote.totalInformado != null ? num(lote.totalInformado) : "?"}`} />
           <StatMini label="Páginas lidas" value={num(lote.paginas)} />
-          <StatMini label="Soma empenhada" value={lote.soma != null ? brl(lote.soma) : "—"} hint={`Leitor v${lote.leitor}`} />
+          <StatMini label={lote.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada"} value={lote.soma != null ? brl(lote.soma) : "—"} hint={`Leitor v${lote.leitor}`} />
           <StatMini label="Erros" value={passos ? num(passos.filter((p) => p.estado === "erro").length) : "…"} />
         </div>
         {lote.mensagem && <Callout kind={lote.estado === "falhou" ? "danger" : "warn"}>{lote.mensagem}</Callout>}

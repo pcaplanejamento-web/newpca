@@ -55,7 +55,7 @@ const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
 /** A IMPORTAÇÃO MANUAL de um card (passo a passo, conduzida pela tela): iniciar um lote (`modo` "unidades" = só o
  * catálogo da Centi), ler UMA página, concluir (conferir e promover) ou cancelar. */
 export const importarCardSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades"]).optional() }),
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes"]).optional(), idOrgao: z.number().int().min(1).max(9999).optional() }),
   z.strictObject({
     acao: z.literal("pagina"),
     lote: z.number().int().positive(),

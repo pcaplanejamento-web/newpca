@@ -2,7 +2,7 @@ import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { anosDoCard, pendenciasDoCard } from "@/lib/empenho-cards-core";
-import { getCard, vinculosDoCard } from "@/lib/empenho-cards";
+import { getCard, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
@@ -33,7 +33,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.card.id), emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
+  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: await orgaosLiquidacao(a.card.id), emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
 }
 
 /**
@@ -61,7 +61,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
-    return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo) });
+    // LIQUIDAÇÕES: um lote por ÓRGÃO da Centi — só os dos destinos dos vínculos (o "ID na Centi" do órgão).
+    if (corpo.modo === "liquidacoes") {
+      const { orgaos } = await orgaosLiquidacao(card.id);
+      if (!corpo.idOrgao || !orgaos.some((o) => o.id === corpo.idOrgao)) return erro("Órgão da Centi fora dos órgãos dos vínculos deste card (o ID na Centi do órgão).", 422);
+    }
+    return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, corpo.modo === "liquidacoes" ? (corpo.idOrgao ?? null) : null) });
   }
 
   const lote = await getLote(corpo.lote, card.id);
@@ -127,7 +132,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     const lote = await getLote(id, card.id);
     if (!lote) continue;
     const res = (await db.batch(comandosExcluirLote(db, lote.id) as never)) as unknown[][];
-    if (!res[3]?.length) continue;
+    if (!res.at(-1)?.length) continue;
     excluidos++;
     await registrarAuditoria({
       usuario: g.u,

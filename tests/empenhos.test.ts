@@ -344,7 +344,7 @@ test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote
   // Um empenho já promovido por este lote fica — só perde a referência.
   b.raw.prepare("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, lote_id) VALUES (1, '2026|P|9', 2026, '9', 'P', ?)").run(lote);
   const r = (await b.db.batch(comandosExcluirLote(b.db, lote) as never)) as unknown[][];
-  assert.equal(r[4].length, 1);
+  assert.equal(r.at(-1)?.length, 1);
   for (const t of ["centi_lotes", "centi_lote_passos", "empenhos_staging"]) assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n, 0, t);
   assert.deepEqual(b.raw.prepare("SELECT numero, lote_id FROM empenhos").all().map((x) => ({ ...x })), [{ numero: "9", lote_id: null }]);
 });

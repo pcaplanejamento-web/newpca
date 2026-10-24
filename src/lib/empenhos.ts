@@ -11,7 +11,7 @@ const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 /** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
 function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
   const { cardId: _, estado, modo, condutor, conduzindoAte, ...resto } = l;
-  return { ...resto, estado: estado as EstadoLote, modo: modo === "unidades" ? "unidades" : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
+  return { ...resto, estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
 }
 
 export async function listarLotes(cardId: number, limite = 20): Promise<LoteCenti[]> {
@@ -48,10 +48,10 @@ export async function loteEmAndamento(cardId: number): Promise<LoteCenti | null>
  * Cria o lote JÁ conduzido pela aba que o pediu (o token dela), com a versão atual do leitor. `modo` "unidades" = só
  * PUXA as unidades da Centi (nada é gravado nos empenhos).
  */
-export async function criarLote(cardId: number, ano: number, quem: string, condutor: string, modo: ModoLote = "dados"): Promise<LoteCenti> {
+export async function criarLote(cardId: number, ano: number, quem: string, condutor: string, modo: ModoLote = "dados", idOrgaoCenti: number | null = null): Promise<LoteCenti> {
   const [l] = await getDb()
     .insert(centiLotes)
-    .values({ cardId, ano, modo, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .values({ cardId, ano, modo, idOrgaoCenti, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
     .returning();
   return paraLote(l);
 }

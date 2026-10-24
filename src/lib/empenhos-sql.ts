@@ -1,7 +1,7 @@
 import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotePassos, centiLotes, centiStagingFora, empenhos, empenhosStaging } from "../db/schema.ts";
+import { centiLotePassos, centiLotes, centiStagingFora, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging } from "../db/schema.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { vinculoSql } from "./empenho-cards-sql.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoLote, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
@@ -128,7 +128,8 @@ export function comandoRecontarLote(db: Db, loteId: number) {
       recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
       // Os ÚNICOS = os guardados (com vínculo) + os só contados (sem vínculo — a chave); a SOMA = a de TODOS os registros
       // lidos (a última leitura de cada página), a mesma régua das importações anteriores na conferência de queda.
-      unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId}))`,
+      // (o lote de LIQUIDAÇÕES guarda no staging dele — um lote é de um tipo só, a soma dos dois é o do lote)
+      unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${liquidacoesStaging} WHERE ${liquidacoesStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId}))`,
       fora: sql`(SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId})`,
       soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina}))`,
       totalInformado: sql`(SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}))`,
@@ -150,11 +151,12 @@ export async function lidoNoPeriodo(db: Db, loteId: number, periodo: Periodo) {
 export async function jaNoLote(db: Db, loteId: number, chaves: string[]): Promise<number> {
   if (!chaves.length) return 0;
   const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
-  const [[a], [b]] = await Promise.all([
+  const [[a], [b], [c]] = await Promise.all([
     db.select({ n: count() }).from(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), sql`${empenhosStaging.chave} IN ${lista}`)),
+    db.select({ n: count() }).from(liquidacoesStaging).where(and(eq(liquidacoesStaging.loteId, loteId), sql`${liquidacoesStaging.chave} IN ${lista}`)),
     db.select({ n: count() }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), sql`${centiStagingFora.chave} IN ${lista}`)),
   ]);
-  return (a?.n ?? 0) + (b?.n ?? 0);
+  return (a?.n ?? 0) + (b?.n ?? 0) + (c?.n ?? 0);
 }
 
 /** Os campos comparados para saber se um empenho MUDOU (todos menos a chave). */
@@ -329,6 +331,7 @@ export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "
   return [
     db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
+    db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
     db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
   ] as const;
 }
@@ -339,12 +342,14 @@ function colunaSql(c: string): string {
 }
 
 /**
- * EXCLUI a tentativa de importação DO BANCO: os passos, o staging e o próprio lote. Os empenhos que ela já promoveu
- * ficam (são os dados do município) — só perdem a referência ao lote.
+ * EXCLUI a tentativa de importação DO BANCO: os passos, o staging e o próprio lote. Os empenhos (e as liquidações) que
+ * ela já promoveu ficam (são os dados do município) — só perdem a referência ao lote. O ÚLTIMO comando devolve o lote.
  */
 export function comandosExcluirLote(db: Db, loteId: number) {
   return [
     db.update(empenhos).set({ loteId: null }).where(eq(empenhos.loteId, loteId)),
+    db.update(liquidacoes).set({ loteId: null }).where(eq(liquidacoes.loteId, loteId)),
+    db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
     db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
     db.delete(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)),

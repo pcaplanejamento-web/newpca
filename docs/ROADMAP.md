@@ -23,7 +23,7 @@ como 0; órgãos 21–25 e 28 nunca lidos). Em passos pequenos, cada um uma vers
 6. **Aberta aos grupos por órgão** (o "Órgão gestor" da Centi = a sigla do órgão cadastrado; a unidade do cabeçalho decide; Empenhos no Filtro da unidade; aviso ao ADM dos órgãos sem cadastro — v1.197.0) — **entregue**.
 6b. **Unidades da Centi vinculadas ao cadastro** (só os registros vinculados são gravados — v1.198.0; o vínculo escolhido no banner do órgão — órgão gestor — e da unidade — unidade orçamentária —, com "Buscar na Centi"; o mesmo vínculo servirá liquidações e pagamentos — v1.199.0) — **entregue**.
 6c. **Empenhos em CARDS** (v1.205.0): tudo numa tela só, no padrão do Orçamento — cada card com a própria integração, anos, programação, regras e VÍNCULOS (órgão gestor › unidade orçamentária › ação → órgão/unidade do cadastro; o mais específico vale) e a sua tabela; o vínculo saiu de Órgãos e Unidades e as APIs saíram de Integrações — **entregue**. Liquidações e pagamentos virão como cards do mesmo jeito.
-7–9. Liquidações e Pagamentos · 10. Dashboard da execução · 11. Ligação com o Orçamento e o PCA (por último).
+7. **Liquidações** (v1.208.0): dentro de cada card (aba Liquidações + Importação → Liquidações), lidas por órgão da Centi, só as de empenho do card — **entregue** (a atualização automática ainda só dos empenhos). 8–9. Pagamentos · 10. Dashboard da execução · 11. Ligação com o Orçamento e o PCA (por último).
 
 ### Termo de Uso assinado + aparelhos vinculados à conta (v1.167.0) — entregue
 Configurações → Termo de uso: implantação Desligado · Teste (testadores, repetir a cada login) · Ativo; texto do ADM + cláusulas

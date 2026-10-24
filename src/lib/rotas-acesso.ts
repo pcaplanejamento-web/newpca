@@ -187,6 +187,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     POST: tela("empenhos", "importar", "a importação manual, passo a passo"),
     DELETE: tela("empenhos", "excluir", "excluir importações ou passos do histórico"),
   },
+  "empenhos/cards/[id]/liquidacoes": { GET: tela("empenhos", "visualizar", "as liquidações de um card (os anos ou as linhas de um ano)") },
   "empenhos/[id]": { GET: tela("empenhos", "visualizar", "um empenho com o histórico") },
   "documentos/[id]/arquivo": { GET: tela("documentos", "visualizar", "ver o PDF; baixar (?baixar=1) exige Exportar") },
   "catalogo/pastas": { POST: tela("catalogo", "manipular") },

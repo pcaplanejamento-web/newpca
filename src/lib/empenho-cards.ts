@@ -5,6 +5,7 @@ import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, type Res
 import { comandosCriarCard, consultaCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
 import type { EscopoEmpenhos } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
+import { orgaosCentiDoCard } from "./liquidacoes-core";
 import { ORDEM_ORGAOS } from "./orgaos";
 
 /** Os CARDS de EMPENHOS no D1 (leitura e edição). Os comandos em lote ficam em `empenho-cards-sql.ts`. */
@@ -142,4 +143,27 @@ export async function cadastroParaVinculos(ocultos = false): Promise<{ orgaos: O
 export async function cadastroDaRegra(): Promise<{ orgaos: Set<number>; unidades: Map<number, number | null> }> {
   const c = await cadastroParaVinculos(true);
   return { orgaos: new Set(c.orgaos.map((o) => o.id)), unidades: new Map(c.unidades.map((u) => [u.id, u.orgaoId])) };
+}
+
+/** Um órgão da Centi das LIQUIDAÇÕES do card: o id e o nome do órgão do cadastro que o tem. */
+export type OrgaoLiquidacao = { id: number; nome: string };
+
+/**
+ * Os ÓRGÃOS da Centi que as LIQUIDAÇÕES do card pedem (a API exige o órgão): o "ID na Centi" dos órgãos de destino dos
+ * vínculos. `semId` = os órgãos de destino sem o ID cadastrado (as liquidações deles não são lidas).
+ */
+export async function orgaosLiquidacao(cardId: number): Promise<{ orgaos: OrgaoLiquidacao[]; semId: string[] }> {
+  const vs = await vinculosDoCard(cardId);
+  const ids = [...new Set(vs.map((v) => v.orgaoId))];
+  if (!ids.length) return { orgaos: [], semId: [] };
+  const os = await getDb()
+    .select({ id: orgaos.id, nome: orgaos.nome, sigla: orgaos.sigla, centi: orgaos.entidadeCenti })
+    .from(orgaos)
+    .where(sql`${orgaos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`);
+  const { ids: centi, semId } = orgaosCentiDoCard(vs, new Map(os.map((o) => [o.id, o.centi])));
+  const nome = (o: (typeof os)[number]) => (o.sigla ? `${o.sigla} — ${o.nome}` : o.nome);
+  return {
+    orgaos: centi.map((id) => ({ id, nome: os.filter((o) => Number(o.centi) === id).map(nome).join(", ") })),
+    semId: os.filter((o) => semId.includes(o.id)).map(nome),
+  };
 }

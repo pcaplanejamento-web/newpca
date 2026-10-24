@@ -113,6 +113,7 @@ EditorVinculoOrcamento.tsx
 EditorVisaoOrcamento.tsx
 EmpenhoCardConfig.tsx
 EmpenhoCardImportacao.tsx
+EmpenhoCardLiquidacoes.tsx
 EmpenhoCardView.tsx
 EmpenhoCardVinculos.tsx
 EmpenhoDetalhe.tsx

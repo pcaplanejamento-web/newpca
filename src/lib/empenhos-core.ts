@@ -281,7 +281,7 @@ export function corpoDaPagina(parametros: string, ano: number, pagina: number, p
 }
 
 /** O total do PERÍODO informado pela página (o período sem nenhum registro tem total 0 — a Centi não manda o campo). */
-export function totalDoPeriodo(p: PaginaLida, pagina: number): number | null {
+export function totalDoPeriodo(p: Pick<PaginaLida, "total" | "recebidos">, pagina: number): number | null {
   if (p.total != null) return p.total;
   return pagina === 1 && p.recebidos === 0 ? 0 : null;
 }
@@ -373,8 +373,8 @@ export function conferirLote(s: SituacaoLote): { completo: true } | { completo: 
 export type EstadoLote = "lendo" | "promovido" | "parcial" | "falhou" | "cancelado" | "unidades";
 
 /** `dados` = importa os registros (só os vinculados) · `unidades` = só PUXA o catálogo da Centi (órgãos gestores, unidades
- * orçamentárias e ações), sem gravar nenhum empenho. */
-export type ModoLote = "dados" | "unidades";
+ * orçamentárias e ações), sem gravar nenhum empenho · `liquidacoes` = as LIQUIDAÇÕES de UM órgão da Centi (`liquidacoes-core.ts`). */
+export type ModoLote = "dados" | "unidades" | "liquidacoes";
 
 export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue" | "emerald" | "amber" | "red" | "slate" }> = {
   lendo: { rotulo: "Lendo", tom: "blue" },
@@ -393,6 +393,8 @@ export type LoteCenti = {
   ano: number;
   estado: EstadoLote;
   modo: ModoLote;
+  /** O órgão da Centi pedido (só nas liquidações). */
+  idOrgaoCenti: number | null;
   paginas: number;
   recebidos: number;
   unicos: number;
