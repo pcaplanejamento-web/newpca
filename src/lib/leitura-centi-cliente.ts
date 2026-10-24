@@ -1,4 +1,4 @@
-import { type LoteCenti, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core";
+import { type LoteCenti, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
 
 /**
  * A LEITURA DE UM ANO NA CENTI conduzida pelo NAVEGADOR (a rota lê uma página por vez — o limite de CPU do Worker): a
@@ -119,7 +119,7 @@ export async function lerAnoNaCenti(o: {
   onAgora: (a: Agora | null) => void;
   /** Ids negativos para os passos que não chegaram ao servidor. */
   idLocal: () => number;
-  /** Onde está (atualizado a cada página — a mensagem de erro de quem chama). */
+  /** Onde parou (o pedido que falhou primeiro — a mensagem de erro de quem chama). */
   onde: (texto: string) => void;
 }): Promise<LoteCenti> {
   let lote = o.lote;
@@ -171,7 +171,6 @@ export async function lerAnoNaCenti(o: {
     await emPool(fila, orgaos == null ? PARALELO_EMPENHOS : PARALELO_LIQUIDACOES, parar, async (item) => {
       emCurso++;
       try {
-        o.onde(`${rotuloPeriodo(item.periodo)}, ${orgaos == null ? "página" : "órgão"} ${item.pagina}`);
         const r = await passo(item.periodo, item.pagina);
         if (r.dividir) {
           // O período grande demais recomeça nas metades — nas liquidações, com TODOS os órgãos (uma vez por período).
@@ -182,6 +181,8 @@ export async function lerAnoNaCenti(o: {
           }
         } else if (r.continuar && orgaos == null) fila.unshift({ periodo: item.periodo, pagina: item.pagina + 1 });
       } catch (e) {
+        // Onde parou = o pedido que FALHOU primeiro (com vários em curso, nunca o último que começou).
+        if (!falhou) o.onde(`${rotuloPeriodo(item.periodo)}, ${orgaos == null ? "página" : "órgão"} ${item.pagina}`);
         falhou = true;
         throw e;
       } finally {

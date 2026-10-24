@@ -4599,7 +4599,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`leitura-centi-cliente.ts`) roda uma FILA com `emPool` — cada pedido é uma requisição própria (o próprio limite do
     Worker): empenhos = várias SEMANAS ao mesmo tempo (`PARALELO_EMPENHOS`=4; as páginas de uma semana em sequência);
     liquidações = TODOS os órgãos de cada semana (`PARALELO_LIQUIDACOES`=6); a 1ª falha para de começar novos e espera os em
-    curso; o lote mais novo (`vistoEm`) vence na tela. Retomada: `pedidosEmCurso(passos, n?)` (`empenhos-core.ts` — a
+    curso (o aviso cita o pedido que falhou PRIMEIRO); o lote mais novo (`vistoEm`) vence na tela. Testado com um servidor
+    falso em `tests/leitura-centi-cliente.test.ts` (o máximo em paralelo, a retomada só do que falta, a divisão com todos os
+    órgãos, a parada na falha, as páginas de uma semana em sequência). Retomada: `pedidosEmCurso(passos, n?)` (`empenhos-core.ts` — a
     próxima página de cada semana começada; nas liquidações, cada órgão que falta, mesmo do meio); `periodoEmCurso`/
     `proximoPedido` (cron) aceitam o `n` de órgãos. Liquidações: o passo guarda o total do PRÓPRIO órgão (o do período =
     a soma — `comandoRecontarLote` por `modo`) e o FECHO é decidido no banco, no lote da página

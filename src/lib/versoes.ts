@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.214.1",
+    data: "2026-10-24",
+    titulo: "Auditoria da importação em paralelo",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos e liquidações", texto: "Quando a leitura para por uma falha, o aviso diz o período e o órgão (ou a página) que falhou primeiro — com vários pedidos ao mesmo tempo, antes podia citar outro.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.214.0",
     data: "2026-10-24",
     titulo: "Importação em paralelo",
