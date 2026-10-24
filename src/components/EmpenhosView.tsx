@@ -39,8 +39,8 @@ export function EmpenhosView({ cards, podeCriar }: { cards: ResumoCard[]; podeCr
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number };
       if (!r.ok || !j.ok || !j.id) throw new Error(j.error ?? "Não foi possível criar o card.");
-      toast.success(`Card "${nome.trim()}" criado — configure a integração e os vínculos.`);
-      router.push(`/painel/empenhos/${j.id}?aba=${copiarDe ? "vinculos" : "configuracao"}`);
+      toast.success(`Card "${nome.trim()}" criado — confirme a configuração e os vínculos antes de importar.`);
+      router.push(`/painel/empenhos/${j.id}?aba=configuracao`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível criar o card.");
       setCriando(false);
@@ -150,6 +150,10 @@ export function EmpenhosView({ cards, podeCriar }: { cards: ResumoCard[]; podeCr
               </option>
             ))}
           </SelectField>
+          <p className="text-[12.5px] text-muted">
+            Depois de criar: 1. confirme a <strong>Configuração</strong> (integração, anos, atualização e regras), 2. crie os <strong>Vínculos</strong>.
+            Só então a importação é liberada.
+          </p>
         </div>
       </Modal>
     </div>

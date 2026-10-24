@@ -68,6 +68,8 @@ export type CardEmpenho = {
   ultimaContagem: number | null;
   ultimoTotal: number | null;
   vinculosEm: string | null;
+  /** Quando a Configuração foi confirmada — sem ela (e sem vínculos), nada é importado. */
+  configuradoEm: string | null;
   criadoPor: string;
   criadoEm: string;
   atualizadoEm: string;
@@ -200,9 +202,26 @@ export function motivoCardInvalido(e: EdicaoCard): string | null {
 /** O endereço do pedido do card. */
 export const urlDoCard = (c: EnderecoCenti): string => urlDaApi(c);
 
+/** Uma etapa da configuração que falta — a aba em que se resolve. */
+export type PendenciaCard = { aba: "configuracao" | "vinculos"; texto: string };
+
+/**
+ * O que falta CONFIGURAR antes de importar (vazio = pode importar): 1º a Configuração confirmada (integração, anos,
+ * programação e regras), 2º ao menos um vínculo. A MESMA régua na tela, na rota da importação e na atualização automática.
+ * O "Buscar na Centi" (só o catálogo, nada gravado nos empenhos) exige só a Configuração — é dele que vêm as escolhas dos
+ * vínculos.
+ */
+export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm">, vinculos: number): PendenciaCard[] {
+  const p: PendenciaCard[] = [];
+  if (!c.configuradoEm) p.push({ aba: "configuracao", texto: "Confirme a configuração: integração, anos, atualização e regras." });
+  if (vinculos < 1) p.push({ aba: "vinculos", texto: "Crie ao menos um vínculo: o que o card importa e para onde vai." });
+  return p;
+}
+
 /** O estado do card (o selo do card e do cabeçalho). */
-export function estadoCard(c: Pick<CardEmpenho, "ativa" | "ultimoStatus">, lendo = false): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
+export function estadoCard(c: Pick<CardEmpenho, "ativa" | "ultimoStatus" | "configuradoEm"> & { vinculos?: number }, lendo = false): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
   if (lendo) return { rotulo: "Importando", tom: "blue" };
+  if (pendenciasDoCard(c, c.vinculos ?? 1).length) return { rotulo: "A configurar", tom: "amber" };
   if (c.ultimoStatus === "falhou") return { rotulo: "Com erro", tom: "red" };
   if (c.ultimoStatus === "parcial") return { rotulo: "Parcial", tom: "amber" };
   if (c.ativa) return { rotulo: "Automática", tom: "emerald" };

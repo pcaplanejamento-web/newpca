@@ -2,7 +2,7 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { anosDoCard, type CardEmpenho, type ResumoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, type CardEmpenho, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
   anoInteiro,
   diaBR,
@@ -70,6 +70,8 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   const api = card;
   const router = useRouter();
   const anos = anosDoCard(card.anos, anoAtual());
+  /** A configuração vem antes de importar (`pendenciasDoCard` — o aviso fica no cabeçalho do card). */
+  const bloqueado = pendenciasDoCard(card, card.vinculos).length > 0;
   const [ano, setAno] = useState(anos[0]);
   const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
   const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
@@ -314,7 +316,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             Interromper
           </Button>
         ) : (
-          <Button size="sm" onClick={() => void importar(null)} disabled={!!emAndamento || !anos.length} icon={<IconDownload className="h-4 w-4" />}>
+          <Button size="sm" onClick={() => void importar(null)} disabled={!!emAndamento || !anos.length || bloqueado} title={bloqueado ? "Configure o card antes de importar (Configuração e Vínculos)" : undefined} icon={<IconDownload className="h-4 w-4" />}>
             Importar {ano}
           </Button>
         )}
@@ -341,9 +343,6 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
           <p>Toque numa importação do histórico para ver os passos dela; marque e use Excluir para tirá-las do banco (os empenhos gravados continuam).</p>
         </Ajuda>
       </FerramentasAba>
-      {card.vinculos === 0 && (
-        <Callout kind="warn">O card não tem vínculos — nenhum empenho seria gravado. Escolha na aba Vínculos o que ele importa.</Callout>
-      )}
       {!comPeriodo && (
         <Callout kind="warn">
           Os parâmetros não usam <code>{"{inicio}"}</code> e <code>{"{fim}"}</code>: o ano só pode ser lido inteiro, e a Centi

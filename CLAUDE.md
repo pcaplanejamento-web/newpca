@@ -4542,7 +4542,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     INSERTs de 14, `comandosRefazerEmpenhosCard` — o que ficou sem vínculo SAI, os demais acompanham — e `vinculos_em`).
     `gruposDosVinculos`/`vinculosDosGrupos` (a tela edita GRUPOS: gestor + unidade + ações + destino), `semVinculo`,
     `coberturaDoGrupo`. Criar um card copiando outro = `comandosCriarCard` (os vínculos copiados no mesmo lote).
-  - **Aba Vínculos (`EmpenhoCardVinculos`):** `Segmented` **Vínculos (N)** (gestor · unidade orçamentária · ações —
+  - **CONFIGURAR ANTES DE IMPORTAR (v1.206.0, migração `0144` — `empenho_cards.configurado_em`):** `pendenciasDoCard(card,
+    vínculos)` (puro, testado) = 1º a Configuração confirmada (o 1º "Confirmar configuração" da aba Configuração — `atualizarCard`
+    grava `configurado_em`; depois leva aos Vínculos), 2º ao menos um vínculo. A MESMA régua na rota da importação (`iniciar` →
+    409; o modo "unidades" — o "Buscar na Centi" — exige só a Configuração), na atualização automática (`cardsAtivos` só os
+    configurados com vínculos), no selo "A configurar" (`estadoCard`) e no aviso com as etapas no cabeçalho do card
+    (`EmpenhoCardView`); o botão Importar fica desabilitado. Criar um card sempre abre a Configuração.
+  - **Aba Vínculos (`EmpenhoCardVinculos`):** as células são EDITÁVEIS para quem configura (v1.206.0) — `Selecao`
+    (órgão gestor, unidade orçamentária com "Todas", destino agrupado por órgão) e `SeletorMultiplo suspenso completo` (as
+    ações; gravadas 800 ms após o último toque), o texto INTEIRO (`nowrap`, sem abreviar), cada mudança grava a lista inteira
+    pela mesma régua do editor; `Segmented` **Vínculos (N)** (gestor · unidade orçamentária · ações —
     `CelulaLista` — · destino · registros cobertos) | **Na Centi sem vínculo (N)** (o catálogo que nenhum vínculo cobre;
     tocar abre o editor já com o gestor e a unidade); **"Buscar na Centi"** (Importar) = um lote `modo` "unidades" pelo
     `lerAnoNaCenti` (`leitura-centi-cliente.ts`) que só atualiza o catálogo, com o `Progress`; **"Novo vínculo"** →

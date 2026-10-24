@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   coberturaDoGrupo,
   type GrupoVinculo,
@@ -21,14 +21,14 @@ import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { CelulaLista, CelulaTexto } from "./CelulaLista";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { SelectField } from "./Field";
-import { IconDownload, IconPlus, IconTrash } from "./icons";
+import { IconDownload, IconPlus, IconSpinner, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
+import { Selecao } from "./Selecao";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { toast } from "./Toast";
 
@@ -41,6 +41,19 @@ type Rascunho = { orgaoGestor: string; unidade: string | null; acoes: string[]; 
 /** O destino no cadastro na escolha: "o:<órgão>" (o órgão inteiro) ou "u:<unidade>". */
 const destinoDe = (g: Pick<GrupoVinculo, "orgaoId" | "reparticaoId">) => (g.reparticaoId != null ? `u:${g.reparticaoId}` : `o:${g.orgaoId}`);
 const TODAS = "__todas__";
+/** A caixa da escolha DENTRO da célula (o texto inteiro, sem abreviar — a coluna cresce com ele). */
+const CELULA =
+  "min-h-11 w-max max-w-none rounded-control px-2 text-[12px] font-medium whitespace-nowrap text-text-2 transition-colors hover:bg-surface-2 lg:min-h-[calc(var(--h-control-sm)-6px)]";
+const ordenar = (l: Iterable<string>) => [...l].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+/** O que a célula põe à vista sem edição: o texto INTEIRO numa linha. */
+const Inteiro = ({ texto, apagado }: { texto: string; apagado?: boolean }) => <span className={`whitespace-nowrap ${apagado ? "text-muted" : "text-text-2"}`}>{texto}</span>;
+/** O invólucro de um controle na célula: o toque nele não abre a linha. */
+const NaCelula = ({ children, gravando }: { children: ReactNode; gravando: boolean }) => (
+  <span role="none" className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+    {children}
+    {gravando && <IconSpinner className="h-3.5 w-3.5 shrink-0 text-accent" />}
+  </span>
+);
 
 /**
  * A aba VÍNCULOS de um card — o que o card IMPORTA e para ONDE vai: cada vínculo escolhe um órgão gestor da Centi, a
@@ -58,6 +71,7 @@ export function EmpenhoCardVinculos({
   cadastro,
   podeEditar,
   podeBuscar,
+  configurado,
 }: {
   cardId: number;
   /** Os anos do card (o "Buscar na Centi" lê o 1º). */
@@ -68,6 +82,8 @@ export function EmpenhoCardVinculos({
   podeEditar: boolean;
   /** Importar no card: "Buscar na Centi" (atualiza o catálogo). */
   podeBuscar: boolean;
+  /** A Configuração do card já foi confirmada (sem ela, nada é lido da Centi). */
+  configurado: boolean;
 }) {
   const router = useRouter();
   const [vista, setVista] = useState<Vista>("vinculos");
@@ -78,6 +94,16 @@ export function EmpenhoCardVinculos({
   const [anoBusca, setAnoBusca] = useState(anos[0] ?? new Date().getFullYear());
   const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
+  /** A linha que está gravando (o spinner na célula) e o RASCUNHO das ações em edição (gravado 800 ms após o último toque). */
+  const [gravandoLinha, setGravandoLinha] = useState<string | null>(null);
+  const [acoesRascunho, setAcoesRascunho] = useState<Record<string, string[]>>({});
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const t = timers.current;
+    return () => {
+      for (const x of t.values()) clearTimeout(x);
+    };
+  }, []);
 
   const grupos = useMemo(() => gruposDosVinculos(vinculos), [vinculos]);
   const fora = useMemo(() => semVinculo(catalogo, vinculos), [catalogo, vinculos]);
@@ -132,6 +158,68 @@ export function EmpenhoCardVinculos({
     return vinculosDosGrupos([...outros, g]);
   }
 
+  /** EDIÇÃO NA CÉLULA: troca um campo do vínculo da linha e grava a lista inteira (a mesma régua do editor). */
+  async function mudarNaCelula(g: GrupoVinculo, patch: Partial<Rascunho>, ok: string) {
+    const r: Rascunho = { orgaoGestor: g.orgaoGestor, unidade: g.unidade, acoes: g.acoes ?? [], destino: destinoDe(g), ...patch };
+    setGravandoLinha(g.chave);
+    try {
+      await gravar(comGrupo(g.chave, r), ok);
+    } finally {
+      setGravandoLinha(null);
+    }
+  }
+  /** As ações marcadas na célula: guardadas no rascunho e gravadas 800 ms depois do último toque (marcar várias = 1 gravação). */
+  function mudarAcoes(g: GrupoVinculo, acoes: string[]) {
+    setAcoesRascunho((x) => ({ ...x, [g.chave]: acoes }));
+    const t = timers.current;
+    clearTimeout(t.get(g.chave));
+    t.set(
+      g.chave,
+      setTimeout(() => {
+        t.delete(g.chave);
+        void mudarNaCelula(g, { acoes }, "Ações do vínculo atualizadas.").finally(() =>
+          setAcoesRascunho((x) => {
+            const { [g.chave]: _, ...resto } = x;
+            return resto;
+          }),
+        );
+      }, 800),
+    );
+  }
+
+  /** As escolhas das células, tiradas do CATÁLOGO (+ o valor atual, que nunca some da lista). */
+  const gestoresCatalogo = useMemo(() => ordenar(new Set(catalogo.map((c) => c.orgaoGestor))), [catalogo]);
+  const unidadesDoGestor = (gestor: string, atual: string | null) => {
+    const s = new Set(catalogo.filter((c) => c.orgaoGestor === gestor).map((c) => c.unidade));
+    if (atual != null) s.add(atual);
+    return ordenar(s);
+  };
+  const acoesDaUnidade = (g: GrupoVinculo, marcadas: string[]) => {
+    const m = new Map<string, number>();
+    for (const c of catalogo) if (c.orgaoGestor === g.orgaoGestor && c.unidade === g.unidade) m.set(c.acao, c.registros);
+    for (const a of marcadas) if (!m.has(a)) m.set(a, 0);
+    return ordenar(m.keys()).map((valor) => ({ valor, rotulo: rotuloAcaoCenti(valor), contagem: m.get(valor) }));
+  };
+  const unidadesPorOrgao = useMemo(() => {
+    const m = new Map<number, UnidadeVinculo[]>();
+    for (const u of cadastro.unidades) if (u.orgaoId != null) m.set(u.orgaoId, [...(m.get(u.orgaoId) ?? []), u]);
+    return m;
+  }, [cadastro.unidades]);
+  const opcoesDestino = (
+    <>
+      {cadastro.orgaos.map((o) => (
+        <optgroup key={o.id} label={`${o.sigla} — ${o.nome}`}>
+          <option value={`o:${o.id}`}>{`${o.sigla} — ${o.nome} (o órgão)`}</option>
+          {(unidadesPorOrgao.get(o.id) ?? []).map((u) => (
+            <option key={u.id} value={`u:${u.id}`}>
+              {`${u.codigo} — ${u.nome}`}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
+
   async function excluir(chave: string) {
     if (!(await confirmar({ titulo: "Excluir este vínculo?", texto: "Os empenhos que só este vínculo cobria saem do banco (importar de novo, com outro vínculo, os traz de volta).", confirmar: "Excluir", perigo: true }))) return;
     if (await gravar(comGrupo(chave, null), "Vínculo excluído.")) setAberto(null);
@@ -170,19 +258,120 @@ export function EmpenhoCardVinculos({
     }
   }
 
+  const ocupado = (g: GrupoVinculo) => gravando || gravandoLinha === g.chave;
+  const textoUnidade = (u: string | null) => (u == null ? "Todas" : u || "(sem unidade orçamentária)");
+  // EDIÇÃO DIRETO NA CÉLULA (quem configura): cada coluna é a escolha do sistema com o texto INTEIRO — o órgão gestor, a
+  // unidade orçamentária (ou todas), as ações (ou todas) e o destino no cadastro. Grava na hora (as ações, 800 ms após o
+  // último toque), pela MESMA régua do editor; tocar fora dos controles abre o vínculo (excluir).
   const colunasVinculos: Column<GrupoVinculo>[] = [
-    { key: "gestor", header: "Órgão gestor (Centi)", align: "left", minWidth: 200, value: (g) => g.orgaoGestor, render: (g) => <CelulaTexto texto={g.orgaoGestor} /> },
-    { key: "unidade", header: "Unidade orçamentária", align: "left", minWidth: 220, value: (g) => (g.unidade == null ? "Todas" : g.unidade || "(sem unidade orçamentária)"), render: (g) => (g.unidade == null ? <span className="text-muted">Todas</span> : <CelulaTexto texto={g.unidade || "(sem unidade orçamentária)"} />) },
+    {
+      key: "gestor",
+      header: "Órgão gestor (Centi)",
+      align: "left",
+      nowrap: true,
+      value: (g) => g.orgaoGestor,
+      render: (g) =>
+        podeEditar ? (
+          <NaCelula gravando={gravandoLinha === g.chave}>
+            <Selecao
+              className={CELULA}
+              value={g.orgaoGestor}
+              titulo="Órgão gestor (Centi)"
+              aria-label={`Órgão gestor do vínculo ${g.orgaoGestor}`}
+              disabled={ocupado(g)}
+              onChange={(e) => void mudarNaCelula(g, { orgaoGestor: e.target.value, unidade: null, acoes: [] }, "Órgão gestor do vínculo atualizado.")}
+            >
+              {ordenar(new Set([...gestoresCatalogo, g.orgaoGestor])).map((x) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </Selecao>
+          </NaCelula>
+        ) : (
+          <Inteiro texto={g.orgaoGestor} />
+        ),
+    },
+    {
+      key: "unidade",
+      header: "Unidade orçamentária",
+      align: "left",
+      nowrap: true,
+      value: (g) => textoUnidade(g.unidade),
+      render: (g) =>
+        podeEditar ? (
+          <NaCelula gravando={gravandoLinha === g.chave}>
+            <Selecao
+              className={`${CELULA} ${g.unidade == null ? "text-muted" : ""}`}
+              value={g.unidade == null ? TODAS : g.unidade}
+              titulo="Unidade orçamentária"
+              aria-label={`Unidade orçamentária do vínculo ${g.orgaoGestor}`}
+              disabled={ocupado(g)}
+              onChange={(e) => void mudarNaCelula(g, { unidade: e.target.value === TODAS ? null : e.target.value, acoes: [] }, "Unidade orçamentária do vínculo atualizada.")}
+            >
+              <option value={TODAS}>Todas</option>
+              {unidadesDoGestor(g.orgaoGestor, g.unidade).map((u) => (
+                <option key={u} value={u}>
+                  {textoUnidade(u)}
+                </option>
+              ))}
+            </Selecao>
+          </NaCelula>
+        ) : (
+          <Inteiro texto={textoUnidade(g.unidade)} apagado={g.unidade == null} />
+        ),
+    },
     {
       key: "acoes",
       header: "Ações",
       align: "left",
-      minWidth: 200,
+      nowrap: true,
       value: (g) => (g.acoes ? g.acoes.map(rotuloAcaoCenti).join("; ") : "Todas"),
       valores: (g) => (g.acoes ? g.acoes.map(rotuloAcaoCenti) : ["Todas"]),
-      render: (g) => (g.acoes ? <CelulaLista valores={g.acoes.map(rotuloAcaoCenti)} /> : <span className="text-muted">Todas</span>),
+      render: (g) => {
+        if (!podeEditar) return g.acoes ? <Inteiro texto={g.acoes.map(rotuloAcaoCenti).join("; ")} /> : <Inteiro texto="Todas" apagado />;
+        const marcadas = acoesRascunho[g.chave] ?? g.acoes ?? [];
+        return (
+          <NaCelula gravando={gravandoLinha === g.chave}>
+            <SeletorMultiplo
+              suspenso
+              completo
+              rotulo={`Ações do vínculo ${g.orgaoGestor}`}
+              opcoes={acoesDaUnidade(g, marcadas)}
+              selecionados={marcadas}
+              onChange={(l) => mudarAcoes(g, l)}
+              disabled={ocupado(g) || g.unidade == null}
+              textoVazio={g.unidade == null ? "Todas (escolha a unidade orçamentária para dividir)" : "Todas"}
+            />
+          </NaCelula>
+        );
+      },
     },
-    { key: "destino", header: "Vai para (cadastro)", align: "left", minWidth: 220, value: rotuloDestino, render: (g) => <CelulaTexto texto={rotuloDestino(g)} /> },
+    {
+      key: "destino",
+      header: "Vai para (cadastro)",
+      align: "left",
+      nowrap: true,
+      value: rotuloDestino,
+      render: (g) =>
+        podeEditar ? (
+          <NaCelula gravando={gravandoLinha === g.chave}>
+            <Selecao
+              className={CELULA}
+              value={destinoDe(g)}
+              texto={rotuloDestino(g)}
+              titulo="Vai para (cadastro)"
+              aria-label={`Destino do vínculo ${g.orgaoGestor}`}
+              disabled={ocupado(g)}
+              onChange={(e) => void mudarNaCelula(g, { destino: e.target.value }, "Destino do vínculo atualizado.")}
+            >
+              {opcoesDestino}
+            </Selecao>
+          </NaCelula>
+        ) : (
+          <Inteiro texto={rotuloDestino(g)} />
+        ),
+    },
     {
       key: "registros",
       header: "Registros na Centi",
@@ -194,9 +383,9 @@ export function EmpenhoCardVinculos({
     },
   ];
   const colunasFora: Column<ItemCatalogo>[] = [
-    { key: "gestor", header: "Órgão gestor", align: "left", minWidth: 200, value: (c) => c.orgaoGestor, render: (c) => <CelulaTexto texto={c.orgaoGestor} /> },
-    { key: "unidade", header: "Unidade orçamentária", align: "left", minWidth: 220, value: (c) => c.unidade || "(sem unidade orçamentária)", render: (c) => <CelulaTexto texto={c.unidade || "(sem unidade orçamentária)"} /> },
-    { key: "acao", header: "Ação", align: "left", minWidth: 220, value: (c) => rotuloAcaoCenti(c.acao), render: (c) => <CelulaTexto texto={rotuloAcaoCenti(c.acao)} /> },
+    { key: "gestor", header: "Órgão gestor", align: "left", nowrap: true, value: (c) => c.orgaoGestor, render: (c) => <Inteiro texto={c.orgaoGestor} /> },
+    { key: "unidade", header: "Unidade orçamentária", align: "left", nowrap: true, value: (c) => textoUnidade(c.unidade), render: (c) => <Inteiro texto={textoUnidade(c.unidade)} /> },
+    { key: "acao", header: "Ação", align: "left", nowrap: true, value: (c) => rotuloAcaoCenti(c.acao), render: (c) => <Inteiro texto={rotuloAcaoCenti(c.acao)} /> },
     { key: "registros", header: "Registros", nowrap: true, filter: "range", formatarFaixa: num, numero: (c) => c.registros, render: (c) => <span className="tabular-nums">{num(c.registros)}</span> },
     { key: "ano", header: "Último ano", nowrap: true, total: false, value: (c) => String(c.ultimoAno ?? "—"), render: (c) => <span className="tabular-nums text-muted">{c.ultimoAno ?? "—"}</span> },
   ];
@@ -224,7 +413,7 @@ export function EmpenhoCardVinculos({
                 ))}
               </SelectField>
             )}
-            <Button size="sm" variant="secondary" onClick={buscar} loading={buscando} disabled={!anos.length} icon={<IconDownload className="h-4 w-4" />} title="Lê o ano na Centi e atualiza as escolhas (nada é gravado nos empenhos)" aria-label="Buscar na Centi">
+            <Button size="sm" variant="secondary" onClick={buscar} loading={buscando} disabled={!anos.length || !configurado} icon={<IconDownload className="h-4 w-4" />} title={configurado ? "Lê o ano na Centi e atualiza as escolhas (nada é gravado nos empenhos)" : "Confirme a Configuração do card antes de ler a Centi"} aria-label="Buscar na Centi">
               Buscar<span className="hidden sm:inline">&nbsp;na Centi</span>
             </Button>
           </>

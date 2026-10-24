@@ -2178,6 +2178,8 @@ export const empenhoCards = sqliteTable("empenho_cards", {
   ultimoTotal: integer("ultimo_total"),
   /** Quando os vínculos mudaram (ISO com ms) — entra na VERSÃO dos empenhos do card (a tela relê). */
   vinculosEm: text("vinculos_em"),
+  /** Quando a Configuração foi confirmada (migração `0144`) — sem ela, nada é importado. */
+  configuradoEm: text("configurado_em"),
   criadoPor: text("criado_por").notNull().default(""),
   criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),

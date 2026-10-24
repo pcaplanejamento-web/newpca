@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import { estadoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
+import { estadoCard, pendenciasDoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
 import { brlCompact, dataHoraBR, num } from "@/lib/format";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { Callout } from "./Callout";
 import { useOndeDetalhe } from "./CanalGrupo";
 import { useConfirmacao } from "./Confirmacao";
-import { IconChevronLeft, IconTrash } from "./icons";
+import { IconCheck, IconChevronLeft, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
 export type AbaCard = "empenhos" | "vinculos" | "importacao" | "configuracao";
@@ -39,6 +40,12 @@ export function EmpenhoCardView({
   const [excluindo, setExcluindo] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
   const e = estadoCard(c, c.lendo);
+  const pendencias = pendenciasDoCard(c, c.vinculos);
+  // A ORDEM obrigatória: Configuração → Vínculos → Importação (nada é importado antes das duas primeiras).
+  const etapas = [
+    { aba: "configuracao" as const, rotulo: "1. Configuração", feito: !!c.configuradoEm },
+    { aba: "vinculos" as const, rotulo: "2. Vínculos", feito: c.vinculos > 0 },
+  ];
 
   async function excluir() {
     const ok = await confirmar({
@@ -115,6 +122,22 @@ export function EmpenhoCardView({
           />
         )}
       </div>
+
+      {pendencias.length > 0 && (
+        <Callout kind="warn">
+          <p className="font-semibold">Configure o card antes de importar</p>
+          <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {etapas.map((et) => (
+              <Link key={et.aba} href={`/painel/empenhos/${c.id}?aba=${et.aba}`} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
+                {et.feito && <IconCheck className="h-4 w-4" />}
+                {et.rotulo}
+              </Link>
+            ))}
+            <span className="text-muted">3. Importação</span>
+          </p>
+        </Callout>
+      )}
 
       <AbasEspaco<AbaCard> aba={aba} opcoes={opcoes}>
         {children}

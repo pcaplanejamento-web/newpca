@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.206.0",
+    data: "2026-10-24",
+    titulo: "Card de empenhos: configurar antes de importar e vínculos na célula",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Empenhos",
+        texto: "Toda a configuração vem antes de qualquer importação: o card novo abre na Configuração (confirme integração, anos, atualização e regras), depois os Vínculos — só então a Importação e a atualização automática são liberadas. O cabeçalho do card mostra as etapas que faltam.",
+        link: "/painel/empenhos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Empenhos",
+        texto: "Na aba Vínculos, quem configura edita direto na célula: órgão gestor, unidade orçamentária, ações e para onde vai no cadastro — grava na hora, com o texto inteiro à vista (sem abreviar).",
+        link: "/painel/empenhos",
+      },
+    ],
+  },
+  {
     versao: "1.205.0",
     data: "2026-10-24",
     titulo: "Empenhos em cards",

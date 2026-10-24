@@ -42,6 +42,7 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
         cadastro={cadastro}
         podeEditar={pode.configurar}
         podeBuscar={pode.importar}
+        configurado={!!card.configuradoEm}
       />
     );
   } else if (aba === "importacao") {

@@ -12,6 +12,7 @@ import {
   coberturaDoGrupo,
   type EdicaoCard,
   estadoCard,
+  pendenciasDoCard,
   gruposDosVinculos,
   lerAnos,
   mapaDosVinculos,
@@ -56,9 +57,16 @@ test("cards: a régua da configuração (a mesma da tela e do servidor)", () => 
   assert.match(m({ horaInicio: "19:00", horaFim: "07:00" }), /antes do fim/);
   assert.match(m({ quedaSoma: 33 }), /queda/);
   assert.deepEqual(previaPedido(card, 2026).corpo, { dataInicio: "01/01/2026", dataFim: "07/01/2026" });
-  assert.equal(estadoCard({ ativa: true, ultimoStatus: "promovido" }).rotulo, "Automática");
-  assert.equal(estadoCard({ ativa: true, ultimoStatus: "falhou" }).rotulo, "Com erro");
-  assert.equal(estadoCard({ ativa: false, ultimoStatus: null }, true).rotulo, "Importando");
+  const ok = { configuradoEm: "2026-10-24", vinculos: 2 };
+  assert.equal(estadoCard({ ativa: true, ultimoStatus: "promovido", ...ok }).rotulo, "Automática");
+  assert.equal(estadoCard({ ativa: true, ultimoStatus: "falhou", ...ok }).rotulo, "Com erro");
+  assert.equal(estadoCard({ ativa: false, ultimoStatus: null, ...ok }, true).rotulo, "Importando");
+  assert.equal(estadoCard({ ativa: true, ultimoStatus: null, configuradoEm: null, vinculos: 2 }).rotulo, "A configurar");
+  assert.equal(estadoCard({ ativa: true, ultimoStatus: null, configuradoEm: "x", vinculos: 0 }).rotulo, "A configurar");
+  // A CONFIGURAÇÃO vem antes de importar: 1º a Configuração confirmada, 2º ao menos um vínculo.
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: null }, 0).map((p) => p.aba), ["configuracao", "vinculos"]);
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: "x" }, 0).map((p) => p.aba), ["vinculos"]);
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: "x" }, 1), []);
   assert.ok(cardEmpenhoSchema.safeParse(card).success);
   assert.ok(!cardEmpenhoSchema.safeParse({ ...card, extra: 1 }).success);
   assert.ok(criarCardSchema.safeParse({ nome: "Saúde", copiarDe: 1 }).success);
@@ -210,4 +218,9 @@ test("migração 0143: a API, os vínculos de Órgãos e Unidades, as importaç�
   for (const t of ["centi_apis", "centi_unidades", "centi_acoes"]) assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = ?").get(t)?.n, 0, t);
   const cols = (t: string) => raw.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
   assert.ok(!cols("reparticoes").includes("centi_unidade_id") && !cols("orgaos").includes("centi_orgao_gestor") && !cols("centi_lotes").includes("api_chave"));
+  // 0144: o card que já tem vínculos conta como configurado; um card novo, não.
+  raw.exec("INSERT INTO empenho_cards (id, nome) VALUES (2, 'Novo')");
+  const j = arqs.findIndex((f) => f.startsWith("0144_"));
+  raw.exec(readFileSync(join(dir, arqs[j]), "utf8"));
+  assert.deepEqual(raw.prepare("SELECT id, configurado_em IS NOT NULL AS c FROM empenho_cards ORDER BY id").all().map((c) => [c.id, c.c]), [[1, 1], [2, 0]]);
 });

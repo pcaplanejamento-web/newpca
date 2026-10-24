@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { empenhoCards, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, type ResumoCard, type VinculoCard } from "./empenho-cards-core";
@@ -40,9 +40,19 @@ export async function getCard(id: number): Promise<CardEmpenho | null> {
   return l ? paraCard(l) : null;
 }
 
-/** Os cards ligados (a atualização automática). */
+/** Os cards ligados (a atualização automática) — só os CONFIGURADOS e com vínculos (`pendenciasDoCard`). */
 export async function cardsAtivos(): Promise<CardEmpenho[]> {
-  const l = await getDb().select().from(empenhoCards).where(eq(empenhoCards.ativa, true)).orderBy(asc(empenhoCards.id));
+  const l = await getDb()
+    .select()
+    .from(empenhoCards)
+    .where(
+      and(
+        eq(empenhoCards.ativa, true),
+        isNotNull(empenhoCards.configuradoEm),
+        sql`EXISTS (SELECT 1 FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
+      ),
+    )
+    .orderBy(asc(empenhoCards.id));
   return l.map(paraCard);
 }
 
@@ -58,7 +68,7 @@ export async function criarCard(e: EdicaoCard, copiarDe: number | null, quem: st
 export async function atualizarCard(id: number, e: EdicaoCard): Promise<void> {
   await getDb()
     .update(empenhoCards)
-    .set({ ...valoresDaEdicao(e), atualizadoEm: sql`CURRENT_TIMESTAMP` })
+    .set({ ...valoresDaEdicao(e), atualizadoEm: sql`CURRENT_TIMESTAMP`, configuradoEm: sql`CURRENT_TIMESTAMP` })
     .where(eq(empenhoCards.id, id));
 }
 

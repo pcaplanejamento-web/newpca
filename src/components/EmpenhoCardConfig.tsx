@@ -83,8 +83,9 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
       const r = await fetch(`/api/empenhos/cards/${card.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; card?: CardEmpenho };
       if (!r.ok || !j.ok || !j.card) throw new Error(j.error ?? "Erro ao salvar o card.");
-      toast.success(`Card "${j.card.nome}" salvo.`);
+      toast.success(card.configuradoEm ? `Card "${j.card.nome}" salvo.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`);
       setV(edicaoDoCard(j.card));
+      if (!card.configuradoEm) router.push(`/painel/empenhos/${card.id}?aba=vinculos`);
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar o card.");
@@ -119,12 +120,12 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
   return (
     <>
       <FerramentasAba>
-        <Button size="sm" onClick={salvar} loading={salvando} disabled={!alterado || !!motivo} icon={<IconSave className="h-4 w-4" />}>
-          Salvar
+        <Button size="sm" onClick={salvar} loading={salvando} disabled={(!alterado && !!card.configuradoEm) || !!motivo} icon={<IconSave className="h-4 w-4" />}>
+          {card.configuradoEm ? "Salvar" : "Confirmar configuração"}
         </Button>
       </FerramentasAba>
 
-      {motivo && alterado && <Callout kind="danger">{motivo}</Callout>}
+      {motivo && (alterado || !card.configuradoEm) && <Callout kind="danger">{motivo}</Callout>}
 
       <div className="grid grid-cols-1 gap-[var(--gap-block)] xl:grid-cols-2">
         <SecaoBanner titulo="Identificação">

@@ -1,8 +1,8 @@
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { anosDoCard } from "@/lib/empenho-cards-core";
-import { getCard } from "@/lib/empenho-cards";
+import { anosDoCard, pendenciasDoCard } from "@/lib/empenho-cards-core";
+import { getCard, vinculosDoCard } from "@/lib/empenho-cards";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
@@ -55,6 +55,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (corpo.acao === "iniciar") {
     const anos = anosDoCard(card.anos, Number(dataIsoBrasilia(new Date().toISOString()).slice(0, 4)));
     if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos deste card (Configuração).`, 422);
+    // A CONFIGURAÇÃO vem antes de qualquer importação: o catálogo ("Buscar na Centi") exige a Configuração confirmada;
+    // os empenhos, também os vínculos.
+    const falta = pendenciasDoCard(card, (await vinculosDoCard(card.id)).length).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
+    if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
     return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo) });
