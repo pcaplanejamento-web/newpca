@@ -199,6 +199,14 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
     }
   }
 
+  // Trocar de ano (fora de uma leitura) tira da tela os passos e os números da importação de outro ano.
+  useEffect(() => {
+    if (!rodando && atual && atual.ano !== ano) {
+      setAtual(null);
+      setPassos([]);
+    }
+  }, [ano, rodando, atual]);
+
   async function interromper() {
     if (await confirmar({ titulo: "Interromper a importação?", texto: "O que já foi lido é descartado; os empenhos ficam como estavam.", confirmar: "Interromper", perigo: true })) {
       parar.current = true;
@@ -327,7 +335,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             Interromper
           </Button>
         ) : (
-          <Button size="sm" onClick={() => void importar(null)} disabled={!!emAndamento || !anos.length || bloqueado} title={bloqueado ? "Configure o card antes de importar (Configuração e Vínculos)" : undefined} icon={<IconDownload className="h-4 w-4" />}>
+          <Button size="sm" onClick={() => void importar(null)} disabled={!!emAndamento || !anos.length || bloqueado} title={bloqueado ? "Configure o card antes de importar (Configuração e Vínculos)" : emAndamento ? `Há uma importação de ${emAndamento.ano} em andamento — continue ou cancele antes (aviso abaixo)` : undefined} icon={<IconDownload className="h-4 w-4" />}>
             Importar {ano}
           </Button>
         )}

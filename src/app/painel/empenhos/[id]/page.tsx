@@ -13,6 +13,7 @@ import { cadastroParaVinculos, catalogoCenti, listarCards, vinculosDoCard } from
 import { anosEmpenhos, escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { anoEscolhido, chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
 import { dataIsoBrasilia } from "@/lib/format";
+import { usaPeriodo } from "@/lib/empenhos-core";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
         catalogo={catalogo}
         cadastro={cadastro}
         podeEditar={pode.configurar}
+        comPeriodo={usaPeriodo(card.parametros)}
         podeBuscar={pode.importar}
         configurado={!!card.configuradoEm}
       />

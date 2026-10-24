@@ -83,12 +83,9 @@ export function EmpenhoCardView({
     ] as const
   ).filter((o) => permitidas.includes(o.value));
 
-  // No desktop o espaço do card cabe no display: só o conteúdo das abas rola por dentro (a página nunca rola).
-  const raiz = useRef<HTMLDivElement>(null);
-  const altura = useAlturaTela(raiz, 360);
 
   return (
-    <div ref={raiz} className="space-y-[var(--gap-block)] lg:flex lg:h-[var(--h-card)] lg:flex-col lg:space-y-0 lg:gap-[var(--gap-block)] lg:overflow-hidden" style={altura ? ({ "--h-card": `${altura}px` } as CSSProperties) : undefined}>
+    <div className="space-y-[var(--gap-block)]">
       <div className="linha-topico flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
@@ -144,13 +141,25 @@ export function EmpenhoCardView({
         </Callout>
       )}
 
-      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-        <AbasEspaco<AbaCard> aba={aba} opcoes={opcoes}>
-          {children}
-        </AbasEspaco>
-      </div>
+      <AbasEspaco<AbaCard> aba={aba} opcoes={opcoes}>
+        <AteOFim>{children}</AteOFim>
+      </AbasEspaco>
 
       {confirmacao}
+    </div>
+  );
+}
+
+/**
+ * No desktop, o conteúdo da aba vai no máximo até o fim do display e rola por dentro — a página nunca rola (a barra das
+ * abas e o cabeçalho ficam à vista). As tabelas `scrollInterno` já medem até o fim e cabem sem rolar aqui.
+ */
+function AteOFim({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const altura = useAlturaTela(ref, 240);
+  return (
+    <div ref={ref} className="space-y-[var(--gap-block)] lg:max-h-[var(--h-aba)] lg:overflow-y-auto" style={altura ? ({ "--h-aba": `${altura}px` } as CSSProperties) : undefined}>
+      {children}
     </div>
   );
 }

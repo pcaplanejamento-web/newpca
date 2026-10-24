@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.207.3",
+    data: "2026-10-24",
+    titulo: "Abas dos empenhos na altura da tela",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "As abas do card de empenhos respeitam a altura da tela: cabeçalho e abas ficam à vista e só o conteúdo rola por dentro.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "“Buscar na Centi” ganhou Interromper, o seletor de ano sempre à vista e segue o período dos parâmetros do card.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Trocar o órgão gestor ou a unidade de um vínculo com ações escolhidas pede confirmação.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Na Importação, trocar de ano limpa os números da importação de outro ano e o botão explica quando há outra importação em andamento.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "A Configuração acompanha as alterações salvas por outra pessoa e o Testar diz por que está bloqueado.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.207.2",
     data: "2026-10-24",
     titulo: "Card de empenhos sem rolar a página",

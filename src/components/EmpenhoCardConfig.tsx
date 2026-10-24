@@ -69,6 +69,14 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
   const previa = useMemo(() => previaPedido(v, ano), [v, ano]);
   const anosDeFato = anosDoCard(v.anos, anoAtual());
 
+  // O card mudou no servidor (outra pessoa salvou): sem edição em curso aqui, a tela acompanha.
+  const base = JSON.stringify(edicaoDoCard(card));
+  const [baseVista, setBaseVista] = useState(base);
+  if (base !== baseVista) {
+    setBaseVista(base);
+    if (JSON.stringify(v) === baseVista) setV(edicaoDoCard(card));
+  }
+
   useEffect(() => {
     if (!alterado) return;
     const aviso = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -89,7 +97,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
       toast.success(card.configuradoEm ? `Card "${j.card.nome}" salvo.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`);
       setV(edicaoDoCard(j.card));
       if (!card.configuradoEm) router.push(`/painel/empenhos/${card.id}?aba=vinculos`);
-      router.refresh();
+      else router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar o card.");
     } finally {
@@ -254,7 +262,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
         titulo="Testar"
         acao={
           <span className="flex items-center gap-1">
-            <Button size="sm" variant="secondary" onClick={testar} loading={testando} disabled={!!previa.erro || !!motivo} icon={<IconPlay className="h-4 w-4" />}>
+            <Button size="sm" variant="secondary" onClick={testar} loading={testando} disabled={!!previa.erro || !!motivo} title={previa.erro ?? motivo ?? undefined} icon={<IconPlay className="h-4 w-4" />}>
               Testar agora
             </Button>
             <A titulo="Testar">

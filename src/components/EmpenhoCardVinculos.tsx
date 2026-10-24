@@ -74,6 +74,7 @@ export function EmpenhoCardVinculos({
   podeEditar,
   podeBuscar,
   configurado,
+  comPeriodo,
 }: {
   cardId: number;
   /** Os anos do card (o "Buscar na Centi" lê o ano escolhido — o mesmo das outras abas, `useAnoDoCard`). */
@@ -86,6 +87,8 @@ export function EmpenhoCardVinculos({
   podeBuscar: boolean;
   /** A Configuração do card já foi confirmada (sem ela, nada é lido da Centi). */
   configurado: boolean;
+  /** Os parâmetros do card pedem período ({inicio}/{fim}) — senão o ano vai num pedido só (`usaPeriodo`). */
+  comPeriodo: boolean;
 }) {
   const router = useRouter();
   const [vista, setVista] = useState<Vista>("vinculos");
@@ -93,6 +96,7 @@ export function EmpenhoCardVinculos({
   const [gravando, setGravando] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [agora, setAgora] = useState<Agora | null>(null);
+  const pararBusca = useRef(false);
   const [anoBusca, setAnoBusca] = useAnoDoCard(cardId, anos);
   const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -155,6 +159,8 @@ export function EmpenhoCardVinculos({
   /** EDIÇÃO NA CÉLULA: troca um campo do vínculo da linha e grava a lista inteira (a mesma régua do editor). */
   async function mudarNaCelula(g: GrupoVinculo, patch: Partial<Rascunho>, ok: string) {
     const r: Rascunho = { orgaoGestor: g.orgaoGestor, unidade: g.unidade, acoes: g.acoes ?? [], destino: destinoDe(g), ...patch };
+    const perde = g.acoes?.length && patch.acoes && !patch.acoes.length ? g.acoes.length : 0;
+    if (perde && !(await confirmar({ titulo: "Trocar e liberar as ações?", texto: `As ${num(perde)} ações escolhidas neste vínculo deixam de valer (passa a ser todas as ações). Os empenhos que ficarem sem vínculo saem do banco.`, confirmar: "Trocar", perigo: true }))) return;
     setGravandoLinha(g.chave);
     try {
       await gravar(comGrupo(g.chave, r), ok);
@@ -196,6 +202,7 @@ export function EmpenhoCardVinculos({
 
   /** "Buscar na Centi": lê o ano em modo catálogo (nada é gravado nos empenhos) e atualiza as escolhas. */
   async function buscar() {
+    pararBusca.current = false;
     setBuscando(true);
     const condutor = crypto.randomUUID();
     let lote: LoteCenti | null = null;
@@ -206,8 +213,8 @@ export function EmpenhoCardVinculos({
         lote,
         anteriores: [],
         condutor,
-        comPeriodo: true,
-        parar: () => false,
+        comPeriodo,
+        parar: () => pararBusca.current,
         onPasso: () => {},
         onLote: () => {},
         onAgora: setAgora,
@@ -218,9 +225,11 @@ export function EmpenhoCardVinculos({
       toast.success(fim.lote.mensagem ?? "Catálogo da Centi atualizado.");
       router.refresh();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha ao buscar na Centi.";
-      if (lote && !(e instanceof RecusaImportacao)) await pedirImportacao(cardId, { acao: "cancelar", lote: lote.id, condutor, falhou: true, motivo: msg.slice(0, 300) }).catch(() => {});
-      toast.error(msg);
+      const interrompida = pararBusca.current;
+      const msg = interrompida ? "Busca na Centi interrompida — o catálogo ficou como estava." : e instanceof Error ? e.message : "Falha ao buscar na Centi.";
+      if (lote && !(e instanceof RecusaImportacao)) await pedirImportacao(cardId, { acao: "cancelar", lote: lote.id, condutor, falhou: !interrompida, motivo: msg.slice(0, 300) }).catch(() => {});
+      if (interrompida) toast.info(msg);
+      else toast.error(msg);
     } finally {
       setAgora(null);
       setBuscando(false);
@@ -360,14 +369,17 @@ export function EmpenhoCardVinculos({
         />
         {podeBuscar && (
           <>
-            {anos.length > 1 && (
-              <SelectField compacto label="Ano" value={String(anoBusca)} onChange={(e) => setAnoBusca(Number(e.target.value))} disabled={buscando}>
-                {anos.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </SelectField>
+            <SelectField compacto label="Ano" value={String(anoBusca)} onChange={(e) => setAnoBusca(Number(e.target.value))} disabled={buscando}>
+              {anos.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </SelectField>
+            {buscando && (
+              <Button size="sm" variant="danger" onClick={() => (pararBusca.current = true)}>
+                Interromper
+              </Button>
             )}
             <Button size="sm" variant="secondary" onClick={buscar} loading={buscando} disabled={!anos.length || !configurado} icon={<IconDownload className="h-4 w-4" />} title={configurado ? "Lê o ano na Centi e atualiza as escolhas (nada é gravado nos empenhos)" : "Confirme a Configuração do card antes de ler a Centi"} aria-label="Buscar na Centi">
               Buscar<span className="hidden sm:inline">&nbsp;na Centi</span>
