@@ -7,12 +7,12 @@ import { comandoRecontarLote, comandoRegistrarPasso, comandoSoltarLote, comandos
 import { corpoLiquidacoes, idCenti, lerOrgaosCenti, lerPaginaLiquidacoes, linhaLiquidacao, orgaoDaPagina, orgaosDaCenti } from "../src/lib/liquidacoes-core.ts";
 import {
   comandoRealinharLiquidacoes,
+  comandosFechoPeriodoLiquidacoes,
   comandosConferirLiquidacoes,
   comandosGuardarLiquidacoes,
   comandosPromoverLiquidacoes,
   contagemLiquidacoes,
   liquidacoesSuspeitas,
-  totalAntesDaPagina,
   ultimaLiquidacaoPromovida,
 } from "../src/lib/liquidacoes-sql.ts";
 import { anosLiquidacoes, COLUNAS_LIQUIDACAO, liquidacaoCompleta, textoLiquidacoes } from "../src/lib/liquidacoes-tela.ts";
@@ -100,16 +100,19 @@ function banco() {
 }
 
 /** Lê UM órgão no período COMO A ROTA FAZ (a "página" é o órgão): o staging + a conferência em tempo real; o resultado. */
-async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<string, unknown>[], pagina = 1, idOrgao = 2, ultima = true) {
+async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<string, unknown>[], pagina = 1, idOrgao = 2, ultima = true, periodo = { inicio: "2025-01-01", fim: "2025-12-31" }) {
   const p = lerPaginaLiquidacoes(JSON.stringify(regs), 2025);
   const novos = p.linhas.length - (await jaNoLote(b.db, lote, p.linhas.map((l) => l.chave)));
-  const periodo = { inicio: "2025-01-01", fim: "2025-12-31" };
-  const total = (await totalAntesDaPagina(b.db, lote, periodo, pagina)) + (p.total ?? 0);
-  const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: ultima, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total, soma: p.soma, mensagem: null, corpo: "{}" };
+  // O total é o DESTE órgão; o fim do período é decidido NO BANCO quando todos os órgãos do lote chegaram (`ultima` = o
+  // lote só com os órgãos lidos até aqui — nos testes antigos, a última página fecha).
+  const total = p.total ?? 0;
+  const paginas = ultima ? pagina : pagina + 1;
+  const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: false, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
     ...comandosGuardarLiquidacoes(b.db, lote, pagina, idOrgao, p.linhas),
     ...comandosConferirLiquidacoes(b.db, lote, LIQ, 1, p.linhas.map((l) => l.chave)),
+    ...comandosFechoPeriodoLiquidacoes(b.db, lote, periodo, paginas),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),
   ] as never)) as Record<string, unknown>[][];
@@ -149,7 +152,7 @@ test("liquidações (D1 real): o NÚMERO DO EMPENHO dá o órgão e a unidade; s
   assert.deepEqual(await guardar(b, l1, [liq(3, "77")], 2, 99, true), { novos: 0, alterados: 0, iguais: 0, semVinculo: 1 });
   const s = lote(b, l1);
   assert.equal(s.unicos, 3);
-  assert.equal(s.totalInformado, 4, "o total ACUMULADO dos órgãos do período (3 do 1º + 1 do 2º)");
+  assert.equal(s.totalInformado, 4, "o total do período = a SOMA dos órgãos (3 do 1º + 1 do 2º)");
   assert.deepEqual(conferirLote(s), { completo: true });
   assert.equal(await liquidacoesSuspeitas(b.db, l1), 0);
   assert.deepEqual(await promover(b, l1, "marcar", [2, 99]), { inseridos: 2, atualizados: 0, removidos: 0, fora: 1 });
@@ -299,4 +302,35 @@ test("liquidações (D1 real): o EMPENHO vem de TODA a tabela, de qualquer ano �
   assert.equal((await liquidacaoCompleta(LIQ, Number(por.get("88")?.[col("id")]), null, b.db))?.empenho, null);
   assert.equal(await liquidacaoCompleta(LIQ, id, { unidades: [999], orgaos: [] }, b.db), null, "fora do escopo = inexistente");
   assert.equal(await liquidacaoCompleta(LIQ + 1, id, null, b.db), null, "de outro card = inexistente");
+});
+
+test("liquidações EM PARALELO (D1 real): os órgãos chegam fora de ordem — o último fecha o período; o total é a soma", async () => {
+  const b = banco();
+  const l1 = b.novoLote([2, 3, 8]);
+  const sem = { inicio: "2025-03-01", fim: "2025-03-07" };
+  const fins = () => b.raw.prepare("SELECT pagina, fim_periodo AS f, estado FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(l1).map((x) => ({ ...x }));
+  // Órgão 3 (página 3), depois o 1 e por último o 2 — cada pedido decide o fecho no banco, com os 3 órgãos do lote.
+  await guardar(b, l1, [liq(30, "x")], 3, 8, false, sem);
+  await guardar(b, l1, [liq(10, "x"), liq(11, "x")], 1, 2, false, sem);
+  assert.deepEqual(fins().map((p) => p.f), [0, 0], "ainda falta um órgão");
+  // O fecho de verdade (a rota passa os órgãos do lote): o 2º órgão chega por último e fecha.
+  const p = lerPaginaLiquidacoes(JSON.stringify([liq(20, "x")]), 2025);
+  await b.db.batch([
+    comandoRegistrarPasso(b.db, l1, { ...sem, pagina: 2, estado: "ok", fimPeriodo: false, status: 200, bytes: 1, ms: 1, recebidos: 1, novos: 1, recusados: 0, repetidos: 0, total: p.total, soma: p.soma, mensagem: null, corpo: "{}" }),
+    ...comandosGuardarLiquidacoes(b.db, l1, 2, 3, p.linhas),
+    ...comandosFechoPeriodoLiquidacoes(b.db, l1, sem, 3),
+    comandoRecontarLote(b.db, l1),
+  ] as never);
+  assert.deepEqual(fins().at(-1), { pagina: 2, f: 1, estado: "ok" }, "o último a chegar fecha o período");
+  assert.equal(lote(b, l1).totalInformado, 4, "1 + 2 + 1 — a soma dos totais de cada órgão");
+  // Um órgão DIVIDE o período (grande demais): o que chegar depois nesse período vira "dividido" também — não conta.
+  const sem2 = { inicio: "2025-03-08", fim: "2025-03-14" };
+  await b.db.batch([
+    comandoRegistrarPasso(b.db, l1, { ...sem2, pagina: 1, estado: "dividido", fimPeriodo: false, status: null, bytes: null, ms: 1, recebidos: 0, novos: 0, recusados: 0, repetidos: 0, total: null, soma: null, mensagem: "grande", corpo: "{}" }),
+  ] as never);
+  await guardar(b, l1, [liq(40, "x")], 2, 3, false, sem2);
+  await guardar(b, l1, [liq(41, "x")], 3, 8, true, sem2);
+  const doSem2 = b.raw.prepare("SELECT estado, fim_periodo AS f FROM centi_lote_passos WHERE lote_id = ? AND inicio = ? ORDER BY id").all(l1, sem2.inicio).map((x) => ({ ...x }));
+  assert.deepEqual(doSem2, [{ estado: "dividido", f: 0 }, { estado: "dividido", f: 0 }, { estado: "dividido", f: 0 }]);
+  assert.equal(lote(b, l1).totalInformado, 4, "o período dividido não entra no total");
 });

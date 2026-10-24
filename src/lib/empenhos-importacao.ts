@@ -6,12 +6,12 @@ import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vincul
 import { corpoLiquidacoes, lerPaginaLiquidacoes, orgaoDaPagina } from "./liquidacoes-core";
 import {
   comandoRealinharLiquidacoes,
+  comandosFechoPeriodoLiquidacoes,
   comandosConferirLiquidacoes,
   comandosGuardarLiquidacoes,
   comandosPromoverLiquidacoes,
   contagemLiquidacoes,
   liquidacoesSuspeitas,
-  totalAntesDaPagina,
   ultimaLiquidacaoPromovida,
 } from "./liquidacoes-sql";
 import { registrarLeituraCard } from "./empenho-cards";
@@ -151,16 +151,16 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
 
   const lido = await lidoNoPeriodo(db, lote.id, periodo);
   const novos = lida.linhas.length - (await jaNoLote(db, lote.id, lida.linhas.map((l) => l.chave)));
-  // LIQUIDAÇÕES: o período termina no último órgão; o total do período é ACUMULADO (o dos órgãos anteriores + o deste) —
-  // o maior total do período (a régua da conferência do lote) é o de todos os órgãos.
-  const total = liq ? (await totalAntesDaPagina(db, lote.id, periodo, pagina)) + (lida.total ?? 0) : (totalDoPeriodo(lida, pagina) ?? lido.total);
+  // LIQUIDAÇÕES: o total é o DESTE órgão (o do período = a soma dos órgãos — `comandoRecontarLote`); os órgãos são lidos
+  // em PARALELO, então o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
+  const total = liq ? (lida.total ?? 0) : (totalDoPeriodo(lida, pagina) ?? lido.total);
   const continuar = liq
     ? pagina < (lote.orgaosCenti?.length ?? 0)
     : continuarPeriodo({ recebidos: lido.recebidos + lida.recebidos, paginas: lido.paginas + 1, total }, { recebidos: lida.recebidos, novos });
   const passo: PassoNovo = {
     ...base,
     estado: "ok",
-    fimPeriodo: !continuar,
+    fimPeriodo: !liq && !continuar,
     status,
     bytes,
     ms,
@@ -179,6 +179,7 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
       ...comandosGuardarLiquidacoes(db, lote.id, pagina, idOrgao ?? 0, lida.linhas),
       // A CONFERÊNCIA EM TEMPO REAL: o resultado da página no passo; as iguais à gravada saem do staging.
       ...comandosConferirLiquidacoes(db, lote.id, card.id, lote.leitor, lida.linhas.map((l) => l.chave)),
+      ...comandosFechoPeriodoLiquidacoes(db, lote.id, periodo, lote.orgaosCenti?.length ?? 0),
       comandoRecontarLote(db, lote.id),
       consultaUltimoPasso(db, lote.id),
     ] as never);

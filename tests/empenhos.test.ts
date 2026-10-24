@@ -21,6 +21,7 @@ import {
   periodoDoAno,
   MAX_PAGINAS,
   type Periodo,
+  pedidosEmCurso,
   periodoEmCurso,
   periodosAPedir,
   periodosLidos,
@@ -238,6 +239,16 @@ test("empenhos: a retomada — períodos concluídos, o em curso na próxima pá
   assert.deepEqual(periodosLidos(passos), [{ inicio: "2026-01-01", fim: "2026-01-31" }]);
   assert.deepEqual(periodoEmCurso(passos), { periodo: { inicio: "2026-02-01", fim: "2026-02-14" }, pagina: 3 });
   assert.equal(periodoEmCurso(passos.slice(0, 1)), null);
+  // EM PARALELO: várias semanas começadas = um pedido por semana (a próxima página de cada uma).
+  const paralelo = [...passos, passo("2026-03-01", "2026-03-07", 1, "ok")];
+  assert.deepEqual(
+    pedidosEmCurso(paralelo).map((p) => `${p.periodo.inicio}:${p.pagina}`),
+    ["2026-02-01:3", "2026-03-01:2"],
+  );
+  // LIQUIDAÇÕES (3 órgãos): os órgãos que faltam do período — inclusive um do MEIO (lidos fora de ordem).
+  const liq = [passo("2026-03-01", "2026-03-07", 1, "ok"), passo("2026-03-01", "2026-03-07", 3, "ok"), passo("2026-03-08", "2026-03-14", 2, "ok", true)];
+  assert.deepEqual(pedidosEmCurso(liq, 3), [{ periodo: { inicio: "2026-03-01", fim: "2026-03-07" }, pagina: 2 }]);
+  assert.deepEqual(periodoEmCurso(liq, 3), { periodo: { inicio: "2026-03-01", fim: "2026-03-07" }, pagina: 2 });
 });
 
 test("empenhos: quando continuar no período e a CONFERÊNCIA (falha no meio ou página repetida nunca é 'completo')", () => {

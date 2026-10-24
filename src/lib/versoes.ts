@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.214.0",
+    data: "2026-10-24",
+    titulo: "Importação em paralelo",
+    mudancas: [
+      { tipo: "melhoria", area: "Liquidações", texto: "A importação lê os órgãos de cada semana AO MESMO TEMPO (até 6 pedidos em paralelo): um órgão que demora ou falha não segura os outros, e o período só fecha quando todos chegaram. As importações de liquidações que estavam abertas foram encerradas — importe de novo.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A importação lê várias semanas ao mesmo tempo (até 4 pedidos em paralelo); as páginas de cada semana seguem em sequência. Continuar retoma tudo o que faltava de cada semana começada.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos e liquidações", texto: "Os indicadores dos banners (valores do empenho e da liquidação) cabem inteiros em qualquer tamanho de tela — a fonte acompanha a largura do cartão, sem reticências.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.213.0",
     data: "2026-10-24",
     titulo: "Detalhe das liquidações e o ano do empenho",

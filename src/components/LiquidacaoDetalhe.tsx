@@ -34,7 +34,7 @@ export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: Liq
   const e = completo?.empenho;
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
         <StatMini label="Valor" value={brl(l.valor)} tone="accent" />
         <StatMini label="Anulado" value={brl(l.valorAnulado)} tone={l.valorAnulado ? "warn" : "default"} />
         <StatMini label="Líquido" value={brl(l.valorLiquido)} />
@@ -72,7 +72,7 @@ export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: Liq
           </Callout>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
               <StatMini label="Empenhado" value={brl(e.valorEmpenhado)} />
               <StatMini label="Liquidado" value={brl(e.valorLiquidado)} />
               <StatMini label="Pago" value={brl(e.valorPago)} tone="ok" />

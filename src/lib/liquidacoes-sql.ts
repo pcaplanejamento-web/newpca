@@ -274,22 +274,29 @@ export function comandosPromoverLiquidacoes(
   ] as const;
 }
 
-/** O total ACUMULADO do período até o órgão anterior (a última leitura lida da "página" anterior) — 0 no 1º órgão. */
-export async function totalAntesDaPagina(db: Db, loteId: number, periodo: { inicio: string; fim: string }, pagina: number): Promise<number> {
-  if (pagina <= 1) return 0;
-  const [p] = await db
-    .select({ total: centiLotePassos.total })
-    .from(centiLotePassos)
-    .where(
-      and(
-        eq(centiLotePassos.loteId, loteId),
-        eq(centiLotePassos.inicio, periodo.inicio),
-        eq(centiLotePassos.fim, periodo.fim),
-        eq(centiLotePassos.pagina, pagina - 1),
-        eq(centiLotePassos.estado, "ok"),
+/**
+ * Os ÓRGÃOS são lidos em PARALELO (cada um numa requisição): o FECHO do período é decidido NO BANCO, dentro do lote da
+ * página (os lotes do D1 são transações em série — nunca dois ao mesmo tempo): (1) o período que outro órgão já DIVIDIU
+ * (resposta grande demais) não aceita a leitura que chegou depois — ela vira "dividido" também (o período recomeça nas
+ * metades, com todos os órgãos); (2) o período termina quando TODOS os órgãos (páginas 1..n) têm uma leitura válida — o
+ * último a chegar, em qualquer ordem, marca o fim no próprio passo.
+ */
+export function comandosFechoPeriodoLiquidacoes(db: Db, loteId: number, periodo: { inicio: string; fim: string }, paginas: number) {
+  const doPeriodo = sql`${centiLotePassos.loteId} = ${loteId} AND ${centiLotePassos.inicio} = ${periodo.inicio} AND ${centiLotePassos.fim} = ${periodo.fim}`;
+  return [
+    db
+      .update(centiLotePassos)
+      .set({ estado: "dividido" })
+      .where(and(sql`${doPeriodo}`, eq(centiLotePassos.estado, "ok"), sql`EXISTS (SELECT 1 FROM ${centiLotePassos} AS d WHERE d."lote_id" = ${loteId} AND d."inicio" = ${periodo.inicio} AND d."fim" = ${periodo.fim} AND d."estado" = 'dividido')`)),
+    db
+      .update(centiLotePassos)
+      .set({ fimPeriodo: 1 })
+      .where(
+        and(
+          eq(centiLotePassos.id, ultimoPasso(loteId)),
+          eq(centiLotePassos.estado, "ok"),
+          sql`(SELECT COUNT(DISTINCT o."pagina") FROM ${centiLotePassos} AS o WHERE o."lote_id" = ${loteId} AND o."inicio" = ${periodo.inicio} AND o."fim" = ${periodo.fim} AND o."estado" = 'ok' AND o."pagina" BETWEEN 1 AND ${paginas}) >= ${paginas}`,
+        ),
       ),
-    )
-    .orderBy(desc(centiLotePassos.id))
-    .limit(1);
-  return p?.total ?? 0;
+  ] as const;
 }

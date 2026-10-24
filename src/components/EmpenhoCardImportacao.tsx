@@ -20,7 +20,7 @@ import {
   usaPeriodo,
 } from "@/lib/empenhos-core";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
-import { type Agora, lerAnoNaCenti, lerPassos, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
+import { type Agora, lerAnoNaCenti, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -476,10 +476,9 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       )}
       {(rodando || passos.length > 0) && atual && (
         <div className="space-y-3">
-          {rodando && atual.orgaosCenti && agora && (
+          {rodando && atual.orgaosCenti && (
             <p className="text-[13px] text-muted">
-              Liquidações de {orgaosLiq?.find((o) => o.idOrgao === atual.orgaosCenti?.[agora.pagina - 1])?.nome ?? rotuloPagina(atual.orgaosCenti, agora.pagina)} ({agora.pagina} de{" "}
-              {atual.orgaosCenti.length} órgãos)
+              Liquidações de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo em cada semana (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
             </p>
           )}
           {rodando && (
@@ -487,12 +486,12 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
               value={fracaoDoAno(atual.ano, passos) * 100}
               label={
                 agora
-                  ? `${rotuloPeriodo(agora.periodo)} · ${rotuloPagina(atual.orgaosCenti, agora.pagina)}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ` · aguardando a Centi há ${segundos} s`}`
+                  ? `${agora.emCurso && agora.emCurso > 1 ? `${agora.emCurso} pedidos em paralelo · último: ` : ""}${rotuloPeriodo(agora.periodo)} · ${rotuloPagina(atual.orgaosCenti, agora.pagina)}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ` · aguardando a Centi há ${segundos} s`}`
                   : "Conferindo…"
               }
             />
           )}
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
             <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
             <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />
             <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />

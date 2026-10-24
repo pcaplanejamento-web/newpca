@@ -376,16 +376,32 @@ export function periodosLidos(passos: PassoMin[]): Periodo[] {
   return [...vistos.values()];
 }
 
-/** Onde retomar: o período começado e não concluído (e a próxima página), se houver. */
-export function periodoEmCurso(passos: PassoMin[]): { periodo: Periodo; pagina: number } | null {
+/**
+ * O que falta dos períodos COMEÇADOS e não concluídos. Empenhos (`paginas` ausente): a próxima página de cada período (as
+ * páginas de um período são lidas em sequência). LIQUIDAÇÕES (`paginas` = quantos órgãos o lote lê): TODAS as páginas
+ * (órgãos) do período que ainda não foram lidas — os órgãos são lidos em PARALELO, então pode faltar uma do meio.
+ */
+export function pedidosEmCurso(passos: PassoMin[], paginas?: number): { periodo: Periodo; pagina: number }[] {
   const feitos = new Set(periodosLidos(passos).map((p) => `${p.inicio}|${p.fim}`));
-  let em: { periodo: Periodo; pagina: number } | null = null;
+  const porPeriodo = new Map<string, { periodo: Periodo; lidas: Set<number> }>();
   for (const p of passos) {
-    if (p.estado !== "ok" || feitos.has(`${p.inicio}|${p.fim}`)) continue;
-    const mesmo = em && em.periodo.inicio === p.inicio && em.periodo.fim === p.fim;
-    if (!mesmo || p.pagina + 1 > (em?.pagina ?? 0)) em = { periodo: { inicio: p.inicio, fim: p.fim }, pagina: p.pagina + 1 };
+    const k = `${p.inicio}|${p.fim}`;
+    if (p.estado !== "ok" || feitos.has(k)) continue;
+    const em = porPeriodo.get(k) ?? { periodo: { inicio: p.inicio, fim: p.fim }, lidas: new Set<number>() };
+    em.lidas.add(p.pagina);
+    porPeriodo.set(k, em);
   }
-  return em;
+  const r: { periodo: Periodo; pagina: number }[] = [];
+  for (const { periodo, lidas } of porPeriodo.values()) {
+    if (paginas == null) r.push({ periodo, pagina: Math.max(...lidas) + 1 });
+    else for (let n = 1; n <= paginas; n++) if (!lidas.has(n)) r.push({ periodo, pagina: n });
+  }
+  return r;
+}
+
+/** Onde retomar: o primeiro período começado e não concluído (e a próxima página), se houver. */
+export function periodoEmCurso(passos: PassoMin[], paginas?: number): { periodo: Periodo; pagina: number } | null {
+  return pedidosEmCurso(passos, paginas)[0] ?? null;
 }
 
 /**
@@ -496,8 +512,8 @@ const chaveP = (p: Periodo) => `${p.inicio}|${p.fim}`;
  * O PRÓXIMO pedido do lote: a página seguinte do período começado; senão o 1º período que falta — o período DIVIDIDO
  * (grande demais) dá lugar às metades, até um dia. null = o ano todo lido (é a hora de concluir).
  */
-export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boolean): { periodo: Periodo; pagina: number } | null {
-  const emCurso = periodoEmCurso(passos);
+export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boolean, paginas?: number): { periodo: Periodo; pagina: number } | null {
+  const emCurso = periodoEmCurso(passos, paginas);
   if (emCurso) return emCurso;
   const lidos = periodosLidos(passos);
   const lidosSet = new Set(lidos.map(chaveP));

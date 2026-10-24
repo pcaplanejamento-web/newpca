@@ -4595,6 +4595,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
     `modo`. A tabela: `EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes` (as tuplas montadas pelo banco —
     `liquidacoes-tela.ts`; escopo = o do empenho).
+  - **IMPORTAÇÃO EM PARALELO (v1.214.0, migração `0151` — encerrou as importações de liquidações abertas):** `lerAnoNaCenti`
+    (`leitura-centi-cliente.ts`) roda uma FILA com `emPool` — cada pedido é uma requisição própria (o próprio limite do
+    Worker): empenhos = várias SEMANAS ao mesmo tempo (`PARALELO_EMPENHOS`=4; as páginas de uma semana em sequência);
+    liquidações = TODOS os órgãos de cada semana (`PARALELO_LIQUIDACOES`=6); a 1ª falha para de começar novos e espera os em
+    curso; o lote mais novo (`vistoEm`) vence na tela. Retomada: `pedidosEmCurso(passos, n?)` (`empenhos-core.ts` — a
+    próxima página de cada semana começada; nas liquidações, cada órgão que falta, mesmo do meio); `periodoEmCurso`/
+    `proximoPedido` (cron) aceitam o `n` de órgãos. Liquidações: o passo guarda o total do PRÓPRIO órgão (o do período =
+    a soma — `comandoRecontarLote` por `modo`) e o FECHO é decidido no banco, no lote da página
+    (`comandosFechoPeriodoLiquidacoes`: o período já dividido por outro órgão transforma a leitura atrasada em "dividido";
+    o último órgão a chegar, em qualquer ordem, marca `fim_periodo`). `StatMini`: o valor proporcional à largura do cartão
+    (container query, quebra só em último caso) e as grades dos detalhes em `auto-fit`.
   - **DETALHE + ANO DO EMPENHO (v1.213.0, sem migração):** tocar numa linha da aba Liquidações abre o `LiquidacaoDetalhe` (DS, num
     `Modal` — o padrão do `EmpenhoDetalhe`) com `GET /api/empenhos/cards/[id]/liquidacoes/[liqId]` → `liquidacaoCompleta`
     (`liquidacoes-tela.ts`: o registro, o cadastro e o EMPENHO ligado; escopo e card conferidos — fora = 404). O empenho é

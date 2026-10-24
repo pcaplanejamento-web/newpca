@@ -72,7 +72,7 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
     const [conduz] = await comandoConduzir(db, lote.id, CONDUTOR_AUTO);
     if (!conduz) return "conduzida por uma aba";
     const passos = await listarPassos(lote.id);
-    const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros));
+    const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), lote.modo === "liquidacoes" ? (lote.orgaosCenti?.length ?? 0) : undefined);
     if (!pedido) return concluir(card, lote);
     if (errosSeguidos(passos, pedido) >= MAX_ERROS_AUTO) {
       await fecharLoteEmpenhos(card, lote, "falhou", `${rotuloPeriodo(pedido.periodo)}, página ${pedido.pagina}: ${MAX_ERROS_AUTO} erros seguidos — a atualização automática desistiu.`);

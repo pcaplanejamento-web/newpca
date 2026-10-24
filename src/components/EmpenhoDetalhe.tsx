@@ -14,7 +14,7 @@ import { StatMini } from "./StatMini";
 export function EmpenhoDetalhe({ empenho, completo }: { empenho: EmpenhoNaTela; completo?: EmpenhoCompleto | null }) {
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
         <StatMini label="Empenhado" value={brl(empenho.valorEmpenhado)} tone="accent" />
         <StatMini label="Anulado" value={brl(empenho.valorAnulado)} tone={empenho.valorAnulado ? "warn" : "default"} />
         <StatMini label="Liquidado" value={brl(empenho.valorLiquidado)} />
