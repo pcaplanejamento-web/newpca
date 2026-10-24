@@ -157,6 +157,17 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       configurar: "Criar cards e configurar o card de empenhos de origem, a integração, os anos, a programação e as regras.",
     },
   },
+  pagamentos: {
+    na: "em Pagamentos",
+    a: "a Pagamentos",
+    acoes: {
+      visualizar: "Abrir Pagamentos, os cards e a tabela importada de cada um.",
+      importar: "Importar os pagamentos (ordens de pagamento) da Centi em cada card.",
+      exportar: "Baixar a tabela em XLSX e PDF.",
+      excluir: "Excluir cards (com os pagamentos deles) e importações do histórico.",
+      configurar: "Criar cards e configurar a integração, os anos, a programação e as regras.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;

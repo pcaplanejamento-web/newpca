@@ -1,7 +1,7 @@
 import { exigirSessao, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
-import { edicaoDoCard, motivoCardInvalido, telaDoCard } from "@/lib/empenho-cards-core";
+import { edicaoDoCard, motivoCardInvalido, NOME_TIPO, telaDoCard } from "@/lib/empenho-cards-core";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { atualizarCard, excluirCard, getCard } from "@/lib/empenho-cards";
 import { cardEmpenhoSchema } from "@/lib/empenho-cards-validation";
@@ -61,8 +61,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (negado) return negado;
   if (!(await excluirCard(card.id))) return erro("Card não encontrado.", 404);
   const resumo =
-    card.tipo === "liquidacoes"
-      ? `Card de liquidações "${card.nome}" excluído com os órgãos, as importações e as liquidações dele`
+    card.tipo !== "empenhos"
+      ? `Card de ${NOME_TIPO[card.tipo].varios} "${card.nome}" excluído com as importações e ${card.tipo === "pagamentos" ? "os pagamentos" : "as liquidações"} dele`
       : `Card de empenhos "${card.nome}" excluído com os vínculos, as importações e os empenhos dele`;
   await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "empenho_card", entidadeId: card.id, resumo });
   return ok();

@@ -1,7 +1,7 @@
 import { registrarAuditoria } from "./auditoria";
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
-import { anosDoCard, type CardEmpenho } from "./empenho-cards-core";
+import { anosDoCard, type CardEmpenho, cardPorOrgao } from "./empenho-cards-core";
 import { cardsAtivos, orgaosLiquidacao } from "./empenho-cards";
 import { criarLote, getLote, listarPassos, loteEmAndamento, ultimaLeituraPorAno } from "./empenhos";
 import {
@@ -11,6 +11,8 @@ import {
   cardNaHora,
   errosSeguidos,
   LEITOR_EMPENHOS,
+  lotePorMes,
+  lotePorOrgao,
   MAX_ERROS_AUTO,
   PAGINAS_POR_PASSADA,
   proximoPedido,
@@ -57,9 +59,9 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
     if (!anos.length) return "nenhum ano";
     const ano = anoDaVez(anos, await ultimaLeituraPorAno(card.id));
     // LIQUIDAÇÕES: o lote lê TODOS os órgãos do cadastro com o "ID na Centi" (a API exige o órgão — um por "página").
-    const orgaos = card.tipo === "liquidacoes" ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
+    const orgaos = cardPorOrgao(card.tipo) ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
     if (orgaos && !orgaos.length) return "nenhum órgão com o ID na Centi";
-    lote = await criarLote(card.id, ano, QUEM_AUTO, CONDUTOR_AUTO, orgaos ? "liquidacoes" : "dados", orgaos);
+    lote = await criarLote(card.id, ano, QUEM_AUTO, CONDUTOR_AUTO, card.tipo === "empenhos" ? "dados" : card.tipo, orgaos);
     await registrarAuditoria({ usuario: null, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${ano}: atualização automática começou${orgaos ? ` (${orgaos.length} órgão(s) da Centi)` : ""}` });
   }
   if (lote.leitor !== LEITOR_EMPENHOS) {
@@ -72,7 +74,7 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
     const [conduz] = await comandoConduzir(db, lote.id, CONDUTOR_AUTO);
     if (!conduz) return "conduzida por uma aba";
     const passos = await listarPassos(lote.id);
-    const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), lote.modo === "liquidacoes" ? (lote.orgaosCenti?.length ?? 0) : undefined);
+    const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), lotePorOrgao(lote) ? (lote.orgaosCenti?.length ?? 0) : undefined, lotePorMes(lote));
     if (!pedido) return concluir(card, lote);
     if (errosSeguidos(passos, pedido) >= MAX_ERROS_AUTO) {
       await fecharLoteEmpenhos(card, lote, "falhou", `${rotuloPeriodo(pedido.periodo)}, página ${pedido.pagina}: ${MAX_ERROS_AUTO} erros seguidos — a atualização automática desistiu.`);

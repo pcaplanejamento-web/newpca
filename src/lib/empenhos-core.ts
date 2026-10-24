@@ -242,11 +242,35 @@ export function lacunasDoAno(ano: number, lidos: Periodo[], hoje?: string): Peri
   return r;
 }
 
-/** Os períodos a pedir: o que falta do ano, semana a semana (sem o {inicio}/{fim}, o ano inteiro de uma vez). */
-export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean, hoje?: string): Periodo[] {
+/** Divide em MESES do calendário (o 1º e o último podem ser parciais quando o período começa ou termina no meio). */
+function emMeses(p: Periodo): Periodo[] {
+  const r: Periodo[] = [];
+  let ini = p.inicio;
+  while (ini <= p.fim) {
+    const d = new Date(paraMs(ini));
+    const ultimo = paraIso(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    const fim = ultimo < p.fim ? ultimo : p.fim;
+    r.push({ inicio: ini, fim });
+    ini = diaSeguinte(fim);
+  }
+  return r;
+}
+
+/**
+ * Os períodos a pedir: o que falta do ano, semana a semana (sem o {inicio}/{fim}, o ano inteiro de uma vez); `porMes` =
+ * mês a mês (os PAGAMENTOS — a Centi só recorta por mês; o que falta é sempre de meses inteiros).
+ */
+export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean, hoje?: string, porMes = false): Periodo[] {
+  if (porMes) return lacunasDoAno(ano, lidos, hoje).flatMap(emMeses);
   if (!comPeriodo) return lidos.length ? [] : [anoInteiro(ano)];
   return lacunasDoAno(ano, lidos, hoje).flatMap(emSemanas);
 }
+
+/** O lote é lido mês a mês (os pagamentos)? */
+export const lotePorMes = (l: { modo: ModoLote }): boolean => l.modo === "pagamentos";
+
+/** O lote lê TODOS os órgãos da Centi (a "página" N = o N-ésimo órgão): liquidações e pagamentos. */
+export const lotePorOrgao = (l: { modo: ModoLote }): boolean => l.modo === "liquidacoes" || l.modo === "pagamentos";
 
 /** Divide o período ao meio (o de um dia não se divide). */
 export function dividirPeriodo(p: Periodo): [Periodo, Periodo] | null {
@@ -422,8 +446,9 @@ export function conferirLote(s: SituacaoLote): { completo: true } | { completo: 
 export type EstadoLote = "lendo" | "promovido" | "parcial" | "falhou" | "cancelado" | "unidades";
 
 /** `dados` = importa os registros (só os vinculados) · `unidades` = só PUXA o catálogo da Centi (órgãos gestores, unidades
- * orçamentárias e ações), sem gravar nenhum empenho · `liquidacoes` = as LIQUIDAÇÕES de UM órgão da Centi (`liquidacoes-core.ts`). */
-export type ModoLote = "dados" | "unidades" | "liquidacoes";
+ * orçamentárias e ações), sem gravar nenhum empenho · `liquidacoes` = as LIQUIDAÇÕES dos órgãos da Centi (`liquidacoes-core.ts`) ·
+ * `pagamentos` = os PAGAMENTOS dos órgãos da Centi, mês a mês (`pagamentos-core.ts`). */
+export type ModoLote = "dados" | "unidades" | "liquidacoes" | "pagamentos";
 
 export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue" | "emerald" | "amber" | "red" | "slate" }> = {
   lendo: { rotulo: "Lendo", tom: "blue" },
@@ -512,7 +537,7 @@ const chaveP = (p: Periodo) => `${p.inicio}|${p.fim}`;
  * O PRÓXIMO pedido do lote: a página seguinte do período começado; senão o 1º período que falta — o período DIVIDIDO
  * (grande demais) dá lugar às metades, até um dia. null = o ano todo lido (é a hora de concluir).
  */
-export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boolean, paginas?: number): { periodo: Periodo; pagina: number } | null {
+export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boolean, paginas?: number, porMes = false): { periodo: Periodo; pagina: number } | null {
   const emCurso = periodoEmCurso(passos, paginas);
   if (emCurso) return emCurso;
   const lidos = periodosLidos(passos);
@@ -528,7 +553,7 @@ export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boole
     }
     return null;
   };
-  for (const p of periodosAPedir(ano, lidos, comPeriodo)) {
+  for (const p of periodosAPedir(ano, lidos, comPeriodo, undefined, porMes)) {
     const r = abrir(p);
     if (r) return { periodo: r, pagina: 1 };
   }

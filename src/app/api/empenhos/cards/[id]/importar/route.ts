@@ -1,7 +1,7 @@
 import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { anosDoCard, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
 import { orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
@@ -29,7 +29,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: a.card.tipo === "liquidacoes" ? await orgaosLiquidacao() : null, emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
+  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: cardPorOrgao(a.card.tipo) ? await orgaosLiquidacao() : null, emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
 }
 
 /**
@@ -55,10 +55,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos deste card (Configuração).`, 422);
     // A CONFIGURAÇÃO vem antes de qualquer importação: o catálogo ("Buscar na Centi") exige a Configuração confirmada;
     // os empenhos, também os vínculos.
-    // O MODO segue o tipo do card: no de liquidações, só liquidações; no de empenhos, os empenhos ou o catálogo.
-    if ((corpo.modo === "liquidacoes") !== (card.tipo === "liquidacoes")) return erro(card.tipo === "liquidacoes" ? "Este card importa liquidações." : "Liquidações se importam num card de liquidações.", 422);
-    // LIQUIDAÇÕES: uma importação lê TODOS os órgãos do cadastro com o "ID na Centi" (a lista fica no lote).
-    const orgaos = card.tipo === "liquidacoes" ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
+    // O MODO segue o tipo do card: no de liquidações, só liquidações; no de pagamentos, só pagamentos; no de empenhos, os
+    // empenhos ou o catálogo.
+    const modoDoCard = card.tipo === "empenhos" ? null : card.tipo;
+    const modoPedido = corpo.modo === "liquidacoes" || corpo.modo === "pagamentos" ? corpo.modo : null;
+    if (modoPedido !== modoDoCard) return erro(modoDoCard ? `Este card importa ${NOME_TIPO[modoDoCard].varios}.` : `${NOME_TIPO[modoPedido ?? "liquidacoes"].titulo} se importam num card de ${NOME_TIPO[modoPedido ?? "liquidacoes"].varios}.`, 422);
+    // LIQUIDAÇÕES e PAGAMENTOS: uma importação lê TODOS os órgãos do cadastro com o "ID na Centi" (a lista fica no lote).
+    const orgaos = cardPorOrgao(card.tipo) ? (await orgaosLiquidacao()).map((o) => o.idOrgao) : null;
     const vinculos = orgaos ? orgaos.length : (await vinculosDoCard(card.id)).length;
     const falta = pendenciasDoCard(card, vinculos).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);

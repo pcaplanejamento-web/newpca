@@ -1,11 +1,12 @@
-import { type LoteCenti, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
+import { type LoteCenti, lotePorMes, lotePorOrgao, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
 
 /**
  * A LEITURA DE UM ANO NA CENTI conduzida pelo NAVEGADOR (a rota lê uma página por vez — o limite de CPU do Worker): a
  * MESMA na importação manual de um card (Empenhos → card → Importação) e no "Buscar na Centi" dos vínculos (o lote em
  * modo `unidades`, que só atualiza o catálogo). Repete a falha de rede com espera; o período grande demais é dividido ao
  * meio. EM PARALELO: cada pedido é uma requisição própria (o próprio limite do Worker) — empenhos: várias SEMANAS ao mesmo
- * tempo (as páginas de uma semana em sequência); liquidações: todos os ÓRGÃOS de cada semana ao mesmo tempo. Um pedido que
+ * tempo (as páginas de uma semana em sequência); liquidações: todos os ÓRGÃOS de cada semana ao mesmo tempo; pagamentos:
+ * todos os ÓRGÃOS de cada MÊS ao mesmo tempo. Um pedido que
  * demora ou falha não segura os outros.
  */
 
@@ -158,14 +159,16 @@ export async function lerAnoNaCenti(o: {
       await esperar(ESPERA_TENTATIVAS[t]);
     }
   }
-  // LIQUIDAÇÕES: cada "página" é um órgão (todos de cada período, em paralelo); empenhos: as páginas em sequência.
-  const orgaos = lote.modo === "liquidacoes" ? (lote.orgaosCenti?.length ?? 0) : undefined;
+  // LIQUIDAÇÕES e PAGAMENTOS: cada "página" é um órgão (todos de cada período, em paralelo); empenhos: as páginas em
+  // sequência. PAGAMENTOS: o período é o MÊS (a Centi só recorta por mês).
+  const orgaos = lotePorOrgao(lote) ? (lote.orgaosCenti?.length ?? 0) : undefined;
+  const porMes = lotePorMes(lote);
   const todasAsPaginas = (periodo: Periodo) => (orgaos == null ? [{ periodo, pagina: 1 }] : Array.from({ length: orgaos }, (_, i) => ({ periodo, pagina: i + 1 })));
   // A FILA: o que falta dos períodos começados e o que falta do ano, semana a semana.
   const emAndamento = pedidosEmCurso(o.anteriores, orgaos);
   const fila: { periodo: Periodo; pagina: number }[] = [...emAndamento];
   const comecados = [...new Map(emAndamento.map((p) => [`${p.periodo.inicio}|${p.periodo.fim}`, p.periodo])).values()];
-  for (const p of periodosAPedir(lote.ano, [...periodosLidos(o.anteriores), ...comecados], o.comPeriodo)) fila.push(...todasAsPaginas(p));
+  for (const p of periodosAPedir(lote.ano, [...periodosLidos(o.anteriores), ...comecados], o.comPeriodo || porMes, undefined, porMes)) fila.push(...todasAsPaginas(p));
   const divididos = new Set<string>();
   try {
     await emPool(fila, orgaos == null ? PARALELO_EMPENHOS : PARALELO_LIQUIDACOES, parar, async (item) => {

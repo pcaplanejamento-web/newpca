@@ -145,6 +145,7 @@ const PALAVRAS: Record<string, string> = {
   "/painel/automacao": "centi extensão fluxos robô baixar dfds cm002",
   "/painel/empenhos": "despesa execução centi empenhado liquidado pago fornecedor fonte elemento cards importação vínculos integração api",
   "/painel/liquidacoes": "despesa execução centi liquidação liquidado pago saldo credor nota empenho cards importação integração api",
+  "/painel/pagamentos": "despesa execução centi pagamento pago ordem de pagamento retenção anulação credor empenho cards importação integração api",
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",

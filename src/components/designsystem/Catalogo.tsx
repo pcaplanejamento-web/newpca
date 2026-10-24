@@ -270,6 +270,7 @@ import {
 } from "@/lib/tarefas-core";
 import { EmpenhoDetalhe } from "@/components/EmpenhoDetalhe";
 import { LiquidacaoDetalhe } from "@/components/LiquidacaoDetalhe";
+import { PagamentoDetalhe } from "@/components/PagamentoDetalhe";
 import { OrcamentoItemDetalhe } from "@/components/OrcamentoItemDetalhe";
 import { OrigemDados } from "@/components/OrigemDados";
 import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
@@ -5044,6 +5045,31 @@ export function Catalogo() {
               orgaoCenti: "FUNDO MUNICIPAL SAUDE RIO VERDE",
               orgao: "FMS",
               unidade: "FMS",
+            }}
+            completo={null}
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="PagamentoDetalhe (uma ordem de pagamento da Centi — só leitura; o empenho ligado pelo NÚMERO — o mesmo bloco EmpenhoLigado da liquidação) · a tabela é a EmpenhoCardPagamentos">
+        <div className="max-w-3xl">
+          <PagamentoDetalhe
+            pagamento={{
+              id: 1891960,
+              data: "2026-03-26",
+              numeroEmpenho: "291596",
+              anoEmpenho: 2025,
+              credor: "FORNECEDOR EXEMPLO LTDA",
+              cpfCnpj: "00.000.000/0001-00",
+              historico: "Liquidação da NF 2024101 — locação de veículo pesado.",
+              valor: 19580.66,
+              valorRetencao: 430.77,
+              valorLiquido: 19149.89,
+              anulado: false,
+              motivoAnulacao: null,
+              orgaoCenti: "PREFEITURA MUNICIPAL DE RIO VERDE",
+              orgao: "PMRV",
+              unidade: "SEINFRA",
             }}
             completo={null}
           />

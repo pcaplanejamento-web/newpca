@@ -4595,6 +4595,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
     `modo`. A tabela: `EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes` (as tuplas montadas pelo banco —
     `liquidacoes-tela.ts`; escopo = o do empenho).
+  - **PAGAMENTOS (v1.215.0, migração `0152` — tabelas `pagamentos_staging` + `pagamentos` [único card + chave = o
+    `IdOrdemPagamento`], `empenho_cards.tipo` 'pagamentos'; a tela nova `pagamentos` copiou as capacidades de Liquidações nos
+    papéis, nos grupos e nos módulos do ADM):** tela de módulo **`/painel/pagamentos`** (`ABA_KEYS`, `IconPagamento`) com os
+    MESMOS componentes dos cards (`EmpenhosView`, `EmpenhoCardView` — aba **Pagamentos** —, `EmpenhoCardImportacao`,
+    `EmpenhoCardConfig`) + a tabela **`EmpenhoCardPagamentos`** e o banner **`PagamentoDetalhe`** (o bloco do empenho ligado é o
+    `EmpenhoLigado`, extraído do `LiquidacaoDetalhe` — o mesmo nos dois). API `GetOrdempaPamento` (núcleo puro
+    **`pagamentos-core.ts`**): exige `ano` (número) e `idOrgao`; o recorte é o **`mes`** — sem ele vem o ANO INTEIRO do órgão
+    (~10 MB), datas e páginas são ignoradas; `IdNotaEmpenho` = o número do empenho (o mesmo `NumeroEmpenho` das liquidações);
+    a resposta traz aspas sem escape (`lerJsonCenti` conserta). O lote `modo` 'pagamentos' lê TODOS os órgãos com o "ID na
+    Centi" MÊS A MÊS (`lotePorMes`/`lotePorOrgao`, `periodosAPedir(…, porMes)`, `proximoPedido(…, n, porMes)`; o mês não se
+    divide — teto de 12 MB), em paralelo como as liquidações (o mesmo `comandosFechoPeriodoLiquidacoes`). Builders
+    **`pagamentos-sql.ts`** (guardar, conferir em tempo real, contagem, promover, `comandoRealinharPagamentos` — junto do das
+    liquidações na promoção dos empenhos e no `PUT …/vinculos`) e a tela **`pagamentos-tela.ts`** (tuplas `COLUNAS_PAGAMENTO`,
+    `pagamentoCompleto`); rotas `GET /api/empenhos/cards/[id]/pagamentos` e `…/pagamentos/[pagId]`. A soma do lote e o "pago
+    líquido" = `valor_liquido` das ordens NÃO anuladas (`anulado`, `motivo_anulacao` ficam guardados). `cardPorOrgao(tipo)` e
+    `NOME_TIPO` (`empenho-cards-core.ts`) são a régua dos tipos por órgão (liquidações e pagamentos). Conferido com a API real:
+    os 12 meses de 2025 do PMRV somam exatamente o ano inteiro (13.345 ordens). Testes: `tests/pagamentos.test.ts`.
   - **IMPORTAÇÃO EM PARALELO (v1.214.0, migração `0151` — encerrou as importações de liquidações abertas):** `lerAnoNaCenti`
     (`leitura-centi-cliente.ts`) roda uma FILA com `emPool` — cada pedido é uma requisição própria (o próprio limite do
     Worker): empenhos = várias SEMANAS ao mesmo tempo (`PARALELO_EMPENHOS`=4; as páginas de uma semana em sequência);

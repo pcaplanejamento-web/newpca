@@ -201,7 +201,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
         !erro && <EsqueletoTabela cheia />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
             <StatMini label="Liquidações" value={num(tot.n)} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidas na Centi" : undefined} />
             <StatMini label="Valor" value={brl(tot.valor)} tone="accent" />
             <StatMini label="Anulado" value={brl(tot.anulado)} tone={tot.anulado ? "warn" : "default"} />

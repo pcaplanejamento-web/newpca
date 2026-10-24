@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { useAlturaTela } from "./AlturaCheia";
-import { estadoCard, pendenciasDoCard, type ResumoCard, rotaDoCard, rotuloAnos } from "@/lib/empenho-cards-core";
+import { cardPorOrgao, estadoCard, NOME_TIPO, pendenciasDoCard, type ResumoCard, rotaDoCard, rotuloAnos } from "@/lib/empenho-cards-core";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
@@ -15,11 +15,11 @@ import { useConfirmacao } from "./Confirmacao";
 import { IconCheck, IconChevronLeft, IconTrash } from "./icons";
 import { toast } from "./Toast";
 
-export type AbaCard = "empenhos" | "liquidacoes" | "vinculos" | "importacao" | "configuracao";
+export type AbaCard = "empenhos" | "liquidacoes" | "pagamentos" | "vinculos" | "importacao" | "configuracao";
 
 /**
- * O ESPAÇO de um CARD de empenhos (`/painel/empenhos/[id]`) ou de liquidações (`/painel/liquidacoes/[id]` — a aba Liquidações
- * no lugar de Empenhos) — no padrão da tela do orçamento: UMA linha de cabeçalho
+ * O ESPAÇO de um CARD de empenhos (`/painel/empenhos/[id]`), de liquidações (`/painel/liquidacoes/[id]` — a aba Liquidações
+ * no lugar de Empenhos) ou de pagamentos (`/painel/pagamentos/[id]` — a aba Pagamentos) — no padrão da tela do orçamento: UMA linha de cabeçalho
  * (voltar · nome · estado · indicadores · excluir — só o ícone) e a barra das abas **Empenhos · Vínculos · Importação ·
  * Configuração** com as ferramentas da aba à direita (`AbasEspaco` + `FerramentasAba`; o servidor monta SÓ a aba ativa).
  */
@@ -41,7 +41,8 @@ export function EmpenhoCardView({
   useOndeDetalhe(c.nome);
   const [excluindo, setExcluindo] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
-  const liq = c.tipo === "liquidacoes";
+  const liq = cardPorOrgao(c.tipo);
+  const nome = NOME_TIPO[c.tipo];
   const lista = `/painel/${c.tipo}`;
   const e = estadoCard(c, c.lendo);
   const pendencias = pendenciasDoCard(c, c.vinculos);
@@ -56,7 +57,7 @@ export function EmpenhoCardView({
     const ok = await confirmar({
       titulo: `Excluir o card "${c.nome}"?`,
       texto: liq
-        ? `As ${num(c.empenhos)} liquidações gravadas e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
+        ? `${nome.masc ? "Os" : "As"} ${num(c.empenhos)} ${nome.varios} ${nome.masc ? "gravados" : "gravadas"} e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
         : `Os ${num(c.empenhos)} empenhos gravados, os ${num(c.vinculos)} vínculos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`,
       confirmar: "Excluir",
       perigo: true,
@@ -75,8 +76,8 @@ export function EmpenhoCardView({
   }
 
   const indicadores = [
-    { rotulo: liq ? "Liquidações" : "Empenhos", valor: num(c.empenhos) },
-    { rotulo: liq ? "Liquidado" : "Empenhado", valor: brl(c.soma) },
+    { rotulo: nome.titulo, valor: num(c.empenhos) },
+    c.tipo === "pagamentos" ? { rotulo: "Pago líquido", valor: brl(c.liquidado) } : { rotulo: liq ? "Liquidado" : "Empenhado", valor: brl(c.soma) },
     { rotulo: "Anos", valor: rotuloAnos(c.anos) },
     { rotulo: "Última leitura", valor: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—" },
   ];
@@ -84,6 +85,7 @@ export function EmpenhoCardView({
     [
       { value: "empenhos", label: "Empenhos" },
       { value: "liquidacoes", label: "Liquidações" },
+      { value: "pagamentos", label: "Pagamentos" },
       { value: "vinculos", label: "Vínculos" },
       { value: "importacao", label: "Importação", curto: "Importar" },
       { value: "configuracao", label: "Configuração", curto: "Config." },
@@ -97,7 +99,7 @@ export function EmpenhoCardView({
         <div className="flex min-w-0 items-center gap-2">
           <Link
             href={lista}
-            aria-label={liq ? "Voltar para Liquidações" : "Voltar para Empenhos"}
+            aria-label={`Voltar para ${nome.titulo}`}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
           >
             <IconChevronLeft className="h-4 w-4" />

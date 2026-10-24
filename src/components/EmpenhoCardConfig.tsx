@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { ResultadoTeste } from "@/lib/centi-resposta-core";
 import {
   anosDoCard,
+  cardPorOrgao,
   type CardEmpenho,
   type EdicaoCard,
   edicaoDoCard,
@@ -51,7 +52,8 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
  * régua é `motivoCardInvalido`, a mesma do servidor. Sair com alteração não salva avisa.
  */
 export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
-  const liq = card.tipo === "liquidacoes";
+  const liq = cardPorOrgao(card.tipo);
+  const nomeSoma = card.tipo === "pagamentos" ? "paga" : card.tipo === "liquidacoes" ? "liquidada" : "empenhada";
   const router = useRouter();
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
   const [salvando, setSalvando] = useState(false);
@@ -68,7 +70,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
 
   const motivo = motivoCardInvalido(v);
   const alterado = JSON.stringify(v) !== JSON.stringify(edicaoDoCard(card));
-  const previa = useMemo(() => previaPedido(v, ano), [v, ano]);
+  const previa = useMemo(() => previaPedido(v, ano, undefined, card.tipo), [v, ano, card.tipo]);
   const anosDeFato = anosDoCard(v.anos, anoAtual());
 
   // O card mudou no servidor (outra pessoa salvou): sem edição em curso aqui, a tela acompanha.
@@ -199,7 +201,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
 
         <SecaoBanner titulo="Regras da conferência">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SelectField denso label={liq ? "Queda da soma liquidada" : "Queda da soma empenhada"} value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<A titulo="Queda da soma">A importação que trouxer a soma {liq ? "liquidada" : "empenhada"} do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</A>}>
+            <SelectField denso label={`Queda da soma ${nomeSoma}`} value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<A titulo="Queda da soma">A importação que trouxer a soma {nomeSoma} do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</A>}>
               {OPCOES_QUEDA.map((o) => (
                 <option key={o.valor} value={o.valor}>
                   {o.rotulo}
@@ -236,7 +238,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_0.6fr_1fr]">
               <TextField denso label="URL base" value={v.urlBase} onChange={(e) => muda("urlBase", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="URL base">O endereço do portal da Centi. Só HTTPS do domínio centi.com.br.</A>} />
-              <TextField denso label="Endpoint" value={v.endpoint} onChange={(e) => muda("endpoint", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="Endpoint">O nome da API no portal (ex.: getempenhos, getliquidacoes).</A>} />
+              <TextField denso label="Endpoint" value={v.endpoint} onChange={(e) => muda("endpoint", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="Endpoint">O nome da API no portal (ex.: getempenhos, getliquidacoes, GetOrdempaPamento).</A>} />
               <TextField denso label="UF" value={v.uf} onChange={(e) => muda("uf", e.target.value)} maxLength={4} autoComplete="off" rotuloExtra={<A titulo="UF">A sigla do estado no endereço (go).</A>} />
               <TextField denso label="Município" value={v.tenant} onChange={(e) => muda("tenant", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="Município">O município no endereço (rioverde).</A>} />
             </div>

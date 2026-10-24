@@ -137,7 +137,7 @@ verificado). Erros voltam como `/login?erro=…` (o motivo técnico só no log d
 
 Integrações → aba **APIs da Centi** (`/painel/integracoes?aba=centi`). É o cadastro das APIs **públicas** do portal da
 Centi (`https://api.centi.com.br/portal/{endpoint}/go/rioverde`, sem login): Empenhos (`getempenhos`, ano inteiro,
-paginada), Liquidações (`getliquidacoes`, por órgão), Pagamentos (`GetOrdempaPamento`, por órgão, paginada), Contratos
+paginada), Liquidações (`getliquidacoes`, por órgão), Pagamentos (`GetOrdempaPamento`, por órgão e por MÊS — `{"ano":2025,"mes":3,"idOrgao":2}`; sem o mês vem o ano inteiro, sem páginas), Contratos
 (`ListaCredores`, por fonte) e Receita (`ObterReceitaOrcamentariaDetalhada`, por órgão).
 
 - Tocar numa API abre o editor, com o (?) em cada campo: **O que ler** (nome, como o ano é pedido, os **órgãos e as

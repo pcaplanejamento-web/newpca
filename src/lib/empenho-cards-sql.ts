@@ -78,11 +78,11 @@ export function comandosGravarVinculos(db: Db, cardId: number, vs: readonly Vinc
  * CRIA o card (já com a configuração) e, com `copiarDe`, COPIA os vínculos daquele card — num lote só: o card novo é o
  * `MAX(id)` (o lote do D1 é uma transação sequencial).
  */
-export function comandosCriarCard(db: Db, valores: typeof empenhoCards.$inferInsert, copiarDe: number | null, tipo: "empenhos" | "liquidacoes" = "empenhos") {
+export function comandosCriarCard(db: Db, valores: typeof empenhoCards.$inferInsert, copiarDe: number | null, tipo: "empenhos" | "liquidacoes" | "pagamentos" = "empenhos") {
   const novo = sql<number>`(SELECT MAX("id") FROM "empenho_cards")`;
   return [
     db.insert(empenhoCards).values({ ...valores, vinculosEm: agoraIso }),
-    ...(copiarDe == null || tipo === "liquidacoes"
+    ...(copiarDe == null || tipo !== "empenhos"
       ? []
       : [
           db.insert(empenhoCardVinculos).select(

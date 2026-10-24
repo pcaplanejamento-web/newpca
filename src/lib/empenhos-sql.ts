@@ -1,7 +1,7 @@
 import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotePassos, centiLotes, centiStagingFora, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging } from "../db/schema.ts";
+import { centiLotePassos, centiLotes, centiStagingFora, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging, pagamentos, pagamentosStaging } from "../db/schema.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { vinculoSql } from "./empenho-cards-sql.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoNovo, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
@@ -134,13 +134,13 @@ export function comandoRecontarLote(db: Db, loteId: number) {
       // Os ÚNICOS = os guardados (com vínculo) + os só contados (sem vínculo — a chave); a SOMA = a de TODOS os registros
       // lidos (a última leitura de cada página), a mesma régua das importações anteriores na conferência de queda.
       // (o lote de LIQUIDAÇÕES guarda no staging dele — um lote é de um tipo só, a soma dos dois é o do lote)
-      unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${liquidacoesStaging} WHERE ${liquidacoesStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId}))`,
+      unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${liquidacoesStaging} WHERE ${liquidacoesStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${pagamentosStaging} WHERE ${pagamentosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId}))`,
       // FORA = só os sem vínculo (as chaves dos IGUAIS ao gravado contam nos únicos, não aqui).
       fora: sql`(SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId} AND ${centiStagingFora.igual} = 0)`,
       soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina}))`,
-      // LIQUIDAÇÕES: cada "página" é um órgão com o PRÓPRIO total (lidos em paralelo) — o do período é a soma deles (a
+      // LIQUIDAÇÕES e PAGAMENTOS: cada "página" é um órgão com o PRÓPRIO total (lidos em paralelo) — o do período é a soma deles (a
       // última leitura de cada órgão); empenhos: o maior total informado em cada período.
-      totalInformado: sql`(CASE WHEN ${centiLotes.modo} = 'liquidacoes'
+      totalInformado: sql`(CASE WHEN ${centiLotes.modo} IN ('liquidacoes', 'pagamentos')
         THEN (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT ${centiLotePassos.total} AS t FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina})))
         ELSE (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim})) END)`,
       vistoEm: sql`CURRENT_TIMESTAMP`,
@@ -161,12 +161,13 @@ export async function lidoNoPeriodo(db: Db, loteId: number, periodo: Periodo) {
 export async function jaNoLote(db: Db, loteId: number, chaves: string[]): Promise<number> {
   if (!chaves.length) return 0;
   const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
-  const [[a], [b], [c]] = await Promise.all([
+  const [[a], [b], [c], [d]] = await Promise.all([
     db.select({ n: count() }).from(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), sql`${empenhosStaging.chave} IN ${lista}`)),
     db.select({ n: count() }).from(liquidacoesStaging).where(and(eq(liquidacoesStaging.loteId, loteId), sql`${liquidacoesStaging.chave} IN ${lista}`)),
+    db.select({ n: count() }).from(pagamentosStaging).where(and(eq(pagamentosStaging.loteId, loteId), sql`${pagamentosStaging.chave} IN ${lista}`)),
     db.select({ n: count() }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), sql`${centiStagingFora.chave} IN ${lista}`)),
   ]);
-  return (a?.n ?? 0) + (b?.n ?? 0) + (c?.n ?? 0);
+  return (a?.n ?? 0) + (b?.n ?? 0) + (c?.n ?? 0) + (d?.n ?? 0);
 }
 
 /** Os campos comparados para saber se um empenho MUDOU (todos menos a chave). */
@@ -411,6 +412,7 @@ export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "
     db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
     db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
+    db.delete(pagamentosStaging).where(eq(pagamentosStaging.loteId, loteId)),
     db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
   ] as const;
 }
@@ -422,7 +424,7 @@ function colunaSql(c: string): string {
 
 /**
  * EXCLUI tentativas de importação DO BANCO — VÁRIAS num lote só (os ids num parâmetro JSON, só as DESTE card): os passos,
- * o staging e os lotes. Os empenhos (e as liquidações) que elas já promoveram ficam (são os dados do município) — só
+ * o staging e os lotes. Os empenhos (e as liquidações e os pagamentos) que elas já promoveram ficam (são os dados do município) — só
  * perdem a referência ao lote. O ÚLTIMO comando devolve os lotes excluídos. Um comando por tabela, qualquer que seja o
  * número de importações: excluir várias de uma vez cabe no limite de consultas do Worker.
  */
@@ -432,6 +434,8 @@ export function comandosExcluirLotes(db: Db, cardId: number, loteIds: number[]) 
     db.update(empenhos).set({ loteId: null }).where(sql`${empenhos.loteId} IN ${ids}`),
     db.update(liquidacoes).set({ loteId: null }).where(sql`${liquidacoes.loteId} IN ${ids}`),
     db.delete(liquidacoesStaging).where(sql`${liquidacoesStaging.loteId} IN ${ids}`),
+    db.update(pagamentos).set({ loteId: null }).where(sql`${pagamentos.loteId} IN ${ids}`),
+    db.delete(pagamentosStaging).where(sql`${pagamentosStaging.loteId} IN ${ids}`),
     db.delete(empenhosStaging).where(sql`${empenhosStaging.loteId} IN ${ids}`),
     db.delete(centiStagingFora).where(sql`${centiStagingFora.loteId} IN ${ids}`),
     db.delete(centiLotePassos).where(sql`${centiLotePassos.loteId} IN ${ids}`),

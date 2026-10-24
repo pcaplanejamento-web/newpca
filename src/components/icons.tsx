@@ -4,6 +4,7 @@ import type { SVGProps } from "react";
 import {
   ReceiptText,
   HandCoins,
+  BanknoteArrowUp,
   CaseSensitive,
   Redo2,
   RemoveFormatting,
@@ -415,3 +416,5 @@ export const IconFormatacao = CaseSensitive;
 /** Empenhos da Centi (Administração → Empenhos). */
 export const IconEmpenho = ReceiptText;
 export const IconLiquidacao = HandCoins;
+/** Pagamentos da Centi (ordens de pagamento). */
+export const IconPagamento = BanknoteArrowUp;

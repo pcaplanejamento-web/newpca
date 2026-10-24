@@ -2,7 +2,7 @@ import { exigirSessao, recusa } from "@/lib/api-auth";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { baixarSeguro } from "@/lib/busca-segura";
 import { type ResultadoTeste, resumoResposta } from "@/lib/centi-resposta-core";
-import { motivoCardInvalido, previaPedido, telaDoCard } from "@/lib/empenho-cards-core";
+import { cardPorOrgao, motivoCardInvalido, previaPedido, telaDoCard } from "@/lib/empenho-cards-core";
 import { orgaosLiquidacao } from "@/lib/empenho-cards";
 import { testarCardSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -15,7 +15,7 @@ const TEMPO_MS = 60_000;
 
 /**
  * TESTA a integração do card com a configuração EM CURSO (ainda não salva) — Configurar: faz SÓ o pedido do período do
- * ano inteiro (até 31/12) e devolve o que veio (status, tempo, quantos registros, o total informado, os campos e uma amostra). NADA é gravado.
+ * ano inteiro (até 31/12; nos pagamentos, janeiro do 1º órgão) e devolve o que veio (status, tempo, quantos registros, o total informado, os campos e uma amostra). NADA é gravado.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirSessao();
@@ -29,13 +29,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { edicao, ano } = p.data;
   const motivo = motivoCardInvalido(edicao);
   if (motivo) return erro(motivo, 422);
-  const previa = previaPedido(edicao, ano);
+  const previa = previaPedido(edicao, ano, undefined, a.card.tipo);
   const { url } = previa;
   let corpo = previa.corpo;
-  if (a.card.tipo === "liquidacoes") {
-    // A API de liquidações exige o ÓRGÃO da Centi: o teste pede o 1º órgão do cadastro com o "ID na Centi".
+  if (previa.erro) return erro(previa.erro, 422);
+  if (cardPorOrgao(a.card.tipo)) {
+    // As APIs de liquidações e pagamentos exigem o ÓRGÃO da Centi: o teste pede o 1º órgão do cadastro com o "ID na Centi".
     const orgaos = await orgaosLiquidacao();
-    if (!orgaos.length) return erro("Cadastre antes o “ID na Centi” de ao menos um órgão (Órgãos e Unidades) — a API de liquidações pede o órgão.", 422);
+    if (!orgaos.length) return erro(`Cadastre antes o “ID na Centi” de ao menos um órgão (Órgãos e Unidades) — a API de ${a.card.tipo === "pagamentos" ? "pagamentos" : "liquidações"} pede o órgão.`, 422);
     corpo = { ...(corpo as Record<string, unknown>), idOrgao: orgaos[0].idOrgao };
   }
   const inicio = Date.now();

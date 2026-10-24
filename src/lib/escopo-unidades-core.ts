@@ -114,6 +114,7 @@ const ROTAS_TELA: readonly [string, string][] = [
   ["/painel/documentos", "documentos"],
   ["/painel/empenhos", "empenhos"],
   ["/painel/liquidacoes", "liquidacoes"],
+  ["/painel/pagamentos", "pagamentos"],
 ];
 export function telaDaRota(pathname: string | null | undefined): string | null {
   const p = pathname ?? "";

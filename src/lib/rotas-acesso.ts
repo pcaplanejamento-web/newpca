@@ -55,8 +55,8 @@ const AGENDA = ["tarefas", "calendario"] as const;
 const QUADRO = "recusaNoQuadro(";
 /** As telas das tabelas com EDIÇÕES SALVAS (a Mesa do sistema e a do PCA, o Comparativo do orçamento, a Lista de tarefas). */
 const TABELAS = ["dfd", "pca", "orcamento", "tarefas"] as const;
-/** Os CARDS da Centi: a tela vem do TIPO do card (Empenhos ou Liquidações — `telaDoCard`). */
-const CARDS = ["empenhos", "liquidacoes"] as const;
+/** Os CARDS da Centi: a tela vem do TIPO do card (Empenhos, Liquidações ou Pagamentos — `telaDoCard`). */
+const CARDS = ["empenhos", "liquidacoes", "pagamentos"] as const;
 
 /** Rota (caminho relativo a `src/app/api`, sem `/route.ts`) → método → regra. */
 export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = {
@@ -180,7 +180,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "documentos/[id]/partes": { PUT: tela("documentos", "importar", "uma parte do PDF (de quem abriu o envio)") },
   "documentos/[id]": { PATCH: tela("documentos", "manipular", "renomear; os PCAs do documento"), DELETE: tela("documentos", "excluir") },
   empenhos: { GET: tela("empenhos", "visualizar", "os empenhos de um ano de um card (pacote compacto)") },
-  "empenhos/cards": { POST: tela(["empenhos", "liquidacoes"], "configurar", "criar um card — a tela do tipo (empenhos ou liquidações)") },
+  "empenhos/cards": { POST: tela(["empenhos", "liquidacoes", "pagamentos"], "configurar", "criar um card — a tela do tipo (empenhos, liquidações ou pagamentos)") },
   "empenhos/cards/[id]": { PATCH: recurso(CARDS, "configurar", undefined, "configurar o card — a tela do card"), DELETE: recurso(CARDS, "excluir", undefined, "excluir o card com os dados dele") },
   "empenhos/cards/[id]/vinculos": { PUT: recurso(CARDS, "configurar", undefined, "os vínculos do card (só os de empenhos)") },
   "empenhos/cards/[id]/testar": { POST: recurso(CARDS, "configurar", undefined, "testar a integração do card (nada é gravado)") },
@@ -191,6 +191,8 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   },
   "empenhos/cards/[id]/liquidacoes": { GET: recurso(CARDS, "visualizar", undefined, "as liquidações de um card (os anos ou as linhas de um ano)") },
   "empenhos/cards/[id]/liquidacoes/[liqId]": { GET: recurso(CARDS, "visualizar", undefined, "uma liquidação com o empenho ligado pelo número (o banner)") },
+  "empenhos/cards/[id]/pagamentos": { GET: recurso(CARDS, "visualizar", undefined, "os pagamentos de um card (os anos ou as linhas de um ano)") },
+  "empenhos/cards/[id]/pagamentos/[pagId]": { GET: recurso(CARDS, "visualizar", undefined, "um pagamento com o empenho ligado pelo número (o banner)") },
   "empenhos/[id]": { GET: tela("empenhos", "visualizar", "um empenho com o histórico") },
   "documentos/[id]/arquivo": { GET: tela("documentos", "visualizar", "ver o PDF; baixar (?baixar=1) exige Exportar") },
   "catalogo/pastas": { POST: tela("catalogo", "manipular") },

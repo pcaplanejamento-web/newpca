@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { estadoCard, type ResumoCard, rotaDoCard, rotuloAnos, type TipoCard } from "@/lib/empenho-cards-core";
+import { cardPorOrgao, estadoCard, NOME_TIPO, type ResumoCard, rotaDoCard, rotuloAnos, type TipoCard } from "@/lib/empenho-cards-core";
 import { dataHoraBR, num } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { SelectField, TextField } from "./Field";
-import { IconEmpenho, IconInbox, IconLiquidacao } from "./icons";
+import { IconEmpenho, IconInbox, IconLiquidacao, IconPagamento } from "./icons";
 import { Modal } from "./Modal";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
@@ -30,8 +30,10 @@ export function EmpenhosView({
   cards: ResumoCard[];
   podeCriar: boolean;
 }) {
-  const liq = tipo === "liquidacoes";
-  const Icone = liq ? IconLiquidacao : IconEmpenho;
+  const liq = cardPorOrgao(tipo);
+  const pag = tipo === "pagamentos";
+  const nomeTipo = NOME_TIPO[tipo];
+  const Icone = pag ? IconPagamento : liq ? IconLiquidacao : IconEmpenho;
   const router = useRouter();
   const [novo, setNovo] = useState(false);
   const [nome, setNome] = useState("");
@@ -63,14 +65,29 @@ export function EmpenhosView({
       <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-            <Icone className="h-5 w-5" /> {liq ? "Liquidações" : "Empenhos"}
+            <Icone className="h-5 w-5" /> {nomeTipo.titulo}
           </h1>
           <p className="text-sm text-muted">
-            {num(cards.length)} {cards.length === 1 ? "card" : "cards"} · {num(total)} {liq ? (total === 1 ? "liquidação gravada" : "liquidações gravadas") : total === 1 ? "empenho gravado" : "empenhos gravados"} · abra
+            {num(cards.length)} {cards.length === 1 ? "card" : "cards"} · {num(total)} {total === 1 ? `${nomeTipo.um} ${nomeTipo.masc ? "gravado" : "gravada"}` : `${nomeTipo.varios} ${nomeTipo.masc ? "gravados" : "gravadas"}`} · abra
             um card para ver a tabela, {liq ? "os órgãos" : "os vínculos"} e a importação
           </p>
         </div>
-        {liq ? (
+        {pag ? (
+          <Ajuda titulo="Pagamentos" botao="sm">
+            <p>
+              Cada <strong>card</strong> importa os pagamentos (as ordens de pagamento) da Centi com a sua própria configuração: a integração, os
+              anos, a atualização automática e as regras da conferência.
+            </p>
+            <p>
+              A Centi entrega os pagamentos por <strong>órgão</strong> e por <strong>mês</strong>: cada importação lê <strong>todos</strong> os
+              órgãos com o “ID na Centi” cadastrado em Órgãos e Unidades, mês a mês, com os órgãos de cada mês ao mesmo tempo.
+            </p>
+            <p>
+              A Centi não informa a unidade: o <strong>número do empenho</strong> liga o pagamento ao empenho — o órgão e a unidade dele são os do
+              empenho no sistema. As ordens com anulação ficam guardadas e fora do pago líquido.
+            </p>
+          </Ajuda>
+        ) : liq ? (
           <Ajuda titulo="Liquidações" botao="sm">
             <p>
               Cada <strong>card</strong> importa as liquidações da Centi com a sua própria configuração: os órgãos, a integração, os anos, a
@@ -96,7 +113,7 @@ export function EmpenhosView({
             que órgão ou unidade do cadastro cada um pertence. Só o que um vínculo cobre é gravado.
           </p>
           <p>Cada card tem a sua tabela no banco — a aba Empenhos mostra exatamente o que está gravado. Excluir o card exclui os empenhos dele.</p>
-          <p>As liquidações ficam na tela Liquidações, com cards próprios.</p>
+          <p>As liquidações e os pagamentos ficam nas telas Liquidações e Pagamentos, com cards próprios.</p>
         </Ajuda>
         )}
       </div>
@@ -104,7 +121,7 @@ export function EmpenhosView({
       {cards.length === 0 && !podeCriar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
-          <p className="text-sm text-muted">{liq ? "Nenhum card de liquidações ainda." : "Nenhum card de empenhos ainda."}</p>
+          <p className="text-sm text-muted">Nenhum card de {nomeTipo.varios} ainda.</p>
         </div>
       ) : (
         <div className={GRADE_ORCAMENTOS}>
@@ -115,14 +132,37 @@ export function EmpenhosView({
                 key={c.id}
                 href={rotaDoCard(c)}
                 icone={<Icone className="h-5 w-5" />}
-                sobretitulo={`${liq ? "Liquidações" : "Empenhos"} · ${rotuloAnos(c.anos)}`}
+                sobretitulo={`${nomeTipo.titulo} · ${rotuloAnos(c.anos)}`}
                 nome={c.nome}
                 selo={
                   <Badge tone={e.tom} dot vivo={c.lendo} tamanho="linha">
                     {e.rotulo}
                   </Badge>
                 }
-                {...(liq
+                {...(pag
+                  ? {
+                      destaque: { rotulo: "Pago líquido", valor: c.liquidado },
+                      barra: {
+                        rotulo: "Retenções",
+                        pct: c.soma - c.anulado > 0 ? (c.pago / (c.soma - c.anulado)) * 100 : 0,
+                        texto: `${(c.soma - c.anulado > 0 ? (c.pago / (c.soma - c.anulado)) * 100 : 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% retido`,
+                      },
+                      linhas: [
+                        { rotulo: `Ordens · ${num(c.empenhos)} pagamentos`, valor: c.soma },
+                        { rotulo: `Anuladas · ${num(c.saldoPagar)}`, valor: c.anulado, sinal: "−" as const, tom: "text-[var(--danger)]" },
+                        { rotulo: "Retenções", valor: c.pago, sinal: "−" as const, tom: "text-text" },
+                        "divisor" as const,
+                        { rotulo: "Pago líquido", valor: c.liquidado, tom: "text-[var(--ok)]" },
+                      ],
+                      numeros: [
+                        { valor: c.vinculos, rotulo: "órgãos" },
+                        { valor: c.unidadesOrc, rotulo: "unidades" },
+                        { valor: c.acoes, rotulo: "empenhos" },
+                        { valor: c.fornecedores, rotulo: "credores" },
+                      ],
+                      rodape: c.ultimaExecucao ? `Última leitura em ${dataHoraBR(c.ultimaExecucao)}` : "Ainda não importado",
+                    }
+                  : liq
                   ? {
                       destaque: { rotulo: "Liquidado líquido", valor: c.liquidado },
                       barra: { rotulo: "Pagamento", pct: c.liquidado > 0 ? (c.pago / c.liquidado) * 100 : 0, texto: `${(c.liquidado > 0 ? (c.pago / c.liquidado) * 100 : 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% pago` },
@@ -173,7 +213,7 @@ export function EmpenhosView({
         onClose={() => !criando && setNovo(false)}
         bloqueado={criando}
         size="md"
-        titulo={liq ? "Novo card de liquidações" : "Novo card de empenhos"}
+        titulo={`Novo card de ${nomeTipo.varios}`}
         rodape={
           <div className="flex w-full justify-end gap-2">
             <Button size="sm" variant="secondary" onClick={() => setNovo(false)} disabled={criando}>
@@ -186,7 +226,7 @@ export function EmpenhosView({
         }
       >
         <div className="space-y-3">
-          <TextField denso label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={60} autoFocus placeholder={liq ? "Ex.: Liquidações da Saúde" : "Ex.: Empenhos da Saúde"} />
+          <TextField denso label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={60} autoFocus placeholder={`Ex.: ${nomeTipo.titulo} da Saúde`} />
           {!liq && (
           <SelectField
             denso

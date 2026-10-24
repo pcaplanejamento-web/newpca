@@ -114,6 +114,7 @@ EditorVisaoOrcamento.tsx
 EmpenhoCardConfig.tsx
 EmpenhoCardImportacao.tsx
 EmpenhoCardLiquidacoes.tsx
+EmpenhoCardPagamentos.tsx
 EmpenhoCardView.tsx
 EmpenhoCardVinculos.tsx
 EmpenhoDetalhe.tsx
@@ -334,3 +335,4 @@ fluxos/TabelaMesaFluxo.tsx
 fluxos/paineis.tsx
 icons.tsx
 LiquidacaoDetalhe.tsx
+PagamentoDetalhe.tsx

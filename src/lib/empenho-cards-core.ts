@@ -7,6 +7,7 @@
 import { type EnderecoCenti, lerParametros, MARCADORES, marcadoresUsados, montarCorpo, urlBaseValida, urlDaApi } from "./centi-resposta-core.ts";
 import { periodoDoAno } from "./empenhos-core.ts";
 import { ENDPOINT_LIQUIDACOES } from "./liquidacoes-core.ts";
+import { corpoPagamentos, ENDPOINT_PAGAMENTOS, periodoDoMes } from "./pagamentos-core.ts";
 
 /** As frequências da atualização automática (minutos). */
 export const FREQUENCIAS: { valor: number; rotulo: string }[] = [
@@ -45,12 +46,22 @@ export const REGRAS_REMOVIDOS: { valor: RegraRemovidos; rotulo: string }[] = [
 
 export const LIMITES_CARD = { nome: 60, descricao: 400, endpoint: 80, uf: 4, tenant: 40, parametros: 2000, anos: 10, vinculos: 2000 } as const;
 
-/** O TIPO do card: EMPENHOS (a tela Empenhos) ou LIQUIDAÇÕES (a tela Liquidações — os empenhos vêm de um card de empenhos). */
-export type TipoCard = "empenhos" | "liquidacoes";
-export const lerTipoCard = (v: unknown): TipoCard => (v === "liquidacoes" ? "liquidacoes" : "empenhos");
+/** O TIPO do card: EMPENHOS (a tela Empenhos), LIQUIDAÇÕES (a tela Liquidações) ou PAGAMENTOS (a tela Pagamentos). */
+export type TipoCard = "empenhos" | "liquidacoes" | "pagamentos";
+export const TIPOS_CARD = ["empenhos", "liquidacoes", "pagamentos"] as const satisfies readonly TipoCard[];
+export const lerTipoCard = (v: unknown): TipoCard => (v === "liquidacoes" || v === "pagamentos" ? v : "empenhos");
+/** O card lê TODOS os órgãos com o "ID na Centi" (a API exige o órgão; o número do empenho dá o destino): liquidações e
+ * pagamentos — sem vínculos próprios. */
+export const cardPorOrgao = (tipo: TipoCard): boolean => tipo !== "empenhos";
+/** O nome do tipo (singular/plural) nas telas. */
+export const NOME_TIPO: Record<TipoCard, { titulo: string; um: string; varios: string; masc: boolean }> = {
+  empenhos: { titulo: "Empenhos", um: "empenho", varios: "empenhos", masc: true },
+  liquidacoes: { titulo: "Liquidações", um: "liquidação", varios: "liquidações", masc: false },
+  pagamentos: { titulo: "Pagamentos", um: "pagamento", varios: "pagamentos", masc: true },
+};
 /** A TELA (permissão) de um card. */
 export const telaDoCard = (c: { tipo: TipoCard }): TipoCard => c.tipo;
-/** O caminho do espaço de um card (`/painel/empenhos/1` · `/painel/liquidacoes/2`). */
+/** O caminho do espaço de um card (`/painel/empenhos/1` · `/painel/liquidacoes/2` · `/painel/pagamentos/3`). */
 export const rotaDoCard = (c: { id: number; tipo: TipoCard }, aba?: string): string => `/painel/${c.tipo}/${c.id}${aba ? `?aba=${aba}` : ""}`;
 
 export type CardEmpenho = {
@@ -149,8 +160,12 @@ export const CARD_PADRAO: Omit<EdicaoCard, "nome"> = {
 /** O card de LIQUIDAÇÕES novo: a API de liquidações do portal (o resto como o de empenhos). */
 export const CARD_PADRAO_LIQUIDACOES: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO, cor: "#7c3aed", endpoint: ENDPOINT_LIQUIDACOES };
 
+/** O card de PAGAMENTOS novo: a API de ordens de pagamento do portal, pedida por ANO (o mês e o órgão vão sempre — ver
+ * `corpoPagamentos`). */
+export const CARD_PADRAO_PAGAMENTOS: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO, cor: "#059669", endpoint: ENDPOINT_PAGAMENTOS, parametros: '{"ano":"{ano}"}' };
+
 /** O padrão do card novo do tipo. */
-export const cardPadrao = (tipo: TipoCard): Omit<EdicaoCard, "nome"> => (tipo === "liquidacoes" ? CARD_PADRAO_LIQUIDACOES : CARD_PADRAO);
+export const cardPadrao = (tipo: TipoCard): Omit<EdicaoCard, "nome"> => (tipo === "liquidacoes" ? CARD_PADRAO_LIQUIDACOES : tipo === "pagamentos" ? CARD_PADRAO_PAGAMENTOS : CARD_PADRAO);
 
 export function edicaoDoCard(c: CardEmpenho): EdicaoCard {
   const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos } = c;
@@ -248,8 +263,8 @@ export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm"> & { tipo?
   if (!c.configuradoEm) p.push({ aba: "configuracao", texto: "Confirme a configuração: integração, anos, atualização e regras." });
   if (vinculos < 1)
     p.push(
-      c.tipo === "liquidacoes"
-        ? { aba: "configuracao", texto: "Cadastre o “ID na Centi” de ao menos um órgão (Órgãos e Unidades): a importação lê as liquidações de todos os órgãos com o ID." }
+      c.tipo && cardPorOrgao(c.tipo)
+        ? { aba: "configuracao", texto: `Cadastre o “ID na Centi” de ao menos um órgão (Órgãos e Unidades): a importação lê ${c.tipo === "pagamentos" ? "os pagamentos" : "as liquidações"} de todos os órgãos com o ID.` }
         : { aba: "vinculos", texto: "Crie ao menos um vínculo: o que o card importa e para onde vai." },
     );
   return p;
@@ -270,8 +285,16 @@ export function rotuloFrequencia(min: number, diasUteis: boolean, inicio: string
   return `${f}${diasUteis ? ", dias úteis" : ""}, ${inicio}–${fim}`;
 }
 
-/** A PRÉVIA do pedido do TESTE: o ano inteiro (01/01 a 31/12, também no ano atual). Nada é enviado. */
-export function previaPedido(e: EdicaoCard, ano: number, hoje?: string): { url: string; corpo: unknown; erro: string | null } {
+/** A PRÉVIA do pedido do TESTE: o ano inteiro (01/01 a 31/12, também no ano atual); nos PAGAMENTOS, janeiro (a Centi só
+ * recorta por mês — o ano inteiro de um órgão passa de 10 MB). Nada é enviado. */
+export function previaPedido(e: EdicaoCard, ano: number, hoje?: string, tipo: TipoCard = "empenhos"): { url: string; corpo: unknown; erro: string | null } {
+  if (tipo === "pagamentos") {
+    try {
+      return { url: urlDoCard(e), corpo: corpoPagamentos(e.parametros, ano, periodoDoMes(ano, 1), 0), erro: null };
+    } catch (x) {
+      return { url: urlDoCard(e), corpo: null, erro: x instanceof Error ? x.message : "Parâmetros inválidos." };
+    }
+  }
   const p = lerParametros(e.parametros);
   const per = periodoDoAno(ano, hoje);
   const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;

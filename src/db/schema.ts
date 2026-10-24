@@ -2180,7 +2180,7 @@ export const empenhoCards = sqliteTable("empenho_cards", {
   vinculosEm: text("vinculos_em"),
   /** Quando a Configuração foi confirmada (migração `0144`) — sem ela, nada é importado. */
   configuradoEm: text("configurado_em"),
-  /** O TIPO do card (migração `0146`): `empenhos` | `liquidacoes` (a tela Liquidações). */
+  /** O TIPO do card (migração `0146`): `empenhos` | `liquidacoes` (a tela Liquidações) | `pagamentos` (`0152`, a tela Pagamentos). */
   tipo: text("tipo").notNull().default("empenhos"),
   criadoPor: text("criado_por").notNull().default(""),
   criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
@@ -2438,6 +2438,71 @@ export const liquidacoes = sqliteTable(
     index("liquidacoes_reparticao_idx").on(t.reparticaoId),
     index("liquidacoes_orgao_idx").on(t.orgaoId),
     index("liquidacoes_lote_idx").on(t.loteId),
+  ],
+);
+
+/** As colunas de um PAGAMENTO (as MESMAS no staging e na tabela final — ver `pagamentos-core.ts`). */
+const colunasPagamento = () => ({
+  chave: text("chave").notNull(),
+  ano: integer("ano").notNull(),
+  srcId: integer("src_id"),
+  data: text("data"),
+  numeroEmpenho: text("numero_empenho").notNull(),
+  orgao: text("orgao").notNull().default(""),
+  credor: text("credor"),
+  cpfCnpj: text("cpf_cnpj"),
+  historico: text("historico"),
+  valor: real("valor").notNull().default(0),
+  valorRetencao: real("valor_retencao").notNull().default(0),
+  valorLiquido: real("valor_liquido").notNull().default(0),
+  anulado: integer("anulado").notNull().default(0),
+  motivoAnulacao: text("motivo_anulacao"),
+});
+
+/** Os pagamentos lidos de um lote, antes da conferência (migração `0152`). */
+export const pagamentosStaging = sqliteTable(
+  "pagamentos_staging",
+  {
+    loteId: integer("lote_id")
+      .notNull()
+      .references(() => centiLotes.id, { onDelete: "cascade" }),
+    pagina: integer("pagina").notNull(),
+    ...colunasPagamento(),
+    idOrgaoCenti: integer("id_orgao_centi"),
+  },
+  (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
+);
+
+/**
+ * Os PAGAMENTOS (ordens de pagamento) da Centi (migração `0152`) de um CARD — chave = o Id da ordem, única por card. O
+ * NÚMERO DO EMPENHO (`numero_empenho` = `empenhos.numero`) liga o pagamento ao empenho: o órgão e a unidade são os dele.
+ */
+export const pagamentos = sqliteTable(
+  "pagamentos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ...colunasPagamento(),
+    idOrgaoCenti: integer("id_orgao_centi").notNull(),
+    orgaoId: integer("orgao_id")
+      .notNull()
+      .references(() => orgaos.id, { onDelete: "cascade" }),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "cascade" }),
+    cardId: integer("card_id")
+      .notNull()
+      .references(() => empenhoCards.id, { onDelete: "cascade" }),
+    loteId: integer("lote_id").references(() => centiLotes.id, { onDelete: "set null" }),
+    removidoEm: text("removido_em"),
+    leitor: integer("leitor").notNull().default(0),
+    criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("pagamentos_card_chave_uq").on(t.cardId, t.chave),
+    index("pagamentos_card_ano_idx").on(t.cardId, t.ano, t.idOrgaoCenti, t.removidoEm),
+    index("pagamentos_reparticao_idx").on(t.reparticaoId),
+    index("pagamentos_orgao_idx").on(t.orgaoId),
+    index("pagamentos_lote_idx").on(t.loteId),
+    index("pagamentos_numero_empenho_idx").on(t.numeroEmpenho),
   ],
 );
 

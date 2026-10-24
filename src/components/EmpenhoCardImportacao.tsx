@@ -3,7 +3,7 @@
 import { useAnoDoCard } from "./anoDoCard";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { anosDoCard, type CardEmpenho, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, type CardEmpenho, cardPorOrgao, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
   periodoDoAno,
   resultadoDosPassos,
@@ -57,7 +57,14 @@ const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleStr
 /** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
 const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
 /** O tipo da importação no histórico. */
-const rotuloTipo = (l: LoteCenti) => (l.modo === "liquidacoes" ? `Liquidações${l.orgaosCenti ? ` · ${l.orgaosCenti.length} órgãos` : ""}` : l.modo === "unidades" ? "Catálogo" : "Empenhos");
+const rotuloTipo = (l: LoteCenti) =>
+  l.modo === "liquidacoes" || l.modo === "pagamentos"
+    ? `${l.modo === "pagamentos" ? "Pagamentos" : "Liquidações"}${l.orgaosCenti ? ` · ${l.orgaosCenti.length} órgãos` : ""}`
+    : l.modo === "unidades"
+      ? "Catálogo"
+      : "Empenhos";
+/** O nome da soma do lote (o que a Centi traz). */
+const rotuloSoma = (l: LoteCenti) => (l.modo === "pagamentos" ? "Soma paga (líquido)" : l.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada");
 /** A "página" de um passo: nas LIQUIDAÇÕES, o órgão da Centi lido (a página N do período é o N-ésimo órgão do lote). */
 const rotuloPagina = (orgaos: number[] | null | undefined, pagina: number) => (orgaos ? `órgão ${orgaos[pagina - 1] ?? "?"}` : `página ${pagina}`);
 const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
@@ -103,6 +110,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   const [desatualizados, setDesatualizados] = useState<{ ano: number; n: number }[]>([]);
   /** O que importar = o TIPO do card: os EMPENHOS ou as LIQUIDAÇÕES (todos os órgãos do cadastro com o "ID na Centi"). */
   const tipo = card.tipo;
+  const liq = cardPorOrgao(tipo);
   const [orgaosLiq, setOrgaosLiq] = useState<OrgaoLiq[] | null>(null);
   const parar = useRef(false);
   /** O token DESTA aba — o servidor deixa uma aba por vez conduzir o lote. */
@@ -150,12 +158,11 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
     condutor.current = crypto.randomUUID();
     setRodando(true);
     setPassos([]);
-    const liq = tipo === "liquidacoes";
     const deQuem = "";
     let lote = retomar;
     let onde = "";
     try {
-      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current, ...(liq ? { modo: "liquidacoes" as const } : {}) })).lote;
+      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current, ...(tipo !== "empenhos" ? { modo: tipo } : {}) })).lote;
       setAtual(lote);
       const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
       setPassos(anteriores);
@@ -194,6 +201,9 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       setAtual(fim);
       if (fim.estado === "unidades") {
         toast.success(fim.mensagem ?? "Catálogo da Centi atualizado.");
+      } else if (fim.estado === "promovido" && tipo === "pagamentos") {
+        toast.success(`Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravados)` : ""}.`);
+        router.refresh();
       } else if (fim.estado === "promovido" && liq) {
         toast.success(`Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravadas)` : ""}.`);
         router.refresh();
@@ -349,7 +359,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       header: "Tipo",
       nowrap: true,
       value: (l) => rotuloTipo(l),
-      render: (l) => <Badge tone={l.modo === "liquidacoes" ? "violet" : l.modo === "unidades" ? "slate" : "blue"}>{rotuloTipo(l)}</Badge>,
+      render: (l) => <Badge tone={l.modo === "pagamentos" ? "emerald" : l.modo === "liquidacoes" ? "violet" : l.modo === "unidades" ? "slate" : "blue"}>{rotuloTipo(l)}</Badge>,
     },
     { key: "soma", header: "Soma", nowrap: true, align: "right", filter: "range", numero: (l) => l.soma, render: (l) => <span className="tabular-nums">{l.soma != null ? brl(l.soma) : "—"}</span> },
     { key: "leitor", header: "Leitor", nowrap: true, total: false, value: (l) => String(l.leitor), render: (l) => (l.leitor < LEITOR_EMPENHOS ? <Badge tone="amber">v{l.leitor} (anterior)</Badge> : <span className="tabular-nums text-muted">v{l.leitor}</span>) },
@@ -377,12 +387,12 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             disabled={!!emAndamento || !anos.length || bloqueado}
             title={
               bloqueado
-                ? tipo === "liquidacoes"
+                ? liq
                   ? "Configure o card antes de importar (Configuração) e cadastre o “ID na Centi” dos órgãos (Órgãos e Unidades)"
                   : "Configure o card antes de importar (Configuração e Vínculos)"
                 : emAndamento
                   ? `Há uma importação de ${emAndamento.ano} em andamento — continue ou cancele antes (aviso abaixo)`
-                  : tipo === "liquidacoes" && orgaosLiq
+                  : liq && orgaosLiq
                     ? `Lê os ${orgaosLiq.length} órgãos com o ID na Centi: ${orgaosLiq.map((o) => `${o.idOrgao} · ${o.sigla}`).join(", ")}`
                     : undefined
             }
@@ -393,11 +403,30 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         )}
         <Ajuda titulo="Importação" botao="sm">
           <p>
-            Lê o ano <strong>semana a semana</strong> (o período que vier grande demais é dividido ao meio), página a página, com a
+            Lê o ano <strong>{tipo === "pagamentos" ? "mês a mês" : "semana a semana"}</strong>
+            {tipo === "pagamentos" ? " (a Centi só recorta os pagamentos por mês)" : " (o período que vier grande demais é dividido ao meio), página a página"}, com a
             configuração salva do card, e guarda tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque
             num para ver o detalhe (o pedido enviado, a resposta, o tempo, o erro).
           </p>
-          {tipo === "liquidacoes" ? (
+          {tipo === "pagamentos" ? (
+            <>
+              <p>
+                A Centi entrega os pagamentos por <strong>órgão</strong> e por <strong>mês</strong>, sem páginas. Uma importação lê{" "}
+                <strong>todos</strong> os órgãos com o “ID na Centi” cadastrado em Órgãos e Unidades: em cada mês, um pedido por órgão, ao
+                mesmo tempo (a coluna Órgão dos passos).
+              </p>
+              <p>
+                A Centi não informa a unidade do pagamento: o <strong>número do empenho</strong> liga o pagamento ao empenho, e o órgão e a
+                unidade dele são os do empenho (importe os empenhos antes, inclusive os de anos anteriores, para os restos a pagar). Sem o
+                empenho no sistema, fica o órgão do cadastro com o ID na Centi, sem unidade — e passa a seguir o empenho quando ele for
+                importado.
+              </p>
+              <p>
+                Os pagamentos só são gravados quando o ano inteiro foi lido, a contagem confere e os valores e a queda passam pelas regras do
+                card. As ordens com anulação ficam guardadas, fora do pago líquido. O que sumir da Centi segue a regra do card.
+              </p>
+            </>
+          ) : tipo === "liquidacoes" ? (
             <>
               <p>
                 A Centi entrega as liquidações por <strong>órgão</strong>, sem páginas. Uma importação lê <strong>todos</strong> os órgãos
@@ -435,10 +464,10 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
           <p>Toque numa importação do histórico para ver os passos dela; marque e use Excluir para tirá-las do banco (o que já foi gravado continua).</p>
         </Ajuda>
       </FerramentasAba>
-      {tipo === "liquidacoes" && orgaosLiq && orgaosLiq.length === 0 && (
-        <Callout kind="warn">Nenhum órgão tem o “ID na Centi” — cadastre em Órgãos e Unidades: a importação lê as liquidações de todos os órgãos com o ID.</Callout>
+      {liq && orgaosLiq && orgaosLiq.length === 0 && (
+        <Callout kind="warn">Nenhum órgão tem o “ID na Centi” — cadastre em Órgãos e Unidades: a importação lê {tipo === "pagamentos" ? "os pagamentos" : "as liquidações"} de todos os órgãos com o ID.</Callout>
       )}
-      {!comPeriodo && (
+      {!comPeriodo && tipo !== "pagamentos" && (
         <Callout kind="warn">
           Os parâmetros não usam <code>{"{inicio}"}</code> e <code>{"{fim}"}</code>: o ano só pode ser lido inteiro, e a Centi
           pode recusar por ser grande demais.
@@ -478,7 +507,8 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         <div className="space-y-3">
           {rodando && atual.orgaosCenti && (
             <p className="text-[13px] text-muted">
-              Liquidações de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo em cada semana (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
+              {atual.modo === "pagamentos" ? "Pagamentos" : "Liquidações"} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo em cada{" "}
+              {atual.modo === "pagamentos" ? "mês" : "semana"} (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
             </p>
           )}
           {rodando && (
@@ -495,7 +525,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
             <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />
             <StatMini label="Ano lido" value={`${Math.floor(fracaoDoAno(atual.ano, passos) * 100)}%`} hint={`${num(atual.paginas)} páginas`} />
-            <StatMini label={atual.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada"} value={atual.soma != null ? brl(atual.soma) : "—"} hint="Dos registros distintos" />
+            <StatMini label={rotuloSoma(atual)} value={atual.soma != null ? brl(atual.soma) : "—"} hint="Dos registros distintos" />
             <StatMini label="Erros" value={num(erros)} tone={erros ? "danger" : "default"} hint={atual.recusados ? `${num(atual.recusados)} recusados` : undefined} />
           </div>
           <ResultadoAteAgora passos={passos} />
@@ -791,7 +821,7 @@ function PassosDoHistorico({
           <StatMini label="Situação" value={est?.rotulo ?? lote.estado} />
           <StatMini label="Conferência" value={`${num(lote.unicos + lote.recusados)} de ${lote.totalInformado != null ? num(lote.totalInformado) : "?"}`} />
           <StatMini label="Páginas lidas" value={num(lote.paginas)} />
-          <StatMini label={lote.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada"} value={lote.soma != null ? brl(lote.soma) : "—"} hint={`Leitor v${lote.leitor}`} />
+          <StatMini label={rotuloSoma(lote)} value={lote.soma != null ? brl(lote.soma) : "—"} hint={`Leitor v${lote.leitor}`} />
           <StatMini label="Erros" value={passos ? num(passos.filter((p) => p.estado === "erro").length) : "…"} />
         </div>
         {passos && <ResultadoAteAgora passos={passos} />}

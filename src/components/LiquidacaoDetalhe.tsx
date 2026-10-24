@@ -1,7 +1,7 @@
 "use client";
 
 import { brl, dataBR, dataHoraBR } from "@/lib/format";
-import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
+import type { EmpenhoDaLiquidacao, LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
 import { Callout } from "./Callout";
 import { Skeleton } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -31,7 +31,6 @@ export type LiquidacaoNaTela = {
  * carregou). Espelha o `EmpenhoDetalhe`.
  */
 export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: LiquidacaoNaTela; completo?: LiquidacaoCompleta | null }) {
-  const e = completo?.empenho;
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
@@ -59,40 +58,7 @@ export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: Liq
         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text">{l.historico || "Sem histórico."}</p>
       </div>
 
-      <div className="rounded-card border border-border p-[var(--pad-card)]">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Empenho ligado (pelo número)</p>
-        {completo === undefined ? (
-          <Skeleton className="h-24 w-full" />
-        ) : completo === null ? (
-          <p className="text-sm text-muted">Não foi possível carregar o empenho.</p>
-        ) : !e ? (
-          <Callout kind="warn">
-            Nenhum empenho nº {l.numeroEmpenho} importado no sistema (de nenhum ano). Importe o ano dele num card de empenhos — a
-            liquidação passa a seguir o órgão e a unidade dele.
-          </Callout>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
-              <StatMini label="Empenhado" value={brl(e.valorEmpenhado)} />
-              <StatMini label="Liquidado" value={brl(e.valorLiquidado)} />
-              <StatMini label="Pago" value={brl(e.valorPago)} tone="ok" />
-              <StatMini label="A pagar" value={brl(e.saldoPagar)} />
-            </div>
-            <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-              <Campo label="Empenho" valor={`nº ${e.numero} · ${e.ano}`} />
-              <Campo label="Data" valor={dataBR(e.data) || "—"} />
-              <Campo label="Órgão gestor" valor={e.orgaoGestor} />
-              <Campo label="Unidade orçamentária" valor={e.unidadeOrcamentaria} />
-              <Campo label="Fornecedor" valor={e.fornecedor} />
-              <Campo label="Ação" valor={e.acao} />
-              <Campo label="Elemento" valor={e.elemento} />
-              <Campo label="Fonte de recurso" valor={e.fonte} />
-              <Campo label="Card de empenhos" valor={e.card} />
-              {e.removidoEm && <Campo label="Removido na Centi em" valor={dataHoraBR(e.removidoEm)} />}
-            </dl>
-          </div>
-        )}
-      </div>
+      <EmpenhoLigado empenho={completo === undefined ? undefined : completo === null ? null : (completo.empenho ?? false)} numero={l.numeroEmpenho} oQue="a liquidação" />
 
       {completo && (
         <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
@@ -112,7 +78,51 @@ export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: Liq
   );
 }
 
-function Campo({ label, valor }: { label: string; valor: string | null | undefined }) {
+/**
+ * O EMPENHO ligado pelo NÚMERO (de qualquer ano) — o MESMO bloco nos banners da liquidação e do pagamento. `empenho`:
+ * `undefined` = carregando, `null` = não carregou, `false` = nenhum empenho com o número no sistema.
+ */
+export function EmpenhoLigado({ empenho: e, numero, oQue }: { empenho: EmpenhoDaLiquidacao | false | null | undefined; numero: string; oQue: string }) {
+  return (
+    <div className="rounded-card border border-border p-[var(--pad-card)]">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Empenho ligado (pelo número)</p>
+      {e === undefined ? (
+        <Skeleton className="h-24 w-full" />
+      ) : e === null ? (
+        <p className="text-sm text-muted">Não foi possível carregar o empenho.</p>
+      ) : !e ? (
+        <Callout kind="warn">
+          Nenhum empenho nº {numero} importado no sistema (de nenhum ano). Importe o ano dele num card de empenhos — {oQue} passa a seguir o
+          órgão e a unidade dele.
+        </Callout>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
+            <StatMini label="Empenhado" value={brl(e.valorEmpenhado)} />
+            <StatMini label="Liquidado" value={brl(e.valorLiquidado)} />
+            <StatMini label="Pago" value={brl(e.valorPago)} tone="ok" />
+            <StatMini label="A pagar" value={brl(e.saldoPagar)} />
+          </div>
+          <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+            <Campo label="Empenho" valor={`nº ${e.numero} · ${e.ano}`} />
+            <Campo label="Data" valor={dataBR(e.data) || "—"} />
+            <Campo label="Órgão gestor" valor={e.orgaoGestor} />
+            <Campo label="Unidade orçamentária" valor={e.unidadeOrcamentaria} />
+            <Campo label="Fornecedor" valor={e.fornecedor} />
+            <Campo label="Ação" valor={e.acao} />
+            <Campo label="Elemento" valor={e.elemento} />
+            <Campo label="Fonte de recurso" valor={e.fonte} />
+            <Campo label="Card de empenhos" valor={e.card} />
+            {e.removidoEm && <Campo label="Removido na Centi em" valor={dataHoraBR(e.removidoEm)} />}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Um campo de um banner de detalhe (rótulo + valor; vazio = "—"). */
+export function Campo({ label, valor }: { label: string; valor: string | null | undefined }) {
   return (
     <div>
       <dt className="text-xs text-muted">{label}</dt>

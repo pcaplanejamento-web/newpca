@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.215.0",
+    data: "2026-10-24",
+    titulo: "Pagamentos da Centi",
+    mudancas: [
+      { tipo: "novo", area: "Pagamentos", texto: "Nova tela Pagamentos, com os mesmos cards de Empenhos e Liquidações: cada card importa as ordens de pagamento da Centi com a própria configuração (integração, anos, atualização automática e regras da conferência) e a sua tabela.", link: "/painel/pagamentos" },
+      { tipo: "novo", area: "Pagamentos", texto: "A importação lê todos os órgãos com o “ID na Centi” MÊS A MÊS, com os órgãos de cada mês ao mesmo tempo; só grava quando o ano inteiro foi lido e a contagem confere. O número do empenho dá o órgão e a unidade de cada pagamento (o empenho de qualquer ano).", link: "/painel/pagamentos" },
+      { tipo: "novo", area: "Pagamentos", texto: "A tabela mostra o valor da ordem, a retenção, o pago líquido e a anulação (as anuladas ficam guardadas, fora das somas); tocar numa linha abre o pagamento inteiro com o empenho ligado.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Importar empenhos ou mudar os vínculos de um card leva junto os pagamentos desses empenhos para o novo órgão e unidade.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.214.1",
     data: "2026-10-24",
     titulo: "Auditoria da importação em paralelo",

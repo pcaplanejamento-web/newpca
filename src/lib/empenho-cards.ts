@@ -21,7 +21,9 @@ function paraCard(l: Linha): CardEmpenho {
 
 /**
  * Os cards de UM TIPO com os números do que está gravado (no ESCOPO da pessoa): nos de empenhos, os empenhos vigentes e a
- * execução; nos de liquidações, as liquidações vigentes (o escopo é o da própria liquidação). Quantos vínculos (no de
+ * execução; nos de liquidações, as liquidações vigentes (o escopo é o da própria liquidação); nos de PAGAMENTOS, os
+ * pagamentos vigentes — `soma` = o valor das ordens, `anulado` = o das anuladas, `liquidado` = o pago LÍQUIDO (sem as
+ * anuladas), `pago` = as RETENÇÕES (sem as anuladas) e `saldoPagar` = quantas ordens anuladas. Quantos vínculos (no de
  * liquidações, os órgãos do cadastro com o "ID na Centi") e se há uma importação lendo agora.
  */
 export async function listarCards(escopo: EscopoEmpenhos, tipo: TipoCard, id?: number): Promise<ResumoCard[]> {
@@ -33,7 +35,7 @@ export async function listarCards(escopo: EscopoEmpenhos, tipo: TipoCard, id?: n
       .select({
         card: empenhoCards,
         vinculos:
-          tipo === "liquidacoes"
+          tipo !== "empenhos"
             ? sql<number>`${sql.raw(ORGAOS_COM_ID)}`
             : sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
         lendo: sql<number>`EXISTS (SELECT 1 FROM "centi_lotes" l WHERE l."card_id" = "empenho_cards"."id" AND l."estado" = 'lendo')`,
@@ -42,7 +44,15 @@ export async function listarCards(escopo: EscopoEmpenhos, tipo: TipoCard, id?: n
       .where(and(eq(empenhoCards.tipo, tipo), id == null ? undefined : eq(empenhoCards.id, id)))
       .orderBy(asc(empenhoCards.nome), asc(empenhoCards.id)),
     // UMA agregação para todos os cards do tipo (o que está gravado, no escopo da pessoa).
-    tipo === "liquidacoes"
+    tipo === "pagamentos"
+      ? db.all<{ c: number; n: number; emp: number; anu: number; liq: number; pag: number; sal: number; forn: number; ges: number; uo: number; ac: number }>(sql`
+      SELECT x."card_id" AS c, COUNT(*) AS n, IFNULL(SUM(x."valor"), 0) AS emp, IFNULL(SUM(CASE WHEN x."anulado" = 1 THEN x."valor" END), 0) AS anu,
+        IFNULL(SUM(CASE WHEN x."anulado" = 0 THEN x."valor_liquido" END), 0) AS liq, IFNULL(SUM(CASE WHEN x."anulado" = 0 THEN x."valor_retencao" END), 0) AS pag,
+        IFNULL(SUM(x."anulado"), 0) AS sal,
+        COUNT(DISTINCT x."cpf_cnpj") AS forn, COUNT(DISTINCT x."id_orgao_centi") AS ges, COUNT(DISTINCT x."reparticao_id") AS uo,
+        COUNT(DISTINCT x."numero_empenho") AS ac
+      FROM "pagamentos" x WHERE x."removido_em" IS NULL${doId}${so("x.")} GROUP BY x."card_id"`)
+      : tipo === "liquidacoes"
       ? db.all<{ c: number; n: number; emp: number; anu: number; liq: number; pag: number; sal: number; forn: number; ges: number; uo: number; ac: number }>(sql`
       SELECT x."card_id" AS c, COUNT(*) AS n, IFNULL(SUM(x."valor"), 0) AS emp, IFNULL(SUM(x."valor_anulado"), 0) AS anu,
         IFNULL(SUM(x."valor_liquido"), 0) AS liq, IFNULL(SUM(x."valor_pago"), 0) AS pag, IFNULL(SUM(x."saldo"), 0) AS sal,
@@ -94,6 +104,7 @@ export async function cardsAtivos(): Promise<CardEmpenho[]> {
         isNotNull(empenhoCards.configuradoEm),
         sql`CASE "empenho_cards"."tipo"
           WHEN 'liquidacoes' THEN ${sql.raw(ORGAOS_COM_ID)} > 0
+          WHEN 'pagamentos' THEN ${sql.raw(ORGAOS_COM_ID)} > 0
           ELSE EXISTS (SELECT 1 FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id") END`,
       ),
     )

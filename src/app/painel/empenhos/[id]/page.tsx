@@ -29,9 +29,9 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
   const [sp, escopo] = await Promise.all([searchParams, escopoDosEmpenhos()]);
   const [card] = await listarCards(escopo, "empenhos", id);
   if (!card) {
-    // Um card de LIQUIDAÇÕES aberto pelo endereço de empenhos vai à tela dele.
+    // Um card de LIQUIDAÇÕES ou PAGAMENTOS aberto pelo endereço de empenhos vai à tela dele.
     const outro = await getCard(id);
-    if (outro?.tipo === "liquidacoes") redirect(rotaDoCard(outro, sp.aba));
+    if (outro && outro.tipo !== "empenhos") redirect(rotaDoCard(outro, sp.aba));
     notFound();
   }
   const permitidas: AbaCard[] = ["empenhos", "vinculos", ...(pode.importar ? (["importacao"] as const) : []), ...(pode.configurar ? (["configuracao"] as const) : [])];

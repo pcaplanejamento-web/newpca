@@ -6,6 +6,7 @@ import { motivoVinculosInvalidos, telaDoCard } from "@/lib/empenho-cards-core";
 import { cadastroDaRegra, vinculosDoCard } from "@/lib/empenho-cards";
 import { comandosGravarVinculos } from "@/lib/empenho-cards-sql";
 import { comandoRealinharLiquidacoes } from "@/lib/liquidacoes-sql";
+import { comandoRealinharPagamentos } from "@/lib/pagamentos-sql";
 import { loteEmAndamento } from "@/lib/empenhos";
 import { vinculosCardSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -36,7 +37,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const antes = await vinculosDoCard(id);
   const db = getDb();
   // As LIQUIDAÇÕES seguem o empenho de mesmo número: mudou a unidade do empenho, muda a delas.
-  await db.batch([...comandosGravarVinculos(db, id, p.data.vinculos), comandoRealinharLiquidacoes(db)] as never);
+  await db.batch([...comandosGravarVinculos(db, id, p.data.vinculos), comandoRealinharLiquidacoes(db), comandoRealinharPagamentos(db)] as never);
   await registrarAuditoria({
     usuario: g.u,
     acao: "editar",

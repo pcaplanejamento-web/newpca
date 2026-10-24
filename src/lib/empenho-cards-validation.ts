@@ -22,10 +22,10 @@ export const cardEmpenhoSchema = z.strictObject({
   removidos: z.enum(["marcar", "apagar"]),
 });
 
-/** O card NOVO: o tipo (empenhos | liquidações), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos
+/** O card NOVO: o tipo (empenhos | liquidações | pagamentos), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos
  * (empenhos) ou os órgãos (liquidações). O resto começa no padrão. */
 export const criarCardSchema = z.strictObject({
-  tipo: z.enum(["empenhos", "liquidacoes"]).optional(),
+  tipo: z.enum(["empenhos", "liquidacoes", "pagamentos"]).optional(),
   nome: z.string().trim().min(1).max(LIMITES_CARD.nome),
   copiarDe: z.number().int().positive().nullable().optional(),
 });
@@ -58,7 +58,7 @@ const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
  * catálogo da Centi), ler UMA página, concluir (conferir e promover), PAUSAR (a leitura parou numa falha: o lote fica aberto
  * e solto para qualquer aba continuar) ou cancelar. */
 export const importarCardSchema = z.discriminatedUnion("acao", [
-  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes"]).optional() }),
+  z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes", "pagamentos"]).optional() }),
   z.strictObject({
     acao: z.literal("pagina"),
     lote: z.number().int().positive(),
