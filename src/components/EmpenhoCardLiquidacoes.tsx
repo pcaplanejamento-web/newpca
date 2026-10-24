@@ -79,12 +79,12 @@ const COLUNAS: Column<Liquidacao>[] = [
   colValor("valorLiquido", "Líquido"),
   colValor("valorPago", "Pago"),
   colValor("saldo", "Saldo"),
-  { key: "orgao", header: "Órgão gestor (Centi)", minWidth: 200, value: (x) => x.orgao, render: (x) => <CelulaTexto texto={x.orgao} /> },
+  { key: "orgao", header: "Órgão (Centi)", minWidth: 200, value: (x) => x.orgao, render: (x) => <CelulaTexto texto={x.orgao} /> },
 ];
 
 /**
- * A aba LIQUIDAÇÕES de um card de liquidações: o que está gravado (só as liquidações de empenho do card de origem — o vínculo
- * é o do empenho),
+ * A aba LIQUIDAÇÕES de um card de liquidações: o que está gravado (as liquidações dos órgãos do card, cada uma com o órgão e
+ * a unidade de destino — independente dos empenhos),
  * por ano, no escopo da pessoa. Os números do topo acompanham os filtros; "Removidas na Centi" no rodapé.
  */
 export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome: string }) {
@@ -156,8 +156,8 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
         <Ajuda titulo="Liquidações do card" botao="sm">
           <p>As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
           <p>
-            Só entra a liquidação cujo <strong>empenho</strong> está no card de empenhos de origem: ela segue o vínculo do empenho (a unidade). Por
-            isso você vê as liquidações dos empenhos da sua unidade.
+            Cada liquidação é do <strong>órgão</strong> que a Centi informou e vai para a unidade de destino escolhida na aba Órgãos (senão, o
+            próprio órgão). Você vê as liquidações da sua unidade (ou do seu órgão).
           </p>
           <p>Os números do topo acompanham os filtros da tabela. “Removidas na Centi” (rodapé) = as que a Centi não traz mais (pela regra do card).</p>
         </Ajuda>
@@ -166,7 +166,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
       {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
 
       {anos && !anos.length ? (
-        <Callout kind="info">Nenhuma liquidação importada neste card ainda. Importe os empenhos no card de origem e depois as liquidações na aba Importação.</Callout>
+        <Callout kind="info">Nenhuma liquidação importada neste card ainda. Escolha os órgãos (aba Órgãos) e importe na aba Importação — um órgão por vez.</Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (

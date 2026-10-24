@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LIMITES_CARD } from "./empenho-cards-core.ts";
+import { MAX_ORGAOS_CARD } from "./liquidacoes-core.ts";
 
 /** A configuração de um CARD de empenhos. A régua completa é `motivoCardInvalido` (core). */
 export const cardEmpenhoSchema = z.strictObject({
@@ -20,17 +21,19 @@ export const cardEmpenhoSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
-  /** Só no card de LIQUIDAÇÕES: o card de empenhos de origem (null = ainda não escolhido). */
-  origemId: z.number().int().positive().nullable(),
 });
 
-/** O card NOVO: o tipo (empenhos | liquidações), o nome e, opcional, o card de onde copiar os vínculos (empenhos) ou o card
- * de empenhos de ORIGEM (liquidações). O resto começa no padrão. */
+/** O card NOVO: o tipo (empenhos | liquidações), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos
+ * (empenhos) ou os órgãos (liquidações). O resto começa no padrão. */
 export const criarCardSchema = z.strictObject({
   tipo: z.enum(["empenhos", "liquidacoes"]).optional(),
   nome: z.string().trim().min(1).max(LIMITES_CARD.nome),
   copiarDe: z.number().int().positive().nullable().optional(),
-  origemId: z.number().int().positive().nullable().optional(),
+});
+
+/** Os ÓRGÃOS de um card de liquidações — a lista INTEIRA (a régua completa é `motivoOrgaosInvalidos`). */
+export const orgaosLiqSchema = z.strictObject({
+  orgaos: z.array(z.strictObject({ orgaoId: z.number().int().positive(), reparticaoId: z.number().int().positive().nullable() })).max(MAX_ORGAOS_CARD),
 });
 
 /** Os VÍNCULOS do card — a lista INTEIRA (a régua completa é `motivoVinculosInvalidos`, core). */
@@ -58,7 +61,8 @@ export const testarCardSchema = z.strictObject({
 const condutor = z.string().regex(/^[A-Za-z0-9-]{16,64}$/);
 
 /** A IMPORTAÇÃO MANUAL de um card (passo a passo, conduzida pela tela): iniciar um lote (`modo` "unidades" = só o
- * catálogo da Centi), ler UMA página, concluir (conferir e promover) ou cancelar. */
+ * catálogo da Centi), ler UMA página, concluir (conferir e promover), PAUSAR (a leitura parou numa falha: o lote fica aberto
+ * e solto para qualquer aba continuar) ou cancelar. */
 export const importarCardSchema = z.discriminatedUnion("acao", [
   z.strictObject({ acao: z.literal("iniciar"), ano: z.number().int().min(2000).max(2100), condutor, modo: z.enum(["dados", "unidades", "liquidacoes"]).optional(), idOrgao: z.number().int().min(1).max(9999).optional() }),
   z.strictObject({
@@ -70,6 +74,7 @@ export const importarCardSchema = z.discriminatedUnion("acao", [
     pagina: z.number().int().min(1).max(500),
   }),
   z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive(), condutor, aceitarQueda: z.boolean().optional() }),
+  z.strictObject({ acao: z.literal("pausar"), lote: z.number().int().positive(), condutor }),
   z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), condutor: condutor.optional(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
 ]);
 

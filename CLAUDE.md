@@ -4595,6 +4595,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
     `modo`. A tabela: `EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes` (as tuplas montadas pelo banco —
     `liquidacoes-tela.ts`; escopo = o do empenho).
+  - **LIQUIDAÇÕES INDEPENDENTES (v1.211.0, migração `0148` — tabela `liquidacao_card_orgaos` [card cascade · `orgao_id` ·
+    `reparticao_id` opcional, único card + órgão]; `liquidacoes` reconstruída SEM `empenho_id`, com `orgao_id` NOT NULL +
+    `reparticao_id` [cascade]; `empenho_cards.origem_id` DORMENTE — zerada):** o card de liquidações tem os PRÓPRIOS órgãos (aba
+    **Órgãos** = `LiquidacaoCardOrgaos` → `PUT /api/empenhos/cards/[id]/orgaos`, Configurar; regra pura `motivoOrgaosInvalidos`
+    — órgão com o "ID na Centi" (`orgaos.entidade_centi`), sem repetir órgão nem ID, a unidade do próprio órgão; 409 com lote
+    lendo; `comandosGravarOrgaosLiq` grava a lista, apaga as liquidações do órgão que saiu e leva o destino às gravadas).
+    TUDO o que a Centi devolve para o `idOrgao` é gravado com o destino dele (`destinoDoLote`; `numero_empenho` é só dado).
+    A importação é de UM órgão por vez (o seletor Órgão + Ano; `pedidosDoCard`/`orgaosLiquidacao`); a automática faz a rodada
+    dos órgãos. Escopo da tabela = o órgão/unidade da própria liquidação. **Falha passageira:** a página tenta 5 vezes
+    (`ESPERA_TENTATIVAS` 2/4/8/15/30 s) e, se não voltar, a ação `pausar` (`comandoSoltarLote`) deixa o lote ABERTO e solto —
+    Continuar lê só o que falta (antes o lote era cancelado e perdia o lido). O texto abaixo sobre a origem é HISTÓRICO.
   - **LIQUIDAÇÕES EM TELA PRÓPRIA (v1.209.0, migração `0146` — `empenho_cards.tipo` empenhos|liquidacoes + `origem_id` set
     null):** tela de módulo **`/painel/liquidacoes`** (`ABA_KEYS` `liquidacoes`, `IconLiquidacao`, as MESMAS ações de Empenhos
     no papel — a `0146` copiou as capacidades de `empenhos`, deu a tela aos grupos com Empenhos nas avulsas e a pôs ao lado de

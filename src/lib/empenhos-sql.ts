@@ -336,6 +336,14 @@ export function comandoConduzir(db: Db, loteId: number, condutor: string) {
     .returning({ id: centiLotes.id });
 }
 
+/** SOLTA a trava de quem conduz (a leitura parou numa falha): o lote segue ABERTO — qualquer aba continua de onde parou. */
+export function comandoSoltarLote(db: Db, loteId: number, condutor: string) {
+  return db
+    .update(centiLotes)
+    .set({ condutor: null, conduzindoAte: null, vistoEm: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"), eq(centiLotes.condutor, condutor)));
+}
+
 /**
  * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos VINCULADOS do card (com o órgão/unidade do
  * cadastro; o que reaparece perde o `removido_em`), trata o que o card tinha no ano e a Centi não trouxe mais pela REGRA

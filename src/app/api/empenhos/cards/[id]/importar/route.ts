@@ -2,13 +2,13 @@ import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { anosDoCard, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
-import { orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
+import { orgaosDoCard, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, lerPaginaDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
-import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandosExcluirLote } from "@/lib/empenhos-sql";
+import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandoSoltarLote, comandosExcluirLote } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -29,7 +29,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: await orgaosLiquidacao(a.card), emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
+  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: a.card.tipo === "liquidacoes" ? await orgaosLiquidacao(a.card.id) : null, emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
 }
 
 /**
@@ -57,15 +57,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     // os empenhos, também os vínculos.
     // O MODO segue o tipo do card: no de liquidações, só liquidações; no de empenhos, os empenhos ou o catálogo.
     if ((corpo.modo === "liquidacoes") !== (card.tipo === "liquidacoes")) return erro(card.tipo === "liquidacoes" ? "Este card importa liquidações." : "Liquidações se importam num card de liquidações.", 422);
-    const vinculos = (await vinculosDoCard(card.origemId ?? card.id)).length;
-    const falta = pendenciasDoCard(card, card.tipo === "liquidacoes" && card.origemId == null ? 0 : vinculos).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
+    const vinculos = card.tipo === "liquidacoes" ? (await orgaosDoCard(card.id)).length : (await vinculosDoCard(card.id)).length;
+    const falta = pendenciasDoCard(card, vinculos).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
-    // LIQUIDAÇÕES: um lote por ÓRGÃO da Centi — só os dos destinos dos vínculos (o "ID na Centi" do órgão).
+    // LIQUIDAÇÕES: um lote por ÓRGÃO da Centi — só os órgãos do card (o "ID na Centi" do órgão).
     if (corpo.modo === "liquidacoes") {
-      const { orgaos } = await orgaosLiquidacao(card);
-      if (!corpo.idOrgao || !orgaos.some((o) => o.id === corpo.idOrgao)) return erro("Órgão da Centi fora dos órgãos dos vínculos do card de empenhos de origem (o ID na Centi do órgão).", 422);
+      const { orgaos } = await orgaosLiquidacao(card.id);
+      if (!corpo.idOrgao || !orgaos.some((o) => o.idOrgao === corpo.idOrgao)) return erro("Órgão da Centi fora dos órgãos deste card (aba Órgãos).", 422);
     }
     return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, corpo.modo === "liquidacoes" ? (corpo.idOrgao ?? null) : null) });
   }
@@ -93,6 +93,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       if (e instanceof PedidoInvalido) return erro(e.message, e.status);
       throw e;
     }
+  }
+
+  if (corpo.acao === "pausar") {
+    await comandoSoltarLote(db, lote.id, corpo.condutor);
+    return ok({ lote: await getLote(lote.id, card.id) });
   }
 
   if (corpo.acao === "cancelar") {

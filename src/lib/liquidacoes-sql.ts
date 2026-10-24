@@ -1,16 +1,16 @@
 import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotePassos, centiLotes, centiStagingFora, empenhos, liquidacoes, liquidacoesStaging } from "../db/schema.ts";
+import { centiLotePassos, centiLotes, centiStagingFora, liquidacoes, liquidacoesStaging } from "../db/schema.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { chavesIguais, MAX_JSON_GUARDA, ultimoPasso } from "./empenhos-sql.ts";
-import { chaveEmpenhoDaLiquidacao, LIMITE_VALOR_LIQUIDACAO, type LinhaLiquidacao } from "./liquidacoes-core.ts";
+import { LIMITE_VALOR_LIQUIDACAO, type LinhaLiquidacao, type OrgaoDoCard } from "./liquidacoes-core.ts";
 
 /**
  * LIQUIDAÇÕES — os comandos da importação como BUILDERS do Drizzle (testados pelo driver D1 REAL — `tests/liquidacoes.test.ts`),
- * no MESMO padrão dos empenhos (`empenhos-sql.ts`): a página num ÚNICO parâmetro JSON, a promoção num lote atômico. O
- * vínculo é o do EMPENHO: só entra a liquidação cujo empenho (órgão gestor + número) está no card de EMPENHOS de ORIGEM
- * (`origem`); a liquidação fica no card de liquidações (`card`).
+ * no MESMO padrão dos empenhos (`empenhos-sql.ts`): a página num ÚNICO parâmetro JSON, a promoção num lote atômico. As
+ * liquidações são INDEPENDENTES dos empenhos: o lote é de UM órgão da Centi e tudo o que ele trouxe vai para o DESTINO do
+ * órgão no card (`OrgaoDoCard` — o órgão e a unidade do cadastro).
  */
 type Db = DrizzleD1Database<typeof schema>;
 
@@ -34,18 +34,7 @@ const CAMPOS = [
 
 const colunaSql = (c: string) => c.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 
-/** Os empenhos do card de ORIGEM (órgão gestor + número) entre os pedidos — as chaves de `chaveEmpenhoDaLiquidacao` que existem. */
-export async function empenhosNoCard(db: Db, origem: number, pares: { orgao: string; numeroEmpenho: string }[]): Promise<Set<string>> {
-  const chaves = [...new Set(pares.map((p) => chaveEmpenhoDaLiquidacao(p.orgao, p.numeroEmpenho)))];
-  if (!chaves.length) return new Set();
-  const r = await db
-    .selectDistinct({ c: sql<string>`${empenhos.orgaoGestor} || char(31) || ${empenhos.numero}` })
-    .from(empenhos)
-    .where(and(eq(empenhos.cardId, origem), sql`(${empenhos.orgaoGestor} || char(31) || ${empenhos.numero}) IN (SELECT value FROM json_each(${JSON.stringify(chaves)}))`));
-  return new Set(r.map((x) => x.c));
-}
-
-/** Guarda as liquidações da página no STAGING (SÓ as de empenho do card — quem chama filtra), em pedaços de JSON. */
+/** Guarda as liquidações da página no STAGING, em pedaços de JSON. */
 export function comandosGuardarLiquidacoes(db: Db, loteId: number, pagina: number, linhas: LinhaLiquidacao[]) {
   const pedacos: string[][] = [];
   let atual: string[] = [];
@@ -74,22 +63,20 @@ export function comandosGuardarLiquidacoes(db: Db, loteId: number, pagina: numbe
   });
 }
 
-/** O EMPENHO do card de ORIGEM de uma linha do staging (o mais recente com o mesmo órgão gestor e número) — null = sem vínculo. */
-const empenhoDaLinha = (origem: number) =>
-  sql`(SELECT ${empenhos.id} FROM ${empenhos} WHERE ${empenhos.cardId} = ${origem} AND ${empenhos.orgaoGestor} = "liquidacoes_staging"."orgao" AND ${empenhos.numero} = "liquidacoes_staging"."numero_empenho" ORDER BY ${empenhos.ano} DESC LIMIT 1)`;
-const stagingVinculado = (origem: number) => sql`${empenhoDaLinha(origem)} IS NOT NULL`;
+/** O destino como valores SQL (o órgão e a unidade do cadastro do órgão do lote). */
+const orgaoSql = (d: OrgaoDoCard) => sql`${d.orgaoId}`;
+const unidadeSql = (d: OrgaoDoCard) => (d.reparticaoId == null ? sql`NULL` : sql`${d.reparticaoId}`);
 
-const chavesVinculadas = (db: Db, loteId: number, origem: number) =>
-  db.select({ c: liquidacoesStaging.chave }).from(liquidacoesStaging).where(and(eq(liquidacoesStaging.loteId, loteId), stagingVinculado(origem)));
+const chavesDoLote = (db: Db, loteId: number) => db.select({ c: liquidacoesStaging.chave }).from(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId));
 
 /** As liquidações do card, do ano e do órgão da Centi que a Centi não trouxe mais. */
-const sumiram = (db: Db, loteId: number, card: number, origem: number, ano: number, idOrgao: number) =>
+const sumiram = (db: Db, loteId: number, card: number, ano: number, idOrgao: number) =>
   and(
     eq(liquidacoes.cardId, card),
     eq(liquidacoes.ano, ano),
     eq(liquidacoes.idOrgaoCenti, idOrgao),
     isNull(liquidacoes.removidoEm),
-    notInArray(liquidacoes.chave, chavesVinculadas(db, loteId, origem)),
+    notInArray(liquidacoes.chave, chavesDoLote(db, loteId)),
     notInArray(liquidacoes.chave, chavesIguais(db, loteId)),
   );
 
@@ -97,11 +84,13 @@ const COMPARADOS = CAMPOS.filter((c) => c !== "chave");
 const colLiq = (c: string) => sql.raw(`"liquidacoes"."${colunaSql(c)}"`);
 const colStg = (c: string) => sql.raw(`"liquidacoes_staging"."${colunaSql(c)}"`);
 
-function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: SQL, empenhoNovo: SQL): SQL {
+/** "Mudou": algum campo diferente, o DESTINO mudou (o órgão do card ganhou outra unidade), estava removida ou outro leitor. */
+function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: SQL, orgaoNovo: SQL, unidadeNovo: SQL): SQL {
   return sql.join(
     [
       ...COMPARADOS.map((c) => sql`${atual(c)} IS NOT ${novo(c)}`),
-      sql`${atual("empenhoId")} IS NOT ${empenhoNovo}`,
+      sql`${atual("orgaoId")} IS NOT ${orgaoNovo}`,
+      sql`${atual("reparticaoId")} IS NOT ${unidadeNovo}`,
       sql`${atual("removidoEm")} IS NOT NULL`,
       sql`${atual("leitor")} IS NOT ${leitorNovo}`,
     ],
@@ -109,15 +98,15 @@ function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: 
   );
 }
 
-/** O resumo da promoção: novas, atualizadas de fato, removidas (não vieram mais) e as FORA (sem o empenho no card). */
-export async function contagemLiquidacoes(db: Db, loteId: number, card: number, origem: number, ano: number, idOrgao: number, leitor: number) {
+/** O resumo da promoção: novas, atualizadas de fato e removidas (não vieram mais). Toda liquidação do órgão tem destino
+ * (o órgão do card) — não há "fora". */
+export async function contagemLiquidacoes(db: Db, loteId: number, card: number, destino: OrgaoDoCard, ano: number, idOrgao: number, leitor: number) {
   const [novos] = await db
     .select({ n: count() })
     .from(liquidacoesStaging)
     .where(
       and(
         eq(liquidacoesStaging.loteId, loteId),
-        stagingVinculado(origem),
         sql`NOT EXISTS (SELECT 1 FROM ${liquidacoes} WHERE ${liquidacoes.cardId} = ${card} AND ${liquidacoes.chave} = ${liquidacoesStaging.chave})`,
       ),
     );
@@ -125,26 +114,21 @@ export async function contagemLiquidacoes(db: Db, loteId: number, card: number, 
     .select({ n: count() })
     .from(liquidacoesStaging)
     .innerJoin(liquidacoes, and(eq(liquidacoes.cardId, card), eq(liquidacoes.chave, liquidacoesStaging.chave)))
-    .where(and(eq(liquidacoesStaging.loteId, loteId), stagingVinculado(origem), mudou(colLiq, colStg, sql`${leitor}`, empenhoDaLinha(origem))));
-  const [removidos] = await db.select({ n: count() }).from(liquidacoes).where(sumiram(db, loteId, card, origem, ano, idOrgao));
-  const [perdeu] = await db
-    .select({ n: count() })
-    .from(liquidacoesStaging)
-    .where(and(eq(liquidacoesStaging.loteId, loteId), sql`NOT (${stagingVinculado(origem)})`));
-  const [contados] = await db.select({ n: count() }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 0)));
-  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: perdeu.n + contados.n };
+    .where(and(eq(liquidacoesStaging.loteId, loteId), mudou(colLiq, colStg, sql`${leitor}`, orgaoSql(destino), unidadeSql(destino))));
+  const [removidos] = await db.select({ n: count() }).from(liquidacoes).where(sumiram(db, loteId, card, ano, idOrgao));
+  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: 0 };
 }
 
 /**
  * A CONFERÊNCIA EM TEMPO REAL de uma página de LIQUIDAÇÕES (a mesma das de empenhos — `comandosConferirPagina`): compara
- * cada liquidação guardada da página com a GRAVADA no card pela régua da promoção (`mudou`, com o empenho da origem e o
- * leitor), grava o RESULTADO no passo e tira do staging as IGUAIS (fica só a chave).
+ * cada liquidação guardada da página com a GRAVADA no card pela régua da promoção (`mudou`, com o destino e o leitor),
+ * grava o RESULTADO no passo e tira do staging as IGUAIS (fica só a chave).
  */
-export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number, origem: number, leitor: number, chaves: readonly string[], semVinculo: number) {
+export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number, destino: OrgaoDoCard, leitor: number, chaves: readonly string[]) {
   const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
   const daPagina = sql`"liquidacoes_staging"."lote_id" = ${loteId} AND "liquidacoes_staging"."chave" IN ${lista}`;
   const juntos = sql`"liquidacoes_staging" JOIN "liquidacoes" ON "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"`;
-  const difere = mudou(colLiq, colStg, sql`${leitor}`, empenhoDaLinha(origem));
+  const difere = mudou(colLiq, colStg, sql`${leitor}`, orgaoSql(destino), unidadeSql(destino));
   return [
     db
       .update(centiLotePassos)
@@ -152,7 +136,7 @@ export function comandosConferirLiquidacoes(db: Db, loteId: number, card: number
         resNovos: sql`(SELECT COUNT(*) FROM "liquidacoes_staging" WHERE ${daPagina} AND NOT EXISTS (SELECT 1 FROM "liquidacoes" WHERE "liquidacoes"."card_id" = ${card} AND "liquidacoes"."chave" = "liquidacoes_staging"."chave"))`,
         resAlterados: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND (${difere}))`,
         resIguais: sql`(SELECT COUNT(*) FROM ${juntos} WHERE ${daPagina} AND NOT (${difere}))`,
-        resSemVinculo: semVinculo,
+        resSemVinculo: 0,
       })
       .where(eq(centiLotePassos.id, ultimoPasso(loteId))),
     db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)),
@@ -208,15 +192,15 @@ export async function ultimaLiquidacaoPromovida(db: Db, card: number, ano: numbe
 }
 
 /**
- * PROMOVE o lote de liquidações conferido, num lote ATÔMICO: grava/atualiza as liquidações cujo EMPENHO está no card
- * (com o id do empenho), trata as que a Centi não trouxe mais (do mesmo ano e órgão) pela REGRA do card, fecha o lote e
- * limpa o staging.
+ * PROMOVE o lote de liquidações conferido, num lote ATÔMICO: grava/atualiza as liquidações do órgão com o DESTINO dele no
+ * card (o órgão e a unidade do cadastro), trata as que a Centi não trouxe mais (do mesmo ano e órgão) pela REGRA do card,
+ * fecha o lote e limpa o staging.
  */
 export function comandosPromoverLiquidacoes(
   db: Db,
   loteId: number,
   card: number,
-  origem: number,
+  destino: OrgaoDoCard,
   ano: number,
   idOrgao: number,
   leitor: number,
@@ -228,7 +212,8 @@ export function comandosPromoverLiquidacoes(
       id: sql<number>`NULL`.as("id"),
       ...Object.fromEntries(CAMPOS.map((c) => [c, liquidacoesStaging[c]])),
       idOrgaoCenti: sql<number>`${idOrgao}`.as("id_orgao_centi"),
-      empenhoId: sql<number>`${empenhoDaLinha(origem)}`.as("empenho_id"),
+      orgaoId: sql<number>`${orgaoSql(destino)}`.as("orgao_id"),
+      reparticaoId: sql<number | null>`${unidadeSql(destino)}`.as("reparticao_id"),
       cardId: sql<number>`${card}`.as("card_id"),
       loteId: liquidacoesStaging.loteId,
       removidoEm: sql<string | null>`NULL`.as("removido_em"),
@@ -237,8 +222,8 @@ export function comandosPromoverLiquidacoes(
       atualizadoEm: sql<string>`CURRENT_TIMESTAMP`.as("atualizado_em"),
     })
     .from(liquidacoesStaging)
-    .where(and(eq(liquidacoesStaging.loteId, loteId), stagingVinculado(origem)));
-  const atualizar = Object.fromEntries([...COMPARADOS, "idOrgaoCenti", "empenhoId", "loteId", "removidoEm", "leitor"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]));
+    .where(eq(liquidacoesStaging.loteId, loteId));
+  const atualizar = Object.fromEntries([...COMPARADOS, "idOrgaoCenti", "orgaoId", "reparticaoId", "loteId", "removidoEm", "leitor"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]));
   return [
     db
       .insert(liquidacoes)
@@ -246,11 +231,11 @@ export function comandosPromoverLiquidacoes(
       .onConflictDoUpdate({
         target: [liquidacoes.cardId, liquidacoes.chave],
         set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` },
-        setWhere: mudou(colLiq, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."empenho_id"`),
+        setWhere: mudou(colLiq, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
       }),
     regra === "apagar"
-      ? db.delete(liquidacoes).where(sumiram(db, loteId, card, origem, ano, idOrgao))
-      : db.update(liquidacoes).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, origem, ano, idOrgao)),
+      ? db.delete(liquidacoes).where(sumiram(db, loteId, card, ano, idOrgao))
+      : db.update(liquidacoes).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano, idOrgao)),
     db
       .update(centiLotes)
       .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })

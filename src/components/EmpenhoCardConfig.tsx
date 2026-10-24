@@ -18,7 +18,6 @@ import {
   type RegraRemovidos,
   rotaDoCard,
 } from "@/lib/empenho-cards-core";
-import { num } from "@/lib/format";
 import { dataIsoBrasilia } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -51,7 +50,7 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
  * curso, sem gravar nada). Edição direta, com o "(?)" em cada campo; "Salvar" na barra das abas (só com alteração) — a
  * régua é `motivoCardInvalido`, a mesma do servidor. Sair com alteração não salva avisa.
  */
-export function EmpenhoCardConfig({ card, origens = [] }: { card: CardEmpenho; /** Liquidações: os cards de empenhos (a origem). */ origens?: { id: number; nome: string; vinculos: number }[] }) {
+export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
   const liq = card.tipo === "liquidacoes";
   const router = useRouter();
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
@@ -67,7 +66,7 @@ export function EmpenhoCardConfig({ card, origens = [] }: { card: CardEmpenho; /
     setTeste(null);
   };
 
-  const motivo = motivoCardInvalido(v, card.tipo);
+  const motivo = motivoCardInvalido(v);
   const alterado = JSON.stringify(v) !== JSON.stringify(edicaoDoCard(card));
   const previa = useMemo(() => previaPedido(v, ano), [v, ano]);
   const anosDeFato = anosDoCard(v.anos, anoAtual());
@@ -98,10 +97,10 @@ export function EmpenhoCardConfig({ card, origens = [] }: { card: CardEmpenho; /
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; card?: CardEmpenho };
       if (!r.ok || !j.ok || !j.card) throw new Error(j.error ?? "Erro ao salvar o card.");
       toast.success(
-        card.configuradoEm ? `Card "${j.card.nome}" salvo.` : liq ? `Configuração confirmada — o card "${j.card.nome}" já pode importar as liquidações.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`,
+        card.configuradoEm ? `Card "${j.card.nome}" salvo.` : liq ? `Configuração confirmada — agora escolha os órgãos do card "${j.card.nome}".` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`,
       );
       setV(edicaoDoCard(j.card));
-      if (!card.configuradoEm) router.push(rotaDoCard(card, liq ? "importacao" : "vinculos"));
+      if (!card.configuradoEm) router.push(rotaDoCard(card, "vinculos"));
       else router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar o card.");
@@ -144,35 +143,6 @@ export function EmpenhoCardConfig({ card, origens = [] }: { card: CardEmpenho; /
       {motivo && (alterado || !card.configuradoEm) && <Callout kind="danger">{motivo}</Callout>}
 
       <div className="grid grid-cols-1 gap-[var(--gap-block)] xl:grid-cols-2">
-        {liq && (
-          <SecaoBanner titulo="Empenhos de origem">
-            <SelectField
-              denso
-              label="Card de empenhos"
-              value={v.origemId == null ? "" : String(v.origemId)}
-              onChange={(e) => muda("origemId", e.target.value ? Number(e.target.value) : null)}
-              rotuloExtra={
-                <A titulo="Card de empenhos de origem">
-                  <p>
-                    A liquidação só é gravada quando o <strong>empenho</strong> dela está neste card de empenhos — e segue o vínculo dele (o órgão
-                    e a unidade do cadastro). Os órgãos da Centi pedidos são os de destino dos vínculos dele.
-                  </p>
-                  <p>Importe os empenhos antes: a liquidação de um empenho que ainda não está no card não entra.</p>
-                </A>
-              }
-            >
-              <option value="">Escolha…</option>
-              {origens.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.nome} ({num(o.vinculos)} vínculos)
-                </option>
-              ))}
-            </SelectField>
-            {card.origemId != null && v.origemId !== card.origemId && (
-              <Callout kind="warn">Ao salvar, as liquidações gravadas neste card (dos empenhos do card anterior) saem do banco — importe de novo pela origem nova.</Callout>
-            )}
-          </SecaoBanner>
-        )}
         <SecaoBanner titulo="Identificação">
           <TextField denso label="Nome" value={v.nome} onChange={(e) => muda("nome", e.target.value)} maxLength={60} rotuloExtra={<A titulo="Nome">Como o card aparece na lista e no cabeçalho.</A>} />
           <ColorField label="Cor do card" value={v.cor} onChange={(cor) => muda("cor", cor)} />

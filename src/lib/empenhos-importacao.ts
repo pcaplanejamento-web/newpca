@@ -3,17 +3,16 @@ import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
 import { baixarSeguro } from "./busca-segura";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
-import { chaveEmpenhoDaLiquidacao, corpoLiquidacoes, lerPaginaLiquidacoes } from "./liquidacoes-core";
+import { corpoLiquidacoes, lerPaginaLiquidacoes, type OrgaoDoCard } from "./liquidacoes-core";
 import {
   comandosConferirLiquidacoes,
   comandosGuardarLiquidacoes,
   comandosPromoverLiquidacoes,
   contagemLiquidacoes,
-  empenhosNoCard,
   liquidacoesSuspeitas,
   ultimaLiquidacaoPromovida,
 } from "./liquidacoes-sql";
-import { registrarLeituraCard } from "./empenho-cards";
+import { orgaosLiquidacao, registrarLeituraCard } from "./empenho-cards";
 import { comandoRegistrarCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
 import { getDb } from "./db";
 import { listarPassos, paraPasso } from "./empenhos";
@@ -98,7 +97,7 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
   const liq = lote.modo === "liquidacoes";
   if (liq !== (card.tipo === "liquidacoes")) throw new PedidoInvalido(liq ? "Liquidações só se importam num card de liquidações." : "O card de liquidações só importa liquidações.");
   if (liq && (!lote.idOrgaoCenti || pagina !== 1)) throw new PedidoInvalido("A importação de liquidações pede um órgão da Centi e não tem páginas.");
-  if (liq && card.origemId == null) throw new PedidoInvalido("Escolha o card de empenhos de origem na Configuração.");
+  const destino = liq ? await destinoDoLote(card, lote) : null;
   let enviado: string;
   try {
     enviado = JSON.stringify(liq ? corpoLiquidacoes(card.parametros, lote.ano, periodo, lote.idOrgaoCenti ?? 0) : corpoDaPagina(card.parametros, lote.ano, pagina, periodo));
@@ -167,18 +166,14 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
     mensagem: lida.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
   };
   if ("orgaos" in lida) {
-    // LIQUIDAÇÕES: só entra a de EMPENHO que está no card de EMPENHOS de origem (o vínculo é o do empenho); das demais
-    // fica só a chave.
-    const doCard = await empenhosNoCard(db, card.origemId ?? 0, lida.linhas);
-    const tem = (l: (typeof lida.linhas)[number]) => doCard.has(chaveEmpenhoDaLiquidacao(l.orgao, l.numeroEmpenho));
-    const guardadas = lida.linhas.filter(tem);
-    const fora = lida.linhas.filter((l) => !tem(l)).map((l) => l.chave);
+    if (!destino) throw new PedidoInvalido("Lote de liquidações sem órgão do card.");
+    // LIQUIDAÇÕES (independentes dos empenhos): o lote é de UM órgão da Centi — tudo o que ele trouxe vai para o destino
+    // do órgão no card.
     const res = await db.batch([
       comandoRegistrarPasso(db, lote.id, passo),
-      ...comandosGuardarLiquidacoes(db, lote.id, pagina, guardadas),
-      ...comandosGuardarFora(db, lote.id, fora),
+      ...comandosGuardarLiquidacoes(db, lote.id, pagina, lida.linhas),
       // A CONFERÊNCIA EM TEMPO REAL: o resultado da página no passo; as iguais à gravada saem do staging.
-      ...comandosConferirLiquidacoes(db, lote.id, card.id, card.origemId ?? 0, lote.leitor, guardadas.map((l) => l.chave), fora.length),
+      ...comandosConferirLiquidacoes(db, lote.id, card.id, destino, lote.leitor, lida.linhas.map((l) => l.chave)),
       comandoRecontarLote(db, lote.id),
       consultaUltimoPasso(db, lote.id),
     ] as never);
@@ -277,16 +272,27 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
   }
   const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, idOrgao, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma liquidada").replace("os empenhos caíram", "as liquidações caíram") };
-  const origem = card.origemId ?? 0;
-  const contagem = await contagemLiquidacoes(db, lote.id, card.id, origem, lote.ano, idOrgao, lote.leitor);
-  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, origem, lote.ano, idOrgao, lote.leitor, card.removidos, contagem) as never);
+  const destino = await destinoDoLote(card, lote).catch(() => null);
+  if (!destino) {
+    const m = `O órgão ${idOrgao} da Centi saiu do card — nada foi gravado.`;
+    return fecharParcial(card, lote, m, m, opcoes.usuario);
+  }
+  const contagem = await contagemLiquidacoes(db, lote.id, card.id, destino, lote.ano, idOrgao, lote.leitor);
+  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, destino, lote.ano, idOrgao, lote.leitor, card.removidos, contagem) as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: liquidações do órgão ${idOrgao} da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}, ${contagem.fora} sem o empenho no card de origem (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}: liquidações do órgão ${idOrgao} da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
+}
+
+/** O DESTINO do lote de liquidações: o órgão do card com o "ID na Centi" do lote (o órgão e a unidade do cadastro). */
+async function destinoDoLote(card: CardEmpenho, lote: LoteCenti): Promise<OrgaoDoCard> {
+  const p = (await orgaosLiquidacao(card.id)).orgaos.find((o) => o.idOrgao === lote.idOrgaoCenti);
+  if (!p) throw new PedidoInvalido(`O órgão ${lote.idOrgaoCenti ?? "?"} da Centi não está mais no card (aba Órgãos) — cancele esta importação.`);
+  return { orgaoId: p.orgaoId, reparticaoId: p.reparticaoId };
 }

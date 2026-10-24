@@ -24,7 +24,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const id = card.id;
   const negado = recusa(g.acesso, telaDoCard(card), "configurar");
   if (negado) return negado;
-  if (card.tipo !== "empenhos") return erro("O card de liquidações usa os vínculos do card de empenhos de origem — edite-os lá.", 422);
+  if (card.tipo !== "empenhos") return erro("O card de liquidações tem os próprios órgãos (aba Órgãos).", 422);
   const p = await parseCorpo(vinculosCardSchema, req);
   if ("resp" in p) return p.resp;
   const motivo = motivoVinculosInvalidos(p.data.vinculos, await cadastroDaRegra());

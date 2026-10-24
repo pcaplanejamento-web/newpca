@@ -55,7 +55,7 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
   let lote = await loteEmAndamento(card.id);
   if (!lote) {
     if (card.tipo === "liquidacoes") {
-      const orgaos = (await orgaosLiquidacao(card)).orgaos.map((o) => o.id);
+      const orgaos = (await orgaosLiquidacao(card.id)).orgaos.map((o) => o.idOrgao);
       if (!orgaos.length) return "nenhum órgão da Centi";
       // A rodada em curso continua pelo próximo órgão; senão, na hora do card, começa a do ano da vez pelo 1º órgão.
       let vez = proximoOrgaoDaRodada(await listarLotes(card.id, 200), orgaos);

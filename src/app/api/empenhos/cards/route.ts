@@ -8,8 +8,8 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 export const dynamic = "force-dynamic";
 
 /**
- * CRIA um card (Configurar na tela do tipo): de EMPENHOS — o nome e, opcional, os vínculos copiados de outro card — ou de
- * LIQUIDAÇÕES — o nome e o card de empenhos de ORIGEM. O resto começa no padrão do tipo.
+ * CRIA um card (Configurar na tela do tipo): o nome e, opcional, os vínculos (empenhos) ou os órgãos (liquidações)
+ * copiados de outro card do MESMO tipo. O resto começa no padrão do tipo.
  */
 export async function POST(req: Request) {
   const p = await parseCorpo(criarCardSchema, req);
@@ -17,10 +17,10 @@ export async function POST(req: Request) {
   const tipo = p.data.tipo ?? "empenhos";
   const g = await exigirAcesso(tipo === "liquidacoes" ? "liquidacoes" : "empenhos", "configurar");
   if ("erro" in g) return g.erro;
-  const ref = tipo === "liquidacoes" ? (p.data.origemId ?? null) : (p.data.copiarDe ?? null);
-  const origem = ref == null ? null : await getCard(ref);
-  if (ref != null && (!origem || origem.tipo !== "empenhos")) return erro(tipo === "liquidacoes" ? "O card de empenhos de origem não existe mais." : "O card de onde copiar os vínculos não existe mais.", 404);
-  const id = await criarCard({ ...cardPadrao(tipo, ref), nome: p.data.nome }, ref, g.u.nome, tipo);
+  const copiarDe = p.data.copiarDe ?? null;
+  const origem = copiarDe == null ? null : await getCard(copiarDe);
+  if (copiarDe != null && (!origem || origem.tipo !== tipo)) return erro("O card de onde copiar não existe mais.", 404);
+  const id = await criarCard({ ...cardPadrao(tipo), nome: p.data.nome }, copiarDe, g.u.nome, tipo);
   await registrarAuditoria({
     usuario: g.u,
     acao: "criar",
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     entidadeId: id,
     resumo:
       tipo === "liquidacoes"
-        ? `Card de liquidações "${p.data.nome}" criado${origem ? ` com os empenhos de "${origem.nome}"` : ""}`
+        ? `Card de liquidações "${p.data.nome}" criado${origem ? ` com os órgãos de "${origem.nome}"` : ""}`
         : `Card de empenhos "${p.data.nome}" criado${origem ? ` com os vínculos de "${origem.nome}"` : ""}`,
   });
   return ok({ id });

@@ -70,7 +70,8 @@ export function passoVazio(id: number, periodo: Periodo, pagina: number): PassoL
 /** O que acontece agora (a linha acima da barra). */
 export type Agora = { periodo: Periodo; pagina: number; tentativa: number; espera?: number };
 
-const ESPERA_TENTATIVAS = [2000, 4000, 8000];
+/** As esperas entre as tentativas de uma página que falhou (a Centi oscila — 500, sem resposta): ~1 min no total. */
+const ESPERA_TENTATIVAS = [2000, 4000, 8000, 15000, 30000];
 const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 /**

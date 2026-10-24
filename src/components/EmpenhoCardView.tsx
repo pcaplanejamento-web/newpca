@@ -45,19 +45,18 @@ export function EmpenhoCardView({
   const lista = `/painel/${c.tipo}`;
   const e = estadoCard(c, c.lendo);
   const pendencias = pendenciasDoCard(c, c.vinculos);
-  // A ORDEM obrigatória: Configuração → Vínculos → Importação (nada é importado antes das duas primeiras). No card de
-  // liquidações, os vínculos são os do card de empenhos de origem.
+  // A ORDEM obrigatória: Configuração → Vínculos (no de liquidações, os Órgãos) → Importação.
   const etapas = [
-    { aba: "configuracao" as const, rotulo: "1. Configuração", feito: !!c.configuradoEm && (!liq || c.origemId != null) },
-    { aba: "vinculos" as const, rotulo: liq ? "2. Vínculos (do card de empenhos)" : "2. Vínculos", feito: c.vinculos > 0 },
+    { aba: "configuracao" as const, rotulo: "1. Configuração", feito: !!c.configuradoEm },
+    { aba: "vinculos" as const, rotulo: liq ? "2. Órgãos" : "2. Vínculos", feito: c.vinculos > 0 },
   ];
 
   async function excluir() {
     const ok = await confirmar({
       titulo: `Excluir o card "${c.nome}"?`,
       texto: liq
-        ? `As ${num(c.empenhos)} liquidações gravadas e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
-        : `Os ${num(c.empenhos)} empenhos gravados (e as liquidações deles nos cards de liquidações), os ${num(c.vinculos)} vínculos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`,
+        ? `As ${num(c.empenhos)} liquidações gravadas, os ${num(c.vinculos)} órgãos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
+        : `Os ${num(c.empenhos)} empenhos gravados, os ${num(c.vinculos)} vínculos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`,
       confirmar: "Excluir",
       perigo: true,
     });
@@ -75,7 +74,6 @@ export function EmpenhoCardView({
   }
 
   const indicadores = [
-    ...(liq ? [{ rotulo: "Empenhos de", valor: c.origemNome ?? "—" }] : []),
     { rotulo: liq ? "Liquidações" : "Empenhos", valor: num(c.empenhos) },
     { rotulo: liq ? "Liquidado" : "Empenhado", valor: brl(c.soma) },
     { rotulo: "Anos", valor: rotuloAnos(c.anos) },
@@ -85,7 +83,7 @@ export function EmpenhoCardView({
     [
       { value: "empenhos", label: "Empenhos" },
       { value: "liquidacoes", label: "Liquidações" },
-      { value: "vinculos", label: "Vínculos" },
+      { value: "vinculos", label: liq ? "Órgãos" : "Vínculos" },
       { value: "importacao", label: "Importação", curto: "Importar" },
       { value: "configuracao", label: "Configuração", curto: "Config." },
     ] as const

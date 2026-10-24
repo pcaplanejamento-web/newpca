@@ -27,16 +27,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const p = await parseCorpo(testarCardSchema, req);
   if ("resp" in p) return p.resp;
   const { edicao, ano } = p.data;
-  const motivo = motivoCardInvalido(edicao, a.card.tipo);
+  const motivo = motivoCardInvalido(edicao);
   if (motivo) return erro(motivo, 422);
   const previa = previaPedido(edicao, ano);
   const { url } = previa;
   let corpo = previa.corpo;
   if (a.card.tipo === "liquidacoes") {
-    // A API de liquidações exige o ÓRGÃO da Centi: o teste pede o 1º órgão do card de empenhos de origem.
-    const { orgaos } = await orgaosLiquidacao({ id: a.card.id, origemId: edicao.origemId });
-    if (!orgaos.length) return erro("Escolha o card de empenhos de origem (com vínculos e o “ID na Centi” cadastrado nos órgãos de destino) para testar.", 422);
-    corpo = { ...(corpo as Record<string, unknown>), idOrgao: orgaos[0].id };
+    // A API de liquidações exige o ÓRGÃO da Centi: o teste pede o 1º órgão do card.
+    const { orgaos } = await orgaosLiquidacao(a.card.id);
+    if (!orgaos.length) return erro("Escolha antes os órgãos do card (aba Órgãos) — a API de liquidações pede um órgão por vez.", 422);
+    corpo = { ...(corpo as Record<string, unknown>), idOrgao: orgaos[0].idOrgao };
   }
   const inicio = Date.now();
   try {

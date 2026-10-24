@@ -3,8 +3,8 @@
  * semana a semana, o staging, a conferência e a promoção), com as PARTICULARIDADES da API `getliquidacoes`:
  * - exige o ÓRGÃO da Centi (`idOrgao` — o "ID na Centi" cadastrado no órgão): uma importação = um lote por órgão;
  * - NÃO pagina nem informa o total: cada período vem inteiro numa resposta — o total do período é o que veio;
- * - não traz unidade orçamentária nem ação, só o NÚMERO DO EMPENHO: a liquidação só é gravada quando o empenho dela já
- *   está no card (o vínculo é o do empenho); sem ele, nada é guardado.
+ * - não traz unidade orçamentária nem ação: TUDO o que a Centi devolve para o órgão é dele — a liquidação é gravada com o
+ *   órgão e a unidade do órgão do card (`OrgaoDoCard`), INDEPENDENTE dos empenhos (o número do empenho fica como dado).
  */
 import { esqueletoResposta, lerJsonCenti, registrosDaResposta } from "./centi-resposta-core.ts";
 import { corpoDaPagina, dataIso, type PaginaLida, type Periodo, valor } from "./empenhos-core.ts";
@@ -39,12 +39,11 @@ function texto(v: unknown): string | null {
 /** A CHAVE da liquidação = o Id da Centi (único; o número da liquidação é o da nota e se repete). */
 export const chaveLiquidacao = (id: number) => String(id);
 
-/** Um registro do portal → a linha (ou o motivo da recusa: sem Id ou sem o número do empenho, não entra). */
+/** Um registro do portal → a linha (ou o motivo da recusa: sem o Id da Centi, não entra). O número do empenho é só dado. */
 export function linhaLiquidacao(item: Record<string, unknown>, ano: number): { linha: LinhaLiquidacao } | { recusado: string } {
   const id = Number(item.Id);
   if (!Number.isInteger(id) || id <= 0) return { recusado: "sem Id" };
-  const numeroEmpenho = texto(item.NumeroEmpenho);
-  if (!numeroEmpenho) return { recusado: "sem o número do empenho" };
+  const numeroEmpenho = texto(item.NumeroEmpenho) ?? "";
   return {
     linha: {
       chave: chaveLiquidacao(id),
@@ -105,19 +104,57 @@ export function corpoLiquidacoes(parametros: string, ano: number, periodo: Perio
   return { ...(corpoDaPagina(parametros, ano, 1, periodo) as Record<string, unknown>), idOrgao };
 }
 
-/** A CHAVE de busca do empenho de uma liquidação no card: o órgão gestor + o número do empenho. */
-export const chaveEmpenhoDaLiquidacao = (orgao: string, numeroEmpenho: string) => `${orgao}\u001f${numeroEmpenho}`;
+/** Um ÓRGÃO de um card de liquidações: o órgão do cadastro (o "ID na Centi" dele é o `idOrgao` do pedido) e, opcional, a
+ * unidade de destino. */
+export type OrgaoDoCard = { orgaoId: number; reparticaoId: number | null };
 
-/** Os ÓRGÃOS da Centi que as liquidações do card pedem: o "ID na Centi" dos órgãos de destino dos vínculos (sem repetir). */
-export function orgaosCentiDoCard(destinos: readonly { orgaoId: number }[], idCentiDoOrgao: ReadonlyMap<number, string | null>): { ids: number[]; semId: number[] } {
-  const ids = new Set<number>();
-  const semId = new Set<number>();
-  for (const d of destinos) {
-    const n = Number(idCentiDoOrgao.get(d.orgaoId) ?? "");
-    if (Number.isInteger(n) && n > 0) ids.add(n);
-    else semId.add(d.orgaoId);
+/** O que se pede à Centi por um órgão do card: o `idOrgao` e para onde vão as liquidações dele. */
+export type PedidoLiquidacao = { idOrgao: number } & OrgaoDoCard;
+
+/** O "ID na Centi" de um órgão do cadastro (texto) como o número do pedido — null = não cadastrado/inválido. */
+export function idCenti(v: string | null | undefined): number | null {
+  const n = Number(String(v ?? "").trim());
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** Os PEDIDOS do card (um por órgão com o "ID na Centi", na ordem do ID) e os órgãos sem o ID (não são lidos). */
+export function pedidosDoCard(orgaos: readonly OrgaoDoCard[], idCentiDoOrgao: ReadonlyMap<number, string | null>): { pedidos: PedidoLiquidacao[]; semId: number[] } {
+  const pedidos: PedidoLiquidacao[] = [];
+  const semId: number[] = [];
+  for (const o of orgaos) {
+    const id = idCenti(idCentiDoOrgao.get(o.orgaoId));
+    if (id == null) semId.push(o.orgaoId);
+    else if (!pedidos.some((p) => p.idOrgao === id)) pedidos.push({ idOrgao: id, ...o });
   }
-  return { ids: [...ids].sort((a, b) => a - b), semId: [...semId] };
+  return { pedidos: pedidos.sort((a, b) => a.idOrgao - b.idOrgao), semId };
+}
+
+export const MAX_ORGAOS_CARD = 100;
+
+/**
+ * A REGRA dos órgãos de um card de liquidações (a MESMA na tela e no servidor): cada órgão uma vez, com o "ID na Centi"
+ * cadastrado e sem repetir o ID; a unidade de destino tem de ser do próprio órgão. null = vale.
+ */
+export function motivoOrgaosInvalidos(
+  orgaos: readonly OrgaoDoCard[],
+  cadastro: { orgaos: ReadonlyMap<number, { nome: string; centi: string | null }>; unidades: ReadonlyMap<number, number | null> },
+): string | null {
+  if (orgaos.length > MAX_ORGAOS_CARD) return `No máximo ${MAX_ORGAOS_CARD} órgãos por card.`;
+  const vistos = new Set<number>();
+  const ids = new Map<number, string>();
+  for (const o of orgaos) {
+    const c = cadastro.orgaos.get(o.orgaoId);
+    if (!c) return "Um dos órgãos não existe mais no cadastro.";
+    if (vistos.has(o.orgaoId)) return `O órgão ${c.nome} aparece duas vezes.`;
+    vistos.add(o.orgaoId);
+    const id = idCenti(c.centi);
+    if (id == null) return `O órgão ${c.nome} não tem o “ID na Centi” cadastrado (Órgãos e Unidades) — sem ele a Centi não entrega as liquidações.`;
+    const outro = ids.get(id);
+    if (outro) return `${c.nome} e ${outro} têm o mesmo ID na Centi (${id}).`;
+    ids.set(id, c.nome);
+    if (o.reparticaoId != null && cadastro.unidades.get(o.reparticaoId) !== o.orgaoId) return `A unidade de destino de ${c.nome} tem de ser uma unidade desse órgão.`;
+  }
+  return null;
 }
 
 /** Uma liquidação com valor negativo ou acima disto é SUSPEITA (erro de leitura) — a conclusão não promove o lote. */

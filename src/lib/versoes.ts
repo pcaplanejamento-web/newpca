@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.211.0",
+    data: "2026-10-24",
+    titulo: "Liquidações independentes dos empenhos",
+    mudancas: [
+      { tipo: "melhoria", area: "Liquidações", texto: "O card de liquidações não depende mais de um card de empenhos: a nova aba Órgãos escolhe os órgãos da Centi que ele importa (com a unidade de destino, opcional) e tudo o que a Centi devolve para o órgão é gravado.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Liquidações", texto: "A importação é de um órgão por vez: escolha o órgão e o ano na aba Importação.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Empenhos", texto: "Uma falha passageira da Centi (erro 500, sem resposta) não descarta mais o que já foi lido: a leitura tenta de novo por até 1 minuto e, se não voltar, fica parada — Continuar lê só o que falta.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.210.0",
     data: "2026-10-24",
     titulo: "Conferência em tempo real na importação",

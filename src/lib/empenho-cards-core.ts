@@ -56,8 +56,6 @@ export const rotaDoCard = (c: { id: number; tipo: TipoCard }, aba?: string): str
 export type CardEmpenho = {
   id: number;
   tipo: TipoCard;
-  /** No card de LIQUIDAÇÕES: o card de EMPENHOS de onde vêm os empenhos e os vínculos (null = ainda não escolhido). */
-  origemId: number | null;
   nome: string;
   descricao: string;
   cor: string;
@@ -92,8 +90,6 @@ export type CardEmpenho = {
 export type ResumoCard = CardEmpenho & {
   /** Os REGISTROS gravados (empenhos; no card de liquidações, as liquidações). */
   empenhos: number;
-  /** No card de liquidações: o nome do card de empenhos de origem. */
-  origemNome: string | null;
   soma: number;
   vinculos: number;
   lendo: boolean;
@@ -128,7 +124,6 @@ export type EdicaoCard = Pick<
   | "quedaSoma"
   | "quedaRegistros"
   | "removidos"
-  | "origemId"
 >;
 
 /** O card novo: a API de empenhos do portal, o ano atual, desligado. */
@@ -149,19 +144,17 @@ export const CARD_PADRAO: Omit<EdicaoCard, "nome"> = {
   quedaSoma: 80,
   quedaRegistros: 90,
   removidos: "marcar",
-  origemId: null,
 };
 
 /** O card de LIQUIDAÇÕES novo: a API de liquidações do portal (o resto como o de empenhos). */
 export const CARD_PADRAO_LIQUIDACOES: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO, cor: "#7c3aed", endpoint: ENDPOINT_LIQUIDACOES };
 
-/** O padrão do card novo do tipo (`ref` = a origem, só no de liquidações). */
-export const cardPadrao = (tipo: TipoCard, ref: number | null = null): Omit<EdicaoCard, "nome"> =>
-  tipo === "liquidacoes" ? { ...CARD_PADRAO_LIQUIDACOES, origemId: ref } : CARD_PADRAO;
+/** O padrão do card novo do tipo. */
+export const cardPadrao = (tipo: TipoCard): Omit<EdicaoCard, "nome"> => (tipo === "liquidacoes" ? CARD_PADRAO_LIQUIDACOES : CARD_PADRAO);
 
 export function edicaoDoCard(c: CardEmpenho): EdicaoCard {
-  const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, origemId } = c;
-  return { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, origemId };
+  const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos } = c;
+  return { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos };
 }
 
 export const lerRegraRemovidos = (v: unknown): RegraRemovidos => (v === "apagar" ? "apagar" : "marcar");
@@ -219,10 +212,8 @@ const SEGMENTO = /^[A-Za-z0-9_-]+$/;
 const COR = /^#[0-9a-fA-F]{6}$/;
 
 /** O motivo de a configuração não valer (null = vale) — a MESMA régua na tela e no servidor. */
-export function motivoCardInvalido(e: EdicaoCard, tipo: TipoCard = "empenhos"): string | null {
+export function motivoCardInvalido(e: EdicaoCard): string | null {
   if (!e.nome.trim()) return "Informe o nome do card.";
-  if (tipo === "empenhos" && e.origemId != null) return "Só o card de liquidações tem um card de origem.";
-  if (tipo === "liquidacoes" && e.origemId == null) return "Escolha o card de empenhos de origem (de onde vêm os empenhos das liquidações).";
   if (!COR.test(e.cor)) return "Cor inválida.";
   if (!urlBaseValida(e.urlBase)) return "A URL base tem de ser HTTPS do domínio da Centi (centi.com.br).";
   if (!SEGMENTO.test(e.endpoint)) return "O endpoint só aceita letras, números, - e _.";
@@ -252,21 +243,20 @@ export type PendenciaCard = { aba: "configuracao" | "vinculos"; texto: string };
  * O "Buscar na Centi" (só o catálogo, nada gravado nos empenhos) exige só a Configuração — é dele que vêm as escolhas dos
  * vínculos.
  */
-export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm"> & { tipo?: TipoCard; origemId?: number | null }, vinculos: number): PendenciaCard[] {
+export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm"> & { tipo?: TipoCard }, vinculos: number): PendenciaCard[] {
   const p: PendenciaCard[] = [];
-  if (c.tipo === "liquidacoes") {
-    // LIQUIDAÇÕES: a Configuração com o card de EMPENHOS de origem; os vínculos são os dele (sem vínculo lá, nada a ler).
-    if (!c.configuradoEm || c.origemId == null) p.push({ aba: "configuracao", texto: "Confirme a configuração: o card de empenhos de origem, a integração, os anos, a atualização e as regras." });
-    else if (vinculos < 1) p.push({ aba: "vinculos", texto: "O card de empenhos de origem ainda não tem vínculos — crie-os lá." });
-    return p;
-  }
   if (!c.configuradoEm) p.push({ aba: "configuracao", texto: "Confirme a configuração: integração, anos, atualização e regras." });
-  if (vinculos < 1) p.push({ aba: "vinculos", texto: "Crie ao menos um vínculo: o que o card importa e para onde vai." });
+  if (vinculos < 1)
+    p.push(
+      c.tipo === "liquidacoes"
+        ? { aba: "vinculos", texto: "Escolha ao menos um órgão da Centi (aba Órgãos): a API entrega as liquidações de um órgão por vez." }
+        : { aba: "vinculos", texto: "Crie ao menos um vínculo: o que o card importa e para onde vai." },
+    );
   return p;
 }
 
 /** O estado do card (o selo do card e do cabeçalho). */
-export function estadoCard(c: Pick<CardEmpenho, "ativa" | "ultimoStatus" | "configuradoEm"> & { vinculos?: number; tipo?: TipoCard; origemId?: number | null }, lendo = false): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
+export function estadoCard(c: Pick<CardEmpenho, "ativa" | "ultimoStatus" | "configuradoEm"> & { vinculos?: number; tipo?: TipoCard }, lendo = false): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
   if (lendo) return { rotulo: "Importando", tom: "blue" };
   if (pendenciasDoCard(c, c.vinculos ?? 1).length) return { rotulo: "A configurar", tom: "amber" };
   if (c.ultimoStatus === "falhou") return { rotulo: "Com erro", tom: "red" };
