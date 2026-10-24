@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.217.0",
+    data: "2026-10-24",
+    titulo: "Importações mais leves para o banco e mais rápidas na automática",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos, liquidações e pagamentos", texto: "Agora o sistema compara cada registro com o já gravado antes de escrever. Um registro sem mudança passou de cerca de cinco escritas no banco para uma, o que mantém as reimportações dentro do limite diário do plano gratuito.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Empenhos, liquidações e pagamentos", texto: "A atualização automática passou a rodar duas vezes por minuto, uma a cada 30 segundos, e uma trava impede que as duas mexam na mesma importação. Os meses grandes terminam na metade do tempo.", link: "/painel/pagamentos" },
+      { tipo: "correcao", area: "Liquidações e pagamentos", texto: "Na leitura em pedaços da automática, um registro que a Centi repete em dois pedaços da mesma resposta passa a contar como repetido. Antes ele contava duas vezes e a conferência podia fechar como parcial.", link: "/painel/pagamentos" },
+      { tipo: "novo", area: "Empenhos, liquidações e pagamentos", texto: "A importação mostra o tempo restante. Quando a atualização automática está importando, a tela acompanha sozinha o ano lido e a resposta grande em leitura.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos, liquidações e pagamentos", texto: "O histórico das importações ganhou três colunas: pedidos feitos à Centi (com os erros), volume baixado e duração.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.216.1",
     data: "2026-10-24",
     titulo: "Importação mais rápida, dentro do plano gratuito",

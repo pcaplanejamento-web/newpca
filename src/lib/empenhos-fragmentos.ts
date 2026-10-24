@@ -32,9 +32,24 @@ import type { ResumoPagina } from "./importacao-partes-core";
 
 type Leitura = typeof centiLeituras.$inferSelect;
 
-/** A leitura em andamento do lote (a automática continua ela antes de pedir outra página). */
-export async function leituraDoLote(loteId: number): Promise<Leitura | null> {
-  const [l] = await getDb().select().from(centiLeituras).where(eq(centiLeituras.loteId, loteId)).orderBy(centiLeituras.id).limit(1);
+/** A leitura em andamento do lote (a automática continua ela antes de pedir outra página) — só as colunas LEVES: o texto
+ * que ficou da janela (`resto`) e as chaves já vistas (`vistas`) vêm só na reserva, quem processa. */
+export async function leituraDoLote(loteId: number) {
+  const [l] = await getDb()
+    .select({
+      id: centiLeituras.id,
+      inicio: centiLeituras.inicio,
+      fim: centiLeituras.fim,
+      bytesCapturados: centiLeituras.bytesCapturados,
+      charsCapturados: centiLeituras.charsCapturados,
+      comprimento: centiLeituras.comprimento,
+      capturado: centiLeituras.capturado,
+      pos: centiLeituras.pos,
+    })
+    .from(centiLeituras)
+    .where(eq(centiLeituras.loteId, loteId))
+    .orderBy(centiLeituras.id)
+    .limit(1);
   return l ?? null;
 }
 
@@ -102,7 +117,7 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
 }
 
 /** CONTINUA a leitura fragmentada: captura o próximo fragmento ou processa a próxima janela. */
-export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta: Leitura): Promise<Avanco> {
+export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta: { id: number }): Promise<Avanco> {
   const l = await reservar(aberta.id);
   if (!l) return { situacao: "leitura em andamento em outra execução" };
   let ped: Pedido;

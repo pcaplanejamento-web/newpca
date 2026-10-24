@@ -400,12 +400,16 @@ export function comandoTravarAuto(db: Db, loteId: number) {
     .update(centiLotes)
     .set({ autoAte: sql`datetime('now', ${`+${SEGUNDOS_EXECUCAO_AUTO} seconds`})` })
     .where(and(eq(centiLotes.id, loteId), or(isNull(centiLotes.autoAte), sql`${centiLotes.autoAte} < datetime('now')`)))
-    .returning({ id: centiLotes.id });
+    .returning({ id: centiLotes.id, ate: centiLotes.autoAte });
 }
 
-/** SOLTA a trava da execução automática (o fim da execução — a próxima pode seguir). */
-export function comandoSoltarAuto(db: Db, loteId: number) {
-  return db.update(centiLotes).set({ autoAte: null }).where(eq(centiLotes.id, loteId));
+/** SOLTA a trava da execução automática (o fim da execução — a próxima pode seguir) — só se ainda for a DESTA execução
+ * (`ate` = o que ela gravou): a que passou do prazo nunca solta a trava de outra que já a pegou. */
+export function comandoSoltarAuto(db: Db, loteId: number, ate: string | null) {
+  return db
+    .update(centiLotes)
+    .set({ autoAte: null })
+    .where(and(eq(centiLotes.id, loteId), ate == null ? isNull(centiLotes.autoAte) : eq(centiLotes.autoAte, ate)));
 }
 
 /** SOLTA a trava de quem conduz (a leitura parou numa falha): o lote segue ABERTO — qualquer aba continua de onde parou. */

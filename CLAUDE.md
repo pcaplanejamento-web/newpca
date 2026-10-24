@@ -4677,6 +4677,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     o IGUAL sai do staging — fica só a chave (`igual` = 1), que conta nos únicos/na conferência e entra em `chavesIguais` (o
     que sumiu exclui). A chave que veio igual e muda numa página seguinte volta ao staging. O `fora` do lote = só os sem
     vínculo (`igual` = 0). Nada igual ao gravado ocupa espaço nem é reescrito; a conclusão recalcula pelos mesmos dados.
+    **v1.217.0 — o IGUAL NUNCA É ESCRITO no staging** (o limite de 100 mil linhas escritas/dia do D1 gratuito conta cada índice;
+    estourar PARA o banco inteiro até 00:00 UTC): `comandosConferirPagina`/`comandosConferirLiquidacoes`/`comandosConferirPagamentos`
+    recebem as LINHAS e guardam + conferem num lote só — a página é uma TABELA VIRTUAL com o nome do staging (`tabelaVirtual`:
+    `json_each` com as mesmas colunas, então `mudou`/`vinculoSql`/`destinoSql` valem sem gravar antes); a ordem: os contadores,
+    tira o "fora" igual das chaves da página, põe o igual (`igual` = 1), apaga o staging das chaves da página (releitura = vale
+    a desta leitura) e guarda só o novo/diferente (`naoIgual`, `CAMPOS[0]` = chave). Pedaços de `MAX_JSON_CONFERIR`
+    (`pedacosJson`); página sem nada a conferir = `comandoResultadoVazio`. 1 escrita por registro igual (antes ~5).
   - **REGRA FIRME — NENHUMA REQUISIÇÃO LÊ O JSON INTEIRO DA CENTI (v1.216.0, migração `0153`):** ler e consertar o JSON custa
     ~20 ms de CPU por MB e converter bytes em texto ~3 ms por MB (medidos); o plano gratuito dá ~10 ms por execução e o mês
     de pagamentos de um órgão grande tem vários MB. **Pela TELA:** a rota `baixar` devolve a resposta crua (`baixarPaginaDoLote`
@@ -4697,13 +4704,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     dentro sem cortar escapes, o registro maior que a janela acumula no `resto` até `MAX_RESTO`) pela MESMA `gravarParte`
     (o estado da leitura avança no MESMO lote — `extras`); `reservar` (90 s) impede duas execuções na mesma leitura;
     `comandosFecharLote` apaga a leitura que ficou. Medido no pior caso (JIT frio): ~6 ms por janela.
-  - **Atualização automática (`empenhos-auto.ts`, gatilho `* * * * *` → `POST /api/integracoes/empenhos/cron`):** UMA tarefa
-    pequena por execução (uma página pequena, um fragmento ou uma janela), com os cards LIGADOS (`cardsAtivos`) em RODÍZIO pelo
-    minuto — o 1º que trabalhar encerra a execução (`trabalhou`); a leitura fragmentada em andamento vem antes de pedir a
+  - **Atualização automática (`empenhos-auto.ts`, gatilhos `* * * * *` e `0-59 * * * *` — o 2º espera 30 s, outra invocação
+    com o PRÓPRIO limite de CPU; o plano gratuito tem 5 crons POR CONTA e este Worker usa 4 → `POST /api/integracoes/empenhos/cron`;
+    a trava `centi_lotes.auto_ate` — `comandoTravarAuto`/`comandoSoltarAuto` só do dono, 90 s, migração `0154` — deixa uma
+    execução por vez no lote; o repetido entre janelas da MESMA resposta conta como repetido — `semRepetidos`,
+    `centi_leituras.vistas`):** UMA tarefa
+    pequena por execução (uma página pequena, um fragmento ou uma janela), com os cards LIGADOS (`cardsAtivos`) em RODÍZIO por
+    meio minuto — o 1º que trabalhar encerra a execução (`trabalhou`); a leitura fragmentada em andamento vem antes de pedir a
     próxima página; na hora (`cardNaHora`: horário de Brasília, dia útil, frequência desde a última leitura) cria o lote do ano
     da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); condutor `CONDUTOR_AUTO`, até 3 erros de rede
     seguidos; a resposta inválida e a grande demais que não se divide (> 12 MB) encerram o lote (`tratarErro`); a queda
-    suspeita fecha "parcial" (a pessoa confirma numa importação manual). Testes: `tests/empenhos*.test.ts`,
+    suspeita fecha "parcial" (a pessoa confirma numa importação manual). A tela (`EmpenhoCardImportacao`) mostra o tempo
+    restante (`useEstimativa`), acompanha a importação de outro condutor (a automática — `LoteCenti.automatica` —, relida a
+    cada 15 s: `GET …/importar` → `andamento` = `fracaoDoAno` + a leitura fragmentada, `fracaoDoAndamento`) e o histórico traz
+    a SAÚDE de cada lote (`listarLotes` → `saude`: pedidos, erros sem os "Guardando…", bytes, espera pela Centi; duração).
+    A limpeza dos textos da Centi = `textoCenti` (`centi-resposta-core.ts`, caminho rápido sem regex no campo já limpo) e,
+    pela tela, a semana até 4 MB (`MAX_BYTES_TELA`; a automática segue com 1 MB). Testes: `tests/empenhos*.test.ts`,
     `tests/importacao-partes.test.ts`, `tests/fragmentos-centi.test.ts` + `tests/fixtures/banco-migrado.ts` (o schema final de
     toda a cadeia, recriado por teste).
 - **`SeletorMultiplo campo`** (v1.182.0): o modo de FORMULÁRIO — o rótulo em cima (`Rotulo`, exportado do `Field`, com o

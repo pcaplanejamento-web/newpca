@@ -107,7 +107,7 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
     await fecharLoteEmpenhos(card, lote, "falhou", e.message);
     return { situacao: "falhou (pedido inválido)", trabalhou: true };
   } finally {
-    await comandoSoltarAuto(db, lote.id).catch(() => {});
+    await comandoSoltarAuto(db, lote.id, trava.ate).catch(() => {});
   }
 }
 

@@ -469,12 +469,20 @@ test("empenhos (D1 real): uma ABA por vez conduz o lote; a trava vencida ou o lo
 test("empenhos (D1 real): UMA execução automática por vez no lote (o cron roda duas vezes por minuto)", async () => {
   const b = banco();
   const l = b.novoLote();
-  assert.equal((await comandoTravarAuto(b.db, l)).length, 1, "a 1ª execução pega");
+  const [a] = await comandoTravarAuto(b.db, l);
+  assert.ok(a, "a 1ª execução pega");
   assert.equal((await comandoTravarAuto(b.db, l)).length, 0, "a 2ª, no meio da 1ª, não começa a mesma página");
-  await comandoSoltarAuto(b.db, l);
-  assert.equal((await comandoTravarAuto(b.db, l)).length, 1, "terminada a 1ª, a próxima segue");
+  await comandoSoltarAuto(b.db, l, a.ate);
+  const [c] = await comandoTravarAuto(b.db, l);
+  assert.ok(c, "terminada a 1ª, a próxima segue");
+  // A execução que passou do prazo: outra pega a trava vencida; a atrasada NÃO solta a trava da outra.
   b.raw.prepare("UPDATE centi_lotes SET auto_ate = datetime('now', '-1 seconds') WHERE id = ?").run(l);
-  assert.equal((await comandoTravarAuto(b.db, l)).length, 1, "a execução que caiu não prende o lote");
+  const vencida = (b.raw.prepare("SELECT auto_ate FROM centi_lotes WHERE id = ?").get(l) as { auto_ate: string }).auto_ate;
+  b.raw.prepare("UPDATE centi_lotes SET auto_ate = datetime('now', '+1 seconds') WHERE id = ? AND auto_ate = ?").run(l, vencida);
+  const [d] = await comandoTravarAuto(b.db, l);
+  assert.equal(d, undefined, "ainda presa pela outra");
+  await comandoSoltarAuto(b.db, l, c.ate);
+  assert.equal((await comandoTravarAuto(b.db, l)).length, 0, "a atrasada não soltou a trava da outra");
 });
 
 test("empenhos (D1 real): o LEITOR novo regrava tudo; o mesmo leitor com dados iguais não regrava nada", async () => {

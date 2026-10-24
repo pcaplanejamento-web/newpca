@@ -12,7 +12,7 @@ const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 /** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
 function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
   const { cardId: _, idOrgaoCenti: __, autoAte: ___, orgaosCenti, estado, modo, condutor, conduzindoAte, ...resto } = l;
-  return { ...resto, orgaosCenti: lerOrgaosCenti(orgaosCenti), estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" || modo === "pagamentos" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql(), automatica: estado === "lendo" && condutor === CONDUTOR_AUTO };
+  return { ...resto, orgaosCenti: lerOrgaosCenti(orgaosCenti), estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" || modo === "pagamentos" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql(), automatica: estado === "lendo" && condutor === CONDUTOR_AUTO && !!conduzindoAte && conduzindoAte > agoraSql() };
 }
 
 /** O histórico das importações do card, com a SAÚDE de cada uma (pedidos à Centi, erros, bytes baixados, tempo de espera). */
@@ -24,7 +24,8 @@ export async function listarLotes(cardId: number, limite = 20): Promise<(LoteCen
     .select({
       lote: centiLotePassos.loteId,
       pedidos: count(),
-      erros: sql<number>`SUM(CASE WHEN ${centiLotePassos.estado} = 'erro' THEN 1 ELSE 0 END)`,
+      // O passo de uma página que ainda recebe as partes fica como "erro" com a marca "Guardando…" — não é erro.
+      erros: sql<number>`SUM(CASE WHEN ${centiLotePassos.estado} = 'erro' AND COALESCE(${centiLotePassos.mensagem}, '') NOT LIKE 'Guardando a página%' THEN 1 ELSE 0 END)`,
       bytes: sql<number>`COALESCE(SUM(${centiLotePassos.bytes}), 0)`,
       ms: sql<number>`COALESCE(SUM(${centiLotePassos.ms}), 0)`,
     })
