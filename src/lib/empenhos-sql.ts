@@ -417,18 +417,21 @@ function colunaSql(c: string): string {
 }
 
 /**
- * EXCLUI a tentativa de importação DO BANCO: os passos, o staging e o próprio lote. Os empenhos (e as liquidações) que
- * ela já promoveu ficam (são os dados do município) — só perdem a referência ao lote. O ÚLTIMO comando devolve o lote.
+ * EXCLUI tentativas de importação DO BANCO — VÁRIAS num lote só (os ids num parâmetro JSON, só as DESTE card): os passos,
+ * o staging e os lotes. Os empenhos (e as liquidações) que elas já promoveram ficam (são os dados do município) — só
+ * perdem a referência ao lote. O ÚLTIMO comando devolve os lotes excluídos. Um comando por tabela, qualquer que seja o
+ * número de importações: excluir várias de uma vez cabe no limite de consultas do Worker.
  */
-export function comandosExcluirLote(db: Db, loteId: number) {
+export function comandosExcluirLotes(db: Db, cardId: number, loteIds: number[]) {
+  const ids = sql`(SELECT ${centiLotes.id} FROM ${centiLotes} WHERE ${centiLotes.cardId} = ${cardId} AND ${centiLotes.id} IN (SELECT value FROM json_each(${JSON.stringify([...new Set(loteIds)])})))`;
   return [
-    db.update(empenhos).set({ loteId: null }).where(eq(empenhos.loteId, loteId)),
-    db.update(liquidacoes).set({ loteId: null }).where(eq(liquidacoes.loteId, loteId)),
-    db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
-    db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
-    db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
-    db.delete(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)),
-    db.delete(centiLotes).where(eq(centiLotes.id, loteId)).returning({ id: centiLotes.id }),
+    db.update(empenhos).set({ loteId: null }).where(sql`${empenhos.loteId} IN ${ids}`),
+    db.update(liquidacoes).set({ loteId: null }).where(sql`${liquidacoes.loteId} IN ${ids}`),
+    db.delete(liquidacoesStaging).where(sql`${liquidacoesStaging.loteId} IN ${ids}`),
+    db.delete(empenhosStaging).where(sql`${empenhosStaging.loteId} IN ${ids}`),
+    db.delete(centiStagingFora).where(sql`${centiStagingFora.loteId} IN ${ids}`),
+    db.delete(centiLotePassos).where(sql`${centiLotePassos.loteId} IN ${ids}`),
+    db.delete(centiLotes).where(sql`${centiLotes.id} IN ${ids}`).returning({ id: centiLotes.id, ano: centiLotes.ano, estado: centiLotes.estado }),
   ];
 }
 

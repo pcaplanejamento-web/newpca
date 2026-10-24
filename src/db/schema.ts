@@ -2366,6 +2366,7 @@ export const empenhos = sqliteTable(
     index("empenhos_unidade_idx").on(t.orgaoGestor, t.unidadeOrcamentaria),
     index("empenhos_vinculo_idx").on(t.orgaoId, t.reparticaoId),
     index("empenhos_card_numero_idx").on(t.cardId, t.orgaoGestor, t.numero),
+    index("empenhos_lote_idx").on(t.loteId),
   ],
 );
 
@@ -2430,6 +2431,7 @@ export const liquidacoes = sqliteTable(
     index("liquidacoes_card_ano_idx").on(t.cardId, t.ano, t.idOrgaoCenti, t.removidoEm),
     index("liquidacoes_reparticao_idx").on(t.reparticaoId),
     index("liquidacoes_orgao_idx").on(t.orgaoId),
+    index("liquidacoes_lote_idx").on(t.loteId),
   ],
 );
 

@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.211.1",
+    data: "2026-10-24",
+    titulo: "Excluir importações",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "Excluir várias importações de uma vez voltou a funcionar: todas saem num pedido só (antes, cada uma fazia várias consultas e o pedido estourava o limite do servidor no meio).", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Liquidações", texto: "A mesma correção na exclusão das importações das liquidações, mais rápida com muitos registros gravados.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.211.0",
     data: "2026-10-24",
     titulo: "Liquidações independentes dos empenhos",

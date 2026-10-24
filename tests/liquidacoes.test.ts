@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { comandosCriarCard, comandosGravarOrgaosLiq } from "../src/lib/empenho-cards-sql.ts";
 import { conferirLote, continuarPeriodo, totalDoPeriodo } from "../src/lib/empenhos-core.ts";
-import { comandoRecontarLote, comandoRegistrarPasso, comandoSoltarLote, comandosExcluirLote, comandosFecharLote, consultaUltimoPasso, jaNoLote } from "../src/lib/empenhos-sql.ts";
+import { comandoRecontarLote, comandoRegistrarPasso, comandoSoltarLote, comandosExcluirLotes, comandosFecharLote, consultaUltimoPasso, jaNoLote } from "../src/lib/empenhos-sql.ts";
 import {
   corpoLiquidacoes,
   idCenti,
@@ -255,7 +255,7 @@ test("liquidações (D1 real): fechar e excluir o lote limpam o staging; as grav
   const l2 = b.novoLote();
   await guardar(b, l2, [liq(1, "9")]);
   await promover(b, l2);
-  const r = (await b.db.batch(comandosExcluirLote(b.db, l2) as never)) as unknown[][];
+  const r = (await b.db.batch(comandosExcluirLotes(b.db, LIQ, [l2, 9999]) as never)) as unknown[][];
   assert.equal(r.at(-1)?.length, 1);
   assert.deepEqual(b.raw.prepare("SELECT chave, lote_id FROM liquidacoes").all().map((x) => ({ ...x })), [{ chave: "1", lote_id: null }]);
   // PAUSAR (a leitura parou numa falha): o lote segue lendo, sem dono — qualquer aba continua.

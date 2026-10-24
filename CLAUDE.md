@@ -4567,7 +4567,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `registrosDaResposta` (`centi-resposta-core.ts`), o ano SEMANA A SEMANA com a divisão do período grande demais, os
     valores pt-BR de 3 casas (`valor`), a soma por passo/lote, `valoresSuspeitos` (> R$ 1 bi ou negativo = parcial), o
     `LEITOR_EMPENHOS`, `setWhere` (só o que mudou), o condutor de UMA aba (`comandoConduzir`, 120 s), os passos
-    (`centi_lote_passos`) e o histórico com Excluir.
+    (`centi_lote_passos`) e o histórico com Excluir (v1.211.1: `comandosExcluirLotes(db, card, ids)` exclui VÁRIAS importações num batch só — um comando por tabela, os ids num parâmetro JSON, só as do card; a rota faz 1 batch + 1 auditoria — antes, um getLote + batch + auditoria POR importação estourava o limite de consultas do Worker; a `0149` indexa `lote_id` em `empenhos`/`liquidacoes`).
   - **Aba Configuração (`EmpenhoCardConfig`):** seções Identificação (nome, `ColorField`, descrição) · Anos
     (`SeletorMultiplo campo` — `opcoesAnos`) · Atualização automática (`Switch` + frequência/dias úteis/horário) · Regras da
     conferência (queda — `OPCOES_QUEDA` — e removidos) · Integração (avançado: URL base só `centi.com.br`, endpoint, UF,

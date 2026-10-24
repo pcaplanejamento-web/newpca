@@ -34,7 +34,7 @@ import {
   comandoConduzir,
   comandoDividirPeriodo,
   comandoExcluirPassos,
-  comandosExcluirLote,
+  comandosExcluirLotes,
   comandosGuardarPagina,
   MAX_JSON_GUARDA,
   comandoRecontarLote,
@@ -348,8 +348,12 @@ test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote
   assert.deepEqual({ ...l }, { paginas: 0, recebidos: 0, unicos: 2 }, "recontado: o staging fica para a releitura");
   // Um empenho já promovido por este lote fica — só perde a referência.
   b.raw.prepare("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, lote_id) VALUES (1, '2026|P|9', 2026, '9', 'P', ?)").run(lote);
-  const r = (await b.db.batch(comandosExcluirLote(b.db, lote) as never)) as unknown[][];
-  assert.equal(r.at(-1)?.length, 1);
+  const outra = b.novoLote(2025);
+  const deOutroCard = b.novoLote(2026, 2);
+  const r = (await b.db.batch(comandosExcluirLotes(b.db, 1, [lote, outra, deOutroCard, lote]) as never)) as unknown[][];
+  assert.equal(r.at(-1)?.length, 2, "as duas deste card, num lote só; a de outro card fica");
+  assert.deepEqual(b.raw.prepare("SELECT id FROM centi_lotes").all().map((x) => ({ ...x })), [{ id: deOutroCard }]);
+  b.raw.prepare("DELETE FROM centi_lotes WHERE id = ?").run(deOutroCard);
   for (const t of ["centi_lotes", "centi_lote_passos", "empenhos_staging"]) assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n, 0, t);
   assert.deepEqual(b.raw.prepare("SELECT numero, lote_id FROM empenhos").all().map((x) => ({ ...x })), [{ numero: "9", lote_id: null }]);
 });

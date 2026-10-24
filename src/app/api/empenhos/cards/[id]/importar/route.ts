@@ -8,7 +8,7 @@ import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, lerPaginaDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
-import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandoSoltarLote, comandosExcluirLote } from "@/lib/empenhos-sql";
+import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -135,20 +135,16 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${lote.ano}: ${excluidos} passo(s) da importação ${lote.id} excluído(s)` });
     return ok({ excluidos, lote: await getLote(lote.id, card.id) });
   }
-  let excluidos = 0;
-  for (const id of new Set(p.data.lotes)) {
-    const lote = await getLote(id, card.id);
-    if (!lote) continue;
-    const res = (await db.batch(comandosExcluirLote(db, lote.id) as never)) as unknown[][];
-    if (!res.at(-1)?.length) continue;
-    excluidos++;
+  const res = (await db.batch(comandosExcluirLotes(db, card.id, p.data.lotes) as never)) as unknown[][];
+  const fora = (res.at(-1) ?? []) as { id: number; ano: number; estado: string }[];
+  const excluidos = fora.length;
+  if (excluidos)
     await registrarAuditoria({
       usuario: g.u,
       acao: "excluir",
       entidade: "empenho_card",
       entidadeId: card.id,
-      resumo: `${card.nome} ${lote.ano}: importação ${lote.id} (${lote.estado}) excluída do banco com os passos${lote.estado === "promovido" ? " — os empenhos que ela gravou ficam" : ""}`,
+      resumo: `${card.nome}: ${excluidos} importaç${excluidos === 1 ? "ão excluída" : "ões excluídas"} do banco com os passos (${fora.map((l) => `${l.id} · ${l.ano} · ${l.estado}`).join("; ")})${fora.some((l) => l.estado === "promovido") ? " — o que as concluídas gravaram fica" : ""}`,
     });
-  }
   return ok({ excluidos });
 }
