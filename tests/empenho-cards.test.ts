@@ -8,6 +8,10 @@ import * as schema from "../src/db/schema.ts";
 import {
   anosDoCard,
   CARD_PADRAO,
+  cardPadrao,
+  lerTipoCard,
+  rotaDoCard,
+  telaDoCard,
   catalogoDasLinhas,
   coberturaDoGrupo,
   type EdicaoCard,
@@ -224,4 +228,19 @@ test("migração 0143: a API, os vínculos de Órgãos e Unidades, as importaç�
   const j = arqs.findIndex((f) => f.startsWith("0144_"));
   raw.exec(readFileSync(join(dir, arqs[j]), "utf8"));
   assert.deepEqual(raw.prepare("SELECT id, configurado_em IS NOT NULL AS c FROM empenho_cards ORDER BY id").all().map((c) => [c.id, c.c]), [[1, 1], [2, 0]]);
+});
+
+test("cards de LIQUIDAÇÕES: a origem é exigida, o padrão é a API de liquidações e as pendências seguem a origem", () => {
+  const liq: EdicaoCard = { nome: "Liquidações", ...cardPadrao("liquidacoes", 4) };
+  assert.equal(liq.endpoint, "getliquidacoes");
+  assert.equal(liq.origemId, 4);
+  assert.equal(motivoCardInvalido(liq, "liquidacoes"), null);
+  assert.match(motivoCardInvalido({ ...liq, origemId: null }, "liquidacoes") ?? "", /card de empenhos de origem/);
+  assert.match(motivoCardInvalido({ ...card, origemId: 4 }) ?? "", /Só o card de liquidações/);
+  assert.deepEqual(cardPadrao("empenhos", 4), CARD_PADRAO, "o de empenhos não tem origem");
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes", origemId: null }, 3).map((p) => p.aba), ["configuracao"]);
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes", origemId: 4 }, 0).map((p) => p.aba), ["vinculos"]);
+  assert.deepEqual(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes", origemId: 4 }, 2), []);
+  assert.equal(rotaDoCard({ id: 7, tipo: "liquidacoes" }, "importacao"), "/painel/liquidacoes/7?aba=importacao");
+  assert.equal(telaDoCard({ tipo: lerTipoCard("x") }), "empenhos");
 });

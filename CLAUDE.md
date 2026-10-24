@@ -4611,7 +4611,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     mapa `recurso(CARDS, …)`); o POST de card cria pela tela do tipo; o modo do lote tem de bater com o tipo (422).
     `listarCards(escopo, tipo, id?)` (no de liquidações, os números das liquidações e os vínculos da origem); o endereço do
     outro tipo redireciona (`rotaDoCard`). Excluir o card de empenhos leva as liquidações dos empenhos dele (cascata) e deixa os
-    cards de liquidações sem origem. **Atualização automática:** os cards de liquidações ligados entram em `cardsAtivos`; uma
+    cards de liquidações sem origem. Trocar a ORIGEM apaga as liquidações do card no MESMO lote da configuração
+    (`atualizarCard(id, e, trocouOrigem)`; 409 com importação lendo; a Configuração avisa). **Atualização automática:** os cards de liquidações ligados entram em `cardsAtivos`; uma
     atualização é uma RODADA — um lote por órgão da Centi, um após o outro (`proximoOrgaoDaRodada`, puro e testado: a rodada
     começa pelo 1º órgão na hora do card e continua sem esperar a frequência). A `0146` moveu as liquidações já importadas
     (v1.208.0) para um card novo "<nome> — liquidações" de cada card de empenhos.

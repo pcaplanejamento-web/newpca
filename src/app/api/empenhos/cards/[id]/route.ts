@@ -5,6 +5,7 @@ import { edicaoDoCard, motivoCardInvalido, telaDoCard } from "@/lib/empenho-card
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { atualizarCard, excluirCard, getCard, liquidacoesDaOrigem } from "@/lib/empenho-cards";
 import { cardEmpenhoSchema } from "@/lib/empenho-cards-validation";
+import { loteEmAndamento } from "@/lib/empenhos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -50,9 +51,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const origem = await getCard(p.data.origemId);
     if (!origem || origem.tipo !== "empenhos") return erro("O card de empenhos de origem não existe mais.", 422);
   }
-  await atualizarCard(id, p.data);
+  // Trocar a ORIGEM tira as liquidações gravadas (são de empenhos do card anterior) — nunca no meio de uma importação.
+  const trocouOrigem = antes.origemId != null && antes.origemId !== p.data.origemId;
+  if (trocouOrigem && (await loteEmAndamento(id))) return erro("Uma importação está lendo este card — espere terminar (ou cancele na aba Importação) para trocar o card de origem.", 409);
+  await atualizarCard(id, p.data, trocouOrigem);
   const dd = diffCampos(edicaoDoCard(antes) as Record<string, unknown>, p.data as Record<string, unknown>, Object.keys(ROTULOS), ROTULOS);
-  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "empenho_card", entidadeId: id, resumo: `Card "${antes.nome}": ${dd.resumo || "configurado"}`, antes: dd.antes, depois: dd.depois });
+  await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "empenho_card", entidadeId: id, resumo: `Card "${antes.nome}": ${dd.resumo || "configurado"}${trocouOrigem ? " — as liquidações do card de origem anterior saíram" : ""}`, antes: dd.antes, depois: dd.depois });
   return ok({ card: await getCard(id) });
 }
 

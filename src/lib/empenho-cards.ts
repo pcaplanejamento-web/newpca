@@ -1,5 +1,5 @@
 import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
-import { empenhoCards, orgaos, reparticoes } from "@/db/schema";
+import { empenhoCards, liquidacoes, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, lerTipoCard, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
 import { comandosCriarCard, consultaCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
@@ -105,11 +105,18 @@ export async function criarCard(e: EdicaoCard, copiarDe: number | null, quem: st
   return Number(r[r.length - 1][0]?.id);
 }
 
-export async function atualizarCard(id: number, e: EdicaoCard): Promise<void> {
-  await getDb()
+/**
+ * Grava a configuração. `trocouOrigem` (card de liquidações): as liquidações gravadas são de empenhos do card ANTERIOR —
+ * saem no MESMO lote (a próxima importação lê de novo pela origem nova).
+ */
+export async function atualizarCard(id: number, e: EdicaoCard, trocouOrigem = false): Promise<void> {
+  const db = getDb();
+  const gravar = db
     .update(empenhoCards)
     .set({ ...valoresDaEdicao(e), atualizadoEm: sql`CURRENT_TIMESTAMP`, configuradoEm: sql`CURRENT_TIMESTAMP` })
     .where(eq(empenhoCards.id, id));
+  if (trocouOrigem) await db.batch([gravar, db.delete(liquidacoes).where(eq(liquidacoes.cardId, id))]);
+  else await gravar;
 }
 
 /** Os cards de EMPENHOS (a escolha da origem de um card de liquidações): id, nome e quantos vínculos. */

@@ -168,6 +168,9 @@ export function EmpenhoCardConfig({ card, origens = [] }: { card: CardEmpenho; /
                 </option>
               ))}
             </SelectField>
+            {card.origemId != null && v.origemId !== card.origemId && (
+              <Callout kind="warn">Ao salvar, as liquidações gravadas neste card (dos empenhos do card anterior) saem do banco — importe de novo pela origem nova.</Callout>
+            )}
           </SecaoBanner>
         )}
         <SecaoBanner titulo="Identificação">

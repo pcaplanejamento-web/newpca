@@ -139,7 +139,7 @@ export function EmpenhoCardView({
           <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
           <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
             {etapas.map((et) => (
-              <Link key={et.aba} href={et.aba === "vinculos" && liq && c.origemId != null && c.configuradoEm ? rotaDoCard({ id: c.origemId, tipo: "empenhos" }, "vinculos") : rotaDoCard(c, et.aba)} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
+              <Link key={et.aba} href={rotaDoCard(c, et.aba)} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
                 {et.feito && <IconCheck className="h-4 w-4" />}
                 {et.rotulo}
               </Link>

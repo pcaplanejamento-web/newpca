@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.209.1",
+    data: "2026-10-24",
+    titulo: "Auditoria das liquidações",
+    mudancas: [
+      { tipo: "correcao", area: "Liquidações", texto: "Trocar o card de empenhos de origem tira as liquidações do card anterior na mesma gravação (a tela avisa antes) e é recusado durante uma importação.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Liquidações", texto: "“Editar no card de empenhos” só aparece para quem configura Empenhos; a etapa Vínculos do aviso leva à própria aba do card.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.209.0",
     data: "2026-10-24",
     titulo: "Liquidações em tela própria",

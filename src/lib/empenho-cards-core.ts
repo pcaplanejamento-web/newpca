@@ -6,6 +6,7 @@
  */
 import { type EnderecoCenti, lerParametros, MARCADORES, marcadoresUsados, montarCorpo, urlBaseValida, urlDaApi } from "./centi-resposta-core.ts";
 import { periodoDoAno } from "./empenhos-core.ts";
+import { ENDPOINT_LIQUIDACOES } from "./liquidacoes-core.ts";
 
 /** As frequências da atualização automática (minutos). */
 export const FREQUENCIAS: { valor: number; rotulo: string }[] = [
@@ -152,10 +153,11 @@ export const CARD_PADRAO: Omit<EdicaoCard, "nome"> = {
 };
 
 /** O card de LIQUIDAÇÕES novo: a API de liquidações do portal (o resto como o de empenhos). */
-export const CARD_PADRAO_LIQUIDACOES: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO, cor: "#7c3aed", endpoint: "getliquidacoes" };
+export const CARD_PADRAO_LIQUIDACOES: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO, cor: "#7c3aed", endpoint: ENDPOINT_LIQUIDACOES };
 
-export const cardPadrao = (tipo: TipoCard, origemId: number | null = null): Omit<EdicaoCard, "nome"> =>
-  tipo === "liquidacoes" ? { ...CARD_PADRAO_LIQUIDACOES, origemId } : CARD_PADRAO;
+/** O padrão do card novo do tipo (`ref` = a origem, só no de liquidações). */
+export const cardPadrao = (tipo: TipoCard, ref: number | null = null): Omit<EdicaoCard, "nome"> =>
+  tipo === "liquidacoes" ? { ...CARD_PADRAO_LIQUIDACOES, origemId: ref } : CARD_PADRAO;
 
 export function edicaoDoCard(c: CardEmpenho): EdicaoCard {
   const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, origemId } = c;

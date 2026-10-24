@@ -8,6 +8,7 @@ import { EmpenhoCardLiquidacoes } from "@/components/EmpenhoCardLiquidacoes";
 import { type AbaCard, EmpenhoCardView } from "@/components/EmpenhoCardView";
 import { EmpenhoCardVinculos } from "@/components/EmpenhoCardVinculos";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
+import { podeTela } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { anosDoCard, rotaDoCard } from "@/lib/empenho-cards-core";
 import { cadastroParaVinculos, cardsDeEmpenhos, catalogoCenti, getCard, listarCards, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 export default async function LiquidacaoCardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const r = await acessoPagina("liquidacoes");
   if (r.bloqueio) return r.bloqueio;
-  const { pode } = r;
+  const { pode, acesso } = r;
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id < 1) notFound();
   const [sp, escopo] = await Promise.all([searchParams, escopoDosEmpenhos()]);
@@ -50,9 +51,11 @@ export default async function LiquidacaoCardPage({ params, searchParams }: { par
             <p>
               Os vínculos das liquidações são os do card de empenhos <strong>{card.origemNome ?? `#${origem}`}</strong>: a liquidação só é gravada
               quando o empenho dela está lá e segue a unidade dele.{" "}
-              <Link href={rotaDoCard({ id: origem, tipo: "empenhos" }, "vinculos")} className="font-semibold underline underline-offset-2">
-                Editar no card de empenhos
-              </Link>
+              {podeTela(acesso, "empenhos").configurar && (
+                <Link href={rotaDoCard({ id: origem, tipo: "empenhos" }, "vinculos")} className="font-semibold underline underline-offset-2">
+                  Editar no card de empenhos
+                </Link>
+              )}
             </p>
             <p className="mt-1">
               {orgaos.orgaos.length

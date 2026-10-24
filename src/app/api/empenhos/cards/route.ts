@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const ref = tipo === "liquidacoes" ? (p.data.origemId ?? null) : (p.data.copiarDe ?? null);
   const origem = ref == null ? null : await getCard(ref);
   if (ref != null && (!origem || origem.tipo !== "empenhos")) return erro(tipo === "liquidacoes" ? "O card de empenhos de origem não existe mais." : "O card de onde copiar os vínculos não existe mais.", 404);
-  const id = await criarCard({ ...cardPadrao(tipo, tipo === "liquidacoes" ? ref : null), nome: p.data.nome }, tipo === "empenhos" ? ref : null, g.u.nome, tipo);
+  const id = await criarCard({ ...cardPadrao(tipo, ref), nome: p.data.nome }, ref, g.u.nome, tipo);
   await registrarAuditoria({
     usuario: g.u,
     acao: "criar",
