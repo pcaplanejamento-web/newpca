@@ -2247,6 +2247,8 @@ export const centiLotes = sqliteTable(
     /** Quem conduz o lote agora (o token da aba) e até quando — uma aba por vez. */
     condutor: text("condutor"),
     conduzindoAte: text("conduzindo_ate"),
+    /** A trava da EXECUÇÃO automática (o cron roda duas vezes por minuto — uma por vez avança o lote). */
+    autoAte: text("auto_ate"),
     inseridos: integer("inseridos"),
     atualizados: integer("atualizados"),
     removidos: integer("removidos"),
@@ -2338,6 +2340,8 @@ export const centiLeituras = sqliteTable(
     ms: integer("ms"),
     reservadoAte: text("reservado_ate"),
     criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** As chaves já vistas nesta resposta (uma por linha) — o repetido entre janelas conta como repetido. */
+    vistas: text("vistas").notNull().default(""),
   },
   (t) => [index("centi_leituras_lote_idx").on(t.loteId)],
 );

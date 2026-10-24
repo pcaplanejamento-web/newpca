@@ -94,3 +94,35 @@ test("fragmentos: o corte do registro, o corte UTF-8, a cauda e a janela dos ped
   assert.equal(janelaDosPedacos(5, 8, [{ ini: 10, texto: "KLMNOP" }, { ini: 0, texto: "FGHIJ" }]), "FGHIJKLM");
   assert.equal(janelaDosPedacos(0, 4, [{ ini: 2, texto: "CD" }]), "", "buraco no começo = nada");
 });
+
+test("fragmentos: o registro repetido em DUAS janelas conta como repetido (a mesma conta da leitura inteira)", async () => {
+  const { semRepetidos } = await import("../src/lib/fragmentos-centi-core.ts");
+  const a = semRepetidos("", [{ chave: "1" }, { chave: "2" }]);
+  assert.deepEqual(a, { linhas: [{ chave: "1" }, { chave: "2" }], repetidos: 0, vistas: "1\n2" });
+  const b = semRepetidos(a.vistas, [{ chave: "2" }, { chave: "3" }, { chave: "3" }]);
+  assert.deepEqual(b, { linhas: [{ chave: "3" }], repetidos: 2, vistas: "1\n2\n3" });
+  assert.deepEqual(semRepetidos(b.vistas, []), { linhas: [], repetidos: 0, vistas: "1\n2\n3" });
+  // A leitura janela a janela com repetição entre janelas = a leitura inteira.
+  const regs = [emp(1), emp(2), emp(3), emp(2)];
+  const texto = lista(regs);
+  const inteira = lerPaginaEmpenhos(texto, 2026);
+  let estado: EstadoJanela = { pos: 0, tamanho: texto.length, forma: null, resto: "" };
+  let vistas = "";
+  let linhas = 0;
+  let repetidos = 0;
+  for (;;) {
+    const r = processarJanela(estado, texto.slice(estado.pos, estado.pos + 300));
+    assert.ok(r.ok);
+    if (r.registros) {
+      const l = lerPaginaEmpenhos(r.registros, 2026);
+      const s = semRepetidos(vistas, l.linhas);
+      vistas = s.vistas;
+      linhas += s.linhas.length;
+      repetidos += l.repetidos + s.repetidos;
+    }
+    estado = r.estado;
+    if (r.fim) break;
+  }
+  assert.equal(linhas, inteira.linhas.length);
+  assert.equal(repetidos, inteira.repetidos);
+});

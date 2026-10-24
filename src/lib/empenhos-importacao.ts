@@ -10,7 +10,6 @@ import { corpoPagamentos, lerPaginaPagamentos, mesDoPeriodo } from "./pagamentos
 import {
   comandoRealinharPagamentos,
   comandosConferirPagamentos,
-  comandosGuardarPagamentos,
   comandosPromoverPagamentos,
   contagemPagamentos,
   pagamentosSuspeitos,
@@ -20,7 +19,6 @@ import {
   comandoRealinharLiquidacoes,
   comandosFechoPeriodoLiquidacoes,
   comandosConferirLiquidacoes,
-  comandosGuardarLiquidacoes,
   comandosPromoverLiquidacoes,
   contagemLiquidacoes,
   liquidacoesSuspeitas,
@@ -61,7 +59,6 @@ import {
   comandosConferirPagina,
   comandosFecharLote,
   comandosGuardarFora,
-  comandosGuardarPagina,
   comandosPromover,
   consultaUltimoPasso,
   contagemDaPromocao,
@@ -250,13 +247,11 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   const daParte: unknown[] = [];
   if (ped.modo === "pagamentos") {
     daParte.push(
-      ...comandosGuardarPagamentos(db, lote.id, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"pagamentos">[]),
-      ...comandosConferirPagamentos(db, lote.id, card.id, lote.leitor, chaves, alvo),
+      ...comandosConferirPagamentos(db, lote.id, card.id, lote.leitor, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"pagamentos">[], alvo),
     );
   } else if (ped.modo === "liquidacoes") {
     daParte.push(
-      ...comandosGuardarLiquidacoes(db, lote.id, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"liquidacoes">[]),
-      ...comandosConferirLiquidacoes(db, lote.id, card.id, lote.leitor, chaves, alvo),
+      ...comandosConferirLiquidacoes(db, lote.id, card.id, lote.leitor, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"liquidacoes">[], alvo),
     );
   } else {
     // SÓ O VINCULADO ENTRA NO BANCO: o registro que nenhum vínculo do card cobre não é guardado — dele fica só a CHAVE até
@@ -268,10 +263,9 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     // Os órgãos gestores, as unidades orçamentárias e as ações entram no CATÁLOGO (a base das escolhas dos vínculos).
     const catalogo = catalogoDasLinhas(linhas);
     daParte.push(
-      ...comandosGuardarPagina(db, lote.id, pagina, guardar),
       ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
       ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
-      ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, guardar.map((l) => l.chave), soContar.length, alvo) : []),
+      ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, pagina, guardar, soContar.length, alvo) : []),
     );
   }
 

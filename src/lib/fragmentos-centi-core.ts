@@ -107,6 +107,22 @@ export function processarJanela(estado: EstadoJanela, bruto: string): ResultadoJ
   return { ok: true, registros: `[${texto.slice(0, c.fecha + 1)}]`, estado: { pos, tamanho: estado.tamanho, forma, resto: texto.slice(c.abre) }, fim: false };
 }
 
+/**
+ * Tira das linhas de uma janela as que já vieram numa janela ANTERIOR da mesma resposta (a Centi às vezes repete um
+ * registro; a leitura inteira o conta como repetido — a fragmentada também). `vistas` = as chaves já vistas, uma por linha.
+ */
+export function semRepetidos<L extends { chave: string }>(vistas: string, linhas: readonly L[]): { linhas: L[]; repetidos: number; vistas: string } {
+  const ja = new Set(vistas ? vistas.split("\n") : []);
+  const novas: L[] = [];
+  for (const l of linhas) {
+    if (ja.has(l.chave)) continue;
+    ja.add(l.chave);
+    novas.push(l);
+  }
+  const acrescentar = novas.map((l) => l.chave).join("\n");
+  return { linhas: novas, repetidos: linhas.length - novas.length, vistas: acrescentar ? (vistas ? `${vistas}\n${acrescentar}` : acrescentar) : vistas };
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // A CAPTURA: a resposta grande é baixada de novo a cada execução e só a FAIXA seguinte (~1 MB) é convertida em texto e
 // guardada (converter bytes em texto custa ~3 ms por MB — medido). A CAUDA (os últimos bytes da faixa anterior) confere

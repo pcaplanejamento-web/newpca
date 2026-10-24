@@ -10,7 +10,6 @@ import { corpoPagamentos, lerPaginaPagamentos, linhaPagamento, mesDoPeriodo, per
 import {
   comandoRealinharPagamentos,
   comandosConferirPagamentos,
-  comandosGuardarPagamentos,
   comandosPromoverPagamentos,
   contagemPagamentos,
   pagamentosSuspeitos,
@@ -124,8 +123,7 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<s
   const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: false, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total: p.total, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
-    ...comandosGuardarPagamentos(b.db, lote, pagina, idOrgao, p.linhas),
-    ...comandosConferirPagamentos(b.db, lote, PAG, 1, p.linhas.map((l) => l.chave)),
+    ...comandosConferirPagamentos(b.db, lote, PAG, 1, pagina, idOrgao, p.linhas),
     ...comandosFechoPeriodoLiquidacoes(b.db, lote, periodo, orgaos),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),

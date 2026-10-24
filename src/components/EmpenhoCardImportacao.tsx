@@ -5,23 +5,26 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useRouter } from "next/navigation";
 import { anosDoCard, type CardEmpenho, cardPorOrgao, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
-  periodoDoAno,
+  type AndamentoLote,
+  fracaoDoAndamento,
+  fracaoDoAno,
   resultadoDosPassos,
   textoResultado,
   diaBR,
-  diasDoPeriodo,
   LEITOR_EMPENHOS,
   type LoteCenti,
   type PassoLote,
-  periodosLidos,
+  type SaudeLote,
   ROTULO_ESTADO_LOTE,
   ROTULO_ESTADO_PASSO,
   rotuloPeriodo,
   usaPeriodo,
 } from "@/lib/empenhos-core";
+import { textoDuracao } from "@/lib/fluxo-progresso";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
 import { type Agora, lerAnoNaCenti, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { FerramentasAba } from "./AbasEspaco";
+import { useEstimativa } from "./fluxos/useEstimativa";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { BotaoCopiar } from "./BotaoCopiar";
@@ -69,12 +72,14 @@ const rotuloSoma = (l: LoteCenti) => (l.modo === "pagamentos" ? "Soma paga (líq
 const rotuloPagina = (orgaos: number[] | null | undefined, pagina: number) => (orgaos ? `órgão ${orgaos[pagina - 1] ?? "?"}` : `página ${pagina}`);
 const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
 
-/** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
-function fracaoDoAno(ano: number, passos: PassoLote[]): number {
-  const dias = periodosLidos(passos).reduce((s, p) => s + diasDoPeriodo(p), 0);
-  return Math.min(1, dias / diasDoPeriodo(periodoDoAno(ano)));
-}
 
+
+/** A duração da importação (do início à conclusão, ou até a última notícia enquanto lê) — em ms. */
+const duracaoLote = (l: LoteCenti) => {
+  const fim = l.concluidoEm ?? l.vistoEm;
+  const t = Date.parse(`${fim.replace(" ", "T")}Z`) - Date.parse(`${l.iniciadoEm.replace(" ", "T")}Z`);
+  return Number.isFinite(t) && t >= 0 ? t : null;
+};
 
 /**
  * A aba IMPORTAÇÃO de um card: a importação MANUAL lê o ano SEMANA A SEMANA (o período grande demais é dividido ao meio),
@@ -90,8 +95,10 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   /** A configuração vem antes de importar (`pendenciasDoCard` — o aviso fica no cabeçalho do card). */
   const bloqueado = pendenciasDoCard(card, card.vinculos).length > 0;
   const [ano, setAno] = useAnoDoCard(card.id, anos);
-  const [lotes, setLotes] = useState<LoteCenti[] | null>(null);
+  const [lotes, setLotes] = useState<(LoteCenti & { saude?: SaudeLote })[] | null>(null);
   const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
+  /** O andamento da importação em curso por OUTRO condutor (a atualização automática ou outra aba) — relido a cada 15 s. */
+  const [andamento, setAndamento] = useState<AndamentoLote | null>(null);
   const [atual, setAtual] = useState<LoteCenti | null>(null);
   const [passos, setPassos] = useState<PassoLote[]>([]);
   const [agora, setAgora] = useState<Agora | null>(null);
@@ -124,8 +131,9 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       const r = await fetch(`/api/empenhos/cards/${api.id}/importar`);
       const j = (await r.json()) as {
         ok?: boolean;
-        lotes?: LoteCenti[];
+        lotes?: (LoteCenti & { saude?: SaudeLote })[];
         emAndamento?: LoteCenti | null;
+        andamento?: AndamentoLote | null;
         desatualizados?: { ano: number; n: number }[];
         orgaosLiquidacao?: OrgaoLiq[] | null;
       };
@@ -133,6 +141,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         setOrgaosLiq(j.orgaosLiquidacao ?? null);
         setLotes(j.lotes ?? []);
         setEmAndamento(j.emAndamento ?? null);
+        setAndamento(j.andamento ?? null);
         setDesatualizados(j.desatualizados ?? []);
       }
     } catch {
@@ -142,6 +151,19 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   useEffect(() => {
     void carregar();
   }, [carregar]);
+  // Outro condutor lendo (a atualização automática, outra aba): a tela acompanha sozinha, com a aba à vista.
+  const acompanhar = !!emAndamento?.conduzido && !rodando;
+  useEffect(() => {
+    if (!acompanhar) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void carregar();
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [acompanhar, carregar]);
+  /** O tempo restante AO VIVO: a fração do ano (ou da resposta grande) amostrada a cada mudança. */
+  const fracaoAtual = rodando && atual ? fracaoDoAno(atual.ano, passos) : acompanhar && andamento && emAndamento ? fracaoDoAndamento(emAndamento.ano, andamento) : 0;
+  const restante = useEstimativa(fracaoAtual, rodando || acompanhar);
+  const textoRestante = restante == null ? "" : ` · termina em ≈ ${textoDuracao(restante)}`;
 
   useEffect(() => {
     if (!rodando) return;
@@ -313,7 +335,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   }
 
   const erros = passos.filter((p) => p.estado === "erro").length;
-  const colunas: Column<LoteCenti>[] = [
+  const colunas: Column<LoteCenti & { saude?: SaudeLote }>[] = [
     { key: "quando", header: "Quando", nowrap: true, value: (l) => dataHoraBR(l.iniciadoEm), render: (l) => <span className="tabular-nums">{dataHoraBR(l.iniciadoEm)}</span> },
     { key: "ano", header: "Ano", nowrap: true, total: false, value: (l) => String(l.ano), render: (l) => <span className="tabular-nums">{l.ano}</span> },
     {
@@ -337,6 +359,37 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
           {num(l.unicos + l.recusados)} de {l.totalInformado != null ? num(l.totalInformado) : "?"}
         </span>
       ),
+    },
+    {
+      key: "pedidos",
+      header: "Pedidos",
+      nowrap: true,
+      filter: "range",
+      formatarFaixa: num,
+      value: (l) => String(l.saude?.pedidos ?? 0),
+      numero: (l) => l.saude?.pedidos ?? 0,
+      render: (l) =>
+        l.saude ? (
+          <span className="tabular-nums" title={`${num(l.saude.pedidos)} pedidos à Centi · ${num(l.saude.erros)} com erro`}>
+            {num(l.saude.pedidos)}
+            {l.saude.erros ? <span className="text-danger"> · {num(l.saude.erros)} erro(s)</span> : null}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    { key: "bytes", header: "Baixado", nowrap: true, total: false, filter: "none", value: (l) => String(l.saude?.bytes ?? 0), render: (l) => <span className="tabular-nums">{l.saude?.bytes ? formatBytes(l.saude.bytes) : "—"}</span> },
+    {
+      key: "duracao",
+      header: "Duração",
+      nowrap: true,
+      total: false,
+      filter: "none",
+      value: (l) => String(duracaoLote(l) ?? 0),
+      render: (l) => {
+        const d = duracaoLote(l);
+        return <span className="tabular-nums" title={l.saude ? `Esperando a Centi: ${textoDuracao(l.saude.msCenti)}` : undefined}>{d == null ? "—" : textoDuracao(d)}</span>;
+      },
     },
     {
       key: "resultado",
@@ -492,14 +545,26 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       )}
       {emAndamento && !rodando && emAndamento.conduzido && (
         <Callout kind="info">
-          A importação de {emAndamento.ano} está em andamento em outra aba ({num(emAndamento.unicos)} registros lidos). Acompanhe por lá — se aquela aba
-          foi fechada, ela fica livre para continuar aqui em até 2 minutos.
+          <span className="block">
+            {emAndamento.automatica
+              ? `A atualização automática está importando ${emAndamento.ano} (${num(emAndamento.unicos)} registros lidos) — esta tela acompanha sozinha.`
+              : `A importação de ${emAndamento.ano} está em andamento em outra aba (${num(emAndamento.unicos)} registros lidos). Acompanhe por lá — se aquela aba foi fechada, ela fica livre para continuar aqui em até 2 minutos.`}
+          </span>
+          {andamento && (
+            <span className="mt-2 block">
+              <Progress
+                value={fracaoDoAndamento(emAndamento.ano, andamento) * 100}
+                label={`${Math.floor(andamento.fracao * 100)}% do ano lido${andamento.leitura ? ` · ${rotuloPeriodo(andamento.leitura)}: resposta grande ${andamento.leitura.capturado ? `capturada (${formatBytes(andamento.leitura.bytes)}), processando ${Math.floor((100 * andamento.leitura.pos) / Math.max(1, andamento.leitura.chars))}%` : `sendo baixada (${formatBytes(andamento.leitura.bytes)}${andamento.leitura.comprimento ? ` de ${formatBytes(andamento.leitura.comprimento)}` : ""})`}` : ""}${textoRestante}`}
+              />
+            </span>
+          )}
         </Callout>
       )}
       {emAndamento && !rodando && !emAndamento.conduzido && (
         <Callout kind="warn">
           <span className="flex flex-wrap items-center justify-between gap-2">
-            Há uma importação de {emAndamento.ano} parada ({num(emAndamento.unicos)} registros lidos) — Continuar lê só o que falta.
+            Há uma importação de {emAndamento.ano} parada ({num(emAndamento.unicos)} registros lidos) — Continuar lê só o que falta
+            {card.ativa ? "; com a atualização automática ligada, ela continua sozinha em até 2 minutos." : "."}
             <span className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={() => setHistorico(emAndamento)}>
                 Ver passos
@@ -527,7 +592,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
               value={fracaoDoAno(atual.ano, passos) * 100}
               label={
                 agora
-                  ? `${agora.emCurso && agora.emCurso > 1 ? `${agora.emCurso} pedidos em paralelo · último: ` : ""}${rotuloPeriodo(agora.periodo)} · ${rotuloPagina(atual.orgaosCenti, agora.pagina)}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ` · aguardando a Centi há ${segundos} s`}`
+                  ? `${agora.emCurso && agora.emCurso > 1 ? `${agora.emCurso} pedidos em paralelo · último: ` : ""}${rotuloPeriodo(agora.periodo)} · ${rotuloPagina(atual.orgaosCenti, agora.pagina)}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ` · aguardando a Centi há ${segundos} s`}${textoRestante}`
                   : "Conferindo…"
               }
             />

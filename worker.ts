@@ -26,6 +26,9 @@ const ROTAS_CRON: Record<string, [string, string]> = {
   "*/5 * * * *": ["trello", "/api/integracoes/trello/cron"],
   "2-59/5 * * * *": ["email", "/api/integracoes/email/cron"],
   "* * * * *": ["empenhos", "/api/integracoes/empenhos/cron"],
+  // A 2ª execução por minuto da importação automática (outro gatilho = outra invocação, com o PRÓPRIO limite de CPU), 30 s
+  // depois da 1ª: dobra a vazão da leitura em fragmentos sem passar do limite de nenhuma execução.
+  "0-59 * * * *": ["empenhos", "/api/integracoes/empenhos/cron"],
 };
 
 /** As colunas do TERMO DE USO + APARELHOS lidas na mesma consulta da sessão. */
@@ -161,6 +164,8 @@ export default {
     const rota = ROTAS_CRON[evento.cron ?? ""];
     if (!rota) return;
     const [rotulo, caminho] = rota;
+    // Esperar não gasta CPU (o cron tem até 15 min de relógio): a 2ª execução da importação cai no meio do minuto.
+    if (evento.cron === "0-59 * * * *") await new Promise((ok) => setTimeout(ok, 30_000));
     const assinatura = await sha256(`${env.INTEGRACOES_CHAVE}:cron`);
     const req = new Request(`https://cron.interno${caminho}`, { method: "POST", headers: { "x-cron-trello": assinatura } });
     ctx.waitUntil(

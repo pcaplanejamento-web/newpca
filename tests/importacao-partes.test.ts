@@ -16,7 +16,7 @@ import {
 } from "../src/lib/importacao-partes-core.ts";
 import { lerPaginaLiquidacoes } from "../src/lib/liquidacoes-core.ts";
 import { lerPaginaPagamentos } from "../src/lib/pagamentos-core.ts";
-import { comandosConferirPagamentos, comandosGuardarPagamentos } from "../src/lib/pagamentos-sql.ts";
+import { comandosConferirPagamentos } from "../src/lib/pagamentos-sql.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -96,8 +96,7 @@ test("partes (D1 real): as partes de UMA página acumulam no MESMO passo — mes
   // A 1ª parte cria o passo da página 1 (dentro do lote atômico o "último passo" é ele).
   const [p1] = ((await db.batch([
     comandoRegistrarPasso(db, lote, { ...base, pagina: 1, recebidos: 4, novos: 4, soma: 40, mensagem: "guardando" }),
-    ...comandosGuardarPagamentos(db, lote, 1, 2, linhas.slice(0, 4)),
-    ...comandosConferirPagamentos(db, lote, 4, 1, linhas.slice(0, 4).map((l) => l.chave)),
+    ...comandosConferirPagamentos(db, lote, 4, 1, 1, 2, linhas.slice(0, 4)),
     consultaUltimoPasso(db, lote),
   ] as never)) as unknown[][]).at(-1) as { id: number; resNovos: number }[];
   assert.equal(p1.resNovos, 4, "o destino pelo órgão com o ID na Centi");
@@ -106,8 +105,7 @@ test("partes (D1 real): as partes de UMA página acumulam no MESMO passo — mes
   assert.equal(await jaNoLote(db, lote, linhas.map((l) => l.chave)), 4, "UMA consulta conta o que o lote já viu");
   // A 2ª parte da página 1 vai pelo id do passo: acumula nele, nunca no da página 2.
   const [p1b] = ((await db.batch([
-    ...comandosGuardarPagamentos(db, lote, 1, 2, linhas.slice(4)),
-    ...comandosConferirPagamentos(db, lote, 4, 1, linhas.slice(4).map((l) => l.chave), p1.id),
+    ...comandosConferirPagamentos(db, lote, 4, 1, 1, 2, linhas.slice(4), p1.id),
     consultaUltimoPasso(db, lote, p1.id),
   ] as never)) as unknown[][]).at(-1) as { id: number; resNovos: number }[];
   assert.equal(p1b.id, p1.id);

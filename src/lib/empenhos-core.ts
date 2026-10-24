@@ -458,6 +458,9 @@ export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue
 /** Sem atividade há mais que isto, o lote "lendo" é considerado abandonado (outro pode começar). */
 export const MINUTOS_LOTE_PARADO = 30;
 
+/** A SAÚDE de uma importação: quantos pedidos à Centi, quantos com erro, os bytes baixados e o tempo de espera pela Centi. */
+export type SaudeLote = { pedidos: number; erros: number; bytes: number; msCenti: number };
+
 export type LoteCenti = {
   id: number;
   ano: number;
@@ -474,6 +477,8 @@ export type LoteCenti = {
   leitor: number;
   /** Outra aba (ou outra pessoa) está conduzindo o lote agora. */
   conduzido: boolean;
+  /** Quem conduz é a ATUALIZAÇÃO AUTOMÁTICA (o cron). */
+  automatica: boolean;
   inseridos: number | null;
   atualizados: number | null;
   removidos: number | null;
@@ -590,4 +595,29 @@ export function anoDaVez(anos: number[], ultimaPorAno: Map<number, string>): num
   const nunca = anos.find((a) => !ultimaPorAno.has(a));
   if (nunca != null) return nunca;
   return [...anos].sort((a, b) => (ultimaPorAno.get(a) ?? "").localeCompare(ultimaPorAno.get(b) ?? "") || b - a)[0];
+}
+
+/** Quanto do ano já foi lido (pelos períodos concluídos) — o andamento real, mesmo com meses divididos. */
+export function fracaoDoAno(ano: number, passos: PassoMin[]): number {
+  const dias = periodosLidos(passos).reduce((s, p) => s + diasDoPeriodo(p), 0);
+  return Math.min(1, dias / diasDoPeriodo(periodoDoAno(ano)));
+}
+
+/** O andamento de uma importação em curso (a tela acompanha a da automática): o ano lido e a resposta grande que está
+ * sendo lida em fragmentos (capturada em bytes; processada em caracteres). */
+export type AndamentoLote = {
+  fracao: number;
+  leitura: { inicio: string; fim: string; bytes: number; comprimento: number | null; capturado: boolean; pos: number; chars: number } | null;
+};
+
+/** A fração da resposta grande já lida: a captura conta a 1ª metade; o processamento das janelas, a 2ª. */
+export function fracaoDaLeitura(l: NonNullable<AndamentoLote["leitura"]>): number {
+  if (!l.capturado) return l.comprimento ? Math.min(0.5, (0.5 * l.bytes) / l.comprimento) : 0;
+  return 0.5 + Math.min(0.5, (0.5 * l.pos) / Math.max(1, l.chars));
+}
+
+/** A fração acompanhada de fora: o ano lido + o período da resposta grande em leitura, na proporção do que já foi lido dele. */
+export function fracaoDoAndamento(ano: number, a: AndamentoLote): number {
+  const extra = a.leitura ? (diasDoPeriodo(a.leitura) / diasDoPeriodo(periodoDoAno(ano))) * fracaoDaLeitura(a.leitura) : 0;
+  return Math.min(1, a.fracao + extra);
 }

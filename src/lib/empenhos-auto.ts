@@ -22,12 +22,12 @@ import {
 } from "./empenhos-core";
 import { avancarLeitura, iniciarPaginaAuto, leituraDoLote } from "./empenhos-fragmentos";
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, fecharParcial, PedidoInvalido, type ResultadoPagina } from "./empenhos-importacao";
-import { comandoConduzir, comandosFecharLote } from "./empenhos-sql";
+import { comandoConduzir, comandoSoltarAuto, comandosFecharLote, comandoTravarAuto } from "./empenhos-sql";
 import { listarFeriados } from "./feriados";
 import { horaAgoraBrasilia } from "./tarefas-core";
 
 /**
- * A ATUALIZAÇÃO AUTOMÁTICA dos cards de empenhos, liquidações e pagamentos (o cron chama a CADA MINUTO): para cada card LIGADO (desligados por
+ * A ATUALIZAÇÃO AUTOMÁTICA dos cards de empenhos, liquidações e pagamentos (o cron chama DUAS vezes por minuto): para cada card LIGADO (desligados por
  * padrão), continua o lote que está lendo ou, na hora certa (horário, dias úteis, frequência do card), começa o do ano da
  * vez — UMA tarefa pequena por execução (uma página pequena, um fragmento da resposta grande ou uma janela dela —
  * `empenhos-fragmentos.ts`), dentro do limite de CPU do plano gratuito, com a MESMA conferência da importação manual. Nunca aceita uma
@@ -42,8 +42,9 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
   const instante = { ms: agora.getTime(), hora: horaAgoraBrasilia(agora), diaUtil: util, ano: Number(hoje.slice(0, 4)) };
   const r: { card: number; situacao: string }[] = [];
   // UMA tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira): os cards em RODÍZIO
-  // pelo minuto — o 1º que trabalhar encerra a execução; os demais esperam a próxima (o cron roda a cada minuto).
-  const inicio = Math.floor(agora.getTime() / 60_000) % cards.length;
+  // por meio minuto (o cron roda DUAS vezes por minuto, uma a cada 30 s) — o 1º que trabalhar encerra a execução; os
+  // demais esperam a próxima.
+  const inicio = Math.floor(agora.getTime() / 30_000) % cards.length;
   for (const card of [...cards.slice(inicio), ...cards.slice(0, inicio)]) {
     try {
       const u = await umCard(card, instante);
@@ -82,6 +83,9 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
   }
   const [conduz] = await comandoConduzir(db, lote.id, CONDUTOR_AUTO);
   if (!conduz) return { situacao: "conduzida por uma aba", trabalhou: false };
+  // A outra execução do minuto (o cron roda duas vezes) ainda está neste lote: esta não começa a mesma página.
+  const [trava] = await comandoTravarAuto(db, lote.id);
+  if (!trava) return { situacao: "outra execução automática está neste lote", trabalhou: false };
   try {
     // A LEITURA FRAGMENTADA em andamento vem primeiro (a resposta grande: captura ou a próxima janela).
     const aberta = await leituraDoLote(lote.id);
@@ -102,6 +106,8 @@ async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaU
     if (!(e instanceof PedidoInvalido)) throw e;
     await fecharLoteEmpenhos(card, lote, "falhou", e.message);
     return { situacao: "falhou (pedido inválido)", trabalhou: true };
+  } finally {
+    await comandoSoltarAuto(db, lote.id).catch(() => {});
   }
 }
 

@@ -15,7 +15,7 @@ import {
   type ResultadoPagina,
   TEMPO_MS,
 } from "./empenhos-importacao";
-import { BYTES_CAPTURA, corteUtf8, type FormaResposta, hexDe, JANELA, janelaDosPedacos, MAX_REINICIOS, processarJanela, TAM_CAUDA } from "./fragmentos-centi-core";
+import { BYTES_CAPTURA, corteUtf8, type FormaResposta, hexDe, JANELA, janelaDosPedacos, MAX_REINICIOS, processarJanela, semRepetidos, TAM_CAUDA } from "./fragmentos-centi-core";
 import type { ResumoPagina } from "./importacao-partes-core";
 
 /**
@@ -191,12 +191,17 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
   });
   if (!r.ok) return falhar(r.erro);
   let lida: ReturnType<typeof lerPaginaDoModo> | null = null;
+  let vistas = l.vistas;
   if (r.registros) {
     try {
       lida = lerPaginaDoModo(ped, r.registros, lote.ano);
     } catch (e) {
       return falhar(e instanceof Error ? e.message : "Não foi possível ler a página.");
     }
+    // O registro que a Centi repete em DUAS janelas da mesma resposta conta como repetido (como na leitura inteira).
+    const s = semRepetidos(l.vistas, lida.linhas as { chave: string }[]);
+    vistas = s.vistas;
+    if (s.repetidos) lida = { ...lida, linhas: s.linhas as never, repetidos: lida.repetidos + s.repetidos };
   }
   const contas = {
     recebidos: l.recebidos + (lida?.recebidos ?? 0),
@@ -205,7 +210,7 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
     total: l.total ?? lida?.total ?? null,
     reparado: l.reparado || lida?.reparado ? 1 : 0,
   };
-  const estado = { pos: r.estado.pos, forma: r.estado.forma, resto: r.estado.resto };
+  const estado = { pos: r.estado.pos, forma: r.estado.forma, resto: r.estado.resto, vistas };
   const periodo = periodoDe(l);
   if (r.fim) {
     const resumo: ResumoPagina = { status: l.status, bytes: l.bytesCapturados, ms: l.ms, recebidos: contas.recebidos, recusados: contas.recusados, repetidos: contas.repetidos, total: contas.total, reparado: !!contas.reparado };

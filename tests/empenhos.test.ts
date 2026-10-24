@@ -33,6 +33,8 @@ import {
 } from "../src/lib/empenhos-core.ts";
 import {
   comandoConduzir,
+  comandoSoltarAuto,
+  comandoTravarAuto,
   comandoDividirPeriodo,
   comandoExcluirPassos,
   comandosExcluirLotes,
@@ -464,6 +466,17 @@ test("empenhos (D1 real): uma ABA por vez conduz o lote; a trava vencida ou o lo
   assert.equal((await comandoConduzir(b.db, l, a)).length, 0, "lote fechado não é conduzido");
 });
 
+test("empenhos (D1 real): UMA execução automática por vez no lote (o cron roda duas vezes por minuto)", async () => {
+  const b = banco();
+  const l = b.novoLote();
+  assert.equal((await comandoTravarAuto(b.db, l)).length, 1, "a 1ª execução pega");
+  assert.equal((await comandoTravarAuto(b.db, l)).length, 0, "a 2ª, no meio da 1ª, não começa a mesma página");
+  await comandoSoltarAuto(b.db, l);
+  assert.equal((await comandoTravarAuto(b.db, l)).length, 1, "terminada a 1ª, a próxima segue");
+  b.raw.prepare("UPDATE centi_lotes SET auto_ate = datetime('now', '-1 seconds') WHERE id = ?").run(l);
+  assert.equal((await comandoTravarAuto(b.db, l)).length, 1, "a execução que caiu não prende o lote");
+});
+
 test("empenhos (D1 real): o LEITOR novo regrava tudo; o mesmo leitor com dados iguais não regrava nada", async () => {
   const b = banco();
   const l1 = b.novoLote();
@@ -522,9 +535,8 @@ async function guardarConferindo(b: ReturnType<typeof banco>, lote: number, regs
   const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: true, status: 200, bytes: 10, ms: 5, recebidos: p.recebidos, novos, recusados: 0, repetidos: 0, total: p.linhas.length, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
-    ...comandosGuardarPagina(b.db, lote, pagina, guardar),
     ...comandosGuardarFora(b.db, lote, fora),
-    ...comandosConferirPagina(b.db, lote, 1, leitor, guardar.map((l) => l.chave), fora.length),
+    ...comandosConferirPagina(b.db, lote, 1, leitor, pagina, guardar, fora.length),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),
   ] as never)) as Record<string, unknown>[][];
@@ -555,11 +567,14 @@ test("empenhos (D1 real): CONFERÊNCIA EM TEMPO REAL — o resultado da página;
   await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 1, "marcar", c) as never);
   assert.equal((b.raw.prepare("SELECT lote_id FROM empenhos WHERE numero = '1'").get() as { lote_id: number }).lote_id, l1, "o igual não foi reescrito");
   assert.equal(n(`SELECT COUNT(*) n FROM centi_staging_fora WHERE lote_id = ${l2}`), 0, "o lote limpo");
-  // 3ª: só o 2 (igual ao gravado) — o 1 e o 3 sumiram; o 2 não (veio igual: só a chave).
+  // 3ª: só o 2 (igual ao gravado) — o 1 e o 3 sumiram; o 2 não (veio igual: só a chave). O IGUAL nunca é ESCRITO no
+  // staging (o limite diário de escritas do D1): nenhuma inserção.
+  b.raw.exec("CREATE TABLE escritas (n INTEGER); INSERT INTO escritas VALUES (0); CREATE TRIGGER conta_escritas AFTER INSERT ON empenhos_staging BEGIN UPDATE escritas SET n = n + 1; END;");
   const l3 = b.novoLote();
   assert.deepEqual(await guardarConferindo(b, l3, [reg("2", { ValorEmpenhado: 200 })]), { novos: 0, alterados: 0, iguais: 1, semVinculo: 0 });
   assert.equal(n(`SELECT COUNT(*) n FROM empenhos_staging WHERE lote_id = ${l3}`), 0);
   assert.equal((await contagemDaPromocao(b.db, l3, 1, 2026, 1)).removidos, 2);
+  assert.equal(n("SELECT n FROM escritas"), 0, "o igual não passa pelo staging");
 });
 
 test("empenhos (D1 real): a chave que veio igual e MUDA numa página seguinte volta ao staging (conta uma vez)", async () => {

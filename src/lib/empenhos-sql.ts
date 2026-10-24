@@ -43,6 +43,43 @@ const CAMPOS = [
 /** Teto de caracteres do JSON de UM comando de guarda — o D1 recusa texto acima de 2 MB (com folga para os acentos). */
 export const MAX_JSON_GUARDA = 600_000;
 
+/** Teto de caracteres do JSON de UMA conferência — a página entra em mais de um ponto do mesmo comando. */
+export const MAX_JSON_CONFERIR = 150_000;
+
+/** As linhas em pedaços de JSON (cada linha = a tupla dos `campos`), cada pedaço com até `max` caracteres. */
+export function pedacosJson<L>(linhas: readonly L[], campos: readonly (keyof L)[], max: number): string[] {
+  const pedacos: string[] = [];
+  let atual: string[] = [];
+  let tamanho = 0;
+  for (const l of linhas) {
+    const j = JSON.stringify(campos.map((c) => l[c]));
+    if (atual.length && tamanho + j.length > max) {
+      pedacos.push(`[${atual.join(",")}]`);
+      atual = [];
+      tamanho = 0;
+    }
+    atual.push(j);
+    tamanho += j.length + 1;
+  }
+  if (atual.length) pedacos.push(`[${atual.join(",")}]`);
+  return pedacos;
+}
+
+/**
+ * A página como uma TABELA VIRTUAL com o NOME do staging (as mesmas colunas): as réguas escritas para o staging
+ * (`mudou`, o vínculo, o destino) valem sobre as linhas lidas SEM gravá-las antes — o registro igual ao gravado nunca é
+ * escrito no staging (cada escrita conta no limite diário do D1).
+ */
+export function tabelaVirtual(tabela: string, campos: readonly string[], json: string, extras: Record<string, number> = {}): SQL {
+  const cols = campos.map((c, i) => sql.raw(`json_extract(value, '$[${i}]') AS "${colunaSql(c)}"`));
+  const ext = Object.entries(extras).map(([c, v]) => sql.raw(`${Math.trunc(v)} AS "${colunaSql(c)}"`));
+  return sql`(SELECT ${sql.join([...cols, ...ext], sql`, `)} FROM json_each(${json})) AS ${sql.raw(`"${tabela}"`)}`;
+}
+
+/** A régua do staging: só entra o registro que NÃO veio igual ao gravado nesta leitura (a chave dele já está no "fora"). */
+export const naoIgual = (loteId: number) =>
+  sql`NOT EXISTS (SELECT 1 FROM "centi_staging_fora" f WHERE f."lote_id" = ${loteId} AND f."chave" = json_extract(value, '$[0]') AND f."igual" = 1)`;
+
 /**
  * Os registros SEM VÍNCULO da página: só a CHAVE (nenhum dado), para a conferência contar cada um uma vez. Pedaços de
  * até `MAX_JSON_GUARDA` caracteres, cada um num parâmetro JSON.
@@ -75,7 +112,7 @@ export function comandosGuardarFora(db: Db, loteId: number, chaves: string[]) {
 }
 
 /** Guarda a página no STAGING (SÓ os registros com vínculo — quem chama filtra): as linhas em pedaços de até `MAX_JSON_GUARDA` caracteres, cada um num parâmetro JSON. */
-export function comandosGuardarPagina(db: Db, loteId: number, pagina: number, linhas: LinhaEmpenho[]) {
+export function comandosGuardarPagina(db: Db, loteId: number, pagina: number, linhas: LinhaEmpenho[], semIguais = false) {
   const pedacos: string[][] = [];
   let atual: string[] = [];
   let tamanho = 0;
@@ -101,7 +138,7 @@ export function comandosGuardarPagina(db: Db, loteId: number, pagina: number, li
       })
       .from(sql`json_each(${json})`)
       // O WHERE desfaz a ambiguidade do SQLite entre "SELECT … ON CONFLICT" e a junção (exigido no upsert com SELECT).
-      .where(sql`1`);
+      .where(semIguais ? naoIgual(loteId) : sql`1`);
     return db.insert(empenhosStaging).select(sel as never).onConflictDoNothing();
   });
 }
@@ -220,46 +257,61 @@ export function consultaUltimoPasso(db: Db, loteId: number, passo?: number) {
 }
 
 /**
- * A CONFERÊNCIA EM TEMPO REAL de uma página de EMPENHOS, no MESMO lote em que ela é guardada (depois de guardar): compara
- * cada registro da página (`chaves` — os vinculados) com o GRAVADO pela MESMA régua da promoção (`mudou`, com o vínculo e o
- * leitor), grava no passo o RESULTADO (novos · alterados · iguais · sem vínculo) e tira do staging os IGUAIS — deles fica
- * só a chave (`igual` = 1), para a conferência com a Centi e para o que sumiu. Nada igual ao gravado ocupa espaço.
+ * GUARDA e CONFERE EM TEMPO REAL uma página de EMPENHOS (só os vinculados — quem chama filtra), num lote só: compara cada
+ * registro LIDO com o GRAVADO pela MESMA régua da promoção (`mudou`, com o vínculo e o leitor) ANTES de guardar — a página é
+ * uma tabela virtual (`tabelaVirtual`) — e grava no passo o RESULTADO (novos · alterados · iguais · sem vínculo). O IGUAL ao
+ * gravado NUNCA é escrito no staging: dele fica só a chave (`igual` = 1), para a conferência com a Centi e para o que sumiu.
+ * Uma escrita por registro igual (antes eram cinco — o limite diário de escritas do D1 no plano gratuito).
  */
-export function comandosConferirPagina(db: Db, loteId: number, card: number, leitor: number, chaves: readonly string[], semVinculo: number, passo?: number) {
-  const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
+/** O resultado da página SEM registros a conferir (só os sem vínculo, ou nenhum): os contadores existem (zero). */
+export function comandoResultadoVazio(db: Db, loteId: number, semVinculo: number, passo?: number) {
+  const mais = (c: SQL.Aliased | SQL | (typeof centiLotePassos)["resNovos" | "resAlterados" | "resIguais" | "resSemVinculo"], n: number) => sql`COALESCE(${c}, 0) + ${n}`;
+  return db
+    .update(centiLotePassos)
+    .set({ resNovos: mais(centiLotePassos.resNovos, 0), resAlterados: mais(centiLotePassos.resAlterados, 0), resIguais: mais(centiLotePassos.resIguais, 0), resSemVinculo: mais(centiLotePassos.resSemVinculo, semVinculo) })
+    .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)));
+}
+
+export function comandosConferirPagina(db: Db, loteId: number, card: number, leitor: number, pagina: number, linhas: readonly LinhaEmpenho[], semVinculo: number, passo?: number) {
   const v = vinculoSql("empenhos_staging", card);
-  const daPagina = sql`"empenhos_staging"."lote_id" = ${loteId} AND "empenhos_staging"."chave" IN ${lista}`;
-  const comGravado = sql`FROM "empenhos_staging" JOIN "empenhos" ON "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave" WHERE ${daPagina}`;
   const difere = mudou(colEmp, colStg, sql`${leitor}`, v.orgao, v.reparticao);
-  return [
-    db
-      .update(centiLotePassos)
-      .set({
-        resNovos: sql`COALESCE(${centiLotePassos.resNovos}, 0) + (SELECT COUNT(*) FROM "empenhos_staging" WHERE ${daPagina} AND NOT EXISTS (SELECT 1 FROM "empenhos" WHERE "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"))`,
-        resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) ${comGravado} AND (${difere}))`,
-        resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) ${comGravado} AND NOT (${difere}))`,
-        resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + ${semVinculo}`,
-      })
-      .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId))),
-    // A classificação é a desta leitura: a chave que antes veio igual e agora mudou volta a ser guardada inteira.
-    db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)),
-    db
-      .insert(centiStagingFora)
-      .select(
-        db
-          .select({ loteId: sql<number>`${loteId}`.as("lote_id"), chave: sql<string>`"empenhos_staging"."chave"`.as("chave"), igual: sql<number>`1`.as("igual") })
-          .from(sql`"empenhos_staging" JOIN "empenhos" ON "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"`)
-          .where(sql`${daPagina} AND NOT (${difere})`) as never,
-      )
-      .onConflictDoNothing(),
-    db.delete(empenhosStaging).where(
-      and(
-        eq(empenhosStaging.loteId, loteId),
-        sql`${empenhosStaging.chave} IN ${lista}`,
-        sql`EXISTS (SELECT 1 FROM "centi_staging_fora" f WHERE f."lote_id" = ${loteId} AND f."chave" = "empenhos_staging"."chave" AND f."igual" = 1)`,
-      ),
-    ),
-  ] as const;
+  const lista = sql`(SELECT value FROM json_each(${JSON.stringify(linhas.map((l) => l.chave))}))`;
+  const cmds: unknown[] = [];
+  const pedacos = pedacosJson(linhas, CAMPOS, MAX_JSON_CONFERIR);
+  pedacos.forEach((json, i) => {
+    const virt = () => tabelaVirtual("empenhos_staging", CAMPOS, json);
+    const comGravado = () => sql`FROM ${virt()} JOIN "empenhos" ON "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"`;
+    cmds.push(
+      db
+        .update(centiLotePassos)
+        .set({
+          resNovos: sql`COALESCE(${centiLotePassos.resNovos}, 0) + (SELECT COUNT(*) FROM ${virt()} WHERE NOT EXISTS (SELECT 1 FROM "empenhos" WHERE "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"))`,
+          resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) ${comGravado()} WHERE (${difere}))`,
+          resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) ${comGravado()} WHERE NOT (${difere}))`,
+          resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + ${i === 0 ? semVinculo : 0}`,
+        })
+        .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId))),
+    );
+  });
+  if (!pedacos.length) return [comandoResultadoVazio(db, loteId, semVinculo, passo)];
+  // A classificação é a desta leitura: a chave que antes veio igual e agora mudou volta a ser guardada inteira.
+  cmds.push(db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)));
+  for (const json of pedacos) {
+    cmds.push(
+      db
+        .insert(centiStagingFora)
+        .select(
+          db
+            .select({ loteId: sql<number>`${loteId}`.as("lote_id"), chave: sql<string>`"empenhos_staging"."chave"`.as("chave"), igual: sql<number>`1`.as("igual") })
+            .from(sql`${tabelaVirtual("empenhos_staging", CAMPOS, json)} JOIN "empenhos" ON "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"`)
+            .where(sql`NOT (${difere})`) as never,
+        )
+        .onConflictDoNothing(),
+    );
+  }
+  // O que uma leitura ANTERIOR da página guardou sai (vale a desta leitura); só o diferente e o novo entram.
+  cmds.push(db.delete(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), sql`${empenhosStaging.chave} IN ${lista}`)), ...comandosGuardarPagina(db, loteId, pagina, [...linhas], true));
+  return cmds;
 }
 
 /**
@@ -337,6 +389,23 @@ export function comandoConduzir(db: Db, loteId: number, condutor: string) {
       ),
     )
     .returning({ id: centiLotes.id });
+}
+
+/** Segundos da trava da EXECUÇÃO automática (a espera pela Centi é de até 30 s; a execução que caiu não prende o lote). */
+export const SEGUNDOS_EXECUCAO_AUTO = 90;
+
+/** TRAVA a execução automática no lote (o cron roda DUAS vezes por minuto): a linha volta só para quem a pegou. */
+export function comandoTravarAuto(db: Db, loteId: number) {
+  return db
+    .update(centiLotes)
+    .set({ autoAte: sql`datetime('now', ${`+${SEGUNDOS_EXECUCAO_AUTO} seconds`})` })
+    .where(and(eq(centiLotes.id, loteId), or(isNull(centiLotes.autoAte), sql`${centiLotes.autoAte} < datetime('now')`)))
+    .returning({ id: centiLotes.id });
+}
+
+/** SOLTA a trava da execução automática (o fim da execução — a próxima pode seguir). */
+export function comandoSoltarAuto(db: Db, loteId: number) {
+  return db.update(centiLotes).set({ autoAte: null }).where(eq(centiLotes.id, loteId));
 }
 
 /** SOLTA a trava de quem conduz (a leitura parou numa falha): o lote segue ABERTO — qualquer aba continua de onde parou. */

@@ -2,7 +2,7 @@ import { and, count, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
-import { type EstadoLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
+import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
@@ -11,13 +11,31 @@ const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 
 /** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
 function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
-  const { cardId: _, idOrgaoCenti: __, orgaosCenti, estado, modo, condutor, conduzindoAte, ...resto } = l;
-  return { ...resto, orgaosCenti: lerOrgaosCenti(orgaosCenti), estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" || modo === "pagamentos" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql() };
+  const { cardId: _, idOrgaoCenti: __, autoAte: ___, orgaosCenti, estado, modo, condutor, conduzindoAte, ...resto } = l;
+  return { ...resto, orgaosCenti: lerOrgaosCenti(orgaosCenti), estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" || modo === "pagamentos" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql(), automatica: estado === "lendo" && condutor === CONDUTOR_AUTO };
 }
 
-export async function listarLotes(cardId: number, limite = 20): Promise<LoteCenti[]> {
-  const l = await getDb().select().from(centiLotes).where(eq(centiLotes.cardId, cardId)).orderBy(desc(centiLotes.id)).limit(limite);
-  return l.map(paraLote);
+/** O histórico das importações do card, com a SAÚDE de cada uma (pedidos à Centi, erros, bytes baixados, tempo de espera). */
+export async function listarLotes(cardId: number, limite = 20): Promise<(LoteCenti & { saude: SaudeLote })[]> {
+  const db = getDb();
+  const l = await db.select().from(centiLotes).where(eq(centiLotes.cardId, cardId)).orderBy(desc(centiLotes.id)).limit(limite);
+  if (!l.length) return [];
+  const s = await db
+    .select({
+      lote: centiLotePassos.loteId,
+      pedidos: count(),
+      erros: sql<number>`SUM(CASE WHEN ${centiLotePassos.estado} = 'erro' THEN 1 ELSE 0 END)`,
+      bytes: sql<number>`COALESCE(SUM(${centiLotePassos.bytes}), 0)`,
+      ms: sql<number>`COALESCE(SUM(${centiLotePassos.ms}), 0)`,
+    })
+    .from(centiLotePassos)
+    .where(sql`${centiLotePassos.loteId} IN (SELECT value FROM json_each(${JSON.stringify(l.map((x) => x.id))}))`)
+    .groupBy(centiLotePassos.loteId);
+  const porLote = new Map(s.map((x) => [x.lote, x]));
+  return l.map((x) => {
+    const r = porLote.get(x.id);
+    return { ...paraLote(x), saude: { pedidos: r?.pedidos ?? 0, erros: Number(r?.erros ?? 0), bytes: Number(r?.bytes ?? 0), msCenti: Number(r?.ms ?? 0) } };
+  });
 }
 
 export async function getLote(id: number, cardId: number): Promise<LoteCenti | null> {

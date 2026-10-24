@@ -10,7 +10,7 @@
   "observability": { "enabled": true },
   // Os CRONS (cada um uma invocação, com o próprio limite de consultas — `worker.ts` → `ROTAS_CRON`): a sincronização com o
   // Trello (a cada 5 min) e os e-mails/avisos de prazo (a cada 5 min, 2 min depois).
-  "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *", "* * * * *"] },
+  "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *", "* * * * *", "0-59 * * * *"] },
   // O canal AO VIVO das notificações: uma CAIXA por pessoa; e a PRESENÇA: um objeto por grupo (WebSocket com hibernação —
   // `src/lib/caixa-notificacoes-do.ts` e `src/lib/presenca-grupo-do.ts`).
   "durable_objects": {

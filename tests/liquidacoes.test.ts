@@ -110,8 +110,7 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<s
   const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: false, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
-    ...comandosGuardarLiquidacoes(b.db, lote, pagina, idOrgao, p.linhas),
-    ...comandosConferirLiquidacoes(b.db, lote, LIQ, 1, p.linhas.map((l) => l.chave)),
+    ...comandosConferirLiquidacoes(b.db, lote, LIQ, 1, pagina, idOrgao, p.linhas),
     ...comandosFechoPeriodoLiquidacoes(b.db, lote, periodo, paginas),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),
