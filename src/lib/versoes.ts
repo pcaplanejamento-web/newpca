@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.207.2",
+    data: "2026-10-24",
+    titulo: "Card de empenhos sem rolar a página",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "No computador, o card de empenhos cabe na tela: só o conteúdo das abas rola por dentro, sem a barra de rolagem do navegador.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "O Testar da Configuração oferece também os anos acrescentados e ainda não salvos; o ano escolhido é sempre um dos anos do card.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Cancelar uma importação parada pede confirmação, como Interromper e Excluir.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.207.1",
     data: "2026-10-24",
     titulo: "Auditoria dos empenhos",

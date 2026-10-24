@@ -54,8 +54,9 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
   const [salvando, setSalvando] = useState(false);
   const [avancado, setAvancado] = useState(false);
-  const anosSalvos = useMemo(() => anosDoCard(card.anos, anoAtual()), [card.anos]);
-  const [ano, setAno] = useAnoDoCard(card.id, anosSalvos);
+  // O Testar usa o que está na tela: oferece os anos salvos e os acrescentados (ainda sem salvar).
+  const anosTeste = useMemo(() => [...new Set([...anosDoCard(card.anos, anoAtual()), ...anosDoCard(v.anos, anoAtual())])].sort((a, b) => b - a), [card.anos, v.anos]);
+  const [ano, setAno] = useAnoDoCard(card.id, anosTeste);
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState<ResultadoTeste | null>(null);
   const muda = <K extends keyof EdicaoCard>(k: K, valor: EdicaoCard[K]) => {
@@ -273,7 +274,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
               setTeste(null);
             }}
           >
-            {anosSalvos.map((y) => (
+            {anosTeste.map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>

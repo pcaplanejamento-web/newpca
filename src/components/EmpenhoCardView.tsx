@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useRef, useState } from "react";
+import { useAlturaTela } from "./AlturaCheia";
 import { estadoCard, pendenciasDoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { AbasEspaco } from "./AbasEspaco";
@@ -82,8 +83,12 @@ export function EmpenhoCardView({
     ] as const
   ).filter((o) => permitidas.includes(o.value));
 
+  // No desktop o espaço do card cabe no display: só o conteúdo das abas rola por dentro (a página nunca rola).
+  const raiz = useRef<HTMLDivElement>(null);
+  const altura = useAlturaTela(raiz, 360);
+
   return (
-    <div className="space-y-[var(--gap-block)]">
+    <div ref={raiz} className="space-y-[var(--gap-block)] lg:flex lg:h-[var(--h-card)] lg:flex-col lg:space-y-0 lg:gap-[var(--gap-block)] lg:overflow-hidden" style={altura ? ({ "--h-card": `${altura}px` } as CSSProperties) : undefined}>
       <div className="linha-topico flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
@@ -139,9 +144,11 @@ export function EmpenhoCardView({
         </Callout>
       )}
 
-      <AbasEspaco<AbaCard> aba={aba} opcoes={opcoes}>
-        {children}
-      </AbasEspaco>
+      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <AbasEspaco<AbaCard> aba={aba} opcoes={opcoes}>
+          {children}
+        </AbasEspaco>
+      </div>
 
       {confirmacao}
     </div>

@@ -11,7 +11,9 @@ const EVENTO = "empenhos:ano";
  */
 export function useAnoDoCard(cardId: number, anos: number[]): [number, (ano: number) => void] {
   const padrao = anos[0] ?? new Date().getFullYear();
-  const valido = useCallback((n: number) => (anos.includes(n) ? n : padrao), [anos, padrao]);
+  const lista = anos.join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a lista é comparada pelo conteúdo (o array pode ser novo a cada render).
+  const valido = useCallback((n: number) => (lista.split(",").map(Number).includes(n) ? n : padrao), [lista, padrao]);
   const [ano, setAnoLocal] = useState(padrao);
   useEffect(() => {
     const ler = () => {
@@ -27,9 +29,10 @@ export function useAnoDoCard(cardId: number, anos: number[]): [number, (ano: num
   }, [cardId, valido, padrao]);
   const setAno = useCallback(
     (n: number) => {
-      setAnoLocal(valido(n));
+      const v = valido(n);
+      setAnoLocal(v);
       try {
-        localStorage.setItem(chave(cardId), String(n));
+        localStorage.setItem(chave(cardId), String(v));
       } catch {}
       window.dispatchEvent(new Event(EVENTO));
     },

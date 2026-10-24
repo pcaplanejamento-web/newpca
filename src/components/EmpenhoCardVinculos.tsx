@@ -76,7 +76,7 @@ export function EmpenhoCardVinculos({
   configurado,
 }: {
   cardId: number;
-  /** Os anos do card (o "Buscar na Centi" lê o 1º). */
+  /** Os anos do card (o "Buscar na Centi" lê o ano escolhido — o mesmo das outras abas, `useAnoDoCard`). */
   anos: number[];
   vinculos: VinculoCard[];
   catalogo: ItemCatalogo[];
@@ -96,15 +96,8 @@ export function EmpenhoCardVinculos({
   const [anoBusca, setAnoBusca] = useAnoDoCard(cardId, anos);
   const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
-  /** A linha que está gravando (o spinner na célula) e o RASCUNHO das ações em edição (gravado 800 ms após o último toque). */
+  /** A linha que está gravando (o spinner na célula). */
   const [gravandoLinha, setGravandoLinha] = useState<string | null>(null);
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  useEffect(() => {
-    const t = timers.current;
-    return () => {
-      for (const x of t.values()) clearTimeout(x);
-    };
-  }, []);
 
   const grupos = useMemo(() => gruposDosVinculos(vinculos), [vinculos]);
   const fora = useMemo(() => semVinculo(catalogo, vinculos), [catalogo, vinculos]);
@@ -237,8 +230,8 @@ export function EmpenhoCardVinculos({
   const ocupado = (g: GrupoVinculo) => gravando || gravandoLinha === g.chave;
   const textoUnidade = (u: string | null) => (u == null ? "Todas" : u || "(sem unidade orçamentária)");
   // EDIÇÃO DIRETO NA CÉLULA (quem configura): cada coluna é a escolha do sistema com o texto INTEIRO — o órgão gestor, a
-  // unidade orçamentária (ou todas), as ações (ou todas) e o destino no cadastro. Grava na hora (as ações, 800 ms após o
-  // último toque), pela MESMA régua do editor; tocar fora dos controles abre o vínculo (excluir).
+  // unidade orçamentária (ou todas) e o destino no cadastro; as ações (selo) se editam no banner. Grava na hora, pela
+  // MESMA régua do editor; tocar fora dos controles abre o vínculo.
   const colunasVinculos: Column<GrupoVinculo>[] = [
     {
       key: "gestor",

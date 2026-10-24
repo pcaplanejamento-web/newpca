@@ -70,7 +70,7 @@ function fracaoDoAno(ano: number, passos: PassoLote[]): number {
 export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard; podeExcluir: boolean }) {
   const api = card;
   const router = useRouter();
-  const anos = anosDoCard(card.anos, anoAtual());
+  const anos = useMemo(() => anosDoCard(card.anos, anoAtual()), [card.anos]);
   /** A configuração vem antes de importar (`pendenciasDoCard` — o aviso fica no cabeçalho do card). */
   const bloqueado = pendenciasDoCard(card, card.vinculos).length > 0;
   const [ano, setAno] = useAnoDoCard(card.id, anos);
@@ -206,6 +206,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   }
 
   async function cancelarParada(l: LoteCenti) {
+    if (!(await confirmar({ titulo: `Cancelar a importação de ${l.ano}?`, texto: "O que já foi lido é descartado; os empenhos ficam como estavam.", confirmar: "Cancelar importação", perigo: true }))) return;
     await pedirImportacao(api.id, { acao: "cancelar", lote: l.id, motivo: "Cancelada por quem importava." }).catch((e) => toast.error(e instanceof Error ? e.message : "Falha."));
     void carregar();
   }
