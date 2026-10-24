@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { brl, dataBR, num } from "@/lib/format";
 import type { OrcamentoResumo } from "@/lib/orcamento";
 import { dotacaoAtualizada, pctEmpenhado } from "@/lib/orcamento-indicadores";
@@ -31,83 +32,124 @@ function Numero({ valor, rotulo }: { valor: number; rotulo: string }) {
   );
 }
 
+/** Uma linha da composição do `CartaoFinanceiro` (valor completo; `sinal` só com valor). */
+export type LinhaFinanceira = { rotulo: string; valor: number; sinal?: "+" | "−"; tom?: string } | "divisor";
+
 /**
- * Card do ORÇAMENTO (tela `/painel/orcamento`) — só INFORMAÇÃO: o nome inteiro; o ano em destaque no canto; a dotação ATUALIZADA
- * com o valor COMPLETO; a barra da execução (empenhado × saldo); a COMPOSIÇÃO da dotação (inicial +
- * suplementação − anulação, e a emenda impositiva) e a execução com os valores completos; a abrangência (órgãos,
- * unidades, programas, ações, lançamentos) e a data da importação. Nenhum texto é cortado: o que não cabe, quebra.
+ * O CARTÃO FINANCEIRO — a moldura do card do orçamento, reutilizada pelo card de empenhos: ícone + sobretítulo + nome
+ * inteiro + o selo no canto; o valor em DESTAQUE completo; a barra (%); a composição em linhas completas; os números da
+ * abrangência e o rodapé. Nenhum texto é cortado: o que não cabe, quebra.
  */
-export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResumo; href: string }) {
-  const atualizada = dotacaoAtualizada(o);
-  const pct = pctEmpenhado(o);
-  const pctTexto = `${pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+export function CartaoFinanceiro({
+  href,
+  icone,
+  sobretitulo,
+  nome,
+  selo,
+  destaque,
+  barra,
+  linhas,
+  numeros,
+  rodape,
+}: {
+  href: string;
+  icone: ReactNode;
+  sobretitulo: string;
+  nome: string;
+  selo?: ReactNode;
+  destaque: { rotulo: string; valor: number };
+  barra: { rotulo: string; pct: number; texto: string };
+  linhas: LinhaFinanceira[];
+  numeros: { valor: number; rotulo: string }[];
+  rodape?: ReactNode;
+}) {
+  const pct = Math.max(0, Math.min(100, barra.pct));
   return (
     <Link
       href={href}
       unstable_dynamicOnHover
-      aria-label={`Abrir ${o.nome}`}
+      aria-label={`Abrir ${nome}`}
       className="group flex h-full w-full flex-col gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-[border-color,box-shadow] duration-[var(--motion-duration)] hover:border-accent/50 hover:shadow-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25"
     >
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">
-          <IconWallet className="h-5 w-5" />
-        </span>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">{icone}</span>
         <div className="min-w-0 flex-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">Orçamento</span>
-          <h3 className="mt-0.5 line-clamp-2 break-words text-[15px] font-semibold leading-snug text-text group-hover:text-accent" title={o.nome}>
-            {o.nome}
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{sobretitulo}</span>
+          <h3 className="mt-0.5 line-clamp-2 break-words text-[15px] font-semibold leading-snug text-text group-hover:text-accent" title={nome}>
+            {nome}
           </h3>
         </div>
-        <span className="shrink-0 rounded-control bg-accent px-2.5 py-1.5 text-[15px] font-bold leading-none tabular-nums tracking-tight text-white shadow-soft">
-          {o.ano}
-        </span>
+        {selo}
       </div>
 
       <div>
-        <p className="text-[12px] text-muted">Dotação atualizada</p>
-        <p className="truncate text-xl font-bold tabular-nums tracking-tight text-text" title={brl(atualizada)}>
-          {brl(atualizada)}
+        <p className="text-[12px] text-muted">{destaque.rotulo}</p>
+        <p className="truncate text-xl font-bold tabular-nums tracking-tight text-text" title={brl(destaque.valor)}>
+          {brl(destaque.valor)}
         </p>
       </div>
 
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-[12px]">
-          <span className="font-medium text-text-2">Execução</span>
-          <span className="tabular-nums text-muted">{pctTexto} empenhado</span>
+          <span className="font-medium text-text-2">{barra.rotulo}</span>
+          <span className="tabular-nums text-muted">{barra.texto}</span>
         </div>
-        <div
-          className="mt-1 h-2 overflow-hidden rounded-full bg-surface-2"
-          role="progressbar"
-          aria-valuenow={Math.round(pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Empenhado"
-        >
+        <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={barra.rotulo}>
           <div className="h-full rounded-full bg-accent transition-[width] duration-[var(--motion-duration)]" style={{ width: `${pct}%` }} />
         </div>
       </div>
 
       <dl className="space-y-1 text-[12px]">
-        <Linha rotulo="Inicial" valor={o.valorInicial} />
-        <Linha rotulo="Suplementação" valor={o.suplementacao} sinal="+" tom="text-[var(--ok)]" />
-        {o.reducao > 0 && <Linha rotulo="Redução" valor={o.reducao} sinal="−" tom="text-[var(--danger)]" />}
-        {o.emenda > 0 && <Linha rotulo="Emenda impositiva" valor={o.emenda} />}
-        <div className="my-1 border-t border-border" />
-        <Linha rotulo={`Empenhado${o.qtdEmpenho ? ` · ${num(o.qtdEmpenho)} empenhos` : ""}`} valor={o.empenho} tom="text-text" />
-        {o.anulacao > 0 && <Linha rotulo="Anulação de empenho" valor={o.anulacao} sinal="−" tom="text-[var(--ok)]" />}
-        <Linha rotulo="Saldo" valor={o.saldo} tom="text-text" />
+        {linhas.map((l, i) => (l === "divisor" ? <div key={i} className="my-1 border-t border-border" /> : <Linha key={i} {...l} />))}
       </dl>
 
       <div className="mt-auto grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-1.5">
-        <Numero valor={o.orgaos} rotulo="órgãos" />
-        <Numero valor={o.unidades} rotulo="unidades" />
-        <Numero valor={o.programas} rotulo="programas" />
-        <Numero valor={o.acoes} rotulo="ações" />
-        <Numero valor={o.totalItens} rotulo="lançamentos" />
+        {numeros.map((n) => (
+          <Numero key={n.rotulo} valor={n.valor} rotulo={n.rotulo} />
+        ))}
       </div>
 
-      {o.atualizadoEm && <p className="border-t border-border pt-2 text-[11.5px] text-muted">Importado em {dataBR(o.atualizadoEm)}</p>}
+      {rodape && <div className="border-t border-border pt-2 text-[11.5px] text-muted">{rodape}</div>}
     </Link>
+  );
+}
+
+/** O selo do ano no canto do card (o do orçamento). */
+export function SeloAno({ children }: { children: ReactNode }) {
+  return <span className="shrink-0 rounded-control bg-accent px-2.5 py-1.5 text-[15px] font-bold leading-none tabular-nums tracking-tight text-white shadow-soft">{children}</span>;
+}
+
+/** Card do ORÇAMENTO (tela `/painel/orcamento`) sobre o `CartaoFinanceiro`: a dotação atualizada, a execução, a composição e a abrangência. */
+export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResumo; href: string }) {
+  const pct = pctEmpenhado(o);
+  return (
+    <CartaoFinanceiro
+      href={href}
+      icone={<IconWallet className="h-5 w-5" />}
+      sobretitulo="Orçamento"
+      nome={o.nome}
+      selo={<SeloAno>{o.ano}</SeloAno>}
+      destaque={{ rotulo: "Dotação atualizada", valor: dotacaoAtualizada(o) }}
+      barra={{ rotulo: "Execução", pct, texto: `${pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% empenhado` }}
+      linhas={[
+        { rotulo: "Inicial", valor: o.valorInicial },
+        { rotulo: "Suplementação", valor: o.suplementacao, sinal: "+", tom: "text-[var(--ok)]" },
+        ...(o.reducao > 0 ? [{ rotulo: "Redução", valor: o.reducao, sinal: "−" as const, tom: "text-[var(--danger)]" }] : []),
+        ...(o.emenda > 0 ? [{ rotulo: "Emenda impositiva", valor: o.emenda }] : []),
+        "divisor",
+        { rotulo: `Empenhado${o.qtdEmpenho ? ` · ${num(o.qtdEmpenho)} empenhos` : ""}`, valor: o.empenho, tom: "text-text" },
+        ...(o.anulacao > 0 ? [{ rotulo: "Anulação de empenho", valor: o.anulacao, sinal: "−" as const, tom: "text-[var(--ok)]" }] : []),
+        { rotulo: "Saldo", valor: o.saldo, tom: "text-text" },
+      ]}
+      numeros={[
+        { valor: o.orgaos, rotulo: "órgãos" },
+        { valor: o.unidades, rotulo: "unidades" },
+        { valor: o.programas, rotulo: "programas" },
+        { valor: o.acoes, rotulo: "ações" },
+        { valor: o.totalItens, rotulo: "lançamentos" },
+      ]}
+      rodape={o.atualizadoEm ? `Importado em ${dataBR(o.atualizadoEm)}` : undefined}
+    />
   );
 }
 

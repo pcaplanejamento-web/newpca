@@ -3,15 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { estadoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
-import { brlCompact, num } from "@/lib/format";
+import { dataHoraBR, num } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { SelectField, TextField } from "./Field";
 import { IconEmpenho, IconInbox } from "./icons";
 import { Modal } from "./Modal";
-import { CapaQuadro, CartaoEspaco, QuadroNovoCard } from "./QuadroCard";
+import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
+import { QuadroNovoCard } from "./QuadroCard";
 import { toast } from "./Toast";
 
 /**
@@ -78,33 +78,39 @@ export function EmpenhosView({ cards, podeCriar }: { cards: ResumoCard[]; podeCr
           <p className="text-sm text-muted">Nenhum card de empenhos ainda.</p>
         </div>
       ) : (
-        <div className={`grid gap-[var(--gap-block)] ${COLUNAS_ESPACOS}`}>
+        <div className={GRADE_ORCAMENTOS}>
           {cards.map((c) => {
             const e = estadoCard(c, c.lendo);
             return (
-              <CartaoEspaco
+              <CartaoFinanceiro
                 key={c.id}
                 href={`/painel/empenhos/${c.id}`}
-                ariaLabel={`Abrir o card ${c.nome}`}
-                capa={
-                  <CapaQuadro quadro={{ cor: c.cor, fundoUrl: null, fundoAjuste: null, fundoGradiente: null }}>
-                    <span className="absolute inset-0 grid place-items-center text-faint" aria-hidden="true">
-                      <IconEmpenho className="h-9 w-9" style={{ color: c.cor }} />
-                    </span>
-                  </CapaQuadro>
-                }
-                sobretitulo={rotuloAnos(c.anos)}
+                icone={<IconEmpenho className="h-5 w-5" />}
+                sobretitulo={`Empenhos · ${rotuloAnos(c.anos)}`}
+                nome={c.nome}
                 selo={
-                  <Badge tone={e.tom} dot vivo={c.lendo}>
+                  <Badge tone={e.tom} dot vivo={c.lendo} tamanho="linha">
                     {e.rotulo}
                   </Badge>
                 }
-                nome={c.nome}
-                metricas={[
-                  { rotulo: "Empenhos", valor: num(c.empenhos) },
-                  { rotulo: "Empenhado", valor: brlCompact(c.soma) },
-                  { rotulo: "Vínculos", valor: num(c.vinculos), cor: c.vinculos ? undefined : "var(--warn)" },
+                destaque={{ rotulo: "Empenhado líquido", valor: c.soma - c.anulado }}
+                barra={{ rotulo: "Execução", pct: c.soma - c.anulado > 0 ? (c.pago / (c.soma - c.anulado)) * 100 : 0, texto: `${(c.soma - c.anulado > 0 ? (c.pago / (c.soma - c.anulado)) * 100 : 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% pago` }}
+                linhas={[
+                  { rotulo: `Empenhado · ${num(c.empenhos)} empenhos`, valor: c.soma },
+                  { rotulo: "Anulado", valor: c.anulado, sinal: "−", tom: "text-[var(--danger)]" },
+                  "divisor",
+                  { rotulo: "Liquidado", valor: c.liquidado, tom: "text-text" },
+                  { rotulo: "Pago", valor: c.pago, tom: "text-[var(--ok)]" },
+                  { rotulo: "Saldo a pagar", valor: c.saldoPagar, tom: "text-text" },
                 ]}
+                numeros={[
+                  { valor: c.gestores, rotulo: "órgãos gestores" },
+                  { valor: c.unidadesOrc, rotulo: "unidades orç." },
+                  { valor: c.acoes, rotulo: "ações" },
+                  { valor: c.fornecedores, rotulo: "fornecedores" },
+                  { valor: c.vinculos, rotulo: "vínculos" },
+                ]}
+                rodape={c.ultimaExecucao ? `Última leitura em ${dataHoraBR(c.ultimaExecucao)}` : "Ainda não importado"}
               />
             );
           })}

@@ -77,7 +77,21 @@ export type CardEmpenho = {
 };
 
 /** O card na lista e no cabeçalho: os números do que está gravado. */
-export type ResumoCard = CardEmpenho & { empenhos: number; soma: number; vinculos: number; lendo: boolean };
+export type ResumoCard = CardEmpenho & {
+  empenhos: number;
+  soma: number;
+  vinculos: number;
+  lendo: boolean;
+  /** A execução do que está gravado (no escopo da pessoa) — o card da lista. */
+  anulado: number;
+  liquidado: number;
+  pago: number;
+  saldoPagar: number;
+  fornecedores: number;
+  gestores: number;
+  unidadesOrc: number;
+  acoes: number;
+};
 
 /** Os campos que se configuram. */
 export type EdicaoCard = Pick<

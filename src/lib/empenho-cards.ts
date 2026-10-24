@@ -21,18 +21,44 @@ function paraCard(l: Linha): CardEmpenho {
  */
 export async function listarCards(escopo: EscopoEmpenhos, id?: number): Promise<ResumoCard[]> {
   const so = escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, "e.")], sql.raw(""));
-  const l = await getDb()
-    .select({
-      card: empenhoCards,
-      empenhos: sql<number>`(SELECT COUNT(*) FROM "empenhos" e WHERE e."card_id" = "empenho_cards"."id" AND e."removido_em" IS NULL${so})`,
-      soma: sql<number>`(SELECT IFNULL(SUM(e."valor_empenhado"), 0) FROM "empenhos" e WHERE e."card_id" = "empenho_cards"."id" AND e."removido_em" IS NULL${so})`,
-      vinculos: sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
-      lendo: sql<number>`EXISTS (SELECT 1 FROM "centi_lotes" l WHERE l."card_id" = "empenho_cards"."id" AND l."estado" = 'lendo')`,
-    })
-    .from(empenhoCards)
-    .where(id == null ? undefined : eq(empenhoCards.id, id))
-    .orderBy(asc(empenhoCards.nome), asc(empenhoCards.id));
-  return l.map((x) => ({ ...paraCard(x.card), empenhos: Number(x.empenhos), soma: Number(x.soma), vinculos: Number(x.vinculos), lendo: !!Number(x.lendo) }));
+  const db = getDb();
+  const [l, somas] = await Promise.all([
+    db
+      .select({
+        card: empenhoCards,
+        vinculos: sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
+        lendo: sql<number>`EXISTS (SELECT 1 FROM "centi_lotes" l WHERE l."card_id" = "empenho_cards"."id" AND l."estado" = 'lendo')`,
+      })
+      .from(empenhoCards)
+      .where(id == null ? undefined : eq(empenhoCards.id, id))
+      .orderBy(asc(empenhoCards.nome), asc(empenhoCards.id)),
+    // UMA agregação para todos os cards (a execução do que está gravado, no escopo da pessoa).
+    db.all<{ c: number; n: number; emp: number; anu: number; liq: number; pag: number; sal: number; forn: number; ges: number; uo: number; ac: number }>(sql`
+      SELECT e."card_id" AS c, COUNT(*) AS n, IFNULL(SUM(e."valor_empenhado"), 0) AS emp, IFNULL(SUM(e."valor_anulado"), 0) AS anu,
+        IFNULL(SUM(e."valor_liquidado"), 0) AS liq, IFNULL(SUM(e."valor_pago"), 0) AS pag, IFNULL(SUM(e."saldo_pagar"), 0) AS sal,
+        COUNT(DISTINCT e."cpf_cnpj") AS forn, COUNT(DISTINCT e."orgao_gestor") AS ges, COUNT(DISTINCT e."unidade_orcamentaria") AS uo,
+        COUNT(DISTINCT e."acao") AS ac
+      FROM "empenhos" e WHERE e."removido_em" IS NULL${id == null ? sql`` : sql` AND e."card_id" = ${id}`}${so} GROUP BY e."card_id"`),
+  ]);
+  const por = new Map(somas.map((x) => [Number(x.c), x]));
+  return l.map((x) => {
+    const s = por.get(x.card.id);
+    return {
+      ...paraCard(x.card),
+      vinculos: Number(x.vinculos),
+      lendo: !!Number(x.lendo),
+      empenhos: Number(s?.n ?? 0),
+      soma: Number(s?.emp ?? 0),
+      anulado: Number(s?.anu ?? 0),
+      liquidado: Number(s?.liq ?? 0),
+      pago: Number(s?.pag ?? 0),
+      saldoPagar: Number(s?.sal ?? 0),
+      fornecedores: Number(s?.forn ?? 0),
+      gestores: Number(s?.ges ?? 0),
+      unidadesOrc: Number(s?.uo ?? 0),
+      acoes: Number(s?.ac ?? 0),
+    };
+  });
 }
 
 export async function getCard(id: number): Promise<CardEmpenho | null> {
