@@ -20,7 +20,7 @@ function banco() {
   const raw = new DatabaseSync(":memory:");
   for (const m of ["0129_centi_apis", "0130_centi_apis_escopo", "0131_empenhos", "0132_centi_lote_passos", "0134_empenhos_conferencia"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
   // O cadastro mínimo que a 0138 (unidades da Centi e os gatilhos) precisa.
-  raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer)");
+  raw.exec("CREATE TABLE orgaos (id integer PRIMARY KEY, sigla text NOT NULL, oculto integer NOT NULL DEFAULT 0); CREATE TABLE reparticoes (id integer PRIMARY KEY, orgao_id integer, codigo text)");
   for (const m of ["0138_centi_unidades", "0139_centi_vinculo_cadastro", "0141_centi_vinculo_acoes", "0142_centi_unidade_acoes"]) raw.exec(readFileSync(new URL(`../drizzle/${m}.sql`, import.meta.url), "utf8"));
   const db = drizzle(d1Sobre(raw) as never, { schema });
   const ins = raw.prepare(
@@ -122,6 +122,23 @@ test("escopo: o empenho vinculado à UNIDADE da pessoa ou — vínculo só ao ó
   assert.equal(chaveEscopoEmpenhos(null), "*");
   assert.equal(chaveEscopoEmpenhos({ unidades: [3, 1], orgaos: [2] }), "u1,3|o2");
   assert.notEqual(chaveEscopoEmpenhos({ unidades: [], orgaos: [] }), chaveEscopoEmpenhos(null));
+});
+
+test("coluna Unidade: a sigla da unidade do cadastro vinculada; vinculado só ao órgão, a sigla do órgão; sem vínculo, vazio", async () => {
+  const b = banco();
+  b.raw.exec("INSERT INTO orgaos (id, sigla) VALUES (1, 'PMRV'), (2, 'FMS'); INSERT INTO reparticoes (id, orgao_id, codigo) VALUES (10, 1, 'SEMED')");
+  b.ins.run("2026|PMRV|1", 2026, "1", "2026-01-02", "PMRV", "A", null, null, null, 1, 0, 0, 0, 1, null, 1, 10);
+  b.ins.run("2026|FMS|2", 2026, "2", "2026-01-03", "FMS", "B", null, null, null, 1, 0, 0, 0, 1, null, 2, null);
+  b.ins.run("2026|X|3", 2026, "3", "2026-01-04", "X", "C", null, null, null, 1, 0, 0, 0, 1, null, null, null);
+  const l = empenhosDoPacote(await pacote(b, 2026));
+  assert.deepEqual(
+    l.map((e) => [e.numero, e.unidade]),
+    [
+      ["1", "SEMED"],
+      ["2", "FMS"],
+      ["3", null],
+    ],
+  );
 });
 
 test("escopo no banco: o pacote e os anos só com os empenhos vinculados às unidades/órgãos da pessoa; nenhum = vazio", async () => {

@@ -5001,6 +5001,7 @@ export function Catalogo() {
               numero: "320932",
               data: "2026-01-07",
               orgaoGestor: "FUNDO MUNICIPAL SAUDE RIO VERDE",
+              unidade: "FMS",
               unidadeOrcamentaria: "FUNDO MUNICIPAL DE SAÚDE",
               fornecedor: "FORNECEDOR EXEMPLO LTDA",
               cpfCnpj: "00.000.000/0001-00",

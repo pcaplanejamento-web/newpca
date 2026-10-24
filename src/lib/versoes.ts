@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.204.0",
+    data: "2026-10-23",
+    titulo: "Unidade do sistema nos empenhos",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Empenhos",
+        texto: "Coluna Unidade na tabela de empenhos: a unidade do cadastro vinculada a cada empenho (vinculado só ao órgão, o órgão), com o filtro padrão de unidade do sistema — sigla e nome, busca pelos dois. Também no detalhe do empenho.",
+        link: "/painel/empenhos",
+      },
+    ],
+  },
+  {
     versao: "1.203.0",
     data: "2026-10-23",
     titulo: "Unidade orçamentária e ações vinculadas juntas",

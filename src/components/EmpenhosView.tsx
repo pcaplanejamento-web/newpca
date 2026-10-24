@@ -57,6 +57,13 @@ const COLUNAS: Column<EmpenhoNaTela>[] = [
     ),
   },
   { key: "data", header: "Data", nowrap: true, filter: "date", value: (e) => e.data ?? "", render: (e) => <span className="tabular-nums">{dataBR(e.data)}</span> },
+  {
+    key: "unidade",
+    header: "Unidade",
+    nowrap: true,
+    value: (e) => e.unidade ?? "—",
+    render: (e) => <span className="font-mono text-[12px] font-semibold text-text-2">{e.unidade ?? "—"}</span>,
+  },
   colTexto("orgaoGestor", "Órgão gestor", 200),
   colTexto("unidadeOrcamentaria", "Unidade orçamentária", 200),
   colTexto("fornecedor", "Fornecedor", 220),

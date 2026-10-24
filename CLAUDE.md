@@ -4567,7 +4567,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   compacto`; `?ano=` — `anoEscolhido`), "Importar" (SÓ o ADM; leva a Integrações → APIs da Centi), 6 `StatMini` (Empenhos · Empenhado · Anulado · Liquidado · Pago · A pagar —
   `resumoEmpenhos` sobre as linhas FILTRADAS da tabela, `onOrdenadas`) e a `DataTable` padrão (`scrollInterno` compacta,
   filtros conectados, `ocultasPadrao` das colunas menos usadas, edições salvas `empenhos:tabela`, XLSX/PDF) + no rodapé
-  **"Removidos na Centi (N)"** (`?removidos=1`). Tocar = `EmpenhoDetalhe` (DS) num `Modal`: o que a tabela tem na hora + o
+  **"Removidos na Centi (N)"** (`?removidos=1`). Coluna **Unidade** (v1.204.0) = a SIGLA da unidade do cadastro vinculada (`empenhos.reparticao_id`; vinculado só ao órgão, a sigla do órgão) — campo `unidade` do dicionário, calculado no banco (`unidade_sistema` na CTE `base`); o filtro da coluna é o padrão de unidade (sigla + nome — `useDetalheSigla`). Tocar = `EmpenhoDetalhe` (DS) num `Modal`: o que a tabela tem na hora + o
   histórico e o registro (importação, leitor, datas) por `GET /api/empenhos/[id]` (`empenhoCompleto`). **Carga
   COMPACTA montada no BANCO** (`GET /api/empenhos?ano=&removidos=` → `pacoteEmpenhos`): cada campo de texto vira um
   DICIONÁRIO (CTE `dN` = os distintos do ano numerados) e cada empenho uma tupla de números (`empenhos-tela-sql.ts`,

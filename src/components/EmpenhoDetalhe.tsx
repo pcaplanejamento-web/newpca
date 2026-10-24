@@ -24,6 +24,7 @@ export function EmpenhoDetalhe({ empenho, completo }: { empenho: EmpenhoNaTela; 
 
       <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
         <Campo label="Data" valor={dataBR(empenho.data) || "—"} />
+        <Campo label="Unidade (cadastro)" valor={empenho.unidade} />
         <Campo label="Órgão gestor" valor={empenho.orgaoGestor} />
         <Campo label="Unidade orçamentária" valor={empenho.unidadeOrcamentaria} />
         <Campo label="Fornecedor" valor={empenho.fornecedor} />

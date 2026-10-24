@@ -5,7 +5,8 @@
  * Medido em 2026 (21.536 empenhos): 10,4 MB em JSON cru → ~2,5 MB assim.
  */
 
-/** Os campos que vão pelo dicionário (a ordem é a da tupla, depois do id e do número). */
+/** Os campos que vão pelo dicionário (a ordem é a da tupla, depois do id e do número). `unidade` = a SIGLA da unidade do
+ * cadastro vinculada (sem unidade, a do órgão) — calculada no banco (`unidade_sistema`, `empenhos-tela-sql.ts`). */
 export const CAMPOS_DICIONARIO = [
   "data",
   "orgaoGestor",
@@ -21,6 +22,7 @@ export const CAMPOS_DICIONARIO = [
   "elemento",
   "subelemento",
   "fonte",
+  "unidade",
 ] as const;
 export type CampoDicionario = (typeof CAMPOS_DICIONARIO)[number];
 
@@ -40,6 +42,7 @@ export const COLUNA_SQL: Record<CampoDicionario, string> = {
   elemento: "elemento",
   subelemento: "subelemento",
   fonte: "fonte",
+  unidade: "unidade_sistema",
 };
 
 /** Os valores (na ordem da tupla, depois dos campos do dicionário). */

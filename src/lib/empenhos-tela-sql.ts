@@ -51,12 +51,16 @@ export async function consultaVersaoEmpenhos(db: Db, ano: number): Promise<strin
 
 const versao = (ano: number): SQL => sql.join([versaoSql(ano), sql.raw(" AS ver")], sql.raw(""));
 
+/** A SIGLA da unidade do cadastro vinculada ao empenho; vinculado só ao órgão, a sigla do órgão (o filtro padrão de unidade). */
+const UNIDADE_SISTEMA =
+  "COALESCE((SELECT r.codigo FROM reparticoes r WHERE r.id = empenhos.reparticao_id), (SELECT o.sigla FROM orgaos o WHERE o.id = empenhos.orgao_id))";
+
 /** `WITH base AS (os empenhos do recorte, numerados pelo id), d0 AS (…), …` — o MESMO prefixo nas consultas. */
 function prefixo(ano: number, removidos: boolean, escopo: EscopoEmpenhos): SQL {
   const dics = CAMPOS_DICIONARIO.map(
     (c, k) => `d${k} AS (SELECT v, row_number() OVER (ORDER BY v) - 1 AS i FROM (SELECT DISTINCT ${COLUNA_SQL[c]} AS v FROM base))`,
   ).join(", ");
-  return sql.join([sql.raw("WITH base AS (SELECT *, row_number() OVER (ORDER BY id) AS rn FROM empenhos WHERE "), onde(ano, removidos, escopo), sql.raw(`), ${dics} `)], sql.raw(""));
+  return sql.join([sql.raw(`WITH base AS (SELECT empenhos.*, ${UNIDADE_SISTEMA} AS unidade_sistema, row_number() OVER (ORDER BY empenhos.id) AS rn FROM empenhos WHERE `), onde(ano, removidos, escopo), sql.raw(`), ${dics} `)], sql.raw(""));
 }
 
 /** Os anos com empenhos: quantos (vigentes), a soma empenhada, quantos removidos na Centi e a última promoção. */
