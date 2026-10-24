@@ -146,6 +146,17 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       configurar: "Criar cards e configurar a integração, os anos, a programação, as regras e os vínculos; publicar edições da tabela.",
     },
   },
+  liquidacoes: {
+    na: "em Liquidações",
+    a: "a Liquidações",
+    acoes: {
+      visualizar: "Abrir Liquidações, os cards e a tabela importada de cada um.",
+      importar: "Importar as liquidações da Centi em cada card.",
+      exportar: "Baixar a tabela em XLSX e PDF.",
+      excluir: "Excluir cards (com as liquidações deles) e importações do histórico.",
+      configurar: "Criar cards e configurar o card de empenhos de origem, a integração, os anos, a programação e as regras.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;

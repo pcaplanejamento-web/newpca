@@ -29,7 +29,6 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
-import { Segmented } from "./Segmented";
 import { CelulaTexto } from "./CelulaLista";
 import { IconDownload, IconTrash } from "./icons";
 import { Modal } from "./Modal";
@@ -95,8 +94,8 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
   const [desatualizados, setDesatualizados] = useState<{ ano: number; n: number }[]>([]);
-  /** O que importar: os EMPENHOS ou as LIQUIDAÇÕES (um lote por órgão da Centi — a API exige o órgão). */
-  const [tipo, setTipo] = useState<"empenhos" | "liquidacoes">("empenhos");
+  /** O que importar = o TIPO do card: os EMPENHOS ou as LIQUIDAÇÕES (um lote por órgão da Centi — a API exige o órgão). */
+  const tipo = card.tipo;
   const [orgaosLiq, setOrgaosLiq] = useState<{ orgaos: { id: number; nome: string }[]; semId: string[] } | null>(null);
   /** O órgão da Centi do lote em curso (liquidações) — "2 de 5" na barra. */
   const [serie, setSerie] = useState<{ nome: string; i: number; n: number } | null>(null);
@@ -206,7 +205,7 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
       if (fim.estado === "unidades") {
         toast.success(fim.mensagem ?? "Catálogo da Centi atualizado.");
       } else if (fim.estado === "promovido" && liq) {
-        toast.success(`Liquidações ${fim.ano}${deQuem} importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} de empenho fora do card (não gravadas)` : ""}.`);
+        toast.success(`Liquidações ${fim.ano}${deQuem} importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} sem o empenho no card de origem (não gravadas)` : ""}.`);
         router.refresh();
       } else if (fim.estado === "promovido") {
         toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem vínculo no card (não gravados)` : ""}.`);
@@ -368,15 +367,6 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
   return (
     <>
       <FerramentasAba>
-        <Segmented
-          ariaLabel="O que importar"
-          value={tipo}
-          onChange={(v) => setTipo(v as "empenhos" | "liquidacoes")}
-          options={[
-            { value: "empenhos", label: "Empenhos", dica: "Os empenhos do card" },
-            { value: "liquidacoes", label: "Liquidações", curto: "Liquid.", dica: "As liquidações dos empenhos do card — uma importação por órgão da Centi" },
-          ]}
-        />
         <SelectField compacto label="Ano" value={String(ano)} onChange={(e) => setAno(Number(e.target.value))} disabled={rodando}>
           {anos.map((y) => (
             <option key={y} value={y}>
@@ -395,11 +385,13 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             disabled={!!emAndamento || !anos.length || bloqueado || (tipo === "liquidacoes" && !orgaosLiq?.orgaos.length)}
             title={
               bloqueado
-                ? "Configure o card antes de importar (Configuração e Vínculos)"
+                ? tipo === "liquidacoes"
+                  ? "Configure o card antes de importar (a Configuração com o card de empenhos de origem, que precisa de vínculos)"
+                  : "Configure o card antes de importar (Configuração e Vínculos)"
                 : emAndamento
                   ? `Há uma importação de ${emAndamento.ano} em andamento — continue ou cancele antes (aviso abaixo)`
                   : tipo === "liquidacoes" && !orgaosLiq?.orgaos.length
-                    ? "Cadastre o ID na Centi dos órgãos de destino dos vínculos (Órgãos e Unidades)"
+                    ? "Cadastre o ID na Centi dos órgãos de destino dos vínculos do card de empenhos de origem (Órgãos e Unidades)"
                     : undefined
             }
             icon={<IconDownload className="h-4 w-4" />}
@@ -414,27 +406,38 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
             configuração salva do card, e guarda tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque
             num para ver o detalhe (o pedido enviado, a resposta, o tempo, o erro).
           </p>
-          <p>
-            Os empenhos só são gravados quando o ano inteiro foi lido e a contagem <strong>confere</strong> com o total que a Centi
-            informa em cada período. Faltou registro, a Centi falhou ou você interrompeu: o lote fica parcial e a tabela do card
-            continua como estava. O que sumir da Centi segue a <strong>regra do card</strong> (marcar como removido ou apagar).
-          </p>
-          <p>
-            A conclusão também confere os <strong>valores</strong>: nenhum negativo ou acima de R$ 1 bilhão, e a soma empenhada e o
-            número de empenhos não podem cair abaixo do limite das regras do card em relação à última importação concluída do ano
-            (você confirma antes de gravar). Reimportar regrava só o que <strong>mudou</strong> — o resumo diz quantos vieram iguais.
-          </p>
-          <p>
-            Só os empenhos que os <strong>vínculos</strong> do card cobrem são gravados; os outros são lidos e conferidos, mas
-            descartados. Uma <strong>aba por vez</strong> conduz a importação.
-          </p>
-          <p>
-            <strong>Liquidações:</strong> a Centi as entrega por <strong>órgão</strong> (o “ID na Centi” cadastrado em Órgãos e
-            Unidades, dos órgãos de destino dos vínculos) e sem páginas — cada órgão vira uma importação, uma depois da outra,
-            lida semana a semana. Só é gravada a liquidação cujo <strong>empenho</strong> está no card (importe os empenhos
-            antes, inclusive os de anos anteriores, para os restos a pagar); ela segue o vínculo do empenho.
-          </p>
-          <p>Toque numa importação do histórico para ver os passos dela; marque e use Excluir para tirá-las do banco (os empenhos gravados continuam).</p>
+          {tipo === "liquidacoes" ? (
+            <>
+              <p>
+                A Centi entrega as liquidações por <strong>órgão</strong> (o “ID na Centi” cadastrado em Órgãos e Unidades, dos órgãos de
+                destino dos vínculos do card de empenhos de origem) e sem páginas — cada órgão vira uma importação, uma depois da outra,
+                lida semana a semana.
+              </p>
+              <p>
+                As liquidações só são gravadas quando o ano inteiro foi lido, a contagem confere e os valores e a queda passam pelas regras
+                do card. Só entra a liquidação cujo <strong>empenho</strong> está no card de origem (importe os empenhos antes, inclusive os
+                de anos anteriores, para os restos a pagar); ela segue o vínculo do empenho. O que sumir da Centi segue a regra do card.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                Os empenhos só são gravados quando o ano inteiro foi lido e a contagem <strong>confere</strong> com o total que a Centi
+                informa em cada período. Faltou registro, a Centi falhou ou você interrompeu: o lote fica parcial e a tabela do card
+                continua como estava. O que sumir da Centi segue a <strong>regra do card</strong> (marcar como removido ou apagar).
+              </p>
+              <p>
+                A conclusão também confere os <strong>valores</strong>: nenhum negativo ou acima de R$ 1 bilhão, e a soma empenhada e o
+                número de empenhos não podem cair abaixo do limite das regras do card em relação à última importação concluída do ano
+                (você confirma antes de gravar). Reimportar regrava só o que <strong>mudou</strong> — o resumo diz quantos vieram iguais.
+              </p>
+              <p>
+                Só os empenhos que os <strong>vínculos</strong> do card cobrem são gravados; os outros são lidos e conferidos, mas
+                descartados. Uma <strong>aba por vez</strong> conduz a importação.
+              </p>
+            </>
+          )}
+          <p>Toque numa importação do histórico para ver os passos dela; marque e use Excluir para tirá-las do banco (o que já foi gravado continua).</p>
         </Ajuda>
       </FerramentasAba>
       {tipo === "liquidacoes" && orgaosLiq && (

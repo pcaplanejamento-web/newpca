@@ -2,9 +2,8 @@ import type { centiLotePassos } from "@/db/schema";
 import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
 import { baixarSeguro } from "./busca-segura";
-import { urlDaApi } from "./centi-resposta-core";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
-import { chaveEmpenhoDaLiquidacao, corpoLiquidacoes, ENDPOINT_LIQUIDACOES, lerPaginaLiquidacoes } from "./liquidacoes-core";
+import { chaveEmpenhoDaLiquidacao, corpoLiquidacoes, lerPaginaLiquidacoes } from "./liquidacoes-core";
 import {
   comandosGuardarLiquidacoes,
   comandosPromoverLiquidacoes,
@@ -93,7 +92,9 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
     throw new PedidoInvalido("Os parâmetros desta API não usam {inicio} e {fim} — o ano só pode ser lido inteiro.");
   }
   const liq = lote.modo === "liquidacoes";
+  if (liq !== (card.tipo === "liquidacoes")) throw new PedidoInvalido(liq ? "Liquidações só se importam num card de liquidações." : "O card de liquidações só importa liquidações.");
   if (liq && (!lote.idOrgaoCenti || pagina !== 1)) throw new PedidoInvalido("A importação de liquidações pede um órgão da Centi e não tem páginas.");
+  if (liq && card.origemId == null) throw new PedidoInvalido("Escolha o card de empenhos de origem na Configuração.");
   let enviado: string;
   try {
     enviado = JSON.stringify(liq ? corpoLiquidacoes(card.parametros, lote.ano, periodo, lote.idOrgaoCenti ?? 0) : corpoDaPagina(card.parametros, lote.ano, pagina, periodo));
@@ -107,7 +108,7 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
   let falha: string | null = null;
   let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | null = null;
   try {
-    const url = liq ? urlDaApi({ ...card, endpoint: ENDPOINT_LIQUIDACOES }) : urlDoCard(card);
+    const url = urlDoCard(card);
     const r = await baixarSeguro(url, { accept: "application/json", maxBytes: diasDoPeriodo(periodo) > 1 ? MAX_BYTES : MAX_BYTES_DIA, quem: "A API da Centi", tempoMs: TEMPO_MS, post: enviado });
     texto = r.texto;
     status = r.status;
@@ -162,8 +163,9 @@ export async function lerPaginaDoLote(card: CardEmpenho, lote: LoteCenti, period
     mensagem: lida.reparado ? "A Centi mandou textos com aspas sem escape (ex.: num histórico) — a leitura consertou; nada se perdeu." : null,
   };
   if ("orgaos" in lida) {
-    // LIQUIDAÇÕES: só entra a de EMPENHO que está no card (o vínculo é o do empenho); das demais fica só a chave.
-    const doCard = await empenhosNoCard(db, card.id, lida.linhas);
+    // LIQUIDAÇÕES: só entra a de EMPENHO que está no card de EMPENHOS de origem (o vínculo é o do empenho); das demais
+    // fica só a chave.
+    const doCard = await empenhosNoCard(db, card.origemId ?? 0, lida.linhas);
     const tem = (l: (typeof lida.linhas)[number]) => doCard.has(chaveEmpenhoDaLiquidacao(l.orgao, l.numeroEmpenho));
     const res = await db.batch([
       comandoRegistrarPasso(db, lote.id, passo).returning(),
@@ -263,14 +265,16 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
   }
   const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, idOrgao, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma liquidada").replace("os empenhos caíram", "as liquidações caíram") };
-  const contagem = await contagemLiquidacoes(db, lote.id, card.id, lote.ano, idOrgao, lote.leitor);
-  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, lote.ano, idOrgao, lote.leitor, card.removidos, contagem) as never);
+  const origem = card.origemId ?? 0;
+  const contagem = await contagemLiquidacoes(db, lote.id, card.id, origem, lote.ano, idOrgao, lote.leitor);
+  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, origem, lote.ano, idOrgao, lote.leitor, card.removidos, contagem) as never);
+  await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: liquidações do órgão ${idOrgao} da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}, ${contagem.fora} sem o empenho no card (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}: liquidações do órgão ${idOrgao} da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}, ${contagem.fora} sem o empenho no card de origem (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }

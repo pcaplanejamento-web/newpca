@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.209.0",
+    data: "2026-10-24",
+    titulo: "Liquidações em tela própria",
+    mudancas: [
+      { tipo: "novo", area: "Liquidações", texto: "Nova tela Liquidações, com os mesmos cards de Empenhos: cada card importa as liquidações da Centi com a própria configuração, a tabela, a importação conferida e o histórico.", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Liquidações", texto: "Cada card de liquidações lê os empenhos de um card de empenhos (escolhido na Configuração): a liquidação só entra quando o empenho está lá e segue a unidade dele. A aba Vínculos mostra os vínculos desse card.", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Liquidações", texto: "Atualização automática das liquidações: no horário do card, lê os órgãos da Centi um após o outro, com a mesma conferência e as mesmas regras de queda.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Administração", texto: "Liquidações tem permissão própria nos papéis e nos módulos; quem já via Empenhos passou a ver Liquidações com as mesmas ações.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "melhoria", area: "Empenhos", texto: "As liquidações saíram de dentro dos cards de empenhos; as já importadas foram para um card novo em Liquidações.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.208.0",
     data: "2026-10-24",
     titulo: "Liquidações nos cards de empenhos",

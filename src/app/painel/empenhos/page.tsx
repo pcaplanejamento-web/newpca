@@ -10,6 +10,6 @@ export const dynamic = "force-dynamic";
 export default async function EmpenhosPage() {
   const r = await acessoPagina("empenhos");
   if (r.bloqueio) return r.bloqueio;
-  const cards = await listarCards(await escopoDosEmpenhos());
-  return <EmpenhosView cards={cards} podeCriar={r.pode.configurar} />;
+  const cards = await listarCards(await escopoDosEmpenhos(), "empenhos");
+  return <EmpenhosView tipo="empenhos" cards={cards} podeCriar={r.pode.configurar} />;
 }

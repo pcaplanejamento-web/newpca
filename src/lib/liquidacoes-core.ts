@@ -122,3 +122,24 @@ export function orgaosCentiDoCard(destinos: readonly { orgaoId: number }[], idCe
 
 /** Uma liquidação com valor negativo ou acima disto é SUSPEITA (erro de leitura) — a conclusão não promove o lote. */
 export const LIMITE_VALOR_LIQUIDACAO = 1_000_000_000;
+
+/** Um lote de liquidações do card (a rodada da atualização automática): id (crescente), ano e órgão da Centi. */
+export type LoteDaRodada = { id: number; ano: number; idOrgaoCenti: number | null };
+
+/**
+ * A RODADA da atualização automática de um card de liquidações: a API pede um órgão por vez, então uma atualização é uma
+ * sequência de lotes (um por órgão, na ordem). A rodada começa pelo 1º órgão; enquanto houver órgão do MESMO ano sem lote
+ * depois do lote do 1º, a rodada CONTINUA por ele (sem esperar a frequência). null = nenhuma rodada em curso (a próxima
+ * começa quando o card estiver na hora).
+ */
+export function proximoOrgaoDaRodada(lotes: readonly LoteDaRodada[], orgaos: readonly number[]): { ano: number; idOrgao: number } | null {
+  if (!orgaos.length) return null;
+  const ordem = [...lotes].sort((a, b) => b.id - a.id);
+  const inicio = ordem.find((l) => l.idOrgaoCenti === orgaos[0]);
+  if (!inicio) return null;
+  for (const o of orgaos.slice(1)) {
+    const ultimo = ordem.find((l) => l.idOrgaoCenti === o && l.ano === inicio.ano);
+    if (!ultimo || ultimo.id < inicio.id) return { ano: inicio.ano, idOrgao: o };
+  }
+  return null;
+}

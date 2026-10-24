@@ -2180,6 +2180,10 @@ export const empenhoCards = sqliteTable("empenho_cards", {
   vinculosEm: text("vinculos_em"),
   /** Quando a Configuração foi confirmada (migração `0144`) — sem ela, nada é importado. */
   configuradoEm: text("configurado_em"),
+  /** O TIPO do card (migração `0146`): `empenhos` | `liquidacoes` (a tela Liquidações). */
+  tipo: text("tipo").notNull().default("empenhos"),
+  /** No card de LIQUIDAÇÕES: o card de EMPENHOS de onde vêm os empenhos (e os vínculos). */
+  origemId: integer("origem_id").references((): AnySQLiteColumn => empenhoCards.id, { onDelete: "set null" }),
   criadoPor: text("criado_por").notNull().default(""),
   criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),

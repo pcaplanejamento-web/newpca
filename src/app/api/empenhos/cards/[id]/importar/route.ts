@@ -1,8 +1,9 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { anosDoCard, pendenciasDoCard } from "@/lib/empenho-cards-core";
-import { getCard, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
+import { anosDoCard, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
+import { orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
+import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { LEITOR_EMPENHOS } from "@/lib/empenhos-core";
@@ -13,27 +14,22 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-async function doCard(ctx: { params: Promise<{ id: string }> }) {
-  const id = intId((await ctx.params).id);
-  if (!id) return { resp: erro("ID inválido.") };
-  const card = await getCard(id);
-  if (!card) return { resp: erro("Card não encontrado.", 404) };
-  return { card };
-}
 
 /** Os últimos lotes do card (o histórico da importação) + o que está lendo agora; com `?lote=`, os PASSOS daquele lote. */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAcesso("empenhos", "importar");
+  const g = await exigirSessao();
   if ("erro" in g) return g.erro;
-  const a = await doCard(ctx);
+  const a = await cardDaRota(ctx);
   if ("resp" in a) return a.resp;
+  const negado = recusa(g.acesso, telaDoCard(a.card), "importar");
+  if (negado) return negado;
   const loteId = intId(new URL(req.url).searchParams.get("lote") ?? "");
   if (loteId) {
     const lote = await getLote(loteId, a.card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
-  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: await orgaosLiquidacao(a.card.id), emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
+  return ok({ lotes: await listarLotes(a.card.id), orgaosLiquidacao: await orgaosLiquidacao(a.card), emAndamento: await loteEmAndamento(a.card.id), desatualizados: await anosDesatualizados(a.card.id), leitor: LEITOR_EMPENHOS });
 }
 
 /**
@@ -42,10 +38,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
  * para a tabela final — senão fecha como parcial, sem tocar nela · `cancelar` fecha sem promover.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAcesso("empenhos", "importar");
+  const g = await exigirSessao();
   if ("erro" in g) return g.erro;
-  const a = await doCard(ctx);
+  const a = await cardDaRota(ctx);
   if ("resp" in a) return a.resp;
+  const negado = recusa(g.acesso, telaDoCard(a.card), "importar");
+  if (negado) return negado;
   const { card } = a;
   const p = await parseCorpo(importarCardSchema, req);
   if ("resp" in p) return p.resp;
@@ -57,14 +55,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!anos.includes(corpo.ano)) return erro(`O ano ${corpo.ano} está fora dos anos deste card (Configuração).`, 422);
     // A CONFIGURAÇÃO vem antes de qualquer importação: o catálogo ("Buscar na Centi") exige a Configuração confirmada;
     // os empenhos, também os vínculos.
-    const falta = pendenciasDoCard(card, (await vinculosDoCard(card.id)).length).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
+    // O MODO segue o tipo do card: no de liquidações, só liquidações; no de empenhos, os empenhos ou o catálogo.
+    if ((corpo.modo === "liquidacoes") !== (card.tipo === "liquidacoes")) return erro(card.tipo === "liquidacoes" ? "Este card importa liquidações." : "Liquidações se importam num card de liquidações.", 422);
+    const vinculos = (await vinculosDoCard(card.origemId ?? card.id)).length;
+    const falta = pendenciasDoCard(card, card.tipo === "liquidacoes" && card.origemId == null ? 0 : vinculos).filter((x) => corpo.modo !== "unidades" || x.aba === "configuracao");
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
     // LIQUIDAÇÕES: um lote por ÓRGÃO da Centi — só os dos destinos dos vínculos (o "ID na Centi" do órgão).
     if (corpo.modo === "liquidacoes") {
-      const { orgaos } = await orgaosLiquidacao(card.id);
-      if (!corpo.idOrgao || !orgaos.some((o) => o.id === corpo.idOrgao)) return erro("Órgão da Centi fora dos órgãos dos vínculos deste card (o ID na Centi do órgão).", 422);
+      const { orgaos } = await orgaosLiquidacao(card);
+      if (!corpo.idOrgao || !orgaos.some((o) => o.id === corpo.idOrgao)) return erro("Órgão da Centi fora dos órgãos dos vínculos do card de empenhos de origem (o ID na Centi do órgão).", 422);
     }
     return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, corpo.modo === "liquidacoes" ? (corpo.idOrgao ?? null) : null) });
   }
@@ -110,10 +111,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
  * ficam); `{lote, passos}` = passos de uma importação (a que ainda lê é recontada; o período volta a faltar).
  */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAcesso("empenhos", "excluir");
+  const g = await exigirSessao();
   if ("erro" in g) return g.erro;
-  const a = await doCard(ctx);
+  const a = await cardDaRota(ctx);
   if ("resp" in a) return a.resp;
+  const negado = recusa(g.acesso, telaDoCard(a.card), "excluir");
+  if (negado) return negado;
   const { card } = a;
   const p = await parseCorpo(excluirImportacaoSchema, req);
   if ("resp" in p) return p.resp;

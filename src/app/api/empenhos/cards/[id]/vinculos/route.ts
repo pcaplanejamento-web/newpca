@@ -1,8 +1,9 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirSessao, recusa } from "@/lib/api-auth";
+import { cardDaRota } from "@/lib/empenho-card-rota";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { motivoVinculosInvalidos } from "@/lib/empenho-cards-core";
-import { cadastroDaRegra, getCard, vinculosDoCard } from "@/lib/empenho-cards";
+import { motivoVinculosInvalidos, telaDoCard } from "@/lib/empenho-cards-core";
+import { cadastroDaRegra, vinculosDoCard } from "@/lib/empenho-cards";
 import { comandosGravarVinculos } from "@/lib/empenho-cards-sql";
 import { loteEmAndamento } from "@/lib/empenhos";
 import { vinculosCardSchema } from "@/lib/empenho-cards-validation";
@@ -15,12 +16,15 @@ export const dynamic = "force-dynamic";
  * lote atômico: o empenho que fica sem vínculo SAI do banco e os demais acompanham o órgão/unidade.
  */
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAcesso("empenhos", "configurar");
+  const g = await exigirSessao();
   if ("erro" in g) return g.erro;
-  const id = intId((await ctx.params).id);
-  if (!id) return erro("ID inválido.");
-  const card = await getCard(id);
-  if (!card) return erro("Card não encontrado.", 404);
+  const a = await cardDaRota(ctx);
+  if ("resp" in a) return a.resp;
+  const { card } = a;
+  const id = card.id;
+  const negado = recusa(g.acesso, telaDoCard(card), "configurar");
+  if (negado) return negado;
+  if (card.tipo !== "empenhos") return erro("O card de liquidações usa os vínculos do card de empenhos de origem — edite-os lá.", 422);
   const p = await parseCorpo(vinculosCardSchema, req);
   if ("resp" in p) return p.resp;
   const motivo = motivoVinculosInvalidos(p.data.vinculos, await cadastroDaRegra());

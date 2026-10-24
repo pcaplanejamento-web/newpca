@@ -1,16 +1,15 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { EmpenhoCardConfig } from "@/components/EmpenhoCardConfig";
 import { EmpenhoCardImportacao } from "@/components/EmpenhoCardImportacao";
-import { EmpenhoCardLiquidacoes } from "@/components/EmpenhoCardLiquidacoes";
 import { type AbaCard, EmpenhoCardView } from "@/components/EmpenhoCardView";
 import { EmpenhoCardVinculos } from "@/components/EmpenhoCardVinculos";
 import { EmpenhosTabela } from "@/components/EmpenhosTabela";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { carregarEdicoes } from "@/lib/edicoes-tabela";
-import { anosDoCard } from "@/lib/empenho-cards-core";
-import { cadastroParaVinculos, catalogoCenti, listarCards, vinculosDoCard } from "@/lib/empenho-cards";
+import { anosDoCard, rotaDoCard } from "@/lib/empenho-cards-core";
+import { cadastroParaVinculos, catalogoCenti, getCard, listarCards, vinculosDoCard } from "@/lib/empenho-cards";
 import { anosEmpenhos, escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { anoEscolhido, chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
 import { dataIsoBrasilia } from "@/lib/format";
@@ -28,9 +27,14 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id < 1) notFound();
   const [sp, escopo] = await Promise.all([searchParams, escopoDosEmpenhos()]);
-  const [card] = await listarCards(escopo, id);
-  if (!card) notFound();
-  const permitidas: AbaCard[] = ["empenhos", "liquidacoes", "vinculos", ...(pode.importar ? (["importacao"] as const) : []), ...(pode.configurar ? (["configuracao"] as const) : [])];
+  const [card] = await listarCards(escopo, "empenhos", id);
+  if (!card) {
+    // Um card de LIQUIDAÇÕES aberto pelo endereço de empenhos vai à tela dele.
+    const outro = await getCard(id);
+    if (outro?.tipo === "liquidacoes") redirect(rotaDoCard(outro, sp.aba));
+    notFound();
+  }
+  const permitidas: AbaCard[] = ["empenhos", "vinculos", ...(pode.importar ? (["importacao"] as const) : []), ...(pode.configurar ? (["configuracao"] as const) : [])];
   const aba: AbaCard = permitidas.includes(sp.aba as AbaCard) ? (sp.aba as AbaCard) : "empenhos";
   let conteudo: ReactNode;
   if (aba === "vinculos") {
@@ -48,8 +52,6 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
         configurado={!!card.configuradoEm}
       />
     );
-  } else if (aba === "liquidacoes") {
-    conteudo = <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} cardId={id} nome={card.nome} />;
   } else if (aba === "importacao") {
     conteudo = <EmpenhoCardImportacao card={card} podeExcluir={pode.excluir} />;
   } else if (aba === "configuracao") {

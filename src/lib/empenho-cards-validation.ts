@@ -20,12 +20,17 @@ export const cardEmpenhoSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
+  /** Só no card de LIQUIDAÇÕES: o card de empenhos de origem (null = ainda não escolhido). */
+  origemId: z.number().int().positive().nullable(),
 });
 
-/** O card NOVO: o nome e, opcional, o card de onde copiar os vínculos (o resto começa no padrão). */
+/** O card NOVO: o tipo (empenhos | liquidações), o nome e, opcional, o card de onde copiar os vínculos (empenhos) ou o card
+ * de empenhos de ORIGEM (liquidações). O resto começa no padrão. */
 export const criarCardSchema = z.strictObject({
+  tipo: z.enum(["empenhos", "liquidacoes"]).optional(),
   nome: z.string().trim().min(1).max(LIMITES_CARD.nome),
   copiarDe: z.number().int().positive().nullable().optional(),
+  origemId: z.number().int().positive().nullable().optional(),
 });
 
 /** Os VÍNCULOS do card — a lista INTEIRA (a régua completa é `motivoVinculosInvalidos`, core). */

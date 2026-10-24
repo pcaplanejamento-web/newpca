@@ -83,7 +83,8 @@ const COLUNAS: Column<Liquidacao>[] = [
 ];
 
 /**
- * A aba LIQUIDAÇÕES de um card: o que está gravado (só as liquidações de empenho do card — o vínculo é o do empenho),
+ * A aba LIQUIDAÇÕES de um card de liquidações: o que está gravado (só as liquidações de empenho do card de origem — o vínculo
+ * é o do empenho),
  * por ano, no escopo da pessoa. Os números do topo acompanham os filtros; "Removidas na Centi" no rodapé.
  */
 export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome: string }) {
@@ -153,10 +154,10 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" onClick={() => void carregar(recorte)} />}
         <Ajuda titulo="Liquidações do card" botao="sm">
-          <p>As liquidações que o card importou da Centi (aba Importação → Liquidações) — exatamente o que está gravado. Só leitura.</p>
+          <p>As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
           <p>
-            Só entra a liquidação cujo <strong>empenho</strong> está no card: ela segue o vínculo do empenho (a unidade). Por isso você vê as liquidações
-            dos empenhos da sua unidade.
+            Só entra a liquidação cujo <strong>empenho</strong> está no card de empenhos de origem: ela segue o vínculo do empenho (a unidade). Por
+            isso você vê as liquidações dos empenhos da sua unidade.
           </p>
           <p>Os números do topo acompanham os filtros da tabela. “Removidas na Centi” (rodapé) = as que a Centi não traz mais (pela regra do card).</p>
         </Ajuda>
@@ -165,7 +166,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome }: { cardId: number; nome:
       {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
 
       {anos && !anos.length ? (
-        <Callout kind="info">Nenhuma liquidação importada neste card ainda. Importe os empenhos e depois as liquidações na aba Importação.</Callout>
+        <Callout kind="info">Nenhuma liquidação importada neste card ainda. Importe os empenhos no card de origem e depois as liquidações na aba Importação.</Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (

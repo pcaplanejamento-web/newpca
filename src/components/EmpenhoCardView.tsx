@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { useAlturaTela } from "./AlturaCheia";
-import { estadoCard, pendenciasDoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
+import { estadoCard, pendenciasDoCard, type ResumoCard, rotaDoCard, rotuloAnos } from "@/lib/empenho-cards-core";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
@@ -18,7 +18,8 @@ import { toast } from "./Toast";
 export type AbaCard = "empenhos" | "liquidacoes" | "vinculos" | "importacao" | "configuracao";
 
 /**
- * O ESPAÇO de um CARD de empenhos (`/painel/empenhos/[id]`) — no padrão da tela do orçamento: UMA linha de cabeçalho
+ * O ESPAÇO de um CARD de empenhos (`/painel/empenhos/[id]`) ou de liquidações (`/painel/liquidacoes/[id]` — a aba Liquidações
+ * no lugar de Empenhos) — no padrão da tela do orçamento: UMA linha de cabeçalho
  * (voltar · nome · estado · indicadores · excluir — só o ícone) e a barra das abas **Empenhos · Vínculos · Importação ·
  * Configuração** com as ferramentas da aba à direita (`AbasEspaco` + `FerramentasAba`; o servidor monta SÓ a aba ativa).
  */
@@ -40,18 +41,23 @@ export function EmpenhoCardView({
   useOndeDetalhe(c.nome);
   const [excluindo, setExcluindo] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
+  const liq = c.tipo === "liquidacoes";
+  const lista = `/painel/${c.tipo}`;
   const e = estadoCard(c, c.lendo);
   const pendencias = pendenciasDoCard(c, c.vinculos);
-  // A ORDEM obrigatória: Configuração → Vínculos → Importação (nada é importado antes das duas primeiras).
+  // A ORDEM obrigatória: Configuração → Vínculos → Importação (nada é importado antes das duas primeiras). No card de
+  // liquidações, os vínculos são os do card de empenhos de origem.
   const etapas = [
-    { aba: "configuracao" as const, rotulo: "1. Configuração", feito: !!c.configuradoEm },
-    { aba: "vinculos" as const, rotulo: "2. Vínculos", feito: c.vinculos > 0 },
+    { aba: "configuracao" as const, rotulo: "1. Configuração", feito: !!c.configuradoEm && (!liq || c.origemId != null) },
+    { aba: "vinculos" as const, rotulo: liq ? "2. Vínculos (do card de empenhos)" : "2. Vínculos", feito: c.vinculos > 0 },
   ];
 
   async function excluir() {
     const ok = await confirmar({
       titulo: `Excluir o card "${c.nome}"?`,
-      texto: `Os ${num(c.empenhos)} empenhos gravados, os ${num(c.vinculos)} vínculos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`,
+      texto: liq
+        ? `As ${num(c.empenhos)} liquidações gravadas e o histórico das importações vão junto. Esta ação não pode ser desfeita.`
+        : `Os ${num(c.empenhos)} empenhos gravados (e as liquidações deles nos cards de liquidações), os ${num(c.vinculos)} vínculos e o histórico das importações vão junto. Esta ação não pode ser desfeita.`,
       confirmar: "Excluir",
       perigo: true,
     });
@@ -60,7 +66,7 @@ export function EmpenhoCardView({
     const r = await fetch(`/api/empenhos/cards/${c.id}`, { method: "DELETE" }).catch(() => null);
     if (r?.ok) {
       toast.success(`Card "${c.nome}" excluído.`);
-      router.push("/painel/empenhos");
+      router.push(lista);
       router.refresh();
       return;
     }
@@ -69,15 +75,16 @@ export function EmpenhoCardView({
   }
 
   const indicadores = [
-    { rotulo: "Empenhos", valor: num(c.empenhos) },
-    { rotulo: "Empenhado", valor: brl(c.soma) },
+    ...(liq ? [{ rotulo: "Empenhos de", valor: c.origemNome ?? "—" }] : []),
+    { rotulo: liq ? "Liquidações" : "Empenhos", valor: num(c.empenhos) },
+    { rotulo: liq ? "Liquidado" : "Empenhado", valor: brl(c.soma) },
     { rotulo: "Anos", valor: rotuloAnos(c.anos) },
     { rotulo: "Última leitura", valor: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—" },
   ];
   const opcoes = (
     [
       { value: "empenhos", label: "Empenhos" },
-      { value: "liquidacoes", label: "Liquidações", curto: "Liquid." },
+      { value: "liquidacoes", label: "Liquidações" },
       { value: "vinculos", label: "Vínculos" },
       { value: "importacao", label: "Importação", curto: "Importar" },
       { value: "configuracao", label: "Configuração", curto: "Config." },
@@ -90,8 +97,8 @@ export function EmpenhoCardView({
       <div className="linha-topico flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
-            href="/painel/empenhos"
-            aria-label="Voltar para Empenhos"
+            href={lista}
+            aria-label={liq ? "Voltar para Liquidações" : "Voltar para Empenhos"}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
           >
             <IconChevronLeft className="h-4 w-4" />
@@ -132,7 +139,7 @@ export function EmpenhoCardView({
           <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
           <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
             {etapas.map((et) => (
-              <Link key={et.aba} href={`/painel/empenhos/${c.id}?aba=${et.aba}`} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
+              <Link key={et.aba} href={et.aba === "vinculos" && liq && c.origemId != null && c.configuradoEm ? rotaDoCard({ id: c.origemId, tipo: "empenhos" }, "vinculos") : rotaDoCard(c, et.aba)} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
                 {et.feito && <IconCheck className="h-4 w-4" />}
                 {et.rotulo}
               </Link>

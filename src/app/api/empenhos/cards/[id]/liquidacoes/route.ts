@@ -1,4 +1,6 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirSessao, recusa } from "@/lib/api-auth";
+import { cardDaRota } from "@/lib/empenho-card-rota";
+import { telaDoCard } from "@/lib/empenho-cards-core";
 import { escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { getDb } from "@/lib/db";
 import { erro, ok } from "@/lib/http";
@@ -11,10 +13,13 @@ export const dynamic = "force-dynamic";
  * linhas do ano em tuplas — o texto montado pelo banco, devolvido como está. O escopo é o do EMPENHO de cada liquidação.
  */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const g = await exigirAcesso("empenhos", "visualizar");
+  const g = await exigirSessao();
   if ("erro" in g) return g.erro;
-  const card = intId((await ctx.params).id);
-  if (!card) return erro("ID inválido.");
+  const a = await cardDaRota(ctx);
+  if ("resp" in a) return a.resp;
+  const negado = recusa(g.acesso, telaDoCard(a.card), "visualizar");
+  if (negado) return negado;
+  const card = a.card.id;
   const u = new URL(req.url);
   const escopo = await escopoDosEmpenhos();
   if (!u.searchParams.has("ano")) return ok({ anos: await anosLiquidacoes(card, escopo, getDb()) });

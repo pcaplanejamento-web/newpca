@@ -4593,9 +4593,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     só é guardada a liquidação cujo empenho (órgão gestor + número, de qualquer ano — restos a pagar) está no card
     (`empenhosNoCard`), e o vínculo é sempre o do empenho. Builders `liquidacoes-sql.ts` (testados no D1 real —
     `tests/liquidacoes.test.ts`); o motor (`lerPaginaDoLote`/`concluirLoteEmpenhos` → `concluirLiquidacoes`) ramifica pelo
-    `modo`. Tela: Importação com `Segmented` Empenhos | Liquidações (os órgãos um após o outro) e a aba **Liquidações**
-    (`EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes`, as tuplas montadas pelo banco —
-    `liquidacoes-tela.ts`; escopo = o do empenho). A atualização automática segue só com os empenhos.
+    `modo`. A tabela: `EmpenhoCardLiquidacoes` → `GET /api/empenhos/cards/[id]/liquidacoes` (as tuplas montadas pelo banco —
+    `liquidacoes-tela.ts`; escopo = o do empenho).
+  - **LIQUIDAÇÕES EM TELA PRÓPRIA (v1.209.0, migração `0146` — `empenho_cards.tipo` empenhos|liquidacoes + `origem_id` set
+    null):** tela de módulo **`/painel/liquidacoes`** (`ABA_KEYS` `liquidacoes`, `IconLiquidacao`, as MESMAS ações de Empenhos
+    no papel — a `0146` copiou as capacidades de `empenhos`, deu a tela aos grupos com Empenhos nas avulsas e a pôs ao lado de
+    Empenhos nos módulos do ADM). O card de liquidações mora na MESMA tabela `empenho_cards` (`tipo`), com a ORIGEM = o card de
+    EMPENHOS de onde vêm os empenhos e os vínculos (escolhida no card novo ou na Configuração — `motivoCardInvalido(e, tipo)`
+    a exige; `pendenciasDoCard` = Configuração com origem + a origem com vínculos). Tudo o que Empenhos tem, pelos MESMOS
+    componentes com o `tipo`: `EmpenhosView tipo` (lista em `CartaoFinanceiro` + "Novo card" com a origem — `cardsDeEmpenhos`),
+    `EmpenhoCardView` (abas **Liquidações · Vínculos · Importação · Configuração**; os Vínculos = os da origem, só leitura,
+    `EmpenhoCardVinculos podeEditar={false}` + os órgãos da Centi pedidos), `EmpenhoCardImportacao` (o tipo do card decide;
+    sem o `Segmented`), `EmpenhoCardConfig origens` e o Testar (com o 1º órgão da origem como `idOrgao`). A liquidação fica no
+    PRÓPRIO card (`liquidacoes.card_id`) e o empenho vem da ORIGEM (`empenhosNoCard(db, origem)`, `empenhoDaLinha(origem)`,
+    `contagemLiquidacoes`/`comandosPromoverLiquidacoes(…, card, origem, …)`); o endpoint é o do card (`getliquidacoes`). As
+    rotas `/api/empenhos/cards/[id]/*` conferem a TELA do card (`cardDaRota` + `recusa(g.acesso, telaDoCard(card), ação)`,
+    mapa `recurso(CARDS, …)`); o POST de card cria pela tela do tipo; o modo do lote tem de bater com o tipo (422).
+    `listarCards(escopo, tipo, id?)` (no de liquidações, os números das liquidações e os vínculos da origem); o endereço do
+    outro tipo redireciona (`rotaDoCard`). Excluir o card de empenhos leva as liquidações dos empenhos dele (cascata) e deixa os
+    cards de liquidações sem origem. **Atualização automática:** os cards de liquidações ligados entram em `cardsAtivos`; uma
+    atualização é uma RODADA — um lote por órgão da Centi, um após o outro (`proximoOrgaoDaRodada`, puro e testado: a rodada
+    começa pelo 1º órgão na hora do card e continua sem esperar a frequência). A `0146` moveu as liquidações já importadas
+    (v1.208.0) para um card novo "<nome> — liquidações" de cada card de empenhos.
   - **Atualização automática (`empenhos-auto.ts`, gatilho `4-59/5` → `POST /api/integracoes/empenhos/cron`):** por card
     LIGADO (`cardsAtivos`), continua o lote que lê ou, na hora (`cardNaHora`: horário de Brasília, dia útil, frequência
     desde a última leitura), cria o do ano da vez (`anoDaVez` sobre `anosDoCard`, `ultimaLeituraPorAno(card)`); 3 páginas

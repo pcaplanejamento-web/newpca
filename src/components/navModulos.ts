@@ -1,5 +1,5 @@
 import { ABAS, type AbaKey } from "@/lib/abas";
-import { IconBox, IconCalendar, IconClipboard, IconDocumentos, IconEmpenho, IconKanban, IconLayers, IconVerificacao, IconWallet } from "./icons";
+import { IconBox, IconCalendar, IconClipboard, IconDocumentos, IconEmpenho, IconKanban, IconLayers, IconLiquidacao, IconVerificacao, IconWallet } from "./icons";
 
 const ICONE: Record<AbaKey, typeof IconClipboard> = {
   dfd: IconClipboard,
@@ -11,6 +11,7 @@ const ICONE: Record<AbaKey, typeof IconClipboard> = {
   verificacao: IconVerificacao,
   documentos: IconDocumentos,
   empenhos: IconEmpenho,
+  liquidacoes: IconLiquidacao,
 };
 
 /** Os MÓDULOS na navegação (sidebar e barra inferior) — rota, rótulo e ícone de cada aba, na ordem de `ABAS` (fonte

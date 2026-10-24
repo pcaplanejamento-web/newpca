@@ -1,7 +1,7 @@
 import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { empenhoCards, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, type ResumoCard, type VinculoCard } from "./empenho-cards-core";
+import { type CardEmpenho, type EdicaoCard, lerAnos, lerRegraRemovidos, lerTipoCard, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
 import { comandosCriarCard, consultaCatalogo, consultaVinculosCard } from "./empenho-cards-sql";
 import type { EscopoEmpenhos } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
@@ -13,28 +13,38 @@ import { ORDEM_ORGAOS } from "./orgaos";
 type Linha = typeof empenhoCards.$inferSelect;
 
 function paraCard(l: Linha): CardEmpenho {
-  return { ...l, anos: lerAnos(l.anos), removidos: lerRegraRemovidos(l.removidos) };
+  return { ...l, tipo: lerTipoCard(l.tipo), anos: lerAnos(l.anos), removidos: lerRegraRemovidos(l.removidos) };
 }
 
 /**
- * Os cards com os números do que está gravado (os empenhos vigentes DO ESCOPO da pessoa e a soma empenhada), quantos
- * vínculos e se há uma importação lendo agora.
+ * Os cards de UM TIPO com os números do que está gravado (no ESCOPO da pessoa): nos de empenhos, os empenhos vigentes e a
+ * execução; nos de liquidações, as liquidações vigentes (o escopo é o do empenho de cada uma). Quantos vínculos (no de
+ * liquidações, os do card de empenhos de origem) e se há uma importação lendo agora.
  */
-export async function listarCards(escopo: EscopoEmpenhos, id?: number): Promise<ResumoCard[]> {
+export async function listarCards(escopo: EscopoEmpenhos, tipo: TipoCard, id?: number): Promise<ResumoCard[]> {
   const so = escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, "e.")], sql.raw(""));
+  const doId = id == null ? sql`` : sql` AND x."card_id" = ${id}`;
   const db = getDb();
   const [l, somas] = await Promise.all([
     db
       .select({
         card: empenhoCards,
-        vinculos: sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
+        vinculos: sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = IFNULL("empenho_cards"."origem_id", "empenho_cards"."id"))`,
         lendo: sql<number>`EXISTS (SELECT 1 FROM "centi_lotes" l WHERE l."card_id" = "empenho_cards"."id" AND l."estado" = 'lendo')`,
+        origemNome: sql<string | null>`(SELECT o."nome" FROM "empenho_cards" o WHERE o."id" = "empenho_cards"."origem_id")`,
       })
       .from(empenhoCards)
-      .where(id == null ? undefined : eq(empenhoCards.id, id))
+      .where(and(eq(empenhoCards.tipo, tipo), id == null ? undefined : eq(empenhoCards.id, id)))
       .orderBy(asc(empenhoCards.nome), asc(empenhoCards.id)),
-    // UMA agregação para todos os cards (a execução do que está gravado, no escopo da pessoa).
-    db.all<{ c: number; n: number; emp: number; anu: number; liq: number; pag: number; sal: number; forn: number; ges: number; uo: number; ac: number }>(sql`
+    // UMA agregação para todos os cards do tipo (o que está gravado, no escopo da pessoa).
+    tipo === "liquidacoes"
+      ? db.all<{ c: number; n: number; emp: number; anu: number; liq: number; pag: number; sal: number; forn: number; ges: number; uo: number; ac: number }>(sql`
+      SELECT x."card_id" AS c, COUNT(*) AS n, IFNULL(SUM(x."valor"), 0) AS emp, IFNULL(SUM(x."valor_anulado"), 0) AS anu,
+        IFNULL(SUM(x."valor_liquido"), 0) AS liq, IFNULL(SUM(x."valor_pago"), 0) AS pag, IFNULL(SUM(x."saldo"), 0) AS sal,
+        COUNT(DISTINCT x."cpf_cnpj") AS forn, COUNT(DISTINCT x."orgao") AS ges, COUNT(DISTINCT e."unidade_orcamentaria") AS uo,
+        COUNT(DISTINCT x."empenho_id") AS ac
+      FROM "liquidacoes" x JOIN "empenhos" e ON e."id" = x."empenho_id" WHERE x."removido_em" IS NULL${doId}${so} GROUP BY x."card_id"`)
+      : db.all<{ c: number; n: number; emp: number; anu: number; liq: number; pag: number; sal: number; forn: number; ges: number; uo: number; ac: number }>(sql`
       SELECT e."card_id" AS c, COUNT(*) AS n, IFNULL(SUM(e."valor_empenhado"), 0) AS emp, IFNULL(SUM(e."valor_anulado"), 0) AS anu,
         IFNULL(SUM(e."valor_liquidado"), 0) AS liq, IFNULL(SUM(e."valor_pago"), 0) AS pag, IFNULL(SUM(e."saldo_pagar"), 0) AS sal,
         COUNT(DISTINCT e."cpf_cnpj") AS forn, COUNT(DISTINCT e."orgao_gestor") AS ges, COUNT(DISTINCT e."unidade_orcamentaria") AS uo,
@@ -48,6 +58,7 @@ export async function listarCards(escopo: EscopoEmpenhos, id?: number): Promise<
       ...paraCard(x.card),
       vinculos: Number(x.vinculos),
       lendo: !!Number(x.lendo),
+      origemNome: x.origemNome ?? null,
       empenhos: Number(s?.n ?? 0),
       soma: Number(s?.emp ?? 0),
       anulado: Number(s?.anu ?? 0),
@@ -67,7 +78,8 @@ export async function getCard(id: number): Promise<CardEmpenho | null> {
   return l ? paraCard(l) : null;
 }
 
-/** Os cards ligados (a atualização automática) — só os CONFIGURADOS e com vínculos (`pendenciasDoCard`). */
+/** Os cards ligados (a atualização automática) — só os CONFIGURADOS e com vínculos (`pendenciasDoCard`; no de
+ * liquidações, com o card de origem e os vínculos dele). */
 export async function cardsAtivos(): Promise<CardEmpenho[]> {
   const l = await getDb()
     .select()
@@ -76,7 +88,8 @@ export async function cardsAtivos(): Promise<CardEmpenho[]> {
       and(
         eq(empenhoCards.ativa, true),
         isNotNull(empenhoCards.configuradoEm),
-        sql`EXISTS (SELECT 1 FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")`,
+        sql`("empenho_cards"."tipo" = 'empenhos' OR "empenho_cards"."origem_id" IS NOT NULL)`,
+        sql`EXISTS (SELECT 1 FROM "empenho_card_vinculos" v WHERE v."card_id" = IFNULL("empenho_cards"."origem_id", "empenho_cards"."id"))`,
       ),
     )
     .orderBy(asc(empenhoCards.id));
@@ -85,10 +98,10 @@ export async function cardsAtivos(): Promise<CardEmpenho[]> {
 
 const valoresDaEdicao = (e: EdicaoCard) => ({ ...e, anos: JSON.stringify(e.anos) });
 
-/** Cria o card (e copia os vínculos de `copiarDe`, quando escolhido) — devolve o id. */
-export async function criarCard(e: EdicaoCard, copiarDe: number | null, quem: string): Promise<number> {
+/** Cria o card do tipo (e copia os vínculos de `copiarDe`, quando escolhido — só nos de empenhos) — devolve o id. */
+export async function criarCard(e: EdicaoCard, copiarDe: number | null, quem: string, tipo: TipoCard = "empenhos"): Promise<number> {
   const db = getDb();
-  const r = (await db.batch(comandosCriarCard(db, { ...valoresDaEdicao(e), criadoPor: quem }, copiarDe) as never)) as { id: number }[][];
+  const r = (await db.batch(comandosCriarCard(db, { ...valoresDaEdicao(e), criadoPor: quem, tipo }, tipo === "empenhos" ? copiarDe : null) as never)) as { id: number }[][];
   return Number(r[r.length - 1][0]?.id);
 }
 
@@ -97,6 +110,21 @@ export async function atualizarCard(id: number, e: EdicaoCard): Promise<void> {
     .update(empenhoCards)
     .set({ ...valoresDaEdicao(e), atualizadoEm: sql`CURRENT_TIMESTAMP`, configuradoEm: sql`CURRENT_TIMESTAMP` })
     .where(eq(empenhoCards.id, id));
+}
+
+/** Os cards de EMPENHOS (a escolha da origem de um card de liquidações): id, nome e quantos vínculos. */
+export async function cardsDeEmpenhos(): Promise<{ id: number; nome: string; vinculos: number }[]> {
+  const l = await getDb()
+    .select({ id: empenhoCards.id, nome: empenhoCards.nome, vinculos: sql<number>`(SELECT COUNT(*) FROM "empenho_card_vinculos" v WHERE v."card_id" = "empenho_cards"."id")` })
+    .from(empenhoCards)
+    .where(eq(empenhoCards.tipo, "empenhos"))
+    .orderBy(asc(empenhoCards.nome), asc(empenhoCards.id));
+  return l.map((x) => ({ ...x, vinculos: Number(x.vinculos) }));
+}
+
+/** Os cards de LIQUIDAÇÕES que leem os empenhos de um card (o aviso ao excluir o card de empenhos). */
+export async function liquidacoesDaOrigem(origemId: number): Promise<{ id: number; nome: string }[]> {
+  return getDb().select({ id: empenhoCards.id, nome: empenhoCards.nome }).from(empenhoCards).where(eq(empenhoCards.origemId, origemId));
 }
 
 /** Exclui o card — as importações, os vínculos e os empenhos dele saem junto (cascata). */
@@ -149,11 +177,12 @@ export async function cadastroDaRegra(): Promise<{ orgaos: Set<number>; unidades
 export type OrgaoLiquidacao = { id: number; nome: string };
 
 /**
- * Os ÓRGÃOS da Centi que as LIQUIDAÇÕES do card pedem (a API exige o órgão): o "ID na Centi" dos órgãos de destino dos
- * vínculos. `semId` = os órgãos de destino sem o ID cadastrado (as liquidações deles não são lidas).
+ * Os ÓRGÃOS da Centi que um card de LIQUIDAÇÕES pede (a API exige o órgão): o "ID na Centi" dos órgãos de destino dos
+ * vínculos do card de EMPENHOS de origem. `semId` = os órgãos de destino sem o ID cadastrado (não são lidos).
  */
-export async function orgaosLiquidacao(cardId: number): Promise<{ orgaos: OrgaoLiquidacao[]; semId: string[] }> {
-  const vs = await vinculosDoCard(cardId);
+export async function orgaosLiquidacao(card: Pick<CardEmpenho, "id" | "origemId">): Promise<{ orgaos: OrgaoLiquidacao[]; semId: string[] }> {
+  if (card.origemId == null) return { orgaos: [], semId: [] };
+  const vs = await vinculosDoCard(card.origemId);
   const ids = [...new Set(vs.map((v) => v.orgaoId))];
   if (!ids.length) return { orgaos: [], semId: [] };
   const os = await getDb()

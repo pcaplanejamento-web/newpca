@@ -16,7 +16,9 @@ import {
   previaPedido,
   REGRAS_REMOVIDOS,
   type RegraRemovidos,
+  rotaDoCard,
 } from "@/lib/empenho-cards-core";
+import { num } from "@/lib/format";
 import { dataIsoBrasilia } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -49,7 +51,8 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
  * curso, sem gravar nada). Edição direta, com o "(?)" em cada campo; "Salvar" na barra das abas (só com alteração) — a
  * régua é `motivoCardInvalido`, a mesma do servidor. Sair com alteração não salva avisa.
  */
-export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
+export function EmpenhoCardConfig({ card, origens = [] }: { card: CardEmpenho; /** Liquidações: os cards de empenhos (a origem). */ origens?: { id: number; nome: string; vinculos: number }[] }) {
+  const liq = card.tipo === "liquidacoes";
   const router = useRouter();
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
   const [salvando, setSalvando] = useState(false);
@@ -64,7 +67,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
     setTeste(null);
   };
 
-  const motivo = motivoCardInvalido(v);
+  const motivo = motivoCardInvalido(v, card.tipo);
   const alterado = JSON.stringify(v) !== JSON.stringify(edicaoDoCard(card));
   const previa = useMemo(() => previaPedido(v, ano), [v, ano]);
   const anosDeFato = anosDoCard(v.anos, anoAtual());
@@ -94,9 +97,11 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
       const r = await fetch(`/api/empenhos/cards/${card.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; card?: CardEmpenho };
       if (!r.ok || !j.ok || !j.card) throw new Error(j.error ?? "Erro ao salvar o card.");
-      toast.success(card.configuradoEm ? `Card "${j.card.nome}" salvo.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`);
+      toast.success(
+        card.configuradoEm ? `Card "${j.card.nome}" salvo.` : liq ? `Configuração confirmada — o card "${j.card.nome}" já pode importar as liquidações.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`,
+      );
       setV(edicaoDoCard(j.card));
-      if (!card.configuradoEm) router.push(`/painel/empenhos/${card.id}?aba=vinculos`);
+      if (!card.configuradoEm) router.push(rotaDoCard(card, liq ? "importacao" : "vinculos"));
       else router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar o card.");
@@ -139,6 +144,32 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
       {motivo && (alterado || !card.configuradoEm) && <Callout kind="danger">{motivo}</Callout>}
 
       <div className="grid grid-cols-1 gap-[var(--gap-block)] xl:grid-cols-2">
+        {liq && (
+          <SecaoBanner titulo="Empenhos de origem">
+            <SelectField
+              denso
+              label="Card de empenhos"
+              value={v.origemId == null ? "" : String(v.origemId)}
+              onChange={(e) => muda("origemId", e.target.value ? Number(e.target.value) : null)}
+              rotuloExtra={
+                <A titulo="Card de empenhos de origem">
+                  <p>
+                    A liquidação só é gravada quando o <strong>empenho</strong> dela está neste card de empenhos — e segue o vínculo dele (o órgão
+                    e a unidade do cadastro). Os órgãos da Centi pedidos são os de destino dos vínculos dele.
+                  </p>
+                  <p>Importe os empenhos antes: a liquidação de um empenho que ainda não está no card não entra.</p>
+                </A>
+              }
+            >
+              <option value="">Escolha…</option>
+              {origens.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome} ({num(o.vinculos)} vínculos)
+                </option>
+              ))}
+            </SelectField>
+          </SecaoBanner>
+        )}
         <SecaoBanner titulo="Identificação">
           <TextField denso label="Nome" value={v.nome} onChange={(e) => muda("nome", e.target.value)} maxLength={60} rotuloExtra={<A titulo="Nome">Como o card aparece na lista e no cabeçalho.</A>} />
           <ColorField label="Cor do card" value={v.cor} onChange={(cor) => muda("cor", cor)} />
@@ -195,14 +226,14 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
 
         <SecaoBanner titulo="Regras da conferência">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SelectField denso label="Queda da soma empenhada" value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<A titulo="Queda da soma">A importação que trouxer a soma empenhada do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</A>}>
+            <SelectField denso label={liq ? "Queda da soma liquidada" : "Queda da soma empenhada"} value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<A titulo="Queda da soma">A importação que trouxer a soma {liq ? "liquidada" : "empenhada"} do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</A>}>
               {OPCOES_QUEDA.map((o) => (
                 <option key={o.valor} value={o.valor}>
                   {o.rotulo}
                 </option>
               ))}
             </SelectField>
-            <SelectField denso label="Queda dos registros" value={String(v.quedaRegistros)} onChange={(e) => muda("quedaRegistros", Number(e.target.value))} rotuloExtra={<A titulo="Queda dos registros">O mesmo para o número de empenhos do ano.</A>}>
+            <SelectField denso label="Queda dos registros" value={String(v.quedaRegistros)} onChange={(e) => muda("quedaRegistros", Number(e.target.value))} rotuloExtra={<A titulo="Queda dos registros">O mesmo para o número de registros do ano.</A>}>
               {OPCOES_QUEDA.map((o) => (
                 <option key={o.valor} value={o.valor}>
                   {o.rotulo}
@@ -232,7 +263,7 @@ export function EmpenhoCardConfig({ card }: { card: CardEmpenho }) {
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.4fr_0.6fr_1fr]">
               <TextField denso label="URL base" value={v.urlBase} onChange={(e) => muda("urlBase", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="URL base">O endereço do portal da Centi. Só HTTPS do domínio centi.com.br.</A>} />
-              <TextField denso label="Endpoint" value={v.endpoint} onChange={(e) => muda("endpoint", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="Endpoint">O nome da API no portal (ex.: getempenhos).</A>} />
+              <TextField denso label="Endpoint" value={v.endpoint} onChange={(e) => muda("endpoint", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="Endpoint">O nome da API no portal (ex.: getempenhos, getliquidacoes).</A>} />
               <TextField denso label="UF" value={v.uf} onChange={(e) => muda("uf", e.target.value)} maxLength={4} autoComplete="off" rotuloExtra={<A titulo="UF">A sigla do estado no endereço (go).</A>} />
               <TextField denso label="Município" value={v.tenant} onChange={(e) => muda("tenant", e.target.value)} autoComplete="off" rotuloExtra={<A titulo="Município">O município no endereço (rioverde).</A>} />
             </div>
