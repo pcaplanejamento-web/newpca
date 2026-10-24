@@ -14,6 +14,7 @@ import {
   corpoDaPagina,
   diasDoPeriodo,
   dividirPeriodo,
+  hojeIso,
   lacunasDoAno,
   type LoteCenti,
   lerPaginaEmpenhos,
@@ -173,6 +174,16 @@ export async function fecharLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, est
 
 export type Conclusao = { estado: "promovido" | "parcial" | "unidades"; motivo?: string } | { estado: "queda"; queda: string };
 
+/** Fecha o lote como PARCIAL (nada é gravado nos empenhos) — a mesma na conclusão manual e na automática. */
+export async function fecharParcial(card: CardEmpenho, lote: LoteCenti, motivo: string, resumo: string, usuario: Ator): Promise<Conclusao> {
+  const db = getDb();
+  const quem = usuario ? "" : " (atualização automática)";
+  await db.batch(comandosFecharLote(db, lote.id, "parcial", motivo) as never);
+  await registrarLeituraCard(card.id, "parcial", lote.unicos + lote.recusados, lote.totalInformado);
+  await registrarAuditoria({ usuario, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${lote.ano}${quem}: importação PARCIAL — ${resumo}` });
+  return { estado: "parcial", motivo };
+}
+
 /**
  * CONCLUI o lote: a CONFERÊNCIA decide — todo o ano lido (nenhum período faltando), a contagem batendo com a Centi e os
  * valores no esperado — e só então PROMOVE; senão fecha como parcial (nada é gravado). A QUEDA (pelas regras do card) em
@@ -182,13 +193,9 @@ export type Conclusao = { estado: "promovido" | "parcial" | "unidades"; motivo?:
 export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
-  const parcial = async (motivo: string, resumo: string): Promise<Conclusao> => {
-    await db.batch(comandosFecharLote(db, lote.id, "parcial", motivo) as never);
-    await registrarLeituraCard(card.id, "parcial", lote.unicos + lote.recusados, lote.totalInformado);
-    await registrarAuditoria({ usuario: opcoes.usuario, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${lote.ano}${quem}: importação PARCIAL — ${resumo}` });
-    return { estado: "parcial", motivo };
-  };
-  const lacunas = lacunasDoAno(lote.ano, periodosLidos(await listarPassos(lote.id)));
+  const parcial = (motivo: string, resumo: string) => fecharParcial(card, lote, motivo, resumo, opcoes.usuario);
+  // O "hoje" é o do INÍCIO do lote: atravessar a meia-noite não cria uma lacuna nova na conclusão.
+  const lacunas = lacunasDoAno(lote.ano, periodosLidos(await listarPassos(lote.id)), hojeIso(new Date(`${lote.iniciadoEm.replace(" ", "T")}Z`)));
   if (lote.modo === "unidades") {
     // Só PUXAR o catálogo: nada é gravado nos empenhos — o lote fecha com o que foi visto.
     const msg = `Catálogo da Centi atualizado com ${lote.ano}${lacunas.length ? ` — ${lacunas.length} período(s) não lido(s)` : ""}. Nenhum empenho foi gravado.`;

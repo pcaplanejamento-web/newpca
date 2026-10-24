@@ -2,9 +2,10 @@ import { registrarAuditoria } from "./auditoria";
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
 import { anosDoCard, type CardEmpenho } from "./empenho-cards-core";
-import { cardsAtivos, registrarLeituraCard } from "./empenho-cards";
+import { cardsAtivos, } from "./empenho-cards";
 import { criarLote, getLote, listarPassos, loteEmAndamento, ultimaLeituraPorAno } from "./empenhos";
 import {
+  hojeIso,
   anoDaVez,
   CONDUTOR_AUTO,
   cardNaHora,
@@ -17,10 +18,9 @@ import {
   rotuloPeriodo,
   usaPeriodo,
 } from "./empenhos-core";
-import { concluirLoteEmpenhos, fecharLoteEmpenhos, lerPaginaDoLote, PedidoInvalido } from "./empenhos-importacao";
+import { concluirLoteEmpenhos, fecharLoteEmpenhos, fecharParcial, lerPaginaDoLote, PedidoInvalido } from "./empenhos-importacao";
 import { comandoConduzir, comandosFecharLote } from "./empenhos-sql";
 import { listarFeriados } from "./feriados";
-import { dataIsoBrasilia } from "./format";
 import { horaAgoraBrasilia } from "./tarefas-core";
 
 /**
@@ -33,7 +33,7 @@ import { horaAgoraBrasilia } from "./tarefas-core";
 export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card: number; situacao: string }[]> {
   const cards = await cardsAtivos();
   if (!cards.length) return [];
-  const hoje = dataIsoBrasilia(agora.toISOString());
+  const hoje = hojeIso(agora);
   const util = cards.some((c) => c.diasUteis) ? diaUtil(hoje, feriadosNoIntervalo(await listarFeriados(), hoje, hoje)) : true;
   const instante = { ms: agora.getTime(), hora: horaAgoraBrasilia(agora), diaUtil: util, ano: Number(hoje.slice(0, 4)) };
   const r: { card: number; situacao: string }[] = [];
@@ -102,10 +102,7 @@ async function concluir(card: CardEmpenho, lote: NonNullable<Awaited<ReturnType<
   const c = await concluirLoteEmpenhos(card, lote, { aceitarQueda: false, usuario: null });
   if (c.estado !== "queda") return c.estado;
   // A QUEDA nunca passa sozinha: o lote fecha como parcial e a pessoa confirma numa importação manual.
-  const db = getDb();
   const motivo = `${c.queda} Confirme numa importação manual (a atualização automática não aceita uma queda sozinha).`;
-  await db.batch(comandosFecharLote(db, lote.id, "parcial", motivo) as never);
-  await registrarLeituraCard(card.id, "parcial", lote.unicos + lote.recusados, lote.totalInformado);
-  await registrarAuditoria({ usuario: null, acao: "importar", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${lote.ano} (atualização automática): PARCIAL — ${motivo}` });
+  await fecharParcial(card, lote, motivo, motivo, null);
   return "parcial (queda)";
 }

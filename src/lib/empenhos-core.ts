@@ -192,9 +192,9 @@ export function anoInteiro(ano: number): Periodo {
   return { inicio: `${ano}-01-01`, fim: `${ano}-12-31` };
 }
 
-/** Hoje (AAAA-MM-DD) no horário de Brasília (UTC−3). */
-export function hojeIso(): string {
-  return new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+/** Hoje (AAAA-MM-DD) no horário de Brasília (UTC−3) — a régua ÚNICA do "hoje" dos empenhos. */
+export function hojeIso(agora: Date = new Date()): string {
+  return new Date(agora.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
 }
 
 /** O período que EXISTE do ano: 01/01 até 31/12 nos anos anteriores e até HOJE no ano atual (nada de pedir o futuro). */

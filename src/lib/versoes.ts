@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.207.1",
+    data: "2026-10-24",
+    titulo: "Auditoria dos empenhos",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "O cabeçalho do card mostra o empenhado com o valor completo (sem abreviar).", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Uma importação do ano atual que atravessa a meia-noite não fecha mais como parcial por um “dia novo” não lido: vale o dia em que ela começou.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.207.0",
     data: "2026-10-24",
     titulo: "Card de empenhos no padrão do card do orçamento",

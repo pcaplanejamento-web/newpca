@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { estadoCard, pendenciasDoCard, type ResumoCard, rotuloAnos } from "@/lib/empenho-cards-core";
-import { brlCompact, dataHoraBR, num } from "@/lib/format";
+import { brl, dataHoraBR, num } from "@/lib/format";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -69,7 +69,7 @@ export function EmpenhoCardView({
 
   const indicadores = [
     { rotulo: "Empenhos", valor: num(c.empenhos) },
-    { rotulo: "Empenhado", valor: brlCompact(c.soma) },
+    { rotulo: "Empenhado", valor: brl(c.soma) },
     { rotulo: "Anos", valor: rotuloAnos(c.anos) },
     { rotulo: "Última leitura", valor: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—" },
   ];
