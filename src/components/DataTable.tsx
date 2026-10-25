@@ -964,8 +964,8 @@ export function DataTable<R>({
 }
 
 /** O menu de FILTROS do rodapé: o funil com o número de filtros e, ao abrir, cada coluna filtrada (✕ limpa só ela),
- * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). Exportado: o MESMO resumo dos filtros
- * ligados em outras telas (ex.: o Dashboard da Execução — `titulo`, cada filtro com o valor no `header`). */
+ * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). Fora das tabelas, os filtros com visões
+ * salvas e o estado inicial do ADM ficam no `PainelFiltros`. */
 export function FiltrosAtivos({
   colunas,
   extra,

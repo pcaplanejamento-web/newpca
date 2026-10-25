@@ -300,6 +300,7 @@ import { SaudeDados } from "@/components/SaudeDados";
 import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
+import { PainelFiltros } from "@/components/PainelFiltros";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { ItemTable } from "@/components/ItemTable";
 import { PlanilhaDfds, TabelaSobrescritos } from "@/components/PlanilhaDfds";
@@ -3381,6 +3382,50 @@ function TarefasDemo() {
   );
 }
 
+const VISOES_FILTRO_DEMO = [
+  { id: 1, chave: "demo:filtros", nome: "Saúde — restos a pagar", publico: false, minha: true, autor: "Você", valor: {} },
+  { id: 2, chave: "demo:filtros", nome: "Obras do ano", publico: true, minha: false, autor: "Ana", valor: {} },
+];
+const CHIPS_DEMO = [
+  { chave: "periodo", rotulo: "Período", valores: ["2025"] },
+  { chave: "tipo", rotulo: "Tipo", valores: ["Restos a Pagar"] },
+  { chave: "unidade", rotulo: "Unidade", valores: Array.from({ length: 140 }, (_, i) => `Unidade ${i + 1}`) },
+];
+
+/** O PainelFiltros com dados de exemplo (estado local — nada é gravado). */
+function DemoPainelFiltros() {
+  const [chips, setChips] = useState(CHIPS_DEMO);
+  const [visao, setVisao] = useState<{ id: number; nome: string; alterada: boolean; minha: boolean } | null>(null);
+  return (
+    <div className="flex items-center gap-3">
+      <PainelFiltros
+        chips={chips}
+        visao={visao}
+        minhas={VISOES_FILTRO_DEMO.filter((v) => v.minha)}
+        publicas={VISOES_FILTRO_DEMO.filter((v) => !v.minha)}
+        podeModerar
+        gravando={false}
+        onTirar={(k) => setChips((l) => l.filter((c) => c.chave !== k))}
+        onLimpar={() => {
+          setChips([]);
+          setVisao(null);
+        }}
+        onTirarVisao={() => setVisao(null)}
+        onAplicar={(e) => {
+          setVisao({ id: e.id, nome: e.nome, alterada: false, minha: e.minha });
+          setChips([]);
+        }}
+        onExcluirVisao={(e) => toast(`Excluir a visão ${e.nome}`)}
+        onSalvar={() => toast("Salvar visão")}
+        inicial={{ definido: true, onDefinir: () => toast("Definir o estado inicial"), onRestaurar: () => toast("Voltar ao padrão") }}
+      />
+      <Button size="sm" variant="ghost" onClick={() => setChips(CHIPS_DEMO)}>
+        Refazer os filtros
+      </Button>
+    </div>
+  );
+}
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -4008,6 +4053,10 @@ export function Catalogo() {
             ]}
           />
         </div>
+      </Secao>
+
+      <Secao titulo="PainelFiltros (os filtros feitos em chips sólidos — o × devolve a parte à referência —, a visão aplicada como UM filtro, as visões salvas e, para o ADM, o estado inicial do lugar)">
+        <DemoPainelFiltros />
       </Secao>
 
       <Secao titulo="Filtro de cabeçalho & Período (PeriodoPicker — atalhos, ano, meses, intervalo DE/ATÉ e Limpar: o MESMO corpo do filtro de datas das tabelas, sem a ordenação)">

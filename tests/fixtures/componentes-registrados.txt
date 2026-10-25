@@ -196,6 +196,7 @@ OrcamentoVisoes.tsx
 OrgaosAdmin.tsx
 OrigemDados.tsx
 Pager.tsx
+PainelFiltros.tsx
 PainelPca.tsx
 PainelPendencias.tsx
 PapeisAdmin.tsx

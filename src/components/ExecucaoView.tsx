@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { type BaseExec, montarBase, type MetaExec, type PacoteExec } from "@/lib/execucao-dash-core";
+import type { EstadoFiltros } from "@/lib/filtros-visao-core";
 import { DashboardExecucao } from "./DashboardExecucao";
 import { DashboardExecucaoEsqueleto } from "./DashboardExecucaoEsqueleto";
 import { ErroCarga } from "./ErroCarga";
@@ -12,7 +14,23 @@ import { ErroCarga } from "./ErroCarga";
  * `versao` nova (importação concluída — o `SincronizarDados` recarrega a tela) também. Enquanto um pedido corre, a tela
  * segue com os números anteriores (esmaecidos); a 1ª carga mostra o esqueleto.
  */
-export function ExecucaoView({ versao, hoje, podeExportar }: { versao: string; hoje: string; podeExportar: boolean }) {
+export function ExecucaoView({
+  versao,
+  hoje,
+  podeExportar,
+  inicialAdm,
+  visoes,
+  podePublicar,
+  admin,
+}: {
+  versao: string;
+  hoje: string;
+  podeExportar: boolean;
+  inicialAdm: EstadoFiltros | null;
+  visoes: EdicaoTabela[];
+  podePublicar: boolean;
+  admin: boolean;
+}) {
   const [anos, setAnos] = useState<number[] | null>(null);
   const [base, setBase] = useState<BaseExec | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -89,6 +107,10 @@ export function ExecucaoView({ versao, hoje, podeExportar }: { versao: string; h
       onTentar={() => void carregar(anosChave)}
       hoje={hoje}
       podeExportar={podeExportar}
+      inicialAdm={inicialAdm}
+      visoes={visoes}
+      podePublicar={podePublicar}
+      admin={admin}
     />
   );
 }

@@ -70,7 +70,8 @@ export function useEdicoesTabela(
     gravar(async () => {
       await chamar(`/api/tabela/edicoes/${e.id}`, "DELETE");
       setLista((l) => l.filter((x) => x.id !== e.id));
-      escolher(null);
+      // Excluir OUTRA edição não troca a que está em uso.
+      if (escolhida === e.id) escolher(null);
     });
   const salvar = (d: { nome: string; publico: boolean; valor: Record<string, unknown>; atualizar: boolean; padrao: boolean }) =>
     gravar(async () => {
@@ -200,6 +201,9 @@ export function SalvarEdicao({
   podePublicar,
   onFechar,
   onSalvar,
+  termo = "edição",
+  semPadrao = false,
+  placeholder = "Ex.: Pessoal por elemento",
 }: {
   aberto: boolean;
   atual: EdicaoTabela | null;
@@ -209,6 +213,11 @@ export function SalvarEdicao({
   podePublicar: boolean;
   onFechar: () => void;
   onSalvar: (d: { nome: string; publico: boolean; atualizar: boolean; padrao: boolean }) => void;
+  /** O nome do que se salva (feminino — "edição", "visão"): o título, o campo e os avisos. */
+  termo?: string;
+  /** Sem o "usar como minha padrão" (onde a tela não tem padrão pessoal). */
+  semPadrao?: boolean;
+  placeholder?: string;
 }) {
   const podeAtualizar = atual?.minha === true;
   const [destino, setDestino] = useState<Destino>(podeAtualizar ? "atualizar" : "nova");
@@ -223,7 +232,7 @@ export function SalvarEdicao({
       open={aberto}
       onClose={onFechar}
       bloqueado={gravando}
-      titulo="Salvar edição"
+      titulo={`Salvar ${termo}`}
       size="md"
       rodape={
         <div className="flex justify-end gap-2">
@@ -259,12 +268,12 @@ export function SalvarEdicao({
             ]}
           />
         )}
-        <TextField label="Nome da edição" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Pessoal por elemento" maxLength={60} />
+        <TextField label={`Nome da ${termo}`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder={placeholder} maxLength={60} />
         <div className="space-y-2">
           <p className="text-[13.5px] font-bold text-text">Quem vê</p>
           {podePublicar ? (
             <Segmented<"eu" | "todos">
-              ariaLabel="Quem vê a edição"
+              ariaLabel={`Quem vê a ${termo}`}
               value={publico ? "todos" : "eu"}
               onChange={(v) => setPublico(v === "todos")}
               options={[
@@ -276,12 +285,12 @@ export function SalvarEdicao({
             <p className="text-[13px] text-muted">
               Só para você.{" "}
               {despublica
-                ? "Esta edição é pública: ao atualizar, ela passa a ser só sua (publicar exige Configurar nesta tela)."
+                ? `Esta ${termo} é pública: ao atualizar, ela passa a ser só sua (publicar exige Configurar nesta tela).`
                 : "Publicar para todos exige Configurar nesta tela."}
             </p>
           )}
         </div>
-        <Checkbox checked={padrao} onChange={(e) => setPadrao(e.target.checked)} label="Usar como minha edição padrão (a tabela abre nela)" />
+        {!semPadrao && <Checkbox checked={padrao} onChange={(e) => setPadrao(e.target.checked)} label="Usar como minha edição padrão (a tabela abre nela)" />}
       </div>
     </Modal>
   );

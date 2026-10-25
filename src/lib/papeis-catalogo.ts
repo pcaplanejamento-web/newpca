@@ -174,6 +174,7 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
     acoes: {
       visualizar: "Abrir o dashboard da execução da despesa (empenhado, liquidado e pago). Cada etapa só com a tela dela (Empenhos, Liquidações, Pagamentos).",
       exportar: "Baixar as tabelas do dashboard em XLSX e PDF e o relatório.",
+      configurar: "Publicar visões dos filtros para todos e moderar as visões públicas de outras pessoas.",
     },
   },
 };

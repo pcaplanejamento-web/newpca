@@ -34,8 +34,8 @@ export function FiltrosDashboard({
   principais?: readonly string[];
   /** Todos à vista em colunas (sem "Mais filtros"). */
   grade?: boolean;
-  /** No `grade`: a 1ª célula (ex.: o Período, que filtra o tempo). */
-  antes?: ReactNode;
+  /** No `grade`: as primeiras células (ex.: a Visão e o Período, que filtra o tempo). */
+  antes?: ReactNode | ReactNode[];
 }) {
   const [mais, setMais] = useState(false);
   if (grade) return <FiltrosEmGrade campos={campos} onMudar={onMudar} antes={antes} />;
@@ -100,10 +100,17 @@ export function FiltrosDashboard({
 }
 
 /** O modo `grade`: um seletor suspenso por dimensão, TODOS à vista, em colunas que acompanham a largura. */
-function FiltrosEmGrade({ campos, onMudar, antes }: { campos: CampoFiltroDash[]; onMudar: (dim: string, chaves: string[]) => void; antes?: ReactNode }) {
+function FiltrosEmGrade({ campos, onMudar, antes }: { campos: CampoFiltroDash[]; onMudar: (dim: string, chaves: string[]) => void; antes?: ReactNode | ReactNode[] }) {
+  const primeiras = (Array.isArray(antes) ? antes : [antes]).filter(Boolean);
+  // Na tela larga, as células em linhas cheias (até 14 = 2 × 7; mais = 2 × 8).
+  const largas = primeiras.length + campos.length > 14 ? "2xl:grid-cols-8" : "2xl:grid-cols-7";
   return (
-    <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
-      {antes && <div className="min-w-0">{antes}</div>}
+    <div className={`grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${largas}`}>
+      {primeiras.map((n, i) => (
+        <div key={i} className="min-w-0">
+          {n}
+        </div>
+      ))}
       {campos.map((c) => (
         <div key={c.dim} className="min-w-0">
           <SeletorMultiplo

@@ -104,6 +104,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/seguranca": { GET: ADMIN, PATCH: ADMIN },
   "admin/escopo-cabecalho": { GET: ADMIN, PATCH: ADMIN },
   "admin/publico": { GET: ADMIN, PATCH: ADMIN },
+  "admin/filtros-iniciais": { PUT: ADMIN },
   "admin/presenca/online": { GET: ADMIN },
   "admin/chat": { GET: ADMIN, PATCH: ADMIN },
   "admin/integracoes/testar": { POST: ADMIN },

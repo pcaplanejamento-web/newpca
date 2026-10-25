@@ -18,7 +18,7 @@ const MAX_VISIVEIS = 300;
 /**
  * Linha RECOLHÍVEL de seleção MÚLTIPLA (padrão das "Visões salvas" do orçamento), na ALTURA PADRÃO dos controles
  * (`--h-control-sm` no desktop, 44px no toque): rótulo à esquerda e,
- * à direita, "Todos" ou "N selecionados" (accent). Aberta: busca (vários de uma vez com ":" — `opcoesDaBusca`;
+ * à direita, "Todos" ou o SELO com quantos estão marcados (accent). Aberta: busca (vários de uma vez com ":" — `opcoesDaBusca`;
  * Enter marca os encontrados) + marcar/limpar os filtrados + a lista de valores com a contagem. Nenhum marcado =
  * `textoVazio` ("Todos" = sem filtro). `suspenso` = a lista abre num painel FLUTUANTE (`Dropdown`) — nada é empurrado
  * (ex.: as repartições da Tela Protocolo na Automação).
@@ -61,7 +61,15 @@ export function SeletorMultiplo({
     ) : (
     <>
       <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-text">{rotulo}</span>
-      <span className={`shrink-0 text-[12px] ${n > 0 ? "font-semibold text-accent" : "text-muted"}`}>{n > 0 ? `${num(n)} selecionado${n === 1 ? "" : "s"}` : textoVazio}</span>
+      {n > 0 ? (
+        // A contagem num SELO (o rótulo fica inteiro mesmo em colunas estreitas); por extenso para o leitor de tela.
+        <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-none text-white tabular-nums" title={`${num(n)} selecionado${n === 1 ? "" : "s"}`}>
+          {num(n)}
+          <span className="sr-only"> selecionado{n === 1 ? "" : "s"}</span>
+        </span>
+      ) : (
+        <span className="shrink-0 text-[12px] text-muted">{textoVazio}</span>
+      )}
       {seta}
     </>
     );

@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.233.0",
+    data: "2026-10-25",
+    titulo: "Execução: filtros em chips, visões salvas e o estado inicial",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "O botão de filtros do gráfico fica sempre à mão e mostra cada filtro feito num chip; o × devolve aquela parte ao ponto de partida.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "Visões: salve as escolhas com um nome (só para você ou pública, com Configurar) e aplique de novo com um toque — a visão vira um filtro só e fica “alterada” se algo mudar depois.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "O administrador define o estado inicial da tela: é o ponto de partida de todos e não aparece como filtro.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "Filtro Visão no cartão de filtros: escolha uma visão salva direto ali (ou Nenhuma).", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Filtros", texto: "Os seletores de filtro mostram quantos valores estão marcados num selo, e o nome do filtro não fica mais cortado.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "Um filtro de unidade, elemento ou credor continua certo ao trocar o período para outro ano (antes podia apontar outro valor).", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Papéis", texto: "A tela Execução ganhou a ação Configurar (publicar visões e moderar as públicas), dada a quem configura Empenhos.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.232.1",
     data: "2026-10-25",
     titulo: "Execução: gráfico sem piscadas e transições fluidas",
