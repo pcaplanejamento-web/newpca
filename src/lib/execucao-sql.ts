@@ -25,9 +25,15 @@ type Db = DrizzleD1Database<any>;
 /** As etapas que a pessoa pode ver (a tela de cada uma). */
 export type FontesSql = { liquidacoes: boolean; pagamentos: boolean };
 
-/** Quantas tuplas por pedaço (cada pedaço é UM texto do banco, abaixo de 2 MB). */
-export const EMP_POR_PEDACO = 10_000;
-export const EVENTOS_POR_PEDACO = 30_000;
+/**
+ * Quantas tuplas por pedaço (cada pedaço é UM texto do banco, abaixo de 2 MB): a tupla do empenho tem ~170 bytes com
+ * valores grandes (5.000 ≈ 0,9 MB — folga para os índices altos do dicionário); a do evento, ~60 bytes.
+ */
+export const EMP_POR_PEDACO = 5_000;
+export const EVENTOS_POR_PEDACO = 20_000;
+/** Os tamanhos dos pedaços (os testes usam pedaços pequenos para conferir a costura). */
+export type TamanhoPedacos = { emp: number; eventos: number };
+const PEDACOS_PADRAO: TamanhoPedacos = { emp: EMP_POR_PEDACO, eventos: EVENTOS_POR_PEDACO };
 
 /** A coluna de cada dimensão do dicionário (só estes nomes entram no SQL — nunca texto de fora). */
 const COLUNA: Record<DimDicionario, string> = {
@@ -103,7 +109,7 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
       daSafra("l.numero_empenho"),
       ")), ",
       "liq AS (SELECT u.* FROM (SELECT liqU.*, row_number() OVER (PARTITION BY liqU.chave ORDER BY liqU.card_id) AS k FROM liqU) u WHERE u.k = 1), ",
-      `lg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN liq.orgao_id END AS o, ${DIA("liq.data")} AS d, liq.r AS r, SUM(liq.v) AS v, SUM(liq.a) AS a, COUNT(*) AS n FROM liq LEFT JOIN canon c ON c.numero = liq.numero_empenho GROUP BY 1, 2, 3, 4) g)`,
+      `lg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o, g.r) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN liq.orgao_id END AS o, ${DIA("liq.data")} AS d, liq.r AS r, SUM(liq.v) AS v, SUM(liq.a) AS a, COUNT(*) AS n FROM liq LEFT JOIN canon c ON c.numero = liq.numero_empenho GROUP BY 1, 2, 3, 4) g)`,
     );
   if (f.pagamentos)
     partes.push(
@@ -122,7 +128,7 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
       daSafra("p.numero_empenho"),
       ")), ",
       "pag AS (SELECT u.* FROM (SELECT pagU.*, row_number() OVER (PARTITION BY pagU.chave ORDER BY pagU.card_id) AS k FROM pagU) u WHERE u.k = 1), ",
-      `pg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN pag.orgao_id END AS o, ${DIA("pag.data")} AS d, pag.r AS r,
+      `pg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o, g.r) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN pag.orgao_id END AS o, ${DIA("pag.data")} AS d, pag.r AS r,
         SUM(CASE WHEN pag.anulado = 0 THEN pag.v ELSE 0 END) AS v, SUM(CASE WHEN pag.anulado = 0 THEN pag.rt ELSE 0 END) AS rt,
         SUM(CASE WHEN pag.anulado = 0 THEN pag.lq ELSE 0 END) AS lq, SUM(CASE WHEN pag.anulado = 0 THEN 0 ELSE pag.v END) AS an,
         SUM(CASE WHEN pag.anulado = 0 THEN 1 ELSE 0 END) AS n, SUM(CASE WHEN pag.anulado = 0 THEN 0 ELSE 1 END) AS na
@@ -183,25 +189,25 @@ function sqlCabeca(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql
   ]);
 }
 
-function sqlEmpenhos(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number): SQL {
+function sqlEmpenhos(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number, por: number): SQL {
   const tupla = ["e.id", "e.numero", "e.r", "e.orgao_id", DIA("e.data"), ...DIMS_DICIONARIO.map((_, k) => `d${k}.i`), "e.vb", "e.va", "e.vl", "e.vp", "e.vs"].join(", ");
   const juncoes = DIMS_DICIONARIO.map((d, k) => `LEFT JOIN d${k} ON d${k}.v IS e.${COLUNA[d]}`).join(" ");
-  const de = pedaco * EMP_POR_PEDACO;
+  const de = pedaco * por;
   return juntar([
     ctes(anos, escopo, f),
     `SELECT (SELECT json_group_array(json_array(${tupla})) FROM (SELECT * FROM emp WHERE ix >= `,
-    sql`${de} AND ix < ${de + EMP_POR_PEDACO}`,
+    sql`${de} AND ix < ${de + por}`,
     ` ORDER BY ix) e ${juncoes}) AS j${SEL_VERSAO}`,
   ]);
 }
 
-function sqlEventos(tipo: "lg" | "pg", anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number): SQL {
+function sqlEventos(tipo: "lg" | "pg", anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number, por: number): SQL {
   const tupla = tipo === "lg" ? "g.ei, g.o, g.d, g.r, g.v, g.a, g.n" : "g.ei, g.o, g.d, g.r, g.v, g.rt, g.lq, g.an, g.n, g.na";
-  const de = pedaco * EVENTOS_POR_PEDACO;
+  const de = pedaco * por;
   return juntar([
     ctes(anos, escopo, f),
     `SELECT (SELECT json_group_array(json_array(${tupla})) FROM (SELECT * FROM ${tipo} WHERE rn > `,
-    sql`${de} AND rn <= ${de + EVENTOS_POR_PEDACO}`,
+    sql`${de} AND rn <= ${de + por}`,
     ` ORDER BY rn) g) AS j${SEL_VERSAO}`,
   ]);
 }
@@ -213,16 +219,16 @@ const corpo = (r: { j: string | null }[][]) =>
     .join(",");
 
 /** Uma leitura completa — `null` quando os dados mudaram no meio (versões diferentes entre as consultas). */
-async function lerUmaVez(db: Db, anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, extra: string): Promise<string | null> {
+async function lerUmaVez(db: Db, anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, extra: string, tam: TamanhoPedacos): Promise<string | null> {
   const [c] = await db.all<{ ne: number; nl: number; np: number; dic: string; orgaos: string | null; ver: string }>(sqlCabeca(anos, escopo, f));
   const ne = Number(c?.ne ?? 0);
   const nl = Number(c?.nl ?? 0);
   const np = Number(c?.np ?? 0);
   const pedacos = (n: number, por: number) => Array.from({ length: Math.ceil(n / por) }, (_, p) => p);
   const [e, l, p] = await Promise.all([
-    Promise.all(pedacos(ne, EMP_POR_PEDACO).map((k) => db.all<{ j: string | null; ver: string }>(sqlEmpenhos(anos, escopo, f, k)))),
-    Promise.all(pedacos(nl, EVENTOS_POR_PEDACO).map((k) => db.all<{ j: string | null; ver: string }>(sqlEventos("lg", anos, escopo, f, k)))),
-    Promise.all(pedacos(np, EVENTOS_POR_PEDACO).map((k) => db.all<{ j: string | null; ver: string }>(sqlEventos("pg", anos, escopo, f, k)))),
+    Promise.all(pedacos(ne, tam.emp).map((k) => db.all<{ j: string | null; ver: string }>(sqlEmpenhos(anos, escopo, f, k, tam.emp)))),
+    Promise.all(pedacos(nl, tam.eventos).map((k) => db.all<{ j: string | null; ver: string }>(sqlEventos("lg", anos, escopo, f, k, tam.eventos)))),
+    Promise.all(pedacos(np, tam.eventos).map((k) => db.all<{ j: string | null; ver: string }>(sqlEventos("pg", anos, escopo, f, k, tam.eventos)))),
   ]);
   if ([...e, ...l, ...p].some((r) => String(r[0]?.ver) !== String(c?.ver))) return null;
   return `{"v":${JSON.stringify(String(c?.ver ?? ""))},"dic":${c?.dic ?? "{}"},"orgaos":${c?.orgaos ?? "[]"},"emp":[${corpo(e)}],"liq":[${corpo(l)}],"pag":[${corpo(p)}]${extra}}`;
@@ -232,10 +238,17 @@ async function lerUmaVez(db: Db, anos: readonly number[], escopo: EscopoEmpenhos
  * O PACOTE da Execução como TEXTO JSON (`PacoteExec`). Os dados mudaram no meio (uma importação concluída agora)? Lê de
  * novo, até 3 vezes; depois, `null`. `extra` = os campos já serializados que vão junto (anos, fontes, meta).
  */
-export async function textoPacoteExecucao(db: Db, anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, extra = ""): Promise<string | null> {
+export async function textoPacoteExecucao(
+  db: Db,
+  anos: readonly number[],
+  escopo: EscopoEmpenhos,
+  f: FontesSql,
+  extra = "",
+  tam: TamanhoPedacos = PEDACOS_PADRAO,
+): Promise<string | null> {
   if (escopoVazio(escopo) || !anos.length) return `{"v":"","dic":{},"orgaos":[],"emp":[],"liq":[],"pag":[]${extra}}`;
   for (let i = 0; i < 3; i++) {
-    const t = await lerUmaVez(db, anos, escopo, f, extra);
+    const t = await lerUmaVez(db, anos, escopo, f, extra, tam);
     if (t != null) return t;
   }
   return null;

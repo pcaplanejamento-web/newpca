@@ -19,6 +19,8 @@ export function ExecucaoView({ versao, hoje, podeExportar }: { versao: string; h
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const pedido = useRef(0);
+  // Os anos que o SERVIDOR escolheu (o 1º pedido vai sem anos): fixá-los na tela não pede de novo.
+  const escolhidosPeloServidor = useRef<string | null>(null);
   const anosChave = anos?.join(",") ?? "";
 
   const carregar = useCallback(async (lista: string) => {
@@ -27,13 +29,23 @@ export function ExecucaoView({ versao, hoje, podeExportar }: { versao: string; h
     setErro(null);
     try {
       const r = await fetch(`/api/execucao${lista ? `?anos=${lista}` : ""}`, { cache: "no-store" });
-      const j = (await r.json()) as { ok?: boolean; error?: string; pacote?: PacoteExec; meta?: MetaExec[] };
+      const texto = await r.text();
       if (n !== pedido.current) return;
+      let j: { ok?: boolean; error?: string; pacote?: PacoteExec; meta?: MetaExec[] };
+      try {
+        j = JSON.parse(texto) as typeof j;
+      } catch {
+        // A resposta não é JSON (o servidor caiu no meio): a mensagem da tela, com o status.
+        throw new Error(`Não foi possível carregar os dados da execução (erro ${r.status}). Tente de novo.`);
+      }
       if (!r.ok || !j.ok || !j.pacote) throw new Error(j.error || "Não foi possível carregar os dados da execução.");
       const b = montarBase({ ...j.pacote, meta: j.meta ?? [] });
       setBase(b);
       // O servidor escolhe o ano quando nenhum foi pedido (o mais recente): a tela passa a mostrar o escolhido.
-      if (!lista) setAnos(b.anos);
+      if (!lista) {
+        escolhidosPeloServidor.current = b.anos.join(",");
+        setAnos(b.anos);
+      }
     } catch (e) {
       if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os dados da execução.");
     } finally {
@@ -43,6 +55,12 @@ export function ExecucaoView({ versao, hoje, podeExportar }: { versao: string; h
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a versão do servidor também pede de novo (importação nova).
   useEffect(() => {
+    // Os anos só passaram a mostrar os que o servidor escolheu (os dados já chegaram): nada a pedir.
+    if (anosChave && anosChave === escolhidosPeloServidor.current) {
+      escolhidosPeloServidor.current = null;
+      return;
+    }
+    escolhidosPeloServidor.current = null;
     void carregar(anosChave);
   }, [anosChave, versao, carregar]);
 

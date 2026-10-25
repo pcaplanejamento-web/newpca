@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.221.1",
+    data: "2026-10-25",
+    titulo: "Execução: carga mais segura",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "A tela da Execução abre com um pedido só, mostra uma mensagem clara quando o servidor falha e lê os dados em partes menores — anos com muitos empenhos não travam a carga.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.221.0",
     data: "2026-10-25",
     titulo: "Dashboard da execução da despesa",

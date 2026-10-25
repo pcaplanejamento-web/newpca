@@ -12,7 +12,8 @@ import { versaoDados } from "./versao-dados";
  * (`consultaVersaoExecucao`) e a versão `dados` do sistema (renomear uma unidade ou um órgão muda os rótulos). A chave leva
  * os anos, as etapas que a pessoa vê e o escopo — nunca a pessoa.
  */
-const memo = criarMemoVersao({ max: 12, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
+// Até 4 pacotes (cada um tem alguns MB — a memória do Worker é de 128 MB, junto com o resto do sistema).
+const memo = criarMemoVersao({ max: 4, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
 
 /** Até quantos anos de uma vez (o volume do pacote). */
 export const MAX_ANOS_EXECUCAO = 5;

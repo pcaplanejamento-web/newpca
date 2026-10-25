@@ -3874,7 +3874,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   pagamentos por empenho+dia (anulados à parte). Valores em inteiros de 1/10.000 (`ESCALA`), dias = inteiros desde
   2000-01-01. Unidade = rótulo ÚNICO (sigla; " — ÓRGÃO" quando a sigla se repete; só órgão = a sigla do órgão). Cache
   `criarMemoVersao` pela versão `VERSAO_SQL` (último lote promovido + vínculos + cards) + `versaoDados().dados`; a situação dos
-  cards (`consultaMetaExecucao`) vai à parte, a cada pedido. A página passa a versão ao cliente (importação nova = pede de novo).
+  cards (`consultaMetaExecucao`) vai à parte, a cada pedido. A página passa a versão ao cliente (importação nova = pede de novo). Pedaços de 5.000 empenhos e 20.000 grupos de eventos (`TamanhoPedacos`, ordem sem empate — `ei, d, o, r`) e o memo com até 4 pacotes (v1.221.1); o 1º pedido vai sem anos e fixar o ano escolhido pelo servidor não pede de novo.
 - **Núcleo PURO `execucao-dash-core.ts`** (todo número sai dele): `montarBase` (arrays por coluna), `calcular(base, visão,
   intervalo, filtros)` → totais + seleção + opções CONECTADAS (uma passada: falha em 0 ou 1 filtro), `derivados`, `serie`
   (`baldesData` com granularidade forçada opcional — parâmetro novo `forcar`; dia/semana > 400 baldes sobe), `selecaoNoIntervalo`

@@ -238,7 +238,7 @@ test("execução (núcleo): datas, linhas da origem e sparks", async () => {
   assert.equal(reais(s.empenhado[2] + s.empenhado[3]), 0);
 });
 
-test("execução (SQL): volume — 12 mil empenhos, 30 mil liquidações e pagamentos em pedaços, sem perder nada", async () => {
+test("execução (SQL): volume — milhares de empenhos, liquidações e pagamentos em pedaços, sem perder nada", async () => {
   const b = banco();
   const ins = b.raw.prepare(
     "INSERT INTO empenhos (card_id, chave, ano, numero, data, orgao_gestor, fornecedor, elemento, valor_empenhado, orgao_id, reparticao_id) VALUES (1, ?, 2025, ?, ?, 'G', ?, ?, ?, 1, 5)",
@@ -271,4 +271,21 @@ test("execução (SQL): volume — 12 mil empenhos, 30 mil liquidações e pagam
   const msCalc = performance.now() - t1;
   assert.ok(ms < 20_000, `leitura em ${ms} ms`);
   assert.ok(msCalc < 500, `cálculo em ${msCalc} ms`);
+});
+
+test("execução (SQL): pedaços pequenos — a costura não repete nem perde grupo (inclusive os sem data de anos diferentes)", async () => {
+  const b = cenario();
+  // Grupos sem data do MESMO empenho em anos diferentes — o de 2026 vem pela safra (r = 0): empatavam na ordem dos pedaços.
+  b.liq(2025, "10", null, 11, 0, 1, 6);
+  b.liq(2026, "10", null, 13, 0, 1, 6);
+  b.pag(2025, "10", null, 7, 0, 0, 1, 6);
+  const extra = `,"anos":[2025],"disponiveis":[],"fontes":${JSON.stringify(TUDO)},"meta":[]`;
+  const inteiro = JSON.parse((await textoPacoteExecucao(b.db, [2025], null, TUDO, extra)) ?? "{}") as PacoteExec;
+  const picado = JSON.parse((await textoPacoteExecucao(b.db, [2025], null, TUDO, extra, { emp: 1, eventos: 1 })) ?? "{}") as PacoteExec;
+  const ord = (l: unknown[][]) => l.map((t) => JSON.stringify(t)).sort();
+  assert.deepEqual(ord(picado.emp), ord(inteiro.emp));
+  assert.deepEqual(ord(picado.liq), ord(inteiro.liq));
+  assert.deepEqual(ord(picado.pag), ord(inteiro.pag));
+  assert.equal(new Set(ord(picado.liq)).size, picado.liq.length, "nenhum grupo repetido");
+  assert.ok(picado.liq.filter((t) => t[2] == null).length >= 2, "os dois grupos sem data estão lá");
 });
