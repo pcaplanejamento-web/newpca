@@ -613,14 +613,20 @@ function extremos(b: BaseExec, s: Selecao): [number, number] | null {
 }
 
 /**
- * A SÉRIE dos selecionados: os baldes do intervalo (o do período; "todo" = do 1º ao último dia com dado) na granularidade
+ * A SÉRIE dos selecionados: os baldes do intervalo (o do período, cortado em HOJE quando passa dele; "todo" = do 1º ao
+ * último dia com dado) na granularidade
  * pedida ("auto" = a de `baldesData`). Dia/semana com mais de `MAX_BALDES` baldes sobe para mês. O último acumulado = os
  * totais menos os registros sem data (invariante testado).
  */
 export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran: Granularidade, hoje: string): Serie {
   const ext = extremos(b, calc.sel);
   const de = intervalo.de ?? (ext ? isoDoDia(ext[0]) : null);
-  const ate = intervalo.ate ?? (ext ? isoDoDia(ext[1]) : null);
+  // O período que passa de hoje (o ano atual, o mês atual) vai só ATÉ HOJE — o futuro não tem execução; um registro com
+  // data depois de hoje estende até ele (nada some do acumulado).
+  const ultimoDado = ext ? isoDoDia(ext[1]) : null;
+  const limite = ultimoDado && ultimoDado > hoje ? ultimoDado : hoje;
+  const ateBruto = intervalo.ate ?? ultimoDado;
+  const ate = ateBruto && ateBruto > limite && (!de || de <= limite) ? limite : ateBruto;
   if (!de || !ate || de > ate) return { granularidade: "dia", pontos: [], de, ate };
   const nDias = (diaDoIso(ate) ?? 0) - (diaDoIso(de) ?? 0) + 1;
   let forcar: GranularidadeData | undefined = gran === "auto" ? undefined : gran;

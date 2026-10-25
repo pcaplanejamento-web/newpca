@@ -168,6 +168,14 @@ test("execução (núcleo): a série fecha com os totais; a origem de um ponto =
   }
   const c = calcular(base, {}, {});
   assert.equal(serie(base, c, {}, "mes", "2025-12-31").granularidade, "mes");
+  {
+    // O ano atual vai só até hoje (o futuro não tem execução); um ano passado, inteiro; período todo no futuro, como pedido.
+    const ano = serie(base, c, { de: "2025-01-01", ate: "2025-12-31" }, "mes", "2025-06-15");
+    assert.equal(ano.ate, "2025-06-15");
+    assert.equal(ano.pontos.at(-1)?.atual, true);
+    assert.equal(serie(base, c, { de: "2025-01-01", ate: "2025-12-31" }, "mes", "2026-03-01").ate, "2025-12-31");
+    assert.equal(serie(base, c, { de: "2030-01-01", ate: "2030-12-31" }, "mes", "2025-06-15").ate, "2030-12-31");
+  }
   assert.equal(serie(base, c, { de: "2025-03-01", ate: "2025-03-31" }, "auto", "2025-12-31").granularidade, "dia");
 });
 

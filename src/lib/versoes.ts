@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.224.1",
+    data: "2026-10-25",
+    titulo: "Execução: o ano atual vai até hoje no gráfico",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "Ao analisar o ano atual, o gráfico vai só até o dia de hoje — sem os meses à frente vazios. Anos passados seguem inteiros; um registro com data depois de hoje estende o gráfico até ele.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.224.0",
     data: "2026-10-25",
     titulo: "Execução: clique no ponto, dados acumulados e indicadores que abrem suavemente",
