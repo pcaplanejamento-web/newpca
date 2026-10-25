@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.229.0",
+    data: "2026-10-25",
+    titulo: "Execução: o gráfico muda como água",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "As linhas do gráfico escorrem da posição antiga até a nova em toda mudança — filtros, Acumulado/Por período, Dia/Semana/Mês, zoom e período —, casadas pela data de cada ponto; no zoom, a janela de datas desliza junto, e as laterais ficam sempre na borda.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "A dica de um ponto marcado ou de um trecho nunca cobre a marcação: fica depois dela, ou antes quando não cabe, e só no meio quando o trecho ocupa quase o gráfico todo; um clique logo depois de arrastar não se perde mais.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.228.1",
     data: "2026-10-25",
     titulo: "Execução: gráfico legível no modo escuro",

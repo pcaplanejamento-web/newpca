@@ -4,6 +4,7 @@ import { type ReactNode, type RefObject, useEffect, useId, useLayoutEffect, useM
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { hexToHsv, hsvToHex } from "@/lib/color";
 import { brl } from "@/lib/format";
+import { morfologia, type QuadroSerie } from "@/lib/serie-morfologia";
 import { IconClose } from "../icons";
 import { semMovimento } from "../useContagem";
 import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
@@ -11,16 +12,17 @@ import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 /** Uma série do gráfico (o valor de cada ponto já em REAIS). */
 export type SerieTemporalDef = { chave: string; rotulo: string; cor: number };
 /** Um ponto (balde de tempo): a chave, o rótulo do eixo, o título da dica e os valores de cada série (em reais). */
-export type PontoTemporal = { chave: string; rotulo: string; titulo: string; atual?: boolean; valores: Record<string, number> };
+export type PontoTemporal = {
+  chave: string;
+  rotulo: string;
+  titulo: string;
+  atual?: boolean;
+  /** A posição no TEMPO (ex.: o dia do meio do balde): a transição entre desenhos casa as curvas pela data. Sem ela, a ordem. */
+  t?: number;
+  valores: Record<string, number>;
+};
 /** Uma linha a mais na dica de um ponto: rótulo, valor e o bloco (as linhas de mesma `secao` ficam juntas, sob o título). */
 export type LinhaDica = { rotulo: string; valor: string; secao?: string };
-
-/** O maior valor de todas as séries nos dados (a folga da escala ajustada). */
-function dataMax(dados: Record<string, number | string>[], series: readonly SerieTemporalDef[]): number {
-  let m = 0;
-  for (const d of dados) for (const s of series) m = Math.max(m, Number(d[s.chave]) || 0);
-  return m;
-}
 
 /** O PONTO sobre a linha com a animação de "online": a onda na cor da série que se expande e some, sem parar (a mesma do
  * ponto de presença; parada com "reduzir movimento"). */
@@ -43,7 +45,19 @@ const BORDA = 8;
  * altura dele e presa dentro do desenho; sem lugar dos lados (tela estreita), vai para cima ou para baixo do ponteiro. Lê o
  * próprio tamanho e o do desenho; o movimento atualiza num quadro de animação.
  */
-function DicaQueSegue({ caixa, fixo, children }: { caixa: RefObject<HTMLElement | null>; fixo?: { x: number; y: number }; children: ReactNode }) {
+function DicaQueSegue({
+  caixa,
+  fixo,
+  evitar,
+  children,
+}: {
+  caixa: RefObject<HTMLElement | null>;
+  fixo?: { x: number; y: number };
+  /** A faixa horizontal (px) que a dica NÃO cobre — o ponto marcado ou o trecho: fica DEPOIS dela; sem lugar, ANTES; sem
+   * lugar dos dois lados (as bordas do gráfico), no meio. */
+  evitar?: { de: number; ate: number };
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -76,9 +90,15 @@ function DicaQueSegue({ caixa, fixo, children }: { caixa: RefObject<HTMLElement 
     const entre = (v: number, min: number, max: number) => Math.max(min, Math.min(v, Math.max(min, max)));
     let left: number;
     let top = entre(m.y - h / 2, BORDA, H - h - BORDA);
-    if (m.x + AFASTA + w <= W - BORDA) left = m.x + AFASTA;
-    else if (m.x - AFASTA - w >= BORDA) left = m.x - AFASTA - w;
-    else {
+    // A faixa a deixar livre: a da marcação, senão a própria ponta do mouse.
+    const de = evitar ? Math.min(evitar.de, evitar.ate) : m.x;
+    const ate = evitar ? Math.max(evitar.de, evitar.ate) : m.x;
+    if (ate + AFASTA + w <= W - BORDA) left = ate + AFASTA;
+    else if (de - AFASTA - w >= BORDA) left = de - AFASTA - w;
+    else if (evitar) {
+      // Sem lugar dos dois lados (a marcação larga e as bordas): no meio da faixa, dentro do desenho.
+      left = entre((de + ate) / 2 - w / 2, BORDA, W - w - BORDA);
+    } else {
       // Sem lugar dos lados: acima do ponteiro (ou abaixo, se não couber em cima).
       left = entre(m.x - w / 2, BORDA, W - w - BORDA);
       top = m.y - AFASTA - h >= BORDA ? m.y - AFASTA - h : entre(m.y + AFASTA, BORDA, H - h - BORDA);
@@ -111,64 +131,47 @@ const TOPO_LIVRE_ESTREITA = 80;
 /** A duração de toda mudança do desenho (os valores deslizando ou um desenho dando lugar a outro). */
 const TRANSICAO_MS = 520;
 
-type Linha = Record<string, number | string>;
-
 /** A curva das transições: começa e termina devagar (o desenho "escorre" até o lugar novo). */
 const suave = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 /**
- * O DESENHO SUAVE: com os MESMOS baldes (só os valores mudam — filtro, Acumulado/Por período), os valores deslizam até os
- * novos quadro a quadro (as laterais nunca saem do lugar: o eixo X é o mesmo); com OUTROS baldes (período, agrupamento,
- * zoom), o desenho anterior fica embaixo esmaecendo enquanto o novo surge por cima. Uma mudança no meio de outra parte de
- * onde o desenho está. Sem movimento com "reduzir movimento".
+ * O DESENHO COMO ÁGUA: toda mudança (filtro, Acumulado/Por período, Dia → Mês, zoom, outro período) é uma MORFOLOGIA — as
+ * duas curvas amostradas nas mesmas datas pela curva com que o gráfico desenha (`morfologia`, `serie-morfologia.ts`) e
+ * misturadas quadro a quadro, com a janela de datas deslizando junto; as laterais ficam sempre na borda (o eixo X é a
+ * janela de cada quadro). Uma mudança no meio de outra parte de onde o desenho está. As datas do desenho que sai
+ * (`extra`) esmaecem enquanto as novas surgem. Sem movimento com "reduzir movimento".
  */
-function useDesenhoSuave<T>(dados: Linha[], estrutura: string, chaves: readonly string[], extra: T) {
-  const [visto, setVisto] = useState(dados);
-  const [saindo, setSaindo] = useState<{ dados: Linha[]; extra: T; n: number } | null>(null);
-  const vistoRef = useRef(dados);
-  const antes = useRef({ dados, estrutura, extra });
+function useDesenhoSuave<T>(alvo: QuadroSerie, estrutura: string, chaves: readonly string[], extra: T) {
+  const [visto, setVisto] = useState(alvo);
+  const [saindo, setSaindo] = useState<{ extra: T; n: number } | null>(null);
+  const vistoRef = useRef(alvo);
+  const antes = useRef({ alvo, estrutura, extra });
   const quadro = useRef(0);
-  // O `extra` (ex.: os pontos, para as datas do desenho que sai) acompanha `dados` — não dispara a transição sozinho.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: extra vem junto com dados.
+  // O `extra` acompanha `alvo` — não dispara a transição sozinho.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: extra vem junto com alvo.
   useEffect(() => {
     const de = antes.current;
-    antes.current = { dados, estrutura, extra };
-    if (de.dados === dados) return;
+    antes.current = { alvo, estrutura, extra };
+    if (de.alvo === alvo) return;
     cancelAnimationFrame(quadro.current);
-    const aplicar = (d: Linha[]) => {
-      vistoRef.current = d;
-      setVisto(d);
+    const aplicar = (q: QuadroSerie) => {
+      vistoRef.current = q;
+      setVisto(q);
     };
     if (semMovimento()) {
       setSaindo(null);
-      return aplicar(dados);
+      return aplicar(alvo);
     }
-    if (de.estrutura !== estrutura) {
-      setSaindo((s) => ({ dados: vistoRef.current, extra: de.extra, n: (s?.n ?? 0) + 1 }));
-      return aplicar(dados);
-    }
-    const inicio = vistoRef.current;
+    if (de.estrutura !== estrutura) setSaindo((s) => ({ extra: de.extra, n: (s?.n ?? 0) + 1 }));
+    const mistura = morfologia(vistoRef.current, alvo, chaves);
     const t0 = performance.now();
     const passo = (agora: number) => {
       const t = Math.min(1, (agora - t0) / TRANSICAO_MS);
-      const k = suave(t);
-      aplicar(
-        t === 1
-          ? dados
-          : dados.map((alvo, i) => {
-              const ini = inicio[i] ?? alvo;
-              const linha: Linha = { ...alvo };
-              for (const c of chaves) {
-                const a = Number(ini[c]) || 0;
-                linha[c] = a + ((Number(alvo[c]) || 0) - a) * k;
-              }
-              return linha;
-            }),
-      );
+      aplicar(mistura(suave(t)));
       if (t < 1) quadro.current = requestAnimationFrame(passo);
     };
     quadro.current = requestAnimationFrame(passo);
-  }, [dados, estrutura, chaves]);
+  }, [alvo, estrutura, chaves]);
   useEffect(() => () => cancelAnimationFrame(quadro.current), []);
   return { visto, saindo, fimSaida: () => setSaindo(null) };
 }
@@ -187,9 +190,9 @@ type Selecao = { tipo: "ponto"; i: number; x: number; y: number } | { tipo: "tre
  * o TRECHO entre os dois (`onTrecho`/`dicaTrecho`: a comparação e a origem do trecho). Esc, clicar fora ou outros baldes
  * desfazem; pelo teclado, a origem de cada balde fica na vista em tabela.
  *
- * TRANSIÇÕES (`useDesenhoSuave`): toda mudança desliza ou esmaece em ~0,5 s e as laterais do desenho ficam sempre no
- * lugar (o Recharts não anima o caminho — a interpolação dele entre larguras ou números de pontos diferentes descolava as
- * pontas). `preencher` = o desenho ocupa a caixa inteira (sem margens, as datas por DENTRO e um espaço livre no alto para
+ * TRANSIÇÕES (`useDesenhoSuave`): toda mudança é uma MORFOLOGIA de ~0,5 s pela data de cada ponto (`t`) — a linha escorre
+ * da posição antiga à nova, também entre Dia, Semana e Mês, e o zoom desliza a janela; as laterais ficam sempre na borda (o
+ * Recharts não anima o caminho — a interpolação dele entre números de pontos diferentes descolava as pontas). `preencher` = o desenho ocupa a caixa inteira (sem margens, as datas por DENTRO e um espaço livre no alto para
  * os controles em vidro).
  */
 export function SerieTemporal({
@@ -251,12 +254,18 @@ export function SerieTemporal({
     for (const svg of figRef.current?.querySelectorAll("svg.recharts-surface") ?? []) svg.setAttribute("preserveAspectRatio", "none");
   });
   const chaves = useMemo(() => series.map((x) => x.chave), [series]);
-  const dados = useMemo<Linha[]>(() => pontos.map((p) => ({ chave: p.chave, ...Object.fromEntries(chaves.map((c) => [c, p.valores[c] ?? 0])) })), [pontos, chaves]);
+  // O quadro de destino: cada ponto na sua posição no tempo (`t`, senão a ordem) e a janela do 1º ao último.
+  const alvo = useMemo<QuadroSerie>(() => {
+    const linhas = pontos.map((p, i) => ({ chave: p.chave, t: p.t ?? i, ...Object.fromEntries(chaves.map((c) => [c, p.valores[c] ?? 0])) }));
+    const lo = linhas[0]?.t ?? 0;
+    const hi = linhas.at(-1)?.t ?? 1;
+    return { linhas, lo, hi: hi > lo ? hi : lo + 1 };
+  }, [pontos, chaves]);
   const porChave = useMemo(() => new Map(pontos.map((p) => [p.chave, p])), [pontos]);
   const total = pontos.length;
-  // Os mesmos baldes (só os valores mudaram) = deslizam; outros baldes (período, agrupamento, zoom) = um desenho dá lugar ao outro.
+  // Os baldes do desenho (outros baldes = a seleção cai e as datas trocam esmaecendo; o desenho escorre nos dois casos).
   const estrutura = total ? `${total}:${pontos[0].chave}:${pontos[total - 1].chave}:${chaves.join(",")}` : "";
-  const { visto, saindo, fimSaida } = useDesenhoSuave(dados, estrutura, chaves, pontos);
+  const { visto, saindo, fimSaida } = useDesenhoSuave(alvo, estrutura, chaves, pontos);
 
   // O PONTO marcado ou o TRECHO; o arrasto em curso (do índice ao índice) e se o clique que vem depois dele é engolido.
   const [sel, setSel] = useState<Selecao | null>(null);
@@ -295,18 +304,16 @@ export function SerieTemporal({
     const ev = e as { clientX?: number; clientY?: number };
     return r && ev.clientX != null && ev.clientY != null ? { x: ev.clientX - r.left, y: ev.clientY - r.top } : { x: 0, y: 0 };
   };
-  const indice = (st: { activeIndex?: unknown } | null | undefined) => {
-    const i = st?.activeIndex == null ? Number.NaN : Number(st.activeIndex);
-    return Number.isInteger(i) && i >= 0 && i < total ? i : null;
-  };
-  /** O ponto sob uma posição horizontal do ponteiro (os baldes são igualmente espaçados entre as margens do desenho). */
+  const margem = preencher ? { top: estreita ? TOPO_LIVRE_ESTREITA : TOPO_LIVRE, right: 0, left: 0, bottom: 0 } : { top: 12, right: 16, left: 16, bottom: 0 };
+  /** A posição horizontal (px, no desenho) de um instante `t` na janela à vista. */
+  const xDoT = (t: number, w = largura) => margem.left + ((t - visto.lo) / (visto.hi - visto.lo)) * Math.max(0, w - margem.left - margem.right);
+  /** O ponto mais perto de uma posição horizontal do ponteiro (pela data, na janela à vista). */
   const indiceNaPosicao = (clientX: number) => {
     const r = figRef.current?.getBoundingClientRect();
     if (!r || !total) return null;
-    const esq = preencher ? 0 : 16;
-    const util = r.width - esq - (preencher ? 0 : 16);
-    if (util <= 0) return null;
-    return Math.max(0, Math.min(total - 1, Math.round(((clientX - r.left - esq) / util) * (total - 1))));
+    let melhor = 0;
+    for (let i = 1; i < total; i++) if (Math.abs(xDoT(alvo.linhas[i].t, r.width) - (clientX - r.left)) < Math.abs(xDoT(alvo.linhas[melhor].t, r.width) - (clientX - r.left))) melhor = i;
+    return melhor;
   };
   const trecho = (a: number, b: number, e: unknown): Selecao => ({ tipo: "trecho", a: Math.min(a, b), b: Math.max(a, b), ...noGrafico(e) });
   const abrir = (p: PontoTemporal) => {
@@ -379,9 +386,24 @@ export function SerieTemporal({
   if (!total) return <ChartEmpty label="Nada no período escolhido" />;
   const intervalo = Math.max(0, Math.ceil(total / (estreita ? 6 : 8)) - 1);
   const atual = pontos.find((p) => p.atual);
-  const margem = preencher ? { top: estreita ? TOPO_LIVRE_ESTREITA : TOPO_LIVRE, right: 0, left: 0, bottom: 0 } : { top: 12, right: 16, left: 16, bottom: 0 };
-  // O topo da escala = o MAIOR valor à vista (o desenho chega ao alto; o espaço dos controles é a margem de cima).
-  const dominio = (d: Linha[]) => [ajustarY ? (min: number) => Math.max(0, min - (dataMax(d, series) - min) * 0.12) : 0, preencher ? "dataMax" : "auto"] as const;
+  // A escala vertical do QUADRO: só os valores DENTRO da janela (no zoom, o que ficou fora não achata o desenho); o topo =
+  // o maior valor à vista (o espaço dos controles é a margem de cima). Recalculada a cada quadro — desliza junto.
+  let yMax = 0;
+  let yMin = Number.POSITIVE_INFINITY;
+  for (const l of visto.linhas) {
+    if (l.t < visto.lo || l.t > visto.hi) continue;
+    for (const c of chaves) {
+      const v = Number(l[c]) || 0;
+      if (v > yMax) yMax = v;
+      if (v < yMin) yMin = v;
+    }
+  }
+  if (!Number.isFinite(yMin)) yMin = 0;
+  const topo = (yMax || 1) * (preencher ? 1 : 1.06);
+  const dominioY: [number, number] = [ajustarY ? Math.max(0, yMin - (yMax - yMin) * 0.12) : 0, topo];
+  // As linhas de grade (e as datas do eixo, fora do `preencher`) nas datas de um a cada `intervalo` pontos.
+  const ticks = pontos.filter((_, i) => i % (intervalo + 1) === 0).map((p, i) => p.t ?? i * (intervalo + 1));
+  const rotuloDoT = new Map(alvo.linhas.map((l, i) => [l.t, pontos[i]?.rotulo ?? ""]));
   /** Os degradês das áreas; `selecao` = o tom de seleção de cada cor (mais denso, para o trecho). */
   const degrades = (pref: string, selecao = false) => (
     <defs>
@@ -398,20 +420,24 @@ export function SerieTemporal({
   const datas = (lista: PontoTemporal[]) => {
     const n = lista.length;
     const passo = Math.max(0, Math.ceil(n / (estreita ? 6 : 8)) - 1);
+    const span = visto.hi - visto.lo;
     return (
       <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-2 h-6 text-[12px] font-semibold text-text">
           {lista.map((p, i) => {
             if (i % (passo + 1) !== 0) return null;
-            const x = (i / Math.max(1, n - 1)) * largura;
-            // Fora da faixa dos controles (as datas que cairiam sob eles não aparecem) e as das pontas alinhadas à borda.
-            if (i > 0 && (x < 80 || x > largura - reservaRotulos - 30)) return null;
+            // Na posição da data na janela à vista (no zoom, deslizam junto com o desenho).
+            const f = ((p.t ?? i) - visto.lo) / span;
+            const x = f * largura;
+            const ponta = f <= 0.001;
+            // Fora da janela, sob os controles ou colada na 1ª: não aparece; a da ponta esquerda alinha à borda.
+            if (f < -0.001 || f > 1.001 || (!ponta && (x < 80 || x > largura - reservaRotulos - 30))) return null;
             return (
               <span
                 key={p.chave}
                 // Cada data numa pílula de vidro (o estilo dos controles): legível sobre qualquer cor, no claro e no escuro.
                 className="absolute whitespace-nowrap rounded-chip bg-surface/75 px-1.5 py-0.5 leading-none tabular-nums shadow-ring backdrop-blur-sm"
                 // Em % da largura: acompanham a caixa no mesmo quadro (sem esperar a medida nova).
-                style={i === 0 ? { left: 8 } : !reservaRotulos && x > largura - 30 ? { right: 8 } : { left: `${(i / Math.max(1, n - 1)) * 100}%`, transform: "translateX(-50%)" }}
+                style={ponta ? { left: 8 } : !reservaRotulos && x > largura - 30 ? { right: 8 } : { left: `${f * 100}%`, transform: "translateX(-50%)" }}
               >
                 {p.rotulo}
               </span>
@@ -422,9 +448,11 @@ export function SerieTemporal({
   };
   const marcado = sel?.tipo === "ponto" ? pontos[sel.i] : undefined;
   const faixa = sel?.tipo === "trecho" ? { a: sel.a, b: sel.b } : arrasto && arrasto.de !== arrasto.ate ? { a: Math.min(arrasto.de, arrasto.ate), b: Math.max(arrasto.de, arrasto.ate) } : null;
-  const pontoDoVisto = (i: number) => visto[i] ?? dados[i];
-  // As bordas do recorte do trecho (px, no SVG): a posição horizontal dos dois pontos entre as margens do desenho.
-  const xDo = (i: number) => margem.left + (i / Math.max(1, total - 1)) * Math.max(0, largura - margem.left - margem.right);
+  // O valor de uma série num ponto, no quadro à vista (na transição, o da mesma data; senão o de destino).
+  const linhaPorT = new Map(visto.linhas.map((l) => [l.t, l]));
+  const valorNoVisto = (i: number, c: string) => Number((linhaPorT.get(alvo.linhas[i].t) ?? alvo.linhas[i])[c]) || 0;
+  // As bordas do recorte do trecho (px, no SVG): a posição das duas pontas na janela à vista.
+  const xDo = (i: number) => xDoT(alvo.linhas[i].t);
 
 
   return (
@@ -436,27 +464,14 @@ export function SerieTemporal({
     >
       {/* O recorte do TRECHO (o `clipPath` do SVG) nas cópias das áreas — a regra só existe com um trecho. */}
       {faixa && <style>{`.${id}-trecho{clip-path:url(#${id}-recorte);pointer-events:none}`}</style>}
-      {/* O desenho ANTERIOR (outros baldes), esmaecendo embaixo do novo. */}
-      {saindo && (
-        <div key={saindo.n} aria-hidden className="grafico-sai pointer-events-none absolute inset-0" onAnimationEnd={fimSaida}>
-          <ResponsiveContainer>
-            <AreaChart data={saindo.dados} margin={margem} accessibilityLayer={false}>
-              {degrades(`${id}s`)}
-              <YAxis hide domain={dominio(saindo.dados)} />
-              <XAxis dataKey="chave" hide />
-              {series.map((s) => (
-                <Area key={s.chave} type="monotone" dataKey={s.chave} stroke="none" fill={`url(#${id}s-${s.chave})`} dot={false} activeDot={false} isAnimationActive={false} />
-              ))}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
       {/* O ARRASTO (mouse e caneta; no toque, os dois toques) pelo ponteiro nativo: o ponto sob ele vem da posição no desenho. */}
       <div
         key={estrutura}
         role="none"
-        className={`h-full ${saindo ? "grafico-entra" : ""} ${onEscolher ? "cursor-pointer" : ""}`}
+        className={`h-full ${onEscolher ? "cursor-pointer" : ""}`}
         onPointerDown={(e) => {
+          // Um gesto novo: o clique engolido era só o que vem logo depois de um arrasto (alguns navegadores não o disparam).
+          engolirClique.current = false;
           if (!onTrecho || e.pointerType === "touch" || e.button !== 0) return;
           const i = indiceNaPosicao(e.clientX);
           if (i == null) return;
@@ -482,15 +497,17 @@ export function SerieTemporal({
       >
         <ResponsiveContainer>
           <AreaChart
-            data={visto}
+            data={visto.linhas}
             margin={margem}
             accessibilityLayer={false}
-            onClick={(st, e) => {
+            onClick={(_st, e) => {
               if (engolirClique.current) {
                 engolirClique.current = false;
                 return;
               }
-              const i = indice(st);
+              // O ponto do clique pela posição do ponteiro (a mesma régua do arrasto e do recorte do trecho).
+              const ev = e as unknown as { clientX?: number };
+              const i = ev.clientX == null ? null : indiceNaPosicao(ev.clientX);
               if (!onEscolher || i == null) return;
               if (sel?.tipo === "ponto" && sel.i === i) return abrir(pontos[i]);
               if (sel?.tipo === "ponto" && onTrecho) return setSel(trecho(sel.i, i, e));
@@ -507,16 +524,21 @@ export function SerieTemporal({
                 </clipPath>
               </defs>
             )}
-            <YAxis hide domain={dominio(visto)} />
-            <CartesianGrid stroke={tk.axis} strokeOpacity={0.3} horizontal={false} />
+            <YAxis hide domain={dominioY} allowDataOverflow />
+            <CartesianGrid stroke={tk.axis} strokeOpacity={0.3} horizontal={false} syncWithTicks />
+            {/* O eixo do TEMPO: a janela do quadro (o zoom desliza); o que passa dela é recortado. */}
             <XAxis
-              dataKey="chave"
-              tickFormatter={(c: string) => porChave.get(c)?.rotulo ?? c}
+              type="number"
+              dataKey="t"
+              domain={[visto.lo, visto.hi]}
+              allowDataOverflow
+              ticks={ticks}
+              tickFormatter={(t: number) => rotuloDoT.get(t) ?? ""}
               tick={{ fontSize: 11, fill: tk.axis }}
               hide={preencher}
               axisLine={false}
               tickLine={false}
-              interval={intervalo}
+              interval={0}
               minTickGap={8}
             />
             <Tooltip
@@ -538,8 +560,8 @@ export function SerieTemporal({
                 );
               }}
             />
-            {atual && <ReferenceLine x={atual.chave} stroke={tk.axis} strokeOpacity={0.85} strokeWidth={1.5} strokeDasharray="4 3" />}
-            {marcado && <ReferenceLine x={marcado.chave} stroke={tk.axis} strokeOpacity={0.85} strokeWidth={1.5} strokeDasharray="4 4" />}
+            {atual && <ReferenceLine x={atual.t ?? pontos.indexOf(atual)} stroke={tk.axis} strokeOpacity={0.85} strokeWidth={1.5} strokeDasharray="4 3" />}
+            {marcado && sel?.tipo === "ponto" && <ReferenceLine x={alvo.linhas[sel.i].t} stroke={tk.axis} strokeOpacity={0.85} strokeWidth={1.5} strokeDasharray="4 4" />}
             {series.map((s) => (
               <Area
                 key={s.chave}
@@ -576,8 +598,8 @@ export function SerieTemporal({
               series.map((s) => (
                 <ReferenceDot
                   key={`sel-${i}-${s.chave}`}
-                  x={pontos[i].chave}
-                  y={Number(pontoDoVisto(i)[s.chave]) || 0}
+                  x={alvo.linhas[i].t}
+                  y={valorNoVisto(i, s.chave)}
                   shape={(d: { cx?: number; cy?: number }) =>
                     d.cx == null || d.cy == null ? (
                       <g />
@@ -595,17 +617,17 @@ export function SerieTemporal({
         </ResponsiveContainer>
       </div>
       {sel?.tipo === "ponto" && marcado && (
-        <DicaQueSegue caixa={figRef} fixo={{ x: sel.x, y: sel.y }}>
+        <DicaQueSegue caixa={figRef} fixo={{ x: sel.x, y: sel.y }} evitar={{ de: xDo(sel.i), ate: xDo(sel.i) }}>
           {caixa(marcado.titulo, valoresDe(marcado), extraDica?.(marcado) ?? [], onEscolher && acoes("Ver os dados completos", () => abrir(marcado), onTrecho ? "Clique em outro ponto para comparar o trecho" : undefined))}
         </DicaQueSegue>
       )}
       {sel?.tipo === "trecho" && (
-        <DicaQueSegue caixa={figRef} fixo={{ x: sel.x, y: sel.y }}>
+        <DicaQueSegue caixa={figRef} fixo={{ x: sel.x, y: sel.y }} evitar={{ de: xDo(sel.a), ate: xDo(sel.b) }}>
           {caixa(`${pontos[sel.a].titulo} → ${pontos[sel.b].titulo}`, null, dicaTrecho?.(pontos[sel.a], pontos[sel.b]) ?? [], acoes("Ver os dados do trecho", () => abrirTrecho(sel.a, sel.b)))}
         </DicaQueSegue>
       )}
       {preencher && saindo && (
-        <div key={`datas-${saindo.n}`} className="grafico-sai pointer-events-none absolute inset-0">
+        <div key={`datas-${saindo.n}`} className="grafico-sai pointer-events-none absolute inset-0" onAnimationEnd={fimSaida}>
           {datas(saindo.extra)}
         </div>
       )}

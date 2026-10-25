@@ -254,6 +254,7 @@ export function DashboardExecucao({
         rotulo: p.rotulo,
         titulo: p.titulo,
         atual: p.atual,
+        t: tDoBalde(p),
         valores:
           modo === "acumulado"
             ? { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) }
@@ -662,6 +663,9 @@ export function DashboardExecucao({
 
 type PontoDaSerie = ReturnType<typeof serie>["pontos"][number];
 
+/** A posição de um balde no TEMPO (o dia do meio dele): o gráfico casa os desenhos pela data ao trocar o agrupamento ou o zoom. */
+const tDoBalde = (p: PontoDaSerie) => ((diaDoIso(p.de) ?? 0) + (diaDoIso(p.ate) ?? 0)) / 2;
+
 /**
  * A DICA de um ponto do gráfico, além dos valores das séries: no acumulado, o que entrou SÓ neste balde (com as
  * quantidades); por período, o acumulado até aqui; e a execução acumulada — % liquidado e pago sobre o empenhado, o que
@@ -814,6 +818,7 @@ function OrigemExecucao({
         chave: p.chave,
         rotulo: p.rotulo,
         titulo: p.titulo,
+        t: tDoBalde(p),
         valores: { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) },
       })),
     [origem.acumulado],
