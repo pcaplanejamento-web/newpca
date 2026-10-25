@@ -5,11 +5,44 @@
 // das posições dos dois) pela MESMA curva com que o gráfico desenha (a monótona do d3, `curveMonotoneX`): no início o
 // quadro é a curva antiga, no fim a nova, e cada quadro intermediário é a mistura das duas. A janela de datas (o domínio
 // do eixo X) também desliza — o zoom anima.
+//
+// A mistura é feita na TELA, não nos valores: cada curva é lida na sua PRÓPRIA escala vertical (de `ylo` a `yhi`) e o
+// quadro mistura as alturas na tela, com a escala também deslizando. Misturar os valores crus falharia entre escalas muito
+// diferentes (o valor de um mês ≈ 30× o de um dia, "Por período" de Dia → Mês): o maior dominaria já no começo e o desenho
+// "pularia" para a forma nova e voltaria a se acomodar.
 
 /** Uma linha do desenho: a chave do ponto (o mais perto, na mistura), a posição no tempo e os valores das séries. */
 export type LinhaSerie = { chave: string; t: number } & Record<string, number | string>;
-/** Um quadro: as linhas e a janela do eixo X (de `lo` a `hi`). */
-export type QuadroSerie = { linhas: LinhaSerie[]; lo: number; hi: number };
+/** Um quadro: as linhas, a janela do eixo X (de `lo` a `hi`), a escala vertical (de `ylo` a `yhi`) e uma `marca` opcional no
+ * tempo (a linha de hoje — desliza junto). */
+export type QuadroSerie = { linhas: LinhaSerie[]; lo: number; hi: number; ylo: number; yhi: number; marca?: number | null };
+
+/**
+ * A escala vertical de um quadro: só os valores DENTRO da janela (no zoom, o que ficou fora não achata o desenho); o topo
+ * = o maior valor × `folga`; o chão = 0, ou um pouco abaixo do menor com `ajustar` (o acumulado no zoom). Nunca vazia.
+ */
+export function escalaDoQuadro(
+  linhas: readonly LinhaSerie[],
+  lo: number,
+  hi: number,
+  chaves: readonly string[],
+  { ajustar = false, folga = 1 }: { ajustar?: boolean; folga?: number } = {},
+): { ylo: number; yhi: number } {
+  let max = 0;
+  let min = Number.POSITIVE_INFINITY;
+  for (const l of linhas) {
+    if (l.t < lo || l.t > hi) continue;
+    for (const c of chaves) {
+      const v = Number(l[c]) || 0;
+      if (v > max) max = v;
+      if (v < min) min = v;
+    }
+  }
+  if (!Number.isFinite(min)) min = 0;
+  const yhi = (max || 1) * folga;
+  const ylo = ajustar ? Math.max(0, min - (max - min) * 0.12) : 0;
+  return { ylo, yhi: yhi > ylo ? yhi : ylo + 1 };
+}
 
 /** As tangentes da curva monótona (as do `curveMonotoneX` do d3: Steffen — nunca passa dos valores vizinhos). */
 function tangentes(xs: number[], ys: number[]): number[] {
@@ -79,7 +112,9 @@ function uniao(a: number[], b: number[]): number[] {
 
 /**
  * A MORFOLOGIA de `de` para `para`: devolve o quadro de cada instante `k` (0 = `de`, 1 = `para` — o próprio, intacto). As
- * duas curvas são amostradas uma vez na união das posições; cada quadro só mistura números. Sem linhas num dos lados, o
+ * duas curvas são amostradas uma vez na união das posições e lidas como ALTURA NA TELA (0–1, cada uma na sua escala); cada
+ * quadro mistura as alturas e devolve o valor que dá aquela altura na escala do quadro (que também desliza) — a linha vai
+ * em linha reta, na tela, da posição antiga à nova, qualquer que seja a mudança de escala. Sem linhas num dos lados, o
  * quadro é o outro (nada a misturar).
  */
 export function morfologia(de: QuadroSerie, para: QuadroSerie, chaves: readonly string[]): (k: number) => QuadroSerie {
@@ -94,8 +129,12 @@ export function morfologia(de: QuadroSerie, para: QuadroSerie, chaves: readonly 
       q.linhas.map((l) => Number(l[c]) || 0),
       ts,
     );
-  const ini = chaves.map((c) => amostra(de, c));
-  const fim = chaves.map((c) => amostra(para, c));
+  const altura = (q: QuadroSerie, c: string) => {
+    const span = q.yhi - q.ylo || 1;
+    return amostra(q, c).map((v) => (v - q.ylo) / span);
+  };
+  const ini = chaves.map((c) => altura(de, c));
+  const fim = chaves.map((c) => altura(para, c));
   // A chave de cada posição = a do ponto NOVO mais perto (a dica e o clique durante a transição já falam do desenho novo).
   const pts = para.linhas;
   let j = 0;
@@ -103,13 +142,20 @@ export function morfologia(de: QuadroSerie, para: QuadroSerie, chaves: readonly 
     while (j < pts.length - 1 && Math.abs(pts[j + 1].t - t) <= Math.abs(pts[j].t - t)) j++;
     return pts[j].chave;
   });
+  const mix = (a: number, b: number, k: number) => a + (b - a) * k;
+  // A marca (a linha de hoje) desliza quando existe nos dois; senão vale a do destino.
+  const marcaDe = de.marca != null && para.marca != null ? de.marca : para.marca;
   return (k) => {
     if (k >= 1) return para;
+    const ylo = mix(de.ylo, para.ylo, k);
+    const yhi = mix(de.yhi, para.yhi, k);
+    const span = yhi - ylo;
     const linhas = ts.map((t, i) => {
       const l: LinhaSerie = { chave: chaveDe[i], t };
-      for (let c = 0; c < chaves.length; c++) l[chaves[c]] = ini[c][i] + (fim[c][i] - ini[c][i]) * k;
+      for (let c = 0; c < chaves.length; c++) l[chaves[c]] = ylo + span * mix(ini[c][i], fim[c][i], k);
       return l;
     });
-    return { linhas, lo: de.lo + (para.lo - de.lo) * k, hi: de.hi + (para.hi - de.hi) * k };
+    const marca = marcaDe != null && para.marca != null ? mix(marcaDe, para.marca, k) : para.marca;
+    return { linhas, lo: mix(de.lo, para.lo, k), hi: mix(de.hi, para.hi, k), ylo, yhi, marca };
   };
 }

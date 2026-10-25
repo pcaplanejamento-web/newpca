@@ -1386,7 +1386,8 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
 }
 
 /* A troca de um desenho de gráfico por outro (outros baldes — SerieTemporal): o anterior esmaece embaixo enquanto o novo
-   surge por cima, no mesmo tempo (~0,5 s). */
+   surge por cima, no mesmo tempo (~0,5 s). `--de` = a opacidade de onde a saída parte (uma camada que ainda entrava não
+   volta a 100% para sair). */
 .grafico-entra {
   animation: grafico-entra 0.52s cubic-bezier(0.65, 0, 0.35, 1) both;
 }
@@ -1403,7 +1404,7 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
 }
 @keyframes grafico-sai {
   from {
-    opacity: 1;
+    opacity: var(--de, 1);
   }
   to {
     opacity: 0;

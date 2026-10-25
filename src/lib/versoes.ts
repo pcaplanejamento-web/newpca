@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.231.0",
+    data: "2026-10-25",
+    titulo: "Execução: transições do gráfico sem saltos",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "Em \"Por período\", trocar entre Dia, Semana e Mês não faz mais o desenho saltar para outra forma e voltar: cada linha vai direto da posição antiga à nova, com a escala deslizando junto — o mesmo em qualquer filtro, modo e zoom.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "As linhas de marcação, as datas e a linha de hoje deslizam e trocam junto com o desenho, de forma suave; em trocas rápidas, o que sai esmaece de onde estava, sem piscar.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.230.0",
     data: "2026-10-25",
     titulo: "Seletor de período renovado e conectado",
