@@ -48,7 +48,8 @@ export async function contaDe(usuarioId: number): Promise<{ limite: number | nul
 }
 
 export type EstadoAparelhos = {
-  lista: AparelhoLista[];
+  /** Sem o indício de janela anônima (vai ao navegador da própria pessoa — só o ADM o vê). */
+  lista: Omit<AparelhoLista, "indicioAnonimo">[];
   limite: number;
   limiteProprio: number | null;
   trocaAte: string | null;
@@ -73,7 +74,7 @@ export async function estadoAparelhos(u: UsuarioSessao, userAgent: string | null
   const limite = isento ? LIMITE_ISENTO : limiteEfetivo(c, u.papel.id, conta.limite);
   const repetir = repeteAoEntrar(c, u);
   return {
-    lista,
+    lista: lista.map(({ indicioAnonimo: _i, ...a }) => a),
     limite,
     limiteProprio: conta.limite,
     trocaAte: conta.trocaAte,
