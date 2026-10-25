@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.236.0",
+    data: "2026-10-25",
+    titulo: "Gráfico da Execução: sem piscar, a última data à vista e datas clicáveis",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "Filtrar não faz mais o gráfico piscar: o desenho escorre direto até os números novos, e as datas que continuam à vista ficam firmes ao trocar Dia, Semana, Mês ou o zoom.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "A última data do gráfico aparece no canto direito (“Hoje” quando é o dia de hoje); a lupa e os botões ao lado subiram para ficar acima dela.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "As datas do gráfico são clicáveis: tocar marca o ponto, tocar de novo abre os dados e tocar em outra data compara o trecho — como no próprio gráfico.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.235.0",
     data: "2026-10-25",
     titulo: "Filtros: o estado inicial à parte e a Unidade no padrão do sistema",

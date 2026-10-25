@@ -55,6 +55,7 @@ import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
 import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./charts/Barras";
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
+import { TOPO_DAS_DATAS } from "./charts/serie-medidas";
 import { corSerie } from "./charts/shared";
 import { type Column, DataTable } from "./DataTable";
 import { SalvarEdicao, useEdicoesTabela } from "./EdicoesTabela";
@@ -90,9 +91,6 @@ const SERIES = [
   { chave: "pago", rotulo: "Pago", cor: 7 },
 ] as const;
 const COR = { empenhado: corSerie(SERIES[0].cor), liquidado: corSerie(SERIES[1].cor), pago: corSerie(SERIES[2].cor) };
-
-/** A largura da pilha de botões sobre o desenho (botão + vidro + a distância da borda): as datas não entram nela. */
-const RESERVA_CONTROLES = 60;
 
 /** Da mais fina à mais grossa (a granularidade do zoom nunca fica mais grossa que a escolhida). */
 const ORDEM_GRAN = { auto: 0, dia: 1, semana: 2, mes: 3, ano: 4 } as const;
@@ -364,13 +362,15 @@ export function DashboardExecucao({
         rotulo: p.rotulo,
         titulo: p.titulo,
         atual: p.atual,
+        // O balde de UM dia que é hoje: a pílula da data diz "Hoje".
+        hoje: p.de === hoje && p.ate === hoje,
         t: tDoBalde(p),
         valores:
           modo === "acumulado"
             ? { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) }
             : { empenhado: reais(p.empenhado), liquidado: reais(p.liquidado), pago: reais(p.pago) },
       })),
-    [s.pontos, modo],
+    [s.pontos, modo, hoje],
   );
   const zoom = (fator: number) => todo && setJanela((j) => zoomJanela(j, todo, fator));
   // As datas que o gráfico MOSTRA no zoom: o início da janela até o fim dela (nunca depois de hoje nem do último dado).
@@ -446,7 +446,9 @@ export function DashboardExecucao({
   };
 
   return (
-    <div className={`space-y-[var(--gap-block)] transition-opacity ${atrasado ? "opacity-70" : ""}`} aria-busy={atrasado}>
+    // Filtrar NÃO esmaece a tela (o desenho escorre até os números novos — esmaecer antes era a "piscada"); só a CARGA de
+    // outros anos (rede) esmaece.
+    <div className={`space-y-[var(--gap-block)] transition-opacity ${carregando ? "opacity-70" : ""}`} aria-busy={atrasado}>
       {/* Sem linha de título: os indicadores abrem a tela (o nome fica para o leitor de tela). */}
       <h1 className="sr-only">Execução da despesa</h1>
 
@@ -785,7 +787,6 @@ export function DashboardExecucao({
               <SerieTemporal
                 pontos={pontos}
                 preencher
-                reservaRotulos={RESERVA_CONTROLES}
                 altura={420}
                 ajustarY={!!janela && modo === "acumulado"}
                 series={seriesVistas}
@@ -803,9 +804,10 @@ export function DashboardExecucao({
                   return pa && pb ? dicaDoTrecho(s.pontos, pa, pb, rotuloGran, temLiq, temPag) : [];
                 }}
               />
-              {/* A lupa, o restaurar e a tabela empilhados no canto inferior direito, à mesma distância da borda dos demais. */}
-              <div className={`pointer-events-none absolute right-2 bottom-2 z-10 ${ESCALA_PILHA}`}>
-                <div className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO}`}>
+              {/* A lupa, o restaurar e a tabela empilhados à direita, ACIMA da linha das datas (a mesma distância da borda e da
+                  pílula da última data) — a última data fica à vista. A escala vai no conteúdo: a posição não encolhe junto. */}
+              <div className="pointer-events-none absolute right-2 z-10" style={{ bottom: TOPO_DAS_DATAS }}>
+                <div className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO} ${ESCALA_PILHA}`}>
                   <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
                     <IconZoom className="h-4 w-4" />
                   </Button>
