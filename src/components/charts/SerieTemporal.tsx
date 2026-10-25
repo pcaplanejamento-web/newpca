@@ -221,6 +221,7 @@ export function SerieTemporal({
   ajustarY = false,
   preencher = false,
   reservaRotulos = 0,
+  ocultas,
 }: {
   pontos: PontoTemporal[];
   series: readonly SerieTemporalDef[];
@@ -238,6 +239,9 @@ export function SerieTemporal({
   preencher?: boolean;
   /** No `preencher`: a faixa à DIREITA (px) em que as datas não entram (onde ficam os controles sobre o desenho). */
   reservaRotulos?: number;
+  /** As séries DESLIGADAS (a legenda): continuam no desenho, deitadas no chão — sair e voltar é a MESMA morfologia das
+   * demais trocas (a linha desce ou sobe e a escala se ajusta às que ficaram). Ao menos uma fica sempre à vista. */
+  ocultas?: ReadonlySet<string>;
 }) {
   const tk = useChartTokens();
   const escuro = (hexToHsv(tk.fundo)?.[2] ?? 100) < 45;
@@ -268,6 +272,13 @@ export function SerieTemporal({
     for (const svg of figRef.current?.querySelectorAll("svg.recharts-surface") ?? []) svg.setAttribute("preserveAspectRatio", "none");
   });
   const chaves = useMemo(() => series.map((x) => x.chave), [series]);
+  const chaveOcultas = ocultas ? [...ocultas].sort().join(",") : "";
+  // As séries à vista (dica, pontos, trecho); sem nenhuma, todas.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `chaveOcultas` representa o conjunto.
+  const visiveis = useMemo(() => {
+    const v = series.filter((x) => !ocultas?.has(x.chave));
+    return v.length ? v : series;
+  }, [series, chaveOcultas]);
   // O quadro de destino: cada ponto na sua posição no tempo (`t`, senão a ordem) e a janela do 1º ao último.
   // A escala vertical e a linha de hoje vão no quadro: a transição desliza as duas junto com o desenho.
   const alvo = useMemo<QuadroSerie>(() => {
@@ -277,8 +288,13 @@ export function SerieTemporal({
     const hi = fim > lo ? fim : lo + 1;
     const iAtual = pontos.findIndex((p) => p.atual);
     const marca = iAtual >= 0 ? linhas[iAtual].t : null;
-    return { linhas, lo, hi, marca, ...escalaDoQuadro(linhas, lo, hi, chaves, { ajustar: ajustarY, folga: preencher ? 1 : 1.06 }) };
-  }, [pontos, chaves, ajustarY, preencher]);
+    const naVista = visiveis.map((x) => x.chave);
+    const escala = escalaDoQuadro(linhas, lo, hi, naVista, { ajustar: ajustarY, folga: preencher ? 1 : 1.06 });
+    // As desligadas deitam no chão da escala (altura zero na tela).
+    const deitadas = chaves.filter((c) => !naVista.includes(c));
+    if (deitadas.length) for (const l of linhas) for (const c of deitadas) (l as Record<string, number | string>)[c] = escala.ylo;
+    return { linhas, lo, hi, marca, ...escala };
+  }, [pontos, chaves, visiveis, ajustarY, preencher]);
   const porChave = useMemo(() => new Map(pontos.map((p) => [p.chave, p])), [pontos]);
   const total = pontos.length;
   // Os baldes do desenho (outros baldes = a seleção cai e as datas trocam esmaecendo; o desenho escorre nos dois casos).
@@ -363,7 +379,7 @@ export function SerieTemporal({
     </TooltipBox>
   );
   const valoresDe = (p: PontoTemporal) =>
-    series.map((s) => (
+    visiveis.map((s) => (
       <div key={s.chave} className="flex items-center justify-between gap-4">
         <span className="inline-flex items-center gap-1.5 text-muted">
           <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: tk.serie[s.cor] }} />
@@ -491,8 +507,9 @@ export function SerieTemporal({
       {/* As linhas de marcação ATRÁS do desenho (antes dele; o desenho é posicionado e pinta por cima). */}
       {preencher && camadas("linhas")}
       {/* O ARRASTO (mouse e caneta; no toque, os dois toques) pelo ponteiro nativo: o ponto sob ele vem da posição no desenho. */}
+      {/* SEM `key` pela estrutura: remontar o `ResponsiveContainer` a cada troca de baldes (filtro, agrupamento) o fazia nascer
+          sem largura — um quadro com o desenho vazio, a "piscada" na cor do fundo. A seleção já é desfeita pelo efeito acima. */}
       <div
-        key={estrutura}
         role="none"
         className={`relative h-full ${onEscolher ? "cursor-pointer" : ""}`}
         onPointerDown={(e) => {
@@ -599,14 +616,14 @@ export function SerieTemporal({
                 fill={`url(#${id}-${s.chave})`}
                 fillOpacity={faixa ? 0.3 : 1}
                 dot={false}
-                activeDot={(d: { cx?: number; cy?: number }) => <PontoVivo cx={d.cx} cy={d.cy} cor={tk.serie[s.cor]} fundo={tk.fundo} />}
+                activeDot={visiveis.includes(s) ? (d: { cx?: number; cy?: number }) => <PontoVivo cx={d.cx} cy={d.cy} cor={tk.serie[s.cor]} fundo={tk.fundo} /> : false}
                 isAnimationActive={false}
               />
             ))}
             {/* O TRECHO: cada área ganha, só entre as duas pontas, o SEU tom de seleção (o degradê mais forte e a linha do topo
                 na cor dela); fora dele o desenho esmaece. O recorte é um `clip-path` do próprio SVG (leve: nada recalculado). */}
             {faixa &&
-              series.map((s) => (
+              visiveis.map((s) => (
                 <Area
                   key={`trecho-${s.chave}`}
                   className={`${id}-trecho`}
@@ -622,7 +639,7 @@ export function SerieTemporal({
               ))}
             {/* Os pontos da seleção (o marcado ou as duas pontas do trecho), pulsando como "online". */}
             {(marcado ? [sel?.tipo === "ponto" ? sel.i : 0] : sel?.tipo === "trecho" ? [sel.a, sel.b] : []).flatMap((i) =>
-              series.map((s) => (
+              visiveis.map((s) => (
                 <ReferenceDot
                   key={`sel-${i}-${s.chave}`}
                   x={alvo.linhas[i].t}

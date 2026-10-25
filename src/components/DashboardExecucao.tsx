@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { EmpenhoNaTela } from "@/lib/empenhos-tela-core";
 import {
   anosDoIntervalo,
@@ -171,7 +171,19 @@ export function DashboardExecucao({
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
   const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
-  const adiado = useDeferredValue(pedido);
+  // Quando o FUNIL entra ou sai (o 1º filtro ligado, o último desligado), o cálculo espera a animação dele terminar: o
+  // cálculo é uma tarefa única e longa, que congelaria o deslizar no meio. As demais trocas seguem na hora.
+  const comFiltro =
+    JSON.stringify(periodo) !== JSON.stringify(periodoPadrao) || tipo.length > 0 || DIMS_EXEC.some((d) => (filtros[d] ?? []).length > 0);
+  const [liberado, setLiberado] = useState(pedido);
+  const funilAntes = useRef(comFiltro);
+  useEffect(() => {
+    if (funilAntes.current === comFiltro) return setLiberado(pedido);
+    funilAntes.current = comFiltro;
+    const id = window.setTimeout(() => setLiberado(pedido), duracaoMotionMs() + 40);
+    return () => window.clearTimeout(id);
+  }, [pedido, comFiltro]);
+  const adiado = useDeferredValue(liberado);
   const atrasado = adiado !== pedido || carregando;
   const intervalo = useMemo(() => intervaloDoPeriodo(adiado.periodo, hoje), [adiado.periodo, hoje]);
   const calc: Calculo = useMemo(() => calcular(base, intervalo, adiado.filtros, adiado.tipo), [base, intervalo, adiado.filtros, adiado.tipo]);
@@ -211,23 +223,26 @@ export function DashboardExecucao({
   const liquidadoAnim = useContagem(reais(t.liquidado));
   const pagoAnim = useContagem(reais(t.pago));
 
-  // O TIPO é um filtro como os demais (o mesmo seletor), com as opções conectadas aos outros filtros.
+  // O TIPO é um filtro como os demais (o mesmo seletor), com as opções conectadas aos outros filtros. As OPÇÕES (pesadas)
+  // seguem o cálculo; os marcados (leves) mudam na hora, sem refazer as opções a cada clique.
+  const opcoesCampos = useMemo(
+    () => ({
+      tipo: OPCOES_TIPO.map((o) => ({ chave: o.chave, rotulo: o.rotulo, count: calc.opcoesTipo.get(o.chave) ?? 0 })),
+      ...Object.fromEntries(DIMS_EXEC.map((dim) => [dim, opcoesDim(base, calc, adiado.filtros, dim)])),
+    }),
+    [base, calc, adiado.filtros],
+  );
   const campos = useMemo(
     () => [
-      {
-        dim: "tipo",
-        rotulo: "Tipo",
-        opcoes: OPCOES_TIPO.map((o) => ({ chave: o.chave, rotulo: o.rotulo, count: calc.opcoesTipo.get(o.chave) ?? 0 })),
-        selecionados: [...tipo],
-      },
+      { dim: "tipo", rotulo: "Tipo", opcoes: opcoesCampos.tipo, selecionados: [...tipo] },
       ...DIMS_EXEC.map((dim) => ({
         dim,
         rotulo: ROTULO_DIM[dim],
-        opcoes: opcoesDim(base, calc, adiado.filtros, dim),
+        opcoes: (opcoesCampos as Record<string, ReturnType<typeof opcoesDim>>)[dim],
         selecionados: [...(filtros[dim] ?? [])],
       })),
     ],
-    [base, calc, adiado.filtros, filtros, tipo],
+    [opcoesCampos, filtros, tipo],
   );
   const mudarFiltro = (dim: string, chaves: string[]) => {
     if (dim === "tipo") return setTipo(chaves.filter((k): k is "ne" | "rp" => k === "ne" || k === "rp"));
@@ -253,6 +268,24 @@ export function DashboardExecucao({
       return l.length ? [{ key: `d:${dim}`, rotulo: ROTULO_DIM[dim], valor: l.map((k) => rotuloOpcao(base, dim, k)).join(", "), tirar: () => mudarFiltro(dim, []) }] : [];
     }),
   ];
+  // O funil SAI deslizando com o último resumo à vista: desmontá-lo na hora tirava a largura que a animação encolhe.
+  const ultimoResumo = useRef(ativosResumo);
+  if (ativosResumo.length) ultimoResumo.current = ativosResumo;
+  const resumoFunil = ativosResumo.length ? ativosResumo : ultimoResumo.current;
+  // A largura do funil (medida): a caixa anima `width` de 0 até ela — a transição de `grid-template-columns` (0fr ↔ 1fr)
+  // não interpola numa caixa de largura intrínseca e o funil saltava.
+  // Ref por função: o funil muda de lugar (gráfico ↔ tabela) e cada elemento novo é observado.
+  const [larguraFunil, setLarguraFunil] = useState(0);
+  const observaFunil = useRef<ResizeObserver | null>(null);
+  const funilRef = useCallback((el: HTMLSpanElement | null) => {
+    observaFunil.current?.disconnect();
+    observaFunil.current = null;
+    if (!el) return;
+    const medir = () => setLarguraFunil(el.offsetWidth);
+    medir();
+    observaFunil.current = new ResizeObserver(medir);
+    observaFunil.current.observe(el);
+  }, []);
 
   const pontos: PontoTemporal[] = useMemo(
     () =>
@@ -518,27 +551,31 @@ export function DashboardExecucao({
           // sem empurrar de repente os botões ao lado.
           const funil = (
             <span
-              className="grid shrink-0 transition-[grid-template-columns,opacity] duration-[var(--motion-duration)] ease-out"
-              style={{ gridTemplateColumns: ativosResumo.length > 0 ? "1fr" : "0fr", opacity: ativosResumo.length > 0 ? 1 : 0 }}
+              className="-mt-1.5 block shrink-0 overflow-hidden pt-1.5 transition-[width,opacity] duration-[var(--motion-duration)] ease-out motion-reduce:transition-none"
+              style={{ width: ativosResumo.length > 0 ? larguraFunil : 0, opacity: ativosResumo.length > 0 ? 1 : 0 }}
               aria-hidden={ativosResumo.length === 0 || undefined}
+              inert={ativosResumo.length === 0 || undefined}
             >
-              {/* O respiro em cima e à direita (com a margem negativa igual) deixa o selo do número inteiro dentro do corte. */}
-              <span className="-mt-1.5 -mr-1 flex min-w-0 overflow-hidden pt-1.5 pr-2">
-                {ativosResumo.length > 0 && (
-                  <FiltrosAtivos
-                    titulo="Filtros ligados"
-                    colunas={ativosResumo.map((x) => ({
-                      key: x.key,
-                      header: (
-                        <span title={`${x.rotulo}: ${x.valor}`}>
-                          <span className="text-muted">{x.rotulo}:</span> {x.valor}
-                        </span>
-                      ),
-                    }))}
-                    onLimparColuna={(k) => ativosResumo.find((x) => x.key === k)?.tirar()}
-                    onLimpar={limparTudo}
-                  />
-                )}
+              {/* O corte (para o deslizar) com respiro em cima — a margem negativa devolve o lugar — e o respiro à direita
+                  por DENTRO: o selo do número fica inteiro e, recolhido, nada sobra de largura. */}
+              <span className="block w-max">
+                <span ref={funilRef} className="flex pr-2">
+                  {resumoFunil.length > 0 && (
+                    <FiltrosAtivos
+                      titulo="Filtros ligados"
+                      colunas={resumoFunil.map((x) => ({
+                        key: x.key,
+                        header: (
+                          <span title={`${x.rotulo}: ${x.valor}`}>
+                            <span className="text-muted">{x.rotulo}:</span> {x.valor}
+                          </span>
+                        ),
+                      }))}
+                      onLimparColuna={(k) => ativosResumo.find((x) => x.key === k)?.tirar()}
+                      onLimpar={limparTudo}
+                    />
+                  )}
+                </span>
               </span>
             </span>
           );
@@ -652,7 +689,8 @@ export function DashboardExecucao({
                 reservaRotulos={RESERVA_CONTROLES}
                 altura={420}
                 ajustarY={!!janela && modo === "acumulado"}
-                series={seriesDesenho}
+                series={seriesVistas}
+                ocultas={ocultas}
                 ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
                 onEscolher={(p) => abrirPonto(p.chave)}
                 extraDica={(p) => {

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.232.1",
+    data: "2026-10-25",
+    titulo: "Execução: gráfico sem piscadas e transições fluidas",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "Ao ligar um filtro ou trocar o agrupamento, o desenho do gráfico não pisca mais em branco (claro) ou preto (escuro): ele escorre direto para a forma nova.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Desligar uma linha na legenda faz ela descer suave até o chão (e subir ao religar), com a escala se ajustando às linhas que ficaram — a mesma transição do resto do gráfico.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "O botão dos filtros ligados entra e sai deslizando, sem travar: o cálculo dos números espera a animação terminar.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.232.0",
     data: "2026-10-25",
     titulo: "Execução: legenda que liga e desliga as linhas",
