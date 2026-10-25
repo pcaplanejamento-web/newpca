@@ -1,5 +1,6 @@
 "use client";
 
+import { areaVisivel, entre } from "./area-visivel";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
@@ -48,11 +49,12 @@ export function JanelaFlutuante({
     if (!aberta || !desk) return setPos(null);
     const el = ref.current;
     const h = el?.offsetHeight ?? 360;
-    const w = Math.min(largura, window.innerWidth - 16);
-    const a = ancora ?? { x: window.innerWidth / 2 - w / 2, y: window.innerHeight / 3, w: 0, h: 0 };
+    const t = areaVisivel();
+    const w = Math.min(largura, t.largura);
+    const a = ancora ?? { x: t.esquerda + t.largura / 2 - w / 2, y: t.topo + t.altura / 3, w: 0, h: 0 };
     const direita = a.x + a.w + 12;
-    const x = direita + w <= window.innerWidth - 8 ? direita : Math.max(8, a.x - w - 12);
-    const y = Math.max(8, Math.min(a.y - 40, window.innerHeight - h - 8));
+    const x = direita + w <= t.direita ? direita : entre(a.x - w - 12, t.esquerda, t.direita - w);
+    const y = entre(a.y - 40, t.topo, t.base - h);
     setPos({ x, y });
   }, [aberta, desk, ancora, largura]);
 
@@ -64,7 +66,8 @@ export function JanelaFlutuante({
     const obs = new ResizeObserver(() => {
       setPos((p) => {
         if (!p) return p;
-        const y = Math.max(8, Math.min(p.y, window.innerHeight - el.offsetHeight - 8));
+        const t = areaVisivel();
+        const y = entre(p.y, t.topo, t.base - el.offsetHeight);
         return y === p.y ? p : { ...p, y };
       });
     });
@@ -102,7 +105,8 @@ export function JanelaFlutuante({
     const mover = (e: PointerEvent) => {
       const w = ref.current?.offsetWidth ?? largura;
       const h = ref.current?.offsetHeight ?? 300;
-      setPos({ x: Math.max(8, Math.min(e.clientX - x0, window.innerWidth - w - 8)), y: Math.max(8, Math.min(e.clientY - y0, window.innerHeight - h - 8)) });
+      const t = areaVisivel();
+      setPos({ x: entre(e.clientX - x0, t.esquerda, t.direita - w), y: entre(e.clientY - y0, t.topo, t.base - h) });
     };
     const fim = () => {
       window.removeEventListener("pointermove", mover);
@@ -131,7 +135,7 @@ export function JanelaFlutuante({
       data-sobre-dropdown=""
       aria-label={titulo}
       className="fixed z-[150] flex max-h-[calc(100dvh-16px)] flex-col rounded-card border border-border bg-surface shadow-soft animate-fade-in-up"
-      style={{ left: pos?.x ?? -9999, top: pos?.y ?? 0, width: Math.min(largura, typeof window === "undefined" ? largura : window.innerWidth - 16) }}
+      style={{ left: pos?.x ?? -9999, top: pos?.y ?? 0, width: Math.min(largura, typeof window === "undefined" ? largura : areaVisivel().largura) }}
     >
       <div className="flex items-center justify-between gap-2 pl-1.5 pr-1.5 pt-1.5">
         <button

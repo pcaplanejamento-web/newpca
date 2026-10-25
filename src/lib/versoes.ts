@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.225.1",
+    data: "2026-10-25",
+    titulo: "Menus suspensos sempre dentro do display",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "Todo menu suspenso (filtros, seletores, listas), as dicas flutuantes e as janelas flutuantes ficam inteiros dentro da área visível: descontam a barra de rolagem e, no celular, a barra do navegador e o teclado; sem espaço embaixo, encostam na borda e rolam por dentro em vez de passar dela.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.225.0",
     data: "2026-10-25",
     titulo: "Execução: zoom por datas, clique só no ponto e a fonte da origem no (!)",

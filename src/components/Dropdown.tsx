@@ -1,5 +1,6 @@
 "use client";
 
+import { areaVisivel, entre, MARGEM_TELA } from "./area-visivel";
 import { type ButtonHTMLAttributes, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EstadoDropdown } from "./SetaDropdown";
@@ -68,7 +69,7 @@ export function Dropdown({
   };
   // Aberto pelo teclado (o clique de Enter/Espaço tem `detail` 0): quem usa leva o foco para dentro do painel.
   const [teclado, setTeclado] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
+  const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520, mw: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // O lado (acima/abaixo) é decidido UMA vez ao abrir: o conteúdo que muda depois (marcar um item, a busca) nunca faz o
@@ -84,15 +85,14 @@ export function Dropdown({
     const el = ancora?.current ?? triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    // A régua ÚNICA da área visível (sem a barra de rolagem; a viewport visual no celular): o painel nunca sai dela.
+    const area = areaVisivel();
     const gap = 6;
     // `width={0}` = o painel na largura do PRÓPRIO conteúdo (barras de ícones).
-    const w = Math.min(width === 0 ? (panelRef.current?.offsetWidth ?? r.width) : (width ?? Math.max(224, r.width)), vw - 16);
-    let left = align === "end" ? r.right - w : r.left;
-    left = Math.max(8, Math.min(left, vw - w - 8));
-    const espacoAbaixo = vh - r.bottom - 8;
-    const espacoAcima = r.top - 8;
+    const w = Math.min(width === 0 ? (panelRef.current?.offsetWidth ?? r.width) : (width ?? Math.max(224, r.width)), area.largura);
+    const left = entre(align === "end" ? r.right - w : r.left, area.esquerda, area.direita - w);
+    const espacoAbaixo = area.base - r.bottom - gap;
+    const espacoAcima = r.top - gap - area.topo;
     const desejada = panelRef.current?.scrollHeight ?? 0;
     if (acimaRef.current == null) {
       acimaRef.current = espacoAbaixo < Math.min(desejada || 320, 360) && espacoAcima > espacoAbaixo;
@@ -102,15 +102,16 @@ export function Dropdown({
     let maxH: number;
     if (acimaRef.current) {
       // Acima: a BASE do painel encosta no gatilho (a altura real dele — mudou o conteúdo, a base continua no lugar).
-      maxH = espacoAcima;
-      top = Math.max(8, r.top - gap - Math.min(desejada || maxH, maxH));
+      maxH = Math.max(0, espacoAcima);
+      top = Math.max(area.topo, r.top - gap - Math.min(desejada || maxH, maxH));
     } else {
-      top = r.bottom + gap;
-      maxH = espacoAbaixo;
+      // Abaixo; o gatilho que saiu da área (rolou) não leva o painel junto para fora: fica dentro, rente à borda.
+      top = entre(r.bottom + gap, area.topo, area.base - Math.min(desejada || 140, 140));
+      maxH = Math.max(0, area.base - top);
     }
-    const novo = { top: Math.round(top), left: Math.round(left), w, maxH: Math.max(140, Math.round(maxH)) };
+    const novo = { top: Math.round(top), left: Math.round(left), w, maxH: Math.round(maxH), mw: Math.round(area.largura) };
     // Sem re-render quando nada mudou (roda a cada quadro enquanto aberto).
-    setPos((p) => (p.top === novo.top && p.left === novo.left && p.w === novo.w && p.maxH === novo.maxH ? p : novo));
+    setPos((p) => (p.top === novo.top && p.left === novo.left && p.w === novo.w && p.maxH === novo.maxH && p.mw === novo.mw ? p : novo));
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reposiciona só ao abrir.
@@ -174,7 +175,7 @@ export function Dropdown({
     : {
         ref: panelRef,
         className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
-        style: { top: pos.top, left: pos.left, width: width === 0 ? "max-content" : pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
+        style: { top: pos.top, left: pos.left, width: width === 0 ? "max-content" : pos.w, maxWidth: pos.mw || `calc(100vw - ${2 * MARGEM_TELA}px)`, maxHeight: pos.maxH },
       };
   // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora).
   const conteudo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;

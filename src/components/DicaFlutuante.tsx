@@ -1,5 +1,6 @@
 "use client";
 
+import { areaVisivel, entre } from "./area-visivel";
 import { type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -20,8 +21,9 @@ export function DicaFlutuante({ conteudo, children, largura = 340 }: { conteudo:
   const mostrar = useCallback(() => {
     const r = ancora.current?.getBoundingClientRect();
     if (!r) return;
-    const w = Math.min(largura, window.innerWidth - 2 * MARGEM);
-    setPos({ left: Math.min(Math.max(MARGEM, r.right - w), window.innerWidth - w - MARGEM), top: r.bottom + 6 });
+    const a = areaVisivel(MARGEM);
+    const w = Math.min(largura, a.largura);
+    setPos({ left: entre(r.right - w, a.esquerda, a.direita - w), top: r.bottom + 6 });
   }, [largura]);
   const esconder = useCallback(() => setPos(null), []);
 
@@ -31,7 +33,12 @@ export function DicaFlutuante({ conteudo, children, largura = 340 }: { conteudo:
     const r = ancora.current?.getBoundingClientRect();
     if (!pos || !p || !r) return;
     const h = p.offsetHeight;
-    if (pos.top + h > window.innerHeight - MARGEM && r.top - h - 6 > MARGEM) setPos({ left: pos.left, top: r.top - h - 6 });
+    const a = areaVisivel(MARGEM);
+    if (pos.top + h > a.base) {
+      // Não cabe embaixo: acima do elemento; sem espaço também acima, rente à borda de baixo (nunca fora do display).
+      const top = r.top - h - 6 >= a.topo ? r.top - h - 6 : Math.max(a.topo, a.base - h);
+      if (top !== pos.top) setPos({ left: pos.left, top });
+    }
   }, [pos]);
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export function DicaFlutuante({ conteudo, children, largura = 340 }: { conteudo:
             id={id}
             role="tooltip"
             className="pointer-events-none fixed z-[90] rounded-card border border-border bg-surface p-3 text-left text-[12.5px] text-text shadow-soft animate-fade-in-up"
-            style={{ left: pos.left, top: pos.top, width: Math.min(largura, window.innerWidth - 2 * MARGEM) }}
+            style={{ left: pos.left, top: pos.top, width: Math.min(largura, areaVisivel(MARGEM).largura), maxHeight: areaVisivel(MARGEM).altura, overflow: "auto" }}
           >
             {conteudo}
           </div>,
