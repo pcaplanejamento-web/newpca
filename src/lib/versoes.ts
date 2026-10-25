@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.228.1",
+    data: "2026-10-25",
+    titulo: "Execução: gráfico legível no modo escuro",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "As datas do gráfico ficam em pequenas pílulas de vidro, do mesmo tamanho no claro e no escuro, e trocam suavemente junto com o desenho; no modo escuro, o trecho selecionado clareia cada cor em vez de escurecer.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.228.0",
     data: "2026-10-25",
     titulo: "Execução: comparar trechos do gráfico, transições suaves e o empenho ao lado da origem",

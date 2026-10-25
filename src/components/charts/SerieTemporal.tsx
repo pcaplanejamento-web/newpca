@@ -94,13 +94,14 @@ function DicaQueSegue({ caixa, fixo, children }: { caixa: RefObject<HTMLElement 
 
 /**
  * O TOM DE SELEÇÃO de uma cor de série (o trecho escolhido): a mesma cor, mais saturada e mais profunda — cada cor tem a sua
- * contrapartida, todas na mesma proporção. `escurecer` = quanto mais profunda (a linha do topo vai mais longe).
+ * contrapartida, todas na mesma proporção. `forca` = quanto se afasta da cor (a linha do topo vai mais longe).
  */
-function tomSelecao(cor: string, escurecer = 0.14): string {
+function tomSelecao(cor: string, escuro: boolean, forca = 0.14): string {
   const hsv = hexToHsv(cor);
   if (!hsv) return cor;
   const [h, sat, v] = hsv;
-  return hsvToHex(h, Math.min(100, sat + 18), Math.max(0, v - escurecer * 100));
+  // No claro, mais profunda; no escuro (fundo escuro), mais clara — sempre destacando do resto do desenho.
+  return hsvToHex(h, Math.min(100, sat + 18), escuro ? Math.min(100, v + forca * 100) : Math.max(0, v - forca * 100));
 }
 
 /** Espaço livre no alto do desenho que PREENCHE o cartão (os controles em vidro ficam sobre ele, sem cobrir os dados). */
@@ -121,15 +122,17 @@ const suave = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 
  * zoom), o desenho anterior fica embaixo esmaecendo enquanto o novo surge por cima. Uma mudança no meio de outra parte de
  * onde o desenho está. Sem movimento com "reduzir movimento".
  */
-function useDesenhoSuave(dados: Linha[], estrutura: string, chaves: readonly string[]) {
+function useDesenhoSuave<T>(dados: Linha[], estrutura: string, chaves: readonly string[], extra: T) {
   const [visto, setVisto] = useState(dados);
-  const [saindo, setSaindo] = useState<{ dados: Linha[]; n: number } | null>(null);
+  const [saindo, setSaindo] = useState<{ dados: Linha[]; extra: T; n: number } | null>(null);
   const vistoRef = useRef(dados);
-  const antes = useRef({ dados, estrutura });
+  const antes = useRef({ dados, estrutura, extra });
   const quadro = useRef(0);
+  // O `extra` (ex.: os pontos, para as datas do desenho que sai) acompanha `dados` — não dispara a transição sozinho.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: extra vem junto com dados.
   useEffect(() => {
     const de = antes.current;
-    antes.current = { dados, estrutura };
+    antes.current = { dados, estrutura, extra };
     if (de.dados === dados) return;
     cancelAnimationFrame(quadro.current);
     const aplicar = (d: Linha[]) => {
@@ -141,7 +144,7 @@ function useDesenhoSuave(dados: Linha[], estrutura: string, chaves: readonly str
       return aplicar(dados);
     }
     if (de.estrutura !== estrutura) {
-      setSaindo((s) => ({ dados: vistoRef.current, n: (s?.n ?? 0) + 1 }));
+      setSaindo((s) => ({ dados: vistoRef.current, extra: de.extra, n: (s?.n ?? 0) + 1 }));
       return aplicar(dados);
     }
     const inicio = vistoRef.current;
@@ -220,6 +223,7 @@ export function SerieTemporal({
   reservaRotulos?: number;
 }) {
   const tk = useChartTokens();
+  const escuro = (hexToHsv(tk.fundo)?.[2] ?? 100) < 45;
   const figRef = useRef<HTMLElement>(null);
   const [largura, setLargura] = useState(0);
   useEffect(() => {
@@ -252,7 +256,7 @@ export function SerieTemporal({
   const total = pontos.length;
   // Os mesmos baldes (só os valores mudaram) = deslizam; outros baldes (período, agrupamento, zoom) = um desenho dá lugar ao outro.
   const estrutura = total ? `${total}:${pontos[0].chave}:${pontos[total - 1].chave}:${chaves.join(",")}` : "";
-  const { visto, saindo, fimSaida } = useDesenhoSuave(dados, estrutura, chaves);
+  const { visto, saindo, fimSaida } = useDesenhoSuave(dados, estrutura, chaves, pontos);
 
   // O PONTO marcado ou o TRECHO; o arrasto em curso (do índice ao índice) e se o clique que vem depois dele é engolido.
   const [sel, setSel] = useState<Selecao | null>(null);
@@ -383,12 +387,39 @@ export function SerieTemporal({
     <defs>
       {series.map((s) => (
         <linearGradient key={s.chave} id={`${pref}-${s.chave}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={selecao ? tomSelecao(tk.serie[s.cor]) : tk.serie[s.cor]} stopOpacity={selecao ? 1 : 0.92} />
-          <stop offset="100%" stopColor={selecao ? tomSelecao(tk.serie[s.cor]) : tk.serie[s.cor]} stopOpacity={selecao ? 0.85 : 0.45} />
+          <stop offset="0%" stopColor={selecao ? tomSelecao(tk.serie[s.cor], escuro) : tk.serie[s.cor]} stopOpacity={selecao ? 1 : 0.92} />
+          <stop offset="100%" stopColor={selecao ? tomSelecao(tk.serie[s.cor], escuro) : tk.serie[s.cor]} stopOpacity={selecao ? 0.85 : 0.45} />
         </linearGradient>
       ))}
     </defs>
   );
+  /** As DATAS por dentro do desenho (o desenho vai até a base do cartão): na posição de cada ponto (em %, acompanham a caixa
+   * no mesmo quadro), as das pontas alinhadas à borda, cada uma numa pílula de vidro — legível no claro e no escuro. */
+  const datas = (lista: PontoTemporal[]) => {
+    const n = lista.length;
+    const passo = Math.max(0, Math.ceil(n / (estreita ? 6 : 8)) - 1);
+    return (
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-2 h-6 text-[12px] font-semibold text-text">
+          {lista.map((p, i) => {
+            if (i % (passo + 1) !== 0) return null;
+            const x = (i / Math.max(1, n - 1)) * largura;
+            // Fora da faixa dos controles (as datas que cairiam sob eles não aparecem) e as das pontas alinhadas à borda.
+            if (i > 0 && (x < 80 || x > largura - reservaRotulos - 30)) return null;
+            return (
+              <span
+                key={p.chave}
+                // Cada data numa pílula de vidro (o estilo dos controles): legível sobre qualquer cor, no claro e no escuro.
+                className="absolute whitespace-nowrap rounded-chip bg-surface/75 px-1.5 py-0.5 leading-none tabular-nums shadow-ring backdrop-blur-sm"
+                // Em % da largura: acompanham a caixa no mesmo quadro (sem esperar a medida nova).
+                style={i === 0 ? { left: 8 } : !reservaRotulos && x > largura - 30 ? { right: 8 } : { left: `${(i / Math.max(1, n - 1)) * 100}%`, transform: "translateX(-50%)" }}
+              >
+                {p.rotulo}
+              </span>
+            );
+          })}
+        </div>
+    );
+  };
   const marcado = sel?.tipo === "ponto" ? pontos[sel.i] : undefined;
   const faixa = sel?.tipo === "trecho" ? { a: sel.a, b: sel.b } : arrasto && arrasto.de !== arrasto.ate ? { a: Math.min(arrasto.de, arrasto.ate), b: Math.max(arrasto.de, arrasto.ate) } : null;
   const pontoDoVisto = (i: number) => visto[i] ?? dados[i];
@@ -532,7 +563,7 @@ export function SerieTemporal({
                   className={`${id}-trecho`}
                   type="monotone"
                   dataKey={s.chave}
-                  stroke={tomSelecao(tk.serie[s.cor], 0.24)}
+                  stroke={tomSelecao(tk.serie[s.cor], escuro, 0.24)}
                   strokeWidth={2.5}
                   fill={`url(#${id}t-${s.chave})`}
                   dot={false}
@@ -573,29 +604,14 @@ export function SerieTemporal({
           {caixa(`${pontos[sel.a].titulo} → ${pontos[sel.b].titulo}`, null, dicaTrecho?.(pontos[sel.a], pontos[sel.b]) ?? [], acoes("Ver os dados do trecho", () => abrirTrecho(sel.a, sel.b)))}
         </DicaQueSegue>
       )}
+      {preencher && saindo && (
+        <div key={`datas-${saindo.n}`} className="grafico-sai pointer-events-none absolute inset-0">
+          {datas(saindo.extra)}
+        </div>
+      )}
       {preencher && (
-        // As DATAS por dentro do desenho (o desenho vai até a base do cartão): na posição de cada ponto, as das pontas
-        // alinhadas à borda; o halo da superfície garante a leitura sobre as ondas.
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-2 h-5 text-[12.5px] font-semibold text-text [text-shadow:0_0_2px_var(--surface),0_0_4px_var(--surface),0_0_8px_var(--surface)]"
-        >
-          {pontos.map((p, i) => {
-            if (i % (intervalo + 1) !== 0) return null;
-            const x = (i / Math.max(1, total - 1)) * largura;
-            // Fora da faixa dos controles (as datas que cairiam sob eles não aparecem) e as das pontas alinhadas à borda.
-            if (i > 0 && (x < 72 || x > largura - reservaRotulos - 24)) return null;
-            return (
-              <span
-                key={p.chave}
-                className="absolute whitespace-nowrap tabular-nums"
-                // Em % da largura: acompanham a caixa no mesmo quadro (sem esperar a medida nova).
-                style={i === 0 ? { left: 10 } : !reservaRotulos && x > largura - 30 ? { right: 10 } : { left: `${(i / Math.max(1, total - 1)) * 100}%`, transform: "translateX(-50%)" }}
-              >
-                {p.rotulo}
-              </span>
-            );
-          })}
+        <div key={`datas-${estrutura}`} className={`pointer-events-none absolute inset-0 ${saindo ? "grafico-entra" : ""}`}>
+          {datas(pontos)}
         </div>
       )}
     </figure>
