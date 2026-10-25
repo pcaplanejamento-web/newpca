@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.233.0",
+    versao: "1.234.0",
     data: "2026-10-25",
     titulo: "Execução: filtros em chips, visões salvas e o estado inicial",
     mudancas: [
@@ -46,6 +46,23 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "Filtros", texto: "Os seletores de filtro mostram quantos valores estão marcados num selo, e o nome do filtro não fica mais cortado.", link: "/painel/execucao" },
       { tipo: "correcao", area: "Execução", texto: "Um filtro de unidade, elemento ou credor continua certo ao trocar o período para outro ano (antes podia apontar outro valor).", link: "/painel/execucao" },
       { tipo: "melhoria", area: "Papéis", texto: "A tela Execução ganhou a ação Configurar (publicar visões e moderar as públicas), dada a quem configura Empenhos.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
+    versao: "1.233.1",
+    data: "2026-10-25",
+    titulo: "Indício de janela anônima só para o ADM",
+    mudancas: [
+      { tipo: "correcao", area: "Usuários", texto: "O indício de janela anônima deixou de ir ao navegador da própria pessoa na tela de nomear o aparelho — só o ADM o recebe.", link: "/painel/usuarios" },
+    ],
+  },
+  {
+    versao: "1.233.0",
+    data: "2026-10-25",
+    titulo: "Aparelho em janela anônima apontado ao ADM",
+    mudancas: [
+      { tipo: "novo", area: "Usuários", texto: "Ao nomear um aparelho, o sistema guarda o indício de janela anônima (pelo armazenamento do navegador). No banner do usuário, só o ADM vê o selo \"Possível janela anônima\" e o \"Temporário\" do aparelho que não voltou a ser usado.", link: "/painel/usuarios" },
+      { tipo: "novo", area: "Notificações", texto: "Os ADMs recebem no sino o aviso \"Aparelho possivelmente em janela anônima\", com a pessoa, o navegador e o IP.", link: "/painel/usuarios" },
     ],
   },
   {

@@ -2134,6 +2134,8 @@ export const aparelhos = sqliteTable(
     criadoEm: text("criado_em").notNull(),
     vistoEm: text("visto_em"),
     teste: integer("teste", { mode: "boolean" }).notNull().default(false),
+    /** Indício de janela anônima ao nomear (`aparelho-anonimo-core.ts`; só o ADM vê). NULL = sem leitura. */
+    indicioAnonimo: text("indicio_anonimo"),
   },
   (t) => [uniqueIndex("aparelhos_usuario_hash_uq").on(t.usuarioId, t.hash)],
 );

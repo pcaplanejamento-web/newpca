@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { aparelhoTemporario } from "@/lib/aparelho-anonimo-core";
 import { emTrava, LIMITE_MAX, LIMITE_MIN, ROTULO_ORIGEM_LIMITE } from "@/lib/acesso-conta-core";
 import { baixarComprovanteTermo } from "@/lib/comprovante-termo";
 import { dataBR, dataHoraBR, ROTULO_METODO } from "@/lib/termo-uso-core";
@@ -20,7 +21,7 @@ import { SkeletonLinhas } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 
-type Aparelho = { id: number; nome: string; navegador: string; ip: string; criadoEm: string; vistoEm: string | null; teste: boolean };
+type Aparelho = { id: number; nome: string; navegador: string; ip: string; criadoEm: string; vistoEm: string | null; teste: boolean; indicioAnonimo?: string | null };
 type Termo = { id: number; versao: number; em: string; metodo: string; codigo: string; teste: boolean; aparelhoNome: string };
 type Dados = {
   lista: Aparelho[];
@@ -181,6 +182,16 @@ export function AparelhosConta({ usuarioId, admin = false }: { usuarioId?: numbe
                 <>
                   {a.id === d.atualId && <Badge tone="blue">Este aparelho</Badge>}
                   {a.teste && <Badge tone="amber">Teste</Badge>}
+                  {admin && a.indicioAnonimo === "provavel" && (
+                    <Badge tone="amber" title="Nomeado com sinais de janela anônima (cota de armazenamento baixa no navegador) — é um indício, não uma certeza.">
+                      Possível janela anônima
+                    </Badge>
+                  )}
+                  {admin && aparelhoTemporario(a, d.lista) && (
+                    <Badge tone="slate" title="Não voltou a ser usado depois do dia em que foi nomeado e o mesmo navegador nomeou outro aparelho depois — o cookie sumiu, como ao fechar uma janela anônima.">
+                      Temporário
+                    </Badge>
+                  )}
                 </>
               }
               acoes={
