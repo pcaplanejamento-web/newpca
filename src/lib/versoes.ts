@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.236.1",
+    data: "2026-10-25",
+    titulo: "Gráfico da Execução: a caixa do ponto marcado ao lado dos botões",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "A caixa de informações do ponto marcado (e a que segue o mouse) fica ao lado da lupa e dos botões do gráfico e abaixo dos controles do alto, com o recuo padrão — nunca por cima deles; sem espaço, rola por dentro.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.236.0",
     data: "2026-10-25",
     titulo: "Gráfico da Execução: sem piscar, a última data à vista e datas clicáveis",

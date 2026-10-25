@@ -7,7 +7,7 @@ import { brl } from "@/lib/format";
 import { escalaDoQuadro, morfologia, type QuadroSerie } from "@/lib/serie-morfologia";
 import { IconClose } from "../icons";
 import { semMovimento } from "../useContagem";
-import { ALTURA_PILULA, BASE_DATAS, TOPO_DAS_DATAS } from "./serie-medidas";
+import { ALTURA_PILULA, BASE_DATAS, RECUO_DICA, TOPO_DAS_DATAS } from "./serie-medidas";
 import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
 /** Uma série do gráfico (o valor de cada ponto já em REAIS). */
@@ -66,7 +66,7 @@ function DicaQueSegue({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
-  const [pos, setPos] = useState<{ left: number; top: number; max: number; rola: boolean } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; max: number; rola: boolean; maxW: number } | null>(null);
   useEffect(() => {
     const el = caixa.current;
     if (!el || fixo) return;
@@ -89,34 +89,48 @@ function DicaQueSegue({
     const d = ref.current;
     const m = fixo ?? mouse;
     if (!el || !d || !m) return;
-    const W = el.clientWidth;
     const H = el.clientHeight;
-    const w = d.offsetWidth;
+    // Os controles sobre o desenho (`data-reserva-dica`: "topo" = a faixa do alto; "lado" = a pilha lateral) — a dica
+    // fica AO LADO deles, com o recuo padrão, nunca por cima.
+    const re = el.getBoundingClientRect();
+    let cima = BORDA;
+    let dir = el.clientWidth - BORDA;
+    for (const r of el.parentElement?.querySelectorAll<HTMLElement>("[data-reserva-dica]") ?? []) {
+      const b = r.getBoundingClientRect();
+      if (!b.width || !b.height) continue;
+      if (r.dataset.reservaDica === "lado") dir = Math.min(dir, b.left - re.left - RECUO_DICA);
+      else cima = Math.max(cima, b.bottom - re.top + RECUO_DICA);
+    }
+    const larguraMax = Math.max(0, dir - BORDA);
+    const w = Math.min(d.offsetWidth, larguraMax);
     const fundo = H - Math.max(BORDA, base);
-    // Mais alta que o espaço acima da base (o celular): a dica rola por dentro — nunca cobre as datas.
-    const max = Math.max(0, fundo - BORDA);
+    // Mais alta que o espaço livre (o celular): a dica rola por dentro — nunca cobre as datas nem os controles.
+    const max = Math.max(0, fundo - cima);
     const h = Math.min(d.scrollHeight, max);
     const entre = (v: number, min: number, max: number) => Math.max(min, Math.min(v, Math.max(min, max)));
     let left: number;
-    let top = entre(m.y - h / 2, BORDA, fundo - h);
+    let top = entre(m.y - h / 2, cima, fundo - h);
     // A faixa a deixar livre: a da marcação, senão a própria ponta do mouse.
     const de = evitar ? Math.min(evitar.de, evitar.ate) : m.x;
     const ate = evitar ? Math.max(evitar.de, evitar.ate) : m.x;
-    if (ate + AFASTA + w <= W - BORDA) left = ate + AFASTA;
-    else if (de - AFASTA - w >= BORDA) left = de - AFASTA - w;
+    if (ate + AFASTA + w <= dir) left = ate + AFASTA;
+    // Antes da marcação — e nunca além do espaço livre (a marcação pode estar atrás da pilha lateral).
+    else if (Math.min(de - AFASTA, dir) - w >= BORDA) left = Math.min(de - AFASTA, dir) - w;
     else if (evitar) {
-      // Sem lugar dos dois lados (a marcação larga e as bordas): no meio da faixa, dentro do desenho.
-      left = entre((de + ate) / 2 - w / 2, BORDA, W - w - BORDA);
+      // Sem lugar dos dois lados (a marcação larga e as bordas): no meio da faixa, dentro do espaço livre.
+      left = entre((de + ate) / 2 - w / 2, BORDA, dir - w);
     } else {
       // Sem lugar dos lados: acima do ponteiro (ou abaixo, se não couber em cima).
-      left = entre(m.x - w / 2, BORDA, W - w - BORDA);
-      top = m.y - AFASTA - h >= BORDA ? m.y - AFASTA - h : entre(m.y + AFASTA, BORDA, fundo - h);
+      left = entre(m.x - w / 2, BORDA, dir - w);
+      top = m.y - AFASTA - h >= cima ? m.y - AFASTA - h : entre(m.y + AFASTA, cima, fundo - h);
     }
     const rola = d.scrollHeight > max;
-    setPos((p) => (p && p.left === left && p.top === top && p.max === max && p.rola === rola ? p : { left, top, max, rola }));
+    setPos((p) =>
+      p && p.left === left && p.top === top && p.max === max && p.rola === rola && p.maxW === larguraMax ? p : { left, top, max, rola, maxW: larguraMax },
+    );
   });
   return (
-    <div ref={ref} className={`absolute ${fixo ? "pointer-events-auto z-20" : "pointer-events-none"}`} style={pos ? { left: pos.left, top: pos.top, ...(pos.rola ? { maxHeight: pos.max, overflowY: "auto", overscrollBehavior: "contain" } : {}) } : { left: 0, top: 0, visibility: "hidden" }}>
+    <div ref={ref} className={`absolute ${fixo ? "pointer-events-auto z-20" : "pointer-events-none"}`} style={pos ? { left: pos.left, top: pos.top, maxWidth: pos.maxW, ...(pos.rola ? { maxHeight: pos.max, overflowY: "auto", overscrollBehavior: "contain" } : {}) } : { left: 0, top: 0, visibility: "hidden" }}>
       {children}
     </div>
   );

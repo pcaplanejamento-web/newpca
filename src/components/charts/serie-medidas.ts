@@ -6,3 +6,5 @@
 export const BASE_DATAS = 8;
 export const ALTURA_PILULA = 20;
 export const TOPO_DAS_DATAS = BASE_DATAS + ALTURA_PILULA + BASE_DATAS;
+/** O recuo entre a dica do gráfico e os controles sobre o desenho (`data-reserva-dica`): a dica fica AO LADO deles. */
+export const RECUO_DICA = BASE_DATAS;

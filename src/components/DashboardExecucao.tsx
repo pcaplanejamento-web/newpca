@@ -725,7 +725,7 @@ export function DashboardExecucao({
           return (
             <div className={CARTAO_GRAFICO}>
               {/* Os controles sobre o desenho, em vidro; em telas menores, numa escala menor (cabem sem cobrir o gráfico). */}
-              <div className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
+              <div data-reserva-dica="topo" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
                 {/* O tipo e o agrupamento: dois controles independentes, cada um em vidro sobre o desenho. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <div className={`pointer-events-auto ${VIDRO}`}>{tipoGran[0]}</div>
@@ -807,7 +807,7 @@ export function DashboardExecucao({
               {/* A lupa, o restaurar e a tabela empilhados à direita, ACIMA da linha das datas (a mesma distância da borda e da
                   pílula da última data) — a última data fica à vista. A escala vai no conteúdo: a posição não encolhe junto. */}
               <div className="pointer-events-none absolute right-2 z-10" style={{ bottom: TOPO_DAS_DATAS }}>
-                <div className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO} ${ESCALA_PILHA}`}>
+                <div data-reserva-dica="lado" className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO} ${ESCALA_PILHA}`}>
                   <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
                     <IconZoom className="h-4 w-4" />
                   </Button>
