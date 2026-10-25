@@ -87,6 +87,10 @@ const RESERVA_CONTROLES = 60;
 const ORDEM_GRAN = { auto: 0, dia: 1, semana: 2, mes: 3, ano: 4 } as const;
 
 /** O "vidro" dos controles SOBRE o desenho do gráfico: a superfície translúcida, desfocada, com o anel. */
+/** O cartão do gráfico. O corte arredondado é feito pelo `clip-path` (e o `isolate`), não só pelo `overflow-hidden`: as camadas
+ * que o navegador compõe à parte — o vidro com desfoque, as pílulas das datas, as animações de opacidade — escapavam do
+ * raio depois de sair da tela e voltar (as pontas do desenho ficavam retas). */
+const CARTAO_GRAFICO = "relative isolate overflow-hidden rounded-card bg-surface-2/60 [clip-path:inset(0_round_var(--radius-card))]";
 const VIDRO = "vidro-controles rounded-[calc(var(--radius-control)+4px)] bg-surface/55 p-1 shadow-ring backdrop-blur-md";
 
 /** A escala dos controles sobre o desenho em telas menores (`zoom` reduz também o espaço que ocupam). */
@@ -274,6 +278,12 @@ export function DashboardExecucao({
   }, [janela, hoje, s.pontos]);
   const diasJanela = janela ? (diaDoIso(janela.ate) ?? 0) - (diaDoIso(janela.de) ?? 0) + 1 : Number.POSITIVE_INFINITY;
   const seriesVistas = useMemo(() => SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true)), [temLiq, temPag]);
+  // As linhas que a pessoa desligou na legenda (só na tela); ao menos uma fica sempre à vista.
+  const [ocultas, setOcultas] = useState<ReadonlySet<string>>(() => new Set());
+  const seriesDesenho = useMemo(() => {
+    const v = seriesVistas.filter((x) => !ocultas.has(x.chave));
+    return v.length ? v : seriesVistas;
+  }, [seriesVistas, ocultas]);
   const rotuloGran = { dia: "dia", semana: "semana", mes: "mês", ano: "ano" }[s.granularidade];
 
   const recorteTexto = [
@@ -512,7 +522,8 @@ export function DashboardExecucao({
               style={{ gridTemplateColumns: ativosResumo.length > 0 ? "1fr" : "0fr", opacity: ativosResumo.length > 0 ? 1 : 0 }}
               aria-hidden={ativosResumo.length === 0 || undefined}
             >
-              <span className="flex min-w-0 overflow-hidden pr-1">
+              {/* O respiro em cima e à direita (com a margem negativa igual) deixa o selo do número inteiro dentro do corte. */}
+              <span className="-mt-1.5 -mr-1 flex min-w-0 overflow-hidden pt-1.5 pr-2">
                 {ativosResumo.length > 0 && (
                   <FiltrosAtivos
                     titulo="Filtros ligados"
@@ -574,7 +585,7 @@ export function DashboardExecucao({
               </>
             );
           return (
-            <div className="relative overflow-hidden rounded-card bg-surface-2/60">
+            <div className={CARTAO_GRAFICO}>
               {/* Os controles sobre o desenho, em vidro; em telas menores, numa escala menor (cabem sem cobrir o gráfico). */}
               <div className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
                 {/* O tipo e o agrupamento: dois controles independentes, cada um em vidro sobre o desenho. */}
@@ -597,7 +608,43 @@ export function DashboardExecucao({
                       </span>
                     </div>
                   )}
-                <div className={`pointer-events-auto ml-auto flex shrink-0 items-center ${VIDRO}`}>{direita}</div>
+                {/* A legenda (uma bolinha por linha, que liga e desliga a linha no gráfico) e o funil/avisos/ajuda; no celular,
+                    um embaixo do outro — cabem ao lado do tipo e do agrupamento. */}
+                <div className="ml-auto flex shrink-0 items-start gap-2 max-md:flex-col max-md:items-end">
+                <fieldset className={`pointer-events-auto flex shrink-0 items-center ${VIDRO}`} aria-label="Linhas do gráfico">
+                  {seriesVistas.map((x) => {
+                    const vista = seriesDesenho.some((d) => d.chave === x.chave);
+                    const ultima = vista && seriesDesenho.length === 1;
+                    const rotulo = ultima ? `${x.rotulo}: ao menos uma linha fica no gráfico` : `${vista ? "Ocultar" : "Mostrar"} ${x.rotulo}`;
+                    return (
+                      <Button
+                        key={x.chave}
+                        size="sm"
+                        variant="icon"
+                        aria-pressed={vista}
+                        aria-label={rotulo}
+                        title={rotulo}
+                        disabled={ultima}
+                        onClick={() =>
+                          setOcultas((o) => {
+                            const n = new Set(o);
+                            if (n.has(x.chave)) n.delete(x.chave);
+                            else n.add(x.chave);
+                            return n;
+                          })
+                        }
+                      >
+                        <span
+                          aria-hidden
+                          className="block h-2.5 w-2.5 rounded-full border-2 transition-colors duration-[var(--motion-duration)]"
+                          style={{ borderColor: COR[x.chave], background: vista ? COR[x.chave] : "transparent" }}
+                        />
+                      </Button>
+                    );
+                  })}
+                </fieldset>
+                <div className={`pointer-events-auto flex shrink-0 items-center ${VIDRO}`}>{direita}</div>
+                </div>
               </div>
               <SerieTemporal
                 pontos={pontos}
@@ -605,7 +652,7 @@ export function DashboardExecucao({
                 reservaRotulos={RESERVA_CONTROLES}
                 altura={420}
                 ajustarY={!!janela && modo === "acumulado"}
-                series={seriesVistas}
+                series={seriesDesenho}
                 ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
                 onEscolher={(p) => abrirPonto(p.chave)}
                 extraDica={(p) => {
@@ -914,7 +961,7 @@ function OrigemExecucao({
         {acum && origem.acumulado && origem.acumulado.pontos.length > 1 && (
           <section className="rounded-card border border-border p-[var(--pad-card)] lg:col-span-2" aria-label="Evolução acumulada até o ponto">
             {/* O MESMO desenho do gráfico da tela (o cartão inteiro, as datas por dentro, o título em vidro e a mesma dica). */}
-            <div className="relative overflow-hidden rounded-card bg-surface-2/60">
+            <div className={CARTAO_GRAFICO}>
               <SerieTemporal
                 pontos={evolucao}
                 preencher

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.232.0",
+    data: "2026-10-25",
+    titulo: "Execução: legenda que liga e desliga as linhas",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "Bolinhas coloridas no canto superior direito do gráfico ligam e desligam as linhas de Empenhado, Liquidado e Pago (ao menos uma fica sempre à vista).", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "O número de filtros ligados no botão do funil aparece inteiro, sem corte.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "As pontas arredondadas do gráfico não ficam mais retas depois de rolar a página e voltar.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.231.0",
     data: "2026-10-25",
     titulo: "Execução: transições do gráfico sem saltos",
