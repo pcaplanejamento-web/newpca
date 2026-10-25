@@ -11,9 +11,11 @@ import {
   type Periodo,
   rotuloPeriodo,
 } from "@/lib/periodo";
+import { mesmoPeriodo } from "@/lib/filtros-visao-core";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { IconLimpar } from "./icons";
+import { BlocoInicial } from "./SeletorMultiplo";
 import { SetaDropdown } from "./SetaDropdown";
 
 // Seletor de período (spec do usuário): cabeçalho com Limpar + atalhos + ano + grade de meses + intervalo (DE/ATÉ). O CORPO
@@ -45,6 +47,7 @@ export function PeriodoCorpo({
   onClose,
   onLimpar,
   autoFoco = false,
+  inicial,
 }: {
   value?: Periodo;
   anos?: number[];
@@ -53,6 +56,8 @@ export function PeriodoCorpo({
   onClose?: () => void;
   onLimpar?: () => void;
   autoFoco?: boolean;
+  /** O ESTADO INICIAL do período (não é filtro), mostrado à parte no topo. */
+  inicial?: InicialPeriodo;
 }) {
   // O ano aberto: o do valor; senão o mais recente com algum mês escolhível.
   const [ano, setAno] = useState<number>(
@@ -79,6 +84,17 @@ export function PeriodoCorpo({
 
   return (
     <div ref={ref} className="space-y-3 p-1">
+      {inicial && (
+        <BlocoInicial
+          rotulo={inicial.rotulo ?? "Estado inicial"}
+          valores={[{ chave: "p", rotulo: inicial.texto ?? rotuloPeriodo(inicial.periodo) }]}
+          emUso={mesmoPeriodo(value, inicial.periodo)}
+          onVoltar={() => {
+            emitir(inicial.periodo);
+            onClose?.();
+          }}
+        />
+      )}
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Período</span>
@@ -192,6 +208,10 @@ export function PeriodoCorpo({
   );
 }
 
+/** O estado inicial do período: o período, o nome do bloco ("Estado inicial" | "Visão: X") e o texto (ex.: "Ano mais
+ * recente (2026)" no automático). */
+export type InicialPeriodo = { periodo: Periodo; rotulo?: string; texto?: string };
+
 /**
  * SELETOR DE PERÍODO — o gatilho no visual do `SelectField compacto` ("Período" + o valor + a seta; 44px no toque) e o
  * `PeriodoCorpo` num painel (`dialog`), sem ordenação. Escolher um atalho, "Limpar" ou Esc fecham e devolvem o foco ao
@@ -204,6 +224,7 @@ export function PeriodoPicker({
   onChange,
   rotulo = "Período",
   className,
+  inicial,
 }: {
   value?: Periodo;
   anos?: number[];
@@ -212,8 +233,11 @@ export function PeriodoPicker({
   onChange?: (v: Periodo) => void;
   rotulo?: string;
   className?: string;
+  /** O ESTADO INICIAL: igual a ele, o gatilho fica neutro (não é filtro); diferente, marcado em accent. */
+  inicial?: InicialPeriodo;
 }) {
   const texto = rotuloPeriodo(value);
+  const filtrado = inicial ? !mesmoPeriodo(value, inicial.periodo) : false;
   return (
     <Dropdown
       papel="dialog"
@@ -224,7 +248,7 @@ export function PeriodoPicker({
       trigger={
         <>
           <span className="shrink-0 text-[12px] text-muted">{rotulo}</span>
-          <span className="min-w-0 truncate text-[13px] font-semibold text-text">{texto}</span>
+          <span className={`min-w-0 truncate text-[13px] ${inicial ? (filtrado ? "font-semibold text-accent" : "font-medium text-muted") : "font-semibold text-text"}`}>{texto}</span>
           <SetaDropdown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted" />
         </>
       }
@@ -246,6 +270,7 @@ export function PeriodoPicker({
               : undefined
           }
           autoFoco={teclado}
+          inicial={inicial}
         />
       )}
     </Dropdown>

@@ -650,6 +650,7 @@ function DemoUsuario() {
 // Orçamento × Contratações. ("Enviar ao PCA" = `EnviarAoPca`, na barra de seleção de protocolos da Mesa.)
 function PcaEspacoDemo() {
   const [sel, setSel] = useState<string[]>(["MATERIAL DE CONSUMO"]);
+  const [selInicial, setSelInicial] = useState<string[]>(["SMS"]);
   const [protoDemo, setProtoDemo] = useState("11");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [capa, setCapa] = useState<string | null>(null);
@@ -766,6 +767,21 @@ function PcaEspacoDemo() {
           opcoes={[{ valor: "SEC. DE SAÚDE" }, { valor: "SEC. DE EDUCAÇÃO" }, { valor: "SEC. DE OBRAS" }]}
           selecionados={sel}
           onChange={setSel}
+        />
+      </div>
+      <div className="max-w-sm">
+        {/* Com o ESTADO INICIAL (do ADM ou da visão): igual a ele, o gatilho fica neutro — não é filtro; o painel o mostra à parte. */}
+        <SeletorMultiplo
+          suspenso
+          rotulo="Unidade"
+          inicial={["SMS"]}
+          opcoes={[
+            { valor: "SMS", detalhe: "Secretaria Municipal de Saúde", contagem: 120 },
+            { valor: "SME", detalhe: "Secretaria Municipal de Educação", contagem: 88 },
+            { valor: "FMC", detalhe: "Fundo Municipal de Cultura", contagem: 12 },
+          ]}
+          selecionados={selInicial}
+          onChange={setSelInicial}
         />
       </div>
       <OrcamentoPca

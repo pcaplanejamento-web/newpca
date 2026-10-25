@@ -21,6 +21,7 @@ import {
   type EstadoFiltros,
   ehChaveFiltrosIniciais,
   lerFiltrosIniciais,
+  mesmaLista,
   mesmoEstado,
   paraGuardar,
   partesDefinidas,
@@ -36,6 +37,13 @@ describe("filtros com visões — estado e diferenças", () => {
     const inicial = est({ tipo: ["rp"], dims: { unidade: ["SMS"] } });
     assert.deepEqual(diferencas(inicial, inicial, R, AUTO), []);
     assert.equal(mesmoEstado(est({ dims: { unidade: ["SMS"] }, tipo: ["rp"] }), inicial, R, AUTO), true);
+  });
+
+  it("o seletor só marca o que DIFERE do inicial: mesma lista em outra ordem não é filtro; vazio = Todos", () => {
+    assert.equal(mesmaLista(["B", "A"], ["A", "B"]), true);
+    assert.equal(mesmaLista([], []), true);
+    assert.equal(mesmaLista([], ["SMS"]), false, "Todos escolhido contra um inicial com valores é filtro");
+    assert.equal(mesmaLista(["SMS", "SME"], ["SMS"]), false);
   });
 
   it("cada parte diferente vira um chip, na ordem período · tipo · dimensões do lugar", () => {

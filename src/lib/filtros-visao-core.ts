@@ -72,7 +72,8 @@ export const periodoEfetivo = (p: Periodo | null, auto: Periodo): Periodo => p ?
 const chavePeriodo = (p: Periodo): string => JSON.stringify([p.preset ?? null, p.ano ?? null, p.mes ?? null, p.de ?? null, p.ate ?? null]);
 export const mesmoPeriodo = (a: Periodo, b: Periodo): boolean => chavePeriodo(a) === chavePeriodo(b);
 
-const mesmaLista = (a: readonly string[] = [], b: readonly string[] = []): boolean => {
+/** Duas listas de valores iguais como CONJUNTO (a ordem não conta; vazio = "Todos"). */
+export const mesmaLista = (a: readonly string[] = [], b: readonly string[] = []): boolean => {
   if (a.length !== b.length) return false;
   const s = new Set(a);
   return b.every((x) => s.has(x));

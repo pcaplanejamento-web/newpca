@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.235.0",
+    data: "2026-10-25",
+    titulo: "Filtros: o estado inicial à parte e a Unidade no padrão do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Filtros", texto: "Cada filtro mostra o estado inicial numa linha discreta no topo — “Todos” em destaque quando é geral; o resto rola de lado — com o ✓ de em uso ou o botão de voltar a ele.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "O estado inicial definido pelo administrador não marca mais os filtros nem destaca o cartão: só o que muda a partir dele conta como filtro.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "O filtro de Unidade segue o padrão do sistema: a sigla com o nome embaixo e a busca pelos dois.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "O Período também mostra o estado inicial (ex.: ano mais recente) e a Visão vazia passa a se chamar “Estado inicial”.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.234.0",
     data: "2026-10-25",
     titulo: "Execução: filtros em chips, visões salvas e o estado inicial",

@@ -63,6 +63,7 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type ChipFiltro, PainelFiltros } from "./PainelFiltros";
 import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
+import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
 import { IconChevronDown, IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
@@ -247,24 +248,37 @@ export function DashboardExecucao({
 
   // O TIPO é um filtro como os demais (o mesmo seletor), com as opções conectadas aos outros filtros. As OPÇÕES (pesadas)
   // seguem o cálculo; os marcados (leves) mudam na hora, sem refazer as opções a cada clique.
+  // O ESTADO INICIAL de cada dimensão (o da visão aplicada ou o do ADM) em chaves deste pacote: o seletor o mostra à parte
+  // e só marca o que difere dele — o inicial não é filtro.
+  const inicialChaves = useMemo(() => filtrosParaChaves(base, referencia.dims), [base, referencia.dims]);
+  const nomesUnidades = useNomesUnidades();
   const opcoesCampos = useMemo(
     () => ({
       tipo: OPCOES_TIPO.map((o) => ({ chave: o.chave, rotulo: o.rotulo, count: calc.opcoesTipo.get(o.chave) ?? 0 })),
-      ...Object.fromEntries(DIMS_EXEC.map((dim) => [dim, opcoesDim(base, calc, adiado.filtros, dim)])),
+      ...Object.fromEntries(
+        DIMS_EXEC.map((dim) => {
+          // Os valores do inicial ficam nas opções mesmo zerados (para voltar a eles e mostrar o nome).
+          const comInicial = { ...adiado.filtros, [dim]: [...new Set([...(adiado.filtros[dim] ?? []), ...(inicialChaves[dim] ?? [])])] };
+          const ops = opcoesDim(base, calc, comInicial, dim);
+          // Unidade no padrão do sistema: a sigla em cima e o NOME embaixo (a busca acha pelos dois).
+          return [dim, dim === "unidade" ? ops.map((o) => ({ ...o, detalhe: o.detalhe ?? nomesUnidades[o.rotulo.split(" — ")[0]] })) : ops];
+        }),
+      ),
     }),
-    [base, calc, adiado.filtros],
+    [base, calc, adiado.filtros, inicialChaves, nomesUnidades],
   );
   const campos = useMemo(
     () => [
-      { dim: "tipo", rotulo: "Tipo", opcoes: opcoesCampos.tipo, selecionados: [...tipo] },
+      { dim: "tipo", rotulo: "Tipo", opcoes: opcoesCampos.tipo, selecionados: [...tipo], inicial: [...referencia.tipo] },
       ...DIMS_EXEC.map((dim) => ({
         dim,
         rotulo: ROTULO_DIM[dim],
         opcoes: (opcoesCampos as Record<string, ReturnType<typeof opcoesDim>>)[dim],
         selecionados: [...(filtros[dim] ?? [])],
+        inicial: inicialChaves[dim] ?? [],
       })),
     ],
-    [opcoesCampos, filtros, tipo],
+    [opcoesCampos, filtros, tipo, referencia.tipo, inicialChaves],
   );
   const mudarFiltro = (dim: string, chaves: string[]) => {
     if (dim === "tipo") return setEstado((e) => ({ ...e, tipo: chaves.filter((k) => k === "ne" || k === "rp") }));
@@ -284,6 +298,12 @@ export function DashboardExecucao({
     return { chave: parte, rotulo: ROTULO_DIM[d], valores: (estado.dims[d] ?? []).map((v) => rotuloOpcao(base, d, chaveDoValor(base, d, v))) };
   });
   const ausentes = useMemo(() => valoresAusentes(base, estado.dims), [base, estado.dims]);
+  const rotuloInicial = vis.atual ? `Visão: ${vis.atual.nome}` : "Estado inicial";
+  const inicialPeriodo = {
+    periodo: periodoEfetivo(referencia.periodo, periodoAuto),
+    rotulo: rotuloInicial,
+    texto: referencia.periodo ? undefined : periodoAuto.ano ? `Ano mais recente (${periodoAuto.ano})` : "Todo o período",
+  };
   const limparTudo = () => {
     vis.escolher(null);
     setEstado(inicial);
@@ -563,6 +583,7 @@ export function DashboardExecucao({
         <FiltrosDashboard
           campos={campos}
           onMudar={mudarFiltro}
+          rotuloInicial={rotuloInicial}
           grade
           antes={[
             <SelectField
@@ -578,7 +599,7 @@ export function DashboardExecucao({
                 else limparTudo();
               }}
             >
-              <option value="">{vis.minhas.length + vis.publicas.length ? "Nenhuma" : "Nenhuma salva"}</option>
+              <option value="">{vis.minhas.length + vis.publicas.length ? "Estado inicial" : "Nenhuma salva"}</option>
               {vis.minhas.length > 0 && (
                 <optgroup label="Minhas">
                   {vis.minhas.map((v) => (
@@ -598,7 +619,7 @@ export function DashboardExecucao({
                 </optgroup>
               )}
             </SelectField>,
-            <PeriodoPicker key="periodo" value={periodo} anos={base.disponiveis} meses={meses} onChange={setPeriodo} className="w-full min-w-0" />,
+            <PeriodoPicker key="periodo" value={periodo} anos={base.disponiveis} meses={meses} onChange={setPeriodo} inicial={inicialPeriodo} className="w-full min-w-0" />,
           ]}
         />
       </section>
