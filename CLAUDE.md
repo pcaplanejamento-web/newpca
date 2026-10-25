@@ -4749,6 +4749,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       se aprende em Vínculos → "Descobrir os IDs" (lote `unidades` com `porOrgao: true` = todos os órgãos do cadastro com o
       ID) e aparece na vista "IDs na Centi" (o órgão do cadastro com o ID e se os vínculos concordam); coluna "ID na Centi"
       nos vínculos. O "Buscar na Centi" segue lendo tudo (o catálogo completo).
+    - **Unidade na tela (v1.220.0):** a coluna Unidade das liquidações e dos pagamentos (tabela e banner) é lida NA HORA do
+      EMPENHO ligado pelo número — `unidadeNaTela(alias, completo)` (`liquidacoes-tela.ts`, a régua `UNIDADE_SISTEMA` dos
+      empenhos: só órgão = a sigla do órgão); sem o empenho, a gravada. O escopo segue pela gravada (realinhada na promoção).
     - **Restos a pagar:** `getempenhos` aceita `numero` com um intervalo de anos (conferido ao vivo); as liquidações/
       pagamentos sem empenho de 2025 são de 2023/2024 — basta pôr os anos anteriores no card (`AvisoSemEmpenho`, exportado de
       `EmpenhoCardLiquidacoes.tsx`, nas duas tabelas). `DestinacaoRecurso` fica FORA: um campo novo no "mudou" regravaria

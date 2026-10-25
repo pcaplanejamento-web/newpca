@@ -41,6 +41,19 @@ const empenhoDa = (alias: string, col: string) =>
     `(SELECT e.${col} FROM empenhos e WHERE e.numero = ${alias}.numero_empenho AND e.orgao_id IS NOT NULL ORDER BY e.removido_em IS NOT NULL, e.reparticao_id IS NULL, e.id LIMIT 1)`,
   );
 
+/**
+ * A UNIDADE na tela = a do EMPENHO ligado pelo número, lida na hora (a mesma régua da coluna Unidade dos empenhos —
+ * `UNIDADE_SISTEMA`: o empenho vinculado só ao órgão mostra a sigla do órgão); sem o empenho no sistema, a gravada na linha.
+ * `completo` = "SIGLA — Nome" (o banner); senão só a sigla (a tabela). Vale para liquidações e pagamentos.
+ */
+export const unidadeNaTela = (alias: string, completo = false) => {
+  const un = completo ? "r.codigo || ' — ' || r.nome" : "r.codigo";
+  const org = completo ? "CASE WHEN COALESCE(o.sigla, '') = '' THEN o.nome ELSE o.sigla || ' — ' || o.nome END" : "COALESCE(NULLIF(o.sigla, ''), o.nome)";
+  return sql.raw(
+    `COALESCE((SELECT COALESCE((SELECT ${un} FROM reparticoes r WHERE r.id = e.reparticao_id), (SELECT ${org} FROM orgaos o WHERE o.id = e.orgao_id)) FROM empenhos e WHERE e.numero = ${alias}.numero_empenho AND e.orgao_id IS NOT NULL ORDER BY e.removido_em IS NOT NULL, e.reparticao_id IS NULL, e.id LIMIT 1), (SELECT ${un} FROM reparticoes r WHERE r.id = ${alias}.reparticao_id))`,
+  );
+};
+
 const recorte = (card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos) =>
   sql.join(
     [
@@ -69,7 +82,7 @@ export async function textoLiquidacoes(card: number, ano: number, removidos: boo
     Array.from({ length: Math.ceil(n / POR_PEDACO) }, (_, i) =>
       db.all<{ t: string | null }>(sql`SELECT json_group_array(json_array(l.id, l.data, l.numero, l.numero_empenho, l.credor, l.cpf_cnpj, l.historico, l.valor, l.valor_anulado, l.valor_liquido, l.valor_pago, l.saldo, l.orgao,
         (SELECT COALESCE(NULLIF(o.sigla, ''), o.nome) FROM orgaos o WHERE o.id = l.orgao_id),
-        (SELECT r.codigo FROM reparticoes r WHERE r.id = l.reparticao_id),
+        ${unidadeNaTela("l")},
         CASE WHEN l.removido_em IS NULL THEN 0 ELSE 1 END,
         ${empenhoDa("l", "ano")})) AS t
         FROM (SELECT l.id AS lid FROM liquidacoes l WHERE ${onde} ORDER BY l.data DESC, l.id DESC LIMIT ${POR_PEDACO} OFFSET ${i * POR_PEDACO}) x
@@ -137,7 +150,7 @@ export async function liquidacaoCompleta(card: number, id: number, escopo: Escop
       l.orgao AS orgaoCenti, l.id_orgao_centi AS idOrgaoCenti, l.credor AS credor, l.cpf_cnpj AS cpfCnpj, l.historico AS historico,
       l.valor AS valor, l.valor_anulado AS valorAnulado, l.valor_liquido AS valorLiquido, l.valor_pago AS valorPago, l.saldo AS saldo,
       (SELECT CASE WHEN COALESCE(o.sigla, '') = '' THEN o.nome ELSE o.sigla || ' — ' || o.nome END FROM orgaos o WHERE o.id = l.orgao_id) AS orgao,
-      (SELECT r.codigo || ' — ' || r.nome FROM reparticoes r WHERE r.id = l.reparticao_id) AS unidade,
+      ${unidadeNaTela("l", true)} AS unidade,
       l.lote_id AS loteId, (SELECT c.concluido_em FROM centi_lotes c WHERE c.id = l.lote_id) AS loteConcluidoEm,
       l.leitor AS leitor, l.removido_em AS removidoEm, l.criado_em AS criadoEm, l.atualizado_em AS atualizadoEm,
       ${empenhoDa("l", "id")} AS empenhoId

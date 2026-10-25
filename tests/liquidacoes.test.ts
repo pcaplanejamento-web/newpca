@@ -333,3 +333,21 @@ test("liquidações EM PARALELO (D1 real): os órgãos chegam fora de ordem — 
   assert.deepEqual(doSem2, [{ estado: "dividido", f: 0 }, { estado: "dividido", f: 0 }, { estado: "dividido", f: 0 }]);
   assert.equal(lote(b, l1).totalInformado, 4, "o período dividido não entra no total");
 });
+
+test("liquidações (D1 real): a coluna Unidade segue o EMPENHO — só órgão = a sigla do órgão; unidade trocada no empenho aparece na hora", async () => {
+  const b = banco();
+  b.empenho("9", 1, 5);
+  b.empenho("11", 2, null);
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "9"), liq(2, "11")]);
+  await promover(b, l1);
+  const col = (c: (typeof COLUNAS_LIQUIDACAO)[number]) => COLUNAS_LIQUIDACAO.indexOf(c);
+  const unidades = async () =>
+    new Map((JSON.parse(await textoLiquidacoes(LIQ, 2025, false, null, b.db)) as unknown[][]).map((t) => [t[col("numeroEmpenho")], t[col("unidade")]]));
+  assert.equal((await unidades()).get("11"), "FMS", "empenho vinculado só ao órgão: a sigla do órgão, como na tabela de empenhos");
+  // O empenho 9 passa a outra unidade sem o realinhamento das liquidações: a tela já mostra a do empenho.
+  b.raw.exec("UPDATE empenhos SET reparticao_id = 6, orgao_id = 2 WHERE numero = '9'");
+  assert.equal((await unidades()).get("9"), "SAUDE");
+  const id = Number((JSON.parse(await textoLiquidacoes(LIQ, 2025, false, null, b.db)) as unknown[][]).find((t) => t[col("numeroEmpenho")] === "9")?.[col("id")]);
+  assert.equal((await liquidacaoCompleta(LIQ, id, null, b.db))?.unidade, "SAUDE — Secretaria de Saúde");
+});

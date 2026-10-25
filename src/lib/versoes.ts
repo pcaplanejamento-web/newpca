@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.220.0",
+    data: "2026-10-25",
+    titulo: "Unidade das liquidações e dos pagamentos pelo empenho",
+    mudancas: [
+      { tipo: "correcao", area: "Liquidações e pagamentos", texto: "A coluna Unidade passa a mostrar a unidade do empenho ligado, como na tabela de empenhos. O empenho vinculado só ao órgão mostra a sigla do órgão. Se a unidade do empenho mudar, a liquidação e o pagamento acompanham na hora.", link: "/painel/liquidacoes" },
+    ],
+  },
+  {
     versao: "1.219.0",
     data: "2026-10-25",
     titulo: "Liquidações e pagamentos abertos de dentro do empenho",

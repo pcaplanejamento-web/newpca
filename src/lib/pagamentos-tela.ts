@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { EscopoEmpenhos } from "./empenhos-tela-core.ts";
 import { doEscopo } from "./empenhos-tela-sql.ts";
-import type { EmpenhoDaLiquidacao } from "./liquidacoes-tela.ts";
+import { type EmpenhoDaLiquidacao, unidadeNaTela } from "./liquidacoes-tela.ts";
 
 /**
  * A TABELA de PAGAMENTOS de um card (D1; o banco vem de quem chama — testável no SQLite real, `tests/pagamentos.test.ts`) —
@@ -66,7 +66,7 @@ export async function textoPagamentos(card: number, ano: number, removidos: bool
       db.all<{ t: string | null }>(sql`SELECT json_group_array(json_array(p.id, p.data, p.numero_empenho, p.credor, p.cpf_cnpj, p.historico, p.valor, p.valor_retencao, p.valor_liquido,
         p.anulado, p.motivo_anulacao, p.orgao,
         (SELECT COALESCE(NULLIF(o.sigla, ''), o.nome) FROM orgaos o WHERE o.id = p.orgao_id),
-        (SELECT r.codigo FROM reparticoes r WHERE r.id = p.reparticao_id),
+        ${unidadeNaTela("p")},
         CASE WHEN p.removido_em IS NULL THEN 0 ELSE 1 END,
         ${empenhoDo("p", "ano")})) AS t
         FROM (SELECT p.id AS pid FROM pagamentos p WHERE ${onde} ORDER BY p.data DESC, p.id DESC LIMIT ${POR_PEDACO} OFFSET ${i * POR_PEDACO}) x
@@ -113,7 +113,7 @@ export async function pagamentoCompleto(card: number, id: number, escopo: Escopo
       p.orgao AS orgaoCenti, p.id_orgao_centi AS idOrgaoCenti, p.credor AS credor, p.cpf_cnpj AS cpfCnpj, p.historico AS historico,
       p.valor AS valor, p.valor_retencao AS valorRetencao, p.valor_liquido AS valorLiquido, p.anulado AS anulado, p.motivo_anulacao AS motivoAnulacao,
       (SELECT CASE WHEN COALESCE(o.sigla, '') = '' THEN o.nome ELSE o.sigla || ' — ' || o.nome END FROM orgaos o WHERE o.id = p.orgao_id) AS orgao,
-      (SELECT r.codigo || ' — ' || r.nome FROM reparticoes r WHERE r.id = p.reparticao_id) AS unidade,
+      ${unidadeNaTela("p", true)} AS unidade,
       p.lote_id AS loteId, (SELECT c.concluido_em FROM centi_lotes c WHERE c.id = p.lote_id) AS loteConcluidoEm,
       p.leitor AS leitor, p.removido_em AS removidoEm, p.criado_em AS criadoEm, p.atualizado_em AS atualizadoEm,
       ${empenhoDo("p", "id")} AS empenhoId
