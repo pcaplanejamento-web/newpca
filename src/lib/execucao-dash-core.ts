@@ -1,0 +1,794 @@
+/**
+ * O DASHBOARD DA EXECUÇÃO — o núcleo PURO (testado em `tests/execucao-dash.test.ts`). Junta empenhos, liquidações e
+ * pagamentos pelo NÚMERO do empenho (a ligação é feita no banco — `execucao-sql.ts` — com a régua de `destinoSql`) e dá
+ * TODOS os números da tela: os indicadores, o funil, a série (diária e acumulada), as opções dos filtros e a origem de cada
+ * ponto. Nenhuma tela soma por conta própria.
+ *
+ * Regras (as mesmas em todo número):
+ * - VALORES em INTEIROS de 1/10.000 de real (`ESCALA`): a Centi manda até 3 casas; cada registro é arredondado UMA vez no
+ *   banco e as somas são exatas (a soma das partes é o total).
+ * - Empenhado = valor empenhado − anulado (a anulação NÃO tem data na Centi — fica na data do empenho). Liquidado = valor −
+ *   anulado das liquidações. Pago = valor das ordens NÃO anuladas (a régua de `conferirExecucao`, medida em 2025); retido e
+ *   pago líquido só das não anuladas; o anulado das ordens à parte.
+ * - VISÃO "movimento": cada etapa pela PRÓPRIA data (o que entrou no período — os restos a pagar inclusive). VISÃO "safra":
+ *   os empenhos do período e TODA a execução deles, de qualquer data (só ela tem "a pagar" e "a liquidar").
+ * - Liquidação/pagamento SEM o empenho no sistema = o valor "Sem empenho no sistema" em todo filtro do empenho (o órgão vem
+ *   do próprio registro); conta no movimento e nunca some.
+ */
+import { baldesData, type BaldeData, type GranularidadeData } from "./mesa-metricas.ts";
+
+/** Os valores chegam em inteiros de 1/ESCALA de real. */
+export const ESCALA = 10_000;
+/** Inteiros → reais (só na hora de mostrar). */
+export const reais = (u: number): number => u / ESCALA;
+
+/** As dimensões do EMPENHO que vão pelo dicionário (a ordem é a da tupla). */
+export const DIMS_DICIONARIO = [
+  "unidade",
+  "orgaoGestor",
+  "unidadeOrcamentaria",
+  "funcao",
+  "subfuncao",
+  "programa",
+  "acao",
+  "elemento",
+  "subelemento",
+  "fonte",
+  "modalidade",
+  "licitacao",
+  "fornecedor",
+] as const;
+export type DimDicionario = (typeof DIMS_DICIONARIO)[number];
+/** Todas as dimensões dos filtros: o dicionário + o ÓRGÃO do cadastro (pelo id). */
+export type DimExec = DimDicionario | "orgao";
+export const DIMS_EXEC: readonly DimExec[] = ["unidade", "orgao", ...DIMS_DICIONARIO.slice(1)];
+
+export const ROTULO_DIM: Record<DimExec, string> = {
+  unidade: "Unidade",
+  orgao: "Órgão",
+  orgaoGestor: "Órgão gestor",
+  unidadeOrcamentaria: "Unidade orçamentária",
+  funcao: "Função",
+  subfuncao: "Subfunção",
+  programa: "Programa",
+  acao: "Ação",
+  elemento: "Elemento",
+  subelemento: "Subelemento",
+  fonte: "Fonte",
+  modalidade: "Modalidade",
+  licitacao: "Licitação",
+  fornecedor: "Fornecedor",
+};
+
+/** As 5 dimensões que ficam À VISTA na linha de filtros (as outras em "Mais filtros"). */
+export const DIMS_PRINCIPAIS: readonly DimExec[] = ["unidade", "orgaoGestor", "acao", "elemento", "fonte"];
+
+/** As chaves especiais de opção: o valor vazio e o registro sem empenho no sistema. */
+export const CHAVE_VAZIO = "~";
+export const CHAVE_SEM_EMPENHO = "!";
+export const ROTULO_VAZIO = "Não informado";
+export const ROTULO_SEM_EMPENHO = "Sem empenho no sistema";
+
+export type Visao = "movimento" | "safra";
+export type Granularidade = "auto" | Exclude<GranularidadeData, "ano">;
+
+/** Situação de um TIPO de card (a faixa de confiança). */
+export type MetaExec = { tipo: "empenhos" | "liquidacoes" | "pagamentos"; cards: number; atualizado: string | null; lendo: number; problemas: number };
+
+/** O que a rota entrega (TEXTO JSON montado no banco). */
+export type PacoteExec = {
+  /** A versão dos dados (muda a cada importação promovida ou vínculo). */
+  v: string;
+  /** Os anos carregados e os que existem. */
+  anos: number[];
+  disponiveis: number[];
+  /** Quais etapas a pessoa pode ver (a tela de cada uma). */
+  fontes: { liquidacoes: boolean; pagamentos: boolean };
+  meta: MetaExec[];
+  /** [id, sigla ou nome, nome] dos órgãos do cadastro citados. */
+  orgaos: [number, string, string][];
+  /** O dicionário de cada dimensão: [índice, texto]. */
+  dic: Partial<Record<DimDicionario, [number, string | null][]>>;
+  /** [id, número, noRecorte(0|1), órgãoId, dia, …índices das dimensões, empenhado, anulado, liquidado, pago, saldo]. */
+  emp: (number | string | null)[][];
+  /** [empenho (índice ou -1), órgãoId (sem empenho), dia, noRecorte, valor, anulado, quantidade]. */
+  liq: (number | null)[][];
+  /** [empenho, órgãoId, dia, noRecorte, pago, retido, pago líquido, anulado, quantidade, anuladas]. */
+  pag: (number | null)[][];
+};
+
+const DIA0 = Date.UTC(2000, 0, 1);
+const DIA_MS = 86_400_000;
+/** O dia (inteiro desde 2000-01-01, como o banco manda) → AAAA-MM-DD. */
+export const isoDoDia = (d: number): string => new Date(DIA0 + d * DIA_MS).toISOString().slice(0, 10);
+/** AAAA-MM-DD → o dia inteiro (inválido = null). */
+export function diaDoIso(iso: string | null | undefined): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(t)) return null;
+  const d = Math.round((t - DIA0) / DIA_MS);
+  // Recusa o dia inexistente (13/40 "rola" para outro mês no Date.UTC).
+  return isoDoDia(d) === iso ? d : null;
+}
+
+const SEM_DIA = -2147483648;
+const n = (x: unknown): number => {
+  const v = Number(x);
+  return Number.isFinite(v) ? v : 0;
+};
+
+/** A base INDEXADA (colunas em arrays — uma passada linear por mudança de filtro). */
+export type BaseExec = {
+  fontes: PacoteExec["fontes"];
+  meta: MetaExec[];
+  anos: number[];
+  disponiveis: number[];
+  orgaos: Map<number, { sigla: string; nome: string }>;
+  /** Os textos de cada dimensão do dicionário (índice → texto; `null` = vazio). */
+  dic: Record<DimDicionario, (string | null)[]>;
+  emp: {
+    n: number;
+    id: Int32Array;
+    numero: string[];
+    r: Uint8Array;
+    org: Int32Array;
+    dia: Int32Array;
+    dims: Record<DimDicionario, Int32Array>;
+    bruto: Float64Array;
+    anulado: Float64Array;
+    liquidado: Float64Array;
+    pago: Float64Array;
+    saldo: Float64Array;
+  };
+  liq: { n: number; ei: Int32Array; org: Int32Array; dia: Int32Array; r: Uint8Array; valor: Float64Array; anulado: Float64Array; qtd: Int32Array };
+  pag: {
+    n: number;
+    ei: Int32Array;
+    org: Int32Array;
+    dia: Int32Array;
+    r: Uint8Array;
+    pago: Float64Array;
+    retido: Float64Array;
+    liquido: Float64Array;
+    anulado: Float64Array;
+    qtd: Int32Array;
+    anuladas: Int32Array;
+  };
+};
+
+/** O pacote → a base indexada (nada quebra com dado faltando: número inválido = 0, índice fora = vazio). */
+export function montarBase(p: PacoteExec): BaseExec {
+  const dic = {} as Record<DimDicionario, (string | null)[]>;
+  for (const d of DIMS_DICIONARIO) {
+    const l: (string | null)[] = [];
+    for (const [i, v] of p.dic[d] ?? []) if (Number.isInteger(i) && i >= 0) l[i] = v == null || v === "" ? null : String(v);
+    dic[d] = l;
+  }
+  const nD = DIMS_DICIONARIO.length;
+  const E = p.emp ?? [];
+  const ne = E.length;
+  const dims = {} as Record<DimDicionario, Int32Array>;
+  for (const d of DIMS_DICIONARIO) dims[d] = new Int32Array(ne);
+  const emp: BaseExec["emp"] = {
+    n: ne,
+    id: new Int32Array(ne),
+    numero: new Array(ne),
+    r: new Uint8Array(ne),
+    org: new Int32Array(ne),
+    dia: new Int32Array(ne),
+    dims,
+    bruto: new Float64Array(ne),
+    anulado: new Float64Array(ne),
+    liquidado: new Float64Array(ne),
+    pago: new Float64Array(ne),
+    saldo: new Float64Array(ne),
+  };
+  for (let i = 0; i < ne; i++) {
+    const t = E[i];
+    emp.id[i] = n(t[0]);
+    emp.numero[i] = String(t[1] ?? "");
+    emp.r[i] = n(t[2]) ? 1 : 0;
+    emp.org[i] = n(t[3]);
+    emp.dia[i] = t[4] == null ? SEM_DIA : n(t[4]);
+    for (let k = 0; k < nD; k++) {
+      const v = t[5 + k];
+      dims[DIMS_DICIONARIO[k]][i] = v == null ? -1 : n(v);
+    }
+    emp.bruto[i] = n(t[5 + nD]);
+    emp.anulado[i] = n(t[6 + nD]);
+    emp.liquidado[i] = n(t[7 + nD]);
+    emp.pago[i] = n(t[8 + nD]);
+    emp.saldo[i] = n(t[9 + nD]);
+  }
+  const ei = (x: unknown) => {
+    const v = Number(x);
+    return Number.isInteger(v) && v >= 0 && v < ne ? v : -1;
+  };
+  const L = p.liq ?? [];
+  const liq: BaseExec["liq"] = {
+    n: L.length,
+    ei: new Int32Array(L.length),
+    org: new Int32Array(L.length),
+    dia: new Int32Array(L.length),
+    r: new Uint8Array(L.length),
+    valor: new Float64Array(L.length),
+    anulado: new Float64Array(L.length),
+    qtd: new Int32Array(L.length),
+  };
+  L.forEach((t, i) => {
+    liq.ei[i] = ei(t[0]);
+    liq.org[i] = liq.ei[i] >= 0 ? emp.org[liq.ei[i]] : n(t[1]);
+    liq.dia[i] = t[2] == null ? SEM_DIA : n(t[2]);
+    liq.r[i] = n(t[3]) ? 1 : 0;
+    liq.valor[i] = n(t[4]);
+    liq.anulado[i] = n(t[5]);
+    liq.qtd[i] = n(t[6]);
+  });
+  const P = p.pag ?? [];
+  const pag: BaseExec["pag"] = {
+    n: P.length,
+    ei: new Int32Array(P.length),
+    org: new Int32Array(P.length),
+    dia: new Int32Array(P.length),
+    r: new Uint8Array(P.length),
+    pago: new Float64Array(P.length),
+    retido: new Float64Array(P.length),
+    liquido: new Float64Array(P.length),
+    anulado: new Float64Array(P.length),
+    qtd: new Int32Array(P.length),
+    anuladas: new Int32Array(P.length),
+  };
+  P.forEach((t, i) => {
+    pag.ei[i] = ei(t[0]);
+    pag.org[i] = pag.ei[i] >= 0 ? emp.org[pag.ei[i]] : n(t[1]);
+    pag.dia[i] = t[2] == null ? SEM_DIA : n(t[2]);
+    pag.r[i] = n(t[3]) ? 1 : 0;
+    pag.pago[i] = n(t[4]);
+    pag.retido[i] = n(t[5]);
+    pag.liquido[i] = n(t[6]);
+    pag.anulado[i] = n(t[7]);
+    pag.qtd[i] = n(t[8]);
+    pag.anuladas[i] = n(t[9]);
+  });
+  const orgaos = new Map<number, { sigla: string; nome: string }>();
+  for (const [id, sigla, nome] of p.orgaos ?? []) orgaos.set(n(id), { sigla: String(sigla ?? ""), nome: String(nome ?? "") });
+  return {
+    fontes: { liquidacoes: !!p.fontes?.liquidacoes, pagamentos: !!p.fontes?.pagamentos },
+    meta: p.meta ?? [],
+    anos: p.anos ?? [],
+    disponiveis: p.disponiveis ?? [],
+    orgaos,
+    dic,
+    emp,
+    liq,
+    pag,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Filtros
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Os filtros escolhidos: por dimensão, as CHAVES das opções (QUALQUER uma; vazio = sem filtro). */
+export type FiltrosExec = Partial<Record<DimExec, readonly string[]>>;
+/** O recorte de tempo: dias inteiros [de, ate] (ausente = sem limite). */
+export type IntervaloExec = { de?: string; ate?: string };
+
+/** A chave da opção de um empenho numa dimensão. */
+function chaveEmp(b: BaseExec, d: DimExec, i: number): string {
+  if (d === "orgao") return String(b.emp.org[i]);
+  const k = b.emp.dims[d][i];
+  return k < 0 || b.dic[d][k] == null ? CHAVE_VAZIO : String(k);
+}
+/** A chave de um evento SEM empenho: o órgão do registro; nas demais dimensões, "Sem empenho no sistema". */
+const chaveSemEmp = (d: DimExec, org: number): string => (d === "orgao" ? String(org) : CHAVE_SEM_EMPENHO);
+
+/** O rótulo de uma opção (único por dimensão — os textos do dicionário são distintos). */
+export function rotuloOpcao(b: BaseExec, d: DimExec, chave: string): string {
+  if (chave === CHAVE_SEM_EMPENHO) return ROTULO_SEM_EMPENHO;
+  if (chave === CHAVE_VAZIO) return ROTULO_VAZIO;
+  if (d === "orgao") return b.orgaos.get(Number(chave))?.sigla || `Órgão ${chave}`;
+  return b.dic[d][Number(chave)] ?? ROTULO_VAZIO;
+}
+/** O detalhe da opção (o nome do órgão, quando a sigla é o rótulo). */
+export function detalheOpcao(b: BaseExec, d: DimExec, chave: string): string | undefined {
+  if (d !== "orgao") return undefined;
+  const o = b.orgaos.get(Number(chave));
+  return o && o.nome && o.nome !== o.sigla ? o.nome : undefined;
+}
+
+type Ativos = { d: DimExec; set: Set<string> }[];
+const ativosDe = (f: FiltrosExec): Ativos =>
+  DIMS_EXEC.flatMap((d) => {
+    const l = f[d];
+    return l && l.length ? [{ d, set: new Set(l) }] : [];
+  });
+
+/**
+ * As FALHAS de cada registro nos filtros ativos: 0 = passa em todos; 1..k = o índice (+1) do ÚNICO filtro em que falha;
+ * -1 = falha em dois ou mais. Com isso UMA passada dá o que passa em tudo e o que passa "em todos menos um" (as opções
+ * conectadas de cada dimensão e o gráfico desenhado sem o próprio filtro).
+ */
+function falhas(chaveDe: (d: DimExec) => string, at: Ativos): number {
+  let f = 0;
+  for (let k = 0; k < at.length; k++) {
+    if (!at[k].set.has(chaveDe(at[k].d))) {
+      if (f !== 0) return -1;
+      f = k + 1;
+    }
+  }
+  return f;
+}
+
+/** Os registros contados pela visão e pelo período (antes dos filtros das dimensões). */
+type Contagem = { emp: Uint8Array; liq: Uint8Array; pag: Uint8Array };
+
+function dentroDe(dia: number, de: number | null, ate: number | null): boolean {
+  if (de == null && ate == null) return true;
+  if (dia === SEM_DIA) return false;
+  return (de == null || dia >= de) && (ate == null || dia <= ate);
+}
+
+/** O que cada visão conta no intervalo (sem os filtros de dimensão). */
+function contados(b: BaseExec, visao: Visao, i: IntervaloExec): Contagem {
+  const de = diaDoIso(i.de);
+  const ate = diaDoIso(i.ate);
+  const emp = new Uint8Array(b.emp.n);
+  for (let k = 0; k < b.emp.n; k++) emp[k] = b.emp.r[k] && dentroDe(b.emp.dia[k], de, ate) ? 1 : 0;
+  const liq = new Uint8Array(b.liq.n);
+  const pag = new Uint8Array(b.pag.n);
+  if (visao === "movimento") {
+    for (let k = 0; k < b.liq.n; k++) liq[k] = b.liq.r[k] && dentroDe(b.liq.dia[k], de, ate) ? 1 : 0;
+    for (let k = 0; k < b.pag.n; k++) pag[k] = b.pag.r[k] && dentroDe(b.pag.dia[k], de, ate) ? 1 : 0;
+  } else {
+    // Safra: a execução (de qualquer data) dos empenhos contados; o registro sem empenho não entra.
+    for (let k = 0; k < b.liq.n; k++) liq[k] = b.liq.ei[k] >= 0 && emp[b.liq.ei[k]] ? 1 : 0;
+    for (let k = 0; k < b.pag.n; k++) pag[k] = b.pag.ei[k] >= 0 && emp[b.pag.ei[k]] ? 1 : 0;
+  }
+  if (!b.fontes.liquidacoes) liq.fill(0);
+  if (!b.fontes.pagamentos) pag.fill(0);
+  return { emp, liq, pag };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// O cálculo único
+// ---------------------------------------------------------------------------------------------------------------
+
+export type Totais = {
+  empenhos: number;
+  empBruto: number;
+  empAnulado: number;
+  /** empBruto − empAnulado. */
+  empenhado: number;
+  liquidacoes: number;
+  liqBruto: number;
+  liqAnulado: number;
+  /** liqBruto − liqAnulado. */
+  liquidado: number;
+  pagamentos: number;
+  /** Valor das ordens NÃO anuladas. */
+  pago: number;
+  retido: number;
+  pagoLiquido: number;
+  pagAnulado: number;
+  pagAnuladas: number;
+  fornecedores: number;
+  /** Liquidações/pagamentos contados sem o empenho no sistema (quantidade e valor). */
+  semEmpenho: number;
+  semEmpenhoValor: number;
+};
+
+const totaisZero = (): Totais => ({
+  empenhos: 0,
+  empBruto: 0,
+  empAnulado: 0,
+  empenhado: 0,
+  liquidacoes: 0,
+  liqBruto: 0,
+  liqAnulado: 0,
+  liquidado: 0,
+  pagamentos: 0,
+  pago: 0,
+  retido: 0,
+  pagoLiquido: 0,
+  pagAnulado: 0,
+  pagAnuladas: 0,
+  fornecedores: 0,
+  semEmpenho: 0,
+  semEmpenhoValor: 0,
+});
+
+/** Os índices que passam (os contados + todos os filtros). */
+export type Selecao = { emp: Int32Array; liq: Int32Array; pag: Int32Array };
+
+export type Calculo = {
+  totais: Totais;
+  /** O que passa em TUDO (a origem dos números). */
+  sel: Selecao;
+  /** As opções CONECTADAS de cada dimensão: chave → quantidade de registros (sem o filtro da própria dimensão). */
+  opcoes: Record<DimExec, Map<string, number>>;
+  /** Registros contados sem data (fora da série — avisados). */
+  semData: { empenhos: number; liquidacoes: number; pagamentos: number };
+};
+
+/**
+ * O CÁLCULO ÚNICO: visão + intervalo + filtros → os totais, os índices que passam e as opções conectadas. Linear nos
+ * registros (uma passada por tipo).
+ */
+export function calcular(b: BaseExec, visao: Visao, intervalo: IntervaloExec, filtros: FiltrosExec): Calculo {
+  const c = contados(b, visao, intervalo);
+  const at = ativosDe(filtros);
+  const opcoes = Object.fromEntries(DIMS_EXEC.map((d) => [d, new Map<string, number>()])) as Record<DimExec, Map<string, number>>;
+  const conta = (d: DimExec, k: string) => {
+    const m = opcoes[d];
+    m.set(k, (m.get(k) ?? 0) + 1);
+  };
+  /** Soma nas opções: f = 0 → em todas as dimensões; f = k → só na dimensão do filtro em que falhou. */
+  const noTopo = (f: number, chaveDe: (d: DimExec) => string) => {
+    if (f === 0) for (const d of DIMS_EXEC) conta(d, chaveDe(d));
+    else if (f > 0) {
+      const d = at[f - 1].d;
+      conta(d, chaveDe(d));
+    }
+  };
+  const t = totaisZero();
+  const semData = { empenhos: 0, liquidacoes: 0, pagamentos: 0 };
+  const selE: number[] = [];
+  const forn = new Set<number>();
+  for (let i = 0; i < b.emp.n; i++) {
+    if (!c.emp[i]) continue;
+    const chave = (d: DimExec) => chaveEmp(b, d, i);
+    const f = falhas(chave, at);
+    noTopo(f, chave);
+    if (f !== 0) continue;
+    selE.push(i);
+    t.empenhos++;
+    t.empBruto += b.emp.bruto[i];
+    t.empAnulado += b.emp.anulado[i];
+    if (b.emp.dims.fornecedor[i] >= 0) forn.add(b.emp.dims.fornecedor[i]);
+    if (b.emp.dia[i] === SEM_DIA) semData.empenhos++;
+  }
+  // Na safra o evento herda a seleção do empenho (os filtros são do empenho); no movimento, confere os filtros nele.
+  const empOk = new Uint8Array(b.emp.n);
+  for (const i of selE) empOk[i] = 1;
+  const chaveEv = (ei: number, org: number) => (d: DimExec) => (ei >= 0 ? chaveEmp(b, d, ei) : chaveSemEmp(d, org));
+  const selL: number[] = [];
+  for (let k = 0; k < b.liq.n; k++) {
+    if (!c.liq[k]) continue;
+    const ei = b.liq.ei[k];
+    let ok: boolean;
+    if (visao === "safra") ok = empOk[ei] === 1;
+    else {
+      const chave = chaveEv(ei, b.liq.org[k]);
+      const f = falhas(chave, at);
+      noTopo(f, chave);
+      ok = f === 0;
+    }
+    if (!ok) continue;
+    selL.push(k);
+    t.liquidacoes += b.liq.qtd[k];
+    t.liqBruto += b.liq.valor[k];
+    t.liqAnulado += b.liq.anulado[k];
+    if (ei < 0) {
+      t.semEmpenho += b.liq.qtd[k];
+      t.semEmpenhoValor += b.liq.valor[k] - b.liq.anulado[k];
+    }
+    if (b.liq.dia[k] === SEM_DIA) semData.liquidacoes += b.liq.qtd[k];
+  }
+  const selP: number[] = [];
+  for (let k = 0; k < b.pag.n; k++) {
+    if (!c.pag[k]) continue;
+    const ei = b.pag.ei[k];
+    let ok: boolean;
+    if (visao === "safra") ok = empOk[ei] === 1;
+    else {
+      const chave = chaveEv(ei, b.pag.org[k]);
+      const f = falhas(chave, at);
+      noTopo(f, chave);
+      ok = f === 0;
+    }
+    if (!ok) continue;
+    selP.push(k);
+    t.pagamentos += b.pag.qtd[k];
+    t.pago += b.pag.pago[k];
+    t.retido += b.pag.retido[k];
+    t.pagoLiquido += b.pag.liquido[k];
+    t.pagAnulado += b.pag.anulado[k];
+    t.pagAnuladas += b.pag.anuladas[k];
+    if (ei < 0) {
+      t.semEmpenho += b.pag.qtd[k];
+      t.semEmpenhoValor += b.pag.pago[k];
+    }
+    if (b.pag.dia[k] === SEM_DIA) semData.pagamentos += b.pag.qtd[k];
+  }
+  t.empenhado = t.empBruto - t.empAnulado;
+  t.liquidado = t.liqBruto - t.liqAnulado;
+  t.fornecedores = forn.size;
+  return { totais: t, sel: { emp: Int32Array.from(selE), liq: Int32Array.from(selL), pag: Int32Array.from(selP) }, opcoes, semData };
+}
+
+/** Os indicadores derivados (na safra: o que falta liquidar e pagar dos empenhos do período). */
+export function derivados(t: Totais): { aLiquidar: number; aPagar: number; liquidadoAPagar: number; pctLiquidado: number | null; pctPago: number | null } {
+  return {
+    aLiquidar: t.empenhado - t.liquidado,
+    aPagar: t.empenhado - t.pago,
+    liquidadoAPagar: t.liquidado - t.pago,
+    pctLiquidado: t.empenhado > 0 ? t.liquidado / t.empenhado : null,
+    pctPago: t.empenhado > 0 ? t.pago / t.empenhado : null,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// A série
+// ---------------------------------------------------------------------------------------------------------------
+
+export type PontoSerie = {
+  chave: string;
+  rotulo: string;
+  titulo: string;
+  de: string;
+  ate: string;
+  atual: boolean;
+  empenhado: number;
+  liquidado: number;
+  pago: number;
+  /** Acumulados desde o 1º balde. */
+  acEmpenhado: number;
+  acLiquidado: number;
+  acPago: number;
+};
+
+export type Serie = { granularidade: GranularidadeData; pontos: PontoSerie[]; de: string | null; ate: string | null };
+
+/** O limite de baldes de dia/semana (acima, o gráfico não teria leitura — a granularidade sobe). */
+export const MAX_BALDES = 400;
+
+/** Os dias dos registros SELECIONADOS (o intervalo da série quando o período é "todo"). */
+function extremos(b: BaseExec, s: Selecao): [number, number] | null {
+  let mi = Number.POSITIVE_INFINITY;
+  let ma = Number.NEGATIVE_INFINITY;
+  const ver = (d: number) => {
+    if (d === SEM_DIA) return;
+    if (d < mi) mi = d;
+    if (d > ma) ma = d;
+  };
+  for (const i of s.emp) ver(b.emp.dia[i]);
+  for (const k of s.liq) ver(b.liq.dia[k]);
+  for (const k of s.pag) ver(b.pag.dia[k]);
+  return mi <= ma ? [mi, ma] : null;
+}
+
+/**
+ * A SÉRIE dos selecionados: os baldes do intervalo (o do período; "todo" = do 1º ao último dia com dado) na granularidade
+ * pedida ("auto" = a de `baldesData`). Dia/semana com mais de `MAX_BALDES` baldes sobe para mês. O último acumulado = os
+ * totais menos os registros sem data (invariante testado).
+ */
+export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran: Granularidade, hoje: string): Serie {
+  const ext = extremos(b, calc.sel);
+  const de = intervalo.de ?? (ext ? isoDoDia(ext[0]) : null);
+  const ate = intervalo.ate ?? (ext ? isoDoDia(ext[1]) : null);
+  if (!de || !ate || de > ate) return { granularidade: "dia", pontos: [], de, ate };
+  const nDias = (diaDoIso(ate) ?? 0) - (diaDoIso(de) ?? 0) + 1;
+  let forcar: GranularidadeData | undefined = gran === "auto" ? undefined : gran;
+  if (forcar === "dia" && nDias > MAX_BALDES) forcar = "semana";
+  if (forcar === "semana" && nDias / 7 > MAX_BALDES) forcar = "mes";
+  const { granularidade, baldes, chaveDoDia } = baldesData(de, ate, hoje, forcar);
+  const pos = new Map(baldes.map((x: BaldeData, i) => [x.chave, i]));
+  const em = new Float64Array(baldes.length);
+  const lq = new Float64Array(baldes.length);
+  const pg = new Float64Array(baldes.length);
+  const onde = (d: number): number => (d === SEM_DIA ? -1 : (pos.get(chaveDoDia(isoDoDia(d)) ?? "") ?? -1));
+  for (const i of calc.sel.emp) {
+    const p = onde(b.emp.dia[i]);
+    if (p >= 0) em[p] += b.emp.bruto[i] - b.emp.anulado[i];
+  }
+  for (const k of calc.sel.liq) {
+    const p = onde(b.liq.dia[k]);
+    if (p >= 0) lq[p] += b.liq.valor[k] - b.liq.anulado[k];
+  }
+  for (const k of calc.sel.pag) {
+    const p = onde(b.pag.dia[k]);
+    if (p >= 0) pg[p] += b.pag.pago[k];
+  }
+  let ae = 0;
+  let al = 0;
+  let ap = 0;
+  const pontos = baldes.map((x, i) => {
+    ae += em[i];
+    al += lq[i];
+    ap += pg[i];
+    return { chave: x.chave, rotulo: x.rotulo, titulo: x.titulo, de: x.de, ate: x.ate, atual: x.atual, empenhado: em[i], liquidado: lq[i], pago: pg[i], acEmpenhado: ae, acLiquidado: al, acPago: ap };
+  });
+  return { granularidade, pontos, de, ate };
+}
+
+/** Os índices selecionados que caem em [de, ate] (a ORIGEM de um ponto da série — a soma é o ponto). */
+export function selecaoNoIntervalo(b: BaseExec, s: Selecao, de: string, ate: string): Selecao {
+  const d0 = diaDoIso(de);
+  const d1 = diaDoIso(ate);
+  const ok = (d: number) => d !== SEM_DIA && (d0 == null || d >= d0) && (d1 == null || d <= d1);
+  return {
+    emp: s.emp.filter((i) => ok(b.emp.dia[i])),
+    liq: s.liq.filter((k) => ok(b.liq.dia[k])),
+    pag: s.pag.filter((k) => ok(b.pag.dia[k])),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// A tela: as opções dos filtros e as linhas da origem
+// ---------------------------------------------------------------------------------------------------------------
+
+export type OpcaoExec = { chave: string; rotulo: string; count: number; detalhe?: string };
+
+/**
+ * As opções de uma dimensão (as do recorte sem o filtro dela, com a quantidade de registros; as escolhidas ficam mesmo
+ * zeradas — para poder desmarcar). Ordem: mais registros primeiro; "Não informado" e "Sem empenho no sistema" por último.
+ */
+export function opcoesDim(b: BaseExec, calc: Calculo, filtros: FiltrosExec, d: DimExec): OpcaoExec[] {
+  const m = new Map(calc.opcoes[d]);
+  for (const k of filtros[d] ?? []) if (!m.has(k)) m.set(k, 0);
+  const fim = (k: string) => (k === CHAVE_VAZIO || k === CHAVE_SEM_EMPENHO ? 1 : 0);
+  return [...m]
+    .map(([chave, count]) => ({ chave, rotulo: rotuloOpcao(b, d, chave), count, detalhe: detalheOpcao(b, d, chave) }))
+    .sort((x, y) => fim(x.chave) - fim(y.chave) || y.count - x.count || x.rotulo.localeCompare(y.rotulo, "pt-BR"));
+}
+
+/** Um empenho para a tela (as colunas da origem e o `EmpenhoDetalhe`). */
+export type EmpenhoExec = {
+  id: number;
+  numero: string;
+  data: string | null;
+  orgao: string;
+  unidade: string | null;
+  orgaoGestor: string | null;
+  unidadeOrcamentaria: string | null;
+  fornecedor: string | null;
+  modalidade: string | null;
+  licitacao: string | null;
+  funcao: string | null;
+  subfuncao: string | null;
+  programa: string | null;
+  acao: string | null;
+  elemento: string | null;
+  subelemento: string | null;
+  fonte: string | null;
+  /** Em reais. */
+  valorEmpenhado: number;
+  valorAnulado: number;
+  valorLiquidado: number;
+  valorPago: number;
+  saldoPagar: number;
+};
+
+export function empenhoExec(b: BaseExec, i: number): EmpenhoExec {
+  const t = (d: DimDicionario) => {
+    const k = b.emp.dims[d][i];
+    return k >= 0 ? (b.dic[d][k] ?? null) : null;
+  };
+  return {
+    id: b.emp.id[i],
+    numero: b.emp.numero[i],
+    data: b.emp.dia[i] === SEM_DIA ? null : isoDoDia(b.emp.dia[i]),
+    orgao: rotuloOpcao(b, "orgao", String(b.emp.org[i])),
+    unidade: t("unidade"),
+    orgaoGestor: t("orgaoGestor"),
+    unidadeOrcamentaria: t("unidadeOrcamentaria"),
+    fornecedor: t("fornecedor"),
+    modalidade: t("modalidade"),
+    licitacao: t("licitacao"),
+    funcao: t("funcao"),
+    subfuncao: t("subfuncao"),
+    programa: t("programa"),
+    acao: t("acao"),
+    elemento: t("elemento"),
+    subelemento: t("subelemento"),
+    fonte: t("fonte"),
+    valorEmpenhado: reais(b.emp.bruto[i]),
+    valorAnulado: reais(b.emp.anulado[i]),
+    valorLiquidado: reais(b.emp.liquidado[i]),
+    valorPago: reais(b.emp.pago[i]),
+    saldoPagar: reais(b.emp.saldo[i]),
+  };
+}
+
+/** Uma linha de liquidações/pagamentos da origem (um dia de um empenho — o banco agrupa por empenho e dia). */
+export type EventoExec = {
+  chave: string;
+  /** O índice do empenho na base (-1 = sem empenho no sistema). */
+  ei: number;
+  numero: string | null;
+  data: string | null;
+  orgao: string;
+  unidade: string | null;
+  fornecedor: string | null;
+  quantidade: number;
+  /** Em reais: liquidações = líquido (valor − anulado) e anulado; pagamentos = pago, retido, líquido, anulado. */
+  valor: number;
+  anulado: number;
+  retido: number;
+  liquido: number;
+};
+
+export function liquidacaoExec(b: BaseExec, k: number): EventoExec {
+  const ei = b.liq.ei[k];
+  const e = ei >= 0 ? empenhoExec(b, ei) : null;
+  return {
+    chave: `l${k}`,
+    ei,
+    numero: e?.numero ?? null,
+    data: b.liq.dia[k] === SEM_DIA ? null : isoDoDia(b.liq.dia[k]),
+    orgao: rotuloOpcao(b, "orgao", String(b.liq.org[k])),
+    unidade: e ? e.unidade : null,
+    fornecedor: e?.fornecedor ?? null,
+    quantidade: b.liq.qtd[k],
+    valor: reais(b.liq.valor[k] - b.liq.anulado[k]),
+    anulado: reais(b.liq.anulado[k]),
+    retido: 0,
+    liquido: reais(b.liq.valor[k] - b.liq.anulado[k]),
+  };
+}
+
+export function pagamentoExec(b: BaseExec, k: number): EventoExec {
+  const ei = b.pag.ei[k];
+  const e = ei >= 0 ? empenhoExec(b, ei) : null;
+  return {
+    chave: `p${k}`,
+    ei,
+    numero: e?.numero ?? null,
+    data: b.pag.dia[k] === SEM_DIA ? null : isoDoDia(b.pag.dia[k]),
+    orgao: rotuloOpcao(b, "orgao", String(b.pag.org[k])),
+    unidade: e ? e.unidade : null,
+    fornecedor: e?.fornecedor ?? null,
+    quantidade: b.pag.qtd[k],
+    valor: reais(b.pag.pago[k]),
+    anulado: reais(b.pag.anulado[k]),
+    retido: reais(b.pag.retido[k]),
+    liquido: reais(b.pag.liquido[k]),
+  };
+}
+
+/** As últimas `semanas` semanas (domingo a sábado) até hoje: o EMPENHADO, o LIQUIDADO e o PAGO de cada (os sparks). */
+export function sparks(b: BaseExec, s: Selecao, hoje: string, semanas = 8): { empenhado: number[]; liquidado: number[]; pago: number[] } {
+  const h = diaDoIso(hoje) ?? 0;
+  // 2000-01-01 foi um sábado (dia da semana 6, domingo = 0): o domingo da semana de `d` = d − ((d + 6) mod 7).
+  const dom = (d: number) => d - ((((d + 6) % 7) + 7) % 7);
+  const fim = dom(h);
+  const ini = fim - (semanas - 1) * 7;
+  const em = new Array(semanas).fill(0);
+  const lq = new Array(semanas).fill(0);
+  const pg = new Array(semanas).fill(0);
+  const w = (d: number) => (d === SEM_DIA || d < ini || d > fim + 6 ? -1 : Math.floor((d - ini) / 7));
+  for (const i of s.emp) {
+    const k = w(b.emp.dia[i]);
+    if (k >= 0) em[k] += b.emp.bruto[i] - b.emp.anulado[i];
+  }
+  for (const i of s.liq) {
+    const k = w(b.liq.dia[i]);
+    if (k >= 0) lq[k] += b.liq.valor[i] - b.liq.anulado[i];
+  }
+  for (const i of s.pag) {
+    const k = w(b.pag.dia[i]);
+    if (k >= 0) pg[k] += b.pag.pago[i];
+  }
+  return { empenhado: em, liquidado: lq, pago: pg };
+}
+
+/** A faixa de CONFIANÇA: a data mais antiga das últimas importações e o que pede atenção. */
+export function confianca(meta: readonly MetaExec[], fontes: PacoteExec["fontes"], agoraMs: number): { atualizado: string | null; avisos: string[] } {
+  const vistas = meta.filter((m) => m.cards > 0 && (m.tipo === "empenhos" || fontes[m.tipo]));
+  const datas = vistas.map((m) => m.atualizado).filter((d): d is string => !!d);
+  const atualizado = datas.length ? datas.sort()[0] : null;
+  const nome = { empenhos: "empenhos", liquidacoes: "liquidações", pagamentos: "pagamentos" } as const;
+  const avisos: string[] = [];
+  for (const m of vistas) {
+    if (m.lendo) avisos.push(`Importação de ${nome[m.tipo]} em andamento — os números podem mudar.`);
+    if (m.problemas) avisos.push(`${m.problemas} card${m.problemas > 1 ? "s" : ""} de ${nome[m.tipo]} com a última importação com erro ou parcial.`);
+    if (!m.atualizado) avisos.push(`Nenhuma importação de ${nome[m.tipo]} concluída.`);
+    else {
+      const t = Date.parse(m.atualizado.includes("T") ? m.atualizado : `${m.atualizado.replace(" ", "T")}Z`);
+      if (Number.isFinite(t) && agoraMs - t > 2 * DIA_MS) avisos.push(`A última importação de ${nome[m.tipo]} tem mais de 2 dias.`);
+    }
+  }
+  return { atualizado, avisos };
+}

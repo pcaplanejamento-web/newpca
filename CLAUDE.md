@@ -3862,6 +3862,38 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 ## Acréscimo × supressão de itens (v1.164.0, sem migração)
 - Núcleo puro `alteracao-itens-core.ts` (testado): `classificarAlteracaoItem(DiffItemDfd)` = inclusão · acréscimo · supressão · exclusão · sem impacto (o valor total decide, senão a quantidade; lê os números já formatados — `numeroFormatado`) e `resumoAlteracoesItens`. O `Historico` mostra o selo (`SeloAlteracao`) em cada item e o resumo (`ResumoItens`) no bloco Itens do evento. Próxima: Restaurar da lixeira.
 
+## Execução — dashboard de empenhos, liquidações e pagamentos (v1.221.0, migração `0157`)
+- Tela de módulo **`/painel/execucao`** (`ABA_KEYS` `execucao`, `IconExecucao`, ações visualizar · exportar; a `0157` deu a
+  tela aos papéis/grupos/módulos que têm Empenhos). Cada ETAPA exige a tela dela além da Execução (`fontesDoAcesso`,
+  `execucao-dados.ts`): sem Empenhos, nada (página e rota); sem Liquidações/Pagamentos, aquela etapa não sai do servidor.
+- **Rota** `GET /api/execucao?anos=` (≤ 5 anos; sem eles, o mais recente) → `respostaExecucao` → o pacote montado NO BANCO
+  (`execucao-sql.ts`, testado no D1 real — `tests/execucao-dash.test.ts`): o universo de empenhos (os anos pedidos `r`=1 + os
+  de outros anos citados pelos eventos, `r`=0, só classificam restos a pagar) e de eventos (os anos pedidos + a execução de
+  outros anos dos empenhos da safra), vigentes, no escopo (`doEscopo`), UMA vez por `chave` entre cards (`row_number` por
+  chave, card menor), o empenho de cada número pela régua de `destinoSql` (`canon`), liquidações agrupadas por empenho+dia e
+  pagamentos por empenho+dia (anulados à parte). Valores em inteiros de 1/10.000 (`ESCALA`), dias = inteiros desde
+  2000-01-01. Unidade = rótulo ÚNICO (sigla; " — ÓRGÃO" quando a sigla se repete; só órgão = a sigla do órgão). Cache
+  `criarMemoVersao` pela versão `VERSAO_SQL` (último lote promovido + vínculos + cards) + `versaoDados().dados`; a situação dos
+  cards (`consultaMetaExecucao`) vai à parte, a cada pedido. A página passa a versão ao cliente (importação nova = pede de novo).
+- **Núcleo PURO `execucao-dash-core.ts`** (todo número sai dele): `montarBase` (arrays por coluna), `calcular(base, visão,
+  intervalo, filtros)` → totais + seleção + opções CONECTADAS (uma passada: falha em 0 ou 1 filtro), `derivados`, `serie`
+  (`baldesData` com granularidade forçada opcional — parâmetro novo `forcar`; dia/semana > 400 baldes sobe), `selecaoNoIntervalo`
+  (a origem de um ponto = o ponto), `opcoesDim`, `empenhoExec`/`liquidacaoExec`/`pagamentoExec`, `sparks`, `confianca`.
+  Visões: **movimento** (cada etapa pela própria data, `r`=1) e **safra** (os empenhos do período + toda a execução deles; o sem
+  empenho fica fora). Empenhado = bruto − anulado (anulação sem data, na data do empenho); liquidado = valor − anulado; pago =
+  ordens não anuladas. Sem empenho no sistema = a opção "Sem empenho no sistema" (`CHAVE_SEM_EMPENHO`) em todo filtro do empenho.
+- **Tela:** `ExecucaoView` (contêiner, fetch) → `DashboardExecucao` (título com `Segmented` Movimento | Por empenho,
+  `PeriodoPicker`, `SeletorMultiplo` de anos; faixa de confiança; 4 `KpiStat completo` com sparks e a origem; "Mais
+  indicadores" no aparelho; `FiltrosDashboard principais` — as 5 à vista + "Mais filtros (N)" num `Modal`; funil `BarrasH`;
+  série `charts/SerieTemporal` (Recharts `ComposedChart`: áreas com degradê no acumulado, colunas agrupadas — linhas acima de 90
+  baldes —, legenda que liga/desliga, zoom ± e `Brush` no desktop, linha "Hoje", "Ver dados" = `DataTable`); a origem =
+  `OrigemDados` com as abas Empenhos · Liquidações · Pagamentos → `EmpenhoBanner`), esqueleto `DashboardExecucaoEsqueleto`.
+- **Reuso feito:** `EmpenhoBanner` (`EmpenhoDetalhe.tsx` — o banner do empenho com a execução ao lado, agora o MESMO na
+  tabela de empenhos e no dashboard); `FiltrosDashboard` guarda a opção pela CHAVE (textos iguais não se fundem) e ganhou
+  `principais`; `KpiStat` com o conteúdo sempre no topo (`flex-col` — os cartões-botão centralizavam).
+- **Próximas fases:** F2 demonstrativo por dimensão + rankings + filtro cruzado nos gráficos + filtros na URL + relatório
+  PDF; F3 prazos, saldo por idade, conferência, comparar anos; F4 dotação × empenhado (Orçamento).
+
 ## Documentos (v1.136.0, migração `0116`)
 - Módulo **`documentos`** (`ABA_KEYS`, `IconDocumentos`, ações visualizar · manipular [renomear] · importar · exportar
   [baixar] · excluir; a `0116` deu a tela aos grupos com o Catálogo e as mesmas ações aos papéis). Tabela `documentos`

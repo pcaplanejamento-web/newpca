@@ -18,6 +18,7 @@ import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
 import { Badge } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 import { LiquidacaoDetalhe } from "./LiquidacaoDetalhe";
+import { Modal } from "./Modal";
 import { PagamentoDetalhe } from "./PagamentoDetalhe";
 import { Skeleton } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -58,7 +59,7 @@ export function EmpenhoDetalhe({
         <Campo label="Órgão gestor" valor={empenho.orgaoGestor} />
         <Campo label="Unidade orçamentária" valor={empenho.unidadeOrcamentaria} />
         <Campo label="Fornecedor" valor={empenho.fornecedor} />
-        <Campo label="CPF/CNPJ" valor={empenho.cpfCnpj} />
+        <Campo label="CPF/CNPJ" valor={empenho.cpfCnpj ?? completo?.cpfCnpj} />
         <Campo label="Modalidade" valor={empenho.modalidade} />
         <Campo label="Licitação" valor={empenho.licitacao} />
       </dl>
@@ -192,6 +193,53 @@ function Execucao({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * O BANNER de um empenho (`Modal`): o `EmpenhoDetalhe` com o que a tela já tem na hora; o histórico, o registro e a
+ * EXECUÇÃO chegam de `GET /api/empenhos/[id]` (a guarda da tela Empenhos e o escopo valem). Tocar numa liquidação ou num
+ * pagamento abre o detalhe dele AO LADO (`DetalheDaExecucao`). O MESMO na tabela de empenhos e no Dashboard da Execução.
+ */
+export function EmpenhoBanner({ empenho, onClose }: { empenho: EmpenhoNaTela | null; onClose: () => void }) {
+  const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
+  const [execucao, setExecucao] = useState<ExecucaoEmpenho | null>(null);
+  const [lateral, setLateral] = useState<AbertoExecucao | null>(null);
+  const id = empenho?.id ?? null;
+  useEffect(() => {
+    if (id == null) return;
+    let vivo = true;
+    setCompleto(undefined);
+    setExecucao(null);
+    setLateral(null);
+    fetch(`/api/empenhos/${id}`)
+      .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto; execucao?: ExecucaoEmpenho }>)
+      .then((j) => {
+        if (!vivo) return;
+        setExecucao(j.ok ? (j.execucao ?? null) : null);
+        setCompleto(j.ok && j.empenho ? j.empenho : null);
+      })
+      .catch(() => vivo && setCompleto(null));
+    return () => {
+      vivo = false;
+    };
+  }, [id]);
+  return (
+    <Modal
+      open={empenho != null}
+      onClose={onClose}
+      titulo={empenho ? `Empenho ${empenho.numero}` : "Empenho"}
+      size="lg"
+      lateral={{
+        aberto: empenho != null && lateral != null,
+        titulo: lateral ? tituloDaExecucao(lateral) : "Execução",
+        onClose: () => setLateral(null),
+        children:
+          empenho && lateral ? <DetalheDaExecucao key={`${lateral.tipo}:${lateral.item.id}`} aberto={lateral} empenho={empenho} anoEmpenho={completo?.ano ?? null} /> : <div />,
+      }}
+    >
+      {empenho ? <EmpenhoDetalhe key={empenho.id} empenho={empenho} completo={completo} execucao={execucao} onAbrir={setLateral} ativo={lateral} /> : <div />}
+    </Modal>
   );
 }
 

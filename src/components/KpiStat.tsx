@@ -43,7 +43,7 @@ export function KpiStat({
   return (
     <Raiz
       {...(onClick ? { type: "button" as const, onClick, "aria-label": `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}` } : {})}
-      className={`kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
+      className={`kpi-card relative flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
         onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
       }`}
       style={

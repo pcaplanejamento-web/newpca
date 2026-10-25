@@ -5,6 +5,7 @@ import {
   ReceiptText,
   HandCoins,
   BanknoteArrowUp,
+  ChartNoAxesCombined,
   CaseSensitive,
   Redo2,
   RemoveFormatting,
@@ -153,6 +154,8 @@ import {
   SquarePlus,
   Move,
   ZoomIn,
+  ZoomOut,
+  RotateCcw,
   FoldHorizontal,
   UnfoldHorizontal,
   WrapText,
@@ -288,6 +291,10 @@ export const IconCartaoMais = SquarePlus;
 export const IconMove = Move;
 /** Zoom (aproximar a imagem de fundo). */
 export const IconZoom = ZoomIn;
+/** Afastar o zoom de um gráfico. */
+export const IconZoomOut = ZoomOut;
+/** Restaurar (o zoom de um gráfico ao todo). */
+export const IconRestaurar = RotateCcw;
 /** Recolher / expandir uma lista do quadro (como no Trello). */
 export const IconRecolher = FoldHorizontal;
 export const IconExpandir = UnfoldHorizontal;
@@ -418,3 +425,5 @@ export const IconEmpenho = ReceiptText;
 export const IconLiquidacao = HandCoins;
 /** Pagamentos da Centi (ordens de pagamento). */
 export const IconPagamento = BanknoteArrowUp;
+/** Execução da despesa (o dashboard de empenhos, liquidações e pagamentos). */
+export const IconExecucao = ChartNoAxesCombined;

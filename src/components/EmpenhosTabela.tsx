@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
-import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
-import type { AbertoExecucao, ExecucaoEmpenho } from "@/lib/execucao-empenho-core";
 import {
   type AnoEmpenhos,
   type EmpenhoNaTela,
@@ -26,11 +24,10 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
-import { DetalheDaExecucao, EmpenhoDetalhe, tituloDaExecucao } from "./EmpenhoDetalhe";
+import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
 import { SelectField } from "./Field";
-import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
 
 /** A chave das edições salvas da tabela (publicar para todos = Configurar em Empenhos). */
@@ -153,9 +150,6 @@ export function EmpenhosTabela({
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<EmpenhoNaTela | null>(null);
-  const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
-  const [execucao, setExecucao] = useState<ExecucaoEmpenho | null>(null);
-  const [lateral, setLateral] = useState<AbertoExecucao | null>(null);
   const [eds, setEds] = useState(edicoes);
   const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
   const pedido = useRef(0);
@@ -197,25 +191,6 @@ export function EmpenhosTabela({
     window.history.replaceState(window.history.state, "", u);
   }, [recorte]);
 
-  // O detalhe: o que a tabela tem na hora; o histórico e o registro chegam depois.
-  useEffect(() => {
-    if (!aberto) return;
-    let vivo = true;
-    setCompleto(undefined);
-    setExecucao(null);
-    setLateral(null);
-    fetch(`/api/empenhos/${aberto.id}`)
-      .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto; execucao?: ExecucaoEmpenho }>)
-      .then((j) => {
-        if (!vivo) return;
-        setExecucao(j.ok ? (j.execucao ?? null) : null);
-        setCompleto(j.ok && j.empenho ? j.empenho : null);
-      })
-      .catch(() => vivo && setCompleto(null));
-    return () => {
-      vivo = false;
-    };
-  }, [aberto]);
 
   const ano = anos.find((a) => a.ano === recorte?.ano);
   const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
@@ -304,25 +279,7 @@ export function EmpenhosTabela({
         </>
       )}
 
-      <Modal
-        open={aberto != null}
-        onClose={() => setAberto(null)}
-        titulo={aberto ? `Empenho ${aberto.numero}` : "Empenho"}
-        size="lg"
-        lateral={{
-          aberto: aberto != null && lateral != null,
-          titulo: lateral ? tituloDaExecucao(lateral) : "Execução",
-          onClose: () => setLateral(null),
-          children:
-            aberto && lateral ? (
-              <DetalheDaExecucao key={`${lateral.tipo}:${lateral.item.id}`} aberto={lateral} empenho={aberto} anoEmpenho={completo?.ano ?? null} />
-            ) : (
-              <div />
-            ),
-        }}
-      >
-        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} execucao={execucao} onAbrir={setLateral} ativo={lateral} /> : <div />}
-      </Modal>
+      <EmpenhoBanner empenho={aberto} onClose={() => setAberto(null)} />
     </>
   );
 }

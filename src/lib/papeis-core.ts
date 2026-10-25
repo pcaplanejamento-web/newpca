@@ -132,6 +132,7 @@ export const CAPACIDADES_MEMBRO: Capacidades = coerceCapacidades({
   empenhos: ["visualizar", "exportar"],
   liquidacoes: ["visualizar", "exportar"],
   pagamentos: ["visualizar", "exportar"],
+  execucao: ["visualizar", "exportar"],
 });
 
 export const PAPEIS_SISTEMA: readonly PapelSistema[] = [

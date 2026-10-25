@@ -168,6 +168,14 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       configurar: "Criar cards e configurar a integração, os anos, a programação e as regras.",
     },
   },
+  execucao: {
+    na: "na Execução",
+    a: "à Execução",
+    acoes: {
+      visualizar: "Abrir o dashboard da execução da despesa (empenhado, liquidado e pago). Cada etapa só com a tela dela (Empenhos, Liquidações, Pagamentos).",
+      exportar: "Baixar as tabelas do dashboard em XLSX e PDF e o relatório.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;

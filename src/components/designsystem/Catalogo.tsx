@@ -68,7 +68,9 @@ import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
 import { DashboardMesa } from "@/components/DashboardMesa";
+import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
+import { SerieTemporal } from "@/components/charts/SerieTemporal";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { type Atividade, diaDoProtocolo, FILTRO_METRICAS_PADRAO, type FiltroMetricas } from "@/lib/mesa-metricas";
 import { PERIODO_TODO, type Periodo } from "@/lib/periodo";
@@ -1615,6 +1617,43 @@ function FiltrosDashboardDemo() {
     },
   ].map((c) => ({ ...c, selecionados: sel[c.dim] ?? [] }));
   return <FiltrosDashboard campos={campos} onMudar={(dim, chaves) => setSel((s) => ({ ...s, [dim]: chaves }))} />;
+}
+
+function SerieTemporalDemo() {
+  const [modo, setModo] = useState<"areas" | "colunas">("areas");
+  const pontos = Array.from({ length: 12 }, (_, i) => {
+    const e = 800_000 + i * 120_000;
+    return { chave: `2026-${i + 1}`, rotulo: ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][i], titulo: `Mês ${i + 1} de 2026`, atual: i === 9, valores: { empenhado: e, liquidado: e * 0.7, pago: e * 0.55 } };
+  });
+  let a = { empenhado: 0, liquidado: 0, pago: 0 };
+  const acumulados = pontos.map((p) => {
+    a = { empenhado: a.empenhado + p.valores.empenhado, liquidado: a.liquidado + p.valores.liquidado, pago: a.pago + p.valores.pago };
+    return { ...p, valores: a };
+  });
+  return (
+    <div className="space-y-2">
+      <Segmented<"areas" | "colunas">
+        value={modo}
+        onChange={setModo}
+        ariaLabel="Tipo do gráfico"
+        options={[
+          { value: "areas", label: "Acumulada" },
+          { value: "colunas", label: "Por período" },
+        ]}
+      />
+      <SerieTemporal
+        pontos={modo === "areas" ? acumulados : pontos}
+        series={[
+          { chave: "empenhado", rotulo: "Empenhado", cor: 0 },
+          { chave: "liquidado", rotulo: "Liquidado", cor: 1 },
+          { chave: "pago", rotulo: "Pago", cor: 2 },
+        ]}
+        modo={modo}
+        ariaLabel="Exemplo de evolução"
+        onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
+      />
+    </div>
+  );
 }
 
 function GraficosDashboardDemo() {
@@ -3747,6 +3786,14 @@ export function Catalogo() {
 
       <Secao titulo="Gráficos do Dashboard do PCA (paleta --serie-*, filtro cruzado e explorador)">
         <GraficosDashboardDemo />
+      </Secao>
+
+      <Secao titulo="SerieTemporal (evolução no tempo: áreas acumuladas ou colunas por período — legenda que liga/desliga, zoom, linha de hoje, origem do ponto)">
+        <SerieTemporalDemo />
+      </Secao>
+
+      <Secao titulo="DashboardExecucaoEsqueleto (enquanto o Dashboard da Execução carrega — a MESMA grade)">
+        <DashboardExecucaoEsqueleto />
       </Secao>
 
       <Secao titulo="FiltrosDashboard (menus suspensos por dimensão — opções conectadas com a contagem)">

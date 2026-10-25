@@ -180,6 +180,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "documentos/[id]/partes": { PUT: tela("documentos", "importar", "uma parte do PDF (de quem abriu o envio)") },
   "documentos/[id]": { PATCH: tela("documentos", "manipular", "renomear; os PCAs do documento"), DELETE: tela("documentos", "excluir") },
   empenhos: { GET: tela("empenhos", "visualizar", "os empenhos de um ano de um card (pacote compacto)") },
+  execucao: { GET: tela("execucao", "visualizar", "o dashboard da execução — cada etapa só com a tela dela (Empenhos obrigatória)") },
   "empenhos/cards": { POST: tela(["empenhos", "liquidacoes", "pagamentos"], "configurar", "criar um card — a tela do tipo (empenhos, liquidações ou pagamentos)") },
   "empenhos/cards/[id]": { PATCH: recurso(CARDS, "configurar", undefined, "configurar o card — a tela do card"), DELETE: recurso(CARDS, "excluir", undefined, "excluir o card com os dados dele") },
   "empenhos/cards/[id]/vinculos": { PUT: recurso(CARDS, "configurar", undefined, "os vínculos do card (só os de empenhos)") },

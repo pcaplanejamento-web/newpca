@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Movimento reduzido (sistema ou a preferência do ADM — `data-motion`). */
-function semMovimento(): boolean {
+export function semMovimento(): boolean {
   if (typeof window === "undefined") return true;
   const m = document.documentElement.dataset.motion;
   return m === "off" || m === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;

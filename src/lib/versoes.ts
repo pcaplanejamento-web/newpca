@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.221.0",
+    data: "2026-10-25",
+    titulo: "Dashboard da execução da despesa",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "Nova tela Execução: empenhado, liquidado, pago e retido de todos os cards, ligados pelo número do empenho, com o funil da execução e a evolução no tempo (acumulada ou por dia, semana e mês, com zoom). Tocar em qualquer número mostra os empenhos, liquidações e pagamentos que o formam.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "Duas visões: Movimento (cada etapa pela própria data, com os restos a pagar) e Por empenho (os empenhos do período e toda a execução deles, com o que falta liquidar e pagar). Filtros por unidade, órgão, ação, elemento, fonte, fornecedor e mais, com as opções ligadas entre si.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "A tela diz de quando são os dados, avisa importação em andamento, com erro ou atrasada, e mostra à parte as liquidações e os pagamentos sem o empenho no sistema. Cada etapa só aparece para quem abre a tela dela.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.220.0",
     data: "2026-10-25",
     titulo: "Unidade das liquidações e dos pagamentos pelo empenho",

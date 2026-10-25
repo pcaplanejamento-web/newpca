@@ -336,3 +336,7 @@ fluxos/paineis.tsx
 icons.tsx
 LiquidacaoDetalhe.tsx
 PagamentoDetalhe.tsx
+DashboardExecucao.tsx
+DashboardExecucaoEsqueleto.tsx
+ExecucaoView.tsx
+charts/SerieTemporal.tsx

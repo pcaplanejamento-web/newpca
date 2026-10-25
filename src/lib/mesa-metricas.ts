@@ -302,7 +302,12 @@ function mesesEntre(de: string, ate: string): number {
  * pontas vazias em `graficoMetricas`). `atual` = o que contém hoje; `chaveDoDia` põe um dia no balde dele por CONTA
  * (sem varrer os baldes) — `null` fora de [de, ate].
  */
-export function baldesData(de: string, ate: string, hoje: string): { granularidade: GranularidadeData; baldes: BaldeData[]; chaveDoDia: (dia: string) => string | null } {
+export function baldesData(
+  de: string,
+  ate: string,
+  hoje: string,
+  forcar?: GranularidadeData,
+): { granularidade: GranularidadeData; baldes: BaldeData[]; chaveDoDia: (dia: string) => string | null } {
   const n0 = numDia(de) ?? 0;
   const n1 = Math.max(n0, numDia(ate) ?? n0);
   const inicio = isoDoNum(n0);
@@ -320,15 +325,17 @@ export function baldesData(de: string, ate: string, hoje: string): { granularida
   });
   const dias = n1 - n0 + 1;
   const meses = mesesEntre(inicio, fim);
-  if (dias <= LIMITE_DIAS) {
+  // `forcar` = a granularidade escolhida pela pessoa (o Dashboard da Execução); sem ela, a automática pelo tamanho.
+  const g: GranularidadeData = forcar ?? (dias <= LIMITE_DIAS ? "dia" : dias <= LIMITE_SEMANAS ? "semana" : meses <= LIMITE_MESES ? "mes" : "ano");
+  if (g === "dia") {
     const baldes = Array.from({ length: dias }, (_, i) => {
       const iso = isoDoNum(n0 + i);
-      const rotulo = dias <= 7 ? `${diaSemanaCurto(iso)} ${iso.slice(8)}` : String(Number(iso.slice(8)));
+      const rotulo = dias <= 7 ? `${diaSemanaCurto(iso)} ${iso.slice(8)}` : dias <= LIMITE_DIAS ? String(Number(iso.slice(8))) : dataBR(iso).slice(0, 5);
       return balde(iso, rotulo, `${maiuscula(diaSemanaCurto(iso))}, ${dataBR(iso)}`, iso, iso);
     });
     return { granularidade: "dia", baldes, chaveDoDia: (d) => (dentro(d) ? d : null) };
   }
-  if (dias <= LIMITE_SEMANAS) {
+  if (g === "semana") {
     const baldes: BaldeData[] = [];
     for (let s = n0; s <= n1; ) {
       const e = Math.min(n1, domingo(s) + 6);
@@ -346,7 +353,7 @@ export function baldesData(de: string, ate: string, hoje: string): { granularida
       },
     };
   }
-  if (meses <= LIMITE_MESES) {
+  if (g === "mes") {
     const baldes = Array.from({ length: meses }, (_, k) => {
       const a = a0 + Math.floor((m0 - 1 + k) / 12);
       const m = ((m0 - 1 + k) % 12) + 1;
