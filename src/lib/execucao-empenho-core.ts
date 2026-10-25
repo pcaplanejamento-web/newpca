@@ -91,3 +91,40 @@ export function semRepetir<T extends { chave: string }>(l: readonly T[]): T[] {
     return true;
   });
 }
+
+/**
+ * O TIPO de uma liquidação ou de um pagamento pelo ANO do empenho ligado pelo número × o ano do próprio registro (o da data;
+ * sem data, o ano da importação):
+ * - mesmo ano = **Nota de Empenho**; empenho de ano anterior = **Restos a Pagar**;
+ * - o número veio, mas o empenho não está no sistema = **Restos a Pagar** presumido (o sistema traz os empenhos dos anos
+ *   importados; o que falta é de ano anterior a eles);
+ * - ERRO: sem número de empenho, ou empenho de ano POSTERIOR ao registro (não existe execução antes do empenho).
+ */
+export type TipoExecucao = { tipo: "ne" | "rp" | "erro"; presumido: boolean; motivo: string };
+
+export const ROTULO_TIPO_EXECUCAO: Record<TipoExecucao["tipo"], string> = { ne: "Nota de Empenho", rp: "Restos a Pagar", erro: "Erro" };
+
+/** O rótulo da célula e do filtro: o tipo; no erro, o motivo curto. */
+export const rotuloTipoExecucao = (t: TipoExecucao): string => (t.tipo === "erro" ? t.motivo : ROTULO_TIPO_EXECUCAO[t.tipo]);
+
+export const MOTIVO_SEM_NUMERO = "Sem número de empenho";
+export const MOTIVO_EMPENHO_POSTERIOR = "Empenho de ano posterior";
+
+/** O ano do registro: o da data (AAAA-…); sem ela, o da importação. */
+export function anoDoRegistro(data: string | null | undefined, anoImportacao: number | null | undefined): number | null {
+  const m = /^(\d{4})-\d{2}-\d{2}/.exec(data ?? "");
+  if (m) return Number(m[1]);
+  return Number.isInteger(anoImportacao) ? (anoImportacao as number) : null;
+}
+
+export function tipoDaExecucao(numeroEmpenho: string | null | undefined, anoEmpenho: number | null | undefined, data: string | null | undefined, anoImportacao?: number | null): TipoExecucao {
+  if (!String(numeroEmpenho ?? "").trim()) return { tipo: "erro", presumido: false, motivo: MOTIVO_SEM_NUMERO };
+  if (anoEmpenho == null || !Number.isInteger(anoEmpenho)) {
+    return { tipo: "rp", presumido: true, motivo: "O empenho não está no sistema: é de um ano anterior aos importados" };
+  }
+  const ano = anoDoRegistro(data, anoImportacao);
+  if (ano == null) return { tipo: "rp", presumido: true, motivo: "Sem data: tipo presumido" };
+  if (anoEmpenho > ano) return { tipo: "erro", presumido: false, motivo: MOTIVO_EMPENHO_POSTERIOR };
+  if (anoEmpenho < ano) return { tipo: "rp", presumido: false, motivo: `Empenho de ${anoEmpenho}, executado em ${ano}` };
+  return { tipo: "ne", presumido: false, motivo: `Empenho e execução em ${ano}` };
+}

@@ -1,7 +1,9 @@
 "use client";
 
+import { rotuloTipoExecucao, type TipoExecucao } from "@/lib/execucao-empenho-core";
 import { brl, dataBR, dataHoraBR } from "@/lib/format";
 import type { EmpenhoDaLiquidacao, LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
+import { Badge } from "./Badge";
 import { Callout } from "./Callout";
 import { Skeleton } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -12,6 +14,8 @@ export type LiquidacaoNaTela = {
   data: string | null;
   numeroEmpenho: string;
   anoEmpenho: number | null;
+  /** Nota de Empenho × Restos a Pagar (`tipoDaExecucao`). */
+  tipo: TipoExecucao;
   credor: string | null;
   cpfCnpj: string | null;
   historico: string | null;
@@ -46,6 +50,7 @@ export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: Liq
         <Campo label="Nº da liquidação" valor={l.numero} />
         <Campo label="Nº do empenho" valor={l.numeroEmpenho} />
         <Campo label="Ano do empenho" valor={l.anoEmpenho != null ? String(l.anoEmpenho) : "Empenho não importado"} />
+        <CampoTipo tipo={l.tipo} />
         <Campo label="Órgão (cadastro)" valor={completo?.orgao ?? l.orgao} />
         <Campo label="Unidade (cadastro)" valor={completo?.unidade ?? l.unidade} />
         <Campo label="Órgão (Centi)" valor={completo ? `${completo.orgaoCenti || "—"} · ID ${completo.idOrgaoCenti}` : l.orgaoCenti} />
@@ -122,6 +127,33 @@ export function EmpenhoLigado({ empenho: e, numero, oQue }: { empenho: EmpenhoDa
 }
 
 /** Um campo de um banner de detalhe (rótulo + valor; vazio = "—"). */
+/**
+ * O TIPO de uma liquidação ou de um pagamento (`tipoDaExecucao`): Nota de Empenho (azul), Restos a Pagar (âmbar; o
+ * presumido — o empenho não está no sistema — com "*") ou o ERRO (vermelho). O motivo vai na dica.
+ */
+export function SeloTipoExecucao({ tipo }: { tipo: TipoExecucao }) {
+  const tom = tipo.tipo === "ne" ? "blue" : tipo.tipo === "rp" ? "amber" : "red";
+  return (
+    <Badge tone={tom} title={tipo.motivo} className="whitespace-nowrap">
+      {rotuloTipoExecucao(tipo)}
+      {tipo.presumido ? "*" : ""}
+    </Badge>
+  );
+}
+
+/** O campo "Tipo" dos banners de liquidação e de pagamento (o selo + o motivo). */
+export function CampoTipo({ tipo }: { tipo: TipoExecucao }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted">Tipo</dt>
+      <dd className="mt-0.5 flex flex-wrap items-center gap-2 leading-snug">
+        <SeloTipoExecucao tipo={tipo} />
+        <span className="text-xs text-muted">{tipo.motivo}</span>
+      </dd>
+    </div>
+  );
+}
+
 export function Campo({ label, valor }: { label: string; valor: string | null | undefined }) {
   return (
     <div>

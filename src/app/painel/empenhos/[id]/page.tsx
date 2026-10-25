@@ -7,6 +7,8 @@ import { EmpenhoCardVinculos } from "@/components/EmpenhoCardVinculos";
 import { EmpenhosTabela } from "@/components/EmpenhosTabela";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
+import { getDb } from "@/lib/db";
+import { consultaVersaoExecucao } from "@/lib/execucao-sql";
 import { carregarEdicoes } from "@/lib/edicoes-tabela";
 import { anosDoCard, orgaosDaLeitura, rotaDoCard } from "@/lib/empenho-cards-core";
 import { cadastroParaVinculos, catalogoCenti, conflitosEntreCards, getCard, listarCards, mapaOrgaosGestores, vinculosDoCard } from "@/lib/empenho-cards";
@@ -61,7 +63,7 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
     const [vinculos, mapa] = await Promise.all([vinculosDoCard(id), mapaOrgaosGestores()]);
     conteudo = <EmpenhoCardConfig card={card} leitura={orgaosDaLeitura(vinculos, mapa)} />;
   } else {
-    const [anos, edicoes] = await Promise.all([anosEmpenhos(id, escopo), carregarEdicoes(acesso.u.id, "empenhos:")]);
+    const [anos, edicoes, versao] = await Promise.all([anosEmpenhos(id, escopo), carregarEdicoes(acesso.u.id, "empenhos:"), consultaVersaoExecucao(getDb())]);
     conteudo = (
       <EmpenhosTabela
         key={chaveEscopoEmpenhos(escopo)}
@@ -72,6 +74,7 @@ export default async function EmpenhoCardPage({ params, searchParams }: { params
         anoInicial={anoEscolhido(anos, sp.ano)}
         edicoes={edicoes}
         podePublicar={pode.configurar}
+        versao={versao}
       />
     );
   }

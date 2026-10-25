@@ -1,9 +1,10 @@
 "use client";
 
+import type { TipoExecucao } from "@/lib/execucao-empenho-core";
 import { brl, dataBR, dataHoraBR } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { Callout } from "./Callout";
-import { Campo, EmpenhoLigado } from "./LiquidacaoDetalhe";
+import { Campo, CampoTipo, EmpenhoLigado } from "./LiquidacaoDetalhe";
 import { StatMini } from "./StatMini";
 
 /** O que a tabela já tem de um pagamento (aparece na hora, antes do registro completo). */
@@ -12,6 +13,8 @@ export type PagamentoNaTela = {
   data: string | null;
   numeroEmpenho: string;
   anoEmpenho: number | null;
+  /** Nota de Empenho × Restos a Pagar (`tipoDaExecucao`). */
+  tipo: TipoExecucao;
   credor: string | null;
   cpfCnpj: string | null;
   historico: string | null;
@@ -50,6 +53,7 @@ export function PagamentoDetalhe({ pagamento: p, completo }: { pagamento: Pagame
         <Campo label="Ordem de pagamento" valor={String(p.id)} />
         <Campo label="Nº do empenho" valor={p.numeroEmpenho} />
         <Campo label="Ano do empenho" valor={p.anoEmpenho != null ? String(p.anoEmpenho) : "Empenho não importado"} />
+        <CampoTipo tipo={p.tipo} />
         <Campo label="Órgão (cadastro)" valor={completo?.orgao ?? p.orgao} />
         <Campo label="Unidade (cadastro)" valor={completo?.unidade ?? p.unidade} />
         <Campo label="Órgão (Centi)" valor={completo ? `${completo.orgaoCenti || "—"} · ID ${completo.idOrgaoCenti}` : p.orgaoCenti} />

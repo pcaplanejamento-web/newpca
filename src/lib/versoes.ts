@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.222.0",
+    data: "2026-10-25",
+    titulo: "Tipo da liquidação e do pagamento: Nota de Empenho ou Restos a Pagar",
+    mudancas: [
+      { tipo: "novo", area: "Liquidações", texto: "Nova coluna Tipo: Nota de Empenho quando o empenho é do mesmo ano da liquidação; Restos a Pagar quando é de ano anterior ou não está no sistema (marcado com *). Sem número de empenho, ou empenho de ano posterior, aparece em vermelho como erro. O tipo também está no detalhe da liquidação.", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Pagamentos", texto: "A mesma coluna Tipo nos pagamentos e no detalhe do pagamento.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "As tabelas de empenhos, liquidações e pagamentos se atualizam sozinhas quando uma importação termina — inclusive a de um ano anterior, que muda o tipo e a unidade das liquidações e dos pagamentos já gravados.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.221.1",
     data: "2026-10-25",
     titulo: "Execução: carga mais segura",

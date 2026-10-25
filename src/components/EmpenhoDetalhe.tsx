@@ -11,6 +11,7 @@ import {
   type LiquidacaoDoEmpenho,
   liquidacaoProvavel,
   type PagamentoDoEmpenho,
+  tipoDaExecucao,
 } from "@/lib/execucao-empenho-core";
 import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
@@ -269,6 +270,7 @@ export function DetalheDaExecucao({ aberto, empenho, anoEmpenho }: { aberto: Abe
     data: aberto.item.data,
     numeroEmpenho: empenho.numero,
     anoEmpenho,
+    tipo: tipoDaExecucao(empenho.numero, anoEmpenho, aberto.item.data, aberto.item.ano),
     credor: completo?.credor ?? null,
     cpfCnpj: completo?.cpfCnpj ?? null,
     historico: completo?.historico ?? null,

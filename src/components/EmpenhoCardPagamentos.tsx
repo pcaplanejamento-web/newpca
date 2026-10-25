@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { brl, dataBR, num } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { FerramentasAba } from "./AbasEspaco";
@@ -10,7 +11,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { AvisoSemEmpenho } from "./EmpenhoCardLiquidacoes";
+import { AvisoSemEmpenho, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
@@ -40,9 +41,11 @@ export type Pagamento = {
   unidade: string | null;
   /** O ANO do empenho ligado pelo número (de qualquer ano — restos a pagar); null = o empenho não está no sistema. */
   anoEmpenho: number | null;
+  /** Nota de Empenho × Restos a Pagar (`tipoDaExecucao`). */
+  tipo: TipoExecucao;
 };
 
-const daTupla = (t: unknown[]): Pagamento => ({
+const daTupla = (t: unknown[], ano: number): Pagamento => ({
   id: Number(t[0]),
   data: (t[1] as string | null) ?? null,
   numeroEmpenho: String(t[2] ?? ""),
@@ -58,6 +61,7 @@ const daTupla = (t: unknown[]): Pagamento => ({
   orgao: (t[12] as string | null) ?? null,
   unidade: (t[13] as string | null) ?? null,
   anoEmpenho: t[15] == null ? null : Number(t[15]),
+  tipo: tipoDaExecucao(String(t[2] ?? ""), t[15] == null ? null : Number(t[15]), (t[1] as string | null) ?? null, ano),
 });
 
 /** As somas do pago: só as ordens NÃO anuladas (a anulada fica guardada, fora do pago). */
@@ -110,6 +114,7 @@ const COLUNAS: Column<Pagamento>[] = [
         </span>
       ),
   },
+  colunaTipoExecucao<Pagamento>(),
   { key: "orgaoSistema", header: "Órgão", nowrap: true, value: (x) => x.orgao ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold text-text-2">{x.orgao ?? "—"}</span> },
   { key: "unidade", header: "Unidade", nowrap: true, value: (x) => x.unidade ?? "—", render: (x) => <span className="font-mono text-[12px] font-semibold text-text-2">{x.unidade ?? "—"}</span> },
   { key: "credor", header: "Credor", minWidth: 220, value: (x) => x.credor ?? "", render: (x) => <CelulaTexto texto={x.credor} /> },
@@ -142,7 +147,7 @@ const COLUNAS: Column<Pagamento>[] = [
  * de cada uma (os do EMPENHO de mesmo número — o número do empenho liga empenhos, liquidações e pagamentos), por ano, no escopo
  * da pessoa. Os números do topo acompanham os filtros e somam só as ordens NÃO anuladas; "Removidos na Centi" no rodapé.
  */
-export function EmpenhoCardPagamentos({ cardId, nome }: { cardId: number; nome: string }) {
+export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number; nome: string; versao: string }) {
   const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(null);
   const [recorte, setRecorte] = useState<{ ano: number; removidos: boolean } | null>(null);
   const [linhas, setLinhas] = useState<Pagamento[] | null>(null);
@@ -150,6 +155,7 @@ export function EmpenhoCardPagamentos({ cardId, nome }: { cardId: number; nome: 
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<Pagamento | null>(null);
+  const pedido = useRef(0);
   const [completo, setCompleto] = useState<PagamentoCompleto | null | undefined>(undefined);
 
   // O detalhe: o que a tabela tem na hora; o registro e o empenho ligado chegam depois.
@@ -166,6 +172,7 @@ export function EmpenhoCardPagamentos({ cardId, nome }: { cardId: number; nome: 
     };
   }, [aberto, cardId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a versão também relê os anos (importação de outro ano).
   useEffect(() => {
     let vivo = true;
     void (async () => {
@@ -175,7 +182,9 @@ export function EmpenhoCardPagamentos({ cardId, nome }: { cardId: number; nome: 
         if (!vivo) return;
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
         setAnos(j.anos ?? []);
-        if (j.anos?.length) setRecorte({ ano: j.anos[0].ano, removidos: false });
+        // A 1ª carga abre no ano mais recente; uma recarga (versão nova) mantém o ano escolhido, se ele ainda existir.
+        const l = j.anos ?? [];
+        setRecorte((rc) => (rc && l.some((a) => a.ano === rc.ano) ? rc : l.length ? { ano: l[0].ano, removidos: false } : null));
       } catch (e) {
         if (vivo) setErro(e instanceof Error ? e.message : "Não foi possível carregar os pagamentos.");
       }
@@ -183,30 +192,37 @@ export function EmpenhoCardPagamentos({ cardId, nome }: { cardId: number; nome: 
     return () => {
       vivo = false;
     };
-  }, [cardId]);
+  }, [cardId, versao]);
 
   const carregar = useCallback(
     async (rc: { ano: number; removidos: boolean }) => {
+      const n = ++pedido.current;
       setCarregando(true);
       setErro(null);
       try {
         const r = await fetch(`/api/empenhos/cards/${cardId}/pagamentos?ano=${rc.ano}${rc.removidos ? "&removidos=1" : ""}`);
         const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+        if (n !== pedido.current) return;
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
-        setLinhas((j.linhas ?? []).map(daTupla));
+        const novas = (j.linhas ?? []).map((t) => daTupla(t, rc.ano));
+        setLinhas(novas);
         setVista(null);
-        setAberto(null);
+        // Recarregou com os dados novos (uma importação de empenhos muda o tipo e a unidade): o detalhe aberto segue, atualizado.
+        setAberto((a) => (a ? (novas.find((x) => x.id === a.id) ?? null) : null));
       } catch (e) {
-        setErro(e instanceof Error ? e.message : "Não foi possível carregar os pagamentos.");
+        if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os pagamentos.");
       } finally {
-        setCarregando(false);
+        if (n === pedido.current) setCarregando(false);
       }
     },
     [cardId],
   );
+  // A VERSÃO dos dados da execução (importação promovida, vínculos, cards) vem da página: mudou, relê — o tipo (Nota de
+  // Empenho × Restos a Pagar), o órgão e a unidade vêm do empenho ligado, lido na hora pelo número.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a versão também relê (importação nova de empenhos).
   useEffect(() => {
     if (recorte) void carregar(recorte);
-  }, [recorte, carregar]);
+  }, [recorte, carregar, versao]);
 
   const base = vista ?? linhas ?? [];
   const tot = useMemo(

@@ -6,6 +6,7 @@ import { CamposAcessoConta } from "@/components/TermoUsoAdmin";
 import { EditorRico } from "@/components/EditorRico";
 import { LeituraTermo } from "@/components/AceiteTermo";
 import { CartaoAparelho } from "@/components/NomearAparelho";
+import { tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ACESSO_CONTA_PADRAO, type ConfigAcessoConta } from "@/lib/acesso-conta-core";
 import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
 import { CabecalhoApp, ItensMenu } from "@/components/MenuLateral";
@@ -5081,6 +5082,7 @@ export function Catalogo() {
               data: "2026-03-12",
               numeroEmpenho: "320932",
               anoEmpenho: 2025,
+              tipo: tipoDaExecucao("320932", 2025, "2026-03-12"),
               credor: "FORNECEDOR EXEMPLO LTDA",
               cpfCnpj: "00.000.000/0001-00",
               historico: "Liquidação da nota fiscal 4471 — material hospitalar.",
@@ -5106,6 +5108,7 @@ export function Catalogo() {
               data: "2026-03-26",
               numeroEmpenho: "291596",
               anoEmpenho: 2025,
+              tipo: tipoDaExecucao("291596", 2025, "2026-03-26"),
               credor: "FORNECEDOR EXEMPLO LTDA",
               cpfCnpj: "00.000.000/0001-00",
               historico: "Liquidação da NF 2024101 — locação de veículo pesado.",

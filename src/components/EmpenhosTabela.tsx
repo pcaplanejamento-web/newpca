@@ -132,6 +132,7 @@ export function EmpenhosTabela({
   edicoes,
   podePublicar,
   escopo = null,
+  versao = "",
 }: {
   cardId: number;
   /** O nome do card (o nome do arquivo exportado). */
@@ -143,6 +144,8 @@ export function EmpenhosTabela({
   podePublicar: boolean;
   /** As unidades e os órgãos à vista (`null` = todos). */
   escopo?: EscopoEmpenhos;
+  /** A versão dos dados da execução (importação promovida, vínculos, cards): mudou, os anos guardados saem e a tabela relê. */
+  versao?: string;
 }) {
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
@@ -182,6 +185,16 @@ export function EmpenhosTabela({
   useEffect(() => {
     if (recorte) void carregar(recorte);
   }, [recorte, carregar]);
+
+  // Importação nova (ou vínculos/cards alterados): o que estava guardado de cada ano fica velho — relê o ano aberto, sem
+  // apagar a tabela da tela enquanto chega.
+  const versaoVista = useRef(versao);
+  useEffect(() => {
+    if (versaoVista.current === versao) return;
+    versaoVista.current = versao;
+    guardados.current.clear();
+    if (recorte) void carregar(recorte, true);
+  }, [versao, recorte, carregar]);
 
   // O ano na URL (voltar/compartilhar abre no mesmo) — sem pedir a página de novo.
   useEffect(() => {

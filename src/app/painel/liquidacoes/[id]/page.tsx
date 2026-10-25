@@ -6,9 +6,11 @@ import { EmpenhoCardLiquidacoes } from "@/components/EmpenhoCardLiquidacoes";
 import { type AbaCard, EmpenhoCardView } from "@/components/EmpenhoCardView";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
+import { getDb } from "@/lib/db";
 import { rotaDoCard } from "@/lib/empenho-cards-core";
 import { getCard, listarCards } from "@/lib/empenho-cards";
 import { escopoDosEmpenhos } from "@/lib/empenhos-tela";
+import { consultaVersaoExecucao } from "@/lib/execucao-sql";
 import { chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export default async function LiquidacaoCardPage({ params, searchParams }: { par
   } else if (aba === "configuracao") {
     conteudo = <EmpenhoCardConfig card={card} />;
   } else {
-    conteudo = <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} cardId={id} nome={card.nome} />;
+    conteudo = <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} cardId={id} nome={card.nome} versao={await consultaVersaoExecucao(getDb())} />;
   }
   return (
     <EmpenhoCardView card={card} aba={aba} permitidas={permitidas} podeExcluir={pode.excluir}>

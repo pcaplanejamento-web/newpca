@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { problemasDoEmpenho } from "../src/lib/empenhos-tela-core.ts";
-import { conferirExecucao, type LiquidacaoDoEmpenho, liquidacaoProvavel, type PagamentoDoEmpenho, semRepetir } from "../src/lib/execucao-empenho-core.ts";
+import {
+  anoDoRegistro,
+  conferirExecucao,
+  type LiquidacaoDoEmpenho,
+  liquidacaoProvavel,
+  MOTIVO_EMPENHO_POSTERIOR,
+  MOTIVO_SEM_NUMERO,
+  type PagamentoDoEmpenho,
+  rotuloTipoExecucao,
+  semRepetir,
+  tipoDaExecucao,
+} from "../src/lib/execucao-empenho-core.ts";
 
 const liq = (id: number, data: string, valor: number, valorAnulado = 0): LiquidacaoDoEmpenho => ({ id, chave: `l${id}`, cardId: 1, ano: 2025, numero: String(id), data, valor, valorAnulado, valorLiquido: valor - valorAnulado, valorPago: 0 });
 const pag = (id: number, data: string, valor: number, anulado = false): PagamentoDoEmpenho => ({ id, chave: `p${id}`, cardId: 2, ano: 2025, srcId: id, data, valor, valorRetencao: 0, valorLiquido: valor, anulado });
@@ -42,4 +53,23 @@ test("conferência do empenho: liquidado ≤ empenhado − anulado, pago ≤ liq
   assert.deepEqual(problemasDoEmpenho(e(100, 10, 95, 40, 50)), ["liquidadoAcima"]);
   assert.deepEqual(problemasDoEmpenho(e(100, 0, 50, 60, 40)), ["pagoAcima"]);
   assert.deepEqual(problemasDoEmpenho(e(100, 0, 50, 20, 30)), ["saldo"]);
+});
+
+test("tipo da liquidação/pagamento: Nota de Empenho × Restos a Pagar × erro", () => {
+  assert.equal(tipoDaExecucao("123", 2025, "2025-06-10").tipo, "ne");
+  assert.equal(rotuloTipoExecucao(tipoDaExecucao("123", 2025, "2025-06-10")), "Nota de Empenho");
+  const rp = tipoDaExecucao("123", 2024, "2025-01-15");
+  assert.deepEqual([rp.tipo, rp.presumido, rotuloTipoExecucao(rp)], ["rp", false, "Restos a Pagar"]);
+  // O empenho não está no sistema: de um ano anterior aos importados.
+  const fora = tipoDaExecucao("999", null, "2025-03-01");
+  assert.deepEqual([fora.tipo, fora.presumido], ["rp", true]);
+  // Sem número de empenho e empenho POSTERIOR ao registro = erro.
+  assert.deepEqual([tipoDaExecucao("  ", 2025, "2025-03-01").tipo, rotuloTipoExecucao(tipoDaExecucao("", 2025, "2025-03-01"))], ["erro", MOTIVO_SEM_NUMERO]);
+  assert.equal(rotuloTipoExecucao(tipoDaExecucao("5", 2026, "2025-12-30")), MOTIVO_EMPENHO_POSTERIOR);
+  // Sem data: o ano da importação decide.
+  assert.equal(tipoDaExecucao("5", 2025, null, 2025).tipo, "ne");
+  assert.equal(tipoDaExecucao("5", 2024, null, 2025).tipo, "rp");
+  assert.equal(tipoDaExecucao("5", 2024, null).presumido, true);
+  assert.equal(anoDoRegistro("2026-01-02", 2025), 2026, "a data vale mais que o ano da importação");
+  assert.equal(anoDoRegistro("x", 2025), 2025);
 });
