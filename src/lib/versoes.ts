@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.224.0",
+    data: "2026-10-25",
+    titulo: "Execução: clique no ponto, dados acumulados e indicadores que abrem suavemente",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "O gráfico abre a origem só ao tocar no PONTO destacado (com área de toque maior que o desenho), não mais em qualquer lugar do gráfico — e sem o contorno azul ao clicar.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "A dica de cada ponto traz o valor só daquele dia, semana ou mês com as quantidades (empenhos, liquidações, ordens), o acumulado até ali e a execução acumulada: % liquidado e pago sobre o empenhado, o que falta liquidar e pagar e quanto do empenhado do gráfico já foi alcançado.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "A origem de um ponto alterna entre “Só o ponto” e “Acumulado até aqui” (no gráfico acumulado, já abre no acumulado — a soma bate com o que o gráfico mostra) e mostra também o % do empenhado, o que falta liquidar e o que falta pagar.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "“Mais indicadores” abre e fecha deslizando pela altura, sem saltos: os cartões de baixo acompanham, nada pisca e a preferência guardada abre já pronta.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.223.1",
     data: "2026-10-25",
     titulo: "Execução: controles do gráfico no canto superior esquerdo",

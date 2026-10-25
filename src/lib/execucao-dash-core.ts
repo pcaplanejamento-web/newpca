@@ -586,6 +586,10 @@ export type PontoSerie = {
   acEmpenhado: number;
   acLiquidado: number;
   acPago: number;
+  /** Quantos registros no balde: empenhos, liquidações e ordens de pagamento (não anuladas). */
+  qEmp: number;
+  qLiq: number;
+  qPag: number;
 };
 
 export type Serie = { granularidade: GranularidadeData; pontos: PontoSerie[]; de: string | null; ate: string | null };
@@ -627,18 +631,30 @@ export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran
   const em = new Float64Array(baldes.length);
   const lq = new Float64Array(baldes.length);
   const pg = new Float64Array(baldes.length);
+  const qe = new Float64Array(baldes.length);
+  const ql = new Float64Array(baldes.length);
+  const qp = new Float64Array(baldes.length);
   const onde = (d: number): number => (d === SEM_DIA ? -1 : (pos.get(chaveDoDia(isoDoDia(d)) ?? "") ?? -1));
   for (const i of calc.sel.emp) {
     const p = onde(b.emp.dia[i]);
-    if (p >= 0) em[p] += b.emp.bruto[i] - b.emp.anulado[i];
+    if (p >= 0) {
+      em[p] += b.emp.bruto[i] - b.emp.anulado[i];
+      qe[p]++;
+    }
   }
   for (const k of calc.sel.liq) {
     const p = onde(b.liq.dia[k]);
-    if (p >= 0) lq[p] += b.liq.valor[k] - b.liq.anulado[k];
+    if (p >= 0) {
+      lq[p] += b.liq.valor[k] - b.liq.anulado[k];
+      ql[p] += b.liq.qtd[k];
+    }
   }
   for (const k of calc.sel.pag) {
     const p = onde(b.pag.dia[k]);
-    if (p >= 0) pg[p] += b.pag.pago[k];
+    if (p >= 0) {
+      pg[p] += b.pag.pago[k];
+      qp[p] += b.pag.qtd[k];
+    }
   }
   let ae = 0;
   let al = 0;
@@ -647,7 +663,7 @@ export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran
     ae += em[i];
     al += lq[i];
     ap += pg[i];
-    return { chave: x.chave, rotulo: x.rotulo, titulo: x.titulo, de: x.de, ate: x.ate, atual: x.atual, empenhado: em[i], liquidado: lq[i], pago: pg[i], acEmpenhado: ae, acLiquidado: al, acPago: ap };
+    return { chave: x.chave, rotulo: x.rotulo, titulo: x.titulo, de: x.de, ate: x.ate, atual: x.atual, empenhado: em[i], liquidado: lq[i], pago: pg[i], acEmpenhado: ae, acLiquidado: al, acPago: ap, qEmp: qe[i], qLiq: ql[i], qPag: qp[i] };
   });
   return { granularidade, pontos, de, ate };
 }

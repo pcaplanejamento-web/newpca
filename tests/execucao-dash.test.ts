@@ -156,6 +156,13 @@ test("execução (núcleo): a série fecha com os totais; a origem de um ponto =
         assert.equal(soma, pt.liquidado, `${visao}/${g}/${pt.chave}: origem = ponto`);
         const somaP = o.pag.reduce((x, k) => x + base.pag.pago[k], 0);
         assert.equal(somaP, pt.pago);
+        assert.equal(o.emp.length, pt.qEmp, `${visao}/${g}/${pt.chave}: os empenhos do ponto`);
+        assert.equal(o.liq.reduce((x, k) => x + base.liq.qtd[k], 0), pt.qLiq);
+        assert.equal(o.pag.reduce((x, k) => x + base.pag.qtd[k], 0), pt.qPag);
+        // O acumulado até o ponto = a origem desde o 1º balde até ele (o "Acumulado até aqui" da origem).
+        const ac = selecaoNoIntervalo(base, c.sel, s.pontos[0].de, pt.ate);
+        assert.equal(ac.liq.reduce((x, k) => x + base.liq.valor[k] - base.liq.anulado[k], 0), pt.acLiquidado);
+        assert.equal(ac.pag.reduce((x, k) => x + base.pag.pago[k], 0), pt.acPago);
       }
     }
   }

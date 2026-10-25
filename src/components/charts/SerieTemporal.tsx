@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { type ActiveDotProps, Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { brl } from "@/lib/format";
 import { semMovimento } from "../useContagem";
 import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
@@ -10,6 +10,8 @@ import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 export type SerieTemporalDef = { chave: string; rotulo: string; cor: number };
 /** Um ponto (balde de tempo): a chave, o rótulo do eixo, o título da dica e os valores de cada série (em reais). */
 export type PontoTemporal = { chave: string; rotulo: string; titulo: string; atual?: boolean; valores: Record<string, number> };
+/** Uma linha a mais na dica de um ponto: rótulo, valor e o bloco (as linhas de mesma `secao` ficam juntas, sob o título). */
+export type LinhaDica = { rotulo: string; valor: string; secao?: string };
 
 /** A transição entre recortes (filtro, período, granularidade): curta e suave, sem redesenhar do zero. */
 const ANIMACAO_MS = 450;
@@ -18,7 +20,9 @@ const ANIMACAO_MS = 450;
  * SÉRIE TEMPORAL — as ONDAS de evolução do sistema (Recharts, cores pelos tokens `--serie-*`): áreas em camadas com
  * degradê forte (a 1ª série atrás), sem legenda, eixo Y nem linhas horizontais — as grades verticais leves e os rótulos do
  * tempo; os nomes e valores de TODAS as séries ficam na dica (+ `extraDica`), as cores são as dos indicadores da tela. O
- * balde de hoje leva a linha tracejada. Tocar num balde = `onEscolher` (a origem). Sem animação com movimento reduzido.
+ * balde de hoje leva a linha tracejada. Tocar no PONTO destacado (não no gráfico inteiro) = `onEscolher` (a origem) — a
+ * área de toque do ponto é maior que o desenho; pelo teclado, a origem de cada balde fica na vista em tabela. Sem animação
+ * com movimento reduzido.
  */
 export function SerieTemporal({
   pontos,
@@ -31,8 +35,8 @@ export function SerieTemporal({
   pontos: PontoTemporal[];
   series: readonly SerieTemporalDef[];
   onEscolher?: (p: PontoTemporal) => void;
-  /** Linhas a mais na dica de um ponto (ex.: "% do empenhado"). */
-  extraDica?: (p: PontoTemporal) => { rotulo: string; valor: string }[];
+  /** Linhas a mais na dica de um ponto (ex.: "% do empenhado"); `secao` = o título do bloco em que a linha entra. */
+  extraDica?: (p: PontoTemporal) => LinhaDica[];
   altura?: number;
   ariaLabel: string;
 }) {
@@ -63,11 +67,7 @@ export function SerieTemporal({
         <AreaChart
           data={dados}
           margin={{ top: 12, right: 16, left: 16, bottom: 0 }}
-          onClick={(e) => {
-            const p = onEscolher ? porChave.get(String(e?.activeLabel ?? "")) : undefined;
-            if (p) onEscolher?.(p);
-          }}
-          className={onEscolher ? "cursor-pointer" : undefined}
+          accessibilityLayer={false}
         >
           <defs>
             {series.map((s) => (
@@ -106,13 +106,18 @@ export function SerieTemporal({
                       <span className="font-semibold tabular-nums text-text">{brl(p.valores[s.chave] ?? 0)}</span>
                     </div>
                   ))}
-                  {extraDica?.(p).map((x) => (
-                    <div key={x.rotulo} className="mt-0.5 flex items-center justify-between gap-4 border-t border-border/70 pt-0.5">
-                      <span className="text-muted">{x.rotulo}</span>
-                      <span className="font-semibold tabular-nums text-text">{x.valor}</span>
+                  {(extraDica?.(p) ?? []).map((x, i, l) => (
+                    <div key={`${x.secao ?? ""}:${x.rotulo}`}>
+                      {x.secao && x.secao !== l[i - 1]?.secao && (
+                        <div className="mt-1.5 border-t border-border/70 pt-1 text-[11px] font-semibold uppercase tracking-wide text-faint">{x.secao}</div>
+                      )}
+                      <div className={`flex items-center justify-between gap-4 ${x.secao ? "" : "mt-0.5 border-t border-border/70 pt-0.5"}`}>
+                        <span className="text-muted">{x.rotulo}</span>
+                        <span className="font-semibold tabular-nums text-text">{x.valor}</span>
+                      </div>
                     </div>
                   ))}
-                  {onEscolher && <div className="mt-1 text-[11px] text-faint">Toque para ver a origem</div>}
+                  {onEscolher && <div className="mt-1.5 text-[11px] text-faint">Toque no ponto para ver a origem</div>}
                 </TooltipBox>
               );
             }}
@@ -127,7 +132,22 @@ export function SerieTemporal({
               stroke="none"
               fill={`url(#${id}-${s.chave})`}
               dot={false}
-              activeDot={{ r: 4, stroke: tk.fundo, strokeWidth: 2, fill: tk.serie[s.cor] }}
+              activeDot={(d: ActiveDotProps) => {
+                if (d.cx == null || d.cy == null) return null;
+                const p = onEscolher ? porChave.get(String((d.payload as { chave?: string })?.chave ?? "")) : undefined;
+                return (
+                  // biome-ignore lint/a11y/noStaticElementInteractions: o ponto é o alvo do ponteiro; pelo teclado, a origem de cada balde fica na vista em tabela.
+                  <g
+                    key={`${s.chave}-${d.index}`}
+                    className={p ? "cursor-pointer" : undefined}
+                    onClick={p ? () => onEscolher?.(p) : undefined}
+                  >
+                    {/* A área de toque do ponto (invisível, maior que o desenho). */}
+                    {p && <circle cx={d.cx} cy={d.cy} r={14} fill="transparent" />}
+                    <circle cx={d.cx} cy={d.cy} r={p ? 5 : 4} stroke={tk.fundo} strokeWidth={2} fill={tk.serie[s.cor]} />
+                  </g>
+                );
+              }}
               isAnimationActive={animar}
               animationDuration={ANIMACAO_MS}
               animationEasing="ease-out"

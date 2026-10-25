@@ -42,7 +42,7 @@ import { Button } from "./Button";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
-import type { PontoTemporal } from "./charts/SerieTemporal";
+import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
 import { corSerie } from "./charts/shared";
 import { type Column, DataTable, FiltrosAtivos } from "./DataTable";
 import { EmpenhoBanner } from "./EmpenhoDetalhe";
@@ -50,6 +50,7 @@ import { ErroCarga } from "./ErroCarga";
 import { FiltrosDashboard } from "./FiltrosDashboard";
 import { IconChevronDown, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
+import { duracaoMotionMs } from "./Modal";
 import { OrigemDados } from "./OrigemDados";
 import { PeriodoPicker } from "./PeriodoPicker";
 import { SelectField } from "./Field";
@@ -72,7 +73,10 @@ const SERIES = [
 const COR = { empenhado: corSerie(SERIES[0].cor), liquidado: corSerie(SERIES[1].cor), pago: corSerie(SERIES[2].cor) };
 
 type Aba = "empenhos" | "liquidacoes" | "pagamentos";
-type Origem = { titulo: string; recorte: string; sel: Selecao; aba: Aba };
+/** Um recorte da origem: o texto e os registros. */
+type RecorteOrigem = { recorte: string; sel: Selecao };
+/** A origem de um número; com `acumulado`, a do ponto do gráfico também oferece "Acumulado até aqui" (`noAcumulado` = abre nele). */
+type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem; noAcumulado?: boolean };
 
 const CHAVE_MAIS = "execucao:mais-indicadores";
 const lerMais = () => {
@@ -127,10 +131,18 @@ export function DashboardExecucao({
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
   const [gran, setGran] = useState<Granularidade>("auto");
   const [mais, setMais] = useState(false);
+  /** A abertura terminou (só então os cartões podem passar da borda — a sombra, o realce). */
+  const [maisPronto, setMaisPronto] = useState(false);
+  const [animarMais, setAnimarMais] = useState(false);
   const [verDados, setVerDados] = useState(false);
   const [origem, setOrigem] = useState<Origem | null>(null);
   const [empenho, setEmpenho] = useState<EmpenhoNaTela | null>(null);
-  useEffect(() => setMais(lerMais()), []);
+  useEffect(() => {
+    // A preferência guardada abre já pronta, sem animar na chegada.
+    const v = lerMais();
+    setMais(v);
+    setMaisPronto(v);
+  }, []);
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
   const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
@@ -248,6 +260,21 @@ export function DashboardExecucao({
 
   const abrirOrigem = (titulo: string, recorte: string, sel: Selecao, aba: Aba) => setOrigem({ titulo, recorte, sel, aba });
   const abrirTudo = (aba: Aba, titulo: string) => abrirOrigem(titulo, recorteTexto, calc.sel, aba);
+  const pontoPorChave = useMemo(() => new Map(s.pontos.map((p) => [p.chave, p])), [s.pontos]);
+  /** A origem de um ponto: o balde e o acumulado desde o início do gráfico até ele (o que o gráfico acumulado mostra). */
+  const abrirPonto = (chave: string) => {
+    const pt = pontoPorChave.get(chave);
+    const inicio = s.pontos[0]?.de;
+    if (!pt || !inicio) return;
+    setOrigem({
+      titulo: modo === "acumulado" ? "Evolução acumulada" : `Valores por ${rotuloGran}`,
+      recorte: pt.titulo,
+      sel: selecaoNoIntervalo(base, calc.sel, pt.de, pt.ate),
+      aba: "empenhos",
+      acumulado: { recorte: `Até ${pt.titulo}`, sel: selecaoNoIntervalo(base, calc.sel, inicio, pt.ate) },
+      noAcumulado: modo === "acumulado",
+    });
+  };
 
   return (
     <div className={`space-y-[var(--gap-block)] transition-opacity ${atrasado ? "opacity-70" : ""}`} aria-busy={atrasado}>
@@ -288,8 +315,18 @@ export function DashboardExecucao({
           onClick={temPag ? () => abrirTudo("pagamentos", "Saldo: pagamentos") : undefined}
           acao="ver os pagamentos"
         />
-        {mais && (
-          <div className="animate-fade-in-up grid grid-cols-1 gap-[var(--gap-block)] md:col-span-3 md:grid-cols-3">
+      </div>
+      {/* "Mais indicadores": abre e fecha pela ALTURA (grid-template-rows 0fr ↔ 1fr) — sempre montado, os de baixo deslizam
+          juntos e nada pisca; fechado = inerte (fora do Tab). O corte só durante a transição (as sombras não ficam presas). */}
+      <div
+        className={`grid ${animarMais ? "transition-[grid-template-rows,opacity,margin] duration-[calc(var(--motion-duration)*1.5)] ease-[var(--motion-ease)] motion-reduce:transition-none" : ""}`}
+        style={{ gridTemplateRows: mais ? "1fr" : "0fr", opacity: mais ? 1 : 0, marginTop: mais ? 0 : "calc(-1 * var(--gap-block))" }}
+        inert={!mais}
+        aria-hidden={!mais}
+        onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === "grid-template-rows" && setMaisPronto(mais)}
+      >
+        <div className={`min-h-0 ${mais && maisPronto ? "overflow-visible" : "overflow-hidden"}`}>
+          <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
             <KpiStat
               label="Anulado: empenhos"
               value={brl(reais(t.empAnulado))}
@@ -345,21 +382,24 @@ export function DashboardExecucao({
               acao="ver os pagamentos"
             />
           </div>
-        )}
+        </div>
       </div>
       <button
         type="button"
         aria-expanded={mais}
-        onClick={() =>
-          setMais((m) => {
-            try {
-              localStorage.setItem(CHAVE_MAIS, m ? "0" : "1");
-            } catch {
-              /* sem armazenamento: vale só nesta visita */
-            }
-            return !m;
-          })
-        }
+        onClick={() => {
+          const novo = !mais;
+          try {
+            localStorage.setItem(CHAVE_MAIS, novo ? "1" : "0");
+          } catch {
+            /* sem armazenamento: vale só nesta visita */
+          }
+          // Sem movimento (sistema ou ADM) não há transição — nem o fim dela: fica pronto na hora.
+          const semTransicao = duracaoMotionMs() === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          setAnimarMais(!semTransicao);
+          setMaisPronto(semTransicao && novo);
+          setMais(novo);
+        }}
         className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)]"
       >
         {mais ? "Menos indicadores" : "Mais indicadores"}
@@ -459,7 +499,7 @@ export function DashboardExecucao({
             getKey={(p) => p.chave}
             density="compact"
             exportar={podeExportar ? { nome: `Execução por ${rotuloGran}` } : false}
-            onRowClick={(p) => abrirOrigem(modo === "acumulado" ? "Evolução acumulada" : `Valores por ${rotuloGran}`, p.titulo, selecaoNoIntervalo(base, calc.sel, p.de, p.ate), "empenhos")}
+            onRowClick={(p) => abrirPonto(p.chave)}
             columns={colunasSerie(temLiq, temPag)}
             vazio="Nada no período escolhido."
           />
@@ -468,18 +508,10 @@ export function DashboardExecucao({
             pontos={pontosVistos}
             series={seriesVistas}
             ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
-            onEscolher={(p) => {
-              const pt = s.pontos.find((x) => x.chave === p.chave);
-              if (pt) abrirOrigem(modo === "acumulado" ? "Evolução acumulada" : `Valores por ${rotuloGran}`, pt.titulo, selecaoNoIntervalo(base, calc.sel, pt.de, pt.ate), "empenhos");
-            }}
+            onEscolher={(p) => abrirPonto(p.chave)}
             extraDica={(p) => {
-              if (modo !== "acumulado") return [];
-              const e = p.valores.empenhado ?? 0;
-              const l: { rotulo: string; valor: string }[] = [];
-              if (temLiq && e > 0) l.push({ rotulo: "Liquidado / empenhado", valor: pctTexto((p.valores.liquidado ?? 0) / e) });
-              if (temPag && e > 0) l.push({ rotulo: "Pago / empenhado", valor: pctTexto((p.valores.pago ?? 0) / e) });
-              if (temPag) l.push({ rotulo: "Diferença empenhado − pago", valor: brl(e - (p.valores.pago ?? 0)) });
-              return l;
+              const pt = pontoPorChave.get(p.chave);
+              return pt ? dicaDoPonto(pt, modo, rotuloGran, s.pontos.at(-1), temLiq, temPag) : [];
             }}
           />
         )}
@@ -509,6 +541,39 @@ export function DashboardExecucao({
       <EmpenhoBanner empenho={empenho} onClose={() => setEmpenho(null)} />
     </div>
   );
+}
+
+type PontoDaSerie = ReturnType<typeof serie>["pontos"][number];
+
+/**
+ * A DICA de um ponto do gráfico, além dos valores das séries: no acumulado, o que entrou SÓ neste balde (com as
+ * quantidades); por período, o acumulado até aqui; e a execução acumulada — % liquidado e pago sobre o empenhado, o que
+ * falta liquidar e pagar e a parte do empenhado do gráfico já alcançada.
+ */
+function dicaDoPonto(pt: PontoDaSerie, modo: "diario" | "acumulado", gran: string, ultimo: PontoDaSerie | undefined, temLiq: boolean, temPag: boolean): LinhaDica[] {
+  const l: LinhaDica[] = [];
+  const conta = (n: number, um: string, varios: string) => (n ? ` · ${plural(n, um, varios)}` : "");
+  if (modo === "acumulado") {
+    const secao = `Neste ${gran}`;
+    l.push({ secao, rotulo: "Empenhado", valor: brl(reais(pt.empenhado)) + conta(pt.qEmp, "empenho", "empenhos") });
+    if (temLiq) l.push({ secao, rotulo: "Liquidado", valor: brl(reais(pt.liquidado)) + conta(pt.qLiq, "liquidação", "liquidações") });
+    if (temPag) l.push({ secao, rotulo: "Pago", valor: brl(reais(pt.pago)) + conta(pt.qPag, "ordem", "ordens") });
+  } else {
+    const secao = "Acumulado até aqui";
+    l.push({ secao, rotulo: "Empenhado", valor: brl(reais(pt.acEmpenhado)) });
+    if (temLiq) l.push({ secao, rotulo: "Liquidado", valor: brl(reais(pt.acLiquidado)) });
+    if (temPag) l.push({ secao, rotulo: "Pago", valor: brl(reais(pt.acPago)) });
+    const qtd = [pt.qEmp && plural(pt.qEmp, "empenho", "empenhos"), temLiq && pt.qLiq && plural(pt.qLiq, "liquidação", "liquidações"), temPag && pt.qPag && plural(pt.qPag, "ordem", "ordens")].filter(Boolean);
+    if (qtd.length) l.push({ secao: `Neste ${gran}`, rotulo: "Registros", valor: qtd.join(" · ") });
+  }
+  const secao = "Execução acumulada";
+  const e = pt.acEmpenhado;
+  if (temLiq && e > 0) l.push({ secao, rotulo: "Liquidado / empenhado", valor: pctTexto(pt.acLiquidado / e) });
+  if (temPag && e > 0) l.push({ secao, rotulo: "Pago / empenhado", valor: pctTexto(pt.acPago / e) });
+  if (temLiq) l.push({ secao, rotulo: "A liquidar", valor: brl(reais(e - pt.acLiquidado)) });
+  if (temLiq && temPag) l.push({ secao, rotulo: "A pagar (liquidado − pago)", valor: brl(reais(pt.acLiquidado - pt.acPago)) });
+  if (ultimo && ultimo.acEmpenhado > 0 && ultimo !== pt) l.push({ secao, rotulo: "Do empenhado no gráfico", valor: pctTexto(e / ultimo.acEmpenhado) });
+  return l;
 }
 
 function colunasSerie(temLiq: boolean, temPag: boolean): Column<ReturnType<typeof serie>["pontos"][number]>[] {
@@ -551,9 +616,11 @@ function OrigemExecucao({
   onEmpenho: (i: number) => void;
 }) {
   const [aba, setAba] = useState<Aba>(origem.aba);
-  const empenhos = useMemo(() => Array.from(origem.sel.emp, (i) => ({ i, ...empenhoExec(base, i) })), [base, origem.sel.emp]);
-  const liqs = useMemo(() => (temLiq ? Array.from(origem.sel.liq, (k) => liquidacaoExec(base, k)) : []), [base, origem.sel.liq, temLiq]);
-  const pags = useMemo(() => (temPag ? Array.from(origem.sel.pag, (k) => pagamentoExec(base, k)) : []), [base, origem.sel.pag, temPag]);
+  const [acum, setAcum] = useState(!!(origem.acumulado && origem.noAcumulado));
+  const ativo: RecorteOrigem = acum && origem.acumulado ? origem.acumulado : origem;
+  const empenhos = useMemo(() => Array.from(ativo.sel.emp, (i) => ({ i, ...empenhoExec(base, i) })), [base, ativo.sel.emp]);
+  const liqs = useMemo(() => (temLiq ? Array.from(ativo.sel.liq, (k) => liquidacaoExec(base, k)) : []), [base, ativo.sel.liq, temLiq]);
+  const pags = useMemo(() => (temPag ? Array.from(ativo.sel.pag, (k) => pagamentoExec(base, k)) : []), [base, ativo.sel.pag, temPag]);
   const soma = <T,>(l: T[], f: (x: T) => number) => l.reduce((t, x) => t + f(x), 0);
   const emp = soma(empenhos, (e) => e.valorEmpenhado - e.valorAnulado);
   const liq = soma(liqs, (l) => l.valor);
@@ -565,11 +632,13 @@ function OrigemExecucao({
       aberto
       onClose={onClose}
       titulo={origem.titulo}
-      recorte={origem.recorte}
+      recorte={ativo.recorte}
       resumo={[
         { label: "Empenhado", value: brl(emp), hint: plural(empenhos.length, "empenho", "empenhos") },
-        ...(temLiq ? [{ label: "Liquidado", value: brl(liq), hint: plural(qLiq, "liquidação", "liquidações") }] : []),
-        ...(temPag ? [{ label: "Pago", value: brl(pag), hint: plural(qPag, "ordem", "ordens") }] : []),
+        ...(temLiq ? [{ label: "Liquidado", value: brl(liq), hint: `${plural(qLiq, "liquidação", "liquidações")}${emp > 0 ? ` · ${pctTexto(liq / emp)} do empenhado` : ""}` }] : []),
+        ...(temPag ? [{ label: "Pago", value: brl(pag), hint: `${plural(qPag, "ordem", "ordens")}${emp > 0 ? ` · ${pctTexto(pag / emp)} do empenhado` : ""}` }] : []),
+        ...(temLiq ? [{ label: "A liquidar", value: brl(emp - liq), hint: "Empenhado − liquidado" }] : []),
+        ...(temLiq && temPag ? [{ label: "A pagar", value: brl(liq - pag), hint: "Liquidado − pago" }] : []),
       ]}
       fonte={
         <>
@@ -579,6 +648,18 @@ function OrigemExecucao({
         </>
       }
     >
+      {origem.acumulado && (
+        <Segmented<"periodo" | "acumulado">
+          value={acum ? "acumulado" : "periodo"}
+          onChange={(v) => setAcum(v === "acumulado")}
+          ariaLabel="Recorte da origem"
+          className="mb-2"
+          options={[
+            { value: "periodo", label: `Só ${origem.recorte}`, curto: "Só o ponto", dica: "Os registros deste dia, semana ou mês" },
+            { value: "acumulado", label: "Acumulado até aqui", curto: "Acumulado", dica: "Os registros desde o início do gráfico até este ponto" },
+          ]}
+        />
+      )}
       <Segmented<Aba>
         value={aba}
         onChange={setAba}
@@ -595,7 +676,7 @@ function OrigemExecucao({
           rows={empenhos}
           getKey={(e) => e.i}
           density="compact"
-          exportar={podeExportar ? { nome: `Origem - empenhos - ${origem.recorte}` } : false}
+          exportar={podeExportar ? { nome: `Origem - empenhos - ${ativo.recorte}` } : false}
           onRowClick={(e) => onEmpenho(e.i)}
           columns={COLUNAS_EMP}
           vazio="Nenhum empenho neste recorte."
@@ -606,7 +687,7 @@ function OrigemExecucao({
           rows={aba === "liquidacoes" ? liqs : pags}
           getKey={(e) => e.chave}
           density="compact"
-          exportar={podeExportar ? { nome: `Origem - ${aba} - ${origem.recorte}` } : false}
+          exportar={podeExportar ? { nome: `Origem - ${aba} - ${ativo.recorte}` } : false}
           onRowClick={(e) => e.ei >= 0 && onEmpenho(e.ei)}
           columns={aba === "liquidacoes" ? COLUNAS_LIQ : COLUNAS_PAG}
           vazio={aba === "liquidacoes" ? "Nenhuma liquidação neste recorte." : "Nenhum pagamento neste recorte."}
