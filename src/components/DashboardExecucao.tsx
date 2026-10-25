@@ -79,6 +79,20 @@ const SERIES = [
 ] as const;
 const COR = { empenhado: corSerie(SERIES[0].cor), liquidado: corSerie(SERIES[1].cor), pago: corSerie(SERIES[2].cor) };
 
+/** A largura da pilha de botões sobre o desenho (botão + vidro + a distância da borda): as datas não entram nela. */
+const RESERVA_CONTROLES = 60;
+
+/** Da mais fina à mais grossa (a granularidade do zoom nunca fica mais grossa que a escolhida). */
+const ORDEM_GRAN = { auto: 0, dia: 1, semana: 2, mes: 3, ano: 4 } as const;
+
+/** O "vidro" dos controles SOBRE o desenho do gráfico: a superfície translúcida, desfocada, com o anel. */
+const VIDRO = "vidro-controles rounded-[calc(var(--radius-control)+4px)] bg-surface/55 p-1 shadow-ring backdrop-blur-md";
+
+/** A escala dos controles sobre o desenho em telas menores (`zoom` reduz também o espaço que ocupam). */
+const ESCALA_CONTROLES = "max-lg:[zoom:0.9] max-sm:[zoom:0.8]";
+/** A pilha lateral (lupa, restaurar, tabela) encolhe mais: no celular cobriria boa parte da altura do desenho. */
+const ESCALA_PILHA = "max-lg:[zoom:0.85] max-sm:[zoom:0.7]";
+
 type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 /** Um recorte da origem: o texto e os registros. */
 type RecorteOrigem = { recorte: string; sel: Selecao };
@@ -136,7 +150,7 @@ export function DashboardExecucao({
   const [filtros, setFiltros] = useState<FiltrosExec>({});
   const [tipo, setTipo] = useState<TipoFiltroExec>([]);
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
-  const [gran, setGran] = useState<Granularidade>("auto");
+  const [gran, setGran] = useState<Granularidade>("dia");
   const [mais, setMais] = useState(false);
   /** A abertura terminou (só então os cartões podem passar da borda — a sombra, o realce). */
   const [maisPronto, setMaisPronto] = useState(false);
@@ -174,8 +188,14 @@ export function DashboardExecucao({
   // biome-ignore lint/correctness/useExhaustiveDependencies: o zoom volta ao todo quando o período do gráfico muda.
   useEffect(() => setJanela(null), [sTodo.de, sTodo.ate]);
   const s = useMemo(
-    () => (janela ? serie(base, calc, janela, "auto", hoje, { acumularDesde: sTodo.pontos[0]?.de }) : sTodo),
-    [janela, base, calc, hoje, sTodo],
+    () => {
+      if (!janela) return sTodo;
+      // Na janela, a granularidade pedida ou uma MAIS FINA quando a janela é curta (um mês em meses seria um ponto só).
+      const opc = { acumularDesde: sTodo.pontos[0]?.de };
+      const auto = serie(base, calc, janela, "auto", hoje, opc);
+      return ORDEM_GRAN[auto.granularidade] <= ORDEM_GRAN[gran] ? auto : serie(base, calc, janela, gran, hoje, opc);
+    },
+    [janela, base, calc, hoje, sTodo, gran],
   );
   const conf = useMemo(() => confianca(base.meta, base.fontes, Date.now()), [base.meta, base.fontes]);
   const temLiq = base.fontes.liquidacoes;
@@ -243,6 +263,12 @@ export function DashboardExecucao({
     [s.pontos, modo],
   );
   const zoom = (fator: number) => todo && setJanela((j) => zoomJanela(j, todo, fator));
+  // As datas que o gráfico MOSTRA no zoom: o início da janela até o fim dela (nunca depois de hoje nem do último dado).
+  const janelaVista = useMemo(() => {
+    if (!janela) return { de: "", ate: "", dias: 0 };
+    const fim = [janela.ate, hoje, s.pontos.at(-1)?.ate ?? janela.ate].sort()[0];
+    return { de: janela.de, ate: fim, dias: (diaDoIso(fim) ?? 0) - (diaDoIso(janela.de) ?? 0) + 1 };
+  }, [janela, hoje, s.pontos]);
   const diasJanela = janela ? (diaDoIso(janela.ate) ?? 0) - (diaDoIso(janela.de) ?? 0) + 1 : Number.POSITIVE_INFINITY;
   const seriesVistas = useMemo(() => SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true)), [temLiq, temPag]);
   const rotuloGran = { dia: "dia", semana: "semana", mes: "mês", ano: "ano" }[s.granularidade];
@@ -437,113 +463,161 @@ export function DashboardExecucao({
       </section>
       {erro && <ErroCarga msg={erro} onTentar={onTentar} kind="warn" />}
 
-      {/* O gráfico: só as ondas (as cores = as dos indicadores; os nomes e valores na dica); os controles dele no próprio cartão. */}
+      {/* O gráfico: o DESENHO ocupa o cartão (com o respiro padrão e o raio do sistema) e os controles ficam SOBRE ele, em vidro:
+          o tipo e o agrupamento no alto à esquerda, o funil/avisos/ajuda no alto à direita e a lupa, o restaurar e a tabela
+          empilhados no canto inferior direito. Na vista em tabela, os mesmos controles numa linha acima dela. */}
       <ChartCard>
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          {/* Os controles do gráfico no canto superior esquerdo; o funil, os avisos e a ajuda à direita. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-          <Segmented<"diario" | "acumulado">
-            value={modo}
-            onChange={setModo}
-            ariaLabel="Tipo do gráfico"
-            options={[
-              { value: "acumulado", label: "Acumulado", dica: "O gráfico soma desde o início do período" },
-              { value: "diario", label: "Por período", curto: "Período", dica: "O gráfico mostra o valor de cada dia, semana ou mês" },
-            ]}
-          />
-          <Segmented<Granularidade>
-            value={gran}
-            onChange={setGran}
-            ariaLabel="Agrupar o gráfico por"
-            options={[
-              { value: "auto", label: "Auto", dica: "Pelo tamanho do período: dias, semanas ou meses" },
-              { value: "dia", label: "Dia", dica: "Agrupar o gráfico por dia" },
-              { value: "semana", label: "Semana", dica: "Agrupar o gráfico por semana" },
-              { value: "mes", label: "Mês", dica: "Agrupar o gráfico por mês" },
-            ]}
-          />
-          {!verDados && (
+        {(() => {
+          const tipoGran = [
+              <Segmented<"diario" | "acumulado">
+                key="tipo"
+                                value={modo}
+                onChange={setModo}
+                ariaLabel="Tipo do gráfico"
+                options={[
+                  { value: "acumulado", label: "Acumulado", dica: "O gráfico soma desde o início do período" },
+                  { value: "diario", label: "Por período", curto: "Período", dica: "O gráfico mostra o valor de cada dia, semana ou mês" },
+                ]}
+              />,
+              <Segmented<Exclude<Granularidade, "auto">>
+                key="gran"
+                                value={s.granularidade === "ano" ? "mes" : s.granularidade}
+                onChange={setGran}
+                ariaLabel="Agrupar o gráfico por"
+                options={[
+                  { value: "dia", label: "Dia", dica: "Agrupar o gráfico por dia (períodos longos demais sobem para mês)" },
+                  { value: "semana", label: "Semana", dica: "Agrupar o gráfico por semana" },
+                  { value: "mes", label: "Mês", dica: "Agrupar o gráfico por mês" },
+                ]}
+              />,
+          ];
+          // O resumo dos filtros ligados (o MESMO funil das tabelas): entra e sai DESLIZANDO — o grupo cresce ou encolhe suave,
+          // sem empurrar de repente os botões ao lado.
+          const funil = (
+            <span
+              className="grid shrink-0 transition-[grid-template-columns,opacity] duration-[var(--motion-duration)] ease-out"
+              style={{ gridTemplateColumns: ativosResumo.length > 0 ? "1fr" : "0fr", opacity: ativosResumo.length > 0 ? 1 : 0 }}
+              aria-hidden={ativosResumo.length === 0 || undefined}
+            >
+              <span className="flex min-w-0 overflow-hidden pr-1">
+                {ativosResumo.length > 0 && (
+                  <FiltrosAtivos
+                    titulo="Filtros ligados"
+                    colunas={ativosResumo.map((x) => ({
+                      key: x.key,
+                      header: (
+                        <span title={`${x.rotulo}: ${x.valor}`}>
+                          <span className="text-muted">{x.rotulo}:</span> {x.valor}
+                        </span>
+                      ),
+                    }))}
+                    onLimparColuna={(k) => ativosResumo.find((x) => x.key === k)?.tirar()}
+                    onLimpar={limparTudo}
+                  />
+                )}
+              </span>
+            </span>
+          );
+          // À direita: o funil (entra à esquerda), os avisos e a ajuda.
+          const direita = (
             <>
-              <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
-                <IconZoom className="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="icon" aria-label="Afastar" title="Afastar (mais dias à vista)" disabled={!janela} onClick={() => zoom(2)}>
-                <IconZoomOut className="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="icon" aria-label="Restaurar o zoom" title="Restaurar o zoom (o período inteiro)" disabled={!janela} onClick={() => setJanela(null)}>
-                <IconRestaurar className="h-4 w-4" />
-              </Button>
-              {janela && todo && (
-                <span className="inline-flex items-center gap-0.5 rounded-control bg-accent-soft/60 pl-0.5 pr-2 text-[12px] font-medium text-accent">
-                  <Button size="sm" variant="icon" aria-label="Voltar no tempo" title="Voltar no tempo" disabled={janela.de <= todo.de} onClick={() => setJanela(deslocarJanela(janela, todo, -1))}>
-                    <IconChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="icon" aria-label="Avançar no tempo" title="Avançar no tempo" disabled={janela.ate >= todo.ate} onClick={() => setJanela(deslocarJanela(janela, todo, 1))}>
-                    <IconChevronRight className="h-4 w-4" />
-                  </Button>
-                  <span className="tabular-nums" aria-live="polite">{textoIntervalo(janela)}</span>
-                </span>
-              )}
+              {funil}
+              <span className="flex items-center gap-1">
+                <Avisos titulo="Avisos dos dados" avisos={avisos} />
+                <AjudaExecucao />
+              </span>
             </>
-          )}
-          <Button
-            size="sm"
-            variant="icon"
-            aria-pressed={verDados}
-            aria-label={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
-            title={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
-            onClick={() => setVerDados((v) => !v)}
-          >
-            <IconLayers className="h-4 w-4" />
-          </Button>
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
-          {/* O resumo dos filtros ligados: o MESMO funil das tabelas (✕ tira um; "Limpar" volta tudo ao padrão). O lugar dele
-              fica reservado: aparecer ou sumir não desloca os botões ao lado. */}
-          <span className="inline-flex h-11 w-11 shrink-0 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
-            {ativosResumo.length > 0 && (
-              <FiltrosAtivos
-                titulo="Filtros ligados"
-                colunas={ativosResumo.map((x) => ({
-                  key: x.key,
-                  header: (
-                    <span title={`${x.rotulo}: ${x.valor}`}>
-                      <span className="text-muted">{x.rotulo}:</span> {x.valor}
-                    </span>
-                  ),
-                }))}
-                onLimparColuna={(k) => ativosResumo.find((x) => x.key === k)?.tirar()}
-                onLimpar={limparTudo}
+          );
+          const botaoTabela = (
+            <Button
+              size="sm"
+              variant="icon"
+              aria-pressed={verDados}
+              aria-label={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
+              title={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
+              onClick={() => setVerDados((v) => !v)}
+            >
+              <IconLayers className="h-4 w-4" />
+            </Button>
+          );
+          if (verDados)
+            return (
+              <>
+                <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                  {tipoGran}
+                  {botaoTabela}
+                  <div className="ml-auto flex items-center">{direita}</div>
+                </div>
+                <DataTable
+                  rows={s.pontos}
+                  getKey={(p) => p.chave}
+                  density="compact"
+                  linhasSalvas="execucao-grafico"
+                  exportar={podeExportar ? { nome: `Execução por ${rotuloGran}` } : false}
+                  onRowClick={(p) => abrirPonto(p.chave)}
+                  columns={colunasSerie(temLiq, temPag)}
+                  vazio="Nada no período escolhido."
+                />
+              </>
+            );
+          return (
+            <div className="relative overflow-hidden rounded-card bg-surface-2/60">
+              {/* Os controles sobre o desenho, em vidro; em telas menores, numa escala menor (cabem sem cobrir o gráfico). */}
+              <div className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
+                {/* O tipo e o agrupamento: dois controles independentes, cada um em vidro sobre o desenho. */}
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <div className={`pointer-events-auto ${VIDRO}`}>{tipoGran[0]}</div>
+                  <div className={`pointer-events-auto ${VIDRO}`}>{tipoGran[1]}</div>
+                </div>
+                {/* No zoom, as setas e as datas da janela no alto, ao lado do tipo e do agrupamento. */}
+                  {janela && todo && (
+                    <div className={`pointer-events-auto flex items-center gap-1 pr-3 text-[13px] font-medium text-text ${VIDRO}`}>
+                      <Button size="sm" variant="icon" aria-label="Voltar no tempo" title="Voltar no tempo" disabled={janela.de <= todo.de} onClick={() => setJanela(deslocarJanela(janela, todo, -1))}>
+                        <IconChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="icon" aria-label="Avançar no tempo" title="Avançar no tempo" disabled={janela.ate >= todo.ate} onClick={() => setJanela(deslocarJanela(janela, todo, 1))}>
+                        <IconChevronRight className="h-4 w-4" />
+                      </Button>
+                      <span className="whitespace-nowrap tabular-nums" aria-live="polite" title={`${plural(janelaVista.dias, "dia", "dias")} à vista, por ${rotuloGran}`}>
+                        {dataBR(janelaVista.de)} a {dataBR(janelaVista.ate)}
+                        <span className="ml-1.5 text-muted">· {plural(janelaVista.dias, "dia", "dias")}</span>
+                      </span>
+                    </div>
+                  )}
+                <div className={`pointer-events-auto ml-auto flex shrink-0 items-center ${VIDRO}`}>{direita}</div>
+              </div>
+              <SerieTemporal
+                pontos={pontos}
+                preencher
+                reservaRotulos={RESERVA_CONTROLES}
+                altura={420}
+                ajustarY={!!janela && modo === "acumulado"}
+                series={seriesVistas}
+                ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
+                onEscolher={(p) => abrirPonto(p.chave)}
+                extraDica={(p) => {
+                  const pt = pontoPorChave.get(p.chave);
+                  return pt ? dicaDoPonto(pt, modo, rotuloGran, sTodo.pontos.at(-1), temLiq, temPag) : [];
+                }}
               />
-            )}
-          </span>
-          <Avisos titulo="Avisos dos dados" avisos={avisos} />
-          <AjudaExecucao />
-          </div>
-        </div>
-        {verDados ? (
-          <DataTable
-            rows={s.pontos}
-            getKey={(p) => p.chave}
-            density="compact"
-            exportar={podeExportar ? { nome: `Execução por ${rotuloGran}` } : false}
-            onRowClick={(p) => abrirPonto(p.chave)}
-            columns={colunasSerie(temLiq, temPag)}
-            vazio="Nada no período escolhido."
-          />
-        ) : (
-          <SerieTemporal
-            pontos={pontos}
-            ajustarY={!!janela && modo === "acumulado"}
-            series={seriesVistas}
-            ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
-            onEscolher={(p) => abrirPonto(p.chave)}
-            extraDica={(p) => {
-              const pt = pontoPorChave.get(p.chave);
-              return pt ? dicaDoPonto(pt, modo, rotuloGran, sTodo.pontos.at(-1), temLiq, temPag) : [];
-            }}
-          />
-        )}
+              {/* A lupa, o restaurar e a tabela empilhados no canto inferior direito, à mesma distância da borda dos demais. */}
+              <div className={`pointer-events-none absolute right-2 bottom-2 z-10 ${ESCALA_PILHA}`}>
+                <div className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO}`}>
+                  <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
+                    <IconZoom className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="icon" aria-label="Afastar" title="Afastar (mais dias à vista)" disabled={!janela} onClick={() => zoom(2)}>
+                    <IconZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="icon" aria-label="Restaurar o zoom" title="Restaurar o zoom (o período inteiro)" disabled={!janela} onClick={() => setJanela(null)}>
+                    <IconRestaurar className="h-4 w-4" />
+                  </Button>
+                  {botaoTabela}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </ChartCard>
 
       {/* O DEMONSTRATIVO: os mesmos números das KPIs, agrupados pela dimensão escolhida (tocar numa linha = a origem dela). */}
@@ -921,6 +995,11 @@ function AjudaExecucao() {
         Empenhado = valor empenhado − anulado (a anulação não tem data na Centi: fica na data do empenho). Liquidado = valor das liquidações −
         anulado. Pago = valor das ordens de pagamento não anuladas; o retido e o pago líquido também só das não anuladas. Cada registro da Centi
         conta uma vez, mesmo que esteja em dois cards.
+      </TopicoAjuda>
+      <TopicoAjuda icone={<IconZoom className="h-4 w-4" />} titulo="O gráfico">
+        Passe o mouse para ver os valores de cada ponto. Um clique MARCA o ponto (a dica fica parada e dá para passar o mouse sobre ela); um
+        segundo clique no mesmo ponto — ou “Ver os dados completos” — abre a origem. Esc ou um clique fora desmarca. A lupa muda o período à
+        vista e o botão de camadas mostra os mesmos números em tabela.
       </TopicoAjuda>
       <TopicoAjuda icone={<IconDatabase className="h-4 w-4" />} titulo="De onde vêm e o que fica fora">
         Os cards de Empenhos, Liquidações e Pagamentos, ligados pelo número do empenho; só os registros da sua unidade e só as etapas cujas telas

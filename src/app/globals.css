@@ -1338,3 +1338,49 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
   animation: none;
   opacity: 0;
 }
+
+/* VIDRO dos controles sobre um gráfico (Execução): o fundo dos botões e das abas dentro dele também fica translúcido — o
+   desenho aparece por trás. Fora das camadas do Tailwind (vence o bg-surface/bg-surface-2 das peças). */
+.vidro-controles .bg-surface {
+  background-color: color-mix(in srgb, var(--surface) 50%, transparent);
+}
+.vidro-controles .bg-surface-2 {
+  background-color: color-mix(in srgb, var(--surface-2) 45%, transparent);
+}
+/* Sem o contorno dos botões dentro do vidro: o fundo do botão é o limite — o respiro até a borda do vidro e entre os
+   botões ficam iguais à vista. */
+.vidro-controles .border-border-2 {
+  border-color: transparent;
+}
+.vidro-controles .hover\:bg-surface-2:hover {
+  background-color: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+/* O "online" dos pontos sobre as linhas dos gráficos (SerieTemporal): a onda que se expande e some, sem parar. */
+.ponto-onda {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ponto-onda 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes ponto-onda {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ponto-onda {
+    animation: none;
+    opacity: 0;
+  }
+}
+[data-motion="off"] .ponto-onda,
+[data-motion="reduced"] .ponto-onda {
+  animation: none;
+  opacity: 0;
+}

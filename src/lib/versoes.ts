@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.227.0",
+    data: "2026-10-25",
+    titulo: "Execução: gráfico em tela cheia no cartão, com controles em vidro e marcação por clique",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "O desenho do gráfico ocupa o cartão inteiro (com o respiro e o arredondamento do sistema), as datas ficam sobre ele e os controles flutuam por cima em vidro translúcido: o tipo e o agrupamento no alto, cada um no seu, as setas e as datas do zoom ao lado, e a lupa, o restaurar e a tabela empilhados no canto inferior direito — menores em telas pequenas.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Um clique MARCA o ponto (a dica para ali e dá para passar o mouse sobre ela); o segundo clique no mesmo ponto — ou “Ver os dados completos” — abre a origem. Sem clique, a dica segue o mouse sem nunca ficar sob ele, em vidro translúcido; os pontos sobre as linhas pulsam como “online”.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "As pontas do desenho não descolam mais ao abrir ou fechar o menu e ao trocar o agrupamento; o agrupamento “Auto” saiu (começa em Dia, e um período longo demais sobe para mês sozinho); o zoom mostra as datas completas da janela e quantos dias estão à vista; a tabela dos dados do gráfico segue o limite de linhas do sistema.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.226.0",
     data: "2026-10-25",
     titulo: "Execução: origem com gráficos e tabelas leves",
