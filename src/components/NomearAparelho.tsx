@@ -104,10 +104,11 @@ export function BannerAparelho({ estado, nome: pessoa, onConcluido }: { estado: 
     setGravando(true);
     setErro(null);
     try {
+      const cota = await navigator.storage?.estimate?.().then((e) => e.quota ?? null, () => null) ?? null;
       const r = await fetch("/api/acesso/aparelho", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, removerIds: lotado ? retirar : undefined }),
+        body: JSON.stringify({ nome, removerIds: lotado ? retirar : undefined, cota }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível liberar o aparelho.");

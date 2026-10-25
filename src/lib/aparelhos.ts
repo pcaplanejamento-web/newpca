@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { aparelhosConta, usuarios } from "@/db/schema";
+import { aparelhos, aparelhosConta, usuarios } from "@/db/schema";
 import {
   COOKIE_APARELHO,
   type ConfigAcessoConta,
@@ -22,7 +22,8 @@ import { sessaoAtualId } from "./auth";
 import { getDb } from "./db";
 import { toHex } from "./password";
 import { resumoNavegador } from "./seguranca-core";
-import { alertarAparelhoCopiado } from "./seguranca-alertas";
+import { alertarAparelhoAnonimo, alertarAparelhoCopiado } from "./seguranca-alertas";
+import { indicioPelaCota } from "./aparelho-anonimo-core";
 
 // APARELHOS DA CONTA no banco — a situação da pessoa e o nomear/trocar (os comandos com a trava no SQL: aparelhos-sql.ts).
 
@@ -140,4 +141,19 @@ export async function nomearAparelhoDaSessao(
 export async function quem(usuarioId: number) {
   const [p] = await getDb().select({ nome: usuarios.nome, email: usuarios.email }).from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1);
   return p ?? null;
+}
+
+/** Grava o INDÍCIO de janela anônima do aparelho nomeado e, quando provável, avisa os ADMs no sino (best-effort). */
+export async function marcarIndicioAnonimo(u: UsuarioSessao, req: Request, aparelhoId: number, nome: string, cota: number | null): Promise<void> {
+  try {
+    const indicio = indicioPelaCota(cota, req.headers.get("user-agent") ?? "");
+    const r = await getDb()
+      .update(aparelhos)
+      .set({ indicioAnonimo: indicio })
+      .where(and(eq(aparelhos.id, aparelhoId), eq(aparelhos.usuarioId, u.id)))
+      .returning({ antes: aparelhos.id });
+    if (r.length && indicio === "provavel") await alertarAparelhoAnonimo(req, u, nome);
+  } catch (e) {
+    console.error("[aparelho] indício não gravado:", (e as Error).message);
+  }
 }

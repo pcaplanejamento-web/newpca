@@ -24,6 +24,7 @@ function inserirComVaga(db: Db, a: NovoAparelho, removidos = 0) {
       criadoEm: sql<string>`${a.em}`.as("criado_em"),
       vistoEm: sql<string>`${a.em}`.as("visto_em"),
       teste: sql<boolean>`${a.teste ? 1 : 0}`.as("teste"),
+      indicioAnonimo: sql<string | null>`NULL`.as("indicio_anonimo"),
     })
     .from(usuarios)
     .where(
@@ -129,7 +130,7 @@ export function comandosLimparTesteAparelhos(db: Db) {
 
 export function consultaAparelhos(db: Db, usuarioId: number) {
   return db
-    .select({ id: aparelhos.id, nome: aparelhos.nome, navegador: aparelhos.navegador, ip: aparelhos.ip, criadoEm: aparelhos.criadoEm, vistoEm: aparelhos.vistoEm, teste: aparelhos.teste })
+    .select({ id: aparelhos.id, nome: aparelhos.nome, navegador: aparelhos.navegador, ip: aparelhos.ip, criadoEm: aparelhos.criadoEm, vistoEm: aparelhos.vistoEm, teste: aparelhos.teste, indicioAnonimo: aparelhos.indicioAnonimo })
     .from(aparelhos)
     .where(eq(aparelhos.usuarioId, usuarioId))
     .orderBy(sql`COALESCE(${aparelhos.vistoEm}, ${aparelhos.criadoEm}) DESC`);

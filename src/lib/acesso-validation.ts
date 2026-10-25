@@ -10,6 +10,8 @@ const id = z.number().int().positive();
 export const nomearAparelhoSchema = z.strictObject({
   nome: z.string().max(NOME_APARELHO_MAX * 2),
   removerIds: z.array(id).max(10).optional(),
+  /** A cota do `navigator.storage.estimate()` (o indício de janela anônima). */
+  cota: z.number().nonnegative().max(1e15).nullable().optional(),
 });
 
 export const renomearAparelhoSchema = z.strictObject({ nome: z.string().max(NOME_APARELHO_MAX * 2) });

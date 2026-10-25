@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.233.0",
+    data: "2026-10-25",
+    titulo: "Aparelho em janela anônima apontado ao ADM",
+    mudancas: [
+      { tipo: "novo", area: "Usuários", texto: "Ao nomear um aparelho, o sistema guarda o indício de janela anônima (pelo armazenamento do navegador). No banner do usuário, só o ADM vê o selo \"Possível janela anônima\" e o \"Temporário\" do aparelho que não voltou a ser usado.", link: "/painel/usuarios" },
+      { tipo: "novo", area: "Notificações", texto: "Os ADMs recebem no sino o aviso \"Aparelho possivelmente em janela anônima\", com a pessoa, o navegador e o IP.", link: "/painel/usuarios" },
+    ],
+  },
+  {
     versao: "1.232.1",
     data: "2026-10-25",
     titulo: "Execução: gráfico sem piscadas e transições fluidas",

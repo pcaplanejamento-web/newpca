@@ -1,7 +1,7 @@
 import { exigirUsuarioLivre } from "@/lib/api-auth";
 import { motivoNomeAparelho, nomeAparelhoValido } from "@/lib/acesso-conta-core";
 import { nomearAparelhoSchema } from "@/lib/acesso-validation";
-import { nomearAparelhoDaSessao } from "@/lib/aparelhos";
+import { marcarIndicioAnonimo, nomearAparelhoDaSessao } from "@/lib/aparelhos";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ligarAceitesAoAparelho } from "@/lib/termo-uso";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -19,6 +19,7 @@ export async function POST(req: Request) {
   if (!nome) return erro(motivoNomeAparelho(corpo.data.nome) ?? "Nome inválido.", 422);
   const r = await nomearAparelhoDaSessao(g.u, req, nome, corpo.data.removerIds ?? []);
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error, situacao: r.situacao }, { status: r.status });
+  await marcarIndicioAnonimo(g.u, req, r.aparelhoId, nome, corpo.data.cota ?? null);
   await ligarAceitesAoAparelho(g.u.id, r.aparelhoId).catch(() => {});
   const troca = (corpo.data.removerIds ?? []).length > 0;
   await registrarAuditoria({

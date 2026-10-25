@@ -12,5 +12,6 @@ export async function GET() {
   const g = await exigirUsuario();
   if ("erro" in g) return g.erro;
   const [lista, conta, cfg, termos] = await Promise.all([listarAparelhos(g.u.id), contaDe(g.u.id), getAcessoConta(), aceitesDe(g.u.id)]);
-  return ok({ lista, atualId: g.u.pendencia.aparelhoId, limite: limiteEfetivo(cfg, g.u.papel.id, conta.limite), origemLimite: origemDoLimite(cfg, g.u.papel.id, conta.limite), trocaDias: cfg.trocaDias, valem: cfg.modo !== "desligado", trocaAte: conta.trocaAte, termos, baixar: cfg.baixarComprovante || g.u.admin });
+  // O indício de janela anônima é só do ADM.
+  return ok({ lista: lista.map(({ indicioAnonimo: _i, ...a }) => a), atualId: g.u.pendencia.aparelhoId, limite: limiteEfetivo(cfg, g.u.papel.id, conta.limite), origemLimite: origemDoLimite(cfg, g.u.papel.id, conta.limite), trocaDias: cfg.trocaDias, valem: cfg.modo !== "desligado", trocaAte: conta.trocaAte, termos, baixar: cfg.baixarComprovante || g.u.admin });
 }

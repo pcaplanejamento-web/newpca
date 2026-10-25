@@ -159,3 +159,23 @@ export async function alertarAparelhoCopiado(req: Request, u: Pessoa, aparelho: 
     console.error("[seguranca] alerta de aparelho copiado falhou:", (e as Error).message);
   }
 }
+
+/** O aparelho foi nomeado PROVAVELMENTE numa janela anônima (indício pela cota do navegador) → aviso aos ADMs. */
+export async function alertarAparelhoAnonimo(req: Request, u: Pessoa, aparelho: string): Promise<void> {
+  try {
+    const nav = resumoNavegador(req.headers.get("user-agent"));
+    const ip = req.headers.get("cf-connecting-ip") ?? "desconhecido";
+    await notificar(
+      (await idsDosAdmins()).map((usuarioId) => ({
+        usuarioId,
+        tipo: "seguranca" as const,
+        titulo: `Aparelho possivelmente em janela anônima: ${u.nome}`,
+        texto: `O aparelho "${aparelho}" foi nomeado em ${nav} (IP ${ip}) com sinais de janela anônima — ao fechá-la, o aparelho deixa de ser reconhecido e outro será pedido.`,
+        link: "/painel/usuarios",
+        chave: `aparelho-anonimo:${u.id}:${Math.floor(Date.now() / 3_600_000)}`,
+      })),
+    );
+  } catch (e) {
+    console.error("[seguranca] alerta de aparelho anônimo falhou:", (e as Error).message);
+  }
+}
