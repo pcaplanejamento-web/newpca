@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { type ActiveDotProps, Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { type ActiveDotProps, Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { brl } from "@/lib/format";
 import { semMovimento } from "../useContagem";
 import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
@@ -12,6 +12,13 @@ export type SerieTemporalDef = { chave: string; rotulo: string; cor: number };
 export type PontoTemporal = { chave: string; rotulo: string; titulo: string; atual?: boolean; valores: Record<string, number> };
 /** Uma linha a mais na dica de um ponto: rótulo, valor e o bloco (as linhas de mesma `secao` ficam juntas, sob o título). */
 export type LinhaDica = { rotulo: string; valor: string; secao?: string };
+
+/** O maior valor de todas as séries nos dados (a folga da escala ajustada). */
+function dataMax(dados: Record<string, number | string>[], series: readonly SerieTemporalDef[]): number {
+  let m = 0;
+  for (const d of dados) for (const s of series) m = Math.max(m, Number(d[s.chave]) || 0);
+  return m;
+}
 
 /** A transição entre recortes (filtro, período, granularidade): curta e suave, sem redesenhar do zero. */
 const ANIMACAO_MS = 450;
@@ -31,6 +38,7 @@ export function SerieTemporal({
   extraDica,
   altura = 320,
   ariaLabel,
+  ajustarY = false,
 }: {
   pontos: PontoTemporal[];
   series: readonly SerieTemporalDef[];
@@ -39,12 +47,16 @@ export function SerieTemporal({
   extraDica?: (p: PontoTemporal) => LinhaDica[];
   altura?: number;
   ariaLabel: string;
+  /** A escala vertical começa perto do MENOR valor à vista (não no zero) — no zoom do acumulado, para a variação aparecer. */
+  ajustarY?: boolean;
 }) {
   const tk = useChartTokens();
   // O id do degradê só com letras e números (o do React traz símbolos que o `url(#…)` do SVG não aceita).
   const id = `serie${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [estreita, setEstreita] = useState(false);
   const [animar, setAnimar] = useState(false);
+  // O retorno do clique: um anel que se expande SÓ em volta do ponto tocado (nunca um contorno no gráfico inteiro).
+  const [pulso, setPulso] = useState<{ chave: string; n: number } | null>(null);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
     const ver = () => setEstreita(mq.matches);
@@ -62,7 +74,7 @@ export function SerieTemporal({
   const atual = pontos.find((p) => p.atual);
 
   return (
-    <figure aria-label={ariaLabel} className="m-0" style={{ height: estreita ? Math.min(altura, 240) : altura }}>
+    <figure aria-label={ariaLabel} className="m-0 [&_*:focus]:outline-none [&_svg]:outline-none" style={{ height: estreita ? Math.min(altura, 240) : altura }}>
       <ResponsiveContainer>
         <AreaChart
           data={dados}
@@ -77,6 +89,10 @@ export function SerieTemporal({
               </linearGradient>
             ))}
           </defs>
+          <YAxis
+            hide
+            domain={ajustarY ? [(min: number) => Math.max(0, min - (dataMax(dados, series) - min) * 0.12), "auto"] : [0, "auto"]}
+          />
           <CartesianGrid stroke={tk.grid} strokeOpacity={0.6} horizontal={false} />
           <XAxis
             dataKey="chave"
@@ -140,8 +156,28 @@ export function SerieTemporal({
                   <g
                     key={`${s.chave}-${d.index}`}
                     className={p ? "cursor-pointer" : undefined}
-                    onClick={p ? () => onEscolher?.(p) : undefined}
+                    onClick={
+                      p
+                        ? () => {
+                            setPulso((x) => ({ chave: p.chave, n: (x?.n ?? 0) + 1 }));
+                            onEscolher?.(p);
+                          }
+                        : undefined
+                    }
                   >
+                    {p && pulso?.chave === p.chave && (
+                      <circle
+                        key={pulso.n}
+                        cx={d.cx}
+                        cy={d.cy}
+                        r={5}
+                        fill="none"
+                        stroke={tk.serie[s.cor]}
+                        strokeWidth={2}
+                        className="pulso-ponto"
+                        onAnimationEnd={() => setPulso(null)}
+                      />
+                    )}
                     {/* A área de toque do ponto (invisível, maior que o desenho). */}
                     {p && <circle cx={d.cx} cy={d.cy} r={14} fill="transparent" />}
                     <circle cx={d.cx} cy={d.cy} r={p ? 5 : 4} stroke={tk.fundo} strokeWidth={2} fill={tk.serie[s.cor]} />

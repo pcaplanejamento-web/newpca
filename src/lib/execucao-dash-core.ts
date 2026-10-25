@@ -618,7 +618,15 @@ function extremos(b: BaseExec, s: Selecao): [number, number] | null {
  * pedida ("auto" = a de `baldesData`). Dia/semana com mais de `MAX_BALDES` baldes sobe para mês. O último acumulado = os
  * totais menos os registros sem data (invariante testado).
  */
-export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran: Granularidade, hoje: string): Serie {
+export function serie(
+  b: BaseExec,
+  calc: Calculo,
+  intervalo: IntervaloExec,
+  gran: Granularidade,
+  hoje: string,
+  /** O ZOOM: os acumulados começam com o que veio de `acumularDesde` até antes do 1º balde (a janela continua o período). */
+  opc: { acumularDesde?: string | null } = {},
+): Serie {
   const ext = extremos(b, calc.sel);
   const de = intervalo.de ?? (ext ? isoDoDia(ext[0]) : null);
   // O período que passa de hoje (o ano atual, o mês atual) vai só ATÉ HOJE — o futuro não tem execução; um registro com
@@ -665,6 +673,14 @@ export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran
   let ae = 0;
   let al = 0;
   let ap = 0;
+  const desde = diaDoIso(opc.acumularDesde ?? null);
+  const antes = diaDoIso(baldes[0]?.de ?? null);
+  if (desde != null && antes != null && desde < antes) {
+    const cedo = (d: number) => d !== SEM_DIA && d >= desde && d < antes;
+    for (const i of calc.sel.emp) if (cedo(b.emp.dia[i])) ae += b.emp.bruto[i] - b.emp.anulado[i];
+    for (const k of calc.sel.liq) if (cedo(b.liq.dia[k])) al += b.liq.valor[k] - b.liq.anulado[k];
+    for (const k of calc.sel.pag) if (cedo(b.pag.dia[k])) ap += b.pag.pago[k];
+  }
   const pontos = baldes.map((x, i) => {
     ae += em[i];
     al += lq[i];
@@ -672,6 +688,39 @@ export function serie(b: BaseExec, calc: Calculo, intervalo: IntervaloExec, gran
     return { chave: x.chave, rotulo: x.rotulo, titulo: x.titulo, de: x.de, ate: x.ate, atual: x.atual, empenhado: em[i], liquidado: lq[i], pago: pg[i], acEmpenhado: ae, acLiquidado: al, acPago: ap, qEmp: qe[i], qLiq: ql[i], qPag: qp[i] };
   });
   return { granularidade, pontos, de, ate };
+}
+
+/** O menor zoom: a janela não fica com menos dias que isto. */
+export const MIN_DIAS_ZOOM = 7;
+
+/**
+ * O ZOOM do gráfico como uma JANELA DE DATAS dentro do período (`todo`): `fator` < 1 aproxima (menos dias, em volta do
+ * centro da janela atual — a série é refeita nela, com a granularidade dela: um ano em meses vira semanas e depois dias),
+ * > 1 afasta. Cobrir o período inteiro = null (sem zoom). Puro e testado.
+ */
+export function zoomJanela(atual: { de: string; ate: string } | null, todo: { de: string; ate: string }, fator: number): { de: string; ate: string } | null {
+  const t0 = diaDoIso(todo.de);
+  const t1 = diaDoIso(todo.ate);
+  if (t0 == null || t1 == null || t1 < t0) return null;
+  const a0 = Math.max(t0, diaDoIso(atual?.de) ?? t0);
+  const a1 = Math.min(t1, diaDoIso(atual?.ate) ?? t1);
+  const total = t1 - t0 + 1;
+  const larg = Math.max(Math.min(MIN_DIAS_ZOOM, total), Math.round((a1 - a0 + 1) * fator));
+  if (larg >= total) return null;
+  const ini = Math.max(t0, Math.min(t1 - larg + 1, Math.round((a0 + a1) / 2 - (larg - 1) / 2)));
+  return { de: isoDoDia(ini), ate: isoDoDia(ini + larg - 1) };
+}
+
+/** Anda com a janela do zoom meia largura para trás (−1) ou para a frente (+1), sem sair do período. */
+export function deslocarJanela(atual: { de: string; ate: string }, todo: { de: string; ate: string }, sentido: -1 | 1): { de: string; ate: string } {
+  const t0 = diaDoIso(todo.de);
+  const t1 = diaDoIso(todo.ate);
+  const a0 = diaDoIso(atual.de);
+  const a1 = diaDoIso(atual.ate);
+  if (t0 == null || t1 == null || a0 == null || a1 == null) return atual;
+  const larg = a1 - a0 + 1;
+  const ini = Math.max(t0, Math.min(t1 - larg + 1, a0 + sentido * Math.max(1, Math.round(larg / 2))));
+  return { de: isoDoDia(ini), ate: isoDoDia(ini + larg - 1) };
 }
 
 /** Os índices selecionados que caem em [de, ate] (a ORIGEM de um ponto da série — a soma é o ponto). */

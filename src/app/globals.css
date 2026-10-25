@@ -1309,3 +1309,32 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
 [data-motion="reduced"] :is(.seta-termo-onda, .seta-termo-icone) { animation: none; }
 [data-motion="off"] .seta-termo-onda,
 [data-motion="reduced"] .seta-termo-onda { opacity: 0; }
+
+/* O retorno do clique num ponto do gráfico (SerieTemporal): um anel que se expande e some, só em volta do ponto. */
+.pulso-ponto {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulso-ponto 0.45s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes pulso-ponto {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulso-ponto {
+    animation: none;
+    opacity: 0;
+  }
+}
+[data-motion="off"] .pulso-ponto,
+[data-motion="reduced"] .pulso-ponto {
+  animation: none;
+  opacity: 0;
+}

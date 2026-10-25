@@ -1,8 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Callout } from "./Callout";
-import { IconDatabase } from "./icons";
+import { Avisos } from "./Avisos";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
 
@@ -10,8 +9,8 @@ export type ResumoOrigem = { label: string; value: ReactNode; hint?: string };
 
 /**
  * ORIGEM DOS DADOS — o banner padrão de "de onde vem este número": o que foi clicado (linha de tabela, fatia ou
- * barra de gráfico) em `StatMini`s, a FONTE num `Callout` e, no corpo, as linhas que formam o número (a tabela do
- * próprio sistema). Usado no Orçamento do PCA, nos gráficos do Dashboard e nas métricas das Integrações.
+ * barra de gráfico) em `StatMini`s e, no corpo, as linhas que formam o número (a tabela do próprio sistema). A FONTE e as
+ * observações ficam no (!) do cabeçalho (`Avisos`) — nada de faixas que empurram a tabela. Usado no Orçamento do PCA, nos gráficos do Dashboard e nas métricas das Integrações.
  */
 export function OrigemDados({
   aberto,
@@ -42,6 +41,15 @@ export function OrigemDados({
       onClose={onClose}
       titulo={`Origem dos dados — ${titulo}`}
       size="xl"
+      acoesCabecalho={
+        <Avisos
+          titulo="Sobre estes dados"
+          avisos={[
+            { id: "fonte", tom: "info" as const, texto: fonte },
+            ...(avisos ?? []).filter(Boolean).map((a, i) => ({ id: `aviso-${i}`, tom: "warn" as const, texto: a })),
+          ]}
+        />
+      }
       cabecalho={
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted">Origem dos dados · {titulo}</p>
@@ -52,19 +60,11 @@ export function OrigemDados({
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
           {resumo.map((r) => (
             <StatMini key={r.label} label={r.label} value={r.value} hint={r.hint} />
           ))}
         </div>
-        <Callout kind="info" icon={<IconDatabase className="h-4 w-4" />}>
-          {fonte}
-        </Callout>
-        {avisos?.filter(Boolean).map((a, i) => (
-          <Callout key={i} kind="warn">
-            {a}
-          </Callout>
-        ))}
         {children}
       </div>
     </Modal>

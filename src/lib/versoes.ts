@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.225.0",
+    data: "2026-10-25",
+    titulo: "Execução: zoom por datas, clique só no ponto e a fonte da origem no (!)",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "O zoom pela lupa agora muda o PERÍODO à vista: aproximar refaz o gráfico numa janela menor de datas com mais detalhe (um ano em meses vira semanas e depois dias, até 7 dias), com setas para andar no tempo e as datas da janela ao lado; no acumulado, o valor continua o do início do período e a escala se ajusta para a variação aparecer.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "Clicar no gráfico não desenha mais um contorno em volta dele: o retorno do clique é um anel que se expande só em volta do ponto tocado.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Origem dos dados", texto: "A fonte dos dados e as observações da janela “Origem dos dados” saíram da faixa azul e ficam no (!) do cabeçalho — em todas as telas que a usam.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.224.1",
     data: "2026-10-25",
     titulo: "Execução: o ano atual vai até hoje no gráfico",

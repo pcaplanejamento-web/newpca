@@ -23,6 +23,8 @@ import {
   reais,
   ROTULO_SEM_EMPENHO,
   selecaoNoIntervalo,
+  deslocarJanela,
+  zoomJanela,
   serie,
   sparks,
 } from "../src/lib/execucao-dash-core.ts";
@@ -175,6 +177,23 @@ test("execução (núcleo): a série fecha com os totais; a origem de um ponto =
     assert.equal(ano.pontos.at(-1)?.atual, true);
     assert.equal(serie(base, c, { de: "2025-01-01", ate: "2025-12-31" }, "mes", "2026-03-01").ate, "2025-12-31");
     assert.equal(serie(base, c, { de: "2030-01-01", ate: "2030-12-31" }, "mes", "2025-06-15").ate, "2030-12-31");
+  }
+  {
+    // ZOOM = janela de datas: a série é refeita nela (outra granularidade) e o acumulado continua o do período.
+    const todo = serie(base, c, { de: "2025-01-01", ate: "2025-12-31" }, "auto", "2026-03-01");
+    const jan = zoomJanela(null, { de: "2025-01-01", ate: "2025-12-31" }, 0.1);
+    assert.ok(jan);
+    assert.equal(jan.ate.localeCompare(jan.de) > 0, true);
+    const z = serie(base, c, jan, "auto", "2026-03-01", { acumularDesde: todo.pontos[0].de });
+    assert.equal(z.granularidade, "semana");
+    const fim = z.pontos.at(-1);
+    const ac = selecaoNoIntervalo(base, c.sel, todo.pontos[0].de, fim?.ate ?? "");
+    assert.equal(ac.pag.reduce((x, k) => x + base.pag.pago[k], 0), fim?.acPago, "o acumulado do zoom = desde o início do período");
+    assert.equal(zoomJanela(jan, { de: "2025-01-01", ate: "2025-12-31" }, 100), null, "afastar tudo = sem zoom");
+    const dez = zoomJanela({ de: "2025-12-25", ate: "2025-12-31" }, { de: "2025-01-01", ate: "2025-12-31" }, 0.1);
+    assert.deepEqual(dez, { de: "2025-12-25", ate: "2025-12-31" }, "o menor zoom = 7 dias");
+    assert.deepEqual(deslocarJanela({ de: "2025-12-20", ate: "2025-12-29" }, { de: "2025-01-01", ate: "2025-12-31" }, 1), { de: "2025-12-22", ate: "2025-12-31" });
+    assert.deepEqual(deslocarJanela({ de: "2025-01-03", ate: "2025-01-12" }, { de: "2025-01-01", ate: "2025-12-31" }, -1), { de: "2025-01-01", ate: "2025-01-10" });
   }
   assert.equal(serie(base, c, { de: "2025-03-01", ate: "2025-03-31" }, "auto", "2025-12-31").granularidade, "dia");
 });

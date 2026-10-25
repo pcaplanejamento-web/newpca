@@ -30,6 +30,10 @@ import {
   rotuloOpcao,
   type Selecao,
   selecaoNoIntervalo,
+  deslocarJanela,
+  diaDoIso,
+  MIN_DIAS_ZOOM,
+  zoomJanela,
   type TipoFiltroExec,
   serie,
   sparks,
@@ -48,7 +52,7 @@ import { type Column, DataTable, FiltrosAtivos } from "./DataTable";
 import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
+import { IconChevronDown, IconChevronLeft, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { duracaoMotionMs } from "./Modal";
 import { OrigemDados } from "./OrigemDados";
@@ -158,7 +162,18 @@ export function DashboardExecucao({
   const t = calc.totais;
   const d = derivados(t);
   const sp = useMemo(() => sparks(base, calc.sel, hoje), [base, calc.sel, hoje]);
-  const s = useMemo(() => serie(base, calc, intervalo, gran, hoje), [base, calc, intervalo, gran, hoje]);
+  // O gráfico do PERÍODO inteiro (a base do zoom, da origem acumulada e da parte alcançada).
+  const sTodo = useMemo(() => serie(base, calc, intervalo, gran, hoje), [base, calc, intervalo, gran, hoje]);
+  // ZOOM pela lupa = uma JANELA DE DATAS do período: a série é refeita nela, na granularidade dela (um ano em meses vira
+  // semanas e depois dias), com os acumulados continuando do início do período. Outro período volta ao todo.
+  const [janela, setJanela] = useState<{ de: string; ate: string } | null>(null);
+  const todo = sTodo.de && sTodo.ate ? { de: sTodo.de, ate: sTodo.ate } : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: o zoom volta ao todo quando o período do gráfico muda.
+  useEffect(() => setJanela(null), [sTodo.de, sTodo.ate]);
+  const s = useMemo(
+    () => (janela ? serie(base, calc, janela, "auto", hoje, { acumularDesde: sTodo.pontos[0]?.de }) : sTodo),
+    [janela, base, calc, hoje, sTodo],
+  );
   const conf = useMemo(() => confianca(base.meta, base.fontes, Date.now()), [base.meta, base.fontes]);
   const temLiq = base.fontes.liquidacoes;
   const temPag = base.fontes.pagamentos;
@@ -224,20 +239,8 @@ export function DashboardExecucao({
       })),
     [s.pontos, modo],
   );
-  // ZOOM pela lupa: a faixa de baldes à vista (null = o período inteiro); outro recorte volta ao todo.
-  const [faixa, setFaixa] = useState<[number, number] | null>(null);
-  const assinatura = pontos.length ? `${pontos[0].chave}|${pontos.at(-1)?.chave}|${pontos.length}` : "";
-  // biome-ignore lint/correctness/useExhaustiveDependencies: o zoom volta ao todo quando os baldes mudam.
-  useEffect(() => setFaixa(null), [assinatura]);
-  const pontosVistos = useMemo(() => (faixa ? pontos.slice(faixa[0], faixa[1] + 1) : pontos), [pontos, faixa]);
-  const zoom = (fator: number) => {
-    const total = pontos.length;
-    const [ini, fim] = faixa ?? [0, total - 1];
-    const larg = Math.max(4, Math.round((fim - ini + 1) * fator));
-    if (larg >= total) return setFaixa(null);
-    const a = Math.max(0, Math.min(total - larg, Math.round((ini + fim) / 2 - larg / 2)));
-    setFaixa([a, a + larg - 1]);
-  };
+  const zoom = (fator: number) => todo && setJanela((j) => zoomJanela(j, todo, fator));
+  const diasJanela = janela ? (diaDoIso(janela.ate) ?? 0) - (diaDoIso(janela.de) ?? 0) + 1 : Number.POSITIVE_INFINITY;
   const seriesVistas = useMemo(() => SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true)), [temLiq, temPag]);
   const rotuloGran = { dia: "dia", semana: "semana", mes: "mês", ano: "ano" }[s.granularidade];
 
@@ -264,7 +267,7 @@ export function DashboardExecucao({
   /** A origem de um ponto: o balde e o acumulado desde o início do gráfico até ele (o que o gráfico acumulado mostra). */
   const abrirPonto = (chave: string) => {
     const pt = pontoPorChave.get(chave);
-    const inicio = s.pontos[0]?.de;
+    const inicio = sTodo.pontos[0]?.de;
     if (!pt || !inicio) return;
     setOrigem({
       titulo: modo === "acumulado" ? "Evolução acumulada" : `Valores por ${rotuloGran}`,
@@ -447,15 +450,26 @@ export function DashboardExecucao({
           />
           {!verDados && (
             <>
-              <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos períodos à vista)" disabled={pontosVistos.length <= 4} onClick={() => zoom(0.5)}>
+              <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
                 <IconZoom className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="icon" aria-label="Afastar" title="Afastar (mais períodos à vista)" disabled={!faixa} onClick={() => zoom(2)}>
+              <Button size="sm" variant="icon" aria-label="Afastar" title="Afastar (mais dias à vista)" disabled={!janela} onClick={() => zoom(2)}>
                 <IconZoomOut className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="icon" aria-label="Restaurar o zoom" title="Restaurar o zoom (o período inteiro)" disabled={!faixa} onClick={() => setFaixa(null)}>
+              <Button size="sm" variant="icon" aria-label="Restaurar o zoom" title="Restaurar o zoom (o período inteiro)" disabled={!janela} onClick={() => setJanela(null)}>
                 <IconRestaurar className="h-4 w-4" />
               </Button>
+              {janela && todo && (
+                <span className="inline-flex items-center gap-0.5 rounded-control bg-accent-soft/60 pl-0.5 pr-2 text-[12px] font-medium text-accent">
+                  <Button size="sm" variant="icon" aria-label="Voltar no tempo" title="Voltar no tempo" disabled={janela.de <= todo.de} onClick={() => setJanela(deslocarJanela(janela, todo, -1))}>
+                    <IconChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="icon" aria-label="Avançar no tempo" title="Avançar no tempo" disabled={janela.ate >= todo.ate} onClick={() => setJanela(deslocarJanela(janela, todo, 1))}>
+                    <IconChevronRight className="h-4 w-4" />
+                  </Button>
+                  <span className="tabular-nums" aria-live="polite">{textoIntervalo(janela)}</span>
+                </span>
+              )}
             </>
           )}
           <Button
@@ -505,13 +519,14 @@ export function DashboardExecucao({
           />
         ) : (
           <SerieTemporal
-            pontos={pontosVistos}
+            pontos={pontos}
+            ajustarY={!!janela && modo === "acumulado"}
             series={seriesVistas}
             ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
             onEscolher={(p) => abrirPonto(p.chave)}
             extraDica={(p) => {
               const pt = pontoPorChave.get(p.chave);
-              return pt ? dicaDoPonto(pt, modo, rotuloGran, s.pontos.at(-1), temLiq, temPag) : [];
+              return pt ? dicaDoPonto(pt, modo, rotuloGran, sTodo.pontos.at(-1), temLiq, temPag) : [];
             }}
           />
         )}
