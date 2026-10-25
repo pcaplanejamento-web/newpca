@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.223.1",
+    data: "2026-10-25",
+    titulo: "Execução: controles do gráfico no canto superior esquerdo",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "Os controles do gráfico (Acumulado | Por período, o agrupamento, o zoom pela lupa e a tabela dos dados) ficam alinhados no canto superior esquerdo do cartão; os filtros ligados, os avisos (!) e a ajuda (?) seguem à direita.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.223.0",
     data: "2026-10-25",
     titulo: "Execução reorganizada: indicadores, filtros, demonstrativo e avisos no (!)",

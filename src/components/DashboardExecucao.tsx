@@ -382,7 +382,9 @@ export function DashboardExecucao({
 
       {/* O gráfico: só as ondas (as cores = as dos indicadores; os nomes e valores na dica); os controles dele no próprio cartão. */}
       <ChartCard>
-        <div className="mb-2 flex flex-wrap items-center justify-end gap-1.5">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {/* Os controles do gráfico no canto superior esquerdo; o funil, os avisos e a ajuda à direita. */}
+          <div className="flex flex-wrap items-center gap-1.5">
           <Segmented<"diario" | "acumulado">
             value={modo}
             onChange={setModo}
@@ -426,7 +428,8 @@ export function DashboardExecucao({
           >
             <IconLayers className="h-4 w-4" />
           </Button>
-          <span aria-hidden className="mx-0.5 h-5 w-px bg-border" />
+          </div>
+          <div className="ml-auto flex items-center gap-1.5">
           {/* O resumo dos filtros ligados: o MESMO funil das tabelas (✕ tira um; "Limpar" volta tudo ao padrão). O lugar dele
               fica reservado: aparecer ou sumir não desloca os botões ao lado. */}
           <span className="inline-flex h-11 w-11 shrink-0 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
@@ -448,6 +451,7 @@ export function DashboardExecucao({
           </span>
           <Avisos titulo="Avisos dos dados" avisos={avisos} />
           <AjudaExecucao />
+          </div>
         </div>
         {verDados ? (
           <DataTable
