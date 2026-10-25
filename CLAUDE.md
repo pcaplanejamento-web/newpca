@@ -4729,7 +4729,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       número em OUTRO card com outro destino (`consultaConflitosEntreCards`, `empenho-cards-sql.ts`).
     - **Execução no empenho:** `GET /api/empenhos/[id]` devolve `execucao` (`execucaoDoEmpenho`, `empenhos-tela.ts`: as
       liquidações e os pagamentos vigentes pelo número, de qualquer card/ano, sem repetir a chave; cada lista só com Visualizar
-      na tela dela — `podeTela`) → `EmpenhoDetalhe` (bloco Execução: duas `DataTable` + `LinhaConferencia`). Núcleo puro
+      na tela dela — `podeTela`) → `EmpenhoDetalhe` (bloco Execução: duas `DataTable` + `LinhaConferencia`; v1.219.0: tocar numa
+      linha — `onAbrir`/`ativo`, `AbertoExecucao` — abre no `Modal.lateral` da `EmpenhosTabela` o **`DetalheDaExecucao`**, que lê
+      `GET /api/empenhos/cards/[cardId]/liquidacoes|pagamentos/[id]` e mostra os MESMOS `LiquidacaoDetalhe`/`PagamentoDetalhe`
+      das abas do card; trocar de empenho fecha o painel). Núcleo puro
       **`execucao-empenho-core.ts`** (testado): `conferirExecucao` (liquidado = Σ (valor − anulado); pago = Σ valor bruto das
       ordens NÃO anuladas — medido em 2025), `liquidacaoProvavel` (mesmo valor, na ordem das datas, nunca depois do pagamento;
       só mostrada), `semRepetir`, `LIMITE_EXECUCAO`=300.

@@ -1,12 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
 import type { EmpenhoNaTela } from "@/lib/empenhos-tela-core";
-import { type ConferenciaValor, conferirExecucao, type ExecucaoEmpenho, type LiquidacaoDoEmpenho, liquidacaoProvavel, type PagamentoDoEmpenho } from "@/lib/execucao-empenho-core";
+import {
+  type AbertoExecucao,
+  type ConferenciaValor,
+  conferirExecucao,
+  type ExecucaoEmpenho,
+  type LiquidacaoDoEmpenho,
+  liquidacaoProvavel,
+  type PagamentoDoEmpenho,
+} from "@/lib/execucao-empenho-core";
+import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
+import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
 import { Badge } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
+import { LiquidacaoDetalhe } from "./LiquidacaoDetalhe";
+import { PagamentoDetalhe } from "./PagamentoDetalhe";
 import { Skeleton } from "./Skeleton";
 import { StatMini } from "./StatMini";
 
@@ -14,9 +26,22 @@ import { StatMini } from "./StatMini";
  * Corpo de um `Modal`: UM empenho da Centi, SÓ LEITURA (os empenhos vêm da Centi — nada se edita na tela). O que a tabela
  * já tem aparece na hora (`empenho`); o histórico e o registro da importação chegam depois (`completo`; `undefined` =
  * carregando, `null` = não carregou). Espelha o `OrcamentoItemDetalhe`. A EXECUÇÃO (`execucao`, junto do registro) lista as
- * liquidações e os pagamentos do empenho e confere as somas com o liquidado e o pago que a Centi informa.
+ * liquidações e os pagamentos do empenho e confere as somas com o liquidado e o pago que a Centi informa; tocar numa linha
+ * (`onAbrir`) abre o detalhe dela no painel ao lado (`DetalheDaExecucao`), a linha `ativo` fica marcada.
  */
-export function EmpenhoDetalhe({ empenho, completo, execucao }: { empenho: EmpenhoNaTela; completo?: EmpenhoCompleto | null; execucao?: ExecucaoEmpenho | null }) {
+export function EmpenhoDetalhe({
+  empenho,
+  completo,
+  execucao,
+  onAbrir,
+  ativo,
+}: {
+  empenho: EmpenhoNaTela;
+  completo?: EmpenhoCompleto | null;
+  execucao?: ExecucaoEmpenho | null;
+  onAbrir?: (a: AbertoExecucao) => void;
+  ativo?: AbertoExecucao | null;
+}) {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
@@ -54,7 +79,7 @@ export function EmpenhoDetalhe({ empenho, completo, execucao }: { empenho: Empen
       {completo === undefined ? (
         <Skeleton className="h-24 w-full" />
       ) : (
-        execucao && (execucao.liquidacoes || execucao.pagamentos) && <Execucao empenho={empenho} execucao={execucao} />
+        execucao && (execucao.liquidacoes || execucao.pagamentos) && <Execucao empenho={empenho} execucao={execucao} onAbrir={onAbrir} ativo={ativo} />
       )}
 
       <div className="rounded-card border border-border p-[var(--pad-card)]">
@@ -93,7 +118,17 @@ const COLUNAS_LIQ: Column<LiquidacaoDoEmpenho>[] = [
 ];
 
 /** As liquidações e os pagamentos do empenho, com a conferência das somas (só as listas que a pessoa vê). */
-function Execucao({ empenho, execucao }: { empenho: EmpenhoNaTela; execucao: ExecucaoEmpenho }) {
+function Execucao({
+  empenho,
+  execucao,
+  onAbrir,
+  ativo,
+}: {
+  empenho: EmpenhoNaTela;
+  execucao: ExecucaoEmpenho;
+  onAbrir?: (a: AbertoExecucao) => void;
+  ativo?: AbertoExecucao | null;
+}) {
   const conf = conferirExecucao(empenho, execucao);
   const provavel = useMemo(() => liquidacaoProvavel(execucao.liquidacoes ?? [], execucao.pagamentos ?? []), [execucao]);
   const colunasPag = useMemo<Column<PagamentoDoEmpenho>[]>(
@@ -137,6 +172,8 @@ function Execucao({ empenho, execucao }: { empenho: EmpenhoNaTela; execucao: Exe
           rows={execucao.liquidacoes}
           getKey={(l) => l.id}
           density="compact"
+          onRowClick={onAbrir ? (item) => onAbrir({ tipo: "liquidacao", item }) : undefined}
+          activeKey={ativo?.tipo === "liquidacao" ? ativo.item.id : null}
           exportar={{ nome: `Empenho ${empenho.numero} - liquidações` }}
           resumo={(l) => `${num(l.length)} ${l.length === 1 ? "liquidação" : "liquidações"} · ${brl(l.reduce((t, x) => t + x.valor - x.valorAnulado, 0))}`}
         />
@@ -148,11 +185,66 @@ function Execucao({ empenho, execucao }: { empenho: EmpenhoNaTela; execucao: Exe
           rows={execucao.pagamentos}
           getKey={(p) => p.id}
           density="compact"
+          onRowClick={onAbrir ? (item) => onAbrir({ tipo: "pagamento", item }) : undefined}
+          activeKey={ativo?.tipo === "pagamento" ? ativo.item.id : null}
           exportar={{ nome: `Empenho ${empenho.numero} - pagamentos` }}
           resumo={(l) => `${num(l.length)} ${l.length === 1 ? "pagamento" : "pagamentos"} · ${brl(l.reduce((t, x) => t + (x.anulado ? 0 : x.valor), 0))}`}
         />
       )}
     </div>
+  );
+}
+
+/** O título do painel ao lado do empenho. */
+export const tituloDaExecucao = (a: AbertoExecucao) => (a.tipo === "liquidacao" ? `Liquidação ${a.item.numero ?? a.item.id}` : `Ordem de pagamento ${a.item.id}`);
+
+/**
+ * O painel ao lado do empenho: a liquidação ou o pagamento aberto na Execução, nos MESMOS `LiquidacaoDetalhe`/
+ * `PagamentoDetalhe` das abas do card. Os valores aparecem na hora (a linha da execução); o credor, o histórico e o registro
+ * chegam pela rota do card em que a linha mora (a guarda da tela do card vale).
+ */
+export function DetalheDaExecucao({ aberto, empenho, anoEmpenho }: { aberto: AbertoExecucao; empenho: EmpenhoNaTela; anoEmpenho: number | null }) {
+  const [completo, setCompleto] = useState<LiquidacaoCompleta | PagamentoCompleto | null | undefined>(undefined);
+  const rota = `/api/empenhos/cards/${aberto.item.cardId}/${aberto.tipo === "liquidacao" ? "liquidacoes" : "pagamentos"}/${aberto.item.id}`;
+  useEffect(() => {
+    let vivo = true;
+    setCompleto(undefined);
+    fetch(rota)
+      .then((r) => r.json() as Promise<{ ok?: boolean; liquidacao?: LiquidacaoCompleta; pagamento?: PagamentoCompleto }>)
+      .then((j) => vivo && setCompleto(j.ok ? (j.liquidacao ?? j.pagamento ?? null) : null))
+      .catch(() => vivo && setCompleto(null));
+    return () => {
+      vivo = false;
+    };
+  }, [rota]);
+  const comum = {
+    data: aberto.item.data,
+    numeroEmpenho: empenho.numero,
+    anoEmpenho,
+    credor: completo?.credor ?? null,
+    cpfCnpj: completo?.cpfCnpj ?? null,
+    historico: completo?.historico ?? null,
+    orgaoCenti: completo?.orgaoCenti ?? "",
+    orgao: completo?.orgao ?? null,
+    unidade: completo?.unidade ?? null,
+  };
+  if (aberto.tipo === "liquidacao") {
+    const l = aberto.item;
+    const c = completo as LiquidacaoCompleta | null | undefined;
+    return (
+      <LiquidacaoDetalhe
+        liquidacao={{ ...comum, numero: l.numero, valor: l.valor, valorAnulado: l.valorAnulado, valorLiquido: l.valorLiquido, valorPago: l.valorPago, saldo: c?.saldo ?? l.valorLiquido - l.valorPago }}
+        completo={c}
+      />
+    );
+  }
+  const p = aberto.item;
+  const c = completo as PagamentoCompleto | null | undefined;
+  return (
+    <PagamentoDetalhe
+      pagamento={{ ...comum, id: p.id, valor: p.valor, valorRetencao: p.valorRetencao, valorLiquido: p.valorLiquido, anulado: p.anulado, motivoAnulacao: c?.motivoAnulacao ?? null }}
+      completo={c}
+    />
   );
 }
 

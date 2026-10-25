@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import type { EmpenhoCompleto } from "@/lib/empenhos-tela";
-import type { ExecucaoEmpenho } from "@/lib/execucao-empenho-core";
+import type { AbertoExecucao, ExecucaoEmpenho } from "@/lib/execucao-empenho-core";
 import {
   type AnoEmpenhos,
   type EmpenhoNaTela,
@@ -26,7 +26,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
-import { EmpenhoDetalhe } from "./EmpenhoDetalhe";
+import { DetalheDaExecucao, EmpenhoDetalhe, tituloDaExecucao } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
 import { SelectField } from "./Field";
@@ -155,6 +155,7 @@ export function EmpenhosTabela({
   const [aberto, setAberto] = useState<EmpenhoNaTela | null>(null);
   const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
   const [execucao, setExecucao] = useState<ExecucaoEmpenho | null>(null);
+  const [lateral, setLateral] = useState<AbertoExecucao | null>(null);
   const [eds, setEds] = useState(edicoes);
   const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
   const pedido = useRef(0);
@@ -202,6 +203,7 @@ export function EmpenhosTabela({
     let vivo = true;
     setCompleto(undefined);
     setExecucao(null);
+    setLateral(null);
     fetch(`/api/empenhos/${aberto.id}`)
       .then((r) => r.json() as Promise<{ ok?: boolean; empenho?: EmpenhoCompleto; execucao?: ExecucaoEmpenho }>)
       .then((j) => {
@@ -302,8 +304,24 @@ export function EmpenhosTabela({
         </>
       )}
 
-      <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Empenho ${aberto.numero}` : "Empenho"} size="lg">
-        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} execucao={execucao} /> : <div />}
+      <Modal
+        open={aberto != null}
+        onClose={() => setAberto(null)}
+        titulo={aberto ? `Empenho ${aberto.numero}` : "Empenho"}
+        size="lg"
+        lateral={{
+          aberto: aberto != null && lateral != null,
+          titulo: lateral ? tituloDaExecucao(lateral) : "Execução",
+          onClose: () => setLateral(null),
+          children:
+            aberto && lateral ? (
+              <DetalheDaExecucao key={`${lateral.tipo}:${lateral.item.id}`} aberto={lateral} empenho={aberto} anoEmpenho={completo?.ano ?? null} />
+            ) : (
+              <div />
+            ),
+        }}
+      >
+        {aberto ? <EmpenhoDetalhe key={aberto.id} empenho={aberto} completo={completo} execucao={execucao} onAbrir={setLateral} ativo={lateral} /> : <div />}
       </Modal>
     </>
   );

@@ -34,6 +34,9 @@ export type PagamentoDoEmpenho = {
 /** O que a tela recebe: `null` = a pessoa não vê aquela tela (o bloco some). */
 export type ExecucaoEmpenho = { liquidacoes: LiquidacaoDoEmpenho[] | null; pagamentos: PagamentoDoEmpenho[] | null; limite: number };
 
+/** A linha da execução aberta no painel ao lado do empenho (a liquidação ou o pagamento). */
+export type AbertoExecucao = { tipo: "liquidacao"; item: LiquidacaoDoEmpenho } | { tipo: "pagamento"; item: PagamentoDoEmpenho };
+
 /** O máximo de liquidações e de pagamentos por empenho na tela (acima, a tela avisa que a lista foi cortada). */
 export const LIMITE_EXECUCAO = 300;
 

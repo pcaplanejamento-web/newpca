@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.219.0",
+    data: "2026-10-25",
+    titulo: "Liquidações e pagamentos abertos de dentro do empenho",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "No detalhe do empenho, tocar numa liquidação ou num pagamento da Execução abre os dados completos dele ao lado (credor, histórico, órgão e o registro da importação), sem sair do empenho.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.218.0",
     data: "2026-10-24",
     titulo: "Execução dentro do empenho, leitura por órgão e sincronia com o cadastro",
