@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.230.0",
+    data: "2026-10-25",
+    titulo: "Seletor de período renovado e conectado",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "O seletor de período ganhou um visual padronizado — o período escolhido no topo com o Limpar em ícone, os atalhos em grade de tamanhos iguais e todas as peças com a mesma altura, borda e curvatura do sistema. Vale em todo lugar: Execução, Dashboard da Mesa e o filtro de datas das tabelas.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "As opções do período ficam ligadas aos dados: escolhido o ano, só os meses com registro (ou até o mês de hoje) podem ser escolhidos, e o intervalo De/Até se limita aos dados existentes; no filtro das tabelas, os meses seguem os demais filtros.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.229.0",
     data: "2026-10-25",
     titulo: "Execução: o gráfico muda como água",

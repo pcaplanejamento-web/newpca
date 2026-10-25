@@ -4008,11 +4008,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `aria-haspopup="dialog"`]; `"listbox"` = a lista de uma `Selecao`; `gatilho` = atributos a mais do botão — teclado, foco, `role`/`aria-*`, `disabled`; `ancora` = o elemento em que o painel se alinha; `folha` = sobe de baixo na largura da tela; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
   conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), **`PeriodoPicker`** (o seletor de período — gatilho no visual do
-  `SelectField compacto` com o prefixo "Período", painel `dialog` com o **`PeriodoCorpo`**: atalhos Todo o período | Hoje | Esta
-  semana | Este mês, o ano, os meses, o intervalo DE/ATÉ e **Limpar** (`onLimpar`) — o MESMO corpo do filtro de datas das
-  tabelas (`DateFilterHeader`, que soma a ordenação e mostra o filtro que vale — o restaurado de uma edição salva aparece no
-  DE/ATÉ); alvos de 44px no toque; aberto pelo teclado, o foco vai à opção marcada
-  e volta ao gatilho ao escolher/Esc; a conversão em datas é pura — `intervaloDoPeriodo`, `src/lib/periodo.ts`),
+  `SelectField compacto` com o prefixo "Período", painel `dialog` de 320px com o **`PeriodoCorpo`** (v1.230.0): o CABEÇALHO
+  (o período escolhido — `rotuloPeriodo` — e o **Limpar em ícone** `IconLimpar`, desabilitado sem período, `onLimpar`), os
+  atalhos Todo o período | Hoje | Esta semana | Este mês em grade 2×2, o ano e os meses em grade de 4 colunas e o intervalo
+  De/Até, seções separadas por divisor; TODA peça = `PECA_PERIODO` (a altura dos controles, `rounded-control`, a borda e o
+  foco do sistema). CONECTADO aos dados: `meses` ("AAAA-MM") → `mesesDisponiveis` (o mês sem dado do ano marcado fica
+  desabilitado com a dica; sem dado no ano — não carregado — até o mês de hoje, nunca o futuro) e `limitesDosMeses` (min/max
+  do De/Até) — as fontes: `facetas.meses` (`aplicarFiltros`, segue os demais filtros da tabela), `mesesComDados` da Mesa
+  (`mesa-metricas.ts`) e da Execução (`execucao-dash-core.ts`); o ano do mês escolhido fica com contorno accent. O MESMO
+  corpo do filtro de datas das tabelas (`DateFilterHeader`, que soma a ordenação nas mesmas peças e mostra o filtro que vale
+  — o restaurado de uma edição salva aparece no DE/ATÉ); alvos de 44px no toque; aberto pelo teclado, o foco vai à opção
+  marcada e volta ao gatilho ao escolher/Esc; a conversão em datas é pura — `intervaloDoPeriodo`, `src/lib/periodo.ts`),
   `MultiSelectHeader`,
   **`Tabs`** (`horizontal` = sublinhado que desliza, faixa com esmaecimento nas bordas | `lateral` = no desktop a lista à esquerda com o fundo que desliza até a ativa; monta SÓ a aba aberta — as visitadas ficam escondidas, guardam o rascunho; o painel ENTRA pelo lado da troca — `animate-aba-direita/esquerda`; `alturaTela` = no desktop no máximo até o fim do display, descontando o respiro dos contornos em volta — a página não rola, o painel rola por dentro e a altura segue o conteúdo; `url` = a aba no parâmetro da URL; `separado` (lateral) = no desktop a lista é um cartão PRÓPRIO com a altura FIXA do display e o conteúdo outro cartão ao lado, com a altura que precisa; teclado ←/→/↑/↓/Home/End com o foco junto; `Tab.dica` = a dica; arrastar o dedo troca, menos em campos/tabelas/faixas que rolam de lado), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única

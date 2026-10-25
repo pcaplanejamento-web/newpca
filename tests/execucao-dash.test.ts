@@ -16,6 +16,7 @@ import {
   empenhoExec,
   isoDoDia,
   liquidacaoExec,
+  mesesComDados,
   montarBase,
   opcoesDim,
   type PacoteExec,
@@ -138,6 +139,11 @@ test("execução (núcleo): os números — cada etapa pela própria data, sem d
   assert.equal(marco.totais.empenhos, 1);
   assert.equal(reais(marco.totais.liquidado), 750);
   assert.equal(marco.semData.empenhos, 0, "com período, o sem data não entra");
+  // Os meses do seletor de período: os dos registros carregados (2025), em ordem, sem o sem data nem o 2024 de restos.
+  const meses = mesesComDados(base);
+  assert.ok(meses.includes("2025-03"));
+  assert.ok(meses.every((m) => m.startsWith("2025-")), meses.join(","));
+  assert.deepEqual(meses, [...new Set(meses)].sort());
 });
 
 test("execução (núcleo): a série fecha com os totais; a origem de um ponto = o ponto; granularidade forçada", async () => {

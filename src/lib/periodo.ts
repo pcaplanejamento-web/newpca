@@ -94,3 +94,30 @@ export function rotuloPeriodo(v: Periodo): string {
   if (anoValido(v.ano)) return String(v.ano);
   return ATALHOS_PERIODO.find((p) => p.k === v.preset)?.l ?? "Todo o período";
 }
+
+/** A chave de um mês ("AAAA-MM") — a lista de meses com dados que cada tela informa ao seletor. */
+export const chaveMes = (ano: number, mes: number): string => `${ano}-${pad(mes)}`;
+
+/**
+ * Os meses do `ano` que o seletor oferece (`true` = escolhível): com `meses` (os que têm dado) e algum deles no ano, só
+ * os que constam; sem a lista, ou sem nenhum mês daquele ano (ainda não carregado), os meses até o de hoje — o futuro
+ * não tem dado (ano passado = todos; ano futuro = nenhum).
+ */
+export function mesesDisponiveis(ano: number, meses?: readonly string[], hoje: string = hojeLocal()): boolean[] {
+  const doAno = meses?.filter((m) => m.startsWith(`${ano}-`));
+  if (doAno?.length) {
+    const s = new Set(doAno);
+    return MESES_PERIODO.map((_, i) => s.has(chaveMes(ano, i + 1)));
+  }
+  const ah = Number(hoje.slice(0, 4));
+  const mh = Number(hoje.slice(5, 7));
+  return MESES_PERIODO.map((_, i) => (Number.isInteger(ah) && ah > 0 ? ano < ah || (ano === ah && i + 1 <= mh) : true));
+}
+
+/** Os limites do intervalo DE/ATÉ pelos meses com dado: do 1º dia do mais antigo ao último dia do mais recente. */
+export function limitesDosMeses(meses?: readonly string[]): { min?: string; max?: string } {
+  const v = (meses ?? []).filter((m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m)).sort();
+  if (!v.length) return {};
+  const [a, m] = v[v.length - 1].split("-").map(Number);
+  return { min: `${v[0]}-01`, max: isoUtc(a, m + 1, 0) };
+}

@@ -4,6 +4,7 @@ import type { DfdPainel, ProtocoloPainel } from "../src/lib/mesa-dashboard.ts";
 import {
   type Atividade,
   anosComDados,
+  mesesComDados,
   baldesData,
   CHAVE_OUTRAS,
   DADOS_METRICAS,
@@ -174,6 +175,10 @@ describe("natureza, período e recorte", () => {
     const velho = P("2024-05-10 12:00:00", { responsavelId: 1 });
     const r = recDe([...PROTOS, velho], DFDS, AT, {}, 1);
     assert.deepEqual(anosComDados(r), [2026, 2024]);
+    const meses = mesesComDados(r);
+    assert.ok(meses.includes("2024-05"));
+    assert.deepEqual(meses, [...meses].sort());
+    assert.ok(meses.every((m) => /^\d{4}-\d{2}$/.test(m)));
   });
 });
 

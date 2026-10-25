@@ -6,10 +6,10 @@ import type { IntervaloData } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { GatilhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
-import { PeriodoCorpo } from "./PeriodoPicker";
+import { PECA_LIVRE, PECA_PERIODO, PeriodoCorpo } from "./PeriodoPicker";
 
 // Filtro de DATA no cabeçalho da tabela. Reutiliza o MESMO componente de período
-// (`PeriodoCorpo`: atalhos + ano + meses + intervalo + Limpar) e acrescenta ordenar. Emite
+// (`PeriodoCorpo`: Limpar + atalhos + ano + meses + intervalo) e acrescenta ordenar, nas MESMAS peças. Emite
 // `{ de, ate }` (ISO) — a tabela filtra por intervalo. Por token; via portal, nunca corta. Escolher/limpar/ordenar
 // fecham e devolvem o foco ao gatilho (o Dropdown cuida).
 
@@ -21,6 +21,7 @@ export function DateFilterHeader({
   sortDir = null,
   align = "start",
   anos,
+  meses,
 }: {
   label: string;
   value?: IntervaloData;
@@ -29,6 +30,8 @@ export function DateFilterHeader({
   sortDir?: "asc" | "desc" | null;
   align?: "start" | "end";
   anos?: number[];
+  /** Os meses ("AAAA-MM") das linhas que passam nos demais filtros — o painel só oferece estes. */
+  meses?: readonly string[];
 }) {
   const ativo = !!(value?.de || value?.ate);
   const [periodo, setPeriodo] = useState<Periodo>(PERIODO_TODO);
@@ -40,8 +43,7 @@ export function DateFilterHeader({
     : escolhido.de === value?.de && escolhido.ate === value?.ate
       ? periodo
       : { preset: "custom", ...(value?.de ? { de: value.de } : {}), ...(value?.ate ? { ate: value.ate } : {}) };
-  const btn =
-    "min-h-11 flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold text-text-2 hover:bg-surface-2 lg:min-h-0";
+  const btn = `${PECA_PERIODO} ${PECA_LIVRE}`;
 
   return (
     <Dropdown
@@ -49,20 +51,20 @@ export function DateFilterHeader({
       ariaLabel={`Filtrar ${label}`}
       papel="dialog"
       triggerClassName="w-full gap-1.5 px-1 py-2"
-      width={300}
+      width={320}
       trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={ativo} />}
     >
       {(close, { teclado }) => (
         <div className="w-full">
           {onSort && (
-            <div className="mb-1 flex gap-2 px-1">
+            <div className="mx-1 mb-2 grid grid-cols-2 gap-1.5 border-b border-border pt-1 pb-3">
               <button
                 type="button"
                 onClick={() => {
                   onSort("asc");
                   close();
                 }}
-                className={`${btn} inline-flex items-center justify-center gap-1`}
+                className={btn}
               >
                 <IconArrowUp className="h-3.5 w-3.5" /> Crescente
               </button>
@@ -72,7 +74,7 @@ export function DateFilterHeader({
                   onSort("desc");
                   close();
                 }}
-                className={`${btn} inline-flex items-center justify-center gap-1`}
+                className={btn}
               >
                 <IconArrowDown className="h-3.5 w-3.5" /> Decrescente
               </button>
@@ -81,6 +83,7 @@ export function DateFilterHeader({
           <PeriodoCorpo
             value={mostrado}
             anos={anos ?? [new Date().getFullYear()]}
+            meses={meses}
             onChange={(p) => {
               setPeriodo(p);
               onApply(intervaloDoPeriodo(p));

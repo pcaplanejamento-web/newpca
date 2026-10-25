@@ -68,6 +68,8 @@ export type ResultadoFiltros = {
   dominios: (number[] | null)[];
   /** Por coluna `date`: anos presentes na faceta (mais recente primeiro). */
   anos: (number[] | null)[];
+  /** Por coluna `date`: os meses ("AAAA-MM") presentes na faceta — o seletor de período só oferece estes. */
+  meses: (string[] | null)[];
 };
 
 /** Texto pt-BR "natural" (números em ordem numérica) — UM `Intl.Collator` reutilizado: `localeCompare`
@@ -92,6 +94,7 @@ export function aplicarFiltros(total: number, cols: ColunaDados[], filtros: (Fil
   const facetaVals: (Set<string> | null)[] = cols.map((c) => (c.tipo === "values" ? new Set<string>() : null));
   const facetaNum: (Set<number> | null)[] = cols.map((c) => (c.tipo === "range" ? new Set<number>() : null));
   const facetaAno: (Set<number> | null)[] = cols.map((c) => (c.tipo === "date" ? new Set<number>() : null));
+  const facetaMes: (Set<string> | null)[] = cols.map((c) => (c.tipo === "date" ? new Set<string>() : null));
   const passam: number[] = [];
 
   for (let i = 0; i < total; i++) {
@@ -116,8 +119,13 @@ export function aplicarFiltros(total: number, cols: ColunaDados[], filtros: (Fil
         const n = c.vals[i];
         if (n != null && !Number.isNaN(n)) (facetaNum[j] as Set<number>).add(n);
       } else if (c.tipo === "date") {
-        const a = c.vals[i]?.slice(0, 4);
-        if (a && /^\d{4}$/.test(a)) (facetaAno[j] as Set<number>).add(Number(a));
+        const v = c.vals[i];
+        const a = v?.slice(0, 4);
+        if (a && /^\d{4}$/.test(a)) {
+          (facetaAno[j] as Set<number>).add(Number(a));
+          const m = v?.slice(0, 7);
+          if (m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m)) (facetaMes[j] as Set<string>).add(m);
+        }
       }
     }
   }
@@ -130,7 +138,8 @@ export function aplicarFiltros(total: number, cols: ColunaDados[], filtros: (Fil
   });
   const dominios = cols.map((c, j) => (c.tipo === "range" ? [...(facetaNum[j] as Set<number>)].sort((a, b) => a - b) : null));
   const anos = cols.map((c, j) => (c.tipo === "date" ? [...(facetaAno[j] as Set<number>)].sort((a, b) => b - a) : null));
-  return { passam, opcoes, dominios, anos };
+  const meses = cols.map((c, j) => (c.tipo === "date" ? [...(facetaMes[j] as Set<string>)].sort() : null));
+  return { passam, opcoes, dominios, anos, meses };
 }
 
 /**

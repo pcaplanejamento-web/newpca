@@ -705,6 +705,7 @@ export function DataTable<R>({
                     label={c.header}
                     value={filters[c.key] as IntervaloData | undefined}
                     anos={facetas.anos[j]?.length ? (facetas.anos[j] as number[]) : undefined}
+                    meses={facetas.meses[j]?.length ? (facetas.meses[j] as string[]) : undefined}
                     onApply={(v) => aplicarFiltro(c.key, v.de || v.ate ? v : null)}
                     onSort={(d) => setSort({ key: c.key, dir: d })}
                     sortDir={sortDe(c.key)}

@@ -186,6 +186,23 @@ export const OPCOES_TIPO: readonly { chave: "ne" | "rp"; rotulo: string }[] = [
   { chave: "rp", rotulo: "Restos a Pagar" },
 ];
 
+/** Os meses ("AAAA-MM") com registro nos anos carregados — empenhos (os dos anos pedidos), liquidações e pagamentos. O
+ * seletor de período só oferece estes; os anos ainda não carregados ficam com a regra "até hoje" do seletor. */
+export function mesesComDados(b: BaseExec): string[] {
+  const s = new Set<string>();
+  const vistos = new Set<number>();
+  const juntar = (d: number) => {
+    // Cada dia é convertido uma vez (milhares de registros caem nos mesmos dias).
+    if (d === SEM_DIA || vistos.has(d)) return;
+    vistos.add(d);
+    s.add(isoDoDia(d).slice(0, 7));
+  };
+  for (let k = 0; k < b.emp.n; k++) if (b.emp.r[k]) juntar(b.emp.dia[k]);
+  for (let k = 0; k < b.liq.n; k++) juntar(b.liq.dia[k]);
+  for (let k = 0; k < b.pag.n; k++) juntar(b.pag.dia[k]);
+  return [...s].sort();
+}
+
 /**
  * Os ANOS a carregar para um intervalo (o Período é o filtro de tempo — os anos seguem ele): os anos com dados que o
  * intervalo cobre, os mais recentes primeiro, até `max`; sem limites = os mais recentes. Nenhum com dados = o mais

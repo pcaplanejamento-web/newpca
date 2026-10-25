@@ -33,8 +33,15 @@ describe("aplicarFiltros — filtros conectados (facetados)", () => {
     assert.deepEqual(r.opcoes[1], ["Item sem valor", "Regular", "Sem prioridade", "Sem tipo"]);
     assert.deepEqual(r.dominios[3], [0, 100, 1500, 2500.5, 90000]); // null fica fora do domínio
     assert.deepEqual(r.anos[2], [2027, 2026, 2025]);
+    assert.deepEqual(r.meses[2], ["2025-12", "2026-01", "2026-05", "2026-07", "2027-02"]);
+    assert.equal(r.meses[0], null);
     assert.equal(r.opcoes[2], null);
     assert.equal(r.dominios[0], null);
+  });
+
+  it("os meses da coluna de data seguem os DEMAIS filtros", () => {
+    const r = aplicarFiltros(6, cols(), [["SMS"]]);
+    assert.deepEqual(r.meses[2], ["2026-01", "2026-05"]);
   });
 
   it("multi-valor: filtrar por um problema OCULTO no +N acha a linha", () => {

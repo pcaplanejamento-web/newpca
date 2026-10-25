@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { intervaloDoPeriodo, noIntervalo, PERIODO_TODO, rotuloPeriodo, textoIntervalo } from "../src/lib/periodo.ts";
+import {
+  chaveMes,
+  intervaloDoPeriodo,
+  limitesDosMeses,
+  mesesDisponiveis,
+  noIntervalo,
+  PERIODO_TODO,
+  rotuloPeriodo,
+  textoIntervalo,
+} from "../src/lib/periodo.ts";
 
 // Hoje = terça-feira 29/09/2026.
 const HOJE = "2026-09-29";
@@ -93,5 +102,24 @@ describe("rótulos do período", () => {
     assert.equal(textoIntervalo({ de: "2026-09-01" }), "desde 01/09/2026");
     assert.equal(textoIntervalo({ ate: "2026-09-30" }), "até 30/09/2026");
     assert.equal(textoIntervalo({}), "");
+  });
+});
+
+describe("meses conectados ao ano", () => {
+  it("com a lista: só os meses com dado daquele ano", () => {
+    const meses = ["2025-01", "2025-07", "2026-03", chaveMes(2026, 9)];
+    const d = mesesDisponiveis(2026, meses, HOJE);
+    assert.deepEqual(d.map((v, i) => (v ? i + 1 : 0)).filter(Boolean), [3, 9]);
+    assert.deepEqual(mesesDisponiveis(2025, meses, HOJE).filter(Boolean).length, 2);
+  });
+  it("sem dado no ano (ou sem lista): até o mês de hoje — o futuro nunca", () => {
+    assert.equal(mesesDisponiveis(2026, undefined, HOJE).filter(Boolean).length, 9);
+    assert.equal(mesesDisponiveis(2024, ["2026-01"], HOJE).filter(Boolean).length, 12);
+    assert.equal(mesesDisponiveis(2027, [], HOJE).filter(Boolean).length, 0);
+  });
+  it("limites do intervalo pelos meses", () => {
+    assert.deepEqual(limitesDosMeses(["2026-02", "2025-11", "lixo"]), { min: "2025-11-01", max: "2026-02-28" });
+    assert.deepEqual(limitesDosMeses([]), {});
+    assert.deepEqual(limitesDosMeses(undefined), {});
   });
 });

@@ -268,6 +268,16 @@ export function recorteMetricas<P extends ProtocoloPainel>(
 const totaisDoProtocolo = (rec: RecorteMetricas<ProtocoloPainel>, id: number): Totais => rec.indice.get(id)?.total ?? SEM_TOTAIS;
 
 /** Os anos com protocolação no foco + o de hoje, do mais novo ao mais antigo — os anos do seletor de período. */
+/** Os meses ("AAAA-MM") com protocolação no recorte — o seletor de período só oferece estes (mesma fonte de `anosComDados`). */
+export function mesesComDados(rec: RecorteMetricas<ProtocoloPainel>): string[] {
+  const s = new Set<string>();
+  for (const p of rec.base) {
+    const d = rec.dia.get(p.id);
+    if (d && /^\d{4}-\d{2}/.test(d)) s.add(d.slice(0, 7));
+  }
+  return [...s].sort();
+}
+
 export function anosComDados(rec: RecorteMetricas<ProtocoloPainel>): number[] {
   const s = new Set<number>([Number(rec.hoje.slice(0, 4))]);
   for (const p of rec.base) {

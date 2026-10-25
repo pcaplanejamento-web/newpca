@@ -9,6 +9,7 @@ import type { FiltroMesa } from "@/lib/mesa-filtros";
 import { METRICAS_TODAS, type MetricasPermitidas } from "@/lib/mesa-visao-core";
 import {
   anosComDados,
+  mesesComDados,
   type Atividade,
   desempenhoPorPessoa,
   diaDoProtocolo,
@@ -147,6 +148,7 @@ export function DashboardMesa({
   const desempenho = useMemo(() => desempenhoPorPessoa(rec), [rec]);
   const resumo = useMemo(() => resumoMetricas(rec), [rec]);
   const anos = useMemo(() => anosComDados(rec), [rec]);
+  const meses = useMemo(() => mesesComDados(rec), [rec]);
   const cores = useMemo<Record<EstadoPainel, string>>(
     () => ({
       regular: estadoProtocoloCor("regular", regras),
@@ -570,6 +572,7 @@ export function DashboardMesa({
         filtro={filtro}
         onFiltro={metricas.onFiltro}
         anos={anos}
+        meses={meses}
         resumo={linhaRecorte}
         aviso={aviso}
         dados={permitido.dados}

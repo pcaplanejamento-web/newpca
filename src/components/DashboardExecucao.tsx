@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { EmpenhoNaTela } from "@/lib/empenhos-tela-core";
 import {
   anosDoIntervalo,
+  mesesComDados,
   type BaseExec,
   type Calculo,
   calcular,
@@ -171,6 +172,8 @@ export function DashboardExecucao({
   const intervalo = useMemo(() => intervaloDoPeriodo(adiado.periodo, hoje), [adiado.periodo, hoje]);
   const calc: Calculo = useMemo(() => calcular(base, intervalo, adiado.filtros, adiado.tipo), [base, intervalo, adiado.filtros, adiado.tipo]);
   // Os ANOS a carregar seguem o Período (o Ano não é um filtro à parte): mudou o que o Período cobre, pede os anos dele.
+  // Os meses que o seletor de período oferece: os com registro nos anos carregados.
+  const meses = useMemo(() => mesesComDados(base), [base]);
   const anosQuer = useMemo(() => anosDoIntervalo(intervaloDoPeriodo(periodo, hoje), base.disponiveis), [periodo, hoje, base.disponiveis]);
   useEffect(() => {
     if (anosQuer.join(",") !== anos.join(",")) onAnos(anosQuer);
@@ -468,7 +471,7 @@ export function DashboardExecucao({
           campos={campos}
           onMudar={mudarFiltro}
           grade
-          antes={<PeriodoPicker value={periodo} anos={base.disponiveis} onChange={setPeriodo} className="w-full min-w-0" />}
+          antes={<PeriodoPicker value={periodo} anos={base.disponiveis} meses={meses} onChange={setPeriodo} className="w-full min-w-0" />}
         />
       </section>
       {erro && <ErroCarga msg={erro} onTentar={onTentar} kind="warn" />}

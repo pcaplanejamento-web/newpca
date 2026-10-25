@@ -18,6 +18,7 @@ export function BarraMetricas({
   filtro,
   onFiltro,
   anos,
+  meses,
   resumo,
   aviso,
   dados,
@@ -28,6 +29,8 @@ export function BarraMetricas({
   onFiltro: (f: FiltroMetricas) => void;
   /** Os anos do seletor de período (os com dados + o atual, do mais novo ao mais antigo). */
   anos: number[];
+  /** Os meses com protocolação ("AAAA-MM") — o seletor de período só oferece estes. */
+  meses?: readonly string[];
   resumo?: ReactNode;
   aviso?: ReactNode;
   /** Os DADOS e as MEDIDAS que o papel permite (os detalhes tiram o que depende de um dado oculto) — sem = todos. */
@@ -42,7 +45,7 @@ export function BarraMetricas({
   return (
     <section aria-label="Filtros das métricas" className="space-y-1.5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
-        {periodo && <PeriodoPicker value={filtro.periodo} anos={anos} onChange={(p) => set({ periodo: p })} className="w-full min-w-0 sm:w-auto" />}
+        {periodo && <PeriodoPicker value={filtro.periodo} anos={anos} meses={meses} onChange={(p) => set({ periodo: p })} className="w-full min-w-0 sm:w-auto" />}
         <div className="col-span-2 row-start-2 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:contents">
           <SelectField compacto label="Dado" value={filtro.dado} onChange={(e) => set({ dado: e.target.value as DadoMetricas })}>
             {opcoesDado.map((d) => (

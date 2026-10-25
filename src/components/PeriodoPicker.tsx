@@ -1,23 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ATALHOS_PERIODO, MESES_PERIODO, PERIODO_TODO, type Periodo, rotuloPeriodo } from "@/lib/periodo";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ATALHOS_PERIODO,
+  intervaloDoPeriodo,
+  limitesDosMeses,
+  MESES_PERIODO,
+  mesesDisponiveis,
+  PERIODO_TODO,
+  type Periodo,
+  rotuloPeriodo,
+} from "@/lib/periodo";
+import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
+import { IconLimpar } from "./icons";
 import { SetaDropdown } from "./SetaDropdown";
 
-// Seletor de período (spec do usuário): atalhos + ano + grade de meses + intervalo (DE/ATÉ) + Limpar. O CORPO
+// Seletor de período (spec do usuário): cabeçalho com Limpar + atalhos + ano + grade de meses + intervalo (DE/ATÉ). O CORPO
 // (`PeriodoCorpo`) é reutilizável — é o MESMO do filtro de datas das tabelas (DateFilterHeader, que soma a ordenação) e
 // do `PeriodoPicker` (sem ordenação). A conversão em datas é pura: `intervaloDoPeriodo` (`@/lib/periodo`).
 
-const campoData =
-  "mt-0.5 h-11 w-full rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]";
+/** A PEÇA padrão do painel (atalho, ano, mês, campo de data e a ordenação do filtro das tabelas): a mesma altura (44px no
+ * toque, a dos controles no desktop), o raio dos controles, a borda e o foco do sistema. */
+export const PECA_PERIODO =
+  "flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-control border px-2 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]";
+export const PECA_LIVRE = "border-border-2 bg-surface text-text-2 hover:bg-surface-2";
+const MARCADA = "border-transparent bg-accent text-white";
+/** O ano do mês escolhido: contorno accent (mostra a qual ano o mês pertence). */
+const CONTEM = "border-accent bg-surface text-accent hover:bg-surface-2";
+const DESLIGADA = "cursor-not-allowed border-border bg-surface-2/40 text-faint";
+const TITULO = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted";
+const campoData = `${PECA_PERIODO} w-full justify-start bg-surface text-text border-border-2 font-normal`;
 
-/** Corpo reutilizável do seletor de período. Os atalhos fecham o painel; ano/mês/intervalo permitem ajuste contínuo.
- * `onLimpar` = o link "Limpar" no pé; `autoFoco` = leva o foco à opção marcada (painel aberto pelo teclado). Alvos de
- * 44px no toque (abaixo do `lg`). Só componentes/tokens do design system. */
+/** Corpo reutilizável do seletor de período: o cabeçalho (o período escolhido + Limpar em ícone), os atalhos, o ano, os
+ * meses do ano e o intervalo — tudo CONECTADO: `meses` ("AAAA-MM", os que têm dado) decide quais meses do ano marcado são
+ * escolhíveis (`mesesDisponiveis`; sem dado no ano, até o mês de hoje) e limita o DE/ATÉ (`limitesDosMeses`). Os atalhos
+ * fecham o painel; ano/mês/intervalo permitem ajuste contínuo. `autoFoco` = leva o foco à opção marcada (painel aberto
+ * pelo teclado). Só componentes/tokens do design system. */
 export function PeriodoCorpo({
   value = PERIODO_TODO,
   anos = [new Date().getFullYear()],
+  meses,
   onChange,
   onClose,
   onLimpar,
@@ -25,17 +48,23 @@ export function PeriodoCorpo({
 }: {
   value?: Periodo;
   anos?: number[];
+  meses?: readonly string[];
   onChange?: (v: Periodo) => void;
   onClose?: () => void;
   onLimpar?: () => void;
   autoFoco?: boolean;
 }) {
-  const [ano, setAno] = useState<number>(value.ano ?? anos[0] ?? new Date().getFullYear());
+  // O ano aberto: o do valor; senão o mais recente com algum mês escolhível.
+  const [ano, setAno] = useState<number>(
+    () => value.ano ?? anos.find((a) => mesesDisponiveis(a, meses).some(Boolean)) ?? anos[0] ?? new Date().getFullYear(),
+  );
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!autoFoco) return;
     const el = ref.current;
-    (el?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? el?.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
+    (el?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? el?.querySelector<HTMLElement>("[aria-pressed]:not(:disabled)"))?.focus({
+      preventScroll: true,
+    });
   }, [autoFoco]);
   const emitir = (v: Periodo) => onChange?.(v);
   // O intervalo substitui o atalho/ano/mês (apagar o DE não volta ao mês); os dois vazios = todo o período.
@@ -44,13 +73,31 @@ export function PeriodoCorpo({
     const ate = campo === "ate" ? data : (value.ate ?? "");
     emitir(de || ate ? { preset: "custom", ...(de ? { de } : {}), ...(ate ? { ate } : {}) } : PERIODO_TODO);
   };
-  const opt = "min-h-11 rounded-control px-3 py-1.5 text-[13px] font-medium border lg:min-h-0";
-  const ativo = "bg-accent text-white border-transparent";
-  const inativo = "border-border-2 text-text-2 hover:bg-surface-2";
+  const disponiveis = useMemo(() => mesesDisponiveis(ano, meses), [ano, meses]);
+  const lim = useMemo(() => limitesDosMeses(meses), [meses]);
+  const escolhido = Object.keys(intervaloDoPeriodo(value)).length > 0;
 
   return (
-    <div ref={ref} className="p-1">
-      <div className="flex flex-wrap gap-1.5">
+    <div ref={ref} className="space-y-3 p-1">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Período</span>
+          <span className="block truncate text-[14px] font-semibold text-text">{rotuloPeriodo(value)}</span>
+        </div>
+        {onLimpar && (
+          <Button
+            variant="icon"
+            size="xs"
+            icon={<IconLimpar className="h-4 w-4" />}
+            aria-label="Limpar período"
+            title={escolhido ? "Limpar período" : "Nenhum período escolhido"}
+            disabled={!escolhido}
+            onClick={onLimpar}
+          />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5 border-t border-border pt-3">
         {ATALHOS_PERIODO.map((p) => {
           const marcado = value.preset === p.k && !value.ano;
           return (
@@ -62,19 +109,20 @@ export function PeriodoCorpo({
                 emitir({ preset: p.k });
                 onClose?.();
               }}
-              className={`min-h-11 rounded-pill border px-3 py-1.5 text-[12.5px] font-medium lg:min-h-0 ${marcado ? ativo : inativo}`}
+              className={`${PECA_PERIODO} ${marcado ? MARCADA : PECA_LIVRE}`}
             >
-              {p.l}
+              <span className="truncate">{p.l}</span>
             </button>
           );
         })}
       </div>
 
-      <div className="mt-3">
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Ano</span>
-        <div className="flex flex-wrap gap-1.5">
+      <div className="border-t border-border pt-3">
+        <span className={TITULO}>Ano</span>
+        <div className="grid grid-cols-4 gap-1.5">
           {anos.map((a) => {
             const marcado = value.ano === a && !value.mes;
+            const contem = value.ano === a && !!value.mes;
             return (
               <button
                 key={a}
@@ -84,58 +132,62 @@ export function PeriodoCorpo({
                   setAno(a);
                   emitir({ ano: a });
                 }}
-                className={`${opt} ${marcado ? ativo : inativo}`}
+                className={`${PECA_PERIODO} tabular-nums ${marcado ? MARCADA : contem || (a === ano && !value.ano) ? CONTEM : PECA_LIVRE}`}
               >
                 {a}
               </button>
             );
           })}
         </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-4 gap-1.5">
-        {MESES_PERIODO.map((m, i) => {
-          const marcado = value.ano === ano && value.mes === i + 1;
-          return (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={marcado}
-              aria-label={`${m} de ${ano}`}
-              onClick={() => emitir({ ano, mes: i + 1 })}
-              className={`min-h-11 rounded-control border px-2 py-1.5 text-[13px] font-medium lg:min-h-0 ${marcado ? ativo : inativo}`}
-            >
-              {m}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-3 border-t border-border pt-3">
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Intervalo</span>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-[11px] text-muted">
-            DE
-            <input type="date" value={value.de ?? ""} max={value.ate || undefined} onChange={(e) => intervalo("de", e.target.value)} className={campoData} />
-          </label>
-          <label className="text-[11px] text-muted">
-            ATÉ
-            <input type="date" value={value.ate ?? ""} min={value.de || undefined} onChange={(e) => intervalo("ate", e.target.value)} className={campoData} />
-          </label>
+        <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+          {MESES_PERIODO.map((m, i) => {
+            const marcado = value.ano === ano && value.mes === i + 1;
+            const pode = marcado || disponiveis[i];
+            return (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={marcado}
+                aria-label={`${m} de ${ano}`}
+                title={pode ? `${m} de ${ano}` : `Sem dados em ${m} ${ano}`}
+                disabled={!pode}
+                onClick={() => emitir({ ano, mes: i + 1 })}
+                className={`${PECA_PERIODO} ${marcado ? MARCADA : pode ? PECA_LIVRE : DESLIGADA}`}
+              >
+                {m}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {onLimpar && (
-        <div className="mt-1 flex justify-end">
-          <button
-            type="button"
-            onClick={onLimpar}
-            className="inline-flex min-h-11 items-center rounded-control px-2 text-[12px] font-semibold text-accent hover:underline lg:min-h-0 lg:py-1"
-          >
-            Limpar
-          </button>
+      <div className="border-t border-border pt-3">
+        <span className={TITULO}>Intervalo</span>
+        <div className="grid grid-cols-2 gap-1.5">
+          <label className="min-w-0 text-[11px] font-medium text-muted">
+            <span className="mb-1 block">De</span>
+            <input
+              type="date"
+              value={value.de ?? ""}
+              min={lim.min}
+              max={value.ate || lim.max}
+              onChange={(e) => intervalo("de", e.target.value)}
+              className={campoData}
+            />
+          </label>
+          <label className="min-w-0 text-[11px] font-medium text-muted">
+            <span className="mb-1 block">Até</span>
+            <input
+              type="date"
+              value={value.ate ?? ""}
+              min={value.de || lim.min}
+              max={lim.max}
+              onChange={(e) => intervalo("ate", e.target.value)}
+              className={campoData}
+            />
+          </label>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -148,12 +200,15 @@ export function PeriodoCorpo({
 export function PeriodoPicker({
   value = PERIODO_TODO,
   anos = [new Date().getFullYear()],
+  meses,
   onChange,
   rotulo = "Período",
   className,
 }: {
   value?: Periodo;
   anos?: number[];
+  /** Os meses com dado ("AAAA-MM") — o painel só oferece estes (ver `PeriodoCorpo`). */
+  meses?: readonly string[];
   onChange?: (v: Periodo) => void;
   rotulo?: string;
   className?: string;
@@ -164,7 +219,7 @@ export function PeriodoPicker({
       papel="dialog"
       ariaLabel={`${rotulo}: ${texto}`}
       className={className}
-      width={300}
+      width={320}
       triggerClassName="h-11 w-full gap-1.5 rounded-control border border-border-2 bg-surface-2 px-3 text-left transition-colors hover:bg-surface lg:h-[var(--h-control-sm)]"
       trigger={
         <>
@@ -179,6 +234,7 @@ export function PeriodoPicker({
         <PeriodoCorpo
           value={value}
           anos={anos}
+          meses={meses}
           onChange={onChange}
           onClose={fechar}
           onLimpar={
