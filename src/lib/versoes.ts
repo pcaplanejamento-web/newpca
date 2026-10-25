@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.223.0",
+    data: "2026-10-25",
+    titulo: "Execução reorganizada: indicadores, filtros, demonstrativo e avisos no (!)",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "Indicadores em três colunas — Empenhos, Liquidações e Pagamentos: o Saldo sempre à vista e, em “Mais indicadores”, o Anulado e o Total (saldo + anulado = total), com a quantidade e o percentual. Tocar em qualquer um mostra a origem dos dados, e dela o empenho com as liquidações e os pagamentos.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Todos os filtros à vista no cartão padrão de filtros, ligados entre si: Período, Tipo (Nota de Empenho × Restos a Pagar), Unidade e Órgão do sistema e as classificações do orçamento. Os anos carregados seguem o Período. Saíram o seletor de anos, a visão “Por empenho”, os filtros duplicados da Centi e o funil (repetia as KPIs).", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "Demonstrativo abaixo do gráfico: escolha por Unidade, Órgão, Função, Programa, Ação, Elemento, Fonte, Credor, Licitação, Modalidade ou Mensal — empenhado, liquidado, anulado, retido, pago e % pago, com filtros nas colunas, exportação e a origem de cada linha.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Gráfico minimalista — ondas em camadas, sem título nem legenda — com os seus controles (zoom pela lupa: aproximar, afastar e restaurar), os avisos (!) e a ajuda (?) no próprio cartão.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Tela mais leve: carrega só os registros dos anos do Período (sem a execução de outros anos da antiga visão por empenho), o gráfico anima suave entre os filtros e os indicadores extras entram sem saltos.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Empenhos", texto: "Novo botão (!) de avisos, ao lado do (?): as mensagens das telas de empenhos, liquidações e pagamentos (registros sem empenho, configuração pendente do card, falha ao recarregar) ficam nele — nenhuma faixa empurra a tela.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.222.0",
     data: "2026-10-25",
     titulo: "Tipo da liquidação e do pagamento: Nota de Empenho ou Restos a Pagar",

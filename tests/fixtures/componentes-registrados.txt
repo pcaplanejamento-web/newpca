@@ -5,6 +5,7 @@ AcessoRestrito.tsx
 AcoesCadastro.tsx
 AgendasExternas.tsx
 Ajuda.tsx
+Avisos.tsx
 AjudaVisoes.tsx
 AlturaCheia.tsx
 AparelhosConta.tsx

@@ -5,6 +5,7 @@ import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/exe
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
+import { type Aviso, Avisos } from "./Avisos";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
@@ -205,6 +206,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome, versao }: { cardId: numbe
           </SelectField>
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" onClick={() => void carregar(recorte)} />}
+        <Avisos avisos={[...avisoSemEmpenho(linhas, "liquidação", "liquidações"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
         <Ajuda titulo="Liquidações do card" botao="sm">
           <p>As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
           <p>
@@ -217,7 +219,7 @@ export function EmpenhoCardLiquidacoes({ cardId, nome, versao }: { cardId: numbe
         </Ajuda>
       </FerramentasAba>
 
-      {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
+      {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
 
       {anos && !anos.length ? (
         <Callout kind="info">Nenhuma liquidação importada neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez.</Callout>
@@ -233,7 +235,6 @@ export function EmpenhoCardLiquidacoes({ cardId, nome, versao }: { cardId: numbe
             <StatMini label="Pago" value={brl(tot.pago)} tone="ok" />
             <StatMini label="Saldo" value={brl(tot.saldo)} />
           </div>
-          <AvisoSemEmpenho linhas={linhas} um="liquidação" varios="liquidações" />
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={COLUNAS}
@@ -272,13 +273,37 @@ export function EmpenhoCardLiquidacoes({ cardId, nome, versao }: { cardId: numbe
 }
 
 /** Quantos registros do ano à vista estão SEM o empenho no sistema (em geral, restos a pagar de anos que nenhum card de
- * empenhos importa) — o aviso com o que fazer. O mesmo nas Liquidações e nos Pagamentos. */
-export function AvisoSemEmpenho({ linhas, um, varios }: { linhas: readonly { anoEmpenho: number | null }[]; um: string; varios: string }) {
-  const n = linhas.reduce((t, x) => t + (x.anoEmpenho == null ? 1 : 0), 0);
-  if (!n) return null;
-  return (
-    <Callout kind="info">
-      {n === 1 ? `1 ${um}` : `${num(n)} ${varios}`} sem o empenho no sistema — em geral, restos a pagar de anos anteriores. Inclua esses anos no card de empenhos (Configuração → Anos) e importe: {n === 1 ? "o registro passa" : "os registros passam"} a seguir o órgão e a unidade do empenho. A coluna “Ano do empenho” filtra “Sem empenho”.
-    </Callout>
-  );
+ * empenhos importa) — o aviso com o que fazer, para o (!) da barra (`Avisos`). O mesmo nas Liquidações e nos Pagamentos. */
+export function avisoSemEmpenho(linhas: readonly { anoEmpenho: number | null }[] | null, um: string, varios: string): Aviso[] {
+  const n = (linhas ?? []).reduce((t, x) => t + (x.anoEmpenho == null ? 1 : 0), 0);
+  if (!n) return [];
+  return [
+    {
+      id: "sem-empenho",
+      tom: "warn",
+      texto: `${n === 1 ? `1 ${um}` : `${num(n)} ${varios}`} sem o empenho no sistema — em geral, restos a pagar de anos anteriores. Inclua esses anos no card de empenhos (Configuração → Anos) e importe: ${n === 1 ? "o registro passa" : "os registros passam"} a seguir o órgão e a unidade do empenho. A coluna “Ano do empenho” filtra “Sem empenho”.`,
+    },
+  ];
+}
+
+/** A falha de uma RECARGA com a tabela já à vista, para o (!) da barra (a tabela segue com os dados anteriores). */
+export function avisoDeFalha(erro: string | null, temLinhas: boolean, tentar: () => void): Aviso[] {
+  if (!erro || !temLinhas) return [];
+  return [
+    {
+      id: "erro",
+      tom: "danger",
+      texto: (
+        <>
+          <p>{erro}</p>
+          <p className="mt-1">
+            A tabela mostra os dados anteriores.{" "}
+            <button type="button" className="font-semibold text-accent underline underline-offset-2" onClick={tentar}>
+              Tentar de novo
+            </button>
+          </p>
+        </>
+      ),
+    },
+  ];
 }

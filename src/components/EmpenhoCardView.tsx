@@ -7,9 +7,9 @@ import { useAlturaTela } from "./AlturaCheia";
 import { cardPorOrgao, estadoCard, NOME_TIPO, pendenciasDoCard, type ResumoCard, rotaDoCard, rotuloAnos } from "@/lib/empenho-cards-core";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { AbasEspaco } from "./AbasEspaco";
+import { Avisos } from "./Avisos";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
 import { useOndeDetalhe } from "./CanalGrupo";
 import { useConfirmacao } from "./Confirmacao";
 import { IconCheck, IconChevronLeft, IconTrash } from "./icons";
@@ -120,11 +120,40 @@ export function EmpenhoCardView({
             </div>
           ))}
         </dl>
+        {/* Os AVISOS do card no (!) — nada de faixa que empurra as abas. */}
+        <div className="ml-auto flex items-center gap-1.5">
+          <Avisos
+            titulo="Avisos do card"
+            avisos={
+              pendencias.length
+                ? [
+                    {
+                      id: "configurar",
+                      tom: "warn",
+                      texto: (
+                        <>
+                          <p className="font-semibold text-text">Configure o card antes de importar</p>
+                          <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
+                          <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            {etapas.map((et) => (
+                              <Link key={et.aba} href={rotaDoCard(c, et.aba)} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
+                                {et.feito && <IconCheck className="h-4 w-4" />}
+                                {et.rotulo}
+                              </Link>
+                            ))}
+                            <span className="text-muted">3. Importação</span>
+                          </p>
+                        </>
+                      ),
+                    },
+                  ]
+                : []
+            }
+          />
         {podeExcluir && (
           <Button
             size="sm"
             variant="icon"
-            className="ml-auto"
             loading={excluindo}
             aria-label={`Excluir o card ${c.nome}`}
             title="Excluir card"
@@ -132,23 +161,9 @@ export function EmpenhoCardView({
             onClick={excluir}
           />
         )}
+        </div>
       </div>
 
-      {pendencias.length > 0 && (
-        <Callout kind="warn">
-          <p className="font-semibold">Configure o card antes de importar</p>
-          <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
-          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-            {etapas.map((et) => (
-              <Link key={et.aba} href={rotaDoCard(c, et.aba)} className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}>
-                {et.feito && <IconCheck className="h-4 w-4" />}
-                {et.rotulo}
-              </Link>
-            ))}
-            <span className="text-muted">3. Importação</span>
-          </p>
-        </Callout>
-      )}
 
       <AbasEspaco<AbaCard> aba={aba} opcoes={opcoes}>
         <AteOFim>{children}</AteOFim>

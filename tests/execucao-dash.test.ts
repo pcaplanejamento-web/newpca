@@ -3,7 +3,11 @@ import test from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import {
+  anosDoIntervalo,
   CHAVE_SEM_EMPENHO,
+  DIMS_EXEC,
+  demonstrativo,
+  selecaoDaLinha,
   calcular,
   confianca,
   derivados,
@@ -101,15 +105,15 @@ test("execução (SQL): o universo — empenho repetido entre cards conta uma ve
   assert.ok(unidades.includes("SAUDE — PMRV") && unidades.includes("SAUDE — FMS"), JSON.stringify(unidades));
   assert.ok(unidades.includes("FMS"), "vinculado só ao órgão = a sigla do órgão");
   assert.equal(new Set(unidades).size, unidades.length);
-  // O evento de 2026 da safra chega com r = 0; o sem empenho, com o órgão.
-  assert.ok(p.liq.some((t) => t[3] === 0), "a execução de outro ano da safra");
+  // Só os eventos dos anos pedidos (o de 2026 do empenho 9 não vem); o sem empenho chega com o órgão.
+  assert.ok(p.liq.every((t) => t[2] == null || Number(t[2]) < 9497), "nenhum evento de 2026");
   assert.ok(p.liq.some((t) => t[0] === -1 && t[1] === 2), "sem empenho: o órgão do registro");
 });
 
-test("execução (núcleo): os números — movimento, safra, sem data, sem empenho, anulações e a soma de cada parte", async () => {
+test("execução (núcleo): os números — cada etapa pela própria data, sem data, sem empenho, anulações e a soma de cada parte", async () => {
   const b = cenario();
   const base = montarBase(await pacote(b, [2025]));
-  const mov = calcular(base, "movimento", {}, {});
+  const mov = calcular(base, {}, {});
   const t = mov.totais;
   assert.equal(t.empenhos, 4, "9, 10, 11 e 12 (o 8 é de 2024, o 99 removido)");
   assert.equal(t.empBruto, 18_505_550, "inteiros exatos (sem a deriva do ponto flutuante)");
@@ -124,14 +128,9 @@ test("execução (núcleo): os números — movimento, safra, sem data, sem empe
   assert.equal(reais(t.pagoLiquido), 450 + 700 + 40);
   assert.equal(t.semEmpenho, 2);
   assert.equal(mov.semData.empenhos, 1);
-  // Safra: os empenhos de 2025 e a execução deles de QUALQUER data (a de 2026 entra; a do 8 e a sem empenho, não).
-  const safra = calcular(base, "safra", {}, {});
-  assert.equal(reais(safra.totais.liquidado), 600 + 150 + 300 + 100);
-  assert.equal(reais(safra.totais.pago), 500);
-  assert.equal(safra.totais.semEmpenho, 0);
-  assert.equal(reais(derivados(safra.totais).aPagar), 1750 - 500);
+  assert.equal(derivados(t).pctPago, t.pago / t.empenhado);
   // O período: só março (o empenho 9 e a execução dele no mês).
-  const marco = calcular(base, "movimento", { de: "2025-03-01", ate: "2025-03-31" }, {});
+  const marco = calcular(base, { de: "2025-03-01", ate: "2025-03-31" }, {});
   assert.equal(marco.totais.empenhos, 1);
   assert.equal(reais(marco.totais.liquidado), 750);
   assert.equal(marco.semData.empenhos, 0, "com período, o sem data não entra");
@@ -140,8 +139,9 @@ test("execução (núcleo): os números — movimento, safra, sem data, sem empe
 test("execução (núcleo): a série fecha com os totais; a origem de um ponto = o ponto; granularidade forçada", async () => {
   const b = cenario();
   const base = montarBase(await pacote(b, [2025]));
-  for (const visao of ["movimento", "safra"] as const) {
-    const c = calcular(base, visao, {}, {});
+  {
+    const visao = "movimento";
+    const c = calcular(base, {}, {});
     for (const g of ["auto", "dia", "semana", "mes"] as const) {
       const s = serie(base, c, {}, g, "2025-12-31");
       const ult = s.pontos.at(-1);
@@ -159,7 +159,7 @@ test("execução (núcleo): a série fecha com os totais; a origem de um ponto =
       }
     }
   }
-  const c = calcular(base, "movimento", {}, {});
+  const c = calcular(base, {}, {});
   assert.equal(serie(base, c, {}, "mes", "2025-12-31").granularidade, "mes");
   assert.equal(serie(base, c, { de: "2025-03-01", ate: "2025-03-31" }, "auto", "2025-12-31").granularidade, "dia");
 });
@@ -167,7 +167,7 @@ test("execução (núcleo): a série fecha com os totais; a origem de um ponto =
 test("execução (núcleo): os filtros — conectados, sem contar duas vezes, sem empenho como opção, ordem e rótulos", async () => {
   const b = cenario();
   const base = montarBase(await pacote(b, [2025]));
-  const tudo = calcular(base, "movimento", {}, {});
+  const tudo = calcular(base, {}, {});
   const el = opcoesDim(base, tudo, {}, "elemento");
   const r30 = el.find((o) => o.rotulo === "3390.30");
   assert.ok(r30);
@@ -175,7 +175,7 @@ test("execução (núcleo): os filtros — conectados, sem contar duas vezes, se
   assert.equal(sem?.rotulo, ROTULO_SEM_EMPENHO, "o sem empenho por último");
   // Filtrar o elemento 3390.30: só o empenho 9 e a execução dele.
   const f = { elemento: [r30.chave] };
-  const c = calcular(base, "movimento", {}, f);
+  const c = calcular(base, {}, f);
   assert.equal(c.totais.empenhos, 1);
   assert.equal(reais(c.totais.liquidado), 750);
   assert.equal(reais(c.totais.pago), 500);
@@ -184,14 +184,14 @@ test("execução (núcleo): os filtros — conectados, sem contar duas vezes, se
   assert.ok(op.length >= 3);
   // Somando por elemento, cada parte fecha com o todo (nada conta duas vezes).
   let soma = 0;
-  for (const o of opcoesDim(base, tudo, {}, "elemento")) soma += calcular(base, "movimento", {}, { elemento: [o.chave] }).totais.liquidado;
+  for (const o of opcoesDim(base, tudo, {}, "elemento")) soma += calcular(base, {}, { elemento: [o.chave] }).totais.liquidado;
   assert.equal(soma, tudo.totais.liquidado);
   // O sem empenho como filtro: só os registros sem empenho.
-  const s = calcular(base, "movimento", {}, { fonte: [CHAVE_SEM_EMPENHO] });
+  const s = calcular(base, {}, { fonte: [CHAVE_SEM_EMPENHO] });
   assert.equal(s.totais.empenhos, 0);
   assert.equal(reais(s.totais.liquidado), 40);
   // O órgão do sem empenho vem do registro.
-  const fms = calcular(base, "movimento", {}, { orgao: ["2"] });
+  const fms = calcular(base, {}, { orgao: ["2"] });
   assert.equal(reais(fms.totais.liquidado), 40);
   assert.equal(fms.totais.empenhos, 2, "11 e 12 são do FMS");
 });
@@ -223,7 +223,7 @@ test("execução (núcleo): datas, linhas da origem e sparks", async () => {
   assert.equal(diaDoIso("2025-13-40"), null);
   const b = cenario();
   const base = montarBase(await pacote(b, [2025]));
-  const c = calcular(base, "movimento", {}, {});
+  const c = calcular(base, {}, {});
   const e = empenhoExec(base, base.emp.numero.indexOf("10"));
   assert.equal(e.data, "2025-04-10");
   assert.equal(e.valorEmpenhado, 500);
@@ -261,21 +261,21 @@ test("execução (SQL): volume — milhares de empenhos, liquidações e pagamen
   const base = montarBase(await pacote(b, [2025]));
   const ms = performance.now() - t0;
   assert.equal(base.emp.n, N);
-  const c = calcular(base, "movimento", {}, {});
+  const c = calcular(base, {}, {});
   assert.equal(reais(c.totais.empenhado), N * 10);
   assert.equal(c.totais.liquidacoes, 2 * N);
   assert.equal(reais(c.totais.liquidado), 2 * N * 1.5);
   assert.equal(reais(c.totais.pago), N * 1.25);
   const t1 = performance.now();
-  calcular(base, "movimento", { de: "2025-03-01", ate: "2025-06-30" }, { elemento: ["1", "2"] });
+  calcular(base, { de: "2025-03-01", ate: "2025-06-30" }, { elemento: ["1", "2"] });
   const msCalc = performance.now() - t1;
   assert.ok(ms < 20_000, `leitura em ${ms} ms`);
   assert.ok(msCalc < 500, `cálculo em ${msCalc} ms`);
 });
 
-test("execução (SQL): pedaços pequenos — a costura não repete nem perde grupo (inclusive os sem data de anos diferentes)", async () => {
+test("execução (SQL): pedaços pequenos — a costura não repete nem perde grupo (inclusive os sem data)", async () => {
   const b = cenario();
-  // Grupos sem data do MESMO empenho em anos diferentes — o de 2026 vem pela safra (r = 0): empatavam na ordem dos pedaços.
+  // Grupos sem data (o de 2026 fica fora: só os anos pedidos) — a ordem dos pedaços não pode empatar.
   b.liq(2025, "10", null, 11, 0, 1, 6);
   b.liq(2026, "10", null, 13, 0, 1, 6);
   b.pag(2025, "10", null, 7, 0, 0, 1, 6);
@@ -287,5 +287,55 @@ test("execução (SQL): pedaços pequenos — a costura não repete nem perde gr
   assert.deepEqual(ord(picado.liq), ord(inteiro.liq));
   assert.deepEqual(ord(picado.pag), ord(inteiro.pag));
   assert.equal(new Set(ord(picado.liq)).size, picado.liq.length, "nenhum grupo repetido");
-  assert.ok(picado.liq.filter((t) => t[2] == null).length >= 2, "os dois grupos sem data estão lá");
+  assert.ok(picado.liq.some((t) => t[2] == null), "o grupo sem data está lá");
+});
+
+test("execução (núcleo): o filtro de TIPO — Nota de Empenho × Restos a Pagar (a régua das tabelas)", async () => {
+  const b = cenario();
+  const base = montarBase(await pacote(b, [2025]));
+  const todos = calcular(base, {}, {});
+  const ne = calcular(base, {}, {}, ["ne"]);
+  const rp = calcular(base, {}, {}, ["rp"]);
+  // RP = a execução de empenhos de anos anteriores (o 8, de 2024) e a do empenho não importado (o 777); sem empenhado.
+  assert.equal(rp.totais.empenhado, 0);
+  assert.equal(reais(rp.totais.liquidado), 700 + 40);
+  assert.equal(reais(rp.totais.pago), 700 + 40);
+  // NE + RP = todos (as liquidações e os pagamentos se dividem; os empenhos ficam com a NE).
+  assert.equal(ne.totais.liquidado + rp.totais.liquidado, todos.totais.liquidado);
+  assert.equal(ne.totais.pago + rp.totais.pago, todos.totais.pago);
+  assert.equal(ne.totais.empenhado, todos.totais.empenhado);
+});
+
+test("execução (núcleo): as opções do tipo (conectadas) e os anos que o período carrega", async () => {
+  const b = cenario();
+  const base = montarBase(await pacote(b, [2025]));
+  const c = calcular(base, {}, {}, ["rp"]);
+  // As opções do tipo ignoram o próprio filtro: as duas aparecem com a contagem.
+  assert.ok((c.opcoesTipo.get("ne") ?? 0) > 0 && (c.opcoesTipo.get("rp") ?? 0) > 0);
+  assert.deepEqual(calcular(base, {}, {}, ["ne", "rp"]).totais, calcular(base, {}, {}).totais, "as duas = todos");
+  assert.deepEqual(anosDoIntervalo({}, [2024, 2026, 2025]), [2026, 2025, 2024]);
+  assert.deepEqual(anosDoIntervalo({ de: "2025-03-01", ate: "2025-03-31" }, [2024, 2025, 2026]), [2025]);
+  assert.deepEqual(anosDoIntervalo({ de: "2024-12-01", ate: "2026-01-31" }, [2024, 2025, 2026]), [2026, 2025, 2024]);
+  assert.deepEqual(anosDoIntervalo({ de: "2030-01-01", ate: "2030-12-31" }, [2024, 2025]), [2025], "sem dados no período: o mais recente (o intervalo zera)");
+});
+
+test("execução (núcleo): o demonstrativo — a soma das linhas = as KPIs, em toda dimensão e no mês; a origem de uma linha = a linha", async () => {
+  const b = cenario();
+  const base = montarBase(await pacote(b, [2025]));
+  const c = calcular(base, {}, {});
+  for (const d of [...DIMS_EXEC, "mes" as const]) {
+    const l = demonstrativo(base, c, d);
+    const soma = (k: "empenhado" | "liquidado" | "pago" | "retido") => l.reduce((t, x) => t + x[k], 0);
+    assert.equal(soma("empenhado"), c.totais.empenhado, d);
+    assert.equal(soma("liquidado"), c.totais.liquidado, d);
+    assert.equal(soma("pago"), c.totais.pago, d);
+    assert.equal(soma("retido"), c.totais.retido, d);
+    const x = l[0];
+    const s = selecaoDaLinha(base, c.sel, d, x.chave);
+    const liq = Array.from(s.liq).reduce((t, k) => t + base.liq.valor[k] - base.liq.anulado[k], 0);
+    assert.equal(liq, x.liquidado, `origem ${d}`);
+  }
+  // O sem empenho fica no fim, com o rótulo próprio.
+  const porElemento = demonstrativo(base, c, "elemento");
+  assert.equal(porElemento.at(-1)?.rotulo, ROTULO_SEM_EMPENHO);
 });

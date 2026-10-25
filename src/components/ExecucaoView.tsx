@@ -5,7 +5,6 @@ import { type BaseExec, montarBase, type MetaExec, type PacoteExec } from "@/lib
 import { DashboardExecucao } from "./DashboardExecucao";
 import { DashboardExecucaoEsqueleto } from "./DashboardExecucaoEsqueleto";
 import { ErroCarga } from "./ErroCarga";
-import { EsqueletoTitulo } from "./EsqueletoTela";
 
 /**
  * A TELA DA EXECUÇÃO (contêiner): pede o pacote (`GET /api/execucao?anos=`) e o indexa UMA vez (`montarBase`); tudo o
@@ -76,7 +75,6 @@ export function ExecucaoView({ versao, hoje, podeExportar }: { versao: string; h
   if (!base) {
     return (
       <div className="space-y-[var(--gap-block)]">
-        <EsqueletoTitulo />
         {erro ? <ErroCarga msg={erro} onTentar={() => void carregar(anosChave)} /> : <DashboardExecucaoEsqueleto />}
       </div>
     );

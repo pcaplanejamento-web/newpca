@@ -16,12 +16,15 @@ export type CampoFiltroDash = { dim: string; rotulo: string; opcoes: OpcaoFiltro
  * nenhum marcado = sem filtro. Os mesmos filtros que o toque nos gráficos liga — os dois caminhos ficam em sincronia.
  * A opção é guardada pela CHAVE (dois textos iguais nunca se fundem). `principais` = as dimensões À VISTA na linha; as
  * demais ficam em "Mais filtros (N)" — um banner com os mesmos seletores (N = as dimensões filtradas ali).
+ * `grade` = TODOS os filtros à vista, em colunas (muitas dimensões — nenhum escondido).
  */
 export function FiltrosDashboard({
   campos,
   onMudar,
   fim,
   principais,
+  grade = false,
+  antes,
 }: {
   campos: CampoFiltroDash[];
   onMudar: (dim: string, chaves: string[]) => void;
@@ -29,8 +32,13 @@ export function FiltrosDashboard({
   fim?: ReactNode;
   /** As dimensões da linha (sem = todas). */
   principais?: readonly string[];
+  /** Todos à vista em colunas (sem "Mais filtros"). */
+  grade?: boolean;
+  /** No `grade`: a 1ª célula (ex.: o Período, que filtra o tempo). */
+  antes?: ReactNode;
 }) {
   const [mais, setMais] = useState(false);
+  if (grade) return <FiltrosEmGrade campos={campos} onMudar={onMudar} antes={antes} />;
   const naLinha = principais ? campos.filter((c) => principais.includes(c.dim)) : campos;
   const escondidos = principais ? campos.filter((c) => !principais.includes(c.dim)) : [];
   const nMais = escondidos.filter((c) => c.selecionados.length > 0).length;
@@ -87,6 +95,27 @@ export function FiltrosDashboard({
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** O modo `grade`: um seletor suspenso por dimensão, TODOS à vista, em colunas que acompanham a largura. */
+function FiltrosEmGrade({ campos, onMudar, antes }: { campos: CampoFiltroDash[]; onMudar: (dim: string, chaves: string[]) => void; antes?: ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
+      {antes && <div className="min-w-0">{antes}</div>}
+      {campos.map((c) => (
+        <div key={c.dim} className="min-w-0">
+          <SeletorMultiplo
+            suspenso
+            rotulo={c.rotulo}
+            textoVazio="Todos"
+            opcoes={c.opcoes.map((o) => ({ valor: o.chave, rotulo: o.rotulo, contagem: o.count, detalhe: o.detalhe }))}
+            selecionados={c.selecionados}
+            onChange={(vs) => onMudar(c.dim, vs)}
+          />
+        </div>
+      ))}
     </div>
   );
 }

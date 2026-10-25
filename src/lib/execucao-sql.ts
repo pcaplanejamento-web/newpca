@@ -12,8 +12,7 @@ import { DIMS_DICIONARIO, type DimDicionario, ESCALA, type MetaExec } from "./ex
  * O UNIVERSO (a ligação pelo número do empenho):
  * - Empenhos: os dos ANOS pedidos (`r` = 1) + os de outros anos citados pelas liquidações/pagamentos carregados (`r` = 0 —
  *   só classificam os restos a pagar; nunca entram no empenhado).
- * - Liquidações/pagamentos: os dos anos pedidos (`r` = 1) + os de outros anos dos empenhos dos anos pedidos (`r` = 0 — a
- *   execução completa da safra).
+ * - Liquidações/pagamentos: os dos anos pedidos (cada etapa conta pela própria data).
  * - Vigentes (`removido_em IS NULL`), no ESCOPO da pessoa (`doEscopo`, a régua da tela de empenhos) e UMA vez por registro
  *   da Centi: a mesma `chave` em dois cards conta no card de id menor (`semRepetir`).
  * - O empenho de um número = o com unidade, de id menor (a régua de `destinoSql`).
@@ -75,8 +74,6 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
   const citados: (SQL | string)[] = [];
   if (f.liquidacoes) citados.push(" OR e.numero IN (SELECT l2.numero_empenho FROM liquidacoes l2 WHERE l2.removido_em IS NULL AND ", anoNos("l2.ano"), " AND ", esc("l2."), ")");
   if (f.pagamentos) citados.push(" OR e.numero IN (SELECT p2.numero_empenho FROM pagamentos p2 WHERE p2.removido_em IS NULL AND ", anoNos("p2.ano"), " AND ", esc("p2."), ")");
-  // Os números dos empenhos dos anos pedidos (para trazer a execução de outros anos — a safra).
-  const daSafra = (col: string) => juntar([` OR ${col} IN (SELECT e2.numero FROM empenhos e2 WHERE e2.removido_em IS NULL AND `, anoNos("e2.ano"), " AND ", esc("e2."), ")"]);
   const partes: (SQL | string)[] = [
     "WITH empU AS (SELECT e.id, e.card_id, e.chave, e.numero, e.orgao_id, e.reparticao_id, e.data, ",
     DIMS_DICIONARIO.filter((d) => d !== "unidade")
@@ -100,16 +97,13 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
       valor("l.valor"),
       " AS v, ",
       valor("l.valor_anulado"),
-      " AS a, (",
-      anoNos("l.ano"),
-      ") AS r FROM liquidacoes l WHERE l.removido_em IS NULL AND ",
+      " AS a FROM liquidacoes l WHERE l.removido_em IS NULL AND ",
       esc("l."),
-      " AND (",
+      " AND ",
       anoNos("l.ano"),
-      daSafra("l.numero_empenho"),
-      ")), ",
+      "), ",
       "liq AS (SELECT u.* FROM (SELECT liqU.*, row_number() OVER (PARTITION BY liqU.chave ORDER BY liqU.card_id) AS k FROM liqU) u WHERE u.k = 1), ",
-      `lg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o, g.r) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN liq.orgao_id END AS o, ${DIA("liq.data")} AS d, liq.r AS r, SUM(liq.v) AS v, SUM(liq.a) AS a, COUNT(*) AS n FROM liq LEFT JOIN canon c ON c.numero = liq.numero_empenho GROUP BY 1, 2, 3, 4) g)`,
+      `lg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN liq.orgao_id END AS o, ${DIA("liq.data")} AS d, SUM(liq.v) AS v, SUM(liq.a) AS a, COUNT(*) AS n, SUM(CASE WHEN liq.a > 0 THEN 1 ELSE 0 END) AS na FROM liq LEFT JOIN canon c ON c.numero = liq.numero_empenho GROUP BY 1, 2, 3) g)`,
     );
   if (f.pagamentos)
     partes.push(
@@ -119,20 +113,17 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
       valor("p.valor_retencao"),
       " AS rt, ",
       valor("p.valor_liquido"),
-      " AS lq, (",
-      anoNos("p.ano"),
-      ") AS r FROM pagamentos p WHERE p.removido_em IS NULL AND ",
+      " AS lq FROM pagamentos p WHERE p.removido_em IS NULL AND ",
       esc("p."),
-      " AND (",
+      " AND ",
       anoNos("p.ano"),
-      daSafra("p.numero_empenho"),
-      ")), ",
+      "), ",
       "pag AS (SELECT u.* FROM (SELECT pagU.*, row_number() OVER (PARTITION BY pagU.chave ORDER BY pagU.card_id) AS k FROM pagU) u WHERE u.k = 1), ",
-      `pg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o, g.r) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN pag.orgao_id END AS o, ${DIA("pag.data")} AS d, pag.r AS r,
+      `pg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN pag.orgao_id END AS o, ${DIA("pag.data")} AS d,
         SUM(CASE WHEN pag.anulado = 0 THEN pag.v ELSE 0 END) AS v, SUM(CASE WHEN pag.anulado = 0 THEN pag.rt ELSE 0 END) AS rt,
         SUM(CASE WHEN pag.anulado = 0 THEN pag.lq ELSE 0 END) AS lq, SUM(CASE WHEN pag.anulado = 0 THEN 0 ELSE pag.v END) AS an,
         SUM(CASE WHEN pag.anulado = 0 THEN 1 ELSE 0 END) AS n, SUM(CASE WHEN pag.anulado = 0 THEN 0 ELSE 1 END) AS na
-        FROM pag LEFT JOIN canon c ON c.numero = pag.numero_empenho GROUP BY 1, 2, 3, 4) g)`,
+        FROM pag LEFT JOIN canon c ON c.numero = pag.numero_empenho GROUP BY 1, 2, 3) g)`,
     );
   // O dicionário de cada dimensão (os valores distintos, numerados em ordem).
   partes.push(
@@ -202,7 +193,7 @@ function sqlEmpenhos(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesS
 }
 
 function sqlEventos(tipo: "lg" | "pg", anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number, por: number): SQL {
-  const tupla = tipo === "lg" ? "g.ei, g.o, g.d, g.r, g.v, g.a, g.n" : "g.ei, g.o, g.d, g.r, g.v, g.rt, g.lq, g.an, g.n, g.na";
+  const tupla = tipo === "lg" ? "g.ei, g.o, g.d, g.v, g.a, g.n, g.na" : "g.ei, g.o, g.d, g.v, g.rt, g.lq, g.an, g.n, g.na";
   const de = pedaco * por;
   return juntar([
     ctes(anos, escopo, f),

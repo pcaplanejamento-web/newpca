@@ -1,11 +1,10 @@
 import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
-import { EsqueletoTela, EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
 
-/** Execução: o título (com as visões, o período e os anos) e o dashboard. */
+/** Execução: o dashboard (os indicadores abrem a tela). */
 export default function Carregando() {
   return (
     <EsqueletoTela>
-      <EsqueletoTitulo />
       <DashboardExecucaoEsqueleto />
     </EsqueletoTela>
   );

@@ -11,7 +11,8 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { AvisoSemEmpenho, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
+import { avisoDeFalha, avisoSemEmpenho, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
+import { Avisos } from "./Avisos";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
@@ -252,6 +253,7 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
           </SelectField>
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" onClick={() => void carregar(recorte)} />}
+        <Avisos avisos={[...avisoSemEmpenho(linhas, "pagamento", "pagamentos"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
         <Ajuda titulo="Pagamentos do card" botao="sm">
           <p>Os pagamentos (ordens de pagamento) que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
           <p>
@@ -268,7 +270,7 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
         </Ajuda>
       </FerramentasAba>
 
-      {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
+      {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
 
       {anos && !anos.length ? (
         <Callout kind="info">Nenhum pagamento importado neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez, mês a mês.</Callout>
@@ -283,7 +285,6 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
             <StatMini label="Pago líquido" value={brl(tot.liquido)} tone="ok" />
             <StatMini label="Anuladas" value={num(tot.anuladas)} tone={tot.anuladas ? "warn" : "default"} hint={tot.anuladas ? brl(tot.valorAnulado) : undefined} />
           </div>
-          <AvisoSemEmpenho linhas={linhas} um="pagamento" varios="pagamentos" />
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={COLUNAS}

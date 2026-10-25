@@ -17,6 +17,8 @@ import {
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
+import { Avisos } from "./Avisos";
+import { avisoDeFalha } from "./EmpenhoCardLiquidacoes";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -222,6 +224,7 @@ export function EmpenhosTabela({
           </SelectField>
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />}
+        <Avisos avisos={avisoDeFalha(erro, linhas != null, () => recorte && void carregar(recorte, true))} />
         <Ajuda titulo="Empenhos do card" botao="sm">
           <p>A tabela que o card importou da Centi — exatamente o que está gravado no banco. Só leitura: para atualizar, importe de novo (aba Importação) ou ligue a atualização automática (Configuração).</p>
           <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
@@ -249,7 +252,7 @@ export function EmpenhosTabela({
             <StatMini label="A pagar" value={linhas ? brl(r.aPagar) : "…"} />
           </div>
 
-          {erro && <ErroCarga msg={erro} kind={linhas ? "warn" : "danger"} onTentar={() => void carregar(recorte, true)} />}
+          {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => void carregar(recorte, true)} />}
 
           {linhas == null ? (
             !erro && <EsqueletoTabela cheia />

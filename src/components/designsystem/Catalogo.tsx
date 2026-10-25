@@ -48,6 +48,7 @@ import { unidadesDoOrcamento } from "@/lib/orcamento-vinculo";
 import type { VisaoOrcamento } from "@/lib/orcamento-visao";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
 import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/orcamento-cruzamento";
+import { Avisos } from "@/components/Avisos";
 import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
 import { useConfirmacao } from "@/components/Confirmacao";
 import { SalvarEdicao, SeletorEdicoes } from "@/components/EdicoesTabela";
@@ -1439,6 +1440,13 @@ function TabelaCruzadaDemo() {
           ]}
         />
         <Checkbox checked={editar} onChange={(e) => setEditar(e.target.checked)} label="Editar a planilha" />
+        <Avisos
+          titulo="Avisos (!)"
+          avisos={[
+            { id: "a", tom: "info", texto: "Dados da Centi importados até 25/10/2026 09:30." },
+            { id: "b", tom: "warn", texto: "43 pagamentos sem o empenho no sistema — em geral, restos a pagar de anos anteriores." },
+          ]}
+        />
         <Ajuda titulo="Ajuda (?)">
           <TopicoAjuda icone={<Icons.IconGrip className="h-4 w-4" />} titulo="Arrastar">
             Arraste o nome de qualquer coluna; a sombra mostra onde ela vai ficar.
@@ -1621,39 +1629,23 @@ function FiltrosDashboardDemo() {
 }
 
 function SerieTemporalDemo() {
-  const [modo, setModo] = useState<"areas" | "colunas">("areas");
+  let a = { empenhado: 0, liquidado: 0, pago: 0 };
   const pontos = Array.from({ length: 12 }, (_, i) => {
     const e = 800_000 + i * 120_000;
-    return { chave: `2026-${i + 1}`, rotulo: ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][i], titulo: `Mês ${i + 1} de 2026`, atual: i === 9, valores: { empenhado: e, liquidado: e * 0.7, pago: e * 0.55 } };
-  });
-  let a = { empenhado: 0, liquidado: 0, pago: 0 };
-  const acumulados = pontos.map((p) => {
-    a = { empenhado: a.empenhado + p.valores.empenhado, liquidado: a.liquidado + p.valores.liquidado, pago: a.pago + p.valores.pago };
-    return { ...p, valores: a };
+    a = { empenhado: a.empenhado + e, liquidado: a.liquidado + e * 0.7, pago: a.pago + e * 0.55 };
+    return { chave: `2026-${i + 1}`, rotulo: ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][i], titulo: `Mês ${i + 1} de 2026`, atual: i === 9, valores: a };
   });
   return (
-    <div className="space-y-2">
-      <Segmented<"areas" | "colunas">
-        value={modo}
-        onChange={setModo}
-        ariaLabel="Tipo do gráfico"
-        options={[
-          { value: "areas", label: "Acumulada" },
-          { value: "colunas", label: "Por período" },
-        ]}
-      />
-      <SerieTemporal
-        pontos={modo === "areas" ? acumulados : pontos}
-        series={[
-          { chave: "empenhado", rotulo: "Empenhado", cor: 0 },
-          { chave: "liquidado", rotulo: "Liquidado", cor: 1 },
-          { chave: "pago", rotulo: "Pago", cor: 2 },
-        ]}
-        modo={modo}
-        ariaLabel="Exemplo de evolução"
-        onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
-      />
-    </div>
+    <SerieTemporal
+      pontos={pontos}
+      series={[
+        { chave: "empenhado", rotulo: "Empenhado", cor: 0 },
+        { chave: "liquidado", rotulo: "Liquidado", cor: 1 },
+        { chave: "pago", rotulo: "Pago", cor: 2 },
+      ]}
+      ariaLabel="Exemplo de evolução"
+      onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
+    />
   );
 }
 
@@ -3789,7 +3781,7 @@ export function Catalogo() {
         <GraficosDashboardDemo />
       </Secao>
 
-      <Secao titulo="SerieTemporal (evolução no tempo: áreas acumuladas ou colunas por período — legenda que liga/desliga, zoom, linha de hoje, origem do ponto)">
+      <Secao titulo="SerieTemporal (as ondas de evolução no tempo: áreas em camadas, sem legenda nem eixo Y — os valores na dica, linha de hoje, origem do ponto)">
         <SerieTemporalDemo />
       </Secao>
 

@@ -4,20 +4,25 @@ import dynamic from "next/dynamic";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { EmpenhoNaTela } from "@/lib/empenhos-tela-core";
 import {
+  anosDoIntervalo,
   type BaseExec,
   type Calculo,
   calcular,
   confianca,
   DIMS_EXEC,
-  DIMS_PRINCIPAIS,
   derivados,
+  type DimDemonstrativo,
   type DimExec,
+  demonstrativo,
+  type LinhaDemonstrativo,
+  selecaoDaLinha,
   type EmpenhoExec,
   type EventoExec,
   empenhoExec,
   type FiltrosExec,
   type Granularidade,
   liquidacaoExec,
+  OPCOES_TIPO,
   opcoesDim,
   pagamentoExec,
   reais,
@@ -25,33 +30,31 @@ import {
   rotuloOpcao,
   type Selecao,
   selecaoNoIntervalo,
+  type TipoFiltroExec,
   serie,
   sparks,
-  type Visao,
 } from "@/lib/execucao-dash-core";
-import { brl, brlCompact, dataBR, dataHoraBR, num } from "@/lib/format";
+import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
 import { intervaloDoPeriodo, type Periodo, PERIODO_TODO, rotuloPeriodo, textoIntervalo } from "@/lib/periodo";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
+import { Avisos } from "./Avisos";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
-import { BarrasH } from "./charts/Barras";
 import type { PontoTemporal } from "./charts/SerieTemporal";
 import { corSerie } from "./charts/shared";
-import { type Column, DataTable } from "./DataTable";
+import { type Column, DataTable, FiltrosAtivos } from "./DataTable";
 import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconClose, IconDatabase, IconFilter, IconInfo, IconLayers, IconExecucao } from "./icons";
+import { IconChevronDown, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { OrigemDados } from "./OrigemDados";
 import { PeriodoPicker } from "./PeriodoPicker";
+import { SelectField } from "./Field";
 import { Segmented } from "./Segmented";
-import { SeletorMultiplo } from "./SeletorMultiplo";
 import { Skeleton } from "./Skeleton";
-import { StatMini } from "./StatMini";
 import { useContagem } from "./useContagem";
 
 // O gráfico (Recharts) só chega com a tela: a mesma altura enquanto o código é baixado.
@@ -60,12 +63,13 @@ const SerieTemporal = dynamic(() => import("./charts/SerieTemporal").then((m) =>
   loading: () => <Skeleton className="h-[360px] w-full rounded-card" />,
 });
 
-/** As séries (a ordem das cores `--serie-*`: azul, verde, âmbar). */
+/** As séries (as cores `--serie-*`: as mesmas dos indicadores e do demonstrativo). */
 const SERIES = [
   { chave: "empenhado", rotulo: "Empenhado", cor: 0 },
   { chave: "liquidado", rotulo: "Liquidado", cor: 1 },
-  { chave: "pago", rotulo: "Pago", cor: 2 },
+  { chave: "pago", rotulo: "Pago", cor: 7 },
 ] as const;
+const COR = { empenhado: corSerie(SERIES[0].cor), liquidado: corSerie(SERIES[1].cor), pago: corSerie(SERIES[2].cor) };
 
 type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 type Origem = { titulo: string; recorte: string; sel: Selecao; aba: Aba };
@@ -91,9 +95,10 @@ const emPct = (l: number[]) => {
 const paraTela = (e: EmpenhoExec): EmpenhoNaTela => ({ ...e, cpfCnpj: null });
 
 /**
- * O DASHBOARD DA EXECUÇÃO (corpo da tela): o título com as VISÕES, o período e os anos; a faixa de confiança; os
- * indicadores; os filtros; o funil e a série (diária/acumulada, com zoom). TODO número sai do núcleo
- * (`execucao-dash-core.ts` — `calcular`), com a ORIGEM de cada um (a soma da lista = o número).
+ * O DASHBOARD DA EXECUÇÃO (corpo da tela): os indicadores (saldo; anulado e total em "Mais indicadores"); o cartão dos
+ * filtros (o Período, o Tipo e as dimensões, conectados); o gráfico (as ondas, acumulado ou por período) com o funil dos
+ * filtros ligados, o (!) e o (?); e o demonstrativo. TODO número sai do núcleo (`execucao-dash-core.ts` — `calcular`), com
+ * a ORIGEM de cada um (a soma da lista = o número).
  */
 export function DashboardExecucao({
   base,
@@ -114,9 +119,11 @@ export function DashboardExecucao({
   hoje: string;
   podeExportar: boolean;
 }) {
-  const [visao, setVisao] = useState<Visao>("movimento");
-  const [periodo, setPeriodo] = useState<Periodo>(PERIODO_TODO);
+  // O Período abre no ano mais recente com dados (os anos carregados seguem o Período — `anosDoIntervalo`).
+  const periodoPadrao = useMemo<Periodo>(() => (base.anos[0] ? { ano: base.anos[0] } : PERIODO_TODO), [base.anos]);
+  const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao);
   const [filtros, setFiltros] = useState<FiltrosExec>({});
+  const [tipo, setTipo] = useState<TipoFiltroExec>([]);
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
   const [gran, setGran] = useState<Granularidade>("auto");
   const [mais, setMais] = useState(false);
@@ -126,44 +133,70 @@ export function DashboardExecucao({
   useEffect(() => setMais(lerMais()), []);
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
-  const pedido = useMemo(() => ({ visao, periodo, filtros }), [visao, periodo, filtros]);
+  const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
   const adiado = useDeferredValue(pedido);
   const atrasado = adiado !== pedido || carregando;
   const intervalo = useMemo(() => intervaloDoPeriodo(adiado.periodo, hoje), [adiado.periodo, hoje]);
-  const calc: Calculo = useMemo(() => calcular(base, adiado.visao, intervalo, adiado.filtros), [base, adiado.visao, intervalo, adiado.filtros]);
+  const calc: Calculo = useMemo(() => calcular(base, intervalo, adiado.filtros, adiado.tipo), [base, intervalo, adiado.filtros, adiado.tipo]);
+  // Os ANOS a carregar seguem o Período (o Ano não é um filtro à parte): mudou o que o Período cobre, pede os anos dele.
+  const anosQuer = useMemo(() => anosDoIntervalo(intervaloDoPeriodo(periodo, hoje), base.disponiveis), [periodo, hoje, base.disponiveis]);
+  useEffect(() => {
+    if (anosQuer.join(",") !== anos.join(",")) onAnos(anosQuer);
+  }, [anosQuer, anos, onAnos]);
   const t = calc.totais;
   const d = derivados(t);
   const sp = useMemo(() => sparks(base, calc.sel, hoje), [base, calc.sel, hoje]);
   const s = useMemo(() => serie(base, calc, intervalo, gran, hoje), [base, calc, intervalo, gran, hoje]);
   const conf = useMemo(() => confianca(base.meta, base.fontes, Date.now()), [base.meta, base.fontes]);
-  const safra = adiado.visao === "safra";
   const temLiq = base.fontes.liquidacoes;
   const temPag = base.fontes.pagamentos;
 
   const empenhadoAnim = useContagem(reais(t.empenhado));
   const liquidadoAnim = useContagem(reais(t.liquidado));
   const pagoAnim = useContagem(reais(t.pago));
-  const quartoAnim = useContagem(reais(safra ? d.aPagar : t.retido));
 
+  // O TIPO é um filtro como os demais (o mesmo seletor), com as opções conectadas aos outros filtros.
   const campos = useMemo(
-    () =>
-      DIMS_EXEC.map((dim) => ({
+    () => [
+      {
+        dim: "tipo",
+        rotulo: "Tipo",
+        opcoes: OPCOES_TIPO.map((o) => ({ chave: o.chave, rotulo: o.rotulo, count: calc.opcoesTipo.get(o.chave) ?? 0 })),
+        selecionados: [...tipo],
+      },
+      ...DIMS_EXEC.map((dim) => ({
         dim,
         rotulo: ROTULO_DIM[dim],
         opcoes: opcoesDim(base, calc, adiado.filtros, dim),
         selecionados: [...(filtros[dim] ?? [])],
       })),
-    [base, calc, adiado.filtros, filtros],
+    ],
+    [base, calc, adiado.filtros, filtros, tipo],
   );
-  const chips = DIMS_EXEC.flatMap((dim) => (filtros[dim] ?? []).map((k) => ({ dim, chave: k, rotulo: rotuloOpcao(base, dim, k) })));
-  const mudarFiltro = (dim: string, chaves: string[]) =>
+  const mudarFiltro = (dim: string, chaves: string[]) => {
+    if (dim === "tipo") return setTipo(chaves.filter((k): k is "ne" | "rp" => k === "ne" || k === "rp"));
     setFiltros((f) => {
       const n = { ...f };
       if (chaves.length) n[dim as DimExec] = chaves;
       else delete n[dim as DimExec];
       return n;
     });
-  const tirarChip = (dim: DimExec, k: string) => mudarFiltro(dim, (filtros[dim] ?? []).filter((x) => x !== k));
+  };
+  const periodoMudou = JSON.stringify(periodo) !== JSON.stringify(periodoPadrao);
+  const limparTudo = () => {
+    setFiltros({});
+    setPeriodo(periodoPadrao);
+    setTipo([]);
+  };
+  /** Os filtros ligados (fora do padrão), um por linha no resumo: o período, o tipo e cada dimensão com os valores. */
+  const ativosResumo: { key: string; rotulo: string; valor: string; tirar: () => void }[] = [
+    ...(periodoMudou ? [{ key: "periodo", rotulo: "Período", valor: rotuloPeriodo(periodo), tirar: () => setPeriodo(periodoPadrao) }] : []),
+    ...(tipo.length ? [{ key: "tipo", rotulo: "Tipo", valor: OPCOES_TIPO.filter((o) => tipo.includes(o.chave)).map((o) => o.rotulo).join(", "), tirar: () => setTipo([]) }] : []),
+    ...DIMS_EXEC.flatMap((dim) => {
+      const l = filtros[dim] ?? [];
+      return l.length ? [{ key: `d:${dim}`, rotulo: ROTULO_DIM[dim], valor: l.map((k) => rotuloOpcao(base, dim, k)).join(", "), tirar: () => mudarFiltro(dim, []) }] : [];
+    }),
+  ];
 
   const pontos: PontoTemporal[] = useMemo(
     () =>
@@ -179,290 +212,242 @@ export function DashboardExecucao({
       })),
     [s.pontos, modo],
   );
-  const seriesVistas = SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true));
+  // ZOOM pela lupa: a faixa de baldes à vista (null = o período inteiro); outro recorte volta ao todo.
+  const [faixa, setFaixa] = useState<[number, number] | null>(null);
+  const assinatura = pontos.length ? `${pontos[0].chave}|${pontos.at(-1)?.chave}|${pontos.length}` : "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: o zoom volta ao todo quando os baldes mudam.
+  useEffect(() => setFaixa(null), [assinatura]);
+  const pontosVistos = useMemo(() => (faixa ? pontos.slice(faixa[0], faixa[1] + 1) : pontos), [pontos, faixa]);
+  const zoom = (fator: number) => {
+    const total = pontos.length;
+    const [ini, fim] = faixa ?? [0, total - 1];
+    const larg = Math.max(4, Math.round((fim - ini + 1) * fator));
+    if (larg >= total) return setFaixa(null);
+    const a = Math.max(0, Math.min(total - larg, Math.round((ini + fim) / 2 - larg / 2)));
+    setFaixa([a, a + larg - 1]);
+  };
+  const seriesVistas = useMemo(() => SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true)), [temLiq, temPag]);
   const rotuloGran = { dia: "dia", semana: "semana", mes: "mês", ano: "ano" }[s.granularidade];
 
   const recorteTexto = [
     rotuloPeriodo(adiado.periodo) + (intervalo.de || intervalo.ate ? ` (${textoIntervalo(intervalo)})` : ""),
-    anos.length > 1 ? `anos ${anos.join(", ")}` : `ano ${anos[0] ?? "—"}`,
-    safra ? "por empenho" : "por movimento",
+    ...(tipo.length === 1 ? [tipo[0] === "ne" ? "Nota de Empenho" : "Restos a Pagar"] : []),
   ].join(" · ");
+
+  // Tudo o que antes empurrava a tela (atualização, alertas da importação, registros sem empenho) fica no (!).
+  const avisos = [
+    { id: "atualizado", tom: conf.atualizado ? ("info" as const) : ("warn" as const), texto: conf.atualizado ? `Dados da Centi importados até ${dataHoraBR(conf.atualizado)}.` : "Nenhuma importação concluída." },
+    ...conf.avisos.map((a) => ({ id: a, tom: "warn" as const, texto: a })),
+    ...(t.semEmpenho
+      ? [{ id: "sem-empenho", tom: "warn" as const, texto: `${plural(t.semEmpenho, "liquidação ou pagamento", "liquidações e pagamentos")} sem o empenho no sistema (${brl(reais(t.semEmpenhoValor))}) — contados como Restos a Pagar.` }]
+      : []),
+    ...(temLiq || temPag
+      ? [{ id: "restos", tom: "info" as const, texto: "O liquidado e o pago incluem os restos a pagar — por isso podem passar do empenhado. Use o filtro Tipo para separar Nota de Empenho e Restos a Pagar." }]
+      : []),
+  ];
 
   const abrirOrigem = (titulo: string, recorte: string, sel: Selecao, aba: Aba) => setOrigem({ titulo, recorte, sel, aba });
   const abrirTudo = (aba: Aba, titulo: string) => abrirOrigem(titulo, recorteTexto, calc.sel, aba);
 
   return (
     <div className={`space-y-[var(--gap-block)] transition-opacity ${atrasado ? "opacity-70" : ""}`} aria-busy={atrasado}>
-      {/* O título com as visões, o período e os anos (no celular, os controles descem em linhas próprias). */}
-      <div className="linha-topico flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto flex min-w-0 items-center gap-2 text-[15px] font-bold text-text">
-          <IconExecucao className="h-5 w-5 shrink-0 text-accent" aria-hidden />
-          <span className="truncate">Execução da despesa</span>
-          <AjudaExecucao />
-        </h1>
-        <div className="grid w-full grid-cols-1 gap-2 min-[480px]:grid-cols-2 lg:flex lg:w-auto lg:items-center">
-          <Segmented<Visao>
-            value={visao}
-            onChange={setVisao}
-            ariaLabel="Visão da execução"
-            className="min-[480px]:col-span-2 lg:col-span-1"
-            options={[
-              { value: "movimento", label: "Movimento", dica: "Cada etapa pela própria data: o que foi empenhado, liquidado e pago no período" },
-              { value: "safra", label: "Por empenho", curto: "Por empenho", dica: "Os empenhos do período e toda a execução deles, de qualquer data (mostra o que falta pagar)" },
-            ]}
-          />
-          <PeriodoPicker value={periodo} anos={anos} onChange={setPeriodo} className="w-full min-w-0 lg:w-auto" />
-          <div className="min-w-0 lg:w-56">
-            <SeletorMultiplo
-              suspenso
-              rotulo="Anos"
-              textoVazio="O mais recente"
-              opcoes={base.disponiveis.map((a) => ({ valor: String(a), rotulo: String(a) }))}
-              selecionados={anos.map(String)}
-              onChange={(vs) => onAnos(vs.map(Number).filter(Number.isInteger).slice(0, 5))}
-            />
-          </div>
-        </div>
-      </div>
+      {/* Sem linha de título: os indicadores abrem a tela (o nome fica para o leitor de tela). */}
+      <h1 className="sr-only">Execução da despesa</h1>
 
-      {erro && <ErroCarga msg={erro} onTentar={onTentar} kind="warn" />}
-      <FaixaConfianca atualizado={conf.atualizado} avisos={conf.avisos} recorte={recorteTexto} carregando={carregando} />
-
-      {/* Os indicadores: 4 à vista, o valor inteiro (a fonte acompanha o cartão). */}
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] min-[420px]:grid-cols-2 lg:grid-cols-4">
+      {/* Os INDICADORES em três colunas — Empenhos · Liquidações · Pagamentos — e três leituras complementares: o SALDO
+          (sempre à vista: valor − anulado), o ANULADO e o TOTAL (bruto) em "Mais indicadores". Saldo + anulado = total.
+          Tocar abre a origem: a lista de cada etapa, e dela o banner padrão do empenho (com as liquidações e os pagamentos). */}
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
         <KpiStat
-          label="Empenhado"
+          label="Saldo: empenhos"
           value={brl(empenhadoAnim)}
           completo
-          cor={corSerie(0)}
+          cor={COR.empenhado}
           spark={emPct(sp.empenhado)}
-          hint="Líquido das anulações"
-          detalhes={[
-            { rotulo: "Empenhos", valor: num(t.empenhos) },
-            { rotulo: "Anulado", valor: brl(reais(t.empAnulado)), cor: t.empAnulado ? "var(--danger)" : undefined },
-          ]}
-          onClick={() => abrirTudo("empenhos", "Empenhado")}
+          hint={plural(t.empenhos, "empenho", "empenhos")}
+          onClick={() => abrirTudo("empenhos", "Saldo: empenhos")}
           acao="ver os empenhos"
         />
         <KpiStat
-          label="Liquidado"
+          label="Saldo: liquidações"
           value={temLiq ? brl(liquidadoAnim) : "—"}
           completo
-          cor={corSerie(1)}
+          cor={COR.liquidado}
           spark={temLiq ? emPct(sp.liquidado) : undefined}
-          hint={temLiq ? `${pctTexto(d.pctLiquidado)} do empenhado` : "Sem acesso às Liquidações"}
-          detalhes={
-            temLiq
-              ? [
-                  { rotulo: "Liquidações", valor: num(t.liquidacoes) },
-                  { rotulo: "Anulado", valor: brl(reais(t.liqAnulado)), cor: t.liqAnulado ? "var(--danger)" : undefined },
-                ]
-              : undefined
-          }
-          onClick={temLiq ? () => abrirTudo("liquidacoes", "Liquidado") : undefined}
+          hint={temLiq ? `${plural(t.liquidacoes, "liquidação", "liquidações")} · ${pctTexto(d.pctLiquidado)} do empenhado` : "Sem acesso às Liquidações"}
+          onClick={temLiq ? () => abrirTudo("liquidacoes", "Saldo: liquidações") : undefined}
           acao="ver as liquidações"
         />
         <KpiStat
-          label="Pago"
+          label="Saldo: pagamentos"
           value={temPag ? brl(pagoAnim) : "—"}
           completo
-          cor={corSerie(2)}
+          cor={COR.pago}
           spark={temPag ? emPct(sp.pago) : undefined}
-          hint={temPag ? `${pctTexto(d.pctPago)} do empenhado` : "Sem acesso aos Pagamentos"}
-          detalhes={
-            temPag
-              ? [
-                  { rotulo: "Ordens", valor: num(t.pagamentos) },
-                  { rotulo: "Pago líquido", valor: brl(reais(t.pagoLiquido)) },
-                ]
-              : undefined
-          }
-          onClick={temPag ? () => abrirTudo("pagamentos", "Pago") : undefined}
+          hint={temPag ? `${plural(t.pagamentos, "pagamento", "pagamentos")} · ${pctTexto(d.pctPago)} do empenhado` : "Sem acesso aos Pagamentos"}
+          onClick={temPag ? () => abrirTudo("pagamentos", "Saldo: pagamentos") : undefined}
           acao="ver os pagamentos"
         />
-        {safra ? (
-          <KpiStat
-            label="A pagar"
-            value={temPag ? brl(quartoAnim) : "—"}
-            completo
-            cor="var(--warn)"
-            hint={temPag ? "Empenhado − pago" : "Sem acesso aos Pagamentos"}
-            detalhes={[
-              ...(temLiq ? [{ rotulo: "A liquidar", valor: brl(reais(d.aLiquidar)) }] : []),
-              ...(temLiq && temPag ? [{ rotulo: "Liquidado a pagar", valor: brl(reais(d.liquidadoAPagar)) }] : []),
-            ]}
-            onClick={() => abrirTudo("empenhos", "A pagar")}
-            acao="ver os empenhos"
-          />
-        ) : (
-          <KpiStat
-            label="Retido"
-            value={temPag ? brl(quartoAnim) : "—"}
-            completo
-            cor="var(--info)"
-            hint={temPag ? "Retenções das ordens pagas" : "Sem acesso aos Pagamentos"}
-            detalhes={
-              temPag
-                ? [
-                    { rotulo: "Ordens anuladas", valor: num(t.pagAnuladas) },
-                    { rotulo: "Valor anulado", valor: brl(reais(t.pagAnulado)), cor: t.pagAnulado ? "var(--danger)" : undefined },
-                  ]
-                : undefined
-            }
-            onClick={temPag ? () => abrirTudo("pagamentos", "Retido") : undefined}
-            acao="ver os pagamentos"
-          />
-        )}
-      </div>
-
-      <div className="flex justify-center">
-        <Button
-          size="sm"
-          variant="ghost"
-          aria-expanded={mais}
-          onClick={() =>
-            setMais((m) => {
-              try {
-                localStorage.setItem(CHAVE_MAIS, m ? "0" : "1");
-              } catch {
-                /* sem armazenamento: vale só nesta visita */
-              }
-              return !m;
-            })
-          }
-          icon={<IconChevronDown className={`h-4 w-4 transition-transform ${mais ? "rotate-180" : ""}`} />}
-        >
-          {mais ? "Menos indicadores" : "Mais indicadores"}
-        </Button>
-      </div>
-      {mais && (
-        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 lg:grid-cols-6">
-          <StatMini label="Empenhos" value={num(t.empenhos)} hint={`${plural(t.fornecedores, "fornecedor", "fornecedores")}`} />
-          <StatMini label="Ticket médio" value={t.empenhos ? brl(reais(t.empenhado) / t.empenhos) : "—"} hint="Empenhado por empenho" />
-          {temLiq && <StatMini label="Liquidado bruto" value={brl(reais(t.liqBruto))} hint={plural(t.liquidacoes, "liquidação", "liquidações")} />}
-          {temPag && <StatMini label="Ordens anuladas" value={num(t.pagAnuladas)} hint={brl(reais(t.pagAnulado))} tone={t.pagAnuladas ? "warn" : "default"} />}
-          <StatMini
-            label="Sem empenho no sistema"
-            value={brl(reais(t.semEmpenhoValor))}
-            hint={`${plural(t.semEmpenho, "registro", "registros")} (restos a pagar)`}
-            tone={t.semEmpenho ? "warn" : "default"}
-          />
-          <StatMini
-            label="Sem data"
-            value={num(calc.semData.empenhos + calc.semData.liquidacoes + calc.semData.pagamentos)}
-            hint="Fora da série (só em Todo o período)"
-          />
-        </div>
-      )}
-
-      <section
-        aria-label="Filtros da execução"
-        className={`space-y-2 rounded-card border p-[var(--pad-card)] transition-colors ${chips.length ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
-      >
-        <FiltrosDashboard campos={campos} onMudar={mudarFiltro} principais={DIMS_PRINCIPAIS} />
-        {chips.length > 0 && (
-          <div className="flex min-h-9 flex-wrap items-center gap-2" aria-live="polite">
-            <IconFilter className="h-4 w-4 shrink-0 text-accent" aria-hidden />
-            {chips.map((c) => (
-              <span key={`${c.dim}:${c.chave}`} className="inline-flex max-w-full items-center gap-1 rounded-chip border border-accent/30 bg-surface pl-2.5 text-xs text-text">
-                <span className="text-muted">{ROTULO_DIM[c.dim]}:</span>
-                <span className="truncate font-medium" title={c.rotulo}>
-                  {c.rotulo}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`Tirar o filtro ${ROTULO_DIM[c.dim]}: ${c.rotulo}`}
-                  title="Tirar este filtro"
-                  onClick={() => tirarChip(c.dim, c.chave)}
-                  className="grid h-7 w-7 place-items-center rounded-chip text-muted hover:text-text pointer-coarse:h-11 pointer-coarse:w-11"
-                >
-                  <IconClose className="h-3.5 w-3.5" />
-                </button>
-              </span>
-            ))}
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setFiltros({})} title="Tirar todos os filtros">
-              Limpar
-            </Button>
+        {mais && (
+          <div className="animate-fade-in-up grid grid-cols-1 gap-[var(--gap-block)] md:col-span-3 md:grid-cols-3">
+            <KpiStat
+              label="Anulado: empenhos"
+              value={brl(reais(t.empAnulado))}
+              completo
+              cor={COR.empenhado}
+              hint={plural(t.empAnulados, "empenho", "empenhos")}
+              onClick={() => abrirOrigem("Anulado: empenhos", recorteTexto, { ...calc.sel, emp: calc.sel.emp.filter((i) => base.emp.anulado[i] > 0) }, "empenhos")}
+              acao="ver os empenhos com anulação"
+            />
+            <KpiStat
+              label="Anulado: liquidações"
+              value={temLiq ? brl(reais(t.liqAnulado)) : "—"}
+              completo
+              cor={COR.liquidado}
+              hint={temLiq ? plural(t.liqAnuladas, "liquidação", "liquidações") : "Sem acesso às Liquidações"}
+              onClick={temLiq ? () => abrirOrigem("Anulado: liquidações", recorteTexto, { ...calc.sel, liq: calc.sel.liq.filter((k) => base.liq.anulado[k] > 0) }, "liquidacoes") : undefined}
+              acao="ver as liquidações com anulação"
+            />
+            <KpiStat
+              label="Anulado: pagamentos"
+              value={temPag ? brl(reais(t.pagAnulado)) : "—"}
+              completo
+              cor={COR.pago}
+              hint={temPag ? plural(t.pagAnuladas, "pagamento", "pagamentos") : "Sem acesso aos Pagamentos"}
+              onClick={temPag ? () => abrirOrigem("Anulado: pagamentos", recorteTexto, { ...calc.sel, pag: calc.sel.pag.filter((k) => base.pag.anuladas[k] > 0) }, "pagamentos") : undefined}
+              acao="ver os pagamentos anulados"
+            />
+            <KpiStat
+              label="Total: empenhos"
+              value={brl(reais(t.empBruto))}
+              completo
+              cor={COR.empenhado}
+              hint={plural(t.empenhos, "empenho", "empenhos")}
+              onClick={() => abrirTudo("empenhos", "Total: empenhos")}
+              acao="ver os empenhos"
+            />
+            <KpiStat
+              label="Total: liquidações"
+              value={temLiq ? brl(reais(t.liqBruto)) : "—"}
+              completo
+              cor={COR.liquidado}
+              hint={temLiq ? plural(t.liquidacoes, "liquidação", "liquidações") : "Sem acesso às Liquidações"}
+              onClick={temLiq ? () => abrirTudo("liquidacoes", "Total: liquidações") : undefined}
+              acao="ver as liquidações"
+            />
+            <KpiStat
+              label="Total: pagamentos"
+              value={temPag ? brl(reais(t.pago + t.pagAnulado)) : "—"}
+              completo
+              cor={COR.pago}
+              hint={temPag ? plural(t.pagamentos + t.pagAnuladas, "pagamento", "pagamentos") : "Sem acesso aos Pagamentos"}
+              onClick={temPag ? () => abrirTudo("pagamentos", "Total: pagamentos") : undefined}
+              acao="ver os pagamentos"
+            />
           </div>
         )}
-      </section>
-
-      <ChartCard title="Funil da execução" subtitle={safra ? "Dos empenhos do período: quanto já foi liquidado e pago" : "O que foi empenhado, liquidado e pago no período"}>
-        <BarrasH
-          ariaLabel="Funil da execução"
-          acao="ver a origem dos dados"
-          onEscolher={(k) => abrirTudo(k as Aba, k === "empenhos" ? "Empenhado" : k === "liquidacoes" ? "Liquidado" : "Pago")}
-          linhas={[
-            {
-              chave: "empenhos",
-              rotulo: "Empenhado",
-              titulo: `Empenhado: ${brl(reais(t.empenhado))}`,
-              segmentos: [{ chave: "e", valor: Math.max(0, t.empenhado), cor: corSerie(0), rotulo: "Empenhado" }],
-              valor: brlCompact(reais(t.empenhado)),
-              detalhe: "100%",
-            },
-            ...(temLiq
-              ? [
-                  {
-                    chave: "liquidacoes",
-                    rotulo: "Liquidado",
-                    titulo: `Liquidado: ${brl(reais(t.liquidado))}`,
-                    segmentos: [{ chave: "l", valor: Math.max(0, t.liquidado), cor: corSerie(1), rotulo: "Liquidado" }],
-                    valor: brlCompact(reais(t.liquidado)),
-                    detalhe: pctTexto(d.pctLiquidado),
-                  },
-                ]
-              : []),
-            ...(temPag
-              ? [
-                  {
-                    chave: "pagamentos",
-                    rotulo: "Pago",
-                    titulo: `Pago: ${brl(reais(t.pago))}`,
-                    segmentos: [{ chave: "p", valor: Math.max(0, t.pago), cor: corSerie(2), rotulo: "Pago" }],
-                    valor: brlCompact(reais(t.pago)),
-                    detalhe: pctTexto(d.pctPago),
-                  },
-                ]
-              : []),
-          ]}
-        />
-        {!safra && (temLiq || temPag) && (
-          <p className="mt-2 text-[11.5px] text-muted">
-            No movimento, o liquidado e o pago incluem os restos a pagar (empenhos de anos anteriores) — por isso podem passar do empenhado. Para a
-            execução dos empenhos do período, use “Por empenho”.
-          </p>
-        )}
-      </ChartCard>
-
-      <ChartCard
-        title={modo === "acumulado" ? "Evolução acumulada" : `Valores por ${rotuloGran}`}
-        subtitle={`${modo === "acumulado" ? "Somando desde o início do período" : "O que entrou em cada balde"} · toque num ponto para ver a origem`}
+      </div>
+      <button
+        type="button"
+        aria-expanded={mais}
+        onClick={() =>
+          setMais((m) => {
+            try {
+              localStorage.setItem(CHAVE_MAIS, m ? "0" : "1");
+            } catch {
+              /* sem armazenamento: vale só nesta visita */
+            }
+            return !m;
+          })
+        }
+        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)]"
       >
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+        {mais ? "Menos indicadores" : "Mais indicadores"}
+        <IconChevronDown className={`h-4 w-4 transition-transform ${mais ? "rotate-180" : ""}`} />
+      </button>
+
+      {/* TODOS os filtros à vista, logo abaixo dos indicadores, no cartão padrão dos filtros: o Período primeiro e as dimensões em colunas. */}
+      <section
+        aria-label="Filtros da execução"
+        className={`rounded-card border p-[var(--pad-card)] transition-colors ${ativosResumo.length ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
+      >
+        <FiltrosDashboard
+          campos={campos}
+          onMudar={mudarFiltro}
+          grade
+          antes={<PeriodoPicker value={periodo} anos={base.disponiveis} onChange={setPeriodo} className="w-full min-w-0" />}
+        />
+      </section>
+      {erro && <ErroCarga msg={erro} onTentar={onTentar} kind="warn" />}
+
+      {/* O gráfico: só as ondas (as cores = as dos indicadores; os nomes e valores na dica); os controles dele no próprio cartão. */}
+      <ChartCard>
+        <div className="mb-2 flex flex-wrap items-center justify-end gap-1.5">
           <Segmented<"diario" | "acumulado">
             value={modo}
             onChange={setModo}
             ariaLabel="Tipo do gráfico"
             options={[
-              { value: "acumulado", label: "Acumulada", dica: "A soma desde o início do período (áreas)" },
-              { value: "diario", label: "Por período", curto: "Período", dica: "O valor de cada dia, semana ou mês (colunas)" },
+              { value: "acumulado", label: "Acumulado", dica: "O gráfico soma desde o início do período" },
+              { value: "diario", label: "Por período", curto: "Período", dica: "O gráfico mostra o valor de cada dia, semana ou mês" },
             ]}
           />
           <Segmented<Granularidade>
             value={gran}
             onChange={setGran}
-            ariaLabel="Granularidade do gráfico"
+            ariaLabel="Agrupar o gráfico por"
             options={[
               { value: "auto", label: "Auto", dica: "Pelo tamanho do período: dias, semanas ou meses" },
-              { value: "dia", label: "Dia" },
-              { value: "semana", label: "Semana" },
-              { value: "mes", label: "Mês" },
+              { value: "dia", label: "Dia", dica: "Agrupar o gráfico por dia" },
+              { value: "semana", label: "Semana", dica: "Agrupar o gráfico por semana" },
+              { value: "mes", label: "Mês", dica: "Agrupar o gráfico por mês" },
             ]}
           />
-          <Button size="sm" variant="secondary" className="ml-auto" aria-pressed={verDados} onClick={() => setVerDados((v) => !v)} icon={<IconLayers className="h-4 w-4" />}>
-            {verDados ? "Ver gráfico" : "Ver dados"}
+          {!verDados && (
+            <>
+              <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos períodos à vista)" disabled={pontosVistos.length <= 4} onClick={() => zoom(0.5)}>
+                <IconZoom className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="icon" aria-label="Afastar" title="Afastar (mais períodos à vista)" disabled={!faixa} onClick={() => zoom(2)}>
+                <IconZoomOut className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="icon" aria-label="Restaurar o zoom" title="Restaurar o zoom (o período inteiro)" disabled={!faixa} onClick={() => setFaixa(null)}>
+                <IconRestaurar className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <Button
+            size="sm"
+            variant="icon"
+            aria-pressed={verDados}
+            aria-label={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
+            title={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
+            onClick={() => setVerDados((v) => !v)}
+          >
+            <IconLayers className="h-4 w-4" />
           </Button>
+          <span aria-hidden className="mx-0.5 h-5 w-px bg-border" />
+          {/* O resumo dos filtros ligados: o MESMO funil das tabelas (✕ tira um; "Limpar" volta tudo ao padrão). O lugar dele
+              fica reservado: aparecer ou sumir não desloca os botões ao lado. */}
+          <span className="inline-flex h-11 w-11 shrink-0 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
+            {ativosResumo.length > 0 && (
+              <FiltrosAtivos
+                titulo="Filtros ligados"
+                colunas={ativosResumo.map((x) => ({
+                  key: x.key,
+                  header: (
+                    <span title={`${x.rotulo}: ${x.valor}`}>
+                      <span className="text-muted">{x.rotulo}:</span> {x.valor}
+                    </span>
+                  ),
+                }))}
+                onLimparColuna={(k) => ativosResumo.find((x) => x.key === k)?.tirar()}
+                onLimpar={limparTudo}
+              />
+            )}
+          </span>
+          <Avisos titulo="Avisos dos dados" avisos={avisos} />
+          <AjudaExecucao />
         </div>
         {verDados ? (
           <DataTable
@@ -476,32 +461,40 @@ export function DashboardExecucao({
           />
         ) : (
           <SerieTemporal
-            pontos={pontos}
-            series={seriesVistas.map((x) => ({ ...x }))}
-            modo={modo === "acumulado" ? "areas" : "colunas"}
+            pontos={pontosVistos}
+            series={seriesVistas}
             ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
             onEscolher={(p) => {
               const pt = s.pontos.find((x) => x.chave === p.chave);
               if (pt) abrirOrigem(modo === "acumulado" ? "Evolução acumulada" : `Valores por ${rotuloGran}`, pt.titulo, selecaoNoIntervalo(base, calc.sel, pt.de, pt.ate), "empenhos");
             }}
-            extraDica={(p, vis) => {
+            extraDica={(p) => {
               if (modo !== "acumulado") return [];
               const e = p.valores.empenhado ?? 0;
               const l: { rotulo: string; valor: string }[] = [];
-              if (vis.has("liquidado") && e > 0) l.push({ rotulo: "Liquidado / empenhado", valor: pctTexto((p.valores.liquidado ?? 0) / e) });
-              if (vis.has("pago") && e > 0) l.push({ rotulo: "Pago / empenhado", valor: pctTexto((p.valores.pago ?? 0) / e) });
-              if (vis.has("pago") && vis.has("empenhado")) l.push({ rotulo: "Diferença empenhado − pago", valor: brl(e - (p.valores.pago ?? 0)) });
+              if (temLiq && e > 0) l.push({ rotulo: "Liquidado / empenhado", valor: pctTexto((p.valores.liquidado ?? 0) / e) });
+              if (temPag && e > 0) l.push({ rotulo: "Pago / empenhado", valor: pctTexto((p.valores.pago ?? 0) / e) });
+              if (temPag) l.push({ rotulo: "Diferença empenhado − pago", valor: brl(e - (p.valores.pago ?? 0)) });
               return l;
             }}
           />
         )}
       </ChartCard>
 
+      {/* O DEMONSTRATIVO: os mesmos números das KPIs, agrupados pela dimensão escolhida (tocar numa linha = a origem dela). */}
+      <DemonstrativoExecucao
+        base={base}
+        calc={calc}
+        podeExportar={podeExportar}
+        temLiq={temLiq}
+        temPag={temPag}
+        onAbrir={(titulo, sel) => abrirOrigem(titulo, recorteTexto, sel, "empenhos")}
+      />
+
       {origem && (
         <OrigemExecucao
           base={base}
           origem={origem}
-          safra={safra}
           temLiq={temLiq}
           temPag={temPag}
           podeExportar={podeExportar}
@@ -535,36 +528,10 @@ function colunasSerie(temLiq: boolean, temPag: boolean): Column<ReturnType<typeo
   ];
 }
 
-/** A faixa de CONFIANÇA: de quando são os dados, o recorte e o que pede atenção. */
-function FaixaConfianca({ atualizado, avisos, recorte, carregando }: { atualizado: string | null; avisos: string[]; recorte: string; carregando: boolean }) {
-  return (
-    <div className="space-y-2">
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-        <span className="inline-flex items-center gap-1.5">
-          <IconDatabase className="h-3.5 w-3.5" aria-hidden />
-          {atualizado ? `Dados da Centi importados até ${dataHoraBR(atualizado)}` : "Nenhuma importação concluída"}
-        </span>
-        <span className="tabular-nums">{recorte}</span>
-        {carregando && <span className="text-accent">Atualizando…</span>}
-      </p>
-      {avisos.length > 0 && (
-        <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
-          <ul className="list-disc space-y-0.5 pl-4">
-            {avisos.map((a) => (
-              <li key={a}>{a}</li>
-            ))}
-          </ul>
-        </Callout>
-      )}
-    </div>
-  );
-}
-
 /** A ORIGEM de um número: as abas Empenhos · Liquidações · Pagamentos com as linhas que o formam. */
 function OrigemExecucao({
   base,
   origem,
-  safra,
   temLiq,
   temPag,
   podeExportar,
@@ -573,7 +540,6 @@ function OrigemExecucao({
 }: {
   base: BaseExec;
   origem: Origem;
-  safra: boolean;
   temLiq: boolean;
   temPag: boolean;
   podeExportar: boolean;
@@ -604,7 +570,7 @@ function OrigemExecucao({
       fonte={
         <>
           Empenhos, liquidações e pagamentos importados da Centi, ligados pelo número do empenho.{" "}
-          {safra ? "Visão por empenho: os empenhos do recorte e toda a execução deles." : "Visão por movimento: cada etapa pela própria data."} As liquidações e os
+          Cada etapa pela própria data (os restos a pagar inclusive). As liquidações e os
           pagamentos aparecem somados por empenho e dia.
         </>
       }
@@ -691,13 +657,14 @@ const colunasEvento = (pag: boolean): Column<EventoExec>[] => [
 const COLUNAS_LIQ = colunasEvento(false);
 const COLUNAS_PAG = colunasEvento(true);
 
-/** O (?) da tela: as visões, as contas de cada número e o que fica de fora. */
+/** O (?) da tela: o período e o tipo, as contas de cada número e o que fica de fora. */
 function AjudaExecucao() {
   return (
     <Ajuda titulo="Execução da despesa" botao="sm">
-      <TopicoAjuda icone={<IconLayers className="h-4 w-4" />} titulo="Movimento × Por empenho">
-        Movimento: cada etapa pela própria data — o que foi empenhado, liquidado e pago no período (inclui os restos a pagar de anos anteriores).
-        Por empenho: os empenhos do período e toda a execução deles, de qualquer data; mostra o que falta liquidar e pagar.
+      <TopicoAjuda icone={<IconLayers className="h-4 w-4" />} titulo="Período e tipo">
+        Cada etapa conta pela própria data: o que foi empenhado, liquidado e pago no Período (os anos carregados seguem o Período). O Tipo
+        separa as liquidações e os pagamentos em Nota de Empenho (empenho do mesmo ano) e Restos a Pagar (empenho de ano anterior ou não
+        importado) — a mesma regra das tabelas; com Restos a Pagar, o empenhado do período não entra.
       </TopicoAjuda>
       <TopicoAjuda icone={<IconInfo className="h-4 w-4" />} titulo="As contas">
         Empenhado = valor empenhado − anulado (a anulação não tem data na Centi: fica na data do empenho). Liquidado = valor das liquidações −
@@ -711,5 +678,111 @@ function AjudaExecucao() {
         linhas que o formam.
       </TopicoAjuda>
     </Ajuda>
+  );
+}
+
+/** As dimensões do demonstrativo (as dos filtros e o Mensal). */
+const DIMS_DEMONSTRATIVO: readonly { valor: DimDemonstrativo; rotulo: string }[] = [
+  ...DIMS_EXEC.map((d) => ({ valor: d as DimDemonstrativo, rotulo: ROTULO_DIM[d] })),
+  { valor: "mes", rotulo: "Mensal" },
+];
+
+/** A TABELA DEMONSTRATIVA do dashboard: "Demonstrativo por" (a dimensão), uma linha por valor com a barra da participação no empenhado. */
+function DemonstrativoExecucao({
+  base,
+  calc,
+  podeExportar,
+  temLiq,
+  temPag,
+  onAbrir,
+}: {
+  base: BaseExec;
+  calc: Calculo;
+  podeExportar: boolean;
+  temLiq: boolean;
+  temPag: boolean;
+  onAbrir: (titulo: string, sel: Selecao) => void;
+}) {
+  const [dim, setDim] = useState<DimDemonstrativo>("unidade");
+  const linhas = useMemo(() => demonstrativo(base, calc, dim), [base, calc, dim]);
+  const maior = useMemo(() => Math.max(0, ...linhas.map((l) => l.empenhado)), [linhas]);
+  const rotuloDim = DIMS_DEMONSTRATIVO.find((x) => x.valor === dim)?.rotulo ?? "";
+  const valor = (k: "empenhado" | "anulado" | "liquidado" | "retido" | "pago", header: string, cor?: (l: LinhaDemonstrativo) => string | undefined): Column<LinhaDemonstrativo> => ({
+    key: k,
+    header,
+    align: "right",
+    nowrap: true,
+    filter: "range",
+    numero: (l) => reais(l[k]),
+    render: (l) => (
+      <span className="tabular-nums" style={{ color: cor?.(l) }}>
+        {brl(reais(l[k]))}
+      </span>
+    ),
+  });
+  const colunas: Column<LinhaDemonstrativo>[] = [
+    {
+      key: "rotulo",
+      header: rotuloDim,
+      minWidth: 260,
+      align: "left",
+      value: (l) => l.rotulo,
+      render: (l) => (
+        <div className="min-w-0 py-0.5" title={l.detalhe ? `${l.rotulo} — ${l.detalhe}` : l.rotulo}>
+          <span className="block truncate text-text">{l.rotulo}</span>
+          <span aria-hidden className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-surface-2">
+            <span className="block h-full rounded-full" style={{ width: `${maior > 0 ? Math.max(0, (l.empenhado / maior) * 100) : 0}%`, background: COR.empenhado }} />
+          </span>
+        </div>
+      ),
+    },
+    valor("empenhado", "Empenhado"),
+    ...(temLiq ? [valor("liquidado", "Liquidado")] : []),
+    valor("anulado", "Anulado", (l) => (l.anulado > 0 ? "var(--warn)" : "var(--faint)")),
+    ...(temPag ? [valor("retido", "Retido"), valor("pago", "Pago")] : []),
+    ...(temPag
+      ? [
+          {
+            key: "pctPago",
+            header: "% pago",
+            align: "right" as const,
+            nowrap: true,
+            total: false as const,
+            filter: "range" as const,
+            numero: (l: LinhaDemonstrativo) => (l.empenhado > 0 ? (l.pago / l.empenhado) * 100 : 0),
+            formatarFaixa: (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+            render: (l: LinhaDemonstrativo) => <span className="tabular-nums text-text-2">{l.empenhado > 0 ? pctTexto(l.pago / l.empenhado) : "—"}</span>,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <ChartCard>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold text-text">Demonstrativo por</h2>
+        <div className="w-full min-w-0 sm:w-56">
+          <SelectField compacto label="" aria-label="Demonstrativo por" value={dim} onChange={(e) => setDim(e.target.value as DimDemonstrativo)}>
+            {DIMS_DEMONSTRATIVO.map((x) => (
+              <option key={x.valor} value={x.valor}>
+                {x.rotulo}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+      </div>
+      <DataTable
+        visao={dim}
+        rows={linhas}
+        getKey={(l) => l.chave}
+        columns={colunas}
+        density="compact"
+        exportar={podeExportar ? { nome: `Demonstrativo por ${rotuloDim}` } : false}
+        onRowClick={(l) => onAbrir(`${rotuloDim}: ${l.rotulo}`, selecaoDaLinha(base, calc.sel, dim, l.chave))}
+        vazio="Nada no recorte dos filtros."
+        resumo={(l) =>
+          `${num(l.length)} ${l.length === 1 ? "linha" : "linhas"} · Empenhado ${brl(reais(l.reduce((t, x) => t + x.empenhado, 0)))}${temPag ? ` · Pago ${brl(reais(l.reduce((t, x) => t + x.pago, 0)))}` : ""}`
+        }
+      />
+    </ChartCard>
   );
 }

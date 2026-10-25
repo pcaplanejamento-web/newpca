@@ -70,6 +70,7 @@ import {
   Image as ImageIcon,
   Inbox,
   Info,
+  CircleAlert,
   KeyRound,
   Landmark,
   Layers,
@@ -264,6 +265,8 @@ export const IconEstrela = Star;
 export const IconRefresh = RefreshCw;
 export const IconPlug = Plug;
 export const IconInfo = Info;
+/** O "(!)" dos AVISOS de uma tela (`Avisos`). */
+export const IconAvisos = CircleAlert;
 export const IconLink = Link2;
 export const IconScale = Scale;
 /** Unificar (juntar itens repetidos num só). */

@@ -963,17 +963,20 @@ export function DataTable<R>({
 }
 
 /** O menu de FILTROS do rodapé: o funil com o número de filtros e, ao abrir, cada coluna filtrada (✕ limpa só ela),
- * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). */
-function FiltrosAtivos({
+ * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). Exportado: o MESMO resumo dos filtros
+ * ligados em outras telas (ex.: o Dashboard da Execução — `titulo`, cada filtro com o valor no `header`). */
+export function FiltrosAtivos({
   colunas,
   extra,
   onLimparColuna,
   onLimpar,
+  titulo = "Nesta tabela",
 }: {
   colunas: { key: string; header: ReactNode }[];
   extra?: { n: number; conteudo: ReactNode };
   onLimparColuna: (key: string) => void;
   onLimpar: () => void;
+  titulo?: string;
 }) {
   const total = colunas.length + (extra?.n ?? 0);
   const rotulo = `Filtros ativos (${total})`;
@@ -999,7 +1002,7 @@ function FiltrosAtivos({
         {colunas.length > 0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Nesta tabela</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{titulo}</p>
               <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline lg:min-h-7">
                 Limpar
               </button>
