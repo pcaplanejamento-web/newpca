@@ -5,7 +5,7 @@ import { Avisos } from "./Avisos";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
 
-export type ResumoOrigem = { label: string; value: ReactNode; hint?: string };
+export type ResumoOrigem = { label: string; value: ReactNode; hint?: string; tone?: "default" | "accent" | "ok" | "warn" | "danger" };
 
 /**
  * ORIGEM DOS DADOS — o banner padrão de "de onde vem este número": o que foi clicado (linha de tabela, fatia ou
@@ -62,7 +62,7 @@ export function OrigemDados({
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
           {resumo.map((r) => (
-            <StatMini key={r.label} label={r.label} value={r.value} hint={r.hint} />
+            <StatMini key={r.label} label={r.label} value={r.value} hint={r.hint} tone={r.tone} />
           ))}
         </div>
         {children}

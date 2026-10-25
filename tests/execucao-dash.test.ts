@@ -21,7 +21,9 @@ import {
   type PacoteExec,
   pagamentoExec,
   reais,
+  resumoSelecao,
   ROTULO_SEM_EMPENHO,
+  saldoEtapa,
   selecaoNoIntervalo,
   deslocarJanela,
   zoomJanela,
@@ -372,4 +374,22 @@ test("execução (núcleo): o demonstrativo — a soma das linhas = as KPIs, em 
   // O sem empenho fica no fim, com o rótulo próprio.
   const porElemento = demonstrativo(base, c, "elemento");
   assert.equal(porElemento.at(-1)?.rotulo, ROTULO_SEM_EMPENHO);
+});
+
+test("execução (núcleo): o resumo de uma seleção = as KPIs; o saldo entre etapas nunca é negativo", async () => {
+  const b = cenario();
+  const base = montarBase(await pacote(b, [2025]));
+  const c = calcular(base, {}, {});
+  const r = resumoSelecao(base, c.sel);
+  assert.equal(r.empenhos, c.totais.empenhos);
+  assert.equal(r.empenhado, c.totais.empenhado);
+  assert.equal(r.liquidado, c.totais.liquidado);
+  assert.equal(r.pago, c.totais.pago);
+  assert.equal(r.retido, c.totais.retido);
+  assert.equal(r.qPag, c.totais.pagamentos);
+  const d = demonstrativo(base, c, "unidade");
+  assert.equal(d.reduce((t, x) => t + x.empenhado, 0), r.empenhado, "o demonstrativo da seleção soma o resumo");
+  assert.deepEqual(saldoEtapa(100, 30), { valor: 70, excedente: false });
+  assert.deepEqual(saldoEtapa(30, 100), { valor: 70, excedente: true });
+  assert.deepEqual(saldoEtapa(50, 50), { valor: 0, excedente: false });
 });

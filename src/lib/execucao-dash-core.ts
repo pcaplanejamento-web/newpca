@@ -945,7 +945,7 @@ const MESES_DEMO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", 
  * O DEMONSTRATIVO dos SELECIONADOS (os mesmos números das KPIs) agrupado por uma dimensão: a soma das linhas = os totais
  * (invariante testado). Ordem: mais empenhado primeiro (no mês, cronológica); "Não informado"/"Sem empenho" no fim.
  */
-export function demonstrativo(b: BaseExec, calc: Calculo, d: DimDemonstrativo): LinhaDemonstrativo[] {
+export function demonstrativo(b: BaseExec, calc: Pick<Calculo, "sel">, d: DimDemonstrativo): LinhaDemonstrativo[] {
   const m = new Map<string, LinhaDemonstrativo>();
   const linha = (k: string) => {
     let l = m.get(k);
@@ -972,6 +972,35 @@ export function demonstrativo(b: BaseExec, calc: Calculo, d: DimDemonstrativo): 
   return [...m.values()].sort((x, y) =>
     fim(x.chave) - fim(y.chave) || (d === "mes" ? x.chave.localeCompare(y.chave) : y.empenhado - x.empenhado || y.pago - x.pago || x.rotulo.localeCompare(y.rotulo, "pt-BR")),
   );
+}
+
+/** Os totais de uma SELEÇÃO (a origem de um recorte) — direto dos arrays, sem montar objetos (em inteiros de 1/ESCALA). */
+export type ResumoSelecao = { empenhos: number; empenhado: number; anulado: number; liquidado: number; qLiq: number; pago: number; qPag: number; retido: number };
+
+export function resumoSelecao(b: BaseExec, s: Selecao): ResumoSelecao {
+  const r: ResumoSelecao = { empenhos: s.emp.length, empenhado: 0, anulado: 0, liquidado: 0, qLiq: 0, pago: 0, qPag: 0, retido: 0 };
+  for (const i of s.emp) {
+    r.empenhado += b.emp.bruto[i] - b.emp.anulado[i];
+    r.anulado += b.emp.anulado[i];
+  }
+  for (const k of s.liq) {
+    r.liquidado += b.liq.valor[k] - b.liq.anulado[k];
+    r.qLiq += b.liq.qtd[k];
+  }
+  for (const k of s.pag) {
+    r.pago += b.pag.pago[k];
+    r.retido += b.pag.retido[k];
+    r.qPag += b.pag.qtd[k];
+  }
+  return r;
+}
+
+/**
+ * O SALDO entre duas etapas (a liquidar = empenhado − liquidado; a pagar = liquidado − pago) sem número negativo: quando a
+ * etapa seguinte passa da anterior (restos a pagar — a execução de empenhos de outros períodos), o valor é o EXCEDENTE.
+ */
+export function saldoEtapa(de: number, ate: number): { valor: number; excedente: boolean } {
+  return ate > de ? { valor: ate - de, excedente: true } : { valor: de - ate, excedente: false };
 }
 
 /** Os selecionados de UMA linha do demonstrativo (a origem dela — a soma é a linha). */

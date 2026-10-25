@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.226.0",
+    data: "2026-10-25",
+    titulo: "Execução: origem com gráficos e tabelas leves",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "A origem de um ponto do gráfico ganhou um painel visual: a evolução acumulada até o ponto, a composição do empenhado (pago, liquidado a pagar e a liquidar) e os 5 maiores por unidade, elemento ou fornecedor — tocar numa barra filtra os registros logo abaixo.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "As tabelas da origem agora são paginadas pelo limite de linhas do sistema (Configurações → Tabelas) e só montam a aba aberta — abrir o acumulado com milhares de empenhos não trava mais.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "Os saldos nunca aparecem negativos: quando o pago passa do liquidado (ou o liquidado passa do empenhado) por causa dos restos a pagar, o indicador vira \"Pago além do liquidado\" (ou \"Liquidado além do empenhado\"), em destaque, na origem e na dica do gráfico.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.225.1",
     data: "2026-10-25",
     titulo: "Menus suspensos sempre dentro do display",

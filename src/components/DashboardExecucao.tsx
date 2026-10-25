@@ -26,7 +26,9 @@ import {
   opcoesDim,
   pagamentoExec,
   reais,
+  resumoSelecao,
   ROTULO_DIM,
+  saldoEtapa,
   rotuloOpcao,
   type Selecao,
   selecaoNoIntervalo,
@@ -46,13 +48,14 @@ import { Button } from "./Button";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
+import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./charts/Barras";
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
 import { corSerie } from "./charts/shared";
 import { type Column, DataTable, FiltrosAtivos } from "./DataTable";
 import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconChevronLeft, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
+import { IconChevronDown, IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { duracaoMotionMs } from "./Modal";
 import { OrigemDados } from "./OrigemDados";
@@ -80,7 +83,7 @@ type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 /** Um recorte da origem: o texto e os registros. */
 type RecorteOrigem = { recorte: string; sel: Selecao };
 /** A origem de um número; com `acumulado`, a do ponto do gráfico também oferece "Acumulado até aqui" (`noAcumulado` = abre nele). */
-type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem; noAcumulado?: boolean };
+type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem & { pontos: PontoTemporal[]; ajustarY: boolean }; noAcumulado?: boolean };
 
 const CHAVE_MAIS = "execucao:mais-indicadores";
 const lerMais = () => {
@@ -274,7 +277,18 @@ export function DashboardExecucao({
       recorte: pt.titulo,
       sel: selecaoNoIntervalo(base, calc.sel, pt.de, pt.ate),
       aba: "empenhos",
-      acumulado: { recorte: `Até ${pt.titulo}`, sel: selecaoNoIntervalo(base, calc.sel, inicio, pt.ate) },
+      acumulado: {
+        recorte: `Até ${pt.titulo}`,
+        sel: selecaoNoIntervalo(base, calc.sel, inicio, pt.ate),
+        // A evolução até o ponto (os pontos do gráfico à vista, em valores acumulados).
+        pontos: s.pontos.slice(0, s.pontos.indexOf(pt) + 1).map((p) => ({
+          chave: p.chave,
+          rotulo: p.rotulo,
+          titulo: p.titulo,
+          valores: { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) },
+        })),
+        ajustarY: !!janela,
+      },
       noAcumulado: modo === "acumulado",
     });
   };
@@ -585,8 +599,14 @@ function dicaDoPonto(pt: PontoDaSerie, modo: "diario" | "acumulado", gran: strin
   const e = pt.acEmpenhado;
   if (temLiq && e > 0) l.push({ secao, rotulo: "Liquidado / empenhado", valor: pctTexto(pt.acLiquidado / e) });
   if (temPag && e > 0) l.push({ secao, rotulo: "Pago / empenhado", valor: pctTexto(pt.acPago / e) });
-  if (temLiq) l.push({ secao, rotulo: "A liquidar", valor: brl(reais(e - pt.acLiquidado)) });
-  if (temLiq && temPag) l.push({ secao, rotulo: "A pagar (liquidado − pago)", valor: brl(reais(pt.acLiquidado - pt.acPago)) });
+  if (temLiq) {
+    const x = saldoEtapa(e, pt.acLiquidado);
+    l.push({ secao, rotulo: SALDO.liquidar[x.excedente ? 1 : 0].rotulo, valor: brl(reais(x.valor)) });
+  }
+  if (temLiq && temPag) {
+    const x = saldoEtapa(pt.acLiquidado, pt.acPago);
+    l.push({ secao, rotulo: SALDO.pagar[x.excedente ? 1 : 0].rotulo, valor: brl(reais(x.valor)) });
+  }
   if (ultimo && ultimo.acEmpenhado > 0 && ultimo !== pt) l.push({ secao, rotulo: "Do empenhado no gráfico", valor: pctTexto(e / ultimo.acEmpenhado) });
   return l;
 }
@@ -613,6 +633,29 @@ function colunasSerie(temLiq: boolean, temPag: boolean): Column<ReturnType<typeo
 }
 
 /** A ORIGEM de um número: as abas Empenhos · Liquidações · Pagamentos com as linhas que o formam. */
+/**
+ * Os SALDOS entre etapas, sem número negativo (`saldoEtapa`): [o normal, o excedente]. A etapa seguinte passa da anterior
+ * quando o recorte executa empenhos de outros períodos (restos a pagar).
+ */
+const SALDO = {
+  liquidar: [
+    { rotulo: "A liquidar", hint: "Empenhado − liquidado" },
+    { rotulo: "Liquidado além do empenhado", hint: "Liquidações de empenhos de outros períodos (restos a pagar)" },
+  ],
+  pagar: [
+    { rotulo: "A pagar", hint: "Liquidado − pago" },
+    { rotulo: "Pago além do liquidado", hint: "Pagamentos de liquidações anteriores ao período (restos a pagar)" },
+  ],
+} as const;
+
+/** Os "Maiores" do painel da origem: os 5 maiores pelo empenhado e o resto somado. */
+const DIMS_MAIORES: { value: DimDemonstrativo; label: string }[] = [
+  { value: "unidade", label: "Unidade" },
+  { value: "elemento", label: "Elemento" },
+  { value: "fornecedor", label: "Fornecedor" },
+];
+const TOP_MAIORES = 5;
+
 function OrigemExecucao({
   base,
   origem,
@@ -632,16 +675,55 @@ function OrigemExecucao({
 }) {
   const [aba, setAba] = useState<Aba>(origem.aba);
   const [acum, setAcum] = useState(!!(origem.acumulado && origem.noAcumulado));
-  const ativo: RecorteOrigem = acum && origem.acumulado ? origem.acumulado : origem;
-  const empenhos = useMemo(() => Array.from(ativo.sel.emp, (i) => ({ i, ...empenhoExec(base, i) })), [base, ativo.sel.emp]);
-  const liqs = useMemo(() => (temLiq ? Array.from(ativo.sel.liq, (k) => liquidacaoExec(base, k)) : []), [base, ativo.sel.liq, temLiq]);
-  const pags = useMemo(() => (temPag ? Array.from(ativo.sel.pag, (k) => pagamentoExec(base, k)) : []), [base, ativo.sel.pag, temPag]);
-  const soma = <T,>(l: T[], f: (x: T) => number) => l.reduce((t, x) => t + f(x), 0);
-  const emp = soma(empenhos, (e) => e.valorEmpenhado - e.valorAnulado);
-  const liq = soma(liqs, (l) => l.valor);
-  const pag = soma(pags, (p) => p.valor);
-  const qLiq = soma(liqs, (l) => l.quantidade);
-  const qPag = soma(pags, (p) => p.quantidade);
+  const [dimMaior, setDimMaior] = useState<DimDemonstrativo>("unidade");
+  /** A barra tocada nos "Maiores" — recorta as listas (a origem daquela linha). */
+  const [foco, setFoco] = useState<{ dim: DimDemonstrativo; chave: string; rotulo: string } | null>(null);
+  const ativo = acum && origem.acumulado ? origem.acumulado : origem;
+  const r = useMemo(() => resumoSelecao(base, ativo.sel), [base, ativo.sel]);
+  const maiores = useMemo(() => demonstrativo(base, ativo, dimMaior), [base, ativo, dimMaior]);
+  const sel = useMemo(() => (foco ? selecaoDaLinha(base, ativo.sel, foco.dim, foco.chave) : ativo.sel), [base, ativo.sel, foco]);
+  const rs = foco ? resumoSelecao(base, sel) : r;
+  // Só as linhas da aba ABERTA são montadas (o resto fica nos índices); a tabela pagina pelo limite do sistema.
+  const linhasEmp = useMemo(() => (aba === "empenhos" ? Array.from(sel.emp, (i) => ({ i, ...empenhoExec(base, i) })) : []), [aba, base, sel.emp]);
+  const linhasEv = useMemo(
+    () => (aba === "liquidacoes" && temLiq ? Array.from(sel.liq, (k) => liquidacaoExec(base, k)) : aba === "pagamentos" && temPag ? Array.from(sel.pag, (k) => pagamentoExec(base, k)) : []),
+    [aba, base, sel.liq, sel.pag, temLiq, temPag],
+  );
+  const sLiq = saldoEtapa(r.empenhado, r.liquidado);
+  const sPag = saldoEtapa(r.liquidado, r.pago);
+  const pct = (v: number) => (r.empenhado > 0 ? ` · ${pctTexto(v / r.empenhado)} do empenhado` : "");
+
+  const linhasMaiores: LinhaBarra[] = useMemo(() => {
+    const top = maiores.slice(0, TOP_MAIORES);
+    const resto = maiores.slice(TOP_MAIORES);
+    const linha = (chave: string, rotulo: string, empenhado: number, clicavel: boolean): LinhaBarra => ({
+      chave,
+      rotulo,
+      titulo: `${rotulo}: ${brl(reais(empenhado))} empenhado`,
+      segmentos: [{ chave: "empenhado", valor: reais(empenhado), cor: COR.empenhado, rotulo: "Empenhado" }],
+      valor: brl(reais(empenhado)),
+      detalhe: r.empenhado > 0 ? pctTexto(empenhado / r.empenhado) : undefined,
+      apagada: !clicavel,
+      clicavel,
+    });
+    return [
+      ...top.map((l) => linha(l.chave, l.rotulo, l.empenhado, true)),
+      ...(resto.length
+        ? [
+            linha("__outras", `Outras ${num(resto.length)}`, resto.reduce((t, l) => t + l.empenhado, 0), false),
+          ]
+        : []),
+    ];
+  }, [maiores, r.empenhado]);
+
+  const composicao: Segmento[] = [
+    ...(temPag ? [{ chave: "pago", valor: reais(Math.min(r.pago, r.liquidado, r.empenhado)), cor: COR.pago, rotulo: "Pago" }] : []),
+    ...(temLiq
+      ? [{ chave: "liquidado", valor: reais(Math.max(0, Math.min(r.liquidado, r.empenhado) - (temPag ? Math.min(r.pago, r.liquidado, r.empenhado) : 0))), cor: COR.liquidado, rotulo: "Liquidado a pagar" }]
+      : []),
+    ...(temLiq ? [{ chave: "aliquidar", valor: reais(Math.max(0, r.empenhado - r.liquidado)), cor: "var(--track)", rotulo: "A liquidar" }] : []),
+  ];
+
   return (
     <OrigemDados
       aberto
@@ -649,11 +731,11 @@ function OrigemExecucao({
       titulo={origem.titulo}
       recorte={ativo.recorte}
       resumo={[
-        { label: "Empenhado", value: brl(emp), hint: plural(empenhos.length, "empenho", "empenhos") },
-        ...(temLiq ? [{ label: "Liquidado", value: brl(liq), hint: `${plural(qLiq, "liquidação", "liquidações")}${emp > 0 ? ` · ${pctTexto(liq / emp)} do empenhado` : ""}` }] : []),
-        ...(temPag ? [{ label: "Pago", value: brl(pag), hint: `${plural(qPag, "ordem", "ordens")}${emp > 0 ? ` · ${pctTexto(pag / emp)} do empenhado` : ""}` }] : []),
-        ...(temLiq ? [{ label: "A liquidar", value: brl(emp - liq), hint: "Empenhado − liquidado" }] : []),
-        ...(temLiq && temPag ? [{ label: "A pagar", value: brl(liq - pag), hint: "Liquidado − pago" }] : []),
+        { label: "Empenhado", value: brl(reais(r.empenhado)), hint: plural(r.empenhos, "empenho", "empenhos") },
+        ...(temLiq ? [{ label: "Liquidado", value: brl(reais(r.liquidado)), hint: `${plural(r.qLiq, "liquidação", "liquidações")}${pct(r.liquidado)}` }] : []),
+        ...(temPag ? [{ label: "Pago", value: brl(reais(r.pago)), hint: `${plural(r.qPag, "ordem", "ordens")}${pct(r.pago)}` }] : []),
+        ...(temLiq ? [{ label: SALDO.liquidar[sLiq.excedente ? 1 : 0].rotulo, value: brl(reais(sLiq.valor)), hint: SALDO.liquidar[sLiq.excedente ? 1 : 0].hint, tone: sLiq.excedente ? ("warn" as const) : undefined }] : []),
+        ...(temLiq && temPag ? [{ label: SALDO.pagar[sPag.excedente ? 1 : 0].rotulo, value: brl(reais(sPag.valor)), hint: SALDO.pagar[sPag.excedente ? 1 : 0].hint, tone: sPag.excedente ? ("warn" as const) : undefined }] : []),
       ]}
       fonte={
         <>
@@ -666,49 +748,118 @@ function OrigemExecucao({
       {origem.acumulado && (
         <Segmented<"periodo" | "acumulado">
           value={acum ? "acumulado" : "periodo"}
-          onChange={(v) => setAcum(v === "acumulado")}
+          onChange={(v) => {
+            setAcum(v === "acumulado");
+            setFoco(null); // a barra tocada era do outro recorte
+          }}
           ariaLabel="Recorte da origem"
-          className="mb-2"
           options={[
             { value: "periodo", label: `Só ${origem.recorte}`, curto: "Só o ponto", dica: "Os registros deste dia, semana ou mês" },
             { value: "acumulado", label: "Acumulado até aqui", curto: "Acumulado", dica: "Os registros desde o início do gráfico até este ponto" },
           ]}
         />
       )}
-      <Segmented<Aba>
-        value={aba}
-        onChange={setAba}
-        ariaLabel="Etapa da origem"
-        className="mb-3"
-        options={[
-          { value: "empenhos", label: `Empenhos (${num(empenhos.length)})`, curto: "Empenhos" },
-          ...(temLiq ? [{ value: "liquidacoes" as const, label: `Liquidações (${num(qLiq)})`, curto: "Liquidações" }] : []),
-          ...(temPag ? [{ value: "pagamentos" as const, label: `Pagamentos (${num(qPag)})`, curto: "Pagamentos" }] : []),
-        ]}
-      />
-      {aba === "empenhos" ? (
-        <DataTable
-          rows={empenhos}
-          getKey={(e) => e.i}
-          density="compact"
-          exportar={podeExportar ? { nome: `Origem - empenhos - ${ativo.recorte}` } : false}
-          onRowClick={(e) => onEmpenho(e.i)}
-          columns={COLUNAS_EMP}
-          vazio="Nenhum empenho neste recorte."
-          resumo={(l) => `${plural(l.length, "empenho", "empenhos")} · ${brl(l.reduce((x, e) => x + e.valorEmpenhado - e.valorAnulado, 0))}`}
-        />
-      ) : (
-        <DataTable
-          rows={aba === "liquidacoes" ? liqs : pags}
-          getKey={(e) => e.chave}
-          density="compact"
-          exportar={podeExportar ? { nome: `Origem - ${aba} - ${ativo.recorte}` } : false}
-          onRowClick={(e) => e.ei >= 0 && onEmpenho(e.ei)}
-          columns={aba === "liquidacoes" ? COLUNAS_LIQ : COLUNAS_PAG}
-          vazio={aba === "liquidacoes" ? "Nenhuma liquidação neste recorte." : "Nenhum pagamento neste recorte."}
-          resumo={(l) => `${num(l.reduce((x, e) => x + e.quantidade, 0))} registros · ${brl(l.reduce((x, e) => x + e.valor, 0))}`}
-        />
-      )}
+
+      {/* O PAINEL VISUAL do recorte: a evolução (no acumulado), a composição e os maiores. */}
+      <div className="grid gap-[var(--gap-block)] lg:grid-cols-2">
+        {acum && origem.acumulado && origem.acumulado.pontos.length > 1 && (
+          <section className="rounded-card border border-border p-[var(--pad-card)] lg:col-span-2" aria-label="Evolução acumulada até o ponto">
+            <h3 className="mb-2 text-[13px] font-semibold text-text">Evolução até {origem.recorte}</h3>
+            <SerieTemporal
+              pontos={origem.acumulado.pontos}
+              series={SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true))}
+              altura={180}
+              ajustarY={origem.acumulado.ajustarY}
+              ariaLabel="Evolução acumulada do empenhado, liquidado e pago até o ponto"
+            />
+          </section>
+        )}
+        {temLiq && r.empenhado > 0 && (
+          <section className="rounded-card border border-border p-[var(--pad-card)]" aria-label="Composição do empenhado">
+            <h3 className="mb-3 text-[13px] font-semibold text-text">Composição do empenhado</h3>
+            <BarraSegmentada segmentos={composicao} max={reais(r.empenhado)} altura={14} trilho />
+            <ul className="mt-3 space-y-1.5 text-[12.5px]">
+              {composicao.map((c) => (
+                <li key={c.chave} className="flex items-center gap-2">
+                  <span aria-hidden className="size-2.5 shrink-0 rounded-[3px]" style={{ background: c.cor }} />
+                  <span className="min-w-0 flex-1 truncate text-text-2">{c.rotulo}</span>
+                  <span className="tabular-nums font-semibold text-text">{brl(c.valor)}</span>
+                  <span className="w-14 text-right tabular-nums text-muted">{pctTexto(c.valor / reais(r.empenhado))}</span>
+                </li>
+              ))}
+            </ul>
+            {(sLiq.excedente || sPag.excedente) && <p className="mt-2 text-[12px] text-warn">Inclui a execução de empenhos de outros períodos (restos a pagar) — fora desta barra.</p>}
+          </section>
+        )}
+        {maiores.length > 0 && (
+          <section className={`rounded-card border border-border p-[var(--pad-card)] ${temLiq && r.empenhado > 0 ? "" : "lg:col-span-2"}`} aria-label="Maiores pelo empenhado">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-[13px] font-semibold text-text">Maiores pelo empenhado</h3>
+              <Segmented<DimDemonstrativo> value={dimMaior} onChange={setDimMaior} ariaLabel="Maiores por" options={DIMS_MAIORES} />
+            </div>
+            <BarrasH
+              linhas={linhasMaiores}
+              ariaLabel={`Maiores por ${ROTULO_DIM[dimMaior as DimExec] ?? dimMaior}`}
+              ativa={foco?.dim === dimMaior ? foco.chave : null}
+              acao="filtrar os registros abaixo"
+              onEscolher={(k) => {
+                const l = maiores.find((x) => x.chave === k);
+                if (!l) return;
+                setFoco((f) => (f && f.dim === dimMaior && f.chave === l.chave ? null : { dim: dimMaior, chave: l.chave, rotulo: l.rotulo }));
+              }}
+            />
+          </section>
+        )}
+      </div>
+
+      {/* Os REGISTROS (paginados pelo limite do sistema — Configurações → Tabelas). */}
+      <section aria-label="Registros" className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented<Aba>
+            value={aba}
+            onChange={setAba}
+            ariaLabel="Etapa da origem"
+            options={[
+              { value: "empenhos", label: `Empenhos (${num(rs.empenhos)})`, curto: "Empenhos" },
+              ...(temLiq ? [{ value: "liquidacoes" as const, label: `Liquidações (${num(rs.qLiq)})`, curto: "Liquidações" }] : []),
+              ...(temPag ? [{ value: "pagamentos" as const, label: `Pagamentos (${num(rs.qPag)})`, curto: "Pagamentos" }] : []),
+            ]}
+          />
+          {foco && (
+            <Button size="sm" variant="secondary" onClick={() => setFoco(null)} aria-label={`Tirar o filtro ${foco.rotulo}`} title="Tirar o filtro">
+              <span className="max-w-[16rem] truncate">
+                {ROTULO_DIM[foco.dim as DimExec] ?? foco.dim}: {foco.rotulo}
+              </span>
+              <IconClose size={14} />
+            </Button>
+          )}
+        </div>
+        {aba === "empenhos" ? (
+          <DataTable
+            rows={linhasEmp}
+            getKey={(e) => e.i}
+            density="compact"
+            linhasSalvas="origem-execucao"
+            exportar={podeExportar ? { nome: `Origem - empenhos - ${ativo.recorte}` } : false}
+            onRowClick={(e) => onEmpenho(e.i)}
+            columns={COLUNAS_EMP}
+            vazio="Nenhum empenho neste recorte."
+            resumo={(l) => `${plural(l.length, "empenho", "empenhos")} · ${brl(l.reduce((x, e) => x + e.valorEmpenhado - e.valorAnulado, 0))}`}
+          />
+        ) : (
+          <DataTable
+            rows={linhasEv}
+            getKey={(e) => e.chave}
+            density="compact"
+            linhasSalvas="origem-execucao"
+            exportar={podeExportar ? { nome: `Origem - ${aba} - ${ativo.recorte}` } : false}
+            onRowClick={(e) => e.ei >= 0 && onEmpenho(e.ei)}
+            columns={aba === "liquidacoes" ? COLUNAS_LIQ : COLUNAS_PAG}
+            vazio={aba === "liquidacoes" ? "Nenhuma liquidação neste recorte." : "Nenhum pagamento neste recorte."}
+            resumo={(l) => `${num(l.reduce((x, e) => x + e.quantidade, 0))} registros · ${brl(l.reduce((x, e) => x + e.valor, 0))}`}
+          />
+        )}
+      </section>
     </OrigemDados>
   );
 }
