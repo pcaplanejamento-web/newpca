@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Avisos } from "./Avisos";
-import { Modal } from "./Modal";
+import { Modal, type ModalPainel } from "./Modal";
 import { StatMini } from "./StatMini";
 
 export type ResumoOrigem = { label: string; value: ReactNode; hint?: string; tone?: "default" | "accent" | "ok" | "warn" | "danger" };
@@ -20,6 +20,7 @@ export function OrigemDados({
   resumo,
   fonte,
   avisos,
+  paineis,
   children,
 }: {
   aberto: boolean;
@@ -33,6 +34,8 @@ export function OrigemDados({
   fonte: ReactNode;
   /** Observações do recorte (ex.: itens anuais, teto da lista). */
   avisos?: ReactNode[];
+  /** Os banners que abrem AO LADO a partir das linhas (a pilha padrão — ex.: o empenho e a liquidação dele). */
+  paineis?: ModalPainel[];
   children: ReactNode;
 }) {
   return (
@@ -41,6 +44,8 @@ export function OrigemDados({
       onClose={onClose}
       titulo={`Origem dos dados — ${titulo}`}
       size="xl"
+      paineis={paineis}
+      larguraPrincipal={paineis?.some((x) => x.aberto) ? 60 : undefined}
       acoesCabecalho={
         <Avisos
           titulo="Sobre estes dados"

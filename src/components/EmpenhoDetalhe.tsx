@@ -19,7 +19,7 @@ import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
 import { Badge } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
 import { LiquidacaoDetalhe } from "./LiquidacaoDetalhe";
-import { Modal } from "./Modal";
+import { Modal, type ModalPainel } from "./Modal";
 import { PagamentoDetalhe } from "./PagamentoDetalhe";
 import { Skeleton } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -198,11 +198,12 @@ function Execucao({
 }
 
 /**
- * O BANNER de um empenho (`Modal`): o `EmpenhoDetalhe` com o que a tela já tem na hora; o histórico, o registro e a
- * EXECUÇÃO chegam de `GET /api/empenhos/[id]` (a guarda da tela Empenhos e o escopo valem). Tocar numa liquidação ou num
- * pagamento abre o detalhe dele AO LADO (`DetalheDaExecucao`). O MESMO na tabela de empenhos e no Dashboard da Execução.
+ * Os PAINÉIS de um empenho para uma pilha de banners: o `EmpenhoDetalhe` com o que a tela já tem na hora (o histórico, o
+ * registro e a EXECUÇÃO chegam de `GET /api/empenhos/[id]` — a guarda da tela Empenhos e o escopo valem) e, tocando numa
+ * liquidação ou num pagamento, o detalhe dele AO LADO (`DetalheDaExecucao`). Usado pelo `EmpenhoBanner` e pela origem
+ * dos números da Execução (o empenho entra ao lado da origem, na mesma pilha).
  */
-export function EmpenhoBanner({ empenho, onClose }: { empenho: EmpenhoNaTela | null; onClose: () => void }) {
+export function usePaineisEmpenho(empenho: EmpenhoNaTela | null, onClose: () => void): { empenho: ModalPainel; execucao: ModalPainel } {
   const [completo, setCompleto] = useState<EmpenhoCompleto | null | undefined>(undefined);
   const [execucao, setExecucao] = useState<ExecucaoEmpenho | null>(null);
   const [lateral, setLateral] = useState<AbertoExecucao | null>(null);
@@ -225,21 +226,33 @@ export function EmpenhoBanner({ empenho, onClose }: { empenho: EmpenhoNaTela | n
       vivo = false;
     };
   }, [id]);
+  return {
+    empenho: {
+      id: "empenho",
+      aberto: empenho != null,
+      titulo: empenho ? `Empenho ${empenho.numero}` : "Empenho",
+      largura: 44,
+      onClose,
+      children: empenho ? <EmpenhoDetalhe key={empenho.id} empenho={empenho} completo={completo} execucao={execucao} onAbrir={setLateral} ativo={lateral} /> : <div />,
+    },
+    execucao: {
+      id: "execucao",
+      aberto: empenho != null && lateral != null,
+      titulo: lateral ? tituloDaExecucao(lateral) : "Execução",
+      largura: 36,
+      onClose: () => setLateral(null),
+      children: empenho && lateral ? <DetalheDaExecucao key={`${lateral.tipo}:${lateral.item.id}`} aberto={lateral} empenho={empenho} anoEmpenho={completo?.ano ?? null} /> : <div />,
+    },
+  };
+}
+
+/** O BANNER de um empenho (`Modal`): os painéis de `usePaineisEmpenho` — o empenho e, ao lado, a liquidação ou o pagamento.
+ * O MESMO na tabela de empenhos. */
+export function EmpenhoBanner({ empenho, onClose }: { empenho: EmpenhoNaTela | null; onClose: () => void }) {
+  const p = usePaineisEmpenho(empenho, onClose);
   return (
-    <Modal
-      open={empenho != null}
-      onClose={onClose}
-      titulo={empenho ? `Empenho ${empenho.numero}` : "Empenho"}
-      size="lg"
-      lateral={{
-        aberto: empenho != null && lateral != null,
-        titulo: lateral ? tituloDaExecucao(lateral) : "Execução",
-        onClose: () => setLateral(null),
-        children:
-          empenho && lateral ? <DetalheDaExecucao key={`${lateral.tipo}:${lateral.item.id}`} aberto={lateral} empenho={empenho} anoEmpenho={completo?.ano ?? null} /> : <div />,
-      }}
-    >
-      {empenho ? <EmpenhoDetalhe key={empenho.id} empenho={empenho} completo={completo} execucao={execucao} onAbrir={setLateral} ativo={lateral} /> : <div />}
+    <Modal open={p.empenho.aberto} onClose={onClose} titulo={p.empenho.titulo} size="lg" lateral={p.execucao}>
+      {p.empenho.children}
     </Modal>
   );
 }

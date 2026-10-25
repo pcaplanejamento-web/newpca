@@ -1384,3 +1384,38 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
   animation: none;
   opacity: 0;
 }
+
+/* A troca de um desenho de gráfico por outro (outros baldes — SerieTemporal): o anterior esmaece embaixo enquanto o novo
+   surge por cima, no mesmo tempo (~0,5 s). */
+.grafico-entra {
+  animation: grafico-entra 0.52s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+.grafico-sai {
+  animation: grafico-sai 0.52s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+@keyframes grafico-entra {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes grafico-sai {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* O SVG dos gráficos de série ESTICA com a caixa (com `preserveAspectRatio="none"`, posto pelo componente): numa mudança
+   de largura o desenho acompanha no mesmo quadro, com as laterais coladas, até o redesenho na medida nova. */
+.grafico-esticado .recharts-responsive-container > div,
+.grafico-esticado .recharts-wrapper,
+.grafico-esticado svg.recharts-surface {
+  width: 100% !important;
+  height: 100% !important;
+}
+

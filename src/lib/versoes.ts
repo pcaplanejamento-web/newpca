@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.228.0",
+    data: "2026-10-25",
+    titulo: "Execução: comparar trechos do gráfico, transições suaves e o empenho ao lado da origem",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "Compare um trecho do gráfico: com um ponto marcado, clique em outro ponto — ou pressione e arraste sobre o gráfico. Só as áreas dentro do trecho ficam destacadas — cada cor no seu tom de seleção, com a linha do topo — e o resto esmaece; a comparação mostra o que entrou nele (com as quantidades), a média, o acumulado no início e no fim, o crescimento e quanto foi liquidado e pago; “Ver os dados do trecho” abre a origem dele.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Toda mudança no gráfico é suave: com os mesmos pontos os valores deslizam até os novos, e com outros pontos (agrupamento, zoom, período) um desenho dá lugar ao outro esmaecendo — sempre com as laterais no lugar, também ao abrir e fechar o menu. Datas maiores e mais fortes e linhas de marcação mais visíveis, no claro e no escuro.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Na origem, a evolução até o ponto usa o mesmo desenho e a mesma dica do gráfico da tela, e tocar num registro abre o empenho AO LADO (e dele a liquidação ou o pagamento), na pilha de banners padrão.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.227.0",
     data: "2026-10-25",
     titulo: "Execução: gráfico em tela cheia no cartão, com controles em vidro e marcação por clique",

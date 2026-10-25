@@ -52,7 +52,7 @@ import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./char
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
 import { corSerie } from "./charts/shared";
 import { type Column, DataTable, FiltrosAtivos } from "./DataTable";
-import { EmpenhoBanner } from "./EmpenhoDetalhe";
+import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { FiltrosDashboard } from "./FiltrosDashboard";
 import { IconChevronDown, IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
@@ -97,7 +97,7 @@ type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 /** Um recorte da origem: o texto e os registros. */
 type RecorteOrigem = { recorte: string; sel: Selecao };
 /** A origem de um número; com `acumulado`, a do ponto do gráfico também oferece "Acumulado até aqui" (`noAcumulado` = abre nele). */
-type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem & { pontos: PontoTemporal[]; ajustarY: boolean }; noAcumulado?: boolean };
+type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem & { pontos: PontoDaSerie[]; ajustarY: boolean }; noAcumulado?: boolean };
 
 const CHAVE_MAIS = "execucao:mais-indicadores";
 const lerMais = () => {
@@ -157,7 +157,6 @@ export function DashboardExecucao({
   const [animarMais, setAnimarMais] = useState(false);
   const [verDados, setVerDados] = useState(false);
   const [origem, setOrigem] = useState<Origem | null>(null);
-  const [empenho, setEmpenho] = useState<EmpenhoNaTela | null>(null);
   useEffect(() => {
     // A preferência guardada abre já pronta, sem animar na chegada.
     const v = lerMais();
@@ -307,15 +306,25 @@ export function DashboardExecucao({
         recorte: `Até ${pt.titulo}`,
         sel: selecaoNoIntervalo(base, calc.sel, inicio, pt.ate),
         // A evolução até o ponto (os pontos do gráfico à vista, em valores acumulados).
-        pontos: s.pontos.slice(0, s.pontos.indexOf(pt) + 1).map((p) => ({
-          chave: p.chave,
-          rotulo: p.rotulo,
-          titulo: p.titulo,
-          valores: { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) },
-        })),
+        pontos: s.pontos.slice(0, s.pontos.indexOf(pt) + 1),
         ajustarY: !!janela,
       },
       noAcumulado: modo === "acumulado",
+    });
+  };
+
+  /** A origem de um TRECHO do gráfico (do início do 1º balde ao fim do 2º) e o acumulado até o fim dele. */
+  const abrirTrecho = (de: string, ate: string) => {
+    const pa = pontoPorChave.get(de);
+    const pb = pontoPorChave.get(ate);
+    const inicio = sTodo.pontos[0]?.de;
+    if (!pa || !pb || !inicio) return;
+    setOrigem({
+      titulo: "Trecho do gráfico",
+      recorte: `${pa.titulo} a ${pb.titulo}`,
+      sel: selecaoNoIntervalo(base, calc.sel, pa.de, pb.ate),
+      aba: "empenhos",
+      acumulado: { recorte: `Até ${pb.titulo}`, sel: selecaoNoIntervalo(base, calc.sel, inicio, pb.ate), pontos: s.pontos.slice(0, s.pontos.indexOf(pb) + 1), ajustarY: !!janela },
     });
   };
 
@@ -599,6 +608,12 @@ export function DashboardExecucao({
                   const pt = pontoPorChave.get(p.chave);
                   return pt ? dicaDoPonto(pt, modo, rotuloGran, sTodo.pontos.at(-1), temLiq, temPag) : [];
                 }}
+                onTrecho={(a, b) => abrirTrecho(a.chave, b.chave)}
+                dicaTrecho={(a, b) => {
+                  const pa = pontoPorChave.get(a.chave);
+                  const pb = pontoPorChave.get(b.chave);
+                  return pa && pb ? dicaDoTrecho(s.pontos, pa, pb, rotuloGran, temLiq, temPag) : [];
+                }}
               />
               {/* A lupa, o restaurar e a tabela empilhados no canto inferior direito, à mesma distância da borda dos demais. */}
               <div className={`pointer-events-none absolute right-2 bottom-2 z-10 ${ESCALA_PILHA}`}>
@@ -637,11 +652,10 @@ export function DashboardExecucao({
           temLiq={temLiq}
           temPag={temPag}
           podeExportar={podeExportar}
+          gran={rotuloGran}
           onClose={() => setOrigem(null)}
-          onEmpenho={(i) => setEmpenho(paraTela(empenhoExec(base, i)))}
         />
       )}
-      <EmpenhoBanner empenho={empenho} onClose={() => setEmpenho(null)} />
     </div>
   );
 }
@@ -682,6 +696,41 @@ function dicaDoPonto(pt: PontoDaSerie, modo: "diario" | "acumulado", gran: strin
     l.push({ secao, rotulo: SALDO.pagar[x.excedente ? 1 : 0].rotulo, valor: brl(reais(x.valor)) });
   }
   if (ultimo && ultimo.acEmpenhado > 0 && ultimo !== pt) l.push({ secao, rotulo: "Do empenhado no gráfico", valor: pctTexto(e / ultimo.acEmpenhado) });
+  return l;
+}
+
+/**
+ * A COMPARAÇÃO de um trecho do gráfico (do início do balde `a` ao fim do `b`): o que entrou no trecho (com as quantidades), a
+ * média por balde, o acumulado no início e no fim (e quanto cresceu) e a execução do trecho — % liquidado e pago sobre o
+ * empenhado dele. Os acumulados da série dão o trecho sem varrer os registros.
+ */
+function dicaDoTrecho(pontos: PontoDaSerie[], a: PontoDaSerie, b: PontoDaSerie, gran: string, temLiq: boolean, temPag: boolean): LinhaDica[] {
+  const ia = pontos.indexOf(a);
+  const ib = pontos.indexOf(b);
+  const baldes = pontos.slice(ia, ib + 1);
+  const n = baldes.length;
+  const no = (ac: number, val: number, acFim: number) => acFim - ac + val;
+  const emp = no(a.acEmpenhado, a.empenhado, b.acEmpenhado);
+  const liq = no(a.acLiquidado, a.liquidado, b.acLiquidado);
+  const pag = no(a.acPago, a.pago, b.acPago);
+  const conta = (q: number, um: string, varios: string) => (q ? ` · ${plural(q, um, varios)}` : "");
+  const soma = (f: (p: PontoDaSerie) => number) => baldes.reduce((t, p) => t + f(p), 0);
+  const dias = (diaDoIso(b.ate) ?? 0) - (diaDoIso(a.de) ?? 0) + 1;
+  const baldesTexto = gran === "dia" ? "" : ` · ${n} ${n === 1 ? gran : gran === "mês" ? "meses" : `${gran}s`}`;
+  const l: LinhaDica[] = [{ rotulo: "Duração", valor: `${plural(dias, "dia", "dias")}${baldesTexto}` }];
+  let secao = "No trecho";
+  l.push({ secao, rotulo: "Empenhado", valor: brl(reais(emp)) + conta(soma((p) => p.qEmp), "empenho", "empenhos") });
+  if (temLiq) l.push({ secao, rotulo: "Liquidado", valor: brl(reais(liq)) + conta(soma((p) => p.qLiq), "liquidação", "liquidações") });
+  if (temPag) l.push({ secao, rotulo: "Pago", valor: brl(reais(pag)) + conta(soma((p) => p.qPag), "ordem", "ordens") });
+  if (n > 1) l.push({ secao, rotulo: `Empenhado por ${gran} (média)`, valor: brl(reais(emp / n)) });
+  secao = "Acumulado";
+  const ini = a.acEmpenhado - a.empenhado;
+  l.push({ secao, rotulo: "Empenhado no início", valor: brl(reais(ini)) });
+  l.push({ secao, rotulo: "Empenhado no fim", valor: brl(reais(b.acEmpenhado)) });
+  if (ini > 0) l.push({ secao, rotulo: "Crescimento no trecho", valor: `+${pctTexto(emp / ini)}` });
+  secao = "Execução do trecho";
+  if (temLiq && emp > 0) l.push({ secao, rotulo: "Liquidado / empenhado", valor: pctTexto(liq / emp) });
+  if (temPag && emp > 0) l.push({ secao, rotulo: "Pago / empenhado", valor: pctTexto(pag / emp) });
   return l;
 }
 
@@ -736,16 +785,17 @@ function OrigemExecucao({
   temLiq,
   temPag,
   podeExportar,
+  gran,
   onClose,
-  onEmpenho,
 }: {
   base: BaseExec;
   origem: Origem;
   temLiq: boolean;
   temPag: boolean;
   podeExportar: boolean;
+  /** O agrupamento do gráfico (o texto da dica da evolução). */
+  gran: string;
   onClose: () => void;
-  onEmpenho: (i: number) => void;
 }) {
   const [aba, setAba] = useState<Aba>(origem.aba);
   const [acum, setAcum] = useState(!!(origem.acumulado && origem.noAcumulado));
@@ -753,6 +803,22 @@ function OrigemExecucao({
   /** A barra tocada nos "Maiores" — recorta as listas (a origem daquela linha). */
   const [foco, setFoco] = useState<{ dim: DimDemonstrativo; chave: string; rotulo: string } | null>(null);
   const ativo = acum && origem.acumulado ? origem.acumulado : origem;
+  // O EMPENHO de uma linha abre AO LADO (a pilha padrão: origem | empenho | liquidação ou pagamento).
+  const [empI, setEmpI] = useState<number | null>(null);
+  const empTela = useMemo(() => (empI == null ? null : paraTela(empenhoExec(base, empI))), [base, empI]);
+  const pe = usePaineisEmpenho(empTela, () => setEmpI(null));
+  // A evolução até o ponto: o MESMO desenho e a mesma dica do gráfico da tela.
+  const evolucao = useMemo(
+    () =>
+      (origem.acumulado?.pontos ?? []).map((p) => ({
+        chave: p.chave,
+        rotulo: p.rotulo,
+        titulo: p.titulo,
+        valores: { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) },
+      })),
+    [origem.acumulado],
+  );
+  const serieEvolucao = useMemo(() => new Map((origem.acumulado?.pontos ?? []).map((p) => [p.chave, p])), [origem.acumulado]);
   const r = useMemo(() => resumoSelecao(base, ativo.sel), [base, ativo.sel]);
   const maiores = useMemo(() => demonstrativo(base, ativo, dimMaior), [base, ativo, dimMaior]);
   const sel = useMemo(() => (foco ? selecaoDaLinha(base, ativo.sel, foco.dim, foco.chave) : ativo.sel), [base, ativo.sel, foco]);
@@ -804,6 +870,7 @@ function OrigemExecucao({
       onClose={onClose}
       titulo={origem.titulo}
       recorte={ativo.recorte}
+      paineis={[pe.empenho, pe.execucao]}
       resumo={[
         { label: "Empenhado", value: brl(reais(r.empenhado)), hint: plural(r.empenhos, "empenho", "empenhos") },
         ...(temLiq ? [{ label: "Liquidado", value: brl(reais(r.liquidado)), hint: `${plural(r.qLiq, "liquidação", "liquidações")}${pct(r.liquidado)}` }] : []),
@@ -838,14 +905,24 @@ function OrigemExecucao({
       <div className="grid gap-[var(--gap-block)] lg:grid-cols-2">
         {acum && origem.acumulado && origem.acumulado.pontos.length > 1 && (
           <section className="rounded-card border border-border p-[var(--pad-card)] lg:col-span-2" aria-label="Evolução acumulada até o ponto">
-            <h3 className="mb-2 text-[13px] font-semibold text-text">Evolução até {origem.recorte}</h3>
-            <SerieTemporal
-              pontos={origem.acumulado.pontos}
-              series={SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true))}
-              altura={180}
-              ajustarY={origem.acumulado.ajustarY}
-              ariaLabel="Evolução acumulada do empenhado, liquidado e pago até o ponto"
-            />
+            {/* O MESMO desenho do gráfico da tela (o cartão inteiro, as datas por dentro, o título em vidro e a mesma dica). */}
+            <div className="relative overflow-hidden rounded-card bg-surface-2/60">
+              <SerieTemporal
+                pontos={evolucao}
+                preencher
+                series={SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true))}
+                altura={280}
+                ajustarY={origem.acumulado.ajustarY}
+                ariaLabel="Evolução acumulada do empenhado, liquidado e pago até o ponto"
+                extraDica={(p) => {
+                  const pt = serieEvolucao.get(p.chave);
+                  return pt ? dicaDoPonto(pt, "acumulado", gran, origem.acumulado?.pontos.at(-1), temLiq, temPag) : [];
+                }}
+              />
+              <div className={`pointer-events-none absolute top-2 left-2 z-10 px-3 py-1.5 text-[13px] font-semibold text-text ${VIDRO} ${ESCALA_CONTROLES}`}>
+                Evolução até {origem.recorte}
+              </div>
+            </div>
           </section>
         )}
         {temLiq && r.empenhado > 0 && (
@@ -915,7 +992,8 @@ function OrigemExecucao({
             density="compact"
             linhasSalvas="origem-execucao"
             exportar={podeExportar ? { nome: `Origem - empenhos - ${ativo.recorte}` } : false}
-            onRowClick={(e) => onEmpenho(e.i)}
+            onRowClick={(e) => setEmpI(e.i)}
+            activeKey={empI}
             columns={COLUNAS_EMP}
             vazio="Nenhum empenho neste recorte."
             resumo={(l) => `${plural(l.length, "empenho", "empenhos")} · ${brl(l.reduce((x, e) => x + e.valorEmpenhado - e.valorAnulado, 0))}`}
@@ -927,7 +1005,7 @@ function OrigemExecucao({
             density="compact"
             linhasSalvas="origem-execucao"
             exportar={podeExportar ? { nome: `Origem - ${aba} - ${ativo.recorte}` } : false}
-            onRowClick={(e) => e.ei >= 0 && onEmpenho(e.ei)}
+            onRowClick={(e) => e.ei >= 0 && setEmpI(e.ei)}
             columns={aba === "liquidacoes" ? COLUNAS_LIQ : COLUNAS_PAG}
             vazio={aba === "liquidacoes" ? "Nenhuma liquidação neste recorte." : "Nenhum pagamento neste recorte."}
             resumo={(l) => `${num(l.reduce((x, e) => x + e.quantidade, 0))} registros · ${brl(l.reduce((x, e) => x + e.valor, 0))}`}
