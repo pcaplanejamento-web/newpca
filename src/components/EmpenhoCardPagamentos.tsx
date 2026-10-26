@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
+import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
 import { brl, dataBR, num } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { FerramentasAba } from "./AbasEspaco";
@@ -11,7 +12,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { avisoDeFalha, avisoSemEmpenho, colunaCard, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
+import { avisoDeFalha, avisoSemEmpenho, colunaAno, colunaCard, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
 import { Avisos } from "./Avisos";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
@@ -46,10 +47,13 @@ export type Pagamento = {
   tipo: TipoExecucao;
   /** O card que gravou o registro (o banner pede por ele; a coluna Card da tabela única). */
   cardId: number;
+  /** O ano do registro (o da importação — a coluna Ano de "Todos os anos"). */
+  ano: number;
 };
 
 const daTupla = (t: unknown[], ano: number): Pagamento => ({
   id: Number(t[0]),
+  ano,
   data: (t[1] as string | null) ?? null,
   numeroEmpenho: String(t[2] ?? ""),
   credor: (t[3] as string | null) ?? null,
@@ -83,6 +87,7 @@ const colValor = (key: "valor" | "valorRetencao" | "valorLiquido", header: strin
 
 const COLUNAS: Column<Pagamento>[] = [
   { key: "data", header: "Data", nowrap: true, filter: "date", value: (x) => x.data ?? "", render: (x) => <span className="tabular-nums">{x.data ? dataBR(x.data) : "—"}</span> },
+  colunaAno<Pagamento>(),
   {
     key: "id",
     header: "Ordem",
@@ -174,6 +179,7 @@ export function EmpenhoCardPagamentos({
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<Pagamento | null>(null);
   const pedido = useRef(0);
+  const anosRef = useRef<{ ano: number; n: number }[]>([]);
   const [completo, setCompleto] = useState<PagamentoCompleto | null | undefined>(undefined);
 
   // O detalhe: o que a tabela tem na hora; o registro e o empenho ligado chegam depois.
@@ -200,9 +206,11 @@ export function EmpenhoCardPagamentos({
         if (!vivo) return;
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
         setAnos(j.anos ?? []);
-        // A 1ª carga abre no ano mais recente; uma recarga (versão nova) mantém o ano escolhido, se ele ainda existir.
+        // A 1ª carga abre em "Todos os anos"; uma recarga (versão nova) mantém o recorte escolhido, se o ano ainda existir —
+        // um recorte NOVO (mesmo igual) relê as linhas já com a lista de anos nova (um ano novo entra no "Todos os anos").
         const l = j.anos ?? [];
-        setRecorte((rc) => (rc && l.some((a) => a.ano === rc.ano) ? rc : l.length ? { ano: l[0].ano, removidos: false } : null));
+        anosRef.current = l;
+        setRecorte((rc) => (rc && (rc.ano === ANO_TODOS || l.some((a) => a.ano === rc.ano)) ? { ...rc } : l.length ? { ano: ANO_TODOS, removidos: false } : null));
       } catch (e) {
         if (vivo) setErro(e instanceof Error ? e.message : "Não foi possível carregar os pagamentos.");
       }
@@ -218,11 +226,18 @@ export function EmpenhoCardPagamentos({
       setCarregando(true);
       setErro(null);
       try {
-        const r = await fetch(`${rota}?ano=${rc.ano}${rc.removidos ? "&removidos=1" : ""}`);
-        const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+        // "Todos os anos" = um pedido POR ANO (cada um com o próprio limite do servidor), juntos — nenhum ano fica de fora:
+        // a falha de um é a falha da carga.
+        const partes = await Promise.all(
+          anosDoRecorte(rc.ano, anosRef.current).map(async (ano) => {
+            const r = await fetch(`${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`);
+            const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+            if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+            return (j.linhas ?? []).map((t) => daTupla(t, ano));
+          }),
+        );
         if (n !== pedido.current) return;
-        if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
-        const novas = (j.linhas ?? []).map((t) => daTupla(t, rc.ano));
+        const novas = partes.flat();
         setLinhas(novas);
         setVista(null);
         // Recarregou com os dados novos (uma importação de empenhos muda o tipo e a unidade): o detalhe aberto segue, atualizado.
@@ -237,10 +252,10 @@ export function EmpenhoCardPagamentos({
   );
   // A VERSÃO dos dados da execução (importação promovida, vínculos, cards) vem da página: mudou, relê — o tipo (Nota de
   // Empenho × Restos a Pagar), o órgão e a unidade vêm do empenho ligado, lido na hora pelo número.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a versão também relê (importação nova de empenhos).
+  // A releitura pela versão nova passa pelos anos (acima): eles chegam primeiro e o recorte novo pede as linhas.
   useEffect(() => {
     if (recorte) void carregar(recorte);
-  }, [recorte, carregar, versao]);
+  }, [recorte, carregar]);
 
   const base = vista ?? linhas ?? [];
   const tot = useMemo(
@@ -262,6 +277,7 @@ export function EmpenhoCardPagamentos({
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
+            <option value={ANO_TODOS}>Todos os anos</option>
             {anos.map((a) => (
               <option key={a.ano} value={a.ano}>
                 {a.ano}
@@ -322,7 +338,7 @@ export function EmpenhoCardPagamentos({
             onOrdenadas={setVista}
             onRowClick={setAberto}
             activeKey={aberto?.id ?? null}
-            exportar={{ nome: `${nome} - pagamentos ${recorte.ano}${recorte.removidos ? " - removidos" : ""}` }}
+            exportar={{ nome: `${nome} - pagamentos ${rotuloRecorteAno(recorte.ano)}${recorte.removidos ? " - removidos" : ""}` }}
             acoesRodape={
               <Button
                 size="sm"
@@ -334,7 +350,7 @@ export function EmpenhoCardPagamentos({
                 Removidos na Centi
               </Button>
             }
-            vazio={recorte.removidos ? "Nenhum pagamento removido na Centi neste ano." : "Nenhum pagamento neste ano."}
+            vazio={recorte.removidos ? `Nenhum pagamento removido na Centi${recorte.ano === ANO_TODOS ? "" : " neste ano"}.` : `Nenhum pagamento${recorte.ano === ANO_TODOS ? "" : " neste ano"}.`}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "pagamento" : "pagamentos"} · Pago líquido ${brl(somaPaga(l, "valorLiquido"))}`}
           />
         </>

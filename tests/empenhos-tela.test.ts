@@ -3,11 +3,13 @@ import { test } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import {
+  ANO_TODOS,
   anoEscolhido,
   chaveEscopoEmpenhos,
   EMPENHOS_POR_PEDACO,
   empenhoNoEscopo,
   empenhosDoPacote,
+  juntarAnos,
   type PacoteEmpenhos,
   resumoEmpenhos,
 } from "../src/lib/empenhos-tela-core.ts";
@@ -92,8 +94,12 @@ test("tela de empenhos: o ano da URL só vale se existe; senão o mais recente",
     { ano: 2025, n: 1, soma: 0, removidos: 0, atualizadoEm: null },
   ];
   assert.equal(anoEscolhido(anos, "2025"), 2025);
-  assert.equal(anoEscolhido(anos, "2019"), 2026);
-  assert.equal(anoEscolhido(anos, "x"), 2026);
+  // Ausente, "todos" ou um ano sem empenhos = TODOS OS ANOS (o padrão).
+  assert.equal(anoEscolhido(anos, "2019"), ANO_TODOS);
+  assert.equal(anoEscolhido(anos, "x"), ANO_TODOS);
+  assert.equal(anoEscolhido(anos, "todos"), ANO_TODOS);
+  assert.equal(anoEscolhido(anos, undefined), ANO_TODOS);
+  assert.equal(anoEscolhido(anos, "0"), ANO_TODOS);
   assert.equal(anoEscolhido([], "2026"), null);
   // Tupla incompleta não quebra.
   assert.deepEqual(empenhosDoPacote({ n: 1, dic: {}, linhas: [[5, "7"]] })[0].valorPago, 0);
@@ -208,4 +214,47 @@ test("tabela ÚNICA: a VERSÃO muda com a promoção de QUALQUER card de empenho
   assert.equal(await consultaVersaoEmpenhos(b.db, null, 2026), v2, "card de liquidações não mexe na versão dos empenhos");
   b.raw.exec("DELETE FROM empenho_cards WHERE id = 1");
   assert.notEqual(await consultaVersaoEmpenhos(b.db, null, 2026), v2);
+});
+
+test("tela de empenhos: TODOS OS ANOS juntos — cada ano com o seu dicionário, as linhas com o ano, todos os anos nas duas ordens", async () => {
+  const b = banco();
+  b.raw.exec(`INSERT INTO empenho_cards (id, nome) VALUES (9, 'X')`);
+  const ins = b.raw.prepare(
+    "INSERT INTO empenhos (card_id, ano, chave, numero, data, orgao_gestor, fornecedor, valor_empenhado) VALUES (9, ?, ?, ?, ?, 'PMRV', ?, ?)",
+  );
+  ins.run(2025, "2025|PMRV|1", "1", "2025-03-10", "ALFA", 10);
+  ins.run(2025, "2025|PMRV|2", "2", "2025-11-02", "BETA", 20);
+  ins.run(2026, "2026|PMRV|1", "1", "2026-01-15", "GAMA", 30);
+  const pacotes = await Promise.all(
+    [2026, 2025].map(async (ano) => ({ ano, pacote: JSON.parse(String(await textoPacoteEmpenhos(b.db, 9, ano, false))) as PacoteEmpenhos })),
+  );
+  const todas = juntarAnos(pacotes);
+  assert.equal(todas.length, 3);
+  // O dicionário de cada ano não se mistura com o do outro (o fornecedor certo em cada linha).
+  assert.deepEqual(
+    todas.map((e) => `${e.ano}:${e.numero}:${e.fornecedor}`).sort(),
+    ["2025:1:ALFA", "2025:2:BETA", "2026:1:GAMA"],
+  );
+  const asc = [...todas].sort((a, c) => String(a.data).localeCompare(String(c.data))).map((e) => e.data);
+  assert.deepEqual(asc, ["2025-03-10", "2025-11-02", "2026-01-15"]);
+  assert.equal(juntarAnos([]).length, 0);
+});
+
+test("tela de empenhos: os ANOS leem a última promoção UMA vez por ano — nunca por empenho (a cota diária de leituras do D1)", async () => {
+  const b = banco();
+  const lote = b.raw.prepare("INSERT INTO centi_lotes (card_id, ano, estado, concluido_em) VALUES (?, ?, ?, ?)");
+  const emp = b.raw.prepare("INSERT INTO empenhos (card_id, chave, ano, numero, data, orgao_gestor, valor_empenhado) VALUES (1, ?, ?, ?, '2025-01-01', 'P', 1)");
+  b.raw.exec("BEGIN");
+  for (let i = 0; i < 2000; i++) lote.run(1, 2024 + (i % 3), i % 2 ? "promovido" : "erro", `2026-0${1 + (i % 9)}-01`);
+  for (const ano of [2024, 2025, 2026]) for (let i = 0; i < 10000; i++) emp.run(`${ano}|P|${i}`, ano, String(i));
+  b.raw.exec("COMMIT");
+  for (const card of [1, null]) {
+    const t = performance.now();
+    const anos = await consultaAnosEmpenhos(b.db, card);
+    // Por empenho (a v1.237.0) levava segundos e lia dezenas de milhões de linhas; por ano, milissegundos.
+    assert.ok(performance.now() - t < 1500, `anos ${card ?? "todos"}: ${Math.round(performance.now() - t)} ms`);
+    assert.deepEqual(anos.map((a) => a.ano), [2026, 2025, 2024]);
+    assert.equal(anos[0].n, 10000);
+    assert.equal(anos[0].atualizadoEm, "2026-09-01");
+  }
 });

@@ -6,7 +6,10 @@ import { type ExecucaoEmpenho, LIMITE_EXECUCAO, semRepetir } from "./execucao-em
 import { type AnoEmpenhos, chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
 import { consultaAnosEmpenhos, consultaVersaoEmpenhos, textoPacoteEmpenhos } from "./empenhos-tela-sql";
 import { unidadeDoModulo } from "./escopo-cabecalho";
+import { consultaVersaoExecucao } from "./execucao-sql";
+import { anosLiquidacoes, textoLiquidacoes } from "./liquidacoes-tela";
 import { criarMemoVersao } from "./memo-versao-core";
+import { anosPagamentos, textoPagamentos } from "./pagamentos-tela";
 
 /**
  * A TABELA de um CARD de empenhos no D1. O pacote de um ano (~2,4 MB para 21 mil empenhos) fica na MEMÓRIA do Worker enquanto a
@@ -14,6 +17,8 @@ import { criarMemoVersao } from "./memo-versao-core";
  * de novo sem importação nova não lê nada além da versão.
  */
 const memo = criarMemoVersao({ max: 12, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
+/** Os ANOS de cada tabela (a página e o "Todos os anos" os pedem a cada abertura e a cada versão nova). */
+const memoAnos = criarMemoVersao({ max: 24, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
 
 /**
  * O ESCOPO dos empenhos da pessoa (por requisição): a unidade do cabeçalho — ou as unidades que ela acessa, com Empenhos
@@ -34,7 +39,18 @@ export const escopoDosEmpenhos = cache(async (): Promise<EscopoEmpenhos> => {
 
 /** Os anos do card — `null` = de TODOS os cards de empenhos (a tabela única da tela). */
 export async function anosEmpenhos(card: number | null, escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
-  return consultaAnosEmpenhos(getDb(), card, escopo);
+  const db = getDb();
+  const ver = await consultaVersaoExecucao(db);
+  return memoAnos.obter(`empenhos:${card ?? "todos"}:${chaveEscopoEmpenhos(escopo)}`, ver, () => consultaAnosEmpenhos(db, card, escopo));
+}
+
+/** Os anos de liquidações/pagamentos (card ou todos) — na memória enquanto a versão da execução for a mesma. */
+export async function anosTabelaExecucao(tipo: "liquidacoes" | "pagamentos", card: number | null, escopo: EscopoEmpenhos): Promise<{ ano: number; n: number }[]> {
+  const db = getDb();
+  const ver = await consultaVersaoExecucao(db);
+  return memoAnos.obter(`${tipo}:${card ?? "todos"}:${chaveEscopoEmpenhos(escopo)}`, ver, () =>
+    tipo === "liquidacoes" ? anosLiquidacoes(card, escopo, db) : anosPagamentos(card, escopo, db),
+  );
 }
 
 /** O pacote do ano do card (`null` = todos os cards, sem repetir o empenho) como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */
@@ -50,6 +66,27 @@ export async function pacoteEmpenhos(card: number | null, ano: number, removidos
   } catch {
     return null;
   }
+}
+
+/**
+ * As LIQUIDAÇÕES/PAGAMENTOS de um ano (card ou todos) como TEXTO JSON — na MEMÓRIA do Worker enquanto a versão da EXECUÇÃO
+ * (a última importação promovida de qualquer card + vínculos + cards — a unidade na tela vem do empenho) for a mesma: abrir a
+ * tela de novo, ou o "Todos os anos" relendo depois de uma importação, não lê de novo o que não mudou (a cota diária de
+ * leituras do D1).
+ */
+const memoExecucao = criarMemoVersao({ max: 16, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
+export async function textoTabelaExecucao(
+  tipo: "liquidacoes" | "pagamentos",
+  card: number | null,
+  ano: number,
+  removidos: boolean,
+  escopo: EscopoEmpenhos,
+): Promise<string> {
+  const db = getDb();
+  const ver = await consultaVersaoExecucao(db);
+  return memoExecucao.obter(`${tipo}:${card ?? "todos"}:${ano}:${removidos ? 1 : 0}:${chaveEscopoEmpenhos(escopo)}`, ver, () =>
+    tipo === "liquidacoes" ? textoLiquidacoes(card, ano, removidos, escopo, db) : textoPagamentos(card, ano, removidos, escopo, db),
+  );
 }
 
 export type EmpenhoCompleto = typeof empenhos.$inferSelect & { loteEstado: string | null; loteConcluidoEm: string | null };

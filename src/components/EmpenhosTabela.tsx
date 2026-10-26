@@ -3,22 +3,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
+  ANO_TODOS,
   type AnoEmpenhos,
+  anosDoRecorte,
   type EmpenhoNaTela,
-  empenhosDoPacote,
   type EscopoEmpenhos,
   escopoVazio,
+  juntarAnos,
   type PacoteEmpenhos,
   PROBLEMAS_EMPENHO,
   problemasDoEmpenho,
   REGULAR_EMPENHO,
   resumoEmpenhos,
+  rotuloRecorteAno,
 } from "@/lib/empenhos-tela-core";
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { Avisos } from "./Avisos";
-import { avisoDeFalha, colunaCard } from "./EmpenhoCardLiquidacoes";
+import { avisoDeFalha, colunaAno, colunaCard } from "./EmpenhoCardLiquidacoes";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -69,6 +72,7 @@ const COLUNAS: Column<EmpenhoNaTela>[] = [
     ),
   },
   { key: "data", header: "Data", nowrap: true, filter: "date", value: (e) => e.data ?? "", render: (e) => <span className="tabular-nums">{dataBR(e.data)}</span> },
+  colunaAno<EmpenhoNaTela>(),
   {
     key: "unidade",
     header: "Unidade",
@@ -164,30 +168,45 @@ export function EmpenhosTabela({
   const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
   const pedido = useRef(0);
 
-  const carregar = useCallback(async (r: Recorte, fresco = false) => {
-    const k = chaveRecorte(r);
-    const n = ++pedido.current;
-    setErro(null);
-    const guardado = fresco ? undefined : guardados.current.get(k);
-    if (guardado) {
-      setLinhas(guardado);
-      return;
-    }
-    setCarregando(true);
-    if (!fresco) setLinhas(null);
-    try {
-      const resp = await fetch(`/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
+  // Um ano lido (e guardado nesta aba) — "Todos os anos" junta um pedido por ano, cada um com o próprio limite do servidor.
+  const lerAno = useCallback(
+    async (ano: number, removidos: boolean, fresco: boolean): Promise<EmpenhoNaTela[]> => {
+      const k = `${ano}:${removidos ? 1 : 0}`;
+      const guardado = fresco ? undefined : guardados.current.get(k);
+      if (guardado) return guardado;
+      const resp = await fetch(`/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
       const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
       if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
-      const lista = empenhosDoPacote(j.pacote);
+      const lista = juntarAnos([{ ano, pacote: j.pacote }]);
       guardados.current.set(k, lista);
-      if (n === pedido.current) setLinhas(lista);
-    } catch (e) {
-      if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os empenhos.");
-    } finally {
-      if (n === pedido.current) setCarregando(false);
-    }
-  }, [cardId]);
+      return lista;
+    },
+    [cardId],
+  );
+
+  const carregar = useCallback(
+    async (r: Recorte, fresco = false) => {
+      const n = ++pedido.current;
+      setErro(null);
+      const lidos = anosDoRecorte(r.ano, anos).map((ano) => guardados.current.get(`${ano}:${r.removidos ? 1 : 0}`));
+      if (!fresco && lidos.every(Boolean)) {
+        setLinhas((lidos as EmpenhoNaTela[][]).flat());
+        return;
+      }
+      setCarregando(true);
+      if (!fresco) setLinhas(null);
+      try {
+        // Nenhum ano fica de fora: a falha de um é a falha da carga (com "Tentar de novo").
+        const partes = await Promise.all(anosDoRecorte(r.ano, anos).map((ano) => lerAno(ano, r.removidos, fresco)));
+        if (n === pedido.current) setLinhas(partes.flat());
+      } catch (e) {
+        if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os empenhos.");
+      } finally {
+        if (n === pedido.current) setCarregando(false);
+      }
+    },
+    [anos, lerAno],
+  );
 
   useEffect(() => {
     if (recorte) void carregar(recorte);
@@ -207,12 +226,13 @@ export function EmpenhosTabela({
   useEffect(() => {
     if (!recorte) return;
     const u = new URL(window.location.href);
-    u.searchParams.set("ano", String(recorte.ano));
+    u.searchParams.set("ano", recorte.ano === ANO_TODOS ? "todos" : String(recorte.ano));
     window.history.replaceState(window.history.state, "", u);
   }, [recorte]);
 
 
-  const ano = anos.find((a) => a.ano === recorte?.ano);
+  // Os removidos do recorte: "Todos os anos" soma os de cada ano.
+  const removidosNoRecorte = recorte ? anos.filter((a) => recorte.ano === ANO_TODOS || a.ano === recorte.ano).reduce((t, a) => t + a.removidos, 0) : 0;
   const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
 
@@ -221,6 +241,7 @@ export function EmpenhosTabela({
       <FerramentasAba>
         {anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
+            <option value={ANO_TODOS}>Todos os anos</option>
             {anos.map((a) => (
               <option key={a.ano} value={a.ano}>
                 {a.ano}
@@ -284,9 +305,9 @@ export function EmpenhosTabela({
               activeKey={aberto?.id ?? null}
               onOrdenadas={setVista}
               edicoes={{ chave: CHAVE_TABELA_EMPENHOS, lista: eds.lista, padroes: eds.padroes, podePublicar, onMudar: (lista, padroes) => setEds({ lista, padroes }) }}
-              exportar={{ nome: `${nome} ${recorte.ano}${recorte.removidos ? " - removidos" : ""}` }}
+              exportar={{ nome: `${nome} ${rotuloRecorteAno(recorte.ano)}${recorte.removidos ? " - removidos" : ""}` }}
               acoesRodape={
-                ano && ano.removidos > 0 ? (
+                removidosNoRecorte > 0 ? (
                   <Button
                     size="sm"
                     variant={recorte.removidos ? "primary" : "secondary"}
@@ -294,11 +315,11 @@ export function EmpenhosTabela({
                     title={recorte.removidos ? "Voltar aos empenhos vigentes" : "Os empenhos que a Centi não traz mais"}
                     onClick={() => setRecorte({ ano: recorte.ano, removidos: !recorte.removidos })}
                   >
-                    Removidos na Centi ({num(ano.removidos)})
+                    Removidos na Centi ({num(removidosNoRecorte)})
                   </Button>
                 ) : undefined
               }
-              vazio={recorte.removidos ? "Nenhum empenho removido na Centi neste ano." : "Nenhum empenho neste ano."}
+              vazio={recorte.removidos ? `Nenhum empenho removido na Centi${recorte.ano === ANO_TODOS ? "" : " neste ano"}.` : `Nenhum empenho${recorte.ano === ANO_TODOS ? "" : " neste ano"}.`}
               resumo={(l) => {
                 const s = resumoEmpenhos(l);
                 return `${num(s.n)} ${s.n === 1 ? "empenho" : "empenhos"} · Empenhado ${brl(s.empenhado)} · Pago ${brl(s.pago)}`;

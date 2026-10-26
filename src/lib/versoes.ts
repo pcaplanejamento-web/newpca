@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.237.1",
+    data: "2026-10-26",
+    titulo: "Sistema de volta: leitura mais leve + todos os anos juntos",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "As telas paravam com “O servidor não conseguiu montar esta tela”: a lista de anos dos empenhos lia o banco linha a linha a cada abertura e esgotava a cota diária de leituras. Agora lê uma vez por ano (centenas de vezes menos) e fica guardada até uma importação nova.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "A tabela abre em “Todos os anos”: os empenhos de todos os anos importados juntos (coluna Ano para filtrar) — ordenar a data, crescente ou decrescente, passa por todos os anos. Escolher um ano no seletor segue valendo.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Liquidações", texto: "A tabela abre em “Todos os anos”, com a coluna Ano; as liquidações ficam guardadas no servidor até uma importação nova.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Pagamentos", texto: "A tabela abre em “Todos os anos”, com a coluna Ano; os pagamentos ficam guardados no servidor até uma importação nova.", link: "/painel/pagamentos" },
+    ],
+  },
+  {
     versao: "1.237.0",
     data: "2026-10-26",
     titulo: "Empenhos, liquidações e pagamentos numa tabela única",

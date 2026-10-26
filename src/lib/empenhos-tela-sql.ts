@@ -82,7 +82,12 @@ function prefixo(card: number | null, ano: number, removidos: boolean, escopo: E
   return sql.join([sql.raw(`WITH base AS (SELECT empenhos.*, ${UNIDADE_SISTEMA} AS unidade_sistema, row_number() OVER (ORDER BY empenhos.data DESC, empenhos.id DESC) AS rn FROM empenhos WHERE `), onde(card, ano, removidos, escopo), sql.raw(`), ${dics} `)], sql.raw(""));
 }
 
-/** Os anos com empenhos no card: quantos (vigentes), a soma empenhada, quantos removidos na Centi e a última promoção. */
+/**
+ * Os anos com empenhos no card: quantos (vigentes), a soma empenhada, quantos removidos na Centi e a última promoção.
+ * AGREGA POR ANO PRIMEIRO e só então lê a última promoção — UMA subconsulta por ANO (pelo índice `centi_lotes_card_ano_idx`),
+ * nunca uma por empenho: a subconsulta por linha lia dezenas de milhões de linhas a cada abertura da tela e esgotou a cota
+ * diária de leituras do D1 (v1.237.1 — o sistema inteiro ficou fora do ar).
+ */
 export async function consultaAnosEmpenhos(db: Db, card: number | null, escopo: EscopoEmpenhos = null): Promise<AnoEmpenhos[]> {
   const so = escopo === null ? sql`` : sql.join([sql.raw("AND "), doEscopo(escopo, "e.")], sql.raw(""));
   // Todos os cards: o mesmo empenho (a chave) em dois cards conta UMA vez — o do card de menor id, vigente antes de removido.
@@ -92,17 +97,20 @@ export async function consultaAnosEmpenhos(db: Db, card: number | null, escopo: 
           "(SELECT * FROM (SELECT x.*, row_number() OVER (PARTITION BY x.chave, x.removido_em IS NULL ORDER BY x.card_id) AS rk FROM empenhos x) WHERE rk = 1) e WHERE 1 ",
         )
       : sql`empenhos e WHERE e.card_id = ${card} `;
-  const atualizado =
+  const lotes =
     card === null
-      ? sql.raw("(SELECT MAX(l.concluido_em) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = 'empenhos' AND l.ano = e.ano AND l.estado = 'promovido')")
-      : sql.raw("(SELECT MAX(l.concluido_em) FROM centi_lotes l WHERE l.card_id = e.card_id AND l.ano = e.ano AND l.estado = 'promovido')");
+      ? sql.raw("l.card_id IN (SELECT c.id FROM empenho_cards c WHERE c.tipo = 'empenhos')")
+      : sql`l.card_id = ${card}`;
   const l = await db.all<{ ano: number; n: number; soma: number | null; removidos: number; atualizado: string | null }>(sql`
-    SELECT e.ano AS ano,
-      SUM(CASE WHEN e.removido_em IS NULL THEN 1 ELSE 0 END) AS n,
-      SUM(CASE WHEN e.removido_em IS NULL THEN e.valor_empenhado ELSE 0 END) AS soma,
-      SUM(CASE WHEN e.removido_em IS NOT NULL THEN 1 ELSE 0 END) AS removidos,
-      MAX(${atualizado}) AS atualizado
-    FROM ${de}${so} GROUP BY e.ano ORDER BY e.ano DESC`);
+    SELECT g.ano AS ano, g.n AS n, g.soma AS soma, g.removidos AS removidos,
+      (SELECT MAX(l.concluido_em) FROM centi_lotes l WHERE ${lotes} AND l.ano = g.ano AND l.estado = 'promovido') AS atualizado
+    FROM (
+      SELECT e.ano AS ano,
+        SUM(CASE WHEN e.removido_em IS NULL THEN 1 ELSE 0 END) AS n,
+        SUM(CASE WHEN e.removido_em IS NULL THEN e.valor_empenhado ELSE 0 END) AS soma,
+        SUM(CASE WHEN e.removido_em IS NOT NULL THEN 1 ELSE 0 END) AS removidos
+      FROM ${de}${so} GROUP BY e.ano
+    ) g ORDER BY g.ano DESC`);
   return l.map((a) => ({ ano: Number(a.ano), n: Number(a.n), soma: Number(a.soma ?? 0), removidos: Number(a.removidos), atualizadoEm: a.atualizado }));
 }
 

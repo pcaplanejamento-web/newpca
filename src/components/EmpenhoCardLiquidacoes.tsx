@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
+import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -45,10 +46,13 @@ type Liquidacao = {
   tipo: TipoExecucao;
   /** O card que gravou o registro (o banner pede por ele; a coluna Card da tabela única). */
   cardId: number;
+  /** O ano do registro (o da importação — a coluna Ano de "Todos os anos"). */
+  ano: number;
 };
 
 const daTupla = (t: unknown[], ano: number): Liquidacao => ({
   id: Number(t[0]),
+  ano,
   data: (t[1] as string | null) ?? null,
   numero: (t[2] as string | null) ?? null,
   numeroEmpenho: String(t[3] ?? ""),
@@ -76,6 +80,11 @@ export function colunaTipoExecucao<T extends { tipo: TipoExecucao }>(): Column<T
   return { key: "tipo", header: "Tipo", nowrap: true, total: false, value: (x) => rotuloTipoExecucao(x.tipo), render: (x) => <SeloTipoExecucao tipo={x.tipo} /> };
 }
 
+/** A coluna ANO (o ano do registro — "Todos os anos" junta vários): filtrável, ordenável. */
+export function colunaAno<T extends { ano?: number }>(): Column<T> {
+  return { key: "ano", header: "Ano", nowrap: true, total: false, value: (x) => (x.ano != null ? String(x.ano) : "—"), render: (x) => <span className="tabular-nums">{x.ano ?? "—"}</span> };
+}
+
 /**
  * A coluna CARD da TABELA ÚNICA (empenhos, liquidações e pagamentos de todos os cards): o nome do card que gravou o registro.
  */
@@ -98,6 +107,7 @@ const colValor = (key: "valor" | "valorAnulado" | "valorLiquido" | "valorPago" |
 
 const COLUNAS: Column<Liquidacao>[] = [
   { key: "data", header: "Data", nowrap: true, filter: "date", value: (x) => x.data ?? "", render: (x) => <span className="tabular-nums">{x.data ? dataBR(x.data) : "—"}</span> },
+  colunaAno<Liquidacao>(),
   { key: "numero", header: "Nº liquidação", nowrap: true, total: false, value: (x) => x.numero ?? "", render: (x) => <CelulaCopiavel copiar={x.numero} rotulo="nº da liquidação">
           <span className="tabular-nums">{x.numero ?? "—"}</span>
         </CelulaCopiavel> },
@@ -146,6 +156,7 @@ export function EmpenhoCardLiquidacoes({
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<Liquidacao | null>(null);
   const pedido = useRef(0);
+  const anosRef = useRef<{ ano: number; n: number }[]>([]);
   const [completo, setCompleto] = useState<LiquidacaoCompleta | null | undefined>(undefined);
 
   // O detalhe: o que a tabela tem na hora; o registro e o empenho ligado chegam depois.
@@ -172,9 +183,11 @@ export function EmpenhoCardLiquidacoes({
         if (!vivo) return;
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
         setAnos(j.anos ?? []);
-        // A 1ª carga abre no ano mais recente; uma recarga (versão nova) mantém o ano escolhido, se ele ainda existir.
+        // A 1ª carga abre em "Todos os anos"; uma recarga (versão nova) mantém o recorte escolhido, se o ano ainda existir —
+        // um recorte NOVO (mesmo igual) relê as linhas já com a lista de anos nova (um ano novo entra no "Todos os anos").
         const l = j.anos ?? [];
-        setRecorte((rc) => (rc && l.some((a) => a.ano === rc.ano) ? rc : l.length ? { ano: l[0].ano, removidos: false } : null));
+        anosRef.current = l;
+        setRecorte((rc) => (rc && (rc.ano === ANO_TODOS || l.some((a) => a.ano === rc.ano)) ? { ...rc } : l.length ? { ano: ANO_TODOS, removidos: false } : null));
       } catch (e) {
         if (vivo) setErro(e instanceof Error ? e.message : "Não foi possível carregar as liquidações.");
       }
@@ -190,11 +203,18 @@ export function EmpenhoCardLiquidacoes({
       setCarregando(true);
       setErro(null);
       try {
-        const r = await fetch(`${rota}?ano=${rc.ano}${rc.removidos ? "&removidos=1" : ""}`);
-        const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+        // "Todos os anos" = um pedido POR ANO (cada um com o próprio limite do servidor), juntos — nenhum ano fica de fora:
+        // a falha de um é a falha da carga.
+        const partes = await Promise.all(
+          anosDoRecorte(rc.ano, anosRef.current).map(async (ano) => {
+            const r = await fetch(`${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`);
+            const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+            if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+            return (j.linhas ?? []).map((t) => daTupla(t, ano));
+          }),
+        );
         if (n !== pedido.current) return;
-        if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
-        const novas = (j.linhas ?? []).map((t) => daTupla(t, rc.ano));
+        const novas = partes.flat();
         setLinhas(novas);
         setVista(null);
         // Recarregou com os dados novos (uma importação de empenhos muda o tipo e a unidade): o detalhe aberto segue, atualizado.
@@ -209,10 +229,10 @@ export function EmpenhoCardLiquidacoes({
   );
   // A VERSÃO dos dados da execução (importação promovida, vínculos, cards) vem da página: mudou, relê — o tipo (Nota de
   // Empenho × Restos a Pagar), o órgão e a unidade vêm do empenho ligado, lido na hora pelo número.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a versão também relê (importação nova de empenhos).
+  // A releitura pela versão nova passa pelos anos (acima): eles chegam primeiro e o recorte novo pede as linhas.
   useEffect(() => {
     if (recorte) void carregar(recorte);
-  }, [recorte, carregar, versao]);
+  }, [recorte, carregar]);
 
   const base = vista ?? linhas ?? [];
   const tot = useMemo(() => ({ n: base.length, valor: soma(base, "valor"), anulado: soma(base, "valorAnulado"), liquido: soma(base, "valorLiquido"), pago: soma(base, "valorPago"), saldo: soma(base, "saldo") }), [base]);
@@ -223,6 +243,7 @@ export function EmpenhoCardLiquidacoes({
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
+            <option value={ANO_TODOS}>Todos os anos</option>
             {anos.map((a) => (
               <option key={a.ano} value={a.ano}>
                 {a.ano}
@@ -280,7 +301,7 @@ export function EmpenhoCardLiquidacoes({
             onOrdenadas={setVista}
             onRowClick={setAberto}
             activeKey={aberto?.id ?? null}
-            exportar={{ nome: `${nome} - liquidações ${recorte.ano}${recorte.removidos ? " - removidas" : ""}` }}
+            exportar={{ nome: `${nome} - liquidações ${rotuloRecorteAno(recorte.ano)}${recorte.removidos ? " - removidas" : ""}` }}
             acoesRodape={
               <Button
                 size="sm"
@@ -292,7 +313,7 @@ export function EmpenhoCardLiquidacoes({
                 Removidas na Centi
               </Button>
             }
-            vazio={recorte.removidos ? "Nenhuma liquidação removida na Centi neste ano." : "Nenhuma liquidação neste ano."}
+            vazio={recorte.removidos ? `Nenhuma liquidação removida na Centi${recorte.ano === ANO_TODOS ? "" : " neste ano"}.` : `Nenhuma liquidação${recorte.ano === ANO_TODOS ? "" : " neste ano"}.`}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "liquidação" : "liquidações"} · Valor ${brl(soma(l, "valor"))} · Pago ${brl(soma(l, "valorPago"))}`}
           />
         </>
