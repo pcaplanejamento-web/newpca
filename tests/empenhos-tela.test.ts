@@ -65,7 +65,7 @@ test("tela de empenhos: o pacote compacto do banco volta IGUAL ao que está grav
   assert.deepEqual(r, { n: 2, empenhado: 3142.5, anulado: 10, liquidado: 50, pago: 50, aPagar: 3082.5 });
 });
 
-test("tela de empenhos: vários PEDAÇOS — nenhum empenho some nem repete, na ordem do id", async () => {
+test("tela de empenhos: vários PEDAÇOS — nenhum empenho some nem repete, da data MAIS RECENTE à mais antiga", async () => {
   const b = banco();
   const total = EMPENHOS_POR_PEDACO * 2 + 37;
   b.raw.exec("BEGIN");
@@ -73,7 +73,16 @@ test("tela de empenhos: vários PEDAÇOS — nenhum empenho some nem repete, na 
   b.raw.exec("COMMIT");
   const e = empenhosDoPacote(await pacote(b, 2026));
   assert.equal(e.length, total);
-  assert.deepEqual(e.map((x) => Number(x.numero)), Array.from({ length: total }, (_, i) => i + 1));
+  assert.deepEqual(
+    e.map((x) => Number(x.numero)).sort((a, b) => a - b),
+    Array.from({ length: total }, (_, i) => i + 1),
+  );
+  // A ordem natural do pacote: data decrescente e, no mesmo dia, o id (= o número aqui) decrescente.
+  for (let i = 1; i < e.length; i++) {
+    const a = e[i - 1];
+    const c = e[i];
+    assert.ok((a.data ?? "") > (c.data ?? "") || ((a.data ?? "") === (c.data ?? "") && Number(a.numero) > Number(c.numero)), `fora de ordem em ${i}`);
+  }
   assert.ok(e.every((x) => x.orgaoGestor === `O${Number(x.numero) % 7}` && x.fonte === `S${Number(x.numero) % 60}` && x.valorEmpenhado === Number(x.numero)));
 });
 
@@ -122,16 +131,16 @@ test("escopo: o empenho vinculado à UNIDADE da pessoa ou — vínculo só ao ó
 
 test("coluna Unidade: a sigla da unidade do cadastro vinculada; vinculado só ao órgão, a sigla do órgão; sem vínculo, vazio", async () => {
   const b = banco();
-    b.ins.run("2026|PMRV|1", 2026, "1", "2026-01-02", "PMRV", "A", null, null, null, 1, 0, 0, 0, 1, null, 1, 10);
+  b.ins.run("2026|PMRV|1", 2026, "1", "2026-01-02", "PMRV", "A", null, null, null, 1, 0, 0, 0, 1, null, 1, 10);
   b.ins.run("2026|FMS|2", 2026, "2", "2026-01-03", "FMS", "B", null, null, null, 1, 0, 0, 0, 1, null, 2, null);
   b.ins.run("2026|X|3", 2026, "3", "2026-01-04", "X", "C", null, null, null, 1, 0, 0, 0, 1, null, null, null);
   const l = empenhosDoPacote(await pacote(b, 2026));
   assert.deepEqual(
     l.map((e) => [e.numero, e.unidade]),
     [
-      ["1", "SEMED"],
-      ["2", "FMS"],
       ["3", null],
+      ["2", "FMS"],
+      ["1", "SEMED"],
     ],
   );
 });
@@ -159,4 +168,44 @@ test("escopo no banco: o pacote e os anos só com os empenhos vinculados às uni
   assert.deepEqual((await consultaAnosEmpenhos(b.db, 1, { unidades: [10], orgaos: [1] })).map((a) => a.ano), [2026, 2025]);
   assert.deepEqual(await consultaAnosEmpenhos(b.db, 1, { unidades: [], orgaos: [] }), []);
   assert.equal((await consultaAnosEmpenhos(b.db, 1, null)).length, 2);
+});
+
+test("tabela ÚNICA (todos os cards): o mesmo empenho em dois cards UMA vez (o do card de menor id), anos sem duplicar, card na tupla, escopo", async () => {
+  const b = banco();
+  const ins2 = b.raw.prepare(
+    `INSERT INTO empenhos (card_id, chave, ano, numero, data, orgao_gestor, valor_empenhado, valor_anulado, valor_liquidado, valor_pago, saldo_pagar, removido_em, orgao_id, reparticao_id)
+     VALUES (?, ?, ?, ?, ?, 'PMRV', ?, 0, 0, 0, 0, ?, 1, ?)`,
+  );
+  ins2.run(1, "2026|PMRV|1", 2026, "1", "2026-03-01", 100, null, 10);
+  ins2.run(2, "2026|PMRV|1", 2026, "1", "2026-03-01", 100, null, 10); // o mesmo empenho no outro card
+  ins2.run(2, "2026|PMRV|2", 2026, "2", "2026-05-01", 50, null, 11);
+  ins2.run(2, "2026|PMRV|3", 2026, "3", "2026-04-01", 7, "2026-06-01", 10);
+  ins2.run(1, "2025|PMRV|9", 2025, "9", "2025-02-01", 1, null, 10);
+  const t = await textoPacoteEmpenhos(b.db, null, 2026, false);
+  assert.ok(t != null);
+  const e = empenhosDoPacote(JSON.parse(t) as PacoteEmpenhos);
+  assert.deepEqual(e.map((x) => [x.numero, x.cardId]), [["2", 2], ["1", 1]], "data decrescente; o repetido só do card 1");
+  const rem = empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, null, 2026, true)) ?? "") as PacoteEmpenhos);
+  assert.deepEqual(rem.map((x) => x.numero), ["3"]);
+  const anos = await consultaAnosEmpenhos(b.db, null);
+  assert.deepEqual(anos.map((a) => [a.ano, a.n, a.soma, a.removidos]), [[2026, 2, 150, 1], [2025, 1, 1, 0]]);
+  // Escopo: só a unidade 10.
+  const so10 = empenhosDoPacote(JSON.parse((await textoPacoteEmpenhos(b.db, null, 2026, false, { unidades: [10], orgaos: [1] })) ?? "") as PacoteEmpenhos);
+  assert.deepEqual(so10.map((x) => x.numero), ["1"]);
+  assert.deepEqual((await consultaAnosEmpenhos(b.db, null, { unidades: [11], orgaos: [1] })).map((a) => [a.ano, a.n]), [[2026, 1]]);
+});
+
+test("tabela ÚNICA: a VERSÃO muda com a promoção de QUALQUER card de empenhos, os vínculos e os cards (excluir um card)", async () => {
+  const b = banco();
+  const v0 = await consultaVersaoEmpenhos(b.db, null, 2026);
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado) VALUES (2, 2026, 'promovido')");
+  const v1 = await consultaVersaoEmpenhos(b.db, null, 2026);
+  assert.notEqual(v1, v0);
+  b.raw.exec("UPDATE empenho_cards SET vinculos_em = '2026-10-26T10:00:00.000Z' WHERE id = 1");
+  const v2 = await consultaVersaoEmpenhos(b.db, null, 2026);
+  assert.notEqual(v2, v1);
+  b.raw.exec("INSERT INTO empenho_cards (id, nome, tipo) VALUES (3, 'Liq', 'liquidacoes'); INSERT INTO centi_lotes (card_id, ano, estado) VALUES (3, 2026, 'promovido')");
+  assert.equal(await consultaVersaoEmpenhos(b.db, null, 2026), v2, "card de liquidações não mexe na versão dos empenhos");
+  b.raw.exec("DELETE FROM empenho_cards WHERE id = 1");
+  assert.notEqual(await consultaVersaoEmpenhos(b.db, null, 2026), v2);
 });

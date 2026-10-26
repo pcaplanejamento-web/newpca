@@ -4545,6 +4545,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `redirect_uri_mismatch`, `invalid_grant`…) e a tela diz o que fazer (`DETALHE_ERRO_GOOGLE` → `mensagemErroLogin`/
   `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
   (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
+- **TABELA ÚNICA (v1.237.0, sem migração):** as telas `/painel/empenhos`, `/painel/liquidacoes` e `/painel/pagamentos` abrem
+  na aba **Dados** (`EmpenhosView` com `AbasEspaco` — Dados | Importações (N); `?aba=importacoes` = a lista de cards; a volta
+  do espaço do card leva a ela) = a MESMA tabela do card com `cardId={null}` (`EmpenhosTabela`, `EmpenhoCardLiquidacoes`,
+  `EmpenhoCardPagamentos` + a coluna **Card** — `colunaCard`): todos os cards do tipo, o mesmo registro (a `chave`) em dois
+  cards UMA vez (o do card de menor id — `row_number() OVER (PARTITION BY chave ORDER BY card_id)`), no escopo da pessoa. O
+  card é opcional nas consultas (`card: number | null` em `empenhos-tela-sql.ts`, `liquidacoes-tela.ts`,
+  `pagamentos-tela.ts`; versão dos empenhos de todos = lote promovido de qualquer card de empenhos + vínculos + cards); as
+  tuplas levam o `card_id` NO FIM (o banner pede pelo card da linha). Rotas `GET /api/empenhos` sem `?card=`,
+  `GET /api/empenhos/liquidacoes` e `GET /api/empenhos/pagamentos`. **Ordem:** tudo da data MAIS RECENTE à mais antiga — o
+  pacote numera por `data DESC, id DESC`, as tabelas abrem ordenadas pela data (desc), `execucaoDoEmpenho` e o bloco
+  Execução do `EmpenhoDetalhe`, os registros da origem e a tabela da série do `DashboardExecucao`.
 - **EMPENHOS EM CARDS (v1.205.0, migração `0143`; substitui o cadastro das APIs da Centi [v1.179–1.180], a tela única de
   empenhos [v1.193] e o vínculo pelo cadastro de Órgãos e Unidades [v1.198–1.203]):** tela de módulo **`/painel/empenhos`**
   (`EmpenhosView` — `ABA_KEYS` `empenhos`, ícone `IconEmpenho`; ações do papel: visualizar · importar · exportar · excluir ·

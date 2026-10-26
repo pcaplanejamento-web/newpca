@@ -351,3 +351,34 @@ test("liquidações (D1 real): a coluna Unidade segue o EMPENHO — só órgão 
   const id = Number((JSON.parse(await textoLiquidacoes(LIQ, 2025, false, null, b.db)) as unknown[][]).find((t) => t[col("numeroEmpenho")] === "9")?.[col("id")]);
   assert.equal((await liquidacaoCompleta(LIQ, id, null, b.db))?.unidade, "SAUDE — Secretaria de Saúde");
 });
+
+test("liquidações (D1 real): TABELA ÚNICA — todos os cards, o mesmo registro em dois cards UMA vez (o do card de menor id), com o card na tupla", async () => {
+  const b = banco();
+  b.empenho("9", 1, 5);
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "9"), liq(2, "10", { DataLiquidacao: "09/05/2025" })]);
+  await promover(b, l1);
+  // Um 2º card de liquidações com uma cópia da liquidação 1 (a mesma chave) e uma só dele.
+  const cols = (b.raw.prepare("PRAGMA table_info(liquidacoes)").all() as { name: string }[]).map((c) => c.name).filter((c) => c !== "id" && c !== "card_id");
+  b.raw.exec(`INSERT INTO empenho_cards (id, nome, tipo) VALUES (99, 'Outro', 'liquidacoes')`);
+  b.raw.exec(`INSERT INTO liquidacoes (card_id, ${cols.join(", ")}) SELECT 99, ${cols.join(", ")} FROM liquidacoes WHERE chave = '1'`);
+  b.raw.exec(`INSERT INTO liquidacoes (card_id, ${cols.join(", ")}) SELECT 99, ${cols.map((c) => (c === "chave" ? "'77'" : c === "data" ? "'2025-01-15'" : c)).join(", ")} FROM liquidacoes WHERE chave = '1' AND card_id = ${LIQ}`);
+  const col = (c: (typeof COLUNAS_LIQUIDACAO)[number]) => COLUNAS_LIQUIDACAO.indexOf(c);
+  const todas = JSON.parse(await textoLiquidacoes(null, 2025, false, null, b.db)) as unknown[][];
+  assert.equal(todas.length, 3, "a cópia do card 99 não repete");
+  assert.deepEqual(
+    todas.map((t) => [t[col("data")], t[col("cardId")]]),
+    [
+      ["2025-05-09", LIQ],
+      ["2025-03-07", LIQ],
+      ["2025-01-15", 99],
+    ],
+    "da data mais recente à mais antiga; a repetida fica com o card de menor id",
+  );
+  assert.deepEqual((await anosLiquidacoes(null, null, b.db)).map((x) => ({ ...x })), [{ ano: 2025, n: 3 }]);
+  // O escopo vale também na tabela única.
+  const so = JSON.parse(await textoLiquidacoes(null, 2025, false, { unidades: [5], orgaos: [] }, b.db)) as unknown[][];
+  assert.deepEqual(so.map((t) => t[col("numeroEmpenho")]), ["9", "9"]);
+  // A rota do card segue só com o card.
+  assert.equal((JSON.parse(await textoLiquidacoes(99, 2025, false, null, b.db)) as unknown[][]).length, 2);
+});

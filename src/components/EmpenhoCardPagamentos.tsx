@@ -11,7 +11,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { avisoDeFalha, avisoSemEmpenho, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
+import { avisoDeFalha, avisoSemEmpenho, colunaCard, colunaTipoExecucao } from "./EmpenhoCardLiquidacoes";
 import { Avisos } from "./Avisos";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
@@ -44,6 +44,8 @@ export type Pagamento = {
   anoEmpenho: number | null;
   /** Nota de Empenho × Restos a Pagar (`tipoDaExecucao`). */
   tipo: TipoExecucao;
+  /** O card que gravou o registro (o banner pede por ele; a coluna Card da tabela única). */
+  cardId: number;
 };
 
 const daTupla = (t: unknown[], ano: number): Pagamento => ({
@@ -63,6 +65,7 @@ const daTupla = (t: unknown[], ano: number): Pagamento => ({
   unidade: (t[13] as string | null) ?? null,
   anoEmpenho: t[15] == null ? null : Number(t[15]),
   tipo: tipoDaExecucao(String(t[2] ?? ""), t[15] == null ? null : Number(t[15]), (t[1] as string | null) ?? null, ano),
+  cardId: Number(t[16] ?? 0),
 });
 
 /** As somas do pago: só as ordens NÃO anuladas (a anulada fica guardada, fora do pago). */
@@ -148,7 +151,21 @@ const COLUNAS: Column<Pagamento>[] = [
  * de cada uma (os do EMPENHO de mesmo número — o número do empenho liga empenhos, liquidações e pagamentos), por ano, no escopo
  * da pessoa. Os números do topo acompanham os filtros e somam só as ordens NÃO anuladas; "Removidos na Centi" no rodapé.
  */
-export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number; nome: string; versao: string }) {
+export function EmpenhoCardPagamentos({
+  cardId,
+  nome,
+  versao,
+  cards,
+}: {
+  /** `null` = a TABELA ÚNICA (todos os cards do tipo — o mesmo registro uma vez). */
+  cardId: number | null;
+  nome: string;
+  versao: string;
+  /** O nome de cada card (a coluna Card da tabela única). */
+  cards?: Record<number, string>;
+}) {
+  const rota = cardId == null ? "/api/empenhos/pagamentos" : `/api/empenhos/cards/${cardId}/pagamentos`;
+  const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<Pagamento>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
   const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(null);
   const [recorte, setRecorte] = useState<{ ano: number; removidos: boolean } | null>(null);
   const [linhas, setLinhas] = useState<Pagamento[] | null>(null);
@@ -164,21 +181,21 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
     if (!aberto) return;
     let vivo = true;
     setCompleto(undefined);
-    fetch(`/api/empenhos/cards/${cardId}/pagamentos/${aberto.id}`)
+    fetch(`/api/empenhos/cards/${aberto.cardId}/pagamentos/${aberto.id}`)
       .then((r) => r.json() as Promise<{ ok?: boolean; pagamento?: PagamentoCompleto }>)
       .then((j) => vivo && setCompleto(j.ok && j.pagamento ? j.pagamento : null))
       .catch(() => vivo && setCompleto(null));
     return () => {
       vivo = false;
     };
-  }, [aberto, cardId]);
+  }, [aberto]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a versão também relê os anos (importação de outro ano).
   useEffect(() => {
     let vivo = true;
     void (async () => {
       try {
-        const r = await fetch(`/api/empenhos/cards/${cardId}/pagamentos`);
+        const r = await fetch(rota);
         const j = (await r.json()) as { ok?: boolean; error?: string; anos?: { ano: number; n: number }[] };
         if (!vivo) return;
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
@@ -193,7 +210,7 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
     return () => {
       vivo = false;
     };
-  }, [cardId, versao]);
+  }, [rota, versao]);
 
   const carregar = useCallback(
     async (rc: { ano: number; removidos: boolean }) => {
@@ -201,7 +218,7 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
       setCarregando(true);
       setErro(null);
       try {
-        const r = await fetch(`/api/empenhos/cards/${cardId}/pagamentos?ano=${rc.ano}${rc.removidos ? "&removidos=1" : ""}`);
+        const r = await fetch(`${rota}?ano=${rc.ano}${rc.removidos ? "&removidos=1" : ""}`);
         const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
         if (n !== pedido.current) return;
         if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
@@ -216,7 +233,7 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
         if (n === pedido.current) setCarregando(false);
       }
     },
-    [cardId],
+    [rota],
   );
   // A VERSÃO dos dados da execução (importação promovida, vínculos, cards) vem da página: mudou, relê — o tipo (Nota de
   // Empenho × Restos a Pagar), o órgão e a unidade vêm do empenho ligado, lido na hora pelo número.
@@ -254,8 +271,12 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" onClick={() => void carregar(recorte)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "pagamento", "pagamentos"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
-        <Ajuda titulo="Pagamentos do card" botao="sm">
-          <p>Os pagamentos (ordens de pagamento) que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura.</p>
+        <Ajuda titulo={cardId == null ? "Pagamentos" : "Pagamentos do card"} botao="sm">
+          <p>
+            {cardId == null
+              ? "Todos os pagamentos (ordens de pagamento) importados, de todos os cards, numa tabela só (o mesmo pagamento em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."
+              : "Os pagamentos (ordens de pagamento) que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura."}
+          </p>
           <p>
             A Centi não informa a unidade do pagamento: o <strong>número do empenho</strong> liga o pagamento ao empenho, e as colunas Órgão e
             Unidade são as do empenho no sistema (o vínculo dele) — procurado em TODA a tabela de empenhos, de qualquer ano (restos a pagar); a
@@ -273,7 +294,11 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
       {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => (recorte ? void carregar(recorte) : window.location.reload())} />}
 
       {anos && !anos.length ? (
-        <Callout kind="info">Nenhum pagamento importado neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez, mês a mês.</Callout>
+        <Callout kind="info">
+          {cardId == null
+            ? "Nenhum pagamento importado ainda. Abra “Importações” para criar um card e importar."
+            : "Nenhum pagamento importado neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez, mês a mês."}
+        </Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (
@@ -287,7 +312,7 @@ export function EmpenhoCardPagamentos({ cardId, nome, versao }: { cardId: number
           </div>
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
-            columns={COLUNAS}
+            columns={colunas}
             rows={linhas}
             getKey={(x) => x.id}
             scrollInterno

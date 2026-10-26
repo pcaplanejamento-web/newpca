@@ -711,7 +711,7 @@ export function DashboardExecucao({
                   <div className="ml-auto flex items-center">{direita}</div>
                 </div>
                 <DataTable
-                  rows={s.pontos}
+                  rows={[...s.pontos].reverse()}
                   getKey={(p) => p.chave}
                   density="compact"
                   linhasSalvas="execucao-grafico"
@@ -1204,6 +1204,7 @@ function OrigemExecucao({
         {aba === "empenhos" ? (
           <DataTable
             rows={linhasEmp}
+            ordemInicial={{ key: "data", dir: "desc" }}
             getKey={(e) => e.i}
             density="compact"
             linhasSalvas="origem-execucao"
@@ -1217,6 +1218,7 @@ function OrigemExecucao({
         ) : (
           <DataTable
             rows={linhasEv}
+            ordemInicial={{ key: "data", dir: "desc" }}
             getKey={(e) => e.chave}
             density="compact"
             linhasSalvas="origem-execucao"

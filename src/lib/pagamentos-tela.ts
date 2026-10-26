@@ -29,6 +29,7 @@ export const COLUNAS_PAGAMENTO = [
   "unidade",
   "removido",
   "anoEmpenho",
+  "cardId",
 ] as const;
 
 /** O EMPENHO de um pagamento pelo NÚMERO, em TODA a tabela de empenhos (qualquer ano e card) — a régua de `destinoSql`. */
@@ -37,10 +38,14 @@ const empenhoDo = (alias: string, col: string) =>
     `(SELECT e.${col} FROM empenhos e WHERE e.numero = ${alias}.numero_empenho AND e.orgao_id IS NOT NULL ORDER BY e.removido_em IS NOT NULL, e.reparticao_id IS NULL, e.id LIMIT 1)`,
   );
 
-const recorte = (card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos) =>
+/** O recorte: o card (`null` = TODOS os cards do tipo — o mesmo registro, a chave, em dois cards entra UMA vez: o do card de
+ * menor id), o ano, vigentes × removidos e o escopo. */
+const recorte = (card: number | null, ano: number, removidos: boolean, escopo: EscopoEmpenhos) =>
   sql.join(
     [
-      sql`p.card_id = ${card} AND p.ano = ${ano} AND p.removido_em IS ${removidos ? sql`NOT NULL` : sql`NULL`}`,
+      card === null
+        ? sql`p.id IN (SELECT id FROM (SELECT id, row_number() OVER (PARTITION BY chave ORDER BY card_id) AS rk FROM pagamentos WHERE ano = ${ano} AND removido_em IS ${removidos ? sql`NOT NULL` : sql`NULL`}) WHERE rk = 1)`
+        : sql`p.card_id = ${card} AND p.ano = ${ano} AND p.removido_em IS ${removidos ? sql`NOT NULL` : sql`NULL`}`,
       ...(escopo === null ? [] : [sql.raw(" AND "), doEscopo(escopo, "p.")]),
     ],
     sql.raw(""),
@@ -50,15 +55,18 @@ const recorte = (card: number, ano: number, removidos: boolean, escopo: EscopoEm
 type Db = DrizzleD1Database<any>;
 
 /** Os anos com pagamentos gravados no card (no escopo), com quantos. */
-export async function anosPagamentos(card: number, escopo: EscopoEmpenhos, db: Db): Promise<{ ano: number; n: number }[]> {
+export async function anosPagamentos(card: number | null, escopo: EscopoEmpenhos, db: Db): Promise<{ ano: number; n: number }[]> {
   const so = escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, "p.")], sql.raw(""));
-  return db.all<{ ano: number; n: number }>(
-    sql`SELECT p.ano AS ano, COUNT(*) AS n FROM pagamentos p WHERE p.card_id = ${card} AND p.removido_em IS NULL${so} GROUP BY p.ano ORDER BY p.ano DESC`,
-  );
+  // `null` = todos os cards do tipo: o mesmo registro (a chave) em dois cards conta UMA vez.
+  const de =
+    card === null
+      ? sql.raw("(SELECT * FROM (SELECT x.*, row_number() OVER (PARTITION BY x.chave ORDER BY x.card_id) AS rk FROM pagamentos x WHERE x.removido_em IS NULL) WHERE rk = 1) p WHERE 1")
+      : sql`pagamentos p WHERE p.card_id = ${card} AND p.removido_em IS NULL`;
+  return db.all<{ ano: number; n: number }>(sql`SELECT p.ano AS ano, COUNT(*) AS n FROM ${de}${so} GROUP BY p.ano ORDER BY p.ano DESC`);
 }
 
 /** Os pagamentos do ano como o TEXTO de um array JSON de tuplas (`COLUNAS_PAGAMENTO`). */
-export async function textoPagamentos(card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos, db: Db): Promise<string> {
+export async function textoPagamentos(card: number | null, ano: number, removidos: boolean, escopo: EscopoEmpenhos, db: Db): Promise<string> {
   const onde = recorte(card, ano, removidos, escopo);
   const [{ n }] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM pagamentos p WHERE ${onde}`);
   const pedacos = await Promise.all(
@@ -68,7 +76,7 @@ export async function textoPagamentos(card: number, ano: number, removidos: bool
         (SELECT COALESCE(NULLIF(o.sigla, ''), o.nome) FROM orgaos o WHERE o.id = p.orgao_id),
         ${unidadeNaTela("p")},
         CASE WHEN p.removido_em IS NULL THEN 0 ELSE 1 END,
-        ${empenhoDo("p", "ano")})) AS t
+        ${empenhoDo("p", "ano")}, p.card_id)) AS t
         FROM (SELECT p.id AS pid FROM pagamentos p WHERE ${onde} ORDER BY p.data DESC, p.id DESC LIMIT ${POR_PEDACO} OFFSET ${i * POR_PEDACO}) x
         JOIN pagamentos p ON p.id = x.pid`),
     ),

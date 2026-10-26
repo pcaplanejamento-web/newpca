@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { cache } from "react";
 import { centiLotes, empenhos, liquidacoes, pagamentos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
@@ -32,16 +32,17 @@ export const escopoDosEmpenhos = cache(async (): Promise<EscopoEmpenhos> => {
   return { unidades: l.map((r) => r.id), orgaos: [...new Set(l.map((r) => r.orgaoId).filter((o): o is number => o != null))] };
 });
 
-export async function anosEmpenhos(card: number, escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
+/** Os anos do card — `null` = de TODOS os cards de empenhos (a tabela única da tela). */
+export async function anosEmpenhos(card: number | null, escopo: EscopoEmpenhos): Promise<AnoEmpenhos[]> {
   return consultaAnosEmpenhos(getDb(), card, escopo);
 }
 
-/** O pacote do ano do card como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */
-export async function pacoteEmpenhos(card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos): Promise<string | null> {
+/** O pacote do ano do card (`null` = todos os cards, sem repetir o empenho) como TEXTO JSON; `null` quando uma importação concluída no meio impediu uma leitura consistente. */
+export async function pacoteEmpenhos(card: number | null, ano: number, removidos: boolean, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
   const ver = await consultaVersaoEmpenhos(db, card, ano);
   try {
-    return await memo.obter(`${card}:${ano}:${removidos ? 1 : 0}:${chaveEscopoEmpenhos(escopo)}`, ver, async () => {
+    return await memo.obter(`${card ?? "todos"}:${ano}:${removidos ? 1 : 0}:${chaveEscopoEmpenhos(escopo)}`, ver, async () => {
       const t = await textoPacoteEmpenhos(db, card, ano, removidos, escopo);
       if (t == null) throw new Error("Os empenhos mudaram durante a leitura.");
       return t;
@@ -66,7 +67,7 @@ export async function empenhoCompleto(id: number): Promise<EmpenhoCompleto | nul
 
 /**
  * A EXECUÇÃO do empenho: as liquidações e os pagamentos VIGENTES ligados pelo número (de qualquer card e ano; o mesmo
- * registro em dois cards uma vez). `liq`/`pag` = a pessoa vê a tela (senão `null` — a lista nem é lida).
+ * registro em dois cards uma vez), da data MAIS RECENTE à mais antiga. `liq`/`pag` = a pessoa vê a tela (senão `null` — a lista nem é lida).
  */
 export async function execucaoDoEmpenho(numero: string, ver: { liq: boolean; pag: boolean }): Promise<ExecucaoEmpenho> {
   const db = getDb();
@@ -87,7 +88,7 @@ export async function execucaoDoEmpenho(numero: string, ver: { liq: boolean; pag
           })
           .from(liquidacoes)
           .where(and(eq(liquidacoes.numeroEmpenho, numero), isNull(liquidacoes.removidoEm)))
-          .orderBy(asc(liquidacoes.cardId), asc(liquidacoes.data), asc(liquidacoes.id))
+          .orderBy(desc(liquidacoes.data), desc(liquidacoes.id))
           .limit(LIMITE_EXECUCAO * 2)
       : null,
     ver.pag
@@ -106,7 +107,7 @@ export async function execucaoDoEmpenho(numero: string, ver: { liq: boolean; pag
           })
           .from(pagamentos)
           .where(and(eq(pagamentos.numeroEmpenho, numero), isNull(pagamentos.removidoEm)))
-          .orderBy(asc(pagamentos.cardId), asc(pagamentos.data), asc(pagamentos.id))
+          .orderBy(desc(pagamentos.data), desc(pagamentos.id))
           .limit(LIMITE_EXECUCAO * 2)
       : null,
   ]);

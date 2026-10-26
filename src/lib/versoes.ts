@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.237.0",
+    data: "2026-10-26",
+    titulo: "Empenhos, liquidações e pagamentos numa tabela única",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "A tela abre em “Dados”: todos os empenhos de todos os cards numa tabela só (o mesmo empenho em dois cards aparece uma vez; a coluna Card diz de onde veio). Os cards ficam em “Importações”.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Liquidações", texto: "A tela abre em “Dados”: todas as liquidações de todos os cards numa tabela só; tocar numa linha abre a liquidação com o empenho ligado. Os cards ficam em “Importações”.", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Pagamentos", texto: "A tela abre em “Dados”: todos os pagamentos de todos os cards numa tabela só; tocar numa linha abre o pagamento. Os cards ficam em “Importações”.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Tudo da data mais recente à mais antiga: as tabelas, a execução no banner do empenho (liquidações e pagamentos) e os registros da origem do dashboard.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.236.2",
     data: "2026-10-26",
     titulo: "Gráfico da Execução: caixa sem corte e trecho só arrastando",

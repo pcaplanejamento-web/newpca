@@ -172,6 +172,7 @@ function Execucao({
         <DataTable
           columns={COLUNAS_LIQ}
           rows={execucao.liquidacoes}
+          ordemInicial={{ key: "data", dir: "desc" }}
           getKey={(l) => l.id}
           density="compact"
           onRowClick={onAbrir ? (item) => onAbrir({ tipo: "liquidacao", item }) : undefined}
@@ -185,6 +186,7 @@ function Execucao({
         <DataTable
           columns={colunasPag}
           rows={execucao.pagamentos}
+          ordemInicial={{ key: "data", dir: "desc" }}
           getKey={(p) => p.id}
           density="compact"
           onRowClick={onAbrir ? (item) => onAbrir({ tipo: "pagamento", item }) : undefined}

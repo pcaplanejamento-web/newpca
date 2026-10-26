@@ -59,7 +59,7 @@ export const COLUNA_VALOR: Record<(typeof VALORES_EMPENHO)[number], string> = {
 export const EMPENHOS_POR_PEDACO = 6000;
 
 /** Um empenho na tabela (sem o histórico — ele vem no detalhe). */
-export type EmpenhoNaTela = { id: number; numero: string } & Record<CampoDicionario, string | null> &
+export type EmpenhoNaTela = { id: number; numero: string; /** O card que gravou o empenho (a coluna Card da tabela única). */ cardId?: number } & Record<CampoDicionario, string | null> &
   Record<(typeof VALORES_EMPENHO)[number], number>;
 
 /** O que a rota entrega: o dicionário de cada campo como pares [índice, texto] e as tuplas. */
@@ -86,6 +86,9 @@ export function empenhosDoPacote(p: PacoteEmpenhos): EmpenhoNaTela[] {
       const v = Number(t[2 + nD + i]);
       e[c] = Number.isFinite(v) ? v : 0;
     });
+    // O card vem DEPOIS dos valores (o último da tupla — pacotes sem ele seguem valendo).
+    const card = t[2 + nD + VALORES_EMPENHO.length];
+    if (card != null && Number.isInteger(Number(card))) e.cardId = Number(card);
     return e as EmpenhoNaTela;
   });
 }

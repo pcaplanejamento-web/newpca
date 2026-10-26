@@ -261,3 +261,27 @@ test("pagamentos (D1 real): valor suspeito não promove; fechar e excluir o lote
   assert.equal(n(b, "SELECT COUNT(*) n FROM centi_lotes"), 1, "só a parcial (l0) fica");
   assert.equal(n(b, "SELECT COUNT(*) n FROM pagamentos WHERE lote_id IS NULL"), 1, "o gravado fica, sem o lote");
 });
+
+test("pagamentos (D1 real): TABELA ÚNICA — todos os cards, o mesmo pagamento em dois cards UMA vez (o do card de menor id), com o card na tupla", async () => {
+  const b = banco();
+  b.empenho("9", 2, 6, 2023);
+  const l1 = b.novoLote();
+  await guardar(b, l1, [pag(1, 9), pag(2, 10, { DataOrdemPagamento: "20/03/2025" })], 1, 2, 1);
+  await promover(b, l1, "marcar", [2]);
+  const cols = (b.raw.prepare("PRAGMA table_info(pagamentos)").all() as { name: string }[]).map((c) => c.name).filter((c) => c !== "id" && c !== "card_id");
+  b.raw.exec(`INSERT INTO empenho_cards (id, nome, tipo) VALUES (99, 'Outro', 'pagamentos')`);
+  b.raw.exec(`INSERT INTO pagamentos (card_id, ${cols.join(", ")}) SELECT 99, ${cols.join(", ")} FROM pagamentos WHERE chave = '1' AND card_id = ${PAG}`);
+  const col = (c: (typeof COLUNAS_PAGAMENTO)[number]) => COLUNAS_PAGAMENTO.indexOf(c);
+  const todos = JSON.parse(await textoPagamentos(null, 2025, false, null, b.db)) as unknown[][];
+  assert.deepEqual(
+    todos.map((t) => [t[col("data")], t[col("cardId")]]),
+    [
+      ["2025-03-20", PAG],
+      ["2025-03-07", PAG],
+    ],
+    "da data mais recente à mais antiga; a cópia do card 99 não repete",
+  );
+  assert.deepEqual((await anosPagamentos(null, null, b.db)).map((x) => ({ ...x })), [{ ano: 2025, n: 2 }]);
+  assert.equal((JSON.parse(await textoPagamentos(null, 2025, false, { unidades: [6], orgaos: [] }, b.db)) as unknown[][]).length, 1);
+  assert.equal((JSON.parse(await textoPagamentos(99, 2025, false, null, b.db)) as unknown[][]).length, 1);
+});

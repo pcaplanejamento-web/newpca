@@ -18,7 +18,7 @@ import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { Avisos } from "./Avisos";
-import { avisoDeFalha } from "./EmpenhoCardLiquidacoes";
+import { avisoDeFalha, colunaCard } from "./EmpenhoCardLiquidacoes";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -135,8 +135,10 @@ export function EmpenhosTabela({
   podePublicar,
   escopo = null,
   versao = "",
+  cards,
 }: {
-  cardId: number;
+  /** `null` = a TABELA ÚNICA (todos os cards de empenhos — o mesmo empenho uma vez; a coluna Card diz de onde veio). */
+  cardId: number | null;
   /** O nome do card (o nome do arquivo exportado). */
   nome: string;
   anos: AnoEmpenhos[];
@@ -148,7 +150,10 @@ export function EmpenhosTabela({
   escopo?: EscopoEmpenhos;
   /** A versão dos dados da execução (importação promovida, vínculos, cards): mudou, os anos guardados saem e a tabela relê. */
   versao?: string;
+  /** O nome de cada card (a coluna Card da tabela única). */
+  cards?: Record<number, string>;
 }) {
+  const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<EmpenhoNaTela>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
   const [vista, setVista] = useState<EmpenhoNaTela[] | null>(null);
@@ -171,7 +176,7 @@ export function EmpenhosTabela({
     setCarregando(true);
     if (!fresco) setLinhas(null);
     try {
-      const resp = await fetch(`/api/empenhos?card=${cardId}&ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
+      const resp = await fetch(`/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${r.ano}${r.removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
       const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
       if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
       const lista = empenhosDoPacote(j.pacote);
@@ -225,8 +230,12 @@ export function EmpenhosTabela({
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={avisoDeFalha(erro, linhas != null, () => recorte && void carregar(recorte, true))} />
-        <Ajuda titulo="Empenhos do card" botao="sm">
-          <p>A tabela que o card importou da Centi — exatamente o que está gravado no banco. Só leitura: para atualizar, importe de novo (aba Importação) ou ligue a atualização automática (Configuração).</p>
+        <Ajuda titulo={cardId == null ? "Empenhos" : "Empenhos do card"} botao="sm">
+          <p>
+            {cardId == null
+              ? "Todos os empenhos importados, de todos os cards, numa tabela só — o mesmo empenho em dois cards aparece uma vez (a coluna Card diz de onde veio). Só leitura: as importações ficam em “Importações”."
+              : "A tabela que o card importou da Centi — exatamente o que está gravado no banco. Só leitura: para atualizar, importe de novo (aba Importação) ou ligue a atualização automática (Configuração)."}
+          </p>
           <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
           <p>“Removidos na Centi” (rodapé) = os que a Centi não traz mais: ficam guardados, fora das somas (pela regra do card).</p>
           <p>Só os empenhos que os VÍNCULOS do card cobrem são gravados. Você vê os vinculados à unidade escolhida no cabeçalho (na “Geral”, a todas as suas); o vinculado só ao órgão aparece para as unidades daquele órgão.</p>
@@ -238,8 +247,12 @@ export function EmpenhosTabela({
           {escopo
             ? escopoVazio(escopo)
               ? "Nenhum empenho para a unidade escolhida no cabeçalho."
-              : "Nenhum empenho vinculado à sua unidade foi importado neste card ainda."
-            : "Nenhum empenho importado neste card ainda. Defina os vínculos e importe na aba Importação."}
+              : cardId == null
+                ? "Nenhum empenho vinculado à sua unidade foi importado ainda."
+                : "Nenhum empenho vinculado à sua unidade foi importado neste card ainda."
+            : cardId == null
+              ? "Nenhum empenho importado ainda. Abra “Importações” para criar um card, definir os vínculos e importar."
+              : "Nenhum empenho importado neste card ainda. Defina os vínculos e importe na aba Importação."}
         </Callout>
       ) : (
         <>
@@ -259,7 +272,7 @@ export function EmpenhosTabela({
           ) : (
             <DataTable
               visao={chaveRecorte(recorte)}
-              columns={COLUNAS}
+              columns={colunas}
               rows={linhas}
               getKey={(e) => e.id}
               scrollInterno

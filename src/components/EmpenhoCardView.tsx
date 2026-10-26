@@ -43,7 +43,8 @@ export function EmpenhoCardView({
   const { confirmar, confirmacao } = useConfirmacao();
   const liq = cardPorOrgao(c.tipo);
   const nome = NOME_TIPO[c.tipo];
-  const lista = `/painel/${c.tipo}`;
+  // A volta leva às IMPORTAÇÕES (a lista de cards) — a tela do módulo abre nos Dados.
+  const lista = `/painel/${c.tipo}?aba=importacoes`;
   const e = estadoCard(c, c.lendo);
   const pendencias = pendenciasDoCard(c, c.vinculos);
   // A ORDEM obrigatória: Configuração → Vínculos → Importação (no de liquidações, só a Configuração: os órgãos são os do
@@ -178,7 +179,7 @@ export function EmpenhoCardView({
  * No desktop, o conteúdo da aba vai no máximo até o fim do display e rola por dentro — a página nunca rola (a barra das
  * abas e o cabeçalho ficam à vista). As tabelas `scrollInterno` já medem até o fim e cabem sem rolar aqui.
  */
-function AteOFim({ children }: { children: ReactNode }) {
+export function AteOFim({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 240);
   return (
