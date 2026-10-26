@@ -42,6 +42,8 @@ function PontoVivo({ cx, cy, cor, fundo }: { cx?: number; cy?: number; cor: stri
 /** O afastamento da dica em relação à ponta do mouse e às bordas do desenho. */
 const AFASTA = 18;
 const BORDA = 8;
+/** Quanto o ponteiro anda (px) antes de o gesto virar o ARRASTO de um trecho — o limiar dos arrastos do sistema. */
+const LIMIAR_ARRASTO = 6;
 
 /**
  * A DICA que SEGUE o mouse e nunca fica sob a ponta dele (com `fixo`, a MARCAÇÃO: parada no ponto clicado e tocável): ao lado do ponteiro (direita; sem espaço, esquerda), centrada na
@@ -104,9 +106,12 @@ function DicaQueSegue({
     const larguraMax = Math.max(0, dir - BORDA);
     const w = Math.min(d.offsetWidth, larguraMax);
     const fundo = H - Math.max(BORDA, base);
-    // Mais alta que o espaço livre (o celular): a dica rola por dentro — nunca cobre as datas nem os controles.
+    // Mais alta que o espaço livre (o celular): só o MIOLO (`data-dica-corpo`) rola — o título e os botões ficam sempre à
+    // vista; nunca cobre as datas nem os controles. A altura NATURAL vem do miolo (restrita, a dica mediria a si mesma).
     const max = Math.max(0, fundo - cima);
-    const h = Math.min(d.scrollHeight, max);
+    const corpo = d.querySelector<HTMLElement>("[data-dica-corpo]");
+    const natural = d.scrollHeight - (corpo ? corpo.clientHeight - corpo.scrollHeight : 0);
+    const h = Math.min(natural, max);
     const entre = (v: number, min: number, max: number) => Math.max(min, Math.min(v, Math.max(min, max)));
     let left: number;
     let top = entre(m.y - h / 2, cima, fundo - h);
@@ -124,13 +129,13 @@ function DicaQueSegue({
       left = entre(m.x - w / 2, BORDA, dir - w);
       top = m.y - AFASTA - h >= cima ? m.y - AFASTA - h : entre(m.y + AFASTA, cima, fundo - h);
     }
-    const rola = d.scrollHeight > max;
+    const rola = natural > max;
     setPos((p) =>
       p && p.left === left && p.top === top && p.max === max && p.rola === rola && p.maxW === larguraMax ? p : { left, top, max, rola, maxW: larguraMax },
     );
   });
   return (
-    <div ref={ref} className={`absolute ${fixo ? "pointer-events-auto z-20" : "pointer-events-none"}`} style={pos ? { left: pos.left, top: pos.top, maxWidth: pos.maxW, ...(pos.rola ? { maxHeight: pos.max, overflowY: "auto", overscrollBehavior: "contain" } : {}) } : { left: 0, top: 0, visibility: "hidden" }}>
+    <div ref={ref} className={`absolute ${fixo ? "pointer-events-auto z-20" : "pointer-events-none"}`} style={pos ? { left: pos.left, top: pos.top, maxWidth: pos.maxW, ...(pos.rola ? { maxHeight: pos.max, display: "flex", flexDirection: "column" } : {}) } : { left: 0, top: 0, visibility: "hidden" }}>
       {children}
     </div>
   );
@@ -225,8 +230,8 @@ type Selecao = { tipo: "ponto"; i: number; x: number; y: number } | { tipo: "tre
  * balde de hoje leva a linha tracejada.
  *
  * INTERAÇÃO: sem clique, a dica SEGUE o mouse e nunca fica sob ele. O 1º clique MARCA o ponto (a dica para ali, tocável);
- * o 2º no MESMO ponto = `onEscolher` (a origem); o 2º em OUTRO ponto — ou pressionar e ARRASTAR sobre o gráfico — seleciona
- * o TRECHO entre os dois (`onTrecho`/`dicaTrecho`: a comparação e a origem do trecho). Esc, clicar fora ou outros baldes
+ * o 2º no MESMO ponto = `onEscolher` (a origem); um clique em OUTRO ponto leva a marca para ele. Só pressionar e ARRASTAR
+ * sobre o gráfico (mouse, caneta ou toque) seleciona o TRECHO (`onTrecho`/`dicaTrecho`: a comparação e a origem do trecho). Esc, clicar fora ou outros baldes
  * desfazem; pelo teclado, a origem de cada balde fica na vista em tabela.
  *
  * TRANSIÇÕES (`useDesenhoSuave`): toda mudança é uma MORFOLOGIA de ~0,5 s pela data de cada ponto (`t`) — a linha escorre
@@ -330,7 +335,7 @@ export function SerieTemporal({
   // O PONTO marcado ou o TRECHO; o arrasto em curso (do índice ao índice) e se o clique que vem depois dele é engolido.
   const [sel, setSel] = useState<Selecao | null>(null);
   const [arrasto, setArrasto] = useState<{ de: number; ate: number } | null>(null);
-  const arrastoRef = useRef<{ de: number; ate: number; moveu: boolean } | null>(null);
+  const arrastoRef = useRef<{ de: number; ate: number; x0: number; moveu: boolean } | null>(null);
   const engolirClique = useRef(false);
   const [pulso, setPulso] = useState(0);
   // Outros baldes = a seleção não vale mais (os pontos podem nem existir).
@@ -380,12 +385,11 @@ export function SerieTemporal({
     setSel(null);
     onEscolher?.(p);
   };
-  /** O CLIQUE num ponto — no desenho ou na pílula da data, o MESMO: o 1º marca; de novo no mesmo = a origem; outro ponto
-   * com um marcado = o trecho entre os dois. `pos` = onde a dica fica (no gráfico). */
+  /** O CLIQUE num ponto — no desenho ou na pílula da data, o MESMO: marca; de novo no mesmo = a origem; outro ponto = a
+   * marca vai para ele (o TRECHO só nasce do arrasto). `pos` = onde a dica fica (no gráfico). */
   const clicar = (i: number, pos: { x: number; y: number }) => {
     if (!onEscolher) return;
     if (sel?.tipo === "ponto" && sel.i === i) return abrir(pontos[i]);
-    if (sel?.tipo === "ponto" && onTrecho) return setSel({ tipo: "trecho", a: Math.min(sel.i, i), b: Math.max(sel.i, i), ...pos });
     setSel({ tipo: "ponto", i, ...pos });
     setPulso((n) => n + 1);
   };
@@ -396,21 +400,24 @@ export function SerieTemporal({
 
   /** A caixa da dica: o título, os valores das séries, as linhas a mais e o rodapé (a ação ou a instrução). */
   const caixa = (titulo: string, valores: ReactNode, linhas: LinhaDica[], rodape: ReactNode) => (
-    <TooltipBox vidro>
-      <div className="mb-1 font-semibold text-text">{titulo}</div>
-      {valores}
-      {linhas.map((x, i, l) => (
-        <div key={`${x.secao ?? ""}:${x.rotulo}`}>
-          {x.secao && x.secao !== l[i - 1]?.secao && (
-            <div className="mt-1.5 border-t border-border/70 pt-1 text-[11px] font-semibold uppercase tracking-wide text-faint">{x.secao}</div>
-          )}
-          <div className={`flex items-center justify-between gap-4 ${x.secao ? "" : "mt-0.5 border-t border-border/70 pt-0.5"}`}>
-            <span className="text-muted">{x.rotulo}</span>
-            <span className="font-semibold tabular-nums text-text">{x.valor}</span>
+    <TooltipBox vidro className="flex min-h-0 max-h-full flex-col">
+      <div className="mb-1 shrink-0 font-semibold text-text">{titulo}</div>
+      {/* O MIOLO: a única parte que rola quando a dica não cabe — o título e o rodapé (a ação) nunca são cortados. */}
+      <div data-dica-corpo className="min-h-0 overflow-y-auto overscroll-contain">
+        {valores}
+        {linhas.map((x, i, l) => (
+          <div key={`${x.secao ?? ""}:${x.rotulo}`}>
+            {x.secao && x.secao !== l[i - 1]?.secao && (
+              <div className="mt-1.5 border-t border-border/70 pt-1 text-[11px] font-semibold uppercase tracking-wide text-faint">{x.secao}</div>
+            )}
+            <div className={`flex items-center justify-between gap-4 ${x.secao ? "" : "mt-0.5 border-t border-border/70 pt-0.5"}`}>
+              <span className="text-muted">{x.rotulo}</span>
+              <span className="font-semibold tabular-nums text-text">{x.valor}</span>
+            </div>
           </div>
-        </div>
-      ))}
-      {rodape}
+        ))}
+      </div>
+      {rodape && <div className="shrink-0">{rodape}</div>}
     </TooltipBox>
   );
   const valoresDe = (p: PontoTemporal) =>
@@ -448,7 +455,7 @@ export function SerieTemporal({
   );
   const instrucao = onEscolher
     ? onTrecho
-      ? "Clique para marcar · arraste ou clique em outro ponto para comparar"
+      ? "Clique para marcar · clique e arraste para selecionar um trecho"
       : "Clique para marcar · de novo para os dados completos"
     : null;
 
@@ -542,7 +549,7 @@ export function SerieTemporal({
           {textoData(p)}
         </span>
       );
-    const acao = sel?.tipo === "ponto" && sel.i === i ? "ver os dados completos" : sel?.tipo === "ponto" && onTrecho ? "comparar o trecho" : "marcar";
+    const acao = sel?.tipo === "ponto" && sel.i === i ? "ver os dados completos" : "marcar";
     return (
       <button
         key={textoData(p)}
@@ -609,36 +616,52 @@ export function SerieTemporal({
       {faixa && <style>{`.${id}-trecho{clip-path:url(#${id}-recorte);pointer-events:none}`}</style>}
       {/* As linhas de marcação ATRÁS do desenho (antes dele; o desenho é posicionado e pinta por cima). */}
       {preencher && camadas("linhas")}
-      {/* O ARRASTO (mouse e caneta; no toque, os dois toques) pelo ponteiro nativo: o ponto sob ele vem da posição no desenho. */}
+      {/* O ARRASTO (mouse, caneta e toque) pelo ponteiro nativo é o ÚNICO jeito de selecionar um trecho: o ponto sob ele vem da
+          posição no desenho; só conta depois de `LIMIAR_ARRASTO` px (um tremor no clique só marca). No toque, a página segue
+          rolando na vertical (`touch-pan-y`) e o arrasto lateral seleciona. */}
       {/* SEM `key` pela estrutura: remontar o `ResponsiveContainer` a cada troca de baldes (filtro, agrupamento) o fazia nascer
           sem largura — um quadro com o desenho vazio, a "piscada" na cor do fundo. A seleção já é desfeita pelo efeito acima. */}
       <div
         role="none"
-        className={`relative h-full ${onEscolher ? "cursor-pointer" : ""}`}
+        className={`relative h-full ${onEscolher ? "cursor-pointer" : ""} ${onTrecho ? "touch-pan-y" : ""}`}
         onPointerDown={(e) => {
           // Um gesto novo: o clique engolido era só o que vem logo depois de um arrasto (alguns navegadores não o disparam).
           engolirClique.current = false;
-          if (!onTrecho || e.pointerType === "touch" || e.button !== 0) return;
+          if (!onTrecho || e.button !== 0) return;
           const i = indiceNaPosicao(e.clientX);
           if (i == null) return;
-          e.preventDefault();
-          arrastoRef.current = { de: i, ate: i, moveu: false };
+          if (e.pointerType !== "touch") e.preventDefault();
+          arrastoRef.current = { de: i, ate: i, x0: e.clientX, moveu: false };
         }}
         onPointerMove={(e) => {
           const g = arrastoRef.current;
-          const i = g ? indiceNaPosicao(e.clientX) : null;
-          if (!g || i == null || i === g.ate) return;
+          if (!g) return;
+          if (!g.moveu) {
+            if (Math.abs(e.clientX - g.x0) < LIMIAR_ARRASTO) return;
+            g.moveu = true;
+            // Preso ao contêiner enquanto arrasta: o gesto segue mesmo saindo do desenho.
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {}
+          }
+          const i = indiceNaPosicao(e.clientX);
+          if (i == null || (i === g.ate && arrasto)) return;
           g.ate = i;
-          g.moveu = g.moveu || i !== g.de;
           setArrasto({ de: g.de, ate: g.ate });
         }}
         onPointerUp={(e) => {
           const g = arrastoRef.current;
           arrastoRef.current = null;
           setArrasto(null);
-          if (!g?.moveu || g.de === g.ate) return;
+          if (!g?.moveu) return;
+          // Arrastou: o clique que vem depois não marca nada (mesmo voltando ao ponto de partida).
           engolirClique.current = true;
-          setSel(trecho(g.de, g.ate, e));
+          if (g.de !== g.ate) setSel(trecho(g.de, g.ate, e));
+        }}
+        onPointerCancel={() => {
+          // A página rolou (toque na vertical) ou o navegador tomou o gesto: nada é selecionado.
+          arrastoRef.current = null;
+          setArrasto(null);
         }}
       >
         <ResponsiveContainer>
@@ -761,7 +784,7 @@ export function SerieTemporal({
       </div>
       {sel?.tipo === "ponto" && marcado && (
         <DicaQueSegue caixa={figRef} base={preencher ? TOPO_DAS_DATAS : 0} fixo={{ x: sel.x, y: sel.y }} evitar={{ de: xDo(sel.i), ate: xDo(sel.i) }}>
-          {caixa(marcado.titulo, valoresDe(marcado), extraDica?.(marcado) ?? [], onEscolher && acoes("Ver os dados completos", () => abrir(marcado), onTrecho ? "Clique em outro ponto para comparar o trecho" : undefined))}
+          {caixa(marcado.titulo, valoresDe(marcado), extraDica?.(marcado) ?? [], onEscolher && acoes("Ver os dados completos", () => abrir(marcado), onTrecho ? "Arraste sobre o gráfico para selecionar um trecho" : undefined))}
         </DicaQueSegue>
       )}
       {sel?.tipo === "trecho" && (

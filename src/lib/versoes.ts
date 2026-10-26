@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.236.2",
+    data: "2026-10-26",
+    titulo: "Gráfico da Execução: caixa sem corte e trecho só arrastando",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "A caixa do ponto marcado nunca é cortada: sem espaço, só os números rolam por dentro — o título, “Ver os dados completos” e o fechar ficam sempre à vista.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Um trecho do gráfico é selecionado só clicando, segurando e arrastando (também com o dedo, de lado); clicar em outro ponto apenas leva a marcação para ele.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.236.1",
     data: "2026-10-25",
     titulo: "Gráfico da Execução: a caixa do ponto marcado ao lado dos botões",
