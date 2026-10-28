@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.248.0",
+    data: "2026-10-28",
+    titulo: "Importações ao vivo para o ADM e a hora da última atualização nos indicadores",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "Cada indicador (empenhos, liquidações, pagamentos) mostra, discreto no canto, há quanto tempo os dados foram atualizados. Com a hora exata na dica, e um ponto que pulsa enquanto uma importação está em andamento.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Importações", texto: "Importar mostra o andamento ao vivo e preciso: o percentual e o tempo que falta, as etapas (preparar, ler o que já está gravado, ler a Centi, conferir e gravar) e cada pedido à Centi. Para cada pedido: aguardando a resposta, baixando (MB e velocidade), lendo, comparando, gravando parte a parte, lido com os novos e alterados, nova tentativa ou erro.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "novo", area: "Importações", texto: "Para o ADM, o painel do canto inferior direito mostra todas as importações ao mesmo tempo, em tempo real: as suas (que seguem ao trocar de tela), as da atualização automática e as de outras abas e pessoas, com Parar e Detalhes. Ao expandir o painel, cada importação mostra todos os dados: etapas, cada pedido, bytes, registros e os últimos passos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "novo", area: "Perfil", texto: "O ADM pode desligar o andamento das importações no canto em Perfil → Notificações.", link: "/painel/perfil?aba=notificacoes" },
+    ],
+  },
+  {
     versao: "1.247.0",
     data: "2026-10-28",
     titulo: "Ordem das colunas no seletor",

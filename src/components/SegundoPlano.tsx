@@ -37,6 +37,12 @@ export type Trabalho = {
   itens?: { rotulo: string; estado: "ok" | "falhou" | "rodando" | "fila"; detalhe?: string }[];
   onAbrir?: () => void;
   onParar?: () => void;
+  /** Dispensado no painel (quem informou esquece o desfecho). */
+  onDispensar?: () => void;
+  /** O DETALHE COMPLETO ao expandir o painel (no lugar do texto e da lista de itens) — ex.: o andamento de uma importação. */
+  corpo?: () => ReactNode;
+  /** Não aparece no painel (só mantém a página dona viva — ex.: o ADM desligou o andamento das importações). */
+  oculto?: boolean;
 };
 
 type Ctx = {
@@ -158,6 +164,12 @@ export function ManterVivo({ chave, children }: { chave: string; children: React
   return <div ref={slot} className="contents" />;
 }
 
+/** Informa/retira trabalhos de FORA de um `ManterVivo` (ex.: o acompanhamento das importações no layout); sem o provedor, null. */
+export function usePainelSegundoPlano(): Pick<Ctx, "informar" | "retirar"> | null {
+  const c = useContext(SegundoPlanoCtx);
+  return useMemo(() => (c ? { informar: c.informar, retirar: c.retirar } : null), [c]);
+}
+
 /** Monta um conteúdo em segundo plano sem a página dona (ver `Ctx.rodarFora`); sem o provedor, null. */
 export function useRodarFora(): Ctx["rodarFora"] | null {
   return useContext(SegundoPlanoCtx)?.rodarFora ?? null;
@@ -233,7 +245,7 @@ export function PainelSegundoPlano({
   const [montado, setMontado] = useState(false);
   useEffect(() => setMontado(true), []);
   // Ativo = sempre acompanhado (minimizado), também na página dona; concluído na página dona sai (o desfecho está à vista).
-  const trabalhos = todos.filter((t) => ATIVO(t.estado) || !(naTela.has(t.chave) && caminho === t.rota.split("?")[0]));
+  const trabalhos = todos.filter((t) => !t.oculto && (ATIVO(t.estado) || !(naTela.has(t.chave) && caminho === t.rota.split("?")[0])));
   const caixa = useRef<HTMLDivElement>(null);
 
   // A altura ocupada vai em --reserva-flutuante (as bolhas do chat e os avisos ficam acima); o "resize" re-mede as bolhas.
@@ -259,7 +271,11 @@ export function PainelSegundoPlano({
   }, [visivel]);
   // Voltou à página dona de um trabalho que terminou fora dela: o desfecho foi visto — sai do painel.
   useEffect(() => {
-    for (const t of todos) if (!ATIVO(t.estado) && naTela.has(t.chave) && caminho === t.rota.split("?")[0]) onDispensar(t.id);
+    for (const t of todos)
+      if (!ATIVO(t.estado) && naTela.has(t.chave) && caminho === t.rota.split("?")[0]) {
+        t.onDispensar?.();
+        onDispensar(t.id);
+      }
   }, [todos, naTela, caminho, onDispensar]);
 
   if (!montado || !visivel) return null;
@@ -267,19 +283,22 @@ export function PainelSegundoPlano({
   const pct = (t: Trabalho) => (t.fracao != null ? t.fracao * 100 : t.total > 0 ? (t.feito / t.total) * 100 : 0);
   // "37% · ≈ 4 min" com o andamento real; senão "3/15".
   const andamento = (t: Trabalho) =>
-    t.fracao != null ? `${textoPct(t.fracao)}${t.restanteMs != null ? ` · ≈ ${textoDuracao(t.restanteMs)}` : ""}` : `${t.feito}/${t.total}`;
+    t.fracao != null ? `${textoPct(t.fracao)}${t.restanteMs != null ? ` · ${textoDuracao(t.restanteMs)}` : ""}` : `${t.feito}/${t.total}`;
   const temAndamento = (t: Trabalho) => t.fracao != null || t.total > 0;
   const abrir = (t: Trabalho) => {
     setAberto(false);
     router.push(t.rota);
     t.onAbrir?.();
-    if (!ATIVO(t.estado)) onDispensar(t.id);
+    if (!ATIVO(t.estado)) {
+      t.onDispensar?.();
+      onDispensar(t.id);
+    }
   };
 
   return createPortal(
     <div
       ref={caixa}
-      className="fixed right-3 bottom-[calc(4rem+env(safe-area-inset-bottom)+var(--reserva-rodape,0px)+0.5rem)] z-[58] w-[min(20rem,calc(100vw-1.5rem))] lg:right-4 lg:bottom-[calc(var(--reserva-rodape,0px)+1rem)]"
+      className={`fixed right-3 bottom-[calc(4rem+env(safe-area-inset-bottom)+var(--reserva-rodape,0px)+0.5rem)] z-[58] lg:right-4 lg:bottom-[calc(var(--reserva-rodape,0px)+1rem)] ${aberto ? (trabalhos.some((t) => t.corpo) ? "w-[min(38rem,calc(100vw-1.5rem))]" : "w-[min(26rem,calc(100vw-1.5rem))]") : "w-[min(20rem,calc(100vw-1.5rem))]"}`}
     >
       {aberto ? (
         <section aria-label="Trabalhos em segundo plano" className="animate-fade-in-up rounded-card bg-surface shadow-flutuante ring-1 ring-border">
@@ -287,7 +306,7 @@ export function PainelSegundoPlano({
             <span className="min-w-0 flex-1 truncate text-sm font-semibold">Em segundo plano</span>
             <Button size="xs" variant="icon" aria-label="Minimizar" title="Minimizar" onClick={() => setAberto(false)} icon={<IconChevronDown className="size-4" />} />
           </header>
-          <ul className="max-h-[50dvh] divide-y divide-border overflow-y-auto">
+          <ul className="max-h-[70dvh] divide-y divide-border overflow-y-auto">
             {trabalhos.map((t) => (
               <li key={t.id} className="space-y-2 px-3 py-2.5">
                 <div className="flex items-center gap-2">
@@ -297,15 +316,18 @@ export function PainelSegundoPlano({
                   </span>
                   <span className="shrink-0 text-xs text-muted tabular-nums">{temAndamento(t) && ATIVO(t.estado) ? andamento(t) : t.total > 0 ? `${t.feito}/${t.total}` : ROTULO[t.estado]}</span>
                 </div>
-                {ATIVO(t.estado) && temAndamento(t) && <Progress value={pct(t)} label={undefined} />}
-                {t.texto && <p className="line-clamp-2 text-xs text-muted" title={t.texto}>{t.texto}</p>}
-                {!!t.itens?.length && (
-                  <ul aria-label="Andamento item a item" className="max-h-40 space-y-0.5 overflow-y-auto rounded-md bg-surface-2 p-1.5 text-xs">
+                {!t.corpo && ATIVO(t.estado) && temAndamento(t) && <Progress value={pct(t)} label={undefined} />}
+                {t.corpo && t.corpo()}
+                {!t.corpo && t.texto && <p className="line-clamp-4 text-xs text-muted" title={t.texto}>{t.texto}</p>}
+                {!t.corpo && !!t.itens?.length && (
+                  <ul aria-label="Andamento item a item" className="max-h-56 space-y-1 overflow-y-auto rounded-md bg-surface-2 p-1.5 text-xs">
                     {t.itens.map((x, i) => (
-                      <li key={i} className="flex items-center gap-1.5" title={x.detalhe ? `${x.rotulo} — ${x.detalhe}` : x.rotulo}>
-                        {ICONE[x.estado === "ok" ? "concluido" : x.estado === "falhou" ? "falhou" : x.estado === "rodando" ? "rodando" : "fila"]}
-                        <span className="min-w-0 flex-1 truncate tabular-nums">{x.rotulo}</span>
-                        {x.detalhe && <span className={`max-w-[45%] shrink-0 truncate ${x.estado === "falhou" ? "text-danger" : "text-muted"}`}>{x.detalhe}</span>}
+                      <li key={i} title={x.detalhe ? `${x.rotulo} — ${x.detalhe}` : x.rotulo}>
+                        <span className="flex items-center gap-1.5">
+                          {ICONE[x.estado === "ok" ? "concluido" : x.estado === "falhou" ? "falhou" : x.estado === "rodando" ? "rodando" : "fila"]}
+                          <span className="min-w-0 flex-1 truncate font-medium tabular-nums text-text-2">{x.rotulo}</span>
+                        </span>
+                        {x.detalhe && <span className={`block pl-[22px] tabular-nums ${x.estado === "falhou" ? "text-danger" : "text-muted"}`}>{x.detalhe}</span>}
                       </li>
                     ))}
                   </ul>
@@ -317,7 +339,15 @@ export function PainelSegundoPlano({
                     </Button>
                   )}
                   {!ATIVO(t.estado) && (
-                    <Button size="xs" variant="ghost" icon={<IconClose className="size-3.5" />} onClick={() => onDispensar(t.id)}>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      icon={<IconClose className="size-3.5" />}
+                      onClick={() => {
+                        t.onDispensar?.();
+                        onDispensar(t.id);
+                      }}
+                    >
                       Dispensar
                     </Button>
                   )}

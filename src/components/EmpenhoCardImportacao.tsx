@@ -2,7 +2,7 @@
 
 import { useAnoDoCard } from "./anoDoCard";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { anosDoCard, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, linkImportacoes, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
   type AndamentoLote,
   fracaoDoAndamento,
@@ -22,8 +22,10 @@ import {
 } from "@/lib/empenhos-core";
 import { textoDuracao } from "@/lib/fluxo-progresso";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
-import { type Agora, importarCard, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
+import { importarCard, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { FerramentasAba } from "./AbasEspaco";
+import { AndamentoImportacao } from "./AndamentoImportacao";
+import { useImportacaoDoCard } from "./ImportacoesAoVivo";
 import { useEstimativa } from "./fluxos/useEstimativa";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -74,8 +76,6 @@ const rotuloTipo = (l: LoteCenti) =>
 const nomeDoLote = (l: LoteCenti) => (l.modo === "pagamentos" ? "Pagamentos" : l.modo === "liquidacoes" ? "Liquidações" : l.modo === "unidades" ? "Catálogo e IDs" : "Empenhos");
 /** O nome da soma do lote (o que a Centi traz). */
 const rotuloSoma = (l: LoteCenti) => (l.modo === "pagamentos" ? "Soma paga (líquido)" : l.modo === "liquidacoes" ? "Soma liquidada" : "Soma empenhada");
-/** A "página" de um passo: nas LIQUIDAÇÕES, o órgão da Centi lido (a página N do período é o N-ésimo órgão do lote). */
-const rotuloPagina = (orgaos: number[] | null | undefined, pagina: number) => (orgaos ? `órgão ${orgaos[pagina - 1] ?? "?"}` : `página ${pagina}`);
 const tempo = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`);
 
 
@@ -118,16 +118,8 @@ export function EmpenhoCardImportacao({
   const [andamento, setAndamento] = useState<AndamentoLote | null>(null);
   const [atual, setAtual] = useState<LoteCenti | null>(null);
   const [passos, setPassos] = useState<PassoLote[]>([]);
-  const [agora, setAgora] = useState<Agora | null>(null);
-  /** Os segundos do pedido em curso — o andamento AO VIVO enquanto a Centi responde (o passo entra na tabela ao chegar). */
-  const [segundos, setSegundos] = useState(0);
-  useEffect(() => {
-    setSegundos(0);
-    if (!agora) return;
-    const t0 = Date.now();
-    const id = setInterval(() => setSegundos(Math.floor((Date.now() - t0) / 1000)), 1000);
-    return () => clearInterval(id);
-  }, [agora]);
+  /** O ANDAMENTO AO VIVO da importação desta aba (fase a fase, pedido a pedido — o mesmo do painel do canto). */
+  const aoVivo = useImportacaoDoCard(card.id);
   const [rodando, setRodando] = useState(false);
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
@@ -216,7 +208,8 @@ export function EmpenhoCardImportacao({
         onLote: setAtual,
         onPasso: anotar,
         onAnteriores: setPassos,
-        onAgora: setAgora,
+        titulo: `${card.nome} · ${ano}`,
+        rota: linkImportacoes(card.tipo, card.id, "importacao"),
         onde: (t) => {
           onde = t;
         },
@@ -577,16 +570,7 @@ export function EmpenhoCardImportacao({
               {nomeDoLote(atual)} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
             </p>
           )}
-          {rodando && (
-            <Progress
-              value={fracaoDoAno(atual.ano, passos) * 100}
-              label={
-                agora
-                  ? `${agora.emCurso && agora.emCurso > 1 ? `${agora.emCurso} pedidos em paralelo · último: ` : ""}${rotuloPeriodo(agora.periodo)} · ${rotuloPagina(atual.orgaosCenti, agora.pagina)}${agora.tentativa > 1 ? ` · tentativa ${agora.tentativa}` : ""}${agora.espera ? ` · nova tentativa em ${agora.espera / 1000} s` : ` · aguardando a Centi há ${segundos} s`}${textoRestante}`
-                  : "Conferindo…"
-              }
-            />
-          )}
+          {rodando && aoVivo?.estado === "rodando" && <AndamentoImportacao imp={aoVivo} compacto />}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
             <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
             <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />

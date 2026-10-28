@@ -66,8 +66,10 @@ import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
+import { IconChevronDown, IconChevronLeft, IconClock, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
+import { haQuanto } from "@/lib/acessos-core";
+import type { MetaExec } from "@/lib/execucao-dash-core";
 import { duracaoMotionMs } from "./Modal";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { coerceEstado, diferencas, ESTADO_VAZIO, type EstadoFiltros, paraGuardar, partesDefinidas, periodoEfetivo, voltarParte } from "@/lib/filtros-visao-core";
@@ -458,6 +460,7 @@ export function DashboardExecucao({
       <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
         <KpiStat
           label="Saldo: empenhos"
+          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "empenhos")} />}
           value={brl(empenhadoAnim)}
           completo
           cor={COR.empenhado}
@@ -468,6 +471,7 @@ export function DashboardExecucao({
         />
         <KpiStat
           label="Saldo: liquidações"
+          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
           value={temLiq ? brl(liquidadoAnim) : "—"}
           completo
           cor={COR.liquidado}
@@ -478,6 +482,7 @@ export function DashboardExecucao({
         />
         <KpiStat
           label="Saldo: pagamentos"
+          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
           value={temPag ? brl(pagoAnim) : "—"}
           completo
           cor={COR.pago}
@@ -1415,5 +1420,28 @@ function DemonstrativoExecucao({
         }
       />
     </ChartCard>
+  );
+}
+
+/**
+ * DISCRETO, no canto do indicador: há quanto tempo a etapa foi atualizada (a última importação concluída de qualquer card
+ * dela — `MetaExec.atualizado`); com uma importação lendo agora, o ponto que pulsa. O relógio anda a cada 30 s.
+ */
+function AtualizadoHa({ meta }: { meta?: MetaExec }) {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  if (!meta?.cards) return null;
+  const lendo = meta.lendo > 0;
+  const quando = meta.atualizado ? haQuanto(meta.atualizado, agora) : "sem importação";
+  const dica = `${meta.atualizado ? `Última importação concluída: ${dataHoraBR(meta.atualizado)}` : "Nenhuma importação concluída"}${lendo ? " · importando agora" : ""}`;
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] leading-none text-faint tabular-nums" title={dica}>
+      {lendo ? <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" /> : <IconClock aria-hidden className="h-3 w-3" />}
+      <span className="sr-only">Atualizado </span>
+      {quando}
+    </span>
   );
 }

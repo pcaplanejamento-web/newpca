@@ -45,7 +45,11 @@ import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 import { Tabs } from "./Tabs";
 import { AparenciaPessoal } from "./AparenciaPessoal";
-import { IconAparelho, IconPalette } from "./icons";
+import { IconAparelho, IconEmpenho, IconPalette } from "./icons";
+import { useImportacoesAoVivo } from "./ImportacoesAoVivo";
+import { Switch } from "./Switch";
+import { toast } from "./Toast";
+import { PREF_IMPORTACOES_AO_VIVO } from "@/lib/importacoes-ao-vivo-store";
 import { AparelhosConta } from "./AparelhosConta";
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
@@ -573,6 +577,7 @@ export function PerfilView({
           <SecaoPerfil icone={<IconBell className="h-4 w-4" />} titulo="Notificações" descricao="Grava sozinho a cada mudança.">
             <PreferenciasNotificacoes googleEmail={identidade.googleEmail} />
           </SecaoPerfil>
+          <AndamentoImportacoesPerfil />
             </div>
           ) },
           ...(mesaResponsavel != null || protocolacao
@@ -687,3 +692,39 @@ export function PerfilView({
 }
 
 /** PRESENÇA: aparecer INVISÍVEL para o grupo (você continua vendo quem está online) — grava na hora. */
+
+/**
+ * Só o ADM: o ANDAMENTO DAS IMPORTAÇÕES no canto inferior direito (a atualização automática, as outras abas e as desta) —
+ * ligado por padrão; desligar grava na hora (`preferencias_tabela`) e vale em todos os aparelhos.
+ */
+function AndamentoImportacoesPerfil() {
+  const pref = useImportacoesAoVivo();
+  const [salvando, setSalvando] = useState(false);
+  if (!pref) return null;
+  const mudar = async (ligado: boolean) => {
+    setSalvando(true);
+    pref.definir(ligado);
+    try {
+      const r = await fetch("/api/preferencias/tabela", {
+        method: ligado ? "DELETE" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ligado ? { chave: PREF_IMPORTACOES_AO_VIVO } : { chave: PREF_IMPORTACOES_AO_VIVO, valor: { desligado: true } }),
+      });
+      if (!r.ok) throw new Error();
+    } catch {
+      pref.definir(!ligado);
+      toast.error("Não foi possível salvar — tente de novo.");
+    } finally {
+      setSalvando(false);
+    }
+  };
+  return (
+    <SecaoPerfil
+      icone={<IconEmpenho className="h-4 w-4" />}
+      titulo="Andamento das importações"
+      descricao="No canto inferior direito, ao vivo: as importações da Centi em andamento — a atualização automática, as de outras abas e pessoas e as suas — com cada pedido e o que está acontecendo agora."
+    >
+      <Switch checked={pref.ligado} onChange={(v) => void mudar(v)} disabled={salvando} label="Mostrar o andamento das importações" dica="Desligado, nada aparece no canto (as importações seguem normalmente)." />
+    </SecaoPerfil>
+  );
+}

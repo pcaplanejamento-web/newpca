@@ -284,6 +284,8 @@ import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
 import { PainelSegundoPlano } from "@/components/SegundoPlano";
+import { AndamentoImportacao } from "@/components/AndamentoImportacao";
+import type { ImportacaoLocal } from "@/lib/importacoes-ao-vivo-store";
 import { VERSOES } from "@/lib/versoes";
 import { PainelPendencias } from "@/components/PainelPendencias";
 import { PreviaDocumento } from "@/components/PreviaDocumento";
@@ -3577,6 +3579,10 @@ export function Catalogo() {
         <DemoSegundoPlano />
       </Secao>
 
+      <Secao titulo="Andamento ao vivo de uma importação (AndamentoImportacao — etapas e cada pedido à Centi; o MonitorImportacoes leva o mesmo ao painel do canto para o ADM)">
+        <AndamentoImportacao imp={DEMO_IMPORTACAO} />
+      </Secao>
+
       <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">
         <div className="space-y-3">
           <div className="w-64 rounded-card border border-border bg-surface p-2">
@@ -5495,6 +5501,35 @@ function IntegracaoTrelloDemo() {
 }
 
 /** O painel minimizado no canto inferior direito (ligue para ver; tocar expande). */
+/** Uma importação de exemplo (o catálogo): 2 pedidos em curso, 1 lido, 1 com nova tentativa, 1 na fila. */
+const DEMO_T0 = Date.parse("2026-10-28T12:00:00Z");
+const DEMO_PEDIDO = { tentativa: 1, inicioMs: DEMO_T0, faseMs: DEMO_T0, bytes: 0, bytesEsperados: null, registros: null, iguais: null, mudaram: null, partes: 0, partesFeitas: 0 };
+const DEMO_IMPORTACAO: ImportacaoLocal = {
+  id: "demo",
+  cardId: 0,
+  titulo: "Liquidações 2026 · 2026",
+  ano: 2026,
+  rota: "/painel/configuracoes?aba=importacoes",
+  lote: null,
+  etapa: "leitura",
+  etapaMs: DEMO_T0,
+  inicioMs: DEMO_T0,
+  fimMs: null,
+  assinaturas: 18_240,
+  estado: "rodando",
+  texto: null,
+  aguardandoConfirmacao: false,
+  parar: () => {},
+  passos: [],
+  pedidos: [
+    { ...DEMO_PEDIDO, chave: "1", periodo: { inicio: "2026-01-01", fim: "2026-12-31" }, pagina: 1, rotuloPagina: "órgão 1", fase: "concluido", fimMs: DEMO_T0 + 8000, registros: 12_480, novos: 32, alterados: 4, bytes: 9_400_000 },
+    { ...DEMO_PEDIDO, chave: "2", periodo: { inicio: "2026-01-01", fim: "2026-12-31" }, pagina: 2, rotuloPagina: "órgão 2", fase: "baixando", bytes: 3_200_000, bytesEsperados: 7_800_000 },
+    { ...DEMO_PEDIDO, chave: "3", periodo: { inicio: "2026-01-01", fim: "2026-12-31" }, pagina: 3, rotuloPagina: "órgão 3", fase: "gravando", registros: 5400, iguais: 5100, mudaram: 300, partes: 4, partesFeitas: 2 },
+    { ...DEMO_PEDIDO, chave: "4", periodo: { inicio: "2026-01-01", fim: "2026-12-31" }, pagina: 4, rotuloPagina: "órgão 4", fase: "esperando", tentativa: 2, espera: 8000, mensagem: "A Centi respondeu 500" },
+    { ...DEMO_PEDIDO, chave: "5", periodo: { inicio: "2026-01-01", fim: "2026-12-31" }, pagina: 5, rotuloPagina: "órgão 5", fase: "fila" },
+  ],
+};
+
 function DemoSegundoPlano() {
   const [ligado, setLigado] = useState(false);
   return (

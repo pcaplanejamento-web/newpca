@@ -7,7 +7,7 @@ import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, telaDoCard } fro
 import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
-import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
+import { anosDesatualizados, bytesEsperados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
 import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti, QUEM_AUTO } from "@/lib/empenhos-core";
 import { leituraDoLote } from "@/lib/empenhos-fragmentos";
 import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
@@ -132,8 +132,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // a falha (rede, status, grande demais) já é o passo registrado, na resposta JSON de sempre.
         const b = await baixarPaginaDoLote(card, lote, periodo, corpo.pagina);
         if (!b.ok) return ok({ lote: await getLote(lote.id, card.id), ...b.r });
+        // O tamanho esperado (a barra do download): o informado pela Centi ou o do mesmo pedido na última importação.
+        const esperado = b.comprimento ?? (await bytesEsperados(card.id, lote.ano, lote.modo, periodo.inicio, periodo.fim, corpo.pagina).catch(() => null));
         return new Response(b.corpo, {
-          headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-centi-status": String(b.status), "x-centi-ms": String(b.ms) },
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-store",
+            "x-centi-status": String(b.status),
+            "x-centi-ms": String(b.ms),
+            ...(esperado ? { "x-centi-bytes": String(esperado) } : {}),
+          },
         });
       }
       const r =

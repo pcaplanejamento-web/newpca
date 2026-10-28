@@ -13,6 +13,9 @@ import { getConfigEscopo } from "@/lib/escopo-cabecalho";
 import { nomesDasSiglas } from "@/lib/reparticoes";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
+import { ImportacoesAoVivoProvider, MonitorImportacoes } from "@/components/ImportacoesAoVivo";
+import { PREF_IMPORTACOES_AO_VIVO } from "@/lib/importacoes-ao-vivo-store";
+import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 import { componentesDoAcesso, getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
@@ -69,7 +72,7 @@ export default async function PainelLayout({
   const cartoesPca = pcas.flatMap((p) => porId.get(p.id) ?? []);
   // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
   const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
-  const [contexto, pcaFiltro, notificacoes, presenca, configChat, escopoCab] = await Promise.all([
+  const [contexto, pcaFiltro, notificacoes, presenca, configChat, escopoCab, prefAoVivo] = await Promise.all([
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
     bloqueio ? 0 : contarNaoLidas(usuario, grupos),
@@ -77,7 +80,10 @@ export default async function PainelLayout({
     bloqueio ? null : presencaDoGrupo(usuario.id, ativo?.id ?? null, grupos, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
     bloqueio ? null : getConfigChat(),
     getConfigEscopo(),
+    // O ANDAMENTO DAS IMPORTAÇÕES no canto (só o ADM; ligado por padrão — Perfil → Notificações desliga).
+    usuario.admin && !bloqueio ? listarPreferenciasTabela(usuario.id, PREF_IMPORTACOES_AO_VIVO).catch((): Record<string, unknown> => ({})) : Promise.resolve<Record<string, unknown>>({}),
   ]);
+  const importacoesAoVivo = (prefAoVivo[PREF_IMPORTACOES_AO_VIVO] as { desligado?: unknown } | undefined)?.desligado !== true;
   // Grupos → Acesso por aba: nas abas em TODAS os dados vêm de todas as unidades (o cabeçalho segue o do grupo e a coluna
   // Unidade fica à vista); nas de SOMA, o seletor do cabeçalho trava.
   const acessos = !usuario.admin && ativo && !bloqueio ? await acessosDoGrupo(ativo.id) : { todas: [], somas: [] };
@@ -120,7 +126,12 @@ export default async function PainelLayout({
             unidade={unidadeDe(contexto.ativa)}
             todasAsUnidades={telasTodas}
           >
-            <SegundoPlano>{bloqueio ? null : children}</SegundoPlano>
+            <ImportacoesAoVivoProvider admin={usuario.admin && !bloqueio} ligado={importacoesAoVivo}>
+              <SegundoPlano>
+                {bloqueio ? null : children}
+                {usuario.admin && !bloqueio && <MonitorImportacoes />}
+              </SegundoPlano>
+            </ImportacoesAoVivoProvider>
           </UnidadeUnica>
         </ComponentesPapel>
       </ConfigTabelas>

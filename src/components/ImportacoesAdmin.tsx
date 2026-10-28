@@ -10,6 +10,7 @@ import {
   type ConfigImportacoes,
   cardPorOrgao,
   estadoCard,
+  linkImportacoes,
   FREQUENCIAS,
   motivoConfigImportacoes,
   NOME_TIPO,
@@ -32,6 +33,8 @@ import { brl, dataHoraBR, num } from "@/lib/format";
 import { ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { type Aviso, Avisos } from "./Avisos";
+import { AndamentoImportacao } from "./AndamentoImportacao";
+import { useImportacaoDoCard, useImportacoesLocais } from "./ImportacoesAoVivo";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -270,6 +273,8 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
           filaQueda.current = p.catch(() => {});
           return p;
         },
+        titulo: `${l.card.nome} · ${l.ano}`,
+        rota: linkImportacoes(l.card.tipo, l.card.id, "importacao"),
         onAnteriores: (a) => passos.push(...a),
         onPasso: (p) => {
           passos.push(p);
@@ -305,6 +310,7 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
     }
   }
 
+  const locais = useImportacoesLocais();
   const vao = (linhas ?? []).filter((l) => l.estado !== "pulado");
   const feitos = vao.filter((l) => l.estado !== "fila" && l.estado !== "lendo").length;
   const total = vao.length;
@@ -368,8 +374,8 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
                       {NOME_TIPO[l.card.tipo].titulo} · {l.ano}
                     </span>
                   </div>
-                  <p className="text-[12.5px] text-text-2">{l.texto}</p>
-                  {l.estado === "lendo" && <Progress value={l.fracao * 100} />}
+                  {!(l.estado === "lendo" && locais.some((x) => x.cardId === l.card.id && x.estado === "rodando")) && <p className="text-[12.5px] text-text-2">{l.texto}</p>}
+                  {l.estado === "lendo" && <AndamentoDoCard cardId={l.card.id} fracao={l.fracao} />}
                 </li>
               ))}
             </ul>
@@ -379,6 +385,12 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
       {confirmacao}
     </>
   );
+}
+
+/** O andamento ao vivo de UM card no "Importar tudo" (o da aba; antes de começar, a barra simples). */
+function AndamentoDoCard({ cardId, fracao }: { cardId: number; fracao: number }) {
+  const imp = useImportacaoDoCard(cardId);
+  return imp?.estado === "rodando" ? <AndamentoImportacao imp={imp} compacto /> : <Progress value={fracao * 100} />;
 }
 
 /** O (?) da aba: como as importações funcionam. */

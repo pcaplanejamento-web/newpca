@@ -3,7 +3,7 @@ import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
 import { registrarLeituraCard } from "./empenho-cards";
-import { COLUNAS_PASSO, comandosFecharLote, type LinhaPasso, MSG_PAGINA_IGUAL } from "./empenhos-sql";
+import { COLUNAS_PASSO, comandosFecharLote, consultaBytesEsperados, type LinhaPasso, MSG_PAGINA_IGUAL } from "./empenhos-sql";
 import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroUnico, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
@@ -12,7 +12,7 @@ import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroU
 const agoraSql = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 
 /** A linha → o lote da tela: o TOKEN de quem conduz nunca sai (só se outra aba conduz agora — `conduzido`). */
-function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
+export function paraLote(l: typeof centiLotes.$inferSelect): LoteCenti {
   const { cardId: _, idOrgaoCenti: __, autoAte: ___, orgaosCenti, estado, modo, condutor, conduzindoAte, ...resto } = l;
   return { ...resto, orgaosCenti: lerOrgaosCenti(orgaosCenti), estado: estado as EstadoLote, modo: modo === "unidades" || modo === "liquidacoes" || modo === "pagamentos" ? modo : "dados", conduzido: estado === "lendo" && !!condutor && !!conduzindoAte && conduzindoAte > agoraSql(), automatica: estado === "lendo" && condutor === CONDUTOR_AUTO && !!conduzindoAte && conduzindoAte > agoraSql() };
 }
@@ -156,3 +156,7 @@ export async function passosDaRetomada(loteId: number) {
     .where(eq(centiLotePassos.loteId, loteId))
     .orderBy(centiLotePassos.id);
 }
+
+/** O tamanho esperado da resposta de um pedido (ver `consultaBytesEsperados`). */
+export const bytesEsperados = (cardId: number, ano: number, modo: string, inicio: string, fim: string, pagina: number) =>
+  consultaBytesEsperados(getDb(), cardId, ano, modo, inicio, fim, pagina);

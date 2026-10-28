@@ -814,3 +814,30 @@ export function comandoPaginaIgual(db: Db, loteId: number, anterior: number, cor
 
 /** A mensagem do passo da página idêntica (a contagem dos "sem mudança" no histórico procura por ela). */
 export const MSG_PAGINA_IGUAL = "Sem mudança desde a importação anterior — nada foi relido nem regravado.";
+
+/**
+ * O TAMANHO ESPERADO da resposta de um pedido (sem o Content-Length da Centi): os bytes do MESMO pedido (período + página/
+ * órgão) na última importação promovida do card no ano — a barra do download anda pela fração exata.
+ */
+export async function consultaBytesEsperados(db: Db, cardId: number, ano: number, modo: string, inicio: string, fim: string, pagina: number): Promise<number | null> {
+  const [r] = await db
+    .select({ bytes: centiLotePassos.bytes })
+    .from(centiLotePassos)
+    .where(
+      sql`${centiLotePassos.loteId} = (SELECT id FROM centi_lotes WHERE card_id = ${cardId} AND ano = ${ano} AND modo = ${modo} AND estado = 'promovido' ORDER BY id DESC LIMIT 1)
+        AND ${centiLotePassos.inicio} = ${inicio} AND ${centiLotePassos.fim} = ${fim} AND ${centiLotePassos.pagina} = ${pagina} AND ${centiLotePassos.estado} = 'ok' AND ${centiLotePassos.bytes} > 0`,
+    )
+    .orderBy(desc(centiLotePassos.id))
+    .limit(1);
+  return r?.bytes != null ? Number(r.bytes) : null;
+}
+
+/** Os lotes do PAINEL AO VIVO do ADM: os lendo e os que terminaram depois de `desde` (UTC "AAAA-MM-DD HH:MM:SS"). */
+export function consultaLotesAoVivo(db: Db, desde: string, limite = 30) {
+  return db
+    .select()
+    .from(centiLotes)
+    .where(or(eq(centiLotes.estado, "lendo"), and(inArray(centiLotes.estado, ["promovido", "parcial", "falhou", "cancelado", "unidades"]), sql`${centiLotes.concluidoEm} >= ${desde}`)))
+    .orderBy(desc(centiLotes.id))
+    .limit(limite);
+}

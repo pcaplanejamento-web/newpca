@@ -19,6 +19,7 @@ export function KpiStat({
   completo = false,
   detalhes,
   emLinha = false,
+  canto,
 }: {
   label: string;
   value: ReactNode;
@@ -38,6 +39,8 @@ export function KpiStat({
   detalhes?: { rotulo: string; valor: ReactNode; cor?: string }[];
   /** Detalhes COMPACTOS: em duas colunas (quando o cartão tem largura), sem a divisória — o cartão fica baixo. */
   emLinha?: boolean;
+  /** Uma informação DISCRETA no canto superior direito (ex.: há quanto tempo os dados foram atualizados). */
+  canto?: ReactNode;
 }) {
   const Raiz = onClick ? "button" : "div";
   return (
@@ -64,6 +67,7 @@ export function KpiStat({
       />
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-[12.5px] text-muted">{label}</span>
+        {canto && <span className="shrink-0">{canto}</span>}
         {delta && (
           <span
             className="inline-flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold"

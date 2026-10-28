@@ -82,7 +82,9 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
         },
       });
       repassando = true;
-      return { texto: "", tipo, url: destino, status: r.status, corpo: r.body.pipeThrough(contar) };
+      // O tamanho informado só vale sem compressão (o corpo repassado já vem descomprimido).
+      const semCompressao = !r.headers.get("content-encoding") || r.headers.get("content-encoding") === "identity";
+      return { texto: "", tipo, url: destino, status: r.status, corpo: r.body.pipeThrough(contar), comprimento: semCompressao ? comprimento : null };
     }
     const leitor = r.body?.getReader();
     if (!leitor) throw new Error(`${o.quem} respondeu sem conteúdo.`);

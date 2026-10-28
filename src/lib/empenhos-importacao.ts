@@ -211,13 +211,13 @@ export async function baixarPaginaDoLote(
   lote: LoteCenti,
   periodo: Periodo,
   pagina: number,
-): Promise<{ ok: true; corpo: ReadableStream<Uint8Array>; status: number; ms: number } | { ok: false; r: ResultadoPagina }> {
+): Promise<{ ok: true; corpo: ReadableStream<Uint8Array>; status: number; ms: number; comprimento: number | null } | { ok: false; r: ResultadoPagina }> {
   const ped = prepararPedido(card, lote, periodo, pagina, true);
   const t0 = Date.now();
   try {
     // REPASSE: o corpo vai ao navegador enquanto chega (nada é guardado na memória do Worker — o ano inteiro cabe).
     const r = await baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_TELA_MS, post: ped.base.corpo ?? "", fluxo: true });
-    return { ok: true, corpo: r.corpo as ReadableStream<Uint8Array>, status: r.status, ms: Date.now() - t0 };
+    return { ok: true, corpo: r.corpo as ReadableStream<Uint8Array>, status: r.status, ms: Date.now() - t0, comprimento: r.comprimento ?? null };
   } catch (e) {
     const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
     return { ok: false, r: await registrarFalha(card, lote, periodo, ped, { mensagem, status: null, bytes: null, ms: Date.now() - t0 }) };
