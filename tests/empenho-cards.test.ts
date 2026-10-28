@@ -10,7 +10,7 @@ import {
   CARD_PADRAO,
   cardPadrao,
   lerTipoCard,
-  rotaDoCard,
+  linkImportacoes,
   telaDoCard,
   catalogoDasLinhas,
   coberturaDoGrupo,
@@ -238,6 +238,7 @@ test("cards de LIQUIDAÇÕES: o padrão é a API de liquidações e as pendênci
   assert.deepEqual(pendenciasDoCard({ configuradoEm: null, tipo: "liquidacoes" }, 0).map((p) => p.aba), ["configuracao", "configuracao"]);
   assert.match(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes" }, 0)[0].texto, /ID na Centi/);
   assert.deepEqual(pendenciasDoCard({ configuradoEm: "x", tipo: "liquidacoes" }, 2), []);
-  assert.equal(rotaDoCard({ id: 7, tipo: "liquidacoes" }, "importacao"), "/painel/liquidacoes/7?aba=importacao");
+  assert.equal(linkImportacoes("liquidacoes"), "/painel/configuracoes?aba=importacoes&tipo=liquidacoes");
+  assert.equal(linkImportacoes("empenhos", 7, "vinculos"), "/painel/configuracoes?aba=importacoes&tipo=empenhos&card=7&sub=vinculos");
   assert.equal(telaDoCard({ tipo: lerTipoCard("x") }), "empenhos");
 });

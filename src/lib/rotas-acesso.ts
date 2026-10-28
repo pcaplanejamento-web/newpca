@@ -90,6 +90,8 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/cargos": { GET: ADMIN, POST: ADMIN },
   "admin/feriados/[id]": { PATCH: adminVia("alvo("), DELETE: adminVia("alvo(") },
   "admin/feriados": { GET: ADMIN, POST: ADMIN },
+  "admin/importacoes": { GET: ADMIN },
+  "admin/importacoes/[id]": { GET: ADMIN },
   "admin/grupos/[id]": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/grupos": { GET: ADMIN, POST: ADMIN },
   "admin/integracoes": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },

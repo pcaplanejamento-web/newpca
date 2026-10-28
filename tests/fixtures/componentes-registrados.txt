@@ -116,7 +116,7 @@ EmpenhoCardConfig.tsx
 EmpenhoCardImportacao.tsx
 EmpenhoCardLiquidacoes.tsx
 EmpenhoCardPagamentos.tsx
-EmpenhoCardView.tsx
+ImportacoesAdmin.tsx
 EmpenhoCardVinculos.tsx
 EmpenhoDetalhe.tsx
 EmpenhosTabela.tsx

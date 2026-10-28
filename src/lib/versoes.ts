@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.239.0",
+    data: "2026-10-28",
+    titulo: "Todas as importações num só lugar: Configurações → Importações",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba “Importações”: os cards de empenhos, liquidações e pagamentos num lugar só. Tocar num card abre ali mesmo a Importação, os Vínculos (empenhos) e a Configuração.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A tela fica só com os dados: a tabela de todos os empenhos. O atalho no título leva às importações (Administrador).", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Liquidações", texto: "A tela fica só com os dados: a tabela de todas as liquidações; as importações estão em Configurações.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Pagamentos", texto: "A tela fica só com os dados: a tabela de todos os pagamentos; as importações estão em Configurações.", link: "/painel/pagamentos" },
+      { tipo: "correcao", area: "Sistema", texto: "Listas de escolha dentro de tabelas largas não alargam mais a página no celular.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.238.0",
     data: "2026-10-28",
     titulo: "Importações da Centi blindadas: nada esgota a cota nem trava",

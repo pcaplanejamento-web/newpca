@@ -259,8 +259,10 @@ export function Selecao({
           />
         )}
       </Dropdown>
-      {/* DEPOIS do gatilho: num `<label>` que envolve o campo, o controle rotulado é o 1º — o gatilho. */}
-      <select ref={selRef} id={`${gid}-nativo`} tabIndex={-1} aria-hidden="true" className="sr-only" disabled={disabled} {...nativo}>
+      {/* DEPOIS do gatilho: num `<label>` que envolve o campo, o controle rotulado é o 1º — o gatilho. Preso ao canto do bloco
+          posicionado (`left-0 top-0`): no fluxo, o select invisível ficava DEPOIS do gatilho — numa célula de tabela larga, fora
+          do corte da rolagem, alargando a página no celular. */}
+      <select ref={selRef} id={`${gid}-nativo`} tabIndex={-1} aria-hidden="true" className="sr-only left-0 top-0" disabled={disabled} {...nativo}>
         {children}
       </select>
     </>

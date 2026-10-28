@@ -1,7 +1,6 @@
 "use client";
 
 import { useAnoDoCard } from "./anoDoCard";
-import { useRouter } from "next/navigation";
 import { type ReactNode, useMemo, useRef, useState } from "react";
 import {
   coberturaDoGrupo,
@@ -83,6 +82,7 @@ export function EmpenhoCardVinculos({
   podeBuscar,
   configurado,
   comPeriodo,
+  onMudou,
 }: {
   cardId: number;
   /** Os anos do card (o "Buscar na Centi" lê o ano escolhido — o mesmo das outras abas, `useAnoDoCard`). */
@@ -103,8 +103,9 @@ export function EmpenhoCardVinculos({
   configurado: boolean;
   /** Os parâmetros do card pedem período ({inicio}/{fim}) — senão o ano vai num pedido só (`usaPeriodo`). */
   comPeriodo: boolean;
+  /** Os vínculos ou o catálogo mudaram: quem hospeda relê o card. */
+  onMudou: () => void;
 }) {
-  const router = useRouter();
   const [vista, setVista] = useState<Vista>("vinculos");
   const [aberto, setAberto] = useState<Aberto | null>(null);
   const [gravando, setGravando] = useState(false);
@@ -153,7 +154,7 @@ export function EmpenhoCardVinculos({
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível gravar os vínculos.");
       toast.success(ok);
-      router.refresh();
+      onMudou();
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível gravar os vínculos.");
@@ -242,7 +243,7 @@ export function EmpenhoCardVinculos({
       });
       const fim = await pedirImportacao<{ lote: LoteCenti }>(cardId, { acao: "concluir", lote: lote.id, condutor });
       toast.success(descobrir ? `IDs dos órgãos lidos na Centi (${anoBusca}). ${fim.lote.mensagem ?? ""}`.trim() : (fim.lote.mensagem ?? "Catálogo da Centi atualizado."));
-      router.refresh();
+      onMudou();
     } catch (e) {
       const interrompida = pararBusca.current;
       const msg = interrompida ? "Busca na Centi interrompida — o catálogo ficou como estava." : e instanceof Error ? e.message : "Falha ao buscar na Centi.";

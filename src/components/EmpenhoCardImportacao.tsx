@@ -2,7 +2,6 @@
 
 import { useAnoDoCard } from "./anoDoCard";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { anosDoCard, type CardEmpenho, cardPorOrgao, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
   type AndamentoLote,
@@ -86,9 +85,17 @@ const duracaoLote = (l: LoteCenti) => {
  * Interromper, fechar a página ou uma falha deixam a tabela do card como estava. O histórico das importações fica abaixo
  * (com Excluir). O ano e o botão Importar ficam na barra das abas (`FerramentasAba`).
  */
-export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard; podeExcluir: boolean }) {
+export function EmpenhoCardImportacao({
+  card,
+  podeExcluir,
+  onMudou,
+}: {
+  card: ResumoCard;
+  podeExcluir: boolean;
+  /** Uma importação foi gravada: quem hospeda relê o card (os números e o estado). */
+  onMudou: () => void;
+}) {
   const api = card;
-  const router = useRouter();
   const anos = useMemo(() => anosDoCard(card.anos, anoAtual()), [card.anos]);
   /** A configuração vem antes de importar (`pendenciasDoCard` — o aviso fica no cabeçalho do card). */
   const bloqueado = pendenciasDoCard(card, card.vinculos).length > 0;
@@ -223,13 +230,13 @@ export function EmpenhoCardImportacao({ card, podeExcluir }: { card: ResumoCard;
         toast.success(fim.mensagem ?? "Catálogo da Centi atualizado.");
       } else if (fim.estado === "promovido" && tipo === "pagamentos") {
         toast.success(`Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravados)` : ""}.`);
-        router.refresh();
+        onMudou();
       } else if (fim.estado === "promovido" && liq) {
         toast.success(`Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravadas)` : ""}.`);
-        router.refresh();
+        onMudou();
       } else if (fim.estado === "promovido") {
         toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem vínculo no card (não gravados)` : ""}.`);
-        router.refresh();
+        onMudou();
       } else {
         toast.error(`Importação parcial${deQuem} — nada foi gravado. ${fim.mensagem ?? ""}`);
       }

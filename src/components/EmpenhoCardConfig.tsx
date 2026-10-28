@@ -1,7 +1,6 @@
 "use client";
 
 import { useAnoDoCard } from "./anoDoCard";
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { ResultadoTeste } from "@/lib/centi-resposta-core";
 import {
@@ -18,7 +17,6 @@ import {
   REGRAS_REMOVIDOS,
   type RegraRemovidos,
   type LeituraPorOrgao,
-  rotaDoCard,
 } from "@/lib/empenho-cards-core";
 import { dataIsoBrasilia } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
@@ -52,10 +50,18 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
  * curso, sem gravar nada). Edição direta, com o "(?)" em cada campo; "Salvar" na barra das abas (só com alteração) — a
  * régua é `motivoCardInvalido`, a mesma do servidor. Sair com alteração não salva avisa.
  */
-export function EmpenhoCardConfig({ card, leitura }: { card: CardEmpenho; leitura?: LeituraPorOrgao }) {
+export function EmpenhoCardConfig({
+  card,
+  leitura,
+  onSalvo,
+}: {
+  card: CardEmpenho;
+  leitura?: LeituraPorOrgao;
+  /** Salvou: quem hospeda relê o card; `proxima` = a etapa a abrir depois da 1ª confirmação. */
+  onSalvo: (proxima: "importacao" | "vinculos" | null) => void;
+}) {
   const liq = cardPorOrgao(card.tipo);
   const nomeSoma = card.tipo === "pagamentos" ? "paga" : card.tipo === "liquidacoes" ? "liquidada" : "empenhada";
-  const router = useRouter();
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
   const [salvando, setSalvando] = useState(false);
   const [avancado, setAvancado] = useState(false);
@@ -103,8 +109,8 @@ export function EmpenhoCardConfig({ card, leitura }: { card: CardEmpenho; leitur
         card.configuradoEm ? `Card "${j.card.nome}" salvo.` : liq ? `Configuração confirmada — o card "${j.card.nome}" já pode importar.` : `Configuração confirmada — agora crie os vínculos do card "${j.card.nome}".`,
       );
       setV(edicaoDoCard(j.card));
-      if (!card.configuradoEm) router.push(rotaDoCard(card, liq ? "importacao" : "vinculos"));
-      else router.refresh();
+      // A 1ª confirmação leva à etapa seguinte (os vínculos; nas liquidações e nos pagamentos, a importação).
+      onSalvo(card.configuradoEm ? null : liq ? "importacao" : "vinculos");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar o card.");
     } finally {

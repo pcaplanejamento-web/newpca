@@ -51,8 +51,11 @@ export function CartaoFinanceiro({
   linhas,
   numeros,
   rodape,
+  onClick,
 }: {
-  href: string;
+  /** O endereço que o card abre — ou `onClick` (abrir no mesmo lugar, sem navegar). */
+  href?: string;
+  onClick?: () => void;
   icone: ReactNode;
   sobretitulo: string;
   nome: string;
@@ -64,13 +67,10 @@ export function CartaoFinanceiro({
   rodape?: ReactNode;
 }) {
   const pct = Math.max(0, Math.min(100, barra.pct));
-  return (
-    <Link
-      href={href}
-      unstable_dynamicOnHover
-      aria-label={`Abrir ${nome}`}
-      className="group flex h-full w-full flex-col gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-[border-color,box-shadow] duration-[var(--motion-duration)] hover:border-accent/50 hover:shadow-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25"
-    >
+  const classe =
+    "group flex h-full w-full flex-col gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-[border-color,box-shadow] duration-[var(--motion-duration)] hover:border-accent/50 hover:shadow-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25";
+  const corpo = (
+    <>
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">{icone}</span>
         <div className="min-w-0 flex-1">
@@ -110,7 +110,16 @@ export function CartaoFinanceiro({
       </div>
 
       {rodape && <div className="border-t border-border pt-2 text-[11.5px] text-muted">{rodape}</div>}
+    </>
+  );
+  return href ? (
+    <Link href={href} unstable_dynamicOnHover aria-label={`Abrir ${nome}`} className={classe}>
+      {corpo}
     </Link>
+  ) : (
+    <button type="button" onClick={onClick} aria-label={`Abrir ${nome}`} className={classe}>
+      {corpo}
+    </button>
   );
 }
 

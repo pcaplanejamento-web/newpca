@@ -127,7 +127,7 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
     abas: [
       ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"], ["termo", "Termo de uso"],
       ["escopo", "Filtro da unidade"], ["publico", "Tela pública"], ["cargos", "Cargos e funções"], ["acesso", "Tela de acesso"], ["tabelas", "Tabelas"], ["pcas", "PCAs"], ["situacoes", "Situações"],
-      ["feriados", "Feriados"], ["presenca", "Presença e chat"], ["notificacoes", "Notificações"], ["avaliacao", "Avaliação"],
+      ["feriados", "Feriados"], ["importacoes", "Importações"], ["presenca", "Presença e chat"], ["notificacoes", "Notificações"], ["avaliacao", "Avaliação"],
       ["referencia", "Referência"], ["mais", "Mais"],
     ],
   },
@@ -138,15 +138,15 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
  * `href` da tela ou "href?valor" da aba.
  */
 const PALAVRAS: Record<string, string> = {
-  "/painel/configuracoes?aba=termo": "termo de uso aceite assinatura lgpd encarregado aparelhos limite troca teste implantação cláusulas",
+  "/painel/configuracoes?termo": "termo de uso aceite assinatura lgpd encarregado aparelhos limite troca teste implantação cláusulas",
   "/painel/integracoes": "turnstile captcha google login resend email e-mail trello cloudflare monitoramento métricas",
   "/painel/armazenamento": "banco dados tamanho saúde sessões expurgar online worker",
   "/painel/auditoria": "histórico alterações registro log quem mudou",
   "/painel/automacao": "centi extensão fluxos robô baixar dfds cm002",
-  "/painel/empenhos": "despesa execução centi empenhado liquidado pago fornecedor fonte elemento cards importação vínculos integração api",
-  "/painel/liquidacoes": "despesa execução centi liquidação liquidado pago saldo credor nota empenho cards importação integração api",
+  "/painel/empenhos": "despesa execução centi empenhado liquidado pago fornecedor fonte elemento",
+  "/painel/liquidacoes": "despesa execução centi liquidação liquidado pago saldo credor nota empenho",
   "/painel/execucao": "dashboard painel execução despesa empenhado liquidado pago a pagar evolução acumulada métricas diárias demonstrativo",
-  "/painel/pagamentos": "despesa execução centi pagamento pago ordem de pagamento retenção anulação credor empenho cards importação integração api",
+  "/painel/pagamentos": "despesa execução centi pagamento pago ordem de pagamento retenção anulação credor empenho",
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",
@@ -158,6 +158,7 @@ const PALAVRAS: Record<string, string> = {
   "/painel/configuracoes?escopo": "filtro da unidade cabeçalho unidade ativa obedecer pca orçamento catálogo tarefas",
   "/painel/configuracoes?publico": "consulta pública site abas publicadas menu",
   "/painel/configuracoes?tabelas": "linhas por página",
+  "/painel/configuracoes?importacoes": "centi importação importar cards empenhos liquidações pagamentos vínculos integração api atualização automática conferência",
   "/painel/configuracoes?situacoes": "situação protocolo cores",
   "/painel/configuracoes?feriados": "calendário ponto facultativo",
   "/painel/configuracoes?presenca": "online chat invisível ausente",

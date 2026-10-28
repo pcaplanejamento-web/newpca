@@ -61,8 +61,9 @@ export const NOME_TIPO: Record<TipoCard, { titulo: string; um: string; varios: s
 };
 /** A TELA (permissão) de um card. */
 export const telaDoCard = (c: { tipo: TipoCard }): TipoCard => c.tipo;
-/** O caminho do espaço de um card (`/painel/empenhos/1` · `/painel/liquidacoes/2` · `/painel/pagamentos/3`). */
-export const rotaDoCard = (c: { id: number; tipo: TipoCard }, aba?: string): string => `/painel/${c.tipo}/${c.id}${aba ? `?aba=${aba}` : ""}`;
+/** O endereço das IMPORTAÇÕES (Configurações → Importações — só o ADM): o tipo e, com `card`, o card aberto na sub-aba. */
+export const linkImportacoes = (tipo: TipoCard, card?: number, sub?: "importacao" | "vinculos" | "configuracao"): string =>
+  `/painel/configuracoes?aba=importacoes&tipo=${tipo}${card ? `&card=${card}${sub ? `&sub=${sub}` : ""}` : ""}`;
 
 export type CardEmpenho = {
   id: number;
