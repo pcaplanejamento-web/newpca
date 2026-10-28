@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.245.0",
+    data: "2026-10-28",
+    titulo: "Escolher quais importações atualizam sozinhas",
+    mudancas: [
+      { tipo: "novo", area: "Importações", texto: "Em “Atualização automática e regras”, a seção “Quais importações” escolhe, card por card e ANO por ano, o que a atualização automática lê (Todas · Nenhuma). O que fica desmarcado só é importado à mão; “Ano atual” acompanha a virada do ano. Até salvar a escolha, tudo continua como estava.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "O selo “Automática” de cada card segue a escolha (o card fora dela aparece “Manual”), o resumo diz quantas importações são automáticas e a Configuração do card mostra os anos automáticos e os manuais. Uma importação automática em andamento num card ou ano tirado da escolha é encerrada sozinha.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.244.0",
     data: "2026-10-28",
     titulo: "Declarações do PCA",

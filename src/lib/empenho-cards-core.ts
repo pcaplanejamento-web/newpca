@@ -238,7 +238,16 @@ export type ConfigImportacoes = {
   quedaSoma: number;
   quedaRegistros: number;
   removidos: RegraRemovidos;
+  /**
+   * QUAIS importações atualizam sozinhas: id do card → os anos ESCOLHIDOS, nos valores gravados no card (o relativo `0` =
+   * "Ano atual", que acompanha a virada do ano, ou o ano fixo). Card ausente ou lista vazia = manual. `null` = o formato
+   * antigo (todos os cards, todos os anos) — vale até o ADM salvar a escolha.
+   */
+  automaticas: Record<string, number[]> | null;
 };
+
+/** Teto de cards na escolha das automáticas (o blob fica pequeno). */
+export const MAX_CARDS_AUTOMATICOS = 200;
 
 /** O padrão: desligada (nada roda sozinho até o ADM ligar), a cada 2 h, dias úteis, 07:00–19:00, queda de 80%/90%. */
 export const IMPORTACOES_PADRAO: ConfigImportacoes = {
@@ -250,7 +259,102 @@ export const IMPORTACOES_PADRAO: ConfigImportacoes = {
   quedaSoma: 80,
   quedaRegistros: 90,
   removidos: "marcar",
+  automaticas: null,
 };
+
+/** A escolha gravada → id → anos válidos, sem repetir (inválido = sai; nada válido e não-objeto = `null`, o legado). */
+export function lerAutomaticas(v: unknown): Record<string, number[]> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, number[]> = {};
+  for (const [k, lista] of Object.entries(v as Record<string, unknown>)) {
+    if (Object.keys(out).length >= MAX_CARDS_AUTOMATICOS) break;
+    if (!/^[1-9]\d{0,9}$/.test(k) || !Array.isArray(lista)) continue;
+    const anos: number[] = [];
+    for (const x of lista) {
+      const n = Number(x);
+      if (anoValido(n) && !anos.includes(n) && anos.length < LIMITES_CARD.anos) anos.push(n);
+    }
+    out[k] = anos;
+  }
+  return out;
+}
+
+/** Os ANOS de fato que a automática lê neste card: os escolhidos que ainda estão no card, resolvidos (`anosDoCard` — os
+ * relativos pelo ano atual, sem futuro). Legado (`null`) = todos os anos do card. Não olha se a central está ligada. */
+export function anosAutomaticos(cfg: Pick<ConfigImportacoes, "automaticas">, card: Pick<CardEmpenho, "id" | "anos">, anoAtual: number): number[] {
+  if (cfg.automaticas == null) return anosDoCard(card.anos, anoAtual);
+  const escolhidos = cfg.automaticas[String(card.id)] ?? [];
+  return anosDoCard(
+    card.anos.filter((a) => escolhidos.includes(a)),
+    anoAtual,
+  );
+}
+
+/** A importação deste card atualiza sozinha? (a central ligada E algum ano escolhido que vale hoje) — o selo "Automática". */
+export function cardAutomatico(cfg: Pick<ConfigImportacoes, "ativa" | "automaticas">, card: Pick<CardEmpenho, "id" | "anos">, anoAtual: number): boolean {
+  return cfg.ativa && anosAutomaticos(cfg, card, anoAtual).length > 0;
+}
+
+/** Os cards que a atualização automática percorre (só os com algum ano escolhido), na ordem da fila única. */
+export function cardsDaAutomatica<T extends Pick<CardEmpenho, "id" | "tipo" | "anos">>(cards: readonly T[], cfg: Pick<ConfigImportacoes, "ativa" | "automaticas">, anoAtual: number): T[] {
+  if (!cfg.ativa) return [];
+  return filaDosCards(cards.filter((c) => anosAutomaticos(cfg, c, anoAtual).length > 0));
+}
+
+/** Os lotes LENDO da automática que saíram da escolha (o card/ano desmarcado, o card que não está mais pronto, a central
+ * desligada) — o cron os cancela: nada fica "Importando" para sempre. */
+export function lotesForaDaEscolha<L extends { cardId: number | null; ano: number }>(
+  lotes: readonly L[],
+  cards: readonly Pick<CardEmpenho, "id" | "tipo" | "anos">[],
+  cfg: Pick<ConfigImportacoes, "ativa" | "automaticas">,
+  anoAtual: number,
+): L[] {
+  const vale = cardsDaAutomatica(cards, cfg, anoAtual);
+  return lotes.filter((l) => {
+    const c = vale.find((x) => x.id === l.cardId);
+    return !c || !anosAutomaticos(cfg, c, anoAtual).includes(l.ano);
+  });
+}
+
+/** A escolha contra os cards de VERDADE (null = vale): todo id é um card e todo ano está nos anos dele. */
+export function motivoEscolhaAutomaticas(automaticas: Record<string, number[]> | null, cards: readonly Pick<CardEmpenho, "id" | "nome" | "anos">[]): string | null {
+  if (!automaticas) return null;
+  for (const [id, anos] of Object.entries(automaticas)) {
+    const c = cards.find((x) => String(x.id) === id);
+    if (!c) return "Uma importação escolhida não existe mais — recarregue a tela.";
+    const fora = anos.find((a) => !c.anos.includes(a));
+    if (fora != null) return `O ano ${rotuloAno(fora)} não está no card "${c.nome}".`;
+  }
+  return null;
+}
+
+/** O que mudou na escolha (a auditoria): "Empenhos 2025: manual → 2025". */
+export function textoDiffAutomaticas(
+  antes: Record<string, number[]> | null,
+  depois: Record<string, number[]> | null,
+  cards: readonly Pick<CardEmpenho, "id" | "nome" | "anos">[],
+): string {
+  const escolhidos = (m: Record<string, number[]> | null, c: Pick<CardEmpenho, "id" | "anos">) => (m == null ? c.anos : (m[String(c.id)] ?? []).filter((a) => c.anos.includes(a)));
+  const txt = (anos: readonly number[]) => (anos.length ? rotuloAnos(anos) : "manual");
+  const partes: string[] = [];
+  for (const c of cards) {
+    const a = escolhidos(antes, c);
+    const d = escolhidos(depois, c);
+    if (txt(a) !== txt(d)) partes.push(`${c.nome}: ${txt(a)} → ${txt(d)}`);
+  }
+  return partes.join("; ");
+}
+
+/** Quantas importações (card × ano) estão na automática, de quantas existem — o resumo do painel. */
+export function contagemAutomaticas(cfg: Pick<ConfigImportacoes, "automaticas">, cards: readonly Pick<CardEmpenho, "id" | "anos">[], anoAtual: number): { auto: number; total: number } {
+  let auto = 0;
+  let total = 0;
+  for (const c of cards) {
+    total += anosDoCard(c.anos, anoAtual).length;
+    auto += anosAutomaticos(cfg, c, anoAtual).length;
+  }
+  return { auto, total };
+}
 
 /** O motivo de a configuração central não valer (null = vale) — a MESMA régua na tela e no servidor. */
 export function motivoConfigImportacoes(c: ConfigImportacoes): string | null {
@@ -258,6 +362,15 @@ export function motivoConfigImportacoes(c: ConfigImportacoes): string | null {
   if (!HORA.test(c.horaInicio) || !HORA.test(c.horaFim)) return "Horário inválido (use HH:MM).";
   if (c.horaInicio >= c.horaFim) return "O horário de início tem de ser antes do fim.";
   if (!OPCOES_QUEDA.some((o) => o.valor === c.quedaSoma) || !OPCOES_QUEDA.some((o) => o.valor === c.quedaRegistros)) return "Regra de queda inválida.";
+  if (c.automaticas) {
+    const ids = Object.keys(c.automaticas);
+    if (ids.length > MAX_CARDS_AUTOMATICOS) return `No máximo ${MAX_CARDS_AUTOMATICOS} importações na escolha.`;
+    for (const id of ids) {
+      if (!/^[1-9]\d{0,9}$/.test(id)) return "Importação inválida na escolha.";
+      const anos = c.automaticas[id];
+      if (!Array.isArray(anos) || anos.some((a) => !anoValido(a)) || new Set(anos).size !== anos.length) return "Ano inválido na escolha das importações automáticas.";
+    }
+  }
   return null;
 }
 
@@ -273,6 +386,7 @@ export function lerConfigImportacoes(v: unknown): ConfigImportacoes {
     quedaSoma: OPCOES_QUEDA.some((q) => q.valor === o.quedaSoma) ? (o.quedaSoma as number) : IMPORTACOES_PADRAO.quedaSoma,
     quedaRegistros: OPCOES_QUEDA.some((q) => q.valor === o.quedaRegistros) ? (o.quedaRegistros as number) : IMPORTACOES_PADRAO.quedaRegistros,
     removidos: lerRegraRemovidos(o.removidos),
+    automaticas: lerAutomaticas(o.automaticas),
   };
   if (c.horaInicio >= c.horaFim) return { ...c, horaInicio: IMPORTACOES_PADRAO.horaInicio, horaFim: IMPORTACOES_PADRAO.horaFim };
   return c;

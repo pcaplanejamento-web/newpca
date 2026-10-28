@@ -26,6 +26,8 @@ export const configImportacoesSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
+  /** Quais importações atualizam sozinhas (id do card → anos); ausente = mantém a gravada; null = todas (o legado). */
+  automaticas: z.record(z.string().regex(/^[1-9]\d{0,9}$/), z.array(z.number().int()).max(10)).nullable().optional(),
 });
 
 /** O card NOVO: o tipo (empenhos | liquidações | pagamentos), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos

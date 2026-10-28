@@ -2,8 +2,11 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  anosAutomaticos,
   anosDoCard,
   type CardEmpenho,
+  cardAutomatico,
+  contagemAutomaticas,
   type ConfigImportacoes,
   cardPorOrgao,
   estadoCard,
@@ -17,6 +20,7 @@ import {
   REGRAS_REMOVIDOS,
   type RegraRemovidos,
   type ResumoCard,
+  rotuloAno,
   rotuloAnos,
   rotuloFrequencia,
   type TipoCard,
@@ -36,8 +40,9 @@ import { EmpenhoCardImportacao, textoConclusao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
 import { Callout } from "./Callout";
+import { ChipsIcone } from "./ChipsIcone";
 import { SelectField, TextField } from "./Field";
-import { IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
+import { IconCalendar, IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
@@ -178,7 +183,7 @@ export function ImportacoesAdmin() {
           <AjudaImportacoes />
         </div>
       </div>
-      {config && <PainelAutomatica config={config} onSalvo={setConfig} />}
+      {config && <PainelAutomatica config={config} cards={cards} onSalvo={setConfig} />}
       {erroConfig && <ErroCarga msg={erroConfig} onTentar={carregarConfig} />}
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
       {cards == null && !erro ? (
@@ -187,7 +192,7 @@ export function ImportacoesAdmin() {
           <SkeletonCartao />
         </div>
       ) : cards ? (
-        <ListaCards tipo={tipo} cards={doTipo} todos={cards} automatica={!!config?.ativa} onAbrir={(id, sub) => abrir(id, sub)} />
+        <ListaCards tipo={tipo} cards={doTipo} todos={cards} config={config} onAbrir={(id, sub) => abrir(id, sub)} />
       ) : null}
     </div>
   );
@@ -408,14 +413,14 @@ function ListaCards({
   tipo,
   cards,
   todos,
-  automatica,
+  config,
   onAbrir,
 }: {
   tipo: TipoCard;
   cards: ResumoCard[];
   todos: ResumoCard[];
-  /** A atualização automática central está ligada (o selo dos cards). */
-  automatica: boolean;
+  /** A configuração central (o selo "Automática" de cada card = a escolha dele). */
+  config: ConfigImportacoes | null;
   onAbrir: (id: number, sub?: SubAba) => void;
 }) {
   const liq = cardPorOrgao(tipo);
@@ -453,7 +458,7 @@ function ListaCards({
     <>
       <div className={GRADE_ORCAMENTOS}>
         {cards.map((c) => (
-          <CartaoFinanceiro key={c.id} onClick={() => onAbrir(c.id)} icone={<Icone className="h-5 w-5" />} {...propsDoCartao(c, automatica)} />
+          <CartaoFinanceiro key={c.id} onClick={() => onAbrir(c.id)} icone={<Icone className="h-5 w-5" />} {...propsDoCartao(c, !!config && cardAutomatico(config, c, anoAtual()))} />
         ))}
         <QuadroNovoCard onClick={() => setNovo(true)} rotulo={cards.length ? "Novo card" : `Novo card de ${nomeTipo.varios}`} />
       </div>
@@ -604,7 +609,7 @@ function propsDoCartao(c: ResumoCard, automatica: boolean) {
  * A ATUALIZAÇÃO AUTOMÁTICA e as REGRAS da conferência — CENTRAIS, valem para todos os cards: o resumo numa linha e
  * "Editar" abre os campos (`motivoConfigImportacoes`, a mesma régua do servidor). Gravar vale na próxima execução.
  */
-function PainelAutomatica({ config, onSalvo }: { config: ConfigImportacoes; onSalvo: (c: ConfigImportacoes) => void }) {
+function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoes; cards: ResumoCard[] | null; onSalvo: (c: ConfigImportacoes) => void }) {
   const [editando, setEditando] = useState<ConfigImportacoes | null>(null);
   const [salvando, setSalvando] = useState(false);
   const v = editando;
@@ -629,12 +634,17 @@ function PainelAutomatica({ config, onSalvo }: { config: ConfigImportacoes; onSa
   }
 
   const queda = (n: number) => OPCOES_QUEDA.find((o) => o.valor === n)?.rotulo ?? `${n}%`;
+  const ano = anoAtual();
+  const conta = cards ? contagemAutomaticas(config, cards, ano) : null;
+  /** Editar: a escolha do formato antigo (todas) vira a lista EXPLÍCITA — salvar passa a valer a escolha. */
+  const editar = () =>
+    setEditando({ ...config, automaticas: config.automaticas ?? Object.fromEntries((cards ?? []).map((c) => [String(c.id), [...c.anos]])) });
   return (
     <>
       <SecaoBanner
         titulo="Atualização automática e regras (todas as importações)"
         acao={
-          <Button size="sm" variant="secondary" icon={<IconPencil className="h-4 w-4" />} onClick={() => setEditando(config)}>
+          <Button size="sm" variant="secondary" icon={<IconPencil className="h-4 w-4" />} onClick={editar}>
             Editar
           </Button>
         }
@@ -644,6 +654,11 @@ function PainelAutomatica({ config, onSalvo }: { config: ConfigImportacoes; onSa
             {config.ativa ? "Ligada" : "Desligada"}
           </Badge>
           <span>{rotuloFrequencia(config.frequenciaMin, config.diasUteis, config.horaInicio, config.horaFim)}</span>
+          {conta && (
+            <span title="Importações (card × ano) que atualizam sozinhas — escolha em Editar.">
+              {num(conta.auto)} de {num(conta.total)} {conta.total === 1 ? "importação automática" : "importações automáticas"}
+            </span>
+          )}
           <span className="text-muted">
             Queda: soma {queda(config.quedaSoma)} · registros {queda(config.quedaRegistros)} · {config.removidos === "apagar" ? "apaga" : "marca"} o que a Centi não traz mais
           </span>
@@ -698,6 +713,7 @@ function PainelAutomatica({ config, onSalvo }: { config: ConfigImportacoes; onSa
                 </Ajuda>
               </div>
             </SecaoBanner>
+            {cards && <EscolhaAutomaticas cards={cards} valor={v.automaticas ?? {}} legado={config.automaticas == null} onMudar={(a) => muda("automaticas", a)} />}
             <SecaoBanner titulo="Regras da conferência">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <SelectField denso label="Queda da soma" value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<Ajuda titulo="Queda da soma" compacta>A importação que trouxer a soma do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</Ajuda>}>
@@ -727,6 +743,96 @@ function PainelAutomatica({ config, onSalvo }: { config: ConfigImportacoes; onSa
         )}
       </Modal>
     </>
+  );
+}
+
+/**
+ * QUAIS IMPORTAÇÕES atualizam sozinhas: cada card (por tipo) com os ANOS dele em chips — toda importação é de um ano, então
+ * a escolha é por card E por ano ("Ano atual" acompanha a virada do ano). O card ainda a configurar não entra.
+ */
+function EscolhaAutomaticas({
+  cards,
+  valor,
+  legado,
+  onMudar,
+}: {
+  cards: ResumoCard[];
+  valor: Record<string, number[]>;
+  /** A escolha ainda não foi salva (até agora, todas as importações eram automáticas). */
+  legado: boolean;
+  onMudar: (a: Record<string, number[]>) => void;
+}) {
+  const ano = anoAtual();
+  const prontos = cards.filter((c) => pendenciasDoCard(c, c.vinculos).length === 0);
+  const todas = () => onMudar(Object.fromEntries(prontos.map((c) => [String(c.id), [...c.anos]])));
+  const nenhuma = () => onMudar({});
+  const alternar = (c: ResumoCard, a: number, ligado: boolean) => {
+    const atual = (valor[String(c.id)] ?? []).filter((x) => c.anos.includes(x));
+    const novo = ligado ? c.anos.filter((x) => x === a || atual.includes(x)) : atual.filter((x) => x !== a);
+    onMudar({ ...valor, [String(c.id)]: novo });
+  };
+  return (
+    <SecaoBanner
+      titulo="Quais importações"
+      acao={
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={todas}>
+            Todas
+          </Button>
+          <Button size="sm" variant="ghost" onClick={nenhuma}>
+            Nenhuma
+          </Button>
+          <Ajuda titulo="Quais importações" compacta>
+            <p>
+              Marque os ANOS de cada card que a atualização automática lê. Toda importação é de um ano: o card que tem 2025 e 2026 pode
+              atualizar só 2026, por exemplo. “Ano atual” acompanha a virada do ano.
+            </p>
+            <p>O que fica desmarcado só é importado à mão (a aba Importação do card ou “Importar tudo”). Um card novo começa manual.</p>
+          </Ajuda>
+        </div>
+      }
+    >
+      {legado && <Callout kind="info">Até agora todas as importações eram automáticas. Salvar passa a valer a escolha abaixo.</Callout>}
+      {cards.length === 0 && <p className="text-[13px] text-muted">Nenhum card cadastrado.</p>}
+      {TIPOS.map((t) => {
+        const doTipo = cards.filter((c) => c.tipo === t);
+        if (!doTipo.length) return null;
+        return (
+          <div key={t} className="space-y-1.5">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-muted">{NOME_TIPO[t].titulo}</p>
+            <ul className="divide-y divide-border rounded-control border border-border">
+              {doTipo.map((c) => {
+                const pend = pendenciasDoCard(c, c.vinculos);
+                const escolhidos = valor[String(c.id)] ?? [];
+                const valendo = anosAutomaticos({ automaticas: valor }, c, ano);
+                return (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text" title={c.nome}>
+                      {c.nome}
+                    </span>
+                    {pend.length ? (
+                      <span className="text-[12px] text-[color:var(--warn)]" title={pend.map((p) => p.texto).join(" ")}>
+                        A configurar — não entra
+                      </span>
+                    ) : (
+                      <>
+                        <ChipsIcone<string>
+                          ariaLabel={`Anos automáticos de ${c.nome}`}
+                          itens={c.anos.map((a) => ({ value: String(a), label: a <= 0 ? `${rotuloAno(a)} (${ano + a})` : rotuloAno(a), Icone: IconCalendar, cor: "var(--accent)" }))}
+                          ligados={escolhidos.filter((a) => c.anos.includes(a)).map(String)}
+                          onAlternar={(v, ligado) => alternar(c, Number(v), ligado)}
+                        />
+                        <Badge tone={valendo.length ? "emerald" : "slate"}>{valendo.length ? "Automática" : "Manual"}</Badge>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </SecaoBanner>
   );
 }
 
@@ -794,7 +900,7 @@ function CardAberto({
   }
   const liq = cardPorOrgao(c.tipo);
   const nome = NOME_TIPO[c.tipo];
-  const e = estadoCard(c, c.lendo, !!config?.ativa);
+  const e = estadoCard(c, c.lendo, !!config && cardAutomatico(config, c, anoAtual()));
   const pendencias = pendenciasDoCard(c, c.vinculos);
   const subs: SubAba[] = liq ? ["importacao", "configuracao"] : ["importacao", "vinculos", "configuracao"];
   const aba: SubAba = subs.includes(sub) ? sub : "importacao";
@@ -847,6 +953,7 @@ function CardAberto({
         <EmpenhoCardConfig
           card={d.card as CardEmpenho}
           leitura={d.vinculos && d.mapa ? orgaosDaLeitura(d.vinculos, d.mapa) : undefined}
+          automaticos={config ? (config.ativa ? anosAutomaticos(config, d.card, anoAtual()) : null) : undefined}
           onSalvo={(proxima) => {
             mudou();
             if (proxima) onSub(proxima);

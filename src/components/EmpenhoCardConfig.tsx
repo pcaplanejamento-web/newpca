@@ -49,10 +49,13 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
 export function EmpenhoCardConfig({
   card,
   leitura,
+  automaticos,
   onSalvo,
 }: {
   card: CardEmpenho;
   leitura?: LeituraPorOrgao;
+  /** Os anos deste card na atualização automática (null = a central desligada; ausente = não mostra). */
+  automaticos?: number[] | null;
   /** Salvou: quem hospeda relê o card; `proxima` = a etapa a abrir depois da 1ª confirmação. */
   onSalvo: (proxima: "importacao" | "vinculos" | null) => void;
 }) {
@@ -171,6 +174,14 @@ export function EmpenhoCardConfig({
             }}
           />
           <p className="text-[12.5px] text-muted">{anosDeFato.length ? `Hoje: ${anosDeFato.join(", ")}.` : "Nenhum ano válido escolhido."}</p>
+          {automaticos !== undefined && (
+            <p className="text-[12.5px] text-muted">
+              {automaticos === null
+                ? "Atualização automática desligada — tudo é importado à mão."
+                : `Automática: ${automaticos.length ? automaticos.join(", ") : "nenhum"} · Manual: ${anosDeFato.filter((a) => !automaticos.includes(a)).join(", ") || "nenhum"}.`}{" "}
+              Escolha em “Atualização automática e regras”, acima da lista de importações.
+            </p>
+          )}
         </SecaoBanner>
 
       </div>
