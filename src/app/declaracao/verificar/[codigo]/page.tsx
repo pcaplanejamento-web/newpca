@@ -44,6 +44,8 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
                   Declaração CANCELADA em {dataHoraBR(d.cancelada.em)}
                   {d.cancelada.motivo ? ` — ${d.cancelada.motivo}` : ""}. Não tem validade.
                 </Callout>
+              ) : !d.exportada ? (
+                <Callout kind="warn">Declaração em elaboração: ainda não foi exportada e não tem validade. O conteúdo pode mudar até a exportação.</Callout>
               ) : (
                 <Callout kind="ok">Declaração válida: o registro confere com o emitido.</Callout>
               )}

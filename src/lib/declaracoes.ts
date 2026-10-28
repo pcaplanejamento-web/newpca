@@ -5,13 +5,22 @@ import { componenteLibera } from "./acesso";
 import { type Guarda, intId, recusaPca } from "./api-auth";
 import type { UsuarioSessao } from "./auth";
 import { getDb } from "./db";
-import { comandoCancelarDeclaracao, comandosEmitirDeclaracao, consultaDeclarados, consultaUltimoNumero } from "./declaracoes-sql";
+import {
+  comandoCancelarDeclaracao,
+  comandoExportarDeclaracao,
+  comandosEditarDeclaracao,
+  comandosEmitirDeclaracao,
+  consultaDeclarados,
+  consultaUltimoNumero,
+} from "./declaracoes-sql";
 import {
   acessoDeclaracoes,
   type ConteudoDeclaracao,
   conferirPedido,
   type Finalidade,
   type ItemDeclaravel,
+  itensParaEdicao,
+  type LinhaDeclaracao,
   lerConteudo,
   montarConteudo,
   type PedidoItem,
@@ -103,6 +112,10 @@ export type DeclaracaoResumo = {
   emitidoPorNome: string;
   emitidoEm: string;
   cancelada: { em: string; por: string | null; motivo: string | null } | null;
+  /** A última edição (antes de exportar). */
+  editada: { em: string; por: string | null } | null;
+  /** Exportada em PDF — travada: não se edita mais. */
+  exportada: { em: string; por: string | null } | null;
 };
 
 const COLS = {
@@ -119,6 +132,10 @@ const COLS = {
   canceladaEm: declaracoes.canceladaEm,
   canceladaPorNome: declaracoes.canceladaPorNome,
   motivoCancelamento: declaracoes.motivoCancelamento,
+  editadaEm: declaracoes.editadaEm,
+  editadaPorNome: declaracoes.editadaPorNome,
+  exportadaEm: declaracoes.exportadaEm,
+  exportadaPorNome: declaracoes.exportadaPorNome,
 };
 
 type LinhaCols = { [K in keyof typeof COLS]: (typeof COLS)[K]["_"]["data"] | null };
@@ -136,6 +153,8 @@ const resumo = (r: LinhaCols): DeclaracaoResumo => ({
   emitidoPorNome: r.emitidoPorNome as string,
   emitidoEm: r.emitidoEm as string,
   cancelada: r.canceladaEm ? { em: r.canceladaEm, por: r.canceladaPorNome, motivo: r.motivoCancelamento } : null,
+  editada: r.editadaEm ? { em: r.editadaEm, por: r.editadaPorNome } : null,
+  exportada: r.exportadaEm ? { em: r.exportadaEm, por: r.exportadaPorNome } : null,
 });
 
 /**
@@ -196,17 +215,9 @@ export async function emitirDeclaracao(
     itensDeclaraveis(pca, rep),
     db.select({ cargo: usuarios.cargo }).from(usuarios).where(eq(usuarios.id, u.id)).limit(1),
   ]);
-  const { linhas, erros } = conferirPedido(p.itens, itens);
-  if (erros.length) return { erro: erros.slice(0, 5).join(" "), status: 422 };
-  const conteudo = montarConteudo({
-    pca: { id: pca.id, nome: pca.nome, ano: pca.ano },
-    finalidade: p.finalidade,
-    finalidadeTexto: p.finalidade === "outra" ? p.finalidadeTexto : null,
-    processo: p.processo,
-    observacao: p.observacao,
-    linhas,
-    emitente: { nome: u.nome, matricula: u.matricula, cargo: pessoa?.cargo ?? null },
-  });
+  const m = conteudoDoPedido(pca, p, itens, { nome: u.nome, matricula: u.matricula, cargo: pessoa?.cargo ?? null });
+  if ("erro" in m) return m;
+  const { conteudo, linhas } = m;
   const texto = JSON.stringify(conteudo);
   for (let tentativa = 0; tentativa < 3; tentativa++) {
     const emitidoEm = new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -235,7 +246,7 @@ export async function emitirDeclaracao(
     try {
       await db.batch(cmds);
     } catch (e) {
-      const msg = String((e as Error)?.message ?? e) + String((e as { cause?: Error })?.cause?.message ?? "");
+      const msg = erroDoLote(e);
       if (msg.includes("saldo_insuficiente")) return { erro: "Parte destes itens acabou de ser declarada por outra pessoa — recarregue e confira o saldo.", status: 409 };
       if (/UNIQUE/i.test(msg) && tentativa < 2) continue;
       throw e;
@@ -246,6 +257,81 @@ export async function emitirDeclaracao(
     return { declaracao: r };
   }
   return { erro: "Não consegui numerar a declaração — tente de novo.", status: 409 };
+}
+
+/** Confere o pedido contra os itens e monta o RETRATO (o mesmo na emissão e na edição). */
+function conteudoDoPedido(
+  pca: PcaEspaco,
+  p: PedidoDeclaracao,
+  itens: ItemDeclaravel[],
+  emitente: ConteudoDeclaracao["emitente"],
+): { erro: string; status: number } | { conteudo: ConteudoDeclaracao; linhas: LinhaDeclaracao[] } {
+  const { linhas, erros } = conferirPedido(p.itens, itens);
+  if (erros.length) return { erro: erros.slice(0, 5).join(" "), status: 422 };
+  const conteudo = montarConteudo({
+    pca: { id: pca.id, nome: pca.nome, ano: pca.ano },
+    finalidade: p.finalidade,
+    finalidadeTexto: p.finalidade === "outra" ? p.finalidadeTexto : null,
+    processo: p.processo,
+    observacao: p.observacao,
+    linhas,
+    emitente,
+  });
+  return { conteudo, linhas };
+}
+
+const erroDoLote = (e: unknown) => String((e as Error)?.message ?? e) + String((e as { cause?: Error })?.cause?.message ?? "");
+
+/**
+ * EDITA a declaração ainda NÃO exportada: o pedido novo conferido contra os itens de hoje (o saldo SEM o que ela mesma
+ * declarava), o retrato e o selo refeitos (mesmos número, código e data de emissão; quem emitiu fica) num lote ATÔMICO. O
+ * gatilho `declaracoes_travada` barra a que acabou de ser exportada ou cancelada; o do saldo, o que passou dele.
+ */
+export async function editarDeclaracao(
+  u: UsuarioSessao,
+  pca: PcaEspaco,
+  d: DeclaracaoCompleta,
+  p: PedidoDeclaracao,
+  rep: FiltroId,
+): Promise<{ declaracao: DeclaracaoResumo } | { erro: string; status: number }> {
+  if (d.cancelada) return { erro: "A declaração está cancelada.", status: 409 };
+  if (d.exportada || !d.conteudo) return { erro: "A declaração já foi exportada em PDF — não pode mais ser editada.", status: 409 };
+  const m = conteudoDoPedido(pca, p, itensParaEdicao(await itensDeclaraveis(pca, rep), d.conteudo.linhas), d.conteudo.emitente);
+  if ("erro" in m) return m;
+  const { conteudo, linhas } = m;
+  const texto = JSON.stringify(conteudo);
+  const selo = await seloDeclaracao({ codigo: d.codigo, ano: d.ano, numero: d.numero, emitidoEm: d.emitidoEm, conteudo: texto });
+  try {
+    await getDb().batch(
+      comandosEditarDeclaracao(getDb(), {
+        id: d.id,
+        pcaId: pca.id,
+        finalidade: p.finalidade,
+        processo: p.processo,
+        observacao: p.observacao,
+        conteudo: texto,
+        selo,
+        totalItens: conteudo.totalItens,
+        valorTotal: conteudo.valorTotal,
+        editadaPorNome: u.nome,
+        itens: linhas.map((l) => ({ sequencial: l.sequencial, quantidade: l.quantidade, quantidadePca: l.quantidadePca })),
+      }),
+    );
+  } catch (e) {
+    const msg = erroDoLote(e);
+    if (msg.includes("declaracao_travada")) return { erro: "A declaração acabou de ser exportada ou cancelada — não pode mais ser editada.", status: 409 };
+    if (msg.includes("saldo_insuficiente")) return { erro: "Parte destes itens acabou de ser declarada por outra pessoa — recarregue e confira o saldo.", status: 409 };
+    throw e;
+  }
+  const nova = await getDeclaracao(d.id);
+  if (!nova) return { erro: "Declaração não encontrada.", status: 404 };
+  const { pcaId: _p, selo: _s, conteudoTexto: _t, conteudo: _c, ...r } = nova;
+  return { declaracao: r };
+}
+
+/** EXPORTA (trava a edição): devolve se marcou agora — a já exportada segue exportada (baixar de novo vale). */
+export async function exportarDeclaracao(id: number, quem: string): Promise<boolean> {
+  return (await comandoExportarDeclaracao(getDb(), id, quem)).length > 0;
 }
 
 /** CANCELA (nada é apagado): devolve o saldo dos itens; a verificação pública passa a dizer "cancelada". */

@@ -98,7 +98,21 @@ export function DocumentoCard({
 }
 
 /** O VISUALIZADOR: as páginas do PDF desenhadas pelo pdf.js (o mesmo leitor da importação) — funciona no celular. */
-export function VisualizadorPdf({ doc, url, onBaixar, onFechar }: { doc: Pick<DocumentoResumo, "id" | "nome" | "nomeArquivo">; /** De onde vem o PDF (a consulta pública usa a rota dela). */ url?: string; onBaixar?: () => void; onFechar: () => void }) {
+export function VisualizadorPdf({
+  doc,
+  url,
+  onBaixar,
+  rotuloBaixar = "Baixar",
+  onFechar,
+}: {
+  doc: Pick<DocumentoResumo, "id" | "nome" | "nomeArquivo">;
+  /** De onde vem o PDF (a consulta pública usa a rota dela). */
+  url?: string;
+  onBaixar?: () => void;
+  /** O nome do botão de baixar (ex.: "Exportar o PDF"). */
+  rotuloBaixar?: string;
+  onFechar: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [estado, setEstado] = useState<"carregando" | "pronto" | "erro">("carregando");
   useEffect(() => {
@@ -138,7 +152,7 @@ export function VisualizadorPdf({ doc, url, onBaixar, onFechar }: { doc: Pick<Do
       onClose={onFechar}
       titulo={doc.nome}
       size="full"
-      acoesCabecalho={onBaixar && <Button variant="icon" size="sm" aria-label="Baixar" title="Baixar" icon={<IconDownload className="h-4 w-4" />} onClick={onBaixar} />}
+      acoesCabecalho={onBaixar && <Button variant="icon" size="sm" aria-label={rotuloBaixar} title={rotuloBaixar} icon={<IconDownload className="h-4 w-4" />} onClick={onBaixar} />}
     >
       {estado === "carregando" && <Skeleton className="mx-auto aspect-[1/1.41] w-full max-w-[900px] rounded-lg" />}
       {estado === "erro" && <p className="p-10 text-center text-sm text-muted">Não consegui abrir este documento.</p>}

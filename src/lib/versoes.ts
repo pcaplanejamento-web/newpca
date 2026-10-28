@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.249.0",
+    data: "2026-10-28",
+    titulo: "Declarações: editar até exportar, PDF timbrado e ações na própria tabela",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "A declaração pode ser editada (finalidade, processo, observação e itens) enquanto o PDF não for exportado; ao exportar, ela vale e fica travada — só pode ser cancelada.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "O PDF da declaração sai no papel timbrado da Prefeitura de Rio Verde, com título centralizado, texto justificado, a tabela dos itens e “Assinado e datado digitalmente.”; antes de exportar, dá para visualizar a prévia (marcada como PRÉVIA).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Cada linha da tabela de declarações tem o botão do PDF (visualizar e exportar) e, em elaboração, o de editar; a coluna Situação mostra Em elaboração, Exportada ou Cancelada.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "A observação usa o editor de texto do sistema (negrito, listas…) e a escolha dos itens ficou mais leve: o campo da quantidade só grava ao sair dele, e as colunas que decidem ficam à vista.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.248.0",
     data: "2026-10-28",
     titulo: "Importações ao vivo para o ADM e a hora da última atualização nos indicadores",

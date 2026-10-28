@@ -2645,7 +2645,7 @@ export const centiAlteracoes = sqliteTable(
 /**
  * DECLARAÇÕES DO PCA (migração `0164`): cada uma atesta que itens (total ou parcial) constam de um PCA — o retrato congelado
  * em `conteudo` (JSON `ConteudoDeclaracao`), o SELO (SHA-256 do retrato) e o CÓDIGO da verificação pública. Numeração por
- * ano (`ano` + `numero` únicos). Cancelar (motivo) devolve o saldo; nada é apagado.
+ * ano (`ano` + `numero` únicos). Cancelar (motivo) devolve o saldo; nada é apagado. Editável até EXPORTAR o PDF (`0166`).
  */
 export const declaracoes = sqliteTable(
   "declaracoes",
@@ -2670,6 +2670,12 @@ export const declaracoes = sqliteTable(
     canceladaEm: text("cancelada_em"),
     canceladaPorNome: text("cancelada_por_nome"),
     motivoCancelamento: text("motivo_cancelamento"),
+    /** A última EDIÇÃO (migração `0166`) — só antes de exportar. */
+    editadaEm: text("editada_em"),
+    editadaPorNome: text("editada_por_nome"),
+    /** EXPORTADA em PDF: daí em diante não se edita mais (gatilho `declaracoes_travada`). */
+    exportadaEm: text("exportada_em"),
+    exportadaPorNome: text("exportada_por_nome"),
   },
   (t) => [uniqueIndex("declaracoes_codigo_uq").on(t.codigo), uniqueIndex("declaracoes_ano_numero_uq").on(t.ano, t.numero), index("declaracoes_pca_idx").on(t.pcaId, t.id)],
 );

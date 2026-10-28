@@ -12,6 +12,8 @@ import {
   conferirPedido,
   dataPorExtenso,
   type ItemDeclaravel,
+  itensParaEdicao,
+  limparObservacao,
   limparTextoDeclaracao,
   montarConteudo,
   rotuloNumero,
@@ -19,7 +21,14 @@ import {
   seloDeclaracao,
   textoDeclaracao,
 } from "../src/lib/declaracoes-core.ts";
-import { comandoCancelarDeclaracao, comandosEmitirDeclaracao, consultaDeclarados, consultaUltimoNumero } from "../src/lib/declaracoes-sql.ts";
+import {
+  comandoCancelarDeclaracao,
+  comandoExportarDeclaracao,
+  comandosEditarDeclaracao,
+  comandosEmitirDeclaracao,
+  consultaDeclarados,
+  consultaUltimoNumero,
+} from "../src/lib/declaracoes-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // DECLARAÇÕES DO PCA: saldo, declaração parcial, conteúdo/texto/selo e o lote no driver `drizzle-orm/d1` REAL (o gatilho
@@ -101,12 +110,27 @@ describe("declarações do PCA — núcleo", () => {
     const r = { codigo: "ABCD", ano: 2026, numero: 1, emitidoEm: "2026-10-28 15:00:00", conteudo: JSON.stringify(c) };
     assert.equal(await seloDeclaracao(r), await seloDeclaracao({ ...r }));
     assert.notEqual(await seloDeclaracao(r), await seloDeclaracao({ ...r, conteudo: r.conteudo.replace("52.5", "60") }));
-    const blocos = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "https://s/declaracao/verificar/ABCD", cancelada: null });
+    const blocos = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "https://s/declaracao/verificar/ABCD", cancelada: null, previa: false });
     assert.equal(blocos[0].tipo, "titulo");
-    const cancel = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: { em: r.emitidoEm, por: "B", motivo: "erro" } });
+    assert.equal(blocos[0].tipo === "titulo" && blocos[0].alinhar, "centro");
+    assert.ok(blocos.some((b) => b.tipo === "paragrafo" && b.texto === "Assinado e datado digitalmente."));
+    const previa = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: null, previa: true });
+    assert.equal(previa[0].tipo === "nota" && /PRÉVIA/.test(previa[0].texto), true);
+    const cancel = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: { em: r.emitidoEm, por: "B", motivo: "erro" }, previa: false });
     assert.equal(cancel[0].tipo, "nota");
     assert.equal(limparTextoDeclaracao("  a\u0007​  b  ", 10), "a b");
     assert.equal(limparTextoDeclaracao("   ", 10), null);
+  });
+
+  it("observação formatada (guarda as linhas) e o saldo da EDIÇÃO sem a própria declaração", () => {
+    assert.equal(limparObservacao("**Atenção**\r\n\n\n\n- item\u0007 um  "), "**Atenção**\n\n- item um");
+    assert.equal(limparObservacao("  \n "), null);
+    const itens = [item(1, 12, 10), item(2, 5, 0)];
+    const ed = itensParaEdicao(itens, [{ sequencial: 1, quantidade: 6 }]);
+    assert.equal(saldoDe(ed[0]), 8); // 12 − (10 − 6): o que ela mesma declarava volta ao saldo dela
+    assert.equal(ed[1], itens[1]);
+    assert.deepEqual(conferirPedido([{ sequencial: 1, quantidade: 8 }], ed).erros, []);
+    assert.match(conferirPedido([{ sequencial: 1, quantidade: 9 }], ed).erros[0], /passa do saldo/);
   });
 });
 
@@ -164,6 +188,46 @@ describe("declarações do PCA — no D1", () => {
     assert.equal((await comandoCancelarDeclaracao(orm, 1, "Bia", "de novo")).length, 0);
     assert.equal((await consultaDeclarados(orm, 1)).length, 0);
     await orm.batch(comandosEmitirDeclaracao(orm, nova("C2", 2, [{ sequencial: 1, quantidade: 12, quantidadePca: 12 }])));
+  });
+});
+
+describe("declarações do PCA — editar e exportar no D1", () => {
+  function banco() {
+    const db = new DatabaseSync(":memory:");
+    const dir = join(process.cwd(), "drizzle");
+    for (const arq of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) db.exec(readFileSync(join(dir, arq), "utf8"));
+    db.exec(`INSERT INTO pcas (id, nome, ano) VALUES (1, 'PCA 2027', 2027)`);
+    return { db, orm: drizzle(d1Sobre(db) as never, { schema }) };
+  }
+  type Orm = Parameters<typeof comandosEditarDeclaracao>[0];
+  const emitir = (orm: Orm, codigo: string, numero: number, itens: { sequencial: number; quantidade: number; quantidadePca: number }[]) =>
+    comandosEmitirDeclaracao(orm, {
+      pcaId: 1, ano: 2026, numero, codigo, finalidade: "inicio", processo: null, observacao: null, conteudo: "{}", selo: "s",
+      totalItens: itens.length, valorTotal: 0, emitidoPor: null, emitidoPorNome: "Ana", emitidoEm: "2026-10-28 12:00:00", itens,
+    });
+  const editar = (orm: Orm, id: number, itens: { sequencial: number; quantidade: number; quantidadePca: number }[]) =>
+    comandosEditarDeclaracao(orm, { id, pcaId: 1, finalidade: "aditivo", processo: "9", observacao: "obs", conteudo: `{"e":${id}}`, selo: "s2", totalItens: itens.length, valorTotal: 1, editadaPorNome: "Bia", itens });
+
+  it("edita (troca os itens, o saldo conta sem os dela), barra além do saldo e trava depois de exportar", async () => {
+    const { db, orm } = banco();
+    await orm.batch(emitir(orm, "C1", 1, [{ sequencial: 1, quantidade: 6, quantidadePca: 12 }]));
+    await orm.batch(editar(orm, 1, [{ sequencial: 1, quantidade: 12, quantidadePca: 12 }, { sequencial: 2, quantidade: 3, quantidadePca: 5 }]));
+    const r = db.prepare("SELECT finalidade, editada_por_nome AS por, total_itens AS n FROM declaracoes WHERE id = 1").get() as { finalidade: string; por: string; n: number };
+    assert.deepEqual({ ...r }, { finalidade: "aditivo", por: "Bia", n: 2 });
+    assert.equal((await consultaDeclarados(orm, 1)).find((x) => x.sequencial === 1)?.total, 12);
+    // além do saldo: o lote inteiro volta (os itens ficam os de antes)
+    await assert.rejects(orm.batch(editar(orm, 1, [{ sequencial: 1, quantidade: 13, quantidadePca: 12 }])), /saldo_insuficiente/);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM declaracao_itens WHERE declaracao_id = 1").get() as { n: number }).n, 2);
+    // exportar: uma vez; depois, editar é recusado pelo gatilho e nada muda
+    assert.equal((await comandoExportarDeclaracao(orm, 1, "Bia")).length, 1);
+    assert.equal((await comandoExportarDeclaracao(orm, 1, "Bia")).length, 0);
+    await assert.rejects(orm.batch(editar(orm, 1, [{ sequencial: 1, quantidade: 1, quantidadePca: 12 }])), /declaracao_travada/);
+    assert.equal((await consultaDeclarados(orm, 1)).find((x) => x.sequencial === 1)?.total, 12);
+    // cancelada: não exporta nem edita
+    await orm.batch(emitir(orm, "C2", 2, [{ sequencial: 3, quantidade: 1, quantidadePca: 2 }]));
+    await comandoCancelarDeclaracao(orm, 2, "Bia", "engano");
+    assert.equal((await comandoExportarDeclaracao(orm, 2, "Bia")).length, 0);
+    await assert.rejects(orm.batch(editar(orm, 2, [{ sequencial: 3, quantidade: 1, quantidadePca: 2 }])), /declaracao_travada/);
   });
 });
 

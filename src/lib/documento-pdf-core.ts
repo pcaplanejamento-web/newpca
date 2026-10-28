@@ -27,10 +27,10 @@ export type LinhaDoc = {
 export type DestaqueDoc = { rotulo: string; valor: string; detalhe?: string; cor?: string };
 
 export type BlocoDoc =
-  | { tipo: "titulo"; texto: string }
+  | { tipo: "titulo"; texto: string; alinhar?: "centro" }
   | { tipo: "secao"; texto: string }
   | { tipo: "subsecao"; texto: string; detalhe?: string; corDetalhe?: string }
-  | { tipo: "paragrafo"; texto: string; cor?: "muted" | "texto" }
+  | { tipo: "paragrafo"; texto: string; cor?: "muted" | "texto"; alinhar?: "centro" | "justificado"; negrito?: boolean }
   | { tipo: "lista"; itens: string[] }
   | { tipo: "destaques"; itens: DestaqueDoc[] }
   | { tipo: "nota"; texto: string; cor: string }
@@ -41,7 +41,12 @@ export type BlocoDoc =
 export type OpDoc =
   | { t: "texto"; x: number; y: number; tam: number; negrito: boolean; cor: string; texto: string }
   | { t: "retangulo"; x: number; y: number; w: number; h: number; cor: string }
-  | { t: "linha"; x1: number; y1: number; x2: number; y2: number; cor: string; espessura: number };
+  | { t: "linha"; x1: number; y1: number; x2: number; y2: number; cor: string; espessura: number }
+  /** A imagem do TIMBRE (a única imagem do documento — `OpcoesDocumento.timbre`). */
+  | { t: "timbre"; x: number; y: number; w: number; h: number };
+
+/** O TIMBRE no alto de cada página: a imagem na LARGURA da folha (a proporção dela) no lugar do título do documento. */
+export type TimbreDoc = { largura: number; altura: number };
 
 /** A4 em pé (pt). */
 export const PAGINA_A4 = { largura: 595.28, altura: 841.89, margem: 40 };
@@ -82,10 +87,17 @@ export function limparBlocos(blocos: BlocoDoc[], limpo: (s: string) => string): 
  * Monta as páginas. `titulo` vai no alto de cada página; `rodape` à esquerda do "Página N de M". `carimbo` = o CARIMBO
  * de assinatura em TODAS as páginas (uma faixa emoldurada acima do rodapé; "{pagina}" e "{total}" são trocados).
  */
-export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titulo: string; rodape: string; carimbo?: { titulo: string; linhas: string[]; cor: string } }): OpDoc[][] {
-  const { largura: W, altura: H, margem: M } = PAGINA_A4;
+export function montarDocumento(
+  blocos: BlocoDoc[],
+  medir: Medir,
+  opcoes: { titulo: string; rodape: string; carimbo?: { titulo: string; linhas: string[]; cor: string }; timbre?: TimbreDoc; margem?: number },
+): OpDoc[][] {
+  const { largura: W, altura: H } = PAGINA_A4;
+  const M = opcoes.margem ?? PAGINA_A4.margem;
   const util = W - 2 * M;
-  const inicio = M + TOPO;
+  // Com o timbre, ele ocupa o alto da folha (na largura inteira) e o conteúdo começa logo abaixo.
+  const hTimbre = opcoes.timbre ? (W * opcoes.timbre.altura) / opcoes.timbre.largura : 0;
+  const inicio = opcoes.timbre ? hTimbre + 8 : M + TOPO;
   const hCarimbo = opcoes.carimbo ? (opcoes.carimbo.linhas.length + 1) * LH(TAM.carimbo) + 2 * PAD + 6 : 0;
   const fim = H - M - RODAPE - hCarimbo;
   const paginas: OpDoc[][] = [];
@@ -104,13 +116,25 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
   const texto = (s: string, x: number, base: number, tam: number, negrito: boolean, cor: string) => {
     if (s) ops.push({ t: "texto", x, y: base, tam, negrito, cor, texto: s });
   };
-  // Linhas de um texto que podem continuar na página seguinte (parágrafo, item de lista, nota não).
-  const linhas = (ls: string[], x: number, tam: number, negrito: boolean, cor: string) => {
-    for (const l of ls) {
+  // Linhas de um texto que podem continuar na página seguinte (parágrafo, item de lista, nota não). `alinhar`: centro =
+  // cada linha no meio; justificado = as palavras espalhadas até a margem (menos a última linha, como no editor de texto).
+  const linhas = (ls: string[], x: number, tam: number, negrito: boolean, cor: string, alinhar?: "centro" | "justificado") => {
+    ls.forEach((l, k) => {
       garantir(LH(tam));
-      texto(l, x, y + tam, tam, negrito, cor);
+      const base = y + tam;
+      const palavras = l.split(" ").filter(Boolean);
+      if (alinhar === "centro") texto(l, x + (util - (x - M) - medir(l, tam, negrito)) / 2, base, tam, negrito, cor);
+      else if (alinhar === "justificado" && k < ls.length - 1 && palavras.length > 1) {
+        const larguras = palavras.map((p) => medir(p, tam, negrito));
+        const vao = (util - (x - M) - larguras.reduce((s2, w) => s2 + w, 0)) / (palavras.length - 1);
+        let xx = x;
+        palavras.forEach((p, j) => {
+          texto(p, xx, base, tam, negrito, cor);
+          xx += larguras[j] + vao;
+        });
+      } else texto(l, x, base, tam, negrito, cor);
       y += LH(tam);
-    }
+    });
   };
 
   for (const b of blocos) {
@@ -118,7 +142,7 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
       case "titulo": {
         const ls = quebrarTexto(b.texto, util, TAM.titulo, medir, true);
         garantir(ls.length * LH(TAM.titulo) + JUNTO);
-        linhas(ls, M, TAM.titulo, true, "@titulo");
+        linhas(ls, M, TAM.titulo, true, "@titulo", b.alinhar);
         y += 2;
         break;
       }
@@ -150,7 +174,7 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
         break;
       }
       case "paragrafo": {
-        linhas(quebrarTexto(b.texto, util, TAM.texto, medir), M, TAM.texto, false, b.cor === "muted" ? "@muted" : "@texto");
+        linhas(quebrarTexto(b.texto, util, TAM.texto, medir, !!b.negrito), M, TAM.texto, !!b.negrito, b.cor === "muted" ? "@muted" : "@texto", b.alinhar);
         y += 5;
         break;
       }
@@ -340,10 +364,12 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
   // Topo (o título do documento) e rodapé (quem/quando + Página N de M) em TODAS as páginas.
   const total = paginas.length;
   paginas.forEach((p, i) => {
-    p.unshift(
-      { t: "texto", x: M, y: M + TAM.cabecalhoPagina, tam: TAM.cabecalhoPagina, negrito: true, cor: "@muted", texto: cortar(opcoes.titulo, util, TAM.cabecalhoPagina, medir, true) },
-      { t: "linha", x1: M, y1: M + 12, x2: M + util, y2: M + 12, cor: "@borda", espessura: 0.5 },
-    );
+    if (opcoes.timbre) p.unshift({ t: "timbre", x: 0, y: 0, w: W, h: hTimbre });
+    else
+      p.unshift(
+        { t: "texto", x: M, y: M + TAM.cabecalhoPagina, tam: TAM.cabecalhoPagina, negrito: true, cor: "@muted", texto: cortar(opcoes.titulo, util, TAM.cabecalhoPagina, medir, true) },
+        { t: "linha", x1: M, y1: M + 12, x2: M + util, y2: M + 12, cor: "@borda", espessura: 0.5 },
+      );
     const pg = `Página ${i + 1} de ${total}`;
     const wpg = medir(pg, TAM.rodape);
     const base = H - M + 4;

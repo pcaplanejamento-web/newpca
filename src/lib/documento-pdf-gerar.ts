@@ -7,6 +7,10 @@ export type OpcoesGerar = {
   sistema: string;
   paleta?: PaletaPdf;
   carimbo?: { titulo: string; linhas: string[]; cor: string };
+  /** O TIMBRE (PNG) no alto de cada página, na largura da folha. */
+  timbre?: { png: Uint8Array; largura: number; altura: number };
+  /** Margem lateral (pt) — sem ela, a do A4 padrão. */
+  margem?: number;
   /** Data FIXA dos metadados (criação/modificação): com ela, o MESMO documento gera os MESMOS bytes. */
   data?: Date;
   assunto?: string;
@@ -32,13 +36,22 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
   };
   const medir = (texto: string, tam: number, b?: boolean) => (b ? negrito : fonte).widthOfTextAtSize(texto, tam);
   const carimbo = o.carimbo ? { titulo: limpo(o.carimbo.titulo), linhas: o.carimbo.linhas.map(limpo), cor: o.carimbo.cor } : undefined;
-  const paginas = montarDocumento(limparBlocos(doc.blocos, limpo), medir, { titulo: limpo(doc.titulo), rodape: limpo(o.rodape), carimbo });
+  const paginas = montarDocumento(limparBlocos(doc.blocos, limpo), medir, {
+    titulo: limpo(doc.titulo),
+    rodape: limpo(o.rodape),
+    carimbo,
+    timbre: o.timbre && { largura: o.timbre.largura, altura: o.timbre.altura },
+    margem: o.margem,
+  });
+  const timbre = o.timbre ? await pdf.embedPng(o.timbre.png) : null;
   const { largura: W, altura: H } = PAGINA_A4;
   for (const ops of paginas) {
     const pag = pdf.addPage([W, H]);
     for (const op of ops) {
       if (op.t === "texto") pag.drawText(op.texto, { x: op.x, y: H - op.y, size: op.tam, font: op.negrito ? negrito : fonte, color: cor(op.cor) });
-      else if (op.t === "retangulo") pag.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, color: cor(op.cor) });
+      else if (op.t === "timbre") {
+        if (timbre) pag.drawImage(timbre, { x: op.x, y: H - op.y - op.h, width: op.w, height: op.h });
+      } else if (op.t === "retangulo") pag.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, color: cor(op.cor) });
       else pag.drawLine({ start: { x: op.x1, y: H - op.y1 }, end: { x: op.x2, y: H - op.y2 }, thickness: op.espessura, color: cor(op.cor) });
     }
   }

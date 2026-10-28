@@ -22,7 +22,7 @@ export function PreviaDocumento({ blocos }: { blocos: BlocoDoc[] }) {
         switch (b.tipo) {
           case "titulo":
             return (
-              <h3 key={k} className="border-b border-border pb-2 text-[16px] font-bold">
+              <h3 key={k} className={`border-b border-border pb-2 text-[16px] font-bold ${b.alinhar === "centro" ? "text-center" : ""}`}>
                 {b.texto}
               </h3>
             );
@@ -41,7 +41,10 @@ export function PreviaDocumento({ blocos }: { blocos: BlocoDoc[] }) {
             );
           case "paragrafo":
             return (
-              <p key={k} className={b.cor === "muted" ? "text-muted" : ""}>
+              <p
+                key={k}
+                className={`${b.cor === "muted" ? "text-muted" : ""} ${b.negrito ? "font-semibold" : ""} ${b.alinhar === "centro" ? "text-center" : b.alinhar === "justificado" ? "text-justify" : ""}`}
+              >
                 {b.texto}
               </p>
             );

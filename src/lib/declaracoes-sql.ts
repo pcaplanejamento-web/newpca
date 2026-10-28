@@ -43,6 +43,37 @@ export function comandosEmitirDeclaracao(db: Db, d: NovaDeclaracaoSql) {
   return cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]];
 }
 
+export type EdicaoDeclaracaoSql = Pick<NovaDeclaracaoSql, "pcaId" | "finalidade" | "processo" | "observacao" | "conteudo" | "selo" | "totalItens" | "valorTotal" | "itens"> & {
+  id: number;
+  editadaPorNome: string;
+};
+
+/**
+ * A EDIÇÃO num lote ATÔMICO: o UPDATE do retrato PRIMEIRO (o gatilho `declaracoes_travada` recusa a exportada/cancelada —
+ * o lote inteiro volta), depois os itens trocados (apagados e regravados — o gatilho do saldo confere cada um sem contar os
+ * da própria declaração, que já saíram).
+ */
+export function comandosEditarDeclaracao(db: Db, d: EdicaoDeclaracaoSql) {
+  const { itens, id, pcaId, editadaPorNome, ...cab } = d;
+  const atualizar = db
+    .update(declaracoes)
+    .set({ ...cab, editadaEm: sql`CURRENT_TIMESTAMP`, editadaPorNome })
+    .where(eq(declaracoes.id, id));
+  const resto = [db.delete(declaracaoItens).where(eq(declaracaoItens.declaracaoId, id))] as unknown as (typeof atualizar)[];
+  for (let i = 0; i < itens.length; i += LOTE_ITENS)
+    resto.push(db.insert(declaracaoItens).values(itens.slice(i, i + LOTE_ITENS).map((l) => ({ declaracaoId: id, pcaId, ...l }))) as unknown as typeof atualizar);
+  return [atualizar, ...resto] as [typeof atualizar, ...(typeof atualizar)[]];
+}
+
+/** EXPORTA: marca a declaração (só a ainda não exportada e não cancelada — devolve se marcou). Daí em diante, travada. */
+export function comandoExportarDeclaracao(db: Db, id: number, quem: string) {
+  return db
+    .update(declaracoes)
+    .set({ exportadaEm: sql`CURRENT_TIMESTAMP`, exportadaPorNome: quem })
+    .where(and(eq(declaracoes.id, id), isNull(declaracoes.exportadaEm), isNull(declaracoes.canceladaEm)))
+    .returning({ id: declaracoes.id });
+}
+
 /** O já declarado de cada item do PCA (as declarações NÃO canceladas), pelo sequencial. */
 export function consultaDeclarados(db: Db, pcaId: number) {
   return db
