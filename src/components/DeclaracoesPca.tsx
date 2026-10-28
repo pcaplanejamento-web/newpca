@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { baixarNoNavegador } from "@/lib/arquivo-navegador";
 import type { DeclaracaoCompleta, DeclaracaoResumo } from "@/lib/declaracoes";
-import { type ItemDeclaravel, type LinhaDeclaracao, LIMITES_DECLARACAO, saldoDe } from "@/lib/declaracoes-core";
+import { type ItemDeclaravel, type LinhaDeclaracao, LIMITES_DECLARACAO, remanescente, saldoDe } from "@/lib/declaracoes-core";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -33,15 +33,15 @@ type CamposItem = Pick<ItemDeclaravel, "sequencial" | "codigo" | "descricao" | "
 /** As colunas de IDENTIFICAÇÃO do item (as mesmas na escolha dos itens e no detalhe da declaração). */
 export function colunasItemDeclaracao<R extends CamposItem>(): Column<R>[] {
   return [
-    { key: "seq", header: "Seq. PCA", nowrap: true, value: (r) => String(r.sequencial), numero: (r) => r.sequencial, formatarFaixa: num, total: false, render: (r) => <span className="tabular-nums">{r.sequencial}</span> },
+    { key: "seq", header: "Item", nowrap: true, value: (r) => String(r.sequencial), numero: (r) => r.sequencial, formatarFaixa: num, total: false, render: (r) => <span className="tabular-nums">{r.sequencial}</span> },
     {
       key: "plan",
-      header: "Nº Plan.",
+      header: "Planejamento",
       nowrap: true,
       value: (r) => r.planejamento ?? "—",
       render: (r) => <CelulaCopiavel copiar={r.planejamento} rotulo="nº de planejamento">{r.planejamento ?? <span className="text-faint">—</span>}</CelulaCopiavel>,
     },
-    { key: "dfd", header: "Nº DFD", nowrap: true, value: (r) => r.dfdNumero ?? "—", render: (r) => r.dfdNumero ?? <span className="text-faint">—</span> },
+    { key: "dfd", header: "DFD", nowrap: true, value: (r) => r.dfdNumero ?? "—", render: (r) => r.dfdNumero ?? <span className="text-faint">—</span> },
     { key: "prot", header: "Protocolo", nowrap: true, value: (r) => r.protocoloNumero ?? "—", render: (r) => r.protocoloNumero ?? <span className="text-faint">—</span> },
     { key: "sigla", header: "Unidade", nowrap: true, value: (r) => r.sigla ?? "—", render: (r) => r.sigla ?? <span className="text-faint">—</span> },
     {
@@ -53,16 +53,27 @@ export function colunasItemDeclaracao<R extends CamposItem>(): Column<R>[] {
     },
     { key: "desc", header: "Descrição", minWidth: 260, align: "left", value: (r) => r.descricao ?? "—", render: (r) => <CelulaTexto texto={r.descricao} /> },
     { key: "med", header: "Medida", nowrap: true, value: (r) => r.unidade ?? "—", render: (r) => r.unidade ?? <span className="text-faint">—</span> },
-    { key: "vu", header: "Vlr. unit.", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorUnitario, total: false, render: (r) => brl(r.valorUnitario) },
+    { key: "vu", header: "Valor unitário", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorUnitario, total: false, render: (r) => brl(r.valorUnitario) },
   ];
 }
 
 const colunasLinha: Column<LinhaDeclaracao>[] = [
   ...colunasItemDeclaracao<LinhaDeclaracao>(),
-  { key: "qpca", header: "Qtd. PCA", align: "right", nowrap: true, filter: "range", numero: (r) => r.quantidadePca, formatarFaixa: num, total: false, render: (r) => num(r.quantidadePca) },
+  { key: "qpca", header: "No PCA", align: "right", nowrap: true, filter: "range", numero: (r) => r.quantidadePca, formatarFaixa: num, total: false, render: (r) => num(r.quantidadePca) },
+  {
+    key: "qant",
+    header: "Já declarada",
+    align: "right",
+    nowrap: true,
+    filter: "range",
+    numero: (r) => r.quantidadeAntes ?? null,
+    formatarFaixa: num,
+    total: false,
+    render: (r) => (r.quantidadeAntes == null ? <span className="text-faint">—</span> : num(r.quantidadeAntes)),
+  },
   {
     key: "qdec",
-    header: "Qtd. declarada",
+    header: "Declarada",
     align: "right",
     nowrap: true,
     filter: "range",
@@ -79,7 +90,21 @@ const colunasLinha: Column<LinhaDeclaracao>[] = [
       </span>
     ),
   },
-  { key: "vt", header: "Vlr. total", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorTotal, render: (r) => brl(r.valorTotal) },
+  {
+    key: "qrem",
+    header: "Saldo",
+    align: "right",
+    nowrap: true,
+    filter: "range",
+    numero: remanescente,
+    formatarFaixa: num,
+    total: false,
+    render: (r) => {
+      const q = remanescente(r);
+      return q == null ? <span className="text-faint">—</span> : num(q);
+    },
+  },
+  { key: "vt", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorTotal, render: (r) => brl(r.valorTotal) },
 ];
 
 type Situacao = Pick<DeclaracaoResumo, "cancelada" | "exportada">;
@@ -117,7 +142,14 @@ const colunasLista: Column<DeclaracaoResumo>[] = [
   { key: "sit", header: "Situação", nowrap: true, value: rotuloSituacao, corPdf: (d) => (d.cancelada ? "var(--danger)" : d.exportada ? "var(--ok)" : "var(--warn)"), render: (d) => <SeloSituacao d={d} /> },
   { key: "em", header: "Emitida em", nowrap: true, filter: "date", value: (d) => dataIsoBrasilia(d.emitidoEm), render: (d) => dataHoraBR(d.emitidoEm) },
   { key: "fin", header: "Finalidade", value: (d) => d.finalidadeRotulo, render: (d) => d.finalidadeRotulo },
-  { key: "proc", header: "Processo", nowrap: true, value: (d) => d.processo ?? "—", render: (d) => d.processo ?? <span className="text-faint">—</span> },
+  {
+    key: "pcenti",
+    header: "Protocolo Centi",
+    nowrap: true,
+    value: (d) => d.protocoloCenti ?? "—",
+    render: (d) => <CelulaCopiavel copiar={d.protocoloCenti} rotulo="protocolo da Centi">{d.protocoloCenti ?? <span className="text-faint">—</span>}</CelulaCopiavel>,
+  },
+  { key: "proc", header: "Processo ou empenho", nowrap: true, value: (d) => d.processo ?? "—", render: (d) => d.processo ?? <span className="text-faint">—</span> },
   { key: "itens", header: "Itens", align: "right", nowrap: true, filter: "range", numero: (d) => d.totalItens, formatarFaixa: num, render: (d) => num(d.totalItens) },
   { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (d) => d.valorTotal, render: (d) => brl(d.valorTotal) },
   { key: "por", header: "Emitida por", value: (d) => d.emitidoPorNome, render: (d) => d.emitidoPorNome },
@@ -471,9 +503,11 @@ function DetalheDeclaracao({
               {d.finalidadeRotulo}
               {c.finalidade === "outra" && c.finalidadeTexto ? ` — ${c.finalidadeTexto}` : ""}
             </dd>
+            <dt className="text-muted">Protocolo na Centi</dt>
+            <dd className="text-text">{c.protocoloCenti ?? <span className="text-faint">Não informado (emitida antes do campo)</span>}</dd>
             {c.processo && (
               <>
-                <dt className="text-muted">Processo</dt>
+                <dt className="text-muted">Processo ou empenho</dt>
                 <dd className="text-text">{c.processo}</dd>
               </>
             )}

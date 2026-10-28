@@ -13,9 +13,11 @@ import {
   dataPorExtenso,
   type ItemDeclaravel,
   itensParaEdicao,
+  lerProtocoloCenti,
   limparObservacao,
   limparTextoDeclaracao,
   montarConteudo,
+  remanescente,
   rotuloNumero,
   saldoDe,
   seloDeclaracao,
@@ -29,6 +31,7 @@ import {
   consultaDeclarados,
   consultaUltimoNumero,
 } from "../src/lib/declaracoes-sql.ts";
+import { brl } from "../src/lib/format.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // DECLARAÇÕES DO PCA: saldo, declaração parcial, conteúdo/texto/selo e o lote no driver `drizzle-orm/d1` REAL (o gatilho
@@ -93,6 +96,7 @@ describe("declarações do PCA — núcleo", () => {
       pca: { id: 3, nome: "PCA 2027", ano: 2027 },
       finalidade: "empenho_complementar",
       finalidadeTexto: null,
+      protocoloCenti: "156844/2026",
       processo: "123/2027",
       observacao: null,
       linhas,
@@ -102,7 +106,7 @@ describe("declarações do PCA — núcleo", () => {
     assert.equal(c.totalItens, 1);
     const t = textoDeclaracao(c);
     assert.match(t, /o item relacionado abaixo consta do Plano de Contratações Anual \(PCA\) 2027/);
-    assert.match(t, /emissão de empenho complementar, no âmbito do processo nº 123\/2027\./);
+    assert.match(t, /emissão de empenho complementar, vinculada ao protocolo nº 156844\/2026 do sistema Centi, no âmbito do processo ou empenho nº 123\/2027\./);
     assert.match(t, /PARCIAL para 1 item/);
     assert.equal(rotuloNumero(7, 2026), "007/2026");
     assert.equal(dataPorExtenso("2026-10-28 15:00:00"), "28 de outubro de 2026");
@@ -114,12 +118,31 @@ describe("declarações do PCA — núcleo", () => {
     assert.equal(blocos[0].tipo, "titulo");
     assert.equal(blocos[0].tipo === "titulo" && blocos[0].alinhar, "centro");
     assert.ok(blocos.some((b) => b.tipo === "paragrafo" && b.texto === "Assinado e datado digitalmente."));
+    // Títulos das colunas por EXTENSO (nada abreviado) e os dados de cada item: origem, previsto, já declarado, remanescente.
+    const tabelas = blocos.filter((b) => b.tipo === "tabela");
+    assert.equal(tabelas.length, 4);
+    for (const tb of tabelas) for (const col of tb.tipo === "tabela" ? tb.colunas : []) assert.doesNotMatch(col.titulo, /\.|Qtd|Vlr|Seq/, col.titulo);
+    const quant = tabelas[2].tipo === "tabela" ? tabelas[2] : null;
+    assert.deepEqual(quant?.linhas[0].celulas.slice(2), ["12", "0", "6 (parcial)", "6"]);
+    const valores = tabelas[3].tipo === "tabela" ? tabelas[3] : null;
+    assert.equal(valores?.linhas[1].celulas[4], brl(52.5)); // o valor remanescente (TOTAL)
+    const ident = tabelas[0].tipo === "tabela" ? tabelas[0] : null;
+    assert.ok(ident?.linhas.some((l) => l.celulas[0] === "Protocolo vinculado (Centi)" && l.celulas[1] === "156844/2026"));
     const previa = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: null, previa: true });
     assert.equal(previa[0].tipo === "nota" && /PRÉVIA/.test(previa[0].texto), true);
     const cancel = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: { em: r.emitidoEm, por: "B", motivo: "erro" }, previa: false });
     assert.equal(cancel[0].tipo, "nota");
     assert.equal(limparTextoDeclaracao("  a\u0007​  b  ", 10), "a b");
     assert.equal(limparTextoDeclaracao("   ", 10), null);
+  });
+
+  it("protocolo da Centi e o remanescente (retrato antigo sem o já declarado = sem remanescente)", () => {
+    assert.equal(lerProtocoloCenti(" 0156844 / 2026 "), "156844/2026");
+    assert.equal(lerProtocoloCenti("156844"), "156844");
+    for (const v of ["", "0", "abc", "156844/26", "1/2/3", null]) assert.equal(lerProtocoloCenti(v), null, String(v));
+    assert.equal(remanescente({ quantidadePca: 12, quantidadeAntes: 4, quantidade: 6 }), 2);
+    assert.equal(remanescente({ quantidadePca: 12, quantidade: 6 }), null);
+    assert.equal(conferirPedido([{ sequencial: 1, quantidade: 2 }], [item(1, 12, 4)]).linhas[0].quantidadeAntes, 4);
   });
 
   it("observação formatada (guarda as linhas) e o saldo da EDIÇÃO sem a própria declaração", () => {
@@ -149,6 +172,7 @@ describe("declarações do PCA — no D1", () => {
     codigo,
     finalidade: "inicio",
     processo: null,
+    protocoloCenti: null,
     observacao: null,
     conteudo: "{}",
     selo: "s",
@@ -202,11 +226,11 @@ describe("declarações do PCA — editar e exportar no D1", () => {
   type Orm = Parameters<typeof comandosEditarDeclaracao>[0];
   const emitir = (orm: Orm, codigo: string, numero: number, itens: { sequencial: number; quantidade: number; quantidadePca: number }[]) =>
     comandosEmitirDeclaracao(orm, {
-      pcaId: 1, ano: 2026, numero, codigo, finalidade: "inicio", processo: null, observacao: null, conteudo: "{}", selo: "s",
+      pcaId: 1, ano: 2026, numero, codigo, finalidade: "inicio", processo: null, protocoloCenti: null, observacao: null, conteudo: "{}", selo: "s",
       totalItens: itens.length, valorTotal: 0, emitidoPor: null, emitidoPorNome: "Ana", emitidoEm: "2026-10-28 12:00:00", itens,
     });
   const editar = (orm: Orm, id: number, itens: { sequencial: number; quantidade: number; quantidadePca: number }[]) =>
-    comandosEditarDeclaracao(orm, { id, pcaId: 1, finalidade: "aditivo", processo: "9", observacao: "obs", conteudo: `{"e":${id}}`, selo: "s2", totalItens: itens.length, valorTotal: 1, editadaPorNome: "Bia", itens });
+    comandosEditarDeclaracao(orm, { id, pcaId: 1, finalidade: "aditivo", processo: "9", protocoloCenti: "77/2026", observacao: "obs", conteudo: `{"e":${id}}`, selo: "s2", totalItens: itens.length, valorTotal: 1, editadaPorNome: "Bia", itens });
 
   it("edita (troca os itens, o saldo conta sem os dela), barra além do saldo e trava depois de exportar", async () => {
     const { db, orm } = banco();

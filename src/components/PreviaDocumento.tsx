@@ -86,7 +86,7 @@ export function PreviaDocumento({ blocos }: { blocos: BlocoDoc[] }) {
                     <thead className="bg-accent-soft text-accent">
                       <tr>
                         {b.colunas.map((c) => (
-                          <th key={c.titulo} className={`px-2 py-1.5 font-semibold ${c.alinhar === "right" ? "text-right" : "text-left"}`}>
+                          <th key={c.titulo} className={`border border-border px-2 py-1.5 align-middle font-semibold ${c.alinhar === "right" ? "text-right" : c.alinhar === "center" ? "text-center" : "text-left"}`}>
                             {c.titulo}
                           </th>
                         ))}
@@ -94,11 +94,11 @@ export function PreviaDocumento({ blocos }: { blocos: BlocoDoc[] }) {
                     </thead>
                     <tbody>
                       {b.linhas.map((l, j) => (
-                        <tr key={j} className={`border-t border-border align-top ${j % 2 ? "bg-surface-2" : ""} ${l.destaque ? "font-bold" : ""}`}>
+                        <tr key={j} className={`border-t border-border align-middle ${j % 2 ? "bg-surface-2" : ""} ${l.destaque ? "font-bold" : ""}`}>
                           {l.celulas.map((t, x) => (
                             <td
                               key={x}
-                              className={`break-words px-2 py-1.5 ${b.colunas[x]?.alinhar === "right" ? "text-right tabular-nums" : ""} ${l.negritos?.[x] ? "font-semibold" : ""}`}
+                              className={`break-words border border-border px-2 py-1.5 ${b.colunas[x]?.alinhar === "right" ? "text-right tabular-nums" : b.colunas[x]?.alinhar === "center" ? "text-center" : ""} ${l.negritos?.[x] ? "font-semibold" : ""}`}
                               style={{ color: cor(l.cores?.[x]) }}
                             >
                               {t}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FINALIDADES, LIMITES_DECLARACAO, limparObservacao, limparTextoDeclaracao, MAX_ITENS_DECLARACAO } from "./declaracoes-core";
+import { FINALIDADES, LIMITES_DECLARACAO, lerProtocoloCenti, limparObservacao, limparTextoDeclaracao, MAX_ITENS_DECLARACAO } from "./declaracoes-core";
 
 const texto = (max: number) =>
   z
@@ -9,11 +9,20 @@ const texto = (max: number) =>
     .optional()
     .transform((s) => limparTextoDeclaracao(s, max));
 
-/** O pedido de emissão (e de EDIÇÃO — o mesmo): finalidade (a "outra" exige o texto), o processo, a observação e os itens com a quantidade. */
+/** O pedido de emissão (e de EDIÇÃO — o mesmo): finalidade (a "outra" exige o texto), o protocolo da Centi, o processo, a observação e os itens com a quantidade. */
 export const emitirDeclaracaoSchema = z
   .strictObject({
     finalidade: z.enum(FINALIDADES.map((f) => f.id) as [string, ...string[]]),
     finalidadeTexto: texto(LIMITES_DECLARACAO.finalidadeTexto),
+    // O protocolo da Centi a que a declaração é vinculada: OBRIGATÓRIO ("156844" ou "156844/2026").
+    protocoloCenti: z
+      .string({ error: "Informe o protocolo da Centi." })
+      .max(LIMITES_DECLARACAO.protocoloCenti * 2)
+      .transform((s, ctx) => {
+        const v = lerProtocoloCenti(s);
+        if (!v) ctx.addIssue({ code: "custom", message: "Informe o nº do protocolo da Centi (ex.: 156844/2026)." });
+        return v ?? "";
+      }),
     processo: texto(LIMITES_DECLARACAO.processo),
     // Texto FORMATADO (o editor do sistema): guarda as quebras de linha e a marcação.
     observacao: z

@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.251.0",
+    data: "2026-10-28",
+    titulo: "Declarações mais completas e profissionais; a assinatura no lugar do carimbo",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "A declaração passa a exigir o protocolo da Centi a que ela será vinculada (ex.: 156844/2026). Ele aparece no texto, na identificação e no registro de autenticidade do PDF, na lista de declarações e na verificação pública.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "O PDF da declaração ficou sóbrio, em preto e cinza, com títulos de coluna curtos e sem abreviações. Está organizado em seções: Identificação; Itens declarados (código, descrição, medida, DFD e item, planejamento, protocolo e unidade); Quantidades (no PCA, já declarada, declarada e saldo); e Valores (unitário, no PCA, declarado e saldo, com o total).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "As tabelas dos documentos em PDF ganharam grade completa (moldura e divisórias entre as colunas), com todas as linhas na mesma espessura e cor, sem nenhuma em negrito. O texto fica centralizado na célula, e nenhuma palavra é partida: cada coluna tem ao menos a largura da maior palavra.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Na tela da declaração, as colunas têm os mesmos títulos do PDF. Para cada item, ela mostra a quantidade já declarada e o saldo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "Documentos assinados: na página da assinatura, o registro da assinatura ocupa o lugar do carimbo do rodapé. As demais páginas seguem com o carimbo. Isso vale para a declaração do PCA e para o comprovante do termo de uso; os comprovantes de aceites anteriores mantêm o desenho com que foram emitidos.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.250.0",
     data: "2026-10-28",
     titulo: "Importar agora pelos indicadores da Execução e o andamento completo no card",

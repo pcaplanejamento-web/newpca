@@ -4,6 +4,12 @@ import type { AceiteRegistro } from "./termo-uso";
 
 /** Nome fixo do produtor do comprovante — muda os bytes se trocar (os PDFs já baixados deixam de conferir). */
 const SISTEMA_COMPROVANTE = "Plataforma PCA";
+/**
+ * Desde quando vale o desenho da v1.251.0 (a ASSINATURA no lugar do carimbo na página dela; colunas sem partir palavras).
+ * Os aceites ANTERIORES seguem com o desenho antigo: o PDF é refeito e comparado pelos bytes — mudar o desenho deles
+ * invalidaria os comprovantes já baixados.
+ */
+const DESENHO_NOVO_DESDE = Date.parse("2026-10-29T03:00:00Z");
 
 /**
  * O COMPROVANTE do aceite em PDF, gerado no SERVIDOR e DETERMINÍSTICO: o mesmo registro + o mesmo texto + a mesma origem
@@ -19,6 +25,7 @@ export async function pdfDoComprovante(a: AceiteRegistro, termo: { textoFinal: s
       rodape: `Comprovante de aceite · código ${a.codigo} · ${SISTEMA_COMPROVANTE}`,
       sistema: SISTEMA_COMPROVANTE,
       carimbo: carimboComprovante(dados),
+      desenhoAntigo: new Date(a.em).getTime() < DESENHO_NOVO_DESDE,
       data: new Date(a.em),
       assunto: `Comprovante de assinatura eletrônica · código ${a.codigo}`,
       palavras: [`codigo:${a.codigo}`, `selo:${a.selo}`, `texto:${a.hash}`],

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState } from "react";
-import { type ConteudoDeclaracao, conferirPedido, FINALIDADES, type Finalidade, type ItemDeclaravel, itensParaEdicao, LIMITES_DECLARACAO, saldoDe } from "@/lib/declaracoes-core";
+import { type ConteudoDeclaracao, conferirPedido, FINALIDADES, type Finalidade, type ItemDeclaravel, itensParaEdicao, LIMITES_DECLARACAO, lerProtocoloCenti, saldoDe } from "@/lib/declaracoes-core";
 import { brl, num } from "@/lib/format";
 import { parseNumberBR } from "@/lib/normalize";
 import { Badge } from "./Badge";
@@ -74,6 +74,7 @@ export function NovaDeclaracao({
   const porSeq = useMemo(() => new Map(disponiveis.map((i) => [i.sequencial, i])), [disponiveis]);
   const [finalidade, setFinalidade] = useState<Finalidade>(c?.finalidade ?? "inicio");
   const [finalidadeTexto, setFinalidadeTexto] = useState(c?.finalidadeTexto ?? "");
+  const [protocoloCenti, setProtocoloCenti] = useState(c?.protocoloCenti ?? "");
   const [processo, setProcesso] = useState(c?.processo ?? "");
   const [observacao, setObservacao] = useState(c?.observacao ?? "");
   // Os itens que a declaração tinha e que não estão mais no PCA (ou sem saldo) saem ao gravar — avisados.
@@ -87,7 +88,13 @@ export function NovaDeclaracao({
   const conf = useMemo(() => conferirPedido(pedido, base), [pedido, base]);
   const total = conf.linhas.reduce((s, l) => s + l.valorTotal, 0);
   const parciais = conf.linhas.filter((l) => l.parcial).length;
-  const motivo = pedido.length === 0 ? "Marque os itens a declarar." : (conf.erros[0] ?? (finalidade === "outra" && !finalidadeTexto.trim() ? "Descreva a finalidade." : null));
+  const protocoloValido = lerProtocoloCenti(protocoloCenti);
+  const erroProtocolo = protocoloCenti.trim() && !protocoloValido ? "Use só números, com o ano opcional (ex.: 156844/2026)." : undefined;
+  const motivo =
+    pedido.length === 0
+      ? "Marque os itens a declarar."
+      : (conf.erros[0] ??
+        (!protocoloValido ? "Informe o protocolo da Centi." : finalidade === "outra" && !finalidadeTexto.trim() ? "Descreva a finalidade." : null));
 
   const marcar = useCallback(
     (s: Set<string | number>) =>
@@ -109,7 +116,7 @@ export function NovaDeclaracao({
     const pega = (...ks: string[]) => ks.map((k) => id.get(k)).filter((col): col is Column<ItemDeclaravel> => !!col);
     return [
       ...pega("seq", "cod", "desc", "med"),
-      { key: "qpca", header: "Qtd. PCA", align: "right", nowrap: true, filter: "range", numero: (r) => r.quantidade, formatarFaixa: num, total: false, render: (r) => num(r.quantidade) },
+      { key: "qpca", header: "No PCA", align: "right", nowrap: true, filter: "range", numero: (r) => r.quantidade, formatarFaixa: num, total: false, render: (r) => num(r.quantidade) },
       { key: "saldo", header: "Saldo", align: "right", nowrap: true, filter: "range", numero: (r) => saldoDe(r), formatarFaixa: num, total: false, render: (r) => <span className="font-medium tabular-nums">{num(saldoDe(r))}</span> },
       {
         key: "declarar",
@@ -148,7 +155,7 @@ export function NovaDeclaracao({
       const r = await fetch(edicao ? `/api/pca/${pcaId}/declaracoes/${edicao.id}` : `/api/pca/${pcaId}/declaracoes`, {
         method: edicao ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ finalidade, finalidadeTexto: finalidadeTexto || null, processo: processo || null, observacao: observacao || null, itens: pedido }),
+        body: JSON.stringify({ finalidade, finalidadeTexto: finalidadeTexto || null, protocoloCenti, processo: processo || null, observacao: observacao || null, itens: pedido }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; declaracao?: { id: number; rotulo: string } };
       if (!r.ok || !j.ok || !j.declaracao) throw new Error(j.error ?? "Não consegui gravar a declaração.");
@@ -188,7 +195,7 @@ export function NovaDeclaracao({
             {fora.length === 1 ? `O item ${fora[0]} não está mais no PCA (ou sem saldo) e sai` : `Os itens ${fora.join(", ")} não estão mais no PCA (ou sem saldo) e saem`} da declaração ao salvar.
           </Callout>
         )}
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-3">
           <SelectField label="Finalidade" value={finalidade} onChange={(e) => setFinalidade(e.target.value as Finalidade)}>
             {FINALIDADES.map((f) => (
               <option key={f.id} value={f.id}>
@@ -196,9 +203,19 @@ export function NovaDeclaracao({
               </option>
             ))}
           </SelectField>
-          <TextField label="Processo / empenho de referência" value={processo} maxLength={LIMITES_DECLARACAO.processo} onChange={(e) => setProcesso(e.target.value)} placeholder="Opcional" />
+          <TextField
+            label="Protocolo na Centi"
+            value={protocoloCenti}
+            maxLength={LIMITES_DECLARACAO.protocoloCenti}
+            inputMode="numeric"
+            required
+            error={erroProtocolo}
+            onChange={(e) => setProtocoloCenti(e.target.value)}
+            placeholder="Ex.: 156844/2026"
+          />
+          <TextField label="Processo ou empenho de referência" value={processo} maxLength={LIMITES_DECLARACAO.processo} onChange={(e) => setProcesso(e.target.value)} placeholder="Opcional" />
           {finalidade === "outra" && (
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 lg:col-span-3">
               <TextField label="Qual finalidade" value={finalidadeTexto} maxLength={LIMITES_DECLARACAO.finalidadeTexto} onChange={(e) => setFinalidadeTexto(e.target.value)} placeholder="Ex.: renovação de contrato" />
             </div>
           )}

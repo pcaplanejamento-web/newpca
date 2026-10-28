@@ -7,6 +7,8 @@ export type OpcoesGerar = {
   sistema: string;
   paleta?: PaletaPdf;
   carimbo?: { titulo: string; linhas: string[]; cor: string };
+  /** O desenho de antes da v1.251.0 (o carimbo também na página da assinatura; as colunas só pelo peso). */
+  desenhoAntigo?: boolean;
   /** O TIMBRE (PNG) no alto de cada página, na largura da folha. */
   timbre?: { png: Uint8Array; largura: number; altura: number };
   /** Margem lateral (pt) — sem ela, a do A4 padrão. */
@@ -40,6 +42,7 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
     titulo: limpo(doc.titulo),
     rodape: limpo(o.rodape),
     carimbo,
+    desenhoAntigo: o.desenhoAntigo,
     timbre: o.timbre && { largura: o.timbre.largura, altura: o.timbre.altura },
     margem: o.margem,
   });

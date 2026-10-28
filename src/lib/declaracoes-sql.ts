@@ -15,6 +15,7 @@ export type NovaDeclaracaoSql = {
   codigo: string;
   finalidade: string;
   processo: string | null;
+  protocoloCenti: string | null;
   observacao: string | null;
   conteudo: string;
   selo: string;
@@ -43,7 +44,7 @@ export function comandosEmitirDeclaracao(db: Db, d: NovaDeclaracaoSql) {
   return cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]];
 }
 
-export type EdicaoDeclaracaoSql = Pick<NovaDeclaracaoSql, "pcaId" | "finalidade" | "processo" | "observacao" | "conteudo" | "selo" | "totalItens" | "valorTotal" | "itens"> & {
+export type EdicaoDeclaracaoSql = Pick<NovaDeclaracaoSql, "pcaId" | "finalidade" | "processo" | "protocoloCenti" | "observacao" | "conteudo" | "selo" | "totalItens" | "valorTotal" | "itens"> & {
   id: number;
   editadaPorNome: string;
 };

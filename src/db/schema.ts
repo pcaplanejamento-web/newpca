@@ -2659,6 +2659,8 @@ export const declaracoes = sqliteTable(
     codigo: text("codigo").notNull(),
     finalidade: text("finalidade").notNull(),
     processo: text("processo"),
+    /** O protocolo da Centi a que a declaração é vinculada (migração `0167`; as anteriores, sem). */
+    protocoloCenti: text("protocolo_centi"),
     observacao: text("observacao"),
     conteudo: text("conteudo").notNull(),
     selo: text("selo").notNull(),

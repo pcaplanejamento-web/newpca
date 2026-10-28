@@ -5,7 +5,7 @@ import { MarcaLink } from "@/components/MarcaSistema";
 import { FormCodigoTermo } from "@/components/VerificarArquivoTermo";
 import { getAparencia } from "@/lib/aparencia";
 import { declaracaoPorCodigo, seloConfereDeclaracao } from "@/lib/declaracoes";
-import { textoDeclaracao } from "@/lib/declaracoes-core";
+import { remanescente, textoDeclaracao } from "@/lib/declaracoes-core";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { contarTentativa } from "@/lib/seguranca-acesso";
 import { codigoNormal } from "@/lib/termo-uso-core";
@@ -59,6 +59,12 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
                 </dd>
                 <dt className="text-muted">Finalidade</dt>
                 <dd className="text-text">{d.finalidadeRotulo}</dd>
+                {c.protocoloCenti && (
+                  <>
+                    <dt className="text-muted">Protocolo na Centi</dt>
+                    <dd className="text-text">{c.protocoloCenti}</dd>
+                  </>
+                )}
                 <dt className="text-muted">Emitida em</dt>
                 <dd className="text-text">
                   {dataHoraBR(d.emitidoEm)} (Brasília) · {c.emitente.nome}
@@ -68,33 +74,39 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
               </dl>
               <p className="text-[14px] leading-relaxed text-text-2">{textoDeclaracao(c)}</p>
               <div className="overflow-x-auto rounded-card border border-border">
-                <table className="w-full min-w-[640px] text-[13px]">
+                <table className="w-full min-w-[760px] text-[13px]">
                   <thead className="bg-surface-2 text-muted">
                     <tr>
-                      <th className="px-3 py-2 text-center font-medium">Seq.</th>
-                      <th className="px-3 py-2 text-center font-medium">DFD / Planej.</th>
+                      <th className="px-3 py-2 text-center font-medium">Item</th>
+                      <th className="px-3 py-2 text-center font-medium">DFD</th>
+                      <th className="px-3 py-2 text-center font-medium">Planejamento</th>
                       <th className="px-3 py-2 text-left font-medium">Descrição</th>
-                      <th className="px-3 py-2 text-right font-medium">Qtd. declarada</th>
-                      <th className="px-3 py-2 text-right font-medium">Vlr. unit.</th>
-                      <th className="px-3 py-2 text-right font-medium">Vlr. total</th>
+                      <th className="px-3 py-2 text-right font-medium">No PCA</th>
+                      <th className="px-3 py-2 text-right font-medium">Declarada</th>
+                      <th className="px-3 py-2 text-right font-medium">Saldo</th>
+                      <th className="px-3 py-2 text-right font-medium">Valor unitário</th>
+                      <th className="px-3 py-2 text-right font-medium">Valor</th>
                     </tr>
                   </thead>
                   <tbody>
                     {c.linhas.map((l) => (
                       <tr key={l.sequencial} className="border-t border-border">
                         <td className="px-3 py-2 text-center tabular-nums">{l.sequencial}</td>
-                        <td className="px-3 py-2 text-center">{[l.dfdNumero ? `DFD ${l.dfdNumero}` : "", l.planejamento ? `Planej. ${l.planejamento}` : ""].filter(Boolean).join(" · ") || "—"}</td>
+                        <td className="px-3 py-2 text-center tabular-nums">{l.dfdNumero ?? "—"}</td>
+                        <td className="px-3 py-2 text-center tabular-nums">{l.planejamento ?? "—"}</td>
                         <td className="px-3 py-2 text-left">{l.descricao ?? "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{num(l.quantidadePca)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">
                           {num(l.quantidade)}
-                          {l.parcial ? ` de ${num(l.quantidadePca)}` : ""}
+                          {l.parcial ? " (parcial)" : ""}
                         </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{remanescente(l) == null ? "—" : num(remanescente(l))}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{brl(l.valorUnitario)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{brl(l.valorTotal)}</td>
                       </tr>
                     ))}
                     <tr className="border-t border-border font-semibold">
-                      <td className="px-3 py-2" colSpan={5}>
+                      <td className="px-3 py-2" colSpan={8}>
                         Total
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{brl(c.valorTotal)}</td>

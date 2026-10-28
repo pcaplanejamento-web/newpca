@@ -107,6 +107,8 @@ export type DeclaracaoResumo = {
   finalidade: Finalidade;
   finalidadeRotulo: string;
   processo: string | null;
+  /** O protocolo da Centi vinculado (as emitidas antes da v1.251.0 não têm). */
+  protocoloCenti: string | null;
   totalItens: number;
   valorTotal: number;
   emitidoPorNome: string;
@@ -125,6 +127,7 @@ const COLS = {
   codigo: declaracoes.codigo,
   finalidade: declaracoes.finalidade,
   processo: declaracoes.processo,
+  protocoloCenti: declaracoes.protocoloCenti,
   totalItens: declaracoes.totalItens,
   valorTotal: declaracoes.valorTotal,
   emitidoPorNome: declaracoes.emitidoPorNome,
@@ -148,6 +151,7 @@ const resumo = (r: LinhaCols): DeclaracaoResumo => ({
   finalidade: r.finalidade as Finalidade,
   finalidadeRotulo: ROTULO_FINALIDADE[r.finalidade as Finalidade] ?? String(r.finalidade),
   processo: r.processo,
+  protocoloCenti: r.protocoloCenti,
   totalItens: r.totalItens as number,
   valorTotal: Number(r.valorTotal ?? 0),
   emitidoPorNome: r.emitidoPorNome as string,
@@ -194,6 +198,7 @@ export async function seloConfereDeclaracao(d: DeclaracaoCompleta): Promise<bool
 export type PedidoDeclaracao = {
   finalidade: Finalidade;
   finalidadeTexto: string | null;
+  protocoloCenti: string;
   processo: string | null;
   observacao: string | null;
   itens: PedidoItem[];
@@ -233,6 +238,7 @@ export async function emitirDeclaracao(
       codigo,
       finalidade: p.finalidade,
       processo: p.processo,
+      protocoloCenti: p.protocoloCenti,
       observacao: p.observacao,
       conteudo: texto,
       selo,
@@ -272,6 +278,7 @@ function conteudoDoPedido(
     pca: { id: pca.id, nome: pca.nome, ano: pca.ano },
     finalidade: p.finalidade,
     finalidadeTexto: p.finalidade === "outra" ? p.finalidadeTexto : null,
+    protocoloCenti: p.protocoloCenti,
     processo: p.processo,
     observacao: p.observacao,
     linhas,
@@ -308,6 +315,7 @@ export async function editarDeclaracao(
         pcaId: pca.id,
         finalidade: p.finalidade,
         processo: p.processo,
+        protocoloCenti: p.protocoloCenti,
         observacao: p.observacao,
         conteudo: texto,
         selo,

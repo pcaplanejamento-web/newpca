@@ -45,7 +45,7 @@ export type Finalidade = (typeof FINALIDADES)[number]["id"];
 export const ROTULO_FINALIDADE = Object.fromEntries(FINALIDADES.map((f) => [f.id, f.rotulo])) as Record<Finalidade, string>;
 
 export const MAX_ITENS_DECLARACAO = 500;
-export const LIMITES_DECLARACAO = { processo: 80, finalidadeTexto: 200, observacao: 4000, motivo: 300 } as const;
+export const LIMITES_DECLARACAO = { processo: 80, finalidadeTexto: 200, observacao: 4000, motivo: 300, protocoloCenti: 20 } as const;
 /** Folga dos números com casas (ponto flutuante): a MESMA do gatilho do banco. */
 const FOLGA = 0.000001;
 export const CIDADE_DECLARACAO = "Rio Verde (GO)";
@@ -81,10 +81,28 @@ export const totalDaLinha = (q: number, vu: number | null) => Math.round(q * Num
 export type LinhaDeclaracao = Omit<ItemDeclaravel, "declarado" | "quantidade" | "dfdId"> & {
   quantidade: number;
   quantidadePca: number;
+  /** O já declarado por OUTRAS declarações na data da emissão (as emitidas antes da v1.251.0 não têm). */
+  quantidadeAntes?: number;
   valorTotal: number;
   /** A quantidade declarada é MENOR que a do item no PCA. */
   parcial: boolean;
 };
+
+/** O que sobra do item no PCA depois desta declaração (na data da emissão) — `null` quando o retrato não tem o já declarado. */
+export function remanescente(l: Pick<LinhaDeclaracao, "quantidadePca" | "quantidade" | "quantidadeAntes">): number | null {
+  if (l.quantidadeAntes == null) return null;
+  return Math.max(0, Math.round((l.quantidadePca - l.quantidadeAntes - l.quantidade) * 1e6) / 1e6);
+}
+
+/**
+ * O PROTOCOLO da Centi a que a declaração é vinculada: "156844" ou "156844/2026" (espaços e zeros à esquerda saem). Fora
+ * desse formato = `null`.
+ */
+export function lerProtocoloCenti(s: string | null | undefined): string | null {
+  const m = String(s ?? "").match(/^\s*0*(\d{1,12})\s*(?:\/\s*(\d{4}))?\s*$/);
+  if (!m || Number(m[1]) === 0) return null;
+  return m[2] ? `${m[1]}/${m[2]}` : m[1];
+}
 
 export type PedidoItem = { sequencial: number; quantidade: number };
 
@@ -123,7 +141,14 @@ export function conferirPedido(pedido: readonly PedidoItem[], itens: readonly It
       continue;
     }
     const { declarado: _d, quantidade: _q, dfdId: _id, ...resto } = it;
-    linhas.push({ ...resto, quantidade: q, quantidadePca: qPca, valorTotal: totalDaLinha(q, it.valorUnitario), parcial: q < qPca - FOLGA });
+    linhas.push({
+      ...resto,
+      quantidade: q,
+      quantidadePca: qPca,
+      quantidadeAntes: Math.round(it.declarado * 1e6) / 1e6,
+      valorTotal: totalDaLinha(q, it.valorUnitario),
+      parcial: q < qPca - FOLGA,
+    });
   }
   linhas.sort((a, b) => a.sequencial - b.sequencial);
   return { linhas, erros };
@@ -134,6 +159,8 @@ export type ConteudoDeclaracao = {
   pca: { id: number; nome: string; ano: number | null };
   finalidade: Finalidade;
   finalidadeTexto: string | null;
+  /** O protocolo da Centi a que a declaração é vinculada (as emitidas antes da v1.251.0 não têm). */
+  protocoloCenti?: string | null;
   processo: string | null;
   observacao: string | null;
   linhas: LinhaDeclaracao[];
@@ -205,11 +232,12 @@ const fraseFinalidade = (c: Pick<ConteudoDeclaracao, "finalidade" | "finalidadeT
 export function textoDeclaracao(c: ConteudoDeclaracao): string {
   const pca = `Plano de Contratações Anual (PCA)${c.pca.ano ? ` ${c.pca.ano}` : ""} — "${c.pca.nome}"`;
   const parciais = c.linhas.filter((l) => l.parcial).length;
-  const processo = c.processo ? `, no âmbito do processo nº ${c.processo}` : "";
+  const protocolo = c.protocoloCenti ? `, vinculada ao protocolo nº ${c.protocoloCenti} do sistema Centi` : "";
+  const processo = c.processo ? `, no âmbito do processo ou empenho nº ${c.processo}` : "";
   const parcial = parciais
     ? ` A declaração é PARCIAL para ${parciais === 1 ? "1 item" : `${parciais} itens`}: a quantidade declarada é menor que a prevista no PCA.`
     : "";
-  return `Declaro, para os devidos fins, que ${c.totalItens === 1 ? "o item relacionado abaixo consta" : `os ${c.totalItens} itens relacionados abaixo constam`} do ${pca}, nas quantidades e valores unitários indicados, para fins de ${fraseFinalidade(c)}${processo}.${parcial}`;
+  return `Declaro, para os devidos fins, que ${c.totalItens === 1 ? "o item relacionado abaixo consta" : `os ${c.totalItens} itens relacionados abaixo constam`} do ${pca}, nas quantidades e valores unitários indicados, para fins de ${fraseFinalidade(c)}${protocolo}${processo}.${parcial}`;
 }
 
 export type RegistroDeclaracao = {
@@ -224,23 +252,35 @@ export type RegistroDeclaracao = {
   previa: boolean;
 };
 
-/** As cores do documento oficial: o VERDE do timbre da Prefeitura no lugar do accent do sistema. */
+/**
+ * As cores do documento oficial: SÓBRIAS — texto quase preto, títulos e molduras em grafite, cabeçalho da tabela e zebra em
+ * cinza claro (nada colorido; o timbre da Prefeitura é a única cor da folha).
+ */
 export const PALETA_DECLARACAO: PaletaPdf = {
   ...PALETA_PADRAO,
-  titulo: "#1e6b3a",
-  cabecalhoFundo: "#e8f3ec",
-  cabecalhoTexto: "#1e6b3a",
-  destaque: "#f1f7f3",
-  zebra: "#f6f8f7",
+  texto: "#1a1a1a",
+  muted: "#555555",
+  titulo: "#1a1a1a",
+  cabecalhoFundo: "#ececec",
+  cabecalhoTexto: "#1a1a1a",
+  destaque: "#f4f4f4",
+  zebra: "#f8f8f8",
+  borda: "#bdbdbd",
 };
+/** A cor das molduras (aviso, assinatura e carimbo) — o grafite; a cancelada, o vermelho. */
+const COR_MOLDURA = "#4a4a4a";
 
 /** O título do PCA no documento: "PLANO DE CONTRATAÇÕES ANUAL – PCA 2026". */
 const tituloPca = (c: ConteudoDeclaracao) => `PLANO DE CONTRATAÇÕES ANUAL – PCA${c.pca.ano ? ` ${c.pca.ano}` : ""}`;
+const ou = (v: string | null | undefined) => (v && v.trim() ? v : "—");
+const rotuloItens = (n: number) => (n === 1 ? "1 item" : `${num(n)} itens`);
 
 /**
  * Os blocos do PDF da declaração (A4 com o TIMBRE da Prefeitura — `documento-pdf-core`), no padrão dos documentos
- * oficiais: título centralizado, texto justificado, a tabela dos itens, local e data, quem emitiu, "Assinado e datado
- * digitalmente." e o quadro de autenticidade. A PRÉVIA (antes de exportar) e a CANCELADA saem com o aviso no topo.
+ * oficiais: título centralizado, texto justificado, 1 · a identificação, 2 · os itens (a origem de cada um: DFD,
+ * planejamento, protocolo e unidade), 3 · as quantidades e 4 · os valores (previsto no PCA, já declarado, desta declaração e o
+ * que sobra), local e data, quem emitiu e o registro da assinatura. Os títulos das colunas por extenso. A PRÉVIA (antes de
+ * exportar) e a CANCELADA saem com o aviso no topo.
  */
 export function blocosDeclaracao(c: ConteudoDeclaracao, r: RegistroDeclaracao): BlocoDoc[] {
   const b: BlocoDoc[] = [];
@@ -251,46 +291,122 @@ export function blocosDeclaracao(c: ConteudoDeclaracao, r: RegistroDeclaracao): 
       cor: "var(--danger)",
     });
   else if (r.previa)
-    b.push({ tipo: "nota", texto: "PRÉVIA — esta declaração ainda não foi exportada e não tem validade. Ao exportar o PDF, ela deixa de ser editável.", cor: "var(--warn)" });
+    b.push({ tipo: "nota", texto: "PRÉVIA — esta declaração ainda não foi exportada e não tem validade. Ao exportar o PDF, ela deixa de ser editável.", cor: COR_MOLDURA });
   b.push({ tipo: "titulo", texto: `DECLARAÇÃO Nº ${rotuloNumero(r.numero, r.ano)}`, alinhar: "centro" });
   b.push({ tipo: "paragrafo", texto: `DECLARAÇÃO DE ITENS DO ${tituloPca(c)}`, alinhar: "centro", negrito: true });
   b.push({ tipo: "paragrafo", texto: textoDeclaracao(c), alinhar: "justificado" });
+
+  const parciais = c.linhas.filter((l) => l.parcial).length;
+  b.push({ tipo: "secao", texto: "1. Identificação" });
   b.push({
     tipo: "tabela",
     colunas: [
-      { titulo: "Seq.", peso: 0.6, alinhar: "center" },
-      { titulo: "Origem", peso: 1.2, alinhar: "center" },
-      { titulo: "Código", peso: 1.15, alinhar: "center" },
-      { titulo: "Descrição do produto/serviço", peso: 3.05 },
-      { titulo: "Medida", peso: 1.1, alinhar: "center" },
-      { titulo: "Qtd. PCA", peso: 0.75, alinhar: "center" },
-      { titulo: "Qtd. decl.", peso: 0.8, alinhar: "center" },
-      { titulo: "Vlr. unit.", peso: 1.05, alinhar: "right" },
-      { titulo: "Vlr. total", peso: 1.25, alinhar: "right" },
+      { titulo: "Dado", peso: 1.6 },
+      { titulo: "Informação", peso: 3.4 },
     ],
     linhas: [
-      ...c.linhas.map((l) => ({
+      ["Plano de Contratações Anual", `${c.pca.ano ? `PCA ${c.pca.ano} — ` : ""}${c.pca.nome}`],
+      ["Finalidade", c.finalidade === "outra" ? ou(c.finalidadeTexto) : (ROTULO_FINALIDADE[c.finalidade] ?? c.finalidade)],
+      ["Protocolo vinculado (Centi)", ou(c.protocoloCenti)],
+      ["Processo ou empenho de referência", ou(c.processo)],
+      ["Itens declarados", `${rotuloItens(c.totalItens)}${parciais ? ` (${parciais === 1 ? "1 parcial" : `${num(parciais)} parciais`})` : ""}`],
+      ["Valor total declarado", brl(c.valorTotal)],
+      ["Data da emissão", `${dataHoraBR(r.emitidoEm)} (horário de Brasília)`],
+    ].map(([k, v]) => ({ celulas: [k, v], negritos: [true, false] })),
+  });
+
+  b.push({ tipo: "secao", texto: "2. Itens declarados" });
+  b.push({
+    tipo: "tabela",
+    colunas: [
+      { titulo: "Item", peso: 0.6, alinhar: "center" },
+      { titulo: "Código", peso: 1.1, alinhar: "center" },
+      { titulo: "Descrição", peso: 3.4, alinhar: "center" },
+      { titulo: "Medida", peso: 1, alinhar: "center" },
+      { titulo: "DFD", peso: 0.9, alinhar: "center" },
+      { titulo: "Planejamento", peso: 1.1, alinhar: "center" },
+      { titulo: "Protocolo", peso: 1.2, alinhar: "center" },
+      { titulo: "Unidade", peso: 1, alinhar: "center" },
+    ],
+    linhas: c.linhas.map((l) => ({
+      celulas: [
+        String(l.sequencial),
+        ou(l.codigo),
+        ou(l.descricao),
+        ou(l.unidade),
+        l.dfdNumero ? `${l.dfdNumero}${l.itemNumero != null ? ` · item ${l.itemNumero}` : ""}` : "—",
+        ou(l.planejamento),
+        ou(l.protocoloNumero),
+        ou(l.sigla),
+      ],
+    })),
+  });
+
+  const restos = c.linhas.map(remanescente);
+  const semRestos = restos.some((q) => q == null);
+  b.push({ tipo: "secao", texto: "3. Quantidades" });
+  b.push({
+    tipo: "tabela",
+    colunas: [
+      { titulo: "Item", peso: 0.8, alinhar: "center" },
+      { titulo: "Medida", peso: 1.3, alinhar: "center" },
+      { titulo: "No PCA", peso: 1.2, alinhar: "center" },
+      { titulo: "Já declarada", peso: 1.2, alinhar: "center" },
+      { titulo: "Declarada", peso: 1.3, alinhar: "center" },
+      { titulo: "Saldo", peso: 1.2, alinhar: "center" },
+    ],
+    linhas: c.linhas.map((l, i) => ({
+      celulas: [
+        String(l.sequencial),
+        ou(l.unidade),
+        num(l.quantidadePca),
+        l.quantidadeAntes == null ? "—" : num(l.quantidadeAntes),
+        `${num(l.quantidade)}${l.parcial ? " (parcial)" : ""}`,
+        restos[i] == null ? "—" : num(restos[i]),
+      ],
+    })),
+  });
+
+  b.push({ tipo: "secao", texto: "4. Valores" });
+  const somaPrevisto = c.linhas.reduce((s, l) => s + totalDaLinha(l.quantidadePca, l.valorUnitario), 0);
+  const somaResto = restos.reduce<number>((s, q, i) => s + totalDaLinha(q ?? 0, c.linhas[i].valorUnitario), 0);
+  b.push({
+    tipo: "tabela",
+    colunas: [
+      { titulo: "Item", peso: 0.8, alinhar: "center" },
+      { titulo: "Unitário", peso: 1.3, alinhar: "center" },
+      { titulo: "No PCA", peso: 1.45, alinhar: "center" },
+      { titulo: "Declarado", peso: 1.45, alinhar: "center" },
+      { titulo: "Saldo", peso: 1.45, alinhar: "center" },
+    ],
+    linhas: [
+      ...c.linhas.map((l, i) => ({
         celulas: [
           String(l.sequencial),
-          [l.planejamento ? `Planej. ${l.planejamento}` : l.dfdNumero ? `DFD ${l.dfdNumero}` : null, l.sigla].filter(Boolean).join(" · ") || "—",
-          l.codigo ?? "—",
-          l.descricao ?? "—",
-          l.unidade ?? "—",
-          num(l.quantidadePca),
-          `${num(l.quantidade)}${l.parcial ? " parcial" : ""}`,
           brl(l.valorUnitario),
+          brl(totalDaLinha(l.quantidadePca, l.valorUnitario)),
           brl(l.valorTotal),
+          restos[i] == null ? "—" : brl(totalDaLinha(restos[i] ?? 0, l.valorUnitario)),
         ],
-        cores: [null, null, null, null, null, null, l.parcial ? "var(--warn)" : null, null, null],
       })),
-      { celulas: ["", "", "", `TOTAL — ${c.totalItens === 1 ? "1 item" : `${num(c.totalItens)} itens`}`, "", "", "", "", brl(c.valorTotal)], destaque: true },
+      { celulas: ["TOTAL", "", brl(somaPrevisto), brl(c.valorTotal), semRestos ? "—" : brl(somaResto)], destaque: true },
     ],
   });
+  b.push({
+    tipo: "paragrafo",
+    texto: `Item = o número do item no PCA. Saldo = quantidade no PCA − já declarada (em outras declarações) − declarada nesta, apurado na data da emissão (declarações canceladas não contam); o valor do saldo é o saldo × o valor unitário. Valores em reais (R$).${semRestos ? " Esta declaração foi emitida antes do registro do já declarado: o saldo não consta." : ""}`,
+    cor: "muted",
+    alinhar: "justificado",
+  });
+
   const obs = textoSimples(c.observacao)
     .split(/\n+/)
     .map((t) => t.trim())
     .filter(Boolean);
-  for (const [i, t] of obs.entries()) b.push({ tipo: "paragrafo", texto: i === 0 ? `Observação: ${t}` : t, alinhar: "justificado" });
+  if (obs.length) {
+    b.push({ tipo: "secao", texto: "5. Observação" });
+    for (const t of obs) b.push({ tipo: "paragrafo", texto: t, alinhar: "justificado" });
+  }
   b.push({
     tipo: "paragrafo",
     texto: `As informações apresentadas destinam-se à comprovação da previsão dos itens no ${tituloPca(c).replace("PLANO DE CONTRATAÇÕES ANUAL", "Plano de Contratações Anual")}, nos termos do artigo 12 da Lei nº 14.133/2021.`,
@@ -304,9 +420,10 @@ export function blocosDeclaracao(c: ConteudoDeclaracao, r: RegistroDeclaracao): 
   b.push({
     tipo: "quadro",
     titulo: "DECLARAÇÃO ELETRÔNICA — REGISTRO DE AUTENTICIDADE",
-    cor: r.cancelada ? "var(--danger)" : "@titulo",
+    cor: r.cancelada ? "var(--danger)" : COR_MOLDURA,
     itens: [
       { rotulo: "Declaração", valor: `Nº ${rotuloNumero(r.numero, r.ano)} — ${ROTULO_FINALIDADE[c.finalidade] ?? c.finalidade}` },
+      ...(c.protocoloCenti ? [{ rotulo: "Protocolo vinculado", valor: `${c.protocoloCenti} (Centi)` }] : []),
       { rotulo: "Emitida por", valor: c.emitente.nome },
       { rotulo: "Data e hora", valor: `${dataHoraBR(r.emitidoEm)} (horário de Brasília)` },
       { rotulo: "Código de verificação", valor: r.codigo },
@@ -317,11 +434,11 @@ export function blocosDeclaracao(c: ConteudoDeclaracao, r: RegistroDeclaracao): 
   return b;
 }
 
-/** O carimbo de cada página do PDF. */
+/** O carimbo das páginas do PDF (a da assinatura não o leva — a assinatura ocupa o lugar dele). */
 export function carimboDeclaracao(c: ConteudoDeclaracao, r: RegistroDeclaracao) {
   return {
     titulo: `${r.cancelada ? "CANCELADA · " : r.previa ? "PRÉVIA · " : ""}DECLARAÇÃO Nº ${rotuloNumero(r.numero, r.ano)} · página {pagina} de {total}`,
     linhas: [`${c.emitente.nome} · ${dataHoraBR(r.emitidoEm)} (Brasília) · código ${r.codigo}`, `Confira em ${r.urlVerificacao}`],
-    cor: r.cancelada ? "var(--danger)" : r.previa ? "var(--warn)" : "@titulo",
+    cor: r.cancelada ? "var(--danger)" : COR_MOLDURA,
   };
 }

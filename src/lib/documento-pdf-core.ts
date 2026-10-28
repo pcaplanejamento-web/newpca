@@ -55,6 +55,8 @@ const RODAPE = 22;
 const TAM = { titulo: 16, secao: 12, subsecao: 9.5, texto: 8.5, tabela: 7.5, rotulo: 7, valor: 11.5, cabecalhoPagina: 7.5, rodape: 7, carimbo: 6.5 };
 const LH = (tam: number) => tam * 1.32;
 const PAD = 4;
+/** A ESPESSURA ÚNICA das linhas do documento (grade, cabeçalho, seções, molduras) — tudo igual, nada reforçado. */
+const LINHA = 0.5;
 /** Espaço que um título precisa ver abaixo de si (senão vai à página seguinte junto com o conteúdo). */
 const JUNTO = 60;
 
@@ -85,12 +87,24 @@ export function limparBlocos(blocos: BlocoDoc[], limpo: (s: string) => string): 
 
 /**
  * Monta as páginas. `titulo` vai no alto de cada página; `rodape` à esquerda do "Página N de M". `carimbo` = o CARIMBO
- * de assinatura em TODAS as páginas (uma faixa emoldurada acima do rodapé; "{pagina}" e "{total}" são trocados).
+ * de assinatura (uma faixa emoldurada acima do rodapé; "{pagina}" e "{total}" são trocados) em todas as páginas MENOS a
+ * da ASSINATURA: a página em que fica o `quadro` (o registro da assinatura) não leva o carimbo — a assinatura ocupa o lugar
+ * dele. Todas as linhas têm a MESMA espessura e cor (`LINHA` — grade, cabeçalho, seções e molduras); as tabelas têm GRADE (moldura e divisórias entre as colunas) e o texto de cada célula fica CENTRADO na vertical da linha. As colunas das tabelas têm ao menos a largura da MAIOR palavra delas (títulos e células): nenhuma palavra é partida
+ * (só a que sozinha não cabe em quase meia página — um código de verificação). `desenhoAntigo` = o desenho de antes da
+ * v1.251.0 (o carimbo em todas as páginas, as colunas só pelo peso, sem a grade e o texto no topo da célula) — para os documentos já emitidos que conferem pelos
+ * bytes, como o comprovante do termo.
  */
 export function montarDocumento(
   blocos: BlocoDoc[],
   medir: Medir,
-  opcoes: { titulo: string; rodape: string; carimbo?: { titulo: string; linhas: string[]; cor: string }; timbre?: TimbreDoc; margem?: number },
+  opcoes: {
+    titulo: string;
+    rodape: string;
+    carimbo?: { titulo: string; linhas: string[]; cor: string };
+    desenhoAntigo?: boolean;
+    timbre?: TimbreDoc;
+    margem?: number;
+  },
 ): OpDoc[][] {
   const { largura: W, altura: H } = PAGINA_A4;
   const M = opcoes.margem ?? PAGINA_A4.margem;
@@ -99,7 +113,13 @@ export function montarDocumento(
   const hTimbre = opcoes.timbre ? (W * opcoes.timbre.altura) / opcoes.timbre.largura : 0;
   const inicio = opcoes.timbre ? hTimbre + 8 : M + TOPO;
   const hCarimbo = opcoes.carimbo ? (opcoes.carimbo.linhas.length + 1) * LH(TAM.carimbo) + 2 * PAD + 6 : 0;
-  const fim = H - M - RODAPE - hCarimbo;
+  const fimPadrao = H - M - RODAPE - hCarimbo;
+  // Sem o carimbo (a página da assinatura), o conteúdo vai até o rodapé.
+  const fimSemCarimbo = H - M - RODAPE;
+  const assinaturaNoLugar = !!opcoes.carimbo && !opcoes.desenhoAntigo;
+  /** As páginas da ASSINATURA (o `quadro`) — sem o carimbo. */
+  const semCarimbo = new Set<number>();
+  let fim = fimPadrao;
   const paginas: OpDoc[][] = [];
   let ops: OpDoc[] = [];
   let y = inicio;
@@ -107,6 +127,7 @@ export function montarDocumento(
     ops = [];
     paginas.push(ops);
     y = inicio;
+    fim = fimPadrao;
   };
   nova();
   const noTopo = () => y === inicio;
@@ -151,7 +172,7 @@ export function montarDocumento(
         if (!noTopo()) y += 12;
         garantir(ls.length * LH(TAM.secao) + 6 + JUNTO);
         linhas(ls, M, TAM.secao, true, "@titulo");
-        ops.push({ t: "linha", x1: M, y1: y + 1, x2: M + util, y2: y + 1, cor: "@titulo", espessura: 0.8 });
+        ops.push({ t: "linha", x1: M, y1: y + 1, x2: M + util, y2: y + 1, cor: opcoes.desenhoAntigo ? "@titulo" : "@borda", espessura: opcoes.desenhoAntigo ? 0.8 : LINHA });
         y += 8;
         break;
       }
@@ -229,7 +250,12 @@ export function montarDocumento(
         const notaLs = b.nota ? quebrarTexto(b.nota, util - 24, TAM.rotulo, medir) : [];
         const h = 2 * PAD + 8 + LH(TAM.subsecao) + 6 + pares.reduce((s2, ls) => s2 + ls.length * LH(TAM.texto), 0) + (notaLs.length ? 6 + notaLs.length * LH(TAM.rotulo) : 0) + 4;
         if (!noTopo()) y += 6;
-        garantir(h);
+        if (assinaturaNoLugar) {
+          // A assinatura ocupa o lugar do carimbo nesta página: cabe até o rodapé.
+          if (y + h > fimSemCarimbo && !noTopo()) nova();
+          fim = fimSemCarimbo;
+          semCarimbo.add(paginas.length - 1);
+        } else garantir(h);
         const topo = y;
         ops.push({ t: "retangulo", x: M, y: topo, w: util, h, cor: "@destaque" });
         for (const [x1, y1, x2, y2] of [
@@ -238,8 +264,8 @@ export function montarDocumento(
           [M, topo, M, topo + h],
           [M + util, topo, M + util, topo + h],
         ])
-          ops.push({ t: "linha", x1, y1, x2, y2, cor: b.cor, espessura: 1.2 });
-        ops.push({ t: "retangulo", x: M, y: topo, w: 4, h, cor: b.cor });
+          ops.push({ t: "linha", x1, y1, x2, y2, cor: opcoes.desenhoAntigo ? b.cor : "@borda", espessura: opcoes.desenhoAntigo ? 1.2 : LINHA });
+        if (opcoes.desenhoAntigo) ops.push({ t: "retangulo", x: M, y: topo, w: 4, h, cor: b.cor });
         let yy = topo + PAD + 6;
         texto(b.titulo, M + 14, yy + TAM.subsecao, TAM.subsecao, true, b.cor);
         yy += LH(TAM.subsecao) + 6;
@@ -268,9 +294,8 @@ export function montarDocumento(
   }
 
   function tabela(b: Extract<BlocoDoc, { tipo: "tabela" }>) {
-    const pesos = b.colunas.reduce((s, c) => s + c.peso, 0) || 1;
-    const larg = b.colunas.map((c) => (c.peso / pesos) * util);
     const tam = TAM.tabela;
+    const larg = opcoes.desenhoAntigo ? larguraPorPeso(b.colunas.map((c) => c.peso), util) : larguraDasColunas(b, util, tam, medir);
     const lh = LH(tam);
     const celulas = (vals: string[], negrito: boolean) => vals.map((v, j) => quebrarTexto(v ?? "", larg[j] - 2 * PAD, tam, medir, negrito));
     const cab = celulas(
@@ -290,23 +315,39 @@ export function montarDocumento(
       borda: { de: number; fimGrupo: boolean } = { de: 0, fimGrupo: true },
     ) => {
       const h = altura(cs);
-      if (fundo) ops.push({ t: "retangulo", x: M, y, w: util, h, cor: fundo });
+      // O fundo começa abaixo da divisória de cima (senão a cobre).
+      const recuo = opcoes.desenhoAntigo ? 0 : 1;
+      if (fundo) ops.push({ t: "retangulo", x: M, y: y + recuo, w: util, h: h - recuo, cor: fundo });
       let x = M;
       cs.forEach((c, j) => {
         const al = b.colunas[j]?.alinhar ?? "left"; // o título segue o alinhamento da coluna (números à direita)
+        // Cada célula CENTRADA na vertical da linha (o desenho antigo: no topo).
+        const dy = opcoes.desenhoAntigo ? 0 : (h - 2 * PAD - Math.max(1, c.length) * lh) / 2;
         c.forEach((l, k) => {
           const tw = medir(l, tam, negrito(j));
           const tx = al === "right" ? x + larg[j] - PAD - tw : al === "center" ? x + (larg[j] - tw) / 2 : x + PAD;
-          texto(l, tx, y + PAD + k * lh + tam, tam, negrito(j), cabecalho ? "@cabecalhoTexto" : (cores[j] ?? "@texto"));
+          texto(l, tx, y + PAD + dy + k * lh + tam, tam, negrito(j), cabecalho ? "@cabecalhoTexto" : (cores[j] ?? "@texto"));
         });
         x += larg[j];
       });
       const x1 = M + larg.slice(0, borda.de).reduce((s, w) => s + w, 0);
-      ops.push({ t: "linha", x1, y1: y + h, x2: M + util, y2: y + h, cor: "@borda", espessura: borda.fimGrupo ? 0.6 : 0.35 });
+      if (opcoes.desenhoAntigo) ops.push({ t: "linha", x1, y1: y + h, x2: M + util, y2: y + h, cor: "@borda", espessura: borda.fimGrupo ? 0.6 : 0.35 });
+      else {
+        // A GRADE: a linha de baixo, as divisórias entre as colunas e a moldura dos lados — todas iguais (`LINHA`).
+        // Em pontos INTEIROS: a mesma espessura vira o mesmo traço na tela (fração de ponto parece mais grossa).
+        const yb = Math.round(y + h);
+        ops.push({ t: "linha", x1: Math.round(x1), y1: yb, x2: Math.round(M + util), y2: yb, cor: "@borda", espessura: LINHA });
+        let xv = M;
+        for (const w of [0, ...larg]) {
+          xv += w;
+          ops.push({ t: "linha", x1: Math.round(xv), y1: Math.round(y), x2: Math.round(xv), y2: yb, cor: "@borda", espessura: LINHA });
+        }
+      }
       y += h;
     };
     const cabecalho = () => {
-      ops.push({ t: "linha", x1: M, y1: y, x2: M + util, y2: y, cor: "@borda", espessura: 0.4 });
+      if (opcoes.desenhoAntigo) ops.push({ t: "linha", x1: M, y1: y, x2: M + util, y2: y, cor: "@borda", espessura: 0.4 });
+      else ops.push({ t: "linha", x1: Math.round(M), y1: Math.round(y), x2: Math.round(M + util), y2: Math.round(y), cor: "@borda", espessura: LINHA });
       desenhar(cab, [], () => true, "@cabecalhoFundo", true);
     };
     const linhasT: LinhaDoc[] = b.linhas.length ? b.linhas : [{ celulas: [b.vazio ?? "Nenhum registro.", ...b.colunas.slice(1).map(() => "")], cores: ["@muted"] }];
@@ -368,12 +409,12 @@ export function montarDocumento(
     else
       p.unshift(
         { t: "texto", x: M, y: M + TAM.cabecalhoPagina, tam: TAM.cabecalhoPagina, negrito: true, cor: "@muted", texto: cortar(opcoes.titulo, util, TAM.cabecalhoPagina, medir, true) },
-        { t: "linha", x1: M, y1: M + 12, x2: M + util, y2: M + 12, cor: "@borda", espessura: 0.5 },
+        { t: "linha", x1: M, y1: M + 12, x2: M + util, y2: M + 12, cor: "@borda", espessura: LINHA },
       );
     const pg = `Página ${i + 1} de ${total}`;
     const wpg = medir(pg, TAM.rodape);
     const base = H - M + 4;
-    const c = opcoes.carimbo;
+    const c = semCarimbo.has(i) ? undefined : opcoes.carimbo;
     if (c) {
       const topo = H - M - RODAPE - hCarimbo + 4;
       const h = hCarimbo - 6;
@@ -384,20 +425,61 @@ export function montarDocumento(
         [M, topo, M, topo + h],
         [M + util, topo, M + util, topo + h],
       ])
-        p.push({ t: "linha", x1, y1, x2, y2, cor: c.cor, espessura: 0.8 });
-      p.push({ t: "retangulo", x: M, y: topo, w: 3, h, cor: c.cor });
+        p.push({ t: "linha", x1, y1, x2, y2, cor: opcoes.desenhoAntigo ? c.cor : "@borda", espessura: opcoes.desenhoAntigo ? 0.8 : LINHA });
+      if (opcoes.desenhoAntigo) p.push({ t: "retangulo", x: M, y: topo, w: 3, h, cor: c.cor });
       const troca = (s2: string) => s2.replaceAll("{pagina}", String(i + 1)).replaceAll("{total}", String(total));
       [c.titulo, ...c.linhas].forEach((l, k) => {
         p.push({ t: "texto", x: M + 10, y: topo + PAD + k * LH(TAM.carimbo) + TAM.carimbo, tam: TAM.carimbo, negrito: k === 0, cor: k === 0 ? c.cor : "@texto", texto: cortar(troca(l), util - 16, TAM.carimbo, medir, k === 0) });
       });
     }
     p.push(
-      { t: "linha", x1: M, y1: H - M - 8, x2: M + util, y2: H - M - 8, cor: "@borda", espessura: 0.5 },
+      { t: "linha", x1: M, y1: H - M - 8, x2: M + util, y2: H - M - 8, cor: "@borda", espessura: LINHA },
       { t: "texto", x: M, y: base, tam: TAM.rodape, negrito: false, cor: "@muted", texto: cortar(opcoes.rodape, util - wpg - 16, TAM.rodape, medir, false) },
       { t: "texto", x: M + util - wpg, y: base, tam: TAM.rodape, negrito: false, cor: "@muted", texto: pg },
     );
   });
   return paginas;
+}
+
+const larguraPorPeso = (pesos: number[], total: number) => {
+  const soma = pesos.reduce((s, p) => s + p, 0) || 1;
+  return pesos.map((p) => (p / soma) * total);
+};
+
+/**
+ * As larguras das colunas: pelo PESO, mas nunca menores que a MAIOR palavra da coluna (título e células, medidas em
+ * negrito) — nenhuma palavra é partida. A coluna que precisa de mais fica com o mínimo dela e as outras dividem o resto
+ * pelo peso. Uma palavra maior que 45% da largura (um código de verificação) não segura a coluna: essa é partida.
+ */
+export function larguraDasColunas(b: Extract<BlocoDoc, { tipo: "tabela" }>, util: number, tam: number, medir: Medir): number[] {
+  const n = b.colunas.length;
+  const minimo = b.colunas.map((c, j) => {
+    let maior = 0;
+    for (const t of [c.titulo, ...b.linhas.map((l) => l.celulas[j] ?? "")])
+      for (const p of String(t).split(/\s+/)) if (p) maior = Math.max(maior, medir(p, tam, true));
+    return Math.min(maior + 2 * PAD + 1, util * 0.45);
+  });
+  const somaMin = minimo.reduce((s, w) => s + w, 0);
+  if (somaMin >= util) return larguraPorPeso(minimo, util);
+  const larg = new Array<number>(n).fill(0);
+  const fixas = new Set<number>();
+  for (;;) {
+    const livres = b.colunas.map((_, j) => j).filter((j) => !fixas.has(j));
+    const resto = util - [...fixas].reduce((s, j) => s + minimo[j], 0);
+    const parte = larguraPorPeso(
+      livres.map((j) => b.colunas[j].peso),
+      resto,
+    );
+    const novas = livres.filter((j, k) => parte[k] < minimo[j]);
+    if (!novas.length) {
+      livres.forEach((j, k) => {
+        larg[j] = parte[k];
+      });
+      for (const j of fixas) larg[j] = minimo[j];
+      return larg;
+    }
+    for (const j of novas) fixas.add(j);
+  }
 }
 
 /** O texto numa linha só, com "…" quando não cabe. */
