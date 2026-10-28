@@ -2,6 +2,7 @@ import { componenteLibera, podeTela } from "@/lib/acesso";
 import type { AbaKey } from "@/lib/abas";
 import { exigirSessao } from "@/lib/api-auth";
 import { ok } from "@/lib/http";
+import { espacosDaPesquisa } from "@/lib/pesquisa";
 import { type LinhaIndice, MAX_INDICE, type PortaoPesquisa, tipoPermitido } from "@/lib/pesquisa-core";
 import { indiceMesa } from "@/lib/tarefas";
 import { versaoDados } from "@/lib/versao-dados";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * O ÍNDICE LOCAL da pesquisa: os protocolos e DFDs que a pessoa vê (o MESMO portão da `GET /api/pesquisa`), com a versão
- * dos dados. O navegador o guarda na MEMÓRIA da aba e só pede de novo quando a versão muda. Tipo acima de `MAX_INDICE`
+ * dos dados — e os ESPAÇOS (orçamentos e quadros de Tarefas) com as abas que a pessoa abre. O navegador o guarda na MEMÓRIA da aba e só pede de novo quando a versão muda. Tipo acima de `MAX_INDICE`
  * linhas volta `completo: false` e segue pelo servidor.
  */
 export async function GET() {
@@ -28,7 +29,8 @@ export async function GET() {
     const linhas = await indiceMesa(a.acesso, tipo);
     grupos.push({ tipo, completo: linhas.length < MAX_INDICE, linhas: linhas.length < MAX_INDICE ? linhas : [] });
   }
-  const r = ok({ versao: (await versaoDados()).dados, grupos });
+  // Os espaços (orçamentos e quadros) com as abas que a pessoa abre: a pesquisa acha as abas deles ("comparativo 2026").
+  const r = ok({ versao: (await versaoDados()).dados, grupos, espacos: await espacosDaPesquisa(a.acesso) });
   r.headers.set("Cache-Control", "private, no-store");
   return r;
 }

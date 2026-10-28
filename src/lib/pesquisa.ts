@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import {
   automacaoFluxos,
   cargos,
@@ -8,23 +8,31 @@ import {
   dfdProtocolos,
   dfds,
   documentos,
+  empenhos,
   feriados,
   grupos,
+  liquidacoes,
   orcamentoItens,
   orcamentos,
   orgaos,
+  pagamentos,
   papeis,
   protocoloSituacoes,
   reparticoes,
+  tarefaQuadros,
   usuarios,
 } from "@/db/schema";
-import { type Acesso, componenteLibera, orcamentosDoAcesso, pcasDoAcesso, podeTela } from "./acesso";
+import { type Acesso, componenteLibera, gruposDeTarefas, orcamentosDoAcesso, pcasDoAcesso, podeTela } from "./acesso";
 import { documentoVisivel, lerPcasDocumento } from "./documentos-core";
 import { linkEvento } from "./calendario-core";
 import { getDb } from "./db";
-import { dataIsoBrasilia, dataBR } from "./format";
-import { padroesLike, type ResultadoPesquisa, type TipoPesquisa } from "./pesquisa-core";
+import { doEscopo } from "./empenhos-tela-sql";
+import { escopoDosEmpenhos } from "./empenhos-tela";
+import { escopoVazio } from "./empenhos-tela-core";
+import { brl, dataIsoBrasilia, dataBR } from "./format";
+import { ehTermoNumero, padroesLike, type ResultadoPesquisa, type TipoPesquisa } from "./pesquisa-core";
 import { casaTermos } from "./pesquisa-sql";
+import { quadroVisivel } from "./tarefas-sql";
 import { buscarNoCalendario } from "./tarefas";
 import { quadrosDoCalendario } from "./tarefas-dados";
 
@@ -33,8 +41,9 @@ import { quadrosDoCalendario } from "./tarefas-dados";
  * ADMINISTRAÇÃO). REGRA: cada tipo só sai para quem ABRE a tela (e a aba/visão) em que o dado está — a administração, só o
  * ADM — e o link é o da tela/aba que abre o registro (`?abrir=`). Sem permissão = nenhum resultado (`null`).
  */
-export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, limite: number): Promise<ResultadoPesquisa[] | null> {
+export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, limite: number, soEste = false): Promise<ResultadoPesquisa[] | null> {
   const db = getDb();
+  if (tipo === "empenho" || tipo === "liquidacao" || tipo === "pagamento") return pesquisarExecucao(a, tipo, q, limite, soEste);
   const padroes = padroesLike(q);
   const LIM = Math.min(50, limite);
   const admin = a.u.admin;
@@ -211,6 +220,97 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
   return null;
 }
 
+const TELA_EXECUCAO = { empenho: "empenhos", liquidacao: "liquidacoes", pagamento: "pagamentos" } as const;
+
+/**
+ * EMPENHOS, LIQUIDAÇÕES e PAGAMENTOS (só para quem abre a tela de cada um, no escopo de unidades dela). As tabelas são
+ * grandes e a cota diária de LEITURAS do D1 é curta: sem o prefixo do tipo, só o NÚMERO casa (o nº do empenho — EXATO, pelo
+ * índice `*_numero_*_idx`); o texto (fornecedor/credor, CPF/CNPJ, histórico…) só com o prefixo ("empenho:", "em:"…), quando a
+ * pessoa procura nesse tipo. O MESMO registro em dois cards aparece UMA vez, com o id que a tabela única mostra (o do card de
+ * menor id — a régua do pacote) — o link abre a linha.
+ */
+async function pesquisarExecucao(a: Acesso, tipo: keyof typeof TELA_EXECUCAO, q: string, limite: number, completo: boolean): Promise<ResultadoPesquisa[] | null> {
+  if (!podeTela(a, TELA_EXECUCAO[tipo]).visualizar) return null;
+  const termo = q.trim();
+  const numero = ehTermoNumero(`%${termo}%`) ? termo.replace(/\/\d{4}$/, "") : null;
+  if (!completo && !numero) return [];
+  const escopo = await escopoDosEmpenhos();
+  if (escopoVazio(escopo)) return [];
+  const db = getDb();
+  const padroes = padroesLike(q);
+  const LIM = Math.min(50, limite);
+  const t = tipo === "empenho" ? empenhos : tipo === "liquidacao" ? liquidacoes : pagamentos;
+  const so: SQL | undefined = escopo === null ? undefined : doEscopo(escopo);
+  const vigente = isNull(t.removidoEm);
+  const filtro = (() => {
+    if (!completo) return tipo === "empenho" ? eq(empenhos.numero, numero ?? "") : eq((t as typeof liquidacoes).numeroEmpenho, numero ?? "");
+    if (tipo === "empenho")
+      return casaTermos(
+        [empenhos.numero, empenhos.fornecedor, empenhos.cpfCnpj, empenhos.historico, empenhos.acao, empenhos.elemento, empenhos.orgaoGestor, empenhos.unidadeOrcamentaria, empenhos.licitacao],
+        padroes,
+        [empenhos.numero, empenhos.cpfCnpj, empenhos.licitacao],
+      );
+    if (tipo === "liquidacao")
+      return casaTermos([liquidacoes.numero, liquidacoes.numeroEmpenho, liquidacoes.credor, liquidacoes.cpfCnpj, liquidacoes.historico], padroes, [liquidacoes.numero, liquidacoes.numeroEmpenho, liquidacoes.cpfCnpj]);
+    return casaTermos([pagamentos.chave, pagamentos.numeroEmpenho, pagamentos.credor, pagamentos.cpfCnpj, pagamentos.historico], padroes, [pagamentos.chave, pagamentos.numeroEmpenho, pagamentos.cpfCnpj]);
+  })();
+  const ls = await db
+    .select({ id: t.id, chave: t.chave, card: t.cardId, ano: t.ano, data: t.data })
+    .from(t)
+    .where(and(vigente, filtro, so))
+    .orderBy(desc(t.ano), desc(t.data), desc(t.id))
+    .limit(LIM * 2);
+  if (!ls.length) return [];
+  // O MESMO registro em dois cards: o do card de menor id (a tabela única) — pelo índice único (card, chave).
+  const chaves = [...new Set(ls.map((l) => l.chave))];
+  const tabela = tipo === "empenho" ? "empenhos" : tipo === "liquidacao" ? "liquidacoes" : "pagamentos";
+  const tipoCard = tipo === "empenho" ? "empenhos" : tipo === "liquidacao" ? "liquidacoes" : "pagamentos";
+  const primeiros = await db.all<{ chave: string; id: number; card: number }>(
+    sql`SELECT e.chave AS chave, e.id AS id, e.card_id AS card FROM empenho_cards c CROSS JOIN ${sql.raw(tabela)} e ON e.card_id = c.id AND e.chave IN (SELECT value FROM json_each(${JSON.stringify(chaves)})) WHERE c.tipo = ${tipoCard} AND e.removido_em IS NULL ORDER BY e.card_id`,
+  );
+  const idDa = new Map<string, number>();
+  for (const p of primeiros) if (!idDa.has(p.chave)) idDa.set(p.chave, p.id);
+  const ids = [...new Set(ls.map((l) => idDa.get(l.chave) ?? l.id))].slice(0, LIM);
+  const enc = encodeURIComponent;
+  if (tipo === "empenho") {
+    const rs = await db
+      .select({ id: empenhos.id, ano: empenhos.ano, numero: empenhos.numero, data: empenhos.data, fornecedor: empenhos.fornecedor, orgao: empenhos.orgaoGestor, valor: empenhos.valorEmpenhado })
+      .from(empenhos)
+      .where(inArray(empenhos.id, ids));
+    const por = new Map(rs.map((r) => [r.id, r]));
+    return ids.flatMap((id) => {
+      const r = por.get(id);
+      return r
+        ? [{ id, rotulo: `Empenho ${r.numero}/${r.ano} · ${(r.fornecedor ?? "Sem fornecedor").slice(0, 80)}`, detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), r.orgao].filter(Boolean).join(" · "), href: `/painel/empenhos?ano=${r.ano}&abrir=${enc(String(id))}` }]
+        : [];
+    });
+  }
+  if (tipo === "liquidacao") {
+    const rs = await db
+      .select({ id: liquidacoes.id, ano: liquidacoes.ano, numero: liquidacoes.numero, data: liquidacoes.data, empenho: liquidacoes.numeroEmpenho, credor: liquidacoes.credor, valor: liquidacoes.valor })
+      .from(liquidacoes)
+      .where(inArray(liquidacoes.id, ids));
+    const por = new Map(rs.map((r) => [r.id, r]));
+    return ids.flatMap((id) => {
+      const r = por.get(id);
+      return r
+        ? [{ id, rotulo: `Liquidação ${r.numero ?? id}/${r.ano} · ${(r.credor ?? "Sem credor").slice(0, 80)}`, detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "), href: `/painel/liquidacoes?abrir=${id}` }]
+        : [];
+    });
+  }
+  const rs = await db
+    .select({ id: pagamentos.id, ano: pagamentos.ano, ordem: pagamentos.chave, data: pagamentos.data, empenho: pagamentos.numeroEmpenho, credor: pagamentos.credor, valor: pagamentos.valor })
+    .from(pagamentos)
+    .where(inArray(pagamentos.id, ids));
+  const por = new Map(rs.map((r) => [r.id, r]));
+  return ids.flatMap((id) => {
+    const r = por.get(id);
+    return r
+      ? [{ id, rotulo: `Ordem de pagamento ${r.ordem} · ${(r.credor ?? "Sem credor").slice(0, 80)}`, detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "), href: `/painel/pagamentos?abrir=${id}` }]
+      : [];
+  });
+}
+
 /**
  * Em que MESA o protocolo/DFD está HOJE: o PCA dele (`pca_id` do protocolo — o DFD pelo protocolo de origem) ou `null`
  * = a Mesa do sistema; `undefined` = não existe. Toda chegada com `?abrir=` passa por aqui (favorito, recente, vínculo de
@@ -232,3 +332,46 @@ export async function mesaDoAlvo(abrir: string | undefined): Promise<number | nu
 /** O link da Mesa em que o alvo está (a mesma régua da pesquisa). */
 export const linkDaMesa = (pcaId: number | null, abrir: string) =>
   pcaId ? `/painel/pca/${pcaId}?aba=mesa&abrir=${encodeURIComponent(abrir)}` : `/painel/mesa?abrir=${encodeURIComponent(abrir)}`;
+
+/** Um ESPAÇO com abas (orçamento, quadro de tarefas): as abas que a pessoa abre nele, pesquisáveis ("comparativo 2026"). */
+export type EspacoPesquisa = { tipo: "orcamento" | "quadro"; id: number; nome: string; abas: [string, string][] };
+
+const ABAS_ORCAMENTO: [string, string][] = [["lancamentos", "Lançamentos"], ["comparativo", "Comparativo"], ["vinculos", "Vínculos"], ["visoes", "Visões"]];
+const ABAS_QUADRO: [string, string][] = [["quadro", "Quadro"], ["lista", "Lista"], ["calendario", "Calendário"], ["dashboard", "Dashboard"], ["configuracao", "Configuração"]];
+
+/**
+ * Os ESPAÇOS da pessoa para o índice da pesquisa: os orçamentos do grupo (com as abas que o papel libera — a régua da tela
+ * `/painel/orcamento/[id]`) e os quadros de Tarefas dos grupos em que ela vê Tarefas (o privado, só do dono; sem os
+ * arquivados), com as abas liberadas (o Quadro sempre). Leve: só id e nome.
+ */
+export async function espacosDaPesquisa(a: Acesso): Promise<EspacoPesquisa[]> {
+  const db = getDb();
+  const out: EspacoPesquisa[] = [];
+  if (podeTela(a, "orcamento").visualizar) {
+    const abas = ABAS_ORCAMENTO.filter(([v]) => componenteLibera(a, `orcamento.${v}`));
+    const orcs = orcamentosDoAcesso(a);
+    if (abas.length) {
+      const ls = await db
+        .select({ id: orcamentos.id, nome: orcamentos.nome, ano: orcamentos.ano })
+        .from(orcamentos)
+        .where(orcs ? inArray(orcamentos.id, [...orcs, 0]) : undefined)
+        .orderBy(desc(orcamentos.ano))
+        .limit(200);
+      for (const o of ls) out.push({ tipo: "orcamento", id: o.id, nome: `${o.ano} · ${o.nome}`, abas });
+    }
+  }
+  if (podeTela(a, "tarefas").visualizar) {
+    const grupos = gruposDeTarefas(a, "visualizar");
+    const abas = ABAS_QUADRO.filter(([v]) => v === "quadro" || componenteLibera(a, `tarefas.${v}`));
+    if (!grupos || grupos.length) {
+      const ls = await db
+        .select({ id: tarefaQuadros.id, nome: tarefaQuadros.nome })
+        .from(tarefaQuadros)
+        .where(and(eq(tarefaQuadros.arquivado, false), quadroVisivel(a.u.id), grupos ? inArray(tarefaQuadros.grupoId, [...grupos, 0]) : undefined))
+        .orderBy(tarefaQuadros.nome)
+        .limit(300);
+      for (const q of ls) out.push({ tipo: "quadro", id: q.id, nome: q.nome, abas });
+    }
+  }
+  return out;
+}

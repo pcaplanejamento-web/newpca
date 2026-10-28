@@ -16,6 +16,9 @@ import {
   IconCalendar,
   IconDatabase,
   IconDocumentos,
+  IconEmpenho,
+  IconLiquidacao,
+  IconPagamento,
   IconClipboard,
   IconClock,
   IconClose,
@@ -46,7 +49,8 @@ const RECENTES = "pesquisa:recentes";
 /** A 1ª fase da pesquisa sem prefixo (os tipos mais usados). */
 
 type GrupoServidor = { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] };
-type Indice = { versao: string; conferido: number; grupos: Map<string, LinhaIndice[]> };
+type EspacoIndice = { tipo: "orcamento" | "quadro"; id: number; nome: string; abas: [string, string][] };
+type Indice = { versao: string; conferido: number; grupos: Map<string, LinhaIndice[]>; espacos: EspacoIndice[] };
 
 // O ÍNDICE LOCAL (protocolos e DFDs que a pessoa vê) e as respostas do servidor por termo — só na MEMÓRIA da aba (somem
 // ao fechá-la; nada vai ao disco). O índice só é pedido de novo quando a VERSÃO dos dados muda (conferida ao abrir a
@@ -68,10 +72,10 @@ async function garantirIndice(): Promise<Indice | null> {
         }
       }
       const r = await fetch("/api/pesquisa/indice", { cache: "no-store" });
-      const j = (await r.json()) as { ok?: boolean; versao?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[] };
+      const j = (await r.json()) as { ok?: boolean; versao?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[]; espacos?: EspacoIndice[] };
       if (!r.ok || !j.ok || !j.versao) return indiceMem;
       respostas.clear();
-      indiceMem = { versao: j.versao, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])) };
+      indiceMem = { versao: j.versao, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])), espacos: j.espacos ?? [] };
       return indiceMem;
     } catch {
       return indiceMem;
@@ -100,6 +104,9 @@ const ICONE_TIPO: Record<string, Icone> = {
   catalogo: IconDatabase,
   historico: IconDatabase,
   documento: IconDocumentos,
+  empenho: IconEmpenho,
+  liquidacao: IconLiquidacao,
+  pagamento: IconPagamento,
   usuario: IconUser,
   orgao: IconBuilding,
   unidade: IconBuilding,
@@ -125,7 +132,7 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
   "/painel/configuracoes": {
     param: "aba",
     abas: [
-      ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"], ["termo", "Termo de uso"],
+      ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"], ["termo", "Termo de uso"], ["verificar-termo", "Verificar comprovante"],
       ["escopo", "Filtro da unidade"], ["publico", "Tela pública"], ["cargos", "Cargos e funções"], ["acesso", "Tela de acesso"], ["tabelas", "Tabelas"], ["pcas", "PCAs"], ["situacoes", "Situações"],
       ["feriados", "Feriados"], ["importacoes", "Importações"], ["presenca", "Presença e chat"], ["notificacoes", "Notificações"], ["avaliacao", "Avaliação"],
       ["referencia", "Referência"], ["mais", "Mais"],
@@ -150,6 +157,7 @@ const PALAVRAS: Record<string, string> = {
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",
+  "/painel/configuracoes?verificar-termo": "comprovante aceite código autenticidade arquivo pdf conferir",
   "/painel/configuracoes?modulos": "menu telas seções",
   "/painel/configuracoes?papeis": "permissão ações visualizar manipular importar exportar excluir configurar detalhes componentes abas ocultar esconder dashboard orçamento documentos importação mesa do pca restrições só os meus responsável",
   "/painel/configuracoes?protecao": "cópia impressão captura marca d'água",
@@ -170,7 +178,9 @@ const ABAS_PERFIL: [string, string][] = [
   ["conta", "Conta"], ["seguranca", "Segurança"], ["acessos", "Histórico de acesso"], ["aparencia", "Aparência"],
   ["notificacoes", "Notificações"], ["trabalho", "Trabalho"], ["acesso", "Meu acesso"],
 ];
-const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["configuracao", "Configuração"]];
+const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["importacao", "Importação"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["configuracao", "Configuração"]];
+/** As importações da Centi (Configurações → Importações): uma por tipo — o link já abre o tipo. */
+const ABAS_IMPORTACOES: [string, string][] = [["empenhos", "Importações de empenhos"], ["liquidacoes", "Importações de liquidações"], ["pagamentos", "Importações de pagamentos"]];
 
 function lerRecentes(): Resultado[] {
   try {
@@ -481,8 +491,19 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const dosPcas = telas.some((t) => t.href === "/painel/pca")
       ? pcas.flatMap((p) => ABAS_PCA.map<Resultado>(([v, r]) => ({ chave: `aba:pca:${p.id}:${v}`, rotulo: r, caminho: ["PCA", `${p.ano} · ${p.nome}`], href: `/painel/pca/${p.id}?aba=${v}`, tipo: "aba" })))
       : [];
-    return [...porTela, ...perfil, ...dosPcas];
-  }, [telas, pcas]);
+    const importacoes = telas.some((t) => t.href === "/painel/configuracoes")
+      ? ABAS_IMPORTACOES.map<Resultado>(([v, r]) => ({ chave: `aba:importacoes:${v}`, rotulo: r, caminho: ["Configurações", "Importações"], href: `/painel/configuracoes?aba=importacoes&tipo=${v}`, tipo: "aba", palavras: "centi cards vínculos atualização automática" }))
+      : [];
+    // Os ESPAÇOS do índice (orçamentos e quadros de Tarefas): as abas que a pessoa abre em cada um.
+    const dosEspacos = (indiceLocal?.espacos ?? []).flatMap((e) =>
+      e.abas.map<Resultado>(([v, r]) =>
+        e.tipo === "orcamento"
+          ? { chave: `aba:orc:${e.id}:${v}`, rotulo: r, caminho: ["Orçamento", e.nome], href: `/painel/orcamento/${e.id}?aba=${v}`, tipo: "aba" }
+          : { chave: `aba:quadro:${e.id}:${v}`, rotulo: r, caminho: ["Tarefas", e.nome], href: `/painel/tarefas/${e.id}?aba=${v}`, tipo: "aba" },
+      ),
+    );
+    return [...porTela, ...importacoes, ...perfil, ...dosPcas, ...dosEspacos];
+  }, [telas, pcas, indiceLocal]);
 
   const grupos = useMemo<Grupo[]>(() => {
     const casa = predicadoBusca(termo);

@@ -44,7 +44,8 @@ export async function GET(req: Request) {
         const opcoes = await buscarVinculos(a.u, tipo, q, gruposDeTarefas(a.acesso, "visualizar", true));
         return { tipo, total: opcoes.length, opcoes: ordenar(opcoes).slice(0, limite) };
       }
-      const opcoes = await pesquisarOutros(a.acesso, tipo, q, 50);
+      // Só UM tipo pedido = a pessoa procura nele (o prefixo): os de tabela grande procuram também no texto.
+      const opcoes = await pesquisarOutros(a.acesso, tipo, q, 50, tipos.length === 1);
       return opcoes ? { tipo, total: opcoes.length, opcoes: ordenar(opcoes).slice(0, limite) } : null;
     }),
   );

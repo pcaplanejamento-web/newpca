@@ -6,6 +6,7 @@ import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-
 import { brl, dataBR, num } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { FerramentasAba } from "./AbasEspaco";
+import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
@@ -178,6 +179,8 @@ export function EmpenhoCardPagamentos({
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<Pagamento | null>(null);
+  // O link da PESQUISA DO SISTEMA (`?abrir=<id>`): abre a linha quando a tabela chega.
+  useAbrirLinhaDaUrl(linhas, setAberto);
   const pedido = useRef(0);
   const anosRef = useRef<{ ano: number; n: number }[]>([]);
   const [completo, setCompleto] = useState<PagamentoCompleto | null | undefined>(undefined);

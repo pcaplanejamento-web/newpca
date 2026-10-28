@@ -21,3 +21,23 @@ export function useAbrirDaUrl(aplicar: (valor: string) => void, prontos = true) 
     window.history.replaceState(window.history.state, "", u.pathname + u.search);
   }, [prontos]);
 }
+
+/**
+ * O `?abrir=<id>` de uma TABELA que carrega as linhas depois (empenhos, liquidações, pagamentos): guarda o id e, quando as
+ * `linhas` chegam, abre a linha dele (`abrir`). Uma vez por chegada; a linha fora do que foi carregado não abre nada.
+ */
+export function useAbrirLinhaDaUrl<T extends { id: number }>(linhas: T[] | null, abrir: (linha: T) => void) {
+  const pendente = useRef<number | null>(null);
+  useAbrirDaUrl((v) => {
+    const n = Number(v);
+    if (Number.isInteger(n) && n > 0) pendente.current = n;
+  });
+  const abrirRef = useRef(abrir);
+  abrirRef.current = abrir;
+  useEffect(() => {
+    if (pendente.current == null || !linhas) return;
+    const l = linhas.find((x) => x.id === pendente.current);
+    pendente.current = null;
+    if (l) abrirRef.current(l);
+  }, [linhas]);
+}

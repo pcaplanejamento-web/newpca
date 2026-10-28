@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.253.0",
+    data: "2026-10-28",
+    titulo: "Pesquisa: empenhos, liquidações, pagamentos e todas as abas",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa do menu acha empenhos, liquidações e pagamentos pelo número do empenho. Com o prefixo (“empenho:”, “liquidacao:”, “pagamento:” ou “em:”, “li:”, “pg:”) procura também no fornecedor/credor, CPF/CNPJ e histórico. Tocar no resultado abre o registro na tabela da tela, no escopo de unidades de cada pessoa.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Todas as abas são pesquisáveis: as de cada orçamento (Lançamentos, Comparativo, Vínculos, Visões), as de cada quadro de Tarefas, a Importação e as Declarações de cada PCA, o Verificar comprovante e as Importações de empenhos, liquidações e pagamentos em Configurações.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.252.1",
     data: "2026-10-28",
     titulo: "Execução: relógio e botão de importar no canto do indicador",

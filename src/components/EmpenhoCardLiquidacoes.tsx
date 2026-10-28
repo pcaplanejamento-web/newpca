@@ -5,6 +5,7 @@ import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/exe
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
+import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
 import { type Aviso, Avisos } from "./Avisos";
 import { CelulaCopiavel } from "./BotaoCopiar";
@@ -155,6 +156,8 @@ export function EmpenhoCardLiquidacoes({
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<Liquidacao | null>(null);
+  // O link da PESQUISA DO SISTEMA (`?abrir=<id>`): abre a linha quando a tabela chega.
+  useAbrirLinhaDaUrl(linhas, setAberto);
   const pedido = useRef(0);
   const anosRef = useRef<{ ano: number; n: number }[]>([]);
   const [completo, setCompleto] = useState<LiquidacaoCompleta | null | undefined>(undefined);

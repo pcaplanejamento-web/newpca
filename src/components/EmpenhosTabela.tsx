@@ -19,6 +19,7 @@ import {
 } from "@/lib/empenhos-tela-core";
 import { brl, dataBR, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
+import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
 import { Avisos } from "./Avisos";
 import { avisoDeFalha, colunaAno, colunaCard } from "./EmpenhoCardLiquidacoes";
@@ -164,6 +165,8 @@ export function EmpenhosTabela({
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<EmpenhoNaTela | null>(null);
+  // O link da PESQUISA DO SISTEMA (`?abrir=<id>`): abre a linha quando a tabela chega.
+  useAbrirLinhaDaUrl(linhas, setAberto);
   const [eds, setEds] = useState(edicoes);
   const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
   const pedido = useRef(0);
