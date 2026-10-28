@@ -701,3 +701,14 @@ export function podePular(
   if (tipo === "empenhos") return !anterior.vinculosDepois;
   return anterior.fora === 0;
 }
+
+/**
+ * O ORÇAMENTO de consultas ao D1 das páginas IDÊNTICAS numa execução automática: o plano gratuito permite 50 consultas por
+ * execução (cada comando de um batch contado à parte, no pior caso); a abertura (configuração, cards, feriados, lote, condução,
+ * trava, leitura) e a limpeza ficam com a folga de 10. Cada pulo custa a retomada + a página anterior (2) + o batch: a cópia do
+ * passo, o recontar e o último passo (3) e, por órgão, os 2 do fecho do período.
+ */
+export const ORCAMENTO_CONSULTAS = 40;
+export const custoDoPulo = (porOrgao: boolean) => 2 + 3 + (porOrgao ? 2 : 0);
+/** Ainda cabe um pulo INTEIRO depois de `gasto` consultas (empenhos: 8 por execução; por órgão: 5). */
+export const cabeOutroPulo = (gasto: number, porOrgao: boolean) => gasto + custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS;

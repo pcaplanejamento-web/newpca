@@ -9,7 +9,9 @@ import {
   hojeIso,
   anoDaVez,
   CONDUTOR_AUTO,
+  cabeOutroPulo,
   cardNaHora,
+  custoDoPulo,
   esperaDoErro,
   LEITOR_EMPENHOS,
   type LoteCenti,
@@ -87,11 +89,6 @@ async function encerrarLotesAuto(): Promise<{ card: number; situacao: string }[]
 
 type Feito = { situacao: string; trabalhou: boolean };
 
-/**
- * Quantas páginas IDÊNTICAS (puladas) uma execução trata: cada uma custa ~5 consultas ao D1 (retomada, a página anterior,
- * o batch) e quase nada de CPU — o limite é o das 50 consultas por execução do plano gratuito, com folga para a abertura.
- */
-export const MAX_PULOS_POR_EXECUCAO = 6;
 
 const modoDoCard = (card: CardEmpenho): ModoLote => (card.tipo === "empenhos" ? "dados" : card.tipo);
 
@@ -135,12 +132,13 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
       const a = await avancarLeitura(card, lote, aberta);
       return { situacao: (await tratarErro(card, lote, a.resultado)) ?? a.situacao, trabalhou: true };
     }
-    // As páginas IDÊNTICAS à última volta são LEVES (nada é lido nem gravado): a execução segue com a próxima, até
-    // `MAX_PULOS_POR_EXECUCAO` (o limite de consultas ao D1 por execução); a 1ª página com mudança encerra a execução.
+    // As páginas IDÊNTICAS à última volta são LEVES (nada é lido nem gravado): a execução segue com a próxima enquanto cabe
+    // um pulo inteiro no ORÇAMENTO de consultas ao D1 (`cabeOutroPulo`); a 1ª página com mudança encerra a execução.
     let pulos = 0;
+    const porOrgao = lotePorOrgao(lote);
     for (;;) {
       const passos = await passosDaRetomada(lote.id);
-      const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), lotePorOrgao(lote) ? (lote.orgaosCenti?.length ?? 0) : undefined, lotePorMes(lote));
+      const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), porOrgao ? (lote.orgaosCenti?.length ?? 0) : undefined, lotePorMes(lote));
       if (!pedido) {
         // A conclusão é pesada (a promoção): depois de pulos, fica para a próxima execução.
         if (pulos) return { situacao: `${lote.ano}: ${pulos} página(s) sem mudança — conclui na próxima execução`, trabalhou: true };
@@ -155,7 +153,7 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
       // Dentro da espera do último erro (1, 2, 4… min): a Centi tem tempo de voltar; o rodízio segue para outro card.
       if (erro.esperar) return { situacao: "esperando depois de um erro", trabalhou: pulos > 0 };
       const a = await iniciarPaginaAuto(card, lote, pedido.periodo, pedido.pagina);
-      if (a.pulou && ++pulos < MAX_PULOS_POR_EXECUCAO) continue;
+      if (a.pulou && cabeOutroPulo(++pulos * custoDoPulo(porOrgao), porOrgao)) continue;
       const situacao = a.pulou ? `${pulos} página(s) sem mudança` : a.situacao;
       return { situacao: (await tratarErro(card, lote, a.resultado)) ?? `${lote.ano}: ${situacao}`, trabalhou: true };
     }

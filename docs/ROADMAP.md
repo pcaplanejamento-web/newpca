@@ -1830,4 +1830,5 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - v1.154.0: unidade de medida do item renomeada para "Medida" na interface.
 - v1.161.3: filtro da Mesa do PCA acompanha o cabeçalho; acesso por aba podado ao trocar módulos.
 - v1.241.0: importações da Centi só gravam o que mudou (assinatura por registro, pares para os iguais), ano inteiro num pedido com partes pequenas em paralelo (fim dos passos "Erro" por tempo de CPU), ausente em duas leituras antes de remover, histórico "Alterações na Centi" nos detalhes e "Importar tudo" em Configurações → Importações.
+- v1.242.1: auditoria — o pulo das páginas sem mudança segue um orçamento contado de consultas ao D1 (8 por execução nos empenhos, 5 por órgão), sempre abaixo das 50 do plano gratuito.
 - v1.242.0: atualização automática pula a página da Centi idêntica à da última volta (SHA-256 dos bytes + chaves da página no passo, várias por execução); registros antigos ganham a assinatura no lugar (1 escrita); partes com orçamento em bytes também para os pares; assinaturas paginadas.

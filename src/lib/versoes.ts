@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.242.1",
+    data: "2026-10-28",
+    titulo: "Atualização automática dentro do limite do banco",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "As páginas sem mudança que a atualização automática pula numa execução agora seguem um orçamento contado de consultas ao banco (8 por execução nos empenhos, 5 nas liquidações e pagamentos) — nunca passa do limite do plano e a última página nunca falha em silêncio.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.242.0",
     data: "2026-10-28",
     titulo: "Atualização automática rápida e segura em segundo plano",

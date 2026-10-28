@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { alteracoesDoRegistro, camposDaAlteracao, valorDoCampo } from "../src/lib/centi-alteracoes-core.ts";
 import { comandoLimparAlteracoes, consultaAlteracoes } from "../src/lib/centi-alteracoes-sql.ts";
-import { lerPaginaEmpenhos, type PassoNovo, podePular } from "../src/lib/empenhos-core.ts";
+import { cabeOutroPulo, custoDoPulo, lerPaginaEmpenhos, ORCAMENTO_CONSULTAS, type PassoNovo, podePular } from "../src/lib/empenhos-core.ts";
 import {
   CONF_EMPENHOS,
   comandoPaginaIgual,
@@ -348,4 +348,19 @@ test("D1 real: a VOLTA SEGUINTE da automática com a Centi idêntica pula a pág
   // Outro leitor, outro modo ou outra página: sem anterior.
   assert.equal(await consultaPaginaAnterior(b.db, "empenhos", { ...lote(l3), leitor: 9 }, periodo, 1), null);
   assert.equal(await consultaPaginaAnterior(b.db, "empenhos", lote(l3), periodo, 2), null);
+});
+
+test("orçamento das páginas puladas: nunca passa das 50 consultas ao D1 por execução", () => {
+  for (const [porOrgao, esperado] of [[false, 8], [true, 5]] as const) {
+    let pulos = 0;
+    // O laço da automática: pula e só continua enquanto cabe um pulo inteiro.
+    for (;;) {
+      pulos++;
+      if (!cabeOutroPulo(pulos * custoDoPulo(porOrgao), porOrgao)) break;
+    }
+    assert.equal(pulos, esperado);
+    assert.ok(pulos * custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS);
+    // A abertura e a limpeza (≤ 10) cabem na folga do limite do plano gratuito.
+    assert.ok(pulos * custoDoPulo(porOrgao) + 10 <= 50);
+  }
 });
