@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import { soltarColuna } from "@/lib/colunas-layout";
 import { predicadoBusca } from "@/lib/tabela-filtros";
-import { ChipPreso, GuiaBloco, useArrastoBlocos } from "./BlocosTarefa";
+import { SombraCartao } from "./ArrastoCartoes";
+import { ChipPreso, useArrastoBlocos } from "./BlocosTarefa";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { SearchField } from "./Field";
@@ -17,7 +18,7 @@ export type OpcaoColuna = { key: string; header: string; grupo?: string };
  * TODAS as colunas da tabela em caixas — cabeçalho com "N de M visíveis", busca acima de 12, grupos com a contagem e
  * "Todos/Nenhum" do grupo, e no pé **Mostrar todas · Padrão** (volta às ocultas do padrão da tabela). Muda NA HORA (sem
  * entrar na edição); a última coluna visível nunca sai. A aba **Ordem** lista as visíveis na ordem da tabela: arrastar pela
- * alça (mouse, caneta e toque — `useArrastoBlocos`) ou ↑/↓ reordenam (soltar entre as congeladas a congela, como no
+ * alça (mouse, caneta e toque — `useArrastoBlocos` + `ChipPreso`; a SOMBRA do item — `SombraCartao` — ocupa o lugar de destino) ou ↑/↓ reordenam (soltar entre as congeladas a congela, como no
  * cabeçalho — `soltarColuna`). A escolha vale até trocar de visão e entra na visão ao salvar.
  */
 export function SeletorColunas({
@@ -77,6 +78,8 @@ export function SeletorColunas({
     onOrdem(r.fixadas, r.livres);
   };
   const lista = useRef<HTMLDivElement>(null);
+  /** A altura da linha pega — a SOMBRA no destino tem a mesma. */
+  const [alturaLinha, setAlturaLinha] = useState(32);
   const { arrasto, fantasma, iniciar } = useArrastoBlocos(lista, (c, i) => mover(c.id, i));
   const contagem = `${visiveis} de ${colunas.length} visíveis`;
   return (
@@ -127,13 +130,17 @@ export function SeletorColunas({
               const outros = naOrdem.filter((x) => x !== arrasto?.carga.id);
               return (
                 <div key={k}>
-                  {arrasto && arrasto.indice === outros.indexOf(k) && <GuiaBloco />}
-                  <div data-bloco={k} className={`flex min-h-[44px] items-center gap-1 pr-1 text-[13.5px] lg:min-h-[32px] ${arrasto?.carga.id === k ? "opacity-40" : ""}`}>
+                  {arrasto && arrasto.indice === outros.indexOf(k) && <SombraCartao altura={alturaLinha} />}
+                  <div data-bloco={k} className={`${arrasto?.carga.id === k ? "hidden" : "flex"} min-h-[44px] items-center gap-1 pr-1 text-[13.5px] lg:min-h-[32px]`}>
                     <button
                       type="button"
                       aria-label={`Arrastar ${nome}`}
                       title="Arrastar para mudar a ordem"
-                      onPointerDown={(e) => iniciar(e, { id: k }, nome)}
+                      onPointerDown={(e) => {
+                        const linha = e.currentTarget.closest<HTMLElement>("[data-bloco]");
+                        if (linha) setAlturaLinha(linha.offsetHeight);
+                        iniciar(e, { id: k }, nome);
+                      }}
                       className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-7"
                     >
                       <IconGrip className="h-4 w-4" />
@@ -150,7 +157,7 @@ export function SeletorColunas({
                 </div>
               );
             })}
-            {arrasto && arrasto.indice === naOrdem.length - 1 && <GuiaBloco />}
+            {arrasto && arrasto.indice === naOrdem.length - 1 && <SombraCartao altura={alturaLinha} />}
             {arrasto && <ChipPreso rotulo={arrasto.rotulo} x={arrasto.x} y={arrasto.y} fantasma={fantasma} />}
           </div>
         )}

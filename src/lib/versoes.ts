@@ -46,6 +46,14 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.247.1",
+    data: "2026-10-28",
+    titulo: "Sombra do destino ao ordenar colunas",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "Ao arrastar uma coluna na aba Ordem, a sombra do item aparece no lugar onde ela vai ficar (o mesmo padrão do arrasto dos cartões).", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.247.0",
     data: "2026-10-28",
     titulo: "Ordem das colunas no seletor",
