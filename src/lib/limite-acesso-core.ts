@@ -33,6 +33,8 @@ export const LIMITES_ACESSO = {
   aceiteTermo: { max: 10, janelaS: 15 * 60 },
   /** A verificação PÚBLICA do comprovante pelo código (por IP). */
   verificarTermoIp: { max: 30, janelaS: 10 * 60 },
+  /** A verificação PÚBLICA da declaração do PCA pelo código (por IP). */
+  verificarDeclaracaoIp: { max: 30, janelaS: 10 * 60 },
   /** "Pedir liberação ao ADM" da troca de aparelho (por pessoa). */
   liberacaoAparelho: { max: 3, janelaS: 24 * 60 * 60 },
 } as const satisfies Record<string, RegraLimite>;

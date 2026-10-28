@@ -1,6 +1,6 @@
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
-import { anosDoCard, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, filaDosCards } from "./empenho-cards-core";
+import { anosAutomaticos, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, cardsDaAutomatica, lotesForaDaEscolha } from "./empenho-cards-core";
 import { cardsAtivos, orgaosDoLote, registrarLeituraCard } from "./empenho-cards";
 import { and, eq } from "drizzle-orm";
 import { centiLeituras, centiLotePassos, centiLotes } from "@/db/schema";
@@ -46,16 +46,21 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
   // A configuração CENTRAL (Configurações → Importações): desligada, nada roda; ligada, vale para todos os cards.
   const cfg = await getConfigImportacoes();
   if (!cfg.ativa) return encerrarLotesAuto();
-  const cards = await cardsAtivos();
-  if (!cards.length) return [];
   const hoje = hojeIso(agora);
+  const anoAtual = Number(hoje.slice(0, 4));
+  // SÓ as importações (card × ano) ESCOLHIDAS em Configurações → Importações; o lote da automática num card/ano que saiu
+  // da escolha é cancelado (nada fica "Importando" para sempre).
+  const prontos = await cardsAtivos();
+  const cards = cardsDaAutomatica(prontos, cfg, anoAtual);
+  const cancelados = await encerrarLotesAuto((l) => lotesForaDaEscolha(l, prontos, cfg, anoAtual), "A importação saiu da atualização automática.");
+  if (!cards.length) return cancelados;
   const util = cfg.diasUteis ? diaUtil(hoje, feriadosNoIntervalo(await listarFeriados(), hoje, hoje)) : true;
   const instante = { ms: agora.getTime(), hora: horaAgoraBrasilia(agora), diaUtil: util, ano: Number(hoje.slice(0, 4)) };
-  const r: { card: number; situacao: string }[] = [];
+  const r: { card: number; situacao: string }[] = [...cancelados];
   // A FILA ÚNICA: empenhos → liquidações → pagamentos (a unidade das liquidações e dos pagamentos vem do empenho); UMA
   // tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira) — o 1º card que trabalhar
   // encerra a execução; quem só espera (fora da hora, depois de um erro) passa a vez ao seguinte.
-  for (const card of filaDosCards(cards)) {
+  for (const card of cards) {
     try {
       const u = await umCard(card, cfg, instante);
       r.push({ card: card.id, situacao: u.situacao });
@@ -76,15 +81,21 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
  * A automática DESLIGADA: os lotes que ELA começou e ainda leem são cancelados (a mesma limpeza do fechamento) — nada fica
  * "Importando" para sempre. As importações manuais não mudam.
  */
-async function encerrarLotesAuto(): Promise<{ card: number; situacao: string }[]> {
+export async function encerrarLotesAuto(
+  /** Quais encerrar (padrão: todos — a automática desligada). */
+  sai: <L extends { cardId: number | null; ano: number }>(lotes: L[]) => L[] = (l) => l,
+  motivo = "A atualização automática foi desligada.",
+): Promise<{ card: number; situacao: string }[]> {
   const db = getDb();
-  const lendo = await db
-    .select({ id: centiLotes.id, cardId: centiLotes.cardId })
-    .from(centiLotes)
-    .where(and(eq(centiLotes.estado, "lendo"), eq(centiLotes.iniciadoPor, QUEM_AUTO)));
+  const lendo = sai(
+    await db
+      .select({ id: centiLotes.id, cardId: centiLotes.cardId, ano: centiLotes.ano })
+      .from(centiLotes)
+      .where(and(eq(centiLotes.estado, "lendo"), eq(centiLotes.iniciadoPor, QUEM_AUTO))),
+  );
   if (!lendo.length) return [];
-  await db.batch(lendo.flatMap((l) => comandosFecharLote(db, l.id, "cancelado", "A atualização automática foi desligada.")) as never);
-  return lendo.map((l) => ({ card: l.cardId ?? 0, situacao: "cancelado: automática desligada" }));
+  await db.batch(lendo.flatMap((l) => comandosFecharLote(db, l.id, "cancelado", motivo)) as never);
+  return lendo.map((l) => ({ card: l.cardId ?? 0, situacao: `cancelado: ${motivo}` }));
 }
 
 type Feito = { situacao: string; trabalhou: boolean };
@@ -100,7 +111,7 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
     if (!cardNaHora({ ...cfg, ultimaExecucao: card.ultimaExecucao }, agora)) return { situacao: "fora da hora", trabalhou: false };
     const { ultima, emEspera } = await rodizioDosAnos(card.id, modoDoCard(card));
     // Os anos cuja última automática falhou ou ficou parcial esperam (o mesmo motivo voltaria) — a manual os libera.
-    const anos = anosDoCard(card.anos, agora.ano).filter((a) => !emEspera.has(a));
+    const anos = anosAutomaticos(cfg, card, agora.ano).filter((a) => !emEspera.has(a));
     if (!anos.length) return { situacao: emEspera.size ? "anos em espera (a última automática falhou)" : "nenhum ano", trabalhou: false };
     const ano = anoDaVez(anos, ultima);
     // POR ÓRGÃO: liquidações e pagamentos leem TODOS os órgãos do cadastro com o "ID na Centi" (a API exige o órgão — um por

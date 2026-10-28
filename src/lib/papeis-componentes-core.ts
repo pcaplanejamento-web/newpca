@@ -91,6 +91,12 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
   c("pca", "documentos", "Documentos do PCA", "A aba Documentos do PCA: os documentos vinculados a ele (também exige a tela Documentos).", {
     visualizar: "Abrir a aba Documentos do PCA.",
   }),
+  c("pca", "declaracoes", "Declarações do PCA", "A aba Declarações: atestar que itens (total ou parcial) constam do PCA, com código de verificação.", {
+    visualizar: "Abrir a aba Declarações e ver as declarações.",
+    manipular: "Emitir declarações.",
+    exportar: "Baixar o PDF das declarações.",
+    excluir: "Cancelar declarações.",
+  }),
   c("pca", "configuracao", "Configuração do PCA", "A aba Configuração do espaço do PCA (nome, ano, publicar, capa, visão).", {
     visualizar: "Abrir a Configuração do PCA.",
     configurar: "Alterar a Configuração do PCA.",

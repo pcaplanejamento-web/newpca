@@ -2639,3 +2639,50 @@ export const centiAlteracoes = sqliteTable(
   },
   (t) => [index("centi_alteracoes_registro_idx").on(t.tipo, t.registroId, t.id), index("centi_alteracoes_em_idx").on(t.em)],
 );
+
+/**
+ * DECLARAÇÕES DO PCA (migração `0164`): cada uma atesta que itens (total ou parcial) constam de um PCA — o retrato congelado
+ * em `conteudo` (JSON `ConteudoDeclaracao`), o SELO (SHA-256 do retrato) e o CÓDIGO da verificação pública. Numeração por
+ * ano (`ano` + `numero` únicos). Cancelar (motivo) devolve o saldo; nada é apagado.
+ */
+export const declaracoes = sqliteTable(
+  "declaracoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    pcaId: integer("pca_id")
+      .notNull()
+      .references(() => pcas.id, { onDelete: "cascade" }),
+    ano: integer("ano").notNull(),
+    numero: integer("numero").notNull(),
+    codigo: text("codigo").notNull(),
+    finalidade: text("finalidade").notNull(),
+    processo: text("processo"),
+    observacao: text("observacao"),
+    conteudo: text("conteudo").notNull(),
+    selo: text("selo").notNull(),
+    totalItens: integer("total_itens").notNull(),
+    valorTotal: real("valor_total").notNull(),
+    emitidoPor: integer("emitido_por").references(() => usuarios.id, { onDelete: "set null" }),
+    emitidoPorNome: text("emitido_por_nome").notNull(),
+    emitidoEm: text("emitido_em").notNull(),
+    canceladaEm: text("cancelada_em"),
+    canceladaPorNome: text("cancelada_por_nome"),
+    motivoCancelamento: text("motivo_cancelamento"),
+  },
+  (t) => [uniqueIndex("declaracoes_codigo_uq").on(t.codigo), uniqueIndex("declaracoes_ano_numero_uq").on(t.ano, t.numero), index("declaracoes_pca_idx").on(t.pcaId, t.id)],
+);
+
+/** O quanto de cada item (pelo SEQUENCIAL do PCA) cada declaração atesta — o gatilho `declaracao_itens_saldo` barra além do saldo. */
+export const declaracaoItens = sqliteTable(
+  "declaracao_itens",
+  {
+    declaracaoId: integer("declaracao_id")
+      .notNull()
+      .references(() => declaracoes.id, { onDelete: "cascade" }),
+    pcaId: integer("pca_id").notNull(),
+    sequencial: integer("sequencial").notNull(),
+    quantidade: real("quantidade").notNull(),
+    quantidadePca: real("quantidade_pca").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.declaracaoId, t.sequencial] }), index("declaracao_itens_pca_seq_idx").on(t.pcaId, t.sequencial)],
+);

@@ -35,11 +35,47 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.243.3",
+    versao: "1.245.1",
     data: "2026-10-28",
     titulo: "Seletor de colunas sem rolagem dupla",
     mudancas: [
       { tipo: "correcao", area: "Tabelas", texto: "O seletor de colunas tem uma rolagem só: a busca e o rodapé ficam fixos, nada é cortado e não sobra espaço vazio.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.245.0",
+    data: "2026-10-28",
+    titulo: "Escolher quais importações atualizam sozinhas",
+    mudancas: [
+      { tipo: "novo", area: "Importações", texto: "Em “Atualização automática e regras”, a seção “Quais importações” escolhe, card por card e ANO por ano, o que a atualização automática lê (Todas · Nenhuma). O que fica desmarcado só é importado à mão; “Ano atual” acompanha a virada do ano. Até salvar a escolha, tudo continua como estava.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "O selo “Automática” de cada card segue a escolha (o card fora dela aparece “Manual”), o resumo diz quantas importações são automáticas e a Configuração do card mostra os anos automáticos e os manuais. Uma importação automática em andamento num card ou ano tirado da escolha é encerrada sozinha.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.244.0",
+    data: "2026-10-28",
+    titulo: "Declarações do PCA",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto:
+          "Aba Declarações no espaço do PCA: emita a declaração de que itens constam do PCA — com o DFD, o planejamento, a descrição, a quantidade e o valor unitário —, inteira ou PARCIAL (ex.: 6 de 12), para o início da contratação, um empenho complementar, um aditivo ou outra finalidade.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto:
+          "Cada item tem SALDO (a quantidade no PCA menos o já declarado): o sistema não deixa declarar além dele, nem com duas pessoas emitindo ao mesmo tempo; cancelar uma declaração (com o motivo) devolve o saldo.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "O PDF da declaração sai numerado por ano, com o carimbo e o código de verificação: qualquer pessoa confere a autenticidade (válida, cancelada ou alterada) na página pública.",
+        link: "/painel/pca",
+      },
     ],
   },
   {

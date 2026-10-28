@@ -15,7 +15,9 @@ import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { itensDosUploads, uploadsDoPca } from "@/lib/pca-uploads";
 import { Ajuda } from "@/components/Ajuda";
 import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
+import { DeclaracoesPca } from "@/components/DeclaracoesPca";
 import { DocumentosView } from "@/components/DocumentosView";
+import { itensDeclaraveis, listarDeclaracoes } from "@/lib/declaracoes";
 import { listarDocumentos } from "@/lib/documentos";
 import { documentoNoPca } from "@/lib/documentos-core";
 import { pcasDosDocumentos } from "@/lib/documentos-pagina";
@@ -39,10 +41,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "documentos", "configuracao"];
+const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "configuracao"];
 
 // ESPAÇO do PCA: Dashboard · Orçamento (KPIs + Comparativo) · Mesa (protocolos — TODO PCA recebe) · Importação (só o de
-// lista pronta: as planilhas) · Configuração.
+// lista pronta: as planilhas) · Documentos · Declarações (atestar itens do PCA, total ou parcial) · Configuração.
 export default async function PcaEspacoPage({
   params,
   searchParams,
@@ -92,7 +94,8 @@ export default async function PcaEspacoPage({
         noPca={{ id: pca.id, candidatos: todos.filter((d) => !documentoNoPca(d.pcas, pca.id)) }}
       />
     );
-  } else {
+  } else if (aba === "declaracoes") conteudo = await abaDeclaracoes(pca, acesso, pode);
+  else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
     conteudo = (
@@ -115,6 +118,18 @@ export default async function PcaEspacoPage({
       <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
     </PcaEspacoView>
   );
+}
+
+/**
+ * Aba DECLARAÇÕES: os itens que a pessoa pode declarar (os da unidade dela, com o saldo) e as declarações que tocam neles.
+ * Emitir, baixar e cancelar = a ação no PCA E o componente `pca.declaracoes` (Detalhes do papel).
+ */
+async function abaDeclaracoes(pca: PcaEspaco, acesso: Parameters<typeof componenteLibera>[0], pode: PodeTela) {
+  const rep = (await unidadeDoModulo("pca", acesso.u, undefined, "declaracoes")).id;
+  const itens = await itensDeclaraveis(pca, rep);
+  const declaracoes = await listarDeclaracoes(pca.id, rep === null ? null : new Set(itens.map((i) => i.sequencial)));
+  const comp = (a: "manipular" | "exportar" | "excluir") => pode[a] && componenteLibera(acesso, "pca.declaracoes", a);
+  return <DeclaracoesPca pcaId={pca.id} declaracoes={declaracoes} itens={itens} pode={{ emitir: comp("manipular"), baixar: comp("exportar"), cancelar: comp("excluir") }} />;
 }
 
 /**

@@ -114,6 +114,12 @@ export async function cardsAtivos(): Promise<CardEmpenho[]> {
   return l.map(paraCard);
 }
 
+/** Todos os cards (os 3 tipos), do mais antigo ao mais novo — a escolha das importações automáticas confere contra eles. */
+export async function todosOsCards(): Promise<CardEmpenho[]> {
+  const l = await getDb().select().from(empenhoCards).orderBy(asc(empenhoCards.id));
+  return l.map(paraCard);
+}
+
 const valoresDaEdicao = (e: EdicaoCard) => ({ ...e, anos: JSON.stringify(e.anos) });
 
 /** Cria o card do tipo (e, no de empenhos, copia os vínculos de `copiarDe`) — devolve o id. */

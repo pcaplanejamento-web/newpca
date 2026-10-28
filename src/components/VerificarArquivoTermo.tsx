@@ -45,13 +45,22 @@ export function VerificarArquivoTermo({ codigo, url = "/api/termo/verificar" }: 
 }
 
 /** O campo do CÓDIGO da verificação pública (vai a /termo/verificar/<código>). */
-export function FormCodigoTermo({ inicial = "" }: { inicial?: string }) {
+export function FormCodigoTermo({
+  inicial = "",
+  base = "/termo/verificar",
+  dica = "Como está no comprovante",
+}: {
+  inicial?: string;
+  /** A página de verificação (o termo; a declaração do PCA usa `/declaracao/verificar`). */
+  base?: string;
+  dica?: string;
+}) {
   const [codigo, setCodigo] = useState(inicial);
   const c = codigo.trim();
   return (
-    <form action={c ? `/termo/verificar/${encodeURIComponent(c)}` : undefined} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+    <form action={c ? `${base}/${encodeURIComponent(c)}` : undefined} className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <div className="min-w-0 flex-1">
-        <TextField label="Código de verificação" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Como está no comprovante" autoComplete="off" />
+        <TextField label="Código de verificação" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder={dica} autoComplete="off" />
       </div>
       <Button type="submit" variant="primary" disabled={!c}>
         Verificar

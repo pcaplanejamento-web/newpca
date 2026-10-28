@@ -1,7 +1,8 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
-import { motivoConfigImportacoes } from "@/lib/empenho-cards-core";
+import { motivoConfigImportacoes, motivoEscolhaAutomaticas, textoDiffAutomaticas } from "@/lib/empenho-cards-core";
+import { todosOsCards } from "@/lib/empenho-cards";
 import { configImportacoesSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getConfigImportacoes, gravarConfigImportacoes } from "@/lib/importacoes-config";
@@ -32,11 +33,18 @@ export async function PATCH(req: Request) {
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(configImportacoesSchema, req);
   if ("resp" in p) return p.resp;
-  const motivo = motivoConfigImportacoes(p.data);
-  if (motivo) return erro(motivo, 422);
   const antes = await getConfigImportacoes();
-  const config = await gravarConfigImportacoes(p.data, a.u.id);
+  // Sem a escolha no pedido, fica a gravada.
+  const pedido = { ...p.data, automaticas: p.data.automaticas === undefined ? antes.automaticas : p.data.automaticas };
+  const motivo = motivoConfigImportacoes(pedido);
+  if (motivo) return erro(motivo, 422);
+  const cards = await todosOsCards();
+  const motivoEscolha = motivoEscolhaAutomaticas(pedido.automaticas, cards);
+  if (motivoEscolha) return erro(motivoEscolha, 422);
+  const config = await gravarConfigImportacoes(pedido, a.u.id);
   const dd = diffCampos(antes as Record<string, unknown>, config as Record<string, unknown>, Object.keys(ROTULOS), ROTULOS);
-  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "empenho_card", resumo: `Importações da Centi: ${dd.resumo || "configuração salva"}`, antes: dd.antes, depois: dd.depois });
+  const escolha = textoDiffAutomaticas(antes.automaticas, config.automaticas, cards);
+  const resumo = [dd.resumo, escolha && `automáticas: ${escolha}`].filter(Boolean).join("; ");
+  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "empenho_card", resumo: `Importações da Centi: ${resumo || "configuração salva"}`, antes: dd.antes, depois: dd.depois });
   return ok({ config });
 }
