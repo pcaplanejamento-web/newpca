@@ -1554,7 +1554,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `colunasNaoPermitidas`; com "Mascarar", pessoais = "•••" e texto livre por `mascararTexto` — `valorParaPapel`; builders
     `mesa-campos-sql.ts`, ids num parâmetro JSON, testados no D1 real). **Layout:** `LayoutTabela.exibidas` = as ocultas no
     padrão que a visão MOSTRA (`ocultasEfetivas`/`comOcultas`/`alternarColuna`, `colunas-layout.ts`) — visão salva antes de
-    uma coluna nova existir a mantém oculta. **Rodapé de toda tabela com visões:** **`SeletorColunas`** (DS — uma rolagem só, a do painel, com topo e rodapé `sticky`; caixas
+    uma coluna nova existir a mantém oculta. **Rodapé de toda tabela com visões:** **`SeletorColunas`** (DS — abas Mostrar | **Ordem** [arrastar pela alça com `useArrastoBlocos`/`ChipPreso`/`GuiaBloco` ou ↑/↓; `soltarColuna` + `comOrdem` pelo ajuste da sessão — soltar entre as congeladas a congela]; uma rolagem só, a do painel, com topo e rodapé `sticky`; caixas
     agrupadas por `Column.grupo`, busca acima de 12, Todos | Nenhum; muda na hora pelo AJUSTE da sessão
     `useEditorEdicoes.ajustar`, sem entrar na edição) + o lápis + o **`PainelFiltros`** (o MESMO da Execução: os filtros das
     colunas em chips, as visões salvas, a estrela `minhaPadrao` = a padrão SÓ DA PESSOA e, para o ADM — `ConfigTabelas

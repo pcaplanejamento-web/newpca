@@ -1579,13 +1579,22 @@ const COLUNAS_DEMO = [
 
 function EdicoesTabelaDemo() {
   const [ocultas, setOcultas] = useState<string[]>(["objeto", "email"]);
+  const [ordemDemo, setOrdemDemo] = useState<{ fixadas: string[]; livres: string[] }>(() => ({ fixadas: [], livres: COLUNAS_DEMO.map((c) => c.key) }));
   const [salvar, setSalvar] = useState(false);
   // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a visão é só da pessoa.
   const [configura, setConfigura] = useState(true);
   const atual = { id: 2, chave: "k", nome: "Por elemento", publico: true, minha: true, autor: "Ana", valor: {} };
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <SeletorColunas colunas={COLUNAS_DEMO} ocultas={ocultas} padrao={[]} onMudar={setOcultas} />
+      <SeletorColunas
+        colunas={COLUNAS_DEMO}
+        ocultas={ocultas}
+        padrao={[]}
+        onMudar={setOcultas}
+        fixadas={ordemDemo.fixadas}
+        livres={ordemDemo.livres}
+        onOrdem={(fixadas, livres) => setOrdemDemo({ fixadas, livres })}
+      />
       <Button size="sm" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => setSalvar(true)}>
         Salvar visão
       </Button>

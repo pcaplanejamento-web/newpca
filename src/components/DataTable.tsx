@@ -920,6 +920,8 @@ export function DataTable<R>({
               ocultas={ocultasAgora}
               padrao={padraoOc}
               onMudar={(ocultas) => editor.ajustar((x) => comOcultas(x, ocultas, padraoOc))}
+              {...ordemExport()}
+              onOrdem={(f, l) => editor.ajustar((x) => comOrdem(x, chaves, f, l))}
             />
           )}
           {edicoes &&

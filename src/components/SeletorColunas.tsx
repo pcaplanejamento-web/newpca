@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { soltarColuna } from "@/lib/colunas-layout";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { ChipPreso, GuiaBloco, useArrastoBlocos } from "./BlocosTarefa";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { SearchField } from "./Field";
-import { IconColunas } from "./icons";
+import { IconArrowDown, IconArrowUp, IconColunas, IconGrip } from "./icons";
+import { Segmented } from "./Segmented";
 
 export type OpcaoColuna = { key: string; header: string; grupo?: string };
 
@@ -13,21 +16,31 @@ export type OpcaoColuna = { key: string; header: string; grupo?: string };
  * SELETOR DE COLUNAS (no rodapé da tabela): o botão só-ícone abre um DROPDOWN preso a ele (folha só abaixo de 40rem) com
  * TODAS as colunas da tabela em caixas — cabeçalho com "N de M visíveis", busca acima de 12, grupos com a contagem e
  * "Todos/Nenhum" do grupo, e no pé **Mostrar todas · Padrão** (volta às ocultas do padrão da tabela). Muda NA HORA (sem
- * entrar na edição); a última coluna visível nunca sai. A escolha vale até trocar de visão e entra na visão ao salvar.
+ * entrar na edição); a última coluna visível nunca sai. A aba **Ordem** lista as visíveis na ordem da tabela: arrastar pela
+ * alça (mouse, caneta e toque — `useArrastoBlocos`) ou ↑/↓ reordenam (soltar entre as congeladas a congela, como no
+ * cabeçalho — `soltarColuna`). A escolha vale até trocar de visão e entra na visão ao salvar.
  */
 export function SeletorColunas({
   colunas,
   ocultas,
   padrao,
   onMudar,
+  fixadas,
+  livres,
+  onOrdem,
 }: {
   colunas: readonly OpcaoColuna[];
   ocultas: readonly string[];
   /** As colunas ocultas no padrão da tabela (o botão "Padrão"). */
   padrao: readonly string[];
   onMudar: (ocultas: string[]) => void;
+  /** A ordem exibida (todas as colunas): congeladas e livres. */
+  fixadas: readonly string[];
+  livres: readonly string[];
+  onOrdem: (fixadas: string[], livres: string[]) => void;
 }) {
   const [busca, setBusca] = useState("");
+  const [aba, setAba] = useState<"mostrar" | "ordem">("mostrar");
   const [aberto, setAberto] = useState(false);
   const [folha, setFolha] = useState(false);
   const oc = useMemo(() => new Set(ocultas), [ocultas]);
@@ -51,6 +64,20 @@ export function SeletorColunas({
     onMudar([...novas]);
   };
   const conhecidas = new Set(colunas.map((c) => c.key));
+  const porChave = new Map(colunas.map((c) => [c.key, c]));
+  const congeladas = new Set(fixadas);
+  /** As visíveis na ordem da tabela. */
+  const naOrdem = [...fixadas, ...livres].filter((k) => porChave.has(k) && !oc.has(k));
+  /** Leva a coluna à posição `indice` entre as VISÍVEIS (sem ela) — as ocultas ficam onde estavam. */
+  const mover = (chave: string, indice: number) => {
+    const vis = naOrdem.filter((k) => k !== chave);
+    const todas = [...fixadas, ...livres].filter((k) => k !== chave);
+    const destino = indice < vis.length ? todas.indexOf(vis[indice]) : vis.length ? todas.indexOf(vis[vis.length - 1]) + 1 : 0;
+    const r = soltarColuna([...fixadas], [...livres], chave, destino);
+    onOrdem(r.fixadas, r.livres);
+  };
+  const lista = useRef<HTMLDivElement>(null);
+  const { arrasto, fantasma, iniciar } = useArrastoBlocos(lista, (c, i) => mover(c.id, i));
   const contagem = `${visiveis} de ${colunas.length} visíveis`;
   return (
     <Dropdown
@@ -74,12 +101,60 @@ export function SeletorColunas({
           <span className="text-[13.5px] font-bold text-text">Colunas</span>
           <span className="text-[12px] tabular-nums text-muted">{contagem}</span>
         </div>
-        {colunas.length > 12 && (
+        <div className="pb-2">
+            <Segmented
+              className="w-full [&>button]:flex-1"
+              ariaLabel="Seletor de colunas"
+              value={aba}
+              onChange={setAba}
+              options={[
+                { value: "mostrar", label: "Mostrar", dica: "Escolher as colunas visíveis" },
+                { value: "ordem", label: "Ordem", dica: "Arrastar para mudar a ordem das colunas" },
+              ]}
+            />
+          </div>
+        {aba === "mostrar" && colunas.length > 12 && (
           <div className="pb-2">
             <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar coluna" aria-label="Procurar coluna" />
           </div>
         )}
         </div>
+        {aba === "ordem" && (
+          <div ref={lista} className="py-1">
+            {naOrdem.map((k, i) => {
+              const c = porChave.get(k) as OpcaoColuna;
+              const nome = c.header || c.key;
+              const outros = naOrdem.filter((x) => x !== arrasto?.carga.id);
+              return (
+                <div key={k}>
+                  {arrasto && arrasto.indice === outros.indexOf(k) && <GuiaBloco />}
+                  <div data-bloco={k} className={`flex min-h-[44px] items-center gap-1 pr-1 text-[13.5px] lg:min-h-[32px] ${arrasto?.carga.id === k ? "opacity-40" : ""}`}>
+                    <button
+                      type="button"
+                      aria-label={`Arrastar ${nome}`}
+                      title="Arrastar para mudar a ordem"
+                      onPointerDown={(e) => iniciar(e, { id: k }, nome)}
+                      className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-7"
+                    >
+                      <IconGrip className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-0 flex-1 break-words py-1 text-text">{nome}</span>
+                    {congeladas.has(k) && <span className="shrink-0 text-[11px] text-muted">congelada</span>}
+                    <Button size="xs" variant="icon" aria-label={`Subir ${nome}`} disabled={i === 0} onClick={() => mover(k, i - 1)}>
+                      <IconArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="xs" variant="icon" aria-label={`Descer ${nome}`} disabled={i === naOrdem.length - 1} onClick={() => mover(k, i + 1)}>
+                      <IconArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {arrasto && arrasto.indice === naOrdem.length - 1 && <GuiaBloco />}
+            {arrasto && <ChipPreso rotulo={arrasto.rotulo} x={arrasto.x} y={arrasto.y} fantasma={fantasma} />}
+          </div>
+        )}
+        {aba === "mostrar" && (
         <div className="py-1">
           {grupos.map(([g, cs]) => {
             const vis = cs.filter((c) => !oc.has(c.key)).length;
@@ -119,6 +194,7 @@ export function SeletorColunas({
           })}
           {grupos.length === 0 && <p className="px-3 py-4 text-[13px] text-muted">Nenhuma coluna com esse nome.</p>}
         </div>
+        )}
         <div className="sticky -bottom-2 z-10 -mx-2 -mb-2 flex justify-end gap-1 border-t border-border bg-surface p-2">
           <Button size="sm" variant="ghost" onClick={() => onMudar(ocultas.filter((k) => !conhecidas.has(k)))}>
             Mostrar todas

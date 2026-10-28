@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.247.0",
+    data: "2026-10-28",
+    titulo: "Ordem das colunas no seletor",
+    mudancas: [
+      { tipo: "novo", area: "Tabelas", texto: "O seletor de colunas ganhou a aba Ordem: arraste pela alça (no mouse, na caneta ou no toque) ou use as setas para mudar a ordem das colunas na hora; a ordem entra na visão ao salvar.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.246.0",
     data: "2026-10-28",
     titulo: "Declarações: quem emite em cada PCA e tabelas mais leves",
