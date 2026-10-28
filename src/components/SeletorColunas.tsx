@@ -68,17 +68,19 @@ export function SeletorColunas({
       triggerClassName="inline-flex h-[44px] w-[44px] items-center justify-center rounded-control border border-border bg-surface text-text hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
       trigger={<IconColunas className="h-4 w-4" aria-hidden="true" />}
     >
-      <div className="flex max-h-[min(70vh,30rem)] flex-col">
-        <div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
+      <div>
+        <div className="sticky -top-2 z-10 -mx-2 -mt-2 border-b border-border bg-surface px-2 pt-2">
+        <div className="flex items-baseline justify-between gap-2 px-3 py-2">
           <span className="text-[13.5px] font-bold text-text">Colunas</span>
           <span className="text-[12px] tabular-nums text-muted">{contagem}</span>
         </div>
         {colunas.length > 12 && (
-          <div className="border-b border-border p-2">
+          <div className="pb-2">
             <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar coluna" aria-label="Procurar coluna" />
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        </div>
+        <div className="py-1">
           {grupos.map(([g, cs]) => {
             const vis = cs.filter((c) => !oc.has(c.key)).length;
             return (
@@ -105,10 +107,10 @@ export function SeletorColunas({
                     <label
                       key={c.key}
                       className={`flex min-h-[44px] items-center gap-2.5 px-3 text-[13.5px] lg:min-h-[32px] ${ultima ? "opacity-60" : "cursor-pointer hover:bg-surface-2"}`}
-                      title={ultima ? "A tabela precisa de ao menos uma coluna" : c.header}
+                      title={ultima ? "A tabela precisa de ao menos uma coluna" : undefined}
                     >
                       <input type="checkbox" className="caixa-marcar" checked={marcada} disabled={ultima} onChange={() => alternar(c.key)} />
-                      <span className="min-w-0 truncate text-text">{c.header || c.key}</span>
+                      <span className="min-w-0 break-words py-1 text-text">{c.header || c.key}</span>
                     </label>
                   );
                 })}
@@ -117,7 +119,7 @@ export function SeletorColunas({
           })}
           {grupos.length === 0 && <p className="px-3 py-4 text-[13px] text-muted">Nenhuma coluna com esse nome.</p>}
         </div>
-        <div className="flex justify-end gap-1 border-t border-border p-2">
+        <div className="sticky -bottom-2 z-10 -mx-2 -mb-2 flex justify-end gap-1 border-t border-border bg-surface p-2">
           <Button size="sm" variant="ghost" onClick={() => onMudar(ocultas.filter((k) => !conhecidas.has(k)))}>
             Mostrar todas
           </Button>

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.243.3",
+    data: "2026-10-28",
+    titulo: "Seletor de colunas sem rolagem dupla",
+    mudancas: [
+      { tipo: "correcao", area: "Tabelas", texto: "O seletor de colunas tem uma rolagem só: a busca e o rodapé ficam fixos, nada é cortado e não sobra espaço vazio.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.243.2",
     data: "2026-10-28",
     titulo: "Seletor de colunas em dropdown",
