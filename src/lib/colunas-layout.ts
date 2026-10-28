@@ -87,9 +87,36 @@ export function comOrdem<L extends AjustesColunas>(l: L, presentes: string[], fi
 export type OrdemTabela = { key: string; dir: "asc" | "desc" } | null;
 
 /** O layout SALVO de uma `DataTable` (as edições da Mesa): colunas + ordenação + FILTROS das colunas. */
-export type LayoutTabela = AjustesColunas & { v: 1; ordem: OrdemTabela; filtros: Record<string, FiltroValor> };
+export type LayoutTabela = AjustesColunas & {
+  v: 1;
+  ordem: OrdemTabela;
+  filtros: Record<string, FiltroValor>;
+  /** As colunas OCULTAS NO PADRÃO (`DataTable.ocultasPadrao` — ex.: os dados extras da Mesa) que a visão MOSTRA. Uma visão
+   * salva antes de uma coluna nova existir não a conhece — e a coluna segue oculta, como no padrão. */
+  exibidas: string[];
+};
 
-export const LAYOUT_TABELA_PADRAO: LayoutTabela = { v: 1, larguras: {}, fixadas: [], ocultas: [], ordemManual: [], ordem: null, filtros: {} };
+export const LAYOUT_TABELA_PADRAO: LayoutTabela = { v: 1, larguras: {}, fixadas: [], ocultas: [], ordemManual: [], ordem: null, filtros: {}, exibidas: [] };
+
+/** As colunas OCULTAS de fato: as ocultas da visão + as ocultas no padrão que ela não mostra. */
+export function ocultasEfetivas(l: Pick<LayoutTabela, "ocultas" | "exibidas">, padrao: readonly string[]): string[] {
+  if (!padrao.length) return l.ocultas;
+  const mostra = new Set(l.exibidas);
+  return [...new Set([...l.ocultas, ...padrao.filter((k) => !mostra.has(k))])];
+}
+
+/** O layout que OCULTA exatamente as colunas `ocultas` (as do padrão vão pelas `exibidas`). */
+export function comOcultas(l: LayoutTabela, ocultas: readonly string[], padrao: readonly string[]): LayoutTabela {
+  const oc = new Set(ocultas);
+  const p = new Set(padrao);
+  return { ...l, ocultas: [...oc].filter((k) => !p.has(k)), exibidas: padrao.filter((k) => !oc.has(k)) };
+}
+
+/** Oculta/mostra UMA coluna considerando as ocultas no padrão. */
+export function alternarColuna(l: LayoutTabela, chave: string, padrao: readonly string[]): LayoutTabela {
+  const oc = ocultasEfetivas(l, padrao);
+  return comOcultas(l, oc.includes(chave) ? oc.filter((k) => k !== chave) : [...oc, chave], padrao);
+}
 
 const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
 const txt = (x: unknown) => (typeof x === "string" && x.length <= 40 ? x : undefined);
@@ -128,6 +155,7 @@ function semColunas(l: LayoutTabela, sem: ReadonlySet<string>): LayoutTabela {
     fixadas: l.fixadas.filter(fora),
     ocultas: l.ocultas.filter(fora),
     ordemManual: l.ordemManual.filter(fora),
+    exibidas: l.exibidas.filter(fora),
     ordem: l.ordem && sem.has(l.ordem.key) ? null : l.ordem,
     filtros: Object.fromEntries(Object.entries(l.filtros).filter(([k]) => fora(k))),
   };
@@ -158,6 +186,7 @@ export function mesclarLayoutOculto(gravado: unknown, novo: unknown, sem: Readon
     fixadas: mesclarLista(g.fixadas, n.fixadas, sem),
     ocultas: [...n.ocultas, ...g.ocultas.filter((k) => sem.has(k))],
     ordemManual: mesclarLista(g.ordemManual, n.ordemManual, sem),
+    exibidas: [...n.exibidas, ...g.exibidas.filter((k) => sem.has(k))],
     // A ordenação por uma coluna oculta segue a do gravado enquanto a pessoa não escolher outra.
     ordem: n.ordem ?? (g.ordem && sem.has(g.ordem.key) ? g.ordem : null),
     filtros: { ...n.filtros, ...soOcultas(g.filtros) },
@@ -180,6 +209,7 @@ function coerceLayoutTabelaCompleto(v: unknown): LayoutTabela {
     fixadas: listaChaves(o.fixadas),
     ocultas: listaChaves(o.ocultas),
     ordemManual: listaChaves(o.ordemManual),
+    exibidas: listaChaves(o.exibidas),
     ordem: s && typeof s.key === "string" && s.key.length <= 300 ? { key: s.key, dir: s.dir === "desc" ? "desc" : "asc" } : null,
     filtros,
   };

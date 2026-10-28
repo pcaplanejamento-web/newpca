@@ -41,7 +41,7 @@ import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
-import { useQuemExporta } from "./ConfigTabelas";
+import { useAdminTabelas, useQuemExporta } from "./ConfigTabelas";
 import { useEditorEdicoes } from "./EdicoesTabela";
 import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { Checkbox, SearchField, SelectField } from "./Field";
@@ -65,7 +65,7 @@ const MODOS: { value: ModoCruzamento; label: string }[] = [
  * planilha no editor do layout, DIRETO na coluna — TODAS, inclusive o nome das linhas, a Sigla e o Total: arrastar o nome
  * move (com a sombra do destino; soltar entre as congeladas congela), o alfinete congela, o olho oculta, a borda ajusta a
  * largura. No RODAPÉ da tabela ficam o LÁPIS (liga a edição), as EDIÇÕES SALVAS do par de colunas (as minhas e as
- * públicas — `useEdicoesTabela`/`SeletorEdicoes`), a estrela da minha PADRÃO e, editando, mapa de calor, ocultar zerados,
+ * públicas — `useEdicoesTabela`/`PainelVisoes`), o alfinete da minha PADRÃO e, editando, mapa de calor, ocultar zerados,
  * congelar/descongelar/mostrar todas, Padrão, Cancelar e **Salvar** (`SalvarEdicao`: nome, só para mim ou pública,
  * atualizar ou nova, usar como padrão). Confirmações e avisos em card flutuante; a explicação de tudo na AJUDA (?).
  */
@@ -163,6 +163,7 @@ export function OrcamentoComparativo({
     padrao: LAYOUT_PADRAO,
     onMudar: onMudarEdicoes,
     podePublicar,
+    admin: useAdminTabelas(),
     aoEscolher: () => setOrdemVista(null),
   });
   const { layout, editando, mudar } = editor;

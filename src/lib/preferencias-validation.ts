@@ -24,3 +24,6 @@ export const criarEdicaoSchema = z.object({ chave, nome: nomeEdicao, publico: z.
 export const editarEdicaoSchema = z
   .object({ nome: nomeEdicao.optional(), publico: z.boolean().optional(), valor: valorLayout.optional() })
   .refine((v) => v.nome !== undefined || v.publico !== undefined || v.valor !== undefined, "Nada para atualizar.");
+
+/** O PADRÃO PARA TODOS de uma tabela (o ADM): a edição pública (`id`) ou nenhuma (`null`). */
+export const padraoAdmSchema = z.strictObject({ chave, id: z.number().int().positive().nullable() });

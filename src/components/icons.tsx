@@ -96,6 +96,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Bookmark,
   Search,
   Columns3,
   Variable,
@@ -230,6 +231,8 @@ export const IconCamera = Camera;
 export const IconKey = KeyRound;
 export const IconImage = ImageIcon;
 export const IconSave = Save;
+/** Uma VISÃO salva de tabela (colunas + filtros + ordem). */
+export const IconVisao = Bookmark;
 export const IconPalette = Palette;
 export const IconMail = Mail;
 /** E-mail CONFIRMADO / código enviado ao e-mail. */

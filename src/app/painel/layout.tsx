@@ -112,7 +112,7 @@ export default async function PainelLayout({
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <PendenciasAcesso bloqueio={!!bloqueio} aparelho={pendAparelho} termo={pendTermo} nome={usuario.nome} />
-      <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
+      <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} admin={usuario.admin} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
         <ComponentesPapel retirados={componentesDoAcesso(acesso)} exibicao={usuario.papel.detalhes.exibicao}>
           <UnidadeUnica

@@ -341,3 +341,5 @@ DashboardExecucao.tsx
 DashboardExecucaoEsqueleto.tsx
 ExecucaoView.tsx
 charts/SerieTemporal.tsx
+CamposMesa.tsx
+SeletorColunas.tsx
