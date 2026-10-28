@@ -1585,7 +1585,7 @@ function EdicoesTabelaDemo() {
   const atual = { id: 2, chave: "k", nome: "Por elemento", publico: true, minha: true, autor: "Ana", valor: {} };
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <SeletorColunas colunas={COLUNAS_DEMO} ocultas={ocultas} onMudar={setOcultas} />
+      <SeletorColunas colunas={COLUNAS_DEMO} ocultas={ocultas} padrao={[]} onMudar={setOcultas} />
       <Button size="sm" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => setSalvar(true)}>
         Salvar visão
       </Button>
@@ -3865,7 +3865,7 @@ export function Catalogo() {
       <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
         <VinculosDaUnidadeDemo />
       </Secao>
-      <Secao titulo="Visões de tabela — SeletorColunas (as colunas visíveis, Todos | Nenhum; no rodapé das tabelas, ao lado do PainelFiltros) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
+      <Secao titulo="Visões de tabela — SeletorColunas (dropdown das colunas visíveis: contagem, grupos com Todos/Nenhum, Mostrar todas · Padrão; no rodapé das tabelas, ao lado do PainelFiltros) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
