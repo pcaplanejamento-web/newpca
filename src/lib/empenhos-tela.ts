@@ -1,6 +1,8 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { cache } from "react";
 import { centiLotes, empenhos, liquidacoes, pagamentos, reparticoes } from "@/db/schema";
+import { type AlteracaoCenti, alteracoesDoRegistro } from "./centi-alteracoes-core";
+import { consultaAlteracoes } from "./centi-alteracoes-sql";
 import { getDb } from "./db";
 import { type ExecucaoEmpenho, LIMITE_EXECUCAO, semRepetir } from "./execucao-empenho-core";
 import { type AnoEmpenhos, chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
@@ -89,17 +91,20 @@ export async function textoTabelaExecucao(
   );
 }
 
-export type EmpenhoCompleto = typeof empenhos.$inferSelect & { loteEstado: string | null; loteConcluidoEm: string | null };
+export type EmpenhoCompleto = Omit<typeof empenhos.$inferSelect, "hash"> & { loteEstado: string | null; loteConcluidoEm: string | null; alteracoes: AlteracaoCenti[] };
 
 /** Um empenho com TUDO (o histórico, a importação que o gravou, o leitor, criado/atualizado/removido). */
 export async function empenhoCompleto(id: number): Promise<EmpenhoCompleto | null> {
-  const [e] = await getDb()
+  const db = getDb();
+  const [e] = await db
     .select()
     .from(empenhos)
     .leftJoin(centiLotes, eq(centiLotes.id, empenhos.loteId))
     .where(eq(empenhos.id, id))
     .limit(1);
-  return e ? { ...e.empenhos, loteEstado: e.centi_lotes?.estado ?? null, loteConcluidoEm: e.centi_lotes?.concluidoEm ?? null } : null;
+  if (!e) return null;
+  const { hash: _, ...emp } = e.empenhos;
+  return { ...emp, loteEstado: e.centi_lotes?.estado ?? null, loteConcluidoEm: e.centi_lotes?.concluidoEm ?? null, alteracoes: alteracoesDoRegistro(await consultaAlteracoes(db, "empenho", id)) };
 }
 
 /**

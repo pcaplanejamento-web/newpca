@@ -15,7 +15,7 @@ export type ModoParte = "empenhos" | "liquidacoes" | "pagamentos";
 
 /** Teto de linhas e de caracteres (o JSON das linhas) de UMA parte — o servidor recusa acima disso. */
 export const MAX_LINHAS_PARTE = 1500;
-export const MAX_BYTES_PARTE = 250_000;
+export const MAX_BYTES_PARTE = 80_000;
 /** O corpo da requisição de uma parte em BYTES (as linhas + o resumo; um acento ocupa 2 bytes) — acima disso a rota responde 413 sem ler. */
 export const MAX_CORPO_PARTE = 1_000_000;
 /** Texto livre (histórico) — o mesmo teto dos textos longos do sistema. */
@@ -94,6 +94,79 @@ export type LinhaDoModo<M extends ModoParte> = M extends "empenhos" ? LinhaEmpen
 export function tuplaDaLinha(modo: ModoParte, l: object): unknown[] {
   const r = l as Record<string, unknown>;
   return ESPEC_PARTE[modo].map(([c]) => r[c] ?? null);
+}
+
+/**
+ * A ASSINATURA de uma linha (o "hash"): FNV-1a de 64 bits (duas faixas de 32) sobre a tupla canônica + a versão do leitor —
+ * a MESMA no navegador (que decide o que mandar) e no servidor (que grava a do registro e confere a que chega). Mudou um
+ * campo (ou o leitor), muda a assinatura; igual, o registro não é escrito de novo.
+ */
+export function hashTupla(tupla: readonly unknown[], leitor: number): string {
+  const s = `${JSON.stringify(tupla)}|${leitor}`;
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ 0x9e3779b9;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x01000193) ^ (a >>> 13);
+  }
+  return (a >>> 0).toString(36) + (b >>> 0).toString(36).padStart(7, "0");
+}
+
+/** A assinatura de uma linha lida (`tuplaDaLinha` + o leitor). */
+export const hashLinha = (modo: ModoParte, l: object, leitor: number) => hashTupla(tuplaDaLinha(modo, l), leitor);
+
+/** Um registro IGUAL ao gravado, como vai na parte: a chave e a assinatura (nenhum dado). */
+export type ParIgual = [chave: string, hash: string];
+
+/** Teto de pares (chave + assinatura) por parte — ~45 caracteres cada. */
+export const MAX_PARES_PARTE = 5000;
+
+/** Uma PARTE: as tuplas (os registros NOVOS ou DIFERENTES do gravado, inteiros) e os pares dos IGUAIS. */
+export type Parte = { tuplas: unknown[][]; iguais: ParIgual[] };
+
+/**
+ * As PARTES de uma página lida (no navegador), já separando o que MUDOU: a linha cuja assinatura é a gravada (`gravados`,
+ * chave → assinatura, baixado no começo da importação) vai só como o PAR (chave + assinatura) — o servidor confere no banco;
+ * as demais vão inteiras (`partesDaPagina`). Página vazia = UMA parte vazia.
+ */
+export function partesComIguais(modo: ModoParte, linhas: readonly object[], gravados: ReadonlyMap<string, string>, leitor: number, o: { maxLinhas?: number; maxBytes?: number; maxPares?: number } = {}): Parte[] {
+  const inteiras: object[] = [];
+  const iguais: ParIgual[] = [];
+  for (const l of linhas) {
+    const chave = (l as { chave: string }).chave;
+    const g = gravados.get(chave);
+    const h = g == null ? null : hashLinha(modo, l, leitor);
+    if (h != null && h === g) iguais.push([chave, h]);
+    else inteiras.push(l);
+  }
+  const maxPares = o.maxPares ?? MAX_PARES_PARTE;
+  const tuplas = inteiras.length ? partesDaPagina(modo, inteiras, o) : [];
+  const partes: Parte[] = tuplas.map((t) => ({ tuplas: t, iguais: [] }));
+  for (let i = 0; i < iguais.length; i += maxPares) {
+    const fatia = iguais.slice(i, i + maxPares);
+    // Os pares vão nas partes que já existem (uma fatia por parte) e, sobrando, em partes só de pares.
+    const alvo = partes.find((p) => !p.iguais.length);
+    if (alvo) alvo.iguais = fatia;
+    else partes.push({ tuplas: [], iguais: fatia });
+  }
+  return partes.length ? partes : [{ tuplas: [], iguais: [] }];
+}
+
+/** Confere os PARES de uma parte (no servidor): chave e assinatura válidas, sem chave repetida nem já entre as linhas. */
+export function paresDaParte(pares: unknown, chavesDasLinhas: ReadonlySet<string>): { ok: true; pares: ParIgual[] } | { ok: false; motivo: string } {
+  if (pares == null) return { ok: true, pares: [] };
+  if (!Array.isArray(pares) || pares.length > MAX_PARES_PARTE) return { ok: false, motivo: `Os iguais da parte passam de ${MAX_PARES_PARTE}.` };
+  const vistas = new Set<string>();
+  for (let i = 0; i < pares.length; i++) {
+    const p = pares[i];
+    if (!Array.isArray(p) || p.length !== 2 || typeof p[0] !== "string" || !p[0] || p[0].length > 200 || typeof p[1] !== "string" || !/^[0-9a-z]{2,16}$/.test(p[1])) {
+      return { ok: false, motivo: `Igual ${i + 1}: chave ou assinatura inválida.` };
+    }
+    if (vistas.has(p[0]) || chavesDasLinhas.has(p[0])) return { ok: false, motivo: `Igual ${i + 1}: chave repetida na parte.` };
+    vistas.add(p[0]);
+  }
+  return { ok: true, pares: pares as ParIgual[] };
 }
 
 /**

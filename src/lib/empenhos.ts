@@ -3,7 +3,7 @@ import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
 import { registrarLeituraCard } from "./empenho-cards";
-import { comandosFecharLote } from "./empenhos-sql";
+import { COLUNAS_PASSO, comandosFecharLote, type LinhaPasso } from "./empenhos-sql";
 import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroUnico, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
@@ -96,12 +96,12 @@ export async function criarLote(cardId: number, ano: number, quem: string, condu
 
 /** Os PASSOS de um lote (na ordem em que aconteceram) — a tela ao vivo, a retomada e o detalhe do histórico. */
 export async function listarPassos(loteId: number, limite = 3000): Promise<PassoLote[]> {
-  const l = await getDb().select().from(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)).orderBy(centiLotePassos.id).limit(limite);
+  const l = await getDb().select(COLUNAS_PASSO).from(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)).orderBy(centiLotePassos.id).limit(limite);
   return l.map(paraPasso);
 }
 
 /** A linha do banco → o passo da tela (o estado tipado, o fim do período booleano). */
-export function paraPasso({ loteId: _, estado, fimPeriodo, ...resto }: typeof centiLotePassos.$inferSelect): PassoLote {
+export function paraPasso({ loteId: _, estado, fimPeriodo, ...resto }: LinhaPasso): PassoLote {
   return { ...resto, estado: estado as EstadoPasso, fimPeriodo: fimPeriodo === 1 };
 }
 

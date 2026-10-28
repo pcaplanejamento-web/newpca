@@ -1,5 +1,5 @@
 import { type LoteCenti, lerPaginaEmpenhos, lotePorMes, lotePorOrgao, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
-import { type ModoParte, partesDaPagina } from "./importacao-partes-core.ts";
+import { type ModoParte, partesComIguais } from "./importacao-partes-core.ts";
 import { lerPaginaLiquidacoes } from "./liquidacoes-core.ts";
 import { lerPaginaPagamentos } from "./pagamentos-core.ts";
 
@@ -17,6 +17,8 @@ import { lerPaginaPagamentos } from "./pagamentos-core.ts";
 /** Quantos pedidos à Centi ao mesmo tempo (empenhos: semanas · liquidações: órgãos). */
 export const PARALELO_EMPENHOS = 4;
 export const PARALELO_LIQUIDACOES = 6;
+/** Quantas PARTES de uma mesma página ao mesmo tempo (a página grande — o ano inteiro — chega em dezenas de partes). */
+export const PARALELO_PARTES = 4;
 
 export type RespostaPasso = {
   /** null na parte do meio de uma página (a contagem do lote só muda na última). */
@@ -24,7 +26,7 @@ export type RespostaPasso = {
   passo: PassoLote;
   continuar?: boolean;
   erro?: { tipo: TipoErro; mensagem: string };
-  dividir?: [Periodo, Periodo] | null;
+  dividir?: Periodo[] | null;
 };
 
 /** O SISTEMA respondeu e recusou (4xx) — não adianta repetir (ex.: outra aba conduz o lote). */
@@ -48,7 +50,14 @@ export async function pedirImportacao<T>(cardId: number, corpo: Record<string, u
  * traz a resposta da Centi crua (ou o passo de erro, já registrado); o JSON é lido aqui pelas MESMAS funções do servidor e
  * as linhas vão em PARTES de tamanho fixo (`parte`); a leitura que falha vira o passo de erro (`falha`).
  */
-export async function lerPaginaNoNavegador(cardId: number, modo: ModoParte, ano: number, base: { lote: number; condutor: string; inicio: string; fim: string; pagina: number }): Promise<RespostaPasso> {
+export async function lerPaginaNoNavegador(
+  cardId: number,
+  modo: ModoParte,
+  ano: number,
+  base: { lote: number; condutor: string; inicio: string; fim: string; pagina: number },
+  gravados: ReadonlyMap<string, string> = new Map(),
+  leitor = 0,
+): Promise<RespostaPasso> {
   const t0 = performance.now();
   const r = await fetch(`/api/empenhos/cards/${cardId}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "baixar", ...base }) });
   const statusCenti = r.headers.get("x-centi-status");
@@ -59,7 +68,13 @@ export async function lerPaginaNoNavegador(cardId: number, modo: ModoParte, ano:
     if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
     return j;
   }
-  const texto = await r.text();
+  let texto: string;
+  try {
+    texto = await r.text();
+  } catch {
+    // O REPASSE caiu no meio: a resposta passou do teto (ou a conexão caiu) — o período é dividido (pedidos menores).
+    return pedirImportacao<RespostaPasso>(cardId, { acao: "falha", ...base, mensagem: "A API da Centi é grande demais para um pedido só (ou a conexão caiu no meio) — o período será dividido.", status: Number(statusCenti) || null, bytes: null, ms: Math.round(performance.now() - t0) });
+  }
   const ms = Math.round(performance.now() - t0);
   const status = Number(statusCenti) || null;
   let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | ReturnType<typeof lerPaginaPagamentos>;
@@ -69,20 +84,42 @@ export async function lerPaginaNoNavegador(cardId: number, modo: ModoParte, ano:
     const mensagem = (e instanceof Error ? e.message : "Resposta inválida da Centi.").slice(0, 500);
     return pedirImportacao<RespostaPasso>(cardId, { acao: "falha", ...base, mensagem, status, bytes: texto.length || null, ms });
   }
-  const partes = partesDaPagina(modo, lida.linhas);
-  let passo: number | null = null;
-  let resp: RespostaPasso | null = null;
-  for (let i = 0; i < partes.length; i++) {
+  // SÓ O QUE MUDOU vai inteiro: o registro com a assinatura gravada vai só como o par (chave + assinatura).
+  const partes = partesComIguais(modo, lida.linhas, gravados, leitor);
+  const enviar = (i: number, passo: number | null) => {
     const ultima = i === partes.length - 1;
     const resumo = ultima ? { status, bytes: texto.length || null, ms, recebidos: lida.recebidos, recusados: lida.recusados, repetidos: lida.repetidos, total: lida.total, reparado: lida.reparado } : null;
-    resp = await pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i], resumo });
-    passo = resp.passo.id;
-  }
-  return resp as RespostaPasso;
+    return pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i].tuplas, iguais: partes[i].iguais, resumo });
+  };
+  // A 1ª parte cria o passo; as do MEIO vão em PARALELO (cada uma soma no passo, no banco); a ÚLTIMA fecha, depois de todas.
+  const primeira = await enviar(0, null);
+  if (partes.length === 1) return primeira;
+  const passo = primeira.passo.id;
+  await emPool(
+    Array.from({ length: partes.length - 2 }, (_, k) => k + 1),
+    PARALELO_PARTES,
+    () => false,
+    async (i) => {
+      await enviar(i, passo);
+    },
+  );
+  return enviar(partes.length - 1, passo);
 }
 
 /** O modo das linhas do lote (os empenhos e o catálogo leem a mesma resposta). */
 export const modoDoLote = (l: Pick<LoteCenti, "modo">): ModoParte => (l.modo === "liquidacoes" || l.modo === "pagamentos" ? l.modo : "empenhos");
+
+/** As ASSINATURAS gravadas do card no ano (chave → assinatura) — baixadas UMA vez no começo; falhou = mapa vazio (tudo vai
+ * inteiro, como antes — nunca deixa de importar). */
+export async function lerAssinaturas(cardId: number, ano: number): Promise<Map<string, string>> {
+  try {
+    const r = await fetch(`/api/empenhos/cards/${cardId}/importar?assinaturas=${ano}`);
+    const j = (await r.json()) as { ok?: boolean; assinaturas?: Record<string, string> };
+    return r.ok && j.ok && j.assinaturas ? new Map(Object.entries(j.assinaturas)) : new Map();
+  } catch {
+    return new Map();
+  }
+}
 
 /** Os passos já gravados de um lote (retomar, o detalhe do histórico). */
 export async function lerPassos(cardId: number, loteId: number): Promise<PassoLote[]> {
@@ -171,6 +208,8 @@ export async function lerAnoNaCenti(o: {
 }): Promise<LoteCenti> {
   let lote = o.lote;
   let falhou = false;
+  // O catálogo ("unidades") não grava registros: sem assinaturas.
+  const gravados = o.lote.modo === "unidades" ? Promise.resolve(new Map<string, string>()) : lerAssinaturas(o.cardId, o.lote.ano);
   const parar = () => falhou || o.parar();
   let emCurso = 0;
   // O lote mais NOVO vence (as respostas paralelas chegam fora de ordem): pelo `vistoEm`, a contagem do banco.
@@ -186,7 +225,7 @@ export async function lerAnoNaCenti(o: {
       o.onAgora({ periodo, pagina, tentativa: t + 1, emCurso });
       let r: RespostaPasso;
       try {
-        r = await lerPaginaNoNavegador(o.cardId, modoDoLote(lote), lote.ano, { lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina });
+        r = await lerPaginaNoNavegador(o.cardId, modoDoLote(lote), lote.ano, { lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina }, await gravados, lote.leitor);
       } catch (e) {
         if (e instanceof RecusaImportacao) throw e;
         // Sem resposta do SISTEMA (rede, sessão) — o passo não chegou ao servidor: fica registrado só na tela.
@@ -214,7 +253,8 @@ export async function lerAnoNaCenti(o: {
   const emAndamento = pedidosEmCurso(o.anteriores, orgaos);
   const fila: { periodo: Periodo; pagina: number }[] = [...emAndamento];
   const comecados = [...new Map(emAndamento.map((p) => [`${p.periodo.inicio}|${p.periodo.fim}`, p.periodo])).values()];
-  for (const p of periodosAPedir(lote.ano, [...periodosLidos(o.anteriores), ...comecados], o.comPeriodo || porMes, undefined, porMes)) fila.push(...todasAsPaginas(p));
+  // O ANO INTEIRO num pedido (por órgão: um pedido por órgão, todos em paralelo); grande demais, divide sozinho.
+  for (const p of periodosAPedir(lote.ano, [...periodosLidos(o.anteriores), ...comecados], o.comPeriodo || porMes, undefined, porMes, true)) fila.push(...todasAsPaginas(p));
   const divididos = new Set<string>();
   try {
     await emPool(fila, orgaos == null ? PARALELO_EMPENHOS : PARALELO_LIQUIDACOES, parar, async (item) => {
@@ -242,4 +282,85 @@ export async function lerAnoNaCenti(o: {
     o.onAgora(null);
   }
   return lote;
+}
+
+/** O desfecho de `importarCard`: gravado (promovido / catálogo), parcial (nada gravado), interrompido ou cancelado na queda. */
+export type FimImportacao = { estado: "gravado" | "parcial" | "interrompido" | "cancelado"; lote: LoteCenti | null };
+
+/**
+ * UMA importação de um card, inteira e no navegador — a MESMA na aba Importação do card e no "Importar tudo": começa (ou
+ * retoma) o lote, lê o ano (`lerAnoNaCenti`), conclui e, com a QUEDA, só grava com `confirmarQueda`. Interromper cancela o
+ * lote (nada gravado). Uma FALHA solta a trava (o lote fica aberto: Continuar lê só o que falta) e é relançada com o lote
+ * (`lote` em `onLote`); a recusa do sistema (outra aba conduz) é relançada sem mexer no lote.
+ */
+export async function importarCard(o: {
+  cardId: number;
+  ano: number;
+  /** O modo do lote novo (`undefined` = empenhos). */
+  modo?: string;
+  retomar: LoteCenti | null;
+  comPeriodo: boolean;
+  parar: () => boolean;
+  confirmarQueda: (queda: string) => Promise<boolean>;
+  onLote?: (l: LoteCenti) => void;
+  onPasso?: (p: PassoLote) => void;
+  onAnteriores?: (p: PassoLote[]) => void;
+  onAgora?: (a: Agora | null) => void;
+  onde?: (texto: string) => void;
+}): Promise<FimImportacao> {
+  const condutor = crypto.randomUUID();
+  let local = -1;
+  let lote = o.retomar;
+  const aplicar = (l: LoteCenti) => {
+    lote = l;
+    o.onLote?.(l);
+  };
+  const cancelar = (motivo: string) => (lote ? pedirImportacao(o.cardId, { acao: "cancelar", lote: lote.id, condutor, motivo: motivo.slice(0, 300) }).catch(() => {}) : Promise.resolve());
+  try {
+    if (!lote) aplicar((await pedirImportacao<{ lote: LoteCenti }>(o.cardId, { acao: "iniciar", ano: o.ano, condutor, ...(o.modo ? { modo: o.modo } : {}) })).lote);
+    else aplicar(lote);
+    const atual = lote as LoteCenti;
+    const anteriores = o.retomar ? await lerPassos(o.cardId, o.retomar.id) : [];
+    o.onAnteriores?.(anteriores);
+    aplicar(
+      await lerAnoNaCenti({
+        cardId: o.cardId,
+        lote: atual,
+        anteriores,
+        condutor,
+        comPeriodo: o.comPeriodo,
+        parar: o.parar,
+        onPasso: o.onPasso ?? (() => {}),
+        onLote: aplicar,
+        onAgora: o.onAgora ?? (() => {}),
+        idLocal: () => local--,
+        onde: o.onde ?? (() => {}),
+      }),
+    );
+    const id = (lote as LoteCenti).id;
+    if (o.parar()) {
+      await cancelar("Interrompida por quem importava.");
+      return { estado: "interrompido", lote };
+    }
+    let c = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(o.cardId, { acao: "concluir", lote: id, condutor });
+    if (c.queda) {
+      if (!(await o.confirmarQueda(c.queda))) {
+        await cancelar(`Cancelada: ${c.queda}`);
+        return { estado: "cancelado", lote };
+      }
+      c = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(o.cardId, { acao: "concluir", lote: id, condutor, aceitarQueda: true });
+    }
+    aplicar(c.lote);
+    return { estado: c.lote.estado === "promovido" || c.lote.estado === "unidades" ? "gravado" : "parcial", lote: c.lote };
+  } catch (e) {
+    o.onAgora?.(null);
+    if (e instanceof RecusaImportacao) throw e;
+    if (lote && o.parar()) {
+      await cancelar("Interrompida por quem importava.");
+      return { estado: "interrompido", lote };
+    }
+    // A falha NÃO perde o que já foi lido: o lote fica aberto e a trava desta aba é solta.
+    if (lote) await pedirImportacao(o.cardId, { acao: "pausar", lote: lote.id, condutor }).catch(() => {});
+    throw e;
+  }
 }

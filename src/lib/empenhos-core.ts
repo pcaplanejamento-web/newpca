@@ -253,10 +253,18 @@ function emMeses(p: Periodo): Periodo[] {
 }
 
 /**
- * Os períodos a pedir: o que falta do ano, semana a semana (sem o {inicio}/{fim}, o ano inteiro de uma vez); `porMes` =
+ * Os períodos a pedir: o que falta do ano, semana a semana (sem o {inicio}/{fim}, o ano inteiro de uma vez; `inteiro` = as
+ * lacunas inteiras — a tela); `porMes` =
  * mês a mês (os PAGAMENTOS — a Centi só recorta por mês; o que falta é sempre de meses inteiros).
  */
-export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean, hoje?: string, porMes = false): Periodo[] {
+export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolean, hoje?: string, porMes = false, inteiro = false): Periodo[] {
+  // INTEIRO (a leitura pela TELA, que repassa a resposta sem guardá-la): as lacunas como estão — o ano todo num pedido; nos
+  // pagamentos, o ano inteiro ou os meses que faltam (a Centi recorta só por mês ou pelo ano).
+  if (inteiro) {
+    const lacunas = lacunasDoAno(ano, lidos, hoje);
+    if (!porMes) return comPeriodo || !lidos.length ? lacunas : [];
+    return lacunas.flatMap((p) => (p.inicio === `${ano}-01-01` && p.fim === `${ano}-12-31` ? [p] : emMeses(p)));
+  }
   if (porMes) return lacunasDoAno(ano, lidos, hoje).flatMap(emMeses);
   if (!comPeriodo) return lidos.length ? [] : [anoInteiro(ano)];
   return lacunasDoAno(ano, lidos, hoje).flatMap(emSemanas);
@@ -487,6 +495,8 @@ export type LoteCenti = {
   inseridos: number | null;
   atualizados: number | null;
   removidos: number | null;
+  /** Os registros que a Centi não trouxe pela 1ª VEZ: ficam AUSENTES (valendo) — só a próxima importação sem eles os remove. */
+  ausentes: number | null;
   /** Os registros SEM vínculo no card — lidos e conferidos, NÃO gravados. */
   fora: number | null;
   mensagem: string | null;

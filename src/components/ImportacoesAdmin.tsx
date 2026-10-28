@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   anosDoCard,
   type CardEmpenho,
@@ -22,7 +22,8 @@ import {
   type TipoCard,
   type VinculoCard,
 } from "@/lib/empenho-cards-core";
-import { usaPeriodo } from "@/lib/empenhos-core";
+import { fracaoDoAno, type LoteCenti, type PassoLote, usaPeriodo } from "@/lib/empenhos-core";
+import { importarCard, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -31,13 +32,14 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { EmpenhoCardConfig } from "./EmpenhoCardConfig";
-import { EmpenhoCardImportacao } from "./EmpenhoCardImportacao";
+import { EmpenhoCardImportacao, textoConclusao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
 import { Callout } from "./Callout";
 import { SelectField, TextField } from "./Field";
-import { IconCheck, IconChevronLeft, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
+import { IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
+import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
 import { Segmented } from "./Segmented";
@@ -171,7 +173,8 @@ export function ImportacoesAdmin() {
           ariaLabel="Tipo de importação"
           options={TIPOS.map((t) => ({ value: t, label: cards ? `${NOME_TIPO[t].titulo} (${num(contagem(t))})` : NOME_TIPO[t].titulo, curto: NOME_TIPO[t].titulo }))}
         />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {cards && config && <ImportarTudo cards={cards} regra={config.removidos} onMudou={carregar} />}
           <AjudaImportacoes />
         </div>
       </div>
@@ -187,6 +190,187 @@ export function ImportacoesAdmin() {
         <ListaCards tipo={tipo} cards={doTipo} todos={cards} automatica={!!config?.ativa} onAbrir={(id, sub) => abrir(id, sub)} />
       ) : null}
     </div>
+  );
+}
+
+/** Uma linha do "Importar tudo": o card e como vai a importação dele. */
+type LinhaTudo = {
+  card: ResumoCard;
+  estado: "fila" | "lendo" | "gravado" | "parcial" | "falhou" | "interrompido" | "cancelado" | "pulado";
+  texto: string;
+  fracao: number;
+  ano: number;
+  retomar: LoteCenti | null;
+};
+
+/**
+ * IMPORTAR TUDO de uma vez: todos os cards configurados, com vínculos e sem outra importação conduzida — cada card um lote
+ * PRÓPRIO (o servidor deixa um lote lendo por card), todos AO MESMO TEMPO, sem fila entre eles: primeiro os EMPENHOS (as
+ * liquidações e os pagamentos seguem o empenho pelo número) e, terminados eles, as LIQUIDAÇÕES e os PAGAMENTOS juntos. A
+ * importação de cada card é a MESMA da aba do card (`importarCard`): o ano escolhido (ou o lote aberto do card, que é
+ * retomado), a conferência e a queda — a confirmação de cada queda vem uma por vez. Interromper cancela os lotes em curso.
+ */
+function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: RegraRemovidos; onMudou: () => void }) {
+  const anoAtual = new Date().getFullYear();
+  const anos = useMemo(() => [...new Set(cards.flatMap((c) => anosDoCard(c.anos, anoAtual)))].sort((a, b) => b - a), [cards, anoAtual]);
+  const [aberto, setAberto] = useState(false);
+  const [ano, setAno] = useState(anoAtual);
+  const [linhas, setLinhas] = useState<LinhaTudo[] | null>(null);
+  const [rodando, setRodando] = useState(false);
+  const parar = useRef(false);
+  const { confirmar, confirmacao } = useConfirmacao();
+  /** As quedas chegam de vários cards ao mesmo tempo: uma pergunta por vez. */
+  const filaQueda = useRef<Promise<unknown>>(Promise.resolve());
+
+  const muda = (id: number, l: Partial<LinhaTudo>) => setLinhas((ls) => ls?.map((x) => (x.card.id === id ? { ...x, ...l } : x)) ?? ls);
+
+  useEffect(() => {
+    if (!rodando) return;
+    const aviso = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [rodando]);
+
+  /** O que vai ser importado: os cards prontos (o lote aberto de cada um é lido para retomar). */
+  async function preparar(): Promise<LinhaTudo[]> {
+    return Promise.all(
+      cards.map(async (card): Promise<LinhaTudo> => {
+        const base: LinhaTudo = { card, estado: "fila", texto: "Na fila", fracao: 0, ano, retomar: null };
+        if (pendenciasDoCard(card, card.vinculos).length > 0) return { ...base, estado: "pulado", texto: "Card ainda não configurado." };
+        const r = await fetch(`/api/empenhos/cards/${card.id}/importar`).catch(() => null);
+        const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; emAndamento?: LoteCenti | null } | undefined;
+        const lendo = j?.emAndamento ?? null;
+        if (lendo?.conduzido) return { ...base, estado: "pulado", texto: "Outra importação está lendo este card agora." };
+        if (lendo) return { ...base, ano: lendo.ano, retomar: lendo, texto: `Continua a importação aberta de ${lendo.ano}` };
+        if (!anosDoCard(card.anos, anoAtual).includes(ano)) return { ...base, estado: "pulado", texto: `O ano ${ano} não está nos anos do card.` };
+        return base;
+      }),
+    );
+  }
+
+  async function umCard(l: LinhaTudo): Promise<void> {
+    const id = l.card.id;
+    const passos: PassoLote[] = [];
+    muda(id, { estado: "lendo", texto: "Lendo na Centi…" });
+    try {
+      const { estado, lote } = await importarCard({
+        cardId: id,
+        ano: l.ano,
+        modo: l.card.tipo !== "empenhos" ? l.card.tipo : undefined,
+        retomar: l.retomar,
+        comPeriodo: usaPeriodo(l.card.parametros),
+        parar: () => parar.current,
+        confirmarQueda: (queda) => {
+          const p = filaQueda.current.then(() =>
+            confirmar({ titulo: `${l.card.nome}: os números caíram — gravar mesmo assim?`, texto: `${queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar este card", perigo: true }),
+          );
+          filaQueda.current = p.catch(() => {});
+          return p;
+        },
+        onAnteriores: (a) => passos.push(...a),
+        onPasso: (p) => {
+          passos.push(p);
+          muda(id, { fracao: fracaoDoAno(l.ano, passos), texto: `Lendo na Centi… ${passos.length} ${passos.length === 1 ? "pedido" : "pedidos"}` });
+        },
+      });
+      if (estado === "gravado" && lote) muda(id, { estado: "gravado", fracao: 1, texto: lote.estado === "promovido" ? textoConclusao(lote, regra) : (lote.mensagem ?? "Concluído.") });
+      else if (estado === "parcial") muda(id, { estado: "parcial", texto: `Parcial — nada foi gravado. ${lote?.mensagem ?? ""}` });
+      else muda(id, { estado, texto: estado === "interrompido" ? "Interrompida — nada foi gravado." : "Cancelada na queda — nada mudou." });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha na importação.";
+      muda(id, { estado: "falhou", texto: e instanceof RecusaImportacao ? msg : `${msg} O que foi lido ficou guardado — Continuar no card lê só o que falta.` });
+    }
+  }
+
+  async function comecar() {
+    parar.current = false;
+    setRodando(true);
+    try {
+      const todas = await preparar();
+      setLinhas(todas);
+      const vao = todas.filter((l) => l.estado === "fila");
+      // Os EMPENHOS primeiro (as liquidações e os pagamentos se ligam a eles pelo número), todos em paralelo.
+      await Promise.all(vao.filter((l) => l.card.tipo === "empenhos").map(umCard));
+      if (!parar.current) await Promise.all(vao.filter((l) => l.card.tipo !== "empenhos").map(umCard));
+    } finally {
+      setRodando(false);
+      onMudou();
+    }
+  }
+
+  const vao = (linhas ?? []).filter((l) => l.estado !== "pulado");
+  const feitos = vao.filter((l) => l.estado !== "fila" && l.estado !== "lendo").length;
+  const total = vao.length;
+  const fracao = total ? vao.reduce((t, l) => t + (l.estado === "fila" ? 0 : l.estado === "lendo" ? l.fracao : 1), 0) / total : 0;
+  const tom = (e: LinhaTudo["estado"]) => (e === "gravado" ? "emerald" : e === "falhou" ? "red" : e === "parcial" || e === "cancelado" ? "amber" : e === "lendo" ? "blue" : "slate");
+  const rotulo: Record<LinhaTudo["estado"], string> = { fila: "Na fila", lendo: "Lendo", gravado: "Gravado", parcial: "Parcial", falhou: "Falhou", interrompido: "Interrompida", cancelado: "Cancelada", pulado: "Fora" };
+
+  return (
+    <>
+      <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => setAberto(true)}>
+        Importar tudo
+      </Button>
+      <Modal
+        open={aberto}
+        onClose={() => !rodando && setAberto(false)}
+        bloqueado={rodando}
+        size="lg"
+        titulo="Importar tudo"
+        rodape={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {rodando ? (
+              <Button size="sm" variant="danger" onClick={() => (parar.current = true)}>
+                Interromper
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => setAberto(false)}>
+                  Fechar
+                </Button>
+                <Button size="sm" icon={<IconDownload className="h-4 w-4" />} onClick={comecar} disabled={!anos.length}>
+                  {linhas ? "Importar de novo" : "Importar"}
+                </Button>
+              </>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-[var(--gap-block)]">
+          <p className="text-[13px] text-muted">
+            Cada card num lote próprio, todos ao mesmo tempo: primeiro os empenhos, depois as liquidações e os pagamentos (que se ligam
+            ao empenho pelo número). Só o que mudou é gravado; a importação aberta de um card é continuada de onde parou.
+          </p>
+          <SelectField label="Ano" compacto value={String(ano)} onChange={(e) => setAno(Number(e.target.value))} disabled={rodando}>
+            {anos.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </SelectField>
+          {linhas && total > 0 && <Progress value={fracao * 100} label={`${num(feitos)} de ${num(total)} cards concluídos`} />}
+          {linhas && (
+            <ul className="divide-y divide-border rounded-card border border-border">
+              {linhas.map((l) => (
+                <li key={l.card.id} className="space-y-1 p-[var(--pad-card)]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={tom(l.estado)} dot vivo={l.estado === "lendo"}>
+                      {rotulo[l.estado]}
+                    </Badge>
+                    <span className="font-medium text-text">{l.card.nome}</span>
+                    <span className="text-xs text-muted">
+                      {NOME_TIPO[l.card.tipo].titulo} · {l.ano}
+                    </span>
+                  </div>
+                  <p className="text-[12.5px] text-text-2">{l.texto}</p>
+                  {l.estado === "lendo" && <Progress value={l.fracao * 100} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Modal>
+      {confirmacao}
+    </>
   );
 }
 

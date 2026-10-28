@@ -23,9 +23,11 @@ export type Baixado = {
   /** Com `faixa`: a resposta acabou dentro da faixa (então `lidos` = o tamanho dela) e o Content-Length, se veio. */
   terminou?: boolean;
   comprimento?: number | null;
+  /** Com `fluxo`: o corpo REPASSADO como chega (contado — passou do teto, o fluxo falha), sem guardar nada na memória. */
+  corpo?: ReadableStream<Uint8Array>;
 };
 
-export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; pedacos?: boolean; faixa?: { de: number; ate: number }; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
+export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; pedacos?: boolean; fluxo?: boolean; faixa?: { de: number; ate: number }; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
   const url = urlAgendaValida(bruta);
   if (!url) throw new Error("Link inválido: use um endereço https:// público.");
   const grande = `${o.quem} é grande demais (máx. ${Math.round(o.maxBytes / 1_000_000) || 1} MB).`;
@@ -33,6 +35,8 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
   const t = setTimeout(() => ctl.abort(), o.tempoMs ?? TEMPO_MS);
   let destino = url;
   let texto = "";
+  // No FLUXO, o tempo vale até o fim do repasse (quem lê o corpo) — o `finally` não desarma.
+  let repassando = false;
   try {
     let r: Response | null = null;
     for (let salto = 0; ; salto++) {
@@ -60,6 +64,26 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
     const cl = r.headers.get("content-length");
     const comprimento = cl != null && /^\d+$/.test(cl) ? Number(cl) : null;
     if ((comprimento ?? 0) > o.maxBytes) throw new Error(grande);
+    if (o.fluxo) {
+      if (!r.body) throw new Error(`${o.quem} respondeu sem conteúdo.`);
+      let lidos = 0;
+      const contar = new TransformStream<Uint8Array, Uint8Array>({
+        transform(pedaco, ctl) {
+          lidos += pedaco.byteLength;
+          if (lidos > o.maxBytes) {
+            clearTimeout(t);
+            ctl.error(new Error(grande));
+            return;
+          }
+          ctl.enqueue(pedaco);
+        },
+        flush() {
+          clearTimeout(t);
+        },
+      });
+      repassando = true;
+      return { texto: "", tipo, url: destino, status: r.status, corpo: r.body.pipeThrough(contar) };
+    }
     const leitor = r.body?.getReader();
     if (!leitor) throw new Error(`${o.quem} respondeu sem conteúdo.`);
     if (o.faixa) {
@@ -130,6 +154,6 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
     if (e instanceof Error && (e.message.startsWith(o.quem) || e.message.startsWith("Link"))) throw e;
     throw new Error(`Não foi possível acessar ${o.quem.replace(/^(A|O) /, (m) => m.toLowerCase())}.`);
   } finally {
-    clearTimeout(t);
+    if (!repassando) clearTimeout(t);
   }
 }

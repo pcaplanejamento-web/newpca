@@ -22,7 +22,7 @@ import {
 } from "@/lib/empenhos-core";
 import { textoDuracao } from "@/lib/fluxo-progresso";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
-import { type Agora, lerAnoNaCenti, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
+import { type Agora, importarCard, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { FerramentasAba } from "./AbasEspaco";
 import { useEstimativa } from "./fluxos/useEstimativa";
 import { Ajuda } from "./Ajuda";
@@ -59,6 +59,14 @@ async function excluirTentativas(cardId: number, corpo: { lotes: number[] } | { 
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
 /** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
 const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
+/** O aviso da importação GRAVADA — o MESMO aqui e no "Importar tudo". */
+export function textoConclusao(fim: LoteCenti, regra: "marcar" | "apagar"): string {
+  const f = fim.modo === "liquidacoes";
+  const o = (m: string, fem: string) => (f ? fem : m);
+  const quem = fim.modo === "pagamentos" ? `Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido)` : f ? `Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados)` : `Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados)`;
+  const fora = fim.modo === "dados" || !fim.modo ? "sem vínculo no card" : "sem o empenho nem o órgão no cadastro";
+  return `${quem}: ${num(fim.inseridos)} ${o("novos", "novas")}, ${num(fim.atualizados)} ${o("atualizados", "atualizadas")}, ${num(semMudanca(fim))} sem mudança (nada gravado), ${num(fim.ausentes ?? 0)} ${o("ausentes", "ausentes")} pela 1ª vez (seguem valendo), ${num(fim.removidos)} ${regra === "apagar" ? o("apagados", "apagadas") : o("marcados como removidos", "marcadas como removidas")}${fim.fora ? `, ${num(fim.fora)} ${fora} (não ${o("gravados", "gravadas")})` : ""}.`;
+}
 /** O tipo da importação no histórico. */
 const rotuloTipo = (l: LoteCenti) =>
   `${l.modo === "pagamentos" ? "Pagamentos" : l.modo === "liquidacoes" ? "Liquidações" : l.modo === "unidades" ? "Catálogo" : "Empenhos"}${l.orgaosCenti ? ` · ${l.orgaosCenti.length} órgãos` : ""}`;
@@ -129,9 +137,6 @@ export function EmpenhoCardImportacao({
   const liq = cardPorOrgao(tipo);
   const [orgaosLiq, setOrgaosLiq] = useState<OrgaoLiq[] | null>(null);
   const parar = useRef(false);
-  /** O token DESTA aba — o servidor deixa uma aba por vez conduzir o lote. */
-  const condutor = useRef("");
-  const local = useRef(-1);
   const { confirmar, confirmacao } = useConfirmacao();
   const comPeriodo = usaPeriodo(api.parametros);
 
@@ -192,85 +197,46 @@ export function EmpenhoCardImportacao({
 
   const anotar = (p: PassoLote) => setPassos((l) => [...l, p]);
 
-  /** Lê UM lote (os empenhos, ou as liquidações de todos os órgãos da Centi). true = gravado. */
+  /** Lê UM lote (os empenhos, ou as liquidações/pagamentos de todos os órgãos da Centi) — `importarCard`. true = gravado. */
   async function importar(retomar: LoteCenti | null): Promise<boolean> {
     parar.current = false;
-    condutor.current = crypto.randomUUID();
     setRodando(true);
     setPassos([]);
-    const deQuem = "";
-    let lote = retomar;
     let onde = "";
     try {
-      if (!lote) lote = (await pedirImportacao<{ lote: LoteCenti }>(api.id, { acao: "iniciar", ano, condutor: condutor.current, ...(tipo !== "empenhos" ? { modo: tipo } : {}) })).lote;
-      setAtual(lote);
-      const anteriores = retomar ? await lerPassos(api.id, retomar.id) : [];
-      setPassos(anteriores);
-      lote = await lerAnoNaCenti({
+      const { estado, lote: fim } = await importarCard({
         cardId: api.id,
-        lote,
-        anteriores,
-        condutor: condutor.current,
+        ano,
+        modo: tipo !== "empenhos" ? tipo : undefined,
+        retomar,
         comPeriodo,
         parar: () => parar.current,
-        onPasso: anotar,
+        confirmarQueda: (queda) =>
+          confirmar({ titulo: "Os números caíram — gravar mesmo assim?", texto: `${queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar importação", perigo: true }),
         onLote: setAtual,
+        onPasso: anotar,
+        onAnteriores: setPassos,
         onAgora: setAgora,
-        idLocal: () => local.current--,
         onde: (t) => {
           onde = t;
         },
       });
-      if (parar.current) {
-        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida por quem importava." });
-        toast.info("Importação interrompida — nada foi gravado.");
-        return false;
-      }
-      let conclusao = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(api.id, { acao: "concluir", lote: lote.id, condutor: condutor.current });
-      if (conclusao.queda) {
-        // A QUEDA em relação à última importação concluída: só grava com a confirmação de quem importa.
-        const seguir = await confirmar({ titulo: "Os números caíram — gravar mesmo assim?", texto: `${conclusao.queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar importação", perigo: true });
-        if (!seguir) {
-          await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: `Cancelada: ${conclusao.queda}`.slice(0, 300) });
-          toast.info("Importação cancelada — nada mudou.");
-          return false;
-        }
-        conclusao = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(api.id, { acao: "concluir", lote: lote.id, condutor: condutor.current, aceitarQueda: true });
-      }
-      const fim = conclusao.lote;
-      setAtual(fim);
-      if (fim.estado === "unidades") {
+      if (estado === "interrompido") toast.info("Importação interrompida — nada foi gravado.");
+      else if (estado === "cancelado") toast.info("Importação cancelada — nada mudou.");
+      else if (!fim) return false;
+      else if (fim.estado === "unidades") {
         toast.success(fim.mensagem ?? "Catálogo da Centi atualizado.");
-      } else if (fim.estado === "promovido" && tipo === "pagamentos") {
-        toast.success(`Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${config.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravados)` : ""}.`);
-        onMudou();
-      } else if (fim.estado === "promovido" && liq) {
-        toast.success(`Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${config.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravadas)` : ""}.`);
-        onMudou();
       } else if (fim.estado === "promovido") {
-        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${config.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem vínculo no card (não gravados)` : ""}.`);
+        toast.success(textoConclusao(fim, config.removidos));
         onMudou();
       } else {
-        toast.error(`Importação parcial${deQuem} — nada foi gravado. ${fim.mensagem ?? ""}`);
+        toast.error(`Importação parcial — nada foi gravado. ${fim.mensagem ?? ""}`);
       }
-      return fim.estado === "promovido" || fim.estado === "unidades";
+      return estado === "gravado";
     } catch (e) {
-      setAgora(null);
       const msg = e instanceof Error ? e.message : "Falha na importação.";
-      if (e instanceof RecusaImportacao) {
-        // Recusado pelo sistema (ex.: outra aba conduz o lote) — o lote é de quem o conduz: não cancela.
-        toast.error(msg);
-      } else if (lote && parar.current) {
-        await pedirImportacao(api.id, { acao: "cancelar", lote: lote.id, condutor: condutor.current, motivo: "Interrompida por quem importava." }).catch(() => {});
-        toast.info("Importação interrompida — nada foi gravado.");
-      } else if (lote) {
-        // A falha (a Centi fora do ar, a rede) NÃO perde o que já foi lido: a importação fica ABERTA — Continuar lê só o
-        // que falta. A trava desta aba é solta para qualquer aba poder continuar.
-        await pedirImportacao(api.id, { acao: "pausar", lote: lote.id, condutor: condutor.current }).catch(() => {});
-        toast.error(`A leitura${deQuem} parou${onde ? ` em ${onde}` : ""}: ${msg} O que já foi lido ficou guardado — toque em Continuar para ler só o que falta.`);
-      } else {
-        toast.error(msg);
-      }
+      if (e instanceof RecusaImportacao) toast.error(msg);
+      else toast.error(`A leitura parou${onde ? ` em ${onde}` : ""}: ${msg} O que já foi lido ficou guardado — toque em Continuar para ler só o que falta.`);
       return false;
     } finally {
       setRodando(false);
@@ -418,7 +384,7 @@ export function EmpenhoCardImportacao({
       render: (l) =>
         l.estado === "promovido" ? (
           <span className="text-text-2">
-            {num(l.inseridos)} novos · {num(l.atualizados)} atualizados · {num(semMudanca(l))} sem mudança · {num(l.removidos)} removidos
+            {num(l.inseridos)} novos · {num(l.atualizados)} atualizados · {num(semMudanca(l))} sem mudança (nada gravado) · {num(l.ausentes ?? 0)} ausentes · {num(l.removidos)} removidos
             {l.fora ? ` · ${num(l.fora)} sem vínculo (não gravados)` : ""}
           </span>
         ) : (
@@ -474,15 +440,21 @@ export function EmpenhoCardImportacao({
         )}
         <Ajuda titulo="Importação" botao="sm">
           <p>
-            Lê o ano <strong>{tipo === "pagamentos" ? "mês a mês" : "semana a semana"}</strong>
-            {tipo === "pagamentos" ? " (a Centi só recorta os pagamentos por mês)" : " (o período que vier grande demais é dividido ao meio), página a página"}, com a
-            configuração salva do card, e guarda tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque
-            num para ver o detalhe (o pedido enviado, a resposta, o tempo, o erro).
+            Lê o <strong>ano inteiro</strong> num pedido{tipo === "empenhos" ? "" : " por órgão, todos os órgãos ao mesmo tempo"} — o período
+            que vier grande demais é dividido{tipo === "pagamentos" ? " em meses" : " ao meio"} —, com a configuração salva do card, e guarda
+            tudo num lote separado. Cada pedido aparece na hora em <strong>Passos</strong> — toque num para ver o detalhe (o pedido
+            enviado, a resposta, o tempo, o erro).
           </p>
           <p>
-            O JSON da Centi é lido <strong>aqui no navegador</strong> e chega ao sistema em partes de tamanho fixo — nenhum pedido passa
-            do limite do plano gratuito, qualquer que seja o tamanho do mês. Na <strong>atualização automática</strong> (sem navegador),
-            a resposta grande é baixada e processada em fragmentos, um a cada minuto.
+            A resposta da Centi passa direto pelo sistema e é lida <strong>aqui no navegador</strong>, que compara cada registro com a
+            assinatura do que já está gravado: só chegam ao sistema, em partes pequenas e paralelas, os registros{" "}
+            <strong>novos ou alterados</strong> — os iguais vão só como a chave conferida, e nada igual é escrito no banco. Na{" "}
+            <strong>atualização automática</strong> (sem navegador), a resposta é processada em fragmentos, um a cada minuto.
+          </p>
+          <p>
+            O registro que <strong>some</strong> da Centi fica <strong>ausente</strong> e continua valendo; só se faltar de novo na
+            próxima importação concluída vale a regra do card (marcar como removido ou apagar). Cada alteração guarda o valor anterior
+            — veja em <strong>Alterações na Centi</strong>, no detalhe do registro.
           </p>
           {tipo === "pagamentos" ? (
             <>
@@ -601,8 +573,7 @@ export function EmpenhoCardImportacao({
         <div className="space-y-3">
           {rodando && atual.orgaosCenti && (
             <p className="text-[13px] text-muted">
-              {nomeDoLote(atual)} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo em cada{" "}
-              {atual.modo === "pagamentos" ? "mês" : "semana"} (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
+              {nomeDoLote(atual)} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
             </p>
           )}
           {rodando && (

@@ -1829,3 +1829,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - v1.153.1: filtros de unidade do Dashboard do PCA e da tela pública com sigla + nome (comNomesUnidades).
 - v1.154.0: unidade de medida do item renomeada para "Medida" na interface.
 - v1.161.3: filtro da Mesa do PCA acompanha o cabeçalho; acesso por aba podado ao trocar módulos.
+- v1.241.0: importações da Centi só gravam o que mudou (assinatura por registro, pares para os iguais), ano inteiro num pedido com partes pequenas em paralelo (fim dos passos "Erro" por tempo de CPU), ausente em duas leituras antes de remover, histórico "Alterações na Centi" nos detalhes e "Importar tudo" em Configurações → Importações.

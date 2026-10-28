@@ -39,45 +39,47 @@ const base = (lote: LoteCenti, anteriores: PassoLote[] = [], parar = () => false
   };
 };
 
-test("leitura em paralelo: liquidações = todos os órgãos de cada semana, no máximo 6 ao mesmo tempo", async () => {
+test("leitura em paralelo: liquidações = o ANO INTEIRO de cada órgão num pedido, todos os órgãos em paralelo (até 6)", async () => {
   const s = servidor(() => ({}));
   const lote = { ...LOTE, ano: 2026 } as LoteCenti;
   await lerAnoNaCenti(base(lote).o);
   const semanas = new Set(s.pedidos.map((p) => p.split("|")[0]));
-  assert.equal(s.pedidos.length, semanas.size * 8, "cada semana pede os 8 órgãos, uma vez cada");
+  assert.equal(semanas.size, 1, "um período só: o ano inteiro");
+  assert.equal(s.pedidos.length, 8, "os 8 órgãos, uma vez cada");
   assert.equal(new Set(s.pedidos).size, s.pedidos.length, "nenhum pedido repetido");
   assert.ok(s.maximo() <= PARALELO_LIQUIDACOES && s.maximo() > 1, `em paralelo, até ${PARALELO_LIQUIDACOES} (foram ${s.maximo()})`);
 });
 
 test("leitura em paralelo: a retomada pede só os órgãos que faltam; a divisão recomeça as metades com todos os órgãos", async () => {
   const p = (inicio: string, fim: string, pagina: number, fimPeriodo = false) => ({ ...passoVazio(pagina, { inicio, fim }, pagina), estado: "ok" as const, fimPeriodo });
-  // A 1ª semana: lidos os órgãos 1 e 3 (falta o 2 e os de 4 a 8); a 2ª dividida (grande demais no órgão 1).
+  // A 1ª semana (de uma leitura antiga): lidos os órgãos 1 e 3 (falta o 2 e os de 4 a 8); o resto do ano vem num pedido por
+  // órgão — e é dividido (grande demais no órgão 1).
   const anteriores = [p("2026-01-01", "2026-01-07", 1), p("2026-01-01", "2026-01-07", 3)];
   let dividiu = false;
   const s = servidor((c) => {
-    if (c.inicio === "2026-01-08" && c.fim === "2026-01-14" && !dividiu) {
+    if (c.inicio === "2026-01-08" && c.fim === "2026-12-31" && !dividiu) {
       dividiu = true;
-      return { dividir: [{ inicio: "2026-01-08", fim: "2026-01-11" }, { inicio: "2026-01-12", fim: "2026-01-14" }] };
+      return { dividir: [{ inicio: "2026-01-08", fim: "2026-07-04" }, { inicio: "2026-07-05", fim: "2026-12-31" }] };
     }
     return {};
   });
   await lerAnoNaCenti(base(LOTE, anteriores as PassoLote[]).o);
   const da1 = s.pedidos.filter((x) => x.startsWith("2026-01-01")).map((x) => Number(x.split("|")[1])).sort((a, b) => a - b);
   assert.deepEqual(da1, [2, 4, 5, 6, 7, 8], "só os órgãos que faltavam");
-  for (const metade of ["2026-01-08", "2026-01-12"]) {
+  for (const metade of ["2026-01-08", "2026-07-05"]) {
     const n = s.pedidos.filter((x) => x.startsWith(`${metade}|`)).length;
     assert.ok(n >= 8, `a metade ${metade} lê os 8 órgãos (${n})`);
   }
 });
 
 test("leitura em paralelo: a 1ª falha para de começar novos, espera os em curso e diz ONDE falhou", async () => {
-  servidor((c) => (c.inicio === "2026-02-08" && c.pagina === 3 ? { status: 409 } : {}));
+  servidor((c) => (c.inicio === "2026-01-01" && c.pagina === 3 ? { status: 409 } : {}));
   const b = base(LOTE);
   await assert.rejects(lerAnoNaCenti(b.o), /recusado/);
   assert.match(b.onde(), /órgão 3$/);
 });
 
-test("leitura em paralelo: empenhos = várias semanas ao mesmo tempo, as páginas de uma semana em sequência", async () => {
+test("leitura: empenhos = o ANO INTEIRO num pedido; as páginas dele em sequência", async () => {
   const lote = { ...LOTE, modo: "dados", orgaosCenti: null } as unknown as LoteCenti;
   const vistas = new Map<string, number[]>();
   const s = servidor((c) => {
@@ -87,8 +89,9 @@ test("leitura em paralelo: empenhos = várias semanas ao mesmo tempo, as página
     return { continuar: c.pagina < 3 };
   });
   await lerAnoNaCenti(base(lote).o);
-  for (const [semana, paginas] of vistas) assert.deepEqual(paginas, [1, 2, 3], `semana ${semana} em sequência`);
-  assert.ok(s.maximo() > 1 && s.maximo() <= 4, `semanas em paralelo, até 4 (foram ${s.maximo()})`);
+  assert.deepEqual([...vistas.keys()], ["2026-01-01"], "um período: o ano inteiro");
+  for (const [semana, paginas] of vistas) assert.deepEqual(paginas, [1, 2, 3], `período ${semana} em sequência`);
+  assert.equal(s.maximo(), 1, "as páginas de um período nunca correm juntas");
 });
 
 test("página no navegador: o JSON é lido AQUI e vai em partes de tamanho fixo; a leitura que falha vira o passo de erro", async () => {
@@ -106,6 +109,7 @@ test("página no navegador: o JSON é lido AQUI e vai em partes de tamanho fixo;
   const partes = enviados.filter((c) => c.acao === "parte");
   assert.equal(partes.length, 3, "3.200 linhas = 3 partes de até 1.500");
   assert.deepEqual(partes.map((p) => p.passo), [null, 7, 7], "a 1ª cria o passo; as seguintes vão pelo id dele");
+  assert.equal(partes.at(-1)?.parte, 2, "a ÚLTIMA (com o resumo) vai depois de todas as do meio");
   assert.equal((partes[2].resumo as { recebidos: number }).recebidos, 3200);
   assert.ok(partes.slice(0, -1).every((p) => p.resumo === null));
   enviados.length = 0;
@@ -113,4 +117,26 @@ test("página no navegador: o JSON é lido AQUI e vai em partes de tamanho fixo;
   await lerPaginaNoNavegador(1, "pagamentos", 2025, base);
   assert.deepEqual(enviados.map((c) => c.acao), ["baixar", "falha"]);
   assert.match(String(enviados[1].mensagem), /não é JSON/);
+});
+
+test("página no navegador: SÓ O QUE MUDOU vai inteiro — o registro com a assinatura gravada vai como o par (chave + assinatura)", async () => {
+  const { hashLinha } = await import("../src/lib/importacao-partes-core.ts");
+  const { lerPaginaPagamentos } = await import("../src/lib/pagamentos-core.ts");
+  const regs = Array.from({ length: 6 }, (_, i) => ({ IdOrdemPagamento: i + 1, IdNotaEmpenho: 9, Orgao: "P", ValorLiquido: 1, PossuiAnulacao: false }));
+  const lidas = lerPaginaPagamentos(JSON.stringify(regs), 2025).linhas;
+  // Gravados: os 4 primeiros iguais; o 5º com outra assinatura (mudou na Centi); o 6º não existe (novo).
+  const gravados = new Map(lidas.slice(0, 4).map((l) => [l.chave, hashLinha("pagamentos", l, 3)] as [string, string]));
+  gravados.set(lidas[4].chave, "zzzzzz");
+  const enviados: Record<string, unknown>[] = [];
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    const c = JSON.parse(init.body);
+    enviados.push(c);
+    if (c.acao === "baixar") return { status: 200, ok: true, headers: { get: (h: string) => (h === "x-centi-status" ? "200" : null) }, text: async () => JSON.stringify(regs) };
+    return { status: 200, ok: true, headers: { get: () => null }, json: async () => ({ ok: true, lote: LOTE, passo: { ...passoVazio(7, c, 1), id: 7 } }) };
+  }) as never;
+  await lerPaginaNoNavegador(1, "pagamentos", 2025, { lote: 1, condutor: "x", inicio: "2025-01-01", fim: "2025-12-31", pagina: 1 }, gravados, 3);
+  const [parte] = enviados.filter((c) => c.acao === "parte");
+  assert.equal((parte.linhas as unknown[]).length, 2, "o alterado e o novo, inteiros");
+  assert.deepEqual((parte.iguais as [string, string][]).map((p) => p[0]), lidas.slice(0, 4).map((l) => l.chave), "os iguais, só a chave + a assinatura");
+  assert.equal((parte.resumo as { recebidos: number }).recebidos, 6);
 });

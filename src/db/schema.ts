@@ -2283,6 +2283,8 @@ export const centiLotes = sqliteTable(
     idOrgaoCenti: integer("id_orgao_centi"),
     /** LIQUIDAÇÕES (migração `0150`): os órgãos da Centi do lote (JSON, na ordem) — a "página" N é o N-ésimo. */
     orgaosCenti: text("orgaos_centi"),
+    /** Os registros que a Centi não trouxe pela 1ª vez (migração `0162`): ficam AUSENTES (valendo) até a próxima importação. */
+    ausentes: integer("ausentes"),
   },
   (t) => [
     index("centi_lotes_card_ano_idx").on(t.cardId, t.ano, t.id),
@@ -2324,6 +2326,10 @@ export const centiLotePassos = sqliteTable(
     resIguais: integer("res_iguais"),
     resSemVinculo: integer("res_sem_vinculo"),
     em: text("em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** As CHAVES da página (migração `0162`, JSON): as dos registros IGUAIS ao gravado (nada deles é escrito) e as dos SEM
+     * VÍNCULO/destino (não gravados) — uma escrita por página, a base do que "sumiu" e da conferência com a Centi. */
+    chavesIguais: text("chaves_iguais"),
+    chavesFora: text("chaves_fora"),
   },
   (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
 );
@@ -2420,6 +2426,8 @@ export const empenhosStaging = sqliteTable(
       .references(() => centiLotes.id, { onDelete: "cascade" }),
     pagina: integer("pagina").notNull(),
     ...colunasEmpenho(),
+    /** A assinatura da linha lida (vai à tabela final na promoção). */
+    hash: text("hash"),
   },
   (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
 );
@@ -2441,6 +2449,11 @@ export const empenhos = sqliteTable(
     orgaoId: integer("orgao_id"),
     reparticaoId: integer("reparticao_id"),
     cardId: integer("card_id").references(() => empenhoCards.id, { onDelete: "cascade" }),
+    /** A importação em que a Centi não trouxe mais o registro (migração `0162`): AUSENTE, ainda valendo — só some (pela regra
+     * dos removidos) se a próxima importação concluída também não o trouxer; volta = NULL. */
+    ausenteDesdeLote: integer("ausente_desde_lote"),
+    /** A ASSINATURA dos dados (migração `0162` — `hashTupla`): igual à da leitura = o registro não é escrito de novo. */
+    hash: text("hash"),
   },
   (t) => [
     uniqueIndex("empenhos_card_chave_uq").on(t.cardId, t.chave),
@@ -2484,6 +2497,7 @@ export const liquidacoesStaging = sqliteTable(
     ...colunasLiquidacao(),
     /** O órgão da Centi que entregou a liquidação (migração `0150`). */
     idOrgaoCenti: integer("id_orgao_centi"),
+    hash: text("hash"),
   },
   (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
 );
@@ -2511,6 +2525,11 @@ export const liquidacoes = sqliteTable(
     leitor: integer("leitor").notNull().default(0),
     criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** A importação em que a Centi não trouxe mais o registro (migração `0162`): AUSENTE, ainda valendo — só some (pela regra
+     * dos removidos) se a próxima importação concluída também não o trouxer; volta = NULL. */
+    ausenteDesdeLote: integer("ausente_desde_lote"),
+    /** A ASSINATURA dos dados (migração `0162` — `hashTupla`): igual à da leitura = o registro não é escrito de novo. */
+    hash: text("hash"),
   },
   (t) => [
     uniqueIndex("liquidacoes_card_chave_uq").on(t.cardId, t.chave),
@@ -2550,6 +2569,7 @@ export const pagamentosStaging = sqliteTable(
     pagina: integer("pagina").notNull(),
     ...colunasPagamento(),
     idOrgaoCenti: integer("id_orgao_centi"),
+    hash: text("hash"),
   },
   (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
 );
@@ -2576,6 +2596,11 @@ export const pagamentos = sqliteTable(
     leitor: integer("leitor").notNull().default(0),
     criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    /** A importação em que a Centi não trouxe mais o registro (migração `0162`): AUSENTE, ainda valendo — só some (pela regra
+     * dos removidos) se a próxima importação concluída também não o trouxer; volta = NULL. */
+    ausenteDesdeLote: integer("ausente_desde_lote"),
+    /** A ASSINATURA dos dados (migração `0162` — `hashTupla`): igual à da leitura = o registro não é escrito de novo. */
+    hash: text("hash"),
   },
   (t) => [
     uniqueIndex("pagamentos_card_chave_uq").on(t.cardId, t.chave),
@@ -2588,18 +2613,21 @@ export const pagamentos = sqliteTable(
 );
 
 /**
- * Os registros SEM VÍNCULO de uma importação aberta (migração `0141`): só a CHAVE — para a conferência com a Centi contar
- * cada um uma vez (uma página repetida não engana); nenhum dado deles é guardado. Sai ao fechar a importação (cascade).
+ * O HISTÓRICO DAS ALTERAÇÕES da Centi (migração `0162`): a cada importação promovida, o que mudou em cada empenho,
+ * liquidação ou pagamento — `campos` = JSON `[{c: campo, a: antes, d: depois}]` (só os campos de dados que mudaram) —, e
+ * quando ficou ausente, foi removido ou voltou. Sem FK (fica mesmo que o registro saia); 365 dias.
  */
-export const centiStagingFora = sqliteTable(
-  "centi_staging_fora",
+export const centiAlteracoes = sqliteTable(
+  "centi_alteracoes",
   {
-    loteId: integer("lote_id")
-      .notNull()
-      .references(() => centiLotes.id, { onDelete: "cascade" }),
-    chave: text("chave").notNull(),
-    /** 1 = a chave de um registro IGUAL ao gravado (conferido em tempo real — os dados não ficam no staging, migração `0147`). */
-    igual: integer("igual").notNull().default(0),
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tipo: text("tipo").notNull(),
+    registroId: integer("registro_id").notNull(),
+    cardId: integer("card_id"),
+    loteId: integer("lote_id"),
+    acao: text("acao").notNull(),
+    campos: text("campos"),
+    em: text("em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [primaryKey({ columns: [t.loteId, t.chave] })],
+  (t) => [index("centi_alteracoes_registro_idx").on(t.tipo, t.registroId, t.id), index("centi_alteracoes_em_idx").on(t.em)],
 );

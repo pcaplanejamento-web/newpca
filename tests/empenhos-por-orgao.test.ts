@@ -60,7 +60,7 @@ test("empenhos por órgão (D1 real): o total soma os órgãos, o mapa é aprend
   assert.deepEqual({ ...lote }, { t: 1, u: 1 }, "o total do lote por órgão = a soma dos órgãos");
   assert.equal(await vigentesDosOrgaos(b.db, 1, 2026, [2]), 1, "só os da PREFEITURA (o ID 2)");
   const c = await contagemDaPromocao(b.db, l1, 1, 2026, 1, [2]);
-  assert.deepEqual(c, { inseridos: 0, atualizados: 1, removidos: 0, fora: 0 });
+  assert.deepEqual(c, { inseridos: 0, atualizados: 1, removidos: 0, ausentes: 0, fora: 0 });
   await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", c, [2]) as never);
   const e = Object.fromEntries((b.raw.prepare("SELECT numero, valor_empenhado v, removido_em r FROM empenhos").all() as { numero: string; v: number; r: string | null }[]).map((x) => [x.numero, x]));
   assert.equal(e["1"].v, 15);
@@ -68,7 +68,7 @@ test("empenhos por órgão (D1 real): o total soma os órgãos, o mapa é aprend
 
   // Sem o lote, a leitura do ano inteiro marcaria o 2 — a régua de sempre segue igual.
   const lTodos = b.novoLote(null);
-  assert.equal(await contagemDaPromocao(b.db, lTodos, 1, 2026, 1).then((x) => x.removidos), 2);
+  assert.equal(await contagemDaPromocao(b.db, lTodos, 1, 2026, 1).then((x) => x.ausentes), 2);
   b.raw.prepare("UPDATE centi_lotes SET estado = 'parcial' WHERE id = ?").run(lTodos); // um lote LENDO por card
 
   // A queda compara só com a importação dos MESMOS órgãos.
@@ -80,8 +80,13 @@ test("empenhos por órgão (D1 real): o total soma os órgãos, o mapa é aprend
   const l2 = b.novoLote([2]);
   await pagina(b, l2, 1, [], 0);
   const c2 = await contagemDaPromocao(b.db, l2, 1, 2026, 1, [2]);
-  assert.equal(c2.removidos, 1);
+  assert.equal(c2.ausentes, 1, "a 1ª vez: ausente");
   await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 1, "marcar", c2, [2]) as never);
+  const l3 = b.novoLote([2]);
+  await pagina(b, l3, 1, [], 0);
+  const c3 = await contagemDaPromocao(b.db, l3, 1, 2026, 1, [2]);
+  assert.equal(c3.removidos, 1, "a 2ª: removido");
+  await b.db.batch(comandosPromover(b.db, l3, 1, 2026, 1, "marcar", c3, [2]) as never);
   assert.ok((b.raw.prepare("SELECT removido_em r FROM empenhos WHERE numero = '1'").get() as { r: string | null }).r);
   assert.equal((b.raw.prepare("SELECT removido_em r FROM empenhos WHERE numero = '2'").get() as { r: string | null }).r, null);
 });

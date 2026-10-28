@@ -12,7 +12,7 @@ import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti, QUEM_
 import { leituraDoLote } from "@/lib/empenhos-fragmentos";
 import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
 import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
-import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
+import { comandoConduzir, comandoExcluirPassos, consultaAssinaturas, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -36,7 +36,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if ("resp" in a) return a.resp;
   const negado = recusa(g.acesso, telaDoCard(a.card), "importar");
   if (negado) return negado;
-  const loteId = intId(new URL(req.url).searchParams.get("lote") ?? "");
+  const busca = new URL(req.url).searchParams;
+  // As ASSINATURAS gravadas do ano (chave → assinatura): o navegador manda inteiro só o que mudou. Um texto montado no banco,
+  // repassado como veio (o Worker não lê nem serializa milhares de linhas).
+  const anoAssinaturas = intId(busca.get("assinaturas") ?? "");
+  if (anoAssinaturas) {
+    const [r] = await consultaAssinaturas(getDb(), a.card.tipo, a.card.id, anoAssinaturas);
+    return new Response(`{"ok":true,"assinaturas":${r?.j ?? "{}"}}`, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  }
+  const loteId = intId(busca.get("lote") ?? "");
   if (loteId) {
     const lote = await getLote(loteId, a.card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
@@ -122,14 +130,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // a falha (rede, status, grande demais) já é o passo registrado, na resposta JSON de sempre.
         const b = await baixarPaginaDoLote(card, lote, periodo, corpo.pagina);
         if (!b.ok) return ok({ lote: await getLote(lote.id, card.id), ...b.r });
-        return new Response(new Blob(b.pedacos as BlobPart[]), {
+        return new Response(b.corpo, {
           headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-centi-status": String(b.status), "x-centi-ms": String(b.ms) },
         });
       }
       const r =
         corpo.acao === "falha"
           ? await falhaDaPagina(card, lote, periodo, corpo.pagina, { mensagem: corpo.mensagem, status: corpo.status, bytes: corpo.bytes, ms: corpo.ms })
-          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, resumo: corpo.resumo });
+          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, iguais: corpo.iguais, resumo: corpo.resumo });
       // A parte do meio não muda a contagem do lote (só a última reconta): não relê o lote.
       return ok({ lote: r.parcial ? null : await getLote(lote.id, card.id), ...r });
     } catch (e) {

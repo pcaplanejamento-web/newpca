@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.241.0",
+    data: "2026-10-28",
+    titulo: "Importações rápidas que só gravam o que mudou, com histórico e “Importar tudo”",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "Fim dos passos em “Erro” na importação: o sistema estourava o tempo de processamento ao conferir partes grandes. Agora cada parte é pequena, a conferência é por assinatura e as partes vão em paralelo.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Muito mais rápida: o ano inteiro num pedido (liquidações e pagamentos: um por órgão, todos ao mesmo tempo); o período grande demais é dividido sozinho.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Só o que mudou é gravado: os registros iguais ao que já está no sistema não são reescritos — o resumo diz quantos vieram iguais.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "novo", area: "Configurações", texto: "“Importar tudo”: todos os cards de uma vez, cada um no seu lote, em paralelo — empenhos primeiro, depois liquidações e pagamentos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Mais segurança: o que some da Centi fica “ausente” e continua valendo; só sai (ou é marcado como removido) se faltar de novo na importação seguinte.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "Alterações na Centi: no detalhe de cada empenho, liquidação e pagamento, o histórico de cada campo que mudou (antes → depois), com a data e a importação.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.240.1",
     data: "2026-10-28",
     titulo: "Auditoria das importações: fila do cron mais robusta e telas sem travas",

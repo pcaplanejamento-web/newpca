@@ -4585,7 +4585,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Régua do vínculo (núcleo puro `empenho-cards-core.ts`, testado — `tests/empenho-cards.test.ts`):** o MAIS ESPECÍFICO
     vale — a ação › a unidade orçamentária › o órgão gestor inteiro (`mapaDosVinculos`/`vinculoDaLinha`; no SQL
     `vinculoSql(tabela, card)` em `empenho-cards-sql.ts`, `ORDER BY acao IS NULL, unidade IS NULL`); sem vínculo = NADA do
-    registro é gravado (só a chave em `centi_staging_fora`, para a conferência contar). `motivoVinculosInvalidos` (a MESMA na
+    registro é gravado (só a chave na lista `chaves_fora` do passo, para a conferência contar). `motivoVinculosInvalidos` (a MESMA na
     tela e no `PUT /api/empenhos/cards/[id]/vinculos` — 422): gestor informado, ação só com a unidade, sem repetir, a unidade
     do cadastro do órgão escolhido. Grava-se a lista INTEIRA num lote atômico (`comandosGravarVinculos`: apaga, insere em
     INSERTs de 14, `comandosRefazerEmpenhosCard` — o que ficou sem vínculo SAI, os demais acompanham — e `vinculos_em`).
@@ -4613,7 +4613,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     staging —, `concluirLoteEmpenhos(card, …)` — a conferência com `TotalRegistros`, a QUEDA pelos limites do card
     [`quedaSuspeita(anterior, atual, {soma, registros})`] e `comandosPromover(…, regra)` [removidos: marcar `removido_em` ou
     apagar] —, `fecharLoteEmpenhos`). Mantido de antes: a resposta da Centi lida por `lerJsonCenti`/`repararJsonCenti`/
-    `registrosDaResposta` (`centi-resposta-core.ts`), o ano SEMANA A SEMANA com a divisão do período grande demais, os
+    `registrosDaResposta` (`centi-resposta-core.ts`), o ANO INTEIRO num pedido (v1.241.0) com a divisão do período grande demais, os
     valores pt-BR de 3 casas (`valor`), a soma por passo/lote, `valoresSuspeitos` (> R$ 1 bi ou negativo = parcial), o
     `LEITOR_EMPENHOS`, `setWhere` (só o que mudou), o condutor de UMA aba (`comandoConduzir`, 120 s), os passos
     (`centi_lote_passos`) e o histórico com Excluir (v1.211.1: `comandosExcluirLotes(db, card, ids)` exclui VÁRIAS importações num batch só — um comando por tabela, os ids num parâmetro JSON, só as do card; a rota faz 1 batch + 1 auditoria — antes, um getLote + batch + auditoria POR importação estourava o limite de consultas do Worker; a `0149` indexa `lote_id` em `empenhos`/`liquidacoes`).
@@ -4734,6 +4734,40 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     tira o "fora" igual das chaves da página, põe o igual (`igual` = 1), apaga o staging das chaves da página (releitura = vale
     a desta leitura) e guarda só o novo/diferente (`naoIgual`, `CAMPOS[0]` = chave). Pedaços de `MAX_JSON_CONFERIR`
     (`pedacosJson`); página sem nada a conferir = `comandoResultadoVazio`. 1 escrita por registro igual (antes ~5).
+  - **SÓ GRAVA O QUE MUDOU + AUSENTE EM DUAS LEITURAS + HISTÓRICO (v1.241.0, migração `0162` — SUBSTITUI as listas/linhas
+    "igual" acima: `centi_staging_fora` SAIU; `centi_lote_passos.chaves_iguais`/`chaves_fora` JSON, `centi_lotes.ausentes`,
+    `ausente_desde_lote` + `hash` nas tabelas finais, `hash` nos stagings, tabela `centi_alteracoes`):**
+    - **Causa dos passos "Erro" (medida):** montar a SQL da conferência de uma parte de 250 KB (~300 linhas) custava 11–21 ms de
+      CPU — o Worker era cortado e o cliente via "Sem resposta do sistema". Agora `MAX_BYTES_PARTE`=80 KB (~3 ms) e a régua é a
+      ASSINATURA: `hashTupla`/`hashLinha` (`importacao-partes-core.ts`, FNV-1a 64 bits da tupla + leitor, base36 — a MESMA no
+      navegador e no servidor). Igual = `hash` igual E válido (`valeIgual`: sem `removido_em`, sem `ausente_desde_lote`); o
+      vínculo/destino está sempre atual na tabela final (realinhamento).
+    - **O navegador manda só o que mudou:** `GET …/importar?assinaturas=ANO` (`consultaAssinaturas` — `json_group_object` dos
+      válidos) → `partesComIguais` separa as linhas: as iguais vão só como PARES `[chave, hash]` (`ParIgual`, até
+      `MAX_PARES_PARTE`=5000, `paresDaParte` valida), as demais inteiras. O servidor recalcula o hash das linhas e confere os
+      pares em SQL (`comandoParesIguais`, nos comandos `depois` — o par que não confere CAI: os únicos baixam e o lote fecha
+      parcial, nunca perda silenciosa). `comandosConferirAssinatura` (empenhos; `ConfTabela`: `CONF_EMPENHOS`,
+      `conf(idOrgao)` de liquidações/pagamentos) atualiza o passo (resultados + `chaves_iguais`/`chaves_fora` — `listaMais`), apaga o
+      staging das chaves da página e guarda (`comandosGuardarStaging` com o LEFT JOIN no gravado igual) só o novo/diferente.
+      As listas são lidas por `chavesDaLista(lote, "iguais"|"fora")` (o último passo ok de cada página) em `sumiram`,
+      `comandoRecontarLote`, `jaNoLote` e nas contagens; `COLUNAS_PASSO` lista os passos sem as listas.
+    - **Ano inteiro e paralelo:** `periodosAPedir(…, inteiro=true)` = as lacunas inteiras (empenhos num pedido; liquidações e
+      pagamentos um por órgão, todos ao mesmo tempo; pagamentos sem `mes` = o ano — `corpoPagamentos`, `mesesDoAno` na
+      divisão); `baixarSeguro {fluxo}` repassa o corpo SEM bufferizar (TransformStream que conta os bytes); a 1ª parte cria o
+      passo, as do MEIO vão em paralelo (`PARALELO_PARTES`=4, incrementos em SQL) e a última finaliza.
+    - **Ausente em duas leituras:** a 1ª importação concluída sem o registro grava `ausente_desde_lote` (continua valendo,
+      `contagem.ausentes`); a seguinte sem ele aplica a regra (`comandosAusencia`: marcar `removido_em` ou apagar); voltou = o
+      upsert limpa (`mudou` inclui `ausente_desde_lote IS NOT NULL`).
+    - **Histórico:** antes do upsert, `comandoAlteracoesDoLote` grava em `centi_alteracoes` (`centi-alteracoes-sql.ts`) só os
+      campos de DADOS que mudaram (`[{c,a,d}]`; o novo não gera linha) e `comandoAlteracoesSumiram` o ausente/removido;
+      leitura pura `alteracoesDoRegistro` (`centi-alteracoes-core.ts`); retenção `DIAS_ALTERACOES`=365 no cron dos e-mails.
+      Tela: `AlteracoesCenti` (em `LiquidacaoDetalhe.tsx`, reusa `DiffLinha compacto`) nos banners do empenho, da liquidação e
+      do pagamento, com o selo "Ausente na última leitura".
+    - **`importarCard`** (`leitura-centi-cliente.ts`) = UMA importação de card (iniciar/retomar → `lerAnoNaCenti` → concluir com
+      a queda confirmada; interromper cancela; falha pausa) — a aba Importação do card e o **"Importar tudo"** de Configurações
+      → Importações (`ImportarTudo` em `ImportacoesAdmin.tsx`: um lote por card, todos em paralelo — empenhos primeiro, depois
+      liquidações e pagamentos —; o lote aberto do card é retomado; as quedas perguntadas uma por vez; `textoConclusao`).
+      Testes: `tests/centi-somente-mudancas.test.ts`.
   - **REGRA FIRME — NENHUMA REQUISIÇÃO LÊ O JSON INTEIRO DA CENTI (v1.216.0, migração `0153`):** ler e consertar o JSON custa
     ~20 ms de CPU por MB e converter bytes em texto ~3 ms por MB (medidos); o plano gratuito dá ~10 ms por execução e o mês
     de pagamentos de um órgão grande tem vários MB. **Pela TELA:** a rota `baixar` devolve a resposta crua (`baixarPaginaDoLote`
@@ -4769,7 +4803,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     cada 15 s: `GET …/importar` → `andamento` = `fracaoDoAno` + a leitura fragmentada, `fracaoDoAndamento`) e o histórico traz
     a SAÚDE de cada lote (`listarLotes` → `saude`: pedidos, erros sem os "Guardando…", bytes, espera pela Centi; duração).
     A limpeza dos textos da Centi = `textoCenti` (`centi-resposta-core.ts`, caminho rápido sem regex no campo já limpo) e,
-    pela tela, a semana até 4 MB (`MAX_BYTES_TELA`; a automática segue com 1 MB). Testes: `tests/empenhos*.test.ts`,
+    pela tela, o ano inteiro em STREAMING até 60 MB (`MAX_BYTES_TELA`, v1.241.0; a automática segue com 1 MB). Testes: `tests/empenhos*.test.ts`,
     `tests/importacao-partes.test.ts`, `tests/fragmentos-centi.test.ts` + `tests/fixtures/banco-migrado.ts` (o schema final de
     toda a cadeia, recriado por teste).
   - **SINCRONIA + EXECUÇÃO + LEITURA POR ÓRGÃO (v1.218.0, migrações `0155`/`0156`):**

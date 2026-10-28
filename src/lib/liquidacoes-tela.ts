@@ -1,4 +1,6 @@
 import { sql } from "drizzle-orm";
+import { type AlteracaoCenti, alteracoesDoRegistro } from "./centi-alteracoes-core.ts";
+import { consultaAlteracoes } from "./centi-alteracoes-sql.ts";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { EscopoEmpenhos } from "./empenhos-tela-core.ts";
 import { doEscopo } from "./empenhos-tela-sql.ts";
@@ -145,22 +147,26 @@ export type LiquidacaoCompleta = {
   loteConcluidoEm: string | null;
   leitor: number;
   removidoEm: string | null;
+  /** A importação em que a Centi não a trouxe mais (AUSENTE — ainda valendo). */
+  ausenteDesdeLote: number | null;
   criadoEm: string;
   atualizadoEm: string;
   empenho: EmpenhoDaLiquidacao | null;
+  /** O HISTÓRICO das alterações que a Centi fez (as mais recentes primeiro). */
+  alteracoes: AlteracaoCenti[];
 };
 
 /** Uma liquidação do card (no escopo da pessoa; fora dele = null, como inexistente) com o empenho ligado pelo número. */
 export async function liquidacaoCompleta(card: number, id: number, escopo: EscopoEmpenhos, db: Db): Promise<LiquidacaoCompleta | null> {
   const so = escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, "l.")], sql.raw(""));
-  const [l] = await db.all<Omit<LiquidacaoCompleta, "empenho"> & { empenhoId: number | null }>(
+  const [l] = await db.all<Omit<LiquidacaoCompleta, "empenho" | "alteracoes"> & { empenhoId: number | null }>(
     sql`SELECT l.id AS id, l.ano AS ano, l.src_id AS srcId, l.numero AS numero, l.data AS data, l.numero_empenho AS numeroEmpenho,
       l.orgao AS orgaoCenti, l.id_orgao_centi AS idOrgaoCenti, l.credor AS credor, l.cpf_cnpj AS cpfCnpj, l.historico AS historico,
       l.valor AS valor, l.valor_anulado AS valorAnulado, l.valor_liquido AS valorLiquido, l.valor_pago AS valorPago, l.saldo AS saldo,
       (SELECT CASE WHEN COALESCE(o.sigla, '') = '' THEN o.nome ELSE o.sigla || ' — ' || o.nome END FROM orgaos o WHERE o.id = l.orgao_id) AS orgao,
       ${unidadeNaTela("l", true)} AS unidade,
       l.lote_id AS loteId, (SELECT c.concluido_em FROM centi_lotes c WHERE c.id = l.lote_id) AS loteConcluidoEm,
-      l.leitor AS leitor, l.removido_em AS removidoEm, l.criado_em AS criadoEm, l.atualizado_em AS atualizadoEm,
+      l.leitor AS leitor, l.removido_em AS removidoEm, l.ausente_desde_lote AS ausenteDesdeLote, l.criado_em AS criadoEm, l.atualizado_em AS atualizadoEm,
       ${empenhoDa("l", "id")} AS empenhoId
       FROM liquidacoes l WHERE l.card_id = ${card} AND l.id = ${id}${so} LIMIT 1`,
   );
@@ -176,5 +182,5 @@ export async function liquidacaoCompleta(card: number, id: number, escopo: Escop
             (SELECT c.nome FROM empenho_cards c WHERE c.id = e.card_id) AS card
             FROM empenhos e WHERE e.id = ${empenhoId}`,
         );
-  return { ...liq, empenho: e ?? null };
+  return { ...liq, empenho: e ?? null, alteracoes: alteracoesDoRegistro(await consultaAlteracoes(db, "liquidacao", liq.id)) };
 }

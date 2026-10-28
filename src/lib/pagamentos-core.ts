@@ -109,6 +109,12 @@ export function mesDoPeriodo(p: Periodo): number | null {
   return p.fim === `${m[1]}-${m[2]}-${String(ULTIMO_DIA(ano, mes)).padStart(2, "0")}` ? mes : null;
 }
 
+/** O ANO INTEIRO grande demais vira os 12 MESES (o mês não se divide — null). */
+export function mesesDoAno(ano: number, p: Periodo): Periodo[] | null {
+  if (p.inicio !== `${ano}-01-01` || p.fim !== `${ano}-12-31`) return null;
+  return Array.from({ length: 12 }, (_, i) => periodoDoMes(ano, i + 1));
+}
+
 /** O período de um mês do ano. */
 export function periodoDoMes(ano: number, mes: number): Periodo {
   const m = String(mes).padStart(2, "0");
@@ -120,12 +126,18 @@ export function periodoDoMes(ano: number, mes: number): Periodo {
  * os parâmetros não tragam (sem o mês, a Centi devolveria o ano inteiro). A API não pagina.
  */
 export function corpoPagamentos(parametros: string, ano: number, periodo: Periodo, idOrgao: number): Record<string, unknown> {
-  const mes = mesDoPeriodo(periodo);
-  if (mes == null) throw new Error("Os pagamentos só se pedem por mês inteiro.");
+  // O ANO INTEIRO vai sem o mês (a Centi devolve o ano do órgão de uma vez); senão, um mês inteiro.
+  const anoTodo = periodo.inicio === `${ano}-01-01` && periodo.fim === `${ano}-12-31`;
+  const mes = anoTodo ? null : mesDoPeriodo(periodo);
+  if (!anoTodo && mes == null) throw new Error("Os pagamentos só se pedem por mês inteiro ou pelo ano inteiro.");
   const p = lerParametros(parametros);
   if (!p.ok) throw new Error(p.motivo);
   const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
   const base = montarCorpo(p.valor, { ano, pagina: 1, inicio: br(periodo.inicio), fim: br(periodo.fim) }) as Record<string, unknown>;
+  if (mes == null) {
+    const { mes: _, ...semMes } = base;
+    return { ...semMes, ano, idOrgao };
+  }
   return { ...base, ano, mes, idOrgao };
 }
 
