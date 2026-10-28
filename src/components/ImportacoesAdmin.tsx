@@ -13,6 +13,7 @@ import {
   FREQUENCIAS,
   motivoConfigImportacoes,
   NOME_TIPO,
+  OPCOES_INTERVALO,
   OPCOES_QUEDA,
   type OrgaoGestorCenti,
   orgaosDaLeitura,
@@ -601,6 +602,7 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
           )}
           <span className="text-muted">
             Queda: soma {queda(config.quedaSoma)} · registros {queda(config.quedaRegistros)} · {config.removidos === "apagar" ? "apaga" : "marca"} o que a Centi não traz mais
+            {config.intervaloMin > 0 && ` · intervalo mínimo de ${(OPCOES_INTERVALO.find((o) => o.valor === config.intervaloMin)?.rotulo ?? "").toLowerCase()}`}
           </span>
         </p>
       </SecaoBanner>
@@ -671,6 +673,24 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
                   ))}
                 </SelectField>
               </div>
+              <SelectField
+                denso
+                label="Intervalo mínimo entre atualizações"
+                value={String(v.intervaloMin)}
+                onChange={(e) => muda("intervaloMin", Number(e.target.value))}
+                rotuloExtra={
+                  <Ajuda titulo="Intervalo mínimo" compacta>
+                    Depois de uma importação concluída, o mesmo card só começa outra quando passar este tempo — vale para a importação do card, o “Importar tudo”, o
+                    “Importar agora” da Execução e a atualização automática. Continuar uma importação aberta e importar de novo depois de uma falha seguem livres.
+                  </Ajuda>
+                }
+              >
+                {OPCOES_INTERVALO.map((o) => (
+                  <option key={o.valor} value={o.valor}>
+                    {o.rotulo}
+                  </option>
+                ))}
+              </SelectField>
               <SelectField denso label="Registros que a Centi não traz mais" value={v.removidos} onChange={(e) => muda("removidos", e.target.value as RegraRemovidos)} rotuloExtra={<Ajuda titulo="Removidos na Centi" compacta>Marcar = ficam guardados, fora das somas (o rodapé das tabelas mostra “Removidos na Centi”). Apagar = saem do banco na importação conferida.</Ajuda>}>
                 {REGRAS_REMOVIDOS.map((r) => (
                   <option key={r.valor} value={r.valor}>

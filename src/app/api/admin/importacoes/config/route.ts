@@ -18,6 +18,7 @@ const ROTULOS: Record<string, string> = {
   quedaSoma: "queda da soma",
   quedaRegistros: "queda dos registros",
   removidos: "removidos na Centi",
+  intervaloMin: "intervalo mínimo entre atualizações",
 };
 
 /** A configuração CENTRAL das importações da Centi (Configurações → Importações — só o ADM). */
@@ -35,7 +36,7 @@ export async function PATCH(req: Request) {
   if ("resp" in p) return p.resp;
   const antes = await getConfigImportacoes();
   // Sem a escolha no pedido, fica a gravada.
-  const pedido = { ...p.data, automaticas: p.data.automaticas === undefined ? antes.automaticas : p.data.automaticas };
+  const pedido = { ...p.data, automaticas: p.data.automaticas === undefined ? antes.automaticas : p.data.automaticas, intervaloMin: p.data.intervaloMin ?? antes.intervaloMin };
   const motivo = motivoConfigImportacoes(pedido);
   if (motivo) return erro(motivo, 422);
   const cards = await todosOsCards();

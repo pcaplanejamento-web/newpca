@@ -6,9 +6,10 @@ import { fracaoDaLeitura as fracaoLeituraGrande, rotuloPeriodo } from "@/lib/emp
 import { type Amostra, registrarAmostra, tempoRestanteMs } from "@/lib/fluxo-progresso";
 import { estadoDoPedido, ordenarPedidos, resumoPedidos, ROTULO_ETAPA, textoBytes, textoPedido } from "@/lib/importacao-progresso";
 import type { LoteAoVivo } from "@/lib/importacoes-andamento";
-import { assinarImportacoes, CHAVE_IMPORTACOES, fracaoDaImportacao, type ImportacaoLocal, importacoesLocais, importacoesLocaisServidor, lotesDestaAba, retirarImportacao } from "@/lib/importacoes-ao-vivo-store";
+import { aoConsultarImportacao, assinarImportacoes, CHAVE_IMPORTACOES, fracaoDaImportacao, type ImportacaoLocal, importacoesLocais, importacoesLocaisServidor, lotesDestaAba, retirarImportacao } from "@/lib/importacoes-ao-vivo-store";
 import { AndamentoDoServidor, AndamentoImportacao } from "./AndamentoImportacao";
 import { type EstadoTrabalho, type Trabalho, usePainelSegundoPlano } from "./SegundoPlano";
+import { toast } from "./Toast";
 
 /**
  * O ANDAMENTO DAS IMPORTAÇÕES ao vivo, para o ADM, no painel padrão do canto inferior direito (`PainelSegundoPlano`):
@@ -111,6 +112,8 @@ export function MonitorImportacoes() {
   const [lotes, setLotes] = useState<LoteAoVivo[]>([]);
   const [agora, setAgora] = useState(() => Date.now());
   const vistosLendo = useRef(new Set<number>());
+  // A ÚLTIMA importação CONSULTADA pelo relógio da Execução (fica no painel até dispensar, mesmo antiga) e o pedido de abrir.
+  const [consultada, setConsultada] = useState<{ lote: LoteAoVivo; em: number } | null>(null);
   const dispensados = useRef(new Set<string>());
   const amostras = useRef(new Map<string, Amostra[]>());
   const informados = useRef(new Set<string>());
@@ -133,7 +136,15 @@ export function MonitorImportacoes() {
     try {
       const r = await fetch("/api/admin/importacoes/andamento", { cache: "no-store" });
       const j = (await r.json()) as { ok?: boolean; lotes?: LoteAoVivo[] };
-      if (r.ok && j.ok && j.lotes) setLotes(j.lotes);
+      if (r.ok && j.ok && j.lotes) {
+        const l = j.lotes;
+        setLotes(l);
+        // A consultada acompanha: lendo, ela vem na lista; a nova leitura a atualiza.
+        setConsultada((c) => {
+          const nova = c && l.find((x) => x.id === c.lote.id);
+          return c && nova ? { ...c, lote: nova } : c;
+        });
+      }
     } catch {
       // Sem rede: fica o que estava (a próxima leitura atualiza).
     }
@@ -164,6 +175,30 @@ export function MonitorImportacoes() {
       document.removeEventListener("visibilitychange", voltar);
     };
   }, [ligado, painel, ler]);
+  // O RELÓGIO dos indicadores da Execução pede a última importação de um tipo: busca e abre o painel nela (vale também com o
+  // andamento ao vivo desligado — é um pedido explícito).
+  useEffect(() => {
+    if (!painel) return;
+    return aoConsultarImportacao((tipo) => {
+      void (async () => {
+        try {
+          const r = await fetch(`/api/admin/importacoes/andamento?ultima=${encodeURIComponent(tipo)}`, { cache: "no-store" });
+          const j = (await r.json()) as { ok?: boolean; error?: string; ultima?: LoteAoVivo | null };
+          if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível ler a última importação.");
+          if (!j.ultima) {
+            toast.info(`Nenhuma importação de ${NOME_TIPO[tipo as LoteAoVivo["tipo"]]?.varios ?? "dados"} ainda.`);
+            return;
+          }
+          const id = j.ultima.id;
+          dispensados.current.delete(`imp-lote-${id}`);
+          for (const i of importacoesLocais()) if (i.lote?.id === id) dispensados.current.delete(`imp-local-${i.id}`);
+          setConsultada({ lote: j.ultima, em: Date.now() });
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Não foi possível ler a última importação.");
+        }
+      })();
+    });
+  }, [painel]);
   const restante = useCallback((id: string, f: number, ativo: boolean) => {
     if (!ativo) {
       amostras.current.delete(id);
@@ -179,8 +214,8 @@ export function MonitorImportacoes() {
     if (!painel) return;
     const agoraInf = new Set<string>();
     const informar = (t: Trabalho) => {
-      const { onParar: _p, onDispensar: _d, onAbrir: _a, ...dados } = t;
-      const ass = JSON.stringify(dados);
+      const { onParar: _p, onDispensar: _d, onAbrir: _a, pergunta, ...dados } = t;
+      const ass = JSON.stringify({ ...dados, pergunta: pergunta?.texto });
       if (assinaturas.current.get(t.id) !== ass) {
         assinaturas.current.set(t.id, ass);
         painel.informar(t);
@@ -197,7 +232,7 @@ export function MonitorImportacoes() {
       const emCurso = ordenarPedidos(i.pedidos).find((p) => p.fase !== "fila" && p.fase !== "concluido" && p.fase !== "dividido");
       const texto = rodando
         ? [
-            i.aguardandoConfirmacao ? "Aguardando a sua confirmação na tela da importação (os números caíram)" : ROTULO_ETAPA[i.etapa],
+            i.aguardandoConfirmacao ? (i.responder ? "Aguardando a sua confirmação aqui (os números caíram)" : "Aguardando a sua confirmação na tela da importação (os números caíram)") : ROTULO_ETAPA[i.etapa],
             emCurso ? `${rotuloPeriodo(emCurso.periodo)} · ${emCurso.rotuloPagina}: ${textoPedido(emCurso, agora)}` : null,
             i.pedidos.length ? `${num(r.concluidos)}/${num(i.pedidos.length)} pedidos · ${num(r.registros)} registros · ${textoBytes(r.bytes)}` : null,
           ]
@@ -215,7 +250,12 @@ export function MonitorImportacoes() {
         restanteMs: restante(id, f, rodando),
         texto,
         rota: i.rota,
-        oculto: !ligado,
+        abrirEm: consultada && i.lote?.id === consultada.lote.id ? consultada.em : undefined,
+        // Com a pergunta da queda no painel, ele aparece mesmo com o andamento desligado.
+        oculto: !ligado && !i.responder && !(consultada && i.lote?.id === consultada.lote.id),
+        pergunta: i.responder
+          ? { texto: `${i.titulo}: os números caíram — gravar mesmo assim? ${(i.texto ?? "").replace(/^Aguardando a confirmação: /, "")} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, sim: "Gravar", nao: "Cancelar este card", responder: i.responder }
+          : undefined,
         corpo: () => <AndamentoDaAba id={i.id} />,
         itens: ordenarPedidos(i.pedidos)
           .slice(0, 40)
@@ -228,39 +268,44 @@ export function MonitorImportacoes() {
       };
       informar(t);
     }
-    if (ligado) {
-      for (const l of lotes) {
-        if (l.estado === "lendo") vistosLendo.current.add(l.id);
-        // O desfecho só de quem foi visto lendo nesta sessão (abrir a tela não lista as que terminaram antes).
-        if (l.estado !== "lendo" && !vistosLendo.current.has(l.id)) continue;
-        if (deAba.has(l.id)) continue;
-        const id = `imp-lote-${l.id}`;
-        if (dispensados.current.has(id)) continue;
-        const rodando = l.estado === "lendo";
-        const t: Trabalho = {
-          id,
-          chave: "",
-          titulo: `${l.cardNome} · ${l.ano}${l.doCron ? " · automática" : ""}`,
-          estado: ESTADO_LOTE(l),
-          feito: l.pedidos,
-          total: 0,
-          fracao: rodando ? l.fracao : undefined,
-          restanteMs: restante(id, l.fracao, rodando),
-          texto: `${l.doCron ? "Atualização automática" : `Importação manual (${l.iniciadoPor})`} de ${NOME_TIPO[l.tipo].titulo.toLowerCase()} — ${textoDoLote(l, agora)}`,
-          rota: linkImportacoes(l.tipo, l.cardId, "importacao"),
-          itens: l.passos.map((p) => {
-            const guardando = (p.mensagem ?? "").startsWith("Guardando a página");
-            return {
-              rotulo: `${rotuloPeriodo(p)} · ${l.orgaosCenti ? `órgão ${l.orgaosCenti[p.pagina - 1] ?? p.pagina}` : `página ${p.pagina}`}`,
-              estado: guardando ? ("rodando" as const) : p.estado === "erro" ? ("falhou" as const) : ("ok" as const),
-              detalhe: guardando ? "gravando…" : p.estado === "erro" ? (p.mensagem ?? "erro") : `${num(p.recebidos)} registros · ${num(p.resNovos ?? 0)} novos · ${haQuanto(p.em, agora)}`,
-            };
-          }),
-          onDispensar: () => dispensados.current.add(id),
-          corpo: () => <AndamentoDoServidor lote={l} />,
-        };
-        informar(t);
-      }
+    const servidor = ligado ? [...lotes] : [];
+    if (consultada && !servidor.some((l) => l.id === consultada.lote.id)) servidor.push(consultada.lote);
+    for (const l of servidor) {
+      const ehConsultada = l.id === consultada?.lote.id;
+      if (l.estado === "lendo") vistosLendo.current.add(l.id);
+      // O desfecho só de quem foi visto lendo nesta sessão (abrir a tela não lista as que terminaram antes) — ou consultado.
+      if (l.estado !== "lendo" && !vistosLendo.current.has(l.id) && !ehConsultada) continue;
+      if (deAba.has(l.id)) continue;
+      const id = `imp-lote-${l.id}`;
+      if (dispensados.current.has(id)) continue;
+      const rodando = l.estado === "lendo";
+      const t: Trabalho = {
+        id,
+        chave: "",
+        titulo: `${l.cardNome} · ${l.ano}${l.doCron ? " · automática" : ""}`,
+        estado: ESTADO_LOTE(l),
+        feito: l.pedidos,
+        total: 0,
+        fracao: rodando ? l.fracao : undefined,
+        restanteMs: restante(id, l.fracao, rodando),
+        texto: `${l.doCron ? "Atualização automática" : `Importação manual (${l.iniciadoPor})`} de ${NOME_TIPO[l.tipo].titulo.toLowerCase()} — ${textoDoLote(l, agora)}`,
+        rota: linkImportacoes(l.tipo, l.cardId, "importacao"),
+        itens: l.passos.map((p) => {
+          const guardando = (p.mensagem ?? "").startsWith("Guardando a página");
+          return {
+            rotulo: `${rotuloPeriodo(p)} · ${l.orgaosCenti ? `órgão ${l.orgaosCenti[p.pagina - 1] ?? p.pagina}` : `página ${p.pagina}`}`,
+            estado: guardando ? ("rodando" as const) : p.estado === "erro" ? ("falhou" as const) : ("ok" as const),
+            detalhe: guardando ? "gravando…" : p.estado === "erro" ? (p.mensagem ?? "erro") : `${num(p.recebidos)} registros · ${num(p.resNovos ?? 0)} novos · ${haQuanto(p.em, agora)}`,
+          };
+        }),
+        onDispensar: () => {
+          dispensados.current.add(id);
+          if (ehConsultada) setConsultada(null);
+        },
+        abrirEm: ehConsultada ? consultada?.em : undefined,
+        corpo: () => <AndamentoDoServidor lote={l} />,
+      };
+      informar(t);
     }
     // O que deixou de existir sai do painel.
     for (const id of informados.current)
@@ -269,7 +314,7 @@ export function MonitorImportacoes() {
         assinaturas.current.delete(id);
       }
     informados.current = agoraInf;
-  }, [painel, locais, lotes, agora, ligado, restante]);
+  }, [painel, locais, lotes, agora, ligado, restante, consultada]);
 
   // Ao desmontar (sair do painel), nada fica.
   useEffect(

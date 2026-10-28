@@ -42,16 +42,21 @@ export function KpiStat({
   emLinha?: boolean;
   /** Uma informação DISCRETA no canto superior direito (ex.: há quanto tempo os dados foram atualizados). */
   canto?: ReactNode;
-  /** Uma AÇÃO pequena no canto superior direito (ex.: o "Importar agora" do ADM na Execução) — fica FORA do cartão-botão
-   * (botão dentro de botão é inválido), por cima dele; o `canto` abre espaço ao lado. */
+  /** Uma AÇÃO pequena no canto superior direito, ao lado do `canto` (ex.: o "Importar agora" do ADM na Execução). */
   acaoCanto?: ReactNode;
 }) {
-  const Raiz = onClick ? "button" : "div";
-  const cartao = (
+  // Com o CANTO (que pode ter botões) num cartão que é botão: o toque do cartão vira uma CAMADA por baixo (botão dentro de
+  // botão é inválido) e o canto fica por cima, alinhado ao rótulo e preso no canto superior direito.
+  const temCanto = !!(canto || acaoCanto);
+  const camada = !!onClick && temCanto;
+  const Raiz = onClick && !camada ? "button" : "div";
+  const nome = `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}`;
+  const foco = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  return (
     <Raiz
-      {...(onClick ? { type: "button" as const, onClick, "aria-label": `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}` } : {})}
-      className={`kpi-card relative flex min-w-0 flex-col ${acaoCanto ? "flex-1" : ""} overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
-        onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
+      {...(onClick && !camada ? { type: "button" as const, onClick, "aria-label": nome } : {})}
+      className={`kpi-card relative flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
+        onClick ? `transition-colors hover:bg-surface-2 ${camada ? "" : foco}` : ""
       }`}
       style={
         {
@@ -64,14 +69,21 @@ export function KpiStat({
         } as CSSProperties
       }
     >
+      {camada && <button type="button" onClick={onClick} aria-label={nome} className={`absolute inset-0 rounded-card ${foco} focus-visible:ring-inset`} />}
       <span
         aria-hidden
         className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-[3px]"
         style={{ background: cor }}
       />
-      <div className="flex items-start justify-between gap-2">
+      <div className={`flex justify-between gap-2 ${temCanto ? "items-center" : "items-start"} ${camada ? "pointer-events-none relative" : ""}`}>
         <span className="truncate text-[12.5px] text-muted">{label}</span>
-        {canto && <span className={`shrink-0 ${acaoCanto ? "mr-8 lg:mr-7" : ""}`}>{canto}</span>}
+        {temCanto && (
+          // A altura do canto não cresce a linha (a ação de toque tem mais altura que o rótulo): centrado nele.
+          <span className="pointer-events-auto relative -my-2 -mr-1 flex shrink-0 items-center gap-1 lg:-my-1.5">
+            {canto}
+            {acaoCanto}
+          </span>
+        )}
         {delta && (
           <span
             className="inline-flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold"
@@ -146,12 +158,5 @@ export function KpiStat({
         </dl>
       )}
     </Raiz>
-  );
-  if (!acaoCanto) return cartao;
-  return (
-    <div className="relative flex min-w-0 flex-col">
-      {cartao}
-      <div className="absolute right-[calc(var(--pad-card)-6px)] top-[calc(var(--pad-card)-6px)] flex">{acaoCanto}</div>
-    </div>
   );
 }

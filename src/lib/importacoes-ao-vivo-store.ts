@@ -35,6 +35,11 @@ export type ImportacaoLocal = {
   texto: string | null;
   /** Aguardando a confirmação de uma queda na tela da importação. */
   aguardandoConfirmacao: boolean;
+  /** A queda perguntada no PAINEL DO CANTO (a importação sem tela que pergunte — o "Importar agora" da Execução): a
+   * resposta grava (true) ou cancela (false). Ausente = a tela da importação pergunta. */
+  responder?: ((sim: boolean) => void) | null;
+  /** O tipo de card (empenhos, liquidações, pagamentos). */
+  tipo?: string;
   /** Pede a interrupção (o laço confere a cada pedido). */
   parar: () => void;
 };
@@ -106,4 +111,19 @@ export function fracaoDaImportacao(i: Pick<ImportacaoLocal, "etapa" | "etapaMs" 
   const orgaos = i.lote?.orgaosCenti?.length ?? null;
   const leitura = i.etapa === "leitura" || i.etapa === "conclusao" ? fracaoDaLeitura(i.ano, periodosLidos(i.passos), i.pedidos, orgaos) : 0;
   return fracaoGeral(i.etapa, i.etapa === "conclusao" ? 1 : leitura, agoraMs - i.etapaMs);
+}
+
+/**
+ * CONSULTAR A ÚLTIMA IMPORTAÇÃO de um tipo de card (o relógio dos indicadores da Execução): quem pede não precisa saber
+ * quem mostra — o monitor do painel do canto (`MonitorImportacoes`) ouve, busca e abre o painel nela.
+ */
+type OuvinteConsulta = (tipo: string) => void;
+const ouvintesConsulta = new Set<OuvinteConsulta>();
+export function consultarUltimaImportacao(tipo: string): boolean {
+  for (const o of ouvintesConsulta) o(tipo);
+  return ouvintesConsulta.size > 0;
+}
+export function aoConsultarImportacao(o: OuvinteConsulta): () => void {
+  ouvintesConsulta.add(o);
+  return () => ouvintesConsulta.delete(o);
 }

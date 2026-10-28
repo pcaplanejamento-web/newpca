@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.252.0",
+    data: "2026-10-28",
+    titulo: "Importações: intervalo mínimo entre atualizações, a última importação pelo relógio e correções",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Intervalo mínimo entre atualizações (Configurações → Importações → Editar): depois de uma importação concluída, o mesmo card só começa outra quando passar o tempo escolhido. Vale para a importação do card, o “Importar tudo”, o “Importar agora” da Execução e a atualização automática. Continuar uma importação aberta e importar de novo depois de uma falha seguem livres. O botão bloqueado diz a partir de que horas pode atualizar.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "novo", area: "Execução", texto: "Para o ADM, tocar no relógio da última atualização num indicador abre no painel do canto inferior direito a última importação da etapa, com todos os dados: pedidos, erros, registros e últimos passos.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "O relógio e o botão de importar ficam alinhados na linha do título, presos no canto superior direito de cada indicador.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "Uma importação parada há mais de 30 minutos (a aba foi fechada ou recarregada) não fica mais como “importando agora” para sempre. Ela é encerrada sozinha em até 1 minuto e não trava o botão de importar nem o painel do canto. Na atualização automática, ela é refeita na próxima vez do card, sem a espera de 12 horas.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "O “Parar” do painel do canto interrompe a série inteira do “Importar agora” e do “Importar tudo”, não só o card em curso. Se os números caírem no “Importar agora”, a confirmação aparece no próprio painel e continua valendo mesmo depois de sair da tela.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.251.0",
     data: "2026-10-28",
     titulo: "Declarações mais completas e profissionais; a assinatura no lugar do carimbo",

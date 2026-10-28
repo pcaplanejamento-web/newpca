@@ -3,7 +3,7 @@ import { centiLeituras } from "@/db/schema";
 import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, proximaDoCard, telaDoCard, textoIntervalo } from "@/lib/empenho-cards-core";
 import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
@@ -15,6 +15,7 @@ import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
 import { comandoConduzir, comandoExcluirPassos, consultaAssinaturas, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { getConfigImportacoes } from "@/lib/importacoes-config";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     return ok({ lote, passos: await listarPassos(lote.id) });
   }
   const emAndamento = await loteEmAndamento(a.card.id);
+  const { intervaloMin } = await getConfigImportacoes();
+  const proxima = emAndamento ? null : proximaDoCard(a.card, intervaloMin);
   return ok({
+    /** Antes disto nenhuma importação NOVA começa (o intervalo mínimo) — o texto do motivo. */
+    intervalo: proxima ? { ate: new Date(proxima).toISOString(), texto: textoIntervalo(proxima, intervaloMin) } : null,
     lotes: await listarLotes(a.card.id),
     orgaosLiquidacao: cardPorOrgao(a.card.tipo) ? await orgaosLiquidacao() : null,
     emAndamento,
@@ -103,6 +108,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
+    // O INTERVALO MÍNIMO entre atualizações (Configurações → Importações): o catálogo ("Buscar na Centi") não grava dados.
+    if (corpo.modo !== "unidades") {
+      const { intervaloMin } = await getConfigImportacoes();
+      const proxima = proximaDoCard(card, intervaloMin);
+      if (proxima) return erro(textoIntervalo(proxima, intervaloMin), 409);
+    }
     return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, orgaos) });
   }
 

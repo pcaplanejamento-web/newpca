@@ -5,7 +5,7 @@ import { centiLeituras, centiLotePassos, centiLotes, centiOrgaosGestores, empenh
 import { comandoAlteracoesDoLote, comandoAlteracoesSumiram, dadosMudaram } from "./centi-alteracoes-sql.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { vinculoSql } from "./empenho-cards-sql.ts";
-import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoNovo, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
+import { LIMITE_VALOR_EMPENHO, limiteParado, type LinhaEmpenho, type PassoNovo, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
 import type { ParIgual } from "./importacao-partes-core.ts";
 
 /**
@@ -833,11 +833,11 @@ export async function consultaBytesEsperados(db: Db, cardId: number, ano: number
 }
 
 /** Os lotes do PAINEL AO VIVO do ADM: os lendo e os que terminaram depois de `desde` (UTC "AAAA-MM-DD HH:MM:SS"). */
-export function consultaLotesAoVivo(db: Db, desde: string, limite = 30) {
+export function consultaLotesAoVivo(db: Db, desde: string, limite = 30, parado = limiteParado()) {
   return db
     .select()
     .from(centiLotes)
-    .where(or(eq(centiLotes.estado, "lendo"), and(inArray(centiLotes.estado, ["promovido", "parcial", "falhou", "cancelado", "unidades"]), sql`${centiLotes.concluidoEm} >= ${desde}`)))
+    .where(or(and(eq(centiLotes.estado, "lendo"), sql`${centiLotes.vistoEm} >= ${parado}`), and(inArray(centiLotes.estado, ["promovido", "parcial", "falhou", "cancelado", "unidades"]), sql`${centiLotes.concluidoEm} >= ${desde}`)))
     .orderBy(desc(centiLotes.id))
     .limit(limite);
 }

@@ -405,7 +405,8 @@ export async function importarCard(o: {
   retomar: LoteCenti | null;
   comPeriodo: boolean;
   parar: () => boolean;
-  confirmarQueda: (queda: string) => Promise<boolean>;
+  /** Quem pergunta a QUEDA na tela; ausente = o painel do canto pergunta (sobrevive a sair da tela). */
+  confirmarQueda?: (queda: string) => Promise<boolean>;
   onLote?: (l: LoteCenti) => void;
   onPasso?: (p: PassoLote) => void;
   onAnteriores?: (p: PassoLote[]) => void;
@@ -440,6 +441,7 @@ export async function importarCard(o: {
     estado: "rodando",
     texto: null,
     aguardandoConfirmacao: false,
+    tipo: o.modo === "liquidacoes" || o.modo === "pagamentos" ? o.modo : "empenhos",
     parar: () => {
       pedidoParar = true;
     },
@@ -493,8 +495,24 @@ export async function importarCard(o: {
     let c = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(o.cardId, { acao: "concluir", lote: loteId, condutor });
     if (c.queda) {
       mudarImportacao(id, (i) => ({ ...i, aguardandoConfirmacao: true, texto: `Aguardando a confirmação: ${c.queda}` }));
-      const sim = await o.confirmarQueda(c.queda);
-      mudarImportacao(id, (i) => ({ ...i, aguardandoConfirmacao: false, texto: null }));
+      const queda = c.queda;
+      const sim = o.confirmarQueda
+        ? await o.confirmarQueda(queda)
+        : await new Promise<boolean>((resolve) => {
+            // Sem tela que pergunte: o painel do canto mostra "Gravar | Cancelar"; Parar também responde (não grava).
+            let respondido = false;
+            const responder = (v: boolean) => {
+              if (respondido) return;
+              respondido = true;
+              resolve(v);
+            };
+            const pararNaPergunta = () => {
+              pedidoParar = true;
+              responder(false);
+            };
+            mudarImportacao(id, (i) => ({ ...i, responder, parar: pararNaPergunta }));
+          });
+      mudarImportacao(id, (i) => ({ ...i, aguardandoConfirmacao: false, texto: null, responder: null }));
       if (!sim) {
         await cancelar(`Cancelada: ${c.queda}`);
         terminar("cancelado", "Cancelada na queda — nada mudou.");

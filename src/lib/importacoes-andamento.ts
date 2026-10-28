@@ -1,5 +1,5 @@
-import { inArray } from "drizzle-orm";
-import { empenhoCards } from "@/db/schema";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { centiLotes, empenhoCards } from "@/db/schema";
 import { getDb } from "./db";
 import type { TipoCard } from "./empenho-cards-core";
 import { listarPassos, paraLote } from "./empenhos";
@@ -35,23 +35,40 @@ const ULTIMOS_PASSOS = 8;
 
 const sqlAgoraMenos = (min: number) => new Date(Date.now() - min * 60_000).toISOString().replace("T", " ").slice(0, 19);
 
-export async function andamentoDasImportacoes(): Promise<LoteAoVivo[]> {
+/**
+ * As importações ao vivo; com `ultimaDe`, também a ÚLTIMA importação de um tipo de card (qualquer estado e quando for — o
+ * relógio da Execução abre ela no painel do canto), com os passos mesmo já encerrada (`ultima`).
+ */
+export async function andamentoDasImportacoes(ultimaDe?: TipoCard): Promise<{ lotes: LoteAoVivo[]; ultima: LoteAoVivo | null }> {
   const db = getDb();
-  const lotes = await consultaLotesAoVivo(db, sqlAgoraMenos(MINUTOS_DESFECHO));
-  if (!lotes.length) return [];
+  const [aoVivo, [ultimo]] = await Promise.all([
+    consultaLotesAoVivo(db, sqlAgoraMenos(MINUTOS_DESFECHO)),
+    ultimaDe
+      ? db
+          .select({ l: centiLotes })
+          .from(centiLotes)
+          .innerJoin(empenhoCards, eq(empenhoCards.id, centiLotes.cardId))
+          .where(and(eq(empenhoCards.tipo, ultimaDe), ne(centiLotes.modo, "unidades")))
+          .orderBy(desc(centiLotes.id))
+          .limit(1)
+      : Promise.resolve([] as { l: typeof centiLotes.$inferSelect }[]),
+  ]);
+  const lotes = ultimo && !aoVivo.some((l) => l.id === ultimo.l.id) ? [...aoVivo, ultimo.l] : aoVivo;
+  if (!lotes.length) return { lotes: [], ultima: null };
   const cards = await db
     .select({ id: empenhoCards.id, nome: empenhoCards.nome, tipo: empenhoCards.tipo })
     .from(empenhoCards)
     .where(inArray(empenhoCards.id, [...new Set(lotes.map((l) => l.cardId ?? 0))]));
   const porId = new Map(cards.map((c) => [c.id, c]));
-  return Promise.all(
+  const todos: LoteAoVivo[] = await Promise.all(
     lotes.flatMap((l) => {
       const c = porId.get(l.cardId ?? 0);
       return c ? [{ lote: l, cardNome: c.nome, tipo: c.tipo }] : [];
     }).map(async ({ lote: l, cardNome, tipo }) => {
       const lote = paraLote(l);
       const lendo = lote.estado === "lendo";
-      const [passos, leituraBruta] = lendo ? await Promise.all([listarPassos(lote.id), leituraDoLote(lote.id)]) : [[] as PassoLote[], null];
+      const consultado = lote.id === ultimo?.l.id;
+      const [passos, leituraBruta] = lendo ? await Promise.all([listarPassos(lote.id), leituraDoLote(lote.id)]) : consultado ? [await listarPassos(lote.id), null] : [[] as PassoLote[], null];
       const leitura: AndamentoLote["leitura"] = leituraBruta
         ? { inicio: leituraBruta.inicio, fim: leituraBruta.fim, bytes: leituraBruta.bytesCapturados, comprimento: leituraBruta.comprimento, capturado: !!leituraBruta.capturado, pos: leituraBruta.pos, chars: leituraBruta.charsCapturados }
         : null;
@@ -75,4 +92,6 @@ export async function andamentoDasImportacoes(): Promise<LoteAoVivo[]> {
       };
     }),
   );
+  const ultima = ultimo ? (todos.find((l) => l.id === ultimo.l.id) ?? null) : null;
+  return { lotes: todos.filter((l) => l.id !== ultimo?.l.id || aoVivo.some((x) => x.id === l.id)), ultima };
 }

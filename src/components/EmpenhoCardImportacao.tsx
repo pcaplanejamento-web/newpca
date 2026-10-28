@@ -105,6 +105,13 @@ export function EmpenhoCardImportacao({
   const [ano, setAno] = useAnoDoCard(card.id, anos);
   const [lotes, setLotes] = useState<(LoteCenti & { saude?: SaudeLote })[] | null>(null);
   const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
+  // O INTERVALO MÍNIMO entre atualizações (Configurações → Importações): até `ate`, nenhuma importação NOVA começa.
+  const [intervalo, setIntervalo] = useState<{ ate: string; texto: string } | null>(null);
+  useEffect(() => {
+    if (!intervalo) return;
+    const t = setTimeout(() => setIntervalo(null), Math.max(0, Date.parse(intervalo.ate) - Date.now()) + 1000);
+    return () => clearTimeout(t);
+  }, [intervalo]);
   /** O andamento da importação em curso por OUTRO condutor (a atualização automática ou outra aba) — relido a cada 15 s. */
   const [andamento, setAndamento] = useState<AndamentoLote | null>(null);
   const [atual, setAtual] = useState<LoteCenti | null>(null);
@@ -133,8 +140,10 @@ export function EmpenhoCardImportacao({
         andamento?: AndamentoLote | null;
         desatualizados?: { ano: number; n: number }[];
         orgaosLiquidacao?: OrgaoLiq[] | null;
+        intervalo?: { ate: string; texto: string } | null;
       };
       if (j.ok) {
+        setIntervalo(j.intervalo ?? null);
         setOrgaosLiq(j.orgaosLiquidacao ?? null);
         setLotes(j.lotes ?? []);
         setEmAndamento(j.emAndamento ?? null);
@@ -406,9 +415,11 @@ export function EmpenhoCardImportacao({
           <Button
             size="sm"
             onClick={() => void importar(null)}
-            disabled={!!emAndamento || !anos.length || bloqueado}
+            disabled={!!emAndamento || !anos.length || bloqueado || !!intervalo}
             title={
-              bloqueado
+              intervalo && !emAndamento
+                ? intervalo.texto
+                : bloqueado
                 ? liq
                   ? "Configure o card antes de importar (Configuração) e cadastre o “ID na Centi” dos órgãos (Órgãos e Unidades)"
                   : "Configure o card antes de importar (Configuração e Vínculos)"
@@ -518,6 +529,7 @@ export function EmpenhoCardImportacao({
           leitor. Importe de novo para atualizar — nada é apagado; o que mudou é regravado.
         </Callout>
       )}
+      {intervalo && !emAndamento && !rodando && <Callout kind="info">{intervalo.texto}</Callout>}
       {emAndamento && !rodando && emAndamento.conduzido && (
         <Callout kind="info">
           <span className="block">

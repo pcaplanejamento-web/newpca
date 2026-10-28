@@ -1,10 +1,10 @@
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
-import { anosAutomaticos, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, cardsDaAutomatica, lotesForaDaEscolha } from "./empenho-cards-core";
+import { anosAutomaticos, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, cardsDaAutomatica, lotesForaDaEscolha, proximaDoCard } from "./empenho-cards-core";
 import { cardsAtivos, orgaosDoLote, registrarLeituraCard } from "./empenho-cards";
 import { and, eq } from "drizzle-orm";
 import { centiLeituras, centiLotePassos, centiLotes } from "@/db/schema";
-import { criarLote, type getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
+import { criarLote, encerrarParados, type getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
 import {
   hojeIso,
   anoDaVez,
@@ -43,6 +43,9 @@ import { horaAgoraBrasilia } from "./tarefas-core";
  * uma aba (a trava de quem conduz). Nos cards de LIQUIDAÇÕES, o lote lê todos os órgãos do cadastro com o "ID na Centi".
  */
 export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card: number; situacao: string }[]> {
+  // Os lotes PARADOS há mais de 30 min (a aba fechou, o Worker foi cortado) são encerrados em TODOS os cards — ligada ou
+  // não a automática: nada fica "lendo" para sempre na Execução e no painel do canto.
+  await encerrarParados().catch((e) => console.error("[empenhos-auto] encerrar parados", e));
   // A configuração CENTRAL (Configurações → Importações): desligada, nada roda; ligada, vale para todos os cards.
   const cfg = await getConfigImportacoes();
   if (!cfg.ativa) return encerrarLotesAuto();
@@ -109,6 +112,8 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
   if (!lote) {
     // A PROGRAMAÇÃO é a central; a última leitura é a de cada card (cada um tem a sua vez na frequência).
     if (!cardNaHora({ ...cfg, ultimaExecucao: card.ultimaExecucao }, agora)) return { situacao: "fora da hora", trabalhou: false };
+    // O INTERVALO MÍNIMO entre atualizações vale também para a automática.
+    if (proximaDoCard(card, cfg.intervaloMin, agora.ms)) return { situacao: "intervalo mínimo", trabalhou: false };
     const { ultima, emEspera } = await rodizioDosAnos(card.id, modoDoCard(card));
     // Os anos cuja última automática falhou ou ficou parcial esperam (o mesmo motivo voltaria) — a manual os libera.
     const anos = anosAutomaticos(cfg, card, agora.ano).filter((a) => !emEspera.has(a));

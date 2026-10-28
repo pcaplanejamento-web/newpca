@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { IconRefresh } from "./icons";
+import { toast } from "./Toast";
 
 /** Uma volta completa do `animate-spin` — o giro nunca para no meio (a recarga rápida ainda mostra o movimento). */
 const VOLTA_MS = 1000;
@@ -47,6 +48,7 @@ export function BotaoAtualizar({
   onClick,
   disabled = false,
   discreto = false,
+  aviso,
 }: {
   ativo: boolean;
   progresso?: number | null;
@@ -60,6 +62,8 @@ export function BotaoAtualizar({
   /** Travado (ex.: gravando, sobrescrita em andamento): fica À VISTA, sem agir — a dica diz o motivo. */
   disabled?: boolean;
   discreto?: boolean;
+  /** Travado COM O MOTIVO ao alcance (também no celular, que não tem dica): esmaecido e o toque mostra o aviso flutuante. */
+  aviso?: string;
 }) {
   const R = 15;
   const C = 2 * Math.PI * R;
@@ -70,10 +74,11 @@ export function BotaoAtualizar({
       type="button"
       aria-label={ativo ? `${rotulo} — ${fazendo}` : rotulo}
       aria-busy={ativo || undefined}
-      title={ativo ? fazendo : (dica ?? rotulo)}
-      onClick={ativo ? undefined : onClick}
+      title={ativo ? fazendo : (aviso ?? dica ?? rotulo)}
+      onClick={ativo ? undefined : aviso ? () => toast.info(aviso) : onClick}
       disabled={disabled && !ativo}
-      className={`relative inline-flex shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50 ${
+      aria-disabled={(!ativo && !!aviso) || undefined}
+      className={`relative inline-flex shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
         discreto
           ? "h-7 w-7 after:absolute after:-inset-2 lg:h-6 lg:w-6 lg:after:hidden pointer-coarse:after:block"
           : "h-11 w-11 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"

@@ -471,6 +471,13 @@ export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue
 /** Sem atividade há mais que isto, o lote "lendo" é considerado abandonado (outro pode começar). */
 export const MINUTOS_LOTE_PARADO = 30;
 
+/** O instante (texto do D1, "AAAA-MM-DD HH:MM:SS" em UTC) antes do qual um lote "lendo" está PARADO — a régua ÚNICA do
+ * fechamento (`loteEmAndamento`/`encerrarParados`), da contagem "lendo agora" da Execução e do andamento ao vivo. */
+export const limiteParado = (agoraMs = Date.now()): string => new Date(agoraMs - MINUTOS_LOTE_PARADO * 60_000).toISOString().replace("T", " ").slice(0, 19);
+
+/** O começo da mensagem do lote fechado por ABANDONO (falha passageira — não põe o ano em espera na automática). */
+export const MSG_ABANDONADO = "Abandonado:";
+
 /** A SAÚDE de uma importação: quantos pedidos à Centi, quantos com erro, os bytes baixados e o tempo de espera pela Centi. */
 /** A saúde do lote: os pedidos à Centi, os erros, o que foi baixado, a espera — e as páginas IDÊNTICAS à volta anterior (puladas na automática). */
 export type SaudeLote = { pedidos: number; erros: number; bytes: number; msCenti: number; semMudanca: number };

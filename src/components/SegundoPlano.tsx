@@ -43,6 +43,11 @@ export type Trabalho = {
   corpo?: () => ReactNode;
   /** Não aparece no painel (só mantém a página dona viva — ex.: o ADM desligou o andamento das importações). */
   oculto?: boolean;
+  /** Uma PERGUNTA a responder no próprio painel (ex.: a queda de uma importação sem tela que pergunte): o painel abre
+   * sozinho e mostra os dois botões; a resposta segue o trabalho. */
+  pergunta?: { texto: string; sim: string; nao: string; responder: (sim: boolean) => void };
+  /** Pedido de ABRIR o painel neste trabalho (o instante do pedido — um novo valor abre de novo). */
+  abrirEm?: number;
 };
 
 type Ctx = {
@@ -269,6 +274,13 @@ export function PainelSegundoPlano({
   useEffect(() => {
     if (!visivel) setAberto(false);
   }, [visivel]);
+  // Uma PERGUNTA pendente abre o painel (a resposta não pode ficar escondida na pílula).
+  const perguntando = trabalhos.some((t) => t.pergunta);
+  // O pedido de abrir (ex.: o relógio da Execução consultando a última importação).
+  const pedidoAbrir = Math.max(0, ...trabalhos.map((t) => t.abrirEm ?? 0));
+  useEffect(() => {
+    if (perguntando || pedidoAbrir) setAberto(true);
+  }, [perguntando, pedidoAbrir]);
   // Voltou à página dona de um trabalho que terminou fora dela: o desfecho foi visto — sai do painel.
   useEffect(() => {
     for (const t of todos)
@@ -331,6 +343,19 @@ export function PainelSegundoPlano({
                       </li>
                     ))}
                   </ul>
+                )}
+                {t.pergunta && (
+                  <div role="alert" className="space-y-2 rounded-md border border-[var(--warn)] bg-[color-mix(in_srgb,var(--warn)_8%,var(--surface))] p-2 text-xs">
+                    <p className="text-text-2">{t.pergunta.texto}</p>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <Button size="xs" variant="ghost" onClick={() => t.pergunta?.responder(false)}>
+                        {t.pergunta.nao}
+                      </Button>
+                      <Button size="xs" variant="danger" onClick={() => t.pergunta?.responder(true)}>
+                        {t.pergunta.sim}
+                      </Button>
+                    </div>
+                  </div>
                 )}
                 <div className="flex justify-end gap-1.5">
                   {t.estado === "rodando" && t.onParar && (

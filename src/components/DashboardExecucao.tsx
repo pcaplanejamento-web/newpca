@@ -70,10 +70,11 @@ import { IconChevronDown, IconChevronLeft, IconClock, IconClose, IconChevronRigh
 import { KpiStat } from "./KpiStat";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { useImportacoesLocais } from "./ImportacoesAoVivo";
+import { consultarUltimaImportacao } from "@/lib/importacoes-ao-vivo-store";
 import { toast } from "./Toast";
 import { useRouter } from "next/navigation";
 import { type ConfigImportacoes, lerRegraRemovidos, NOME_TIPO, type ResumoCard } from "@/lib/empenho-cards-core";
-import { anoMaisRecente, importarCards, perguntaDeQueda, prepararCards, resumoImportacao } from "@/lib/importar-cards";
+import { anoMaisRecente, importarCards, prepararCards, resumoImportacao } from "@/lib/importar-cards";
 import { haQuanto } from "@/lib/acessos-core";
 import type { MetaExec } from "@/lib/execucao-dash-core";
 import { duracaoMotionMs } from "./Modal";
@@ -466,7 +467,7 @@ export function DashboardExecucao({
       <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
         <KpiStat
           label="Saldo: empenhos"
-          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "empenhos")} />}
+          canto={<AtualizadoHa admin={admin} meta={base.meta.find((m) => m.tipo === "empenhos")} />}
           acaoCanto={admin ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "empenhos")} /> : undefined}
           value={brl(empenhadoAnim)}
           completo
@@ -478,7 +479,7 @@ export function DashboardExecucao({
         />
         <KpiStat
           label="Saldo: liquidações"
-          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
+          canto={<AtualizadoHa admin={admin && temLiq} meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
           acaoCanto={admin && temLiq ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "liquidacoes")} /> : undefined}
           value={temLiq ? brl(liquidadoAnim) : "—"}
           completo
@@ -490,7 +491,7 @@ export function DashboardExecucao({
         />
         <KpiStat
           label="Saldo: pagamentos"
-          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
+          canto={<AtualizadoHa admin={admin && temPag} meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
           acaoCanto={admin && temPag ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "pagamentos")} /> : undefined}
           value={temPag ? brl(pagoAnim) : "—"}
           completo
@@ -1443,10 +1444,23 @@ function ImportarAgora({ meta }: { meta?: MetaExec }) {
   const { confirmar, confirmacao } = useConfirmacao();
   const locais = useImportacoesLocais();
   const [rodando, setRodando] = useState(false);
+  // O fim do intervalo mínimo destrava o botão sozinho (sem esperar a tela recarregar).
+  const [, setFimIntervalo] = useState(0);
+  const ateIntervalo = meta?.intervalo ? Date.parse(meta.intervalo.ate) : 0;
+  useEffect(() => {
+    const falta = ateIntervalo - Date.now();
+    if (!(falta > 0)) return;
+    const t = setTimeout(() => setFimIntervalo(Date.now()), falta + 500);
+    return () => clearTimeout(t);
+  }, [ateIntervalo]);
   if (!meta?.cards) return null;
   const tipo = meta.tipo;
   const nome = NOME_TIPO[tipo].titulo;
-  const lendo = meta.lendo > 0 || locais.some((i) => i.estado === "rodando");
+  // Travado com uma importação DESTE tipo lendo (no servidor — outra aba, a automática — ou nesta aba) ou dentro do
+  // INTERVALO MÍNIMO entre atualizações (Configurações → Importações): o toque mostra o motivo.
+  const lendo = meta.lendo > 0 || locais.some((i) => i.estado === "rodando" && i.tipo === tipo);
+  const intervalo = meta.intervalo && ateIntervalo > Date.now() ? meta.intervalo.texto : null;
+  const aviso = lendo ? `Há uma importação de ${nome.toLowerCase()} em andamento — o andamento está no canto inferior direito.` : (intervalo ?? undefined);
   async function importar() {
     if (rodando) return;
     setRodando(true);
@@ -1456,14 +1470,14 @@ function ImportarAgora({ meta }: { meta?: MetaExec }) {
       const jf = (await rf.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes };
       if (!rc.ok || !jc.ok || !jc.cards) throw new Error(jc.error ?? "Não foi possível ler os cards de importação.");
       const cards = jc.cards.filter((c) => c.tipo === tipo);
-      if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito.`, confirmar: "Importar" })))
+      if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito — pode sair desta tela.`, confirmar: "Importar" })))
         return;
       const anoAtual = new Date().getFullYear();
       const linhas = await prepararCards(cards, (c) => anoMaisRecente(c, anoAtual), anoAtual);
       await importarCards(linhas, {
         regra: lerRegraRemovidos(jf.config?.removidos),
+        // O "Parar" do painel do canto interrompe o card e a série; a QUEDA é perguntada no painel (sobrevive a sair da tela).
         parar: () => false,
-        confirmarQueda: perguntaDeQueda(confirmar),
         onLinha: (id, mudou) => {
           const l = linhas.find((x) => x.card.id === id);
           if (l) Object.assign(l, mudou);
@@ -1483,9 +1497,9 @@ function ImportarAgora({ meta }: { meta?: MetaExec }) {
       <BotaoAtualizar
         discreto
         ativo={rodando}
-        disabled={lendo}
+        aviso={aviso}
         rotulo={`Importar agora os dados atualizados de ${nome.toLowerCase()}`}
-        dica={lendo ? "Há uma importação em andamento — o andamento está no canto inferior direito" : `Importar agora: ${nome.toLowerCase()}`}
+        dica={`Importar agora: ${nome.toLowerCase()}`}
         detalhe={`Importando ${nome.toLowerCase()} — veja o andamento no canto inferior direito`}
         onClick={() => void importar()}
       />
@@ -1498,7 +1512,7 @@ function ImportarAgora({ meta }: { meta?: MetaExec }) {
  * DISCRETO, no canto do indicador: há quanto tempo a etapa foi atualizada (a última importação concluída de qualquer card
  * dela — `MetaExec.atualizado`); com uma importação lendo agora, o ponto que pulsa. O relógio anda a cada 30 s.
  */
-function AtualizadoHa({ meta }: { meta?: MetaExec }) {
+function AtualizadoHa({ meta, admin }: { meta?: MetaExec; admin: boolean }) {
   const [agora, setAgora] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setAgora(Date.now()), 30_000);
@@ -1508,11 +1522,30 @@ function AtualizadoHa({ meta }: { meta?: MetaExec }) {
   const lendo = meta.lendo > 0;
   const quando = meta.atualizado ? haQuanto(meta.atualizado, agora) : "sem importação";
   const dica = `${meta.atualizado ? `Última importação concluída: ${dataHoraBR(meta.atualizado)}` : "Nenhuma importação concluída"}${lendo ? " · importando agora" : ""}`;
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] leading-none text-faint tabular-nums" title={dica}>
+  const conteudo = (
+    <>
       {lendo ? <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" /> : <IconClock aria-hidden className="h-3 w-3" />}
       <span className="sr-only">Atualizado </span>
       {quando}
+    </>
+  );
+  const classe = "inline-flex items-center gap-1 text-[11px] leading-none text-faint tabular-nums";
+  // O ADM toca no relógio e a ÚLTIMA importação da etapa abre no painel do canto inferior direito (o detalhe completo).
+  if (admin)
+    return (
+      <button
+        type="button"
+        onClick={() => consultarUltimaImportacao(meta.tipo)}
+        title={`${dica} — ver a última importação`}
+        className={`${classe} relative h-7 rounded-control px-1 transition-colors after:absolute after:-inset-2 hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-6 lg:after:hidden pointer-coarse:after:block`}
+      >
+        {conteudo}
+        <span className="sr-only"> — ver a última importação</span>
+      </button>
+    );
+  return (
+    <span className={classe} title={dica}>
+      {conteudo}
     </span>
   );
 }

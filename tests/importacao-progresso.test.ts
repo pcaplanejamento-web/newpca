@@ -142,6 +142,8 @@ test("D1 real: o tamanho esperado vem do mesmo pedido da última importação pr
     (2, 1, 2025, 'promovido', 'dados', '2025-02-01 10:00:00'),
     (3, 1, 2025, 'lendo', 'dados', NULL),
     (4, 1, 2025, 'falhou', 'dados', '2025-02-01 09:00:00')`);
+  // O PARADO há mais de 30 min não aparece como lendo (é abandonado).
+  raw.exec("INSERT INTO empenho_cards (id, nome) VALUES (2, 'Outro'); INSERT INTO centi_lotes (id, card_id, ano, estado, modo, visto_em) VALUES (5, 2, 2024, 'lendo', 'dados', '2000-01-01 00:00:00')");
   raw.exec(`INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado, bytes) VALUES
     (1, '2025-01-01', '2025-12-31', 1, 'ok', 111),
     (2, '2025-01-01', '2025-12-31', 1, 'ok', 222),

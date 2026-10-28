@@ -68,10 +68,12 @@ export async function prepararCards(cards: readonly ResumoCard[], anoDe: (c: Res
       const base: LinhaImportacao = { card, estado: "fila", texto: "Na fila", fracao: 0, ano: ano ?? anoAtual, retomar: null };
       if (pendenciasDoCard(card, card.vinculos).length > 0) return { ...base, estado: "pulado", texto: "Card ainda não configurado." };
       const r = await fetch(`/api/empenhos/cards/${card.id}/importar`).catch(() => null);
-      const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; emAndamento?: LoteCenti | null } | undefined;
+      const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; emAndamento?: LoteCenti | null; intervalo?: { texto: string } | null } | undefined;
       const lendo = j?.emAndamento ?? null;
-      if (lendo?.conduzido) return { ...base, estado: "pulado", texto: "Outra importação está lendo este card agora." };
+      if (lendo?.conduzido) return { ...base, estado: "pulado", texto: "Outra importação está lendo este card agora — se foi uma aba fechada ou recarregada, tente de novo em 2 minutos (o que já foi lido continua)." };
       if (lendo) return { ...base, ano: lendo.ano, retomar: lendo, texto: `Continua a importação aberta de ${lendo.ano}` };
+      // O INTERVALO MÍNIMO entre atualizações (Configurações → Importações): o card atualizado há pouco espera.
+      if (j?.intervalo) return { ...base, estado: "pulado", texto: j.intervalo.texto };
       if (ano == null || !anosDoCard(card.anos, anoAtual).includes(ano)) return { ...base, estado: "pulado", texto: `O ano ${ano ?? "—"} não está nos anos do card.` };
       return base;
     }),
@@ -84,18 +86,26 @@ export const ordemDeImportacao = (linhas: readonly LinhaImportacao[]): LinhaImpo
   return [...vao.filter((l) => l.card.tipo === "empenhos"), ...vao.filter((l) => l.card.tipo !== "empenhos")];
 };
 
-/** Importa as linhas na ordem, UM CARD POR VEZ; `onLinha` recebe cada mudança. Para entre um card e outro com `parar`. */
+/**
+ * Importa as linhas na ordem, UM CARD POR VEZ; `onLinha` recebe cada mudança. Para entre um card e outro com `parar` — e
+ * quando um card é INTERROMPIDO (o "Parar" do painel do canto vale para a série inteira); os que faltam ficam "não iniciado".
+ */
 export async function importarCards(
   linhas: readonly LinhaImportacao[],
-  o: { regra: RegraRemovidos; parar: () => boolean; confirmarQueda: (l: LinhaImportacao, queda: string) => Promise<boolean>; onLinha: (id: number, mudou: Partial<LinhaImportacao>) => void },
+  o: { regra: RegraRemovidos; parar: () => boolean; confirmarQueda?: (l: LinhaImportacao, queda: string) => Promise<boolean>; onLinha: (id: number, mudou: Partial<LinhaImportacao>) => void },
 ): Promise<void> {
-  for (const l of ordemDeImportacao(linhas)) {
-    if (o.parar()) break;
-    await umCard(l, o);
+  const fila = ordemDeImportacao(linhas);
+  let anterior: EstadoLinha | null = null;
+  for (let i = 0; i < fila.length; i++) {
+    if (o.parar() || anterior === "interrompido") {
+      for (const l of fila.slice(i)) o.onLinha(l.card.id, { estado: "interrompido", texto: "Não iniciado — a importação foi interrompida." });
+      break;
+    }
+    anterior = await umCard(fila[i], o);
   }
 }
 
-async function umCard(l: LinhaImportacao, o: Parameters<typeof importarCards>[1]): Promise<void> {
+async function umCard(l: LinhaImportacao, o: Parameters<typeof importarCards>[1]): Promise<EstadoLinha> {
   const id = l.card.id;
   const passos: PassoLote[] = [];
   o.onLinha(id, { estado: "lendo", texto: "Lendo na Centi…" });
@@ -107,7 +117,7 @@ async function umCard(l: LinhaImportacao, o: Parameters<typeof importarCards>[1]
       retomar: l.retomar,
       comPeriodo: usaPeriodo(l.card.parametros),
       parar: o.parar,
-      confirmarQueda: (queda) => o.confirmarQueda(l, queda),
+      confirmarQueda: o.confirmarQueda ? (queda) => o.confirmarQueda?.(l, queda) ?? Promise.resolve(false) : undefined,
       titulo: `${l.card.nome} · ${l.ano}`,
       rota: linkImportacoes(l.card.tipo, l.card.id, "importacao"),
       onAnteriores: (a) => passos.push(...a),
@@ -119,9 +129,11 @@ async function umCard(l: LinhaImportacao, o: Parameters<typeof importarCards>[1]
     if (estado === "gravado" && lote) o.onLinha(id, { estado: "gravado", fracao: 1, texto: lote.estado === "promovido" ? textoConclusao(lote, o.regra) : (lote.mensagem ?? "Concluído.") });
     else if (estado === "parcial") o.onLinha(id, { estado: "parcial", texto: `Parcial — nada foi gravado. ${lote?.mensagem ?? ""}` });
     else o.onLinha(id, { estado, texto: estado === "interrompido" ? "Interrompida — nada foi gravado." : "Cancelada na queda — nada mudou." });
+    return estado;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha na importação.";
     o.onLinha(id, { estado: "falhou", texto: e instanceof RecusaImportacao ? msg : `${msg} O que foi lido ficou guardado — Continuar no card lê só o que falta.` });
+    return "falhou";
   }
 }
 
