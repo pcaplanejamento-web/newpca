@@ -18,7 +18,7 @@ import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { brl, dataBR, dataHoraBR, num } from "@/lib/format";
 import { Badge } from "./Badge";
 import { type Column, DataTable } from "./DataTable";
-import { LiquidacaoDetalhe } from "./LiquidacaoDetalhe";
+import { AlteracoesCenti, LiquidacaoDetalhe } from "./LiquidacaoDetalhe";
 import { Modal, type ModalPainel } from "./Modal";
 import { PagamentoDetalhe } from "./PagamentoDetalhe";
 import { Skeleton } from "./Skeleton";
@@ -107,6 +107,8 @@ export function EmpenhoDetalhe({
           </dl>
         </div>
       )}
+
+      {completo && <AlteracoesCenti alteracoes={completo.alteracoes} ausente={completo.ausenteDesdeLote} />}
     </div>
   );
 }
@@ -172,6 +174,7 @@ function Execucao({
         <DataTable
           columns={COLUNAS_LIQ}
           rows={execucao.liquidacoes}
+          ordemInicial={{ key: "data", dir: "desc" }}
           getKey={(l) => l.id}
           density="compact"
           onRowClick={onAbrir ? (item) => onAbrir({ tipo: "liquidacao", item }) : undefined}
@@ -185,6 +188,7 @@ function Execucao({
         <DataTable
           columns={colunasPag}
           rows={execucao.pagamentos}
+          ordemInicial={{ key: "data", dir: "desc" }}
           getKey={(p) => p.id}
           density="compact"
           onRowClick={onAbrir ? (item) => onAbrir({ tipo: "pagamento", item }) : undefined}

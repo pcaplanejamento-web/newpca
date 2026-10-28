@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LIMITES_CARD } from "./empenho-cards-core.ts";
-import { MAX_LINHAS_PARTE } from "./importacao-partes-core.ts";
+import { MAX_LINHAS_PARTE, MAX_PARES_PARTE } from "./importacao-partes-core.ts";
 
 /** A configuração de um CARD de empenhos. A régua completa é `motivoCardInvalido` (core). */
 export const cardEmpenhoSchema = z.strictObject({
@@ -13,6 +13,11 @@ export const cardEmpenhoSchema = z.strictObject({
   tenant: z.string().trim().min(1).max(LIMITES_CARD.tenant),
   parametros: z.string().trim().min(2).max(LIMITES_CARD.parametros),
   anos: z.array(z.number().int()).min(1).max(LIMITES_CARD.anos),
+  porOrgao: z.boolean().default(false),
+});
+
+/** A CONFIGURAÇÃO CENTRAL das importações (Configurações → Importações). A régua completa é `motivoConfigImportacoes` (core). */
+export const configImportacoesSchema = z.strictObject({
   ativa: z.boolean(),
   frequenciaMin: z.number().int(),
   diasUteis: z.boolean(),
@@ -21,7 +26,6 @@ export const cardEmpenhoSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
-  porOrgao: z.boolean().default(false),
 });
 
 /** O card NOVO: o tipo (empenhos | liquidações | pagamentos), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos
@@ -89,6 +93,8 @@ export const importarCardSchema = z.discriminatedUnion("acao", [
     passo: z.number().int().positive().nullable(),
     // As tuplas (uma por linha) — o tipo de cada campo é conferido depois, sem o custo do Zod por campo.
     linhas: z.array(z.unknown()).max(MAX_LINHAS_PARTE),
+    // Os IGUAIS ao gravado: só a chave e a assinatura (conferidos no banco — `paresDaParte`/`comandoParesIguais`).
+    iguais: z.array(z.unknown()).max(MAX_PARES_PARTE).optional(),
     resumo: z
       .strictObject({
         status: z.number().int().min(0).max(999).nullable(),

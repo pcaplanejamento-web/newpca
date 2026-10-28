@@ -1,12 +1,13 @@
-import { and, eq } from "drizzle-orm";
-import { centiLotePassos } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { centiLotePassos, centiLotes } from "@/db/schema";
 import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
-import { type LinhaDoModo, linhasDaParte, type ModoParte, partesDaPagina, type ResumoPagina, resumoValido, somaDaLinha } from "./importacao-partes-core";
+import { getConfigImportacoes } from "./importacoes-config";
+import { hashLinha, type LinhaDoModo, linhasDaParte, type ModoParte, type ParIgual, paresDaParte, partesDaPagina, type ResumoPagina, resumoValido, somaDaLinha } from "./importacao-partes-core";
 import { baixarSeguro } from "./busca-segura";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
 import { corpoComOrgao, lerPaginaLiquidacoes, orgaoDaPagina } from "./liquidacoes-core";
-import { corpoPagamentos, lerPaginaPagamentos, mesDoPeriodo } from "./pagamentos-core";
+import { corpoPagamentos, lerPaginaPagamentos, mesDoPeriodo, mesesDoAno } from "./pagamentos-core";
 import {
   comandoRealinharPagamentos,
   comandosConferirPagamentos,
@@ -40,6 +41,7 @@ import {
   type LoteCenti,
   lerPaginaEmpenhos,
   lotePorOrgao,
+  MARCA_GUARDANDO,
   motivoValoresSuspeitos,
   type PassoLote,
   type PassoNovo,
@@ -54,18 +56,22 @@ import {
   usaPeriodo,
 } from "./empenhos-core";
 import {
+  COLUNAS_PASSO,
+  type LinhaPasso,
   comandoDividirPeriodo,
   comandoRecontarLote,
   comandoRegistrarPasso,
-  comandosConferirPagina,
+  CONF_EMPENHOS,
+  comandosConferirAssinatura,
   comandosFecharLote,
-  comandosGuardarFora,
+  comandoChavesFora,
   comandosPromover,
   consultaUltimoPasso,
   contagemDaPromocao,
   jaNoLote,
   lidoNoPeriodo,
   ultimoPromovido,
+  ultimoPasso,
   valoresSuspeitos,
   vigentesDosOrgaos,
 } from "./empenhos-sql";
@@ -75,7 +81,7 @@ import {
  * (a tela conduz pela rota) e na atualização AUTOMÁTICA (o cron conduz). Quem chama confere o acesso e a trava do lote.
  */
 
-type Linha = typeof centiLotePassos.$inferSelect;
+type Linha = LinhaPasso;
 
 /**
  * Até 1 MB por resposta (a semana média tem ~0,7 MB; o que passa disso é dividido ao meio) e, no período de UM dia ou no mês
@@ -85,11 +91,14 @@ type Linha = typeof centiLotePassos.$inferSelect;
  * capturada e processada em fragmentos, uma janela por execução do cron (`empenhos-fragmentos.ts`).
  */
 const MAX_BYTES = 1_000_000;
-/** Pela TELA o servidor só repassa os bytes (o navegador lê o JSON): a semana cabe inteira em até 4 MB — menos divisões e
- * menos pedidos. A automática segue com 1 MB (a resposta grande é baixada de novo a cada fragmento capturado). */
-const MAX_BYTES_TELA = 4_000_000;
+/** Pela TELA o servidor só REPASSA os bytes, sem guardá-los (o navegador lê o JSON): o ANO INTEIRO de uma vez (a Centi
+ * entrega 2026 inteiro, ~32 MB, em ~7 s) — um pedido por ano (por órgão nas liquidações e nos pagamentos), não dezenas
+ * por semana. A automática segue com 1 MB (a resposta grande é baixada de novo a cada fragmento capturado). */
+const MAX_BYTES_TELA = 60_000_000;
 const MAX_BYTES_DIA = 12_000_000;
 export const TEMPO_MS = 30_000;
+/** Pela TELA o tempo vale até o fim do repasse (o ano inteiro da Centi chega em ~10 s). */
+const TEMPO_TELA_MS = 120_000;
 
 /** O pedido não vale (período fora do ano, parâmetros inválidos) — a rota responde com o status. */
 export class PedidoInvalido extends Error {
@@ -105,7 +114,7 @@ export type ResultadoPagina = {
   passo: PassoLote;
   continuar?: boolean;
   erro?: { tipo: TipoErro; mensagem: string };
-  dividir?: [Periodo, Periodo] | null;
+  dividir?: Periodo[] | null;
   /** A parte foi guardada e a página ainda não terminou (mande a próxima com o `passo.id`). */
   parcial?: boolean;
 };
@@ -114,7 +123,7 @@ export type ResultadoPagina = {
 const statusDaMensagem = (m: string) => Number(m.match(/respondeu (\d{3})/)?.[1]) || null;
 
 /** A marca do passo de uma página que ainda recebe as partes (se a leitura parar no meio, o passo fica como erro). */
-const guardando = (parte: number) => `Guardando a página — ${parte} parte(s) recebida(s); se parar aqui, a página é lida de novo.`;
+const GUARDANDO = `${MARCA_GUARDANDO} — as partes estão chegando; se parar aqui, a página é lida de novo.`;
 
 export type Pedido = {
   modo: ModoParte;
@@ -135,7 +144,7 @@ export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Peri
   const doAno = anoInteiro(lote.ano);
   if (periodo.inicio > periodo.fim || periodo.inicio < doAno.inicio || periodo.fim > doAno.fim) throw new PedidoInvalido("Período fora do ano da importação.");
   // PAGAMENTOS: a Centi só recorta por MÊS — o período tem de ser um mês inteiro (os parâmetros não precisam do {inicio}/{fim}).
-  if (pag && mesDoPeriodo(periodo) == null) throw new PedidoInvalido("Os pagamentos só se leem por mês inteiro.");
+  if (pag && mesDoPeriodo(periodo) == null && !(periodo.inicio === doAno.inicio && periodo.fim === doAno.fim)) throw new PedidoInvalido("Os pagamentos só se leem por mês inteiro ou pelo ano inteiro.");
   if (!pag && !usaPeriodo(card.parametros) && (periodo.inicio !== doAno.inicio || periodo.fim !== doAno.fim)) {
     throw new PedidoInvalido("Os parâmetros desta API não usam {inicio} e {fim} — o ano só pode ser lido inteiro.");
   }
@@ -156,7 +165,7 @@ export function prepararPedido(card: CardEmpenho, lote: LoteCenti, periodo: Peri
     throw new PedidoInvalido(e instanceof Error ? e.message : "Parâmetros inválidos.");
   }
   // O mês dos pagamentos não se divide: vale o teto do período que não se divide.
-  const maxBytes = pag || diasDoPeriodo(periodo) <= 1 ? MAX_BYTES_DIA : tela ? MAX_BYTES_TELA : MAX_BYTES;
+  const maxBytes = tela ? MAX_BYTES_TELA : pag || diasDoPeriodo(periodo) <= 1 ? MAX_BYTES_DIA : MAX_BYTES;
   return { modo: tipoDoModo, pag, porOrgao, idOrgao, base: { inicio: periodo.inicio, fim: periodo.fim, pagina, corpo: enviado }, maxBytes };
 }
 
@@ -171,7 +180,8 @@ export async function registrarFalha(
 ): Promise<ResultadoPagina> {
   const db = getDb();
   const tipo = tipoDoErro(f.mensagem);
-  const metades = tipo === "grande" && !ped.pag && usaPeriodo(card.parametros) ? dividirPeriodo(periodo) : null;
+  // O grande demais DIVIDE: ao meio (empenhos e liquidações); nos pagamentos, o ano em MESES (o mês não se divide).
+  const metades = tipo !== "grande" ? null : ped.pag ? mesesDoAno(lote.ano, periodo) : usaPeriodo(card.parametros) ? dividirPeriodo(periodo) : null;
   const passo: PassoNovo = {
     ...ped.base,
     estado: metades ? "dividido" : "erro",
@@ -185,7 +195,7 @@ export async function registrarFalha(
     repetidos: 0,
     total: null,
     soma: null,
-    mensagem: metades ? `${f.mensagem} — ${rotuloPeriodo(periodo)} será lido em duas partes: ${rotuloPeriodo(metades[0])} e ${rotuloPeriodo(metades[1])}.` : f.mensagem,
+    mensagem: metades ? `${f.mensagem} — ${rotuloPeriodo(periodo)} será lido em ${metades.length === 2 ? `duas partes: ${rotuloPeriodo(metades[0])} e ${rotuloPeriodo(metades[1])}` : `${metades.length} partes (mês a mês)`}.` : f.mensagem,
   };
   const res = await db.batch([comandoRegistrarPasso(db, lote.id, passo).returning(), ...(metades ? [comandoDividirPeriodo(db, lote.id, periodo), comandoRecontarLote(db, lote.id)] : []), ...extras] as never);
   return { passo: paraPasso((res as Linha[][])[0][0]), erro: { tipo, mensagem: f.mensagem }, dividir: metades };
@@ -201,12 +211,13 @@ export async function baixarPaginaDoLote(
   lote: LoteCenti,
   periodo: Periodo,
   pagina: number,
-): Promise<{ ok: true; pedacos: Uint8Array[]; status: number; ms: number } | { ok: false; r: ResultadoPagina }> {
+): Promise<{ ok: true; corpo: ReadableStream<Uint8Array>; status: number; ms: number } | { ok: false; r: ResultadoPagina }> {
   const ped = prepararPedido(card, lote, periodo, pagina, true);
   const t0 = Date.now();
   try {
-    const r = await baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", pedacos: true });
-    return { ok: true, pedacos: r.pedacos ?? [], status: r.status, ms: Date.now() - t0 };
+    // REPASSE: o corpo vai ao navegador enquanto chega (nada é guardado na memória do Worker — o ano inteiro cabe).
+    const r = await baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_TELA_MS, post: ped.base.corpo ?? "", fluxo: true });
+    return { ok: true, corpo: r.corpo as ReadableStream<Uint8Array>, status: r.status, ms: Date.now() - t0 };
   } catch (e) {
     const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
     return { ok: false, r: await registrarFalha(card, lote, periodo, ped, { mensagem, status: null, bytes: null, ms: Date.now() - t0 }) };
@@ -219,7 +230,16 @@ export async function falhaDaPagina(card: CardEmpenho, lote: LoteCenti, periodo:
 }
 
 /** `parte` = quantas partes já vieram antes desta (0 = a 1ª); `ultima` traz o `resumo`. */
-export type ParteLida = { parte: number; ultima: boolean; passo: number | null; linhas: object[]; resumo: ResumoPagina | null };
+export type ParteLida = {
+  parte: number;
+  ultima: boolean;
+  passo: number | null;
+  linhas: object[];
+  iguais?: ParIgual[];
+  resumo: ResumoPagina | null;
+  /** O SHA-256 dos bytes da resposta (só quando veio inteira num pedido — a automática): vai ao passo final. */
+  assinatura?: string | null;
+};
 
 /**
  * GUARDA UMA PARTE da página (as linhas já lidas — conferidas antes): cada parte = um lote de comandos de tamanho FIXO,
@@ -234,32 +254,34 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   let antes: Linha | null = null;
   if (p.passo != null) {
     const [a] = await db
-      .select()
+      .select(COLUNAS_PASSO)
       .from(centiLotePassos)
       .where(and(eq(centiLotePassos.id, p.passo), eq(centiLotePassos.loteId, lote.id), eq(centiLotePassos.inicio, periodo.inicio), eq(centiLotePassos.fim, periodo.fim), eq(centiLotePassos.pagina, pagina), eq(centiLotePassos.estado, "erro")));
-    if (!a || a.mensagem !== guardando(p.parte)) throw new PedidoInvalido("A página recomeçou em outro pedido — leia de novo.", 409);
+    // As partes do MEIO chegam em PARALELO (cada uma soma no passo, no banco); a ÚLTIMA vem depois de todas.
+    if (!a || a.mensagem !== GUARDANDO) throw new PedidoInvalido("A página recomeçou em outro pedido — leia de novo.", 409);
     antes = a;
   }
-  const chaves = p.linhas.map((l) => (l as { chave: string }).chave);
-  const novos = (antes?.novos ?? 0) + p.linhas.length - (await jaNoLote(db, lote.id, chaves));
-  const linhasPagina = (antes?.recebidos ?? 0) + p.linhas.length;
+  const iguais = p.iguais ?? [];
+  const chaves = [...p.linhas.map((l) => (l as { chave: string }).chave), ...iguais.map((x) => x[0])];
+  const novos = (antes?.novos ?? 0) + chaves.length - (await jaNoLote(db, lote.id, chaves));
+  const linhasPagina = (antes?.recebidos ?? 0) + chaves.length;
+  // A SOMA das linhas inteiras (a dos iguais o banco soma do gravado — `comandoParesIguais`, nos comandos `depois`).
   const soma = (antes?.soma ?? 0) + p.linhas.reduce((t: number, l) => t + somaDaLinha(ped.modo, l), 0);
   const alvo = p.passo ?? undefined;
+  // A ASSINATURA de cada linha (calculada AQUI, sobre a linha conferida — nunca a que o navegador diz).
+  const comHash = p.linhas.map((l) => ({ ...l, hash: hashLinha(ped.modo, l, lote.leitor) })) as (object & { chave: string; hash: string })[];
 
   // Os comandos da parte (guardar + a conferência em tempo real) — os mesmos de sempre, no passo da página.
   const daParte: unknown[] = [];
-  if (ped.modo === "pagamentos") {
-    daParte.push(
-      ...comandosConferirPagamentos(db, lote.id, card.id, lote.leitor, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"pagamentos">[], alvo),
-    );
-  } else if (ped.modo === "liquidacoes") {
-    daParte.push(
-      ...comandosConferirLiquidacoes(db, lote.id, card.id, lote.leitor, pagina, ped.idOrgao ?? 0, p.linhas as LinhaDoModo<"liquidacoes">[], alvo),
-    );
+  let depois: unknown[] = [];
+  if (ped.modo === "pagamentos" || ped.modo === "liquidacoes") {
+    const c = (ped.modo === "pagamentos" ? comandosConferirPagamentos : comandosConferirLiquidacoes)(db, lote.id, card.id, pagina, ped.idOrgao ?? 0, comHash as never, iguais, alvo, lote.leitor);
+    daParte.push(...c.cmds);
+    depois = c.depois;
   } else {
     // SÓ O VINCULADO ENTRA NO BANCO: o registro que nenhum vínculo do card cobre não é guardado — dele fica só a CHAVE até
     // o fim da importação, para a conferência com a Centi. Na leitura só do catálogo, nenhum.
-    const linhas = p.linhas as LinhaDoModo<"empenhos">[];
+    const linhas = comHash as unknown as (LinhaDoModo<"empenhos"> & { hash: string })[];
     const mapa = lote.modo === "unidades" ? null : mapaDosVinculos(await consultaVinculosCard(db, card.id));
     const guardar = mapa ? linhas.filter((l) => vinculoDaLinha(mapa, l)) : [];
     const soContar = mapa ? linhas.filter((l) => !vinculoDaLinha(mapa, l)) : linhas;
@@ -267,20 +289,35 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     const catalogo = catalogoDasLinhas(linhas);
     // POR ÓRGÃO: o ID pedido e os órgãos gestores que vieram entram no MAPA (a base da leitura por órgão).
     const gestores = ped.porOrgao && ped.idOrgao != null ? [...new Set(linhas.map((l) => l.orgaoGestor).filter(Boolean))] : [];
+    const c = mapa ? comandosConferirAssinatura(db, { ...CONF_EMPENHOS, leitor: lote.leitor }, lote.id, card.id, pagina, guardar, iguais, soContar.map((l) => l.chave), alvo) : null;
     daParte.push(
-      ...(gestores.length ? [comandoRegistrarGestores(db, ped.idOrgao as number, gestores)] : []),
-      ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
+      // Em grupos de 40 (2 parâmetros por gestor — o limite de 100 do D1).
+      ...Array.from({ length: Math.ceil(gestores.length / 40) }, (_, i) => comandoRegistrarGestores(db, ped.idOrgao as number, gestores.slice(i * 40, i * 40 + 40))),
       ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
-      ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, pagina, guardar, soContar.length, alvo) : []),
+      // Os SEM VÍNCULO: só as chaves, na lista do passo (uma escrita por página).
+      ...(c ? c.cmds : soContar.length ? [comandoChavesFora(db, lote.id, soContar.map((l) => l.chave), alvo)] : []),
     );
+    depois = c?.depois ?? [];
   }
 
   if (!ultima) {
-    const meio = { recebidos: linhasPagina, novos, soma, mensagem: guardando(p.parte + 1) };
+    const meio = { recebidos: linhasPagina, novos, soma, mensagem: GUARDANDO };
     const passo: PassoNovo = { ...ped.base, estado: "erro", fimPeriodo: false, status: null, bytes: null, ms: null, recusados: 0, repetidos: 0, total: null, ...meio };
+    // A parte do meio SOMA no passo (no banco — as do meio correm em paralelo); a 1ª cria o passo.
+    const mais = { recebidos: chaves.length, novos: novos - (antes?.novos ?? 0), soma: soma - (antes?.soma ?? 0) };
     const res = await db.batch([
-      ...(p.passo == null ? [comandoRegistrarPasso(db, lote.id, passo)] : [db.update(centiLotePassos).set(meio).where(eq(centiLotePassos.id, p.passo))]),
+      ...(p.passo == null
+        ? [comandoRegistrarPasso(db, lote.id, passo)]
+        : [
+            db
+              .update(centiLotePassos)
+              .set({ recebidos: sql`${centiLotePassos.recebidos} + ${mais.recebidos}`, novos: sql`${centiLotePassos.novos} + ${mais.novos}`, soma: sql`COALESCE(${centiLotePassos.soma}, 0) + ${mais.soma}` })
+              .where(eq(centiLotePassos.id, p.passo)),
+          ]),
+      // A parte também é atividade: o lote que recebe uma página grande nunca é dado como abandonado.
+      db.update(centiLotes).set({ vistoEm: sql`CURRENT_TIMESTAMP` }).where(and(eq(centiLotes.id, lote.id), eq(centiLotes.estado, "lendo"))),
       ...daParte,
+      ...depois,
       ...extras,
       consultaUltimoPasso(db, lote.id, alvo),
     ] as never);
@@ -288,6 +325,21 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   }
 
   const r = p.resumo as ResumoPagina;
+  // A página JÁ LIDA (uma leitura atrasada — a da execução automática que outra aba retomou, ou o pedido repetido pela
+  // rede) ou o período já DIVIDIDO não entram de novo: contariam duas vezes.
+  const [repetida] = await db
+    .select({ id: centiLotePassos.id })
+    .from(centiLotePassos)
+    .where(
+      and(
+        eq(centiLotePassos.loteId, lote.id),
+        eq(centiLotePassos.inicio, periodo.inicio),
+        eq(centiLotePassos.fim, periodo.fim),
+        sql`(${centiLotePassos.estado} = 'dividido' OR (${centiLotePassos.estado} = 'ok' AND ${centiLotePassos.pagina} = ${pagina}))`,
+      ),
+    )
+    .limit(1);
+  if (repetida) throw new PedidoInvalido("Esta página já foi lida neste lote — a leitura repetida não entra.", 409);
   if (!resumoValido(r, linhasPagina)) throw new PedidoInvalido("O resumo da página não confere com as linhas recebidas — leia de novo.");
   // LIQUIDAÇÕES e PAGAMENTOS: o total é o DESTE órgão = os distintos + os recusados (contado aqui); o do período = a soma dos
   // órgãos (`comandoRecontarLote`), e o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
@@ -320,6 +372,8 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     ...(p.passo == null ? [comandoRegistrarPasso(db, lote.id, { ...ped.base, ...final })] : []),
     ...daParte,
     ...(p.passo == null ? [] : [db.update(centiLotePassos).set({ ...final, fimPeriodo: final.fimPeriodo ? 1 : 0 }).where(eq(centiLotePassos.id, p.passo))]),
+    ...depois,
+    ...(p.assinatura ? [db.update(centiLotePassos).set({ assinaturaBruta: p.assinatura }).where(eq(centiLotePassos.id, p.passo ?? ultimoPasso(lote.id)))] : []),
     ...fecho,
     comandoRecontarLote(db, lote.id),
     ...extras,
@@ -334,20 +388,22 @@ export async function guardarParteDoLote(
   lote: LoteCenti,
   periodo: Periodo,
   pagina: number,
-  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; resumo: ResumoPagina | null },
+  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; iguais?: unknown; resumo: ResumoPagina | null },
 ): Promise<ResultadoPagina> {
   const ped = prepararPedido(card, lote, periodo, pagina);
   const v = linhasDaParte(ped.modo, lote.ano, p.tuplas);
   if (!v.ok) throw new PedidoInvalido(`Parte recusada: ${v.motivo}`);
+  const pares = paresDaParte(p.iguais, new Set(v.linhas.map((l) => (l as { chave: string }).chave)));
+  if (!pares.ok) throw new PedidoInvalido(`Parte recusada: ${pares.motivo}`);
   if (p.parte < 0 || p.parte >= p.partes) throw new PedidoInvalido("Parte fora de ordem — leia a página de novo.");
-  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, resumo: p.resumo });
+  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, iguais: pares.pares, resumo: p.resumo });
 }
 
 /**
  * Lê e guarda uma página PEQUENA já baixada (o texto inteiro) NO SERVIDOR — a atualização automática, quando a resposta
  * cabe numa janela (`JANELA`); a maior é fragmentada (`empenhos-fragmentos.ts`). Guarda pelas MESMAS partes da tela.
  */
-export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, texto: string, status: number | null, ms: number): Promise<ResultadoPagina> {
+export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, texto: string, status: number | null, ms: number, assinatura: string | null = null): Promise<ResultadoPagina> {
   let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | ReturnType<typeof lerPaginaPagamentos>;
   try {
     lida = lerPaginaDoModo(ped, texto, lote.ano);
@@ -363,7 +419,8 @@ export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, per
   for (let i = 0; i < partes.length; i++) {
     const linhas = lida.linhas.slice(feitas, feitas + partes[i].length);
     feitas += linhas.length;
-    res = await gravarParte(card, lote, periodo, ped, { parte: i, ultima: i === partes.length - 1, passo, linhas, resumo: i === partes.length - 1 ? resumo : null });
+    const ultima = i === partes.length - 1;
+    res = await gravarParte(card, lote, periodo, ped, { parte: i, ultima, passo, linhas, resumo: ultima ? resumo : null, assinatura: ultima ? assinatura : null });
     passo = res.passo.id;
   }
   return res as ResultadoPagina;
@@ -401,6 +458,8 @@ export async function fecharParcial(card: CardEmpenho, lote: LoteCenti, motivo: 
  */
 export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
+  const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const parcial = (motivo: string, resumo: string) => fecharParcial(card, lote, motivo, resumo, opcoes.usuario);
   // O "hoje" é o do INÍCIO do lote: atravessar a meia-noite não cria uma lacuna nova na conclusão.
@@ -427,17 +486,17 @@ export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, o
   const contagem = await contagemDaPromocao(db, lote.id, card.id, lote.ano, lote.leitor, orgaos);
   // A 1ª leitura por órgão não tem com quem comparar: a régua da queda vale sobre os empenhos vigentes desses órgãos (o que
   // a leitura marcaria como removido) — um mapa errado nunca esvazia o ano sem a pessoa confirmar.
-  const queda = anterior || !orgaos ? quedaSuspeita(anterior, lote, { soma: card.quedaSoma, registros: card.quedaRegistros }) : quedaPrimeiraPorOrgao(await vigentesDosOrgaos(db, card.id, lote.ano, orgaos), contagem.removidos, card.quedaRegistros);
+  const queda = anterior || !orgaos ? quedaSuspeita(anterior, lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros }) : quedaPrimeiraPorOrgao(await vigentesDosOrgaos(db, card.id, lote.ano, orgaos), contagem.removidos + contagem.ausentes, regras.quedaRegistros);
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda };
   // As LIQUIDAÇÕES e os PAGAMENTOS seguem o empenho de mesmo número: as dos empenhos que chegaram (ou mudaram de unidade) realinham juntas.
-  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, card.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db), comandoRealinharPagamentos(db)] as never);
+  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, regras.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db, { card: card.id, ano: lote.ano }), comandoRealinharPagamentos(db, { card: card.id, ano: lote.ano })] as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}${orgaos ? ` (por órgão: ${orgaos.length} órgão(s) da Centi)` : ""}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"} (não vieram mais), ${contagem.fora} sem vínculo no card (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}${orgaos ? ` (por órgão: ${orgaos.length} órgão(s) da Centi)` : ""}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.ausentes} ausentes pela 1ª vez (seguem valendo), ${contagem.removidos} ${regras.removidos === "apagar" ? "apagados" : "marcados como removidos"} (ausentes de novo), ${contagem.fora} sem vínculo no card (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }
@@ -446,6 +505,8 @@ export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, o
  * regras do card. */
 async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
+  const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const orgaos = lote.orgaosCenti ?? [];
   const n = await liquidacoesSuspeitas(db, lote.id);
@@ -453,17 +514,17 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
     const m = `${n} liquidação(ões) com valor negativo ou acima do limite — a leitura parece errada; nada foi gravado.`;
     return fecharParcial(card, lote, m, m, opcoes.usuario);
   }
-  const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
+  const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, lote.id), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma liquidada").replace("os empenhos caíram", "as liquidações caíram") };
   const contagem = await contagemLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor);
-  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, card.removidos, contagem) as never);
+  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, regras.removidos, contagem) as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: liquidações de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}, ${contagem.fora} sem empenho nem órgão no cadastro (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}: liquidações de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.ausentes} ausentes pela 1ª vez, ${contagem.removidos} ${regras.removidos === "apagar" ? "apagadas" : "marcadas como removidas"} (ausentes de novo), ${contagem.fora} sem empenho nem órgão no cadastro (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }
@@ -472,6 +533,8 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
  * mesmas regras do card (a soma = o pago líquido das ordens não anuladas). */
 async function concluirPagamentos(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
+  const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const orgaos = lote.orgaosCenti ?? [];
   const n = await pagamentosSuspeitos(db, lote.id);
@@ -479,17 +542,17 @@ async function concluirPagamentos(card: CardEmpenho, lote: LoteCenti, opcoes: { 
     const m = `${n} pagamento(s) com valor negativo ou acima do limite — a leitura parece errada; nada foi gravado.`;
     return fecharParcial(card, lote, m, m, opcoes.usuario);
   }
-  const queda = quedaSuspeita(await ultimoPagamentoPromovido(db, card.id, lote.ano, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
+  const queda = quedaSuspeita(await ultimoPagamentoPromovido(db, card.id, lote.ano, lote.id), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma paga").replace("os empenhos caíram", "os pagamentos caíram") };
   const contagem = await contagemPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor);
-  await db.batch(comandosPromoverPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, card.removidos, contagem) as never);
+  await db.batch(comandosPromoverPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, regras.removidos, contagem) as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: pagamentos de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidos (Σ pago líquido ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${contagem.removidos} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}, ${contagem.fora} sem empenho nem órgão no cadastro (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}: pagamentos de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidos (Σ pago líquido ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${contagem.ausentes} ausentes pela 1ª vez, ${contagem.removidos} ${regras.removidos === "apagar" ? "apagados" : "marcados como removidos"} (ausentes de novo), ${contagem.fora} sem empenho nem órgão no cadastro (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }

@@ -33,6 +33,11 @@ v1.168.0: termo e aparelho em BANNERS flutuantes (sem páginas), canais ao vivo 
 agora", cartões de aparelho com o status da troca e o editor visual do texto (`EditorRico`).
 **Próximo:** o alerta de login suspeito usar a tabela `aparelhos`. (v1.169.0: o `EditorRico` virou o editor único — descrição, notas e comentários das tarefas.)
 
+### Mesa: todo dado vira coluna (v1.243.0) — entregue
+Todos os dados do protocolo e do DFD como colunas (ocultas até ligar, lidas sob demanda, respeitando o papel), o seletor de
+colunas no rodapé e o PainelFiltros (o da Execução) nas tabelas: filtros em chips, visões, a padrão da pessoa e o estado
+inicial para todos do ADM. **Próximo:** colunas extras também na Consolidada.
+
 ### Acesso às unidades por aba (v1.161.0/1) — entregue
 Na aba em Todas o cabeçalho segue com as unidades do grupo; a tabela filtra pela coluna Unidade.
 Uma configuração por aba no grupo (Da pessoa · Soma · Todas): ex.: a Mesa do PCA com todas as unidades e o Dashboard/Orçamento só na unidade da pessoa; na Soma o seletor do cabeçalho trava.
@@ -1829,3 +1834,6 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - v1.153.1: filtros de unidade do Dashboard do PCA e da tela pública com sigla + nome (comNomesUnidades).
 - v1.154.0: unidade de medida do item renomeada para "Medida" na interface.
 - v1.161.3: filtro da Mesa do PCA acompanha o cabeçalho; acesso por aba podado ao trocar módulos.
+- v1.241.0: importações da Centi só gravam o que mudou (assinatura por registro, pares para os iguais), ano inteiro num pedido com partes pequenas em paralelo (fim dos passos "Erro" por tempo de CPU), ausente em duas leituras antes de remover, histórico "Alterações na Centi" nos detalhes e "Importar tudo" em Configurações → Importações.
+- v1.242.1: auditoria — o pulo das páginas sem mudança segue um orçamento contado de consultas ao D1 (8 por execução nos empenhos, 5 por órgão), sempre abaixo das 50 do plano gratuito.
+- v1.242.0: atualização automática pula a página da Centi idêntica à da última volta (SHA-256 dos bytes + chaves da página no passo, várias por execução); registros antigos ganham a assinatura no lugar (1 escrita); partes com orçamento em bytes também para os pares; assinaturas paginadas.

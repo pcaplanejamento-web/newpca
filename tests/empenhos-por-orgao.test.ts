@@ -4,8 +4,8 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { idsPorGestor, orgaosDaLeitura } from "../src/lib/empenho-cards-core.ts";
 import { comandoRegistrarGestores, consultaOrgaosGestores } from "../src/lib/empenho-cards-sql.ts";
-import { anoInteiro, lerPaginaEmpenhos, lotePorOrgao, quedaPrimeiraPorOrgao } from "../src/lib/empenhos-core.ts";
-import { comandoRecontarLote, comandoRegistrarPasso, comandosGuardarPagina, comandosPromover, contagemDaPromocao, ultimoPromovido, vigentesDosOrgaos } from "../src/lib/empenhos-sql.ts";
+import { anoInteiro, erroUnico, lerPaginaEmpenhos, lotePorOrgao, quedaPrimeiraPorOrgao } from "../src/lib/empenhos-core.ts";
+import { comandoRecontarLote, comandoRegistrarPasso, comandosFecharLote, comandosGuardarPagina, comandosPromover, contagemDaPromocao, ultimoPromovido, vigentesDosOrgaos } from "../src/lib/empenhos-sql.ts";
 import { corpoComOrgao } from "../src/lib/liquidacoes-core.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
@@ -60,14 +60,16 @@ test("empenhos por órgão (D1 real): o total soma os órgãos, o mapa é aprend
   assert.deepEqual({ ...lote }, { t: 1, u: 1 }, "o total do lote por órgão = a soma dos órgãos");
   assert.equal(await vigentesDosOrgaos(b.db, 1, 2026, [2]), 1, "só os da PREFEITURA (o ID 2)");
   const c = await contagemDaPromocao(b.db, l1, 1, 2026, 1, [2]);
-  assert.deepEqual(c, { inseridos: 0, atualizados: 1, removidos: 0, fora: 0 });
+  assert.deepEqual(c, { inseridos: 0, atualizados: 1, removidos: 0, ausentes: 0, fora: 0 });
   await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", c, [2]) as never);
   const e = Object.fromEntries((b.raw.prepare("SELECT numero, valor_empenhado v, removido_em r FROM empenhos").all() as { numero: string; v: number; r: string | null }[]).map((x) => [x.numero, x]));
   assert.equal(e["1"].v, 15);
   assert.equal(e["2"].r, null, "o órgão não lido nunca 'some'");
 
   // Sem o lote, a leitura do ano inteiro marcaria o 2 — a régua de sempre segue igual.
-  assert.equal(await contagemDaPromocao(b.db, b.novoLote(null), 1, 2026, 1).then((x) => x.removidos), 2);
+  const lTodos = b.novoLote(null);
+  assert.equal(await contagemDaPromocao(b.db, lTodos, 1, 2026, 1).then((x) => x.ausentes), 2);
+  b.raw.prepare("UPDATE centi_lotes SET estado = 'parcial' WHERE id = ?").run(lTodos); // um lote LENDO por card
 
   // A queda compara só com a importação dos MESMOS órgãos.
   assert.equal((await ultimoPromovido(b.db, 1, 2026, -1, [2]))?.unicos, 1);
@@ -78,8 +80,13 @@ test("empenhos por órgão (D1 real): o total soma os órgãos, o mapa é aprend
   const l2 = b.novoLote([2]);
   await pagina(b, l2, 1, [], 0);
   const c2 = await contagemDaPromocao(b.db, l2, 1, 2026, 1, [2]);
-  assert.equal(c2.removidos, 1);
+  assert.equal(c2.ausentes, 1, "a 1ª vez: ausente");
   await b.db.batch(comandosPromover(b.db, l2, 1, 2026, 1, "marcar", c2, [2]) as never);
+  const l3 = b.novoLote([2]);
+  await pagina(b, l3, 1, [], 0);
+  const c3 = await contagemDaPromocao(b.db, l3, 1, 2026, 1, [2]);
+  assert.equal(c3.removidos, 1, "a 2ª: removido");
+  await b.db.batch(comandosPromover(b.db, l3, 1, 2026, 1, "marcar", c3, [2]) as never);
   assert.ok((b.raw.prepare("SELECT removido_em r FROM empenhos WHERE numero = '1'").get() as { r: string | null }).r);
   assert.equal((b.raw.prepare("SELECT removido_em r FROM empenhos WHERE numero = '2'").get() as { r: string | null }).r, null);
 });
@@ -90,4 +97,22 @@ test("a 1ª leitura por órgão pede confirmação quando marcaria removidos dem
   assert.match(quedaPrimeiraPorOrgao(100, 11, 90) ?? "", /marcaria 11 de 100/);
   assert.equal(quedaPrimeiraPorOrgao(100, 99, 0), null, "a regra desligada não confere");
   assert.equal(quedaPrimeiraPorOrgao(0, 0, 90), null);
+});
+
+test("fechar o lote (D1 real): só o que ainda LÊ — um fechamento atrasado nunca rebaixa o promovido", async () => {
+  const b = banco();
+  const l = b.novoLote(null);
+  b.raw.prepare("UPDATE centi_lotes SET estado = 'promovido' WHERE id = ?").run(l);
+  await b.db.batch(comandosFecharLote(b.db, l, "falhou", "atrasado") as never);
+  assert.equal((b.raw.prepare("SELECT estado FROM centi_lotes WHERE id = ?").get(l) as { estado: string }).estado, "promovido");
+  const l2 = b.novoLote(null);
+  await b.db.batch(comandosFecharLote(b.db, l2, "cancelado", "desligada") as never);
+  assert.equal((b.raw.prepare("SELECT estado FROM centi_lotes WHERE id = ?").get(l2) as { estado: string }).estado, "cancelado");
+});
+
+test("o erro do índice único é reconhecido também embrulhado pelo Drizzle (o texto em `cause`)", () => {
+  const d1 = new Error("D1_ERROR: UNIQUE constraint failed: centi_lotes.card_id: SQLITE_CONSTRAINT");
+  assert.equal(erroUnico(new Error('Failed query: insert into "centi_lotes"', { cause: d1 })), true);
+  assert.equal(erroUnico(d1), true);
+  assert.equal(erroUnico(new Error("Failed query", { cause: new Error("no such table") })), false);
 });

@@ -1,4 +1,6 @@
 import { sql } from "drizzle-orm";
+import { type AlteracaoCenti, alteracoesDoRegistro } from "./centi-alteracoes-core.ts";
+import { consultaAlteracoes } from "./centi-alteracoes-sql.ts";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { EscopoEmpenhos } from "./empenhos-tela-core.ts";
 import { doEscopo } from "./empenhos-tela-sql.ts";
@@ -29,6 +31,7 @@ export const COLUNAS_LIQUIDACAO = [
   "unidade",
   "removido",
   "anoEmpenho",
+  "cardId",
 ] as const;
 
 /**
@@ -54,10 +57,14 @@ export const unidadeNaTela = (alias: string, completo = false) => {
   );
 };
 
-const recorte = (card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos) =>
+/** O recorte: o card (`null` = TODOS os cards do tipo — o mesmo registro, a chave, em dois cards entra UMA vez: o do card de
+ * menor id), o ano, vigentes × removidos e o escopo. */
+const recorte = (card: number | null, ano: number, removidos: boolean, escopo: EscopoEmpenhos) =>
   sql.join(
     [
-      sql`l.card_id = ${card} AND l.ano = ${ano} AND l.removido_em IS ${removidos ? sql`NOT NULL` : sql`NULL`}`,
+      card === null
+        ? sql`l.id IN (SELECT id FROM (SELECT id, row_number() OVER (PARTITION BY chave ORDER BY card_id) AS rk FROM liquidacoes WHERE ano = ${ano} AND removido_em IS ${removidos ? sql`NOT NULL` : sql`NULL`}) WHERE rk = 1)`
+        : sql`l.card_id = ${card} AND l.ano = ${ano} AND l.removido_em IS ${removidos ? sql`NOT NULL` : sql`NULL`}`,
       ...(escopo === null ? [] : [sql.raw(" AND "), doEscopo(escopo, "l.")]),
     ],
     sql.raw(""),
@@ -67,15 +74,18 @@ const recorte = (card: number, ano: number, removidos: boolean, escopo: EscopoEm
 // biome-ignore lint/suspicious/noExplicitAny: o schema não importa aqui (o mesmo banco de `getDb`).
 type Db = DrizzleD1Database<any>;
 
-export async function anosLiquidacoes(card: number, escopo: EscopoEmpenhos, db: Db): Promise<{ ano: number; n: number }[]> {
+export async function anosLiquidacoes(card: number | null, escopo: EscopoEmpenhos, db: Db): Promise<{ ano: number; n: number }[]> {
   const so = escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, "l.")], sql.raw(""));
-  return db.all<{ ano: number; n: number }>(
-    sql`SELECT l.ano AS ano, COUNT(*) AS n FROM liquidacoes l WHERE l.card_id = ${card} AND l.removido_em IS NULL${so} GROUP BY l.ano ORDER BY l.ano DESC`,
-  );
+  // `null` = todos os cards do tipo: o mesmo registro (a chave) em dois cards conta UMA vez.
+  const de =
+    card === null
+      ? sql.raw("(SELECT * FROM (SELECT x.*, row_number() OVER (PARTITION BY x.chave ORDER BY x.card_id) AS rk FROM liquidacoes x WHERE x.removido_em IS NULL) WHERE rk = 1) l WHERE 1")
+      : sql`liquidacoes l WHERE l.card_id = ${card} AND l.removido_em IS NULL`;
+  return db.all<{ ano: number; n: number }>(sql`SELECT l.ano AS ano, COUNT(*) AS n FROM ${de}${so} GROUP BY l.ano ORDER BY l.ano DESC`);
 }
 
 /** As liquidações do ano como o TEXTO de um array JSON de tuplas (`COLUNAS_LIQUIDACAO`). */
-export async function textoLiquidacoes(card: number, ano: number, removidos: boolean, escopo: EscopoEmpenhos, db: Db): Promise<string> {
+export async function textoLiquidacoes(card: number | null, ano: number, removidos: boolean, escopo: EscopoEmpenhos, db: Db): Promise<string> {
   const onde = recorte(card, ano, removidos, escopo);
   const [{ n }] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM liquidacoes l WHERE ${onde}`);
   const pedacos = await Promise.all(
@@ -84,7 +94,7 @@ export async function textoLiquidacoes(card: number, ano: number, removidos: boo
         (SELECT COALESCE(NULLIF(o.sigla, ''), o.nome) FROM orgaos o WHERE o.id = l.orgao_id),
         ${unidadeNaTela("l")},
         CASE WHEN l.removido_em IS NULL THEN 0 ELSE 1 END,
-        ${empenhoDa("l", "ano")})) AS t
+        ${empenhoDa("l", "ano")}, l.card_id)) AS t
         FROM (SELECT l.id AS lid FROM liquidacoes l WHERE ${onde} ORDER BY l.data DESC, l.id DESC LIMIT ${POR_PEDACO} OFFSET ${i * POR_PEDACO}) x
         JOIN liquidacoes l ON l.id = x.lid`),
     ),
@@ -137,22 +147,26 @@ export type LiquidacaoCompleta = {
   loteConcluidoEm: string | null;
   leitor: number;
   removidoEm: string | null;
+  /** A importação em que a Centi não a trouxe mais (AUSENTE — ainda valendo). */
+  ausenteDesdeLote: number | null;
   criadoEm: string;
   atualizadoEm: string;
   empenho: EmpenhoDaLiquidacao | null;
+  /** O HISTÓRICO das alterações que a Centi fez (as mais recentes primeiro). */
+  alteracoes: AlteracaoCenti[];
 };
 
 /** Uma liquidação do card (no escopo da pessoa; fora dele = null, como inexistente) com o empenho ligado pelo número. */
 export async function liquidacaoCompleta(card: number, id: number, escopo: EscopoEmpenhos, db: Db): Promise<LiquidacaoCompleta | null> {
   const so = escopo === null ? sql`` : sql.join([sql.raw(" AND "), doEscopo(escopo, "l.")], sql.raw(""));
-  const [l] = await db.all<Omit<LiquidacaoCompleta, "empenho"> & { empenhoId: number | null }>(
+  const [l] = await db.all<Omit<LiquidacaoCompleta, "empenho" | "alteracoes"> & { empenhoId: number | null }>(
     sql`SELECT l.id AS id, l.ano AS ano, l.src_id AS srcId, l.numero AS numero, l.data AS data, l.numero_empenho AS numeroEmpenho,
       l.orgao AS orgaoCenti, l.id_orgao_centi AS idOrgaoCenti, l.credor AS credor, l.cpf_cnpj AS cpfCnpj, l.historico AS historico,
       l.valor AS valor, l.valor_anulado AS valorAnulado, l.valor_liquido AS valorLiquido, l.valor_pago AS valorPago, l.saldo AS saldo,
       (SELECT CASE WHEN COALESCE(o.sigla, '') = '' THEN o.nome ELSE o.sigla || ' — ' || o.nome END FROM orgaos o WHERE o.id = l.orgao_id) AS orgao,
       ${unidadeNaTela("l", true)} AS unidade,
       l.lote_id AS loteId, (SELECT c.concluido_em FROM centi_lotes c WHERE c.id = l.lote_id) AS loteConcluidoEm,
-      l.leitor AS leitor, l.removido_em AS removidoEm, l.criado_em AS criadoEm, l.atualizado_em AS atualizadoEm,
+      l.leitor AS leitor, l.removido_em AS removidoEm, l.ausente_desde_lote AS ausenteDesdeLote, l.criado_em AS criadoEm, l.atualizado_em AS atualizadoEm,
       ${empenhoDa("l", "id")} AS empenhoId
       FROM liquidacoes l WHERE l.card_id = ${card} AND l.id = ${id}${so} LIMIT 1`,
   );
@@ -168,5 +182,5 @@ export async function liquidacaoCompleta(card: number, id: number, escopo: Escop
             (SELECT c.nome FROM empenho_cards c WHERE c.id = e.card_id) AS card
             FROM empenhos e WHERE e.id = ${empenhoId}`,
         );
-  return { ...liq, empenho: e ?? null };
+  return { ...liq, empenho: e ?? null, alteracoes: alteracoesDoRegistro(await consultaAlteracoes(db, "liquidacao", liq.id)) };
 }

@@ -61,8 +61,9 @@ export const NOME_TIPO: Record<TipoCard, { titulo: string; um: string; varios: s
 };
 /** A TELA (permissão) de um card. */
 export const telaDoCard = (c: { tipo: TipoCard }): TipoCard => c.tipo;
-/** O caminho do espaço de um card (`/painel/empenhos/1` · `/painel/liquidacoes/2` · `/painel/pagamentos/3`). */
-export const rotaDoCard = (c: { id: number; tipo: TipoCard }, aba?: string): string => `/painel/${c.tipo}/${c.id}${aba ? `?aba=${aba}` : ""}`;
+/** O endereço das IMPORTAÇÕES (Configurações → Importações — só o ADM): o tipo e, com `card`, o card aberto na sub-aba. */
+export const linkImportacoes = (tipo: TipoCard, card?: number, sub?: "importacao" | "vinculos" | "configuracao"): string =>
+  `/painel/configuracoes?aba=importacoes&tipo=${tipo}${card ? `&card=${card}${sub ? `&sub=${sub}` : ""}` : ""}`;
 
 export type CardEmpenho = {
   id: number;
@@ -77,14 +78,6 @@ export type CardEmpenho = {
   parametros: string;
   /** Os anos (0/-1/-2 = relativos; senão o ano fixo). */
   anos: number[];
-  ativa: boolean;
-  frequenciaMin: number;
-  diasUteis: boolean;
-  horaInicio: string;
-  horaFim: string;
-  quedaSoma: number;
-  quedaRegistros: number;
-  removidos: RegraRemovidos;
   /** Lê os empenhos POR ÓRGÃO (só os órgãos dos vínculos, pelo ID na Centi) — ver `orgaosDaLeitura`. */
   porOrgao: boolean;
   ultimaExecucao: string | null;
@@ -129,14 +122,6 @@ export type EdicaoCard = Pick<
   | "tenant"
   | "parametros"
   | "anos"
-  | "ativa"
-  | "frequenciaMin"
-  | "diasUteis"
-  | "horaInicio"
-  | "horaFim"
-  | "quedaSoma"
-  | "quedaRegistros"
-  | "removidos"
   | "porOrgao"
 >;
 
@@ -150,14 +135,6 @@ export const CARD_PADRAO: Omit<EdicaoCard, "nome"> = {
   tenant: "rioverde",
   parametros: '{"dataInicio":"{inicio}","dataFim":"{fim}"}',
   anos: [0],
-  ativa: false,
-  frequenciaMin: 120,
-  diasUteis: true,
-  horaInicio: "07:00",
-  horaFim: "19:00",
-  quedaSoma: 80,
-  quedaRegistros: 90,
-  removidos: "marcar",
   porOrgao: false,
 };
 
@@ -172,8 +149,8 @@ export const CARD_PADRAO_PAGAMENTOS: Omit<EdicaoCard, "nome"> = { ...CARD_PADRAO
 export const cardPadrao = (tipo: TipoCard): Omit<EdicaoCard, "nome"> => (tipo === "liquidacoes" ? CARD_PADRAO_LIQUIDACOES : tipo === "pagamentos" ? CARD_PADRAO_PAGAMENTOS : CARD_PADRAO);
 
 export function edicaoDoCard(c: CardEmpenho): EdicaoCard {
-  const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, porOrgao } = c;
-  return { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, ativa, frequenciaMin, diasUteis, horaInicio, horaFim, quedaSoma, quedaRegistros, removidos, porOrgao };
+  const { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, porOrgao } = c;
+  return { nome, descricao, cor, urlBase, endpoint, uf, tenant, parametros, anos, porOrgao };
 }
 
 export const lerRegraRemovidos = (v: unknown): RegraRemovidos => (v === "apagar" ? "apagar" : "marcar");
@@ -243,11 +220,69 @@ export function motivoCardInvalido(e: EdicaoCard): string | null {
   if (desconhecido) return `Marcador desconhecido: {${desconhecido}} (use {ano}, {inicio}, {fim} ou {pagina}).`;
   if (!e.anos.length) return "Escolha ao menos um ano.";
   if (e.anos.length > LIMITES_CARD.anos || e.anos.some((a) => !anoValido(a))) return "Ano inválido.";
-  if (!FREQUENCIAS.some((f) => f.valor === e.frequenciaMin)) return "Frequência inválida.";
-  if (!HORA.test(e.horaInicio) || !HORA.test(e.horaFim)) return "Horário inválido (use HH:MM).";
-  if (e.horaInicio >= e.horaFim) return "O horário de início tem de ser antes do fim.";
-  if (!OPCOES_QUEDA.some((o) => o.valor === e.quedaSoma) || !OPCOES_QUEDA.some((o) => o.valor === e.quedaRegistros)) return "Regra de queda inválida.";
   return null;
+}
+
+/**
+ * A CONFIGURAÇÃO CENTRAL das importações da Centi (Configurações → Importações — vale para TODOS os cards): a atualização
+ * automática em segundo plano (ligada, frequência, horário de Brasília, só dias úteis) e as REGRAS da conferência (queda da
+ * soma e dos registros em relação à importação anterior; o que fazer com o que a Centi não traz mais). Os cards ficam só
+ * com o que é deles (nome, anos, integração e vínculos). Blob `configuracoes`, chave `importacoes`.
+ */
+export type ConfigImportacoes = {
+  ativa: boolean;
+  frequenciaMin: number;
+  diasUteis: boolean;
+  horaInicio: string;
+  horaFim: string;
+  quedaSoma: number;
+  quedaRegistros: number;
+  removidos: RegraRemovidos;
+};
+
+/** O padrão: desligada (nada roda sozinho até o ADM ligar), a cada 2 h, dias úteis, 07:00–19:00, queda de 80%/90%. */
+export const IMPORTACOES_PADRAO: ConfigImportacoes = {
+  ativa: false,
+  frequenciaMin: 120,
+  diasUteis: true,
+  horaInicio: "07:00",
+  horaFim: "19:00",
+  quedaSoma: 80,
+  quedaRegistros: 90,
+  removidos: "marcar",
+};
+
+/** O motivo de a configuração central não valer (null = vale) — a MESMA régua na tela e no servidor. */
+export function motivoConfigImportacoes(c: ConfigImportacoes): string | null {
+  if (!FREQUENCIAS.some((f) => f.valor === c.frequenciaMin)) return "Frequência inválida.";
+  if (!HORA.test(c.horaInicio) || !HORA.test(c.horaFim)) return "Horário inválido (use HH:MM).";
+  if (c.horaInicio >= c.horaFim) return "O horário de início tem de ser antes do fim.";
+  if (!OPCOES_QUEDA.some((o) => o.valor === c.quedaSoma) || !OPCOES_QUEDA.some((o) => o.valor === c.quedaRegistros)) return "Regra de queda inválida.";
+  return null;
+}
+
+/** O blob gravado → a configuração (qualquer valor fora do esperado volta ao padrão, campo a campo). */
+export function lerConfigImportacoes(v: unknown): ConfigImportacoes {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const c: ConfigImportacoes = {
+    ativa: o.ativa === true,
+    frequenciaMin: FREQUENCIAS.some((f) => f.valor === o.frequenciaMin) ? (o.frequenciaMin as number) : IMPORTACOES_PADRAO.frequenciaMin,
+    diasUteis: typeof o.diasUteis === "boolean" ? o.diasUteis : IMPORTACOES_PADRAO.diasUteis,
+    horaInicio: typeof o.horaInicio === "string" && HORA.test(o.horaInicio) ? o.horaInicio : IMPORTACOES_PADRAO.horaInicio,
+    horaFim: typeof o.horaFim === "string" && HORA.test(o.horaFim) ? o.horaFim : IMPORTACOES_PADRAO.horaFim,
+    quedaSoma: OPCOES_QUEDA.some((q) => q.valor === o.quedaSoma) ? (o.quedaSoma as number) : IMPORTACOES_PADRAO.quedaSoma,
+    quedaRegistros: OPCOES_QUEDA.some((q) => q.valor === o.quedaRegistros) ? (o.quedaRegistros as number) : IMPORTACOES_PADRAO.quedaRegistros,
+    removidos: lerRegraRemovidos(o.removidos),
+  };
+  if (c.horaInicio >= c.horaFim) return { ...c, horaInicio: IMPORTACOES_PADRAO.horaInicio, horaFim: IMPORTACOES_PADRAO.horaFim };
+  return c;
+}
+
+/** A ORDEM da fila única da atualização automática: empenhos primeiro (é deles que vêm a unidade das liquidações e dos
+ * pagamentos), depois liquidações e pagamentos; no mesmo tipo, o card mais antigo primeiro. */
+const ORDEM_TIPO: Record<TipoCard, number> = { empenhos: 0, liquidacoes: 1, pagamentos: 2 };
+export function filaDosCards<T extends Pick<CardEmpenho, "id" | "tipo">>(cards: readonly T[]): T[] {
+  return [...cards].sort((a, b) => ORDEM_TIPO[a.tipo] - ORDEM_TIPO[b.tipo] || a.id - b.id);
 }
 
 /** O endereço do pedido do card. */
@@ -264,7 +299,7 @@ export type PendenciaCard = { aba: "configuracao" | "vinculos"; texto: string };
  */
 export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm"> & { tipo?: TipoCard }, vinculos: number): PendenciaCard[] {
   const p: PendenciaCard[] = [];
-  if (!c.configuradoEm) p.push({ aba: "configuracao", texto: "Confirme a configuração: integração, anos, atualização e regras." });
+  if (!c.configuradoEm) p.push({ aba: "configuracao", texto: "Confirme a configuração: anos e integração." });
   if (vinculos < 1)
     p.push(
       c.tipo && cardPorOrgao(c.tipo)
@@ -275,12 +310,17 @@ export function pendenciasDoCard(c: Pick<CardEmpenho, "configuradoEm"> & { tipo?
 }
 
 /** O estado do card (o selo do card e do cabeçalho). */
-export function estadoCard(c: Pick<CardEmpenho, "ativa" | "ultimoStatus" | "configuradoEm"> & { vinculos?: number; tipo?: TipoCard }, lendo = false): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
+export function estadoCard(
+  c: Pick<CardEmpenho, "ultimoStatus" | "configuradoEm"> & { vinculos?: number; tipo?: TipoCard },
+  lendo = false,
+  /** A atualização automática central está ligada (Configurações → Importações). */
+  automatica = false,
+): { rotulo: string; tom: "slate" | "emerald" | "amber" | "red" | "blue" } {
   if (lendo) return { rotulo: "Importando", tom: "blue" };
   if (pendenciasDoCard(c, c.vinculos ?? 1).length) return { rotulo: "A configurar", tom: "amber" };
   if (c.ultimoStatus === "falhou") return { rotulo: "Com erro", tom: "red" };
   if (c.ultimoStatus === "parcial") return { rotulo: "Parcial", tom: "amber" };
-  if (c.ativa) return { rotulo: "Automática", tom: "emerald" };
+  if (automatica) return { rotulo: "Automática", tom: "emerald" };
   return { rotulo: "Manual", tom: "slate" };
 }
 

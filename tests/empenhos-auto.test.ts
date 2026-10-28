@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anoDaVez, cardNaHora, errosSeguidos, MAX_ERROS_AUTO, proximoPedido } from "../src/lib/empenhos-core.ts";
+import { anoDaVez, cardNaHora, errosSeguidos, esperaDoErro, MAX_ERROS_AUTO, MINUTOS_DESISTIR_AUTO, proximoPedido } from "../src/lib/empenhos-core.ts";
 
 type P = { inicio: string; fim: string; pagina: number; estado: "ok" | "erro" | "dividido"; fimPeriodo: boolean };
 const ok = (inicio: string, fim: string, pagina = 1, fimPeriodo = true): P => ({ inicio, fim, pagina, estado: "ok", fimPeriodo });
@@ -31,6 +31,26 @@ test("atualização automática: conta os erros seguidos do mesmo pedido (o suce
   assert.equal(errosSeguidos([ok("2026-01-01", "2026-01-07"), erro, erro], ped), 2);
   assert.equal(errosSeguidos([erro, ok("2026-01-01", "2026-01-07")], ped), 0);
   assert.ok(MAX_ERROS_AUTO >= 2);
+});
+
+test("atualização automática: os erros esperam (1, 2, 4… min) e só desistem depois de 30 min sem avanço", () => {
+  const ped = { periodo: { inicio: "2026-01-08", fim: "2026-01-14" }, pagina: 1 };
+  const erro = (em: string): P & { em: string } => ({ inicio: "2026-01-08", fim: "2026-01-14", pagina: 1, estado: "erro", fimPeriodo: false, em });
+  const guardando = { ...erro("2026-10-23 15:00:30"), mensagem: "Guardando a página — 1 parte(s) recebida(s)" };
+  const agora = Date.parse("2026-10-23T15:01:00Z");
+  // 1 erro há 30 s: espera 1 min.
+  assert.deepEqual(esperaDoErro([erro("2026-10-23 15:00:30")], ped, agora), { esperar: true, desistir: false });
+  // O passo "Guardando a página…" não conta como erro.
+  assert.equal(errosSeguidos([erro("2026-10-23 15:00:00"), guardando], ped), 1);
+  // 3 erros em 1 minuto: ainda NÃO desiste (o cron roda 2×/min — a falha passageira da Centi não derruba o lote).
+  const tres = [erro("2026-10-23 15:00:00"), erro("2026-10-23 15:00:30"), erro("2026-10-23 15:00:50")];
+  assert.equal(esperaDoErro(tres, ped, agora).desistir, false);
+  // 3 erros com o 1º há mais de 30 min: desiste.
+  const velhos = [erro("2026-10-23 14:20:00"), erro("2026-10-23 14:40:00"), erro("2026-10-23 15:00:50")];
+  assert.equal(esperaDoErro(velhos, ped, agora).desistir, true);
+  assert.ok(MINUTOS_DESISTIR_AUTO >= 30);
+  // Sem erro: segue.
+  assert.deepEqual(esperaDoErro([], ped, agora), { esperar: false, desistir: false });
 });
 
 test("atualização automática: só começa na hora (horário, dia útil, frequência)", () => {

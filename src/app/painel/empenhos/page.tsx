@@ -1,15 +1,42 @@
 import { EmpenhosView } from "@/components/EmpenhosView";
+import { EmpenhosTabela } from "@/components/EmpenhosTabela";
+import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
+import { getDb } from "@/lib/db";
+import { carregarEdicoes } from "@/lib/edicoes-tabela";
+import { linkImportacoes } from "@/lib/empenho-cards-core";
 import { listarCards } from "@/lib/empenho-cards";
-import { escopoDosEmpenhos } from "@/lib/empenhos-tela";
+import { anosEmpenhos, escopoDosEmpenhos } from "@/lib/empenhos-tela";
+import { anoEscolhido, chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
+import { consultaVersaoExecucao } from "@/lib/execucao-sql";
 
 export const dynamic = "force-dynamic";
 
-// EMPENHOS (tela do módulo): a LISTA de cards — cada card é uma importação da Centi com a própria configuração e a sua
-// tabela no banco. Os números de cada card só com os empenhos do escopo da pessoa (a unidade do cabeçalho).
-export default async function EmpenhosPage() {
+// EMPENHOS (tela do módulo): só os DADOS — a TABELA ÚNICA de todos os cards (o mesmo empenho uma vez). As importações (os
+// cards) ficam em Configurações → Importações. Tudo no escopo da pessoa (a unidade do cabeçalho): trocar a unidade remonta
+// a tabela (a `key`).
+export default async function EmpenhosPage({ searchParams }: { searchParams: Promise<{ ano?: string }> }) {
   const r = await acessoPagina("empenhos");
   if (r.bloqueio) return r.bloqueio;
-  const cards = await listarCards(await escopoDosEmpenhos(), "empenhos");
-  return <EmpenhosView tipo="empenhos" cards={cards} podeCriar={r.pode.configurar} />;
+  const [sp, escopo] = await Promise.all([searchParams, escopoDosEmpenhos()]);
+  const cards = await listarCards(escopo, "empenhos");
+  const [anos, edicoes, versao] = await Promise.all([anosEmpenhos(null, escopo), carregarEdicoes(r.acesso.u.id, "empenhos:"), consultaVersaoExecucao(getDb())]);
+  return (
+    <EmpenhosView tipo="empenhos" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("empenhos") : undefined}>
+      <PermissaoExportar permitido={r.pode.exportar}>
+        <EmpenhosTabela
+          key={chaveEscopoEmpenhos(escopo)}
+          cardId={null}
+          nome="Empenhos - todos os cards"
+          cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))}
+          escopo={escopo}
+          anos={anos}
+          anoInicial={anoEscolhido(anos, sp.ano)}
+          edicoes={edicoes}
+          podePublicar={r.pode.configurar}
+          versao={versao}
+        />
+      </PermissaoExportar>
+    </EmpenhosView>
+  );
 }

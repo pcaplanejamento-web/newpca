@@ -4,7 +4,7 @@ import type { TipoExecucao } from "@/lib/execucao-empenho-core";
 import { brl, dataBR, dataHoraBR } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { Callout } from "./Callout";
-import { Campo, CampoTipo, EmpenhoLigado } from "./LiquidacaoDetalhe";
+import { AlteracoesCenti, Campo, CampoTipo, EmpenhoLigado } from "./LiquidacaoDetalhe";
 import { StatMini } from "./StatMini";
 
 /** O que a tabela já tem de um pagamento (aparece na hora, antes do registro completo). */
@@ -82,6 +82,8 @@ export function PagamentoDetalhe({ pagamento: p, completo }: { pagamento: Pagame
           </dl>
         </div>
       )}
+
+      {completo && <AlteracoesCenti alteracoes={completo.alteracoes} ausente={completo.ausenteDesdeLote} />}
     </div>
   );
 }

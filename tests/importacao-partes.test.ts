@@ -6,6 +6,7 @@ import { lerPaginaEmpenhos } from "../src/lib/empenhos-core.ts";
 import { comandoRegistrarPasso, consultaUltimoPasso, jaNoLote } from "../src/lib/empenhos-sql.ts";
 import {
   ESPEC_PARTE,
+  hashLinha,
   linhasDaParte,
   MAX_BYTES_PARTE,
   MAX_LINHAS_PARTE,
@@ -23,6 +24,10 @@ import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 const emp = (n: number, historico = "SERVIÇO") => ({ Id: n, Numero: String(n), OrgaoGestor: "PMRV", UnidadeOrcamentaria: "SEFAZ", Acao: "2001", ValorEmpenhado: "1.021,070", Data: "05/03/2026", Historico: historico });
 const liq = (n: number) => ({ Id: n, NumeroLiquidacao: "7", NumeroEmpenho: "99", Orgao: "PMRV", Valor: 10.5, DataLiquidacao: "01/03/2026" });
 const pag = (n: number, anulado = false) => ({ IdOrdemPagamento: n, IdNotaEmpenho: 99, Orgao: "PMRV", ValorDocumento: 12, ValorLiquido: 10, PossuiAnulacao: anulado });
+
+/** As linhas com a ASSINATURA (como o servidor calcula — leitor 1) e os comandos da conferência num lote só. */
+const comHash = <L extends object>(modo: "empenhos" | "liquidacoes" | "pagamentos", linhas: readonly L[]) => linhas.map((l) => ({ ...l, hash: hashLinha(modo, l, 1) }));
+const conf = (c: { cmds: unknown[]; depois: unknown[] }) => [...c.cmds, ...c.depois];
 
 test("partes: as linhas lidas vão e voltam iguais (tupla → conferência) nos três modos", () => {
   const e = lerPaginaEmpenhos(JSON.stringify([emp(1), emp(2, 'TEXTO "LONGO" COM ÁGUA')]), 2026).linhas;
@@ -96,7 +101,7 @@ test("partes (D1 real): as partes de UMA página acumulam no MESMO passo — mes
   // A 1ª parte cria o passo da página 1 (dentro do lote atômico o "último passo" é ele).
   const [p1] = ((await db.batch([
     comandoRegistrarPasso(db, lote, { ...base, pagina: 1, recebidos: 4, novos: 4, soma: 40, mensagem: "guardando" }),
-    ...comandosConferirPagamentos(db, lote, 4, 1, 1, 2, linhas.slice(0, 4)),
+    ...conf(comandosConferirPagamentos(db, lote, 4, 1, 2, comHash("pagamentos", linhas.slice(0, 4)), [])),
     consultaUltimoPasso(db, lote),
   ] as never)) as unknown[][]).at(-1) as { id: number; resNovos: number }[];
   assert.equal(p1.resNovos, 4, "o destino pelo órgão com o ID na Centi");
@@ -105,7 +110,7 @@ test("partes (D1 real): as partes de UMA página acumulam no MESMO passo — mes
   assert.equal(await jaNoLote(db, lote, linhas.map((l) => l.chave)), 4, "UMA consulta conta o que o lote já viu");
   // A 2ª parte da página 1 vai pelo id do passo: acumula nele, nunca no da página 2.
   const [p1b] = ((await db.batch([
-    ...comandosConferirPagamentos(db, lote, 4, 1, 1, 2, linhas.slice(4), p1.id),
+    ...conf(comandosConferirPagamentos(db, lote, 4, 1, 2, comHash("pagamentos", linhas.slice(4)), [], p1.id)),
     consultaUltimoPasso(db, lote, p1.id),
   ] as never)) as unknown[][]).at(-1) as { id: number; resNovos: number }[];
   assert.equal(p1b.id, p1.id);

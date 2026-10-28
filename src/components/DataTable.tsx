@@ -16,7 +16,7 @@ import {
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { baixarPlanilhaXlsx, type ColunaPlanilha, linhasPlanilhaTabela, nomeArquivoPlanilha, tabelaParaPdf } from "@/lib/exportar-tabela";
 import { nomeArquivoPdf } from "@/lib/exportar-pdf-core";
-import { brl, dataIsoBrasilia, num } from "@/lib/format";
+import { brl, dataBR, dataIsoBrasilia, num } from "@/lib/format";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -892,9 +892,10 @@ export function DataTable<R>({
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 sm:gap-x-3">
-          {ativos.length + (filtrosRodape?.n ?? 0) > 0 && (
+          {/* Com visões salvas, os filtros das colunas ficam no PainelFiltros — aqui só os de fora (o Recorte da Mesa). */}
+          {(edicoes ? 0 : ativos.length) + (filtrosRodape?.n ?? 0) > 0 && (
             <FiltrosAtivos
-              colunas={ativos.map((c) => ({ key: c.key, header: c.header }))}
+              colunas={edicoes ? [] : ativos.map((c) => ({ key: c.key, header: c.header }))}
               extra={filtrosRodape}
               onLimparColuna={(k) => {
                 const c = ativos.find((x) => x.key === k);
@@ -924,10 +925,16 @@ export function DataTable<R>({
             editor.rodape({
               onEditar: () => editor.editar(lay),
               disabled: rows.length === 0,
-              filtros: ativos.map((c) => c.header || c.key),
-              onLimparFiltros: () => {
-                setFilters({});
-                for (const c of ativos) c.filtroExterno?.onChange(null);
+              chips: ativos.map((c) => ({ chave: c.key, rotulo: c.header || c.key, valores: valoresDoFiltro(c, filters[c.key]) })),
+              alterada: JSON.stringify(filters) !== JSON.stringify(editor.salvo.filtros),
+              onTirar: (k) => {
+                const c = ativos.find((x) => x.key === k);
+                if (c?.filtroExterno) c.filtroExterno.onChange(null);
+                else
+                  setFilters((f) => {
+                    const { [k]: _, ...resto } = f;
+                    return resto;
+                  });
                 setPage(1);
               },
               onCongelarTodas: () =>
@@ -996,9 +1003,23 @@ export function DataTable<R>({
   );
 }
 
+/** Os VALORES de um filtro de coluna como texto (o chip do PainelFiltros): a seleção, a faixa ("de … a …") ou o período. */
+function valoresDoFiltro<R>(c: Column<R>, f: FiltroValor | undefined): string[] {
+  if (c.filtroExterno) return c.filtroExterno.valor;
+  if (!f) return [];
+  if (Array.isArray(f)) return f;
+  const fmt = c.formatarFaixa ?? brl;
+  if ("min" in f || "max" in f) {
+    const r = f as { min?: number; max?: number };
+    return [`${r.min != null ? `de ${fmt(r.min)}` : ""}${r.min != null && r.max != null ? " " : ""}${r.max != null ? `até ${fmt(r.max)}` : ""}`];
+  }
+  const d = f as { de?: string; ate?: string };
+  return [`${d.de ? `de ${dataBR(d.de)}` : ""}${d.de && d.ate ? " " : ""}${d.ate ? `até ${dataBR(d.ate)}` : ""}`];
+}
+
 /** O menu de FILTROS do rodapé: o funil com o número de filtros e, ao abrir, cada coluna filtrada (✕ limpa só ela),
- * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). Exportado: o MESMO resumo dos filtros
- * ligados em outras telas (ex.: o Dashboard da Execução — `titulo`, cada filtro com o valor no `header`). */
+ * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). Fora das tabelas, os filtros com visões
+ * salvas e o estado inicial do ADM ficam no `PainelFiltros`. */
 export function FiltrosAtivos({
   colunas,
   extra,

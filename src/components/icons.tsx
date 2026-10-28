@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  Bookmark,
   ReceiptText,
   HandCoins,
   BanknoteArrowUp,
@@ -96,7 +97,6 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Bookmark,
   Search,
   Columns3,
   Variable,
@@ -231,8 +231,6 @@ export const IconCamera = Camera;
 export const IconKey = KeyRound;
 export const IconImage = ImageIcon;
 export const IconSave = Save;
-/** Uma VISÃO salva de tabela (colunas + filtros + ordem). */
-export const IconVisao = Bookmark;
 export const IconPalette = Palette;
 export const IconMail = Mail;
 /** E-mail CONFIRMADO / código enviado ao e-mail. */
@@ -433,3 +431,5 @@ export const IconLiquidacao = HandCoins;
 export const IconPagamento = BanknoteArrowUp;
 /** Execução da despesa (o dashboard de empenhos, liquidações e pagamentos). */
 export const IconExecucao = ChartNoAxesCombined;
+/** Uma VISÃO salva dos filtros (o conjunto de escolhas com nome). */
+export const IconVisao = Bookmark;

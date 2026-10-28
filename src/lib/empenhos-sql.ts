@@ -1,10 +1,12 @@
-import { and, count, desc, eq, inArray, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
+import { and, count, desc, eq, getTableColumns, inArray, isNotNull, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLeituras, centiLotePassos, centiLotes, centiOrgaosGestores, centiStagingFora, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging, pagamentos, pagamentosStaging } from "../db/schema.ts";
+import { centiLeituras, centiLotePassos, centiLotes, centiOrgaosGestores, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging, pagamentos, pagamentosStaging } from "../db/schema.ts";
+import { comandoAlteracoesDoLote, comandoAlteracoesSumiram, dadosMudaram } from "./centi-alteracoes-sql.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { vinculoSql } from "./empenho-cards-sql.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoNovo, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
+import type { ParIgual } from "./importacao-partes-core.ts";
 
 /**
  * EMPENHOS — os comandos da importação como BUILDERS do Drizzle (testados pelo driver D1 REAL sobre `node:sqlite`,
@@ -39,6 +41,9 @@ const CAMPOS = [
   "saldoPagar",
   "historico",
 ] as const satisfies readonly (keyof LinhaEmpenho)[];
+
+/** Os EMPENHOS na conferência pela assinatura (`comandosConferirAssinatura`). */
+export const CONF_EMPENHOS: ConfTabela = { tabela: "empenhos", campos: CAMPOS, soma: `e."valor_empenhado"` };
 
 /** Teto de caracteres do JSON de UM comando de guarda — o D1 recusa texto acima de 2 MB (com folga para os acentos). */
 export const MAX_JSON_GUARDA = 600_000;
@@ -76,71 +81,220 @@ export function tabelaVirtual(tabela: string, campos: readonly string[], json: s
   return sql`(SELECT ${sql.join([...cols, ...ext], sql`, `)} FROM json_each(${json})) AS ${sql.raw(`"${tabela}"`)}`;
 }
 
-/** A régua do staging: só entra o registro que NÃO veio igual ao gravado nesta leitura (a chave dele já está no "fora"). */
-export const naoIgual = (loteId: number) =>
-  sql`NOT EXISTS (SELECT 1 FROM "centi_staging_fora" f WHERE f."lote_id" = ${loteId} AND f."chave" = json_extract(value, '$[0]') AND f."igual" = 1)`;
+/** Os passos que VALEM no lote: a ÚLTIMA leitura (ok) de cada página — uma página relida não conta duas vezes. */
+const passosQueValem = (loteId: number) =>
+  sql`(SELECT MAX(q."id") FROM "centi_lote_passos" q WHERE q."lote_id" = ${loteId} AND q."estado" = 'ok' GROUP BY q."inicio", q."fim", q."pagina")`;
+
+/** A coluna da LISTA de chaves do passo: as dos registros IGUAIS ao gravado ou as dos SEM vínculo/destino. */
+export type ListaChaves = "iguais" | "fora" | "gravadas";
+const COLUNA_LISTA: Record<ListaChaves, string> = { iguais: "chaves_iguais", fora: "chaves_fora", gravadas: "chaves_gravadas" };
 
 /**
- * Os registros SEM VÍNCULO da página: só a CHAVE (nenhum dado), para a conferência contar cada um uma vez. Pedaços de
- * até `MAX_JSON_GUARDA` caracteres, cada um num parâmetro JSON.
+ * As CHAVES de uma lista do lote (`SELECT value` — para `IN`/`NOT IN`): as das páginas que VALEM (`passosQueValem`); com
+ * `todas`, as de qualquer leitura do lote fora dos períodos divididos (o "já visto" da página em andamento).
  */
-export function comandosGuardarFora(db: Db, loteId: number, chaves: string[]) {
-  const pedacos: string[][] = [];
-  let atual: string[] = [];
-  let tamanho = 0;
-  for (const c of chaves) {
-    if (atual.length && tamanho + c.length + 3 > MAX_JSON_GUARDA) {
-      pedacos.push(atual);
-      atual = [];
-      tamanho = 0;
-    }
-    atual.push(c);
-    tamanho += c.length + 3;
-  }
-  if (atual.length) pedacos.push(atual);
-  return pedacos.map((p) =>
-    db
-      .insert(centiStagingFora)
-      .select(
-        db
-          .select({ loteId: sql<number>`${loteId}`.as("lote_id"), chave: sql<string>`value`.as("chave"), igual: sql<number>`0`.as("igual") })
-          .from(sql`json_each(${JSON.stringify(p)})`)
-          .where(sql`1`) as never,
-      )
-      .onConflictDoNothing(),
-  );
+export function chavesDaLista(loteId: number, lista: ListaChaves, todas = false): SQL {
+  const col = sql.raw(`p."${COLUNA_LISTA[lista]}"`);
+  const quais = todas ? sql`p."lote_id" = ${loteId} AND p."estado" <> 'dividido'` : sql`p."id" IN ${passosQueValem(loteId)}`;
+  return sql`(SELECT j."value" FROM "centi_lote_passos" p, json_each(COALESCE(${col}, '[]')) j WHERE ${quais})`;
 }
 
-/** Guarda a página no STAGING (SÓ os registros com vínculo — quem chama filtra): as linhas em pedaços de até `MAX_JSON_GUARDA` caracteres, cada um num parâmetro JSON. */
-export function comandosGuardarPagina(db: Db, loteId: number, pagina: number, linhas: LinhaEmpenho[], semIguais = false) {
-  const pedacos: string[][] = [];
-  let atual: string[] = [];
-  let tamanho = 0;
-  for (const l of linhas) {
-    const j = JSON.stringify(CAMPOS.map((c) => l[c]));
-    if (atual.length && tamanho + j.length > MAX_JSON_GUARDA) {
-      pedacos.push(atual);
-      atual = [];
-      tamanho = 0;
-    }
-    atual.push(j);
-    tamanho += j.length + 1;
-  }
-  if (atual.length) pedacos.push(atual);
-  return pedacos.map((p) => {
-    const json = `[${p.join(",")}]`;
+/**
+ * A lista do passo com as chaves de `fonte` (um SELECT com a coluna `c`), sem repetir — UMA escrita por página, qualquer que
+ * seja o número de registros (antes: uma linha por registro igual ou sem vínculo, o limite diário de escritas do D1).
+ */
+export function listaMais(lista: ListaChaves, fonte: SQL): SQL {
+  const col = sql.raw(`"centi_lote_passos"."${COLUNA_LISTA[lista]}"`);
+  return sql`(SELECT json_group_array("c") FROM (SELECT "value" AS "c" FROM json_each(COALESCE(${col}, '[]')) UNION SELECT "c" FROM (${fonte})))`;
+}
+
+/** As chaves de um JSON como fonte da `listaMais`. */
+export const chavesDoJson = (chaves: readonly string[]) => sql`SELECT "value" AS "c" FROM json_each(${JSON.stringify(chaves)})`;
+
+/** Só as chaves dos SEM VÍNCULO à lista do passo (a leitura só do catálogo — nada é conferido nem guardado). */
+export function comandoChavesFora(db: Db, loteId: number, chaves: readonly string[], passo?: number) {
+  return db
+    .update(centiLotePassos)
+    .set({ chavesFora: listaMais("fora", chavesDoJson(chaves)) })
+    .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)));
+}
+
+/** Uma linha com a ASSINATURA dos dados (`hashTupla` — calculada no servidor sobre a linha conferida). */
+export type ComHash<L> = L & { hash?: string | null };
+
+/** A tabela FINAL de um tipo (o staging é `<tabela>_staging`) e o que a conferência precisa dela. */
+export type ConfTabela = {
+  tabela: "empenhos" | "liquidacoes" | "pagamentos";
+  campos: readonly string[];
+  /** Colunas a mais do staging, com o mesmo valor em toda a página (o órgão da Centi das liquidações e dos pagamentos). */
+  extras?: Record<string, number>;
+  /** O registro (no staging/tabela virtual) tem DESTINO — sem ele não é guardado (liquidações e pagamentos). */
+  destino?: SQL;
+  /** O valor do registro gravado `e` que entra na SOMA do passo. */
+  soma: string;
+  /** A versão do leitor do lote: com ela, o registro gravado ANTES da assinatura (hash NULL) e igual ao lido ganha a assinatura
+   * no lugar (`comandoHashLegado`) — 1 escrita, nunca o staging. */
+  leitor?: number;
+};
+
+const STAGING = { empenhos: empenhosStaging, liquidacoes: liquidacoesStaging, pagamentos: pagamentosStaging } as const;
+const STAGING_FINAL = { empenhos, liquidacoes, pagamentos } as unknown as Record<ConfTabela["tabela"], typeof empenhos>;
+
+/** O GRAVADO `e` é IGUAL ao lido: a mesma assinatura e valendo (nem removido nem ausente — esses voltam pela promoção). */
+const valeIgual = (h: SQL) => sql`e."hash" IS ${h} AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL`;
+
+/**
+ * Guarda a página no STAGING, em pedaços de até `MAX_JSON_GUARDA` caracteres (as linhas com a assinatura). Com `card` (a
+ * leitura de verdade), só entra o que NÃO é igual ao gravado — e, com destino, só o que tem destino.
+ */
+export function comandosGuardarStaging(db: Db, c: ConfTabela, loteId: number, pagina: number, linhas: readonly ComHash<object>[], card?: number) {
+  const nome = `${c.tabela}_staging`;
+  const cols = [...c.campos, "hash"];
+  return pedacosJson(linhas as unknown as readonly Record<string, unknown>[], cols, MAX_JSON_GUARDA).map((json) => {
+    const virt = tabelaVirtual(nome, cols, json, c.extras);
+    const col = (x: string) => sql.raw(`"${nome}"."${colunaSql(x)}"`);
     // As chaves na MESMA ordem das colunas da tabela (exigência do insert…select).
-    const sel = db
-      .select({
-        loteId: sql<number>`${loteId}`.as("lote_id"),
-        pagina: sql<number>`${pagina}`.as("pagina"),
-        ...Object.fromEntries(CAMPOS.map((c, i) => [c, sql`json_extract(value, ${`$[${i}]`})`.as(c)])),
-      })
-      .from(sql`json_each(${json})`)
-      // O WHERE desfaz a ambiguidade do SQLite entre "SELECT … ON CONFLICT" e a junção (exigido no upsert com SELECT).
-      .where(semIguais ? naoIgual(loteId) : sql`1`);
-    return db.insert(empenhosStaging).select(sel as never).onConflictDoNothing();
+    const sel = db.select({
+      loteId: sql<number>`${loteId}`.as("lote_id"),
+      pagina: sql<number>`${pagina}`.as("pagina"),
+      ...Object.fromEntries([...c.campos, ...Object.keys(c.extras ?? {}), "hash"].map((x) => [x, sql`${col(x)}`.as(x)])),
+    });
+    const q =
+      card == null
+        ? sel.from(virt).where(sql`1`)
+        : sel
+            .from(sql`${virt} LEFT JOIN ${sql.raw(`"${c.tabela}"`)} e ON e."card_id" = ${card} AND e."chave" = ${col("chave")} AND ${valeIgual(col("hash"))}`)
+            // O WHERE também desfaz a ambiguidade do SQLite entre "SELECT … ON CONFLICT" e a junção.
+            .where(c.destino ? sql`e."id" IS NULL AND ${c.destino}` : sql`e."id" IS NULL`);
+    return db.insert(STAGING[c.tabela]).select(q as never).onConflictDoNothing();
   });
+}
+
+/** A página de EMPENHOS no staging (sem conferir — a base dos testes e da leitura antiga). */
+export function comandosGuardarPagina(db: Db, loteId: number, pagina: number, linhas: readonly ComHash<LinhaEmpenho>[]) {
+  return comandosGuardarStaging(db, CONF_EMPENHOS, loteId, pagina, linhas);
+}
+
+/**
+ * GUARDA e CONFERE EM TEMPO REAL uma página pela ASSINATURA dos dados, num lote só — o que custa CPU e escrita é só o que
+ * MUDOU: `linhas` = os registros inteiros (cada um com a `hash` calculada no servidor), `iguais` = os PARES (chave +
+ * assinatura) que o navegador já viu iguais ao gravado, `fora` = as chaves dos sem vínculo (empenhos; nos de destino, o
+ * próprio SQL separa). O passo recebe o RESULTADO (novos · alterados · iguais · sem vínculo) e as LISTAS das chaves (uma
+ * escrita por página); o staging recebe só o novo e o diferente. Os PARES são conferidos NO BANCO (`comandoParesIguais`, nos
+ * comandos `depois` — depois de o passo receber a soma da parte): o par que não confere não entra em lista nenhuma e a
+ * conferência do lote acusa a falta (nada é promovido pela metade).
+ */
+export function comandosConferirAssinatura(
+  db: Db,
+  c: ConfTabela,
+  loteId: number,
+  card: number,
+  pagina: number,
+  linhas: readonly ComHash<object & { chave: string }>[],
+  iguais: readonly ParIgual[],
+  fora: readonly string[],
+  passo?: number,
+): { cmds: unknown[]; depois: unknown[] } {
+  const nome = `${c.tabela}_staging`;
+  const cols = [...c.campos, "hash"];
+  const tab = sql.raw(`"${c.tabela}"`);
+  const chaveStg = sql.raw(`"${nome}"."chave"`);
+  const hashStg = sql.raw(`"${nome}"."hash"`);
+  const alvo = eq(centiLotePassos.id, passo ?? ultimoPasso(loteId));
+  const comDestino = c.destino ? sql` AND ${c.destino}` : sql``;
+  const pedacos = pedacosJson(linhas as unknown as readonly Record<string, unknown>[], cols, MAX_JSON_CONFERIR);
+  // O registro gravado ANTES da assinatura e IGUAL ao lido ganha a assinatura primeiro: daí em diante é um igual comum.
+  const legados: unknown[] = c.leitor == null ? [] : pedacos.map((json) => comandoHashLegado(db, c, card, c.leitor as number, json));
+  const cmds: unknown[] = pedacos.map((json, i) => {
+    const virt = () => tabelaVirtual(nome, cols, json, c.extras);
+    const junto = (cond: SQL) => sql`FROM ${virt()} JOIN ${tab} e ON e."card_id" = ${card} AND e."chave" = ${chaveStg} WHERE ${cond}${comDestino}`;
+    const semDestino = c.destino
+      ? {
+          resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + (SELECT COUNT(*) FROM ${virt()} WHERE NOT (${c.destino}))`,
+          chavesFora: listaMais("fora", sql`SELECT ${chaveStg} AS "c" FROM ${virt()} WHERE NOT (${c.destino})`),
+        }
+      : i === 0
+        ? { resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + ${fora.length}`, ...(fora.length ? { chavesFora: listaMais("fora", chavesDoJson(fora)) } : {}) }
+        : {};
+    return db
+      .update(centiLotePassos)
+      .set({
+        resNovos: sql`COALESCE(${centiLotePassos.resNovos}, 0) + (SELECT COUNT(*) FROM ${virt()} WHERE NOT EXISTS (SELECT 1 FROM ${tab} e WHERE e."card_id" = ${card} AND e."chave" = ${chaveStg})${comDestino})`,
+        resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) ${junto(sql`NOT (${valeIgual(hashStg)})`)})`,
+        resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) ${junto(valeIgual(hashStg))})`,
+        chavesIguais: listaMais("iguais", sql`SELECT ${chaveStg} AS "c" ${junto(valeIgual(hashStg))}`),
+        // As que vão ao STAGING (novas ou diferentes): com as iguais e as fora, o passo conhece todas as chaves da página.
+        chavesGravadas: listaMais(
+          "gravadas",
+          sql`SELECT ${chaveStg} AS "c" FROM ${virt()} WHERE NOT EXISTS (SELECT 1 FROM ${tab} e WHERE e."card_id" = ${card} AND e."chave" = ${chaveStg} AND ${valeIgual(hashStg)})${comDestino}`,
+        ),
+        ...semDestino,
+      })
+      .where(alvo);
+  });
+  if (!pedacos.length) cmds.push(comandoResultadoVazio(db, loteId, c.destino ? [] : fora, passo));
+  // O que uma leitura ANTERIOR da página guardou sai (vale a desta leitura — também o que agora veio igual).
+  const todas = [...linhas.map((l) => l.chave), ...iguais.map((p) => p[0])];
+  if (todas.length) cmds.push(db.delete(STAGING[c.tabela]).where(and(eq(STAGING[c.tabela].loteId, loteId), sql`${STAGING[c.tabela].chave} IN (SELECT value FROM json_each(${JSON.stringify(todas)}))`)));
+  cmds.push(...comandosGuardarStaging(db, c, loteId, pagina, linhas, card));
+  return { cmds: [...legados, ...cmds], depois: iguais.length ? [comandoParesIguais(db, c, loteId, card, iguais, passo)] : [] };
+}
+
+/**
+ * A ASSINATURA no lugar para o registro gravado antes dela (hash NULL) e IGUAL ao lido — os mesmos dados, o mesmo leitor,
+ * valendo: UMA escrita (a coluna não tem índice), uma única vez. Sem isto, a 1ª importação depois da assinatura mandaria TODOS
+ * ao staging e os regravaria (~8 escritas por registro — o limite diário do D1 gratuito).
+ */
+export function comandoHashLegado(db: Db, c: ConfTabela, card: number, leitor: number, json: string) {
+  const nome = `${c.tabela}_staging`;
+  const cols = [...c.campos, "hash"];
+  const t = STAGING_FINAL[c.tabela];
+  const final = sql.raw(`"${c.tabela}"`);
+  const iguais = sql`FROM ${tabelaVirtual(nome, cols, json, c.extras)} WHERE ${sql.raw(`"${nome}"."chave"`)} = ${final}."chave" AND NOT (${dadosMudaram(c.tabela, nome, c.campos)})${c.destino ? sql` AND ${c.destino}` : sql``}`;
+  return db
+    .update(t)
+    .set({ hash: sql`(SELECT ${sql.raw(`"${nome}"."hash"`)} ${iguais})` })
+    .where(
+      and(
+        eq(t.cardId, card),
+        isNull(t.hash),
+        isNull(t.removidoEm),
+        isNull(t.ausenteDesdeLote),
+        eq(t.leitor, leitor),
+        sql`${final}."chave" IN (SELECT json_extract(value, '$[0]') FROM json_each(${json}))`,
+        sql`EXISTS (SELECT 1 ${iguais})`,
+      ),
+    );
+}
+
+/**
+ * Os PARES (chave + assinatura) que o navegador viu iguais ao gravado, CONFERIDOS NO BANCO: só o que bate (a mesma
+ * assinatura, valendo) entra nos iguais do passo — e a SOMA do passo recebe o valor GRAVADO deles (é o mesmo da Centi).
+ */
+export function comandoParesIguais(db: Db, c: ConfTabela, loteId: number, card: number, iguais: readonly ParIgual[], passo?: number) {
+  const junto = sql`FROM (SELECT json_extract(value, '$[0]') AS "chave", json_extract(value, '$[1]') AS "hash" FROM json_each(${JSON.stringify(iguais)})) AS p JOIN ${sql.raw(`"${c.tabela}"`)} e ON e."card_id" = ${card} AND e."chave" = p."chave" AND ${valeIgual(sql.raw(`p."hash"`))}`;
+  return db
+    .update(centiLotePassos)
+    .set({
+      resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) ${junto})`,
+      chavesIguais: listaMais("iguais", sql`SELECT p."chave" AS "c" ${junto}`),
+      soma: sql`COALESCE(${centiLotePassos.soma}, 0) + (SELECT COALESCE(SUM(${sql.raw(c.soma)}), 0) ${junto})`,
+    })
+    .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)));
+}
+
+/**
+ * As ASSINATURAS gravadas do card no ano (chave → assinatura), como UM texto JSON montado NO BANCO — o navegador baixa no
+ * começo da importação e manda inteiro só o que mudou. Só os registros valendo (o removido e o ausente voltam inteiros).
+ */
+export const ASSINATURAS_POR_PAGINA = 10_000;
+export function consultaAssinaturas(db: Db, tabela: ConfTabela["tabela"], card: number, ano: number, depois = 0, limite = ASSINATURAS_POR_PAGINA) {
+  const t = sql.raw(`"${tabela}"`);
+  // Em PÁGINAS pelo id (um texto de até ~700 KB — o D1 limita cada valor a 2 MB): `ultimo` = o id da última da página.
+  const pagina = sql`(SELECT "id", "chave", "hash" FROM ${t} WHERE "card_id" = ${card} AND "ano" = ${ano} AND "id" > ${depois} AND "hash" IS NOT NULL AND "removido_em" IS NULL AND "ausente_desde_lote" IS NULL ORDER BY "id" LIMIT ${limite})`;
+  return db
+    .select({ j: sql<string>`(SELECT json_group_object("chave", "hash") FROM ${pagina})`, ultimo: sql<number | null>`(SELECT MAX("id") FROM ${pagina})` })
+    .from(sql`(SELECT 1)`);
 }
 
 /** Registra um PASSO do lote (um pedido à Centi, lido ou com erro) — o que a tela acompanha ao vivo. */
@@ -162,28 +316,35 @@ export function comandoDividirPeriodo(db: Db, loteId: number, periodo: Periodo) 
  */
 export function comandoRecontarLote(db: Db, loteId: number) {
   const ok = sql`${centiLotePassos.loteId} = ${loteId} AND ${centiLotePassos.estado} = 'ok'`;
+  const ultimas = sql`(SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina})`;
   return db
     .update(centiLotes)
     .set({
       paginas: sql`(SELECT COUNT(*) FROM ${centiLotePassos} WHERE ${ok})`,
-      recebidos: sql`(SELECT COALESCE(SUM(${centiLotePassos.recebidos}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
-      recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
+      // A ÚLTIMA leitura de cada página (uma página relida não conta duas vezes).
+      recebidos: sql`(SELECT COALESCE(SUM(${centiLotePassos.recebidos}), 0) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas})`,
+      recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas})`,
       // Os ÚNICOS = os guardados (com vínculo) + os só contados (sem vínculo — a chave); a SOMA = a de TODOS os registros
       // lidos (a última leitura de cada página), a mesma régua das importações anteriores na conferência de queda.
       // (o lote de LIQUIDAÇÕES guarda no staging dele — um lote é de um tipo só, a soma dos dois é o do lote)
-      unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${liquidacoesStaging} WHERE ${liquidacoesStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${pagamentosStaging} WHERE ${pagamentosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId}))`,
-      // FORA = só os sem vínculo (as chaves dos IGUAIS ao gravado contam nos únicos, não aqui).
-      fora: sql`(SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId} AND ${centiStagingFora.igual} = 0)`,
-      soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina}))`,
+      unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${liquidacoesStaging} WHERE ${liquidacoesStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${pagamentosStaging} WHERE ${pagamentosStaging.loteId} = ${loteId})
+        + (SELECT COUNT(*) FROM (SELECT "value" FROM ${chavesDaLista(loteId, "iguais")} UNION SELECT "value" FROM ${chavesDaLista(loteId, "fora")}) WHERE "value" NOT IN ${chavesDoStaging(loteId)}))`,
+      // FORA = só os sem vínculo/destino (as chaves dos IGUAIS ao gravado contam nos únicos, não aqui).
+      fora: sql`(SELECT COUNT(DISTINCT "value") FROM ${chavesDaLista(loteId, "fora")} WHERE "value" NOT IN ${chavesDoStaging(loteId)})`,
+      soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas})`,
       // POR ÓRGÃO (liquidações, pagamentos e os empenhos lidos por órgão): cada "página" é um órgão com o PRÓPRIO total (lidos em
       // paralelo) — o do período é a soma deles (a última leitura de cada órgão); empenhos: o maior total informado em cada período.
       totalInformado: sql`(CASE WHEN ${centiLotes.modo} IN ('liquidacoes', 'pagamentos') OR ${centiLotes.orgaosCenti} IS NOT NULL
-        THEN (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT ${centiLotePassos.total} AS t FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina})))
+        THEN (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT ${centiLotePassos.total} AS t FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas}))
         ELSE (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim})) END)`,
       vistoEm: sql`CURRENT_TIMESTAMP`,
     })
     .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo")));
 }
+
+/** As chaves GUARDADAS do lote (o staging do tipo dele — um lote é de um tipo só). */
+const chavesDoStaging = (loteId: number) =>
+  sql`(SELECT "chave" FROM "empenhos_staging" WHERE "lote_id" = ${loteId} UNION ALL SELECT "chave" FROM "liquidacoes_staging" WHERE "lote_id" = ${loteId} UNION ALL SELECT "chave" FROM "pagamentos_staging" WHERE "lote_id" = ${loteId})`;
 
 /** O que o período já leu (as páginas lidas e os registros) — para decidir se continua. */
 export async function lidoNoPeriodo(db: Db, loteId: number, periodo: Periodo) {
@@ -198,17 +359,18 @@ export async function lidoNoPeriodo(db: Db, loteId: number, periodo: Periodo) {
 export async function jaNoLote(db: Db, loteId: number, chaves: string[]): Promise<number> {
   if (!chaves.length) return 0;
   const lista = sql`(SELECT value FROM json_each(${JSON.stringify(chaves)}))`;
-  // UMA consulta (as quatro tabelas do lote): cada requisição da importação conta as consultas (plano gratuito: 50).
-  const conta = (t: string) => sql.raw(`(SELECT COUNT(*) FROM "${t}" WHERE "lote_id" = `);
-  const de = (t: string) => sql`${conta(t)}${loteId} AND "chave" IN ${lista})`;
-  const [r] = await db.select({ n: sql<number>`${de("empenhos_staging")} + ${de("liquidacoes_staging")} + ${de("pagamentos_staging")} + ${de("centi_staging_fora")}` }).from(sql`(SELECT 1)`);
+  // UMA consulta (o staging e as listas do lote): cada requisição da importação conta as consultas (plano gratuito: 50).
+  const [r] = await db
+    .select({ n: sql<number>`(SELECT COUNT(*) FROM ${lista} WHERE "value" IN ${chavesDoStaging(loteId)} OR "value" IN ${chavesDaLista(loteId, "iguais", true)} OR "value" IN ${chavesDaLista(loteId, "fora", true)})` })
+    .from(sql`(SELECT 1)`);
   return Number(r?.n ?? 0);
 }
 
 /** Os campos comparados para saber se um empenho MUDOU (todos menos a chave). */
 const COMPARADOS = CAMPOS.filter((c) => c !== "chave");
 
-/** "Mudou": algum campo diferente (`IS NOT` — nulo conta), o vínculo mudou, o empenho estava removido ou foi lido por outro leitor. */
+/** "Mudou": algum campo diferente (`IS NOT` — nulo conta), o vínculo mudou, o empenho estava removido ou AUSENTE (volta) ou foi
+ * lido por outro leitor. */
 function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: SQL, orgaoNovo: SQL, reparticaoNovo: SQL): SQL {
   return sql.join(
     [
@@ -216,6 +378,7 @@ function mudou(atual: (c: string) => SQL, novo: (c: string) => SQL, leitorNovo: 
       sql`${atual("orgaoId")} IS NOT ${orgaoNovo}`,
       sql`${atual("reparticaoId")} IS NOT ${reparticaoNovo}`,
       sql`${atual("removidoEm")} IS NOT NULL`,
+      sql`${atual("ausenteDesdeLote")} IS NOT NULL`,
       sql`${atual("leitor")} IS NOT ${leitorNovo}`,
     ],
     sql` OR `,
@@ -234,9 +397,6 @@ const stagingVinculado = (card: number) => sql`${vinculoSql("empenhos_staging", 
 const chavesVinculadas = (db: Db, loteId: number, card: number) =>
   db.select({ c: empenhosStaging.chave }).from(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card)));
 
-/** As chaves que vieram IGUAIS ao gravado (conferidas em tempo real — só a chave ficou no lote). */
-export const chavesIguais = (db: Db, loteId: number) =>
-  db.select({ c: centiStagingFora.chave }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1)));
 
 /**
  * Os empenhos do card e do ano que a Centi não trouxe mais (fora das chaves vinculadas e das iguais do lote). Na leitura POR
@@ -248,79 +408,42 @@ const sumiram = (db: Db, loteId: number, card: number, ano: number, orgaos: read
     eq(empenhos.ano, ano),
     isNull(empenhos.removidoEm),
     notInArray(empenhos.chave, chavesVinculadas(db, loteId, card)),
-    notInArray(empenhos.chave, chavesIguais(db, loteId)),
+    notInArray(empenhos.chave, chavesDaLista(loteId, "iguais")),
     orgaos ? inArray(empenhos.orgaoGestor, db.select({ g: centiOrgaosGestores.orgaoGestor }).from(centiOrgaosGestores).where(sql`${centiOrgaosGestores.idCenti} IN (SELECT value FROM json_each(${JSON.stringify(orgaos)}))`)) : undefined,
   );
+
+/** As colunas do passo SEM as listas de chaves (que podem ter milhares) — o que a tela e a leitura usam. */
+const { chavesIguais: _iguais, chavesFora: _fora, chavesGravadas: _gravadas, assinaturaBruta: _assinatura, ...COLUNAS_PASSO } = getTableColumns(centiLotePassos);
+export { COLUNAS_PASSO };
+export type LinhaPasso = Omit<typeof centiLotePassos.$inferSelect, "chavesIguais" | "chavesFora" | "chavesGravadas" | "assinaturaBruta">;
 
 /** O passo mais recente do lote (o que a página acabou de registrar no mesmo lote). */
 export const ultimoPasso = (loteId: number) => sql`(SELECT MAX("id") FROM "centi_lote_passos" WHERE "lote_id" = ${loteId})`;
 
 /** Lê o passo mais recente do lote — o último comando do lote da página (já com o resultado da conferência). */
 export function consultaUltimoPasso(db: Db, loteId: number, passo?: number) {
-  return db.select().from(centiLotePassos).where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)));
+  return db.select(COLUNAS_PASSO).from(centiLotePassos).where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)));
 }
 
-/**
- * GUARDA e CONFERE EM TEMPO REAL uma página de EMPENHOS (só os vinculados — quem chama filtra), num lote só: compara cada
- * registro LIDO com o GRAVADO pela MESMA régua da promoção (`mudou`, com o vínculo e o leitor) ANTES de guardar — a página é
- * uma tabela virtual (`tabelaVirtual`) — e grava no passo o RESULTADO (novos · alterados · iguais · sem vínculo). O IGUAL ao
- * gravado NUNCA é escrito no staging: dele fica só a chave (`igual` = 1), para a conferência com a Centi e para o que sumiu.
- * Uma escrita por registro igual (antes eram cinco — o limite diário de escritas do D1 no plano gratuito).
- */
-/** O resultado da página SEM registros a conferir (só os sem vínculo, ou nenhum): os contadores existem (zero). */
-export function comandoResultadoVazio(db: Db, loteId: number, semVinculo: number, passo?: number) {
-  const mais = (c: SQL.Aliased | SQL | (typeof centiLotePassos)["resNovos" | "resAlterados" | "resIguais" | "resSemVinculo"], n: number) => sql`COALESCE(${c}, 0) + ${n}`;
+/** O resultado da página SEM registros a conferir (só os sem vínculo, ou nenhum): os contadores existem (zero) e as chaves
+ * dos sem vínculo vão à lista do passo. */
+export function comandoResultadoVazio(db: Db, loteId: number, fora: readonly string[], passo?: number) {
+  const mais = (c: (typeof centiLotePassos)["resNovos" | "resAlterados" | "resIguais" | "resSemVinculo"], n: number) => sql`COALESCE(${c}, 0) + ${n}`;
   return db
     .update(centiLotePassos)
-    .set({ resNovos: mais(centiLotePassos.resNovos, 0), resAlterados: mais(centiLotePassos.resAlterados, 0), resIguais: mais(centiLotePassos.resIguais, 0), resSemVinculo: mais(centiLotePassos.resSemVinculo, semVinculo) })
+    .set({
+      resNovos: mais(centiLotePassos.resNovos, 0),
+      resAlterados: mais(centiLotePassos.resAlterados, 0),
+      resIguais: mais(centiLotePassos.resIguais, 0),
+      resSemVinculo: mais(centiLotePassos.resSemVinculo, fora.length),
+      ...(fora.length ? { chavesFora: listaMais("fora", chavesDoJson(fora)) } : {}),
+    })
     .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId)));
 }
 
-export function comandosConferirPagina(db: Db, loteId: number, card: number, leitor: number, pagina: number, linhas: readonly LinhaEmpenho[], semVinculo: number, passo?: number) {
-  const v = vinculoSql("empenhos_staging", card);
-  const difere = mudou(colEmp, colStg, sql`${leitor}`, v.orgao, v.reparticao);
-  const lista = sql`(SELECT value FROM json_each(${JSON.stringify(linhas.map((l) => l.chave))}))`;
-  const cmds: unknown[] = [];
-  const pedacos = pedacosJson(linhas, CAMPOS, MAX_JSON_CONFERIR);
-  pedacos.forEach((json, i) => {
-    const virt = () => tabelaVirtual("empenhos_staging", CAMPOS, json);
-    const comGravado = () => sql`FROM ${virt()} JOIN "empenhos" ON "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"`;
-    cmds.push(
-      db
-        .update(centiLotePassos)
-        .set({
-          resNovos: sql`COALESCE(${centiLotePassos.resNovos}, 0) + (SELECT COUNT(*) FROM ${virt()} WHERE NOT EXISTS (SELECT 1 FROM "empenhos" WHERE "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"))`,
-          resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) ${comGravado()} WHERE (${difere}))`,
-          resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) ${comGravado()} WHERE NOT (${difere}))`,
-          resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + ${i === 0 ? semVinculo : 0}`,
-        })
-        .where(eq(centiLotePassos.id, passo ?? ultimoPasso(loteId))),
-    );
-  });
-  if (!pedacos.length) return [comandoResultadoVazio(db, loteId, semVinculo, passo)];
-  // A classificação é a desta leitura: a chave que antes veio igual e agora mudou volta a ser guardada inteira.
-  cmds.push(db.delete(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 1), sql`${centiStagingFora.chave} IN ${lista}`)));
-  for (const json of pedacos) {
-    cmds.push(
-      db
-        .insert(centiStagingFora)
-        .select(
-          db
-            .select({ loteId: sql<number>`${loteId}`.as("lote_id"), chave: sql<string>`"empenhos_staging"."chave"`.as("chave"), igual: sql<number>`1`.as("igual") })
-            .from(sql`${tabelaVirtual("empenhos_staging", CAMPOS, json)} JOIN "empenhos" ON "empenhos"."card_id" = ${card} AND "empenhos"."chave" = "empenhos_staging"."chave"`)
-            .where(sql`NOT (${difere})`) as never,
-        )
-        .onConflictDoNothing(),
-    );
-  }
-  // O que uma leitura ANTERIOR da página guardou sai (vale a desta leitura); só o diferente e o novo entram.
-  cmds.push(db.delete(empenhosStaging).where(and(eq(empenhosStaging.loteId, loteId), sql`${empenhosStaging.chave} IN ${lista}`)), ...comandosGuardarPagina(db, loteId, pagina, [...linhas], true));
-  return cmds;
-}
-
 /**
- * Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor ou o vínculo mudou), marca como removidos — e quantos
- * registros ficam FORA (unidade da Centi sem vínculo: não são gravados) — o resumo do lote.
+ * Quantos empenhos o lote cria, ATUALIZA DE FATO (algum valor ou o vínculo mudou), deixa AUSENTES (a 1ª importação sem
+ * eles — seguem valendo), REMOVE (a 2ª: a regra dos removidos) — e quantos registros ficam FORA (unidade da Centi sem vínculo: não são gravados) — o resumo do lote.
  */
 export async function contagemDaPromocao(db: Db, loteId: number, card: number, ano: number, leitor: number, orgaos: readonly number[] | null = null) {
   const vStg = vinculoSql("empenhos_staging", card);
@@ -339,14 +462,15 @@ export async function contagemDaPromocao(db: Db, loteId: number, card: number, a
     .from(empenhosStaging)
     .innerJoin(empenhos, and(eq(empenhos.cardId, card), eq(empenhos.chave, empenhosStaging.chave)))
     .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card), mudou(colEmp, colStg, sql`${leitor}`, vStg.orgao, vStg.reparticao)));
-  const [removidos] = await db.select({ n: count() }).from(empenhos).where(sumiram(db, loteId, card, ano, orgaos));
+  const [removidos] = await db.select({ n: count() }).from(empenhos).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos), isNotNull(empenhos.ausenteDesdeLote)));
+  const [ausentes] = await db.select({ n: count() }).from(empenhos).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos), isNull(empenhos.ausenteDesdeLote)));
   // FORA = os só contados na leitura + os guardados que perderam o vínculo antes da conclusão (não entram).
   const [perdeu] = await db
     .select({ n: count() })
     .from(empenhosStaging)
     .where(and(eq(empenhosStaging.loteId, loteId), sql`NOT (${stagingVinculado(card)})`));
-  const [contados] = await db.select({ n: count() }).from(centiStagingFora).where(and(eq(centiStagingFora.loteId, loteId), eq(centiStagingFora.igual, 0)));
-  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: perdeu.n + contados.n };
+  const [contados] = await db.select({ n: sql<number>`COUNT(DISTINCT "value")` }).from(sql`${chavesDaLista(loteId, "fora")}`).where(sql`"value" NOT IN ${chavesDoStaging(loteId)}`);
+  return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, ausentes: ausentes.n, fora: perdeu.n + Number(contados?.n ?? 0) };
 }
 
 const VALORES = ["valorEmpenhado", "valorAnulado", "valorLiquidado", "valorPago", "saldoPagar"] as const;
@@ -409,7 +533,7 @@ export async function vigentesDosOrgaos(db: Db, card: number, ano: number, orgao
 export function comandoConduzir(db: Db, loteId: number, condutor: string) {
   return db
     .update(centiLotes)
-    .set({ condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .set({ condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})`, vistoEm: sql`CURRENT_TIMESTAMP` })
     .where(
       and(
         eq(centiLotes.id, loteId),
@@ -427,8 +551,8 @@ export const SEGUNDOS_EXECUCAO_AUTO = 90;
 export function comandoTravarAuto(db: Db, loteId: number) {
   return db
     .update(centiLotes)
-    .set({ autoAte: sql`datetime('now', ${`+${SEGUNDOS_EXECUCAO_AUTO} seconds`})` })
-    .where(and(eq(centiLotes.id, loteId), or(isNull(centiLotes.autoAte), sql`${centiLotes.autoAte} < datetime('now')`)))
+    .set({ autoAte: sql`datetime('now', ${`+${SEGUNDOS_EXECUCAO_AUTO} seconds`})`, vistoEm: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"), or(isNull(centiLotes.autoAte), sql`${centiLotes.autoAte} < datetime('now')`)))
     .returning({ id: centiLotes.id, ate: centiLotes.autoAte });
 }
 
@@ -450,9 +574,39 @@ export function comandoSoltarLote(db: Db, loteId: number, condutor: string) {
 }
 
 /**
- * PROMOVE o lote conferido, num lote ATÔMICO: grava/atualiza os empenhos VINCULADOS do card (com o órgão/unidade do
- * cadastro; o que reaparece perde o `removido_em`), trata o que o card tinha no ano e a Centi não trouxe mais pela REGRA
- * do card (marca `removido_em` ou apaga), APAGA o que ficou sem vínculo (banco limpo), fecha o lote e limpa o staging.
+ * O lote ainda está LENDO — a guarda da PROMOÇÃO: o lote atômico só marca como removido (ou apaga) o que a Centi não trouxe
+ * enquanto o lote não foi promovido. Uma 2ª promoção do MESMO lote (o pedido repetido pela rede) encontra o staging já
+ * limpo — sem a guarda, TUDO do ano "teria sumido". O último comando do lote o fecha; os anteriores veem "lendo".
+ */
+export function loteLendo(loteId: number) {
+  return sql`EXISTS (SELECT 1 FROM ${centiLotes} WHERE ${centiLotes.id} = ${loteId} AND ${centiLotes.estado} = 'lendo')`;
+}
+
+/** A contagem da promoção (o resumo do lote). */
+export type ContagemPromocao = { inseridos: number; atualizados: number; removidos: number; ausentes: number; fora: number };
+
+/**
+ * O que a Centi NÃO trouxe, em DOIS tempos (a resposta incompleta nunca apaga nada de uma vez): a 1ª importação sem o
+ * registro só o deixa AUSENTE (`ausente_desde_lote`, segue valendo); a próxima importação concluída sem ele aplica a REGRA
+ * dos removidos (marca `removido_em` ou apaga). Os comandos, NA ORDEM, depois do upsert (o que voltou já saiu da ausência).
+ */
+export function comandosAusencia<T extends typeof empenhos | typeof liquidacoes | typeof pagamentos>(db: Db, tabela: T, loteId: number, regra: RegraRemovidos, onde: SQL | undefined) {
+  const t = tabela as typeof empenhos;
+  const confirmados = and(loteLendo(loteId), onde, isNotNull(t.ausenteDesdeLote));
+  return [
+    regra === "apagar"
+      ? db.delete(t).where(confirmados)
+      : db.update(t).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(confirmados),
+    // A 1ª ausência só marca a importação (o `removido_em` da regra "marcar" já tirou os confirmados do `onde`).
+    db.update(t).set({ ausenteDesdeLote: loteId }).where(and(loteLendo(loteId), onde, isNull(t.ausenteDesdeLote))),
+  ] as const;
+}
+
+/**
+ * PROMOVE o lote conferido, num lote ATÔMICO: registra no HISTÓRICO o que mudou (antes de mudar), grava/atualiza os empenhos
+ * VINCULADOS do card (com o órgão/unidade do cadastro; o que reaparece perde o `removido_em` e a ausência), trata o que o card
+ * tinha no ano e a Centi não trouxe mais em dois tempos (`comandosAusencia`), APAGA o que ficou sem vínculo (banco limpo),
+ * fecha o lote e limpa o staging.
  */
 export function comandosPromover(
   db: Db,
@@ -461,7 +615,7 @@ export function comandosPromover(
   ano: number,
   leitor: number,
   regra: RegraRemovidos,
-  contagem: { inseridos: number; atualizados: number; removidos: number; fora: number },
+  contagem: ContagemPromocao,
   orgaos: readonly number[] | null = null,
 ) {
   const vStg = vinculoSql("empenhos_staging", card);
@@ -478,13 +632,19 @@ export function comandosPromover(
       orgaoId: sql<number>`${vStg.orgao}`.as("orgao_id"),
       reparticaoId: sql<number | null>`${vStg.reparticao}`.as("reparticao_id"),
       cardId: sql<number>`${card}`.as("card_id"),
+      ausenteDesdeLote: sql<number | null>`NULL`.as("ausente_desde_lote"),
+      hash: empenhosStaging.hash,
     })
     .from(empenhosStaging)
     .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card)));
   const atualizar = Object.fromEntries(
-    [...COMPARADOS, "loteId", "removidoEm", "leitor", "orgaoId", "reparticaoId"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
+    [...COMPARADOS, "loteId", "removidoEm", "leitor", "orgaoId", "reparticaoId", "ausenteDesdeLote", "hash"].map((c) => [c, sql.raw(`excluded.${colunaSql(c)}`)]),
   );
+  const sumiu = sumiram(db, loteId, card, ano, orgaos);
   return [
+    // O HISTÓRICO primeiro (o valor de ANTES ainda está gravado).
+    comandoAlteracoesDoLote(db, "empenho", { final: "empenhos", staging: "empenhos_staging", campos: COMPARADOS }, loteId, card, and(loteLendo(loteId), stagingVinculado(card)) as SQL),
+    comandoAlteracoesSumiram(db, "empenho", "empenhos", loteId, card, and(loteLendo(loteId), sumiu) as SQL),
     db
       .insert(empenhos)
       .select(sel as never)
@@ -492,31 +652,32 @@ export function comandosPromover(
       .onConflictDoUpdate({
         target: [empenhos.cardId, empenhos.chave],
         set: { ...atualizar, atualizadoEm: sql`CURRENT_TIMESTAMP` },
-        setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
+        // (ou só a ASSINATURA, a 1ª vez — o registro de antes da assinatura passa a tê-la.)
+        setWhere: sql`${mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`)} OR "empenhos"."hash" IS NOT excluded."hash"`,
       }),
-    regra === "apagar"
-      ? db.delete(empenhos).where(sumiram(db, loteId, card, ano, orgaos))
-      : db.update(empenhos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano, orgaos)),
-    db.delete(empenhos).where(and(eq(empenhos.cardId, card), eq(empenhos.ano, ano), sql`${vEmp.orgao} IS NULL`)),
+    ...comandosAusencia(db, empenhos, loteId, regra, sumiu),
+    db.delete(empenhos).where(and(loteLendo(loteId), eq(empenhos.cardId, card), eq(empenhos.ano, ano), sql`${vEmp.orgao} IS NULL`)),
     db
       .update(centiLotes)
       .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
-      .where(eq(centiLotes.id, loteId)),
+      .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"))),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
-    db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
     // A leitura fragmentada da automática (e os fragmentos, em cascata) que ficou no meio.
     db.delete(centiLeituras).where(eq(centiLeituras.loteId, loteId)),
   ] as const;
 }
 
-/** Fecha o lote sem promover (parcial, falhou ou cancelado) e limpa o staging — a tabela final não muda. */
+/** Fecha o lote que ainda LÊ sem promover (parcial, falhou ou cancelado) e limpa o staging — a tabela final não muda. */
 export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "falhou" | "cancelado" | "unidades", mensagem: string) {
   return [
-    db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
+    db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
+      // Só o lote que ainda LÊ: um fechamento atrasado (abandono, outra aba) nunca rebaixa um lote já promovido.
+      .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"))),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
     db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
     db.delete(pagamentosStaging).where(eq(pagamentosStaging.loteId, loteId)),
-    db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
+    // A leitura fragmentada que ficou no meio (e os fragmentos, em cascata) — nada de texto grande sobrando no banco.
+    db.delete(centiLeituras).where(eq(centiLeituras.loteId, loteId)),
   ] as const;
 }
 
@@ -540,7 +701,6 @@ export function comandosExcluirLotes(db: Db, cardId: number, loteIds: number[]) 
     db.update(pagamentos).set({ loteId: null }).where(sql`${pagamentos.loteId} IN ${ids}`),
     db.delete(pagamentosStaging).where(sql`${pagamentosStaging.loteId} IN ${ids}`),
     db.delete(empenhosStaging).where(sql`${empenhosStaging.loteId} IN ${ids}`),
-    db.delete(centiStagingFora).where(sql`${centiStagingFora.loteId} IN ${ids}`),
     db.delete(centiLotePassos).where(sql`${centiLotePassos.loteId} IN ${ids}`),
     db.delete(centiLotes).where(sql`${centiLotes.id} IN ${ids}`).returning({ id: centiLotes.id, ano: centiLotes.ano, estado: centiLotes.estado }),
   ];
@@ -556,3 +716,101 @@ export function comandoExcluirPassos(db: Db, loteId: number, ids: number[]) {
     .where(and(eq(centiLotePassos.loteId, loteId), sql`${centiLotePassos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`))
     .returning({ id: centiLotePassos.id });
 }
+
+/** O que a automática precisa saber da MESMA página na última volta (ver `podePular`, `empenhos-core.ts`). */
+export type PaginaAnterior = {
+  passo: number;
+  assinatura: string | null;
+  /** Aquele lote tem a data de conclusão e os vínculos do card mudaram DEPOIS dela (as datas comparadas no banco). */
+  concluido: boolean;
+  vinculosDepois: boolean;
+  /** Quantas chaves "fora" (sem vínculo/destino) aquela página tinha. */
+  fora: number;
+  /** Quantas chaves daquela página NÃO valem hoje no banco (sumiram, sem assinatura, removidas ou ausentes). */
+  invalidos: number;
+};
+
+/**
+ * A MESMA página (período, página) no ÚLTIMO lote PROMOVIDO do card e do ano — do mesmo modo, órgãos e leitor —, com o
+ * estado de hoje das chaves dela, numa consulta só. Só o último promovido conta: comparar com uma volta mais antiga deixaria
+ * passar o que uma importação posterior mudou.
+ */
+export async function consultaPaginaAnterior(
+  db: Db,
+  tabela: ConfTabela["tabela"],
+  lote: { id: number; cardId: number; ano: number; modo: string; leitor: number; orgaosCenti: readonly number[] | null },
+  periodo: Periodo,
+  pagina: number,
+): Promise<PaginaAnterior | null> {
+  const orgaos = lote.orgaosCenti ? JSON.stringify(lote.orgaosCenti) : null;
+  const t = sql.raw(`"${tabela}"`);
+  const linhas = await db.all<{ passo: number; assinatura: string | null; concluido: number; vinculosDepois: number; fora: number; invalidos: number }>(sql`
+    WITH ultimo AS (
+      SELECT "id", "concluido_em" FROM "centi_lotes"
+      WHERE "card_id" = ${lote.cardId} AND "ano" = ${lote.ano} AND "estado" = 'promovido' AND "id" <> ${lote.id}
+      ORDER BY "id" DESC LIMIT 1
+    ), igual AS (
+      SELECT l."id", l."concluido_em" FROM "centi_lotes" l JOIN ultimo u ON u."id" = l."id"
+      WHERE l."modo" = ${lote.modo} AND l."leitor" = ${lote.leitor} AND l."orgaos_centi" IS ${orgaos}
+    ), p AS (
+      SELECT q.* FROM "centi_lote_passos" q JOIN igual i ON q."lote_id" = i."id"
+      WHERE q."inicio" = ${periodo.inicio} AND q."fim" = ${periodo.fim} AND q."pagina" = ${pagina} AND q."estado" = 'ok'
+      ORDER BY q."id" DESC LIMIT 1
+    )
+    SELECT p."id" AS "passo", p."assinatura_bruta" AS "assinatura", (SELECT "concluido_em" IS NOT NULL FROM igual) AS "concluido",
+      COALESCE((SELECT julianday(c."vinculos_em") >= julianday((SELECT "concluido_em" FROM igual)) FROM "empenho_cards" c WHERE c."id" = ${lote.cardId}), 0) AS "vinculosDepois",
+      json_array_length(COALESCE(p."chaves_fora", '[]')) AS "fora",
+      (SELECT COUNT(*) FROM (SELECT j."value" AS "c" FROM json_each(COALESCE(p."chaves_iguais", '[]')) j
+         UNION SELECT g."value" FROM json_each(COALESCE(p."chaves_gravadas", '[]')) g) k
+       WHERE NOT EXISTS (SELECT 1 FROM ${t} e WHERE e."card_id" = ${lote.cardId} AND e."chave" = k."c" AND e."hash" IS NOT NULL
+         AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL)) AS "invalidos"
+    FROM p`);
+  const r = linhas[0];
+  return r ? { passo: r.passo, assinatura: r.assinatura, concluido: !!r.concluido, vinculosDepois: !!r.vinculosDepois, fora: Number(r.fora), invalidos: Number(r.invalidos) } : null;
+}
+
+/**
+ * A PÁGINA IDÊNTICA à da última volta (`podePular`): o passo `ok` é COPIADO do anterior — as contagens, a soma, o total e as
+ * chaves (as iguais + as que foram ao staging passam a ser iguais: hoje valem no banco com a mesma assinatura; as fora seguem
+ * fora) —, sem ler nem gravar registro nenhum. Por órgão, o fim do período é decidido pelo fecho (nunca copiado).
+ */
+export function comandoPaginaIgual(db: Db, loteId: number, anterior: number, corpo: string | null, porOrgao: boolean) {
+  const a = centiLotePassos;
+  const iguais = sql`(SELECT json_group_array("c") FROM (SELECT j."value" AS "c" FROM json_each(COALESCE(${a.chavesIguais}, '[]')) j UNION SELECT g."value" FROM json_each(COALESCE(${a.chavesGravadas}, '[]')) g))`;
+  const sel = db
+    .select({
+      id: sql<null>`NULL`.as("id"),
+      loteId: sql<number>`${loteId}`.as("lote_id"),
+      inicio: a.inicio,
+      fim: a.fim,
+      pagina: a.pagina,
+      estado: sql<string>`'ok'`.as("estado"),
+      fimPeriodo: porOrgao ? sql<number>`0`.as("fim_periodo") : a.fimPeriodo,
+      status: a.status,
+      bytes: a.bytes,
+      ms: sql<number>`0`.as("ms"),
+      recebidos: a.recebidos,
+      novos: a.novos,
+      recusados: a.recusados,
+      repetidos: a.repetidos,
+      total: a.total,
+      soma: a.soma,
+      mensagem: sql<string>`${MSG_PAGINA_IGUAL}`.as("mensagem"),
+      corpo: sql<string | null>`${corpo}`.as("corpo"),
+      resNovos: sql<number>`0`.as("res_novos"),
+      resAlterados: sql<number>`0`.as("res_alterados"),
+      resIguais: sql<number>`json_array_length(${iguais})`.as("res_iguais"),
+      resSemVinculo: sql<number>`json_array_length(COALESCE(${a.chavesFora}, '[]'))`.as("res_sem_vinculo"),
+      em: sql<string>`CURRENT_TIMESTAMP`.as("em"),
+      chavesIguais: sql<string>`${iguais}`.as("chaves_iguais"),
+      chavesFora: a.chavesFora,
+      chavesGravadas: sql<string>`'[]'`.as("chaves_gravadas"),
+      assinaturaBruta: a.assinaturaBruta,
+    })
+    .from(a)
+    .where(eq(a.id, anterior));
+  return db.insert(centiLotePassos).select(sel as never);
+}
+
+/** A mensagem do passo da página idêntica (a contagem dos "sem mudança" no histórico procura por ela). */
+export const MSG_PAGINA_IGUAL = "Sem mudança desde a importação anterior — nada foi relido nem regravado.";

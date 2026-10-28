@@ -19,19 +19,11 @@ const ROTULOS: Record<string, string> = {
   tenant: "município",
   parametros: "parâmetros",
   anos: "anos",
-  ativa: "atualização automática",
-  frequenciaMin: "frequência",
-  diasUteis: "dias úteis",
-  horaInicio: "início",
-  horaFim: "fim",
-  quedaSoma: "queda da soma",
-  quedaRegistros: "queda dos registros",
-  removidos: "removidos na Centi",
   porOrgao: "ler por órgão",
 };
 
-/** CONFIGURA o card (Configurar, na tela do card): a integração, os anos, a programação e as regras — a régua de
- * `motivoCardInvalido`. */
+/** CONFIGURA o card: a identificação, os anos e a integração — a régua de `motivoCardInvalido` (a atualização automática
+ * e as regras são centrais — `/api/admin/importacoes/config`). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirSessao();
   if ("erro" in g) return g.erro;

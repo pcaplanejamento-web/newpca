@@ -59,7 +59,14 @@ export const COLUNA_VALOR: Record<(typeof VALORES_EMPENHO)[number], string> = {
 export const EMPENHOS_POR_PEDACO = 6000;
 
 /** Um empenho na tabela (sem o histórico — ele vem no detalhe). */
-export type EmpenhoNaTela = { id: number; numero: string } & Record<CampoDicionario, string | null> &
+export type EmpenhoNaTela = {
+  id: number;
+  numero: string;
+  /** O card que gravou o empenho (a coluna Card da tabela única). */
+  cardId?: number;
+  /** O ano do empenho (o do pacote lido — a coluna Ano de "Todos os anos"). */
+  ano?: number;
+} & Record<CampoDicionario, string | null> &
   Record<(typeof VALORES_EMPENHO)[number], number>;
 
 /** O que a rota entrega: o dicionário de cada campo como pares [índice, texto] e as tuplas. */
@@ -86,6 +93,9 @@ export function empenhosDoPacote(p: PacoteEmpenhos): EmpenhoNaTela[] {
       const v = Number(t[2 + nD + i]);
       e[c] = Number.isFinite(v) ? v : 0;
     });
+    // O card vem DEPOIS dos valores (o último da tupla — pacotes sem ele seguem valendo).
+    const card = t[2 + nD + VALORES_EMPENHO.length];
+    if (card != null && Number.isInteger(Number(card))) e.cardId = Number(card);
     return e as EmpenhoNaTela;
   });
 }
@@ -105,14 +115,34 @@ export function resumoEmpenhos(linhas: readonly EmpenhoNaTela[]): ResumoEmpenhos
   return r;
 }
 
+/**
+ * "TODOS OS ANOS" juntos: cada ano é lido num pedido próprio (o seu dicionário — nunca se misturam) e as linhas levam o ano.
+ * O empenho não se repete entre anos (a chave leva o ano — `chaveEmpenho`).
+ */
+export function juntarAnos(pacotes: readonly { ano: number; pacote: PacoteEmpenhos }[]): EmpenhoNaTela[] {
+  const todas: EmpenhoNaTela[] = [];
+  for (const { ano, pacote } of pacotes) for (const e of empenhosDoPacote(pacote)) todas.push({ ...e, ano });
+  return todas;
+}
+
+/** O valor do seletor "Todos os anos" (o padrão das tabelas de empenhos, liquidações e pagamentos). */
+export const ANO_TODOS = 0;
+
+/** O texto do recorte de anos ("todos os anos" | "2026") — nomes de arquivo e textos vazios das tabelas. */
+export const rotuloRecorteAno = (ano: number): string => (ano === ANO_TODOS ? "todos os anos" : String(ano));
+
+/** Os anos que um recorte pede: "Todos os anos" = cada ano da lista (um pedido por ano); senão, o próprio ano. */
+export const anosDoRecorte = (ano: number, anos: readonly { ano: number }[]): number[] => (ano === ANO_TODOS ? anos.map((a) => a.ano) : [ano]);
+
 /** Um ano com empenhos (o seletor de ano da tela). */
 export type AnoEmpenhos = { ano: number; n: number; soma: number; removidos: number; atualizadoEm: string | null };
 
-/** O ano pedido na URL, se existe; senão o mais recente; sem nenhum, null. */
-export function anoEscolhido(anos: readonly AnoEmpenhos[], pedido: unknown): number | null {
+/** O ano pedido na URL, se existe; senão "Todos os anos" (`ANO_TODOS`); sem nenhum ano, null. */
+export function anoEscolhido(anos: readonly { ano: number }[], pedido: unknown): number | null {
+  if (!anos.length) return null;
   const n = Number(pedido);
-  if (Number.isInteger(n) && anos.some((a) => a.ano === n)) return n;
-  return anos[0]?.ano ?? null;
+  if (pedido != null && pedido !== "" && Number.isInteger(n) && anos.some((a) => a.ano === n)) return n;
+  return ANO_TODOS;
 }
 
 /**

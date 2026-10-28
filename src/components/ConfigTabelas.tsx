@@ -49,13 +49,17 @@ export const useAdminTabelas = () => useContext(AdminCtx);
 /** As linhas por página iniciais das tabelas (a escolha do ADM). */
 export const useLinhasTabela = () => useContext(LinhasTabelaCtx);
 
+/** SIGLA → NOME das unidades e órgãos (o que o layout entrega): o filtro de unidade no padrão do sistema — a sigla em
+ * cima, o nome embaixo e a busca pelos dois. */
+export const useNomesUnidades = () => useContext(NomesCtx);
+
 const COLUNA_SIGLA = /sigla|unidade|reparti|[óo]rg[ãa]o/i;
 const NAO_SIGLA = /medida|unid\.|cadastrada|planilha/i;
 
 /** O ÚNICO ponto das colunas de UNIDADE/ÓRGÃO/SIGLA: pelo título da coluna, a função que dá o NOME de cada sigla (a 2ª
  * linha do filtro, que também busca por ele) — `undefined` nas demais colunas (nunca a unidade de MEDIDA). */
 export function useDetalheSigla() {
-  const nomes = useContext(NomesCtx);
+  const nomes = useNomesUnidades();
   const detalhe = useCallback((o: string) => nomes[o], [nomes]);
   return useCallback((titulo: string) => (COLUNA_SIGLA.test(titulo) && !NAO_SIGLA.test(titulo) ? detalhe : undefined), [detalhe]);
 }

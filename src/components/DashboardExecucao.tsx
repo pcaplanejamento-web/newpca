@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { EmpenhoNaTela } from "@/lib/empenhos-tela-core";
 import {
   anosDoIntervalo,
@@ -20,12 +20,16 @@ import {
   type EmpenhoExec,
   type EventoExec,
   empenhoExec,
-  type FiltrosExec,
   type Granularidade,
   liquidacaoExec,
   OPCOES_TIPO,
   opcoesDim,
   pagamentoExec,
+  REGRAS_FILTROS_EXEC,
+  chaveDoValor,
+  filtrosParaChaves,
+  valorDaChave,
+  valoresAusentes,
   reais,
   resumoSelecao,
   ROTULO_DIM,
@@ -51,14 +55,22 @@ import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
 import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./charts/Barras";
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
+import { TOPO_DAS_DATAS } from "./charts/serie-medidas";
 import { corSerie } from "./charts/shared";
-import { type Column, DataTable, FiltrosAtivos } from "./DataTable";
+import { type Column, DataTable } from "./DataTable";
+import { SalvarEdicao, useEdicoesTabela } from "./EdicoesTabela";
+import { useConfirmacao } from "./Confirmacao";
+import { AvisoFlutuante } from "./AvisoFlutuante";
+import { type ChipFiltro, PainelFiltros } from "./PainelFiltros";
 import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
+import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "./icons";
+import { IconChevronDown, IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { duracaoMotionMs } from "./Modal";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
+import { coerceEstado, diferencas, ESTADO_VAZIO, type EstadoFiltros, paraGuardar, partesDefinidas, periodoEfetivo, voltarParte } from "@/lib/filtros-visao-core";
 import { OrigemDados } from "./OrigemDados";
 import { PeriodoPicker } from "./PeriodoPicker";
 import { SelectField } from "./Field";
@@ -79,9 +91,6 @@ const SERIES = [
   { chave: "pago", rotulo: "Pago", cor: 7 },
 ] as const;
 const COR = { empenhado: corSerie(SERIES[0].cor), liquidado: corSerie(SERIES[1].cor), pago: corSerie(SERIES[2].cor) };
-
-/** A largura da pilha de botões sobre o desenho (botão + vidro + a distância da borda): as datas não entram nela. */
-const RESERVA_CONTROLES = 60;
 
 /** Da mais fina à mais grossa (a granularidade do zoom nunca fica mais grossa que a escolhida). */
 const ORDEM_GRAN = { auto: 0, dia: 1, semana: 2, mes: 3, ano: 4 } as const;
@@ -139,6 +148,10 @@ export function DashboardExecucao({
   onTentar,
   hoje,
   podeExportar,
+  inicialAdm,
+  visoes,
+  podePublicar,
+  admin,
 }: {
   base: BaseExec;
   anos: number[];
@@ -148,12 +161,32 @@ export function DashboardExecucao({
   onTentar: () => void;
   hoje: string;
   podeExportar: boolean;
+  /** O ESTADO INICIAL dos filtros (o ADM define — o ponto de partida, nunca um filtro). `null` = o padrão do sistema. */
+  inicialAdm: EstadoFiltros | null;
+  /** As VISÕES salvas dos filtros (as da pessoa e as públicas). */
+  visoes: EdicaoTabela[];
+  /** Configurar na Execução: publica visões e modera as públicas de outras pessoas. */
+  podePublicar: boolean;
+  admin: boolean;
 }) {
-  // O Período abre no ano mais recente com dados (os anos carregados seguem o Período — `anosDoIntervalo`).
-  const periodoPadrao = useMemo<Periodo>(() => (base.anos[0] ? { ano: base.anos[0] } : PERIODO_TODO), [base.anos]);
-  const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao);
-  const [filtros, setFiltros] = useState<FiltrosExec>({});
-  const [tipo, setTipo] = useState<TipoFiltroExec>([]);
+  // O período AUTOMÁTICO: o ano mais recente com dados (o mesmo com outros anos carregados — os anos seguem o Período).
+  const periodoAuto = useMemo<Periodo>(() => {
+    const a = Math.max(...base.disponiveis, ...base.anos);
+    return Number.isFinite(a) ? { ano: a } : PERIODO_TODO;
+  }, [base.disponiveis, base.anos]);
+  // Os filtros em VALORES ESTÁVEIS (textos e ids — `filtros-visao-core.ts`): valem em qualquer pacote carregado e são o
+  // que vai às visões. O que está FILTRADO é a diferença para a REFERÊNCIA: a visão aplicada ou o estado inicial do ADM.
+  const [inicial, setInicial] = useState<EstadoFiltros>(() => inicialAdm ?? ESTADO_VAZIO);
+  const [estado, setEstado] = useState<EstadoFiltros>(inicial);
+  const vis = useEdicoesTabela(CHAVE_VISOES, visoes, SEM_PADROES);
+  const visaoEstado = useMemo(() => (vis.atual ? coerceEstado(vis.atual.valor, REGRAS_FILTROS_EXEC) : null), [vis.atual]);
+  const referencia = visaoEstado ?? inicial;
+  const periodo = periodoEfetivo(estado.periodo, periodoAuto);
+  const tipo = estado.tipo as TipoFiltroExec;
+  const filtros = useMemo(() => filtrosParaChaves(base, estado.dims), [base, estado.dims]);
+  const difs = useMemo(() => diferencas(estado, referencia, REGRAS_FILTROS_EXEC, periodoAuto), [estado, referencia, periodoAuto]);
+  const filtrado = difs.length > 0 || vis.atual != null;
+  const setPeriodo = (p: Periodo) => setEstado((e) => ({ ...e, periodo: p }));
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
   const [gran, setGran] = useState<Granularidade>("dia");
   const [mais, setMais] = useState(false);
@@ -171,19 +204,7 @@ export function DashboardExecucao({
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
   const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
-  // Quando o FUNIL entra ou sai (o 1º filtro ligado, o último desligado), o cálculo espera a animação dele terminar: o
-  // cálculo é uma tarefa única e longa, que congelaria o deslizar no meio. As demais trocas seguem na hora.
-  const comFiltro =
-    JSON.stringify(periodo) !== JSON.stringify(periodoPadrao) || tipo.length > 0 || DIMS_EXEC.some((d) => (filtros[d] ?? []).length > 0);
-  const [liberado, setLiberado] = useState(pedido);
-  const funilAntes = useRef(comFiltro);
-  useEffect(() => {
-    if (funilAntes.current === comFiltro) return setLiberado(pedido);
-    funilAntes.current = comFiltro;
-    const id = window.setTimeout(() => setLiberado(pedido), duracaoMotionMs() + 40);
-    return () => window.clearTimeout(id);
-  }, [pedido, comFiltro]);
-  const adiado = useDeferredValue(liberado);
+  const adiado = useDeferredValue(pedido);
   const atrasado = adiado !== pedido || carregando;
   const intervalo = useMemo(() => intervaloDoPeriodo(adiado.periodo, hoje), [adiado.periodo, hoje]);
   const calc: Calculo = useMemo(() => calcular(base, intervalo, adiado.filtros, adiado.tipo), [base, intervalo, adiado.filtros, adiado.tipo]);
@@ -225,67 +246,114 @@ export function DashboardExecucao({
 
   // O TIPO é um filtro como os demais (o mesmo seletor), com as opções conectadas aos outros filtros. As OPÇÕES (pesadas)
   // seguem o cálculo; os marcados (leves) mudam na hora, sem refazer as opções a cada clique.
+  // O ESTADO INICIAL de cada dimensão (o da visão aplicada ou o do ADM) em chaves deste pacote: o seletor o mostra à parte
+  // e só marca o que difere dele — o inicial não é filtro.
+  const inicialChaves = useMemo(() => filtrosParaChaves(base, referencia.dims), [base, referencia.dims]);
+  const nomesUnidades = useNomesUnidades();
   const opcoesCampos = useMemo(
     () => ({
       tipo: OPCOES_TIPO.map((o) => ({ chave: o.chave, rotulo: o.rotulo, count: calc.opcoesTipo.get(o.chave) ?? 0 })),
-      ...Object.fromEntries(DIMS_EXEC.map((dim) => [dim, opcoesDim(base, calc, adiado.filtros, dim)])),
+      ...Object.fromEntries(
+        DIMS_EXEC.map((dim) => {
+          // Os valores do inicial ficam nas opções mesmo zerados (para voltar a eles e mostrar o nome).
+          const comInicial = { ...adiado.filtros, [dim]: [...new Set([...(adiado.filtros[dim] ?? []), ...(inicialChaves[dim] ?? [])])] };
+          const ops = opcoesDim(base, calc, comInicial, dim);
+          // Unidade no padrão do sistema: a sigla em cima e o NOME embaixo (a busca acha pelos dois).
+          return [dim, dim === "unidade" ? ops.map((o) => ({ ...o, detalhe: o.detalhe ?? nomesUnidades[o.rotulo.split(" — ")[0]] })) : ops];
+        }),
+      ),
     }),
-    [base, calc, adiado.filtros],
+    [base, calc, adiado.filtros, inicialChaves, nomesUnidades],
   );
   const campos = useMemo(
     () => [
-      { dim: "tipo", rotulo: "Tipo", opcoes: opcoesCampos.tipo, selecionados: [...tipo] },
+      { dim: "tipo", rotulo: "Tipo", opcoes: opcoesCampos.tipo, selecionados: [...tipo], inicial: [...referencia.tipo] },
       ...DIMS_EXEC.map((dim) => ({
         dim,
         rotulo: ROTULO_DIM[dim],
         opcoes: (opcoesCampos as Record<string, ReturnType<typeof opcoesDim>>)[dim],
         selecionados: [...(filtros[dim] ?? [])],
+        inicial: inicialChaves[dim] ?? [],
       })),
     ],
-    [opcoesCampos, filtros, tipo],
+    [opcoesCampos, filtros, tipo, referencia.tipo, inicialChaves],
   );
   const mudarFiltro = (dim: string, chaves: string[]) => {
-    if (dim === "tipo") return setTipo(chaves.filter((k): k is "ne" | "rp" => k === "ne" || k === "rp"));
-    setFiltros((f) => {
-      const n = { ...f };
-      if (chaves.length) n[dim as DimExec] = chaves;
-      else delete n[dim as DimExec];
-      return n;
+    if (dim === "tipo") return setEstado((e) => ({ ...e, tipo: chaves.filter((k) => k === "ne" || k === "rp") }));
+    const d = dim as DimExec;
+    setEstado((e) => {
+      const dims = { ...e.dims };
+      if (chaves.length) dims[d] = chaves.map((k) => valorDaChave(base, d, k));
+      else delete dims[d];
+      return { ...e, dims };
     });
   };
-  const periodoMudou = JSON.stringify(periodo) !== JSON.stringify(periodoPadrao);
-  const limparTudo = () => {
-    setFiltros({});
-    setPeriodo(periodoPadrao);
-    setTipo([]);
+  /** Os filtros FEITOS (o que difere da referência), um chip por parte: o período, o tipo e cada dimensão. */
+  const chips: ChipFiltro[] = difs.map((parte) => {
+    if (parte === "periodo") return { chave: parte, rotulo: "Período", valores: [rotuloPeriodo(periodo)] };
+    if (parte === "tipo") return { chave: parte, rotulo: "Tipo", valores: estado.tipo.map((v) => OPCOES_TIPO.find((o) => o.chave === v)?.rotulo ?? v) };
+    const d = parte as DimExec;
+    return { chave: parte, rotulo: ROTULO_DIM[d], valores: (estado.dims[d] ?? []).map((v) => rotuloOpcao(base, d, chaveDoValor(base, d, v))) };
+  });
+  const ausentes = useMemo(() => valoresAusentes(base, estado.dims), [base, estado.dims]);
+  const rotuloInicial = vis.atual ? `Visão: ${vis.atual.nome}` : "Estado inicial";
+  const inicialPeriodo = {
+    periodo: periodoEfetivo(referencia.periodo, periodoAuto),
+    rotulo: rotuloInicial,
+    texto: referencia.periodo ? undefined : periodoAuto.ano ? `Ano mais recente (${periodoAuto.ano})` : "Todo o período",
   };
-  /** Os filtros ligados (fora do padrão), um por linha no resumo: o período, o tipo e cada dimensão com os valores. */
-  const ativosResumo: { key: string; rotulo: string; valor: string; tirar: () => void }[] = [
-    ...(periodoMudou ? [{ key: "periodo", rotulo: "Período", valor: rotuloPeriodo(periodo), tirar: () => setPeriodo(periodoPadrao) }] : []),
-    ...(tipo.length ? [{ key: "tipo", rotulo: "Tipo", valor: OPCOES_TIPO.filter((o) => tipo.includes(o.chave)).map((o) => o.rotulo).join(", "), tirar: () => setTipo([]) }] : []),
-    ...DIMS_EXEC.flatMap((dim) => {
-      const l = filtros[dim] ?? [];
-      return l.length ? [{ key: `d:${dim}`, rotulo: ROTULO_DIM[dim], valor: l.map((k) => rotuloOpcao(base, dim, k)).join(", "), tirar: () => mudarFiltro(dim, []) }] : [];
-    }),
-  ];
-  // O funil SAI deslizando com o último resumo à vista: desmontá-lo na hora tirava a largura que a animação encolhe.
-  const ultimoResumo = useRef(ativosResumo);
-  if (ativosResumo.length) ultimoResumo.current = ativosResumo;
-  const resumoFunil = ativosResumo.length ? ativosResumo : ultimoResumo.current;
-  // A largura do funil (medida): a caixa anima `width` de 0 até ela — a transição de `grid-template-columns` (0fr ↔ 1fr)
-  // não interpola numa caixa de largura intrínseca e o funil saltava.
-  // Ref por função: o funil muda de lugar (gráfico ↔ tabela) e cada elemento novo é observado.
-  const [larguraFunil, setLarguraFunil] = useState(0);
-  const observaFunil = useRef<ResizeObserver | null>(null);
-  const funilRef = useCallback((el: HTMLSpanElement | null) => {
-    observaFunil.current?.disconnect();
-    observaFunil.current = null;
-    if (!el) return;
-    const medir = () => setLarguraFunil(el.offsetWidth);
-    medir();
-    observaFunil.current = new ResizeObserver(medir);
-    observaFunil.current.observe(el);
-  }, []);
+  const limparTudo = () => {
+    vis.escolher(null);
+    setEstado(inicial);
+  };
+  // As VISÕES e o ESTADO INICIAL: gravar avisa a falha (o painel segue como estava).
+  const { confirmar, confirmacao } = useConfirmacao();
+  const [salvando, setSalvando] = useState(false);
+  const [gravandoInicial, setGravandoInicial] = useState(false);
+  const [falha, setFalha] = useState<string | null>(null);
+  const tentar = async (f: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await f();
+      return true;
+    } catch (e) {
+      setFalha(e instanceof Error ? e.message : "Não foi possível concluir. Tente de novo.");
+      return false;
+    }
+  };
+  const aplicarVisao = (e: EdicaoTabela) => {
+    // Tocar na visão já aplicada desfaz o que mudou depois de aplicar.
+    vis.escolher(e.id);
+    setEstado(coerceEstado(e.valor, REGRAS_FILTROS_EXEC));
+  };
+  const excluirVisao = async (e: EdicaoTabela) => {
+    const texto = e.minha ? undefined : `É uma visão pública de ${e.autor}: ela some para todos.`;
+    if (!(await confirmar({ titulo: `Excluir a visão "${e.nome}"?`, texto, confirmar: "Excluir", perigo: true }))) return;
+    await tentar(() => vis.excluir(e));
+  };
+  const gravarInicial = async (novo: EstadoFiltros | null) => {
+    const resumo = chips.map((c) => `${c.rotulo}: ${c.valores.length ? c.valores.slice(0, 5).join(", ") + (c.valores.length > 5 ? ` +${c.valores.length - 5}` : "") : "Todos"}`).join(" · ");
+    const ok = await confirmar(
+      novo
+        ? { titulo: "Definir o estado inicial da Execução?", texto: `Passa a ser o ponto de partida desta tela para todos, sem aparecer como filtro. ${resumo}`, confirmar: "Definir" }
+        : { titulo: "Voltar ao padrão do sistema?", texto: "A Execução volta a abrir sem filtros, no ano mais recente, para todos.", confirmar: "Voltar ao padrão" },
+    );
+    if (!ok) return;
+    setGravandoInicial(true);
+    await tentar(async () => {
+      const r = await fetch("/api/admin/filtros-iniciais", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chave: "execucao", estado: novo }),
+      }).catch(() => null);
+      const j = (await r?.json().catch(() => null)) as { ok?: boolean; error?: string; estado?: unknown } | null;
+      if (!r?.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível gravar o estado inicial. Tente de novo.");
+      const salvo = j.estado ? coerceEstado(j.estado, REGRAS_FILTROS_EXEC) : ESTADO_VAZIO;
+      setInicial(salvo);
+      vis.escolher(null);
+      setEstado(salvo);
+    });
+    setGravandoInicial(false);
+  };
 
   const pontos: PontoTemporal[] = useMemo(
     () =>
@@ -294,13 +362,15 @@ export function DashboardExecucao({
         rotulo: p.rotulo,
         titulo: p.titulo,
         atual: p.atual,
+        // O balde de UM dia que é hoje: a pílula da data diz "Hoje".
+        hoje: p.de === hoje && p.ate === hoje,
         t: tDoBalde(p),
         valores:
           modo === "acumulado"
             ? { empenhado: reais(p.acEmpenhado), liquidado: reais(p.acLiquidado), pago: reais(p.acPago) }
             : { empenhado: reais(p.empenhado), liquidado: reais(p.liquidado), pago: reais(p.pago) },
       })),
-    [s.pontos, modo],
+    [s.pontos, modo, hoje],
   );
   const zoom = (fator: number) => todo && setJanela((j) => zoomJanela(j, todo, fator));
   // As datas que o gráfico MOSTRA no zoom: o início da janela até o fim dela (nunca depois de hoje nem do último dado).
@@ -376,7 +446,9 @@ export function DashboardExecucao({
   };
 
   return (
-    <div className={`space-y-[var(--gap-block)] transition-opacity ${atrasado ? "opacity-70" : ""}`} aria-busy={atrasado}>
+    // Filtrar NÃO esmaece a tela (o desenho escorre até os números novos — esmaecer antes era a "piscada"); só a CARGA de
+    // outros anos (rede) esmaece.
+    <div className={`space-y-[var(--gap-block)] transition-opacity ${carregando ? "opacity-70" : ""}`} aria-busy={atrasado}>
       {/* Sem linha de título: os indicadores abrem a tela (o nome fica para o leitor de tela). */}
       <h1 className="sr-only">Execução da despesa</h1>
 
@@ -508,13 +580,49 @@ export function DashboardExecucao({
       {/* TODOS os filtros à vista, logo abaixo dos indicadores, no cartão padrão dos filtros: o Período primeiro e as dimensões em colunas. */}
       <section
         aria-label="Filtros da execução"
-        className={`rounded-card border p-[var(--pad-card)] transition-colors ${ativosResumo.length ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
+        className={`rounded-card border p-[var(--pad-card)] transition-colors ${filtrado ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
       >
         <FiltrosDashboard
           campos={campos}
           onMudar={mudarFiltro}
+          rotuloInicial={rotuloInicial}
           grade
-          antes={<PeriodoPicker value={periodo} anos={base.disponiveis} meses={meses} onChange={setPeriodo} className="w-full min-w-0" />}
+          antes={[
+            <SelectField
+              key="visao"
+              compacto
+              label="Visão"
+              value={vis.atual?.id ?? ""}
+              disabled={vis.gravando || vis.minhas.length + vis.publicas.length === 0}
+              title={vis.atual ? `Visão aplicada: ${vis.atual.nome}${difs.length ? " (alterada)" : ""}` : "Aplicar uma visão salva"}
+              onChange={(e) => {
+                const v = [...vis.minhas, ...vis.publicas].find((x) => x.id === Number(e.target.value));
+                if (v) aplicarVisao(v);
+                else limparTudo();
+              }}
+            >
+              <option value="">{vis.minhas.length + vis.publicas.length ? "Estado inicial" : "Nenhuma salva"}</option>
+              {vis.minhas.length > 0 && (
+                <optgroup label="Minhas">
+                  {vis.minhas.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.nome}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {vis.publicas.length > 0 && (
+                <optgroup label="Públicas">
+                  {vis.publicas.map((v) => (
+                    <option key={v.id} value={v.id} data-detalhe={v.autor}>
+                      {v.nome}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </SelectField>,
+            <PeriodoPicker key="periodo" value={periodo} anos={base.disponiveis} meses={meses} onChange={setPeriodo} inicial={inicialPeriodo} className="w-full min-w-0" />,
+          ]}
         />
       </section>
       {erro && <ErroCarga msg={erro} onTentar={onTentar} kind="warn" />}
@@ -547,47 +655,40 @@ export function DashboardExecucao({
                 ]}
               />,
           ];
-          // O resumo dos filtros ligados (o MESMO funil das tabelas): entra e sai DESLIZANDO — o grupo cresce ou encolhe suave,
-          // sem empurrar de repente os botões ao lado.
+          // Os FILTROS e as VISÕES (sempre à vista — o gatilho mostra quantos filtros e a visão aplicada).
           const funil = (
-            <span
-              className="-mt-1.5 block shrink-0 overflow-hidden pt-1.5 transition-[width,opacity] duration-[var(--motion-duration)] ease-out motion-reduce:transition-none"
-              style={{ width: ativosResumo.length > 0 ? larguraFunil : 0, opacity: ativosResumo.length > 0 ? 1 : 0 }}
-              aria-hidden={ativosResumo.length === 0 || undefined}
-              inert={ativosResumo.length === 0 || undefined}
-            >
-              {/* O corte (para o deslizar) com respiro em cima — a margem negativa devolve o lugar — e o respiro à direita
-                  por DENTRO: o selo do número fica inteiro e, recolhido, nada sobra de largura. */}
-              <span className="block w-max">
-                <span ref={funilRef} className="flex pr-2">
-                  {resumoFunil.length > 0 && (
-                    <FiltrosAtivos
-                      titulo="Filtros ligados"
-                      colunas={resumoFunil.map((x) => ({
-                        key: x.key,
-                        header: (
-                          <span title={`${x.rotulo}: ${x.valor}`}>
-                            <span className="text-muted">{x.rotulo}:</span> {x.valor}
-                          </span>
-                        ),
-                      }))}
-                      onLimparColuna={(k) => ativosResumo.find((x) => x.key === k)?.tirar()}
-                      onLimpar={limparTudo}
-                    />
-                  )}
-                </span>
-              </span>
-            </span>
+            <PainelFiltros
+              chips={chips}
+              visao={vis.atual ? { id: vis.atual.id, nome: vis.atual.nome, alterada: difs.length > 0, minha: vis.atual.minha } : null}
+              minhas={vis.minhas}
+              publicas={vis.publicas}
+              podeModerar={podePublicar}
+              gravando={vis.gravando || gravandoInicial}
+              avisoAusentes={ausentes}
+              onTirar={(parte) => setEstado((e) => voltarParte(e, referencia, parte))}
+              onLimpar={limparTudo}
+              onTirarVisao={limparTudo}
+              onAplicar={aplicarVisao}
+              onExcluirVisao={(e) => void excluirVisao(e)}
+              onSalvar={() => setSalvando(true)}
+              inicial={
+                admin
+                  ? {
+                      definido: partesDefinidas(inicial) > 0,
+                      onDefinir: () => void gravarInicial(paraGuardar(estado, REGRAS_FILTROS_EXEC, periodoAuto)),
+                      onRestaurar: () => void gravarInicial(null),
+                    }
+                  : undefined
+              }
+            />
           );
-          // À direita: o funil (entra à esquerda), os avisos e a ajuda.
+          // À direita: os filtros, os avisos e a ajuda.
           const direita = (
-            <>
+            <span className="flex items-center gap-1">
               {funil}
-              <span className="flex items-center gap-1">
-                <Avisos titulo="Avisos dos dados" avisos={avisos} />
-                <AjudaExecucao />
-              </span>
-            </>
+              <Avisos titulo="Avisos dos dados" avisos={avisos} />
+              <AjudaExecucao />
+            </span>
           );
           const botaoTabela = (
             <Button
@@ -610,7 +711,7 @@ export function DashboardExecucao({
                   <div className="ml-auto flex items-center">{direita}</div>
                 </div>
                 <DataTable
-                  rows={s.pontos}
+                  rows={[...s.pontos].reverse()}
                   getKey={(p) => p.chave}
                   density="compact"
                   linhasSalvas="execucao-grafico"
@@ -624,7 +725,7 @@ export function DashboardExecucao({
           return (
             <div className={CARTAO_GRAFICO}>
               {/* Os controles sobre o desenho, em vidro; em telas menores, numa escala menor (cabem sem cobrir o gráfico). */}
-              <div className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
+              <div data-reserva-dica="topo" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
                 {/* O tipo e o agrupamento: dois controles independentes, cada um em vidro sobre o desenho. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <div className={`pointer-events-auto ${VIDRO}`}>{tipoGran[0]}</div>
@@ -686,7 +787,6 @@ export function DashboardExecucao({
               <SerieTemporal
                 pontos={pontos}
                 preencher
-                reservaRotulos={RESERVA_CONTROLES}
                 altura={420}
                 ajustarY={!!janela && modo === "acumulado"}
                 series={seriesVistas}
@@ -704,9 +804,10 @@ export function DashboardExecucao({
                   return pa && pb ? dicaDoTrecho(s.pontos, pa, pb, rotuloGran, temLiq, temPag) : [];
                 }}
               />
-              {/* A lupa, o restaurar e a tabela empilhados no canto inferior direito, à mesma distância da borda dos demais. */}
-              <div className={`pointer-events-none absolute right-2 bottom-2 z-10 ${ESCALA_PILHA}`}>
-                <div className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO}`}>
+              {/* A lupa, o restaurar e a tabela empilhados à direita, ACIMA da linha das datas (a mesma distância da borda e da
+                  pílula da última data) — a última data fica à vista. A escala vai no conteúdo: a posição não encolhe junto. */}
+              <div className="pointer-events-none absolute right-2 z-10" style={{ bottom: TOPO_DAS_DATAS }}>
+                <div data-reserva-dica="lado" className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO} ${ESCALA_PILHA}`}>
                   <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
                     <IconZoom className="h-4 w-4" />
                   </Button>
@@ -745,9 +846,31 @@ export function DashboardExecucao({
           onClose={() => setOrigem(null)}
         />
       )}
+      {salvando && (
+        <SalvarEdicao
+          aberto
+          termo="visão"
+          semPadrao
+          placeholder="Ex.: Saúde — restos a pagar"
+          atual={vis.atual}
+          ehPadrao={false}
+          gravando={vis.gravando}
+          podePublicar={podePublicar}
+          onFechar={() => setSalvando(false)}
+          onSalvar={(d) =>
+            void tentar(() => vis.salvar({ ...d, padrao: false, valor: paraGuardar(estado, REGRAS_FILTROS_EXEC, periodoAuto) })).then((feito) => feito && setSalvando(false))
+          }
+        />
+      )}
+      {confirmacao}
+      {falha && <AvisoFlutuante kind="danger" titulo={falha} onClose={() => setFalha(null)} duracao={9000} />}
     </div>
   );
 }
+
+const CHAVE_VISOES = "execucao:filtros";
+/** As visões da Execução não têm "padrão pessoal": o ponto de partida é o estado inicial do ADM. */
+const SEM_PADROES: Record<string, unknown> = {};
 
 type PontoDaSerie = ReturnType<typeof serie>["pontos"][number];
 
@@ -1081,6 +1204,7 @@ function OrigemExecucao({
         {aba === "empenhos" ? (
           <DataTable
             rows={linhasEmp}
+            ordemInicial={{ key: "data", dir: "desc" }}
             getKey={(e) => e.i}
             density="compact"
             linhasSalvas="origem-execucao"
@@ -1094,6 +1218,7 @@ function OrigemExecucao({
         ) : (
           <DataTable
             rows={linhasEv}
+            ordemInicial={{ key: "data", dir: "desc" }}
             getKey={(e) => e.chave}
             density="compact"
             linhasSalvas="origem-execucao"
@@ -1171,6 +1296,11 @@ function AjudaExecucao() {
         Passe o mouse para ver os valores de cada ponto. Um clique MARCA o ponto (a dica fica parada e dá para passar o mouse sobre ela); um
         segundo clique no mesmo ponto — ou “Ver os dados completos” — abre a origem. Esc ou um clique fora desmarca. A lupa muda o período à
         vista e o botão de camadas mostra os mesmos números em tabela.
+      </TopicoAjuda>
+      <TopicoAjuda icone={<IconVisao className="h-4 w-4" />} titulo="Filtros e visões">
+        O funil do gráfico mostra cada filtro feito num chip — o × devolve aquela parte ao estado inicial. Salve as escolhas como uma VISÃO
+        (só para você ou, com Configurar, pública) e aplique de novo com um toque: ela vira um filtro só. Mudou algo depois? A visão fica
+        “alterada”. O estado inicial é o ponto de partida definido pelo administrador e não aparece como filtro.
       </TopicoAjuda>
       <TopicoAjuda icone={<IconDatabase className="h-4 w-4" />} titulo="De onde vêm e o que fica fora">
         Os cards de Empenhos, Liquidações e Pagamentos, ligados pelo número do empenho; só os registros da sua unidade e só as etapas cujas telas

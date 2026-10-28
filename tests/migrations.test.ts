@@ -1257,3 +1257,23 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(idx.includes("usuarios_email_uq"));
   });
 });
+
+describe("0161: a configuração CENTRAL das importações vem do card", () => {
+  it("semeia a chave `importacoes` do card ligado e não sobrescreve a que já existe", () => {
+    const db = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0161")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO configuracoes (id, dados) SELECT 1, '{"tema":1}' WHERE NOT EXISTS (SELECT 1 FROM configuracoes WHERE id = 1)`);
+    db.exec(`UPDATE configuracoes SET dados = '{"tema":1}' WHERE id = 1`);
+    db.exec(`INSERT INTO empenho_cards (nome, ativa, frequencia_min, dias_uteis, queda_soma, removidos) VALUES ('A', 0, 60, 1, 80, 'marcar')`);
+    db.exec(`INSERT INTO empenho_cards (nome, ativa, frequencia_min, dias_uteis, queda_soma, removidos) VALUES ('B', 1, 240, 0, 50, 'apagar')`);
+    const m = readFileSync(join(DIR, arquivos.find((f) => f.startsWith("0161")) as string), "utf8");
+    db.exec(m);
+    const ler = () => JSON.parse(String((db.prepare("SELECT dados FROM configuracoes WHERE id = 1").get() as { dados: string }).dados));
+    const d = ler();
+    assert.equal(d.tema, 1);
+    assert.deepEqual(d.importacoes, { ativa: true, frequenciaMin: 240, diasUteis: false, horaInicio: "07:00", horaFim: "19:00", quedaSoma: 50, quedaRegistros: 90, removidos: "apagar" });
+    db.exec(`UPDATE empenho_cards SET frequencia_min = 30`);
+    db.exec(m);
+    assert.equal(ler().importacoes.frequenciaMin, 240);
+  });
+});

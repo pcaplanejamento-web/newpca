@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { centiLeituras } from "@/db/schema";
 import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -6,11 +8,11 @@ import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-ca
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
-import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti } from "@/lib/empenhos-core";
+import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti, QUEM_AUTO } from "@/lib/empenhos-core";
 import { leituraDoLote } from "@/lib/empenhos-fragmentos";
 import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
 import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
-import { comandoConduzir, comandoExcluirPassos, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
+import { comandoConduzir, comandoExcluirPassos, consultaAssinaturas, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -34,7 +36,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if ("resp" in a) return a.resp;
   const negado = recusa(g.acesso, telaDoCard(a.card), "importar");
   if (negado) return negado;
-  const loteId = intId(new URL(req.url).searchParams.get("lote") ?? "");
+  const busca = new URL(req.url).searchParams;
+  // As ASSINATURAS gravadas do ano (chave → assinatura): o navegador manda inteiro só o que mudou. Um texto montado no banco,
+  // repassado como veio (o Worker não lê nem serializa milhares de linhas).
+  const anoAssinaturas = intId(busca.get("assinaturas") ?? "");
+  if (anoAssinaturas) {
+    // Em PÁGINAS (`depois` = o último id da página anterior; `ultimo` null = acabou): cada texto bem abaixo dos 2 MB do D1.
+    const depois = Math.max(0, Math.trunc(Number(busca.get("depois") ?? 0)) || 0);
+    const [r] = await consultaAssinaturas(getDb(), a.card.tipo, a.card.id, anoAssinaturas, depois);
+    return new Response(`{"ok":true,"assinaturas":${r?.j ?? "{}"},"ultimo":${r?.ultimo == null ? "null" : Number(r.ultimo)}}`, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  }
+  const loteId = intId(busca.get("lote") ?? "");
   if (loteId) {
     const lote = await getLote(loteId, a.card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
@@ -101,6 +113,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (corpo.condutor || corpo.acao !== "cancelar") {
     const [conduz] = await comandoConduzir(db, lote.id, corpo.condutor ?? "");
     if (!conduz) return erro("Esta importação está em andamento em outra aba, com outra pessoa ou na atualização automática — acompanhe por lá ou espere 2 minutos sem atividade dela.", 409);
+    // A aba que assume o lote descarta a leitura fragmentada que a automática deixou no meio (a página volta a ser lida
+    // por quem conduz agora — nunca duas leituras da mesma página no lote).
+    if (lote.iniciadoPor === QUEM_AUTO) await db.delete(centiLeituras).where(eq(centiLeituras.loteId, lote.id));
   } else if (lote.conduzido) {
     return erro("Esta importação está em andamento em outra aba — interrompa por lá.", 409);
   }
@@ -117,14 +132,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // a falha (rede, status, grande demais) já é o passo registrado, na resposta JSON de sempre.
         const b = await baixarPaginaDoLote(card, lote, periodo, corpo.pagina);
         if (!b.ok) return ok({ lote: await getLote(lote.id, card.id), ...b.r });
-        return new Response(new Blob(b.pedacos as BlobPart[]), {
+        return new Response(b.corpo, {
           headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-centi-status": String(b.status), "x-centi-ms": String(b.ms) },
         });
       }
       const r =
         corpo.acao === "falha"
           ? await falhaDaPagina(card, lote, periodo, corpo.pagina, { mensagem: corpo.mensagem, status: corpo.status, bytes: corpo.bytes, ms: corpo.ms })
-          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, resumo: corpo.resumo });
+          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, iguais: corpo.iguais, resumo: corpo.resumo });
       // A parte do meio não muda a contagem do lote (só a última reconta): não relê o lote.
       return ok({ lote: r.parcial ? null : await getLote(lote.id, card.id), ...r });
     } catch (e) {

@@ -350,9 +350,79 @@ const chaveSemEmp = (d: DimExec, org: number): string => (d === "orgao" ? String
 export function rotuloOpcao(b: BaseExec, d: DimExec, chave: string): string {
   if (chave === CHAVE_SEM_EMPENHO) return ROTULO_SEM_EMPENHO;
   if (chave === CHAVE_VAZIO) return ROTULO_VAZIO;
+  if (chave.startsWith(PREFIXO_AUSENTE)) return chave.slice(PREFIXO_AUSENTE.length);
   if (d === "orgao") return b.orgaos.get(Number(chave))?.sigla || `Órgão ${chave}`;
   return b.dic[d][Number(chave)] ?? ROTULO_VAZIO;
 }
+// ---------------------------------------------------------------------------------------------------------------
+// Valores ESTÁVEIS dos filtros (as visões salvas e o estado inicial do ADM)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** As regras do lugar para as visões (`filtros-visao-core.ts`): as dimensões, na ordem dos chips, e os tipos. */
+export const REGRAS_FILTROS_EXEC = { dims: DIMS_EXEC, tipos: ["ne", "rp"] } as const;
+
+/** A chave de um valor guardado que o pacote carregado NÃO tem (nunca casa um registro; o rótulo é o próprio valor). */
+export const PREFIXO_AUSENTE = "?";
+
+const reversos = new WeakMap<BaseExec, Partial<Record<DimDicionario, Map<string, number>>>>();
+function reverso(b: BaseExec, d: DimDicionario): Map<string, number> {
+  let porDim = reversos.get(b);
+  if (!porDim) {
+    porDim = {};
+    reversos.set(b, porDim);
+  }
+  let m = porDim[d];
+  if (!m) {
+    m = new Map();
+    for (let i = 0; i < b.dic[d].length; i++) {
+      const t = b.dic[d][i];
+      if (t != null && !m.has(t)) m.set(t, i);
+    }
+    porDim[d] = m;
+  }
+  return m;
+}
+
+/**
+ * O valor ESTÁVEL de uma chave de opção: o TEXTO do dicionário (o índice muda a cada pacote — outros anos, outra
+ * numeração), o id do órgão e as chaves especiais como são. É o que a tela guarda e o que vai às visões.
+ */
+export function valorDaChave(b: BaseExec, d: DimExec, chave: string): string {
+  if (chave === CHAVE_VAZIO || chave === CHAVE_SEM_EMPENHO || d === "orgao") return chave;
+  if (chave.startsWith(PREFIXO_AUSENTE)) return chave.slice(PREFIXO_AUSENTE.length);
+  return b.dic[d][Number(chave)] ?? chave;
+}
+
+/** A chave de opção de um valor estável NESTE pacote (o que ele não tem = `?valor`, que nunca casa — o filtro segue
+ * valendo e mostra zero, em vez de sumir sem aviso). */
+export function chaveDoValor(b: BaseExec, d: DimExec, valor: string): string {
+  if (valor === CHAVE_VAZIO || valor === CHAVE_SEM_EMPENHO) return valor;
+  if (d === "orgao") return /^\d{1,9}$/.test(valor) ? valor : PREFIXO_AUSENTE + valor;
+  const i = reverso(b, d).get(valor);
+  return i == null ? PREFIXO_AUSENTE + valor : String(i);
+}
+
+/** Os filtros guardados (valores estáveis) nas chaves deste pacote. */
+export function filtrosParaChaves(b: BaseExec, dims: Readonly<Record<string, readonly string[]>>): FiltrosExec {
+  const f: FiltrosExec = {};
+  for (const d of DIMS_EXEC) {
+    const l = dims[d];
+    if (l?.length) f[d] = l.map((v) => chaveDoValor(b, d, v));
+  }
+  return f;
+}
+
+/** Quantos valores filtrados o pacote carregado não tem (o aviso da tela). O órgão vale pelo cadastro dos órgãos citados. */
+export function valoresAusentes(b: BaseExec, dims: Readonly<Record<string, readonly string[]>>): number {
+  let n = 0;
+  for (const d of DIMS_EXEC)
+    for (const v of dims[d] ?? []) {
+      const k = chaveDoValor(b, d, v);
+      if (k.startsWith(PREFIXO_AUSENTE) || (d === "orgao" && !b.orgaos.has(Number(k)))) n++;
+    }
+  return n;
+}
+
 /** O detalhe da opção (o nome do órgão, quando a sigla é o rótulo). */
 export function detalheOpcao(b: BaseExec, d: DimExec, chave: string): string | undefined {
   if (d !== "orgao") return undefined;

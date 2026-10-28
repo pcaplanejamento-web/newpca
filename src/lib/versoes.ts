@@ -35,6 +35,170 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.243.0",
+    data: "2026-10-28",
+    titulo: "Mesa: todo dado vira coluna, seletor de colunas e visões com estado inicial",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Todos os dados do protocolo e do DFD viram colunas nas tabelas de Protocolos, DFDs e Itens (nas duas Mesas): interessado, CPF/CNPJ, observação, objeto, setor, contato do responsável, nº do contrato/ARP/licitação, datas e o texto de cada seção do DFD. Abrem ocultas e só são lidas quando a coluna é ligada; os dados pessoais e os valores seguem o papel.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Seletor de colunas no rodapé das tabelas: marque as colunas que quer ver, com Todos e Nenhum.", link: "/painel/mesa?vista=protocolos" },
+      { tipo: "melhoria", area: "Mesa", texto: "O painel de filtros e visões (o mesmo da Execução) nas tabelas: os filtros em chips, as visões salvas (colunas, filtros e ordem), a sua visão padrão e, para o administrador, o estado inicial para todos — a escolha da própria pessoa vence.", link: "/painel/mesa?vista=itens" },
+    ],
+  },
+  {
+    versao: "1.242.1",
+    data: "2026-10-28",
+    titulo: "Atualização automática dentro do limite do banco",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "As páginas sem mudança que a atualização automática pula numa execução agora seguem um orçamento contado de consultas ao banco (8 por execução nos empenhos, 5 nas liquidações e pagamentos) — nunca passa do limite do plano e a última página nunca falha em silêncio.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.242.0",
+    data: "2026-10-28",
+    titulo: "Atualização automática rápida e segura em segundo plano",
+    mudancas: [
+      { tipo: "melhoria", area: "Configurações", texto: "A atualização automática não refaz o que não mudou: a página da Centi idêntica à da última volta é reconhecida pela assinatura dos dados e não é relida nem regravada — várias por execução. Uma volta completa cai de horas para cerca de uma hora.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "A primeira importação depois da v1.241.0 não reescreve mais todos os registros: os já gravados e iguais só recebem a assinatura (protege o limite diário de gravações do banco).", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Partes menores e de tamanho fixo também para os registros iguais, e as assinaturas baixadas em páginas — a importação pela tela fica estável em cards grandes.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "No histórico das importações, quantas páginas vieram sem mudança.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.241.0",
+    data: "2026-10-28",
+    titulo: "Importações rápidas que só gravam o que mudou, com histórico e “Importar tudo”",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "Fim dos passos em “Erro” na importação: o sistema estourava o tempo de processamento ao conferir partes grandes. Agora cada parte é pequena, a conferência é por assinatura e as partes vão em paralelo.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Muito mais rápida: o ano inteiro num pedido (liquidações e pagamentos: um por órgão, todos ao mesmo tempo); o período grande demais é dividido sozinho.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Só o que mudou é gravado: os registros iguais ao que já está no sistema não são reescritos — o resumo diz quantos vieram iguais.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "novo", area: "Configurações", texto: "“Importar tudo”: todos os cards de uma vez, cada um no seu lote, em paralelo — empenhos primeiro, depois liquidações e pagamentos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Mais segurança: o que some da Centi fica “ausente” e continua valendo; só sai (ou é marcado como removido) se faltar de novo na importação seguinte.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Empenhos", texto: "Alterações na Centi: no detalhe de cada empenho, liquidação e pagamento, o histórico de cada campo que mudou (antes → depois), com a data e a importação.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.240.1",
+    data: "2026-10-28",
+    titulo: "Auditoria das importações: fila do cron mais robusta e telas sem travas",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "Em segundo plano, um card com problema não prende mais a fila: ele espera a próxima vez e os outros seguem.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Desligar a atualização automática encerra as importações que ela tinha começado — nenhum card fica “Importando” para sempre.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Uma importação aberta na tela e a automática começando juntas no mesmo card não dão mais erro: a segunda segue com a que entrou primeiro.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Na aba Importações: a falha ao carregar a atualização automática mostra “Tentar de novo”, o card aberto acompanha o fim de uma importação automática e a exclusão recusada diz o motivo.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.240.0",
+    data: "2026-10-28",
+    titulo: "Atualização automática central: uma configuração e uma fila para todas as importações",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Em Importações, o quadro “Atualização automática e regras” liga/desliga, define frequência, horário e dias úteis e as regras da conferência (queda da soma e dos registros, o que fazer com o que a Centi não traz mais) — UMA vez, para empenhos, liquidações e pagamentos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Em segundo plano, os cards entram numa fila única: empenhos primeiro (é deles que vem a unidade das liquidações e dos pagamentos), depois liquidações e pagamentos, cada card na sua vez.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "A Configuração de cada card fica só com o que é dele: nome, anos e a integração. O que estava ligado num card foi trazido para a configuração central.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.239.0",
+    data: "2026-10-28",
+    titulo: "Todas as importações num só lugar: Configurações → Importações",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba “Importações”: os cards de empenhos, liquidações e pagamentos num lugar só. Tocar num card abre ali mesmo a Importação, os Vínculos (empenhos) e a Configuração.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A tela fica só com os dados: a tabela de todos os empenhos. O atalho no título leva às importações (Administrador).", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Liquidações", texto: "A tela fica só com os dados: a tabela de todas as liquidações; as importações estão em Configurações.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Pagamentos", texto: "A tela fica só com os dados: a tabela de todos os pagamentos; as importações estão em Configurações.", link: "/painel/pagamentos" },
+      { tipo: "correcao", area: "Sistema", texto: "Listas de escolha dentro de tabelas largas não alargam mais a página no celular.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.238.0",
+    data: "2026-10-28",
+    titulo: "Importações da Centi blindadas: nada esgota a cota nem trava",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "A conferência de “há dado novo” (a cada minuto em cada aba aberta) lia o histórico inteiro de alterações; agora lê só o último registro — milhares de vezes menos leitura do banco.", link: "/painel" },
+      { tipo: "correcao", area: "Empenhos", texto: "A atualização automática não dá mais como abandonada uma importação que ainda avança (página grande lida em partes), espera mais a cada erro de rede (1, 2, 4… min) e só desiste depois de 30 minutos sem avanço.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Uma letra acentuada partida entre duas partes de uma resposta grande da Centi mudava o número do empenho e o dava como removido; agora a parte termina antes da letra.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Gravar a mesma importação duas vezes (o pedido repetido pela rede) não faz mais nada: antes podia marcar o ano inteiro como removido.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Liquidações", texto: "A atualização automática de liquidações e pagamentos alterna entre todos os anos do card (antes lia só o ano atual) e o ano que falhou espera 12 horas antes de nova tentativa (a manual libera).", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Pagamentos", texto: "“Pedidos demais” e “tempo esgotado” da Centi viram nova tentativa, nunca o fim da importação; resposta fora do formato encerra na hora em vez de repetir.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A automática não assume mais a importação manual (esperando a confirmação de uma queda ou pausada), não deixa texto grande sobrando no banco e registra no histórico só o fim de cada importação.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Execução", texto: "Depois de cada importação, liquidações e pagamentos são realinhados só no ano e no card importados (antes, as tabelas inteiras), e a lista de anos é lida uma vez por importação.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.237.1",
+    data: "2026-10-26",
+    titulo: "Sistema de volta: leitura mais leve + todos os anos juntos",
+    mudancas: [
+      { tipo: "correcao", area: "Empenhos", texto: "As telas paravam com “O servidor não conseguiu montar esta tela”: a lista de anos dos empenhos lia o banco linha a linha a cada abertura e esgotava a cota diária de leituras. Agora lê uma vez por ano (centenas de vezes menos) e fica guardada até uma importação nova.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "A tabela abre em “Todos os anos”: os empenhos de todos os anos importados juntos (coluna Ano para filtrar) — ordenar a data, crescente ou decrescente, passa por todos os anos. Escolher um ano no seletor segue valendo.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Liquidações", texto: "A tabela abre em “Todos os anos”, com a coluna Ano; as liquidações ficam guardadas no servidor até uma importação nova.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Pagamentos", texto: "A tabela abre em “Todos os anos”, com a coluna Ano; os pagamentos ficam guardados no servidor até uma importação nova.", link: "/painel/pagamentos" },
+    ],
+  },
+  {
+    versao: "1.237.0",
+    data: "2026-10-26",
+    titulo: "Empenhos, liquidações e pagamentos numa tabela única",
+    mudancas: [
+      { tipo: "novo", area: "Empenhos", texto: "A tela abre em “Dados”: todos os empenhos de todos os cards numa tabela só (o mesmo empenho em dois cards aparece uma vez; a coluna Card diz de onde veio). Os cards ficam em “Importações”.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Liquidações", texto: "A tela abre em “Dados”: todas as liquidações de todos os cards numa tabela só; tocar numa linha abre a liquidação com o empenho ligado. Os cards ficam em “Importações”.", link: "/painel/liquidacoes" },
+      { tipo: "novo", area: "Pagamentos", texto: "A tela abre em “Dados”: todos os pagamentos de todos os cards numa tabela só; tocar numa linha abre o pagamento. Os cards ficam em “Importações”.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Tudo da data mais recente à mais antiga: as tabelas, a execução no banner do empenho (liquidações e pagamentos) e os registros da origem do dashboard.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.236.2",
+    data: "2026-10-26",
+    titulo: "Gráfico da Execução: caixa sem corte e trecho só arrastando",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "A caixa do ponto marcado nunca é cortada: sem espaço, só os números rolam por dentro — o título, “Ver os dados completos” e o fechar ficam sempre à vista.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Um trecho do gráfico é selecionado só clicando, segurando e arrastando (também com o dedo, de lado); clicar em outro ponto apenas leva a marcação para ele.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.236.1",
+    data: "2026-10-25",
+    titulo: "Gráfico da Execução: a caixa do ponto marcado ao lado dos botões",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "A caixa de informações do ponto marcado (e a que segue o mouse) fica ao lado da lupa e dos botões do gráfico e abaixo dos controles do alto, com o recuo padrão — nunca por cima deles; sem espaço, rola por dentro.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.236.0",
+    data: "2026-10-25",
+    titulo: "Gráfico da Execução: sem piscar, a última data à vista e datas clicáveis",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "Filtrar não faz mais o gráfico piscar: o desenho escorre direto até os números novos, e as datas que continuam à vista ficam firmes ao trocar Dia, Semana, Mês ou o zoom.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "A última data do gráfico aparece no canto direito (“Hoje” quando é o dia de hoje); a lupa e os botões ao lado subiram para ficar acima dela.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "As datas do gráfico são clicáveis: tocar marca o ponto, tocar de novo abre os dados e tocar em outra data compara o trecho — como no próprio gráfico.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.235.0",
+    data: "2026-10-25",
+    titulo: "Filtros: o estado inicial à parte e a Unidade no padrão do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Filtros", texto: "Cada filtro mostra o estado inicial numa linha discreta no topo — “Todos” em destaque quando é geral; o resto rola de lado — com o ✓ de em uso ou o botão de voltar a ele.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "O estado inicial definido pelo administrador não marca mais os filtros nem destaca o cartão: só o que muda a partir dele conta como filtro.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "O filtro de Unidade segue o padrão do sistema: a sigla com o nome embaixo e a busca pelos dois.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "O Período também mostra o estado inicial (ex.: ano mais recente) e a Visão vazia passa a se chamar “Estado inicial”.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.234.0",
+    data: "2026-10-25",
+    titulo: "Execução: filtros em chips, visões salvas e o estado inicial",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "O botão de filtros do gráfico fica sempre à mão e mostra cada filtro feito num chip; o × devolve aquela parte ao ponto de partida.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "Visões: salve as escolhas com um nome (só para você ou pública, com Configurar) e aplique de novo com um toque — a visão vira um filtro só e fica “alterada” se algo mudar depois.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "O administrador define o estado inicial da tela: é o ponto de partida de todos e não aparece como filtro.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Execução", texto: "Filtro Visão no cartão de filtros: escolha uma visão salva direto ali (ou Nenhuma).", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Filtros", texto: "Os seletores de filtro mostram quantos valores estão marcados num selo, e o nome do filtro não fica mais cortado.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "Um filtro de unidade, elemento ou credor continua certo ao trocar o período para outro ano (antes podia apontar outro valor).", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Papéis", texto: "A tela Execução ganhou a ação Configurar (publicar visões e moderar as públicas), dada a quem configura Empenhos.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.233.1",
     data: "2026-10-25",
     titulo: "Indício de janela anônima só para o ADM",

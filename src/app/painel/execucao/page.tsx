@@ -4,7 +4,9 @@ import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { getDb } from "@/lib/db";
 import { fontesDoAcesso } from "@/lib/execucao-dados";
+import { carregarEdicoes } from "@/lib/edicoes-tabela";
 import { consultaVersaoExecucao } from "@/lib/execucao-sql";
+import { getFiltrosIniciais } from "@/lib/filtros-iniciais";
 import { dataIsoBrasilia } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +19,19 @@ export default async function ExecucaoPage() {
   if (r.bloqueio) return r.bloqueio;
   const f = fontesDoAcesso(r.acesso);
   if (!f.empenhos) return <AcessoRestrito mensagem="O dashboard da execução precisa do acesso à tela Empenhos. Peça ao administrador." />;
-  const versao = await consultaVersaoExecucao(getDb());
+  // O ESTADO INICIAL dos filtros (o ADM define) e as VISÕES salvas (as da pessoa e as públicas) — `execucao:filtros`.
+  const [versao, iniciais, edicoes] = await Promise.all([consultaVersaoExecucao(getDb()), getFiltrosIniciais(), carregarEdicoes(r.acesso.u.id, "execucao:")]);
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
-      <ExecucaoView versao={versao} hoje={dataIsoBrasilia(new Date().toISOString())} podeExportar={r.pode.exportar} />
+      <ExecucaoView
+        versao={versao}
+        hoje={dataIsoBrasilia(new Date().toISOString())}
+        podeExportar={r.pode.exportar}
+        inicialAdm={iniciais.execucao ?? null}
+        visoes={edicoes.lista}
+        podePublicar={r.pode.configurar}
+        admin={r.acesso.u.admin}
+      />
     </PermissaoExportar>
   );
 }

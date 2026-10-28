@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
+import { mesmaLista } from "@/lib/filtros-visao-core";
 import { Button } from "./Button";
 import { IconFilter } from "./icons";
 import { Modal } from "./Modal";
@@ -8,7 +9,8 @@ import { SeletorMultiplo } from "./SeletorMultiplo";
 
 /** Uma opção do filtro: a chave (o que o filtro guarda), o texto e quantos itens. */
 export type OpcaoFiltroDash = { chave: string; rotulo: string; count: number; detalhe?: string };
-export type CampoFiltroDash = { dim: string; rotulo: string; opcoes: OpcaoFiltroDash[]; selecionados: string[] };
+/** `inicial` = o ESTADO INICIAL da dimensão (vazio = "Todos"): não é filtro — o seletor só marca o que difere dele. */
+export type CampoFiltroDash = { dim: string; rotulo: string; opcoes: OpcaoFiltroDash[]; selecionados: string[]; inicial?: readonly string[] };
 
 /**
  * FILTROS DO DASHBOARD — uma linha de menus suspensos de seleção MÚLTIPLA (busca, marcar todos, limpar), um por
@@ -25,6 +27,7 @@ export function FiltrosDashboard({
   principais,
   grade = false,
   antes,
+  rotuloInicial,
 }: {
   campos: CampoFiltroDash[];
   onMudar: (dim: string, chaves: string[]) => void;
@@ -34,14 +37,16 @@ export function FiltrosDashboard({
   principais?: readonly string[];
   /** Todos à vista em colunas (sem "Mais filtros"). */
   grade?: boolean;
-  /** No `grade`: a 1ª célula (ex.: o Período, que filtra o tempo). */
-  antes?: ReactNode;
+  /** No `grade`: as primeiras células (ex.: a Visão e o Período, que filtra o tempo). */
+  antes?: ReactNode | ReactNode[];
+  /** O nome do estado inicial nos painéis (ex.: "Estado inicial" ou "Visão: X"). */
+  rotuloInicial?: string;
 }) {
   const [mais, setMais] = useState(false);
-  if (grade) return <FiltrosEmGrade campos={campos} onMudar={onMudar} antes={antes} />;
+  if (grade) return <FiltrosEmGrade campos={campos} onMudar={onMudar} antes={antes} rotuloInicial={rotuloInicial} />;
   const naLinha = principais ? campos.filter((c) => principais.includes(c.dim)) : campos;
   const escondidos = principais ? campos.filter((c) => !principais.includes(c.dim)) : [];
-  const nMais = escondidos.filter((c) => c.selecionados.length > 0).length;
+  const nMais = escondidos.filter((c) => (c.inicial ? !mesmaLista(c.selecionados, c.inicial) : c.selecionados.length > 0)).length;
   const seletor = (c: CampoFiltroDash, campo: boolean) => (
     <SeletorMultiplo
       suspenso={!campo}
@@ -51,6 +56,8 @@ export function FiltrosDashboard({
       opcoes={c.opcoes.map((o) => ({ valor: o.chave, rotulo: o.rotulo, contagem: o.count, detalhe: o.detalhe }))}
       selecionados={c.selecionados}
       onChange={(vs) => onMudar(c.dim, vs)}
+      inicial={c.inicial}
+      rotuloInicial={rotuloInicial}
     />
   );
   // UMA linha no desktop (cada filtro divide o espaço); no celular quebra, com o `fim` sempre junto.
@@ -76,7 +83,7 @@ export function FiltrosDashboard({
           rodape={
             <div className="flex w-full items-center justify-between gap-2">
               <Button size="sm" variant="secondary" disabled={!nMais} onClick={() => {
-                  for (const c of escondidos) if (c.selecionados.length) onMudar(c.dim, []);
+                  for (const c of escondidos) if (!mesmaLista(c.selecionados, c.inicial)) onMudar(c.dim, [...(c.inicial ?? [])]);
                 }}>
                 Limpar estes filtros
               </Button>
@@ -100,10 +107,27 @@ export function FiltrosDashboard({
 }
 
 /** O modo `grade`: um seletor suspenso por dimensão, TODOS à vista, em colunas que acompanham a largura. */
-function FiltrosEmGrade({ campos, onMudar, antes }: { campos: CampoFiltroDash[]; onMudar: (dim: string, chaves: string[]) => void; antes?: ReactNode }) {
+function FiltrosEmGrade({
+  campos,
+  onMudar,
+  antes,
+  rotuloInicial,
+}: {
+  campos: CampoFiltroDash[];
+  onMudar: (dim: string, chaves: string[]) => void;
+  antes?: ReactNode | ReactNode[];
+  rotuloInicial?: string;
+}) {
+  const primeiras = (Array.isArray(antes) ? antes : [antes]).filter(Boolean);
+  // Na tela larga, as células em linhas cheias (até 14 = 2 × 7; mais = 2 × 8).
+  const largas = primeiras.length + campos.length > 14 ? "2xl:grid-cols-8" : "2xl:grid-cols-7";
   return (
-    <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
-      {antes && <div className="min-w-0">{antes}</div>}
+    <div className={`grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${largas}`}>
+      {primeiras.map((n, i) => (
+        <div key={i} className="min-w-0">
+          {n}
+        </div>
+      ))}
       {campos.map((c) => (
         <div key={c.dim} className="min-w-0">
           <SeletorMultiplo
@@ -113,6 +137,8 @@ function FiltrosEmGrade({ campos, onMudar, antes }: { campos: CampoFiltroDash[];
             opcoes={c.opcoes.map((o) => ({ valor: o.chave, rotulo: o.rotulo, contagem: o.count, detalhe: o.detalhe }))}
             selecionados={c.selecionados}
             onChange={(vs) => onMudar(c.dim, vs)}
+            inicial={c.inicial}
+            rotuloInicial={rotuloInicial}
           />
         </div>
       ))}

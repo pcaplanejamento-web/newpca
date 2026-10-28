@@ -16,6 +16,7 @@ import {
   ultimoPagamentoPromovido,
 } from "../src/lib/pagamentos-sql.ts";
 import { anosPagamentos, COLUNAS_PAGAMENTO, pagamentoCompleto, textoPagamentos } from "../src/lib/pagamentos-tela.ts";
+import { hashLinha } from "../src/lib/importacao-partes-core.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -36,6 +37,10 @@ const pag = (id: number, empenho: number, extra: Record<string, unknown> = {}) =
   MotivoAnulacao: "",
   ...extra,
 });
+
+/** As linhas com a ASSINATURA (como o servidor calcula — leitor 1) e os comandos da conferência num lote só. */
+const comHash = <L extends object>(modo: "empenhos" | "liquidacoes" | "pagamentos", linhas: readonly L[]) => linhas.map((l) => ({ ...l, hash: hashLinha(modo, l, 1) }));
+const conf = (c: { cmds: unknown[]; depois: unknown[] }) => [...c.cmds, ...c.depois];
 
 test("pagamentos: a linha, a anulação, a recusa e a leitura do mês (sem paginação — o total é o que veio)", () => {
   const l = linhaPagamento(pag(1843386, 259677), 2025);
@@ -123,7 +128,7 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<s
   const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: false, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total: p.total, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
-    ...comandosConferirPagamentos(b.db, lote, PAG, 1, pagina, idOrgao, p.linhas),
+    ...conf(comandosConferirPagamentos(b.db, lote, PAG, pagina, idOrgao, comHash("pagamentos", p.linhas), [])),
     ...comandosFechoPeriodoLiquidacoes(b.db, lote, periodo, orgaos),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),
@@ -151,6 +156,9 @@ async function promover(b: ReturnType<typeof banco>, id: number, regra: "marcar"
 }
 
 const n = (b: ReturnType<typeof banco>, q: string) => (b.raw.prepare(q).get() as { n: number }).n;
+/** Quem está AUSENTE (a 1ª importação sem ele — segue valendo), pela chave. */
+const ausentes = (b: ReturnType<typeof banco>) =>
+  new Set((b.raw.prepare("SELECT chave FROM pagamentos WHERE ausente_desde_lote IS NOT NULL").all() as { chave: string }[]).map((x) => x.chave));
 const gravados = (b: ReturnType<typeof banco>) =>
   b.raw.prepare("SELECT chave, numero_empenho AS emp, orgao_id AS org, reparticao_id AS rep, id_orgao_centi AS centi, anulado, removido_em IS NOT NULL AS removido FROM pagamentos ORDER BY CAST(chave AS INTEGER)").all().map((x) => ({ ...x }));
 
@@ -174,7 +182,7 @@ test("pagamentos (D1 real): o NÚMERO DO EMPENHO dá o órgão e a unidade; sem 
   assert.deepEqual(conferirLote(s), { completo: true });
   assert.equal(s.soma, 3265.36 * 2, "o pago líquido das não anuladas (1 do 1º órgão + 1 do 2º)");
   assert.equal(await pagamentosSuspeitos(b.db, l1), 0);
-  assert.deepEqual(await promover(b, l1, "marcar", [2, 99]), { inseridos: 2, atualizados: 0, removidos: 0, fora: 1 });
+  assert.deepEqual(await promover(b, l1, "marcar", [2, 99]), { inseridos: 2, atualizados: 0, removidos: 0, ausentes: 0, fora: 1 });
   assert.deepEqual(gravados(b), [
     { chave: "1", emp: "9", org: 2, rep: 6, centi: 2, anulado: 0, removido: 0 },
     { chave: "2", emp: "10", org: 1, rep: null, centi: 2, anulado: 1, removido: 0 },
@@ -227,20 +235,21 @@ test("pagamentos (D1 real): reimportar atualiza o que mudou (a anulação també
   const l2 = b.novoLote();
   await guardar(b, l2, [pag(1, 9, { PossuiAnulacao: true, MotivoAnulacao: "ANULADA" })], 1, 2, 2);
   assert.deepEqual(await guardar(b, l2, [], 2, 3, 2), { novos: 0, alterados: 0, iguais: 0, semVinculo: 0, fim: 1 });
-  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 2, fora: 0 });
-  assert.deepEqual(gravados(b).map((x) => [x.chave, x.anulado, x.removido]), [
-    ["1", 1, 0],
-    ["2", 0, 1],
-    ["5", 0, 1],
-    ["8", 0, 0],
-  ], "a 1 foi anulada na Centi; a 2 e a 5 sumiram; a 8 é de outro órgão");
+  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 0, ausentes: 2, fora: 0 });
+  assert.deepEqual(gravados(b).map((x) => [x.chave, x.anulado, x.removido, ausentes(b).has(x.chave as string) ? 1 : 0]), [
+    ["1", 1, 0, 0],
+    ["2", 0, 0, 1],
+    ["5", 0, 0, 1],
+    ["8", 0, 0, 0],
+  ], "a 1 foi anulada na Centi; a 2 e a 5 sumiram pela 1ª vez (ausentes); a 8 é de outro órgão");
   const l3 = b.novoLote();
   await guardar(b, l3, [pag(2, 10)]);
-  assert.equal((await promover(b, l3, "apagar")).removidos, 1);
-  assert.deepEqual(gravados(b).map((x) => [x.chave, x.removido]), [
-    ["2", 0],
-    ["5", 1],
-    ["8", 0],
+  const c3 = await promover(b, l3, "apagar");
+  assert.deepEqual({ r: c3.removidos, a: c3.ausentes }, { r: 1, a: 1 });
+  assert.deepEqual(gravados(b).map((x) => [x.chave, x.removido, ausentes(b).has(x.chave as string) ? 1 : 0]), [
+    ["1", 0, 1],
+    ["2", 0, 0],
+    ["8", 0, 0],
   ]);
 });
 
@@ -260,4 +269,28 @@ test("pagamentos (D1 real): valor suspeito não promove; fechar e excluir o lote
   assert.equal(n(b, "SELECT COUNT(*) n FROM pagamentos_staging"), 0);
   assert.equal(n(b, "SELECT COUNT(*) n FROM centi_lotes"), 1, "só a parcial (l0) fica");
   assert.equal(n(b, "SELECT COUNT(*) n FROM pagamentos WHERE lote_id IS NULL"), 1, "o gravado fica, sem o lote");
+});
+
+test("pagamentos (D1 real): TABELA ÚNICA — todos os cards, o mesmo pagamento em dois cards UMA vez (o do card de menor id), com o card na tupla", async () => {
+  const b = banco();
+  b.empenho("9", 2, 6, 2023);
+  const l1 = b.novoLote();
+  await guardar(b, l1, [pag(1, 9), pag(2, 10, { DataOrdemPagamento: "20/03/2025" })], 1, 2, 1);
+  await promover(b, l1, "marcar", [2]);
+  const cols = (b.raw.prepare("PRAGMA table_info(pagamentos)").all() as { name: string }[]).map((c) => c.name).filter((c) => c !== "id" && c !== "card_id");
+  b.raw.exec(`INSERT INTO empenho_cards (id, nome, tipo) VALUES (99, 'Outro', 'pagamentos')`);
+  b.raw.exec(`INSERT INTO pagamentos (card_id, ${cols.join(", ")}) SELECT 99, ${cols.join(", ")} FROM pagamentos WHERE chave = '1' AND card_id = ${PAG}`);
+  const col = (c: (typeof COLUNAS_PAGAMENTO)[number]) => COLUNAS_PAGAMENTO.indexOf(c);
+  const todos = JSON.parse(await textoPagamentos(null, 2025, false, null, b.db)) as unknown[][];
+  assert.deepEqual(
+    todos.map((t) => [t[col("data")], t[col("cardId")]]),
+    [
+      ["2025-03-20", PAG],
+      ["2025-03-07", PAG],
+    ],
+    "da data mais recente à mais antiga; a cópia do card 99 não repete",
+  );
+  assert.deepEqual((await anosPagamentos(null, null, b.db)).map((x) => ({ ...x })), [{ ano: 2025, n: 2 }]);
+  assert.equal((JSON.parse(await textoPagamentos(null, 2025, false, { unidades: [6], orgaos: [] }, b.db)) as unknown[][]).length, 1);
+  assert.equal((JSON.parse(await textoPagamentos(99, 2025, false, null, b.db)) as unknown[][]).length, 1);
 });

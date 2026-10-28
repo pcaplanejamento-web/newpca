@@ -67,7 +67,8 @@ export function edicaoInicial(edicoes: EdicaoTabela[], padroes: Record<string, u
 /**
  * A TELA da tabela de uma chave — a régua do acesso às edições salvas: a Mesa do sistema (`mesa:`), a Mesa do PCA
  * (`mesa-pca:`), o Comparativo do orçamento (`orcamento-comparativo:` — está no Orçamento e no PCA: basta uma), os
- * Lançamentos do orçamento (`orcamento-lancamentos:`), os Empenhos (`empenhos:`) e a Lista de
+ * Lançamentos do orçamento (`orcamento-lancamentos:`), os Empenhos (`empenhos:`), as VISÕES dos filtros da Execução
+ * (`execucao:`) e a Lista de
  * um quadro de tarefas (`tarefas:<quadro>:` — a permissão segue o grupo DO QUADRO). Salvar a sua = Visualizar; PUBLICAR (ou
  * moderar a pública de outra pessoa) = Configurar. Chave de outra tabela ⇒ `null` (recusada).
  */
@@ -80,6 +81,7 @@ export const chaveDeAdmin = (chave: string) => /^admin:[a-z-]+:[a-z-]+$/.test(ch
 export function telasDaChave(chave: string): { telas: readonly Tela[]; quadroId: number | null } | null {
   if (chave.startsWith("orcamento-lancamentos:")) return { telas: ["orcamento"], quadroId: null };
   if (chave.startsWith("empenhos:")) return { telas: ["empenhos"], quadroId: null };
+  if (chave.startsWith("execucao:")) return { telas: ["execucao"], quadroId: null };
   if (chave.startsWith("mesa-pca:")) return { telas: ["pca"], quadroId: null };
   if (chave.startsWith("mesa:")) return { telas: ["dfd"], quadroId: null };
   if (chave.startsWith("orcamento-comparativo:")) return { telas: ["orcamento", "pca"], quadroId: null };

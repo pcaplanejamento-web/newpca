@@ -16,6 +16,7 @@ import {
   ultimaLiquidacaoPromovida,
 } from "../src/lib/liquidacoes-sql.ts";
 import { anosLiquidacoes, COLUNAS_LIQUIDACAO, liquidacaoCompleta, textoLiquidacoes } from "../src/lib/liquidacoes-tela.ts";
+import { hashLinha } from "../src/lib/importacao-partes-core.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -37,6 +38,10 @@ const liq = (id: number, empenho: string, extra: Record<string, unknown> = {}) =
   docs: [],
   ...extra,
 });
+
+/** As linhas com a ASSINATURA (como o servidor calcula — leitor 1) e os comandos da conferência num lote só. */
+const comHash = <L extends object>(modo: "empenhos" | "liquidacoes" | "pagamentos", linhas: readonly L[]) => linhas.map((l) => ({ ...l, hash: hashLinha(modo, l, 1) }));
+const conf = (c: { cmds: unknown[]; depois: unknown[] }) => [...c.cmds, ...c.depois];
 
 test("liquidações: a linha, a recusa e a leitura do período (sem paginação — o total é o que veio)", () => {
   const l = linhaLiquidacao(liq(595421, "292241"), 2025);
@@ -110,7 +115,7 @@ async function guardar(b: ReturnType<typeof banco>, lote: number, regs: Record<s
   const passo = { ...periodo, pagina, estado: "ok" as const, fimPeriodo: false, status: 200, bytes: 1, ms: 1, recebidos: p.recebidos, novos, recusados: p.recusados, repetidos: p.repetidos, total, soma: p.soma, mensagem: null, corpo: "{}" };
   const res = (await b.db.batch([
     comandoRegistrarPasso(b.db, lote, passo),
-    ...comandosConferirLiquidacoes(b.db, lote, LIQ, 1, pagina, idOrgao, p.linhas),
+    ...conf(comandosConferirLiquidacoes(b.db, lote, LIQ, pagina, idOrgao, comHash("liquidacoes", p.linhas), [])),
     ...comandosFechoPeriodoLiquidacoes(b.db, lote, periodo, paginas),
     comandoRecontarLote(b.db, lote),
     consultaUltimoPasso(b.db, lote),
@@ -138,6 +143,9 @@ async function promover(b: ReturnType<typeof banco>, id: number, regra: "marcar"
 }
 
 const n = (b: ReturnType<typeof banco>, q: string) => (b.raw.prepare(q).get() as { n: number }).n;
+/** Quem está AUSENTE (a 1ª importação sem ele — segue valendo), pela chave. */
+const ausentes = (b: ReturnType<typeof banco>) =>
+  new Set((b.raw.prepare("SELECT chave FROM liquidacoes WHERE ausente_desde_lote IS NOT NULL").all() as { chave: string }[]).map((x) => x.chave));
 const gravadas = (b: ReturnType<typeof banco>) =>
   b.raw.prepare("SELECT chave, numero_empenho AS emp, orgao_id AS org, reparticao_id AS rep, id_orgao_centi AS centi, removido_em IS NOT NULL AS removida FROM liquidacoes ORDER BY CAST(chave AS INTEGER)").all().map((x) => ({ ...x }));
 
@@ -154,7 +162,7 @@ test("liquidações (D1 real): o NÚMERO DO EMPENHO dá o órgão e a unidade; s
   assert.equal(s.totalInformado, 4, "o total do período = a SOMA dos órgãos (3 do 1º + 1 do 2º)");
   assert.deepEqual(conferirLote(s), { completo: true });
   assert.equal(await liquidacoesSuspeitas(b.db, l1), 0);
-  assert.deepEqual(await promover(b, l1, "marcar", [2, 99]), { inseridos: 2, atualizados: 0, removidos: 0, fora: 1 });
+  assert.deepEqual(await promover(b, l1, "marcar", [2, 99]), { inseridos: 2, atualizados: 0, removidos: 0, ausentes: 0, fora: 1 });
   assert.deepEqual(gravadas(b), [
     { chave: "1", emp: "9", org: 2, rep: 6, centi: 2, removida: 0 },
     { chave: "2", emp: "10", org: 1, rep: null, centi: 2, removida: 0 },
@@ -198,21 +206,22 @@ test("liquidações (D1 real): reimportar atualiza o que mudou, marca a que sumi
   const l2 = b.novoLote();
   await guardar(b, l2, [liq(1, "9", { ValorPago: "1.590,00" })], 1, 2, false);
   assert.deepEqual(await guardar(b, l2, [], 2, 3, true), { novos: 0, alterados: 0, iguais: 0, semVinculo: 0 });
-  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 2, fora: 0 });
-  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.org, x.removida]), [
-    ["1", 1, 0],
-    ["2", 1, 1],
-    ["5", 2, 1],
-    ["8", 1, 0],
-  ]);
+  assert.deepEqual(await promover(b, l2), { inseridos: 0, atualizados: 1, removidos: 0, ausentes: 2, fora: 0 });
+  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.org, x.removida, ausentes(b).has(x.chave as string) ? 1 : 0]), [
+    ["1", 1, 0, 0],
+    ["2", 1, 0, 1],
+    ["5", 2, 0, 1],
+    ["8", 1, 0, 0],
+  ], "a 2 e a 5 sumiram pela 1ª vez: AUSENTES (seguem valendo)");
   const l3 = b.novoLote();
   await guardar(b, l3, [liq(2, "10")]);
-  assert.equal((await promover(b, l3, "apagar")).removidos, 1);
-  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.removida]), [
-    ["2", 0],
-    ["5", 1],
-    ["8", 0],
-  ], "a 2 voltou; a 1 sumiu e foi apagada; a 5 já estava removida; a 8 é de outro órgão");
+  const c3 = await promover(b, l3, "apagar");
+  assert.deepEqual({ r: c3.removidos, a: c3.ausentes }, { r: 1, a: 1 });
+  assert.deepEqual(gravadas(b).map((x) => [x.chave, x.removida, ausentes(b).has(x.chave as string) ? 1 : 0]), [
+    ["1", 0, 1],
+    ["2", 0, 0],
+    ["8", 0, 0],
+  ], "a 2 voltou; a 5 sumiu de novo e foi apagada; a 1 sumiu pela 1ª vez; a 8 é de outro órgão");
 });
 
 test("liquidações (D1 real): CONFERÊNCIA EM TEMPO REAL — a igual à gravada sai do staging e não some na conclusão", async () => {
@@ -224,7 +233,7 @@ test("liquidações (D1 real): CONFERÊNCIA EM TEMPO REAL — a igual à gravada
   assert.deepEqual(await guardar(b, l2, [liq(1, "9"), liq(2, "10", { ValorPago: "1.590,00" }), liq(3, "11")]), { novos: 1, alterados: 1, iguais: 1, semVinculo: 0 });
   assert.equal(n(b, `SELECT COUNT(*) n FROM liquidacoes_staging WHERE lote_id = ${l2}`), 2, "só a nova e a alterada");
   assert.deepEqual({ ...(b.raw.prepare(`SELECT unicos, fora FROM centi_lotes WHERE id = ${l2}`).get() as object) }, { unicos: 3, fora: 0 });
-  assert.deepEqual(await promover(b, l2), { inseridos: 1, atualizados: 1, removidos: 0, fora: 0 });
+  assert.deepEqual(await promover(b, l2), { inseridos: 1, atualizados: 1, removidos: 0, ausentes: 0, fora: 0 });
   assert.equal((b.raw.prepare("SELECT lote_id FROM liquidacoes WHERE chave = '1'").get() as { lote_id: number }).lote_id, l1, "a igual não foi reescrita");
 });
 
@@ -350,4 +359,35 @@ test("liquidações (D1 real): a coluna Unidade segue o EMPENHO — só órgão 
   assert.equal((await unidades()).get("9"), "SAUDE");
   const id = Number((JSON.parse(await textoLiquidacoes(LIQ, 2025, false, null, b.db)) as unknown[][]).find((t) => t[col("numeroEmpenho")] === "9")?.[col("id")]);
   assert.equal((await liquidacaoCompleta(LIQ, id, null, b.db))?.unidade, "SAUDE — Secretaria de Saúde");
+});
+
+test("liquidações (D1 real): TABELA ÚNICA — todos os cards, o mesmo registro em dois cards UMA vez (o do card de menor id), com o card na tupla", async () => {
+  const b = banco();
+  b.empenho("9", 1, 5);
+  const l1 = b.novoLote();
+  await guardar(b, l1, [liq(1, "9"), liq(2, "10", { DataLiquidacao: "09/05/2025" })]);
+  await promover(b, l1);
+  // Um 2º card de liquidações com uma cópia da liquidação 1 (a mesma chave) e uma só dele.
+  const cols = (b.raw.prepare("PRAGMA table_info(liquidacoes)").all() as { name: string }[]).map((c) => c.name).filter((c) => c !== "id" && c !== "card_id");
+  b.raw.exec(`INSERT INTO empenho_cards (id, nome, tipo) VALUES (99, 'Outro', 'liquidacoes')`);
+  b.raw.exec(`INSERT INTO liquidacoes (card_id, ${cols.join(", ")}) SELECT 99, ${cols.join(", ")} FROM liquidacoes WHERE chave = '1'`);
+  b.raw.exec(`INSERT INTO liquidacoes (card_id, ${cols.join(", ")}) SELECT 99, ${cols.map((c) => (c === "chave" ? "'77'" : c === "data" ? "'2025-01-15'" : c)).join(", ")} FROM liquidacoes WHERE chave = '1' AND card_id = ${LIQ}`);
+  const col = (c: (typeof COLUNAS_LIQUIDACAO)[number]) => COLUNAS_LIQUIDACAO.indexOf(c);
+  const todas = JSON.parse(await textoLiquidacoes(null, 2025, false, null, b.db)) as unknown[][];
+  assert.equal(todas.length, 3, "a cópia do card 99 não repete");
+  assert.deepEqual(
+    todas.map((t) => [t[col("data")], t[col("cardId")]]),
+    [
+      ["2025-05-09", LIQ],
+      ["2025-03-07", LIQ],
+      ["2025-01-15", 99],
+    ],
+    "da data mais recente à mais antiga; a repetida fica com o card de menor id",
+  );
+  assert.deepEqual((await anosLiquidacoes(null, null, b.db)).map((x) => ({ ...x })), [{ ano: 2025, n: 3 }]);
+  // O escopo vale também na tabela única.
+  const so = JSON.parse(await textoLiquidacoes(null, 2025, false, { unidades: [5], orgaos: [] }, b.db)) as unknown[][];
+  assert.deepEqual(so.map((t) => t[col("numeroEmpenho")]), ["9", "9"]);
+  // A rota do card segue só com o card.
+  assert.equal((JSON.parse(await textoLiquidacoes(99, 2025, false, null, b.db)) as unknown[][]).length, 2);
 });

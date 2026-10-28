@@ -58,10 +58,10 @@ export function ChartEmpty({ label = "Sem dados para exibir" }: { label?: string
 }
 
 /** A caixa das dicas dos gráficos; `vidro` = translúcida e desfocada (o desenho aparece por trás). */
-export function TooltipBox({ children, vidro = false }: { children: ReactNode; vidro?: boolean }) {
+export function TooltipBox({ children, vidro = false, className = "" }: { children: ReactNode; vidro?: boolean; className?: string }) {
   return (
     <div
-      className={`rounded-control border px-3 py-2 text-xs text-text shadow-soft ${vidro ? "border-border/60 bg-surface/65 backdrop-blur-md" : "border-border bg-surface"}`}
+      className={`rounded-control border px-3 py-2 text-xs text-text shadow-soft ${vidro ? "border-border/60 bg-surface/65 backdrop-blur-md" : "border-border bg-surface"} ${className}`}
     >
       {children}
     </div>

@@ -51,7 +51,7 @@ import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/
 import { Avisos } from "@/components/Avisos";
 import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
 import { useConfirmacao } from "@/components/Confirmacao";
-import { PainelVisoes, SalvarEdicao } from "@/components/EdicoesTabela";
+import { SalvarEdicao } from "@/components/EdicoesTabela";
 import { SeletorColunas } from "@/components/SeletorColunas";
 import { Avatar } from "@/components/Avatar";
 import { ContasNavegador } from "@/components/ContasNavegador";
@@ -301,6 +301,7 @@ import { SaudeDados } from "@/components/SaudeDados";
 import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
+import { PainelFiltros } from "@/components/PainelFiltros";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
 import { ItemTable } from "@/components/ItemTable";
 import { PlanilhaDfds, TabelaSobrescritos } from "@/components/PlanilhaDfds";
@@ -650,6 +651,7 @@ function DemoUsuario() {
 // Orçamento × Contratações. ("Enviar ao PCA" = `EnviarAoPca`, na barra de seleção de protocolos da Mesa.)
 function PcaEspacoDemo() {
   const [sel, setSel] = useState<string[]>(["MATERIAL DE CONSUMO"]);
+  const [selInicial, setSelInicial] = useState<string[]>(["SMS"]);
   const [protoDemo, setProtoDemo] = useState("11");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [capa, setCapa] = useState<string | null>(null);
@@ -766,6 +768,21 @@ function PcaEspacoDemo() {
           opcoes={[{ valor: "SEC. DE SAÚDE" }, { valor: "SEC. DE EDUCAÇÃO" }, { valor: "SEC. DE OBRAS" }]}
           selecionados={sel}
           onChange={setSel}
+        />
+      </div>
+      <div className="max-w-sm">
+        {/* Com o ESTADO INICIAL (do ADM ou da visão): igual a ele, o gatilho fica neutro — não é filtro; o painel o mostra à parte. */}
+        <SeletorMultiplo
+          suspenso
+          rotulo="Unidade"
+          inicial={["SMS"]}
+          opcoes={[
+            { valor: "SMS", detalhe: "Secretaria Municipal de Saúde", contagem: 120 },
+            { valor: "SME", detalhe: "Secretaria Municipal de Educação", contagem: 88 },
+            { valor: "FMC", detalhe: "Fundo Municipal de Cultura", contagem: 12 },
+          ]}
+          selecionados={selInicial}
+          onChange={setSelInicial}
         />
       </div>
       <OrcamentoPca
@@ -1561,57 +1578,30 @@ const COLUNAS_DEMO = [
 ];
 
 function EdicoesTabelaDemo() {
-  const [atual, setAtual] = useState<number | null>(2);
-  const [padraoId, setPadraoId] = useState<number | null>(2);
-  const [padraoTodos, setPadraoTodos] = useState<number | null>(3);
-  const [filtros, setFiltros] = useState<string[]>(["Estado", "Situação"]);
   const [ocultas, setOcultas] = useState<string[]>(["objeto", "email"]);
   const [salvar, setSalvar] = useState(false);
-  // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a edição é só da pessoa.
+  // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a visão é só da pessoa.
   const [configura, setConfigura] = useState(true);
-  const { confirmar, confirmacao } = useConfirmacao();
-  const e = (id: number, nome: string, minha: boolean, publico: boolean) => ({ id, chave: "k", nome, publico, minha, autor: "Ana", valor: {} });
-  const minhas = [e(1, "Pessoal", true, false), e(2, "Por elemento", true, true)];
-  const publicas = [e(3, "Equipe do PCA", false, true)];
-  const escolhida = [...minhas, ...publicas].find((x) => x.id === atual) ?? null;
+  const atual = { id: 2, chave: "k", nome: "Por elemento", publico: true, minha: true, autor: "Ana", valor: {} };
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <SeletorColunas
-        colunas={COLUNAS_DEMO}
-        ocultas={ocultas}
-        onMudar={setOcultas}
-      />
-      <PainelVisoes
-        minhas={minhas}
-        publicas={publicas}
-        atual={escolhida}
-        padraoId={padraoId}
-        padraoAdmId={padraoTodos}
-        inicialId={padraoId ?? padraoTodos}
-        filtros={filtros}
-        onEscolher={setAtual}
-        onPadrao={setPadraoId}
-        onPadraoTodos={setPadraoTodos}
-        onExcluir={() => void confirmar({ titulo: "Excluir a visão?", confirmar: "Excluir", perigo: true })}
-        onEditar={() => setSalvar(true)}
-        onSalvar={() => setSalvar(true)}
-        onLimparFiltros={() => setFiltros([])}
-        onRestaurar={() => setAtual(padraoId ?? padraoTodos)}
-        podeModerar={configura}
-      />
+      <SeletorColunas colunas={COLUNAS_DEMO} ocultas={ocultas} onMudar={setOcultas} />
+      <Button size="sm" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => setSalvar(true)}>
+        Salvar visão
+      </Button>
       <Checkbox checked={configura} onChange={(ev) => setConfigura(ev.target.checked)} label="O papel configura a tela (publica e modera)" />
       {salvar && (
         <SalvarEdicao
           aberto
-          atual={escolhida}
-          ehPadrao={atual === padraoId}
+          atual={atual}
+          ehPadrao
           gravando={false}
           podePublicar={configura}
+          termo="visão"
           onFechar={() => setSalvar(false)}
           onSalvar={() => setSalvar(false)}
         />
       )}
-      {confirmacao}
     </div>
   );
 }
@@ -3404,6 +3394,50 @@ function TarefasDemo() {
   );
 }
 
+const VISOES_FILTRO_DEMO = [
+  { id: 1, chave: "demo:filtros", nome: "Saúde — restos a pagar", publico: false, minha: true, autor: "Você", valor: {} },
+  { id: 2, chave: "demo:filtros", nome: "Obras do ano", publico: true, minha: false, autor: "Ana", valor: {} },
+];
+const CHIPS_DEMO = [
+  { chave: "periodo", rotulo: "Período", valores: ["2025"] },
+  { chave: "tipo", rotulo: "Tipo", valores: ["Restos a Pagar"] },
+  { chave: "unidade", rotulo: "Unidade", valores: Array.from({ length: 140 }, (_, i) => `Unidade ${i + 1}`) },
+];
+
+/** O PainelFiltros com dados de exemplo (estado local — nada é gravado). */
+function DemoPainelFiltros() {
+  const [chips, setChips] = useState(CHIPS_DEMO);
+  const [visao, setVisao] = useState<{ id: number; nome: string; alterada: boolean; minha: boolean } | null>(null);
+  return (
+    <div className="flex items-center gap-3">
+      <PainelFiltros
+        chips={chips}
+        visao={visao}
+        minhas={VISOES_FILTRO_DEMO.filter((v) => v.minha)}
+        publicas={VISOES_FILTRO_DEMO.filter((v) => !v.minha)}
+        podeModerar
+        gravando={false}
+        onTirar={(k) => setChips((l) => l.filter((c) => c.chave !== k))}
+        onLimpar={() => {
+          setChips([]);
+          setVisao(null);
+        }}
+        onTirarVisao={() => setVisao(null)}
+        onAplicar={(e) => {
+          setVisao({ id: e.id, nome: e.nome, alterada: false, minha: e.minha });
+          setChips([]);
+        }}
+        onExcluirVisao={(e) => toast(`Excluir a visão ${e.nome}`)}
+        onSalvar={() => toast("Salvar visão")}
+        inicial={{ definido: true, onDefinir: () => toast("Definir o estado inicial"), onRestaurar: () => toast("Voltar ao padrão") }}
+      />
+      <Button size="sm" variant="ghost" onClick={() => setChips(CHIPS_DEMO)}>
+        Refazer os filtros
+      </Button>
+    </div>
+  );
+}
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -3831,7 +3865,7 @@ export function Catalogo() {
       <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
         <VinculosDaUnidadeDemo />
       </Secao>
-      <Secao titulo="Visões de tabela — SeletorColunas (as colunas visíveis, Todos | Nenhum) + PainelVisoes (Filtros · Visões · Estado inicial: o alfinete fixa a minha padrão, o ADM fixa a padrão para todos; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
+      <Secao titulo="Visões de tabela — SeletorColunas (as colunas visíveis, Todos | Nenhum; no rodapé das tabelas, ao lado do PainelFiltros) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
@@ -4031,6 +4065,10 @@ export function Catalogo() {
             ]}
           />
         </div>
+      </Secao>
+
+      <Secao titulo="PainelFiltros (os filtros feitos em chips sólidos — o × devolve a parte à referência —, a visão aplicada como UM filtro, as visões salvas e, para o ADM, o estado inicial do lugar)">
+        <DemoPainelFiltros />
       </Secao>
 
       <Secao titulo="Filtro de cabeçalho & Período (PeriodoPicker — atalhos, ano, meses, intervalo DE/ATÉ e Limpar: o MESMO corpo do filtro de datas das tabelas, sem a ordenação)">
@@ -5058,7 +5096,7 @@ export function Catalogo() {
         <TarefasDemo />
       </Secao>
 
-      <Secao titulo="EmpenhoDetalhe (um empenho da Centi — só leitura; o histórico chega depois) · a lista é a EmpenhosView (cards) e a tabela de cada card, a EmpenhosTabela">
+      <Secao titulo="EmpenhoDetalhe (um empenho da Centi — só leitura; o histórico chega depois) · os cards ficam em Configurações → Importações (ImportacoesAdmin) e a tabela única é a EmpenhosTabela">
         <div className="max-w-3xl">
           <EmpenhoDetalhe
             empenho={{

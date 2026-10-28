@@ -3,7 +3,9 @@
 import { rotuloTipoExecucao, type TipoExecucao } from "@/lib/execucao-empenho-core";
 import { brl, dataBR, dataHoraBR } from "@/lib/format";
 import type { EmpenhoDaLiquidacao, LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
+import type { AlteracaoCenti } from "@/lib/centi-alteracoes-core";
 import { Badge } from "./Badge";
+import { DiffLinha } from "./ComparacaoReenvio";
 import { Callout } from "./Callout";
 import { Skeleton } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -79,7 +81,48 @@ export function LiquidacaoDetalhe({ liquidacao: l, completo }: { liquidacao: Liq
           </dl>
         </div>
       )}
+
+      {completo && <AlteracoesCenti alteracoes={completo.alteracoes} ausente={completo.ausenteDesdeLote} />}
     </div>
+  );
+}
+
+/**
+ * O HISTÓRICO DAS ALTERAÇÕES da Centi — o MESMO bloco nos banners do empenho, da liquidação e do pagamento: o selo do
+ * registro AUSENTE na última importação (continua valendo até a próxima confirmar) e, recolhível, cada alteração com a data, a
+ * importação e os campos antes → depois (`DiffLinha` compacto). Sem nada, não aparece.
+ */
+export function AlteracoesCenti({ alteracoes, ausente }: { alteracoes: AlteracaoCenti[]; ausente: number | null }) {
+  if (alteracoes.length === 0 && ausente == null) return null;
+  return (
+    <details className="group rounded-card border border-border p-[var(--pad-card)]" open={ausente != null}>
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 lg:min-h-0">
+        <span className="text-xs font-semibold uppercase tracking-wide text-faint">Alterações na Centi</span>
+        <Badge tone="slate">{alteracoes.length}</Badge>
+        {ausente != null && (
+          <Badge tone="amber" title={`Não veio na importação nº ${ausente}; se não vier na próxima, vale a regra dos removidos.`}>
+            Ausente na última leitura
+          </Badge>
+        )}
+        <span className="ml-auto text-xs text-muted group-open:hidden">Ver</span>
+      </summary>
+      <ol className="mt-3 space-y-3">
+        {alteracoes.map((a) => (
+          <li key={a.id} className="space-y-1.5 border-t border-border pt-3 first:border-t-0 first:pt-0">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+              <Badge tone={a.acao === "removido" ? "red" : a.acao === "ausente" ? "amber" : a.acao === "restaurado" ? "emerald" : "blue"}>{a.rotulo}</Badge>
+              <span className="text-muted">
+                {dataHoraBR(a.em)}
+                {a.loteId ? ` · importação nº ${a.loteId}` : ""}
+              </span>
+            </p>
+            {a.campos.map((d) => (
+              <DiffLinha key={d.campo} d={d} compacto rotulos={["Antes", "Depois"]} />
+            ))}
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 
