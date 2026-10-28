@@ -11,6 +11,26 @@ import { limparTexto } from "./normalize.ts";
  * retrato congelado (o PCA pode mudar depois), selado por SHA-256 e conferível pelo CÓDIGO na página pública.
  */
 
+/** Quem EMITE declarações num PCA (Configuração do PCA): todos (o papel decide) · só os Administradores · ninguém. */
+export const MODOS_DECLARACOES = ["todos", "adm", "desligado"] as const;
+export type ModoDeclaracoes = (typeof MODOS_DECLARACOES)[number];
+export const ROTULO_MODO_DECLARACOES: Record<ModoDeclaracoes, string> = {
+  todos: "Todos com permissão",
+  adm: "Só os Administradores",
+  desligado: "Desligado",
+};
+export const coerceModoDeclaracoes = (v: unknown): ModoDeclaracoes => (MODOS_DECLARACOES.includes(v as ModoDeclaracoes) ? (v as ModoDeclaracoes) : "todos");
+
+/**
+ * O que a pessoa faz nas declarações do PCA pelo MODO (o papel ainda decide cada ação): `total` = como o papel manda ·
+ * `leitura` = consulta, baixa e cancela as emitidas, sem emitir (o ADM com o modo desligado) · `nenhum` = a aba some.
+ */
+export function acessoDeclaracoes(modo: ModoDeclaracoes, admin: boolean): "total" | "leitura" | "nenhum" {
+  if (modo === "todos") return "total";
+  if (!admin) return "nenhum";
+  return modo === "adm" ? "total" : "leitura";
+}
+
 export const FINALIDADES = [
   { id: "inicio", rotulo: "Início do processo de contratação", frase: "instrução do processo de contratação" },
   { id: "empenho_complementar", rotulo: "Empenho complementar", frase: "emissão de empenho complementar" },

@@ -18,6 +18,7 @@ import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
 import { DeclaracoesPca } from "@/components/DeclaracoesPca";
 import { DocumentosView } from "@/components/DocumentosView";
 import { itensDeclaraveis, listarDeclaracoes } from "@/lib/declaracoes";
+import { acessoDeclaracoes } from "@/lib/declaracoes-core";
 import { listarDocumentos } from "@/lib/documentos";
 import { documentoNoPca } from "@/lib/documentos-core";
 import { pcasDosDocumentos } from "@/lib/documentos-pagina";
@@ -70,7 +71,9 @@ export default async function PcaEspacoPage({
   // As abas que o papel vê (Detalhes do papel → Componentes); a pedida fora delas cai na 1ª permitida.
   // Documentos: a função do PCA E a tela Documentos (o PDF é servido por ela — e o papel decide o que se faz).
   const permitidas = ABAS.filter(
-    (a) => (a !== "importacao" || pca.fonte === "lista") && (a !== "documentos" || podeTela(acesso, "documentos").visualizar) && componenteLibera(acesso, `pca.${a}`),
+    (a) => (a !== "importacao" || pca.fonte === "lista") && (a !== "documentos" || podeTela(acesso, "documentos").visualizar) &&
+      (a !== "declaracoes" || acessoDeclaracoes(pca.declaracoes, u.admin) !== "nenhum") &&
+      componenteLibera(acesso, `pca.${a}`),
   );
   const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
 
@@ -100,7 +103,7 @@ export default async function PcaEspacoPage({
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
     conteudo = (
       <PcaConfiguracao
-        pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa, orcamentoVisaoId: pca.orcamentoVisaoId, mesaMarcados: pca.mesaMarcados }}
+        pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status, capa: pca.capa, orcamentoVisaoId: pca.orcamentoVisaoId, mesaMarcados: pca.mesaMarcados, declaracoes: pca.declaracoes }}
         podeEditar={pode.configurar}
         podeExcluir={pode.excluir}
         temDados={temDados}
@@ -122,14 +125,24 @@ export default async function PcaEspacoPage({
 
 /**
  * Aba DECLARAÇÕES: os itens que a pessoa pode declarar (os da unidade dela, com o saldo) e as declarações que tocam neles.
- * Emitir, baixar e cancelar = a ação no PCA E o componente `pca.declaracoes` (Detalhes do papel).
+ * Emitir, baixar e cancelar = a ação no PCA E o componente `pca.declaracoes` (Detalhes do papel) E o modo do PCA
+ * (Configuração → Declarações: desligado, o ADM só consulta, baixa e cancela).
  */
 async function abaDeclaracoes(pca: PcaEspaco, acesso: Parameters<typeof componenteLibera>[0], pode: PodeTela) {
   const rep = (await unidadeDoModulo("pca", acesso.u, undefined, "declaracoes")).id;
   const itens = await itensDeclaraveis(pca, rep);
   const declaracoes = await listarDeclaracoes(pca.id, rep === null ? null : new Set(itens.map((i) => i.sequencial)));
   const comp = (a: "manipular" | "exportar" | "excluir") => pode[a] && componenteLibera(acesso, "pca.declaracoes", a);
-  return <DeclaracoesPca pcaId={pca.id} declaracoes={declaracoes} itens={itens} pode={{ emitir: comp("manipular"), baixar: comp("exportar"), cancelar: comp("excluir") }} />;
+  const desligada = acessoDeclaracoes(pca.declaracoes, acesso.u.admin) === "leitura";
+  return (
+    <DeclaracoesPca
+      pcaId={pca.id}
+      declaracoes={declaracoes}
+      itens={itens}
+      emissaoDesligada={desligada}
+      pode={{ emitir: !desligada && comp("manipular"), baixar: comp("exportar"), cancelar: comp("excluir") }}
+    />
+  );
 }
 
 /**

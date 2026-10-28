@@ -31,6 +31,7 @@ import { classificarItem, criarClassificador } from "./padronizacao-core";
 import { getDb } from "./db";
 import { getDfd } from "./dfd";
 import { prioridadeDoDfd } from "./dfd-tratamento";
+import { coerceModoDeclaracoes, type ModoDeclaracoes } from "./declaracoes-core";
 import { normUnidadeMedida } from "./normalize";
 import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
 import { type AusentesVisao, aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento, valoresAusentes } from "./orcamento-visao";
@@ -91,6 +92,8 @@ export type PcaEspaco = {
   orcamentoVisaoId: number | null;
   /** A Mesa do PCA mostra também os protocolos MARCADOS com o ano dele que ainda estão na Mesa do sistema (visão). */
   mesaMarcados: boolean;
+  /** Quem emite declarações neste PCA (`acessoDeclaracoes`). */
+  declaracoes: ModoDeclaracoes;
 };
 
 export type PcaCard = PcaEspaco & {
@@ -115,6 +118,7 @@ const COLS_PCA = {
   publicadoEm: pcas.publicadoEm,
   orcamentoVisaoId: pcas.orcamentoVisaoId,
   mesaMarcados: pcas.mesaMarcados,
+  declaracoes: pcas.declaracoes,
 };
 
 type RowPca = { [K in keyof typeof COLS_PCA]: unknown };
@@ -130,6 +134,7 @@ function paraEspaco(r: RowPca): PcaEspaco {
     publicadoEm: (r.publicadoEm as string | null) ?? null,
     orcamentoVisaoId: r.orcamentoVisaoId == null ? null : Number(r.orcamentoVisaoId),
     mesaMarcados: !!r.mesaMarcados,
+    declaracoes: coerceModoDeclaracoes(r.declaracoes),
   };
 }
 
@@ -358,11 +363,12 @@ export type CamposPcaEspaco = Partial<{
   capa: string | null;
   orcamentoVisaoId: number | null;
   mesaMarcados: boolean;
+  declaracoes: ModoDeclaracoes;
 }>;
 
 export async function atualizarPcaEspaco(id: number, c: CamposPcaEspaco): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
-  for (const k of ["nome", "ano", "fonte", "capa", "orcamentoVisaoId", "mesaMarcados"] as const) if (c[k] !== undefined) set[k] = c[k];
+  for (const k of ["nome", "ano", "fonte", "capa", "orcamentoVisaoId", "mesaMarcados", "declaracoes"] as const) if (c[k] !== undefined) set[k] = c[k];
   if (c.status !== undefined) {
     set.status = c.status;
     set.publicadoEm = c.status === "publicado" ? sql`(CURRENT_TIMESTAMP)` : null;
@@ -755,7 +761,7 @@ export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep: nu
 }
 
 /** O que do PCA muda as cargas dele (a chave do `memoPorVersao`). */
-const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}`;
+const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}:${p.declaracoes}`;
 
 async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep?: number | readonly number[]): Promise<DashboardPca> {
   if (pca.fonte === "lista") {

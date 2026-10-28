@@ -6,7 +6,9 @@ import { describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import {
+  acessoDeclaracoes,
   blocosDeclaracao,
+  coerceModoDeclaracoes,
   conferirPedido,
   dataPorExtenso,
   type ItemDeclaravel,
@@ -163,4 +165,14 @@ describe("declarações do PCA — no D1", () => {
     assert.equal((await consultaDeclarados(orm, 1)).length, 0);
     await orm.batch(comandosEmitirDeclaracao(orm, nova("C2", 2, [{ sequencial: 1, quantidade: 12, quantidadePca: 12 }])));
   });
+});
+
+it("modo do PCA: quem emite (todos · só ADM · desligado)", () => {
+  assert.equal(acessoDeclaracoes("todos", false), "total");
+  assert.equal(acessoDeclaracoes("adm", false), "nenhum");
+  assert.equal(acessoDeclaracoes("adm", true), "total");
+  assert.equal(acessoDeclaracoes("desligado", false), "nenhum");
+  assert.equal(acessoDeclaracoes("desligado", true), "leitura");
+  assert.equal(coerceModoDeclaracoes("qualquer"), "todos");
+  assert.equal(coerceModoDeclaracoes("adm"), "adm");
 });

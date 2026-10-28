@@ -15,7 +15,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string; did
   const { id, did } = await ctx.params;
   const c = await contextoDeclaracoes(g, id, baixar ? "exportar" : "visualizar");
   if ("erro" in c) return c.erro;
-  const d = await declaracaoDoContexto(c.pca, c.rep, did);
+  const d = (await declaracaoDoContexto(c.pca, c.rep, did))?.d;
   const bytes = d ? await pdfDaDeclaracao(d, new URL(req.url).origin) : null;
   if (!d || !bytes) return erro("Declaração não encontrada.", 404);
   return new Response(bytes as Uint8Array<ArrayBuffer>, {

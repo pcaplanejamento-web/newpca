@@ -660,6 +660,8 @@ export const pcas = sqliteTable("pcas", {
   }),
   // Migração `0063`: a Mesa do PCA mostra também os protocolos MARCADOS com o ano dele ainda na Mesa do sistema (visão).
   mesaMarcados: integer("mesa_marcados", { mode: "boolean" }).notNull().default(false),
+  // Migração `0165`: quem emite declarações neste PCA — todos (o papel decide) | adm | desligado.
+  declaracoes: text("declaracoes", { enum: ["todos", "adm", "desligado"] }).notNull().default("todos"),
   criadoPor: integer("criado_por").references(() => usuarios.id, {
     onDelete: "set null",
   }),

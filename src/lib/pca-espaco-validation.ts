@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MODOS_DECLARACOES } from "./declaracoes-core.ts";
 import { DIMENSOES_VISAO } from "./orcamento-visao.ts";
 
 // Schemas de entrada do PCA como ESPAÇO e das visões do orçamento. Módulo SÓ-schema (sem getDb) →
@@ -28,6 +29,7 @@ export const editarPcaEspacoSchema = z
     capa: capaSchema.nullable().optional(),
     orcamentoVisaoId: z.number().int().positive().nullable().optional(),
     mesaMarcados: z.boolean().optional(),
+    declaracoes: z.enum(MODOS_DECLARACOES).optional(),
   })
   .refine((o) => Object.values(o).some((v) => v !== undefined), "Nada para alterar.");
 

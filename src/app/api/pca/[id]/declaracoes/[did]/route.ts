@@ -15,9 +15,9 @@ export async function GET(_req: Request, ctx: Ctx) {
   const { id, did } = await ctx.params;
   const c = await contextoDeclaracoes(g, id, "visualizar");
   if ("erro" in c) return c.erro;
-  const d = await declaracaoDoContexto(c.pca, c.rep, did);
-  if (!d) return erro("Declaração não encontrada.", 404);
-  const { conteudoTexto: _t, ...resto } = d;
+  const v = await declaracaoDoContexto(c.pca, c.rep, did);
+  if (!v) return erro("Declaração não encontrada.", 404);
+  const { conteudoTexto: _t, ...resto } = v.d;
   return ok({ declaracao: resto });
 }
 
@@ -30,8 +30,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if ("erro" in c) return c.erro;
   const p = await parseCorpo(cancelarDeclaracaoSchema, req);
   if ("resp" in p) return p.resp;
-  const d = await declaracaoDoContexto(c.pca, c.rep, did);
-  if (!d) return erro("Declaração não encontrada.", 404);
+  const v = await declaracaoDoContexto(c.pca, c.rep, did);
+  if (!v) return erro("Declaração não encontrada.", 404);
+  if (!v.todos) return erro("A declaração tem itens de outras unidades — só quem vê todos eles pode cancelá-la.", 403);
+  const d = v.d;
   if (d.cancelada || !(await cancelarDeclaracao(d.id, g.u.nome, p.data.motivo as string))) return erro("A declaração já está cancelada.", 409);
   await registrarAuditoria({
     usuario: g.u,

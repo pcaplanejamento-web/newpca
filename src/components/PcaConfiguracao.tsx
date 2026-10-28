@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { MODOS_DECLARACOES, type ModoDeclaracoes, ROTULO_MODO_DECLARACOES } from "@/lib/declaracoes-core";
 import type { FontePca, StatusPca } from "@/lib/pca-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
@@ -12,6 +13,7 @@ import { selectCls } from "./formStyles";
 import { IconCheck, IconImage, IconLock, IconTrash } from "./icons";
 import { PcaCapa } from "./PcaCard";
 import { RecorteImagem } from "./RecorteImagem";
+import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 import { Selecao } from "./Selecao";
 
@@ -25,7 +27,17 @@ export type ConfigPca = {
   orcamentoVisaoId: number | null;
   /** A Mesa do PCA mostra também os protocolos marcados com o ano dele ainda na Mesa do sistema (visão). */
   mesaMarcados: boolean;
+  /** Quem emite declarações neste PCA. */
+  declaracoes: ModoDeclaracoes;
 };
+
+const TEXTO_MODO: Record<ModoDeclaracoes, string> = {
+  todos: "Quem tem permissão no papel emite declarações dos itens deste PCA (aba Declarações).",
+  adm: "Só os Administradores veem a aba Declarações e emitem declarações deste PCA.",
+  desligado: "Ninguém emite declarações neste PCA; os Administradores ainda consultam, baixam e cancelam as já emitidas.",
+};
+
+const CURTO_MODO: Record<ModoDeclaracoes, string> = { todos: "Todos", adm: "Só ADM", desligado: "Desligado" };
 
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
@@ -240,6 +252,20 @@ export function PcaConfiguracao({
             />
           </section>
         )}
+
+        <section className={`${CARTAO} flex flex-wrap items-center justify-between gap-3`}>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold text-text">Declarações</h2>
+            <p className="text-sm text-muted">{TEXTO_MODO[pca.declaracoes]}</p>
+          </div>
+          <Segmented
+            ariaLabel="Quem emite declarações"
+            value={pca.declaracoes}
+            disabled={ro || salvando != null}
+            options={MODOS_DECLARACOES.map((m) => ({ value: m, label: ROTULO_MODO_DECLARACOES[m], curto: CURTO_MODO[m], dica: TEXTO_MODO[m] }))}
+            onChange={(m) => m !== pca.declaracoes && salvar({ declaracoes: m }, "declaracoes", `Declarações: ${ROTULO_MODO_DECLARACOES[m].toLowerCase()}.`)}
+          />
+        </section>
 
         {(
           <section className={CARTAO}>

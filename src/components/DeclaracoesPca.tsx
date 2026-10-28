@@ -122,12 +122,15 @@ export function DeclaracoesPca({
   pcaId,
   declaracoes,
   itens,
+  emissaoDesligada = false,
   pode,
 }: {
   pcaId: number;
   declaracoes: DeclaracaoResumo[];
   /** Os itens que a pessoa pode declarar (a unidade dela), com o já declarado. */
   itens: ItemDeclaravel[];
+  /** A Configuração do PCA desligou a emissão (o ADM ainda consulta, baixa e cancela as emitidas). */
+  emissaoDesligada?: boolean;
   pode: { emitir: boolean; baixar: boolean; cancelar: boolean };
 }) {
   const router = useRouter();
@@ -141,6 +144,8 @@ export function DeclaracoesPca({
           <p>A declaração atesta que itens constam deste PCA — o item inteiro ou só parte da quantidade (ex.: 6 de 12).</p>
           <p>Cada item tem um SALDO: a quantidade no PCA menos o que já foi declarado. Cancelar uma declaração devolve o saldo.</p>
           <p>O PDF traz um código de verificação: qualquer pessoa confere a autenticidade na página pública.</p>
+          <p>Quem emite é definido na Configuração do PCA (todos com permissão, só os Administradores ou desligado).</p>
+          {emissaoDesligada && <p>A emissão está DESLIGADA neste PCA: as declarações já emitidas seguem para consulta, download e cancelamento.</p>}
         </Ajuda>
         {pode.emitir && (
           <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => setNova(true)} disabled={comSaldo === 0} title={comSaldo === 0 ? "Nenhum item com saldo para declarar" : undefined}>
@@ -159,7 +164,9 @@ export function DeclaracoesPca({
         exportar={{ nome: "Declarações do PCA" }}
         resumo={(ls) => `${num(ls.length)} declaração(ões) · ${brl(ls.reduce((s, d) => s + (d.cancelada ? 0 : d.valorTotal), 0))} válidas`}
         vazio={
-          itens.length === 0
+          emissaoDesligada
+            ? "Nenhuma declaração emitida — a emissão está desligada na Configuração do PCA."
+            : itens.length === 0
             ? "Nenhum item deste PCA para declarar ainda."
             : pode.emitir
               ? "Nenhuma declaração emitida ainda — use “Nova declaração”."
@@ -345,6 +352,7 @@ function DetalheDeclaracao({
               rows={c.linhas}
               getKey={(l) => l.sequencial}
               density="compact"
+              linhasSalvas="declaracao-itens"
               exportar={{ nome: `Declaração ${d.rotulo}` }}
               resumo={(ls) => `${num(ls.length)} item(ns) · ${brl(ls.reduce((s, l) => s + l.valorTotal, 0))}`}
             />

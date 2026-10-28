@@ -45,7 +45,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (publicado && antes.mesaMarcados && d.mesaMarcados === undefined) d.mesaMarcados = false;
   await atualizarPcaEspaco(id, d);
   const semCapa = (o: Record<string, unknown>) => ({ ...o, capa: o.capa ? "(imagem)" : null });
-  const dd = diffCampos<Record<string, unknown>>(semCapa(antes), semCapa({ ...antes, ...d }), ["nome", "ano", "fonte", "status", "capa", "orcamentoVisaoId", "mesaMarcados"], {
+  const dd = diffCampos<Record<string, unknown>>(semCapa(antes), semCapa({ ...antes, ...d }), ["nome", "ano", "fonte", "status", "capa", "orcamentoVisaoId", "mesaMarcados", "declaracoes"], {
     nome: "nome",
     ano: "ano",
     fonte: "fonte",
@@ -53,6 +53,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     capa: "capa",
     orcamentoVisaoId: "visão do orçamento",
     mesaMarcados: "Mesa do PCA com os marcados na Mesa do sistema",
+    declaracoes: "quem emite declarações",
   });
   await registrarAuditoria({
     usuario: a.u,

@@ -7,6 +7,7 @@ import type { UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import { comandoCancelarDeclaracao, comandosEmitirDeclaracao, consultaDeclarados, consultaUltimoNumero } from "./declaracoes-sql";
 import {
+  acessoDeclaracoes,
   type ConteudoDeclaracao,
   conferirPedido,
   type Finalidade,
@@ -264,15 +265,23 @@ export async function contextoDeclaracoes(g: Guarda, pcaIdTexto: string, acao: A
   if (!componenteLibera(g.acesso, "pca.declaracoes", acao)) return { erro: erro("Sem permissão nas declarações deste PCA.", 403) };
   const pca = await getPcaEspaco(id);
   if (!pca) return { erro: erro("PCA não encontrado.", 404) };
+  // O MODO do PCA (Configuração → Declarações): desligado ou só os ADMs — fora dele, nada; desligado, o ADM não emite.
+  const modo = acessoDeclaracoes(pca.declaracoes, g.u.admin);
+  if (modo === "nenhum") return { erro: erro("As declarações estão indisponíveis neste PCA.", 403) };
+  if (modo === "leitura" && acao === "manipular") return { erro: erro("A emissão de declarações está desligada neste PCA.", 403) };
   return { pca, rep: (await unidadeDoModulo("pca", g.u, undefined, "declaracoes")).id };
 }
 
-/** A declaração do PCA que a pessoa vê (com a unidade dela: ao menos um item que ela vê) — senão `null` (404). */
-export async function declaracaoDoContexto(pca: PcaEspaco, rep: FiltroId, idTexto: string): Promise<DeclaracaoCompleta | null> {
+/**
+ * A declaração do PCA que a pessoa vê (com a unidade dela: ao menos um item que ela vê) — senão `null` (404). `todos` = a
+ * pessoa vê TODOS os itens dela (cancelar devolve o saldo de cada item: quem só vê parte não cancela a de outra unidade).
+ */
+export async function declaracaoDoContexto(pca: PcaEspaco, rep: FiltroId, idTexto: string): Promise<{ d: DeclaracaoCompleta; todos: boolean } | null> {
   const id = intId(idTexto);
   const d = id ? await getDeclaracao(id) : null;
   if (!d || d.pcaId !== pca.id) return null;
-  if (rep === null) return d;
+  if (rep === null) return { d, todos: true };
   const ve = new Set((await itensDeclaraveis(pca, rep)).map((i) => i.sequencial));
-  return d.conteudo?.linhas.some((l) => ve.has(l.sequencial)) ? d : null;
+  const linhas = d.conteudo?.linhas ?? [];
+  return linhas.some((l) => ve.has(l.sequencial)) ? { d, todos: linhas.every((l) => ve.has(l.sequencial)) } : null;
 }

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.246.0",
+    data: "2026-10-28",
+    titulo: "Declarações: quem emite em cada PCA e tabelas mais leves",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Configuração do PCA → Declarações: escolha quem emite declarações neste PCA — todos com permissão, só os Administradores ou desligado (desligado, os Administradores ainda consultam, baixam e cancelam as já emitidas).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "As tabelas da Nova declaração e dos itens de uma declaração seguem as linhas por página do sistema (com o seletor no rodapé) e o campo da quantidade só aparece no item marcado — leves com milhares de itens.", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Uma declaração com itens de outras unidades só pode ser cancelada por quem vê todos os itens dela (cancelar devolve o saldo de cada item).", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.245.0",
     data: "2026-10-28",
     titulo: "Escolher quais importações atualizam sozinhas",

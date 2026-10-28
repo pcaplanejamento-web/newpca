@@ -46,12 +46,14 @@ export function NovaDeclaracao({
   const faltaTexto = finalidade === "outra" && !finalidadeTexto.trim();
   const motivo = pedido.length === 0 ? "Marque os itens a declarar." : (conf.erros[0] ?? (faltaTexto ? "Descreva a finalidade." : null));
 
+  const porSeq = useMemo(() => new Map(disponiveis.map((i) => [i.sequencial, i])), [disponiveis]);
+
   function marcar(s: Set<string | number>) {
     setQtd((ant) => {
       const novo = new Map<number, number | null>();
       for (const k of s) {
         const seq = Number(k);
-        const it = disponiveis.find((i) => i.sequencial === seq);
+        const it = porSeq.get(seq);
         if (it) novo.set(seq, ant.has(seq) ? (ant.get(seq) ?? null) : saldoDe(it));
       }
       return novo;
@@ -71,6 +73,8 @@ export function NovaDeclaracao({
       total: false,
       minWidth: 120,
       render: (r) => {
+        // Só a linha MARCADA ganha o campo (leve com milhares de itens); as demais, o traço.
+        if (!qtd.has(r.sequencial)) return <span className="text-faint">—</span>;
         const q = qtd.get(r.sequencial);
         const parcial = q != null && q > 0 && q < Number(r.quantidade ?? 0);
         return (
@@ -172,6 +176,7 @@ export function NovaDeclaracao({
           selected={selecionados}
           onSelected={marcar}
           density="compact"
+          linhasSalvas="declaracao-nova"
           exportar={false}
           resumo={(ls) => `${num(ls.length)} item(ns) com saldo${esgotados ? ` · ${num(esgotados)} já declarado(s) por inteiro` : ""}`}
           vazio="Nenhum item com saldo para declarar."
