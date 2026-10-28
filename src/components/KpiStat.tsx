@@ -75,11 +75,11 @@ export function KpiStat({
         className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-[3px]"
         style={{ background: cor }}
       />
-      <div className={`flex justify-between gap-2 ${temCanto ? "items-center" : "items-start"} ${camada ? "pointer-events-none relative" : ""}`}>
+      <div className={`flex justify-between gap-2 items-start ${camada ? "pointer-events-none relative" : ""}`}>
         <span className="truncate text-[12.5px] text-muted">{label}</span>
         {temCanto && (
-          // A altura do canto não cresce a linha (a ação de toque tem mais altura que o rótulo): centrado nele.
-          <span className="pointer-events-auto relative -my-2 -mr-1 flex shrink-0 items-center gap-1 lg:-my-1.5">
+          // Preso ao canto, com o MESMO recuo do topo e da direita (6px até a caixa); a margem de baixo negativa não deixa a linha do rótulo crescer.
+          <span className="pointer-events-auto relative -mb-4 -mr-[calc(var(--pad-card)-6px)] -mt-[calc(var(--pad-card)-6px)] flex shrink-0 items-center gap-1 self-start">
             {canto}
             {acaoCanto}
           </span>

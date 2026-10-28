@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.252.1",
+    data: "2026-10-28",
+    titulo: "Execução: relógio e botão de importar no canto do indicador",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "O relógio da última atualização e o botão de importar ficam mais perto do topo de cada indicador, com o mesmo recuo do topo e da lateral direita.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.252.0",
     data: "2026-10-28",
     titulo: "Importações: intervalo mínimo entre atualizações, a última importação pelo relógio e correções",
