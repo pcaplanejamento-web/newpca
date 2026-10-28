@@ -918,6 +918,7 @@ export function DataTable<R>({
             <SeletorColunas
               colunas={columns.filter((c) => c.header).map((c) => ({ key: c.key, header: c.header, grupo: c.grupo ?? "Colunas" }))}
               ocultas={ocultasAgora}
+              padrao={padraoOc}
               onMudar={(ocultas) => editor.ajustar((x) => comOcultas(x, ocultas, padraoOc))}
             />
           )}

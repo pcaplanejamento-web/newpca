@@ -62,6 +62,14 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.243.2",
+    data: "2026-10-28",
+    titulo: "Seletor de colunas em dropdown",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "O seletor de colunas das tabelas abre num dropdown preso ao botão (folha só no celular): a contagem de colunas visíveis, a busca, cada grupo com a contagem e Todos/Nenhum, e no pé Mostrar todas · Padrão (volta às colunas do padrão da tabela).", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.243.1",
     data: "2026-10-28",
     titulo: "Importações sem travar o sistema",
