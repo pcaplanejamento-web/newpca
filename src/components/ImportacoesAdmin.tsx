@@ -84,11 +84,15 @@ export function ImportacoesAdmin() {
   const [tipo, setTipo] = useState<TipoCard>("empenhos");
   const [aberto, setAberto] = useState<{ id: number; sub: SubAba } | null>(null);
   const [config, setConfig] = useState<ConfigImportacoes | null>(null);
+  const [erroConfig, setErroConfig] = useState<string | null>(null);
 
   const carregarConfig = useCallback(async () => {
     const r = await fetch("/api/admin/importacoes/config", { cache: "no-store" }).catch(() => null);
-    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes } | undefined;
-    if (r?.ok && j?.ok && j.config) setConfig(j.config);
+    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigImportacoes } | undefined;
+    if (r?.ok && j?.ok && j.config) {
+      setConfig(j.config);
+      setErroConfig(null);
+    } else setErroConfig(j?.error ?? "Não foi possível carregar a atualização automática.");
   }, []);
 
   const carregar = useCallback(async () => {
@@ -115,6 +119,12 @@ export function ImportacoesAdmin() {
     void carregarConfig();
   }, [carregar, carregarConfig]);
 
+  // O card aberto pelo endereço manda no tipo (um link só com `?card=` de outro tipo volta à lista certa).
+  const tipoDoAberto = aberto ? cards?.find((c) => c.id === aberto.id)?.tipo : undefined;
+  useEffect(() => {
+    if (tipoDoAberto) setTipo(tipoDoAberto);
+  }, [tipoDoAberto]);
+
   const doTipo = useMemo(() => (cards ?? []).filter((c) => c.tipo === tipo), [cards, tipo]);
   const contagem = (t: TipoCard) => (cards ?? []).filter((c) => c.tipo === t).length;
 
@@ -140,6 +150,8 @@ export function ImportacoesAdmin() {
         sub={aberto.sub}
         cards={cards ?? []}
         config={config}
+        erroConfig={erroConfig}
+        onTentarConfig={carregarConfig}
         onSub={(sub) => {
           setAberto({ id: aberto.id, sub });
           gravarNaUrl(tipo, aberto.id, sub);
@@ -164,6 +176,7 @@ export function ImportacoesAdmin() {
         </div>
       </div>
       {config && <PainelAutomatica config={config} onSalvo={setConfig} />}
+      {erroConfig && <ErroCarga msg={erroConfig} onTentar={carregarConfig} />}
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
       {cards == null && !erro ? (
         <div className={GRADE_ORCAMENTOS}>
@@ -182,9 +195,9 @@ function AjudaImportacoes() {
   return (
     <Ajuda titulo="Importações da Centi" botao="sm">
       <p>
-        Cada <strong>card</strong> é uma importação da Centi com a sua própria configuração: a integração, os anos, a atualização automática
-        (horário, frequência, dias úteis) e as regras da conferência. Os dados importados aparecem nas telas Empenhos, Liquidações e
-        Pagamentos.
+        Cada <strong>card</strong> é uma importação da Centi com a sua configuração (a integração e os anos). A{" "}
+        <strong>atualização automática</strong> (horário, frequência, dias úteis) e as <strong>regras da conferência</strong> são as mesmas para
+        todos os cards — o quadro acima da lista. Os dados importados aparecem nas telas Empenhos, Liquidações e Pagamentos.
       </p>
       <p>
         <strong>Empenhos</strong>: os <strong>vínculos</strong> dizem o que entra (órgãos gestores, unidades orçamentárias e ações da Centi) e a
@@ -539,6 +552,8 @@ function CardAberto({
   sub,
   cards,
   config,
+  erroConfig,
+  onTentarConfig,
   onSub,
   onFechar,
   onMudou,
@@ -547,6 +562,8 @@ function CardAberto({
   sub: SubAba;
   cards: ResumoCard[];
   config: ConfigImportacoes | null;
+  erroConfig: string | null;
+  onTentarConfig: () => void;
   onSub: (s: SubAba) => void;
   onFechar: () => void;
   onMudou: () => Promise<void>;
@@ -616,7 +633,8 @@ function CardAberto({
       onFechar();
       return;
     }
-    toast.error("Não foi possível excluir o card.");
+    const j = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
+    toast.error(j?.error ?? "Não foi possível excluir o card.");
   }
 
   const indicadores = [
@@ -628,7 +646,14 @@ function CardAberto({
 
   let conteudo: ReactNode = <SkeletonCartao />;
   if (d) {
-    if (aba === "importacao") conteudo = config ? <EmpenhoCardImportacao card={d.card} config={config} podeExcluir onMudou={mudou} /> : <SkeletonCartao />;
+    if (aba === "importacao")
+      conteudo = config ? (
+        <EmpenhoCardImportacao card={d.card} config={config} podeExcluir onMudou={mudou} />
+      ) : erroConfig ? (
+        <ErroCarga msg={erroConfig} onTentar={onTentarConfig} />
+      ) : (
+        <SkeletonCartao />
+      );
     else if (aba === "configuracao")
       conteudo = (
         <EmpenhoCardConfig

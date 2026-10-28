@@ -4,8 +4,8 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { idsPorGestor, orgaosDaLeitura } from "../src/lib/empenho-cards-core.ts";
 import { comandoRegistrarGestores, consultaOrgaosGestores } from "../src/lib/empenho-cards-sql.ts";
-import { anoInteiro, lerPaginaEmpenhos, lotePorOrgao, quedaPrimeiraPorOrgao } from "../src/lib/empenhos-core.ts";
-import { comandoRecontarLote, comandoRegistrarPasso, comandosGuardarPagina, comandosPromover, contagemDaPromocao, ultimoPromovido, vigentesDosOrgaos } from "../src/lib/empenhos-sql.ts";
+import { anoInteiro, erroUnico, lerPaginaEmpenhos, lotePorOrgao, quedaPrimeiraPorOrgao } from "../src/lib/empenhos-core.ts";
+import { comandoRecontarLote, comandoRegistrarPasso, comandosFecharLote, comandosGuardarPagina, comandosPromover, contagemDaPromocao, ultimoPromovido, vigentesDosOrgaos } from "../src/lib/empenhos-sql.ts";
 import { corpoComOrgao } from "../src/lib/liquidacoes-core.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
@@ -92,4 +92,22 @@ test("a 1ª leitura por órgão pede confirmação quando marcaria removidos dem
   assert.match(quedaPrimeiraPorOrgao(100, 11, 90) ?? "", /marcaria 11 de 100/);
   assert.equal(quedaPrimeiraPorOrgao(100, 99, 0), null, "a regra desligada não confere");
   assert.equal(quedaPrimeiraPorOrgao(0, 0, 90), null);
+});
+
+test("fechar o lote (D1 real): só o que ainda LÊ — um fechamento atrasado nunca rebaixa o promovido", async () => {
+  const b = banco();
+  const l = b.novoLote(null);
+  b.raw.prepare("UPDATE centi_lotes SET estado = 'promovido' WHERE id = ?").run(l);
+  await b.db.batch(comandosFecharLote(b.db, l, "falhou", "atrasado") as never);
+  assert.equal((b.raw.prepare("SELECT estado FROM centi_lotes WHERE id = ?").get(l) as { estado: string }).estado, "promovido");
+  const l2 = b.novoLote(null);
+  await b.db.batch(comandosFecharLote(b.db, l2, "cancelado", "desligada") as never);
+  assert.equal((b.raw.prepare("SELECT estado FROM centi_lotes WHERE id = ?").get(l2) as { estado: string }).estado, "cancelado");
+});
+
+test("o erro do índice único é reconhecido também embrulhado pelo Drizzle (o texto em `cause`)", () => {
+  const d1 = new Error("D1_ERROR: UNIQUE constraint failed: centi_lotes.card_id: SQLITE_CONSTRAINT");
+  assert.equal(erroUnico(new Error('Failed query: insert into "centi_lotes"', { cause: d1 })), true);
+  assert.equal(erroUnico(d1), true);
+  assert.equal(erroUnico(new Error("Failed query", { cause: new Error("no such table") })), false);
 });

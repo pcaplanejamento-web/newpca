@@ -520,10 +520,12 @@ export function comandosPromover(
   ] as const;
 }
 
-/** Fecha o lote sem promover (parcial, falhou ou cancelado) e limpa o staging — a tabela final não muda. */
+/** Fecha o lote que ainda LÊ sem promover (parcial, falhou ou cancelado) e limpa o staging — a tabela final não muda. */
 export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "falhou" | "cancelado" | "unidades", mensagem: string) {
   return [
-    db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLotes.id, loteId)),
+    db.update(centiLotes).set({ estado, mensagem, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
+      // Só o lote que ainda LÊ: um fechamento atrasado (abandono, outra aba) nunca rebaixa um lote já promovido.
+      .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"))),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
     db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
     db.delete(pagamentosStaging).where(eq(pagamentosStaging.loteId, loteId)),

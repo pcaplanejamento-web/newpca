@@ -4,7 +4,7 @@ import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
 import { registrarLeituraCard } from "./empenho-cards";
 import { comandosFecharLote } from "./empenhos-sql";
-import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
+import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroUnico, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
@@ -88,7 +88,7 @@ export async function criarLote(cardId: number, ano: number, quem: string, condu
   } catch (e) {
     // UM lote LENDO por card (índice único — a aba e a automática começando juntas): fica o que entrou primeiro; quem
     // chegou depois recebe ele (e a trava de quem conduz decide quem segue).
-    const existente = /UNIQUE/i.test(String((e as Error).message)) ? await loteEmAndamento(cardId) : null;
+    const existente = erroUnico(e) ? await loteEmAndamento(cardId) : null;
     if (existente) return existente;
     throw e;
   }

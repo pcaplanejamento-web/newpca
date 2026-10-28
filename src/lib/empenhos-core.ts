@@ -667,3 +667,9 @@ export function fracaoDoAndamento(ano: number, a: AndamentoLote): number {
   const extra = a.leitura ? (diasDoPeriodo(a.leitura) / diasDoPeriodo(periodoDoAno(ano))) * fracaoDaLeitura(a.leitura) : 0;
   return Math.min(1, a.fracao + extra);
 }
+
+/** O erro do índice ÚNICO — o Drizzle embrulha o erro do D1 (o texto fica em `cause`), como em `nomeDuplicado`. */
+export function erroUnico(e: unknown): boolean {
+  const msg = e instanceof Error ? `${e.message} ${e.cause instanceof Error ? e.cause.message : ""}` : String(e);
+  return /UNIQUE constraint failed/i.test(msg);
+}

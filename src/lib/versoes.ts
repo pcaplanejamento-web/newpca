@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.240.1",
+    data: "2026-10-28",
+    titulo: "Auditoria das importações: fila do cron mais robusta e telas sem travas",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "Em segundo plano, um card com problema não prende mais a fila: ele espera a próxima vez e os outros seguem.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Desligar a atualização automática encerra as importações que ela tinha começado — nenhum card fica “Importando” para sempre.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Uma importação aberta na tela e a automática começando juntas no mesmo card não dão mais erro: a segunda segue com a que entrou primeiro.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Na aba Importações: a falha ao carregar a atualização automática mostra “Tentar de novo”, o card aberto acompanha o fim de uma importação automática e a exclusão recusada diz o motivo.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.240.0",
     data: "2026-10-28",
     titulo: "Atualização automática central: uma configuração e uma fila para todas as importações",
@@ -53,7 +64,7 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "Empenhos", texto: "A tela fica só com os dados: a tabela de todos os empenhos. O atalho no título leva às importações (Administrador).", link: "/painel/empenhos" },
       { tipo: "melhoria", area: "Liquidações", texto: "A tela fica só com os dados: a tabela de todas as liquidações; as importações estão em Configurações.", link: "/painel/liquidacoes" },
       { tipo: "melhoria", area: "Pagamentos", texto: "A tela fica só com os dados: a tabela de todos os pagamentos; as importações estão em Configurações.", link: "/painel/pagamentos" },
-      { tipo: "correcao", area: "Sistema", texto: "Listas de escolha dentro de tabelas largas não alargam mais a página no celular.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Sistema", texto: "Listas de escolha dentro de tabelas largas não alargam mais a página no celular.", link: "/painel/empenhos" },
     ],
   },
   {

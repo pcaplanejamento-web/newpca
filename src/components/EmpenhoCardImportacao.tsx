@@ -169,6 +169,15 @@ export function EmpenhoCardImportacao({
     }, 15_000);
     return () => clearInterval(id);
   }, [acompanhar, carregar]);
+  // O lote acompanhado terminou (promovido, parcial, falhou): o cabeçalho do card (selo, totais) relê junto.
+  const seguido = useRef<number | null>(null);
+  useEffect(() => {
+    if (acompanhar && emAndamento) seguido.current = emAndamento.id;
+    else if (seguido.current != null && emAndamento?.id !== seguido.current) {
+      seguido.current = null;
+      if (!rodando) onMudou();
+    }
+  }, [acompanhar, emAndamento, rodando, onMudou]);
   /** O tempo restante AO VIVO: a fração do ano (ou da resposta grande) amostrada a cada mudança. */
   const fracaoAtual = rodando && atual ? fracaoDoAno(atual.ano, passos) : acompanhar && andamento && emAndamento ? fracaoDoAndamento(emAndamento.ano, andamento) : 0;
   const restante = useEstimativa(fracaoAtual, rodando || acompanhar);

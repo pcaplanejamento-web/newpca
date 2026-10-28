@@ -1,10 +1,10 @@
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
 import { anosDoCard, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, filaDosCards } from "./empenho-cards-core";
-import { cardsAtivos, orgaosDoLote } from "./empenho-cards";
-import { eq } from "drizzle-orm";
-import { centiLeituras, centiLotePassos } from "@/db/schema";
-import { criarLote, getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
+import { cardsAtivos, orgaosDoLote, registrarLeituraCard } from "./empenho-cards";
+import { and, eq } from "drizzle-orm";
+import { centiLeituras, centiLotePassos, centiLotes } from "@/db/schema";
+import { criarLote, type getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
 import {
   hojeIso,
   anoDaVez,
@@ -43,7 +43,7 @@ import { horaAgoraBrasilia } from "./tarefas-core";
 export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card: number; situacao: string }[]> {
   // A configuração CENTRAL (Configurações → Importações): desligada, nada roda; ligada, vale para todos os cards.
   const cfg = await getConfigImportacoes();
-  if (!cfg.ativa) return [];
+  if (!cfg.ativa) return encerrarLotesAuto();
   const cards = await cardsAtivos();
   if (!cards.length) return [];
   const hoje = hojeIso(agora);
@@ -60,12 +60,29 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
       if (u.trabalhou) break;
     } catch (e) {
       // Nunca em silêncio: o erro vira um passo do lote (umCard) e o log; a fila segue na próxima execução.
+      // O card que falha vai para a espera da frequência (a última leitura = falhou) e a fila SEGUE: um card com defeito
+      // nunca prende os outros.
       console.error(`[cron empenhos] card ${card.id}:`, (e as Error).message);
       r.push({ card: card.id, situacao: `erro: ${(e as Error).message}` });
-      break;
+      await registrarLeituraCard(card.id, "falhou", card.ultimaContagem ?? 0, card.ultimoTotal).catch(() => undefined);
     }
   }
   return r;
+}
+
+/**
+ * A automática DESLIGADA: os lotes que ELA começou e ainda leem são cancelados (a mesma limpeza do fechamento) — nada fica
+ * "Importando" para sempre. As importações manuais não mudam.
+ */
+async function encerrarLotesAuto(): Promise<{ card: number; situacao: string }[]> {
+  const db = getDb();
+  const lendo = await db
+    .select({ id: centiLotes.id, cardId: centiLotes.cardId })
+    .from(centiLotes)
+    .where(and(eq(centiLotes.estado, "lendo"), eq(centiLotes.iniciadoPor, QUEM_AUTO)));
+  if (!lendo.length) return [];
+  await db.batch(lendo.flatMap((l) => comandosFecharLote(db, l.id, "cancelado", "A atualização automática foi desligada.")) as never);
+  return lendo.map((l) => ({ card: l.cardId ?? 0, situacao: "cancelado: automática desligada" }));
 }
 
 type Feito = { situacao: string; trabalhou: boolean };
