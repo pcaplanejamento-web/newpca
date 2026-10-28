@@ -2330,6 +2330,12 @@ export const centiLotePassos = sqliteTable(
      * VÍNCULO/destino (não gravados) — uma escrita por página, a base do que "sumiu" e da conferência com a Centi. */
     chavesIguais: text("chaves_iguais"),
     chavesFora: text("chaves_fora"),
+    /** As chaves que a página mandou ao STAGING (novas ou diferentes — migração `0163`): com as iguais e as fora, o passo
+     * conhece TODAS as chaves da página (a base do pulo da página idêntica na automática). */
+    chavesGravadas: text("chaves_gravadas"),
+    /** SHA-256 dos BYTES exatos da resposta da Centi (só quando ela veio inteira num pedido — migração `0163`): a mesma
+     * assinatura na próxima volta da automática = a página não mudou e não é reprocessada. */
+    assinaturaBruta: text("assinatura_bruta"),
   },
   (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
 );
@@ -2371,6 +2377,8 @@ export const centiLeituras = sqliteTable(
     criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
     /** As chaves já vistas nesta resposta (uma por linha) — o repetido entre janelas conta como repetido. */
     vistas: text("vistas").notNull().default(""),
+    /** SHA-256 da resposta (só quando veio inteira no 1º pedido — migração `0163`), levada ao passo final. */
+    assinatura: text("assinatura"),
   },
   (t) => [index("centi_leituras_lote_idx").on(t.loteId)],
 );

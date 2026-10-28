@@ -109,16 +109,24 @@ export async function lerPaginaNoNavegador(
 /** O modo das linhas do lote (os empenhos e o catálogo leem a mesma resposta). */
 export const modoDoLote = (l: Pick<LoteCenti, "modo">): ModoParte => (l.modo === "liquidacoes" || l.modo === "pagamentos" ? l.modo : "empenhos");
 
-/** As ASSINATURAS gravadas do card no ano (chave → assinatura) — baixadas UMA vez no começo; falhou = mapa vazio (tudo vai
- * inteiro, como antes — nunca deixa de importar). */
+/** As ASSINATURAS gravadas do card no ano (chave → assinatura) — baixadas no começo, em PÁGINAS de até 10 mil; uma falha
+ * deixa o mapa como está (o que faltar vai inteiro, como antes — nunca deixa de importar). */
 export async function lerAssinaturas(cardId: number, ano: number): Promise<Map<string, string>> {
+  const mapa = new Map<string, string>();
+  let depois = 0;
   try {
-    const r = await fetch(`/api/empenhos/cards/${cardId}/importar?assinaturas=${ano}`);
-    const j = (await r.json()) as { ok?: boolean; assinaturas?: Record<string, string> };
-    return r.ok && j.ok && j.assinaturas ? new Map(Object.entries(j.assinaturas)) : new Map();
+    for (let i = 0; i < 100; i++) {
+      const r = await fetch(`/api/empenhos/cards/${cardId}/importar?assinaturas=${ano}&depois=${depois}`);
+      const j = (await r.json()) as { ok?: boolean; assinaturas?: Record<string, string>; ultimo?: number | null };
+      if (!r.ok || !j.ok || !j.assinaturas) break;
+      for (const [k, v] of Object.entries(j.assinaturas)) mapa.set(k, v);
+      if (j.ultimo == null || j.ultimo <= depois) break;
+      depois = j.ultimo;
+    }
   } catch {
-    return new Map();
+    // O mapa parcial vale: o resto vai inteiro.
   }
+  return mapa;
 }
 
 /** Os passos já gravados de um lote (retomar, o detalhe do histórico). */

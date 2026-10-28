@@ -2,7 +2,7 @@ import { and, count, desc, eq, getTableColumns, inArray, isNotNull, isNull, ne, 
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { centiLeituras, centiLotePassos, centiLotes, centiOrgaosGestores, empenhos, empenhosStaging, liquidacoes, liquidacoesStaging, pagamentos, pagamentosStaging } from "../db/schema.ts";
-import { comandoAlteracoesDoLote, comandoAlteracoesSumiram } from "./centi-alteracoes-sql.ts";
+import { comandoAlteracoesDoLote, comandoAlteracoesSumiram, dadosMudaram } from "./centi-alteracoes-sql.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
 import { vinculoSql } from "./empenho-cards-sql.ts";
 import { LIMITE_VALOR_EMPENHO, type LinhaEmpenho, type PassoNovo, type Periodo, SEGUNDOS_CONDUCAO } from "./empenhos-core.ts";
@@ -86,8 +86,8 @@ const passosQueValem = (loteId: number) =>
   sql`(SELECT MAX(q."id") FROM "centi_lote_passos" q WHERE q."lote_id" = ${loteId} AND q."estado" = 'ok' GROUP BY q."inicio", q."fim", q."pagina")`;
 
 /** A coluna da LISTA de chaves do passo: as dos registros IGUAIS ao gravado ou as dos SEM vínculo/destino. */
-export type ListaChaves = "iguais" | "fora";
-const COLUNA_LISTA: Record<ListaChaves, string> = { iguais: "chaves_iguais", fora: "chaves_fora" };
+export type ListaChaves = "iguais" | "fora" | "gravadas";
+const COLUNA_LISTA: Record<ListaChaves, string> = { iguais: "chaves_iguais", fora: "chaves_fora", gravadas: "chaves_gravadas" };
 
 /**
  * As CHAVES de uma lista do lote (`SELECT value` — para `IN`/`NOT IN`): as das páginas que VALEM (`passosQueValem`); com
@@ -132,9 +132,13 @@ export type ConfTabela = {
   destino?: SQL;
   /** O valor do registro gravado `e` que entra na SOMA do passo. */
   soma: string;
+  /** A versão do leitor do lote: com ela, o registro gravado ANTES da assinatura (hash NULL) e igual ao lido ganha a assinatura
+   * no lugar (`comandoHashLegado`) — 1 escrita, nunca o staging. */
+  leitor?: number;
 };
 
 const STAGING = { empenhos: empenhosStaging, liquidacoes: liquidacoesStaging, pagamentos: pagamentosStaging } as const;
+const STAGING_FINAL = { empenhos, liquidacoes, pagamentos } as unknown as Record<ConfTabela["tabela"], typeof empenhos>;
 
 /** O GRAVADO `e` é IGUAL ao lido: a mesma assinatura e valendo (nem removido nem ausente — esses voltam pela promoção). */
 const valeIgual = (h: SQL) => sql`e."hash" IS ${h} AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL`;
@@ -199,6 +203,8 @@ export function comandosConferirAssinatura(
   const alvo = eq(centiLotePassos.id, passo ?? ultimoPasso(loteId));
   const comDestino = c.destino ? sql` AND ${c.destino}` : sql``;
   const pedacos = pedacosJson(linhas as unknown as readonly Record<string, unknown>[], cols, MAX_JSON_CONFERIR);
+  // O registro gravado ANTES da assinatura e IGUAL ao lido ganha a assinatura primeiro: daí em diante é um igual comum.
+  const legados: unknown[] = c.leitor == null ? [] : pedacos.map((json) => comandoHashLegado(db, c, card, c.leitor as number, json));
   const cmds: unknown[] = pedacos.map((json, i) => {
     const virt = () => tabelaVirtual(nome, cols, json, c.extras);
     const junto = (cond: SQL) => sql`FROM ${virt()} JOIN ${tab} e ON e."card_id" = ${card} AND e."chave" = ${chaveStg} WHERE ${cond}${comDestino}`;
@@ -217,6 +223,11 @@ export function comandosConferirAssinatura(
         resAlterados: sql`COALESCE(${centiLotePassos.resAlterados}, 0) + (SELECT COUNT(*) ${junto(sql`NOT (${valeIgual(hashStg)})`)})`,
         resIguais: sql`COALESCE(${centiLotePassos.resIguais}, 0) + (SELECT COUNT(*) ${junto(valeIgual(hashStg))})`,
         chavesIguais: listaMais("iguais", sql`SELECT ${chaveStg} AS "c" ${junto(valeIgual(hashStg))}`),
+        // As que vão ao STAGING (novas ou diferentes): com as iguais e as fora, o passo conhece todas as chaves da página.
+        chavesGravadas: listaMais(
+          "gravadas",
+          sql`SELECT ${chaveStg} AS "c" FROM ${virt()} WHERE NOT EXISTS (SELECT 1 FROM ${tab} e WHERE e."card_id" = ${card} AND e."chave" = ${chaveStg} AND ${valeIgual(hashStg)})${comDestino}`,
+        ),
         ...semDestino,
       })
       .where(alvo);
@@ -226,7 +237,34 @@ export function comandosConferirAssinatura(
   const todas = [...linhas.map((l) => l.chave), ...iguais.map((p) => p[0])];
   if (todas.length) cmds.push(db.delete(STAGING[c.tabela]).where(and(eq(STAGING[c.tabela].loteId, loteId), sql`${STAGING[c.tabela].chave} IN (SELECT value FROM json_each(${JSON.stringify(todas)}))`)));
   cmds.push(...comandosGuardarStaging(db, c, loteId, pagina, linhas, card));
-  return { cmds, depois: iguais.length ? [comandoParesIguais(db, c, loteId, card, iguais, passo)] : [] };
+  return { cmds: [...legados, ...cmds], depois: iguais.length ? [comandoParesIguais(db, c, loteId, card, iguais, passo)] : [] };
+}
+
+/**
+ * A ASSINATURA no lugar para o registro gravado antes dela (hash NULL) e IGUAL ao lido — os mesmos dados, o mesmo leitor,
+ * valendo: UMA escrita (a coluna não tem índice), uma única vez. Sem isto, a 1ª importação depois da assinatura mandaria TODOS
+ * ao staging e os regravaria (~8 escritas por registro — o limite diário do D1 gratuito).
+ */
+export function comandoHashLegado(db: Db, c: ConfTabela, card: number, leitor: number, json: string) {
+  const nome = `${c.tabela}_staging`;
+  const cols = [...c.campos, "hash"];
+  const t = STAGING_FINAL[c.tabela];
+  const final = sql.raw(`"${c.tabela}"`);
+  const iguais = sql`FROM ${tabelaVirtual(nome, cols, json, c.extras)} WHERE ${sql.raw(`"${nome}"."chave"`)} = ${final}."chave" AND NOT (${dadosMudaram(c.tabela, nome, c.campos)})${c.destino ? sql` AND ${c.destino}` : sql``}`;
+  return db
+    .update(t)
+    .set({ hash: sql`(SELECT ${sql.raw(`"${nome}"."hash"`)} ${iguais})` })
+    .where(
+      and(
+        eq(t.cardId, card),
+        isNull(t.hash),
+        isNull(t.removidoEm),
+        isNull(t.ausenteDesdeLote),
+        eq(t.leitor, leitor),
+        sql`${final}."chave" IN (SELECT json_extract(value, '$[0]') FROM json_each(${json}))`,
+        sql`EXISTS (SELECT 1 ${iguais})`,
+      ),
+    );
 }
 
 /**
@@ -249,10 +287,13 @@ export function comandoParesIguais(db: Db, c: ConfTabela, loteId: number, card: 
  * As ASSINATURAS gravadas do card no ano (chave → assinatura), como UM texto JSON montado NO BANCO — o navegador baixa no
  * começo da importação e manda inteiro só o que mudou. Só os registros valendo (o removido e o ausente voltam inteiros).
  */
-export function consultaAssinaturas(db: Db, tabela: ConfTabela["tabela"], card: number, ano: number) {
+export const ASSINATURAS_POR_PAGINA = 10_000;
+export function consultaAssinaturas(db: Db, tabela: ConfTabela["tabela"], card: number, ano: number, depois = 0, limite = ASSINATURAS_POR_PAGINA) {
   const t = sql.raw(`"${tabela}"`);
+  // Em PÁGINAS pelo id (um texto de até ~700 KB — o D1 limita cada valor a 2 MB): `ultimo` = o id da última da página.
+  const pagina = sql`(SELECT "id", "chave", "hash" FROM ${t} WHERE "card_id" = ${card} AND "ano" = ${ano} AND "id" > ${depois} AND "hash" IS NOT NULL AND "removido_em" IS NULL AND "ausente_desde_lote" IS NULL ORDER BY "id" LIMIT ${limite})`;
   return db
-    .select({ j: sql<string>`(SELECT json_group_object("chave", "hash") FROM ${t} WHERE "card_id" = ${card} AND "ano" = ${ano} AND "hash" IS NOT NULL AND "removido_em" IS NULL AND "ausente_desde_lote" IS NULL)` })
+    .select({ j: sql<string>`(SELECT json_group_object("chave", "hash") FROM ${pagina})`, ultimo: sql<number | null>`(SELECT MAX("id") FROM ${pagina})` })
     .from(sql`(SELECT 1)`);
 }
 
@@ -372,9 +413,9 @@ const sumiram = (db: Db, loteId: number, card: number, ano: number, orgaos: read
   );
 
 /** As colunas do passo SEM as listas de chaves (que podem ter milhares) — o que a tela e a leitura usam. */
-const { chavesIguais: _iguais, chavesFora: _fora, ...COLUNAS_PASSO } = getTableColumns(centiLotePassos);
+const { chavesIguais: _iguais, chavesFora: _fora, chavesGravadas: _gravadas, assinaturaBruta: _assinatura, ...COLUNAS_PASSO } = getTableColumns(centiLotePassos);
 export { COLUNAS_PASSO };
-export type LinhaPasso = Omit<typeof centiLotePassos.$inferSelect, "chavesIguais" | "chavesFora">;
+export type LinhaPasso = Omit<typeof centiLotePassos.$inferSelect, "chavesIguais" | "chavesFora" | "chavesGravadas" | "assinaturaBruta">;
 
 /** O passo mais recente do lote (o que a página acabou de registrar no mesmo lote). */
 export const ultimoPasso = (loteId: number) => sql`(SELECT MAX("id") FROM "centi_lote_passos" WHERE "lote_id" = ${loteId})`;
@@ -675,3 +716,101 @@ export function comandoExcluirPassos(db: Db, loteId: number, ids: number[]) {
     .where(and(eq(centiLotePassos.loteId, loteId), sql`${centiLotePassos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`))
     .returning({ id: centiLotePassos.id });
 }
+
+/** O que a automática precisa saber da MESMA página na última volta (ver `podePular`, `empenhos-core.ts`). */
+export type PaginaAnterior = {
+  passo: number;
+  assinatura: string | null;
+  /** Aquele lote tem a data de conclusão e os vínculos do card mudaram DEPOIS dela (as datas comparadas no banco). */
+  concluido: boolean;
+  vinculosDepois: boolean;
+  /** Quantas chaves "fora" (sem vínculo/destino) aquela página tinha. */
+  fora: number;
+  /** Quantas chaves daquela página NÃO valem hoje no banco (sumiram, sem assinatura, removidas ou ausentes). */
+  invalidos: number;
+};
+
+/**
+ * A MESMA página (período, página) no ÚLTIMO lote PROMOVIDO do card e do ano — do mesmo modo, órgãos e leitor —, com o
+ * estado de hoje das chaves dela, numa consulta só. Só o último promovido conta: comparar com uma volta mais antiga deixaria
+ * passar o que uma importação posterior mudou.
+ */
+export async function consultaPaginaAnterior(
+  db: Db,
+  tabela: ConfTabela["tabela"],
+  lote: { id: number; cardId: number; ano: number; modo: string; leitor: number; orgaosCenti: readonly number[] | null },
+  periodo: Periodo,
+  pagina: number,
+): Promise<PaginaAnterior | null> {
+  const orgaos = lote.orgaosCenti ? JSON.stringify(lote.orgaosCenti) : null;
+  const t = sql.raw(`"${tabela}"`);
+  const linhas = await db.all<{ passo: number; assinatura: string | null; concluido: number; vinculosDepois: number; fora: number; invalidos: number }>(sql`
+    WITH ultimo AS (
+      SELECT "id", "concluido_em" FROM "centi_lotes"
+      WHERE "card_id" = ${lote.cardId} AND "ano" = ${lote.ano} AND "estado" = 'promovido' AND "id" <> ${lote.id}
+      ORDER BY "id" DESC LIMIT 1
+    ), igual AS (
+      SELECT l."id", l."concluido_em" FROM "centi_lotes" l JOIN ultimo u ON u."id" = l."id"
+      WHERE l."modo" = ${lote.modo} AND l."leitor" = ${lote.leitor} AND l."orgaos_centi" IS ${orgaos}
+    ), p AS (
+      SELECT q.* FROM "centi_lote_passos" q JOIN igual i ON q."lote_id" = i."id"
+      WHERE q."inicio" = ${periodo.inicio} AND q."fim" = ${periodo.fim} AND q."pagina" = ${pagina} AND q."estado" = 'ok'
+      ORDER BY q."id" DESC LIMIT 1
+    )
+    SELECT p."id" AS "passo", p."assinatura_bruta" AS "assinatura", (SELECT "concluido_em" IS NOT NULL FROM igual) AS "concluido",
+      COALESCE((SELECT julianday(c."vinculos_em") >= julianday((SELECT "concluido_em" FROM igual)) FROM "empenho_cards" c WHERE c."id" = ${lote.cardId}), 0) AS "vinculosDepois",
+      json_array_length(COALESCE(p."chaves_fora", '[]')) AS "fora",
+      (SELECT COUNT(*) FROM (SELECT j."value" AS "c" FROM json_each(COALESCE(p."chaves_iguais", '[]')) j
+         UNION SELECT g."value" FROM json_each(COALESCE(p."chaves_gravadas", '[]')) g) k
+       WHERE NOT EXISTS (SELECT 1 FROM ${t} e WHERE e."card_id" = ${lote.cardId} AND e."chave" = k."c" AND e."hash" IS NOT NULL
+         AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL)) AS "invalidos"
+    FROM p`);
+  const r = linhas[0];
+  return r ? { passo: r.passo, assinatura: r.assinatura, concluido: !!r.concluido, vinculosDepois: !!r.vinculosDepois, fora: Number(r.fora), invalidos: Number(r.invalidos) } : null;
+}
+
+/**
+ * A PÁGINA IDÊNTICA à da última volta (`podePular`): o passo `ok` é COPIADO do anterior — as contagens, a soma, o total e as
+ * chaves (as iguais + as que foram ao staging passam a ser iguais: hoje valem no banco com a mesma assinatura; as fora seguem
+ * fora) —, sem ler nem gravar registro nenhum. Por órgão, o fim do período é decidido pelo fecho (nunca copiado).
+ */
+export function comandoPaginaIgual(db: Db, loteId: number, anterior: number, corpo: string | null, porOrgao: boolean) {
+  const a = centiLotePassos;
+  const iguais = sql`(SELECT json_group_array("c") FROM (SELECT j."value" AS "c" FROM json_each(COALESCE(${a.chavesIguais}, '[]')) j UNION SELECT g."value" FROM json_each(COALESCE(${a.chavesGravadas}, '[]')) g))`;
+  const sel = db
+    .select({
+      id: sql<null>`NULL`.as("id"),
+      loteId: sql<number>`${loteId}`.as("lote_id"),
+      inicio: a.inicio,
+      fim: a.fim,
+      pagina: a.pagina,
+      estado: sql<string>`'ok'`.as("estado"),
+      fimPeriodo: porOrgao ? sql<number>`0`.as("fim_periodo") : a.fimPeriodo,
+      status: a.status,
+      bytes: a.bytes,
+      ms: sql<number>`0`.as("ms"),
+      recebidos: a.recebidos,
+      novos: a.novos,
+      recusados: a.recusados,
+      repetidos: a.repetidos,
+      total: a.total,
+      soma: a.soma,
+      mensagem: sql<string>`${MSG_PAGINA_IGUAL}`.as("mensagem"),
+      corpo: sql<string | null>`${corpo}`.as("corpo"),
+      resNovos: sql<number>`0`.as("res_novos"),
+      resAlterados: sql<number>`0`.as("res_alterados"),
+      resIguais: sql<number>`json_array_length(${iguais})`.as("res_iguais"),
+      resSemVinculo: sql<number>`json_array_length(COALESCE(${a.chavesFora}, '[]'))`.as("res_sem_vinculo"),
+      em: sql<string>`CURRENT_TIMESTAMP`.as("em"),
+      chavesIguais: sql<string>`${iguais}`.as("chaves_iguais"),
+      chavesFora: a.chavesFora,
+      chavesGravadas: sql<string>`'[]'`.as("chaves_gravadas"),
+      assinaturaBruta: a.assinaturaBruta,
+    })
+    .from(a)
+    .where(eq(a.id, anterior));
+  return db.insert(centiLotePassos).select(sel as never);
+}
+
+/** A mensagem do passo da página idêntica (a contagem dos "sem mudança" no histórico procura por ela). */
+export const MSG_PAGINA_IGUAL = "Sem mudança desde a importação anterior — nada foi relido nem regravado.";

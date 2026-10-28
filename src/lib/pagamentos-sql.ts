@@ -136,8 +136,8 @@ export async function contagemPagamentos(db: Db, loteId: number, card: number, a
  * com o destino pelo empenho e o leitor); o resultado e as LISTAS das chaves (iguais · sem destino) vão ao passo — o IGUAL e
  * o SEM DESTINO nunca são escritos no staging.
  */
-export function comandosConferirPagamentos(db: Db, loteId: number, card: number, pagina: number, idOrgao: number, linhas: readonly ComHash<LinhaPagamento>[], iguais: readonly ParIgual[] = [], passo?: number) {
-  return comandosConferirAssinatura(db, conf(idOrgao), loteId, card, pagina, linhas, iguais, [], passo);
+export function comandosConferirPagamentos(db: Db, loteId: number, card: number, pagina: number, idOrgao: number, linhas: readonly ComHash<LinhaPagamento>[], iguais: readonly ParIgual[] = [], passo?: number, leitor?: number) {
+  return comandosConferirAssinatura(db, { ...conf(idOrgao), leitor }, loteId, card, pagina, linhas, iguais, [], passo);
 }
 
 const VALORES = ["valor", "valorRetencao", "valorLiquido"] as const;

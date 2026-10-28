@@ -3,7 +3,6 @@ import { centiBrutos, centiLeituras, centiLotePassos } from "@/db/schema";
 import { baixarSeguro } from "./busca-segura";
 import { getDb } from "./db";
 import { type CardEmpenho, urlDoCard } from "./empenho-cards-core";
-import type { LoteCenti, Periodo } from "./empenhos-core";
 import {
   gravarParte,
   gravarTextoInteiro,
@@ -15,6 +14,10 @@ import {
   type ResultadoPagina,
   TEMPO_MS,
 } from "./empenhos-importacao";
+import { type LoteCenti, type Periodo, podePular } from "./empenhos-core";
+import { comandoPaginaIgual, comandoRecontarLote, consultaPaginaAnterior, consultaUltimoPasso, type LinhaPasso } from "./empenhos-sql";
+import { comandosFechoPeriodoLiquidacoes } from "./liquidacoes-sql";
+import { paraPasso } from "./empenhos";
 import { BYTES_CAPTURA, corteUtf8, type FormaResposta, hexDe, JANELA, janelaDosPedacos, MAX_REINICIOS, processarJanela, semRepetidos, TAM_CAUDA } from "./fragmentos-centi-core";
 import type { ResumoPagina } from "./importacao-partes-core";
 
@@ -72,7 +75,32 @@ function baixarFaixa(card: CardEmpenho, ped: Pedido, de: number, ate: number) {
   return baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", faixa: { de, ate } });
 }
 
-export type Avanco = { resultado?: ResultadoPagina; situacao: string };
+/** `pulou` = a página era IDÊNTICA à da última volta: nada foi lido nem gravado (uma tarefa LEVE — a execução segue). */
+export type Avanco = { resultado?: ResultadoPagina; situacao: string; pulou?: boolean };
+
+/** O SHA-256 (hex) dos bytes exatos da resposta — nativo (`crypto.subtle`), sem custo de JS. */
+export async function assinaturaDosBytes(bytes: Uint8Array): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>));
+  return Array.from(h, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * A PÁGINA IDÊNTICA à da última volta promovida (`podePular`): o passo é COPIADO num batch — nada é decodificado, lido como
+ * JSON, conferido nem gravado. null = não pode pular (lê como sempre).
+ */
+async function pularSeIgual(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, assinatura: string): Promise<ResultadoPagina | null> {
+  const db = getDb();
+  const anterior = await consultaPaginaAnterior(db, ped.modo, { ...lote, cardId: card.id }, periodo, ped.base.pagina);
+  if (!anterior || !podePular(anterior, assinatura, ped.modo)) return null;
+  const res = await db.batch([
+    comandoPaginaIgual(db, lote.id, anterior.passo, ped.base.corpo ?? null, ped.porOrgao),
+    ...(ped.porOrgao ? comandosFechoPeriodoLiquidacoes(db, lote.id, periodo, lote.orgaosCenti?.length ?? 0) : []),
+    comandoRecontarLote(db, lote.id),
+    consultaUltimoPasso(db, lote.id),
+  ] as never);
+  const passo = paraPasso((res as LinhaPasso[][]).at(-1)?.[0] as LinhaPasso);
+  return { passo, continuar: ped.porOrgao ? ped.base.pagina < (lote.orgaosCenti?.length ?? 0) : !passo.fimPeriodo };
+}
 
 /**
  * COMEÇA a página na automática: a resposta pequena é lida e guardada já; a grande abre a leitura fragmentada com o 1º
@@ -91,9 +119,15 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
   }
   const ms = Date.now() - t0;
   const bytes = r.bytes ?? new Uint8Array();
+  // A resposta INTEIRA num pedido tem a assinatura dos bytes exatos: igual à da última volta = a página não mudou.
+  const assinatura = r.terminou ? await assinaturaDosBytes(bytes) : null;
+  if (assinatura) {
+    const igual = await pularSeIgual(card, lote, periodo, ped, assinatura);
+    if (igual) return { resultado: igual, situacao: "sem mudança", pulou: true };
+  }
   if (r.terminou && bytes.length <= JANELA) {
     const texto = new TextDecoder().decode(bytes);
-    return { resultado: await gravarTextoInteiro(card, lote, periodo, ped, texto, r.status, ms), situacao: "página lida" };
+    return { resultado: await gravarTextoInteiro(card, lote, periodo, ped, texto, r.status, ms, assinatura), situacao: "página lida" };
   }
   const corte = r.terminou ? bytes.length : corteUtf8(bytes, bytes.length);
   const texto = new TextDecoder().decode(bytes.subarray(0, corte));
@@ -111,6 +145,7 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
       comprimento: r.comprimento ?? null,
       status: r.status,
       ms,
+      assinatura,
     }),
     db.insert(centiBrutos).select(
       db
@@ -243,7 +278,7 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
   const periodo = periodoDe(l);
   if (r.fim) {
     const resumo: ResumoPagina = { status: l.status, bytes: l.bytesCapturados, ms: l.ms, recebidos: contas.recebidos, recusados: contas.recusados, repetidos: contas.repetidos, total: contas.total, reparado: !!contas.reparado };
-    const resultado = await gravarParte(card, lote, periodo, ped, { parte: l.parte, ultima: true, passo: l.passoId, linhas: lida?.linhas ?? [], resumo }, [apagar(l.id)]);
+    const resultado = await gravarParte(card, lote, periodo, ped, { parte: l.parte, ultima: true, passo: l.passoId, linhas: lida?.linhas ?? [], resumo, assinatura: l.assinatura }, [apagar(l.id)]);
     return { resultado, situacao: "página lida (fragmentada)" };
   }
   if (!lida || !lida.linhas.length) {

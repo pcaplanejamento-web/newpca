@@ -41,8 +41,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   // repassado como veio (o Worker não lê nem serializa milhares de linhas).
   const anoAssinaturas = intId(busca.get("assinaturas") ?? "");
   if (anoAssinaturas) {
-    const [r] = await consultaAssinaturas(getDb(), a.card.tipo, a.card.id, anoAssinaturas);
-    return new Response(`{"ok":true,"assinaturas":${r?.j ?? "{}"}}`, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+    // Em PÁGINAS (`depois` = o último id da página anterior; `ultimo` null = acabou): cada texto bem abaixo dos 2 MB do D1.
+    const depois = Math.max(0, Math.trunc(Number(busca.get("depois") ?? 0)) || 0);
+    const [r] = await consultaAssinaturas(getDb(), a.card.tipo, a.card.id, anoAssinaturas, depois);
+    return new Response(`{"ok":true,"assinaturas":${r?.j ?? "{}"},"ultimo":${r?.ultimo == null ? "null" : Number(r.ultimo)}}`, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
   }
   const loteId = intId(busca.get("lote") ?? "");
   if (loteId) {

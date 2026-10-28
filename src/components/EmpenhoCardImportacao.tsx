@@ -354,8 +354,9 @@ export function EmpenhoCardImportacao({
       numero: (l) => l.saude?.pedidos ?? 0,
       render: (l) =>
         l.saude ? (
-          <span className="tabular-nums" title={`${num(l.saude.pedidos)} pedidos à Centi · ${num(l.saude.erros)} com erro`}>
+          <span className="tabular-nums" title={`${num(l.saude.pedidos)} pedidos à Centi · ${num(l.saude.erros)} com erro · ${num(l.saude.semMudanca)} página(s) sem mudança desde a importação anterior (nada relido nem regravado)`}>
             {num(l.saude.pedidos)}
+            {l.saude.semMudanca ? <span className="text-muted"> · {num(l.saude.semMudanca)} sem mudança</span> : null}
             {l.saude.erros ? <span className="text-danger"> · {num(l.saude.erros)} erro(s)</span> : null}
           </span>
         ) : (

@@ -472,7 +472,8 @@ export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue
 export const MINUTOS_LOTE_PARADO = 30;
 
 /** A SAÚDE de uma importação: quantos pedidos à Centi, quantos com erro, os bytes baixados e o tempo de espera pela Centi. */
-export type SaudeLote = { pedidos: number; erros: number; bytes: number; msCenti: number };
+/** A saúde do lote: os pedidos à Centi, os erros, o que foi baixado, a espera — e as páginas IDÊNTICAS à volta anterior (puladas na automática). */
+export type SaudeLote = { pedidos: number; erros: number; bytes: number; msCenti: number; semMudanca: number };
 
 export type LoteCenti = {
   id: number;
@@ -682,4 +683,21 @@ export function fracaoDoAndamento(ano: number, a: AndamentoLote): number {
 export function erroUnico(e: unknown): boolean {
   const msg = e instanceof Error ? `${e.message} ${e.cause instanceof Error ? e.cause.message : ""}` : String(e);
   return /UNIQUE constraint failed/i.test(msg);
+}
+
+/**
+ * A PÁGINA IDÊNTICA na atualização automática (só quando a resposta veio INTEIRA num pedido — a assinatura é a dos bytes
+ * exatos): pula o reprocessamento quando a mesma página na ÚLTIMA volta promovida teve a MESMA assinatura, os vínculos do card
+ * não mudaram desde então, TODAS as chaves dela valem hoje no banco e — nas liquidações e nos pagamentos, cujo destino depende
+ * de empenhos que podem ter chegado depois — ela não tinha registros sem destino. Na dúvida, não pula (lê como sempre).
+ */
+export function podePular(
+  anterior: { assinatura: string | null; concluido: boolean; vinculosDepois: boolean; fora: number; invalidos: number } | null,
+  assinatura: string | null,
+  tipo: "empenhos" | "liquidacoes" | "pagamentos",
+): boolean {
+  if (!anterior || !assinatura || anterior.assinatura !== assinatura || !anterior.concluido) return false;
+  if (anterior.invalidos !== 0) return false;
+  if (tipo === "empenhos") return !anterior.vinculosDepois;
+  return anterior.fora === 0;
 }

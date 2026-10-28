@@ -71,6 +71,7 @@ import {
   jaNoLote,
   lidoNoPeriodo,
   ultimoPromovido,
+  ultimoPasso,
   valoresSuspeitos,
   vigentesDosOrgaos,
 } from "./empenhos-sql";
@@ -229,7 +230,16 @@ export async function falhaDaPagina(card: CardEmpenho, lote: LoteCenti, periodo:
 }
 
 /** `parte` = quantas partes já vieram antes desta (0 = a 1ª); `ultima` traz o `resumo`. */
-export type ParteLida = { parte: number; ultima: boolean; passo: number | null; linhas: object[]; iguais?: ParIgual[]; resumo: ResumoPagina | null };
+export type ParteLida = {
+  parte: number;
+  ultima: boolean;
+  passo: number | null;
+  linhas: object[];
+  iguais?: ParIgual[];
+  resumo: ResumoPagina | null;
+  /** O SHA-256 dos bytes da resposta (só quando veio inteira num pedido — a automática): vai ao passo final. */
+  assinatura?: string | null;
+};
 
 /**
  * GUARDA UMA PARTE da página (as linhas já lidas — conferidas antes): cada parte = um lote de comandos de tamanho FIXO,
@@ -265,7 +275,7 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   const daParte: unknown[] = [];
   let depois: unknown[] = [];
   if (ped.modo === "pagamentos" || ped.modo === "liquidacoes") {
-    const c = (ped.modo === "pagamentos" ? comandosConferirPagamentos : comandosConferirLiquidacoes)(db, lote.id, card.id, pagina, ped.idOrgao ?? 0, comHash as never, iguais, alvo);
+    const c = (ped.modo === "pagamentos" ? comandosConferirPagamentos : comandosConferirLiquidacoes)(db, lote.id, card.id, pagina, ped.idOrgao ?? 0, comHash as never, iguais, alvo, lote.leitor);
     daParte.push(...c.cmds);
     depois = c.depois;
   } else {
@@ -279,7 +289,7 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     const catalogo = catalogoDasLinhas(linhas);
     // POR ÓRGÃO: o ID pedido e os órgãos gestores que vieram entram no MAPA (a base da leitura por órgão).
     const gestores = ped.porOrgao && ped.idOrgao != null ? [...new Set(linhas.map((l) => l.orgaoGestor).filter(Boolean))] : [];
-    const c = mapa ? comandosConferirAssinatura(db, CONF_EMPENHOS, lote.id, card.id, pagina, guardar, iguais, soContar.map((l) => l.chave), alvo) : null;
+    const c = mapa ? comandosConferirAssinatura(db, { ...CONF_EMPENHOS, leitor: lote.leitor }, lote.id, card.id, pagina, guardar, iguais, soContar.map((l) => l.chave), alvo) : null;
     daParte.push(
       // Em grupos de 40 (2 parâmetros por gestor — o limite de 100 do D1).
       ...Array.from({ length: Math.ceil(gestores.length / 40) }, (_, i) => comandoRegistrarGestores(db, ped.idOrgao as number, gestores.slice(i * 40, i * 40 + 40))),
@@ -363,6 +373,7 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     ...daParte,
     ...(p.passo == null ? [] : [db.update(centiLotePassos).set({ ...final, fimPeriodo: final.fimPeriodo ? 1 : 0 }).where(eq(centiLotePassos.id, p.passo))]),
     ...depois,
+    ...(p.assinatura ? [db.update(centiLotePassos).set({ assinaturaBruta: p.assinatura }).where(eq(centiLotePassos.id, p.passo ?? ultimoPasso(lote.id)))] : []),
     ...fecho,
     comandoRecontarLote(db, lote.id),
     ...extras,
@@ -392,7 +403,7 @@ export async function guardarParteDoLote(
  * Lê e guarda uma página PEQUENA já baixada (o texto inteiro) NO SERVIDOR — a atualização automática, quando a resposta
  * cabe numa janela (`JANELA`); a maior é fragmentada (`empenhos-fragmentos.ts`). Guarda pelas MESMAS partes da tela.
  */
-export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, texto: string, status: number | null, ms: number): Promise<ResultadoPagina> {
+export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, ped: Pedido, texto: string, status: number | null, ms: number, assinatura: string | null = null): Promise<ResultadoPagina> {
   let lida: ReturnType<typeof lerPaginaEmpenhos> | ReturnType<typeof lerPaginaLiquidacoes> | ReturnType<typeof lerPaginaPagamentos>;
   try {
     lida = lerPaginaDoModo(ped, texto, lote.ano);
@@ -408,7 +419,8 @@ export async function gravarTextoInteiro(card: CardEmpenho, lote: LoteCenti, per
   for (let i = 0; i < partes.length; i++) {
     const linhas = lida.linhas.slice(feitas, feitas + partes[i].length);
     feitas += linhas.length;
-    res = await gravarParte(card, lote, periodo, ped, { parte: i, ultima: i === partes.length - 1, passo, linhas, resumo: i === partes.length - 1 ? resumo : null });
+    const ultima = i === partes.length - 1;
+    res = await gravarParte(card, lote, periodo, ped, { parte: i, ultima, passo, linhas, resumo: ultima ? resumo : null, assinatura: ultima ? assinatura : null });
     passo = res.passo.id;
   }
   return res as ResultadoPagina;

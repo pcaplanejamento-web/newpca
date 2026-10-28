@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.242.0",
+    data: "2026-10-28",
+    titulo: "Atualização automática rápida e segura em segundo plano",
+    mudancas: [
+      { tipo: "melhoria", area: "Configurações", texto: "A atualização automática não refaz o que não mudou: a página da Centi idêntica à da última volta é reconhecida pela assinatura dos dados e não é relida nem regravada — várias por execução. Uma volta completa cai de horas para cerca de uma hora.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "A primeira importação depois da v1.241.0 não reescreve mais todos os registros: os já gravados e iguais só recebem a assinatura (protege o limite diário de gravações do banco).", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Configurações", texto: "Partes menores e de tamanho fixo também para os registros iguais, e as assinaturas baixadas em páginas — a importação pela tela fica estável em cards grandes.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "No histórico das importações, quantas páginas vieram sem mudança.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.241.0",
     data: "2026-10-28",
     titulo: "Importações rápidas que só gravam o que mudou, com histórico e “Importar tudo”",

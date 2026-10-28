@@ -3,7 +3,7 @@ import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
 import { registrarLeituraCard } from "./empenho-cards";
-import { COLUNAS_PASSO, comandosFecharLote, type LinhaPasso } from "./empenhos-sql";
+import { COLUNAS_PASSO, comandosFecharLote, type LinhaPasso, MSG_PAGINA_IGUAL } from "./empenhos-sql";
 import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroUnico, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
@@ -30,6 +30,7 @@ export async function listarLotes(cardId: number, limite = 20): Promise<(LoteCen
       erros: sql<number>`SUM(CASE WHEN ${centiLotePassos.estado} = 'erro' AND COALESCE(${centiLotePassos.mensagem}, '') NOT LIKE 'Guardando a página%' THEN 1 ELSE 0 END)`,
       bytes: sql<number>`COALESCE(SUM(${centiLotePassos.bytes}), 0)`,
       ms: sql<number>`COALESCE(SUM(${centiLotePassos.ms}), 0)`,
+      semMudanca: sql<number>`SUM(CASE WHEN ${centiLotePassos.mensagem} = ${MSG_PAGINA_IGUAL} THEN 1 ELSE 0 END)`,
     })
     .from(centiLotePassos)
     .where(sql`${centiLotePassos.loteId} IN (SELECT value FROM json_each(${JSON.stringify(l.map((x) => x.id))}))`)
@@ -37,7 +38,7 @@ export async function listarLotes(cardId: number, limite = 20): Promise<(LoteCen
   const porLote = new Map(s.map((x) => [x.lote, x]));
   return l.map((x) => {
     const r = porLote.get(x.id);
-    return { ...paraLote(x), saude: { pedidos: r?.pedidos ?? 0, erros: Number(r?.erros ?? 0), bytes: Number(r?.bytes ?? 0), msCenti: Number(r?.ms ?? 0) } };
+    return { ...paraLote(x), saude: { pedidos: r?.pedidos ?? 0, erros: Number(r?.erros ?? 0), bytes: Number(r?.bytes ?? 0), msCenti: Number(r?.ms ?? 0), semMudanca: Number(r?.semMudanca ?? 0) } };
   });
 }
 

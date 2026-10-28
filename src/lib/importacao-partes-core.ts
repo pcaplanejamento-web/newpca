@@ -125,10 +125,15 @@ export const MAX_PARES_PARTE = 5000;
 /** Uma PARTE: as tuplas (os registros NOVOS ou DIFERENTES do gravado, inteiros) e os pares dos IGUAIS. */
 export type Parte = { tuplas: unknown[][]; iguais: ParIgual[] };
 
+/** O tamanho de UM par no JSON da parte (`["chave","hash"],`) — a MESMA conta no navegador e no servidor. */
+export const bytesDoPar = (p: ParIgual) => JSON.stringify(p).length + 1;
+
 /**
  * As PARTES de uma página lida (no navegador), já separando o que MUDOU: a linha cuja assinatura é a gravada (`gravados`,
  * chave → assinatura, baixado no começo da importação) vai só como o PAR (chave + assinatura) — o servidor confere no banco;
- * as demais vão inteiras (`partesDaPagina`). Página vazia = UMA parte vazia.
+ * as demais vão inteiras (`partesDaPagina`). O ORÇAMENTO de cada parte é em BYTES somando as linhas e os pares (≤
+ * `MAX_BYTES_PARTE`): os pares completam as partes de linhas e o que sobra vai em partes só de pares do mesmo tamanho — a
+ * CPU de cada requisição fica fixa, qualquer que seja o tamanho das chaves. Página vazia = UMA parte vazia.
  */
 export function partesComIguais(modo: ModoParte, linhas: readonly object[], gravados: ReadonlyMap<string, string>, leitor: number, o: { maxLinhas?: number; maxBytes?: number; maxPares?: number } = {}): Parte[] {
   const inteiras: object[] = [];
@@ -141,16 +146,19 @@ export function partesComIguais(modo: ModoParte, linhas: readonly object[], grav
     else inteiras.push(l);
   }
   const maxPares = o.maxPares ?? MAX_PARES_PARTE;
+  const maxBytes = o.maxBytes ?? MAX_BYTES_PARTE;
   const tuplas = inteiras.length ? partesDaPagina(modo, inteiras, o) : [];
-  const partes: Parte[] = tuplas.map((t) => ({ tuplas: t, iguais: [] }));
-  for (let i = 0; i < iguais.length; i += maxPares) {
-    const fatia = iguais.slice(i, i + maxPares);
-    // Os pares vão nas partes que já existem (uma fatia por parte) e, sobrando, em partes só de pares.
-    const alvo = partes.find((p) => !p.iguais.length);
-    if (alvo) alvo.iguais = fatia;
-    else partes.push({ tuplas: [], iguais: fatia });
+  const partes: (Parte & { bytes: number })[] = tuplas.map((t) => ({ tuplas: t, iguais: [], bytes: JSON.stringify(t).length }));
+  let k = 0;
+  for (const par of iguais) {
+    const n = bytesDoPar(par);
+    // A 1ª parte com espaço (linhas + pares ≤ o teto; pares ≤ o teto de quantidade); nenhuma = uma parte só de pares.
+    while (k < partes.length && (partes[k].bytes + n > maxBytes || partes[k].iguais.length >= maxPares)) k++;
+    if (k === partes.length) partes.push({ tuplas: [], iguais: [], bytes: 2 });
+    partes[k].iguais.push(par);
+    partes[k].bytes += n;
   }
-  return partes.length ? partes : [{ tuplas: [], iguais: [] }];
+  return partes.length ? partes.map(({ tuplas: t, iguais: i }) => ({ tuplas: t, iguais: i })) : [{ tuplas: [], iguais: [] }];
 }
 
 /** Confere os PARES de uma parte (no servidor): chave e assinatura válidas, sem chave repetida nem já entre as linhas. */
@@ -158,6 +166,7 @@ export function paresDaParte(pares: unknown, chavesDasLinhas: ReadonlySet<string
   if (pares == null) return { ok: true, pares: [] };
   if (!Array.isArray(pares) || pares.length > MAX_PARES_PARTE) return { ok: false, motivo: `Os iguais da parte passam de ${MAX_PARES_PARTE}.` };
   const vistas = new Set<string>();
+  let bytes = 0;
   for (let i = 0; i < pares.length; i++) {
     const p = pares[i];
     if (!Array.isArray(p) || p.length !== 2 || typeof p[0] !== "string" || !p[0] || p[0].length > 200 || typeof p[1] !== "string" || !/^[0-9a-z]{2,16}$/.test(p[1])) {
@@ -165,6 +174,8 @@ export function paresDaParte(pares: unknown, chavesDasLinhas: ReadonlySet<string
     }
     if (vistas.has(p[0]) || chavesDasLinhas.has(p[0])) return { ok: false, motivo: `Igual ${i + 1}: chave repetida na parte.` };
     vistas.add(p[0]);
+    bytes += bytesDoPar(p as ParIgual);
+    if (bytes > MAX_BYTES_PARTE) return { ok: false, motivo: `Os iguais da parte passam de ${Math.round(MAX_BYTES_PARTE / 1000)} KB.` };
   }
   return { ok: true, pares: pares as ParIgual[] };
 }
