@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.245.2",
+    data: "2026-10-28",
+    titulo: "Escolha das importações automáticas mais clara",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "Em “Quais importações”, cada ano de cada card tem um interruptor: ligado é automática, desligado é manual.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "Os avisos da escolha e da configuração (o card a configurar, a escolha ainda não salva, o que falta corrigir) ficam no botão de avisos (!), sem faixas na tela.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.245.1",
     data: "2026-10-28",
     titulo: "Seletor de colunas sem rolagem dupla",
