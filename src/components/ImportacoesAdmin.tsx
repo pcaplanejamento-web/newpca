@@ -31,7 +31,7 @@ import { importarCard, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
-import { Avisos } from "./Avisos";
+import { type Aviso, Avisos } from "./Avisos";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -39,10 +39,8 @@ import { EmpenhoCardConfig } from "./EmpenhoCardConfig";
 import { EmpenhoCardImportacao, textoConclusao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
-import { Callout } from "./Callout";
-import { ChipsIcone } from "./ChipsIcone";
 import { SelectField, TextField } from "./Field";
-import { IconCalendar, IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
+import { IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
@@ -670,6 +668,7 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
         bloqueado={salvando}
         size="lg"
         titulo="Atualização automática e regras"
+        acoesCabecalho={motivo ? <Avisos titulo="Corrija antes de salvar" avisos={[{ id: "motivo", texto: motivo, tom: "danger" }]} /> : undefined}
         rodape={
           <div className="flex w-full justify-end gap-2">
             <Button size="sm" variant="secondary" onClick={() => setEditando(null)} disabled={salvando}>
@@ -683,7 +682,6 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
       >
         {v && (
           <div className="space-y-[var(--gap-block)]">
-            {motivo && <Callout kind="danger">{motivo}</Callout>}
             <SecaoBanner titulo="Atualização automática">
               <div className="flex flex-wrap items-center gap-1">
                 <Switch checked={v.ativa} onChange={(x) => muda("ativa", x)} label="Ligada" dica="Liga a atualização automática de TODAS as importações (desligada por padrão)." />
@@ -771,11 +769,22 @@ function EscolhaAutomaticas({
     const novo = ligado ? c.anos.filter((x) => x === a || atual.includes(x)) : atual.filter((x) => x !== a);
     onMudar({ ...valor, [String(c.id)]: novo });
   };
+  const avisos: Aviso[] = [
+    ...(legado ? [{ id: "legado", texto: "Até agora todas as importações eram automáticas. Salvar passa a valer a escolha abaixo.", tom: "info" as const }] : []),
+    ...cards
+      .filter((c) => pendenciasDoCard(c, c.vinculos).length > 0)
+      .map((c) => ({
+        id: `pend-${c.id}`,
+        texto: `${c.nome}: ${pendenciasDoCard(c, c.vinculos).map((p) => p.texto).join(" ")} — não entra na automática.`,
+        tom: "warn" as const,
+      })),
+  ];
   return (
     <SecaoBanner
       titulo="Quais importações"
       acao={
         <div className="flex items-center gap-1">
+          <Avisos titulo="Avisos da escolha" avisos={avisos} />
           <Button size="sm" variant="ghost" onClick={todas}>
             Todas
           </Button>
@@ -784,15 +793,14 @@ function EscolhaAutomaticas({
           </Button>
           <Ajuda titulo="Quais importações" compacta>
             <p>
-              Marque os ANOS de cada card que a atualização automática lê. Toda importação é de um ano: o card que tem 2025 e 2026 pode
+              Ligue os ANOS de cada card que a atualização automática lê. Toda importação é de um ano: o card que tem 2025 e 2026 pode
               atualizar só 2026, por exemplo. “Ano atual” acompanha a virada do ano.
             </p>
-            <p>O que fica desmarcado só é importado à mão (a aba Importação do card ou “Importar tudo”). Um card novo começa manual.</p>
+            <p>O que fica desligado só é importado à mão (a aba Importação do card ou “Importar tudo”). Um card novo começa manual.</p>
           </Ajuda>
         </div>
       }
     >
-      {legado && <Callout kind="info">Até agora todas as importações eram automáticas. Salvar passa a valer a escolha abaixo.</Callout>}
       {cards.length === 0 && <p className="text-[13px] text-muted">Nenhum card cadastrado.</p>}
       {TIPOS.map((t) => {
         const doTipo = cards.filter((c) => c.tipo === t);
@@ -802,29 +810,29 @@ function EscolhaAutomaticas({
             <p className="text-[12px] font-semibold uppercase tracking-wide text-muted">{NOME_TIPO[t].titulo}</p>
             <ul className="divide-y divide-border rounded-control border border-border">
               {doTipo.map((c) => {
-                const pend = pendenciasDoCard(c, c.vinculos);
-                const escolhidos = valor[String(c.id)] ?? [];
-                const valendo = anosAutomaticos({ automaticas: valor }, c, ano);
+                const pend = pendenciasDoCard(c, c.vinculos).length > 0;
+                const escolhidos = (valor[String(c.id)] ?? []).filter((a) => c.anos.includes(a));
                 return (
-                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text" title={c.nome}>
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1">
+                    <span className={`min-w-0 flex-1 truncate text-[13px] font-medium ${pend ? "text-muted" : "text-text"}`} title={c.nome}>
                       {c.nome}
                     </span>
-                    {pend.length ? (
-                      <span className="text-[12px] text-[color:var(--warn)]" title={pend.map((p) => p.texto).join(" ")}>
-                        A configurar — não entra
-                      </span>
-                    ) : (
-                      <>
-                        <ChipsIcone<string>
-                          ariaLabel={`Anos automáticos de ${c.nome}`}
-                          itens={c.anos.map((a) => ({ value: String(a), label: a <= 0 ? `${rotuloAno(a)} (${ano + a})` : rotuloAno(a), Icone: IconCalendar, cor: "var(--accent)" }))}
-                          ligados={escolhidos.filter((a) => c.anos.includes(a)).map(String)}
-                          onAlternar={(v, ligado) => alternar(c, Number(v), ligado)}
-                        />
-                        <Badge tone={valendo.length ? "emerald" : "slate"}>{valendo.length ? "Automática" : "Manual"}</Badge>
-                      </>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3">
+                      {c.anos.map((a) => {
+                        const rotulo = a <= 0 ? `${rotuloAno(a)} (${ano + a})` : rotuloAno(a);
+                        const ligado = !pend && escolhidos.includes(a);
+                        return (
+                          <Switch
+                            key={a}
+                            checked={ligado}
+                            disabled={pend}
+                            onChange={(x) => alternar(c, a, x)}
+                            label={rotulo}
+                            dica={pend ? "Card a configurar — não entra na automática." : ligado ? `${c.nome} · ${rotulo}: automática (desligar = manual)` : `${c.nome} · ${rotulo}: manual (ligar = automática)`}
+                          />
+                        );
+                      })}
+                    </div>
                   </li>
                 );
               })}

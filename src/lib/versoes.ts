@@ -45,6 +45,23 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.245.2",
+    data: "2026-10-28",
+    titulo: "Escolha das importações automáticas mais clara",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "Em “Quais importações”, cada ano de cada card tem um interruptor: ligado é automática, desligado é manual.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "Os avisos da escolha e da configuração (o card a configurar, a escolha ainda não salva, o que falta corrigir) ficam no botão de avisos (!), sem faixas na tela.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.245.1",
+    data: "2026-10-28",
+    titulo: "Seletor de colunas sem rolagem dupla",
+    mudancas: [
+      { tipo: "correcao", area: "Tabelas", texto: "O seletor de colunas tem uma rolagem só: a busca e o rodapé ficam fixos, nada é cortado e não sobra espaço vazio.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.245.0",
     data: "2026-10-28",
     titulo: "Escolher quais importações atualizam sozinhas",
