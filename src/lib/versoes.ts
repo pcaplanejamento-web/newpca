@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.250.0",
+    data: "2026-10-28",
+    titulo: "Importar agora pelos indicadores da Execução e o andamento completo no card",
+    mudancas: [
+      { tipo: "novo", area: "Execução", texto: "Para o ADM, um botão pequeno no canto de cada indicador (empenhos, liquidações, pagamentos) importa na hora os dados atualizados daquela etapa: todos os cards dela, cada um no ano mais recente. O andamento aparece no canto inferior direito e continua mesmo saindo da tela; no fim, os números são atualizados.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Importações", texto: "A aba Importação do card mostra o andamento completo: o percentual, as etapas e cada pedido à Centi.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.249.0",
     data: "2026-10-28",
     titulo: "Declarações: editar até exportar, PDF timbrado e ações na própria tabela",

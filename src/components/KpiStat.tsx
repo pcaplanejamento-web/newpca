@@ -20,6 +20,7 @@ export function KpiStat({
   detalhes,
   emLinha = false,
   canto,
+  acaoCanto,
 }: {
   label: string;
   value: ReactNode;
@@ -41,12 +42,15 @@ export function KpiStat({
   emLinha?: boolean;
   /** Uma informação DISCRETA no canto superior direito (ex.: há quanto tempo os dados foram atualizados). */
   canto?: ReactNode;
+  /** Uma AÇÃO pequena no canto superior direito (ex.: o "Importar agora" do ADM na Execução) — fica FORA do cartão-botão
+   * (botão dentro de botão é inválido), por cima dele; o `canto` abre espaço ao lado. */
+  acaoCanto?: ReactNode;
 }) {
   const Raiz = onClick ? "button" : "div";
-  return (
+  const cartao = (
     <Raiz
       {...(onClick ? { type: "button" as const, onClick, "aria-label": `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}` } : {})}
-      className={`kpi-card relative flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
+      className={`kpi-card relative flex min-w-0 flex-col ${acaoCanto ? "flex-1" : ""} overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
         onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
       }`}
       style={
@@ -67,7 +71,7 @@ export function KpiStat({
       />
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-[12.5px] text-muted">{label}</span>
-        {canto && <span className="shrink-0">{canto}</span>}
+        {canto && <span className={`shrink-0 ${acaoCanto ? "mr-8 lg:mr-7" : ""}`}>{canto}</span>}
         {delta && (
           <span
             className="inline-flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold"
@@ -142,5 +146,12 @@ export function KpiStat({
         </dl>
       )}
     </Raiz>
+  );
+  if (!acaoCanto) return cartao;
+  return (
+    <div className="relative flex min-w-0 flex-col">
+      {cartao}
+      <div className="absolute right-[calc(var(--pad-card)-6px)] top-[calc(var(--pad-card)-6px)] flex">{acaoCanto}</div>
+    </div>
   );
 }

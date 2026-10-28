@@ -10,7 +10,6 @@ import {
   type ConfigImportacoes,
   cardPorOrgao,
   estadoCard,
-  linkImportacoes,
   FREQUENCIAS,
   motivoConfigImportacoes,
   NOME_TIPO,
@@ -27,8 +26,8 @@ import {
   type TipoCard,
   type VinculoCard,
 } from "@/lib/empenho-cards-core";
-import { fracaoDoAno, type LoteCenti, type PassoLote, usaPeriodo } from "@/lib/empenhos-core";
-import { importarCard, RecusaImportacao } from "@/lib/leitura-centi-cliente";
+import { usaPeriodo } from "@/lib/empenhos-core";
+import { type EstadoLinha, importarCards, type LinhaImportacao, perguntaDeQueda, prepararCards } from "@/lib/importar-cards";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
@@ -39,7 +38,7 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { EmpenhoCardConfig } from "./EmpenhoCardConfig";
-import { EmpenhoCardImportacao, textoConclusao } from "./EmpenhoCardImportacao";
+import { EmpenhoCardImportacao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
@@ -199,36 +198,22 @@ export function ImportacoesAdmin() {
   );
 }
 
-/** Uma linha do "Importar tudo": o card e como vai a importação dele. */
-type LinhaTudo = {
-  card: ResumoCard;
-  estado: "fila" | "lendo" | "gravado" | "parcial" | "falhou" | "interrompido" | "cancelado" | "pulado";
-  texto: string;
-  fracao: number;
-  ano: number;
-  retomar: LoteCenti | null;
-};
-
 /**
- * IMPORTAR TUDO de uma vez: todos os cards configurados, com vínculos e sem outra importação conduzida — cada card um lote
- * PRÓPRIO (o servidor deixa um lote lendo por card), todos AO MESMO TEMPO, sem fila entre eles: primeiro os EMPENHOS (as
- * liquidações e os pagamentos seguem o empenho pelo número) e, terminados eles, as LIQUIDAÇÕES e os PAGAMENTOS juntos. A
- * importação de cada card é a MESMA da aba do card (`importarCard`): o ano escolhido (ou o lote aberto do card, que é
- * retomado), a conferência e a queda — a confirmação de cada queda vem uma por vez. Interromper cancela os lotes em curso.
+ * IMPORTAR TUDO de uma vez: todos os cards configurados (o executor `importarCards`, `importar-cards.ts` — o MESMO do
+ * "Importar agora" das KPIs da Execução): cada card num lote próprio, um por vez, os empenhos primeiro; o ano escolhido ou
+ * o lote aberto do card (retomado); a confirmação de cada queda vem uma por vez. Interromper para entre um card e outro.
  */
 function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: RegraRemovidos; onMudou: () => void }) {
   const anoAtual = new Date().getFullYear();
   const anos = useMemo(() => [...new Set(cards.flatMap((c) => anosDoCard(c.anos, anoAtual)))].sort((a, b) => b - a), [cards, anoAtual]);
   const [aberto, setAberto] = useState(false);
   const [ano, setAno] = useState(anoAtual);
-  const [linhas, setLinhas] = useState<LinhaTudo[] | null>(null);
+  const [linhas, setLinhas] = useState<LinhaImportacao[] | null>(null);
   const [rodando, setRodando] = useState(false);
   const parar = useRef(false);
   const { confirmar, confirmacao } = useConfirmacao();
-  /** As quedas chegam de vários cards ao mesmo tempo: uma pergunta por vez. */
-  const filaQueda = useRef<Promise<unknown>>(Promise.resolve());
 
-  const muda = (id: number, l: Partial<LinhaTudo>) => setLinhas((ls) => ls?.map((x) => (x.card.id === id ? { ...x, ...l } : x)) ?? ls);
+  const muda = (id: number, l: Partial<LinhaImportacao>) => setLinhas((ls) => ls?.map((x) => (x.card.id === id ? { ...x, ...l } : x)) ?? ls);
 
   useEffect(() => {
     if (!rodando) return;
@@ -237,73 +222,18 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
     return () => window.removeEventListener("beforeunload", aviso);
   }, [rodando]);
 
-  /** O que vai ser importado: os cards prontos (o lote aberto de cada um é lido para retomar). */
-  async function preparar(): Promise<LinhaTudo[]> {
-    return Promise.all(
-      cards.map(async (card): Promise<LinhaTudo> => {
-        const base: LinhaTudo = { card, estado: "fila", texto: "Na fila", fracao: 0, ano, retomar: null };
-        if (pendenciasDoCard(card, card.vinculos).length > 0) return { ...base, estado: "pulado", texto: "Card ainda não configurado." };
-        const r = await fetch(`/api/empenhos/cards/${card.id}/importar`).catch(() => null);
-        const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; emAndamento?: LoteCenti | null } | undefined;
-        const lendo = j?.emAndamento ?? null;
-        if (lendo?.conduzido) return { ...base, estado: "pulado", texto: "Outra importação está lendo este card agora." };
-        if (lendo) return { ...base, ano: lendo.ano, retomar: lendo, texto: `Continua a importação aberta de ${lendo.ano}` };
-        if (!anosDoCard(card.anos, anoAtual).includes(ano)) return { ...base, estado: "pulado", texto: `O ano ${ano} não está nos anos do card.` };
-        return base;
-      }),
-    );
-  }
-
-  async function umCard(l: LinhaTudo): Promise<void> {
-    const id = l.card.id;
-    const passos: PassoLote[] = [];
-    muda(id, { estado: "lendo", texto: "Lendo na Centi…" });
-    try {
-      const { estado, lote } = await importarCard({
-        cardId: id,
-        ano: l.ano,
-        modo: l.card.tipo !== "empenhos" ? l.card.tipo : undefined,
-        retomar: l.retomar,
-        comPeriodo: usaPeriodo(l.card.parametros),
-        parar: () => parar.current,
-        confirmarQueda: (queda) => {
-          const p = filaQueda.current.then(() =>
-            confirmar({ titulo: `${l.card.nome}: os números caíram — gravar mesmo assim?`, texto: `${queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar este card", perigo: true }),
-          );
-          filaQueda.current = p.catch(() => {});
-          return p;
-        },
-        titulo: `${l.card.nome} · ${l.ano}`,
-        rota: linkImportacoes(l.card.tipo, l.card.id, "importacao"),
-        onAnteriores: (a) => passos.push(...a),
-        onPasso: (p) => {
-          passos.push(p);
-          muda(id, { fracao: fracaoDoAno(l.ano, passos), texto: `Lendo na Centi… ${passos.length} ${passos.length === 1 ? "pedido" : "pedidos"}` });
-        },
-      });
-      if (estado === "gravado" && lote) muda(id, { estado: "gravado", fracao: 1, texto: lote.estado === "promovido" ? textoConclusao(lote, regra) : (lote.mensagem ?? "Concluído.") });
-      else if (estado === "parcial") muda(id, { estado: "parcial", texto: `Parcial — nada foi gravado. ${lote?.mensagem ?? ""}` });
-      else muda(id, { estado, texto: estado === "interrompido" ? "Interrompida — nada foi gravado." : "Cancelada na queda — nada mudou." });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha na importação.";
-      muda(id, { estado: "falhou", texto: e instanceof RecusaImportacao ? msg : `${msg} O que foi lido ficou guardado — Continuar no card lê só o que falta.` });
-    }
-  }
-
   async function comecar() {
     parar.current = false;
     setRodando(true);
     try {
-      const todas = await preparar();
+      const todas = await prepararCards(cards, () => ano, anoAtual);
       setLinhas(todas);
-      const vao = todas.filter((l) => l.estado === "fila");
-      // Os EMPENHOS primeiro (as liquidações e os pagamentos se ligam a eles pelo número), UM CARD POR VEZ: cada card já lê
-      // em paralelo por dentro, e cards juntos só formam fila no banco (o D1 executa uma consulta por vez para todos).
-      const ordem = [...vao.filter((l) => l.card.tipo === "empenhos"), ...vao.filter((l) => l.card.tipo !== "empenhos")];
-      for (const l of ordem) {
-        if (parar.current) break;
-        await umCard(l);
-      }
+      await importarCards(todas, {
+        regra,
+        parar: () => parar.current,
+        confirmarQueda: perguntaDeQueda(confirmar),
+        onLinha: muda,
+      });
     } finally {
       setRodando(false);
       onMudou();
@@ -315,8 +245,8 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
   const feitos = vao.filter((l) => l.estado !== "fila" && l.estado !== "lendo").length;
   const total = vao.length;
   const fracao = total ? vao.reduce((t, l) => t + (l.estado === "fila" ? 0 : l.estado === "lendo" ? l.fracao : 1), 0) / total : 0;
-  const tom = (e: LinhaTudo["estado"]) => (e === "gravado" ? "emerald" : e === "falhou" ? "red" : e === "parcial" || e === "cancelado" ? "amber" : e === "lendo" ? "blue" : "slate");
-  const rotulo: Record<LinhaTudo["estado"], string> = { fila: "Na fila", lendo: "Lendo", gravado: "Gravado", parcial: "Parcial", falhou: "Falhou", interrompido: "Interrompida", cancelado: "Cancelada", pulado: "Fora" };
+  const tom = (e: EstadoLinha) => (e === "gravado" ? "emerald" : e === "falhou" ? "red" : e === "parcial" || e === "cancelado" ? "amber" : e === "lendo" ? "blue" : "slate");
+  const rotulo: Record<EstadoLinha, string> = { fila: "Na fila", lendo: "Lendo", gravado: "Gravado", parcial: "Parcial", falhou: "Falhou", interrompido: "Interrompida", cancelado: "Cancelada", pulado: "Fora" };
 
   return (
     <>

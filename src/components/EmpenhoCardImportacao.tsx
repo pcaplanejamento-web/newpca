@@ -22,6 +22,7 @@ import {
 } from "@/lib/empenhos-core";
 import { textoDuracao } from "@/lib/fluxo-progresso";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
+import { semMudanca, textoConclusao } from "@/lib/importar-cards";
 import { importarCard, lerPassos, PARALELO_LIQUIDACOES, pedirImportacao, RecusaImportacao } from "@/lib/leitura-centi-cliente";
 import { FerramentasAba } from "./AbasEspaco";
 import { AndamentoImportacao } from "./AndamentoImportacao";
@@ -59,16 +60,6 @@ async function excluirTentativas(cardId: number, corpo: { lotes: number[] } | { 
 }
 
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR"));
-/** Os empenhos que a importação concluída trouxe IGUAIS (não regravados). */
-const semMudanca = (l: LoteCenti) => Math.max(0, l.unicos - (l.fora ?? 0) - (l.inseridos ?? 0) - (l.atualizados ?? 0));
-/** O aviso da importação GRAVADA — o MESMO aqui e no "Importar tudo". */
-export function textoConclusao(fim: LoteCenti, regra: "marcar" | "apagar"): string {
-  const f = fim.modo === "liquidacoes";
-  const o = (m: string, fem: string) => (f ? fem : m);
-  const quem = fim.modo === "pagamentos" ? `Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido)` : f ? `Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados)` : `Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados)`;
-  const fora = fim.modo === "dados" || !fim.modo ? "sem vínculo no card" : "sem o empenho nem o órgão no cadastro";
-  return `${quem}: ${num(fim.inseridos)} ${o("novos", "novas")}, ${num(fim.atualizados)} ${o("atualizados", "atualizadas")}, ${num(semMudanca(fim))} sem mudança (nada gravado), ${num(fim.ausentes ?? 0)} ${o("ausentes", "ausentes")} pela 1ª vez (seguem valendo), ${num(fim.removidos)} ${regra === "apagar" ? o("apagados", "apagadas") : o("marcados como removidos", "marcadas como removidas")}${fim.fora ? `, ${num(fim.fora)} ${fora} (não ${o("gravados", "gravadas")})` : ""}.`;
-}
 /** O tipo da importação no histórico. */
 const rotuloTipo = (l: LoteCenti) =>
   `${l.modo === "pagamentos" ? "Pagamentos" : l.modo === "liquidacoes" ? "Liquidações" : l.modo === "unidades" ? "Catálogo" : "Empenhos"}${l.orgaosCenti ? ` · ${l.orgaosCenti.length} órgãos` : ""}`;
@@ -570,7 +561,7 @@ export function EmpenhoCardImportacao({
               {nomeDoLote(atual)} de {num(atual.orgaosCenti.length)} órgãos da Centi, lidos ao mesmo tempo (até {PARALELO_LIQUIDACOES} pedidos em paralelo).
             </p>
           )}
-          {rodando && aoVivo?.estado === "rodando" && <AndamentoImportacao imp={aoVivo} compacto />}
+          {rodando && aoVivo?.estado === "rodando" && <AndamentoImportacao imp={aoVivo} />}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
             <StatMini label="Registros distintos" value={num(atual.unicos)} hint={`${num(atual.recebidos)} recebidos`} />
             <StatMini label="Total informado" value={num(atual.totalInformado)} hint="Soma dos períodos lidos" />

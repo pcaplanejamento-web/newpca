@@ -35,6 +35,8 @@ export function useGiro() {
  * que GIRA dentro de um ANEL enquanto trabalha. `progresso` 0–1 enche o anel (null/ausente = indeterminado: o arco gira).
  * Usos: a barra das Mesas (reverifica protocolos, DFDs e itens, com o andamento), os banners gravados de DFD, item e
  * protocolo (recarrega e revisa — com `useGiro`) e o "Recarregar" das telas de administração. 44px no celular.
+ * `discreto` = pequeno, sem moldura, no canto de um cartão (o "Importar agora" das KPIs da Execução): 24px no desktop, 28px
+ * no toque com a área de toque ampliada a 44px.
  */
 export function BotaoAtualizar({
   ativo,
@@ -44,6 +46,7 @@ export function BotaoAtualizar({
   detalhe,
   onClick,
   disabled = false,
+  discreto = false,
 }: {
   ativo: boolean;
   progresso?: number | null;
@@ -56,6 +59,7 @@ export function BotaoAtualizar({
   onClick: () => void;
   /** Travado (ex.: gravando, sobrescrita em andamento): fica À VISTA, sem agir — a dica diz o motivo. */
   disabled?: boolean;
+  discreto?: boolean;
 }) {
   const R = 15;
   const C = 2 * Math.PI * R;
@@ -69,8 +73,16 @@ export function BotaoAtualizar({
       title={ativo ? fazendo : (dica ?? rotulo)}
       onClick={ativo ? undefined : onClick}
       disabled={disabled && !ativo}
-      className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
-        ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
+      className={`relative inline-flex shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50 ${
+        discreto
+          ? "h-7 w-7 after:absolute after:-inset-2 lg:h-6 lg:w-6 lg:after:hidden pointer-coarse:after:block"
+          : "h-11 w-11 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      } ${
+        ativo
+          ? "border-accent/50 bg-accent-soft text-accent"
+          : discreto
+            ? "border-transparent bg-transparent text-faint hover:bg-surface-2 hover:text-text-2"
+            : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
       }`}
     >
       {ativo && (
@@ -94,7 +106,7 @@ export function BotaoAtualizar({
         </span>
       )}
       <span aria-hidden="true" className={`relative inline-flex ${ativo ? "animate-girar" : ""}`}>
-        <IconRefresh className="h-4 w-4" />
+        <IconRefresh className={discreto ? "h-3.5 w-3.5" : "h-4 w-4"} />
       </span>
     </button>
   );

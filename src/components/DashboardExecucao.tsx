@@ -68,6 +68,12 @@ import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
 import { IconChevronDown, IconChevronLeft, IconClock, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { useImportacoesLocais } from "./ImportacoesAoVivo";
+import { toast } from "./Toast";
+import { useRouter } from "next/navigation";
+import { type ConfigImportacoes, lerRegraRemovidos, NOME_TIPO, type ResumoCard } from "@/lib/empenho-cards-core";
+import { anoMaisRecente, importarCards, perguntaDeQueda, prepararCards, resumoImportacao } from "@/lib/importar-cards";
 import { haQuanto } from "@/lib/acessos-core";
 import type { MetaExec } from "@/lib/execucao-dash-core";
 import { duracaoMotionMs } from "./Modal";
@@ -461,6 +467,7 @@ export function DashboardExecucao({
         <KpiStat
           label="Saldo: empenhos"
           canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "empenhos")} />}
+          acaoCanto={admin ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "empenhos")} /> : undefined}
           value={brl(empenhadoAnim)}
           completo
           cor={COR.empenhado}
@@ -472,6 +479,7 @@ export function DashboardExecucao({
         <KpiStat
           label="Saldo: liquidações"
           canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
+          acaoCanto={admin && temLiq ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "liquidacoes")} /> : undefined}
           value={temLiq ? brl(liquidadoAnim) : "—"}
           completo
           cor={COR.liquidado}
@@ -483,6 +491,7 @@ export function DashboardExecucao({
         <KpiStat
           label="Saldo: pagamentos"
           canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
+          acaoCanto={admin && temPag ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "pagamentos")} /> : undefined}
           value={temPag ? brl(pagoAnim) : "—"}
           completo
           cor={COR.pago}
@@ -1420,6 +1429,68 @@ function DemonstrativoExecucao({
         }
       />
     </ChartCard>
+  );
+}
+
+/**
+ * IMPORTAR AGORA (só o ADM), no canto do indicador: importa os dados atualizados da etapa — todos os cards dela, cada um no
+ * ano mais recente (o lote aberto do card é continuado), pelo MESMO executor do "Importar tudo" (`importarCards`). O
+ * andamento aparece no painel do canto inferior direito e segue ao sair da tela; a queda pergunta aqui (fora da tela = não
+ * grava). No fim, o resumo e a página relida (a versão nova traz os números).
+ */
+function ImportarAgora({ meta }: { meta?: MetaExec }) {
+  const router = useRouter();
+  const { confirmar, confirmacao } = useConfirmacao();
+  const locais = useImportacoesLocais();
+  const [rodando, setRodando] = useState(false);
+  if (!meta?.cards) return null;
+  const tipo = meta.tipo;
+  const nome = NOME_TIPO[tipo].titulo;
+  const lendo = meta.lendo > 0 || locais.some((i) => i.estado === "rodando");
+  async function importar() {
+    if (rodando) return;
+    setRodando(true);
+    try {
+      const [rc, rf] = await Promise.all([fetch("/api/admin/importacoes", { cache: "no-store" }), fetch("/api/admin/importacoes/config", { cache: "no-store" })]);
+      const jc = (await rc.json().catch(() => ({}))) as { ok?: boolean; error?: string; cards?: ResumoCard[] };
+      const jf = (await rf.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes };
+      if (!rc.ok || !jc.ok || !jc.cards) throw new Error(jc.error ?? "Não foi possível ler os cards de importação.");
+      const cards = jc.cards.filter((c) => c.tipo === tipo);
+      if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito.`, confirmar: "Importar" })))
+        return;
+      const anoAtual = new Date().getFullYear();
+      const linhas = await prepararCards(cards, (c) => anoMaisRecente(c, anoAtual), anoAtual);
+      await importarCards(linhas, {
+        regra: lerRegraRemovidos(jf.config?.removidos),
+        parar: () => false,
+        confirmarQueda: perguntaDeQueda(confirmar),
+        onLinha: (id, mudou) => {
+          const l = linhas.find((x) => x.card.id === id);
+          if (l) Object.assign(l, mudou);
+        },
+      });
+      const r = resumoImportacao(linhas);
+      (r.tom === "erro" ? toast.error : r.tom === "aviso" ? toast.warning : toast.success)(`${nome}: ${r.texto}.`);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao importar.");
+    } finally {
+      setRodando(false);
+    }
+  }
+  return (
+    <>
+      <BotaoAtualizar
+        discreto
+        ativo={rodando}
+        disabled={lendo}
+        rotulo={`Importar agora os dados atualizados de ${nome.toLowerCase()}`}
+        dica={lendo ? "Há uma importação em andamento — o andamento está no canto inferior direito" : `Importar agora: ${nome.toLowerCase()}`}
+        detalhe={`Importando ${nome.toLowerCase()} — veja o andamento no canto inferior direito`}
+        onClick={() => void importar()}
+      />
+      {confirmacao}
+    </>
   );
 }
 
