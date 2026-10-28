@@ -6,7 +6,7 @@ import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Button } from "./Button";
 import { Dropdown } from "./Dropdown";
 import { SearchField } from "./Field";
-import { IconAlert, IconClose, IconFilter, IconFixar, IconLimpar, IconRestaurar, IconSave, IconSettings, IconTrash, IconUsers, IconVisao } from "./icons";
+import { IconAlert, IconClose, IconEstrela, IconFilter, IconFixar, IconLimpar, IconRestaurar, IconSave, IconSettings, IconTrash, IconUsers, IconVisao } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 
 // A chave do chip da visão na animação de saída (nenhuma parte dos filtros se chama assim).
@@ -50,6 +50,8 @@ export function PainelFiltros({
   onExcluirVisao,
   onSalvar,
   inicial,
+  minhaPadrao,
+  podeSalvar,
 }: {
   chips: ChipFiltro[];
   visao: VisaoAplicada | null;
@@ -68,6 +70,10 @@ export function PainelFiltros({
   onSalvar: () => void;
   /** Só o ADM: definir o que está escolhido como o estado inicial do lugar, ou voltar ao padrão do sistema. */
   inicial?: { definido: boolean; onDefinir: () => void; onRestaurar: () => void };
+  /** As TABELAS: a visão em uso como a padrão SÓ DA PESSOA (vence o estado inicial do ADM) — o alfinete alterna. */
+  minhaPadrao?: { ativa: boolean; onAlternar: () => void };
+  /** Salvar sem nenhum filtro (as tabelas salvam também as colunas e a ordem); padrão = só com filtros. */
+  podeSalvar?: boolean;
 }) {
   const total = chips.length + (visao ? 1 : 0);
   const [aberto, setAberto] = useState(false);
@@ -147,7 +153,7 @@ export function PainelFiltros({
                 icon={<IconSave className="h-4 w-4" />}
                 aria-label={tituloSalvar}
                 title={tituloSalvar}
-                disabled={gravando || !total}
+                disabled={gravando || !(podeSalvar ?? total > 0)}
                 onClick={() => {
                   // O diálogo de salvar abre no lugar do painel (o painel por cima dele cobriria o formulário).
                   setAberto(false);
@@ -256,24 +262,38 @@ export function PainelFiltros({
           )}
         </section>
 
-        {inicial && (
+        {(inicial || minhaPadrao) && (
           <section aria-label="Estado inicial" className="flex items-center gap-1.5 border-t border-border pt-3">
             <IconSettings className="h-4 w-4 shrink-0 text-muted" />
             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text" title="O ponto de partida da tela para todos (não aparece como filtro)">
               Estado inicial
             </span>
-            {inicial.definido && (
+            {minhaPadrao && (
+              <Button
+                variant="icon"
+                size="xs"
+                aria-pressed={minhaPadrao.ativa}
+                icon={<IconEstrela className={`h-4 w-4 ${minhaPadrao.ativa ? "fill-current text-accent" : ""}`} />}
+                aria-label={minhaPadrao.ativa ? "Deixar de abrir nesta visão" : "Abrir sempre nesta visão (só para mim)"}
+                title={minhaPadrao.ativa ? "Sua padrão (vence o estado inicial) — tocar desfaz" : "Abrir sempre nesta visão (só para mim — vence o estado inicial)"}
+                disabled={gravando}
+                onClick={minhaPadrao.onAlternar}
+              />
+            )}
+            {inicial?.definido && (
               <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] leading-5 text-text-2" title="Definido pelo administrador">
                 definido
               </span>
             )}
+            {inicial && (
+              <>
             <Button
               variant="icon"
               size="xs"
               icon={<IconFixar className="h-4 w-4" />}
               aria-label="Definir o que está escolhido como o estado inicial"
               title="Definir o que está escolhido como o estado inicial (para todos)"
-              disabled={gravando || !total}
+              disabled={gravando || !(podeSalvar ?? total > 0)}
               onClick={inicial.onDefinir}
             />
             <Button
@@ -285,6 +305,8 @@ export function PainelFiltros({
               disabled={gravando || !inicial.definido}
               onClick={inicial.onRestaurar}
             />
+              </>
+            )}
           </section>
         )}
       </div>

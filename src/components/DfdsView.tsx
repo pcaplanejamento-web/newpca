@@ -71,6 +71,9 @@ import { ExcluidosMesa } from "./ExcluidosMesa";
 import { PermissaoExportar } from "./ExportarTabelas";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
+import { camposLigados, colunasCamposMesa, useCamposMesa } from "./CamposMesa";
+import { colunasNaoPermitidas, colunasPadraoOcultas, type EntidadeCampos } from "@/lib/mesa-campos-core";
+import type { TabelaMesa } from "@/lib/papeis-detalhes-core";
 import { RecorteMesa, visoesNoRecorte } from "./RecorteMesa";
 import { mesmoConjunto, type PassamRecorte, recorteMesa, SEM_RECORTE, type VisaoRecorte } from "@/lib/mesa-recorte";
 import type { FiltroValor } from "@/lib/tabela-filtros";
@@ -126,6 +129,11 @@ type ModoItens = "normal" | "consolidada";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
 /** Na Mesa do PCA a Situação (CM002) e a Centi abrem ocultas — a edição da tabela as mostra. */
 const OCULTAS_NO_PCA = ["execucao", "conferenciaCenti"] as const;
+/** Os campos EXTRAS (todo dado do protocolo e do DFD) abrem ocultos em toda tabela — o seletor de colunas os liga. */
+const OCULTAS_PROTOCOLOS = colunasPadraoOcultas("protocolos");
+const OCULTAS_DFDS = colunasPadraoOcultas("dfds");
+const OCULTAS_DFDS_PCA = [...OCULTAS_NO_PCA, ...OCULTAS_DFDS];
+const OCULTAS_ITENS = colunasPadraoOcultas("itens");
 
 const FATIA_CONFERENCIA = 150;
 /** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
@@ -1277,6 +1285,22 @@ export function DfdsView({
   const travaResp = filtro.responsavel !== "todos" ? "Filtrado pelo seletor de responsável acima da tabela" : undefined;
   // As colunas que os DETALHES do papel ocultam (Responsável, Distribuição…) — o servidor nem manda o dado.
   const ocultasProto = ocultasDe(pode.vis, "protocolos");
+  // CAMPOS EXTRAS como colunas (todo dado do protocolo e do DFD — `mesa-campos-core.ts`): abrem ocultas; o seletor de
+  // colunas as liga e só então os valores são pedidos ao servidor (as linhas da visão, só as colunas ligadas).
+  const [colsVisiveis, setColsVisiveis] = useState<string[]>([]);
+  const ligados = useMemo(() => camposLigados(colsVisiveis), [colsVisiveis]);
+  const protoDoDfd = useMemo(() => new Map(dfds.map((d) => [d.id, d.protocoloId])), [dfds]);
+  const idsCampos = useMemo((): Record<EntidadeCampos, number[]> => {
+    const dfdIds = vista === "dfds" ? dfds.map((d) => d.id) : vista === "itens" && modoItens === "normal" ? [...new Set((itens ?? []).map((i) => i.dfdId))] : [];
+    const protoIds =
+      vista === "protocolos" ? protocolos.map((p) => p.id) : [...new Set(dfdIds.map((id) => protoDoDfd.get(id)).filter((x): x is number => x != null))];
+    return { protocolo: ligados.protocolo.length ? protoIds : [], dfd: ligados.dfd.length ? dfdIds : [] };
+  }, [vista, modoItens, dfds, itens, protocolos, protoDoDfd, ligados]);
+  const valorCampo = {
+    protocolo: useCamposMesa("protocolo", idsCampos.protocolo, ligados.protocolo, protocolos),
+    dfd: useCamposMesa("dfd", idsCampos.dfd, ligados.dfd, dfds),
+  };
+  const semCamposDe = (t: TabelaMesa) => new Set(colunasNaoPermitidas(t, pode.vis));
   const travaAssunto = filtro.assunto != null ? "Filtrado pelo seletor de assunto acima da tabela" : undefined;
   const colsProto: Column<ProtocoloNaMesa>[] = [
     {
@@ -2143,7 +2167,7 @@ export function DfdsView({
     <DataTable
       visao={visaoTabela}
       trocando={trocando}
-      columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key) && !(semUnidade && c.key === "reparticao"))}
+      columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id), ...colunasCamposMesa<ProtocoloNaMesa>("protocolos", (r) => r.id, valorCampo, semCamposDe("protocolos"))].filter((c) => !ocultasProto.has(c.key) && !(semUnidade && c.key === "reparticao"))}
       rows={protocolosR}
       getKey={(r) => r.id}
       filtrosRodape={filtrosRodape}
@@ -2159,6 +2183,8 @@ export function DfdsView({
       density="compact"
       acoesRodape={botaoImportar}
       edicoes={edicoesDe("protocolos")}
+      ocultasPadrao={OCULTAS_PROTOCOLOS}
+      onColunasVisiveis={setColsVisiveis}
       exportar={exportarComo("Protocolos", "protocolos")}
       vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
       resumo={(linhas) =>
@@ -2192,12 +2218,16 @@ export function DfdsView({
         acoes: acoesDfd,
         regras: regras,
         acoesRodape: botaoImportar,
-        colunasExtras: colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key),
+        colunasExtras: [
+          ...colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key),
+          ...colunasCamposMesa<LinhaDfd>("dfds", (r, e) => (e === "dfd" ? r.key : protoDoDfd.get(r.key)), valorCampo, semCamposDe("dfds")),
+        ],
         edicoes: edicoesDe("dfds"),
-        ocultasPadrao: modoPca ? OCULTAS_NO_PCA : undefined,
+        ocultasPadrao: modoPca ? OCULTAS_DFDS_PCA : OCULTAS_DFDS,
         exportar: exportarComo("DFDs", "dfds"),
         vazio: filtrado && dfds.length > 0 ? semResultado : semDados("DFD"),
       }).principal}
+      onColunasVisiveis={setColsVisiveis}
     />
   );
   // As colunas da padronização (só com o cadastro) alargam as tabelas de itens.
@@ -2206,7 +2236,7 @@ export function DfdsView({
     <DataTable
       visao={visaoTabela}
       trocando={trocando}
-      columns={semColUnidade([...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)])}
+      columns={semColUnidade([...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id), ...colunasCamposMesa<ItemDfdRow>("itens", (r, e) => (e === "dfd" ? r.dfdId : protoDoDfd.get(r.dfdId)), valorCampo, semCamposDe("itens"))])}
       rows={itensR ?? []}
       getKey={(r) => r.id}
       filtrosRodape={filtrosRodape}
@@ -2222,6 +2252,8 @@ export function DfdsView({
       minWidth={(modoPca ? 1280 : 1460) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("itens")}
+      ocultasPadrao={OCULTAS_ITENS}
+      onColunasVisiveis={setColsVisiveis}
       exportar={exportarComo("Itens", "itens")}
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}

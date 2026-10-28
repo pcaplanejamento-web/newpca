@@ -1,12 +1,13 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { chavePadrao, type EdicaoTabela, edicaoInicial, edicoesDaChave, idPadrao } from "@/lib/edicoes-tabela-core";
+import { chavePadrao, chavePadraoAdm, type EdicaoTabela, edicaoInicial, edicoesDaChave, idPadrao, idPadraoAdm } from "@/lib/edicoes-tabela-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
-import { Checkbox, SelectField, TextField } from "./Field";
-import { IconDesafixar, IconEstrela, IconEye, IconFixar, IconPencil, IconSave, IconTrash, IconUndo } from "./icons";
+import { Checkbox, TextField } from "./Field";
+import { IconDesafixar, IconEye, IconFixar, IconPencil, IconSave, IconUndo } from "./icons";
+import { type ChipFiltro, PainelFiltros } from "./PainelFiltros";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 
@@ -47,6 +48,8 @@ export function useEdicoesTabela(
   const escolhida = chave in escolhas ? escolhas[chave] : (edicaoInicial(lista, prefs, chave)?.id ?? null);
   const atual = [...minhas, ...publicas].find((e) => e.id === escolhida) ?? null;
   const padraoId = idPadrao(prefs, chave);
+  const padraoAdmId = idPadraoAdm(prefs, chave);
+  const inicialId = edicaoInicial(lista, prefs, chave)?.id ?? null;
 
   const gravar = async <T,>(f: () => Promise<T>): Promise<T> => {
     setGravando(true);
@@ -61,6 +64,16 @@ export function useEdicoesTabela(
     gravar(async () => {
       const k = chavePadrao(chave);
       await chamar("/api/preferencias/tabela", id == null ? "DELETE" : "PUT", id == null ? { chave: k } : { chave: k, valor: { id } });
+      setPrefs((p) => {
+        const { [k]: _, ...resto } = p;
+        return id == null ? resto : { ...resto, [k]: { id } };
+      });
+    });
+  /** Só o ADM: a padrão PARA TODOS da tabela (uma visão pública) ou nenhuma. */
+  const definirPadraoTodos = (id: number | null) =>
+    gravar(async () => {
+      await chamar("/api/admin/tabela/padrao", "PUT", { chave, id });
+      const k = chavePadraoAdm(chave);
       setPrefs((p) => {
         const { [k]: _, ...resto } = p;
         return id == null ? resto : { ...resto, [k]: { id } };
@@ -92,97 +105,7 @@ export function useEdicoesTabela(
       }
       return id;
     });
-  return { minhas, publicas, atual, padraoId, gravando, escolher, definirPadrao, excluir, salvar };
-}
-
-/**
- * SELETOR das edições salvas (no RODAPÉ da tabela): o LÁPIS (só o ícone) liga a edição; o seletor troca a edição em uso
- * ("Padrão do sistema", as minhas e as públicas com o autor); a ESTRELA marca a em uso como a minha PADRÃO (a tabela abre
- * nela); a lixeira exclui a minha — e, com `podeModerar` (quem CONFIGURA a tela), também a PÚBLICA de outra pessoa. Na
- * altura dos controles; 44px no toque.
- */
-export function SeletorEdicoes({
-  minhas,
-  publicas,
-  atual,
-  padraoId,
-  onEscolher,
-  onPadrao,
-  onExcluir,
-  onEditar,
-  disabled = false,
-  podeModerar = false,
-}: {
-  minhas: EdicaoTabela[];
-  publicas: EdicaoTabela[];
-  atual: EdicaoTabela | null;
-  padraoId: number | null;
-  onEscolher: (id: number | null) => void;
-  onPadrao: () => void;
-  onExcluir: () => void;
-  onEditar: () => void;
-  disabled?: boolean;
-  /** Quem CONFIGURA a tela modera as edições PÚBLICAS de outras pessoas (pode excluí-las). */
-  podeModerar?: boolean;
-}) {
-  const ehPadrao = (atual?.id ?? null) === padraoId;
-  const podeExcluir = !!atual && (atual.minha || (podeModerar && atual.publico));
-  return (
-    <div className="flex items-center gap-1">
-      <Button size="sm" variant="icon" icon={<IconPencil className="h-4 w-4" />} aria-label="Editar a planilha" title="Editar a planilha" onClick={onEditar} disabled={disabled} />
-      <div className="w-44 sm:w-56">
-        <SelectField
-          compacto
-          label="Edição"
-          value={atual?.id ?? ""}
-          disabled={disabled}
-          onChange={(e) => onEscolher(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">Padrão do sistema</option>
-          {minhas.length > 0 && (
-            <optgroup label="Minhas">
-              {minhas.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nome}
-                  {e.publico ? " · pública" : ""}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {publicas.length > 0 && (
-            <optgroup label="Públicas">
-              {publicas.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nome} · {e.autor}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </SelectField>
-      </div>
-      <Button
-        size="sm"
-        variant="icon"
-        aria-pressed={ehPadrao}
-        aria-label={ehPadrao ? "Esta é a sua edição padrão" : "Usar como minha edição padrão"}
-        title={ehPadrao ? "Sua edição padrão (a tabela abre nela)" : "Usar como minha edição padrão"}
-        icon={<IconEstrela className={`h-4 w-4 ${ehPadrao ? "fill-current text-accent" : ""}`} />}
-        onClick={onPadrao}
-        disabled={disabled || ehPadrao}
-      />
-      {atual && podeExcluir && (
-        <Button
-          size="sm"
-          variant="icon"
-          aria-label={`Excluir a edição ${atual.nome}`}
-          title={atual.minha ? "Excluir esta edição" : `Excluir esta edição pública (de ${atual.autor})`}
-          icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-          onClick={onExcluir}
-          disabled={disabled}
-        />
-      )}
-    </div>
-  );
+  return { minhas, publicas, atual, padraoId, padraoAdmId, inicialId, gravando, escolher, definirPadrao, definirPadraoTodos, excluir, salvar };
 }
 
 type Destino = "atualizar" | "nova";
@@ -299,7 +222,7 @@ export function SalvarEdicao({
 /**
  * EDITOR de uma tabela com EDIÇÕES SALVAS — o fluxo COMPLETO, o MESMO no Comparativo do orçamento e nas tabelas da Mesa:
  * o layout SALVO (a edição em uso — a padrão do usuário ao abrir), o RASCUNHO enquanto edita (`editar`/`mudar`), e o que
- * vai no RODAPÉ da tabela — fora da edição, o `SeletorEdicoes` (lápis · edição · estrela · lixeira); editando, a
+ * vai no RODAPÉ da tabela — fora da edição, o lápis + o `PainelFiltros` (filtros em chips · visões · estado inicial: a minha padrão e, do ADM, a de todos); editando, a
  * `BarraEdicao` (ações de colunas + extras + Padrão · Cancelar · Salvar) — mais as camadas (`SalvarEdicao`, a
  * confirmação e o aviso flutuante). `paraSalvar` completa o rascunho com o que a tabela guarda fora dele (ex.: a ordenação
  * e os filtros da `DataTable`); `aoEscolher` aplica esse estado quando o usuário troca de edição.
@@ -315,12 +238,15 @@ export function useEditorEdicoes<L>({
   aoEscolher,
   onMudar,
   podePublicar,
+  admin = false,
 }: {
   chave: string;
   edicoes: EdicaoTabela[];
   padroes: Record<string, unknown>;
   /** O papel CONFIGURA a tela da tabela: publica edições e modera as públicas de outras pessoas. */
   podePublicar: boolean;
+  /** O ADM: define a visão padrão PARA TODOS. */
+  admin?: boolean;
   onMudar?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
   coerce: (v: unknown) => L;
   igual: (a: L, b: L) => boolean;
@@ -332,18 +258,23 @@ export function useEditorEdicoes<L>({
   const ed = useEdicoesTabela(chave, edicoes, padroes, onMudar);
   const salvo = useMemo(() => coerce(ed.atual?.valor), [ed.atual, coerce]);
   const [rascunho, setRascunho] = useState<L | null>(null);
+  // O AJUSTE da sessão (o seletor de colunas — sem entrar na edição): vale até trocar de visão; salvo, vira a visão.
+  const [ajuste, setAjuste] = useState<L | null>(null);
   // Outra tabela no MESMO componente (a Mesa troca de visão sem remontar): a edição em curso não passa para ela.
   const [chaveEd, setChaveEd] = useState(chave);
   if (chaveEd !== chave) {
     setChaveEd(chave);
     setRascunho(null);
+    setAjuste(null);
   }
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const editando = rascunho != null;
-  const layout = rascunho ?? salvo;
+  const layout = rascunho ?? ajuste ?? salvo;
   const mudar = (f: (l: L) => L) => setRascunho((r) => (r ? f(r) : r));
+  /** Ajusta o layout SEM entrar na edição (ex.: o seletor de colunas); editando, muda o rascunho. */
+  const ajustar = (f: (l: L) => L) => (editando ? mudar(f) : setAjuste((a) => f(a ?? salvo)));
 
   // As ações das edições salvas: o erro vira aviso flutuante (nada de alerta do navegador).
   const tentar = async (f: () => Promise<unknown>, ok?: string) => {
@@ -361,30 +292,38 @@ export function useEditorEdicoes<L>({
   };
   const salvar = (d: { nome: string; publico: boolean; atualizar: boolean; padrao: boolean }) =>
     tentar(async () => {
-      if (!rascunho) return;
-      await ed.salvar({ ...d, valor: paraSalvar(rascunho) as Record<string, unknown> });
+      await ed.salvar({ ...d, valor: paraSalvar(layout) as Record<string, unknown> });
       setSalvando(false);
       setRascunho(null);
-    }, "Edição salva.");
-  const excluir = async () => {
-    const e = ed.atual;
-    if (!e) return;
-    const texto = !e.minha ? `Ela é pública, de ${e.autor}: some para todos.` : e.publico ? "Ela é pública: some para todos." : undefined;
-    if (!(await confirmar({ titulo: `Excluir a edição "${e.nome}"?`, texto, confirmar: "Excluir", perigo: true }))) return;
-    await tentar(async () => {
-      await ed.excluir(e);
-      aoEscolher?.(coerce(undefined));
-    }, "Edição excluída.");
-  };
+      setAjuste(null);
+    }, "Visão salva.");
   const escolher = (id: number | null) => {
     ed.escolher(id);
+    setAjuste(null);
     aoEscolher?.(coerce([...ed.minhas, ...ed.publicas].find((e) => e.id === id)?.valor));
   };
+  const excluir = async (e: EdicaoTabela) => {
+    const texto = !e.minha ? `Ela é pública, de ${e.autor}: some para todos.` : e.publico ? "Ela é pública: some para todos." : undefined;
+    if (!(await confirmar({ titulo: `Excluir a visão "${e.nome}"?`, texto, confirmar: "Excluir", perigo: true }))) return;
+    const emUso = e.id === ed.atual?.id;
+    await tentar(async () => {
+      await ed.excluir(e);
+      if (emUso) {
+        setAjuste(null);
+        aoEscolher?.(coerce(undefined));
+      }
+    }, "Visão excluída.");
+  };
 
-  /** O RODAPÉ: o seletor das edições (fora da edição) ou a barra da edição (editando). */
+  /** O RODAPÉ: o painel das visões (fora da edição) ou a barra da edição (editando). */
   const rodape = (o: {
     onEditar: () => void;
     disabled?: boolean;
+    /** Os filtros feitos agora (chips) e como tirar um — ausente na tabela que não filtra. */
+    chips?: ChipFiltro[];
+    onTirar?: (chave: string) => void;
+    /** Algo mudou depois de aplicar a visão (ex.: um filtro) — o chip da visão diz "alterada". */
+    alterada?: boolean;
     /** Controles próprios da tabela na barra de edição (ex.: mapa de calor). */
     extras?: ReactNode;
     onCongelarTodas: () => void;
@@ -404,18 +343,44 @@ export function useEditorEdicoes<L>({
         onSalvar={() => setSalvando(true)}
       />
     ) : (
-      <SeletorEdicoes
-        minhas={ed.minhas}
-        publicas={ed.publicas}
-        atual={ed.atual}
-        padraoId={ed.padraoId}
-        disabled={o.disabled || ed.gravando}
-        podeModerar={podePublicar}
-        onEditar={o.onEditar}
-        onEscolher={escolher}
-        onPadrao={() => tentar(() => ed.definirPadrao(ed.atual?.id ?? null), ed.atual ? `"${ed.atual.nome}" é a sua padrão.` : "A tabela abre no padrão do sistema.")}
-        onExcluir={excluir}
-      />
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="icon" icon={<IconPencil className="h-4 w-4" />} aria-label="Editar a planilha" title="Editar a planilha" onClick={o.onEditar} disabled={o.disabled || ed.gravando} />
+        <PainelFiltros
+          chips={o.chips ?? []}
+          visao={ed.atual ? { id: ed.atual.id, nome: ed.atual.nome, minha: ed.atual.minha, alterada: ajuste != null || !!o.alterada } : null}
+          minhas={ed.minhas}
+          publicas={ed.publicas}
+          podeModerar={podePublicar}
+          gravando={ed.gravando}
+          podeSalvar
+          onTirar={(k) => o.onTirar?.(k)}
+          onLimpar={() => escolher(ed.inicialId)}
+          onTirarVisao={() => escolher(ed.atual?.id === ed.inicialId ? null : ed.inicialId)}
+          onAplicar={(e) => escolher(e.id)}
+          onExcluirVisao={(e) => void excluir(e)}
+          onSalvar={() => setSalvando(true)}
+          minhaPadrao={{
+            ativa: ed.atual != null && ed.atual.id === ed.padraoId,
+            onAlternar: () => {
+              const id = ed.atual != null && ed.atual.id === ed.padraoId ? null : (ed.atual?.id ?? null);
+              void tentar(() => ed.definirPadrao(id), id == null ? "A tabela volta a abrir no estado inicial." : `A tabela abre em “${ed.atual?.nome}” para você.`);
+            },
+          }}
+          inicial={
+            admin
+              ? {
+                  definido: ed.padraoAdmId != null,
+                  onDefinir: () =>
+                    void tentar(async () => {
+                      if (!ed.atual?.publico) throw new Error("Salve como visão PÚBLICA antes — o estado inicial de todos é uma visão pública.");
+                      await ed.definirPadraoTodos(ed.atual.id);
+                    }, "Agora todos abrem nesta visão (quem escolheu a própria padrão abre na dela)."),
+                  onRestaurar: () => void tentar(() => ed.definirPadraoTodos(null), "Estado inicial de volta ao padrão do sistema."),
+                }
+              : undefined
+          }
+        />
+      </div>
     );
 
   const camadas = (
@@ -440,7 +405,7 @@ export function useEditorEdicoes<L>({
     </>
   );
 
-  return { salvo, layout, editando, editar: (base: L) => setRascunho(base), mudar, rodape, camadas };
+  return { salvo, layout, editando, editar: (base: L) => setRascunho(base), mudar, ajustar, rodape, camadas };
 }
 
 /** A BARRA da EDIÇÃO no rodapé da tabela: extras da tabela · congelar/descongelar/mostrar todas · Padrão · Cancelar · Salvar. */

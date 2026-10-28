@@ -131,6 +131,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/situacoes/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/situacoes/ordem": { PATCH: ADMIN },
   "admin/situacoes": { GET: ADMIN, POST: ADMIN },
+  "admin/tabela/padrao": { PUT: ADMIN },
   "admin/usuarios/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/usuarios": { GET: ADMIN },
   "admin/usuarios/[id]/acessos": { GET: ADMIN },
@@ -237,6 +238,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "dfd/itens": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema")) },
   "dfd/itens/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha")) },
   "dfd/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha")) },
+  "mesa/campos": { POST: naMesa(tela(MESA, "visualizar", "os campos extras das colunas — só os legíveis e os que o papel recebe")) },
   "mesa/excluidos": {
     GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema — a lixeira")),
     DELETE: naMesa(recurso(MESA, "excluir", "recusa(", "limpar a lixeira da Mesa (apaga de vez)")),

@@ -17,7 +17,7 @@ import { lerPaginaPagamentos } from "./pagamentos-core.ts";
 /**
  * Quantos pedidos à Centi ao mesmo tempo (empenhos: semanas · liquidações: órgãos) e quantas PARTES de uma mesma página (a
  * página grande — o ano inteiro — chega em dezenas de partes). O D1 executa UMA consulta por vez para o sistema inteiro:
- * pedidos demais em paralelo só formam fila no banco e atrasam as telas de todos (v1.242.2 — no máximo 3 × 2 = 6).
+ * pedidos demais em paralelo só formam fila no banco e atrasam as telas de todos (v1.243.1 — no máximo 3 × 2 = 6).
  */
 export const PARALELO_EMPENHOS = 3;
 export const PARALELO_LIQUIDACOES = 3;

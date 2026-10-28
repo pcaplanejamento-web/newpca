@@ -1,7 +1,7 @@
 import type { NextResponse } from "next/server";
 import { exigirSessao, type Guarda, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { atualizarEdicaoTabela, excluirEdicaoTabela, getEdicaoTabela, recusaNaChave } from "@/lib/edicoes-tabela";
+import { atualizarEdicaoTabela, excluirEdicaoTabela, getEdicaoTabela, gravarPadraoAdm, recusaNaChave } from "@/lib/edicoes-tabela";
 import { acaoParaGravar } from "@/lib/edicoes-tabela-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { editarEdicaoSchema } from "@/lib/preferencias-validation";
@@ -42,6 +42,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("erro" in g) return g.erro;
   const { e, dono } = g;
   await atualizarEdicaoTabela(e.id, d);
+  // Deixou de ser pública: deixa de ser o padrão para todos.
+  if (e.publico && d.publico === false) await gravarPadraoAdm(e.chave, null, a.u.id, e.id);
   // O que é (ou foi) PÚBLICO e o que alguém faz na edição de OUTRA pessoa (moderar) vão ao histórico.
   const publicoDepois = d.publico ?? e.publico;
   if (e.publico || publicoDepois || !dono) {
@@ -66,6 +68,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if ("erro" in g) return g.erro;
   const { e, dono } = g;
   await excluirEdicaoTabela(e.id);
+  if (e.publico) await gravarPadraoAdm(e.chave, null, a.u.id, e.id);
   if (e.publico || !dono)
     await registrarAuditoria({
       usuario: a.u,

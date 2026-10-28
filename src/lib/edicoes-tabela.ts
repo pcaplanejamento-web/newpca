@@ -1,8 +1,9 @@
-import { and, eq, like, or } from "drizzle-orm";
-import { edicoesTabela, usuarios } from "@/db/schema";
+import { and, eq, like, or, sql } from "drizzle-orm";
+import { configuracoes, edicoesTabela, usuarios } from "@/db/schema";
 import { type Acesso, motivoNoQuadro, motivoRecusa } from "./acesso";
 import { getDb } from "./db";
-import { chaveDeAdmin, type EdicaoTabela, telasDaChave } from "./edicoes-tabela-core";
+import { chaveDeAdmin, chavePadraoAdm, type EdicaoTabela, lerPadroesAdm, telasDaChave } from "./edicoes-tabela-core";
+import { lerBlobConfiguracoes } from "./integracoes";
 import type { AcaoPapel } from "./papeis-core";
 import { nomeExibicao } from "./pessoa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
@@ -107,6 +108,36 @@ export async function excluirEdicaoTabela(id: number): Promise<void> {
  * as preferências de edição PADRÃO dele. Sem usuário, nada. */
 export async function carregarEdicoes(usuarioId: number | null, prefixo: string): Promise<{ lista: EdicaoTabela[]; padroes: Record<string, unknown> }> {
   if (usuarioId == null) return { lista: [], padroes: {} };
-  const [lista, padroes] = await Promise.all([listarEdicoesTabela(usuarioId, prefixo), listarPreferenciasTabela(usuarioId, `padrao:${prefixo}`)]);
+  const [lista, padroes, adm] = await Promise.all([listarEdicoesTabela(usuarioId, prefixo), listarPreferenciasTabela(usuarioId, `padrao:${prefixo}`), getPadroesAdm()]);
+  // O padrão PARA TODOS do ADM vai junto (`padraoAdm:<chave>`) — a escolha da pessoa vence (`edicaoInicial`).
+  for (const [k, id] of Object.entries(adm)) if (k.startsWith(prefixo)) padroes[chavePadraoAdm(k)] = { id };
   return { lista, padroes };
+}
+
+// O PADRÃO PARA TODOS de cada tabela (blob `configuracoes`, chave `edicoesPadrao` → {chave: id}; cache 60 s, fail-safe = nenhum).
+let cachePadroes: { at: number; dados: Record<string, number> } | null = null;
+
+export async function getPadroesAdm(): Promise<Record<string, number>> {
+  if (cachePadroes && Date.now() - cachePadroes.at < 60_000) return cachePadroes.dados;
+  try {
+    const dados = lerPadroesAdm((await lerBlobConfiguracoes()).edicoesPadrao);
+    cachePadroes = { at: Date.now(), dados };
+    return dados;
+  } catch {
+    return cachePadroes?.dados ?? {};
+  }
+}
+
+/** Define (`id`) ou tira (`null`) o padrão para todos da tabela `chave`; com `soId`, tira só se for aquela edição. */
+export async function gravarPadraoAdm(chave: string, id: number | null, usuarioId: number, soId?: number): Promise<void> {
+  const blob = await lerBlobConfiguracoes();
+  const atual = lerPadroesAdm(blob.edicoesPadrao);
+  if (soId != null && atual[chave] !== soId) return;
+  const { [chave]: _, ...resto } = atual;
+  const novo = id == null ? resto : { ...resto, [chave]: id };
+  await getDb()
+    .update(configuracoes)
+    .set({ dados: JSON.stringify({ ...blob, edicoesPadrao: novo }), atualizadoPor: usuarioId, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(eq(configuracoes.id, 1));
+  cachePadroes = null;
 }

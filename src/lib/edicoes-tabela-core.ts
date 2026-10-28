@@ -33,12 +33,35 @@ export function edicoesDaChave(edicoes: EdicaoTabela[], chave: string): { minhas
   return { minhas: daChave.filter((e) => e.minha), publicas: daChave.filter((e) => !e.minha && e.publico) };
 }
 
-/** A edição com que a tabela ABRE: a padrão do usuário, se ele ainda a vê (excluída ou despublicada ⇒ o padrão do sistema). */
+/** A chave (nas `padroes` entregues à tela) do PADRÃO PARA TODOS que o ADM definiu para a tabela `chave`. */
+export const chavePadraoAdm = (chave: string) => `padraoAdm:${chave}`;
+
+/** O id do padrão PARA TODOS do ADM (`null` = nenhum). */
+export function idPadraoAdm(padroes: Record<string, unknown>, chave: string): number | null {
+  const v = padroes[chavePadraoAdm(chave)] as { id?: unknown } | undefined;
+  return typeof v?.id === "number" && Number.isInteger(v.id) ? v.id : null;
+}
+
+/** O mapa {chave da tabela → id} do padrão para todos (blob `configuracoes.edicoesPadrao`), normalizado. */
+export function lerPadroesAdm(v: unknown): Record<string, number> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>).filter(([k, id]) => k.length > 0 && k.length <= 200 && typeof id === "number" && Number.isInteger(id) && id > 0),
+  ) as Record<string, number>;
+}
+
+/**
+ * A edição com que a tabela ABRE: a padrão do USUÁRIO, se ele ainda a vê; senão o padrão PARA TODOS do ADM (uma edição
+ * PÚBLICA); senão o padrão do sistema (`null`). A escolha da pessoa vence a do ADM.
+ */
 export function edicaoInicial(edicoes: EdicaoTabela[], padroes: Record<string, unknown>, chave: string): EdicaoTabela | null {
-  const id = idPadrao(padroes, chave);
-  if (id == null) return null;
   const { minhas, publicas } = edicoesDaChave(edicoes, chave);
-  return [...minhas, ...publicas].find((e) => e.id === id) ?? null;
+  const todas = [...minhas, ...publicas];
+  const minha = idPadrao(padroes, chave);
+  const daPessoa = minha == null ? null : todas.find((e) => e.id === minha);
+  if (daPessoa) return daPessoa;
+  const adm = idPadraoAdm(padroes, chave);
+  return adm == null ? null : (todas.find((e) => e.id === adm && e.publico) ?? null);
 }
 
 /**

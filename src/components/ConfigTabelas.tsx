@@ -6,6 +6,7 @@ import { LINHAS_TABELA_PADRAO, type LinhasTabela } from "@/lib/theme";
 const LinhasTabelaCtx = createContext<LinhasTabela>(LINHAS_TABELA_PADRAO);
 const QuemCtx = createContext<string | null>(null);
 const NomesCtx = createContext<Record<string, string>>({});
+const AdminCtx = createContext(false);
 
 /**
  * Configuração das TABELAS definida pelo ADM (Configurações → Tabelas) para toda a área logada: as LINHAS POR PÁGINA com
@@ -17,18 +18,23 @@ export function ConfigTabelas({
   linhas,
   quem = null,
   nomesUnidades = {},
+  admin = false,
   children,
 }: {
   linhas: LinhasTabela;
   quem?: string | null;
   /** SIGLA → NOME das unidades e órgãos: o filtro das colunas de unidade/sigla mostra e busca pelos dois. */
   nomesUnidades?: Record<string, string>;
+  /** O ADM: nas tabelas com visões salvas, define a visão padrão PARA TODOS. */
+  admin?: boolean;
   children: ReactNode;
 }) {
   return (
     <LinhasTabelaCtx.Provider value={linhas}>
       <QuemCtx.Provider value={quem}>
-        <NomesCtx.Provider value={nomesUnidades}>{children}</NomesCtx.Provider>
+        <NomesCtx.Provider value={nomesUnidades}>
+          <AdminCtx.Provider value={admin}>{children}</AdminCtx.Provider>
+        </NomesCtx.Provider>
       </QuemCtx.Provider>
     </LinhasTabelaCtx.Provider>
   );
@@ -36,6 +42,9 @@ export function ConfigTabelas({
 
 /** Quem está logado ("Nome (matrícula N)") — sem provedor (tela pública), `null`. */
 export const useQuemExporta = () => useContext(QuemCtx);
+
+/** O ADM está logado (define a visão padrão para todos nas tabelas). */
+export const useAdminTabelas = () => useContext(AdminCtx);
 
 /** As linhas por página iniciais das tabelas (a escolha do ADM). */
 export const useLinhasTabela = () => useContext(LinhasTabelaCtx);

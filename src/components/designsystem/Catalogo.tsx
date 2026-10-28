@@ -51,7 +51,8 @@ import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/
 import { Avisos } from "@/components/Avisos";
 import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
 import { useConfirmacao } from "@/components/Confirmacao";
-import { SalvarEdicao, SeletorEdicoes } from "@/components/EdicoesTabela";
+import { SalvarEdicao } from "@/components/EdicoesTabela";
+import { SeletorColunas } from "@/components/SeletorColunas";
 import { Avatar } from "@/components/Avatar";
 import { ContasNavegador } from "@/components/ContasNavegador";
 import { Badge, type Tone } from "@/components/Badge";
@@ -1569,43 +1570,38 @@ function PapeisDemo() {
   );
 }
 
+const COLUNAS_DEMO = [
+  { key: "numero", header: "Nº processo", grupo: "Colunas" },
+  { key: "assunto", header: "Assunto", grupo: "Colunas" },
+  { key: "objeto", header: "Objeto", grupo: "DFD (mais dados)" },
+  { key: "email", header: "E-mail", grupo: "DFD (mais dados)" },
+];
+
 function EdicoesTabelaDemo() {
-  const [atual, setAtual] = useState<number | null>(2);
-  const [padraoId, setPadraoId] = useState<number | null>(2);
+  const [ocultas, setOcultas] = useState<string[]>(["objeto", "email"]);
   const [salvar, setSalvar] = useState(false);
-  // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a edição é só da pessoa.
+  // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a visão é só da pessoa.
   const [configura, setConfigura] = useState(true);
-  const { confirmar, confirmacao } = useConfirmacao();
-  const e = (id: number, nome: string, minha: boolean, publico: boolean) => ({ id, chave: "k", nome, publico, minha, autor: "Ana", valor: {} });
-  const minhas = [e(1, "Pessoal", true, false), e(2, "Por elemento", true, true)];
-  const publicas = [e(3, "Equipe do PCA", false, true)];
-  const escolhida = [...minhas, ...publicas].find((x) => x.id === atual) ?? null;
+  const atual = { id: 2, chave: "k", nome: "Por elemento", publico: true, minha: true, autor: "Ana", valor: {} };
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <SeletorEdicoes
-        minhas={minhas}
-        publicas={publicas}
-        atual={escolhida}
-        padraoId={padraoId}
-        onEscolher={setAtual}
-        onPadrao={() => setPadraoId(atual)}
-        onExcluir={() => void confirmar({ titulo: "Excluir a edição?", confirmar: "Excluir", perigo: true })}
-        onEditar={() => setSalvar(true)}
-        podeModerar={configura}
-      />
+      <SeletorColunas colunas={COLUNAS_DEMO} ocultas={ocultas} onMudar={setOcultas} />
+      <Button size="sm" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => setSalvar(true)}>
+        Salvar visão
+      </Button>
       <Checkbox checked={configura} onChange={(ev) => setConfigura(ev.target.checked)} label="O papel configura a tela (publica e modera)" />
       {salvar && (
         <SalvarEdicao
           aberto
-          atual={escolhida}
-          ehPadrao={atual === padraoId}
+          atual={atual}
+          ehPadrao
           gravando={false}
           podePublicar={configura}
+          termo="visão"
           onFechar={() => setSalvar(false)}
           onSalvar={() => setSalvar(false)}
         />
       )}
-      {confirmacao}
     </div>
   );
 }
@@ -3869,7 +3865,7 @@ export function Catalogo() {
       <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
         <VinculosDaUnidadeDemo />
       </Secao>
-      <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
+      <Secao titulo="Visões de tabela — SeletorColunas (as colunas visíveis, Todos | Nenhum; no rodapé das tabelas, ao lado do PainelFiltros) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">

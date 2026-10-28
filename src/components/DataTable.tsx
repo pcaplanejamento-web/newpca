@@ -2,19 +2,21 @@
 
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  alternarOculta,
+  alternarColuna,
   coerceLayoutTabela,
   comLargura,
+  comOcultas,
   comOrdem,
   LAYOUT_TABELA_PADRAO,
   type LayoutTabela,
   layoutTabelaIgual,
+  ocultasEfetivas,
   ordemDasColunas,
 } from "@/lib/colunas-layout";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { baixarPlanilhaXlsx, type ColunaPlanilha, linhasPlanilhaTabela, nomeArquivoPlanilha, tabelaParaPdf } from "@/lib/exportar-tabela";
 import { nomeArquivoPdf } from "@/lib/exportar-pdf-core";
-import { brl, dataIsoBrasilia, num } from "@/lib/format";
+import { brl, dataBR, dataIsoBrasilia, num } from "@/lib/format";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -30,7 +32,8 @@ import {
 import { DateFilterHeader } from "./DateFilterHeader";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { useEditorEdicoes } from "./EdicoesTabela";
-import { useDetalheSigla, useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
+import { SeletorColunas } from "./SeletorColunas";
+import { useAdminTabelas, useDetalheSigla, useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
 import { definirVarRaiz, ehDesktop } from "./espacamento";
 import { Dropdown } from "./Dropdown";
@@ -50,6 +53,8 @@ import { Selecao } from "./Selecao";
 export type Column<R> = {
   key: string;
   header: string;
+  /** O GRUPO da coluna no seletor de colunas (ex.: "Protocolo (mais dados)"); sem ele, "Colunas". */
+  grupo?: string;
   render?: (row: R) => ReactNode;
   /** Alinhamento horizontal da coluna. Padrão = **center** (dados centralizados); use "right"
    * para valores monetários (R$) e "left" só em exceções. */
@@ -158,6 +163,7 @@ export function DataTable<R>({
   exportar,
   ocultas,
   ocultasPadrao,
+  onColunasVisiveis,
   conexao,
   ordemInicial,
   filtrosRodape,
@@ -234,6 +240,8 @@ export function DataTable<R>({
   ocultas?: ReadonlySet<string>;
   /** Colunas OCULTAS no padrão do sistema (a tabela abre sem elas; a edição da tabela as mostra de volta). */
   ocultasPadrao?: readonly string[];
+  /** Avisa as colunas VISÍVEIS agora (ex.: a Mesa pede ao servidor os dados das colunas extras ligadas). */
+  onColunasVisiveis?: (chaves: string[]) => void;
   /** MESA CONECTADA — ver `ConexaoTabela`. */
   conexao?: ConexaoTabela<R>;
   /** A ORDEM com que a tabela abre quando não há edição salva nem conexão (ex.: a consulta do PCA, do sequencial maior ao menor). */
@@ -250,22 +258,23 @@ export function DataTable<R>({
   const semCols = useMemo(() => new Set(chaveOcultas ? chaveOcultas.split("|") : []), [chaveOcultas]);
   const columns = useMemo(() => (semCols.size ? todasColunas.filter((c) => !semCols.has(c.key)) : todasColunas), [todasColunas, semCols]);
   const coerceLayout = useCallback((v: unknown) => coerceLayoutTabela(v, semCols), [semCols]);
+  // As OCULTAS NO PADRÃO (ex.: os dados extras da Mesa): ficam ocultas em toda visão que não as mostra (`exibidas`) —
+  // inclusive nas salvas antes de a coluna existir.
   const chavePadrao = ocultasPadrao?.join("|") ?? "";
-  const layoutPadrao = useMemo(
-    () => (chavePadrao ? { ...LAYOUT_TABELA_PADRAO, ocultas: chavePadrao.split("|") } : LAYOUT_TABELA_PADRAO),
-    [chavePadrao],
-  );
+  const padraoOc = useMemo(() => (chavePadrao ? chavePadrao.split("|") : []), [chavePadrao]);
   // A edição em uso (a padrão do usuário ao abrir) dá o layout das colunas e o ESTADO INICIAL da ordenação e dos filtros;
   // trocar de edição os aplica. Salvar leva a ordenação e os filtros do momento.
+  const adminTabelas = useAdminTabelas();
   const editor = useEditorEdicoes<LayoutTabela>({
     chave: edicoes?.chave ?? "",
     edicoes: edicoes?.lista ?? SEM_EDICOES,
     padroes: edicoes?.padroes ?? SEM_PADROES,
     onMudar: edicoes?.onMudar,
     podePublicar: edicoes?.podePublicar ?? false,
+    admin: adminTabelas,
     coerce: coerceLayout,
     igual: layoutTabelaIgual,
-    padrao: layoutPadrao,
+    padrao: LAYOUT_TABELA_PADRAO,
     paraSalvar: (l: LayoutTabela): LayoutTabela => ({ ...l, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, filtros: filters }),
     aoEscolher: (l: LayoutTabela) => {
       setFilters(l.filtros);
@@ -475,7 +484,14 @@ export function DataTable<R>({
   const lay = editor.layout;
   const chaves = useMemo(() => columns.map((c) => c.key), [columns]);
   const indice = useMemo(() => new Map(columns.map((c, j) => [c.key, j])), [columns]);
-  const fora = useMemo(() => new Set(lay.ocultas), [lay.ocultas]);
+  const ocultasAgora = useMemo(() => ocultasEfetivas(lay, padraoOc), [lay, padraoOc]);
+  const fora = useMemo(() => new Set(ocultasAgora), [ocultasAgora]);
+  const chaveVisiveis = chaves.filter((k) => !fora.has(k)).join("|");
+  const avisarVisiveis = useRef(onColunasVisiveis);
+  avisarVisiveis.current = onColunasVisiveis;
+  useEffect(() => {
+    avisarVisiveis.current?.(chaveVisiveis ? chaveVisiveis.split("|") : []);
+  }, [chaveVisiveis]);
   const ordemAtual = useMemo(() => {
     const o = ordemDasColunas(chaves, lay.fixadas, lay.ordemManual);
     const vis = (k: string) => editando || !fora.has(k);
@@ -763,7 +779,7 @@ export function DataTable<R>({
                         onArrastar={(e) => iniciar(e, c.key)}
                         onMover={(d) => mover(c.key, p, d)}
                         onCongelar={() => congelar(c.key)}
-                        onOcultar={() => editor.mudar((x) => alternarOculta(x, c.key))}
+                        onOcultar={() => editor.mudar((x) => alternarColuna(x, c.key, padraoOc))}
                         onOrdenar={() => ordenarPor(c.key)}
                         largura={lay.larguras[c.key]}
                         onLargura={(px) => editor.mudar((x) => comLargura(x, c.key, px))}
@@ -876,9 +892,10 @@ export function DataTable<R>({
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 sm:gap-x-3">
-          {ativos.length + (filtrosRodape?.n ?? 0) > 0 && (
+          {/* Com visões salvas, os filtros das colunas ficam no PainelFiltros — aqui só os de fora (o Recorte da Mesa). */}
+          {(edicoes ? 0 : ativos.length) + (filtrosRodape?.n ?? 0) > 0 && (
             <FiltrosAtivos
-              colunas={ativos.map((c) => ({ key: c.key, header: c.header }))}
+              colunas={edicoes ? [] : ativos.map((c) => ({ key: c.key, header: c.header }))}
               extra={filtrosRodape}
               onLimparColuna={(k) => {
                 const c = ativos.find((x) => x.key === k);
@@ -897,14 +914,37 @@ export function DataTable<R>({
               }}
             />
           )}
+          {edicoes && !editando && (
+            <SeletorColunas
+              colunas={columns.filter((c) => c.header).map((c) => ({ key: c.key, header: c.header, grupo: c.grupo ?? "Colunas" }))}
+              ocultas={ocultasAgora}
+              onMudar={(ocultas) => editor.ajustar((x) => comOcultas(x, ocultas, padraoOc))}
+            />
+          )}
           {edicoes &&
             editor.rodape({
               onEditar: () => editor.editar(lay),
               disabled: rows.length === 0,
-              onCongelarTodas: () => editor.mudar((x) => ({ ...x, fixadas: chaves.filter((k) => !x.ocultas.includes(k)) })),
+              chips: ativos.map((c) => ({ chave: c.key, rotulo: c.header || c.key, valores: valoresDoFiltro(c, filters[c.key]) })),
+              alterada: JSON.stringify(filters) !== JSON.stringify(editor.salvo.filtros),
+              onTirar: (k) => {
+                const c = ativos.find((x) => x.key === k);
+                if (c?.filtroExterno) c.filtroExterno.onChange(null);
+                else
+                  setFilters((f) => {
+                    const { [k]: _, ...resto } = f;
+                    return resto;
+                  });
+                setPage(1);
+              },
+              onCongelarTodas: () =>
+                editor.mudar((x) => {
+                  const oc = new Set(ocultasEfetivas(x, padraoOc));
+                  return { ...x, fixadas: chaves.filter((k) => !oc.has(k)) };
+                }),
               onDescongelarTodas: () => editor.mudar((x) => ({ ...x, fixadas: [] })),
-              onMostrarTodas: () => editor.mudar((x) => ({ ...x, ocultas: [] })),
-              semOcultas: lay.ocultas.length === 0,
+              onMostrarTodas: () => editor.mudar((x) => comOcultas(x, [], padraoOc)),
+              semOcultas: ocultasAgora.length === 0,
             })}
           {nomeExportar && (
             <>
@@ -961,6 +1001,20 @@ export function DataTable<R>({
       )}
     </div>
   );
+}
+
+/** Os VALORES de um filtro de coluna como texto (o chip do PainelFiltros): a seleção, a faixa ("de … a …") ou o período. */
+function valoresDoFiltro<R>(c: Column<R>, f: FiltroValor | undefined): string[] {
+  if (c.filtroExterno) return c.filtroExterno.valor;
+  if (!f) return [];
+  if (Array.isArray(f)) return f;
+  const fmt = c.formatarFaixa ?? brl;
+  if ("min" in f || "max" in f) {
+    const r = f as { min?: number; max?: number };
+    return [`${r.min != null ? `de ${fmt(r.min)}` : ""}${r.min != null && r.max != null ? " " : ""}${r.max != null ? `até ${fmt(r.max)}` : ""}`];
+  }
+  const d = f as { de?: string; ate?: string };
+  return [`${d.de ? `de ${dataBR(d.de)}` : ""}${d.de && d.ate ? " " : ""}${d.ate ? `até ${dataBR(d.ate)}` : ""}`];
 }
 
 /** O menu de FILTROS do rodapé: o funil com o número de filtros e, ao abrir, cada coluna filtrada (✕ limpa só ela),

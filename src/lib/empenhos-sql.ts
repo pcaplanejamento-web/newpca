@@ -208,7 +208,7 @@ export function comandosConferirAssinatura(
   const cmds: unknown[] = pedacos.map((json, i) => {
     const virt = () => tabelaVirtual(nome, cols, json, c.extras);
     // CROSS JOIN = a página por FORA e o gravado pelo índice único por dentro: o SQLite sem estatísticas (o D1) escolhia o
-    // contrário — o card inteiro por fora e a página varrida para cada registro (28 s por parte com 18 mil empenhos, v1.242.2).
+    // contrário — o card inteiro por fora e a página varrida para cada registro (28 s por parte com 18 mil empenhos, v1.243.1).
     const junto = (cond: SQL) => sql`FROM ${virt()} CROSS JOIN ${tab} e ON e."card_id" = ${card} AND e."chave" = ${chaveStg} WHERE ${cond}${comDestino}`;
     const semDestino = c.destino
       ? {
@@ -254,7 +254,7 @@ export function comandoHashLegado(db: Db, c: ConfTabela, card: number, leitor: n
   const final = sql.raw(`"${c.tabela}"`);
   // Os pares (registro gravado, assinatura lida) numa junção com a PÁGINA POR FORA (`CROSS JOIN`) e o gravado pelo índice
   // único (card, chave) por dentro — linear. O SQLite sem estatísticas (o D1) escolhia o contrário nas versões anteriores
-  // (o card ou a página varridos para cada registro), segurando o banco e derrubando as telas de todos (v1.242.2).
+  // (o card ou a página varridos para cada registro), segurando o banco e derrubando as telas de todos (v1.243.1).
   const pares = sql`(SELECT e."id" AS "eid", ${sql.raw(`"${nome}"."hash"`)} AS "h" FROM ${tabelaVirtual(nome, cols, json, c.extras)} CROSS JOIN ${final} e
     ON e."card_id" = ${card} AND e."chave" = ${sql.raw(`"${nome}"."chave"`)}
     WHERE e."hash" IS NULL AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL AND e."leitor" = ${leitor}

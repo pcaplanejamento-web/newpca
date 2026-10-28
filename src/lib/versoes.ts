@@ -35,12 +35,22 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.242.2",
+    versao: "1.243.1",
     data: "2026-10-28",
     titulo: "Importações sem travar o sistema",
     mudancas: [
       { tipo: "correcao", area: "Importações", texto: "A conferência de cada parte da importação (manual e automática) varria todos os registros do card para cada registro da parte — até 30 segundos por parte, segurando o banco e deixando o sistema fora do ar para todos enquanto importava. Agora cada registro é achado direto pelo índice: milissegundos por parte.", link: "/painel/configuracoes?aba=importacoes" },
       { tipo: "melhoria", area: "Importações", texto: "Menos pedidos ao mesmo tempo (até 3 × 2 partes) e o \"Importar tudo\" um card por vez: as outras telas nunca esperam pela importação.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.243.0",
+    data: "2026-10-28",
+    titulo: "Mesa: todo dado vira coluna, seletor de colunas e visões com estado inicial",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Todos os dados do protocolo e do DFD viram colunas nas tabelas de Protocolos, DFDs e Itens (nas duas Mesas): interessado, CPF/CNPJ, observação, objeto, setor, contato do responsável, nº do contrato/ARP/licitação, datas e o texto de cada seção do DFD. Abrem ocultas e só são lidas quando a coluna é ligada; os dados pessoais e os valores seguem o papel.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Seletor de colunas no rodapé das tabelas: marque as colunas que quer ver, com Todos e Nenhum.", link: "/painel/mesa?vista=protocolos" },
+      { tipo: "melhoria", area: "Mesa", texto: "O painel de filtros e visões (o mesmo da Execução) nas tabelas: os filtros em chips, as visões salvas (colunas, filtros e ordem), a sua visão padrão e, para o administrador, o estado inicial para todos — a escolha da própria pessoa vence.", link: "/painel/mesa?vista=itens" },
     ],
   },
   {
