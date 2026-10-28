@@ -9,13 +9,9 @@ import {
   type CardEmpenho,
   type EdicaoCard,
   edicaoDoCard,
-  FREQUENCIAS,
   motivoCardInvalido,
-  OPCOES_QUEDA,
   opcoesAnos,
   previaPedido,
-  REGRAS_REMOVIDOS,
-  type RegraRemovidos,
   type LeituraPorOrgao,
 } from "@/lib/empenho-cards-core";
 import { dataIsoBrasilia } from "@/lib/format";
@@ -45,8 +41,8 @@ function A({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /**
- * A aba CONFIGURAÇÃO de um card: a identificação, os ANOS, a programação da atualização automática, as REGRAS da
- * conferência e a INTEGRAÇÃO (endereço e parâmetros — avançado) com o TESTE (um pedido de verdade com a configuração em
+ * A CONFIGURAÇÃO de um card: a identificação, os ANOS e a INTEGRAÇÃO (a atualização automática e as regras da
+ * conferência são CENTRAIS — o painel do topo de Configurações → Importações); a INTEGRAÇÃO (endereço e parâmetros — avançado) com o TESTE (um pedido de verdade com a configuração em
  * curso, sem gravar nada). Edição direta, com o "(?)" em cada campo; "Salvar" na barra das abas (só com alteração) — a
  * régua é `motivoCardInvalido`, a mesma do servidor. Sair com alteração não salva avisa.
  */
@@ -61,7 +57,6 @@ export function EmpenhoCardConfig({
   onSalvo: (proxima: "importacao" | "vinculos" | null) => void;
 }) {
   const liq = cardPorOrgao(card.tipo);
-  const nomeSoma = card.tipo === "pagamentos" ? "paga" : card.tipo === "liquidacoes" ? "liquidada" : "empenhada";
   const [v, setV] = useState<EdicaoCard>(() => edicaoDoCard(card));
   const [salvando, setSalvando] = useState(false);
   const [avancado, setAvancado] = useState(false);
@@ -178,59 +173,6 @@ export function EmpenhoCardConfig({
           <p className="text-[12.5px] text-muted">{anosDeFato.length ? `Hoje: ${anosDeFato.join(", ")}.` : "Nenhum ano válido escolhido."}</p>
         </SecaoBanner>
 
-        <SecaoBanner titulo="Atualização automática">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <SelectField denso label="Frequência" value={String(v.frequenciaMin)} onChange={(e) => muda("frequenciaMin", Number(e.target.value))} rotuloExtra={<A titulo="Frequência">De quanto em quanto tempo o card é lido, dentro do horário.</A>}>
-              {FREQUENCIAS.map((f) => (
-                <option key={f.valor} value={f.valor}>
-                  {f.rotulo}
-                </option>
-              ))}
-            </SelectField>
-            <TextField denso label="Das" type="time" value={v.horaInicio} onChange={(e) => muda("horaInicio", e.target.value)} rotuloExtra={<A titulo="Horário">A leitura só acontece entre esses horários (Brasília).</A>} />
-            <TextField denso label="Até" type="time" value={v.horaFim} onChange={(e) => muda("horaFim", e.target.value)} rotuloExtra={<A titulo="Horário">A leitura só acontece entre esses horários (Brasília).</A>} />
-          </div>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex items-center gap-1">
-              <Switch checked={v.diasUteis} onChange={(x) => muda("diasUteis", x)} label="Só em dias úteis" />
-              <A titulo="Dias úteis">Ligado: não lê aos sábados, domingos e feriados.</A>
-            </div>
-            <div className="flex items-center gap-1">
-              <Switch checked={v.ativa} onChange={(x) => muda("ativa", x)} label="Ligada" dica="Liga a atualização automática deste card (desligada por padrão)." />
-              <A titulo="Ligada">
-                No horário e na frequência acima, o sistema importa sozinho os anos do card (um por vez, em rodízio), poucas páginas a cada
-                5 minutos, com a MESMA conferência da importação manual. Uma queda suspeita nunca passa sozinha — a importação fecha como
-                parcial e você confirma numa importação manual.
-              </A>
-            </div>
-          </div>
-        </SecaoBanner>
-
-        <SecaoBanner titulo="Regras da conferência">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SelectField denso label={`Queda da soma ${nomeSoma}`} value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<A titulo="Queda da soma">A importação que trouxer a soma {nomeSoma} do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</A>}>
-              {OPCOES_QUEDA.map((o) => (
-                <option key={o.valor} value={o.valor}>
-                  {o.rotulo}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField denso label="Queda dos registros" value={String(v.quedaRegistros)} onChange={(e) => muda("quedaRegistros", Number(e.target.value))} rotuloExtra={<A titulo="Queda dos registros">O mesmo para o número de registros do ano.</A>}>
-              {OPCOES_QUEDA.map((o) => (
-                <option key={o.valor} value={o.valor}>
-                  {o.rotulo}
-                </option>
-              ))}
-            </SelectField>
-          </div>
-          <SelectField denso label="Empenhos que a Centi não traz mais" value={v.removidos} onChange={(e) => muda("removidos", e.target.value as RegraRemovidos)} rotuloExtra={<A titulo="Removidos na Centi">Marcar = ficam guardados, fora das somas (o rodapé da tabela mostra “Removidos na Centi”). Apagar = saem do banco na importação conferida.</A>}>
-            {REGRAS_REMOVIDOS.map((r) => (
-              <option key={r.valor} value={r.valor}>
-                {r.rotulo}
-              </option>
-            ))}
-          </SelectField>
-        </SecaoBanner>
       </div>
 
       <SecaoBanner

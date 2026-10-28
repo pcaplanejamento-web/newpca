@@ -1,6 +1,6 @@
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
-import { anosDoCard, type CardEmpenho, cardPorOrgao } from "./empenho-cards-core";
+import { anosDoCard, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, filaDosCards } from "./empenho-cards-core";
 import { cardsAtivos, orgaosDoLote } from "./empenho-cards";
 import { eq } from "drizzle-orm";
 import { centiLeituras, centiLotePassos } from "@/db/schema";
@@ -28,34 +28,38 @@ import { avancarLeitura, iniciarPaginaAuto, leituraDoLote } from "./empenhos-fra
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, fecharParcial, PedidoInvalido, type ResultadoPagina } from "./empenhos-importacao";
 import { comandoConduzir, comandoSoltarAuto, comandosFecharLote, comandoTravarAuto } from "./empenhos-sql";
 import { listarFeriados } from "./feriados";
+import { getConfigImportacoes } from "./importacoes-config";
 import { horaAgoraBrasilia } from "./tarefas-core";
 
 /**
- * A ATUALIZAÇÃO AUTOMÁTICA dos cards de empenhos, liquidações e pagamentos (o cron chama DUAS vezes por minuto): para cada card LIGADO (desligados por
- * padrão), continua o lote que está lendo ou, na hora certa (horário, dias úteis, frequência do card), começa o do ano da
+ * A ATUALIZAÇÃO AUTOMÁTICA das importações da Centi (o cron chama DUAS vezes por minuto), com a configuração CENTRAL
+ * (Configurações → Importações — desligada por padrão): numa FILA ÚNICA (empenhos → liquidações → pagamentos), continua o
+ * lote que está lendo ou, na hora certa (horário, dias úteis e frequência centrais), começa o do ano da
  * vez — UMA tarefa pequena por execução (uma página pequena, um fragmento da resposta grande ou uma janela dela —
  * `empenhos-fragmentos.ts`), dentro do limite de CPU do plano gratuito, com a MESMA conferência da importação manual. Nunca aceita uma
  * QUEDA suspeita sozinha (o lote fecha como parcial — a pessoa confirma numa importação manual) e nunca disputa o lote com
  * uma aba (a trava de quem conduz). Nos cards de LIQUIDAÇÕES, o lote lê todos os órgãos do cadastro com o "ID na Centi".
  */
 export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card: number; situacao: string }[]> {
+  // A configuração CENTRAL (Configurações → Importações): desligada, nada roda; ligada, vale para todos os cards.
+  const cfg = await getConfigImportacoes();
+  if (!cfg.ativa) return [];
   const cards = await cardsAtivos();
   if (!cards.length) return [];
   const hoje = hojeIso(agora);
-  const util = cards.some((c) => c.diasUteis) ? diaUtil(hoje, feriadosNoIntervalo(await listarFeriados(), hoje, hoje)) : true;
+  const util = cfg.diasUteis ? diaUtil(hoje, feriadosNoIntervalo(await listarFeriados(), hoje, hoje)) : true;
   const instante = { ms: agora.getTime(), hora: horaAgoraBrasilia(agora), diaUtil: util, ano: Number(hoje.slice(0, 4)) };
   const r: { card: number; situacao: string }[] = [];
-  // UMA tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira): os cards em RODÍZIO
-  // por meio minuto (o cron roda DUAS vezes por minuto, uma a cada 30 s) — o 1º que trabalhar encerra a execução; os
-  // demais esperam a próxima.
-  const inicio = Math.floor(agora.getTime() / 30_000) % cards.length;
-  for (const card of [...cards.slice(inicio), ...cards.slice(0, inicio)]) {
+  // A FILA ÚNICA: empenhos → liquidações → pagamentos (a unidade das liquidações e dos pagamentos vem do empenho); UMA
+  // tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira) — o 1º card que trabalhar
+  // encerra a execução; quem só espera (fora da hora, depois de um erro) passa a vez ao seguinte.
+  for (const card of filaDosCards(cards)) {
     try {
-      const u = await umCard(card, instante);
+      const u = await umCard(card, cfg, instante);
       r.push({ card: card.id, situacao: u.situacao });
       if (u.trabalhou) break;
     } catch (e) {
-      // Nunca em silêncio: o erro vira um passo do lote (umCard) e o log; o rodízio segue na próxima execução.
+      // Nunca em silêncio: o erro vira um passo do lote (umCard) e o log; a fila segue na próxima execução.
       console.error(`[cron empenhos] card ${card.id}:`, (e as Error).message);
       r.push({ card: card.id, situacao: `erro: ${(e as Error).message}` });
       break;
@@ -68,11 +72,12 @@ type Feito = { situacao: string; trabalhou: boolean };
 
 const modoDoCard = (card: CardEmpenho): ModoLote => (card.tipo === "empenhos" ? "dados" : card.tipo);
 
-async function umCard(card: CardEmpenho, agora: { ms: number; hora: string; diaUtil: boolean; ano: number }): Promise<Feito> {
+async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: number; hora: string; diaUtil: boolean; ano: number }): Promise<Feito> {
   const db = getDb();
   let lote = await loteEmAndamento(card.id);
   if (!lote) {
-    if (!cardNaHora(card, agora)) return { situacao: "fora da hora", trabalhou: false };
+    // A PROGRAMAÇÃO é a central; a última leitura é a de cada card (cada um tem a sua vez na frequência).
+    if (!cardNaHora({ ...cfg, ultimaExecucao: card.ultimaExecucao }, agora)) return { situacao: "fora da hora", trabalhou: false };
     const { ultima, emEspera } = await rodizioDosAnos(card.id, modoDoCard(card));
     // Os anos cuja última automática falhou ou ficou parcial esperam (o mesmo motivo voltaria) — a manual os libera.
     const anos = anosDoCard(card.anos, agora.ano).filter((a) => !emEspera.has(a));

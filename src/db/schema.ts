@@ -2165,12 +2165,13 @@ export const empenhoCards = sqliteTable("empenho_cards", {
   tenant: text("tenant").notNull().default("rioverde"),
   parametros: text("parametros").notNull().default('{"dataInicio":"{inicio}","dataFim":"{fim}"}'),
   anos: text("anos").notNull().default("[0]"),
+  /** DORMENTES desde a v1.240.0 (migração `0161`): a automática e as regras moram na configuração CENTRAL
+   * (`configuracoes.importacoes` — Configurações → Importações). Sem código; nada é apagado. */
   ativa: integer("ativa", { mode: "boolean" }).notNull().default(false),
   frequenciaMin: integer("frequencia_min").notNull().default(120),
   diasUteis: integer("dias_uteis", { mode: "boolean" }).notNull().default(true),
   horaInicio: text("hora_inicio").notNull().default("07:00"),
   horaFim: text("hora_fim").notNull().default("19:00"),
-  /** As regras da conferência: a QUEDA (% da última importação concluída) e o que fazer com o que a Centi não traz mais. */
   quedaSoma: integer("queda_soma").notNull().default(80),
   quedaRegistros: integer("queda_registros").notNull().default(90),
   removidos: text("removidos").notNull().default("marcar"),

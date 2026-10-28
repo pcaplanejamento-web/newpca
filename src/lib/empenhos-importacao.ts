@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { centiLotePassos, centiLotes } from "@/db/schema";
 import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
+import { getConfigImportacoes } from "./importacoes-config";
 import { type LinhaDoModo, linhasDaParte, type ModoParte, partesDaPagina, type ResumoPagina, resumoValido, somaDaLinha } from "./importacao-partes-core";
 import { baixarSeguro } from "./busca-segura";
 import { type CardEmpenho, catalogoDasLinhas, mapaDosVinculos, urlDoCard, vinculoDaLinha } from "./empenho-cards-core";
@@ -420,6 +421,8 @@ export async function fecharParcial(card: CardEmpenho, lote: LoteCenti, motivo: 
  */
 export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
+  const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const parcial = (motivo: string, resumo: string) => fecharParcial(card, lote, motivo, resumo, opcoes.usuario);
   // O "hoje" é o do INÍCIO do lote: atravessar a meia-noite não cria uma lacuna nova na conclusão.
@@ -446,17 +449,17 @@ export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, o
   const contagem = await contagemDaPromocao(db, lote.id, card.id, lote.ano, lote.leitor, orgaos);
   // A 1ª leitura por órgão não tem com quem comparar: a régua da queda vale sobre os empenhos vigentes desses órgãos (o que
   // a leitura marcaria como removido) — um mapa errado nunca esvazia o ano sem a pessoa confirmar.
-  const queda = anterior || !orgaos ? quedaSuspeita(anterior, lote, { soma: card.quedaSoma, registros: card.quedaRegistros }) : quedaPrimeiraPorOrgao(await vigentesDosOrgaos(db, card.id, lote.ano, orgaos), contagem.removidos, card.quedaRegistros);
+  const queda = anterior || !orgaos ? quedaSuspeita(anterior, lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros }) : quedaPrimeiraPorOrgao(await vigentesDosOrgaos(db, card.id, lote.ano, orgaos), contagem.removidos, regras.quedaRegistros);
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda };
   // As LIQUIDAÇÕES e os PAGAMENTOS seguem o empenho de mesmo número: as dos empenhos que chegaram (ou mudaram de unidade) realinham juntas.
-  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, card.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db, { card: card.id, ano: lote.ano }), comandoRealinharPagamentos(db, { card: card.id, ano: lote.ano })] as never);
+  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, regras.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db, { card: card.id, ano: lote.ano }), comandoRealinharPagamentos(db, { card: card.id, ano: lote.ano })] as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}${orgaos ? ` (por órgão: ${orgaos.length} órgão(s) da Centi)` : ""}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"} (não vieram mais), ${contagem.fora} sem vínculo no card (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}${orgaos ? ` (por órgão: ${orgaos.length} órgão(s) da Centi)` : ""}: ${lote.unicos} conferidos com a Centi (Σ empenhado ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) — ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${lote.unicos - contagem.fora - contagem.inseridos - contagem.atualizados} sem mudança, ${contagem.removidos} ${regras.removidos === "apagar" ? "apagados" : "marcados como removidos"} (não vieram mais), ${contagem.fora} sem vínculo no card (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }
@@ -465,6 +468,8 @@ export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, o
  * regras do card. */
 async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
+  const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const orgaos = lote.orgaosCenti ?? [];
   const n = await liquidacoesSuspeitas(db, lote.id);
@@ -472,17 +477,17 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
     const m = `${n} liquidação(ões) com valor negativo ou acima do limite — a leitura parece errada; nada foi gravado.`;
     return fecharParcial(card, lote, m, m, opcoes.usuario);
   }
-  const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
+  const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, lote.id), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma liquidada").replace("os empenhos caíram", "as liquidações caíram") };
   const contagem = await contagemLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor);
-  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, card.removidos, contagem) as never);
+  await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, regras.removidos, contagem) as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: liquidações de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}, ${contagem.fora} sem empenho nem órgão no cadastro (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}: liquidações de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidas (Σ ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novas, ${contagem.atualizados} atualizadas, ${contagem.removidos} ${regras.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}, ${contagem.fora} sem empenho nem órgão no cadastro (não gravadas)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }
@@ -491,6 +496,8 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
  * mesmas regras do card (a soma = o pago líquido das ordens não anuladas). */
 async function concluirPagamentos(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
+  const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const orgaos = lote.orgaosCenti ?? [];
   const n = await pagamentosSuspeitos(db, lote.id);
@@ -498,17 +505,17 @@ async function concluirPagamentos(card: CardEmpenho, lote: LoteCenti, opcoes: { 
     const m = `${n} pagamento(s) com valor negativo ou acima do limite — a leitura parece errada; nada foi gravado.`;
     return fecharParcial(card, lote, m, m, opcoes.usuario);
   }
-  const queda = quedaSuspeita(await ultimoPagamentoPromovido(db, card.id, lote.ano, lote.id), lote, { soma: card.quedaSoma, registros: card.quedaRegistros });
+  const queda = quedaSuspeita(await ultimoPagamentoPromovido(db, card.id, lote.ano, lote.id), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma paga").replace("os empenhos caíram", "os pagamentos caíram") };
   const contagem = await contagemPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor);
-  await db.batch(comandosPromoverPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, card.removidos, contagem) as never);
+  await db.batch(comandosPromoverPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, regras.removidos, contagem) as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,
     acao: "importar",
     entidade: "empenho_card",
     entidadeId: card.id,
-    resumo: `${card.nome} ${lote.ano}${quem}: pagamentos de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidos (Σ pago líquido ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${contagem.removidos} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}, ${contagem.fora} sem empenho nem órgão no cadastro (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
+    resumo: `${card.nome} ${lote.ano}${quem}: pagamentos de ${orgaos.length} órgão(s) da Centi — ${lote.unicos} lidos (Σ pago líquido ${(lote.soma ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}): ${contagem.inseridos} novos, ${contagem.atualizados} atualizados, ${contagem.removidos} ${regras.removidos === "apagar" ? "apagados" : "marcados como removidos"}, ${contagem.fora} sem empenho nem órgão no cadastro (não gravados)${queda ? ` — queda confirmada: ${queda}` : ""}`,
   });
   return { estado: "promovido" };
 }

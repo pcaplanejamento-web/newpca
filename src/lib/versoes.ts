@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.240.0",
+    data: "2026-10-28",
+    titulo: "Atualização automática central: uma configuração e uma fila para todas as importações",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Em Importações, o quadro “Atualização automática e regras” liga/desliga, define frequência, horário e dias úteis e as regras da conferência (queda da soma e dos registros, o que fazer com o que a Centi não traz mais) — UMA vez, para empenhos, liquidações e pagamentos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Em segundo plano, os cards entram numa fila única: empenhos primeiro (é deles que vem a unidade das liquidações e dos pagamentos), depois liquidações e pagamentos, cada card na sua vez.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "A Configuração de cada card fica só com o que é dele: nome, anos e a integração. O que estava ligado num card foi trazido para a configuração central.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.239.0",
     data: "2026-10-28",
     titulo: "Todas as importações num só lugar: Configurações → Importações",

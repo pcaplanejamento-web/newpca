@@ -13,6 +13,11 @@ export const cardEmpenhoSchema = z.strictObject({
   tenant: z.string().trim().min(1).max(LIMITES_CARD.tenant),
   parametros: z.string().trim().min(2).max(LIMITES_CARD.parametros),
   anos: z.array(z.number().int()).min(1).max(LIMITES_CARD.anos),
+  porOrgao: z.boolean().default(false),
+});
+
+/** A CONFIGURAÇÃO CENTRAL das importações (Configurações → Importações). A régua completa é `motivoConfigImportacoes` (core). */
+export const configImportacoesSchema = z.strictObject({
   ativa: z.boolean(),
   frequenciaMin: z.number().int(),
   diasUteis: z.boolean(),
@@ -21,7 +26,6 @@ export const cardEmpenhoSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
-  porOrgao: z.boolean().default(false),
 });
 
 /** O card NOVO: o tipo (empenhos | liquidações | pagamentos), o nome e, opcional, o card do MESMO tipo de onde copiar os vínculos

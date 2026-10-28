@@ -16,6 +16,10 @@ import {
   coberturaDoGrupo,
   type EdicaoCard,
   estadoCard,
+  filaDosCards,
+  IMPORTACOES_PADRAO,
+  lerConfigImportacoes,
+  motivoConfigImportacoes,
   pendenciasDoCard,
   gruposDosVinculos,
   lerAnos,
@@ -57,17 +61,15 @@ test("cards: a régua da configuração (a mesma da tela e do servidor)", () => 
   assert.match(m({ parametros: '{"a":"{orgao}"}' }), /desconhecido/);
   assert.match(m({ anos: [] }), /ano/);
   assert.match(m({ anos: [1990] }), /Ano inválido/);
-  assert.match(m({ frequenciaMin: 7 }), /Frequência/);
-  assert.match(m({ horaInicio: "19:00", horaFim: "07:00" }), /antes do fim/);
-  assert.match(m({ quedaSoma: 33 }), /queda/);
   assert.deepEqual(previaPedido(card, 2026, "2026-10-24").corpo, { dataInicio: "01/01/2026", dataFim: "31/12/2026" });
   assert.deepEqual(previaPedido(card, 2025, "2026-10-24").corpo, { dataInicio: "01/01/2025", dataFim: "31/12/2025" });
   const ok = { configuradoEm: "2026-10-24", vinculos: 2 };
-  assert.equal(estadoCard({ ativa: true, ultimoStatus: "promovido", ...ok }).rotulo, "Automática");
-  assert.equal(estadoCard({ ativa: true, ultimoStatus: "falhou", ...ok }).rotulo, "Com erro");
-  assert.equal(estadoCard({ ativa: false, ultimoStatus: null, ...ok }, true).rotulo, "Importando");
-  assert.equal(estadoCard({ ativa: true, ultimoStatus: null, configuradoEm: null, vinculos: 2 }).rotulo, "A configurar");
-  assert.equal(estadoCard({ ativa: true, ultimoStatus: null, configuradoEm: "x", vinculos: 0 }).rotulo, "A configurar");
+  assert.equal(estadoCard({ ultimoStatus: "promovido", ...ok }, false, true).rotulo, "Automática");
+  assert.equal(estadoCard({ ultimoStatus: "promovido", ...ok }).rotulo, "Manual");
+  assert.equal(estadoCard({ ultimoStatus: "falhou", ...ok }, false, true).rotulo, "Com erro");
+  assert.equal(estadoCard({ ultimoStatus: null, ...ok }, true).rotulo, "Importando");
+  assert.equal(estadoCard({ ultimoStatus: null, configuradoEm: null, vinculos: 2 }, false, true).rotulo, "A configurar");
+  assert.equal(estadoCard({ ultimoStatus: null, configuradoEm: "x", vinculos: 0 }, false, true).rotulo, "A configurar");
   // A CONFIGURAÇÃO vem antes de importar: 1º a Configuração confirmada, 2º ao menos um vínculo.
   assert.deepEqual(pendenciasDoCard({ configuradoEm: null }, 0).map((p) => p.aba), ["configuracao", "vinculos"]);
   assert.deepEqual(pendenciasDoCard({ configuradoEm: "x" }, 0).map((p) => p.aba), ["vinculos"]);
@@ -241,4 +243,35 @@ test("cards de LIQUIDAÇÕES: o padrão é a API de liquidações e as pendênci
   assert.equal(linkImportacoes("liquidacoes"), "/painel/configuracoes?aba=importacoes&tipo=liquidacoes");
   assert.equal(linkImportacoes("empenhos", 7, "vinculos"), "/painel/configuracoes?aba=importacoes&tipo=empenhos&card=7&sub=vinculos");
   assert.equal(telaDoCard({ tipo: lerTipoCard("x") }), "empenhos");
+});
+
+test("importações: a configuração CENTRAL (automática + regras) e a fila única", () => {
+  assert.equal(motivoConfigImportacoes(IMPORTACOES_PADRAO), null);
+  const m = (e: Partial<typeof IMPORTACOES_PADRAO>) => motivoConfigImportacoes({ ...IMPORTACOES_PADRAO, ...e }) ?? "";
+  assert.match(m({ frequenciaMin: 7 }), /Frequência/);
+  assert.match(m({ horaInicio: "19:00", horaFim: "07:00" }), /antes do fim/);
+  assert.match(m({ horaInicio: "7h" }), /Horário/);
+  assert.match(m({ quedaSoma: 33 }), /queda/);
+  // Tolerante: qualquer valor fora do esperado volta ao padrão, campo a campo; nada liga sozinho.
+  assert.deepEqual(lerConfigImportacoes(null), IMPORTACOES_PADRAO);
+  assert.deepEqual(lerConfigImportacoes("x"), IMPORTACOES_PADRAO);
+  assert.equal(lerConfigImportacoes({ ativa: "sim" }).ativa, false);
+  const c = lerConfigImportacoes({ ativa: true, frequenciaMin: 7, quedaSoma: 33, removidos: "apagar", diasUteis: false });
+  assert.equal(c.ativa, true);
+  assert.equal(c.frequenciaMin, IMPORTACOES_PADRAO.frequenciaMin);
+  assert.equal(c.quedaSoma, IMPORTACOES_PADRAO.quedaSoma);
+  assert.equal(c.removidos, "apagar");
+  assert.equal(c.diasUteis, false);
+  const inv = lerConfigImportacoes({ horaInicio: "20:00", horaFim: "08:00" });
+  assert.equal(inv.horaInicio, IMPORTACOES_PADRAO.horaInicio);
+  assert.equal(inv.horaFim, IMPORTACOES_PADRAO.horaFim);
+  // A fila: empenhos antes (a unidade das liquidações/pagamentos vem deles), depois por id; não muda a lista original.
+  const cards = [
+    { id: 5, tipo: "pagamentos" as const },
+    { id: 9, tipo: "empenhos" as const },
+    { id: 2, tipo: "liquidacoes" as const },
+    { id: 1, tipo: "empenhos" as const },
+  ];
+  assert.deepEqual(filaDosCards(cards).map((x) => x.id), [1, 9, 2, 5]);
+  assert.deepEqual(cards.map((x) => x.id), [5, 9, 2, 1]);
 });

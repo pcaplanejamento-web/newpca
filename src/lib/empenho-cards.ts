@@ -1,7 +1,7 @@
 import { and, asc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { empenhoCards, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import { type CardEmpenho, cardPorOrgao, type EdicaoCard, lerAnos, lerRegraRemovidos, lerTipoCard, type OrgaoGestorCenti, orgaosDaLeitura, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
+import { type CardEmpenho, cardPorOrgao, type EdicaoCard, lerAnos, lerTipoCard, type OrgaoGestorCenti, orgaosDaLeitura, type ResumoCard, type TipoCard, type VinculoCard } from "./empenho-cards-core";
 import { comandosCriarCard, consultaCatalogo, consultaConflitosEntreCards, consultaOrgaosGestores, consultaVinculosCard } from "./empenho-cards-sql";
 import type { EscopoEmpenhos } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
@@ -16,7 +16,10 @@ type Linha = typeof empenhoCards.$inferSelect;
 const ORGAOS_COM_ID = `(SELECT COUNT(DISTINCT CAST(TRIM(o."entidade_centi") AS INTEGER)) FROM "orgaos" o WHERE CAST(TRIM(o."entidade_centi") AS INTEGER) > 0)`;
 
 function paraCard(l: Linha): CardEmpenho {
-  return { ...l, tipo: lerTipoCard(l.tipo), anos: lerAnos(l.anos), removidos: lerRegraRemovidos(l.removidos) };
+  // As colunas da programação e das regras (ativa, frequência, horário, queda, removidos) ficam DORMENTES desde a v1.240.0:
+  // a configuração é CENTRAL (`importacoes-config.ts`) — não saem no card.
+  const { ativa: _a, frequenciaMin: _f, diasUteis: _d, horaInicio: _hi, horaFim: _hf, quedaSoma: _qs, quedaRegistros: _qr, removidos: _r, ...resto } = l;
+  return { ...resto, tipo: lerTipoCard(l.tipo), anos: lerAnos(l.anos) };
 }
 
 /**
@@ -92,15 +95,14 @@ export async function getCard(id: number): Promise<CardEmpenho | null> {
   return l ? paraCard(l) : null;
 }
 
-/** Os cards ligados (a atualização automática) — só os CONFIGURADOS e com vínculos (`pendenciasDoCard`; no de
- * liquidações, algum órgão do cadastro com o "ID na Centi"). */
+/** Os cards da atualização automática (a central ligada — quem chama confere) — só os CONFIGURADOS e com vínculos
+ * (`pendenciasDoCard`; nos de liquidações e pagamentos, algum órgão do cadastro com o "ID na Centi"). */
 export async function cardsAtivos(): Promise<CardEmpenho[]> {
   const l = await getDb()
     .select()
     .from(empenhoCards)
     .where(
       and(
-        eq(empenhoCards.ativa, true),
         isNotNull(empenhoCards.configuradoEm),
         sql`CASE "empenho_cards"."tipo"
           WHEN 'liquidacoes' THEN ${sql.raw(ORGAOS_COM_ID)} > 0

@@ -92,6 +92,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/feriados": { GET: ADMIN, POST: ADMIN },
   "admin/importacoes": { GET: ADMIN },
   "admin/importacoes/[id]": { GET: ADMIN },
+  "admin/importacoes/config": { GET: ADMIN, PATCH: ADMIN },
   "admin/grupos/[id]": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/grupos": { GET: ADMIN, POST: ADMIN },
   "admin/integracoes": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },

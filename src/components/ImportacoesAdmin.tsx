@@ -4,14 +4,21 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import {
   anosDoCard,
   type CardEmpenho,
+  type ConfigImportacoes,
   cardPorOrgao,
   estadoCard,
+  FREQUENCIAS,
+  motivoConfigImportacoes,
   NOME_TIPO,
+  OPCOES_QUEDA,
   type OrgaoGestorCenti,
   orgaosDaLeitura,
   pendenciasDoCard,
+  REGRAS_REMOVIDOS,
+  type RegraRemovidos,
   type ResumoCard,
   rotuloAnos,
+  rotuloFrequencia,
   type TipoCard,
   type VinculoCard,
 } from "@/lib/empenho-cards-core";
@@ -27,13 +34,16 @@ import { EmpenhoCardConfig } from "./EmpenhoCardConfig";
 import { EmpenhoCardImportacao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
+import { Callout } from "./Callout";
 import { SelectField, TextField } from "./Field";
-import { IconCheck, IconChevronLeft, IconEmpenho, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
+import { IconCheck, IconChevronLeft, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
 import { Segmented } from "./Segmented";
+import { SecaoBanner } from "./SecaoBanner";
 import { SkeletonCartao } from "./Skeleton";
+import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
 type SubAba = "importacao" | "vinculos" | "configuracao";
@@ -73,6 +83,13 @@ export function ImportacoesAdmin() {
   const [erro, setErro] = useState<string | null>(null);
   const [tipo, setTipo] = useState<TipoCard>("empenhos");
   const [aberto, setAberto] = useState<{ id: number; sub: SubAba } | null>(null);
+  const [config, setConfig] = useState<ConfigImportacoes | null>(null);
+
+  const carregarConfig = useCallback(async () => {
+    const r = await fetch("/api/admin/importacoes/config", { cache: "no-store" }).catch(() => null);
+    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes } | undefined;
+    if (r?.ok && j?.ok && j.config) setConfig(j.config);
+  }, []);
 
   const carregar = useCallback(async () => {
     try {
@@ -95,7 +112,8 @@ export function ImportacoesAdmin() {
     const sub = u.searchParams.get("sub");
     if (Number.isInteger(id) && id > 0) setAberto({ id, sub: sub === "vinculos" || sub === "configuracao" ? sub : "importacao" });
     void carregar();
-  }, [carregar]);
+    void carregarConfig();
+  }, [carregar, carregarConfig]);
 
   const doTipo = useMemo(() => (cards ?? []).filter((c) => c.tipo === tipo), [cards, tipo]);
   const contagem = (t: TipoCard) => (cards ?? []).filter((c) => c.tipo === t).length;
@@ -121,6 +139,7 @@ export function ImportacoesAdmin() {
         id={aberto.id}
         sub={aberto.sub}
         cards={cards ?? []}
+        config={config}
         onSub={(sub) => {
           setAberto({ id: aberto.id, sub });
           gravarNaUrl(tipo, aberto.id, sub);
@@ -144,6 +163,7 @@ export function ImportacoesAdmin() {
           <AjudaImportacoes />
         </div>
       </div>
+      {config && <PainelAutomatica config={config} onSalvo={setConfig} />}
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
       {cards == null && !erro ? (
         <div className={GRADE_ORCAMENTOS}>
@@ -151,7 +171,7 @@ export function ImportacoesAdmin() {
           <SkeletonCartao />
         </div>
       ) : cards ? (
-        <ListaCards tipo={tipo} cards={doTipo} todos={cards} onAbrir={(id, sub) => abrir(id, sub)} />
+        <ListaCards tipo={tipo} cards={doTipo} todos={cards} automatica={!!config?.ativa} onAbrir={(id, sub) => abrir(id, sub)} />
       ) : null}
     </div>
   );
@@ -183,7 +203,20 @@ function AjudaImportacoes() {
 }
 
 /** A grade dos cards do tipo + o "Novo card" (o nome e, nos empenhos, os vínculos copiados de outro card). */
-function ListaCards({ tipo, cards, todos, onAbrir }: { tipo: TipoCard; cards: ResumoCard[]; todos: ResumoCard[]; onAbrir: (id: number, sub?: SubAba) => void }) {
+function ListaCards({
+  tipo,
+  cards,
+  todos,
+  automatica,
+  onAbrir,
+}: {
+  tipo: TipoCard;
+  cards: ResumoCard[];
+  todos: ResumoCard[];
+  /** A atualização automática central está ligada (o selo dos cards). */
+  automatica: boolean;
+  onAbrir: (id: number, sub?: SubAba) => void;
+}) {
   const liq = cardPorOrgao(tipo);
   const nomeTipo = NOME_TIPO[tipo];
   const Icone = ICONE[tipo];
@@ -219,7 +252,7 @@ function ListaCards({ tipo, cards, todos, onAbrir }: { tipo: TipoCard; cards: Re
     <>
       <div className={GRADE_ORCAMENTOS}>
         {cards.map((c) => (
-          <CartaoFinanceiro key={c.id} onClick={() => onAbrir(c.id)} icone={<Icone className="h-5 w-5" />} {...propsDoCartao(c)} />
+          <CartaoFinanceiro key={c.id} onClick={() => onAbrir(c.id)} icone={<Icone className="h-5 w-5" />} {...propsDoCartao(c, automatica)} />
         ))}
         <QuadroNovoCard onClick={() => setNovo(true)} rotulo={cards.length ? "Novo card" : `Novo card de ${nomeTipo.varios}`} />
       </div>
@@ -286,8 +319,8 @@ function ListaCards({ tipo, cards, todos, onAbrir }: { tipo: TipoCard; cards: Re
 }
 
 /** O conteúdo do card de cada tipo (os números do `CartaoFinanceiro`). */
-function propsDoCartao(c: ResumoCard) {
-  const e = estadoCard(c, c.lendo);
+function propsDoCartao(c: ResumoCard, automatica: boolean) {
+  const e = estadoCard(c, c.lendo, automatica);
   const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : 0);
   const fmtPct = (p: number) => p.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   const rodape = c.ultimaExecucao ? `Última leitura em ${dataHoraBR(c.ultimaExecucao)}` : "Ainda não importado";
@@ -367,6 +400,136 @@ function propsDoCartao(c: ResumoCard) {
 }
 
 /**
+ * A ATUALIZAÇÃO AUTOMÁTICA e as REGRAS da conferência — CENTRAIS, valem para todos os cards: o resumo numa linha e
+ * "Editar" abre os campos (`motivoConfigImportacoes`, a mesma régua do servidor). Gravar vale na próxima execução.
+ */
+function PainelAutomatica({ config, onSalvo }: { config: ConfigImportacoes; onSalvo: (c: ConfigImportacoes) => void }) {
+  const [editando, setEditando] = useState<ConfigImportacoes | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const v = editando;
+  const motivo = v ? motivoConfigImportacoes(v) : null;
+  const muda = <K extends keyof ConfigImportacoes>(k: K, valor: ConfigImportacoes[K]) => setEditando((x) => (x ? { ...x, [k]: valor } : x));
+
+  async function salvar() {
+    if (!v || motivo) return;
+    setSalvando(true);
+    try {
+      const r = await fetch("/api/admin/importacoes/config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigImportacoes };
+      if (!r.ok || !j.ok || !j.config) throw new Error(j.error ?? "Não foi possível salvar.");
+      onSalvo(j.config);
+      setEditando(null);
+      toast.success(j.config.ativa ? "Atualização automática salva — vale na próxima execução." : "Configuração salva — a atualização automática está desligada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  const queda = (n: number) => OPCOES_QUEDA.find((o) => o.valor === n)?.rotulo ?? `${n}%`;
+  return (
+    <>
+      <SecaoBanner
+        titulo="Atualização automática e regras (todas as importações)"
+        acao={
+          <Button size="sm" variant="secondary" icon={<IconPencil className="h-4 w-4" />} onClick={() => setEditando(config)}>
+            Editar
+          </Button>
+        }
+      >
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-text-2">
+          <Badge tone={config.ativa ? "emerald" : "slate"} dot vivo={config.ativa}>
+            {config.ativa ? "Ligada" : "Desligada"}
+          </Badge>
+          <span>{rotuloFrequencia(config.frequenciaMin, config.diasUteis, config.horaInicio, config.horaFim)}</span>
+          <span className="text-muted">
+            Queda: soma {queda(config.quedaSoma)} · registros {queda(config.quedaRegistros)} · {config.removidos === "apagar" ? "apaga" : "marca"} o que a Centi não traz mais
+          </span>
+        </p>
+      </SecaoBanner>
+      <Modal
+        open={!!v}
+        onClose={() => !salvando && setEditando(null)}
+        bloqueado={salvando}
+        size="lg"
+        titulo="Atualização automática e regras"
+        rodape={
+          <div className="flex w-full justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setEditando(null)} disabled={salvando}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={salvar} loading={salvando} disabled={!!motivo}>
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        {v && (
+          <div className="space-y-[var(--gap-block)]">
+            {motivo && <Callout kind="danger">{motivo}</Callout>}
+            <SecaoBanner titulo="Atualização automática">
+              <div className="flex flex-wrap items-center gap-1">
+                <Switch checked={v.ativa} onChange={(x) => muda("ativa", x)} label="Ligada" dica="Liga a atualização automática de TODAS as importações (desligada por padrão)." />
+                <Ajuda titulo="Atualização automática" compacta>
+                  <p>
+                    Ligada, o sistema importa sozinho, em segundo plano, numa FILA ÚNICA: os cards de empenhos primeiro, depois os de liquidações e
+                    de pagamentos — cada card na sua vez, um ano por vez, com a MESMA conferência da importação manual.
+                  </p>
+                  <p>Uma queda suspeita nunca passa sozinha: a importação fecha como parcial e você confirma numa importação manual.</p>
+                </Ajuda>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <SelectField denso label="Frequência" value={String(v.frequenciaMin)} onChange={(e) => muda("frequenciaMin", Number(e.target.value))} rotuloExtra={<Ajuda titulo="Frequência" compacta>De quanto em quanto tempo cada card é lido, dentro do horário.</Ajuda>}>
+                  {FREQUENCIAS.map((f) => (
+                    <option key={f.valor} value={f.valor}>
+                      {f.rotulo}
+                    </option>
+                  ))}
+                </SelectField>
+                <TextField denso label="Das" type="time" value={v.horaInicio} onChange={(e) => muda("horaInicio", e.target.value)} rotuloExtra={<Ajuda titulo="Horário" compacta>A leitura só acontece entre esses horários (Brasília).</Ajuda>} />
+                <TextField denso label="Até" type="time" value={v.horaFim} onChange={(e) => muda("horaFim", e.target.value)} rotuloExtra={<Ajuda titulo="Horário" compacta>A leitura só acontece entre esses horários (Brasília).</Ajuda>} />
+              </div>
+              <div className="flex items-center gap-1">
+                <Switch checked={v.diasUteis} onChange={(x) => muda("diasUteis", x)} label="Só em dias úteis" />
+                <Ajuda titulo="Dias úteis" compacta>
+                  Ligado: não lê aos sábados, domingos e feriados.
+                </Ajuda>
+              </div>
+            </SecaoBanner>
+            <SecaoBanner titulo="Regras da conferência">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <SelectField denso label="Queda da soma" value={String(v.quedaSoma)} onChange={(e) => muda("quedaSoma", Number(e.target.value))} rotuloExtra={<Ajuda titulo="Queda da soma" compacta>A importação que trouxer a soma do ano ABAIXO deste % da última importação concluída pede confirmação antes de gravar (a automática fecha como parcial).</Ajuda>}>
+                  {OPCOES_QUEDA.map((o) => (
+                    <option key={o.valor} value={o.valor}>
+                      {o.rotulo}
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField denso label="Queda dos registros" value={String(v.quedaRegistros)} onChange={(e) => muda("quedaRegistros", Number(e.target.value))} rotuloExtra={<Ajuda titulo="Queda dos registros" compacta>O mesmo para o número de registros do ano.</Ajuda>}>
+                  {OPCOES_QUEDA.map((o) => (
+                    <option key={o.valor} value={o.valor}>
+                      {o.rotulo}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+              <SelectField denso label="Registros que a Centi não traz mais" value={v.removidos} onChange={(e) => muda("removidos", e.target.value as RegraRemovidos)} rotuloExtra={<Ajuda titulo="Removidos na Centi" compacta>Marcar = ficam guardados, fora das somas (o rodapé das tabelas mostra “Removidos na Centi”). Apagar = saem do banco na importação conferida.</Ajuda>}>
+                {REGRAS_REMOVIDOS.map((r) => (
+                  <option key={r.valor} value={r.valor}>
+                    {r.rotulo}
+                  </option>
+                ))}
+              </SelectField>
+            </SecaoBanner>
+          </div>
+        )}
+      </Modal>
+    </>
+  );
+}
+
+/**
  * O CARD ABERTO no lugar da lista: a linha do card (voltar · cor · nome · estado · números · avisos · excluir) e as
  * sub-abas com as ferramentas de cada uma à direita (o slot do `ConteudoAba`). Os dados do card (e, nos empenhos, os
  * vínculos, o catálogo e o cadastro) vêm sob demanda e são relidos a cada mudança.
@@ -375,6 +538,7 @@ function CardAberto({
   id,
   sub,
   cards,
+  config,
   onSub,
   onFechar,
   onMudou,
@@ -382,6 +546,7 @@ function CardAberto({
   id: number;
   sub: SubAba;
   cards: ResumoCard[];
+  config: ConfigImportacoes | null;
   onSub: (s: SubAba) => void;
   onFechar: () => void;
   onMudou: () => Promise<void>;
@@ -424,7 +589,7 @@ function CardAberto({
   }
   const liq = cardPorOrgao(c.tipo);
   const nome = NOME_TIPO[c.tipo];
-  const e = estadoCard(c, c.lendo);
+  const e = estadoCard(c, c.lendo, !!config?.ativa);
   const pendencias = pendenciasDoCard(c, c.vinculos);
   const subs: SubAba[] = liq ? ["importacao", "configuracao"] : ["importacao", "vinculos", "configuracao"];
   const aba: SubAba = subs.includes(sub) ? sub : "importacao";
@@ -463,7 +628,7 @@ function CardAberto({
 
   let conteudo: ReactNode = <SkeletonCartao />;
   if (d) {
-    if (aba === "importacao") conteudo = <EmpenhoCardImportacao card={d.card} podeExcluir onMudou={mudou} />;
+    if (aba === "importacao") conteudo = config ? <EmpenhoCardImportacao card={d.card} config={config} podeExcluir onMudou={mudou} /> : <SkeletonCartao />;
     else if (aba === "configuracao")
       conteudo = (
         <EmpenhoCardConfig

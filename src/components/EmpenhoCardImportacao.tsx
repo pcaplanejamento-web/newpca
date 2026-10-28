@@ -2,7 +2,7 @@
 
 import { useAnoDoCard } from "./anoDoCard";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { anosDoCard, type CardEmpenho, cardPorOrgao, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, pendenciasDoCard, type ResumoCard } from "@/lib/empenho-cards-core";
 import {
   type AndamentoLote,
   fracaoDoAndamento,
@@ -18,6 +18,7 @@ import {
   ROTULO_ESTADO_PASSO,
   rotuloPeriodo,
   usaPeriodo,
+  QUEM_AUTO,
 } from "@/lib/empenhos-core";
 import { textoDuracao } from "@/lib/fluxo-progresso";
 import { brl, dataHoraBR, dataIsoBrasilia, formatBytes } from "@/lib/format";
@@ -87,10 +88,13 @@ const duracaoLote = (l: LoteCenti) => {
  */
 export function EmpenhoCardImportacao({
   card,
+  config,
   podeExcluir,
   onMudou,
 }: {
   card: ResumoCard;
+  /** A configuração CENTRAL das importações (a atualização automática e as regras). */
+  config: ConfigImportacoes;
   podeExcluir: boolean;
   /** Uma importação foi gravada: quem hospeda relê o card (os números e o estado). */
   onMudou: () => void;
@@ -229,13 +233,13 @@ export function EmpenhoCardImportacao({
       if (fim.estado === "unidades") {
         toast.success(fim.mensagem ?? "Catálogo da Centi atualizado.");
       } else if (fim.estado === "promovido" && tipo === "pagamentos") {
-        toast.success(`Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravados)` : ""}.`);
+        toast.success(`Pagamentos ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importados (${brl(fim.soma)} pagos, líquido): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${config.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravados)` : ""}.`);
         onMudou();
       } else if (fim.estado === "promovido" && liq) {
-        toast.success(`Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravadas)` : ""}.`);
+        toast.success(`Liquidações ${fim.ano} de ${num(fim.orgaosCenti?.length ?? 0)} órgãos importadas (${brl(fim.soma)} liquidados): ${num(fim.inseridos)} novas, ${num(fim.atualizados)} atualizadas, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${config.removidos === "apagar" ? "apagadas" : "marcadas como removidas"}${fim.fora ? `, ${num(fim.fora)} sem o empenho nem o órgão no cadastro (não gravadas)` : ""}.`);
         onMudou();
       } else if (fim.estado === "promovido") {
-        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${card.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem vínculo no card (não gravados)` : ""}.`);
+        toast.success(`Empenhos ${fim.ano} importados e conferidos (${brl(fim.soma)} empenhados): ${num(fim.inseridos)} novos, ${num(fim.atualizados)} atualizados, ${num(semMudanca(fim))} sem mudança, ${num(fim.removidos)} ${config.removidos === "apagar" ? "apagados" : "marcados como removidos"}${fim.fora ? `, ${num(fim.fora)} sem vínculo no card (não gravados)` : ""}.`);
         onMudou();
       } else {
         toast.error(`Importação parcial${deQuem} — nada foi gravado. ${fim.mensagem ?? ""}`);
@@ -569,7 +573,7 @@ export function EmpenhoCardImportacao({
         <Callout kind="warn">
           <span className="flex flex-wrap items-center justify-between gap-2">
             Há uma importação de {emAndamento.ano} parada ({num(emAndamento.unicos)} registros lidos) — Continuar lê só o que falta
-            {card.ativa ? "; com a atualização automática ligada, ela continua sozinha em até 2 minutos." : "."}
+            {config.ativa && emAndamento.iniciadoPor === QUEM_AUTO ? "; a atualização automática a continua sozinha em até 2 minutos." : "."}
             <span className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={() => setHistorico(emAndamento)}>
                 Ver passos
