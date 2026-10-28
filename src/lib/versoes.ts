@@ -35,6 +35,33 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.244.0",
+    data: "2026-10-28",
+    titulo: "Declarações do PCA",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto:
+          "Aba Declarações no espaço do PCA: emita a declaração de que itens constam do PCA — com o DFD, o planejamento, a descrição, a quantidade e o valor unitário —, inteira ou PARCIAL (ex.: 6 de 12), para o início da contratação, um empenho complementar, um aditivo ou outra finalidade.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto:
+          "Cada item tem SALDO (a quantidade no PCA menos o já declarado): o sistema não deixa declarar além dele, nem com duas pessoas emitindo ao mesmo tempo; cancelar uma declaração (com o motivo) devolve o saldo.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "O PDF da declaração sai numerado por ano, com o carimbo e o código de verificação: qualquer pessoa confere a autenticidade (válida, cancelada ou alterada) na página pública.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.243.1",
     data: "2026-10-28",
     titulo: "Importações sem travar o sistema",

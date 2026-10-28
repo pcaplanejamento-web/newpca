@@ -94,6 +94,7 @@ DataTable.tsx
 DataTableEsqueleto.tsx
 DatasTarefa.tsx
 DateFilterHeader.tsx
+DeclaracoesPca.tsx
 DetalhesPapelEditor.tsx
 DfdConferir.tsx
 DfdGravado.tsx
@@ -179,6 +180,7 @@ MonitoramentoWorker.tsx
 MultiSelectHeader.tsx
 NomearAparelho.tsx
 NotificacoesAdmin.tsx
+NovaDeclaracao.tsx
 NovaSenhaObrigatoria.tsx
 Novidades.tsx
 OnlineAgoraAdmin.tsx

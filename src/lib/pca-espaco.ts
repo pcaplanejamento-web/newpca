@@ -607,7 +607,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
       protocoloSigla: string | null;
     }
   >();
-  const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null; tipoDfd: string | null; dominio: string })[] = [];
+  const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null; tipoDfd: string | null; dominio: string; numerado: boolean })[] = [];
   // Os lotes em PARALELO (cada um: os DFDs + os itens com SÓ as colunas usadas); a PREVISÃO sai UMA vez por DFD (o JSON
   // das seções pode ser grande — lido por item, milhares de itens estouravam a CPU do Worker).
   const previsaoPorDfd = new Map<number, ReturnType<typeof previsaoDoDfd>>();
@@ -678,6 +678,8 @@ export async function itensConsolidados(pca: PcaEspaco) {
         id: it.id,
         dfdId: it.dfdId,
         itemNumero: it.item,
+        // Tem o nº no PCA (`pca_itens`) — o item legado sem número usa o dele no DFD (não é a chave das declarações).
+        numerado: !!n,
         reparticaoId: d?.reparticaoId ?? null,
         codigoProduto: it.codigo,
         sequencial: n?.sequencial ?? it.item ?? it.sequencial,

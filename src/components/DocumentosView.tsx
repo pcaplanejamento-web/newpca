@@ -98,7 +98,7 @@ export function DocumentoCard({
 }
 
 /** O VISUALIZADOR: as páginas do PDF desenhadas pelo pdf.js (o mesmo leitor da importação) — funciona no celular. */
-export function VisualizadorPdf({ doc, url, onBaixar, onFechar }: { doc: DocumentoResumo; /** De onde vem o PDF (a consulta pública usa a rota dela). */ url?: string; onBaixar?: () => void; onFechar: () => void }) {
+export function VisualizadorPdf({ doc, url, onBaixar, onFechar }: { doc: Pick<DocumentoResumo, "id" | "nome" | "nomeArquivo">; /** De onde vem o PDF (a consulta pública usa a rota dela). */ url?: string; onBaixar?: () => void; onFechar: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [estado, setEstado] = useState<"carregando" | "pronto" | "erro">("carregando");
   useEffect(() => {

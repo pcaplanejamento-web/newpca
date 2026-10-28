@@ -8,11 +8,12 @@ import { Badge } from "./Badge";
 import { IconCalendar, IconCheck, IconChevronLeft, IconSettings } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
 
-export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "configuracao";
+export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "declaracoes" | "configuracao";
 
 /**
  * ESPAÇO do PCA (`/painel/pca/[id]`) — enxuto como a tela do orçamento, usando a largura toda: UMA linha (voltar · nome ·
- * ano · status, à esquerda; as ferramentas da aba e as abas **Dashboard · Orçamento · Mesa|Importação · Configuração [ícone]**,
+ * ano · status, à esquerda; as ferramentas da aba e as abas **Dashboard · Orçamento · Mesa|Importação · Documentos ·
+ * Declarações · Configuração [ícone]**,
  * à direita — `AbasEspaco cabecalho` + `FerramentasAba`; o servidor monta SÓ a aba ativa). O Preview PULSA (ao vivo: o PCA
  * ainda em preparação). A capa fica no card e na Configuração.
  */
@@ -72,6 +73,7 @@ export function PcaEspacoView({
           { value: "mesa", label: "Mesa" },
           ...(pca.fonte === "lista" ? [{ value: "importacao", label: "Importação" } as const] : []),
           { value: "documentos", label: "Documentos" },
+          { value: "declaracoes", label: "Declarações" },
           { value: "configuracao", label: "Configuração", soIcone: true, icone: <IconSettings className="h-4 w-4" aria-hidden="true" /> },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >

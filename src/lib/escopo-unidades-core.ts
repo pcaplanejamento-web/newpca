@@ -234,6 +234,7 @@ export const ABAS_FONTE: Readonly<Record<string, readonly { aba: string; rotulo:
     { aba: "dashboard", rotulo: "Dashboard" },
     { aba: "orcamento", rotulo: "Orçamento" },
     { aba: "mesa", rotulo: "Mesa do PCA" },
+    { aba: "declaracoes", rotulo: "Declarações" },
   ],
   orcamento: [
     { aba: "lista", rotulo: "Cards dos orçamentos" },

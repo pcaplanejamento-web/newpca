@@ -27,6 +27,7 @@ export type EntidadeAuditoria =
   | "catalogo_item"
   | "catalogo_pasta"
   | "documento"
+  | "declaracao"
   | "pca"
   | "grupo"
   | "permissao"
@@ -89,6 +90,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   catalogo_item: "Item do catálogo",
   catalogo_pasta: "Pasta de catálogos",
   documento: "Documento",
+  declaracao: "Declaração do PCA",
   pca: "PCA",
   grupo: "Grupo",
   permissao: "Permissão",
