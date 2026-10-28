@@ -17,6 +17,7 @@ import {
   type UsoUnidade,
 } from "@/lib/padronizacao-core";
 import { chamarPadronizacao } from "@/lib/padronizacao-cliente";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
@@ -80,6 +81,15 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
   const usoPorUnidade = useMemo(() => (comparacao ? itensPorUnidade(comparacao.linhas) : new Map<number, { dfd: number; catalogo: number }>()), [comparacao]);
   const unidadePorId = useMemo(() => new Map((dados?.unidades ?? []).map((u) => [u.id, u])), [dados]);
   const classPorId = useMemo(() => new Map((dados?.classificacoes ?? []).map((c) => [c.id, c])), [dados]);
+  // A PESQUISA DO SISTEMA (`?vista=unidades&editar=<id>`): abre a medida quando o cadastro chega.
+  useAbrirDaUrl(
+    (v) => {
+      const u = unidadePorId.get(Number(v));
+      if (u) setEditando({ id: u.id, sigla: u.sigla, nome: u.nome, sinonimos: u.sinonimos, classificacaoId: u.classificacaoId });
+    },
+    dados != null,
+    "editar",
+  );
 
   async function salvar(r: RascunhoUnidade) {
     const nova = r.id == null;

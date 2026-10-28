@@ -4,26 +4,37 @@ import {
   cargos,
   catalogoCompras,
   catalogoItens,
+  catalogoPastas,
   catalogos,
+  declaracoes,
   dfdProtocolos,
   dfds,
   documentos,
+  empenhoCards,
   empenhos,
   feriados,
   grupos,
+  itemClassificacoes,
   liquidacoes,
   orcamentoItens,
+  orcamentoVisoes,
   orcamentos,
   orgaos,
   pagamentos,
   papeis,
+  pcas,
   protocoloSituacoes,
   reparticoes,
+  responsaveis,
   tarefaQuadros,
+  unidadesMedida,
   usuarios,
 } from "@/db/schema";
 import { type Acesso, componenteLibera, gruposDeTarefas, orcamentosDoAcesso, pcasDoAcesso, podeTela } from "./acesso";
+import { acessoDeclaracoes } from "./declaracoes-core";
 import { documentoVisivel, lerPcasDocumento } from "./documentos-core";
+import { linkImportacoes, NOME_TIPO } from "./empenho-cards-core";
+import { unidadeDoModulo } from "./escopo-cabecalho";
 import { linkEvento } from "./calendario-core";
 import { getDb } from "./db";
 import { doEscopo } from "./empenhos-tela-sql";
@@ -90,12 +101,21 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .where(casaTermos([catalogoItens.codigo, catalogoItens.descricao], padroes))
       .orderBy(desc(catalogoItens.id))
       .limit(LIM);
-    return ls.map((l) => ({
-      id: l.id,
-      rotulo: `${l.codigo} · ${l.descricao.slice(0, 90)}`,
-      detalhe: l.catalogo,
-      href: `/painel/catalogo?abrir=${enc(`catalogo:${l.catalogoId}:${l.codigo}`)}`,
-    }));
+    // Os CATÁLOGOS da agenda e as PASTAS pelo nome (primeiro) e os itens.
+    const [cs, ps] = await Promise.all([
+      db.select({ id: catalogos.id, nome: catalogos.nome, total: catalogos.totalItens }).from(catalogos).where(and(eq(catalogos.tipo, "agenda"), casaTermos([catalogos.nome, catalogos.descricao], padroes))).limit(LIM),
+      db.select({ id: catalogoPastas.id, nome: catalogoPastas.nome }).from(catalogoPastas).where(casaTermos([catalogoPastas.nome], padroes)).limit(LIM),
+    ]);
+    return [
+      ...ps.map((l) => ({ id: 2_000_000_000 + l.id, rotulo: l.nome, detalhe: "Pasta de catálogos", href: `/painel/catalogo/pasta/${l.id}` })),
+      ...cs.map((l) => ({ id: 1_000_000_000 + l.id, rotulo: l.nome, detalhe: `Catálogo · ${l.total} itens`, href: `/painel/catalogo?abrir=${enc(`catalogo:${l.id}`)}` })),
+      ...ls.map((l) => ({
+        id: l.id,
+        rotulo: `${l.codigo} · ${l.descricao.slice(0, 90)}`,
+        detalhe: l.catalogo,
+        href: `/painel/catalogo?abrir=${enc(`catalogo:${l.catalogoId}:${l.codigo}`)}`,
+      })),
+    ].slice(0, LIM);
   }
 
   if (tipo === "historico") {
@@ -114,12 +134,112 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .where(casaTermos([catalogoCompras.codigo, catalogoCompras.descricao, catalogoCompras.idContrato, catalogoCompras.processo], padroes))
       .orderBy(desc(catalogoCompras.id))
       .limit(LIM);
-    return ls.map((l) => ({
-      id: l.id,
-      rotulo: `${l.codigo} · ${l.descricao.slice(0, 90)}`,
-      detalhe: `${l.catalogo} · Contrato ${l.contrato}`,
-      href: `/painel/catalogo?abrir=${enc(`historico:${l.catalogoId}`)}`,
-    }));
+    // Os HISTÓRICOS pelo nome (primeiro) e as compras.
+    const cs = await db
+      .select({ id: catalogos.id, nome: catalogos.nome })
+      .from(catalogos)
+      .where(and(eq(catalogos.tipo, "historico"), casaTermos([catalogos.nome, catalogos.descricao], padroes)))
+      .limit(LIM);
+    return [
+      ...cs.map((l) => ({ id: 1_000_000_000 + l.id, rotulo: l.nome, detalhe: "Histórico de compra", href: `/painel/catalogo?abrir=${enc(`historico:${l.id}`)}` })),
+      ...ls.map((l) => ({
+        id: l.id,
+        rotulo: `${l.codigo} · ${l.descricao.slice(0, 90)}`,
+        detalhe: `${l.catalogo} · Contrato ${l.contrato}`,
+        href: `/painel/catalogo?abrir=${enc(`historico:${l.catalogoId}`)}`,
+      })),
+    ].slice(0, LIM);
+  }
+
+  if (tipo === "padronizacao") {
+    if (!podeTela(a, "catalogo").visualizar) return null;
+    const un = componenteLibera(a, "catalogo.unidades");
+    const cl = componenteLibera(a, "catalogo.classificacoes");
+    if (!un && !cl) return null;
+    const [us, cs] = await Promise.all([
+      un ? db.select({ id: unidadesMedida.id, sigla: unidadesMedida.sigla, nome: unidadesMedida.nome }).from(unidadesMedida).where(casaTermos([unidadesMedida.sigla, unidadesMedida.nome, unidadesMedida.sinonimos], padroes)).orderBy(unidadesMedida.ordem).limit(LIM) : [],
+      cl ? db.select({ id: itemClassificacoes.id, nome: itemClassificacoes.nome }).from(itemClassificacoes).where(casaTermos([itemClassificacoes.nome, itemClassificacoes.palavras], padroes)).orderBy(itemClassificacoes.ordem).limit(LIM) : [],
+    ]);
+    return [
+      ...us.map((l) => ({ id: l.id, rotulo: `${l.sigla} · ${l.nome}`, detalhe: "Medida · Catálogo", href: `/painel/catalogo?vista=unidades&editar=${l.id}` })),
+      ...cs.map((l) => ({ id: 1_000_000 + l.id, rotulo: l.nome, detalhe: "Classificação · Catálogo", href: `/painel/catalogo?vista=classificacoes&editar=${l.id}` })),
+    ].slice(0, LIM);
+  }
+
+  if (tipo === "visao") {
+    if (!podeTela(a, "orcamento").visualizar || !componenteLibera(a, "orcamento.visoes")) return null;
+    // As visões são GLOBAIS e se editam dentro de um orçamento: o mais recente que a pessoa abre.
+    const orcs = orcamentosDoAcesso(a);
+    const [orc] = await db
+      .select({ id: orcamentos.id, ano: orcamentos.ano })
+      .from(orcamentos)
+      .where(orcs ? inArray(orcamentos.id, [...orcs, 0]) : undefined)
+      .orderBy(desc(orcamentos.ano), desc(orcamentos.id))
+      .limit(1);
+    if (!orc) return [];
+    const ls = await db.select({ id: orcamentoVisoes.id, nome: orcamentoVisoes.nome }).from(orcamentoVisoes).where(casaTermos([orcamentoVisoes.nome], padroes)).orderBy(orcamentoVisoes.ordem).limit(LIM);
+    return ls.map((l) => ({ id: l.id, rotulo: l.nome, detalhe: `Visão do orçamento · aberta no orçamento ${orc.ano}`, href: `/painel/orcamento/${orc.id}?aba=visoes&abrir=${l.id}` }));
+  }
+
+  if (tipo === "declaracao") {
+    if (!podeTela(a, "pca").visualizar || !componenteLibera(a, "pca.declaracoes")) return null;
+    const permitidos = pcasDoAcesso(a);
+    const ls = await db
+      .select({
+        id: declaracoes.id,
+        pcaId: declaracoes.pcaId,
+        ano: declaracoes.ano,
+        numero: declaracoes.numero,
+        finalidade: declaracoes.finalidade,
+        processo: declaracoes.processo,
+        protocolo: declaracoes.protocoloCenti,
+        valor: declaracoes.valorTotal,
+        cancelada: declaracoes.canceladaEm,
+        conteudo: declaracoes.conteudo,
+        modo: pcas.declaracoes,
+        pca: pcas.nome,
+      })
+      .from(declaracoes)
+      .innerJoin(pcas, eq(pcas.id, declaracoes.pcaId))
+      .where(
+        and(
+          permitidos ? inArray(declaracoes.pcaId, [...permitidos, 0]) : undefined,
+          casaTermos(
+            [sql`${declaracoes.numero} || '/' || ${declaracoes.ano}`, declaracoes.processo, declaracoes.protocoloCenti, declaracoes.finalidade, declaracoes.observacao],
+            padroes,
+            [sql`${declaracoes.numero} || '/' || ${declaracoes.ano}`, declaracoes.processo, declaracoes.protocoloCenti],
+          ),
+        ),
+      )
+      .orderBy(desc(declaracoes.ano), desc(declaracoes.numero))
+      .limit(LIM * 2);
+    // A unidade da pessoa (a aba Declarações): só as declarações com ao menos um item de uma unidade dela.
+    const rep = (await unidadeDoModulo("pca", a.u, undefined, "declaracoes")).id;
+    if (rep === false) return [];
+    const siglas =
+      rep === null
+        ? null
+        : new Set(
+            (await db.select({ codigo: reparticoes.codigo }).from(reparticoes).where(inArray(reparticoes.id, typeof rep === "number" ? [rep] : [...rep, 0]))).map((r) => r.codigo),
+          );
+    const daUnidade = (conteudo: string) => {
+      if (!siglas) return true;
+      try {
+        const c = JSON.parse(conteudo) as { linhas?: { sigla?: string | null }[] };
+        return (c.linhas ?? []).some((l) => l.sigla != null && siglas.has(l.sigla));
+      } catch {
+        return false;
+      }
+    };
+    return ls
+      .filter((l) => acessoDeclaracoes(l.modo, admin) !== "nenhum" && daUnidade(l.conteudo))
+      .slice(0, LIM)
+      .map((l) => ({
+        id: l.id,
+        rotulo: `Declaração ${l.numero}/${l.ano}${l.cancelada ? " (cancelada)" : ""}`,
+        detalhe: [l.pca, l.protocolo ? `Protocolo ${l.protocolo}` : "", l.processo ? `Processo ${l.processo}` : "", brl(l.valor)].filter(Boolean).join(" · "),
+        href: `/painel/pca/${l.pcaId}?aba=declaracoes&abrir=${l.id}`,
+      }));
   }
 
   if (tipo === "documento") {
@@ -186,6 +306,32 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .orderBy(reparticoes.nome)
       .limit(LIM);
     return ls.map((l) => ({ id: l.id, rotulo: `${l.codigo} · ${l.nome}`, detalhe: `Unidade · ${l.orgao}`, href: `/painel/orgaos/${l.orgaoId}?abrir=${l.id}` }));
+  }
+  if (tipo === "responsavel") {
+    const ls = await db
+      .select({ id: responsaveis.id, nome: responsaveis.nome, matricula: responsaveis.matricula, cargo: responsaveis.cargo, exonerado: responsaveis.exoneradoEm })
+      .from(responsaveis)
+      .where(casaTermos([responsaveis.nome, responsaveis.matricula, responsaveis.cargo], padroes, [responsaveis.matricula]))
+      .orderBy(responsaveis.nome)
+      .limit(LIM);
+    return ls.map((l) => ({
+      id: l.id,
+      rotulo: l.nome,
+      detalhe: ["Responsável por DFDs", l.matricula ? `Mat. ${l.matricula}` : "", l.cargo, l.exonerado ? "exonerado" : ""].filter(Boolean).join(" · "),
+      href: `/painel/orgaos?aba=responsaveis&pessoa=${l.id}`,
+    }));
+  }
+  if (tipo === "importacao") {
+    const ls = await db
+      .select({ id: empenhoCards.id, nome: empenhoCards.nome, tipo: empenhoCards.tipo })
+      .from(empenhoCards)
+      .where(casaTermos([empenhoCards.nome, empenhoCards.descricao], padroes))
+      .orderBy(empenhoCards.nome)
+      .limit(LIM);
+    return ls.map((l) => {
+      const t = l.tipo === "liquidacoes" || l.tipo === "pagamentos" ? l.tipo : "empenhos";
+      return { id: l.id, rotulo: l.nome, detalhe: `Card de importação · ${NOME_TIPO[t].titulo}`, href: linkImportacoes(t, l.id) };
+    });
   }
   if (tipo === "grupo") {
     const ls = await db.select({ id: grupos.id, nome: grupos.nome }).from(grupos).where(casaTermos([grupos.nome], padroes)).orderBy(grupos.nome).limit(LIM);
@@ -334,19 +480,42 @@ export const linkDaMesa = (pcaId: number | null, abrir: string) =>
   pcaId ? `/painel/pca/${pcaId}?aba=mesa&abrir=${encodeURIComponent(abrir)}` : `/painel/mesa?abrir=${encodeURIComponent(abrir)}`;
 
 /** Um ESPAÇO com abas (orçamento, quadro de tarefas): as abas que a pessoa abre nele, pesquisáveis ("comparativo 2026"). */
-export type EspacoPesquisa = { tipo: "orcamento" | "quadro"; id: number; nome: string; abas: [string, string][] };
+export type EspacoPesquisa = { tipo: "orcamento" | "quadro" | "pca"; id: number; nome: string; abas: [string, string][] };
 
 const ABAS_ORCAMENTO: [string, string][] = [["lancamentos", "Lançamentos"], ["comparativo", "Comparativo"], ["vinculos", "Vínculos"], ["visoes", "Visões"]];
+const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["importacao", "Importação"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["configuracao", "Configuração"]];
 const ABAS_QUADRO: [string, string][] = [["quadro", "Quadro"], ["lista", "Lista"], ["calendario", "Calendário"], ["dashboard", "Dashboard"], ["configuracao", "Configuração"]];
 
 /**
- * Os ESPAÇOS da pessoa para o índice da pesquisa: os orçamentos do grupo (com as abas que o papel libera — a régua da tela
+ * Os ESPAÇOS da pessoa para o índice da pesquisa: os PCAs do grupo (com as abas da régua da tela), os orçamentos do grupo (com as abas que o papel libera — a régua da tela
  * `/painel/orcamento/[id]`) e os quadros de Tarefas dos grupos em que ela vê Tarefas (o privado, só do dono; sem os
  * arquivados), com as abas liberadas (o Quadro sempre). Leve: só id e nome.
  */
 export async function espacosDaPesquisa(a: Acesso): Promise<EspacoPesquisa[]> {
   const db = getDb();
   const out: EspacoPesquisa[] = [];
+  if (podeTela(a, "pca").visualizar) {
+    // A MESMA régua da tela `/painel/pca/[id]`: a Importação só no PCA de lista, Documentos com a tela Documentos, as
+    // Declarações conforme o modo do PCA — e o que o papel libera.
+    const permitidos = pcasDoAcesso(a);
+    const ls = await db
+      .select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano, fonte: pcas.fonte, declaracoes: pcas.declaracoes })
+      .from(pcas)
+      .where(permitidos ? inArray(pcas.id, [...permitidos, 0]) : undefined)
+      .orderBy(desc(pcas.ano))
+      .limit(100);
+    const docs = podeTela(a, "documentos").visualizar;
+    for (const p of ls) {
+      const abas = ABAS_PCA.filter(
+        ([v]) =>
+          (v !== "importacao" || p.fonte === "lista") &&
+          (v !== "documentos" || docs) &&
+          (v !== "declaracoes" || acessoDeclaracoes(p.declaracoes, a.u.admin) !== "nenhum") &&
+          componenteLibera(a, `pca.${v}`),
+      );
+      if (abas.length) out.push({ tipo: "pca", id: p.id, nome: `${p.ano ?? ""} · ${p.nome}`, abas });
+    }
+  }
   if (podeTela(a, "orcamento").visualizar) {
     const abas = ABAS_ORCAMENTO.filter(([v]) => componenteLibera(a, `orcamento.${v}`));
     const orcs = orcamentosDoAcesso(a);

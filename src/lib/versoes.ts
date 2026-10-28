@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.254.0",
+    data: "2026-10-28",
+    titulo: "Pesquisa completa: declarações, visões, medidas, responsáveis, importações e todas as sub-abas",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa do menu passa a achar as declarações do PCA (nº, processo, protocolo da Centi), as visões do orçamento, as medidas e classificações do Catálogo, os catálogos e as pastas pelo nome e, para o ADM, os responsáveis por DFDs e os cards de importação. Tocar abre o registro.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Também são pesquisáveis as visões do Catálogo (Lista de Itens, Medidas, Classificações), da Verificação (protocolo ou DFD), as vistas do Calendário e as sub-abas de Notificações e Avaliação em Configurações. As abas de cada PCA aparecem só quando a pessoa pode abri-las, e as abas que o papel esconde também não aparecem.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Pesquisa", texto: "Os filtros rápidos da pesquisa passam a incluir Empenhos, Liquidações, Pagamentos e os tipos novos, e a pesquisa sem prefixo é dividida em pedidos menores (não passa do limite do servidor).", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.253.0",
     data: "2026-10-28",
     titulo: "Pesquisa: empenhos, liquidações, pagamentos e todas as abas",

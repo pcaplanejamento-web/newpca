@@ -20,6 +20,7 @@ export async function GET(req: Request) {
   const pedidos = (sp.get("tipos") ?? "").split(",").filter(ehTipoPesquisa);
   const tipos: TipoPesquisa[] = pedidos.length ? pedidos.slice(0, TIPOS_PADRAO.length) : TIPOS_PADRAO;
   const limite = Math.min(50, Math.max(1, Number(sp.get("limite")) || 8));
+  const prefixo = sp.get("prefixo") === "1";
   if (q.length < 2) return ok({ grupos: [] });
   // A régua ÚNICA (testada por perfil): o tipo que a pessoa não abre nem é consultado.
   const portao: PortaoPesquisa = {
@@ -44,8 +45,8 @@ export async function GET(req: Request) {
         const opcoes = await buscarVinculos(a.u, tipo, q, gruposDeTarefas(a.acesso, "visualizar", true));
         return { tipo, total: opcoes.length, opcoes: ordenar(opcoes).slice(0, limite) };
       }
-      // Só UM tipo pedido = a pessoa procura nele (o prefixo): os de tabela grande procuram também no texto.
-      const opcoes = await pesquisarOutros(a.acesso, tipo, q, 50, tipos.length === 1);
+      // Com o PREFIXO (`prefixo=1`, a pessoa procura nesse tipo): os de tabela grande procuram também no texto.
+      const opcoes = await pesquisarOutros(a.acesso, tipo, q, 50, prefixo && tipos.length === 1);
       return opcoes ? { tipo, total: opcoes.length, opcoes: ordenar(opcoes).slice(0, limite) } : null;
     }),
   );

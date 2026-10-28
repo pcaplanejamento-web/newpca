@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
 import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
@@ -221,6 +221,13 @@ export function CatalogoView({
   const [criandoItem, setCriandoItem] = useState(false); // lateral em modo "criar item"
   const [salvandoItem, setSalvandoItem] = useState(false);
   const [erroItem, setErroItem] = useState<string | null>(null);
+
+  // A visão pedida no endereço (`?vista=` — a PESQUISA DO SISTEMA): Catálogo · Lista de Itens · Medida · Classificações.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só na chegada.
+  useEffect(() => {
+    const v = new URL(window.location.href).searchParams.get("vista");
+    if (v === "lista" || v === "unidades" || v === "classificacoes") setVista(v);
+  }, []);
 
   function trocarVista(v: Vista) {
     setVista(v);

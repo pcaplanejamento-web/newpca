@@ -23,6 +23,8 @@ import {
   IconClock,
   IconClose,
   IconEstrela,
+  IconFile,
+  IconFilter,
   IconKanban,
   IconLayers,
   IconRobo,
@@ -34,6 +36,7 @@ import {
   IconWallet,
 } from "./icons";
 import { ChipsEscolha } from "./ChipsEscolha";
+import { useComponente } from "./ComponentesPapel";
 import { toast } from "./Toast";
 import { gravarTemaPessoal, lerTemaPessoal } from "./TemaPessoal";
 
@@ -49,7 +52,7 @@ const RECENTES = "pesquisa:recentes";
 /** A 1ª fase da pesquisa sem prefixo (os tipos mais usados). */
 
 type GrupoServidor = { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] };
-type EspacoIndice = { tipo: "orcamento" | "quadro"; id: number; nome: string; abas: [string, string][] };
+type EspacoIndice = { tipo: "orcamento" | "quadro" | "pca"; id: number; nome: string; abas: [string, string][] };
 type Indice = { versao: string; conferido: number; grupos: Map<string, LinhaIndice[]>; espacos: EspacoIndice[] };
 
 // O ÍNDICE LOCAL (protocolos e DFDs que a pessoa vê) e as respostas do servidor por termo — só na MEMÓRIA da aba (somem
@@ -86,6 +89,8 @@ async function garantirIndice(): Promise<Indice | null> {
   return carregandoIndice;
 }
 const MAX_RECENTES = 6;
+/** Quantos tipos vão num pedido ao servidor (os demais em pedidos paralelos). */
+const TIPOS_POR_PEDIDO = 6;
 /** Fora do banner: abrir o banner e alternar o menu lateral (a AÇÃO "Recolher o menu"). */
 export const EVENTO_ABRIR_PESQUISA = "pesquisa-sistema:abrir";
 
@@ -104,6 +109,11 @@ const ICONE_TIPO: Record<string, Icone> = {
   catalogo: IconDatabase,
   historico: IconDatabase,
   documento: IconDocumentos,
+  declaracao: IconFile,
+  visao: IconFilter,
+  padronizacao: IconDatabase,
+  responsavel: IconUser,
+  importacao: IconEmpenho,
   empenho: IconEmpenho,
   liquidacao: IconLiquidacao,
   pagamento: IconPagamento,
@@ -139,6 +149,22 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
     ],
   },
   "/painel/orgaos": { param: "aba", abas: [["orgaos", "Órgãos"], ["responsaveis", "Responsáveis"]] },
+  "/painel/catalogo": { param: "vista", abas: [["catalogo", "Catálogos"], ["lista", "Lista de Itens"], ["unidades", "Medidas"], ["classificacoes", "Classificações"]] },
+  "/painel/verificacao": { param: "tipo", abas: [["protocolo", "Verificar protocolo"], ["dfd", "Verificar DFD"]] },
+  "/painel/calendario": { param: "vista", abas: [["dia", "Dia"], ["ndias", "4 dias"], ["semana", "Semana"], ["mes", "Mês"], ["ano", "Ano"], ["agenda", "Programação"]] },
+};
+/** O componente do papel que libera cada aba de tela (sem ele, a aba nem aparece na pesquisa — a tela também a esconde). */
+const COMPONENTE_ABA: Record<string, string> = {
+  "/painel/mesa?dashboard": "dfd.dashboard",
+  "/painel/mesa?protocolos": "dfd.protocolos",
+  "/painel/mesa?dfds": "dfd.dfds",
+  "/painel/mesa?itens": "dfd.itens",
+  "/painel/catalogo?catalogo": "catalogo.catalogos",
+  "/painel/catalogo?lista": "catalogo.lista",
+  "/painel/catalogo?unidades": "catalogo.unidades",
+  "/painel/catalogo?classificacoes": "catalogo.classificacoes",
+  "/painel/verificacao?protocolo": "verificacao.protocolo",
+  "/painel/verificacao?dfd": "verificacao.dfd",
 };
 /**
  * As PALAVRAS de cada tela/aba (o que se ajusta nelas): "turnstile" acha Integrações; "senha" acha Segurança. A chave é o
@@ -178,9 +204,15 @@ const ABAS_PERFIL: [string, string][] = [
   ["conta", "Conta"], ["seguranca", "Segurança"], ["acessos", "Histórico de acesso"], ["aparencia", "Aparência"],
   ["notificacoes", "Notificações"], ["trabalho", "Trabalho"], ["acesso", "Meu acesso"],
 ];
-const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["importacao", "Importação"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["configuracao", "Configuração"]];
-/** As importações da Centi (Configurações → Importações): uma por tipo — o link já abre o tipo. */
-const ABAS_IMPORTACOES: [string, string][] = [["empenhos", "Importações de empenhos"], ["liquidacoes", "Importações de liquidações"], ["pagamentos", "Importações de pagamentos"]];
+/**
+ * As SUB-ABAS de Configurações (dentro de uma aba): as Importações por tipo, as de Notificações e as de Avaliação — o
+ * link já abre a sub-aba (`tipo`/`sub`). Só o ADM abre Configurações.
+ */
+const SUBABAS_CONFIG: { aba: string; rotuloAba: string; param: string; abas: [string, string][]; palavras?: string }[] = [
+  { aba: "importacoes", rotuloAba: "Importações", param: "tipo", abas: [["empenhos", "Importações de empenhos"], ["liquidacoes", "Importações de liquidações"], ["pagamentos", "Importações de pagamentos"]], palavras: "centi cards vínculos atualização automática" },
+  { aba: "notificacoes", rotuloAba: "Notificações", param: "sub", abas: [["avisos", "Avisos"], ["limpeza", "Limpeza dos avisos"], ["comunicado", "Comunicado"], ["alcance", "Alcance dos avisos"]], palavras: "sino e-mail" },
+  { aba: "avaliacao", rotuloAba: "Avaliação", param: "sub", abas: [["importancias", "Importâncias"], ["protocolo", "Avaliação do protocolo"], ["dfd", "Avaliação do DFD"], ["item", "Avaliação do item"], ["protocolacao", "Protocolação"]], palavras: "regras bloqueia avisa" },
+];
 
 function lerRecentes(): Resultado[] {
   try {
@@ -348,6 +380,8 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
 
   // O índice local: pedido ao abrir a pesquisa (só de novo quando a versão dos dados muda).
   const [indiceLocal, setIndiceLocal] = useState<Indice | null>(indiceMem);
+  // As abas/visões que o PAPEL esconde (Detalhes → Componentes) também não aparecem na pesquisa.
+  const libera = useComponente();
   useEffect(() => {
     if (!aberto) return;
     let vivo = true;
@@ -413,10 +447,19 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const ctl = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${doServidor.join(",")}&limite=${limite}`, { signal: ctl.signal });
-        const j = (await r.json()) as { ok?: boolean; grupos?: GrupoServidor[] };
-        if (!r.ok || !j.ok) throw new Error();
-        const grupos = j.grupos ?? [];
+        // Em PARTES de até `TIPOS_POR_PEDIDO` tipos, ao mesmo tempo: cada pedido tem o próprio limite de consultas do
+        // Worker (50) — todos os tipos num pedido só passariam dele. Com o prefixo, `prefixo=1` (procura também no texto).
+        const partes: TipoPesquisa[][] = [];
+        for (let i = 0; i < doServidor.length; i += TIPOS_POR_PEDIDO) partes.push(doServidor.slice(i, i + TIPOS_POR_PEDIDO));
+        const respostasPartes = await Promise.all(
+          partes.map(async (p) => {
+            const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${p.join(",")}&limite=${limite}${tipo ? "&prefixo=1" : ""}`, { signal: ctl.signal });
+            const j = (await r.json()) as { ok?: boolean; grupos?: GrupoServidor[] };
+            if (!r.ok || !j.ok) throw new Error();
+            return j.grupos ?? [];
+          }),
+        );
+        const grupos = respostasPartes.flat();
         if (respostas.size >= 60) respostas.delete(respostas.keys().next().value as string);
         respostas.set(chave, { em: Date.now(), versao: indiceLocal?.versao ?? "", grupos });
         setRemotos(juntar(grupos));
@@ -477,7 +520,10 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const porTela = telas.flatMap((t) => {
       const def = ABAS_TELAS[t.href];
       return def
-        ? def.abas.map<Resultado>(([v, r]) => ({
+        ? def.abas.filter(([v]) => {
+            const comp = COMPONENTE_ABA[`${t.href}?${v}`];
+            return !comp || libera(comp);
+          }).map<Resultado>(([v, r]) => ({
             chave: `aba:${t.href}:${v}`,
             rotulo: r,
             caminho: [t.secao, t.label].filter(Boolean),
@@ -488,22 +534,23 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         : [];
     });
     const perfil = ABAS_PERFIL.map<Resultado>(([v, r]) => ({ chave: `aba:perfil:${v}`, rotulo: r, caminho: ["Conta", "Perfil"], href: `/painel/perfil?aba=${v}`, tipo: "aba" }));
-    const dosPcas = telas.some((t) => t.href === "/painel/pca")
-      ? pcas.flatMap((p) => ABAS_PCA.map<Resultado>(([v, r]) => ({ chave: `aba:pca:${p.id}:${v}`, rotulo: r, caminho: ["PCA", `${p.ano} · ${p.nome}`], href: `/painel/pca/${p.id}?aba=${v}`, tipo: "aba" })))
-      : [];
-    const importacoes = telas.some((t) => t.href === "/painel/configuracoes")
-      ? ABAS_IMPORTACOES.map<Resultado>(([v, r]) => ({ chave: `aba:importacoes:${v}`, rotulo: r, caminho: ["Configurações", "Importações"], href: `/painel/configuracoes?aba=importacoes&tipo=${v}`, tipo: "aba", palavras: "centi cards vínculos atualização automática" }))
+    const subConfig = telas.some((t) => t.href === "/painel/configuracoes")
+      ? SUBABAS_CONFIG.flatMap((g) =>
+          g.abas.map<Resultado>(([v, r]) => ({ chave: `aba:config:${g.aba}:${v}`, rotulo: r, caminho: ["Configurações", g.rotuloAba], href: `/painel/configuracoes?aba=${g.aba}&${g.param}=${v}`, tipo: "aba", palavras: g.palavras })),
+        )
       : [];
     // Os ESPAÇOS do índice (orçamentos e quadros de Tarefas): as abas que a pessoa abre em cada um.
     const dosEspacos = (indiceLocal?.espacos ?? []).flatMap((e) =>
       e.abas.map<Resultado>(([v, r]) =>
-        e.tipo === "orcamento"
-          ? { chave: `aba:orc:${e.id}:${v}`, rotulo: r, caminho: ["Orçamento", e.nome], href: `/painel/orcamento/${e.id}?aba=${v}`, tipo: "aba" }
-          : { chave: `aba:quadro:${e.id}:${v}`, rotulo: r, caminho: ["Tarefas", e.nome], href: `/painel/tarefas/${e.id}?aba=${v}`, tipo: "aba" },
+        e.tipo === "pca"
+          ? { chave: `aba:pca:${e.id}:${v}`, rotulo: r, caminho: ["PCA", e.nome], href: `/painel/pca/${e.id}?aba=${v}`, tipo: "aba" }
+          : e.tipo === "orcamento"
+            ? { chave: `aba:orc:${e.id}:${v}`, rotulo: r, caminho: ["Orçamento", e.nome], href: `/painel/orcamento/${e.id}?aba=${v}`, tipo: "aba" }
+            : { chave: `aba:quadro:${e.id}:${v}`, rotulo: r, caminho: ["Tarefas", e.nome], href: `/painel/tarefas/${e.id}?aba=${v}`, tipo: "aba" },
       ),
     );
-    return [...porTela, ...importacoes, ...perfil, ...dosPcas, ...dosEspacos];
-  }, [telas, pcas, indiceLocal]);
+    return [...porTela, ...subConfig, ...perfil, ...dosEspacos];
+  }, [telas, indiceLocal, libera]);
 
   const grupos = useMemo<Grupo[]>(() => {
     const casa = predicadoBusca(termo);
@@ -567,13 +614,24 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
     ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
     ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
-    ...(abre("/painel/orcamento") ? [{ value: "orcamento", label: "Orçamentos" }, { value: "lancamento", label: "Lançamentos" }] : []),
-    ...(abre("/painel/catalogo") ? [{ value: "catalogo", label: "Catálogo" }, { value: "historico", label: "Histórico" }] : []),
+    ...(abre("/painel/orcamento")
+      ? [{ value: "orcamento", label: "Orçamentos" }, ...(libera("orcamento.lancamentos") ? [{ value: "lancamento", label: "Lançamentos" }] : []), ...(libera("orcamento.visoes") ? [{ value: "visao", label: "Visões" }] : [])]
+      : []),
+    ...(abre("/painel/catalogo")
+      ? [
+          ...(libera("catalogo.catalogos") ? [{ value: "catalogo", label: "Catálogo" }] : []),
+          ...(libera("catalogo.historico") ? [{ value: "historico", label: "Histórico" }] : []),
+          ...(libera("catalogo.unidades") || libera("catalogo.classificacoes") ? [{ value: "padronizacao", label: "Medidas" }] : []),
+        ]
+      : []),
+    ...(abre("/painel/empenhos") ? [{ value: "empenho", label: "Empenhos" }] : []),
+    ...(abre("/painel/liquidacoes") ? [{ value: "liquidacao", label: "Liquidações" }] : []),
+    ...(abre("/painel/pagamentos") ? [{ value: "pagamento", label: "Pagamentos" }] : []),
     ...(abre("/painel/usuarios")
-      ? ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
+      ? ["usuario", "orgao", "unidade", "responsavel", "importacao", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
       : []),
     ...(abre("/painel/documentos") ? [{ value: "documento", label: "Documentos" }] : []),
-    ...(abre("/painel/pca") ? [{ value: "pca", label: "PCAs" }] : []),
+    ...(abre("/painel/pca") ? [{ value: "pca", label: "PCAs" }, ...(libera("pca.declaracoes") ? [{ value: "declaracao", label: "Declarações" }] : [])] : []),
     { value: "tela", label: "Telas" },
   ];
   // As DICAS só dos tipos que a pessoa pode pesquisar (os mesmos dos filtros) + as abas.

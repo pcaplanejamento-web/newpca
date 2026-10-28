@@ -678,6 +678,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
       <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <Tabs
+          url="sub"
           tabs={[
             { key: "importancias", label: "Importâncias", content: painelImportancias() },
             { key: "protocolo", label: "Protocolo", content: painelSujeito("protocolo", "protocolo", ctxProto, setCtxProto) },

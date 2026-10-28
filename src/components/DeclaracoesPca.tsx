@@ -8,6 +8,7 @@ import type { DeclaracaoCompleta, DeclaracaoResumo } from "@/lib/declaracoes";
 import { type ItemDeclaravel, type LinhaDeclaracao, LIMITES_DECLARACAO, remanescente, saldoDe } from "@/lib/declaracoes-core";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
@@ -223,6 +224,11 @@ export function DeclaracoesPca({
   const router = useRouter();
   const [nova, setNova] = useState(false);
   const [aberta, setAberta] = useState<number | null>(null);
+  // A PESQUISA DO SISTEMA (`?aba=declaracoes&abrir=<id>`): abre a declaração — só a que está na lista (a da unidade da pessoa).
+  useAbrirDaUrl((v) => {
+    const n = Number(v);
+    if (declaracoes.some((d) => d.id === n)) setAberta(n);
+  });
   const [editando, setEditando] = useState<EdicaoDeclaracao | null>(null);
   const [vendo, setVendo] = useState<DeclaracaoResumo | null>(null);
   const mudou = useCallback(() => router.refresh(), [router]);

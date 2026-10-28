@@ -15,10 +15,15 @@ export const TIPOS_PESQUISA = [
   { tipo: "empenho", titulo: "Empenhos", prefixo: "empenho:", curto: "em:", texto: "Empenhos (nº, fornecedor, CPF/CNPJ, histórico, ação, elemento)" },
   { tipo: "liquidacao", titulo: "Liquidações", prefixo: "liquidacao:", curto: "li:", texto: "Liquidações (nº, nº do empenho, credor, CPF/CNPJ, histórico)" },
   { tipo: "pagamento", titulo: "Pagamentos", prefixo: "pagamento:", curto: "pg:", texto: "Pagamentos (nº da ordem, nº do empenho, credor, CPF/CNPJ, histórico)" },
+  { tipo: "declaracao", titulo: "Declarações do PCA", prefixo: "declaracao:", curto: "de:", texto: "Declarações do PCA (nº, processo, protocolo da Centi, finalidade)" },
+  { tipo: "visao", titulo: "Visões do orçamento", prefixo: "visao:", curto: "vi:", texto: "Visões do orçamento (nome)" },
+  { tipo: "padronizacao", titulo: "Medidas e classificações", prefixo: "medida:", curto: "me:", texto: "Medidas e classificações do Catálogo (sigla, nome, sinônimos, palavras-chave)" },
   { tipo: "documento", titulo: "Documentos", prefixo: "documento:", curto: "do:", texto: "Documentos (nome, arquivo)" },
   { tipo: "usuario", titulo: "Usuários", prefixo: "usuario:", curto: "u:", texto: "Usuários (nome, apelido, e-mail, matrícula) — administração" },
   { tipo: "orgao", titulo: "Órgãos", prefixo: "orgao:", curto: "og:", texto: "Órgãos (nome, sigla) — administração" },
   { tipo: "unidade", titulo: "Unidades", prefixo: "unidade:", curto: "un:", texto: "Unidades (nome, sigla) — administração" },
+  { tipo: "responsavel", titulo: "Responsáveis por DFDs", prefixo: "responsavel:", curto: "re:", texto: "Responsáveis por DFDs (nome, matrícula, cargo) — administração" },
+  { tipo: "importacao", titulo: "Importações da Centi", prefixo: "importacao:", curto: "im:", texto: "Cards de importação (nome) — administração" },
   { tipo: "grupo", titulo: "Grupos", prefixo: "grupo:", curto: "g:", texto: "Grupos de acesso — administração" },
   { tipo: "cadastro", titulo: "Cadastros", prefixo: "cadastro:", curto: "ca:", texto: "Papéis, cargos, situações e feriados — administração" },
   { tipo: "fluxo", titulo: "Automações", prefixo: "automacao:", curto: "au:", texto: "Automações (nome, descrição) — administração" },
@@ -117,6 +122,12 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.ve("catalogo") && p.libera("catalogo.historico");
     case "documento":
       return p.ve("documentos");
+    case "declaracao":
+      return p.ve("pca") && p.libera("pca.declaracoes");
+    case "visao":
+      return p.ve("orcamento") && p.libera("orcamento.visoes");
+    case "padronizacao":
+      return p.ve("catalogo") && (p.libera("catalogo.unidades") || p.libera("catalogo.classificacoes"));
     case "empenho":
       return p.ve("empenhos");
     case "liquidacao":
@@ -124,6 +135,6 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
     case "pagamento":
       return p.ve("pagamentos");
     default:
-      return p.admin; // usuário, órgão, unidade, grupo, cadastro, automação
+      return p.admin; // usuário, órgão, unidade, responsável, importação, grupo, cadastro, automação
   }
 }

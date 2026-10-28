@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 import { Ajuda } from "./Ajuda";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { Dropzone } from "./Dropzone";
@@ -28,6 +28,10 @@ export function VerificacaoView({
   const [protocolo, setProtocolo] = useState<Arquivo>(null);
   const [dfd, setDfd] = useState<Arquivo>(null);
   const [tipoPedido, setTipo] = useState<"protocolo" | "dfd">("protocolo");
+  // `?tipo=dfd` (a PESQUISA DO SISTEMA) já abre na verificação de DFD.
+  useEffect(() => {
+    if (new URL(window.location.href).searchParams.get("tipo") === "dfd") setTipo("dfd");
+  }, []);
   const libera = useComponente();
   const tipo = vistaPermitida<"protocolo" | "dfd">(tipoPedido, ["protocolo", "dfd"], (v) => libera(`verificacao.${v}`));
   const comum = { reparticoes, pcas, regras, orgaos };

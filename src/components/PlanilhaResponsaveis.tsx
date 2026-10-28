@@ -25,6 +25,7 @@ import {
   usuarioSugerido,
   type VinculoComPessoa,
 } from "@/lib/responsaveis-planilha-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
@@ -266,6 +267,15 @@ export function BotaoExonerados({ ctx, ativo, onAlternar, className }: { ctx: Ct
 export function PlanilhaResponsaveis({ ctx, orgaoId, exonerados = false }: { ctx: CtxPlanilha; orgaoId?: number; exonerados?: boolean }) {
   const { planilha, grupos, hoje } = ctx;
   const [aberta, setAberta] = useState<number | "nova" | null>(null);
+  // A PESQUISA DO SISTEMA (`?aba=responsaveis&pessoa=<id>`): abre a pessoa.
+  useAbrirDaUrl(
+    (v) => {
+      const n = Number(v);
+      if (Number.isInteger(n) && n > 0) setAberta(n);
+    },
+    true,
+    "pessoa",
+  );
   const linhas = useMemo<LinhaPessoa[]>(() => {
     if (!planilha) return [];
     const doEscopo = (v: VinculoComPessoa) =>

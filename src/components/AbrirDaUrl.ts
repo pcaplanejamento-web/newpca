@@ -5,21 +5,22 @@ import { useEffect, useRef } from "react";
 /**
  * O `?abrir=` da URL (o link de um resultado da PESQUISA DO SISTEMA): `aplicar(valor)` abre o registro na tela quando os
  * dados estão `prontos`; o parâmetro sai da URL depois (recarregar não reabre), sem nova renderização. Uma vez por chegada.
+ * `param` = outro nome quando a tela de fora também lê o `abrir` (a visão dentro do Catálogo, a planilha dentro de Órgãos).
  */
-export function useAbrirDaUrl(aplicar: (valor: string) => void, prontos = true) {
+export function useAbrirDaUrl(aplicar: (valor: string) => void, prontos = true, param = "abrir") {
   const feito = useRef(false);
   const aplicarRef = useRef(aplicar);
   aplicarRef.current = aplicar;
   useEffect(() => {
     if (feito.current || !prontos) return;
     const u = new URL(window.location.href);
-    const valor = u.searchParams.get("abrir");
+    const valor = u.searchParams.get(param);
     feito.current = true;
     if (!valor) return;
     aplicarRef.current(valor);
-    u.searchParams.delete("abrir");
+    u.searchParams.delete(param);
     window.history.replaceState(window.history.state, "", u.pathname + u.search);
-  }, [prontos]);
+  }, [prontos, param]);
 }
 
 /**

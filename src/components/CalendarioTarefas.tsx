@@ -679,7 +679,8 @@ export function CalendarioTarefas({
   // A vista e o painel lembrados neste aparelho (conveniência — sem armazenamento, só não lembra).
   // biome-ignore lint/correctness/useExhaustiveDependencies: só ao montar.
   useEffect(() => {
-    const v = lerLocal(CHAVE_VISTA) as VistaCalendario | null;
+    // A vista pedida no endereço (`?vista=` — a PESQUISA DO SISTEMA) vale mais que a lembrada.
+    const v = (new URL(window.location.href).searchParams.get("vista") ?? lerLocal(CHAVE_VISTA)) as VistaCalendario | null;
     if (v && v in ROTULO_VISTA && v !== "mes") trocarVista(v);
     setPainel(lerLocal(CHAVE_PAINEL) === "1");
   }, []);
