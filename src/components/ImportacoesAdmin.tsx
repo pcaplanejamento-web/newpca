@@ -289,9 +289,13 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
       const todas = await preparar();
       setLinhas(todas);
       const vao = todas.filter((l) => l.estado === "fila");
-      // Os EMPENHOS primeiro (as liquidações e os pagamentos se ligam a eles pelo número), todos em paralelo.
-      await Promise.all(vao.filter((l) => l.card.tipo === "empenhos").map(umCard));
-      if (!parar.current) await Promise.all(vao.filter((l) => l.card.tipo !== "empenhos").map(umCard));
+      // Os EMPENHOS primeiro (as liquidações e os pagamentos se ligam a eles pelo número), UM CARD POR VEZ: cada card já lê
+      // em paralelo por dentro, e cards juntos só formam fila no banco (o D1 executa uma consulta por vez para todos).
+      const ordem = [...vao.filter((l) => l.card.tipo === "empenhos"), ...vao.filter((l) => l.card.tipo !== "empenhos")];
+      for (const l of ordem) {
+        if (parar.current) break;
+        await umCard(l);
+      }
     } finally {
       setRodando(false);
       onMudou();
@@ -337,7 +341,7 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
       >
         <div className="space-y-[var(--gap-block)]">
           <p className="text-[13px] text-muted">
-            Cada card num lote próprio, todos ao mesmo tempo: primeiro os empenhos, depois as liquidações e os pagamentos (que se ligam
+            Cada card num lote próprio, um de cada vez: primeiro os empenhos, depois as liquidações e os pagamentos (que se ligam
             ao empenho pelo número). Só o que mudou é gravado; a importação aberta de um card é continuada de onde parou.
           </p>
           <SelectField label="Ano" compacto value={String(ano)} onChange={(e) => setAno(Number(e.target.value))} disabled={rodando}>

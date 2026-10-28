@@ -207,7 +207,9 @@ export function comandosConferirAssinatura(
   const legados: unknown[] = c.leitor == null ? [] : pedacos.map((json) => comandoHashLegado(db, c, card, c.leitor as number, json));
   const cmds: unknown[] = pedacos.map((json, i) => {
     const virt = () => tabelaVirtual(nome, cols, json, c.extras);
-    const junto = (cond: SQL) => sql`FROM ${virt()} JOIN ${tab} e ON e."card_id" = ${card} AND e."chave" = ${chaveStg} WHERE ${cond}${comDestino}`;
+    // CROSS JOIN = a página por FORA e o gravado pelo índice único por dentro: o SQLite sem estatísticas (o D1) escolhia o
+    // contrário — o card inteiro por fora e a página varrida para cada registro (28 s por parte com 18 mil empenhos, v1.242.2).
+    const junto = (cond: SQL) => sql`FROM ${virt()} CROSS JOIN ${tab} e ON e."card_id" = ${card} AND e."chave" = ${chaveStg} WHERE ${cond}${comDestino}`;
     const semDestino = c.destino
       ? {
           resSemVinculo: sql`COALESCE(${centiLotePassos.resSemVinculo}, 0) + (SELECT COUNT(*) FROM ${virt()} WHERE NOT (${c.destino}))`,
@@ -250,21 +252,19 @@ export function comandoHashLegado(db: Db, c: ConfTabela, card: number, leitor: n
   const cols = [...c.campos, "hash"];
   const t = STAGING_FINAL[c.tabela];
   const final = sql.raw(`"${c.tabela}"`);
-  const iguais = sql`FROM ${tabelaVirtual(nome, cols, json, c.extras)} WHERE ${sql.raw(`"${nome}"."chave"`)} = ${final}."chave" AND NOT (${dadosMudaram(c.tabela, nome, c.campos)})${c.destino ? sql` AND ${c.destino}` : sql``}`;
+  // Os pares (registro gravado, assinatura lida) numa junção com a PÁGINA POR FORA (`CROSS JOIN`) e o gravado pelo índice
+  // único (card, chave) por dentro — linear. O SQLite sem estatísticas (o D1) escolhia o contrário nas versões anteriores
+  // (o card ou a página varridos para cada registro), segurando o banco e derrubando as telas de todos (v1.242.2).
+  const pares = sql`(SELECT e."id" AS "eid", ${sql.raw(`"${nome}"."hash"`)} AS "h" FROM ${tabelaVirtual(nome, cols, json, c.extras)} CROSS JOIN ${final} e
+    ON e."card_id" = ${card} AND e."chave" = ${sql.raw(`"${nome}"."chave"`)}
+    WHERE e."hash" IS NULL AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL AND e."leitor" = ${leitor}
+      AND NOT (${dadosMudaram("e", nome, c.campos)})${c.destino ? sql` AND ${c.destino}` : sql``} LIMIT -1) AS "m"`;
   return db
     .update(t)
-    .set({ hash: sql`(SELECT ${sql.raw(`"${nome}"."hash"`)} ${iguais})` })
-    .where(
-      and(
-        eq(t.cardId, card),
-        isNull(t.hash),
-        isNull(t.removidoEm),
-        isNull(t.ausenteDesdeLote),
-        eq(t.leitor, leitor),
-        sql`${final}."chave" IN (SELECT json_extract(value, '$[0]') FROM json_each(${json}))`,
-        sql`EXISTS (SELECT 1 ${iguais})`,
-      ),
-    );
+    .set({ hash: sql`"m"."h"` })
+    .from(pares as never)
+    // O `LIMIT -1` impede o SQLite de desfazer a subconsulta na junção (ela é feita UMA vez; o gravado, pelo id).
+    .where(sql`${final}."id" = "m"."eid"`);
 }
 
 /**
@@ -272,7 +272,7 @@ export function comandoHashLegado(db: Db, c: ConfTabela, card: number, leitor: n
  * assinatura, valendo) entra nos iguais do passo — e a SOMA do passo recebe o valor GRAVADO deles (é o mesmo da Centi).
  */
 export function comandoParesIguais(db: Db, c: ConfTabela, loteId: number, card: number, iguais: readonly ParIgual[], passo?: number) {
-  const junto = sql`FROM (SELECT json_extract(value, '$[0]') AS "chave", json_extract(value, '$[1]') AS "hash" FROM json_each(${JSON.stringify(iguais)})) AS p JOIN ${sql.raw(`"${c.tabela}"`)} e ON e."card_id" = ${card} AND e."chave" = p."chave" AND ${valeIgual(sql.raw(`p."hash"`))}`;
+  const junto = sql`FROM (SELECT json_extract(value, '$[0]') AS "chave", json_extract(value, '$[1]') AS "hash" FROM json_each(${JSON.stringify(iguais)})) AS p CROSS JOIN ${sql.raw(`"${c.tabela}"`)} e ON e."card_id" = ${card} AND e."chave" = p."chave" AND ${valeIgual(sql.raw(`p."hash"`))}`;
   return db
     .update(centiLotePassos)
     .set({

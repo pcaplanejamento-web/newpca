@@ -14,11 +14,14 @@ import { lerPaginaPagamentos } from "./pagamentos-core.ts";
  * demora ou falha não segura os outros.
  */
 
-/** Quantos pedidos à Centi ao mesmo tempo (empenhos: semanas · liquidações: órgãos). */
-export const PARALELO_EMPENHOS = 4;
-export const PARALELO_LIQUIDACOES = 6;
-/** Quantas PARTES de uma mesma página ao mesmo tempo (a página grande — o ano inteiro — chega em dezenas de partes). */
-export const PARALELO_PARTES = 4;
+/**
+ * Quantos pedidos à Centi ao mesmo tempo (empenhos: semanas · liquidações: órgãos) e quantas PARTES de uma mesma página (a
+ * página grande — o ano inteiro — chega em dezenas de partes). O D1 executa UMA consulta por vez para o sistema inteiro:
+ * pedidos demais em paralelo só formam fila no banco e atrasam as telas de todos (v1.242.2 — no máximo 3 × 2 = 6).
+ */
+export const PARALELO_EMPENHOS = 3;
+export const PARALELO_LIQUIDACOES = 3;
+export const PARALELO_PARTES = 2;
 
 export type RespostaPasso = {
   /** null na parte do meio de uma página (a contagem do lote só muda na última). */

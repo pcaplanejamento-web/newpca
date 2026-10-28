@@ -52,7 +52,8 @@ export function comandoAlteracoesDoLote(
       campos: sql<string>`${camposQueMudaram(t.final, t.staging, t.campos)}`.as("campos"),
       em: sql<string>`CURRENT_TIMESTAMP`.as("em"),
     })
-    .from(sql`${sql.raw(`"${t.staging}"`)} JOIN ${sql.raw(`"${t.final}"`)} ON ${f("card_id")} = ${card} AND ${f("chave")} = ${sql.raw(`"${t.staging}"."chave"`)}`)
+    // O staging (do lote, pela chave primária) por FORA e o gravado pelo índice único por dentro — linear sem estatísticas.
+    .from(sql`${sql.raw(`"${t.staging}"`)} CROSS JOIN ${sql.raw(`"${t.final}"`)} ON ${f("card_id")} = ${card} AND ${f("chave")} = ${sql.raw(`"${t.staging}"."chave"`)}`)
     .where(sql`${sql.raw(`"${t.staging}"."lote_id"`)} = ${loteId} AND ${filtro} AND (${dadosMudaram(t.final, t.staging, t.campos)} OR ${voltou})`);
   return db.insert(centiAlteracoes).select(sel as never);
 }

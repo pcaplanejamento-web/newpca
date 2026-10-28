@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.242.2",
+    data: "2026-10-28",
+    titulo: "Importações sem travar o sistema",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "A conferência de cada parte da importação (manual e automática) varria todos os registros do card para cada registro da parte — até 30 segundos por parte, segurando o banco e deixando o sistema fora do ar para todos enquanto importava. Agora cada registro é achado direto pelo índice: milissegundos por parte.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "Menos pedidos ao mesmo tempo (até 3 × 2 partes) e o \"Importar tudo\" um card por vez: as outras telas nunca esperam pela importação.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.242.1",
     data: "2026-10-28",
     titulo: "Atualização automática dentro do limite do banco",

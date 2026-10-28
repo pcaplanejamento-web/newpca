@@ -10,6 +10,7 @@ import { comandoLimparAlteracoes, consultaAlteracoes } from "../src/lib/centi-al
 import { cabeOutroPulo, custoDoPulo, lerPaginaEmpenhos, ORCAMENTO_CONSULTAS, type PassoNovo, podePular } from "../src/lib/empenhos-core.ts";
 import {
   CONF_EMPENHOS,
+  comandoHashLegado,
   comandoPaginaIgual,
   comandoRecontarLote,
   comandoRegistrarPasso,
@@ -362,5 +363,32 @@ test("orçamento das páginas puladas: nunca passa das 50 consultas ao D1 por ex
     assert.ok(pulos * custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS);
     // A abertura e a limpeza (≤ 10) cabem na folga do limite do plano gratuito.
     assert.ok(pulos * custoDoPulo(porOrgao) + 10 <= 50);
+  }
+});
+
+test("assinatura no lugar: UMA junção pelo índice único — nunca a parte varrida por registro (derrubou o D1 na v1.242.0)", () => {
+  const b = banco();
+  const linhas = lerPaginaEmpenhos(JSON.stringify(Array.from({ length: 50 }, (_, i) => reg(String(i + 1)))), 2026).linhas.map((l) => ({ ...l, hash: hashLinha("empenhos", l, LEITOR) }));
+  const json = JSON.stringify(linhas.map((l) => [...CONF_EMPENHOS.campos, "hash"].map((c) => (l as Record<string, unknown>)[c] ?? null)));
+  const q = (comandoHashLegado(b.db, CONF_EMPENHOS, 1, LEITOR, json) as unknown as { toSQL(): { sql: string; params: unknown[] } }).toSQL();
+  const plano = (b.raw.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...(q.params as never[])) as { detail: string }[]).map((r) => r.detail).join("\n");
+  assert.match(plano, /empenhos_card_chave_uq/);
+  assert.doesNotMatch(plano, /CORRELATED/, plano);
+});
+
+test("conferência da parte: nenhum comando varre os gravados do card (sem estatísticas, como o D1 — 28 s por parte na v1.242.0)", async () => {
+  const b = banco();
+  // Gravados de verdade (com a tabela vazia o SQLite escolheria a ordem certa por acaso).
+  const l0 = b.novoLote();
+  await pagina(b, l0, Array.from({ length: 300 }, (_, i) => reg(String(i + 1))));
+  await promover(b, l0);
+  const linhas = lerPaginaEmpenhos(JSON.stringify(Array.from({ length: 50 }, (_, i) => reg(String(i + 1)))), 2026).linhas.map((l) => ({ ...l, hash: hashLinha("empenhos", l, LEITOR) }));
+  const c = comandosConferirAssinatura(b.db, { ...CONF_EMPENHOS, leitor: LEITOR }, 1, 1, 1, linhas, [["9", "x"]], []);
+  for (const cmd of [...c.cmds, ...c.depois]) {
+    const q = (cmd as { toSQL(): { sql: string; params: unknown[] } }).toSQL();
+    const plano = (b.raw.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...(q.params as never[])) as { detail: string }[]).map((r) => r.detail);
+    // Varrer o card = SCAN da tabela ou SEARCH só pelo card (sem a chave) — milhares de linhas para CADA registro da parte.
+    const varre = (d: string) => /^SCAN (e|empenhos)\b/.test(d) || /^SEARCH (e|empenhos) USING (COVERING )?INDEX \S+ \(card_id=\?\)$/.test(d);
+    assert.ok(!plano.some(varre), `${q.sql.slice(0, 80)}\n${plano.join("\n")}`);
   }
 });
