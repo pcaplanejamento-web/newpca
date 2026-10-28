@@ -2,7 +2,9 @@ import { and, count, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { centiLotePassos, centiLotes, empenhos } from "@/db/schema";
 import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
-import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, SEGUNDOS_CONDUCAO } from "./empenhos-core";
+import { registrarLeituraCard } from "./empenho-cards";
+import { comandosFecharLote } from "./empenhos-sql";
+import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
@@ -48,20 +50,28 @@ export async function getLote(id: number, cardId: number): Promise<LoteCenti | n
   return l ? paraLote(l) : null;
 }
 
-/** O lote ainda lendo deste card (o parado há mais de 30 min é encerrado como abandonado antes). */
+/**
+ * O lote ainda lendo deste card. O parado há mais de 30 min (nenhuma página, nenhuma execução) é ENCERRADO como abandonado
+ * antes — com a MESMA limpeza do fechamento (staging e a leitura fragmentada) e a leitura registrada no card (a próxima
+ * atualização respeita a frequência). O índice `centi_lotes(card_id, estado, id)` faz as duas leituras pararem no lote certo.
+ */
 export async function loteEmAndamento(cardId: number): Promise<LoteCenti | null> {
   const db = getDb();
-  await db
-    .update(centiLotes)
-    .set({ estado: "falhou", mensagem: `Abandonado: sem atividade por mais de ${MINUTOS_LOTE_PARADO} minutos.`, concluidoEm: sql`CURRENT_TIMESTAMP` })
-    .where(and(eq(centiLotes.cardId, cardId), eq(centiLotes.estado, "lendo"), sql`${centiLotes.vistoEm} < datetime('now', ${`-${MINUTOS_LOTE_PARADO} minutes`})`));
-  const [l] = await db
+  const lendo = await db
     .select()
     .from(centiLotes)
     .where(and(eq(centiLotes.cardId, cardId), eq(centiLotes.estado, "lendo")))
-    .orderBy(desc(centiLotes.id))
-    .limit(1);
-  return l ? paraLote(l) : null;
+    .orderBy(desc(centiLotes.id));
+  const limite = new Date(Date.now() - MINUTOS_LOTE_PARADO * 60_000).toISOString().replace("T", " ").slice(0, 19);
+  const parados = lendo.filter((l) => l.vistoEm < limite);
+  if (parados.length) {
+    const msg = `Abandonado: sem atividade por mais de ${MINUTOS_LOTE_PARADO} minutos.`;
+    await db.batch(parados.flatMap((l) => comandosFecharLote(db, l.id, "falhou", msg)) as never);
+    const ultimo = parados[0];
+    await registrarLeituraCard(cardId, "falhou", ultimo.unicos + ultimo.recusados, ultimo.totalInformado);
+  }
+  const ativo = lendo.find((l) => l.vistoEm >= limite);
+  return ativo ? paraLote(ativo) : null;
 }
 
 /**
@@ -69,11 +79,19 @@ export async function loteEmAndamento(cardId: number): Promise<LoteCenti | null>
  * PUXA as unidades da Centi (nada é gravado nos empenhos).
  */
 export async function criarLote(cardId: number, ano: number, quem: string, condutor: string, modo: ModoLote = "dados", orgaosCenti: number[] | null = null): Promise<LoteCenti> {
-  const [l] = await getDb()
-    .insert(centiLotes)
-    .values({ cardId, ano, modo, orgaosCenti: orgaosCenti ? JSON.stringify(orgaosCenti) : null, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
-    .returning();
-  return paraLote(l);
+  try {
+    const [l] = await getDb()
+      .insert(centiLotes)
+      .values({ cardId, ano, modo, orgaosCenti: orgaosCenti ? JSON.stringify(orgaosCenti) : null, iniciadoPor: quem, leitor: LEITOR_EMPENHOS, condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+      .returning();
+    return paraLote(l);
+  } catch (e) {
+    // UM lote LENDO por card (índice único — a aba e a automática começando juntas): fica o que entrou primeiro; quem
+    // chegou depois recebe ele (e a trava de quem conduz decide quem segue).
+    const existente = /UNIQUE/i.test(String((e as Error).message)) ? await loteEmAndamento(cardId) : null;
+    if (existente) return existente;
+    throw e;
+  }
 }
 
 /** Os PASSOS de um lote (na ordem em que aconteceram) — a tela ao vivo, a retomada e o detalhe do histórico. */
@@ -97,12 +115,43 @@ export async function anosDesatualizados(cardId: number): Promise<{ ano: number;
     .orderBy(desc(empenhos.ano));
 }
 
-/** Quando cada ano foi lido pela última vez (o início do último lote encerrado) — o rodízio da atualização automática. */
-export async function ultimaLeituraPorAno(cardId: number): Promise<Map<number, string>> {
+/**
+ * O RODÍZIO da atualização automática, por ano do card: quando cada ano foi lido pela última vez (o início do último lote
+ * encerrado DO TIPO do card) e os anos em ESPERA — a última automática do ano falhou ou ficou parcial (queda, resposta
+ * inválida, grande demais) há menos de `HORAS_ESPERA_FALHA`: repetir o mesmo ano não adianta (nem enche a auditoria); a
+ * importação manual ou um lote promovido depois liberam o ano.
+ */
+export const HORAS_ESPERA_FALHA = 12;
+export async function rodizioDosAnos(cardId: number, modo: ModoLote): Promise<{ ultima: Map<number, string>; emEspera: Set<number> }> {
   const l = await getDb()
-    .select({ ano: centiLotes.ano, em: sql<string>`MAX(${centiLotes.iniciadoEm})` })
+    .select({
+      ano: centiLotes.ano,
+      em: sql<string>`MAX(${centiLotes.iniciadoEm})`,
+      promovido: sql<string | null>`MAX(CASE WHEN ${centiLotes.estado} = 'promovido' OR ${centiLotes.iniciadoPor} <> ${QUEM_AUTO} THEN ${centiLotes.iniciadoEm} END)`,
+      falha: sql<string | null>`MAX(CASE WHEN ${centiLotes.estado} IN ('falhou', 'parcial') AND ${centiLotes.iniciadoPor} = ${QUEM_AUTO} AND ${centiLotes.concluidoEm} > datetime('now', ${`-${HORAS_ESPERA_FALHA} hours`}) THEN ${centiLotes.iniciadoEm} END)`,
+    })
     .from(centiLotes)
-    .where(and(eq(centiLotes.cardId, cardId), ne(centiLotes.estado, "lendo"), eq(centiLotes.modo, "dados")))
+    .where(and(eq(centiLotes.cardId, cardId), ne(centiLotes.estado, "lendo"), eq(centiLotes.modo, modo)))
     .groupBy(centiLotes.ano);
-  return new Map(l.map((x) => [x.ano, x.em]));
+  return {
+    ultima: new Map(l.map((x) => [x.ano, x.em])),
+    emEspera: new Set(l.filter((x) => x.falha && (!x.promovido || x.promovido < x.falha)).map((x) => x.ano)),
+  };
+}
+
+/** Os PASSOS mínimos do lote (sem o corpo enviado — a retomada e os erros), TODOS: a automática decide o próximo pedido. */
+export async function passosDaRetomada(loteId: number) {
+  return getDb()
+    .select({
+      inicio: centiLotePassos.inicio,
+      fim: centiLotePassos.fim,
+      pagina: centiLotePassos.pagina,
+      estado: sql<EstadoPasso>`${centiLotePassos.estado}`,
+      fimPeriodo: sql<boolean>`${centiLotePassos.fimPeriodo} = 1`,
+      mensagem: sql<string | null>`substr(${centiLotePassos.mensagem}, 1, 40)`,
+      em: centiLotePassos.em,
+    })
+    .from(centiLotePassos)
+    .where(eq(centiLotePassos.loteId, loteId))
+    .orderBy(centiLotePassos.id);
 }

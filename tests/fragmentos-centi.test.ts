@@ -90,6 +90,11 @@ test("fragmentos: o corte do registro, o corte UTF-8, a cauda e a janela dos ped
   assert.equal(corteUtf8(b, 4), 3, "não corta o €");
   assert.equal(corteUtf8(b, 6), 6);
   assert.equal(corteUtf8(b, 99), b.length);
+  // O fragmento que acaba NO MEIO de um caractere: o corte fica antes dele (o resto vem no próximo).
+  const partido = new TextEncoder().encode("aç€");
+  assert.equal(corteUtf8(partido.subarray(0, 2), 2), 1, "o ç partido não entra");
+  assert.equal(corteUtf8(partido.subarray(0, 5), 5), 3, "o € partido (2 de 3 bytes) não entra");
+  assert.equal(corteUtf8(partido, partido.length), partido.length, "inteiro fica inteiro");
   assert.equal(hexDe(new Uint8Array([0, 15, 255])), "000fff");
   assert.equal(janelaDosPedacos(5, 8, [{ ini: 10, texto: "KLMNOP" }, { ini: 0, texto: "FGHIJ" }]), "FGHIJKLM");
   assert.equal(janelaDosPedacos(0, 4, [{ ini: 2, texto: "CD" }]), "", "buraco no começo = nada");

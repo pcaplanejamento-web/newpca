@@ -17,17 +17,24 @@ const FORA = sql.join(
   sql`, `,
 );
 
+/**
+ * O último id de cada versão lido DE TRÁS PARA A FRENTE (`ORDER BY id DESC LIMIT 1`): o SQLite para na 1ª linha que passa
+ * no filtro — lê poucas linhas, nunca a tabela inteira (o `MAX(CASE…)` sem WHERE lia a `auditoria` toda a cada pedido e
+ * esgotava a cota diária de leituras do D1).
+ */
+const BASE = sql`${auditoria.acao} NOT IN ('login', 'logout') AND ${auditoria.entidade} <> 'sessao'`;
+
 export const versaoDados = cache(async (): Promise<VersoesDados> => {
   const [r] = await getDb()
     .select({
       // Só o que muda DADO: login/logout e a sessão não invalidam as cargas nem o cache das telas.
-      a: sql<number | null>`MAX(CASE WHEN ${auditoria.acao} NOT IN ('login', 'logout') AND ${auditoria.entidade} <> 'sessao' THEN ${auditoria.id} END)`,
-      d: sql<number | null>`MAX(CASE WHEN ${auditoria.acao} NOT IN ('login', 'logout') AND ${auditoria.entidade} <> 'sessao' AND ${auditoria.entidade} NOT IN (${FORA}) THEN ${auditoria.id} END)`,
+      a: sql<number | null>`(SELECT ${auditoria.id} FROM ${auditoria} WHERE ${BASE} ORDER BY ${auditoria.id} DESC LIMIT 1)`,
+      d: sql<number | null>`(SELECT ${auditoria.id} FROM ${auditoria} WHERE ${BASE} AND ${auditoria.entidade} NOT IN (${FORA}) ORDER BY ${auditoria.id} DESC LIMIT 1)`,
       i: sql<number | null>`(SELECT MAX(${dfdItens.id}) FROM ${dfdItens})`,
       o: sql<number | null>`(SELECT MAX(${orcamentoItens.id}) FROM ${orcamentoItens})`,
       p: sql<number | null>`(SELECT MAX(${itens.id}) FROM ${itens})`,
     })
-    .from(auditoria);
+    .from(sql`(SELECT 1)`);
   const lotes = `${r?.i ?? 0}.${r?.o ?? 0}.${r?.p ?? 0}`;
   return { completa: `${r?.a ?? 0}.${lotes}`, dados: `${r?.d ?? 0}.${lotes}` };
 });

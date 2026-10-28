@@ -1,9 +1,9 @@
 import { and, count, desc, eq, isNull, ne, notInArray, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLotePassos, centiLotes, centiStagingFora, pagamentos, pagamentosStaging } from "../db/schema.ts";
+import { centiLeituras, centiLotePassos, centiLotes, centiStagingFora, pagamentos, pagamentosStaging } from "../db/schema.ts";
 import type { RegraRemovidos } from "./empenho-cards-core.ts";
-import { chavesIguais, MAX_JSON_CONFERIR, MAX_JSON_GUARDA, comandoResultadoVazio, naoIgual, pedacosJson, tabelaVirtual, ultimoPasso } from "./empenhos-sql.ts";
+import { chavesIguais, loteLendo, MAX_JSON_CONFERIR, MAX_JSON_GUARDA, comandoResultadoVazio, naoIgual, pedacosJson, tabelaVirtual, ultimoPasso } from "./empenhos-sql.ts";
 import { destinoSql } from "./liquidacoes-sql.ts";
 import { LIMITE_VALOR_PAGAMENTO, type LinhaPagamento } from "./pagamentos-core.ts";
 
@@ -76,12 +76,19 @@ const temEmpenho = (num: SQL) => sql`EXISTS (SELECT 1 FROM "empenhos" e WHERE e.
  * REALINHA os pagamentos gravados ao EMPENHO de mesmo número (o órgão e a unidade dele) — no MESMO lote em que as
  * liquidações realinham (a promoção de empenhos e a troca dos vínculos de um card de empenhos).
  */
-export function comandoRealinharPagamentos(db: Db) {
+export function comandoRealinharPagamentos(db: Db, so?: { card: number; ano: number }) {
   const num = sql.raw(`"pagamentos"."numero_empenho"`);
   return db
     .update(pagamentos)
     .set({ orgaoId: sql`${doEmpenho(num, "orgao_id")}`, reparticaoId: sql`${doEmpenho(num, "reparticao_id")}`, atualizadoEm: sql`CURRENT_TIMESTAMP` })
-    .where(and(temEmpenho(num), sql`(${pagamentos.orgaoId} IS NOT ${doEmpenho(num, "orgao_id")} OR ${pagamentos.reparticaoId} IS NOT ${doEmpenho(num, "reparticao_id")})`));
+    .where(
+      and(
+        // Depois de PROMOVER: só os números do card e do ano promovidos (pelo índice do número) — nunca a tabela inteira.
+        so ? sql`${pagamentos.numeroEmpenho} IN (SELECT e.numero FROM empenhos e WHERE e.card_id = ${so.card} AND e.ano = ${so.ano})` : undefined,
+        temEmpenho(num),
+        sql`(${pagamentos.orgaoId} IS NOT ${doEmpenho(num, "orgao_id")} OR ${pagamentos.reparticaoId} IS NOT ${doEmpenho(num, "reparticao_id")})`,
+      ),
+    );
 }
 
 const chavesDoLote = (db: Db, loteId: number) => db.select({ c: pagamentosStaging.chave }).from(pagamentosStaging).where(eq(pagamentosStaging.loteId, loteId));
@@ -132,7 +139,7 @@ export async function contagemPagamentos(db: Db, loteId: number, card: number, a
     .select({ n: count() })
     .from(pagamentosStaging)
     .where(and(eq(pagamentosStaging.loteId, loteId), sql`${DESTINO.orgao} IS NULL`));
-  const [removidos] = await db.select({ n: count() }).from(pagamentos).where(sumiram(db, loteId, card, ano, orgaos));
+  const [removidos] = await db.select({ n: count() }).from(pagamentos).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos)));
   return { inseridos: novos.n, atualizados: alterados.n, removidos: removidos.n, fora: fora.n };
 }
 
@@ -254,14 +261,15 @@ export function comandosPromoverPagamentos(
         setWhere: mudou(colPag, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
       }),
     regra === "apagar"
-      ? db.delete(pagamentos).where(sumiram(db, loteId, card, ano, orgaos))
-      : db.update(pagamentos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano, orgaos)),
+      ? db.delete(pagamentos).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos)))
+      : db.update(pagamentos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos))),
     db
       .update(centiLotes)
       .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
-      .where(eq(centiLotes.id, loteId)),
+      .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"))),
     db.delete(pagamentosStaging).where(eq(pagamentosStaging.loteId, loteId)),
     db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
+    db.delete(centiLeituras).where(eq(centiLeituras.loteId, loteId)),
   ] as const;
 }
 

@@ -1,4 +1,4 @@
-import { and, eq, gt, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { centiBrutos, centiLeituras, centiLotePassos } from "@/db/schema";
 import { baixarSeguro } from "./busca-segura";
 import { getDb } from "./db";
@@ -40,6 +40,7 @@ export async function leituraDoLote(loteId: number) {
       id: centiLeituras.id,
       inicio: centiLeituras.inicio,
       fim: centiLeituras.fim,
+      pagina: centiLeituras.pagina,
       bytesCapturados: centiLeituras.bytesCapturados,
       charsCapturados: centiLeituras.charsCapturados,
       comprimento: centiLeituras.comprimento,
@@ -96,9 +97,9 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
   }
   const corte = r.terminou ? bytes.length : corteUtf8(bytes, bytes.length);
   const texto = new TextDecoder().decode(bytes.subarray(0, corte));
-  const [nova] = await db
-    .insert(centiLeituras)
-    .values({
+  // A leitura e o 1º fragmento num lote ATÔMICO (a execução que cai no meio não deixa leitura sem o começo).
+  await db.batch([
+    db.insert(centiLeituras).values({
       loteId: lote.id,
       inicio: periodo.inicio,
       fim: periodo.fim,
@@ -110,9 +111,22 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
       comprimento: r.comprimento ?? null,
       status: r.status,
       ms,
-    })
-    .returning({ id: centiLeituras.id });
-  await db.insert(centiBrutos).values({ leituraId: nova.id, ordem: 0, ini: 0, chars: texto.length, texto });
+    }),
+    db.insert(centiBrutos).select(
+      db
+        .select({
+          leituraId: sql<number>`${centiLeituras.id}`.as("leitura_id"),
+          ordem: sql<number>`0`.as("ordem"),
+          ini: sql<number>`0`.as("ini"),
+          chars: sql<number>`${texto.length}`.as("chars"),
+          texto: sql<string>`${texto}`.as("texto"),
+        })
+        .from(centiLeituras)
+        .where(eq(centiLeituras.loteId, lote.id))
+        .orderBy(desc(centiLeituras.id))
+        .limit(1) as never,
+    ),
+  ] as never);
   return { situacao: `resposta grande: capturando (${Math.round(corte / 1000)} KB)` };
 }
 

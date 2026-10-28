@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { centiLeituras } from "@/db/schema";
 import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -6,7 +8,7 @@ import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-ca
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
-import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti } from "@/lib/empenhos-core";
+import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti, QUEM_AUTO } from "@/lib/empenhos-core";
 import { leituraDoLote } from "@/lib/empenhos-fragmentos";
 import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
 import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
@@ -101,6 +103,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (corpo.condutor || corpo.acao !== "cancelar") {
     const [conduz] = await comandoConduzir(db, lote.id, corpo.condutor ?? "");
     if (!conduz) return erro("Esta importação está em andamento em outra aba, com outra pessoa ou na atualização automática — acompanhe por lá ou espere 2 minutos sem atividade dela.", 409);
+    // A aba que assume o lote descarta a leitura fragmentada que a automática deixou no meio (a página volta a ser lida
+    // por quem conduz agora — nunca duas leituras da mesma página no lote).
+    if (lote.iniciadoPor === QUEM_AUTO) await db.delete(centiLeituras).where(eq(centiLeituras.loteId, lote.id));
   } else if (lote.conduzido) {
     return erro("Esta importação está em andamento em outra aba — interrompa por lá.", 409);
   }

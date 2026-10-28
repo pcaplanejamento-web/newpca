@@ -227,6 +227,10 @@ test("empenhos: o ano SEMANA A SEMANA, o período grande dividido ao meio até u
   assert.equal(tipoDoErro("A API da Centi respondeu 400."), "resposta");
   assert.equal(tipoDoErro("A API da Centi respondeu 503."), "rede");
   assert.equal(tipoDoErro("The operation was aborted due to timeout"), "rede");
+  assert.equal(tipoDoErro("A API da Centi respondeu 429."), "rede", "pedidos demais = passageiro");
+  assert.equal(tipoDoErro("A API da Centi respondeu 408."), "rede", "tempo esgotado = passageiro");
+  assert.equal(tipoDoErro("A resposta da Centi (texto com o JSON dentro) tem um trecho inválido."), "resposta");
+  assert.equal(tipoDoErro("A resposta da Centi terminou no meio da lista (incompleta)."), "resposta");
 });
 
 test("empenhos: a retomada — períodos concluídos, o em curso na próxima página, os divididos não contam", () => {
@@ -361,6 +365,7 @@ test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote
   assert.deepEqual({ ...l }, { paginas: 0, recebidos: 0, unicos: 2 }, "recontado: o staging fica para a releitura");
   // Um empenho já promovido por este lote fica — só perde a referência.
   b.raw.prepare("INSERT INTO empenhos (card_id, chave, ano, numero, orgao_gestor, lote_id) VALUES (1, '2026|P|9', 2026, '9', 'P', ?)").run(lote);
+  b.raw.prepare("UPDATE centi_lotes SET estado = 'parcial' WHERE id = ?").run(lote); // um lote LENDO por card
   const outra = b.novoLote(2025);
   const deOutroCard = b.novoLote(2026, 2);
   const r = (await b.db.batch(comandosExcluirLotes(b.db, 1, [lote, outra, deOutroCard, lote]) as never)) as unknown[][];
@@ -380,6 +385,10 @@ test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e
   await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", c1) as never);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos").get() as { n: number }).n, 3);
   assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos_staging").get() as { n: number }).n, 0);
+  // A PROMOÇÃO REPETIDA (o pedido repetido pela rede) não faz nada: o staging já limpo não marca o ano todo como removido.
+  await b.db.batch(comandosPromover(b.db, l1, 1, 2026, 1, "marcar", c1) as never);
+  assert.equal((b.raw.prepare("SELECT COUNT(*) n FROM empenhos WHERE removido_em IS NULL").get() as { n: number }).n, 3, "nada removido na 2ª promoção");
+  assert.equal((b.raw.prepare("SELECT estado FROM centi_lotes WHERE id = ?").get(l1) as { estado: string }).estado, "promovido");
 
   // 2ª importação: o 3 sumiu, o 1 mudou de valor, o 4 é novo.
   const l2 = b.novoLote();

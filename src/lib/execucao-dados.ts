@@ -14,6 +14,8 @@ import { versaoDados } from "./versao-dados";
  */
 // Até 4 pacotes (cada um tem alguns MB — a memória do Worker é de 128 MB, junto com o resto do sistema).
 const memo = criarMemoVersao({ max: 4, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
+// Os ANOS do escopo (percorre os empenhos): lidos UMA vez por versão e escopo, nunca a cada pedido.
+const memoAnos = criarMemoVersao({ max: 24, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
 
 /** Até quantos anos de uma vez (o volume do pacote). */
 export const MAX_ANOS_EXECUCAO = 5;
@@ -37,7 +39,9 @@ export function anosPedidos(texto: string | null, disponiveis: readonly number[]
 /** O texto JSON da resposta (`{"ok":true,"pacote":…}`); `null` = uma importação concluída no meio impediu ler. */
 export async function respostaExecucao(anosTexto: string | null, fontes: FontesSql, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
-  const [disponiveis, meta, ver, dados] = await Promise.all([consultaAnosExecucao(db, escopo), consultaMetaExecucao(db), consultaVersaoExecucao(db), versaoDados()]);
+  // A versão dos dados nunca derruba a resposta: sem ela, o pacote vale só pela versão das importações.
+  const [meta, ver, dados] = await Promise.all([consultaMetaExecucao(db), consultaVersaoExecucao(db), versaoDados().catch(() => ({ dados: "" }))]);
+  const disponiveis = await memoAnos.obter(chaveEscopoEmpenhos(escopo), ver, () => consultaAnosExecucao(db, escopo));
   const anos = anosPedidos(anosTexto, disponiveis);
   const extra = `,"anos":${JSON.stringify(anos)},"disponiveis":${JSON.stringify(disponiveis)},"fontes":${JSON.stringify(fontes)}`;
   const chave = `${anos.join(",")}|${fontes.liquidacoes ? 1 : 0}${fontes.pagamentos ? 1 : 0}|${chaveEscopoEmpenhos(escopo)}`;

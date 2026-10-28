@@ -136,9 +136,22 @@ export const TAM_CAUDA = 32;
 /** Recomeços da captura (a Centi mudando a resposta no meio) antes de desistir da página. */
 export const MAX_REINICIOS = 3;
 
-/** O maior corte ≤ n que não cai no meio de um caractere UTF-8 (o byte do corte não é de continuação, 10xxxxxx). */
+/**
+ * O maior corte ≤ n que não cai no meio de um caractere UTF-8 (o byte do corte não é de continuação, 10xxxxxx). No FIM do
+ * buffer (o fragmento capturado acaba onde a faixa acabou) confere se o último caractere veio inteiro — senão o corte
+ * fica antes dele (o resto vem no próximo fragmento): um "ç" partido viraria "\uFFFD" e mudaria a chave do registro.
+ */
 export function corteUtf8(bytes: Uint8Array, n: number): number {
-  if (n >= bytes.length) return bytes.length;
+  if (n >= bytes.length) {
+    const fim = bytes.length;
+    for (let k = 1; k <= 3 && k <= fim; k++) {
+      const b = bytes[fim - k];
+      if ((b & 0xc0) === 0x80) continue;
+      const tamanho = b >= 0xf0 ? 4 : b >= 0xe0 ? 3 : b >= 0xc0 ? 2 : 1;
+      return tamanho > k ? fim - k : fim;
+    }
+    return fim;
+  }
   let m = n;
   while (m > 0 && n - m < 4 && (bytes[m] & 0xc0) === 0x80) m--;
   return m;

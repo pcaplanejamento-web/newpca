@@ -162,23 +162,25 @@ export function comandoDividirPeriodo(db: Db, loteId: number, periodo: Periodo) 
  */
 export function comandoRecontarLote(db: Db, loteId: number) {
   const ok = sql`${centiLotePassos.loteId} = ${loteId} AND ${centiLotePassos.estado} = 'ok'`;
+  const ultimas = sql`(SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina})`;
   return db
     .update(centiLotes)
     .set({
       paginas: sql`(SELECT COUNT(*) FROM ${centiLotePassos} WHERE ${ok})`,
-      recebidos: sql`(SELECT COALESCE(SUM(${centiLotePassos.recebidos}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
-      recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${ok})`,
+      // A ÚLTIMA leitura de cada página (uma página relida não conta duas vezes).
+      recebidos: sql`(SELECT COALESCE(SUM(${centiLotePassos.recebidos}), 0) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas})`,
+      recusados: sql`(SELECT COALESCE(SUM(${centiLotePassos.recusados}), 0) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas})`,
       // Os ÚNICOS = os guardados (com vínculo) + os só contados (sem vínculo — a chave); a SOMA = a de TODOS os registros
       // lidos (a última leitura de cada página), a mesma régua das importações anteriores na conferência de queda.
       // (o lote de LIQUIDAÇÕES guarda no staging dele — um lote é de um tipo só, a soma dos dois é o do lote)
       unicos: sql`((SELECT COUNT(*) FROM ${empenhosStaging} WHERE ${empenhosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${liquidacoesStaging} WHERE ${liquidacoesStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${pagamentosStaging} WHERE ${pagamentosStaging.loteId} = ${loteId}) + (SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId}))`,
       // FORA = só os sem vínculo (as chaves dos IGUAIS ao gravado contam nos únicos, não aqui).
       fora: sql`(SELECT COUNT(*) FROM ${centiStagingFora} WHERE ${centiStagingFora.loteId} = ${loteId} AND ${centiStagingFora.igual} = 0)`,
-      soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina}))`,
+      soma: sql`(SELECT SUM(${centiLotePassos.soma}) FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas})`,
       // POR ÓRGÃO (liquidações, pagamentos e os empenhos lidos por órgão): cada "página" é um órgão com o PRÓPRIO total (lidos em
       // paralelo) — o do período é a soma deles (a última leitura de cada órgão); empenhos: o maior total informado em cada período.
       totalInformado: sql`(CASE WHEN ${centiLotes.modo} IN ('liquidacoes', 'pagamentos') OR ${centiLotes.orgaosCenti} IS NOT NULL
-        THEN (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT ${centiLotePassos.total} AS t FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN (SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim}, ${centiLotePassos.pagina})))
+        THEN (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT ${centiLotePassos.total} AS t FROM ${centiLotePassos} WHERE ${centiLotePassos.id} IN ${ultimas}))
         ELSE (SELECT CASE WHEN COUNT(t) = COUNT(*) THEN SUM(t) END FROM (SELECT MAX(${centiLotePassos.total}) AS t FROM ${centiLotePassos} WHERE ${ok} GROUP BY ${centiLotePassos.inicio}, ${centiLotePassos.fim})) END)`,
       vistoEm: sql`CURRENT_TIMESTAMP`,
     })
@@ -339,7 +341,7 @@ export async function contagemDaPromocao(db: Db, loteId: number, card: number, a
     .from(empenhosStaging)
     .innerJoin(empenhos, and(eq(empenhos.cardId, card), eq(empenhos.chave, empenhosStaging.chave)))
     .where(and(eq(empenhosStaging.loteId, loteId), stagingVinculado(card), mudou(colEmp, colStg, sql`${leitor}`, vStg.orgao, vStg.reparticao)));
-  const [removidos] = await db.select({ n: count() }).from(empenhos).where(sumiram(db, loteId, card, ano, orgaos));
+  const [removidos] = await db.select({ n: count() }).from(empenhos).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos)));
   // FORA = os só contados na leitura + os guardados que perderam o vínculo antes da conclusão (não entram).
   const [perdeu] = await db
     .select({ n: count() })
@@ -409,7 +411,7 @@ export async function vigentesDosOrgaos(db: Db, card: number, ano: number, orgao
 export function comandoConduzir(db: Db, loteId: number, condutor: string) {
   return db
     .update(centiLotes)
-    .set({ condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})` })
+    .set({ condutor, conduzindoAte: sql`datetime('now', ${`+${SEGUNDOS_CONDUCAO} seconds`})`, vistoEm: sql`CURRENT_TIMESTAMP` })
     .where(
       and(
         eq(centiLotes.id, loteId),
@@ -427,8 +429,8 @@ export const SEGUNDOS_EXECUCAO_AUTO = 90;
 export function comandoTravarAuto(db: Db, loteId: number) {
   return db
     .update(centiLotes)
-    .set({ autoAte: sql`datetime('now', ${`+${SEGUNDOS_EXECUCAO_AUTO} seconds`})` })
-    .where(and(eq(centiLotes.id, loteId), or(isNull(centiLotes.autoAte), sql`${centiLotes.autoAte} < datetime('now')`)))
+    .set({ autoAte: sql`datetime('now', ${`+${SEGUNDOS_EXECUCAO_AUTO} seconds`})`, vistoEm: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"), or(isNull(centiLotes.autoAte), sql`${centiLotes.autoAte} < datetime('now')`)))
     .returning({ id: centiLotes.id, ate: centiLotes.autoAte });
 }
 
@@ -447,6 +449,15 @@ export function comandoSoltarLote(db: Db, loteId: number, condutor: string) {
     .update(centiLotes)
     .set({ condutor: null, conduzindoAte: null, vistoEm: sql`CURRENT_TIMESTAMP` })
     .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"), eq(centiLotes.condutor, condutor)));
+}
+
+/**
+ * O lote ainda está LENDO — a guarda da PROMOÇÃO: o lote atômico só marca como removido (ou apaga) o que a Centi não trouxe
+ * enquanto o lote não foi promovido. Uma 2ª promoção do MESMO lote (o pedido repetido pela rede) encontra o staging já
+ * limpo — sem a guarda, TUDO do ano "teria sumido". O último comando do lote o fecha; os anteriores veem "lendo".
+ */
+export function loteLendo(loteId: number) {
+  return sql`EXISTS (SELECT 1 FROM ${centiLotes} WHERE ${centiLotes.id} = ${loteId} AND ${centiLotes.estado} = 'lendo')`;
 }
 
 /**
@@ -495,13 +506,13 @@ export function comandosPromover(
         setWhere: mudou(colEmp, (c) => sql.raw(`excluded."${colunaSql(c)}"`), sql`excluded."leitor"`, sql`excluded."orgao_id"`, sql`excluded."reparticao_id"`),
       }),
     regra === "apagar"
-      ? db.delete(empenhos).where(sumiram(db, loteId, card, ano, orgaos))
-      : db.update(empenhos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(sumiram(db, loteId, card, ano, orgaos)),
-    db.delete(empenhos).where(and(eq(empenhos.cardId, card), eq(empenhos.ano, ano), sql`${vEmp.orgao} IS NULL`)),
+      ? db.delete(empenhos).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos)))
+      : db.update(empenhos).set({ removidoEm: sql`CURRENT_TIMESTAMP`, atualizadoEm: sql`CURRENT_TIMESTAMP` }).where(and(loteLendo(loteId), sumiram(db, loteId, card, ano, orgaos))),
+    db.delete(empenhos).where(and(loteLendo(loteId), eq(empenhos.cardId, card), eq(empenhos.ano, ano), sql`${vEmp.orgao} IS NULL`)),
     db
       .update(centiLotes)
       .set({ estado: "promovido", ...contagem, mensagem: null, condutor: null, conduzindoAte: null, concluidoEm: sql`CURRENT_TIMESTAMP`, vistoEm: sql`CURRENT_TIMESTAMP` })
-      .where(eq(centiLotes.id, loteId)),
+      .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo"))),
     db.delete(empenhosStaging).where(eq(empenhosStaging.loteId, loteId)),
     db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
     // A leitura fragmentada da automática (e os fragmentos, em cascata) que ficou no meio.
@@ -517,6 +528,8 @@ export function comandosFecharLote(db: Db, loteId: number, estado: "parcial" | "
     db.delete(liquidacoesStaging).where(eq(liquidacoesStaging.loteId, loteId)),
     db.delete(pagamentosStaging).where(eq(pagamentosStaging.loteId, loteId)),
     db.delete(centiStagingFora).where(eq(centiStagingFora.loteId, loteId)),
+    // A leitura fragmentada que ficou no meio (e os fragmentos, em cascata) — nada de texto grande sobrando no banco.
+    db.delete(centiLeituras).where(eq(centiLeituras.loteId, loteId)),
   ] as const;
 }
 

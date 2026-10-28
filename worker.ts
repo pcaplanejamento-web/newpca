@@ -160,7 +160,10 @@ export default {
     return handler.fetch(req, env, ctx);
   },
   async scheduled(evento: { cron?: string }, env: Env, ctx: Contexto) {
-    if (!env.INTEGRACOES_CHAVE) return;
+    if (!env.INTEGRACOES_CHAVE) {
+      console.error("[cron] INTEGRACOES_CHAVE ausente — nenhuma tarefa agendada roda (importações, e-mails, Trello).");
+      return;
+    }
     const rota = ROTAS_CRON[evento.cron ?? ""];
     if (!rota) return;
     const [rotulo, caminho] = rota;
@@ -168,13 +171,13 @@ export default {
     if (evento.cron === "0-59 * * * *") await new Promise((ok) => setTimeout(ok, 30_000));
     const assinatura = await sha256(`${env.INTEGRACOES_CHAVE}:cron`);
     const req = new Request(`https://cron.interno${caminho}`, { method: "POST", headers: { "x-cron-trello": assinatura } });
-    ctx.waitUntil(
-      Promise.resolve(handler.fetch(req, env, ctx)).then(
-        async (r: Response) => {
-          if (!r.ok) console.error(`[${rotulo}] cron:`, r.status, await r.text());
-        },
-        (e: unknown) => console.error(`[${rotulo}] cron falhou:`, e),
-      ),
-    );
+    // AGUARDADO no próprio `scheduled` (não no `waitUntil`, que pode cortar a tarefa longa no meio — travas presas e
+    // gravações pela metade).
+    try {
+      const r: Response = await handler.fetch(req, env, ctx);
+      if (!r.ok) console.error(`[${rotulo}] cron:`, r.status, await r.text());
+    } catch (e) {
+      console.error(`[${rotulo}] cron falhou:`, e);
+    }
   },
 };

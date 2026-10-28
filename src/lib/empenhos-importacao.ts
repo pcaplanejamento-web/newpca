@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { centiLotePassos } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { centiLotePassos, centiLotes } from "@/db/schema";
 import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
 import { type LinhaDoModo, linhasDaParte, type ModoParte, partesDaPagina, type ResumoPagina, resumoValido, somaDaLinha } from "./importacao-partes-core";
@@ -40,6 +40,7 @@ import {
   type LoteCenti,
   lerPaginaEmpenhos,
   lotePorOrgao,
+  MARCA_GUARDANDO,
   motivoValoresSuspeitos,
   type PassoLote,
   type PassoNovo,
@@ -114,7 +115,7 @@ export type ResultadoPagina = {
 const statusDaMensagem = (m: string) => Number(m.match(/respondeu (\d{3})/)?.[1]) || null;
 
 /** A marca do passo de uma página que ainda recebe as partes (se a leitura parar no meio, o passo fica como erro). */
-const guardando = (parte: number) => `Guardando a página — ${parte} parte(s) recebida(s); se parar aqui, a página é lida de novo.`;
+const guardando = (parte: number) => `${MARCA_GUARDANDO} — ${parte} parte(s) recebida(s); se parar aqui, a página é lida de novo.`;
 
 export type Pedido = {
   modo: ModoParte;
@@ -268,7 +269,8 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     // POR ÓRGÃO: o ID pedido e os órgãos gestores que vieram entram no MAPA (a base da leitura por órgão).
     const gestores = ped.porOrgao && ped.idOrgao != null ? [...new Set(linhas.map((l) => l.orgaoGestor).filter(Boolean))] : [];
     daParte.push(
-      ...(gestores.length ? [comandoRegistrarGestores(db, ped.idOrgao as number, gestores)] : []),
+      // Em grupos de 40 (2 parâmetros por gestor — o limite de 100 do D1).
+      ...Array.from({ length: Math.ceil(gestores.length / 40) }, (_, i) => comandoRegistrarGestores(db, ped.idOrgao as number, gestores.slice(i * 40, i * 40 + 40))),
       ...comandosGuardarFora(db, lote.id, soContar.map((l) => l.chave)),
       ...(catalogo.length ? [comandoRegistrarCatalogo(db, lote.id, lote.ano, catalogo)] : []),
       ...(mapa ? comandosConferirPagina(db, lote.id, card.id, lote.leitor, pagina, guardar, soContar.length, alvo) : []),
@@ -280,6 +282,8 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     const passo: PassoNovo = { ...ped.base, estado: "erro", fimPeriodo: false, status: null, bytes: null, ms: null, recusados: 0, repetidos: 0, total: null, ...meio };
     const res = await db.batch([
       ...(p.passo == null ? [comandoRegistrarPasso(db, lote.id, passo)] : [db.update(centiLotePassos).set(meio).where(eq(centiLotePassos.id, p.passo))]),
+      // A parte também é atividade: o lote que recebe uma página grande nunca é dado como abandonado.
+      db.update(centiLotes).set({ vistoEm: sql`CURRENT_TIMESTAMP` }).where(and(eq(centiLotes.id, lote.id), eq(centiLotes.estado, "lendo"))),
       ...daParte,
       ...extras,
       consultaUltimoPasso(db, lote.id, alvo),
@@ -288,6 +292,21 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   }
 
   const r = p.resumo as ResumoPagina;
+  // A página JÁ LIDA (uma leitura atrasada — a da execução automática que outra aba retomou, ou o pedido repetido pela
+  // rede) ou o período já DIVIDIDO não entram de novo: contariam duas vezes.
+  const [repetida] = await db
+    .select({ id: centiLotePassos.id })
+    .from(centiLotePassos)
+    .where(
+      and(
+        eq(centiLotePassos.loteId, lote.id),
+        eq(centiLotePassos.inicio, periodo.inicio),
+        eq(centiLotePassos.fim, periodo.fim),
+        sql`(${centiLotePassos.estado} = 'dividido' OR (${centiLotePassos.estado} = 'ok' AND ${centiLotePassos.pagina} = ${pagina}))`,
+      ),
+    )
+    .limit(1);
+  if (repetida) throw new PedidoInvalido("Esta página já foi lida neste lote — a leitura repetida não entra.", 409);
   if (!resumoValido(r, linhasPagina)) throw new PedidoInvalido("O resumo da página não confere com as linhas recebidas — leia de novo.");
   // LIQUIDAÇÕES e PAGAMENTOS: o total é o DESTE órgão = os distintos + os recusados (contado aqui); o do período = a soma dos
   // órgãos (`comandoRecontarLote`), e o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
@@ -430,7 +449,7 @@ export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, o
   const queda = anterior || !orgaos ? quedaSuspeita(anterior, lote, { soma: card.quedaSoma, registros: card.quedaRegistros }) : quedaPrimeiraPorOrgao(await vigentesDosOrgaos(db, card.id, lote.ano, orgaos), contagem.removidos, card.quedaRegistros);
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda };
   // As LIQUIDAÇÕES e os PAGAMENTOS seguem o empenho de mesmo número: as dos empenhos que chegaram (ou mudaram de unidade) realinham juntas.
-  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, card.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db), comandoRealinharPagamentos(db)] as never);
+  await db.batch([...comandosPromover(db, lote.id, card.id, lote.ano, lote.leitor, card.removidos, contagem, orgaos), comandoRealinharLiquidacoes(db, { card: card.id, ano: lote.ano }), comandoRealinharPagamentos(db, { card: card.id, ano: lote.ano })] as never);
   await registrarLeituraCard(card.id, "completo", lote.unicos + lote.recusados, lote.totalInformado);
   await registrarAuditoria({
     usuario: opcoes.usuario,

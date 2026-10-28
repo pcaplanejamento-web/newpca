@@ -35,6 +35,21 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.238.0",
+    data: "2026-10-28",
+    titulo: "Importações da Centi blindadas: nada esgota a cota nem trava",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "A conferência de “há dado novo” (a cada minuto em cada aba aberta) lia o histórico inteiro de alterações; agora lê só o último registro — milhares de vezes menos leitura do banco.", link: "/painel" },
+      { tipo: "correcao", area: "Empenhos", texto: "A atualização automática não dá mais como abandonada uma importação que ainda avança (página grande lida em partes), espera mais a cada erro de rede (1, 2, 4… min) e só desiste depois de 30 minutos sem avanço.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Uma letra acentuada partida entre duas partes de uma resposta grande da Centi mudava o número do empenho e o dava como removido; agora a parte termina antes da letra.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Empenhos", texto: "Gravar a mesma importação duas vezes (o pedido repetido pela rede) não faz mais nada: antes podia marcar o ano inteiro como removido.", link: "/painel/empenhos" },
+      { tipo: "correcao", area: "Liquidações", texto: "A atualização automática de liquidações e pagamentos alterna entre todos os anos do card (antes lia só o ano atual) e o ano que falhou espera 12 horas antes de nova tentativa (a manual libera).", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Pagamentos", texto: "“Pedidos demais” e “tempo esgotado” da Centi viram nova tentativa, nunca o fim da importação; resposta fora do formato encerra na hora em vez de repetir.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "A automática não assume mais a importação manual (esperando a confirmação de uma queda ou pausada), não deixa texto grande sobrando no banco e registra no histórico só o fim de cada importação.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Execução", texto: "Depois de cada importação, liquidações e pagamentos são realinhados só no ano e no card importados (antes, as tabelas inteiras), e a lista de anos é lida uma vez por importação.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.237.1",
     data: "2026-10-26",
     titulo: "Sistema de volta: leitura mais leve + todos os anos juntos",

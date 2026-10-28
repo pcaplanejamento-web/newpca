@@ -67,7 +67,9 @@ test("empenhos por órgão (D1 real): o total soma os órgãos, o mapa é aprend
   assert.equal(e["2"].r, null, "o órgão não lido nunca 'some'");
 
   // Sem o lote, a leitura do ano inteiro marcaria o 2 — a régua de sempre segue igual.
-  assert.equal(await contagemDaPromocao(b.db, b.novoLote(null), 1, 2026, 1).then((x) => x.removidos), 2);
+  const lTodos = b.novoLote(null);
+  assert.equal(await contagemDaPromocao(b.db, lTodos, 1, 2026, 1).then((x) => x.removidos), 2);
+  b.raw.prepare("UPDATE centi_lotes SET estado = 'parcial' WHERE id = ?").run(lTodos); // um lote LENDO por card
 
   // A queda compara só com a importação dos MESMOS órgãos.
   assert.equal((await ultimoPromovido(b.db, 1, 2026, -1, [2]))?.unicos, 1);

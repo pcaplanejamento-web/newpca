@@ -323,7 +323,10 @@ export function continuarPeriodo(s: { recebidos: number; paginas: number; total:
 export type TipoErro = "grande" | "resposta" | "rede";
 export function tipoDoErro(mensagem: string): TipoErro {
   if (/grande demais/i.test(mensagem)) return "grande";
-  if (/não é JSON|lista de registros|respondeu 4\d\d/i.test(mensagem)) return "resposta";
+  // 408 (tempo esgotado) e 429 (pedidos demais) são PASSAGEIROS: tenta de novo depois — nunca encerram o lote.
+  if (/respondeu (408|429)\b/i.test(mensagem)) return "rede";
+  // A resposta que não está no formato (inteira ou num fragmento): repetir não adianta.
+  if (/não é JSON|lista de registros|respondeu 4\d\d|não é uma lista|trecho inválido|terminou no meio da lista|passa de 1 MB/i.test(mensagem)) return "resposta";
   return "rede";
 }
 
@@ -540,10 +543,13 @@ export function quedaSuspeita(
 /** O condutor da atualização automática (o token da trava do lote — uma aba nunca o usa) e quem aparece como autor. */
 export const CONDUTOR_AUTO = "atualizacao-automatica";
 export const QUEM_AUTO = "Atualização automática";
-/** Páginas lidas por passada (o cron roda a cada 5 min) — cabe no limite de consultas e de CPU do Worker. */
+/** Páginas lidas por passada — cabe no limite de consultas e de CPU do Worker. */
 export const PAGINAS_POR_PASSADA = 3;
-/** Erros seguidos no MESMO pedido (um por passada) antes de a atualização automática desistir do lote. */
+/** Erros seguidos no MESMO pedido antes de a atualização automática desistir do lote — e só depois de
+ * `MINUTOS_DESISTIR_AUTO` sem avanço (o cron roda duas vezes por minuto: 3 erros de rede em 1 minuto não derrubam um lote
+ * de horas). Entre as tentativas, a espera dobra (`esperaDoErro`). */
 export const MAX_ERROS_AUTO = 3;
+export const MINUTOS_DESISTIR_AUTO = 30;
 
 const chaveP = (p: Periodo) => `${p.inicio}|${p.fim}`;
 
@@ -575,14 +581,41 @@ export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boole
 }
 
 /** Quantos ERROS seguidos (os últimos passos) o MESMO pedido já teve. */
-export function errosSeguidos(passos: PassoMin[], pedido: { periodo: Periodo; pagina: number }): number {
-  let n = 0;
+/** O passo de uma página que ainda recebe as partes fica "erro" com esta marca — não é erro. */
+export const MARCA_GUARDANDO = "Guardando a página";
+type PassoErro = PassoMin & { mensagem?: string | null; em?: string };
+const guardando = (p: PassoErro) => p.estado === "erro" && !!p.mensagem?.startsWith(MARCA_GUARDANDO);
+
+/** Os passos de ERRO seguidos no fim, do MESMO pedido (os "Guardando a página…" não contam; o sucesso zera). */
+function sequenciaDeErros(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }): PassoErro[] {
+  const r: PassoErro[] = [];
   for (let i = passos.length - 1; i >= 0; i--) {
     const p = passos[i];
+    if (guardando(p)) continue;
     if (p.estado !== "erro" || p.inicio !== pedido.periodo.inicio || p.fim !== pedido.periodo.fim || p.pagina !== pedido.pagina) break;
-    n++;
+    r.push(p);
   }
-  return n;
+  return r;
+}
+
+export function errosSeguidos(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }): number {
+  return sequenciaDeErros(passos, pedido).length;
+}
+
+/**
+ * O que a atualização automática faz com os erros do pedido: `esperar` = ainda dentro da espera do último erro (1, 2, 4,
+ * 8… até 16 min — a falha passageira da Centi passa sozinha); `desistir` = `MAX_ERROS_AUTO` erros seguidos E mais de
+ * `MINUTOS_DESISTIR_AUTO` desde o 1º deles (sem avanço nenhum). Sem a hora dos passos, só a contagem decide.
+ */
+export function esperaDoErro(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs: number): { esperar: boolean; desistir: boolean } {
+  const erros = sequenciaDeErros(passos, pedido);
+  if (!erros.length) return { esperar: false, desistir: false };
+  const ultimo = erros[0].em ? msSql(erros[0].em) : Number.NaN;
+  const primeiro = erros[erros.length - 1].em ? msSql(erros[erros.length - 1].em as string) : Number.NaN;
+  if (Number.isNaN(ultimo) || Number.isNaN(primeiro)) return { esperar: false, desistir: erros.length >= MAX_ERROS_AUTO };
+  const desistir = erros.length >= MAX_ERROS_AUTO && agoraMs - primeiro >= MINUTOS_DESISTIR_AUTO * 60_000;
+  const espera = Math.min(16, 2 ** (erros.length - 1)) * 60_000;
+  return { esperar: !desistir && agoraMs - ultimo < espera, desistir };
 }
 
 /** "AAAA-MM-DD HH:MM:SS" (UTC, o do SQLite) → ms. */

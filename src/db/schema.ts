@@ -357,7 +357,7 @@ export const reparticoes = sqliteTable(
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId)],
+  (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId), index("reparticoes_codigo_idx").on(t.codigo)],
 );
 
 /**
@@ -2283,7 +2283,14 @@ export const centiLotes = sqliteTable(
     /** LIQUIDAÇÕES (migração `0150`): os órgãos da Centi do lote (JSON, na ordem) — a "página" N é o N-ésimo. */
     orgaosCenti: text("orgaos_centi"),
   },
-  (t) => [index("centi_lotes_card_ano_idx").on(t.cardId, t.ano, t.id)],
+  (t) => [
+    index("centi_lotes_card_ano_idx").on(t.cardId, t.ano, t.id),
+    // Migração `0160`: o lote em andamento / a última concluída do card e a versão das importações, sem varrer o histórico;
+    // um lote LENDO por card garantido no banco.
+    index("centi_lotes_card_estado_idx").on(t.cardId, t.estado, t.concluidoEm),
+    index("centi_lotes_estado_idx").on(t.estado, t.id),
+    uniqueIndex("centi_lotes_um_lendo_uq").on(t.cardId).where(sql`${t.estado} = 'lendo'`),
+  ],
 );
 
 /** Os PASSOS de um lote (migração `0132`): cada pedido à Centi — período + página — com o resultado ou o erro. */
