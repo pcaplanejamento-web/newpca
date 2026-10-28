@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { casaLocal, type LinhaIndice, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
+import { casaLocal, type LinhaIndice, linhasDaExecucao, pedeIndiceExecucao, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoExecucaoPesquisa, type TipoPesquisa, type TuplaExecucao } from "@/lib/pesquisa-core";
 import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
@@ -26,6 +26,7 @@ import {
   IconFile,
   IconFilter,
   IconKanban,
+  IconPasta,
   IconLayers,
   IconRobo,
   IconSearch,
@@ -53,7 +54,7 @@ const RECENTES = "pesquisa:recentes";
 
 type GrupoServidor = { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] };
 type EspacoIndice = { tipo: "orcamento" | "quadro" | "pca"; id: number; nome: string; abas: [string, string][] };
-type Indice = { versao: string; conferido: number; grupos: Map<string, LinhaIndice[]>; espacos: EspacoIndice[] };
+type Indice = { versao: string; completa: string; conferido: number; grupos: Map<string, LinhaIndice[]>; espacos: EspacoIndice[] };
 
 // O ÍNDICE LOCAL (protocolos e DFDs que a pessoa vê) e as respostas do servidor por termo — só na MEMÓRIA da aba (somem
 // ao fechá-la; nada vai ao disco). O índice só é pedido de novo quando a VERSÃO dos dados muda (conferida ao abrir a
@@ -67,18 +68,27 @@ async function garantirIndice(): Promise<Indice | null> {
   if (indiceMem && Date.now() - indiceMem.conferido < 60_000) return indiceMem;
   carregandoIndice ??= (async () => {
     try {
+      let completa = "";
       if (indiceMem) {
-        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { dados?: string };
+        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { dados?: string; versao?: string };
+        completa = v.versao ?? "";
         if (v.dados === indiceMem.versao) {
+          // Os dados da Mesa são os mesmos; se mudou algo FORA deles (um quadro de Tarefas novo, renomeado), só os
+          // ESPAÇOS são pedidos de novo — o índice de protocolos e DFDs fica.
+          if (completa && completa !== indiceMem.completa) {
+            const r = await fetch("/api/pesquisa/indice?so=espacos", { cache: "no-store" });
+            const j = (await r.json()) as { ok?: boolean; espacos?: EspacoIndice[] };
+            if (r.ok && j.ok) indiceMem = { ...indiceMem, espacos: j.espacos ?? [], completa };
+          }
           indiceMem = { ...indiceMem, conferido: Date.now() };
           return indiceMem;
         }
       }
       const r = await fetch("/api/pesquisa/indice", { cache: "no-store" });
-      const j = (await r.json()) as { ok?: boolean; versao?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[]; espacos?: EspacoIndice[] };
+      const j = (await r.json()) as { ok?: boolean; versao?: string; completa?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[]; espacos?: EspacoIndice[] };
       if (!r.ok || !j.ok || !j.versao) return indiceMem;
       respostas.clear();
-      indiceMem = { versao: j.versao, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])), espacos: j.espacos ?? [] };
+      indiceMem = { versao: j.versao, completa: j.completa ?? completa, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])), espacos: j.espacos ?? [] };
       return indiceMem;
     } catch {
       return indiceMem;
@@ -88,6 +98,31 @@ async function garantirIndice(): Promise<Indice | null> {
   })();
   return carregandoIndice;
 }
+
+type IndiceExecucao = { em: number; validade: number; grupos: Map<string, LinhaIndice[]> };
+// O ÍNDICE DE TEXTO da execução (empenhos, liquidações e pagamentos): pedido só quando a pessoa procura TEXTO sem prefixo
+// (`pedeIndiceExecucao`) e guardado na memória da aba pela validade que o servidor diz (horas — a cota de leituras do D1).
+let indiceExecMem: IndiceExecucao | null = null;
+let carregandoExec: Promise<IndiceExecucao | null> | null = null;
+
+async function garantirIndiceExecucao(): Promise<IndiceExecucao | null> {
+  if (indiceExecMem && Date.now() - indiceExecMem.em < indiceExecMem.validade) return indiceExecMem;
+  carregandoExec ??= (async () => {
+    try {
+      const r = await fetch("/api/pesquisa/indice-execucao", { cache: "no-store" });
+      const j = (await r.json()) as { ok?: boolean; validade?: number; grupos?: { tipo: TipoExecucaoPesquisa; completo: boolean; tuplas: TuplaExecucao[] }[] };
+      if (!r.ok || !j.ok) return indiceExecMem;
+      indiceExecMem = { em: Date.now(), validade: j.validade ?? 3_600_000, grupos: new Map((j.grupos ?? []).map((g) => [g.tipo, linhasDaExecucao(g.tipo, g.tuplas)])) };
+      return indiceExecMem;
+    } catch {
+      return indiceExecMem;
+    } finally {
+      carregandoExec = null;
+    }
+  })();
+  return carregandoExec;
+}
+
 const MAX_RECENTES = 6;
 /** Quantos tipos vão num pedido ao servidor (os demais em pedidos paralelos). */
 const TIPOS_POR_PEDIDO = 6;
@@ -104,6 +139,7 @@ const ICONE_TIPO: Record<string, Icone> = {
   pca: IconBox,
   orcamento: IconWallet,
   tarefa: IconKanban,
+  pasta: IconPasta,
   evento: IconCalendar,
   lancamento: IconWallet,
   catalogo: IconDatabase,
@@ -148,6 +184,7 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
       ["referencia", "Referência"], ["mais", "Mais"],
     ],
   },
+  "/painel/usuarios": { param: "vista", abas: [["ativos", "Usuários ativos"], ["arquivados", "Usuários arquivados"]] },
   "/painel/orgaos": { param: "aba", abas: [["orgaos", "Órgãos"], ["responsaveis", "Responsáveis"]] },
   "/painel/catalogo": { param: "vista", abas: [["catalogo", "Catálogos"], ["lista", "Lista de Itens"], ["unidades", "Medidas"], ["classificacoes", "Classificações"]] },
   "/painel/verificacao": { param: "tipo", abas: [["protocolo", "Verificar protocolo"], ["dfd", "Verificar DFD"]] },
@@ -181,6 +218,7 @@ const PALAVRAS: Record<string, string> = {
   "/painel/execucao": "dashboard painel execução despesa empenhado liquidado pago a pagar evolução acumulada métricas diárias demonstrativo",
   "/painel/pagamentos": "despesa execução centi pagamento pago ordem de pagamento retenção anulação credor empenho",
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
+  "/painel/usuarios?arquivados": "arquivado arquivada restaurar excluir definitivamente desligado exonerado",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",
   "/painel/configuracoes?verificar-termo": "comprovante aceite código autenticidade arquivo pdf conferir",
@@ -391,6 +429,18 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     };
   }, [aberto]);
 
+  // A EXECUÇÃO por texto: sem prefixo, o termo com letras pede o índice de texto (uma vez a cada poucas horas por aba).
+  const [indiceExec, setIndiceExec] = useState<IndiceExecucao | null>(indiceExecMem);
+  const querExec = aberto && !tipo && pedeIndiceExecucao(termo);
+  useEffect(() => {
+    if (!querExec) return;
+    let vivo = true;
+    void garantirIndiceExecucao().then((i) => vivo && setIndiceExec(i));
+    return () => {
+      vivo = false;
+    };
+  }, [querExec]);
+
   // Protocolos e DFDs no ÍNDICE LOCAL (na hora, sem pedido); o resto num pedido ÚNICO ao servidor, 400 ms depois da
   // última tecla, com a resposta do mesmo termo guardada e o pedido antigo CANCELADO quando o termo muda.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tiposServidor` sai de `tipo`; `tentativa` refaz após falha.
@@ -429,11 +479,39 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href }));
       return { tipo: t, total: achados.length, opcoes };
     });
-    const juntar = (srv: GrupoServidor[]) =>
-      [...gruposLocais, ...srv]
+    // Empenhos, liquidações e pagamentos pelo TEXTO no índice local; o servidor segue achando o nº exato (todos os anos) —
+    // os dois juntos, sem repetir.
+    const gruposExec: GrupoServidor[] =
+      !tipo && indiceExec && pedeIndiceExecucao(termo)
+        ? doServidor.flatMap((t) => {
+            const linhas = indiceExec.grupos.get(t);
+            if (!linhas) return [];
+            const achados = linhas.filter(casa);
+            const opcoes = achados
+              .map((o, i) => ({ o, i, p: pontuar(`${o.rotulo} ${o.detalhe}`, termo) }))
+              .sort((x, y) => y.p - x.p || x.i - y.i)
+              .slice(0, limite)
+              .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href }));
+            return [{ tipo: t, total: achados.length, opcoes }];
+          })
+        : [];
+    const comExec = (srv: GrupoServidor[]) => {
+      const out = srv.map((g) => {
+        const l = gruposExec.find((x) => x.tipo === g.tipo);
+        if (!l) return g;
+        const ids = new Set(g.opcoes.map((o) => o.id));
+        const extra = l.opcoes.filter((o) => !ids.has(o.id));
+        return { ...g, total: Math.max(g.total, l.total), opcoes: [...g.opcoes, ...extra].slice(0, limite) };
+      });
+      return [...out, ...gruposExec.filter((l) => !srv.some((g) => g.tipo === l.tipo))];
+    };
+    const juntar = (srvBruto: GrupoServidor[]) => {
+      const srv = comExec(srvBruto);
+      return [...gruposLocais, ...srv]
         .filter((g) => g.total > 0)
         .sort((x, y) => pedidos.indexOf(x.tipo as TipoPesquisa) - pedidos.indexOf(y.tipo as TipoPesquisa))
         .map(converter);
+    };
     setFalhou(false);
     const chave = `${doServidor.join(",")}|${limite}|${termo.toLowerCase()}`;
     const guardada = respostas.get(chave);
@@ -473,7 +551,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       ctl.abort();
       clearTimeout(t);
     };
-  }, [aberto, tipo, termo, tentativa, indiceLocal]);
+  }, [aberto, tipo, termo, tentativa, indiceLocal, indiceExec]);
 
   const fechar = useCallback(() => setAberto(false), []);
 
@@ -613,6 +691,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const todosFiltros: { value: string; label: string }[] = [
     ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
     ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
+    ...(abre("/painel/tarefas") ? [{ value: "pasta", label: "Pastas" }] : []),
     ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
     ...(abre("/painel/orcamento")
       ? [{ value: "orcamento", label: "Orçamentos" }, ...(libera("orcamento.lancamentos") ? [{ value: "lancamento", label: "Lançamentos" }] : []), ...(libera("orcamento.visoes") ? [{ value: "visao", label: "Visões" }] : [])]

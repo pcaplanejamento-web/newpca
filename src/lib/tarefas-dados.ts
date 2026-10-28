@@ -50,7 +50,7 @@ export async function preferenciasCalendario(usuarioId: number) {
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 
 /** Os quadros do GRUPO ATIVO do cabeçalho (o ADM sem grupo ativo, todos; sem grupo, nenhum). */
-const escopoAtivo = (a: Acesso): number[] | null => (a.grupoAtivo ? [a.grupoAtivo.id] : a.u.admin ? null : []);
+export const escopoAtivo = (a: Acesso): number[] | null => (a.grupoAtivo ? [a.grupoAtivo.id] : a.u.admin ? null : []);
 
 /**
  * A LISTA de quadros (`/painel/tarefas`): os do GRUPO ATIVO do cabeçalho; o ADM sem grupo ativo vê todos. `podeCriar` =

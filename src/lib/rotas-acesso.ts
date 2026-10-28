@@ -406,6 +406,9 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   },
   "pesquisa/favoritos": { GET: pessoal("os favoritos da pesquisa da própria pessoa"), PUT: pessoal("os favoritos da pesquisa da própria pessoa") },
   pesquisa: { GET: recurso(["dfd", "pca", "orcamento", "tarefas"], "visualizar", "podeTela(", "a pesquisa do sistema: as telas do alvo (tarefas: os quadros que o papel vê)") },
+  "pesquisa/indice-execucao": {
+    GET: recurso(["empenhos", "liquidacoes", "pagamentos"], "visualizar", "podeTela(", "o índice de texto da execução para a pesquisa: cada tipo só com a tela dele, no escopo de unidades da pessoa"),
+  },
   "pesquisa/indice": { GET: recurso(["dfd", "pca"], "visualizar", "podeTela(", "o índice local da pesquisa: os protocolos/DFDs das Mesas que a pessoa abre") },
   "tarefas/vinculos": { GET: recurso(["dfd", "pca", "orcamento", "tarefas"], "visualizar", "podeTela(", "a busca na tela do alvo (tarefas: os quadros que o papel vê)") },
 

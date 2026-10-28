@@ -1,3 +1,5 @@
+import { brl, dataBR } from "./format.ts";
+
 /**
  * PESQUISA DO SISTEMA — o catálogo ÚNICO dos tipos que o servidor pesquisa (o banner Ctrl+K): o título do grupo, o
  * prefixo/atalho que restringe a pesquisa a ele e o que se pode digitar. Puro (a rota e a tela usam o mesmo).
@@ -7,6 +9,7 @@ export const TIPOS_PESQUISA = [
   { tipo: "dfd", titulo: "DFDs", prefixo: "dfd:", curto: "d:", texto: "DFDs (nº, planejamento, objeto, protocolo)" },
   { tipo: "item", titulo: "Itens", prefixo: "item:", curto: "i:", texto: "Itens dos DFDs (código, descrição)" },
   { tipo: "tarefa", titulo: "Tarefas", prefixo: "tarefa:", curto: "t:", texto: "Tarefas (título, nº do ticket)" },
+  { tipo: "pasta", titulo: "Pastas de quadros", prefixo: "pasta:", curto: "pa:", texto: "Pastas de quadros de Tarefas (nome)" },
   { tipo: "evento", titulo: "Calendário", prefixo: "evento:", curto: "e:", texto: "Eventos do calendário (título, local, descrição)" },
   { tipo: "orcamento", titulo: "Orçamentos", prefixo: "orcamento:", curto: "o:", texto: "Orçamentos (nome, ano)" },
   { tipo: "lancamento", titulo: "Lançamentos do orçamento", prefixo: "lancamento:", curto: "l:", texto: "Lançamentos (ficha, ação, elemento, unidade, função, programa, fonte)" },
@@ -110,6 +113,8 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.ve("dfd") || (p.ve("pca") && p.libera("pca.mesa"));
     case "tarefa":
       return p.ve("tarefas") || p.ve("calendario");
+    case "pasta":
+      return p.ve("tarefas");
     case "evento":
       return p.ve("calendario");
     case "orcamento":
@@ -138,3 +143,71 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.admin; // usuário, órgão, unidade, responsável, importação, grupo, cadastro, automação
   }
 }
+
+/** Os tipos da EXECUÇÃO (empenhos, liquidações, pagamentos) — o índice de texto local da pesquisa. */
+export type TipoExecucaoPesquisa = "empenho" | "liquidacao" | "pagamento";
+export const TIPOS_EXECUCAO_PESQUISA: TipoExecucaoPesquisa[] = ["empenho", "liquidacao", "pagamento"];
+
+/** Teto de registros por tipo no índice de texto da execução (os MAIS RECENTES; os anteriores seguem pelo prefixo e pelo nº exato). */
+export const MAX_INDICE_EXECUCAO = 20000;
+
+/** Validade do índice da execução (na memória do Worker e da aba): fixa, não pela versão — a automática promove o dia todo. */
+export const VALIDADE_INDICE_EXECUCAO_MS = 6 * 60 * 60_000;
+
+type Txt = string | null;
+/** A tupla do banco: empenho `[id, ano, nº, fornecedor, CPF/CNPJ, valor, data]`; liquidação `[id, ano, nº, nº empenho, credor, CPF/CNPJ, valor, data]`; pagamento `[id, ano, ordem, nº empenho, credor, CPF/CNPJ, valor, data]`. */
+export type TuplaExecucao = (number | Txt)[];
+
+/** O resultado de um empenho/liquidação/pagamento — o MESMO no SQL (`pesquisarExecucao`) e no índice local. */
+export function resultadoEmpenho(r: { id: number; ano: number; numero: string; data: Txt; fornecedor: Txt; orgao?: Txt; valor: number | null }): ResultadoPesquisa {
+  return {
+    id: r.id,
+    rotulo: `Empenho ${r.numero}/${r.ano} · ${(r.fornecedor ?? "Sem fornecedor").slice(0, 80)}`,
+    detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), r.orgao ?? ""].filter(Boolean).join(" · "),
+    href: `/painel/empenhos?ano=${r.ano}&abrir=${r.id}`,
+  };
+}
+export function resultadoLiquidacao(r: { id: number; ano: number; numero: Txt; data: Txt; empenho: string; credor: Txt; valor: number | null }): ResultadoPesquisa {
+  return {
+    id: r.id,
+    rotulo: `Liquidação ${r.numero ?? r.id}/${r.ano} · ${(r.credor ?? "Sem credor").slice(0, 80)}`,
+    detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "),
+    href: `/painel/liquidacoes?abrir=${r.id}`,
+  };
+}
+export function resultadoPagamento(r: { id: number; ordem: string; data: Txt; empenho: string; credor: Txt; valor: number | null }): ResultadoPesquisa {
+  return {
+    id: r.id,
+    rotulo: `Ordem de pagamento ${r.ordem} · ${(r.credor ?? "Sem credor").slice(0, 80)}`,
+    detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "),
+    href: `/painel/pagamentos?abrir=${r.id}`,
+  };
+}
+
+const s = (v: number | Txt | undefined): Txt => (v == null ? null : String(v));
+const n = (v: number | Txt | undefined): number => Number(v ?? 0) || 0;
+
+/** As tuplas do índice da execução viram linhas do índice local (os campos de texto e os de número, como o SQL). */
+export function linhasDaExecucao(tipo: TipoExecucaoPesquisa, tuplas: TuplaExecucao[]): LinhaIndice[] {
+  return tuplas.map((t) => {
+    if (tipo === "empenho") {
+      const [id, ano, numero, forn, cpf, valor, data] = t;
+      const r = resultadoEmpenho({ id: n(id), ano: n(ano), numero: s(numero) ?? "", data: s(data), fornecedor: s(forn), valor: n(valor) });
+      return { ...r, campos: [s(numero), s(forn), s(cpf)].filter((x): x is string => !!x), numeros: [s(numero), s(cpf)].filter((x): x is string => !!x) };
+    }
+    if (tipo === "liquidacao") {
+      const [id, ano, numero, emp, credor, cpf, valor, data] = t;
+      const r = resultadoLiquidacao({ id: n(id), ano: n(ano), numero: s(numero), data: s(data), empenho: s(emp) ?? "", credor: s(credor), valor: n(valor) });
+      return { ...r, campos: [s(numero), s(emp), s(credor), s(cpf)].filter((x): x is string => !!x), numeros: [s(numero), s(emp), s(cpf)].filter((x): x is string => !!x) };
+    }
+    const [id, , ordem, emp, credor, cpf, valor, data] = t;
+    const r = resultadoPagamento({ id: n(id), ordem: s(ordem) ?? "", data: s(data), empenho: s(emp) ?? "", credor: s(credor), valor: n(valor) });
+    return { ...r, campos: [s(ordem), s(emp), s(credor), s(cpf)].filter((x): x is string => !!x), numeros: [s(ordem), s(emp), s(cpf)].filter((x): x is string => !!x) };
+  });
+}
+
+/**
+ * O termo merece o índice de TEXTO da execução: sem prefixo, com letras e ao menos 3 caracteres (o número exato segue
+ * pelo servidor, que acha todos os anos).
+ */
+export const pedeIndiceExecucao = (termo: string) => termo.trim().length >= 3 && /\p{L}/u.test(termo);

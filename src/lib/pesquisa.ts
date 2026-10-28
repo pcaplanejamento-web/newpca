@@ -26,6 +26,7 @@ import {
   protocoloSituacoes,
   reparticoes,
   responsaveis,
+  tarefaPastas,
   tarefaQuadros,
   unidadesMedida,
   usuarios,
@@ -39,13 +40,15 @@ import { linkEvento } from "./calendario-core";
 import { getDb } from "./db";
 import { doEscopo } from "./empenhos-tela-sql";
 import { escopoDosEmpenhos } from "./empenhos-tela";
-import { escopoVazio } from "./empenhos-tela-core";
+import { chaveEscopoEmpenhos, escopoVazio } from "./empenhos-tela-core";
 import { brl, dataIsoBrasilia, dataBR } from "./format";
-import { ehTermoNumero, padroesLike, type ResultadoPesquisa, type TipoPesquisa } from "./pesquisa-core";
+import { ehTermoNumero, MAX_INDICE_EXECUCAO, padroesLike, type ResultadoPesquisa, resultadoEmpenho, resultadoLiquidacao, resultadoPagamento, type TipoExecucaoPesquisa, type TipoPesquisa, VALIDADE_INDICE_EXECUCAO_MS } from "./pesquisa-core";
+import { consultaIndiceExecucao } from "./pesquisa-execucao-sql";
 import { casaTermos } from "./pesquisa-sql";
-import { quadroVisivel } from "./tarefas-sql";
+import { criarMemoVersao } from "./memo-versao-core";
+import { pastaVisivel, quadroVisivel } from "./tarefas-sql";
 import { buscarNoCalendario } from "./tarefas";
-import { quadrosDoCalendario } from "./tarefas-dados";
+import { escopoAtivo, quadrosDoCalendario } from "./tarefas-dados";
 
 /**
  * PESQUISA DO SISTEMA — os dados das telas além da Mesa (orçamento, catálogo, histórico de compra, calendário e a
@@ -271,12 +274,36 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
     }));
   }
 
+  if (tipo === "pasta") {
+    // As PASTAS de quadros do GRUPO ATIVO (a tela de Tarefas mostra só ele): as públicas + as privadas da pessoa.
+    if (!podeTela(a, "tarefas").visualizar) return null;
+    const grupos = escopoAtivo(a);
+    if (grupos && !grupos.length) return [];
+    const ls = await db
+      .select({
+        id: tarefaPastas.id,
+        nome: tarefaPastas.nome,
+        privado: tarefaPastas.privado,
+        quadros: sql<number>`(SELECT COUNT(*) FROM tarefa_quadros q WHERE q.pasta_id = ${tarefaPastas.id} AND q.arquivado = 0)`,
+      })
+      .from(tarefaPastas)
+      .where(and(grupos ? inArray(tarefaPastas.grupoId, grupos) : undefined, pastaVisivel(a.u.id, admin), casaTermos([tarefaPastas.nome], padroes)))
+      .orderBy(tarefaPastas.nome)
+      .limit(LIM);
+    return ls.map((l) => ({
+      id: l.id,
+      rotulo: l.nome,
+      detalhe: [`Pasta · ${l.quadros} ${Number(l.quadros) === 1 ? "quadro" : "quadros"}`, l.privado ? "privada" : ""].filter(Boolean).join(" · "),
+      href: `/painel/tarefas?pasta=${l.id}`,
+    }));
+  }
+
   // ─── ADMINISTRAÇÃO (só o ADM) ───
   if (!admin) return null;
 
   if (tipo === "usuario") {
     const ls = await db
-      .select({ id: usuarios.id, nome: usuarios.nome, apelido: usuarios.apelido, email: usuarios.email, matricula: usuarios.matricula, status: usuarios.status })
+      .select({ id: usuarios.id, nome: usuarios.nome, apelido: usuarios.apelido, email: usuarios.email, matricula: usuarios.matricula, status: usuarios.status, arquivadoEm: usuarios.arquivadoEm })
       .from(usuarios)
       .where(casaTermos([usuarios.nome, usuarios.apelido, usuarios.email, usuarios.matricula], padroes))
       .orderBy(usuarios.nome)
@@ -284,7 +311,9 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
     return ls.map((l) => ({
       id: l.id,
       rotulo: l.apelido ? `${l.apelido} (${l.nome})` : l.nome,
-      detalhe: [l.email, l.matricula ? `Mat. ${l.matricula}` : "", l.status === "ativo" ? "" : l.status].filter(Boolean).join(" · "),
+      detalhe: [l.arquivadoEm ? `Arquivado(a) em ${dataBR(l.arquivadoEm.slice(0, 10))}` : "", l.email, l.matricula ? `Mat. ${l.matricula}` : "", l.status === "ativo" || l.arquivadoEm ? "" : l.status]
+        .filter(Boolean)
+        .join(" · "),
       href: `/painel/usuarios?abrir=${l.id}`,
     }));
   }
@@ -369,6 +398,21 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
 const TELA_EXECUCAO = { empenho: "empenhos", liquidacao: "liquidacoes", pagamento: "pagamentos" } as const;
 
 /**
+ * O ÍNDICE DE TEXTO da execução (`GET /api/pesquisa/indice-execucao`): as tuplas do tipo no escopo da pessoa, na MEMÓRIA
+ * do Worker por `VALIDADE_INDICE_EXECUCAO_MS` — PRESO AO RELÓGIO, nunca à versão da execução: a automática promove lotes
+ * o dia todo e cada reconstrução lê a tabela inteira (a cota diária de leituras do D1). O que entrou depois aparece pelo nº
+ * exato e pelo prefixo. `null` = a pessoa não abre a tela do tipo.
+ */
+const memoIndiceExecucao = criarMemoVersao({ max: 12, ttlMs: VALIDADE_INDICE_EXECUCAO_MS, agora: () => Date.now() });
+export async function indiceExecucao(a: Acesso, tipo: TipoExecucaoPesquisa): Promise<{ texto: string; total: number; completo: boolean } | null> {
+  if (!podeTela(a, TELA_EXECUCAO[tipo]).visualizar) return null;
+  const escopo = await escopoDosEmpenhos();
+  if (escopoVazio(escopo)) return { texto: "[]", total: 0, completo: true };
+  const r = await memoIndiceExecucao.obter(`${tipo}:${chaveEscopoEmpenhos(escopo)}`, "fixo", () => consultaIndiceExecucao(getDb(), tipo, escopo));
+  return { ...r, completo: r.total < MAX_INDICE_EXECUCAO };
+}
+
+/**
  * EMPENHOS, LIQUIDAÇÕES e PAGAMENTOS (só para quem abre a tela de cada um, no escopo de unidades dela). As tabelas são
  * grandes e a cota diária de LEITURAS do D1 é curta: sem o prefixo do tipo, só o NÚMERO casa (o nº do empenho — EXATO, pelo
  * índice `*_numero_*_idx`); o texto (fornecedor/credor, CPF/CNPJ, histórico…) só com o prefixo ("empenho:", "em:"…), quando a
@@ -417,7 +461,6 @@ async function pesquisarExecucao(a: Acesso, tipo: keyof typeof TELA_EXECUCAO, q:
   const idDa = new Map<string, number>();
   for (const p of primeiros) if (!idDa.has(p.chave)) idDa.set(p.chave, p.id);
   const ids = [...new Set(ls.map((l) => idDa.get(l.chave) ?? l.id))].slice(0, LIM);
-  const enc = encodeURIComponent;
   if (tipo === "empenho") {
     const rs = await db
       .select({ id: empenhos.id, ano: empenhos.ano, numero: empenhos.numero, data: empenhos.data, fornecedor: empenhos.fornecedor, orgao: empenhos.orgaoGestor, valor: empenhos.valorEmpenhado })
@@ -426,9 +469,7 @@ async function pesquisarExecucao(a: Acesso, tipo: keyof typeof TELA_EXECUCAO, q:
     const por = new Map(rs.map((r) => [r.id, r]));
     return ids.flatMap((id) => {
       const r = por.get(id);
-      return r
-        ? [{ id, rotulo: `Empenho ${r.numero}/${r.ano} · ${(r.fornecedor ?? "Sem fornecedor").slice(0, 80)}`, detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), r.orgao].filter(Boolean).join(" · "), href: `/painel/empenhos?ano=${r.ano}&abrir=${enc(String(id))}` }]
-        : [];
+      return r ? [resultadoEmpenho({ ...r, id })] : [];
     });
   }
   if (tipo === "liquidacao") {
@@ -439,9 +480,7 @@ async function pesquisarExecucao(a: Acesso, tipo: keyof typeof TELA_EXECUCAO, q:
     const por = new Map(rs.map((r) => [r.id, r]));
     return ids.flatMap((id) => {
       const r = por.get(id);
-      return r
-        ? [{ id, rotulo: `Liquidação ${r.numero ?? id}/${r.ano} · ${(r.credor ?? "Sem credor").slice(0, 80)}`, detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "), href: `/painel/liquidacoes?abrir=${id}` }]
-        : [];
+      return r ? [resultadoLiquidacao({ ...r, id })] : [];
     });
   }
   const rs = await db
@@ -451,9 +490,7 @@ async function pesquisarExecucao(a: Acesso, tipo: keyof typeof TELA_EXECUCAO, q:
   const por = new Map(rs.map((r) => [r.id, r]));
   return ids.flatMap((id) => {
     const r = por.get(id);
-    return r
-      ? [{ id, rotulo: `Ordem de pagamento ${r.ordem} · ${(r.credor ?? "Sem credor").slice(0, 80)}`, detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "), href: `/painel/pagamentos?abrir=${id}` }]
-      : [];
+    return r ? [resultadoPagamento({ ...r, id })] : [];
   });
 }
 

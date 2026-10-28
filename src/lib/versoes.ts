@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.255.0",
+    data: "2026-10-28",
+    titulo: "Pesquisa por texto em empenhos, liquidações e pagamentos; pastas e usuários arquivados",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "Sem prefixo, a pesquisa do menu passa a achar empenhos, liquidações e pagamentos pelo fornecedor ou credor, CPF/CNPJ e números — os mais recentes, de um índice leve guardado na aba por algumas horas. O número exato continua achando todos os anos.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Pesquisa", texto: "As pastas de quadros de Tarefas são pesquisáveis (prefixo \"pasta:\") e o resultado abre a pasta no lugar.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Os usuários arquivados aparecem marcados com a data do arquivamento e há a entrada \"Usuários arquivados\", que abre a lista deles.", link: "/painel/usuarios" },
+      { tipo: "correcao", area: "Pesquisa", texto: "Um quadro de Tarefas criado ou renomeado aparece nas abas da pesquisa sem precisar recarregar a página.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.254.0",
     data: "2026-10-28",
     titulo: "Pesquisa completa: declarações, visões, medidas, responsáveis, importações e todas as sub-abas",

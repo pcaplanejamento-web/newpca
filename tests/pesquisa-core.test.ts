@@ -52,7 +52,7 @@ const perfil = (telas: string[], comps: string[] = [], admin = false): PortaoPes
   libera: (c) => admin || !comps.length || comps.includes(c),
 });
 test("pesquisa: portão por perfil", () => {
-  const todos = ["protocolo", "dfd", "item", "tarefa", "evento", "orcamento", "lancamento", "catalogo", "historico", "declaracao", "visao", "padronizacao", "empenho", "liquidacao", "pagamento", "usuario", "orgao", "unidade", "responsavel", "importacao", "grupo", "cadastro", "fluxo"] as const;
+  const todos = ["protocolo", "dfd", "item", "tarefa", "pasta", "evento", "orcamento", "lancamento", "catalogo", "historico", "declaracao", "visao", "padronizacao", "empenho", "liquidacao", "pagamento", "usuario", "orgao", "unidade", "responsavel", "importacao", "grupo", "cadastro", "fluxo"] as const;
   const permitidos = (p: PortaoPesquisa) => todos.filter((t) => tipoPermitido(p, t));
   // sem Mesa do sistema, com PCA e a aba Mesa do PCA: vê a Mesa (só a do PCA — o SQL restringe)
   assert.deepEqual(permitidos(perfil(["pca"], ["pca.mesa"])), ["protocolo", "dfd", "item"]);
@@ -64,6 +64,8 @@ test("pesquisa: portão por perfil", () => {
   assert.deepEqual(permitidos(perfil(["catalogo"], ["catalogo.historico"])), ["historico"]);
   // tarefas pelo calendário também (os eventos e as tarefas dos quadros)
   assert.deepEqual(permitidos(perfil(["calendario"])), ["tarefa", "evento"]);
+  // pastas de quadros: só com a tela Tarefas
+  assert.deepEqual(permitidos(perfil(["tarefas"])), ["tarefa", "pasta"]);
   // declarações pela aba do PCA; visões pela aba do orçamento; medidas/classificações pelas visões do Catálogo
   assert.deepEqual(permitidos(perfil(["pca"], ["pca.declaracoes"])), ["declaracao"]);
   assert.deepEqual(permitidos(perfil(["orcamento"], ["orcamento.visoes"])), ["orcamento", "visao"]);
