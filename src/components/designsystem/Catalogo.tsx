@@ -286,6 +286,7 @@ import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
 import { PainelSegundoPlano } from "@/components/SegundoPlano";
 import { AndamentoImportacao } from "@/components/AndamentoImportacao";
+import { AtualizadoHa } from "@/components/AtualizacaoKpi";
 import type { ImportacaoLocal } from "@/lib/importacoes-ao-vivo-store";
 import { VERSOES } from "@/lib/versoes";
 import { PainelPendencias } from "@/components/PainelPendencias";
@@ -3609,6 +3610,10 @@ export function Catalogo() {
 
       <Secao titulo="Andamento ao vivo de uma importação (AndamentoImportacao — etapas e cada pedido à Centi; o MonitorImportacoes leva o mesmo ao painel do canto para o ADM)">
         <AndamentoImportacao imp={DEMO_IMPORTACAO} />
+      </Secao>
+
+      <Secao titulo="Atualização no canto das KPIs (AtualizacaoKpi — AtualizadoHa · ImportarAgora; Execução e Frotas, por KpiStat canto/acaoCanto)">
+        <KpiStat label="Abastecimentos" value="R$ 1,2 mi" canto={<AtualizadoHa admin={false} meta={{ tipo: "frotas", atualizado: new Date(Date.now() - 12 * 60_000).toISOString(), lendo: 0 }} />} />
       </Secao>
 
       <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">

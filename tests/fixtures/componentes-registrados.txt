@@ -16,6 +16,7 @@ AprendizTelaProtocolo.tsx
 ArmazenamentoAdmin.tsx
 ArrastoCartoes.tsx
 AssinaturaCalendario.tsx
+AtualizacaoKpi.tsx
 AtividadeTarefa.tsx
 AuditoriaAdmin.tsx
 AuthForm.tsx

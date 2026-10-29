@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { centiLotes, empenhoCards } from "@/db/schema";
+import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
+import { centiLotes, empenhoCards, frotaCursores, frotaLeituras } from "@/db/schema";
 import { getDb } from "./db";
-import type { TipoCard } from "./empenho-cards-core";
+import type { TipoCard, TipoImportacao } from "./empenho-cards-core";
+import { frotaAoVivo, type LeituraFrotaAoVivo } from "./frota-andamento-core";
 import { listarPassos, paraLote } from "./empenhos";
 import { type AndamentoLote, fracaoDoAndamento, fracaoDoAno, type LoteCenti, type PassoLote, QUEM_AUTO } from "./empenhos-core";
 import { leituraDoLote } from "./empenhos-fragmentos";
@@ -15,9 +16,10 @@ import { consultaLotesAoVivo } from "./empenhos-sql";
  */
 export type PassoAoVivo = Omit<PassoLote, "corpo">;
 export type LoteAoVivo = LoteCenti & {
-  cardId: number;
+  /** O card (Centi); null = a FROTA (Vólus — a automática pelos cursores e as leituras recentes). */
+  cardId: number | null;
   cardNome: string;
-  tipo: TipoCard;
+  tipo: TipoImportacao;
   /** A atualização automática começou esta importação. */
   doCron: boolean;
   fracao: number;
@@ -39,7 +41,30 @@ const sqlAgoraMenos = (min: number) => new Date(Date.now() - min * 60_000).toISO
  * As importações ao vivo; com `ultimaDe`, também a ÚLTIMA importação de um tipo de card (qualquer estado e quando for — o
  * relógio da Execução abre ela no painel do canto), com os passos mesmo já encerrada (`ultima`).
  */
-export async function andamentoDasImportacoes(ultimaDe?: TipoCard): Promise<{ lotes: LoteAoVivo[]; ultima: LoteAoVivo | null }> {
+export async function andamentoDasImportacoes(ultimaDe?: TipoImportacao): Promise<{ lotes: LoteAoVivo[]; ultima: LoteAoVivo | null }> {
+  const [centi, frota] = await Promise.all([andamentoCenti(ultimaDe === "frotas" ? undefined : ultimaDe), andamentoFrota(ultimaDe === "frotas")]);
+  return { lotes: frota.aoVivo ? [...centi.lotes, frota.aoVivo] : centi.lotes, ultima: ultimaDe === "frotas" ? frota.ultima : centi.ultima };
+}
+
+/** A FROTA: os cursores travados (a automática lendo) + as leituras dos últimos minutos; com `ultima`, as da última leitura. */
+async function andamentoFrota(ultima: boolean): Promise<{ aoVivo: LoteAoVivo | null; ultima: LoteAoVivo | null }> {
+  const db = getDb();
+  const agoraIso = new Date().toISOString();
+  try {
+    const [cursores, recentes, ultimas] = await Promise.all([
+      db.select({ contrato: frotaCursores.contrato, tipo: frotaCursores.tipo, travaAte: frotaCursores.travaAte, cicloInicio: frotaCursores.cicloInicio, proximo: frotaCursores.proximo }).from(frotaCursores),
+      db.select().from(frotaLeituras).where(gte(frotaLeituras.em, sqlAgoraMenos(MINUTOS_DESFECHO))).orderBy(desc(frotaLeituras.id)).limit(200),
+      ultima ? db.select().from(frotaLeituras).orderBy(desc(frotaLeituras.id)).limit(8) : Promise.resolve([]),
+    ]);
+    const aoVivo = frotaAoVivo(cursores, recentes as LeituraFrotaAoVivo[], agoraIso);
+    return { aoVivo, ultima: ultima ? (aoVivo ?? frotaAoVivo([], ultimas as LeituraFrotaAoVivo[], agoraIso)) : null };
+  } catch {
+    // A frota ainda sem tabelas/sem dados: o painel segue com a Centi.
+    return { aoVivo: null, ultima: null };
+  }
+}
+
+async function andamentoCenti(ultimaDe?: TipoCard): Promise<{ lotes: LoteAoVivo[]; ultima: LoteAoVivo | null }> {
   const db = getDb();
   const [aoVivo, [ultimo]] = await Promise.all([
     consultaLotesAoVivo(db, sqlAgoraMenos(MINUTOS_DESFECHO)),

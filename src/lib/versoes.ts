@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.258.0",
+    data: "2026-10-29",
+    titulo: "Frotas: a importação da Vólus igual à das outras importações",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação da Vólus mostra o andamento de cada período (lido, dividido, nova tentativa, erro) no mesmo quadro das outras importações e continua ao sair da tela.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Importações", texto: "O painel do canto inferior direito mostra também a Frota: a importação desta aba e a atualização automática da Vólus.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram há quanto tempo a Vólus foi lida e, para o administrador, o botão \"Importar agora\" — o mesmo canto da Execução.", link: "/painel/frotas" },
+    ],
+  },
+  {
     versao: "1.257.0",
     data: "2026-10-29",
     titulo: "Frotas: combustível, manutenção e veículos com os dados da Vólus",

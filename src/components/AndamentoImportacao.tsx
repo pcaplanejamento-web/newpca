@@ -70,7 +70,7 @@ export function AndamentoImportacao({ imp, compacto = false }: { imp: Importacao
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px]">
           <span className="font-medium text-text">
-            {rodando ? ROTULO_ETAPA[imp.etapa] : (imp.texto ?? ROTULO_ETAPA.fim)}
+            {rodando ? (imp.cardId == null ? "Lendo a Vólus" : ROTULO_ETAPA[imp.etapa]) : (imp.texto ?? ROTULO_ETAPA.fim)}
             {rodando && imp.aguardandoConfirmacao && " — aguardando a confirmação"}
           </span>
           <span className="text-muted tabular-nums">
@@ -82,7 +82,7 @@ export function AndamentoImportacao({ imp, compacto = false }: { imp: Importacao
         {rodando && <Progress value={fracao * 100} label={`${ROTULO_ETAPA[imp.etapa]}: ${textoPct(fracao)}`} continuo />}
       </div>
 
-      {!compacto && (
+      {!compacto && imp.cardId != null && (
         <ol aria-label="Etapas da importação" className="grid gap-1.5 @min-[22rem]:grid-cols-2 @min-[52rem]:grid-cols-4">
           {ORDEM_ETAPAS.map((e, i) => {
             const feita = i < etapaIdx || (imp.etapa === "fim" && imp.estado === "gravado");
@@ -102,7 +102,7 @@ export function AndamentoImportacao({ imp, compacto = false }: { imp: Importacao
       )}
 
       {pedidos.length > 0 && (
-        <ul aria-label="Pedidos à Centi" className={`divide-y divide-border overflow-y-auto rounded-control border border-border ${compacto ? "max-h-40" : "max-h-72"}`}>
+        <ul aria-label={imp.cardId == null ? "Pedidos" : "Pedidos à Centi"} className={`divide-y divide-border overflow-y-auto rounded-control border border-border ${compacto ? "max-h-40" : "max-h-72"}`}>
           {pedidos.map((p) => {
             const ativo = p.fase !== "fila" && p.fase !== "concluido" && p.fase !== "dividido" && p.fase !== "erro" && p.fase !== "esperando";
             return (
@@ -144,12 +144,13 @@ export function AndamentoDoServidor({ lote: l }: { lote: LoteAoVivo }) {
   const lendo = l.estado === "lendo";
   const agora = useAgora(lendo);
   const restante = useEstimativa(l.fracao, lendo);
-  const pag = (p: number) => (l.orgaosCenti ? `órgão ${l.orgaosCenti[p - 1] ?? p}` : `página ${p}`);
+  const frota = l.cardId == null;
+  const pag = (p: number, m?: string | null) => (frota ? (m ?? "") : l.orgaosCenti ? `órgão ${l.orgaosCenti[p - 1] ?? p}` : `página ${p}`);
   return (
     <div className="@container space-y-3 text-[12.5px]">
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <span className="font-medium text-text">{lendo ? (l.doCron ? "Atualização automática lendo a Centi" : `Importação manual de ${l.iniciadoPor}`) : (l.mensagem ?? "Terminou")}</span>
+          <span className="font-medium text-text">{lendo ? (l.doCron ? `Atualização automática lendo ${frota ? "a Vólus" : "a Centi"}` : `Importação manual de ${l.iniciadoPor}`) : (l.mensagem ?? "Terminou")}</span>
           <span className="text-muted tabular-nums">
             {lendo ? textoPct(l.fracao) : textoPct(1, true)}
             {lendo && restante != null && ` · faltam ${textoDuracao(restante)}`}
@@ -191,7 +192,7 @@ export function AndamentoDoServidor({ lote: l }: { lote: LoteAoVivo }) {
                 <div className="flex items-center gap-2">
                   <IconeFase fase={fase} />
                   <span className="min-w-0 flex-1 truncate font-medium text-text tabular-nums">
-                    {rotuloPeriodo(p)} · {pag(p.pagina)}
+                    {rotuloPeriodo(p)} · {pag(p.pagina, p.estado === "erro" ? null : p.mensagem)}
                   </span>
                   <span className="shrink-0 text-muted">{quando(p.em, agora)}</span>
                 </div>

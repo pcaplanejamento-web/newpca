@@ -8,6 +8,7 @@ import { doEscopo } from "./empenhos-tela-sql";
 import { unidadeDoModulo } from "./escopo-cabecalho";
 import { agoraBrasilia, avancarCursor, type ConfigFrota, credencialDefinida, esperaDaFalha, lerConfigFrota, motivoForaDaHora, novoPasso, proximoTrabalho } from "./frota-config-core";
 import { comandoLeituraSemGravar, comandoRealinharContrato, comandoRealinharUnidade, comandoSubirVersao, comandosGravarExtrato, consultaAnosFrota, contagensDoLote, consultaPacoteFrota, consultaVersaoFrota, type Gravacao } from "./frota-sql";
+import { cursoresLendo } from "./frota-andamento-core";
 import { lerBlobConfiguracoes } from "./integracoes";
 import { decifrarSegredo } from "./integracoes-segredos";
 import { criarMemoVersao } from "./memo-versao-core";
@@ -331,14 +332,23 @@ export const listarClassificacoesFrota = () => getDb().select().from(frotaClassi
 export async function dadosDaPaginaFrota() {
   const escopo = await escopoDaFrota();
   const db = getDb();
-  const [anos, versao, contratos, cfg, ultimas] = await Promise.all([anosFrota(escopo), consultaVersaoFrota(db), listarContratos(), getConfigFrota(), ultimasLeituras()]);
+  const [anos, versao, contratos, cfg, ultimas, cursores] = await Promise.all([anosFrota(escopo), consultaVersaoFrota(db), listarContratos(), getConfigFrota(), ultimasLeituras(), listarCursores()]);
   const atualizadoEm = ultimas.reduce<string | null>((m, u) => (!m || u.em > m ? u.em : m), null);
+  const agoraIso = new Date().toISOString();
   return {
     escopo,
     anos: anos.map((a) => a.ano),
     versao,
     contratos: contratos.map((c) => ({ codigo: c.codigo, sigla: c.sigla, nome: c.nome })),
+    /** Os contratos ATIVOS com o produto (o "Importar agora" das KPIs, só o ADM). */
+    ativos: contratos.filter((c) => c.ativo).map((c) => ({ codigo: c.codigo, produto: c.produto as ProdutoContrato })),
     alertas: cfg.alertas,
     atualizadoEm,
+    /** O canto das KPIs (o MESMO da Execução): a última leitura ok (UTC do banco → ISO) e quantos cursores lendo agora. */
+    meta: {
+      tipo: "frotas" as const,
+      atualizado: atualizadoEm ? `${atualizadoEm.replace(" ", "T")}Z` : null,
+      lendo: cursoresLendo(cursores, agoraIso).length,
+    },
   };
 }

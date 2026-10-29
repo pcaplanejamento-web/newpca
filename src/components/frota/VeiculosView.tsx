@@ -31,7 +31,7 @@ import { Dropzone } from "../Dropzone";
 import { ErroCarga } from "../ErroCarga";
 import { TextField } from "../Field";
 import { IconEtiqueta, IconPlus, IconSave, IconUpload } from "../icons";
-import { IndicadoresFrota } from "./FrotaView";
+import { type ImportacaoFrotaKpi, IndicadoresFrota } from "./FrotaView";
 import { Modal } from "../Modal";
 import { SkeletonCartao } from "../Skeleton";
 import { toast } from "../Toast";
@@ -63,12 +63,15 @@ export function VeiculosView({
   versao,
   contratos,
   alertas,
+  importacao,
   pode,
 }: {
   anoInicial: number | null;
   versao: string;
   contratos: ContratoFrota[];
   alertas: LimitesAlertas;
+  /** O canto das KPIs (há quanto tempo a Vólus foi lida; o "Importar agora" do ADM). */
+  importacao?: ImportacaoFrotaKpi;
   pode: { manipular: boolean; importar: boolean; configurar: boolean; exportar: boolean };
 }) {
   const { transacoes, ctx, cadastro } = useDadosFrota({ ano: anoInicial, versao, contratos });
@@ -160,7 +163,7 @@ export function VeiculosView({
     <div className="space-y-[var(--gap-block)]">
       {/* Sem linha de título (o padrão das telas de dados): os indicadores abrem a tela. */}
       <h1 className="sr-only">Veículos</h1>
-      {veiculos != null && <IndicadoresVeiculos linhas={linhas} />}
+      {veiculos != null && <IndicadoresVeiculos linhas={linhas} importacao={importacao} />}
       {erro && <ErroCarga msg={erro} onTentar={() => void recarregar()} />}
       {veiculos == null ? (
         <SkeletonCartao />
@@ -285,7 +288,7 @@ export function VeiculosView({
 }
 
 /** Os INDICADORES do cadastro (sobre todos os veículos do escopo; o gasto é o do ano mais recente). */
-function IndicadoresVeiculos({ linhas }: { linhas: Linha[] }) {
+function IndicadoresVeiculos({ linhas, importacao }: { linhas: Linha[]; importacao?: ImportacaoFrotaKpi }) {
   const ativos = linhas.filter((l) => l.situacao === "ativo").length;
   const proprios = linhas.filter((l) => l.origem === "proprio");
   const contrato = linhas.filter((l) => l.origem === "contrato");
@@ -297,6 +300,7 @@ function IndicadoresVeiculos({ linhas }: { linhas: Linha[] }) {
   return (
     <IndicadoresFrota
       chave="frota:veiculos:mais-indicadores"
+      importacao={importacao}
       cartoes={[
         {
           label: "Veículos",

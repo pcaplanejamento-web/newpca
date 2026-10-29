@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { linkImportacoes, NOME_TIPO } from "@/lib/empenho-cards-core";
+import { linkImportacoes, NOME_IMPORTACAO } from "@/lib/empenho-cards-core";
 import { fracaoDaLeitura as fracaoLeituraGrande, rotuloPeriodo } from "@/lib/empenhos-core";
 import { type Amostra, registrarAmostra, tempoRestanteMs } from "@/lib/fluxo-progresso";
 import { estadoDoPedido, ordenarPedidos, resumoPedidos, ROTULO_ETAPA, textoBytes, textoPedido } from "@/lib/importacao-progresso";
@@ -186,7 +186,7 @@ export function MonitorImportacoes() {
           const j = (await r.json()) as { ok?: boolean; error?: string; ultima?: LoteAoVivo | null };
           if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível ler a última importação.");
           if (!j.ultima) {
-            toast.info(`Nenhuma importação de ${NOME_TIPO[tipo as LoteAoVivo["tipo"]]?.varios ?? "dados"} ainda.`);
+            toast.info(`Nenhuma importação de ${NOME_IMPORTACAO[tipo as LoteAoVivo["tipo"]]?.varios ?? "dados"} ainda.`);
             return;
           }
           const id = j.ultima.id;
@@ -232,7 +232,7 @@ export function MonitorImportacoes() {
       const emCurso = ordenarPedidos(i.pedidos).find((p) => p.fase !== "fila" && p.fase !== "concluido" && p.fase !== "dividido");
       const texto = rodando
         ? [
-            i.aguardandoConfirmacao ? (i.responder ? "Aguardando a sua confirmação aqui (os números caíram)" : "Aguardando a sua confirmação na tela da importação (os números caíram)") : ROTULO_ETAPA[i.etapa],
+            i.aguardandoConfirmacao ? (i.responder ? "Aguardando a sua confirmação aqui (os números caíram)" : "Aguardando a sua confirmação na tela da importação (os números caíram)") : i.cardId == null ? "Lendo a Vólus" : ROTULO_ETAPA[i.etapa],
             emCurso ? `${rotuloPeriodo(emCurso.periodo)} · ${emCurso.rotuloPagina}: ${textoPedido(emCurso, agora)}` : null,
             i.pedidos.length ? `${num(r.concluidos)}/${num(i.pedidos.length)} pedidos · ${num(r.registros)} registros · ${textoBytes(r.bytes)}` : null,
           ]
@@ -245,7 +245,7 @@ export function MonitorImportacoes() {
         titulo: i.titulo,
         estado: ESTADO_LOCAL[i.estado],
         feito: r.concluidos,
-        total: i.pedidos.length,
+        total: i.totalPedidos ?? i.pedidos.length,
         fracao: rodando ? f : undefined,
         restanteMs: restante(id, f, rodando),
         texto,
@@ -282,18 +282,18 @@ export function MonitorImportacoes() {
       const t: Trabalho = {
         id,
         chave: "",
-        titulo: `${l.cardNome} · ${l.ano}${l.doCron ? " · automática" : ""}`,
+        titulo: l.cardId == null ? `${l.cardNome}${l.doCron ? " · automática" : ""}` : `${l.cardNome} · ${l.ano}${l.doCron ? " · automática" : ""}`,
         estado: ESTADO_LOTE(l),
         feito: l.pedidos,
         total: 0,
         fracao: rodando ? l.fracao : undefined,
         restanteMs: restante(id, l.fracao, rodando),
-        texto: `${l.doCron ? "Atualização automática" : `Importação manual (${l.iniciadoPor})`} de ${NOME_TIPO[l.tipo].titulo.toLowerCase()} — ${textoDoLote(l, agora)}`,
+        texto: `${l.doCron ? "Atualização automática" : `Importação manual (${l.iniciadoPor})`} de ${NOME_IMPORTACAO[l.tipo].titulo.toLowerCase()} — ${textoDoLote(l, agora)}`,
         rota: linkImportacoes(l.tipo, l.cardId, "importacao"),
         itens: l.passos.map((p) => {
           const guardando = (p.mensagem ?? "").startsWith("Guardando a página");
           return {
-            rotulo: `${rotuloPeriodo(p)} · ${l.orgaosCenti ? `órgão ${l.orgaosCenti[p.pagina - 1] ?? p.pagina}` : `página ${p.pagina}`}`,
+            rotulo: `${rotuloPeriodo(p)} · ${l.cardId == null ? (p.mensagem ?? "") : l.orgaosCenti ? `órgão ${l.orgaosCenti[p.pagina - 1] ?? p.pagina}` : `página ${p.pagina}`}`,
             estado: guardando ? ("rodando" as const) : p.estado === "erro" ? ("falhou" as const) : ("ok" as const),
             detalhe: guardando ? "gravando…" : p.estado === "erro" ? (p.mensagem ?? "erro") : `${num(p.recebidos)} registros · ${num(p.resNovos ?? 0)} novos · ${haQuanto(p.em, agora)}`,
           };

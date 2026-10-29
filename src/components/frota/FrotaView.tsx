@@ -23,6 +23,9 @@ import {
 } from "@/lib/frota-core";
 import { intervaloDoPeriodo, PERIODO_TODO, type Periodo } from "@/lib/periodo";
 import type { TipoTransacao } from "@/lib/volus-core";
+import { type ContratoFrota as ContratoImportacao, importarFrota } from "@/lib/importar-frota-cliente";
+import { AtualizadoHa, ImportarAgora, type MetaImportacao } from "../AtualizacaoKpi";
+import { toast } from "../Toast";
 import { useAbrirDaUrl } from "../AbrirDaUrl";
 import { Ajuda } from "../Ajuda";
 import { Badge } from "../Badge";
@@ -61,7 +64,7 @@ export function FrotaView({
   versao,
   contratos,
   alertas,
-  atualizadoEm,
+  importacao,
   configurar,
 }: {
   modo: ModoFrota;
@@ -70,8 +73,8 @@ export function FrotaView({
   versao: string;
   contratos: ContratoFrota[];
   alertas: LimitesAlertas;
-  /** A última leitura da Vólus (ISO) — "Atualizado em". */
-  atualizadoEm: string | null;
+  /** O canto das KPIs (o MESMO da Execução): há quanto tempo a Vólus foi lida e, para o ADM, "Importar agora". */
+  importacao?: ImportacaoFrotaKpi;
   /** O endereço da configuração da Vólus (só o ADM). */
   configurar?: string;
 }) {
@@ -129,7 +132,7 @@ export function FrotaView({
         <SkeletonCartao />
       ) : (
         <div className={`space-y-[var(--gap-block)] transition-opacity ${carregando ? "opacity-60" : ""}`}>
-          <Indicadores modo={modo} trs={filtradas} consumo={consumo} />
+          <Indicadores modo={modo} trs={filtradas} consumo={consumo} importacao={importacao} />
           {/* TODOS os filtros à vista, logo abaixo dos indicadores, no cartão padrão dos filtros (o da Execução): o Período
               primeiro e as dimensões em colunas. */}
           <section
@@ -166,8 +169,8 @@ export function FrotaView({
                       veículo inativo.
                     </p>
                     <p>
-                      Os números ficam no recorte dos <strong>filtros</strong> (abaixo dos indicadores). Os dados são de{" "}
-                      {atualizadoEm ? `${dataBR(atualizadoEm.slice(0, 10))} às ${atualizadoEm.slice(11, 16)}` : "nenhuma leitura ainda"}.
+                      Os números ficam no recorte dos <strong>filtros</strong> (abaixo dos indicadores). No canto do indicador, há quanto tempo a Vólus
+                      foi lida.
                     </p>
                     <p>Você vê só a frota das unidades do seu acesso (a unidade escolhida no cabeçalho).</p>
                   </Ajuda>
@@ -201,7 +204,7 @@ export function FrotaView({
   );
 }
 
-function Indicadores({ modo, trs, consumo }: { modo: ModoFrota; trs: Transacao[]; consumo: ReturnType<typeof consumoDosAbastecimentos> }) {
+function Indicadores({ modo, trs, consumo, importacao }: { modo: ModoFrota; trs: Transacao[]; consumo: ReturnType<typeof consumoDosAbastecimentos>; importacao?: ImportacaoFrotaKpi }) {
   const k = kpisFrota(trs, consumo);
   // Os DETALHES dos cartões principais: dois por cartão, curtos (R$ compacto — nada quebra a linha) e nenhum repetido
   // entre os cartões; os complementares só com o valor e a dica.
@@ -327,25 +330,51 @@ function Indicadores({ modo, trs, consumo }: { modo: ModoFrota; trs: Transacao[]
               detalhes: [{ rotulo: "Por veículo", valor: porN(k.manutencao, k.veiculos) }, maiorPlaca],
             },
           ];
-  return <IndicadoresFrota chave={`frota:${modo}:mais-indicadores`} cartoes={cartoes} />;
+  return <IndicadoresFrota chave={`frota:${modo}:mais-indicadores`} cartoes={cartoes} importacao={importacao} todos={modo === "painel"} />;
+}
+
+/** O que o canto das KPIs da Frota precisa: o meta da importação, se é ADM e os contratos ativos (o "Importar agora"). */
+export type ImportacaoFrotaKpi = { meta: MetaImportacao; admin: boolean; ativos: ContratoImportacao[] };
+
+/** O "Importar agora" da Frota: o ano atual, todos os contratos ativos, pelo MESMO executor da tela de Importação. */
+function importarFrotaAgora(ativos: ContratoImportacao[]) {
+  return async (confirmar: Parameters<Parameters<typeof ImportarAgora>[0]["executar"]>[0]) => {
+    const ano = new Date().getFullYear();
+    if (!ativos.length) throw new Error("Nenhum contrato ativo da Vólus — cadastre em Configurações → Importações → Frotas.");
+    if (!(await confirmar({ titulo: `Importar agora: frotas (Vólus) ${ano}`, texto: `${ativos.length} contrato(s), mês a mês. Grava só o que mudou. O andamento aparece no canto inferior direito — pode sair desta tela.`, confirmar: "Importar" })))
+      return;
+    const r = await importarFrota({ ano, contratos: ativos }).fim;
+    (r.falhas.length ? toast.warning : toast.success)(`Frotas: ${r.interrompido ? "interrompida" : r.falhas.length ? `${r.falhas.length} falha(s)` : "concluída"} — ${num(r.novos)} novos, ${num(r.alterados)} alterados.`);
+  };
+}
+
+/** O canto de um indicador: o relógio e, para o ADM, o "Importar agora". */
+function cantoFrota(importacao?: ImportacaoFrotaKpi) {
+  if (!importacao) return {};
+  return {
+    canto: <AtualizadoHa meta={importacao.meta} admin={importacao.admin} />,
+    acaoCanto: importacao.admin ? <ImportarAgora meta={importacao.meta} executar={importarFrotaAgora(importacao.ativos)} /> : undefined,
+  };
 }
 
 export type CartaoFrota = { label: string; value: ReactNode; hint?: string; cor?: string; detalhes?: { rotulo: string; valor: ReactNode }[] };
 
 /** Os indicadores das telas da Frota: os QUATRO principais à vista e os demais em "Mais indicadores" (o da Execução). */
-export function IndicadoresFrota({ chave, cartoes }: { chave: string; cartoes: CartaoFrota[] }) {
-  const grade = (cs: CartaoFrota[]) => (
+export function IndicadoresFrota({ chave, cartoes, importacao, todos = false }: { chave: string; cartoes: CartaoFrota[]; importacao?: ImportacaoFrotaKpi; todos?: boolean }) {
+  // A atualização no canto (o MESMO par da Execução): no 1º cartão, ou nos quatro principais (o Painel).
+  const canto = cantoFrota(importacao);
+  const grade = (cs: CartaoFrota[], principais: boolean) => (
     <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
-      {cs.map((c) => (
-        <KpiStat key={c.label} label={c.label} value={c.value} hint={c.hint} cor={c.cor} detalhes={c.detalhes} realce={!!c.detalhes} completo />
+      {cs.map((c, i) => (
+        <KpiStat key={c.label} label={c.label} value={c.value} hint={c.hint} cor={c.cor} detalhes={c.detalhes} realce={!!c.detalhes} completo {...(principais && (todos || i === 0) ? canto : {})} />
       ))}
     </div>
   );
   const extras = cartoes.slice(4);
   return (
     <>
-      {grade(cartoes.slice(0, 4))}
-      {extras.length > 0 && <MaisIndicadores chave={chave} extras={grade(extras)} />}
+      {grade(cartoes.slice(0, 4), true)}
+      {extras.length > 0 && <MaisIndicadores chave={chave} extras={grade(extras, false)} />}
     </>
   );
 }

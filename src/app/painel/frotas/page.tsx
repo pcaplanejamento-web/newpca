@@ -22,7 +22,7 @@ export default async function Pagina() {
         versao={d.versao}
         contratos={d.contratos}
         alertas={d.alertas}
-        atualizadoEm={d.atualizadoEm}
+        importacao={{ meta: d.meta, admin: r.acesso.u.admin, ativos: r.acesso.u.admin ? d.ativos : [] }}
         configurar={r.acesso.u.admin ? LINK_CONFIG_FROTA : undefined}
       />
     </PermissaoExportar>

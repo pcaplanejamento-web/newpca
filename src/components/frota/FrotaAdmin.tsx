@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { hojeIso } from "@/lib/empenhos-core";
+import { useCallback, useEffect, useState } from "react";
 import { dataBR, dataHoraBR, formatBytes, num } from "@/lib/format";
 import { type ConfigFrotaView, OPCOES_DIAS_RECENTES, OPCOES_FREQUENCIA_FROTA } from "@/lib/frota-config-core";
-import { codigoLegivel, dividirPeriodo, mesesDoAno, type ProdutoContrato, ROTULO_PRODUTO, type TipoTransacao, tiposDoProduto } from "@/lib/volus-core";
+import { importarFrota, TIPO_FROTA } from "@/lib/importar-frota-cliente";
+import { codigoLegivel, type ProdutoContrato, ROTULO_PRODUTO } from "@/lib/volus-core";
 import { Ajuda } from "../Ajuda";
 import { Badge } from "../Badge";
 import { BannerCadastro } from "../BannerCadastro";
@@ -16,13 +16,12 @@ import { ErroCarga } from "../ErroCarga";
 import { PasswordField, SelectField, TextField } from "../Field";
 import { IconKey, IconPencil, IconPlay, IconPlus, IconRefresh } from "../icons";
 import { Modal } from "../Modal";
-import { Progress } from "../Progress";
 import { SecaoBanner } from "../SecaoBanner";
-import { useTrabalhoSegundoPlano } from "../SegundoPlano";
+import { AndamentoImportacao } from "../AndamentoImportacao";
+import { useImportacoesLocais } from "../ImportacoesAoVivo";
 import { SeletorCelula } from "../SeletorCelula";
 import { SeletorMultiplo } from "../SeletorMultiplo";
 import { SkeletonCartao } from "../Skeleton";
-import { StatMini } from "../StatMini";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
 import { CelulaTexto } from "../CelulaLista";
@@ -436,91 +435,25 @@ function Integracao({ d, onSalvo }: { d: Dados; onSalvo: () => void }) {
   );
 }
 
-/** Um pedido da fila de importação. */
-type Pedido = { contrato: string; tipo: TipoTransacao; inicio: string; fim: string };
-type Resultado = { estado: string; partes?: number; registros?: number; novos?: number; alterados?: number; removidos?: number };
-
 function Importar({ d, onMudou }: { d: Dados; onMudou: () => void }) {
   const anoAtual = new Date().getFullYear();
   const ativos = d.contratos.filter((c) => c.ativo);
   const [ano, setAno] = useState(anoAtual);
   const [escolhidos, setEscolhidos] = useState<string[]>([]);
-  const [rodando, setRodando] = useState(false);
-  const [feito, setFeito] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [atual, setAtual] = useState("");
-  const [resumo, setResumo] = useState<{ registros: number; novos: number; alterados: number; removidos: number; falhas: string[] } | null>(null);
-  const parar = useRef(false);
   const { confirmar, confirmacao } = useConfirmacao();
   const alvo = escolhidos.length ? ativos.filter((c) => escolhidos.includes(c.codigo)) : ativos;
+  // A importação da frota desta aba (a em curso, ou a última) — a MESMA do painel do canto: sair da tela não a interrompe.
+  const imp = useImportacoesLocais().filter((i) => i.tipo === TIPO_FROTA).at(-1) ?? null;
+  const rodando = imp?.estado === "rodando";
 
   async function rodar() {
-    if (!(await confirmar({ titulo: `Importar ${ano}?`, texto: `${alvo.length} contrato(s), mês a mês. Grava só o que mudou — repetir não duplica.`, confirmar: "Importar" }))) return;
-    parar.current = false;
-    const hoje = hojeIso();
-    const fila: Pedido[] = alvo.flatMap((c) => tiposDoProduto(c.produto).flatMap((tipo) => mesesDoAno(ano, hoje).map((m) => ({ contrato: c.codigo, tipo, ...m }))));
-    const r = { registros: 0, novos: 0, alterados: 0, removidos: 0, falhas: [] as string[] };
-    setResumo(null);
-    setRodando(true);
-    setFeito(0);
-    setTotal(fila.length);
-    let n = 0;
-    while (fila.length && !parar.current) {
-      const p = fila.shift() as Pedido;
-      setAtual(`${codigoLegivel(p.contrato)} · ${ROTULO_TIPO[p.tipo]} · ${dataBR(p.inicio)} a ${dataBR(p.fim)}`);
-      for (let tentativa = 0; ; tentativa++) {
-        try {
-          const { resultado: x } = await pedir<{ resultado: Resultado }>("/api/admin/frota/importar", { method: "POST", body: JSON.stringify(p) });
-          if (x.estado === "dividir") {
-            // Grande demais para um pedido: o período volta à fila em partes (o total cresce).
-            const partes = dividirPeriodo(p.inicio, p.fim, x.partes ?? 2).map((q) => ({ ...p, ...q }));
-            fila.unshift(...partes);
-            setTotal((t) => t + partes.length - 1);
-            n--;
-          } else {
-            r.registros += x.registros ?? 0;
-            r.novos += x.novos ?? 0;
-            r.alterados += x.alterados ?? 0;
-            r.removidos += x.removidos ?? 0;
-          }
-          break;
-        } catch (e) {
-          const status = (e as { status?: number }).status ?? 0;
-          if ((status >= 500 || status === 0) && tentativa < 2) {
-            await new Promise((ok) => setTimeout(ok, 2000 * (tentativa + 1)));
-            continue;
-          }
-          r.falhas.push(`${codigoLegivel(p.contrato)} ${ROTULO_TIPO[p.tipo]} ${dataBR(p.inicio)}: ${(e as Error).message}`);
-          break;
-        }
-      }
-      setFeito(++n);
-    }
-    setRodando(false);
-    setAtual("");
-    setResumo(r);
+    if (rodando) return;
+    if (!(await confirmar({ titulo: `Importar ${ano}?`, texto: `${alvo.length} contrato(s), mês a mês. Grava só o que mudou — repetir não duplica. O andamento segue no canto inferior direito se sair da tela.`, confirmar: "Importar" }))) return;
+    const r = await importarFrota({ ano, contratos: alvo }).fim;
     if (r.falhas.length) toast.warning(`Importação de ${ano} com ${r.falhas.length} falha(s) — veja o histórico.`);
-    else toast.success(`Importação de ${ano} ${parar.current ? "interrompida" : "concluída"}: ${num(r.novos)} novos, ${num(r.alterados)} alterados.`);
+    else toast.success(`Importação de ${ano} ${r.interrompido ? "interrompida" : "concluída"}: ${num(r.novos)} novos, ${num(r.alterados)} alterados.`);
     onMudou();
   }
-
-  // Sair da tela não para a importação: o andamento segue no painel do canto.
-  useTrabalhoSegundoPlano(
-    rodando
-      ? {
-          id: "frota-importar",
-          titulo: `Frotas (Vólus) — ${ano}`,
-          estado: "rodando",
-          feito,
-          total,
-          texto: atual,
-          rota: "/painel/configuracoes?aba=importacoes&tipo=frotas",
-          onParar: () => {
-            parar.current = true;
-          },
-        }
-      : null,
-  );
 
   return (
     <SecaoBanner
@@ -555,13 +488,7 @@ function Importar({ d, onMudou }: { d: Dados; onMudou: () => void }) {
               />
             </div>
             {rodando ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  parar.current = true;
-                }}
-              >
+              <Button size="sm" variant="secondary" onClick={() => imp?.parar()}>
                 Parar
               </Button>
             ) : (
@@ -570,16 +497,7 @@ function Importar({ d, onMudou }: { d: Dados; onMudou: () => void }) {
               </Button>
             )}
           </div>
-          {rodando && <Progress value={total ? (feito / total) * 100 : 0} label={`${feito} de ${total} · ${atual}`} />}
-          {resumo && (
-            <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-5">
-              <StatMini label="Registros lidos" value={num(resumo.registros)} />
-              <StatMini label="Novos" value={num(resumo.novos)} tone="ok" />
-              <StatMini label="Alterados" value={num(resumo.alterados)} tone="accent" />
-              <StatMini label="Removidos" value={num(resumo.removidos)} tone={resumo.removidos ? "warn" : "default"} />
-              <StatMini label="Falhas" value={num(resumo.falhas.length)} tone={resumo.falhas.length ? "danger" : "default"} hint={resumo.falhas[0]} />
-            </div>
-          )}
+          {imp && <AndamentoImportacao imp={imp} />}
         </>
       )}
       {confirmacao}

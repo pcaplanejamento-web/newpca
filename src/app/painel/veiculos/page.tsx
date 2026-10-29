@@ -19,6 +19,7 @@ export default async function Pagina() {
         versao={d.versao}
         contratos={d.contratos}
         alertas={d.alertas}
+        importacao={{ meta: d.meta, admin: r.acesso.u.admin, ativos: r.acesso.u.admin ? d.ativos : [] }}
         pode={{ manipular: r.pode.manipular, importar: r.pode.importar, configurar: r.pode.configurar, exportar: r.pode.exportar }}
       />
     </PermissaoExportar>
