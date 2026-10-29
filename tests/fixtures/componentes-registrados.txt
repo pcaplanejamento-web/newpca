@@ -348,3 +348,4 @@ CamposMesa.tsx
 SeletorColunas.tsx
 AndamentoImportacao.tsx
 ImportacoesAoVivo.tsx
+EscopoCliente.tsx

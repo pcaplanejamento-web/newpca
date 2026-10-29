@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.257.0",
+    data: "2026-10-29",
+    titulo: "Dados guardados no navegador, cada um com a sua atualização",
+    mudancas: [
+      { tipo: "novo", area: "Desempenho", texto: "Empenhos, Liquidações, Pagamentos e Execução ficam guardados no navegador: voltar à tela, apertar F5 ou reabrir o navegador mostra os dados na hora.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Cada dado se atualiza sozinho: importar pagamentos renova só Pagamentos e Execução; importar empenhos renova Empenhos, Liquidações, Pagamentos e Execução.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Trocar o ano não apaga mais a tabela enquanto o novo ano chega.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Configurações", texto: "Configurações → Tabelas: o ADM pode desligar a guarda dos dados no navegador. Sair ou trocar de conta apaga o que estava guardado.", link: "/painel/configuracoes?aba=tabelas" },
+    ],
+  },
+  {
     versao: "1.256.1",
     data: "2026-10-29",
     titulo: "Empenhos, liquidações e pagamentos sem recarregar",

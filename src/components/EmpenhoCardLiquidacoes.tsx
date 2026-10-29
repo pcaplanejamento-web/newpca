@@ -1,6 +1,6 @@
 "use client";
 
-import { lerGuardado } from "@/lib/memoria-aba";
+import { lerDado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
@@ -182,7 +182,7 @@ export function EmpenhoCardLiquidacoes({
     let vivo = true;
     void (async () => {
       try {
-        const j = await lerGuardado(rota, versao, async (r) => {
+        const j = await lerDado("liquidacoes", rota, versao, async (r) => {
           const j = (await r.json()) as { ok?: boolean; error?: string; anos?: { ano: number; n: number }[] };
           if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
           return j;
@@ -213,7 +213,8 @@ export function EmpenhoCardLiquidacoes({
         // a falha de um é a falha da carga.
         const partes = await Promise.all(
           anosDoRecorte(rc.ano, anosRef.current).map(async (ano) => {
-            const j = await lerGuardado(
+            const j = await lerDado(
+              "liquidacoes",
               `${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`,
               versao,
               async (r) => {

@@ -5567,6 +5567,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   da prévia) abre as Novidades DAQUELA versão (`versaoDoAviso`) no banner flutuante AO LADO do sino, que CONTINUA ABERTO
   (`Dropdown` ignora o toque e o Esc com uma janela `[data-sobre-dropdown]` por cima — o Esc fecha primeiro o banner).
 
+## DADOS NO NAVEGADOR (v1.257.0 — plano em fases: Execução → Mesa → PCA → Orçamento → Tarefas/Calendário → Catálogo → ADM)
+- Armazém ÚNICO `src/lib/dados-cliente.ts` (memória da aba + IndexedDB `pca-dados`; núcleo puro `dados-cliente-core.ts`,
+  testado): `lerDado(recurso, url, versao, ler, fresco)` = memória › aparelho › servidor, só com a MESMA versão e o mesmo
+  `FORMATO_DADOS`; pedidos iguais = um; a falha não é guardada; 401 apaga tudo. A chave = pessoa + ASSINATURA do acesso
+  (SHA-256 no layout: papel, telas, grupo, unidades, acesso por aba, filtro da unidade) + recurso + endereço.
+  `EscopoCliente` (layout) define a pessoa NO DESENHO; outra pessoa/formato/sem uso há 30 dias/além de 120 entradas saem.
+  Sair/trocar de conta = `apagarDadosLocais` (+ as outras abas pelo `BroadcastChannel`). Configurações → Tabelas →
+  "Guardar os dados das telas no navegador" (`aparencia.tabelas.noAparelho`, padrão ligado) desliga.
+- **Versão POR DADO:** a tela recebe da página a versão do que ELA mostra — Execução: `consultaVersoesExecucao` +
+  `versaoDaTelaExecucao` (empenhos ≠ liquidações ≠ pagamentos; liquidações/pagamentos dependem também dos empenhos; o
+  cadastro de órgãos/unidades em todas). **Dado novo de tela = `lerDado` com a versão das dependências dele** (nunca um
+  `fetch` de leitura solto nem um cache próprio).
+
 ## Ao finalizar qualquer mudança
 1. `npm run lint`, `npm test` e `npm run typecheck` verdes (os três bloqueiam o deploy).
 2. **Commit + deploy** (push na main) e **verifique o site no ar** sem regressão.

@@ -40,7 +40,7 @@ export const aparenciaSchema = z.object({
     .optional(),
   // Tabelas (Configurações → Tabelas): linhas por página com que as tabelas de rolagem interna abrem.
   tabelas: z
-    .object({ linhas: z.custom<LinhasTabela>((v) => LINHAS_TABELA.includes(v as LinhasTabela), "Quantidade de linhas inválida.") })
+    .object({ linhas: z.custom<LinhasTabela>((v) => LINHAS_TABELA.includes(v as LinhasTabela), "Quantidade de linhas inválida."), noAparelho: z.boolean().optional() })
     .optional(),
   // Tela de acesso (Configurações → Tela de acesso): os textos da vitrine e o aviso; vazio = o padrão.
   acesso: z

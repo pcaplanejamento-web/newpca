@@ -1,6 +1,6 @@
 "use client";
 
-import { lerGuardado } from "@/lib/memoria-aba";
+import { lerDado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
@@ -180,8 +180,9 @@ export function EmpenhosTabela({
       const k = `${ano}:${removidos ? 1 : 0}`;
       const guardado = fresco ? undefined : guardados.current.get(k);
       if (guardado) return guardado;
-      // Na MEMÓRIA DA ABA pela versão: sair e voltar à tela não pede de novo.
-      const lista = await lerGuardado(
+      // Guardado no NAVEGADOR pela versão: sair e voltar à tela não pede de novo.
+      const lista = await lerDado(
+        "empenhos",
         `/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`,
         versaoRef.current ?? "",
         async (resp) => {
@@ -207,7 +208,6 @@ export function EmpenhosTabela({
         return;
       }
       setCarregando(true);
-      if (!fresco) setLinhas(null);
       try {
         // Nenhum ano fica de fora: a falha de um é a falha da carga (com "Tentar de novo").
         const partes = await Promise.all(anosDoRecorte(r.ano, anos).map((ano) => lerAno(ano, r.removidos, fresco)));

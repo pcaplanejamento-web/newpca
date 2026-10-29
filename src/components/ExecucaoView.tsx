@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lerDado } from "@/lib/dados-cliente";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { type BaseExec, montarBase, type MetaExec, type PacoteExec } from "@/lib/execucao-dash-core";
 import type { EstadoFiltros } from "@/lib/filtros-visao-core";
@@ -36,6 +37,8 @@ export function ExecucaoView({
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const pedido = useRef(0);
+  const versaoRef = useRef(versao);
+  versaoRef.current = versao;
   // Os anos que o SERVIDOR escolheu (o 1º pedido vai sem anos): fixá-los na tela não pede de novo.
   const escolhidosPeloServidor = useRef<string | null>(null);
   const anosChave = anos?.join(",") ?? "";
@@ -45,17 +48,20 @@ export function ExecucaoView({
     setCarregando(true);
     setErro(null);
     try {
-      const r = await fetch(`/api/execucao${lista ? `?anos=${lista}` : ""}`, { cache: "no-store" });
-      const texto = await r.text();
+      // Guardado no navegador pela versão da execução: voltar à tela (ou reabrir o navegador) não pede de novo.
+      const j = await lerDado("execucao", `/api/execucao${lista ? `?anos=${lista}` : ""}`, versaoRef.current, async (r) => {
+        const texto = await r.text();
+        let j: { ok?: boolean; error?: string; pacote?: PacoteExec; meta?: MetaExec[] };
+        try {
+          j = JSON.parse(texto) as typeof j;
+        } catch {
+          // A resposta não é JSON (o servidor caiu no meio): a mensagem da tela, com o status.
+          throw new Error(`Não foi possível carregar os dados da execução (erro ${r.status}). Tente de novo.`);
+        }
+        if (!r.ok || !j.ok || !j.pacote) throw new Error(j.error || "Não foi possível carregar os dados da execução.");
+        return j as { pacote: PacoteExec; meta?: MetaExec[] };
+      });
       if (n !== pedido.current) return;
-      let j: { ok?: boolean; error?: string; pacote?: PacoteExec; meta?: MetaExec[] };
-      try {
-        j = JSON.parse(texto) as typeof j;
-      } catch {
-        // A resposta não é JSON (o servidor caiu no meio): a mensagem da tela, com o status.
-        throw new Error(`Não foi possível carregar os dados da execução (erro ${r.status}). Tente de novo.`);
-      }
-      if (!r.ok || !j.ok || !j.pacote) throw new Error(j.error || "Não foi possível carregar os dados da execução.");
       const b = montarBase({ ...j.pacote, meta: j.meta ?? [] });
       setBase(b);
       // O servidor escolhe o ano quando nenhum foi pedido (o mais recente): a tela passa a mostrar o escolhido.
