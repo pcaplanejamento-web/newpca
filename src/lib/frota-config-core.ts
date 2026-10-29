@@ -144,7 +144,20 @@ export type CursorFrota = {
   esperaAte: string | null;
   travaAte: string | null;
   cicloConcluidoEm: string | null;
+  ultimoErro?: string | null;
 };
+
+/** A marca que a TRAVA grava antes da leitura: se a execução for cortada (limite de CPU, exceção), ela fica como o último
+ * erro — a próxima vê que a anterior não terminou. O fim da leitura (ok ou erro) a substitui. */
+export const MSG_INTERROMPIDA = "Execução interrompida antes do fim (limite de processamento do servidor).";
+
+/** O passo efetivo do cursor: depois de execuções INTERROMPIDAS seguidas (o período que derruba o Worker), a metade a cada
+ * uma, até 1 dia — nunca o mesmo período para sempre. */
+export function passoEfetivo(k: Pick<CursorFrota, "passoDias" | "falhas" | "ultimoErro">): number {
+  const passo = Math.max(1, Math.min(31, k.passoDias || 7));
+  if (k.ultimoErro !== MSG_INTERROMPIDA || k.falhas < 1) return passo;
+  return Math.max(1, passo >> Math.min(k.falhas, 5));
+}
 
 /** O próximo trabalho da automática: o cursor com leitura pendente (ou o que deve começar um ciclo novo). */
 export type TrabalhoFrota = { contrato: string; tipo: string; inicio: string; fim: string; novoCiclo: boolean };
@@ -160,7 +173,7 @@ export function proximoTrabalho(cursores: readonly CursorFrota[], c: ConfigFrota
   for (const k of cursores) {
     if (k.esperaAte && k.esperaAte > iso) continue;
     if (k.travaAte && k.travaAte > iso) continue;
-    const passo = Math.max(1, Math.min(31, k.passoDias || 7));
+    const passo = passoEfetivo(k);
     if (k.proximo && k.proximo <= hoje) {
       const fim = somar(k.proximo, passo - 1);
       candidatos.push({ t: { contrato: k.contrato, tipo: k.tipo, inicio: k.proximo, fim: fim < hoje ? fim : hoje, novoCiclo: false }, ordem: `0${k.proximo}` });

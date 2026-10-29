@@ -48,7 +48,8 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
   await encerrarParados().catch((e) => console.error("[empenhos-auto] encerrar parados", e));
   // A configuração CENTRAL (Configurações → Importações): desligada, nada roda; ligada, vale para todos os cards.
   const cfg = await getConfigImportacoes();
-  if (!cfg.ativa) return encerrarLotesAuto();
+  // `card` 0 = a automática inteira (a tela mostra se ela está desligada, sem nada escolhido ou rodando).
+  if (!cfg.ativa) return [{ card: 0, situacao: "Atualização automática desligada" }, ...(await encerrarLotesAuto())];
   const hoje = hojeIso(agora);
   const anoAtual = Number(hoje.slice(0, 4));
   // SÓ as importações (card × ano) ESCOLHIDAS em Configurações → Importações; o lote da automática num card/ano que saiu
@@ -56,10 +57,10 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
   const prontos = await cardsAtivos();
   const cards = cardsDaAutomatica(prontos, cfg, anoAtual);
   const cancelados = await encerrarLotesAuto((l) => lotesForaDaEscolha(l, prontos, cfg, anoAtual), "A importação saiu da atualização automática.");
-  if (!cards.length) return cancelados;
+  if (!cards.length) return [{ card: 0, situacao: "Nenhuma importação escolhida para a atualização automática" }, ...cancelados];
   const util = cfg.diasUteis ? diaUtil(hoje, feriadosNoIntervalo(await listarFeriados(), hoje, hoje)) : true;
   const instante = { ms: agora.getTime(), hora: horaAgoraBrasilia(agora), diaUtil: util, ano: Number(hoje.slice(0, 4)) };
-  const r: { card: number; situacao: string }[] = [...cancelados];
+  const r: { card: number; situacao: string }[] = [{ card: 0, situacao: "Ligada" }, ...cancelados];
   // A FILA ÚNICA: empenhos → liquidações → pagamentos (a unidade das liquidações e dos pagamentos vem do empenho); UMA
   // tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira) — o 1º card que trabalhar
   // encerra a execução; quem só espera (fora da hora, depois de um erro) passa a vez ao seguinte.
@@ -107,8 +108,6 @@ export async function encerrarLotesAuto(
 }
 
 type Feito = { situacao: string; trabalhou: boolean };
-/** A leitura fragmentada parada há mais que isto (a Centi ou o banco falhando sem parar) é descartada e pedida de novo. */
-const HORAS_LEITURA = 3;
 
 
 const modoDoCard = (card: CardEmpenho): ModoLote => (card.tipo === "empenhos" ? "dados" : card.tipo);
@@ -152,11 +151,6 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
     const aberta = await leituraDoLote(lote.id);
     if (aberta) {
       pedidoAtual = { periodo: { inicio: aberta.inicio, fim: aberta.fim }, pagina: aberta.pagina };
-      // A leitura parada há horas (a Centi ou o banco falhando sem parar) é descartada: a página é pedida de novo.
-      if (agora.ms - Date.parse(`${aberta.criadoEm.replace(" ", "T")}Z`) > HORAS_LEITURA * 3_600_000) {
-        await db.batch([...descartarLeitura(aberta, `parada há mais de ${HORAS_LEITURA} h — a página será pedida de novo.`)] as never);
-        return { situacao: "leitura parada descartada", trabalhou: true };
-      }
       // A MESMA espera e desistência dos erros da página: a falha que se repete na leitura não prende o lote para sempre.
       const erro = esperaDoErro(await passosDaRetomada(lote.id), pedidoAtual, agora.ms);
       if (erro.desistir) {

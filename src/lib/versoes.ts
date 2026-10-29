@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.262.0",
+    data: "2026-10-29",
+    titulo: "Importações automáticas que não ficam presas e o motivo de cada uma à vista",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "Um trecho pesado demais para o servidor não prende mais a importação da Centi para sempre: a cada execução que não avança, o pedaço lido encolhe; sem avançar seis vezes, o período é dividido (ou o erro aparece).", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Uma resposta grande da Centi que levava mais de 3 horas para ler não recomeça mais do zero.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Frotas", texto: "A leitura da Vólus interrompida no meio não repete o mesmo período para sempre: a falha é contada e o período encolhe até um dia.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Importações", texto: "Configurações → Importações mostra a última execução da atualização automática e, por importação, o que ela está fazendo e desde quando (erro em vermelho; parada há mais de 30 min em âmbar).", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.261.3",
     data: "2026-10-29",
     titulo: "Capa do protocolo protegida contra gravação sobre dado antigo",

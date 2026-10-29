@@ -6,6 +6,7 @@ import { todosOsCards } from "@/lib/empenho-cards";
 import { configImportacoesSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getConfigImportacoes, gravarConfigImportacoes } from "@/lib/importacoes-config";
+import { situacoesCron } from "@/lib/importacoes-cron";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,9 @@ const ROTULOS: Record<string, string> = {
 export async function GET() {
   const a = await exigirAdmin();
   if ("erro" in a) return a.erro;
-  return ok({ config: await getConfigImportacoes() });
+  // + a SITUAÇÃO de cada importação automática (o que a última execução fez — a tela mostra por que não avança).
+  const [config, cron] = await Promise.all([getConfigImportacoes(), situacoesCron().catch(() => [])]);
+  return ok({ config, cron });
 }
 
 /** Grava a atualização automática e as regras da conferência — valem para TODOS os cards. */

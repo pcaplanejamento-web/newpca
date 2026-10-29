@@ -28,6 +28,8 @@ import {
   type VinculoCard,
 } from "@/lib/empenho-cards-core";
 import { usaPeriodo } from "@/lib/empenhos-core";
+import { haQuanto } from "@/lib/acessos-core";
+import type { LinhaCron } from "@/lib/importacoes-cron-sql";
 import { type EstadoLinha, importarCards, type LinhaImportacao, perguntaDeQueda, prepararCards } from "@/lib/importar-cards";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { ConteudoAba } from "./AbasEspaco";
@@ -96,12 +98,14 @@ export function ImportacoesAdmin() {
   const [aberto, setAberto] = useState<{ id: number; sub: SubAba } | null>(null);
   const [config, setConfig] = useState<ConfigImportacoes | null>(null);
   const [erroConfig, setErroConfig] = useState<string | null>(null);
+  const [cron, setCron] = useState<LinhaCron[]>([]);
 
   const carregarConfig = useCallback(async () => {
     const r = await fetch("/api/admin/importacoes/config", { cache: "no-store" }).catch(() => null);
-    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigImportacoes } | undefined;
+    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigImportacoes; cron?: LinhaCron[] } | undefined;
     if (r?.ok && j?.ok && j.config) {
       setConfig(j.config);
+      setCron(j.cron ?? []);
       setErroConfig(null);
     } else setErroConfig(j?.error ?? "Não foi possível carregar a atualização automática.");
   }, []);
@@ -130,6 +134,14 @@ export function ImportacoesAdmin() {
     void carregar();
     void carregarConfig();
   }, [carregar, carregarConfig]);
+
+  // A SITUAÇÃO da automática acompanha a cada minuto (só com a aba à vista).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void carregarConfig();
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [carregarConfig]);
 
   // O card aberto pelo endereço manda no tipo (um link só com `?card=` de outro tipo volta à lista certa).
   const tipoDoAberto = aberto ? cards?.find((c) => c.id === aberto.id)?.tipo : undefined;
@@ -207,7 +219,7 @@ export function ImportacoesAdmin() {
         <FrotaAdmin />
       ) : (
         <>
-      {config && <PainelAutomatica config={config} cards={cards} onSalvo={setConfig} />}
+      {config && <PainelAutomatica config={config} cards={cards} cron={cron} onSalvo={setConfig} />}
       {erroConfig && <ErroCarga msg={erroConfig} onTentar={carregarConfig} />}
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
       {cards == null && !erro ? (
@@ -575,7 +587,46 @@ function propsDoCartao(c: ResumoCard, automatica: boolean) {
  * A ATUALIZAÇÃO AUTOMÁTICA e as REGRAS da conferência — CENTRAIS, valem para todos os cards: o resumo numa linha e
  * "Editar" abre os campos (`motivoConfigImportacoes`, a mesma régua do servidor). Gravar vale na próxima execução.
  */
-function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoes; cards: ResumoCard[] | null; onSalvo: (c: ConfigImportacoes) => void }) {
+/**
+ * O QUE A AUTOMÁTICA ESTÁ FAZENDO: a última execução e, por importação, a situação atual e há quanto tempo está nela
+ * (erro em vermelho; a mesma situação há mais de 30 min em âmbar) — o motivo de uma importação não avançar fica à vista.
+ */
+function SituacaoAutomatica({ cron, cards }: { cron: LinhaCron[]; cards: ResumoCard[] | null }) {
+  const agora = Date.now();
+  if (!cron.length) return <p className="mt-2 text-[13px] text-muted">A atualização automática ainda não registrou nenhuma execução.</p>;
+  const geral = cron.find((c) => c.chave === "centi:geral");
+  const nome = (chave: string) => {
+    if (chave === "frota:geral") return "Frotas (Vólus)";
+    const id = Number(chave.slice(6));
+    return cards?.find((c) => c.id === id)?.nome ?? `Card ${id}`;
+  };
+  const parada = (c: LinhaCron) => !c.erro && agora - Date.parse(`${c.desde.replace(" ", "T")}Z`) > 30 * 60_000;
+  const linhas = cron.filter((c) => c.chave !== "centi:geral").sort((a, b) => b.erro - a.erro || nome(a.chave).localeCompare(nome(b.chave), "pt-BR"));
+  return (
+    <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-[13px]">
+      {geral && (
+        <p className="text-text-2">
+          Última execução {haQuanto(geral.em, agora)} · {geral.situacao}
+        </p>
+      )}
+      <ul className="space-y-1">
+        {linhas.map((c) => (
+          <li key={c.chave} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <Badge tone={c.erro ? "red" : parada(c) ? "amber" : "slate"} dot>
+              {nome(c.chave)}
+            </Badge>
+            <span className={c.erro ? "text-[color:var(--danger)]" : "text-text-2"}>{c.situacao}</span>
+            <span className="text-faint tabular-nums" title={`Nesta situação desde ${dataHoraBR(`${c.desde.replace(" ", "T")}Z`)}`}>
+              {haQuanto(c.desde, agora)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PainelAutomatica({ config, cards, cron, onSalvo }: { config: ConfigImportacoes; cards: ResumoCard[] | null; cron: LinhaCron[]; onSalvo: (c: ConfigImportacoes) => void }) {
   const [editando, setEditando] = useState<ConfigImportacoes | null>(null);
   const [salvando, setSalvando] = useState(false);
   const v = editando;
@@ -630,6 +681,7 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
             {config.intervaloMin > 0 && ` · intervalo mínimo de ${(OPCOES_INTERVALO.find((o) => o.valor === config.intervaloMin)?.rotulo ?? "").toLowerCase()}`}
           </span>
         </p>
+        <SituacaoAutomatica cron={cron} cards={cards} />
       </SecaoBanner>
       <Modal
         open={!!v}
