@@ -263,7 +263,6 @@ export function ReferenciaSistema({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <h1 className="sr-only">Referência do sistema</h1>
 
       <div className="space-y-3">
         <SearchField

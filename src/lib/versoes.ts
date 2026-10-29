@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.8",
+    data: "2026-10-29",
+    titulo: "A lateral direita sem recuo e as telas do ADM arrumadas",
+    mudancas: [
+      { tipo: "correcao", area: "Telas", texto: "A lateral direita das telas não fica mais recuada: o espaço reservado para a barra de rolagem ficava vazio quando a tela não rolava.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Armazenamento", texto: "Os indicadores abrem a tela, o carregamento tem o mesmo formato e a confirmação é a do sistema.", link: "/painel/armazenamento" },
+      { tipo: "melhoria", area: "Auditoria", texto: "Os filtros (entidade e ação) à esquerda e o recarregar à direita, numa linha só.", link: "/painel/auditoria" },
+      { tipo: "correcao", area: "PCA", texto: "Excluir uma planilha ou o PCA trata a falha de rede, não manda dois pedidos e diz o resultado; a Configuração explica que devolver o protocolo à Mesa só inativa os números.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Situações", texto: "A confirmação de excluir é a do sistema.", link: "/painel/configuracoes?aba=situacoes" },
+    ],
+  },
+  {
     versao: "1.264.7",
     data: "2026-10-29",
     titulo: "Correções do PCA, um só esqueleto e o menu que não mexe na altura",

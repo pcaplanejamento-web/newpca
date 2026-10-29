@@ -652,7 +652,6 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <h1 className="sr-only">Avaliação</h1>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={restaurar} disabled={salvando}>
             Restaurar padrão

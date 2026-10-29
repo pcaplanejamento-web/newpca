@@ -328,13 +328,8 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
-  /* No computador, o lugar da barra de rolagem fica RESERVADO: um conteúdo que cresce e encolhe (abrir "Mais indicadores",
-     um acordeão) não faz a barra aparecer e sumir — a largura não muda e nada "pula" da direita e volta. */
-  @media (min-width: 64rem) {
-    html {
-      scrollbar-gutter: stable;
-    }
-  }
+  /* SEM reservar o lugar da barra de rolagem (`scrollbar-gutter`): nas telas que não rolam, a faixa reservada ficava vazia
+     à direita — o conteúdo recuado sem motivo, diferente da margem da esquerda. */
   body {
     @apply antialiased;
     background: var(--surface-2);

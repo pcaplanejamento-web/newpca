@@ -10,6 +10,7 @@ import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { IconImage, IconLayers, IconTrash } from "./icons";
@@ -18,7 +19,7 @@ import { MonitoramentoWorker } from "./MonitoramentoWorker";
 import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
 import { useCanalGrupo } from "./CanalGrupo";
 import { SaudeDados } from "./SaudeDados";
-import { SkeletonLinhas } from "./Skeleton";
+import { EsqueletoIndicadores } from "./EsqueletoTela";
 import { StatMini } from "./StatMini";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
@@ -39,6 +40,7 @@ export function ArmazenamentoAdmin() {
   const [erro, setErro] = useState<string | null>(null);
   const [recarregando, setRecarregando] = useState(false);
   const [expurgando, setExpurgando] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async (fresco = false) => {
     setErro(null);
@@ -112,10 +114,9 @@ export function ArmazenamentoAdmin() {
 
   async function expurgar() {
     if (!dados) return;
-    if (!confirm(`Expurgar ${dados.sessoes.expiradas} sessão(ões) expirada(s)? Elas já estão vencidas — ninguém é deslogado.`))
+    if (!(await confirmar({ titulo: `Expurgar ${dados.sessoes.expiradas} sessão(ões) expirada(s)?`, texto: "Elas já estão vencidas — ninguém é deslogado.", confirmar: "Expurgar" })))
       return;
     setExpurgando(true);
-    setErro(null);
     try {
       const r = await fetch("/api/admin/armazenamento", {
         method: "POST",
@@ -127,9 +128,7 @@ export function ArmazenamentoAdmin() {
       toast.success(`${num(j.removidas ?? 0)} sessão(ões) expirada(s) removida(s).`);
       await carregar();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Não foi possível expurgar.";
-      setErro(msg);
-      toast.error(msg);
+      toast.error(e instanceof Error ? e.message : "Não foi possível expurgar.");
     } finally {
       setExpurgando(false);
     }
@@ -145,13 +144,16 @@ export function ArmazenamentoAdmin() {
   if (dados === null) {
     return (
       <div className="space-y-[var(--gap-block)]">
-        {cabecalho}
         {erro ? (
-          <Callout kind="danger">{erro}</Callout>
+          <>
+            {cabecalho}
+            <Callout kind="danger">{erro}</Callout>
+          </>
         ) : (
-          <div className="rounded-card border border-border p-[var(--pad-card)]">
-            <SkeletonLinhas linhas={6} />
-          </div>
+          <>
+            <EsqueletoIndicadores />
+            {cabecalho}
+          </>
         )}
         {secaoSaude}
       </div>
@@ -223,11 +225,9 @@ export function ArmazenamentoAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {cabecalho}
-      {erro && <Callout kind="danger">{erro}</Callout>}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {confirmacao}
+      {/* Os indicadores primeiro; a barra (recarregar) logo abaixo. */}
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
         <KpiStat
           label="Tamanho do banco"
           value={formatBytes(dados.totalBytes)}
@@ -247,6 +247,8 @@ export function ArmazenamentoAdmin() {
           cor={dados.sessoes.expiradas > 0 ? "var(--warn)" : "var(--ok)"}
         />
       </div>
+      {cabecalho}
+      {erro && <Callout kind="danger">{erro}</Callout>}
 
       <DadosNoNavegador />
 
