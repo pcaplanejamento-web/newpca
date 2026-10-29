@@ -1,5 +1,6 @@
 "use client";
 
+import { lerDado, versaoGeralDados } from "@/lib/dados-cliente";
 import { useEffect, useMemo, useState } from "react";
 import {
   type AcaoAuditoria,
@@ -78,17 +79,20 @@ export function useHistorico(url: string | null): { linhas: LinhaHistorico[] | n
   useEffect(() => {
     setEstado(null);
     if (!url) return;
-    const ac = new AbortController();
-    fetch(url, { signal: ac.signal })
-      .then(async (r) => {
-        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; historico?: LinhaHistorico[] };
-        if (ac.signal.aborted) return;
-        setEstado(r.ok && j.ok ? { url, linhas: j.historico ?? [], erro: null } : { url, linhas: [], erro: j.error ?? "Não foi possível carregar o histórico." });
-      })
-      .catch(() => {
-        if (!ac.signal.aborted) setEstado({ url, linhas: [], erro: "Sem conexão com o servidor — tente novamente." });
+    let vivo = true;
+    // Guardado no navegador pela versão COMPLETA dos dados (nenhuma gravação nova = o mesmo histórico, sem pedir).
+    lerDado("historico", url, versaoGeralDados(), async (r) => {
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; historico?: LinhaHistorico[] };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível carregar o histórico.");
+      return j.historico ?? [];
+    })
+      .then((linhas) => vivo && setEstado({ url, linhas, erro: null }))
+      .catch((e: unknown) => {
+        if (vivo) setEstado({ url, linhas: [], erro: e instanceof TypeError ? "Sem conexão com o servidor — tente novamente." : e instanceof Error ? e.message : "Não foi possível carregar o histórico." });
       });
-    return () => ac.abort();
+    return () => {
+      vivo = false;
+    };
   }, [url]);
   // Resposta de OUTRA url (a anterior) nunca aparece: até a nova chegar, é "carregando".
   return estado && estado.url === url ? { linhas: estado.linhas, erro: estado.erro } : { linhas: null, erro: null };

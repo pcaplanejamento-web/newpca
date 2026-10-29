@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { apagarDadosLocais } from "@/lib/dados-cliente";
+import { apagarDadosLocais, definirVersaoGeral } from "@/lib/dados-cliente";
 import { sessaoEncerrada } from "@/lib/dados-cliente-core";
 import { type VersoesDados, versaoDaRota } from "@/lib/versao-dados-core";
 
@@ -22,6 +22,7 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
   const router = useRouter();
   const pathname = usePathname();
   const conhecida = useRef(versoes);
+  definirVersaoGeral(versoes.completa);
   const rota = useRef(pathname);
   const ultimaConsulta = useRef(Date.now());
   const consultando = useRef(false);
@@ -62,6 +63,7 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
           | { ok?: boolean; versao?: string; dados?: string; tarefas?: string; agenda?: string; execucao?: string }
           | null;
         if (j?.ok && j.versao && j.dados) {
+          definirVersaoGeral(j.versao);
           const c = conhecida.current;
           ultima.current = { completa: j.versao, dados: j.dados, tarefas: j.tarefas ?? c.tarefas, agenda: j.agenda ?? c.agenda, execucao: j.execucao ?? c.execucao };
           recarregar.current(rota.current);

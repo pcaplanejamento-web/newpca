@@ -176,3 +176,13 @@ export async function lerDado<T>(recurso: string, url: string, versao: string, l
   );
   return p;
 }
+
+/** A versão COMPLETA dos dados (toda escrita do sistema) — o `SincronizarDados` a mantém; o que não tem versão própria
+ * (histórico, banners) a usa: qualquer gravação nova = outra versão = o servidor. */
+let versaoGeral = "";
+export function definirVersaoGeral(v: string): void {
+  if (v) versaoGeral = v;
+}
+export function versaoGeralDados(): string {
+  return versaoGeral;
+}

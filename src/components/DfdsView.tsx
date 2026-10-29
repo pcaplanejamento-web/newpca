@@ -1,5 +1,7 @@
 "use client";
 
+import { jaGuardado, lerDado } from "@/lib/dados-cliente";
+import { resumoTexto } from "@/lib/dados-cliente-core";
 import { dominioPorDescricao } from "@/lib/padronizacao-core";
 import type { ColunasMesa } from "@/lib/mesa-colunas-core";
 import { colunasDaAutomacao } from "./ColunasAutomacao";
@@ -471,7 +473,9 @@ export function DfdsView({
   const anoFiltro = pcaFiltro?.ano;
   const urlItens = pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`;
   const chaveAba = `${urlItens}#${chaveItens}`;
-  const guardados = itensGuardados(usuarioId, chaveAba, versaoItens);
+  // A versão no ARMAZÉM do navegador: a dos dados da carga + o resumo dos DFDs da lista (algum mudou = outra versão).
+  const versaoArm = versaoItens ? `${versaoItens}#${resumoTexto(chaveItens)}` : "";
+  const guardados = itensGuardados(usuarioId, chaveAba, versaoItens) ?? (versaoArm ? jaGuardado<ItensGuardados>("mesa.itens", urlItens, versaoArm) : undefined);
   // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
   // inicial). `null` = ainda não buscado.
   const [itens, setItens] = useState<ItemDfdRow[] | null>(guardados?.itens ?? null);
@@ -493,43 +497,46 @@ export function DfdsView({
   useEffect(() => {
     if (chaveVista.current === chaveAba) return;
     chaveVista.current = chaveAba;
-    const g = itensGuardados(usuarioId, chaveAba, versaoItens);
+    const g = itensGuardados(usuarioId, chaveAba, versaoItens) ?? (versaoArm ? jaGuardado<ItensGuardados>("mesa.itens", urlItens, versaoArm) : undefined);
     setItens(g?.itens ?? null);
     if (g) {
       setPadronizacao(g.padronizacao);
       setHistorico(g.historico);
     }
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
-  }, [chaveAba, usuarioId, versaoItens]);
+  }, [chaveAba, usuarioId, versaoItens, versaoArm, urlItens]);
   useEffect(() => {
     if ((vista !== "itens" && !reverAtivo && !preItens) || itens !== null) return;
-    const ac = new AbortController();
+    let vivo = true;
     setCarregandoItens(true);
-    fetch(urlItens, { signal: ac.signal })
-      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null; historico?: Record<string, ReferenciaHistorico> }>)
-      .then((j) => {
-        if (ac.signal.aborted) return;
-        setItens(j.ok ? (j.itens ?? []) : []);
-        if (j.ok) {
-          const v: ItensGuardados = {
-            versao: versaoItens,
-            itens: j.itens ?? [],
-            padronizacao: j.padronizacao ?? null,
-            historico: j.historico && Object.keys(j.historico).length > 0 ? j.historico : null,
-          };
-          setPadronizacao(v.padronizacao);
-          setHistorico(v.historico);
-          guardarItensDaAba(usuarioId, chaveAba, v);
-        }
+    // Guardado no NAVEGADOR (memória + aparelho) pela versão: voltar à Mesa, F5 ou reabrir não pede de novo.
+    lerDado<ItensGuardados>("mesa.itens", urlItens, versaoArm, async (r) => {
+      const j = (await r.json()) as { ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null; historico?: Record<string, ReferenciaHistorico> };
+      if (!r.ok || !j.ok) throw new Error("Falha ao carregar os itens.");
+      return {
+        versao: versaoItens,
+        itens: j.itens ?? [],
+        padronizacao: j.padronizacao ?? null,
+        historico: j.historico && Object.keys(j.historico).length > 0 ? j.historico : null,
+      };
+    }, reverAtivo)
+      .then((v) => {
+        if (!vivo) return;
+        setItens(v.itens);
+        setPadronizacao(v.padronizacao);
+        setHistorico(v.historico);
+        guardarItensDaAba(usuarioId, chaveAba, v);
       })
       .catch(() => {
-        if (!ac.signal.aborted) setItens([]);
+        if (vivo) setItens([]);
       })
       .finally(() => {
-        if (!ac.signal.aborted) setCarregandoItens(false);
+        if (vivo) setCarregandoItens(false);
       });
-    return () => ac.abort();
-  }, [vista, itens, urlItens, chaveAba, usuarioId, versaoItens, reverAtivo, preItens]);
+    return () => {
+      vivo = false;
+    };
+  }, [vista, itens, urlItens, chaveAba, usuarioId, versaoItens, versaoArm, reverAtivo, preItens]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).

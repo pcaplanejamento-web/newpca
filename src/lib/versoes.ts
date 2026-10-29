@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.260.2",
+    data: "2026-10-29",
+    titulo: "Itens da Mesa e histórico guardados no navegador",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A visão Itens da Mesa (e da Mesa do PCA) fica guardada no navegador: voltar, F5 ou reabrir mostram os itens na hora; muda sozinha quando algum DFD é gravado.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Histórico", texto: "O histórico dos protocolos, DFDs e itens reabre na hora enquanto nada novo foi gravado.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.260.1",
     data: "2026-10-29",
     titulo: "Dados guardados: sem esqueleto ao voltar, Frotas e mais segurança",

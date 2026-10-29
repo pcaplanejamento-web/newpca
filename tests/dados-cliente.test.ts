@@ -43,3 +43,10 @@ test("sessão encerrada", () => {
   assert.equal(sessaoEncerrada(403), false);
   assert.equal(sessaoEncerrada(200), false);
 });
+
+test("resumoTexto: estável, curto e muda com o texto", async () => {
+  const { resumoTexto } = await import("../src/lib/dados-cliente-core.ts");
+  assert.equal(resumoTexto("1|a,2|b"), resumoTexto("1|a,2|b"));
+  assert.notEqual(resumoTexto("1|a,2|b"), resumoTexto("1|a,2|c"));
+  assert.ok(resumoTexto("x".repeat(100000)).length < 16);
+});
