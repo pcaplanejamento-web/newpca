@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.261.4",
+    data: "2026-10-29",
+    titulo: "Banners do DFD e do protocolo reabrem na hora",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Reabrir um DFD ou um protocolo já visto usa os dados guardados no navegador, sem esperar o servidor; qualquer gravação, sua ou de outra pessoa, renova os dados, e Atualizar sempre busca do banco.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.261.3",
     data: "2026-10-29",
     titulo: "Capa do protocolo protegida contra gravação sobre dado antigo",

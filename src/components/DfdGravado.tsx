@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao } from "@/lib/avaliacao-core";
 import { estadoDeMensagens, gravacaoIncompleta, mensagensDoDfd } from "@/lib/conferencia-dfd";
@@ -139,14 +140,14 @@ export function useDfdGravado({
   // Nº da requisição de carga — só a MAIS RECENTE aplica o resultado (resposta atrasada é ignorada). Devolve o que
   // aplicou (`null` = falhou ou foi superada) — o Atualizar revisa em cima disso.
   const cargaRef = useRef(0);
-  async function carregar(id: number, alvo: ItemRef | null): Promise<{ detalhe: DfdDetalhe; d: DfdParseado } | null> {
+  // `fresco` = vai ao servidor; sem ele, reabrir o banner usa o guardado no navegador (mesma versão geral dos dados).
+  async function carregar(id: number, alvo: ItemRef | null, fresco = true): Promise<{ detalhe: DfdDetalhe; d: DfdParseado } | null> {
     const minha = ++cargaRef.current;
     setErro(null);
     try {
-      const r = await fetch(`/api/dfd/${id}`);
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe; unidade?: UnidadeConferencia | null };
+      const j = await lerJsonGuardado<{ dfd?: DfdDetalhe; unidade?: UnidadeConferencia | null }>("dfd", `/api/dfd/${id}`, "Não foi possível abrir o DFD.", fresco);
       if (minha !== cargaRef.current) return null;
-      if (!r.ok || !j.ok || !j.dfd) throw new Error(j.error ?? "Não foi possível abrir o DFD.");
+      if (!j.dfd) throw new Error("Não foi possível abrir o DFD.");
       const d = detalheParaParseado(j.dfd);
       setOrig(j.dfd);
       setDfd(d);
@@ -183,7 +184,7 @@ export function useDfdGravado({
     setItemIdx(null);
     setAncoraAlvo(null);
     setErro(null);
-    if (dfdId != null) void carregar(dfdId, modoItem ? item : null);
+    if (dfdId != null) void carregar(dfdId, modoItem ? item : null, false);
   }, [dfdId]);
 
   // Troca do item pedido (outra linha da visão "Itens" no mesmo DFD) — sem recarregar o DFD.
