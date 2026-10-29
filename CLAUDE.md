@@ -5466,7 +5466,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   banner POR CIMA dela (embaixo quando não cabe — o lado com mais espaço; `aria-expanded`) e a pílula ENCOLHE numa bolha
   (`.painel-pilula` anima só a largura, presa à borda do lado por `right`/`left`; o texto esmaece; o andamento vira o anel
   `.painel-anel`); de novo FECHA (`.animate-painel-sai`, suave) e a bolha volta a ser pílula. O `style` parado não fixa
-  `transition` (senão a da classe some). A faixa ocupada (pílula + banner) vai ao armazém **`flutuantes-store.ts`** → `BolhasChat`
+  `transition` (senão a da classe some). **O transform é só do DOM (v1.261.2):** o arrasto escreve `translate3d` direto no
+  elemento a cada quadro (o React só sabe da lixeira — nenhuma renderização por movimento, colado ao ponteiro), parte de
+  onde o painel está À VISTA (pegar no meio do voo não salta) e o pouso é um FLIP num `useLayoutEffect` (o contador
+  `nPouso`); o clique até 400 ms depois de soltar é ignorado (`fimArrasto`). Pílula compacta (13,5rem: o título até o
+  " · " + a %; os outros trabalhos num selo "+N") e **"Manter como bolha"** (`segundo-plano:bolha`, em `CHAVES_PESSOAIS`). A faixa ocupada (pílula + banner) vai ao armazém **`flutuantes-store.ts`** → `BolhasChat`
   passa como `TelaBolhas.fixos` e `arrumarBolhas`/`imaBolha` pousam fora dela (`FaixaFixa.ambos` = no celular, os dois
   lados); `--reserva-flutuante` só quando o painel está no canto inferior direito (os avisos flutuantes). O desfecho só sai
   na página dona com a MESMA busca (`naRotaDona`) e a pergunta NOVA reabre o painel uma vez.
@@ -5626,6 +5630,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   navegador" (`estatisticasDados`). Usam hoje: Execução, Empenhos, Liquidações, Pagamentos, Frotas, Mesa → Itens, Histórico,
   Grupos, Órgãos, Unidades, Responsáveis, Situações, Cargos. As telas que vêm do servidor (Mesa, PCA, Orçamento, Tarefas…)
   seguem pelo cache de navegação (2 h).
+- **Hidratação:** o 1º desenho com o guardado (`jaGuardado` no estado inicial) só vale com `useGuardadoNoDesenho()`
+  verdadeiro — numa tela montada no cliente; no F5 vale o esqueleto do servidor (senão erro de hidratação).
 - **Versão POR DADO:** a tela recebe da página a versão do que ELA mostra — Execução: `consultaVersoesExecucao` +
   `versaoDaTelaExecucao` (empenhos ≠ liquidações ≠ pagamentos; liquidações/pagamentos dependem também dos empenhos; o
   cadastro de órgãos/unidades em todas). **Dado novo de tela = `lerDado` com a versão das dependências dele** (nunca um

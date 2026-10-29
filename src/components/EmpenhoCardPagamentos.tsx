@@ -1,6 +1,6 @@
 "use client";
 
-import { jaGuardado, lerDado } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
@@ -174,8 +174,9 @@ export function EmpenhoCardPagamentos({
   const rota = cardId == null ? "/api/empenhos/pagamentos" : `/api/empenhos/cards/${cardId}/pagamentos`;
   const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<Pagamento>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
   // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto); a versão confere depois.
+  const noDesenho = useGuardadoNoDesenho();
   const [inicio] = useState(() => {
-    const a = versao ? jaGuardado<{ anos?: { ano: number; n: number }[] }>("pagamentos", rota, versao)?.anos : undefined;
+    const a = noDesenho && versao ? jaGuardado<{ anos?: { ano: number; n: number }[] }>("pagamentos", rota, versao)?.anos : undefined;
     if (!a?.length) return null;
     const partes = anosDoRecorte(ANO_TODOS, a).map((ano) => {
       const j = jaGuardado<{ linhas?: unknown[][] }>("pagamentos", `${rota}?ano=${ano}`, versao);

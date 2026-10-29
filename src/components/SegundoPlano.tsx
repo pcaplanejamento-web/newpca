@@ -9,7 +9,7 @@ import { type AmostraArrasto, lerPosicaoBolha, type PosicaoBolha, pousarBolha, p
 import { publicarFaixaFlutuante } from "@/lib/flutuantes-store";
 import { LIXEIRA, LixeiraFlutuante, semMovimento } from "./LixeiraFlutuante";
 import { definirVarRaiz, tokenPx } from "./espacamento";
-import { IconAlert, IconAmpliar, IconChevronDown, IconCirculoCheck, IconClose, IconGrip, IconLimpar, IconParar, IconSpinner } from "./icons";
+import { IconAlert, IconAmpliar, IconChevronDown, IconCirculo, IconCirculoCheck, IconClose, IconGrip, IconLimpar, IconParar, IconSpinner } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { segurar } from "./segurar";
 import { Progress } from "./Progress";
@@ -244,6 +244,8 @@ const ROTULO: Record<EstadoTrabalho, string> = { rodando: "Executando", fila: "N
 
 /** Onde o painel fica (o lado, a altura e quando foi mexido) — neste aparelho. */
 const CHAVE_POSICAO = "segundo-plano:posicao";
+/** "Sempre bolha" (a pílula circular também fechada) — neste aparelho. */
+const CHAVE_BOLHA = "segundo-plano:bolha";
 const POSICAO_PADRAO: PosicaoBolha = { lado: "dir", y: 1, t: 0 };
 const MARGEM = 12;
 const LIMIAR = 6;
@@ -300,11 +302,16 @@ export function PainelSegundoPlano({
   const [pos, setPos] = useState<PosicaoBolha>(POSICAO_PADRAO);
   const [tela, setTela] = useState<ReturnType<typeof medirTela> | null>(null);
   const [caixaTam, setCaixaTam] = useState({ w: 0, h: 0 });
-  /** O arrasto em curso: o deslocamento desde onde estava e se está sobre a lixeira. */
-  const [arrasto, setArrasto] = useState<{ dx: number; dy: number; naLixeira: boolean; ativo: boolean } | null>(null);
-  /** O POUSO (FLIP): parte de onde foi solto (`voo`) e desliza até o lugar novo. */
-  const [voo, setVoo] = useState<{ dx: number; dy: number; fase: "ini" | "voo" } | null>(null);
-  const engolirClique = useRef(false);
+  /** O arrasto em curso (só o que muda a TELA ao redor: a lixeira). O movimento em si vai DIRETO ao DOM, quadro a quadro —
+   * nenhuma renderização do React por movimento: o painel fica colado ao ponteiro/dedo. */
+  const [arrasto, setArrasto] = useState<{ naLixeira: boolean } | null>(null);
+  /** O POUSO (FLIP no DOM): de onde foi solto até o lugar novo — aplicado depois que o lugar novo entra na tela. */
+  const pouso = useRef<{ dx: number; dy: number } | null>(null);
+  const [nPouso, setNPouso] = useState(0);
+  /** Quando o último arrasto terminou: o clique que o navegador manda logo depois (no toque, às vezes atrasado) não abre. */
+  const fimArrasto = useRef(0);
+  /** SEMPRE BOLHA: a pílula fica circular mesmo fechada (a escolha deste aparelho). */
+  const [sempreBolha, setSempreBolha] = useState(false);
   /** O banner FECHANDO (a animação de saída antes de desmontar). */
   const [fechando, setFechando] = useState(false);
   const secao = useRef<HTMLElement>(null);
@@ -321,7 +328,7 @@ export function PainelSegundoPlano({
   }, []);
   /** Tocar na pílula: abre o banner por cima; de novo, fecha. */
   const alternar = () => {
-    if (engolirClique.current) return;
+    if (performance.now() - fimArrasto.current < 400) return;
     if (aberto && !fechando) fechar();
     else {
       window.clearTimeout(tFechar.current);
@@ -332,6 +339,11 @@ export function PainelSegundoPlano({
   useEffect(() => {
     setMontado(true);
     setPos(lerPosicaoGuardada());
+    try {
+      setSempreBolha(localStorage.getItem(CHAVE_BOLHA) === "1");
+    } catch {
+      // Sem o aparelho: pílula.
+    }
     const medir = () => setTela(medirTela());
     medir();
     window.addEventListener("resize", medir);
@@ -343,6 +355,7 @@ export function PainelSegundoPlano({
   const visivel = trabalhos.length > 0;
 
   // O tamanho da caixa (recolhida, expandida, a lista crescendo) — a posição e a faixa dependem dele.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `montado` = a caixa acabou de entrar no DOM (a ref só existe depois)
   useLayoutEffect(() => {
     const el = caixa.current;
     if (!visivel || !el) return;
@@ -433,67 +446,104 @@ export function PainelSegundoPlano({
       }
   }, [trabalhos, onDispensar]);
 
-  /** POUSA em `nova` vindo de onde está à vista agora (FLIP) — sem "reduzir movimento". */
+  /** POUSA em `nova` vindo de onde está à vista agora (`de`, o canto superior esquerdo em px): o lugar novo entra na tela e
+   * o painel desliza até ele (FLIP — o `useLayoutEffect` abaixo); sem "reduzir movimento". */
   const pousar = useCallback(
     (nova: PosicaoBolha, de: { left: number; top: number }) => {
       if (!geo) return;
       const destino = { left: nova.lado === "esq" ? MARGEM : Math.max(MARGEM, geo.largura - MARGEM - caixaTam.w), top: topoDaPosicao(nova, geo) };
+      pouso.current = semMovimento() ? { dx: 0, dy: 0 } : { dx: de.left - destino.left, dy: de.top - destino.top };
       guardar(nova);
-      if (semMovimento()) return;
-      setVoo({ dx: de.left - destino.left, dy: de.top - destino.top, fase: "ini" });
-      requestAnimationFrame(() => requestAnimationFrame(() => setVoo((v) => (v ? { ...v, fase: "voo" } : v))));
-      window.setTimeout(() => setVoo(null), duracaoMotionMs() * 2.4 + 120);
+      setNPouso((n) => n + 1);
     },
     [geo, caixaTam.w, guardar],
   );
+  // O VOO do pouso, antes da pintura: parte de onde foi solto (sem transição) e desliza com mola até o lugar (o novo
+  // `top`/`left` já está no DOM). A transição inline sai no fim — volta a da classe (a largura pílula ↔ bolha).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: roda a cada pouso (o contador)
+  useLayoutEffect(() => {
+    const el = caixa.current;
+    const v = pouso.current;
+    pouso.current = null;
+    if (!el || !v) return;
+    el.style.transition = "none";
+    el.style.transform = v.dx || v.dy ? `translate3d(${v.dx}px, ${v.dy}px, 0)` : "";
+    if (!v.dx && !v.dy) {
+      el.style.transition = "";
+      return;
+    }
+    void el.offsetWidth;
+    el.style.transition = "transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1)";
+    el.style.transform = "";
+    const fim = (e: TransitionEvent) => {
+      if (e.target !== el || e.propertyName !== "transform") return;
+      el.style.transition = "";
+      el.removeEventListener("transitionend", fim);
+    };
+    el.addEventListener("transitionend", fim);
+  }, [nPouso]);
 
   const pegar = useCallback(
     (e: React.PointerEvent) => {
-      if (!geo || !lugar || !lixeira || e.button > 0) return;
+      const el = caixa.current;
+      if (!el || !geo || !lugar || !lixeira || e.button > 0 || !e.isPrimary) return;
       // Os botões do cabeçalho (minimizar, dispensar) não arrastam.
       if ((e.target as HTMLElement).closest("button") && !(e.target as HTMLElement).closest("[data-alca-painel]")) return;
       if (e.pointerType === "mouse") e.preventDefault();
+      const id = e.pointerId;
       const x0 = e.clientX;
       const y0 = e.clientY;
       const amostras: AmostraArrasto[] = [{ x: x0, y: y0, t: performance.now() }];
       let ativo = false;
       let soltarSeguro: (() => void) | null = null;
+      // Onde o painel está À VISTA ao ser pego (no meio de um voo, também): o arrasto parte daí, sem salto.
+      let base = { dx: 0, dy: 0 };
       let ultimo = { dx: 0, dy: 0, naLixeira: false };
       let quadro = 0;
+      const desenhar = () => {
+        quadro = 0;
+        el.style.transform = `translate3d(${base.dx + ultimo.dx}px, ${base.dy + ultimo.dy}px, 0) scale(${ultimo.naLixeira ? 0.86 : 1.02})`;
+      };
       const mover = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
         const dx = ev.clientX - x0;
         const dy = ev.clientY - y0;
         if (!ativo) {
           if (Math.hypot(dx, dy) < LIMIAR) return;
           ativo = true;
           soltarSeguro = segurar("grabbing");
+          const r = el.getBoundingClientRect();
+          base = { dx: r.left - lugar.left, dy: r.top - lugar.top };
+          el.style.transition = "none";
+          setArrasto({ naLixeira: false });
         }
         ev.preventDefault();
         amostras.push({ x: ev.clientX, y: ev.clientY, t: performance.now() });
         if (amostras.length > 12) amostras.shift();
         const naLixeira = Math.hypot(ev.clientX - lixeira.x, ev.clientY - lixeira.y) < LIXEIRA.ima;
-        if (naLixeira && !ultimo.naLixeira) navigator.vibrate?.(10);
+        if (naLixeira !== ultimo.naLixeira) {
+          if (naLixeira) navigator.vibrate?.(10);
+          setArrasto({ naLixeira });
+        }
         ultimo = { dx, dy, naLixeira };
-        if (!quadro) quadro = requestAnimationFrame(() => {
-          quadro = 0;
-          setArrasto({ ...ultimo, ativo: true });
-        });
+        if (!quadro) quadro = requestAnimationFrame(desenhar);
       };
-      const fim = (cancelado: boolean) => {
+      const fim = (ev: PointerEvent | null, cancelado: boolean) => {
+        if (ev && ev.pointerId !== id) return;
         window.removeEventListener("pointermove", mover);
         window.removeEventListener("pointerup", soltar);
         window.removeEventListener("pointercancel", cancelar);
+        window.removeEventListener("blur", perdeu);
         if (quadro) cancelAnimationFrame(quadro);
         soltarSeguro?.();
         if (!ativo) return;
-        engolirClique.current = true;
-        window.setTimeout(() => {
-          engolirClique.current = false;
-        }, 0);
-        const solto = { left: lugar.left + ultimo.dx, top: lugar.top + ultimo.dy };
+        fimArrasto.current = performance.now();
+        const solto = { left: lugar.left + base.dx + ultimo.dx, top: lugar.top + base.dy + ultimo.dy };
         setArrasto(null);
         if (cancelado) return pousar(pos, solto);
         if (ultimo.naLixeira && !emCurso) {
+          el.style.transition = "";
+          el.style.transform = "";
           dispensarTerminados();
           return;
         }
@@ -501,11 +551,14 @@ export function PainelSegundoPlano({
         const alvo = projetarArremesso(solto.left + caixaTam.w / 2, solto.top, velocidadeArrasto(amostras));
         pousar(pousarBolha(alvo.x, alvo.y, geo, Date.now()), solto);
       };
-      const soltar = () => fim(false);
-      const cancelar = () => fim(true);
+      const soltar = (ev: PointerEvent) => fim(ev, false);
+      const cancelar = (ev: PointerEvent) => fim(ev, true);
+      // A janela perdeu o foco no meio (troca de aba, alerta): volta ao lugar.
+      const perdeu = () => fim(null, true);
       window.addEventListener("pointermove", mover, { passive: false });
       window.addEventListener("pointerup", soltar);
       window.addEventListener("pointercancel", cancelar);
+      window.addEventListener("blur", perdeu);
     },
     [geo, lugar, lixeira, pos, caixaTam.w, emCurso, pousar, dispensarTerminados],
   );
@@ -541,16 +594,14 @@ export function PainelSegundoPlano({
   const terminados = trabalhos.filter((t) => !ATIVO(t.estado)).length;
   // Ainda sem a medida (o 1º quadro): no canto padrão, invisível — sem pular de lugar.
   // Aberto, a pílula ENCOLHE numa bolha (o banner cresce por cima dela); fechando, volta a ser pílula — o inverso, juntos.
-  const bolha = aberto && !fechando;
+  const bolha = sempreBolha || (aberto && !fechando);
   const progresso = ATIVO(principal.estado) && temAndamento(principal);
   // Presa à BORDA do lado (direita = `right`): a largura que anima não move a borda — nada treme durante a animação.
   const estilo: React.CSSProperties = lugar
     ? {
         ...(pos.lado === "esq" ? { left: lugar.left } : { right: MARGEM }),
         top: lugar.top,
-        transform: arrasto ? `translate3d(${arrasto.dx}px, ${arrasto.dy}px, 0) scale(${arrasto.naLixeira ? 0.86 : 1.02})` : voo ? `translate3d(${voo.fase === "ini" ? voo.dx : 0}px, ${voo.fase === "ini" ? voo.dy : 0}px, 0)` : undefined,
-        // Parado, vale a transição da classe (a largura pílula ↔ bolha).
-        transition: arrasto ? "transform 70ms linear" : voo?.fase === "voo" ? "transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1)" : undefined,
+        // O transform (arrasto e pouso) é do DOM — o React nunca o escreve (não desfaz o movimento no meio).
       }
     : { right: MARGEM, bottom: 96, visibility: "hidden" };
   const dicaArrasto = "Arraste para mudar de lugar (Alt + setas no teclado); até a lixeira para dispensar os concluídos.";
@@ -560,7 +611,7 @@ export function PainelSegundoPlano({
     <div
       ref={caixa}
       style={estilo}
-      className={`painel-pilula fixed ${arrasto ? "z-[61]" : "z-[58]"} ${bolha ? "w-11" : "w-[min(20rem,calc(100vw-1.5rem))]"}`}
+      className={`painel-pilula fixed ${arrasto ? "z-[61]" : "z-[58]"} ${bolha ? "w-11" : "w-[min(13.5rem,calc(100vw-1.5rem))]"}`}
     >
       {aberto && (
         <section
@@ -587,6 +638,23 @@ export function PainelSegundoPlano({
             {terminados > 0 && (
               <Button size="xs" variant="icon" aria-label={`Dispensar os concluídos (${terminados})`} title={`Dispensar os concluídos (${terminados})`} onClick={dispensarTerminados} icon={<IconLimpar className="size-4" />} />
             )}
+            <Button
+              size="xs"
+              variant="icon"
+              aria-pressed={sempreBolha}
+              aria-label="Manter como bolha"
+              title={sempreBolha ? "Bolha sempre: ligada — fechado, o painel fica circular" : "Manter como bolha (fechado, o painel fica circular)"}
+              onClick={() => {
+                const v = !sempreBolha;
+                setSempreBolha(v);
+                try {
+                  localStorage.setItem(CHAVE_BOLHA, v ? "1" : "0");
+                } catch {
+                  // Sem o aparelho: vale nesta visita.
+                }
+              }}
+              icon={<IconCirculo className={`size-4 ${sempreBolha ? "fill-current text-accent" : ""}`} />}
+            />
             <Button size="xs" variant="icon" aria-label="Minimizar" title="Minimizar (Alt + setas movem o painel)" onClick={fechar} icon={<IconChevronDown className="size-4" />} />
           </header>
           <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
@@ -670,10 +738,10 @@ export function PainelSegundoPlano({
         >
           {ICONE[principal.estado]}
           {/* O texto some na bolha (só o ícone fica, no centro) e volta na pílula. */}
-          <span className={`painel-pilula-texto min-w-0 flex-1 truncate text-left text-sm font-medium ${bolha ? "opacity-0" : ""}`}>{principal.titulo}</span>
+          {/* Resumida: o título curto (o 1º trecho, sem o " · …") e só a % (ou o estado); o resto está no banner. */}
+          <span className={`painel-pilula-texto min-w-0 flex-1 truncate text-left text-[13px] font-medium ${bolha ? "opacity-0" : ""}`}>{principal.titulo.split(" · ")[0]}</span>
           <span className={`painel-pilula-texto shrink-0 text-xs text-muted tabular-nums ${bolha ? "opacity-0" : ""}`}>
-            {progresso ? andamento(principal) : ROTULO[principal.estado]}
-            {trabalhos.length > 1 ? ` · +${trabalhos.length - 1}` : ""}
+            {progresso ? (principal.fracao != null ? textoPct(principal.fracao) : `${principal.feito}/${principal.total}`) : ROTULO[principal.estado]}
           </span>
           {progresso && (
             <span aria-hidden className={`painel-pilula-texto absolute inset-x-0 bottom-0 h-0.5 bg-track ${bolha ? "opacity-0" : ""}`}>
@@ -689,6 +757,12 @@ export function PainelSegundoPlano({
             />
           )}
         </button>
+        {/* Os outros trabalhos: um selo no canto (visível também na bolha). */}
+        {trabalhos.length > 1 && (
+          <span aria-hidden className="pointer-events-none absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tabular-nums ring-2 ring-surface">
+            +{trabalhos.length - 1}
+          </span>
+        )}
     </div>
     {arrasto && lixeira && <LixeiraFlutuante x={lixeira.x} y={lixeira.y} aberta ativa={arrasto.naLixeira} bloqueada={emCurso} />}
     {arrasto && (
