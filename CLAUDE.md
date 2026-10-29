@@ -4616,6 +4616,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   a página…" em erro. Andamento PELOS BYTES: `andamentoDoLote` (`empenhos-fragmentos.ts` — a tela do card e o painel) +
   `consultaBytesDoAno` (o total da última importação promovida) → `fracaoDoAndamento` com `AndamentoLote.bytes`; o painel
   soma o capturado no "Baixado", os `recebidos` do passo em curso nos Registros e mostra a última atividade (`vistoEm`).
+- **RODADA DO CRON (v1.263.0, sem migração):** o `scheduled` (`worker.ts`) das rotas `empenhos` e `frota` chama o PRÓPRIO
+  Worker pelo service binding `SELF` (`wrangler.jsonc` → `services`) em SEQUÊNCIA — cada chamada é uma execução NOVA, com o
+  próprio limite de CPU e de 50 consultas; esperar não gasta CPU do pai. Núcleo puro **`rodada-cron-core.ts`** (testado —
+  `tests/rodada-cron.test.ts`): `rodadaDoCron` para quando a chamada não trabalhou (`{trabalhou}` da rota), falhou, passou de
+  `MAX_MS_RODADA`=25 s (os dois disparos — 0 s e 30 s — não se sobrepõem) ou de `MAX_CHAMADAS_RODADA`=8 (≈ 23 mil
+  requisições/dia no pior caso, só enquanto há trabalho); `?vez=N` (`vezDaRodada`) desloca o rodízio dos cards
+  (`atualizarEmpenhosAuto(agora, vez)` → `{situacoes, trabalhou}`; a limpeza — parados, lotes fora da escolha — só na vez 0)
+  e a situação vai à tela só no começo e no fim (`registraNaVez`; "Ligada · N tarefas na rodada" — `textoTarefas`). A Frota
+  usa `frotaTrabalhou`. Sem o binding (dev), o caminho único de antes.
 - **EXECUÇÃO CORTADA = TENTATIVA CONTADA (v1.262.0, migração `0170` — `centi_leituras.tentativas` + tabela
   `importacoes_cron`):** o Worker cortado pelo limite de CPU (ou uma exceção) não grava erro nenhum — então a tentativa é
   contada ANTES do trabalho. Centi: `reservar` soma `tentativas` e todo avanço zera; a janela (`janelaDaTentativa`) e o

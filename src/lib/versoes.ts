@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.263.0",
+    data: "2026-10-29",
+    titulo: "Importações automáticas várias vezes mais rápidas",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A atualização automática da Centi faz várias tarefas por minuto em vez de uma: Empenhos, Liquidações e Pagamentos avançam juntos e uma resposta grande termina em minutos, não em horas.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Frotas", texto: "A atualização automática da Vólus lê vários períodos por disparo.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Importações", texto: "A situação da atualização automática diz quantas tarefas a última rodada fez.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.262.1",
     data: "2026-10-29",
     titulo: "Banners do DFD e do protocolo reabrem na hora",

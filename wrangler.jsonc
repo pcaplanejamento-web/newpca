@@ -12,6 +12,9 @@
   // Trello (a cada 5 min), os e-mails/avisos de prazo (a cada 5 min, 2 min depois), a importação dos empenhos (2 por minuto)
   // e a frota da Vólus (a cada 3 min). O plano gratuito tem 5 gatilhos POR CONTA — todos usados.
   "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *", "* * * * *", "0-59 * * * *", "*/3 * * * *"] },
+  // O binding para o PRÓPRIO Worker: a RODADA do cron (importação automática e frota) chama a si mesmo várias vezes por
+  // disparo — cada chamada é uma execução nova, com o próprio limite de CPU (`src/lib/rodada-cron-core.ts`).
+  "services": [{ "binding": "SELF", "service": "newpca" }],
   // O canal AO VIVO das notificações: uma CAIXA por pessoa; e a PRESENÇA: um objeto por grupo (WebSocket com hibernação —
   // `src/lib/caixa-notificacoes-do.ts` e `src/lib/presenca-grupo-do.ts`).
   "durable_objects": {

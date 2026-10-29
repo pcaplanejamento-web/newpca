@@ -8,18 +8,23 @@ import handler from "./.open-next/worker.js";
 import { canalRecusado } from "./src/lib/acesso-conta-core";
 import { lerCookie, origemDoProprioSite } from "./src/lib/ao-vivo-core";
 import { lerConfigChat } from "./src/lib/chat-core";
+import { rodadaDoCron } from "./src/lib/rodada-cron-core";
 import { CHAVE_PREF_PRESENCA, lerConfigPresenca, lerPrefsPresenca } from "./src/lib/presenca-core";
 
 export { CaixaNotificacoes } from "./src/lib/caixa-notificacoes-do";
 export { PresencaGrupo } from "./src/lib/presenca-grupo-do";
 
-type Env = { INTEGRACOES_CHAVE?: string; DB: D1Database; CAIXA_NOTIFICACOES: DurableObjectNamespace; PRESENCA_GRUPO: DurableObjectNamespace };
+// `SELF` = o binding para o PRÓPRIO Worker (`wrangler.jsonc` → `services`): cada chamada é uma execução nova.
+type Env = { INTEGRACOES_CHAVE?: string; SELF?: { fetch(req: Request): Promise<Response> }; DB: D1Database; CAIXA_NOTIFICACOES: DurableObjectNamespace; PRESENCA_GRUPO: DurableObjectNamespace };
 type Contexto = { waitUntil(p: Promise<unknown>): void };
 
 async function sha256(texto: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/** As rotas em RODADA: o disparo chama o próprio Worker várias vezes (uma tarefa pequena por chamada). */
+const EM_RODADA = new Set(["empenhos", "frota"]);
 
 /** A rota interna de cada gatilho do cron (`wrangler.jsonc` → `triggers.crons`). */
 const ROTAS_CRON: Record<string, [string, string]> = {
@@ -172,11 +177,32 @@ export default {
     // Esperar não gasta CPU (o cron tem até 15 min de relógio): a 2ª execução da importação cai no meio do minuto.
     if (evento.cron === "0-59 * * * *") await new Promise((ok) => setTimeout(ok, 30_000));
     const assinatura = await sha256(`${env.INTEGRACOES_CHAVE}:cron`);
-    const req = new Request(`https://cron.interno${caminho}`, { method: "POST", headers: { "x-cron-trello": assinatura } });
+    const pedido = (vez: number) => new Request(`https://cron.interno${caminho}?vez=${vez}`, { method: "POST", headers: { "x-cron-trello": assinatura } });
     // AGUARDADO no próprio `scheduled` (não no `waitUntil`, que pode cortar a tarefa longa no meio — travas presas e
     // gravações pela metade).
+    const self = env.SELF;
+    if (self && EM_RODADA.has(rotulo)) {
+      // A RODADA: cada chamada pelo binding é uma execução NOVA (o próprio limite de CPU e de consultas) — várias tarefas
+      // pequenas por disparo, em sequência; as travas do lote e da leitura impedem duas na mesma página.
+      const r = await rodadaDoCron(async (vez) => {
+        try {
+          const resp = await self.fetch(pedido(vez));
+          if (!resp.ok) {
+            console.error(`[${rotulo}] cron (vez ${vez}):`, resp.status, await resp.text());
+            return { ok: false, trabalhou: false };
+          }
+          const corpo = (await resp.json().catch(() => null)) as { trabalhou?: boolean } | null;
+          return { ok: true, trabalhou: corpo?.trabalhou === true };
+        } catch (e) {
+          console.error(`[${rotulo}] cron falhou (vez ${vez}):`, e);
+          return { ok: false, trabalhou: false };
+        }
+      });
+      if (r.tarefas > 1) console.log(`[${rotulo}] rodada: ${r.tarefas} tarefas em ${r.vezes} chamadas`);
+      return;
+    }
     try {
-      const r: Response = await handler.fetch(req, env, ctx);
+      const r: Response = await handler.fetch(pedido(0), env, ctx);
       if (!r.ok) console.error(`[${rotulo}] cron:`, r.status, await r.text());
     } catch (e) {
       console.error(`[${rotulo}] cron falhou:`, e);
