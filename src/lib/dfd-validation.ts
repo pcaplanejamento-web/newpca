@@ -197,6 +197,8 @@ export const startProtocoloSchema = z.object({
  * observação/CPF-CNPJ/valor/local). Os **IDENTIFICADORES** (número/Id/data/ano do PCA)
  * são IMUTÁVEIS — o schema NÃO os aceita, então nunca mudam. */
 export const editarProtocoloSchema = z.object({
+  // Quando o banner leu o protocolo — diferente do gravado = 409.
+  atualizadoEmLido: z.string().max(40).optional(),
   reparticaoId: z.number().int().positive().optional().nullable(),
   interessado: textoOpc,
   documento: textoCurtoOpc,
@@ -253,6 +255,8 @@ export const editarDfdSchema = z
     matricula: textoCurtoOpc,
     email: textoCurtoOpc,
     telefone: textoCurtoOpc,
+    // Quando o banner leu o DFD — diferente do gravado = 409 (outra pessoa salvou antes).
+    atualizadoEmLido: z.string().max(40).optional(),
   })
   .refine(
     (d) =>

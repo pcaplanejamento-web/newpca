@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.261.1",
+    data: "2026-10-29",
+    titulo: "Salvar sobre alteração de outra pessoa é avisado e as abas dividem a conferência de dados novos",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Salvar um DFD que outra pessoa alterou depois que você o abriu não sobrescreve mais a alteração dela: o sistema avisa e recarrega o DFD para você refazer a sua.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Navegação", texto: "Com várias abas abertas, só uma consulta se há dados novos e avisa as outras — menos pedidos ao servidor.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Checklist e eventos da tarefa e a planilha de Responsáveis mostram o esqueleto enquanto carregam, no lugar do texto “Carregando…”.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.261.0",
     data: "2026-10-29",
     titulo: "Importações sem travas e o painel “Em segundo plano” manuseável como as bolhas do chat",

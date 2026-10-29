@@ -33,3 +33,6 @@ export async function parseCorpo<T>(
     };
   return { data: parsed.data };
 }
+
+/** Edição sobre uma versão antiga (outra pessoa salvou depois que o banner leu) — o banner recarrega. */
+export const MSG_ALTERADO_POR_OUTRA = "Outra pessoa salvou alterações depois que você abriu — os dados foram recarregados; refaça a sua alteração.";

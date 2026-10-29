@@ -1,5 +1,7 @@
 "use client";
 
+import { SkeletonLinhas } from "@/components/Skeleton";
+
 import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resumoEstado } from "@/lib/dfd-tratamento";
@@ -744,7 +746,7 @@ function abrirNoLugarQueVale(grupo: readonly { orgaoId: number | null; repartica
 export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo: { orgaoId: number } | { reparticaoId: number }; nota?: string }) {
   const { planilha, grupos, hoje, ocupado, acoes } = ctx;
   const [editor, setEditor] = useState<AberturaVinculo | null>(null);
-  if (!planilha) return <p className="text-[13px] text-muted">Carregando os responsáveis…</p>;
+  if (!planilha) return <SkeletonLinhas linhas={8} />;
   const a = "orgaoId" in alvo ? { orgaoId: alvo.orgaoId, reparticaoId: null } : { orgaoId: null, reparticaoId: alvo.reparticaoId };
   const valor = a.orgaoId != null ? `o${a.orgaoId}` : `u${a.reparticaoId}`;
   const vinculos = grupos.get(valor) ?? [];

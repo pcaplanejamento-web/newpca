@@ -860,9 +860,12 @@ export async function getDfdReparticao(
   criadoEm: string | null;
   /** O PCA do protocolo do DFD (a Mesa em que ele está — `null` = a do sistema). */
   pcaId: number | null;
+  /** A última gravação — o PATCH recusa (409) quem editou sobre uma versão mais antiga. */
+  atualizadoEm: string | null;
 } | null> {
   const [r] = await getDb()
     .select({
+      atualizadoEm: dfds.atualizadoEm,
       reparticaoId: dfds.reparticaoId,
       tipo: dfds.tipo,
       protocoloId: dfds.protocoloId,
