@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.260.1",
+    data: "2026-10-29",
+    titulo: "Dados guardados: sem esqueleto ao voltar, Frotas e mais segurança",
+    mudancas: [
+      { tipo: "melhoria", area: "Desempenho", texto: "Voltar a Empenhos, Liquidações, Pagamentos e Execução desenha os dados guardados na hora, sem o esqueleto; as outras abas abertas aproveitam o dado já buscado.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Frotas", texto: "Frotas, Combustível, Manutenção e Veículos também ficam guardados no navegador.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Segurança", texto: "Sessão encerrada ou a tela de acesso apagam os dados guardados; papéis com proteção de dados guardam só enquanto a aba está aberta.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Termo de uso", texto: "Cláusula automática \"Dados guardados no navegador\".", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Armazenamento", texto: "\"Dados neste navegador\": quantas leituras vieram sem pedir ao servidor.", link: "/painel/armazenamento" },
+    ],
+  },
+  {
     versao: "1.260.0",
     data: "2026-10-29",
     titulo: "Frotas: tabelas da Mesa, Órgão e Unidade do sistema e banners organizados",

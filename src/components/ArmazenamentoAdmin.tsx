@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Armazenamento, TabelaArmazenamento } from "@/lib/armazenamento";
 import type { MonitoramentoArmazenamento, UsoOficial } from "@/lib/cf-analytics";
 import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
+import { estatisticasDados } from "@/lib/dados-cliente";
 import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -18,6 +19,7 @@ import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
 import { useCanalGrupo } from "./CanalGrupo";
 import { SaudeDados } from "./SaudeDados";
 import { SkeletonLinhas } from "./Skeleton";
+import { StatMini } from "./StatMini";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
 
@@ -254,6 +256,8 @@ export function ArmazenamentoAdmin() {
         />
       </div>
 
+      <DadosNoNavegador />
+
       {/* Uso diário oficial (Cloudflare) — leituras/escritas vs. tetos do plano free */}
       <section className="space-y-2">
         <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">
@@ -392,5 +396,28 @@ export function ArmazenamentoAdmin() {
         {dados.geradoEm ? new Date(dados.geradoEm).toLocaleString("pt-BR") : "—"}.
       </p>
     </div>
+  );
+}
+
+/** De onde vieram as leituras das telas NESTA aba: memória, o aparelho (IndexedDB) ou o servidor — a prova do ganho. */
+function DadosNoNavegador() {
+  const [e, setE] = useState<ReturnType<typeof estatisticasDados> | null>(null);
+  useEffect(() => {
+    setE(estatisticasDados());
+    const t = setInterval(() => setE(estatisticasDados()), 5000);
+    return () => clearInterval(t);
+  }, []);
+  if (!e) return null;
+  const total = e.memoria + e.aparelho + e.servidor;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Dados neste navegador (esta aba)</h2>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatMini label="Sem pedir ao servidor" value={total ? pct(e.memoria + e.aparelho, total) : "—"} hint={`${num(total)} leituras`} tone="ok" />
+        <StatMini label="Da memória da aba" value={num(e.memoria)} />
+        <StatMini label="Do aparelho" value={num(e.aparelho)} />
+        <StatMini label="Do servidor" value={num(e.servidor)} hint={e.servidor ? `média ${num(Math.round(e.msServidor / e.servidor))} ms` : undefined} />
+      </div>
+    </section>
   );
 }

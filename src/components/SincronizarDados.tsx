@@ -2,6 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { apagarDadosLocais } from "@/lib/dados-cliente";
+import { sessaoEncerrada } from "@/lib/dados-cliente-core";
 import { type VersoesDados, versaoDaRota } from "@/lib/versao-dados-core";
 
 /** Intervalo mínimo entre duas consultas da versão (ms). */
@@ -54,6 +56,8 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
       ultimaConsulta.current = Date.now();
       try {
         const r = await fetch("/api/dados/versao", { cache: "no-store" });
+        // Sessão encerrada (saiu em outro aparelho, inatividade): nada fica guardado neste navegador.
+        if (sessaoEncerrada(r.status)) void apagarDadosLocais();
         const j = (await r.json().catch(() => null)) as
           | { ok?: boolean; versao?: string; dados?: string; tarefas?: string; agenda?: string; execucao?: string }
           | null;

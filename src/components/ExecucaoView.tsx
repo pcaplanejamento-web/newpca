@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { lerDado } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado } from "@/lib/dados-cliente";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { type BaseExec, montarBase, type MetaExec, type PacoteExec } from "@/lib/execucao-dash-core";
 import type { EstadoFiltros } from "@/lib/filtros-visao-core";
@@ -32,15 +32,20 @@ export function ExecucaoView({
   podePublicar: boolean;
   admin: boolean;
 }) {
-  const [anos, setAnos] = useState<number[] | null>(null);
-  const [base, setBase] = useState<BaseExec | null>(null);
+  // Voltar à tela: o pacote já na memória da aba desenha no 1º quadro (sem o esqueleto).
+  const [inicio] = useState(() => {
+    const j = versao ? jaGuardado<{ pacote: PacoteExec; meta?: MetaExec[] }>("execucao", "/api/execucao", versao) : undefined;
+    return j ? montarBase({ ...j.pacote, meta: j.meta ?? [] }) : null;
+  });
+  const [anos, setAnos] = useState<number[] | null>(inicio?.anos ?? null);
+  const [base, setBase] = useState<BaseExec | null>(inicio);
   const [erro, setErro] = useState<string | null>(null);
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(!inicio);
   const pedido = useRef(0);
   const versaoRef = useRef(versao);
   versaoRef.current = versao;
   // Os anos que o SERVIDOR escolheu (o 1º pedido vai sem anos): fixá-los na tela não pede de novo.
-  const escolhidosPeloServidor = useRef<string | null>(null);
+  const escolhidosPeloServidor = useRef<string | null>(inicio ? inicio.anos.join(",") : null);
   const anosChave = anos?.join(",") ?? "";
 
   const carregar = useCallback(async (lista: string) => {

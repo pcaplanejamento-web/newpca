@@ -1,5 +1,6 @@
 "use client";
 
+import { jaGuardado, lerDado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Classificacao, type ContextoFrota, contextoFrota, type Transacao, transacoesDoPacote, type Veiculo } from "@/lib/frota-core";
 import type { TipoTransacao } from "@/lib/volus-core";
@@ -39,35 +40,53 @@ export function useCadastroFrota() {
  */
 export function useDadosFrota({ tipo, ano, versao, contratos }: { tipo?: TipoTransacao; ano: number | null; versao: string; contratos: ContratoFrota[] }) {
   const cadastro = useCadastroFrota();
-  const [transacoes, setTransacoes] = useState<Transacao[] | null>(null);
+  const url = ano == null ? "" : `/api/frota/dados?ano=${ano}${tipo ? `&tipo=${tipo}` : ""}`;
+  // Voltar à tela: o pacote já na memória da aba desenha no 1º quadro (sem o esqueleto).
+  const [transacoes, setTransacoes] = useState<Transacao[] | null>(() => {
+    const p = url && versao ? jaGuardado<(string | number | null)[][]>("frota", url, versao) : undefined;
+    return p ? transacoesDoPacote(p) : null;
+  });
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const pedido = useRef(0);
-  const carregar = useCallback(async () => {
-    if (ano == null) {
-      setTransacoes([]);
-      return;
-    }
-    const n = ++pedido.current;
-    setCarregando(true);
-    setErro(null);
-    try {
-      const r = await fetch(`/api/frota/dados?ano=${ano}${tipo ? `&tipo=${tipo}` : ""}`, { cache: "no-store" });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; pacote?: (string | number | null)[][] };
-      if (n !== pedido.current) return;
-      if (!r.ok || !j.ok) throw new Error(j.error || `Não foi possível carregar os dados da frota (erro ${r.status}).`);
-      setTransacoes(transacoesDoPacote(j.pacote ?? []));
-    } catch (e) {
-      if (n === pedido.current) setErro((e as Error).message);
-    } finally {
-      if (n === pedido.current) setCarregando(false);
-    }
-  }, [ano, tipo]);
+  const versaoRef = useRef(versao);
+  versaoRef.current = versao;
+  const carregar = useCallback(
+    async (fresco = false) => {
+      if (!url) {
+        setTransacoes([]);
+        return;
+      }
+      const n = ++pedido.current;
+      setCarregando(true);
+      setErro(null);
+      try {
+        // Guardado no navegador pela versão da frota: sair e voltar (ou reabrir o navegador) não pede de novo.
+        const pacote = await lerDado(
+          "frota",
+          url,
+          versaoRef.current,
+          async (r) => {
+            const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; pacote?: (string | number | null)[][] };
+            if (!r.ok || !j.ok) throw new Error(j.error || `Não foi possível carregar os dados da frota (erro ${r.status}).`);
+            return j.pacote ?? [];
+          },
+          fresco,
+        );
+        if (n === pedido.current) setTransacoes(transacoesDoPacote(pacote));
+      } catch (e) {
+        if (n === pedido.current) setErro((e as Error).message);
+      } finally {
+        if (n === pedido.current) setCarregando(false);
+      }
+    },
+    [url],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: a versão nova pede de novo
   useEffect(() => {
     void carregar();
   }, [carregar, versao]);
   const ctx: ContextoFrota = useMemo(() => contextoFrota(cadastro.veiculos ?? [], cadastro.classificacoes, contratos), [cadastro.veiculos, cadastro.classificacoes, contratos]);
-  return { transacoes, ctx, erro: erro ?? cadastro.erro, carregando, recarregar: carregar, cadastro };
+  return { transacoes, ctx, erro: erro ?? cadastro.erro, carregando, recarregar: () => carregar(true), cadastro };
 }
 

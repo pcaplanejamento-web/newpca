@@ -15,6 +15,11 @@ const memoria = new Map<string, EntradaDado>();
 const emCurso = new Map<string, Promise<unknown>>();
 let banco: Promise<IDBDatabase | null> | null = null;
 let canal: BroadcastChannel | null = null;
+/** De onde vieram as leituras nesta aba (Armazenamento → "Dados neste navegador"): a prova do ganho. */
+const contagem = { memoria: 0, aparelho: 0, servidor: 0, msServidor: 0 };
+export function estatisticasDados(): { memoria: number; aparelho: number; servidor: number; msServidor: number; guardadas: number } {
+  return { ...contagem, guardadas: memoria.size };
+}
 
 function abrirBanco(): Promise<IDBDatabase | null> {
   if (banco) return banco;
@@ -58,8 +63,11 @@ function obterCanal(): BroadcastChannel | null {
   try {
     canal = new BroadcastChannel(CANAL);
     canal.onmessage = (ev) => {
-      const m = ev.data as { t?: string; pessoa?: number };
+      const m = ev.data as { t?: string; pessoa?: number; entrada?: EntradaDado };
       if (m?.t === "apagar") memoria.clear();
+      // Outra aba buscou um dado: esta já o tem, sem pedir de novo (só da MESMA pessoa e do mesmo formato).
+      if (m?.t === "valor" && m.entrada && escopo && m.entrada.pessoa === escopo.pessoa && m.entrada.formato === FORMATO_DADOS)
+        memoria.set(m.entrada.chave, m.entrada);
       if (m?.t === "pessoa" && escopo && m.pessoa !== escopo.pessoa) memoria.clear();
     };
   } catch {
@@ -84,6 +92,10 @@ async function limparAntigos(pessoa: number): Promise<void> {
   try {
     const todas = (await naLoja<EntradaDado[]>("readonly", (l) => l.getAll() as IDBRequest<EntradaDado[]>)) ?? [];
     const fora = aApagar(todas, pessoa, Date.now());
+    // Aquece a memória da aba com o guardado desta pessoa (os mais usados): ir a outra tela já desenha na hora.
+    const saem = new Set(fora);
+    const minhas = todas.filter((x) => !saem.has(x.chave) && x.pessoa === pessoa && x.formato === FORMATO_DADOS);
+    for (const x of minhas.sort((a, b) => b.uso - a.uso).slice(0, 20)) if (!memoria.has(x.chave) && escopo?.pessoa === pessoa) memoria.set(x.chave, x);
     if (fora.length) await naLoja("readwrite", (l) => {
       for (const k of fora) l.delete(k);
       return undefined;
@@ -119,6 +131,7 @@ export async function lerDado<T>(recurso: string, url: string, versao: string, l
     const m = memoria.get(chave);
     if (entradaVale(m, chave, e, versao)) {
       m.uso = Date.now();
+      contagem.memoria++;
       return m.valor as T;
     }
     if (ligado) {
@@ -126,6 +139,7 @@ export async function lerDado<T>(recurso: string, url: string, versao: string, l
       if (entradaVale(guardada, chave, e, versao) && escopo === e) {
         guardada.uso = Date.now();
         memoria.set(chave, guardada);
+        contagem.aparelho++;
         return guardada.valor as T;
       }
     }
@@ -134,7 +148,10 @@ export async function lerDado<T>(recurso: string, url: string, versao: string, l
   const atual = emCurso.get(id);
   if (atual) return atual as Promise<T>;
   const p = (async () => {
+    const t0 = Date.now();
     const r = await fetch(url, { cache: "no-store" });
+    contagem.servidor++;
+    contagem.msServidor += Date.now() - t0;
     if (sessaoEncerrada(r.status)) void apagarDadosLocais();
     const valor = await ler(r);
     // Só guarda se a pessoa/escopo ainda são os mesmos de quando o pedido saiu.
@@ -144,6 +161,11 @@ export async function lerDado<T>(recurso: string, url: string, versao: string, l
       memoria.set(chave, entrada);
       while (memoria.size > 40) memoria.delete(memoria.keys().next().value as string);
       if (ligado) void naLoja("readwrite", (l) => l.put(entrada)).catch(() => undefined);
+      try {
+        obterCanal()?.postMessage({ t: "valor", entrada });
+      } catch {
+        /* valor que não se copia entre abas: cada aba busca o seu */
+      }
     }
     return valor;
   })();
