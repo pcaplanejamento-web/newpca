@@ -5573,6 +5573,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
+- **ENGRENAGEM SEMPRE À DIREITA + PÁGINA ATUAL EM EVIDÊNCIA (v1.264.12):** o botão de configurações de uma tela/espaço é o
+  ÚLTIMO da linha — `BotaoConfiguracoes` (`AbasEspaco.tsx`; o `AbasEspaco` tira sozinho a opção `configuracao` das abas e a
+  põe no fim, depois do `fim`; espaço do PCA: ano e status à direita, antes dela). Na trilha do cabeçalho
+  (`TrilhaCabecalho`), o ÚLTIMO nível (a página atual) em `font-semibold text-text`; os anteriores discretos.
 - **TELAS INTERNAS (v1.264.9) — regra firme:** a tela aberta a partir de outra (espaço do PCA, espaço do orçamento, quadro de
   Tarefas, órgão, pasta do catálogo, card de Importações) NÃO tem título nem subtítulo: o nome vai ao caminho do cabeçalho
   (`useOndeDetalhe`, mostrado pela `TrilhaCabecalho` em qualquer rota) e a PRIMEIRA linha é o `BotaoVoltar` (`AbasEspaco.tsx`) à
@@ -5581,13 +5585,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **UM SÓ ESQUELETO (v1.264.7) — regra firme:** a tela que busca os dados no navegador mostra, enquanto espera, o MESMO
   esqueleto do `loading.tsx` da rota (Execução = `DashboardExecucaoEsqueleto`; Frotas = `EsqueletoFrota`; Empenhos/
   Liquidações/Pagamentos = `EsqueletoIndicadores` + `EsqueletoTabela`) — nunca um segundo esqueleto diferente.
-- **MENU LATERAL E "MAIS INDICADORES" FIXOS (v1.264.11) — regra firme:** abrir/fechar o menu NÃO move o conteúdo: a
-  `.menu-vaga` troca de largura UMA vez e a borda DIREITA fica parada; o menu (opaco, z-40) anima a própria largura por cima
-  — recolher alarga o conteúdo na hora (o menu, encolhendo, revela); expandir segura a vaga estreita
-  (`html[data-menu-abrindo]`) até o menu terminar de crescer (`alternarMenu`, `MenuLateral.tsx`); só os cartões que trocam
-  de lugar numa grade auto-fill deslizam (`trocarComGrades`, FLIP relativo à grade). O **`MaisIndicadores`** abre os
-  complementares num PAINEL POR CIMA (absoluto, preso abaixo do botão; fecha no toque fora/Esc) — nada embaixo se move. O
-  `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes em uma linha: a largura muda, a altura nunca.
+- **MENU LATERAL E "MAIS INDICADORES" (v1.264.12) — regra firme:** a `.menu-vaga` anima a largura NO MESMO RITMO do menu
+  (300 ms, `--menu-curva`): o conteúdo estica/encolhe junto e a borda DIREITA fica parada. A ANIMAÇÃO PADRÃO DOS CARTÕES
+  (`deslizarGrades`, `MenuLateral.tsx`): nas grades de cartões — `auto-fill` (PCA, Orçamento, Catálogo, Tarefas, Documentos,
+  Importações…) ou `data-grade-cartoes` — o cartão que salta de coluna/linha desliza (FLIP), só os à vista. O
+  **`MaisIndicadores`** abre os complementares num PAINEL POR CIMA (absoluto, abaixo do botão; fecha no toque fora/Esc) —
+  nada embaixo se move. O `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes em uma linha.
 - **BARRA DE FERRAMENTAS (v1.264.4) — regra firme:** numa barra de botões, os PRINCIPAIS (seletores, campos, busca, filtros) à
   ESQUERDA e os SECUNDÁRIOS (só-ícone: recarregar, configurar, ajuda) à DIREITA. A classe `.barra-ferramentas` (`globals.css`)
   faz isso sozinha (`order` + `margin-left:auto` no 1º secundário), qualquer que seja a ordem do código; usada no
@@ -5609,9 +5612,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **IMAGENS PROTEGIDAS + SELETOR DE UNIDADE (v1.107.5):** toda `img` sem arrasto/seleção/toque longo (`globals.css`) e o `ProtegerImagens` (layout raiz) barra `dragstart`/`contextmenu` em imagens; o seletor de unidade do cabeçalho = `ListaUnidades` (`AppShell`: busca acima de 8, SIGLA em cima e o nome embaixo — o desenho do filtro de unidades das tabelas). A barra de rolagem do menu lateral fica escondida (`.menu-rolagem`, v1.107.3–4: no Windows ela cortava/encolhia os itens).
 - **CABEÇALHO DO CELULAR (v1.261.0):** só o essencial — menu, PCA, presença/conversas, avisos e claro/escuro; a logo e a
   foto ficam SÓ no menu (a página pública na marca do menu; o "Site" volta a partir de `sm`).
-- **SEM BARRA DE ROLAGEM RESERVADA (v1.264.8):** nada usa `scrollbar-gutter: stable` (a v1.261.0 reservava no `html` e no
-  `AteOFim`): nas telas que não rolam, a faixa ficava vazia à direita — o conteúdo recuado sem motivo. A margem da direita é
-  só o `--pad-canvas`, igual à da esquerda.
+- **BARRA DE ROLAGEM RESERVADA E COMPENSADA (v1.264.12) — regra firme:** o `html` tem `scrollbar-gutter: stable` (a barra
+  aparecer/sumir nunca empurra a tela para a esquerda) e a margem DIREITA do conteúdo desconta a largura da barra —
+  `--pad-direita` = `--pad-canvas` − `--barra-rolagem` (medida por `SCRIPT_BARRA_ROLAGEM`, `menu-lateral.ts`, no layout; 0 nas
+  barras que flutuam). O `<main>` do `AppShell`/`TelaPublica` e o cabeçalho usam `pl-[var(--pad-canvas)]
+  pr-[var(--pad-direita)]`; o que sai da margem usa `-ml-[var(--pad-canvas)] -mr-[var(--pad-direita)]`. A faixa vazia tem as
+  cores da tela (o fundo do `html` com o cabeçalho, preso à janela). Nunca `px-[var(--pad-canvas)]` na coluna do conteúdo.
 - **NAVEGAÇÃO (v1.107.2):** os seletores do cabeçalho (grupo, unidade, PCA) mostram o nome INTEIRO (lista com quebra de linha, botão sem corte a partir de `sm`); o ícone do item do menu e da barra inferior vira spinner enquanto a tela carrega (`IconeNavegacao`, `CarregandoLink.tsx` — `useLinkStatus`); a logo leva direto a `rotaInicial` (sem o redirecionamento do `/painel`). **TRILHA COMPLETA (v1.99.0):** `TrilhaCabecalho.tsx` (DS) = Seção ⌃⌄ › Tela ⌃⌄ › PCA ⌃⌄ | nome do espaço › Aba ⌃⌄ (`ABAS_ESPACO`: PCA, orçamento, quadro — `?aba=`) › banners abertos; o armazém `trilha-store.ts` recebe o nome do espaço pelo `useOndeDetalhe` e os banners pelo `VendoAgora` (`useNivelAberto`). Listas com busca acima de 8, recentes no aparelho (`trilha:recentes`) e ↑/↓/Enter; selo "PCA ano" nas telas filtradas; Ctrl+K/⌘K = paleta "Ir para…"; no celular (≥ sm) só a Tela; níveis do meio somem antes (seção só no 2xl com níveis fundos).
 - **TRILHA DO CABEÇALHO (v1.98.0):** `TrilhaCabecalho` (`AppShell`, desktop) = Seção › Tela ⌃⌄ (as telas da mesma seção do menu — `secoesVisiveis`) e, em `/painel/pca/[id]`, › PCA ⌃⌄ (troca de espaço); ícone `IconAlternarNivel` (ChevronsUpDown). O `PcaSelect` mudou para a DIREITA do cabeçalho e só oferece “Todos os PCAs” com mais de um PCA (com um só, o gatilho mostra ele).
 - **MENU LATERAL RECOLHÍVEL (v1.97.0, sem migração):** o botão `IconRecolherMenu` no rodapé do menu (ao lado da versão) alterna o atributo `data-menu-recolhido` no `<html>` (`localStorage` `menu:recolhido`; `SCRIPT_MENU` em `menu-lateral.ts` o aplica antes da 1ª pintura). A `.menu-vaga` (sticky) troca a largura 16rem ↔ 3,75rem DE UMA VEZ e a coluna do conteúdo DESLIZA por transform (FLIP em `alternarMenu` — `Element.animate`, 300 ms; v1.97.2: nada reflui a cada quadro; a raiz tem `lg:overflow-x-clip`); no trilho o cartão do usuário mostra só a foto (`min-w-[38px]` + `overflow-hidden`); o `.menu-lateral` é absoluto dentro dela com conteúdo de largura FIXA (nada reflui, só é cortado); recolhido, com o mouse, o foco do teclado ou um dropdown do menu aberto (`:has([aria-expanded="true"])` — o painel por portal tirava o :hover e o menu piscava, v1.159.2), abre POR CIMA (sombra, 120 ms de espera) e `data-sem-peek` evita reabrir logo após recolher. Rótulos com `.menu-esconde` / `[data-marca-texto]` acompanham a largura com reticências e entram deslizando (curva `--menu-curva`, 300 ms); recolhido, o título de cada módulo vira a `.menu-linha` (separador curto centrado no trilho, v1.97.1); os ícones ficam parados (centrados no trilho). Regras em `globals.css`.

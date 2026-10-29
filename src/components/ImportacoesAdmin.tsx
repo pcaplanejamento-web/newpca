@@ -32,7 +32,7 @@ import { haQuanto } from "@/lib/acessos-core";
 import type { LinhaCron } from "@/lib/importacoes-cron-sql";
 import { type EstadoLinha, importarCards, type LinhaImportacao, perguntaDeQueda, prepararCards } from "@/lib/importar-cards";
 import { brl, dataHoraBR, num } from "@/lib/format";
-import { BotaoVoltar, ConteudoAba } from "./AbasEspaco";
+import { BotaoConfiguracoes, BotaoVoltar, ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { type Aviso, Avisos } from "./Avisos";
 import { AndamentoImportacao } from "./AndamentoImportacao";
@@ -1051,7 +1051,7 @@ function CardAberto({
           value={aba}
           onChange={onSub}
           ariaLabel={`Seções do card ${c.nome}`}
-          options={subs.map((s) => ({ value: s, label: s === "importacao" ? "Importação" : s === "vinculos" ? "Vínculos" : "Configuração", curto: s === "configuracao" ? "Config." : undefined }))}
+          options={subs.filter((s) => s !== "configuracao").map((s) => ({ value: s, label: s === "importacao" ? "Importação" : "Vínculos" }))}
         />
         <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -1100,6 +1100,7 @@ function CardAberto({
             icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
             onClick={() => excluir(c)}
           />
+          <BotaoConfiguracoes ativo={aba === "configuracao"} rotulo="Configuração do card" onClick={() => onSub("configuracao")} />
         </div>
       </div>
       <IndicadoresKpi cartoes={cartoes} />

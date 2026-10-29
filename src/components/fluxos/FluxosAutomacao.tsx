@@ -1445,9 +1445,6 @@ function EditorFluxo({
             <IconPlay className="size-4" />
           </Button>
         )}
-        <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
-          <IconSettings className="size-4" />
-        </Button>
         {onAtualizarModelo && (
           <Button size="sm" variant="icon" aria-label="Atualizar pelo modelo" title="Atualizar pelo modelo (volta ao diagrama do modelo de hoje)" disabled={rodando} onClick={onAtualizarModelo}>
             <IconRefresh className="size-4" />
@@ -1457,6 +1454,9 @@ function EditorFluxo({
           <IconTrash className="size-4" />
         </Button>
         <AjudaDoFluxo titulo={nome.trim() || fluxo.nome} ajuda={ajuda} />
+        <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
+          <IconSettings className="size-4" />
+        </Button>
         <ConfigFluxo
           open={configAberta}
           onClose={() => setConfigAberta(false)}

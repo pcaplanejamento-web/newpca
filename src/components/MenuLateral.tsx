@@ -25,36 +25,55 @@ function movimentoReduzido(): boolean {
   return m === "off" || m === "reduced";
 }
 
-const CURVA_MENU = "cubic-bezier(.32,.72,0,1)";
-const DURACAO_MENU = 300;
-
-/** Troca a largura do conteúdo UMA vez (`mudar`) e, nas grades de cartões (auto-fill), o cartão que mudou de lugar DENTRO
- *  da grade (outra coluna/linha, outra largura) desliza do lugar antigo ao novo (FLIP). A grade que só acompanha a borda
- *  esquerda não anima — a direita fica parada. */
-function trocarComGrades(mudar: () => void) {
-  if (movimentoReduzido()) return mudar();
-  const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
-  const naGrade = (e: HTMLElement) => {
+/** A ANIMAÇÃO PADRÃO DOS CARTÕES ao abrir/fechar o menu: o conteúdo estica junto com o menu e, nas grades de cartões
+ *  (auto-fill ou `data-grade-cartoes`), o cartão que SALTA de lugar (nova coluna/linha) desliza da posição antiga até a nova
+ *  (FLIP), em vez de pular. Só nesses 340 ms. */
+function deslizarGrades() {
+  if (movimentoReduzido()) return;
+  // Os CARTÕES das grades (PCA, Orçamento, Catálogo, Tarefas, Documentos, Importações…) — só os à vista (medir os de fora
+  // a cada quadro só custaria).
+  const altura = window.innerHeight;
+  const itens = Array.from(document.querySelectorAll<HTMLElement>('main :is([class*="auto-fill"], [data-grade-cartoes]) > *')).filter((e) => {
     const r = e.getBoundingClientRect();
-    const g = (e.parentElement as HTMLElement).getBoundingClientRect();
-    return { x: r.left - g.left, y: r.top - g.top, w: r.width, h: r.height };
+    return r.bottom > -200 && r.top < altura + 200;
+  });
+  if (!itens.length) return;
+  // A posição DENTRO da grade (não na página): a coluna inteira anda com o menu — isso não é salto.
+  const naGrade = (e: HTMLElement) => {
+    const g = e.parentElement as HTMLElement;
+    const base = e.offsetParent === g ? { x: 0, y: 0 } : { x: g.offsetLeft, y: g.offsetTop };
+    return { x: e.offsetLeft - base.x, y: e.offsetTop - base.y, w: e.offsetWidth };
   };
-  const antes = new Map(itens.map((e) => [e, naGrade(e)]));
-  mudar();
-  for (const e of itens) {
-    const a = antes.get(e);
-    const n = naGrade(e);
-    if (!a || !n.w || !n.h) continue;
-    if (Math.abs(a.x - n.x) < 1 && Math.abs(a.y - n.y) < 1 && Math.abs(a.w - n.w) < 1) continue;
-    for (const an of e.getAnimations()) an.cancel();
-    e.style.transformOrigin = "0 0";
-    e.animate(
-      [{ transform: `translate(${a.x - n.x}px, ${a.y - n.y}px) scale(${a.w / n.w}, ${a.h / n.h})` }, { transform: "none" }],
-      { duration: DURACAO_MENU, easing: CURVA_MENU },
-    ).onfinish = () => {
-      e.style.transformOrigin = "";
-    };
-  }
+  const antes = new Map(itens.map((e) => [e, { grade: naGrade(e), visual: e.getBoundingClientRect() }]));
+  const fim = performance.now() + 340;
+  const passo = () => {
+    for (const e of itens) {
+      const a = antes.get(e);
+      if (!a) continue;
+      const g = naGrade(e);
+      // SALTO = trocou de coluna/linha ou a largura mudou de uma vez (a grade ganhou/perdeu uma coluna). O que só
+      // estica/encolhe com o menu acompanha sozinho.
+      const salto = Math.abs(g.x - a.grade.x) > 40 || Math.abs(g.y - a.grade.y) > 40 || Math.abs(g.w - a.grade.w) > a.grade.w * 0.12;
+      if (salto) {
+        for (const an of e.getAnimations()) an.cancel();
+        const novo = e.getBoundingClientRect();
+        const v = a.visual;
+        e.style.transformOrigin = "0 0";
+        e.animate(
+          [
+            { transform: `translate(${v.left - novo.left}px, ${v.top - novo.top}px) scale(${v.width / novo.width || 1}, ${v.height / novo.height || 1})` },
+            { transform: "none" },
+          ],
+          { duration: Math.max(120, fim - performance.now()), easing: "cubic-bezier(.32,.72,0,1)" },
+        ).onfinish = () => {
+          e.style.transformOrigin = "";
+        };
+      }
+      antes.set(e, { grade: g, visual: e.getBoundingClientRect() });
+    }
+    if (performance.now() < fim) requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
 }
 
 /** Os ITENS do menu por seção (o título vira a linha curta no trilho recolhido). `ativo` decide o item marcado. */
@@ -130,35 +149,12 @@ export function MenuLateral({
     // Sem guardar: ao sair da tela, o atributo volta à preferência do aparelho.
     return guardar ? undefined : aplicarMenuGuardado;
   }, [guardar, inicial]);
-  const abrindoRef = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (abrindoRef.current != null) window.clearTimeout(abrindoRef.current);
-      document.documentElement.removeAttribute("data-menu-abrindo");
-    },
-    [],
-  );
   function alternarMenu() {
     const novo = !document.documentElement.hasAttribute(ATRIBUTO_MENU);
-    const html = document.documentElement;
-    if (abrindoRef.current != null) {
-      window.clearTimeout(abrindoRef.current);
-      abrindoRef.current = null;
-    }
-    // O CONTEÚDO não desliza: a borda DIREITA fica parada e só a largura muda, UMA vez. O menu (por cima, opaco) anima a
-    // própria largura. Recolher: o conteúdo alarga na hora e o menu, encolhendo, o revela. Expandir: o menu cresce por
-    // cima e o conteúdo só estreita no fim (data-menu-abrindo segura a vaga estreita) — nunca um vão entre os dois.
-    if (novo || movimentoReduzido()) {
-      html.removeAttribute("data-menu-abrindo");
-      trocarComGrades(() => html.toggleAttribute(ATRIBUTO_MENU, novo));
-    } else {
-      html.setAttribute("data-menu-abrindo", "");
-      html.removeAttribute(ATRIBUTO_MENU);
-      abrindoRef.current = window.setTimeout(() => {
-        abrindoRef.current = null;
-        trocarComGrades(() => html.removeAttribute("data-menu-abrindo"));
-      }, DURACAO_MENU);
-    }
+    // A VAGA anima a largura junto com o menu (globals.css): o conteúdo ESTICA/ENCOLHE no mesmo ritmo, a borda direita
+    // fica parada; os cartões que saltam de coluna numa grade deslizam (deslizarGrades).
+    document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
+    deslizarGrades();
     if (guardar)
       try {
         localStorage.setItem(CHAVE_MENU, novo ? "1" : "0");
@@ -267,7 +263,7 @@ export function GavetaMenu({
  *  e os controles à direita. */
 export function CabecalhoApp({ onMenu, inicio, direita }: { onMenu: () => void; inicio?: ReactNode; direita: ReactNode }) {
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
+    <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface pl-[var(--pad-canvas)] pr-[var(--pad-direita)] print:hidden">
       <button
         type="button"
         aria-label="Abrir menu"

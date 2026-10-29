@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.12",
+    data: "2026-10-29",
+    titulo: "Menu suave, direita fixa e engrenagem à direita",
+    mudancas: [
+      { tipo: "melhoria", area: "Interface", texto: "Ao abrir e fechar o menu lateral, o conteúdo estica junto com ele, suave; os cartões (PCA, Orçamento, Catálogo, Tarefas…) que mudam de coluna deslizam até o lugar novo.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Interface", texto: "A barra de rolagem da página tem o lugar reservado: ela aparecer nunca mais empurra a tela para a esquerda, e a margem direita fica igual à esquerda.", link: "/painel" },
+      { tipo: "melhoria", area: "Interface", texto: "A engrenagem das configurações fica sempre no fim da linha, à direita; no PCA, o ano e o status também ficam à direita.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Navegação", texto: "No caminho do cabeçalho, o nome da página atual fica em destaque.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.264.11",
     data: "2026-10-29",
     titulo: "Menu e Mais indicadores sem mexer na tela",

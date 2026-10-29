@@ -291,7 +291,7 @@ export function QuadroKanban({
       suppressHydrationWarning
       style={altura ? { height: altura } : naMoldura ? { paddingBottom: reservaInferior } : undefined}
       className={`flex items-start snap-x snap-mandatory overflow-x-auto lg:snap-none ${
-        naMoldura ? "gap-3 px-3 pt-3 pb-2" : "-mx-[var(--pad-canvas)] gap-[var(--gap-block)] px-[var(--pad-canvas)] pb-2"
+        naMoldura ? "gap-3 px-3 pt-3 pb-2" : "-ml-[var(--pad-canvas)] -mr-[var(--pad-direita)] gap-[var(--gap-block)] pl-[var(--pad-canvas)] pr-[var(--pad-direita)] pb-2"
       }`}
     >
       <AlturaNoHtml />

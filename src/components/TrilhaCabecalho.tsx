@@ -154,15 +154,18 @@ function Sep({ className = "" }: { className?: string }) {
   return <IconChevronRight aria-hidden className={`h-3.5 w-3.5 shrink-0 text-faint ${className}`} />;
 }
 
-/** Um nível com ⌃⌄ que abre a lista. */
-function Nivel({ rotulo, aria, icone: Ic, forte, opcoes, className = "", largura = 260 }: { rotulo: string; aria: string; icone?: Icone; forte?: boolean; opcoes: Opcao[]; className?: string; largura?: number }) {
+/** O nível da PÁGINA ATUAL (o último do caminho): em evidência. */
+const ATUAL = "font-semibold text-text";
+
+/** Um nível com ⌃⌄ que abre a lista. `forte` = true (a página atual) ou as classes do tom. */
+function Nivel({ rotulo, aria, icone: Ic, forte, opcoes, className = "", largura = 260 }: { rotulo: string; aria: string; icone?: Icone; forte?: string | boolean; opcoes: Opcao[]; className?: string; largura?: number }) {
   return (
     <Dropdown
       align="start"
       className={`min-w-0 ${className}`}
       ariaLabel={aria}
       title={rotulo}
-      triggerClassName={`${NIVEL} min-w-0 ${forte ? "font-semibold text-text" : "text-text-2"}`}
+      triggerClassName={`${NIVEL} min-w-0 ${forte === true ? ATUAL : forte || "text-text-2"}`}
       width={largura}
       trigger={
         <>
@@ -225,6 +228,9 @@ export function TrilhaCabecalho({
   const filtro = FILTRADAS.test(pathname) ? pcas.find((p) => p.id === pcaFiltroId) : undefined;
   const fundo = tela.abertos.length > 0 || !!abaAtual;
   const secaoAtual = secao;
+  // A PÁGINA ATUAL = o último nível do caminho, em evidência; os de antes ficam discretos. Abaixo do lg só a Tela aparece.
+  const ultimo = tela.abertos.length ? "aberto" : espaco && abaAtual ? "aba" : detalhe ? "detalhe" : pca ? "pca" : "tela";
+  const tomLg = (n: typeof ultimo) => (ultimo === n ? ATUAL : "text-text-2 max-lg:font-semibold max-lg:text-text");
 
   return (
     <>
@@ -243,17 +249,17 @@ export function TrilhaCabecalho({
           }))}
         />
         <Sep className={`hidden ${fundo ? "2xl:block" : "lg:block"}`} />
-        <Nivel forte rotulo={item.label} icone={item.Icon} aria={`Tela: ${item.label} — trocar de tela`} opcoes={opcoesTela(secao)} className="shrink-0" />
+        <Nivel forte={ultimo === "tela" ? true : tomLg("tela")} rotulo={item.label} icone={item.Icon} aria={`Tela: ${item.label} — trocar de tela`} opcoes={opcoesTela(secao)} className="shrink-0" />
         {pca && (
           <>
             <Sep className="hidden lg:block" />
-            <Nivel className="hidden max-w-[16rem] lg:flex" rotulo={`${pca.ano} · ${pca.nome}`} aria={`PCA: ${pca.nome} — trocar de PCA`} opcoes={opcoesPca} />
+            <Nivel forte={ultimo === "pca"} className="hidden max-w-[16rem] lg:flex" rotulo={`${pca.ano} · ${pca.nome}`} aria={`PCA: ${pca.nome} — trocar de PCA`} opcoes={opcoesPca} />
           </>
         )}
         {detalhe && (
           <>
             <Sep className="hidden lg:block" />
-            <span className="hidden max-w-[14rem] truncate px-2 text-[13px] text-text-2 lg:inline" title={detalhe}>
+            <span className={`hidden max-w-[16rem] truncate px-2 lg:inline ${ultimo === "detalhe" ? `text-[13px] ${ATUAL}` : "text-[13px] text-text-2"}`} title={detalhe}>
               {detalhe}
             </span>
           </>
@@ -262,6 +268,7 @@ export function TrilhaCabecalho({
           <>
             <Sep className="hidden lg:block" />
             <Nivel
+              forte={ultimo === "aba"}
               className="hidden lg:flex"
               rotulo={abaAtual.rotulo}
               aria={`Aba: ${abaAtual.rotulo} — trocar de aba`}
@@ -282,7 +289,7 @@ export function TrilhaCabecalho({
         {tela.abertos.map((a, i) => (
           <span key={a.chave} className={`hidden min-w-0 items-center gap-0.5 ${i < tela.abertos.length - 1 ? "xl:flex" : "lg:flex"}`}>
             <Sep />
-            <span className={`min-w-0 truncate px-2 text-[13px] ${i === tela.abertos.length - 1 ? "font-medium text-text" : "text-text-2"}`} title={a.rotulo}>
+            <span className={`min-w-0 truncate px-2 ${i === tela.abertos.length - 1 ? `text-[13px] ${ATUAL}` : "text-[13px] text-text-2"}`} title={a.rotulo}>
               {a.rotulo}
             </span>
           </span>
