@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.256.0",
+    data: "2026-10-29",
+    titulo: "Telas mais rápidas: cache que não se apaga à toa e telas pré-carregadas",
+    mudancas: [
+      { tipo: "melhoria", area: "Desempenho", texto: "Cada tela acompanha só os dados que mostra: a importação automática dos empenhos e as gravações de Tarefas não recarregam mais a Mesa, o PCA nem o Orçamento — sair e voltar a uma tela já vista abre na hora.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Desempenho", texto: "Tarefas, Calendário, Empenhos, Liquidações, Pagamentos e Execução só recarregam quando os dados deles mudam.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Desempenho", texto: "Com a tela pronta, o sistema pré-carrega em segundo plano as primeiras telas do menu, uma por vez: ir a elas abre sem esperar.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.255.0",
     data: "2026-10-28",
     titulo: "Pesquisa por texto em empenhos, liquidações e pagamentos; pastas e usuários arquivados",

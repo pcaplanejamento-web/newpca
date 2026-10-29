@@ -76,6 +76,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     conta; catálogo, configuração e edições de tabela contam) — a do `memoPorVersao` e do índice da pesquisa. `areaDaRota`:
     Mesa/PCA/Orçamento/Catálogo/Verificação acompanham `dados`; as demais (Tarefas, Calendário, ADM, Perfil, desconhecida),
     `completa`. **Carga nova que leia tarefa/agenda numa tela da área `dados` = tirar a entidade da lista ou a tela da área.**
+  - **Áreas da sincronia (v1.256.0, migração `0168` — índice `auditoria(entidade, id)`):** além de `completa` e `dados`, o
+    `versaoDados` devolve `tarefas` (`DAS_TAREFAS`), `agenda` (`DA_AGENDA`) e `execucao` (`DA_EXECUCAO` — as importações da
+    Centi), cada uma pelo último id POR ENTIDADE no índice (`ultimoDe`); `areaDaRota`: Tarefas → `tarefas`, Calendário →
+    tarefas + agenda + dados, Empenhos/Liquidações/Pagamentos/Execução → `execucao` (a importação automática não recarrega
+    mais nenhuma outra tela). **`PreCarregarTelas`** (`SincronizarDados.tsx`, no `AppShell`): com a tela pronta e o navegador
+    livre, `router.prefetch` completo das 6 primeiras telas do menu, uma a cada 1,5 s; de novo quando as versões mudam, no
+    máximo a cada 30 min (o limite de 100 mil pedidos/dia); nada com a aba escondida, economia de dados ou 2G.
   - **Navegador:** `next.config` `experimental.staleTimes {dynamic:7200, static:7200}` (v1.129.0; 2 h desde a v1.132.0) — telas/abas já vistas voltam do cache na hora;
     os links do menu (`AppShell`, `BottomNav`) e os cartões de PCA/Orçamento/Quadro/espaço levam `unstable_dynamicOnHover` (a página
     completa é pedida ao passar o mouse ou encostar o dedo — o clique reaproveita);

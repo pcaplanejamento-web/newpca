@@ -918,6 +918,7 @@ export const auditoria = sqliteTable(
   },
   (t) => [
     index("auditoria_entidade_idx").on(t.entidade, t.entidadeId),
+    index("auditoria_entidade_id_idx").on(t.entidade, t.id),
     index("auditoria_usuario_idx").on(t.usuarioId),
     index("auditoria_criado_idx").on(t.criadoEm),
     index("auditoria_protocolo_idx").on(t.protocoloId),

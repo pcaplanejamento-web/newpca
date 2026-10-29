@@ -12,7 +12,7 @@ export async function GET() {
   const g = await exigirUsuario();
   if ("erro" in g) return g.erro;
   const v = await versaoDados();
-  const r = ok({ versao: v.completa, dados: v.dados });
+  const r = ok({ versao: v.completa, dados: v.dados, tarefas: v.tarefas, agenda: v.agenda, execucao: v.execucao });
   r.headers.set("Cache-Control", "no-store");
   return r;
 }

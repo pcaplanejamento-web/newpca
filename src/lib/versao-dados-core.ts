@@ -30,21 +30,63 @@ export function contaNosDados(entidade: string): boolean {
   return !(FORA_DOS_DADOS as readonly string[]).includes(entidade);
 }
 
-export type AreaVersao = "dados" | "completa";
+/** As entidades que só o módulo de TAREFAS lê (a versão `tarefas`). */
+export const DAS_TAREFAS = [
+  "tarefa",
+  "tarefa_quadro",
+  "tarefa_lista",
+  "tarefa_etiqueta",
+  "tarefa_pasta",
+  "tarefa_equipe",
+  "tarefa_campo",
+  "tarefa_automacao",
+  "tarefa_modelo",
+  "trello_integracao",
+] as const;
+
+/** As entidades da AGENDA (o Calendário soma estas às de Tarefas e aos dados — o cronograma do PCA). */
+export const DA_AGENDA = ["agenda_externa", "feriado"] as const;
+
+/** As entidades da EXECUÇÃO (Empenhos, Liquidações, Pagamentos e Execução: as importações da Centi). */
+export const DA_EXECUCAO = ["empenho_card", "centi_api"] as const;
+
+/**
+ * As ÁREAS da sincronia: cada tela acompanha SÓ a versão do que mostra, para que uma gravação de outra área (a importação
+ * automática dos empenhos, um comentário de tarefa) não recarregue a tela aberta nem apague o cache das outras.
+ */
+export type AreaVersao = "dados" | "tarefas" | "calendario" | "execucao" | "completa";
 
 /** As telas que só leem dados de Mesa/PCA/Orçamento/Catálogo/Verificação (versão `dados`). */
 const TELAS_DOS_DADOS = ["/painel/mesa", "/painel/pca", "/painel/orcamento", "/painel/catalogo", "/painel/verificacao"];
+const TELAS_DA_EXECUCAO = ["/painel/empenhos", "/painel/liquidacoes", "/painel/pagamentos", "/painel/execucao"];
 
-/** Qual versão a tela da rota acompanha: as telas dos dados → `dados`; todas as outras (e as desconhecidas) → `completa`. */
+const em = (p: string, telas: readonly string[]) => telas.some((t) => p === t || p.startsWith(`${t}/`));
+
+/** Qual versão a tela da rota acompanha; as desconhecidas, a completa (recarregar a mais, nunca a menos). */
 export function areaDaRota(pathname: string | null | undefined): AreaVersao {
   const p = pathname ?? "";
-  return TELAS_DOS_DADOS.some((t) => p === t || p.startsWith(`${t}/`)) ? "dados" : "completa";
+  if (em(p, TELAS_DOS_DADOS)) return "dados";
+  if (em(p, ["/painel/tarefas"])) return "tarefas";
+  if (em(p, ["/painel/calendario"])) return "calendario";
+  if (em(p, TELAS_DA_EXECUCAO)) return "execucao";
+  return "completa";
 }
 
-/** As duas versões, como o servidor as entrega. */
-export type VersoesDados = { completa: string; dados: string };
+/** As versões, como o servidor as entrega. */
+export type VersoesDados = { completa: string; dados: string; tarefas: string; agenda: string; execucao: string };
 
-/** A versão que a tela da rota acompanha. */
+/** A versão que a tela da rota acompanha (o Calendário = tarefas + agenda + dados: o cronograma do PCA). */
 export function versaoDaRota(v: VersoesDados, pathname: string | null | undefined): string {
-  return areaDaRota(pathname) === "dados" ? v.dados : v.completa;
+  switch (areaDaRota(pathname)) {
+    case "dados":
+      return v.dados;
+    case "tarefas":
+      return v.tarefas;
+    case "calendario":
+      return `${v.tarefas}|${v.agenda}|${v.dados}`;
+    case "execucao":
+      return v.execucao;
+    default:
+      return v.completa;
+  }
 }
