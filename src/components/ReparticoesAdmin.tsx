@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
@@ -84,9 +85,7 @@ export function ReparticoesAdmin({
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch(`/api/admin/reparticoes?orgaoId=${orgaoId}`);
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; reparticoes?: Rep[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar as unidades.");
+      const j = await lerJsonGuardado<{ reparticoes?: Rep[] }>("adm.unidades", `/api/admin/reparticoes?orgaoId=${orgaoId}`, "Erro ao carregar as unidades.");
       setLista(j.reparticoes ?? []);
       setErro(null);
     } catch (e) {

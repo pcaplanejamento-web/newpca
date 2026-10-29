@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import type { CargoComUso } from "@/lib/cargos";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -40,9 +41,7 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch("/api/admin/cargos");
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; cargos?: CargoComUso[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar os cargos.");
+      const j = await lerJsonGuardado<{ cargos?: CargoComUso[] }>("adm.cargos", "/api/admin/cargos", "Erro ao carregar os cargos.");
       setLista(j.cargos ?? []);
       setErro(null);
     } catch (e) {

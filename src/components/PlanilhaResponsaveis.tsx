@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resumoEstado } from "@/lib/dfd-tratamento";
 import { hojeISO } from "@/lib/reparticao-responsaveis";
@@ -72,9 +73,8 @@ export function usePlanilhaResponsaveis() {
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch("/api/admin/responsaveis");
-      const j = (await r.json().catch(() => ({}))) as Resposta;
-      if (!r.ok || !j.ok || !j.planilha) throw new Error(j.error ?? "Não foi possível carregar os responsáveis.");
+      const j = await lerJsonGuardado<Resposta>("adm.responsaveis", "/api/admin/responsaveis", "Não foi possível carregar os responsáveis.");
+      if (!j.planilha) throw new Error("Não foi possível carregar os responsáveis.");
       setPlanilha(j.planilha);
       setErro(null);
     } catch (e) {

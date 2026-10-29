@@ -65,6 +65,7 @@ function obterCanal(): BroadcastChannel | null {
     canal.onmessage = (ev) => {
       const m = ev.data as { t?: string; pessoa?: number; entrada?: EntradaDado };
       if (m?.t === "apagar") memoria.clear();
+      if (m?.t === "gravou") gravou(false);
       // Outra aba buscou um dado: esta já o tem, sem pedir de novo (só da MESMA pessoa e do mesmo formato).
       if (m?.t === "valor" && m.entrada && escopo && m.entrada.pessoa === escopo.pessoa && m.entrada.formato === FORMATO_DADOS)
         memoria.set(m.entrada.chave, m.entrada);
@@ -183,6 +184,47 @@ let versaoGeral = "";
 export function definirVersaoGeral(v: string): void {
   if (v) versaoGeral = v;
 }
+/** Gravações feitas NESTA aba (e nas outras, pelo canal): mudam a versão local na hora, sem esperar o servidor. */
+let geracao = 0;
 export function versaoGeralDados(): string {
-  return versaoGeral;
+  return versaoGeral ? `${versaoGeral}.${geracao}` : "";
+}
+function gravou(avisar: boolean): void {
+  geracao++;
+  if (avisar) obterCanal()?.postMessage({ t: "gravou" });
+}
+let vigiando = false;
+/** Toda gravação ao servidor (POST/PUT/PATCH/DELETE em /api/) torna velho o que depende da versão geral. */
+export function vigiarGravacoes(): void {
+  if (vigiando || typeof window === "undefined") return;
+  vigiando = true;
+  const original = window.fetch.bind(window);
+  window.fetch = async (entrada: RequestInfo | URL, init?: RequestInit) => {
+    const metodo = (init?.method ?? (entrada instanceof Request ? entrada.method : "GET")).toUpperCase();
+    const url = typeof entrada === "string" ? entrada : entrada instanceof URL ? entrada.href : entrada.url;
+    const grava = metodo !== "GET" && metodo !== "HEAD" && /(^|\/\/[^/]+)\/api\//.test(url) && !/\/api\/(erros|perfil\/eventos|chat\/sinal|dados\/versao)/.test(url);
+    try {
+      return await original(entrada, init);
+    } finally {
+      if (grava) gravou(true);
+    }
+  };
+}
+
+/**
+ * O ADAPTADOR das telas que leem um JSON `{ ok, ... }`: o mesmo resultado do `fetch` + `json`, guardado no navegador pela
+ * versão GERAL (nenhuma gravação desde então = sem pedir de novo). Falha (rede, `ok:false`) lança com a mensagem do servidor.
+ */
+export async function lerJsonGuardado<T extends object>(recurso: string, url: string, falha = "Não foi possível carregar.", fresco = false): Promise<T & { ok: true }> {
+  return lerDado(
+    recurso,
+    url,
+    versaoGeralDados(),
+    async (r) => {
+      const j = (await r.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? falha);
+      return j as T & { ok: true };
+    },
+    fresco,
+  );
 }

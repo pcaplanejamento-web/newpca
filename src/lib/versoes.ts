@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.260.3",
+    data: "2026-10-29",
+    titulo: "Telas da Administração guardadas no navegador",
+    mudancas: [
+      { tipo: "melhoria", area: "Administração", texto: "Grupos, Órgãos, Unidades, Responsáveis, Situações e Cargos reabrem na hora enquanto nada novo foi gravado; gravar qualquer coisa renova na hora.", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Histórico", texto: "Depois de gravar, o histórico guardado é renovado na hora (antes podia esperar até um minuto).", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.260.2",
     data: "2026-10-29",
     titulo: "Itens da Mesa e histórico guardados no navegador",
