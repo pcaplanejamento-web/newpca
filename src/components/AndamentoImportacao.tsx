@@ -194,7 +194,7 @@ export function AndamentoDoServidor({ lote: l }: { lote: LoteAoVivo }) {
               <li key={p.id} className="space-y-0.5 px-2.5 py-1.5">
                 <div className="flex items-center gap-2">
                   <IconeFase fase={fase} />
-                  <span className="min-w-0 flex-1 truncate font-medium text-text tabular-nums">
+                  <span className="line-clamp-2 min-w-0 flex-1 break-words font-medium text-text tabular-nums">
                     {rotuloPeriodo(p)} · {pag(p.pagina, frota || p.estado !== "erro" ? p.mensagem : null)}
                   </span>
                   <span className="shrink-0 text-muted">{guardando ? `começou ${quando(p.em, agora)}` : quando(p.em, agora)}</span>

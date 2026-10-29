@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.261.0",
+    data: "2026-10-29",
+    titulo: "Importações sem travas e o painel “Em segundo plano” manuseável como as bolhas do chat",
+    mudancas: [
+      { tipo: "novo", area: "Importações", texto: "O painel “Em segundo plano” é manuseado como as bolhas do chat: arraste para qualquer lugar (com o mouse ou o dedo), arremesse e ele encosta na borda mais perto; leve-o à lixeira para dispensar os que terminaram; Alt + setas movem pelo teclado; a posição fica guardada neste aparelho. As bolhas do chat desviam dele.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Importações", texto: "Tocar no painel fechado abre o banner POR CIMA dele (a pílula continua à vista); tocar de novo fecha, suavemente.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Importações", texto: "Atualização automática da Centi: depois de ler um dia pesado ela segue direto para o dia seguinte (antes pedia de novo a semana e a dividia outra vez), a fila alterna entre os cards (uma leitura longa não deixa os outros sem a vez) e uma leitura que falha sem parar é descartada e pedida de novo.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "O andamento da importação automática anda pelos bytes (um dia de 5 MB conta o que pesa — antes ficava em 0%), mostra os registros que estão sendo gravados, o baixado de verdade e a última atividade; o passo “Gravando no banco…” que falhou vira erro em vez de girar para sempre.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Frotas", texto: "Quando a Vólus não responde a tempo, o período seguinte é a metade (antes repetia os mesmos 24 dias para sempre); o tempo vale até ler a resposta inteira, a importação manual divide o período lento e espera a automática terminar o mesmo contrato.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Frotas", texto: "No painel das importações, o passo com erro mostra o contrato e o tipo, “Falhou” só aparece com um contrato em espera depois de um erro (com o nome dele) e não há mais “100%” ao lado de “Falhou”.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Navegação", texto: "No celular, o cabeçalho fica só com o essencial (menu, PCA, conversas e avisos): a logo e a foto do perfil ficam no menu, o tema no Perfil → Aparência e a página pública na marca do menu.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.260.0",
     data: "2026-10-29",
     titulo: "Frotas: tabelas da Mesa, Órgão e Unidade do sistema e banners organizados",

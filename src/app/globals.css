@@ -793,6 +793,11 @@
   animation: janela-sai 60ms cubic-bezier(0.4, 0, 1, 1) both;
   pointer-events: none;
 }
+/* O banner do painel "Em segundo plano" fecha SUAVE: encolhe de volta à pílula (a origem é ela) e some. */
+.animate-painel-sai {
+  animation: janela-sai calc(var(--motion-duration) * 1.4) cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
 /* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */
 @keyframes lixeira-entra {
   0% {
@@ -827,6 +832,7 @@
   .animate-cabeca-entra,
   .animate-janela-cresce,
   .animate-janela-sai,
+  .animate-painel-sai,
   .animate-lixeira-entra,
   .animate-lixeira-sai {
     animation: none;
@@ -835,6 +841,7 @@
 [data-motion="off"] .animate-cabeca-entra,
 [data-motion="off"] .animate-janela-cresce,
 [data-motion="off"] .animate-janela-sai,
+[data-motion="off"] .animate-painel-sai,
 [data-motion="off"] .animate-lixeira-entra,
 [data-motion="off"] .animate-lixeira-sai,
 [data-motion="reduced"] .animate-cabeca-entra,

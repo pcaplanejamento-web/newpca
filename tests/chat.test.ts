@@ -352,3 +352,19 @@ describe("não lidas REAIS (v1.17.3)", () => {
     assert.equal(naoLidasAoCarregar(Number.NaN, [], 1, Number.POSITIVE_INFINITY), 0);
   });
 });
+
+describe("bolhas — desviam do painel “Em segundo plano” (v1.261.0)", () => {
+  it("nenhuma bolha pousa na faixa do painel, no lado dele (ou nos dois, quando ele ocupa a largura)", async () => {
+    const { arrumarBolhas } = await import("../src/lib/chat-core.ts");
+    const base = { largura: 1280, altura: 800, topo: 64, base: 16, tam: 56 };
+    const painel = { lado: "dir" as const, top: 600, altura: 184 };
+    const l = arrumarBolhas({ a: { lado: "dir", y: 1, t: 2 }, b: { lado: "dir", y: 1, t: 1 } }, ["a", "b"], { ...base, fixos: [painel] });
+    for (const k of ["a", "b"]) assert.ok(l[k].top + 56 + 10 <= painel.top + 0.5, `${k} acima do painel`);
+    // Do outro lado, o painel não atrapalha.
+    const e = arrumarBolhas({ a: { lado: "esq", y: 1, t: 1 } }, ["a"], { ...base, fixos: [painel] });
+    assert.equal(e.a.top, 800 - 16 - 56);
+    // No celular o painel cobre os dois lados (`ambos`).
+    const c = arrumarBolhas({ a: { lado: "esq", y: 1, t: 1 } }, ["a"], { ...base, fixos: [{ ...painel, ambos: true }] });
+    assert.ok(c.a.top + 56 + 10 <= painel.top + 0.5);
+  });
+});

@@ -167,6 +167,7 @@ KpiStat.tsx
 LinkCard.tsx
 LinkExterno.tsx
 ListaEscolhaIds.tsx
+LixeiraFlutuante.tsx
 MarcaSistema.tsx
 MatrizCapacidades.tsx
 MatrizEdicoes.tsx

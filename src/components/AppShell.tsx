@@ -1,13 +1,11 @@
 "use client";
 
 import type { VersoesDados } from "@/lib/versao-dados-core";
-import Link from "next/link";
 import { Button } from "./Button";
 import { rotaInicial } from "@/lib/abas";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { chaveDaRota } from "@/lib/escopo-unidades-core";
 import { type ReactNode, useRef, useState } from "react";
-import { Avatar } from "./Avatar";
 import { ContasNavegador } from "./ContasNavegador";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
@@ -30,7 +28,6 @@ import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral"
 import { SeletorUnidade } from "./SeletorUnidade";
 import { toast } from "./Toast";
 import {
-  IconBox,
   IconLandmark,
   IconCheck,
   IconClock,
@@ -46,7 +43,6 @@ import {
   IconWeb,
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
-import { nomeExibicao } from "@/lib/pessoa";
 
 type NavItem = {
   href: string;
@@ -367,10 +363,6 @@ export function AppShell({
           onMenu={() => setMenuAberto(true)}
           inicio={
             <>
-          {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
-          <div className={`shrink-0 sm:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
-            <MarcaLink href="/" dica={DICA_SITE} compacta identidade={identidade} />
-          </div>
           {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
           <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} pcaFiltroId={pcaFiltroId} />
             </>
@@ -395,14 +387,15 @@ export function AppShell({
               </ChatAoVivo>
             )}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
-            <ThemeToggle />
-            <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
-              <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
-            </Link>
-            {/* O último item: atalho para a página pública (no celular, só o ícone). */}
-            <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
-              <span className="hidden sm:inline">Site</span>
-            </Button>
+            {/* No celular o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos): o tema mora no Perfil → Aparência
+                e a página pública na marca do menu — a logo e a foto ficam SÓ no menu. */}
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <ThemeToggle />
+              {/* O último item: atalho para a página pública. */}
+              <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
+                Site
+              </Button>
+            </div>
             </>
           }
         />

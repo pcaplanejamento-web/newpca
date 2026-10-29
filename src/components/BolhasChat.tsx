@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   type AmostraArrasto,
@@ -16,8 +16,10 @@ import {
   VAO_BOLHAS,
   velocidadeArrasto,
 } from "@/lib/chat-core";
+import { assinarFaixaFlutuante, lerFaixaFlutuante } from "@/lib/flutuantes-store";
+import { LIXEIRA, LixeiraFlutuante, semMovimento } from "./LixeiraFlutuante";
 import { Avatar } from "./Avatar";
-import { IconTrash, IconUsers } from "./icons";
+import { IconUsers } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { segurar } from "./segurar";
 
@@ -40,16 +42,12 @@ const TAM = { celular: 48, desktop: 56 };
 const MARGEM = 12;
 const LIMIAR = 6;
 const JANELA = { largura: 340, altura: 480 };
-/** A LIXEIRA: o tamanho, a distância da base da área livre e o raio em que a bolha é ATRAÍDA para dentro dela. */
-const LIXEIRA = { tam: 64, base: 28, ima: 72 };
 
 function tela() {
   const largura = window.innerWidth;
   const altura = window.innerHeight;
   const desktop = largura >= 1024;
-  // O painel de trabalhos em segundo plano (canto inferior direito) reserva a altura dele: as bolhas ficam acima.
-  const reserva = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--reserva-flutuante")) || 0;
-  return { largura, altura, desktop, topo: 64, base: (desktop ? 16 : 84) + reserva, tam: desktop ? TAM.desktop : TAM.celular };
+  return { largura, altura, desktop, topo: 64, base: desktop ? 16 : 84, tam: desktop ? TAM.desktop : TAM.celular };
 }
 
 /** A prévia de onde a bolha vai pousar: os lugares de TODAS (as outras já abrindo espaço), o alvo dela e se o ímã agiu. */
@@ -58,12 +56,6 @@ type Previa = ReturnType<typeof previaArrasto>;
  * velocidade e a PRÉVIA (as outras abrem espaço AO VIVO; a sombra mostra onde ela pousa). */
 type Arrasto = { chave: string; x: number; y: number; naLixeira: boolean; rot: number; previa: Previa | null };
 
-/** "Reduzir movimento" (sistema ou o ADM): sem inclinação nem voo. */
-function semMovimento(): boolean {
-  if (typeof window === "undefined") return false;
-  const m = document.documentElement.dataset.motion;
-  return m === "off" || m === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 /** O pouso (FLIP): `ini` = cada bolha parada onde estava · `voo` = voando até o lugar novo (o fator da duração cresce com a
  * distância — um arremesso longo voa mais). */
 type Pouso = { fase: "ini" | "voo"; mapa: Map<string, { dx: number; dy: number; fator: number }> };
@@ -110,7 +102,10 @@ export function BolhasChat({
   /** O conteúdo da janela de uma conversa (a aberta, ou a que está fechando — a animação de saída). */
   janela: (c: Conversa) => ReactNode;
 }) {
-  const [t, setT] = useState<ReturnType<typeof tela> | null>(null);
+  const [medida, setT] = useState<ReturnType<typeof tela> | null>(null);
+  // O painel "Em segundo plano" (onde estiver — arrastável): as bolhas pousam fora da faixa dele.
+  const faixa = useSyncExternalStore(assinarFaixaFlutuante, lerFaixaFlutuante, () => null);
+  const t = useMemo(() => (medida ? { ...medida, fixos: faixa ? [faixa] : [] } : null), [medida, faixa]);
   /** Encerra o arrasto em curso (a janela mudou de tamanho no meio dele — as medidas mudaram). */
   const cancelarRef = useRef<(() => void) | null>(null);
   useEffect(() => {
@@ -501,21 +496,7 @@ export function BolhasChat({
           </li>
         )}
       </ul>
-      {arrasto && arrasto.chave !== "+" && (
-        <div
-          aria-hidden="true"
-          className={`pointer-events-none fixed z-[59] ${arrastando ? "animate-lixeira-entra" : "animate-lixeira-sai"}`}
-          style={{ width: LIXEIRA.tam, height: LIXEIRA.tam, left: lixeira.x - LIXEIRA.tam / 2, top: lixeira.y - LIXEIRA.tam / 2 }}
-        >
-          <span
-            className={`flex h-full w-full items-center justify-center rounded-full text-white shadow-flutuante transition-[background-color,transform] duration-[var(--motion-duration)] ${
-              arrasto.naLixeira ? "scale-[1.18] bg-[var(--danger)]" : "bg-[color-mix(in_oklab,var(--text)_70%,transparent)]"
-            }`}
-          >
-            <IconTrash className={`h-6 w-6 transition-transform duration-[var(--motion-duration)] ${arrasto.naLixeira ? "-rotate-12 scale-110" : ""}`} />
-          </span>
-        </div>
-      )}
+      {arrasto && arrasto.chave !== "+" && <LixeiraFlutuante x={lixeira.x} y={lixeira.y} aberta={arrastando} ativa={arrasto.naLixeira} />}
       {arrastando && arrasto.chave !== "+" && (
         <p aria-live="polite" className="sr-only">
           {arrasto.naLixeira ? "Solte para excluir a conversa" : "Arraste até a lixeira para excluir"}

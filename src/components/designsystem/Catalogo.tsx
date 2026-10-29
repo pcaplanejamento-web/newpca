@@ -238,6 +238,7 @@ import { ItemNotificacao } from "@/components/SinoNotificacoes";
 import { PresencaGrupo, SeloAoVivo } from "@/components/PresencaGrupo";
 import { CanalGrupoDemo } from "@/components/CanalGrupo";
 import { FotoBolha } from "@/components/BolhasChat";
+import { LixeiraFlutuante } from "@/components/LixeiraFlutuante";
 import { AtividadePessoa, PresencaNoItem } from "@/components/PresencaNoItem";
 import { Balao, ChatAoVivo, Digitando } from "@/components/ChatAoVivo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
@@ -4070,6 +4071,14 @@ export function Catalogo() {
           <FotoBolha b={{ rotulo: "Carlão", fotos: [{ nome: PESSOAS_DEMO[1].nome, foto: PESSOAS_DEMO[1].foto }], presenca: "online" }} />
           <FotoBolha b={{ rotulo: "Compras", fotos: PESSOAS_DEMO.slice(1, 4).map((p) => ({ nome: p.nome, foto: p.foto })) }} />
           <FotoBolha b={{ rotulo: "Grupo · Planejamento", fotos: [], grupoAtivo: true }} />
+        </div>
+      </Secao>
+
+      <Secao titulo="LixeiraFlutuante (a LIXEIRA dos flutuantes — as bolhas do chat e o painel “Em segundo plano”: surge no centro embaixo enquanto um deles é arrastado; vermelha quando ele está sobre ela, âmbar quando não aceita — um trabalho ainda em andamento)">
+        <div className="relative flex h-24 gap-4 [transform:translateZ(0)]">
+          <LixeiraFlutuante x={40} y={44} aberta ativa={false} />
+          <LixeiraFlutuante x={120} y={44} aberta ativa />
+          <LixeiraFlutuante x={200} y={44} aberta ativa bloqueada />
         </div>
       </Secao>
 
