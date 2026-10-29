@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.9",
+    data: "2026-10-29",
+    titulo: "Telas internas sem título, com o voltar à esquerda",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Dentro de um PCA a primeira linha é o voltar à esquerda, as abas e as ferramentas — sem o nome, o ano e os selos (o nome está no caminho do cabeçalho).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Dentro de um orçamento: o voltar e as abas primeiro, os números em indicadores logo abaixo; excluir fica no fim da linha.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Tarefas", texto: "No quadro, o nome saiu do topo (está no caminho do cabeçalho) — renomear o quadro agora é na Configuração.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Catálogo", texto: "Na pasta: o voltar e as visões primeiro, os números da pasta em indicadores abaixo.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Órgãos", texto: "Nas unidades de um órgão, o voltar à esquerda das abas, sem o título.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Importações", texto: "No card aberto: o voltar, as seções e as ferramentas numa linha, a situação e excluir à direita, os números em indicadores abaixo.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.264.8",
     data: "2026-10-29",
     titulo: "A lateral direita sem recuo e as telas do ADM arrumadas",

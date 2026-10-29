@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { brlCompact, num } from "@/lib/format";
@@ -8,10 +7,10 @@ import type { OrcamentoResumo } from "@/lib/orcamento";
 import { dotacaoAtualizada, pctEmpenhado } from "@/lib/orcamento-indicadores";
 import { AbasEspaco } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
-import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
-import { IconCalendar, IconChevronLeft, IconTrash } from "./icons";
+import { IconTrash } from "./icons";
+import { type CartaoKpi, IndicadoresKpi } from "./IndicadoresKpi";
 import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes";
@@ -63,56 +62,32 @@ export function OrcamentoEspacoView({
     setFalha(true);
   }
 
-  const indicadores = [
-    { rotulo: "Dotação atualizada", valor: brlCompact(dotacaoAtualizada(o)) },
-    { rotulo: "Empenhado", valor: `${brlCompact(o.empenho)} · ${Math.round(pctEmpenhado(o))}%` },
-    { rotulo: "Saldo", valor: brlCompact(o.saldo) },
-    { rotulo: "Lançamentos", valor: num(o.totalItens) },
+  // Os números do orçamento em indicadores (dois detalhes cada), logo abaixo da linha das abas.
+  const cartoes: CartaoKpi[] = [
+    { label: "Dotação atualizada", value: brlCompact(dotacaoAtualizada(o)), cor: "var(--accent)", detalhes: [{ rotulo: "Inicial", valor: brlCompact(o.valorInicial) }, { rotulo: "Ano", valor: String(o.ano) }] },
+    { label: "Empenhado", value: brlCompact(o.empenho), detalhes: [{ rotulo: "Da dotação", valor: `${Math.round(pctEmpenhado(o))}%` }, { rotulo: "Saldo", valor: brlCompact(o.saldo) }] },
+    { label: "Saldo", value: brlCompact(o.saldo), cor: "var(--ok)", detalhes: [{ rotulo: "Da dotação", valor: `${Math.round(100 - pctEmpenhado(o))}%` }, { rotulo: "Empenhado", valor: brlCompact(o.empenho) }] },
+    { label: "Lançamentos", value: num(o.totalItens), detalhes: [{ rotulo: "Orçamento", valor: o.nome }, { rotulo: "Ano", valor: String(o.ano) }] },
   ];
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Link
-            href="/painel/orcamento"
-            aria-label="Voltar para Orçamento"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-          >
-            <IconChevronLeft className="h-4 w-4" />
-          </Link>
-          <h1 className="min-w-0 truncate text-[26px] font-bold leading-[44px] tracking-tight lg:text-2xl text-text lg:leading-[var(--h-control-sm)]" title={o.nome}>
-            {o.nome}
-          </h1>
-          <Badge tone="blue" tamanho="linha" className="shrink-0 tabular-nums">
-            <IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
-            {o.ano}
-          </Badge>
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-          {indicadores.map((i) => (
-            <div key={i.rotulo} className="flex items-baseline gap-1.5">
-              <dt className="text-muted">{i.rotulo}</dt>
-              <dd className="font-semibold tabular-nums text-text">{i.valor}</dd>
-            </div>
-          ))}
-        </dl>
-        {podeExcluir && (
-          <Button
-            size="sm"
-            variant="icon"
-            className="ml-auto"
-            loading={excluindo}
-            aria-label={`Excluir o orçamento ${o.nome}`}
-            title="Excluir orçamento"
-            icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-            onClick={excluir}
-          />
-        )}
-      </div>
-
       <AbasEspaco<AbaOrcamento>
         aba={aba}
+        voltar={{ href: "/painel/orcamento", rotulo: "Orçamento" }}
+        fim={
+          podeExcluir ? (
+            <Button
+              size="sm"
+              variant="icon"
+              loading={excluindo}
+              aria-label={`Excluir o orçamento ${o.nome}`}
+              title="Excluir orçamento"
+              icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+              onClick={excluir}
+            />
+          ) : undefined
+        }
         opcoes={([
           { value: "lancamentos", label: "Lançamentos" },
           { value: "comparativo", label: "Comparativo" },
@@ -120,6 +95,7 @@ export function OrcamentoEspacoView({
           { value: "visoes", label: "Visões" },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >
+        <IndicadoresKpi chave="orcamento:indicadores" cartoes={cartoes} />
         {children}
       </AbasEspaco>
 

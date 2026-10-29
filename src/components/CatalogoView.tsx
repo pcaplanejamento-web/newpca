@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
@@ -25,7 +24,9 @@ import { HistoricoCompraModal } from "./HistoricoCompraView";
 import { ImportarHistorico } from "./ImportarHistorico";
 import { QuadroNovoCard } from "./QuadroCard";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
-import { StatMini } from "./StatMini";
+import { BotaoVoltar } from "./AbasEspaco";
+import { useOndeDetalhe } from "./CanalGrupo";
+import { IndicadoresKpi } from "./IndicadoresKpi";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -33,7 +34,7 @@ import { CatalogoItemDetalhe } from "./CatalogoItemDetalhe";
 import { type Column, DataTable } from "./DataTable";
 import { Dropzone } from "./Dropzone";
 import { SearchField, SelectField, TextArea, TextField } from "./Field";
-import { IconAlert, IconChevronLeft, IconCompra, IconDownload, IconInbox, IconPasta, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
+import { IconAlert, IconCompra, IconDownload, IconInbox, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { useComponente } from "./ComponentesPapel";
@@ -807,67 +808,18 @@ export function CatalogoView({
       onExcluir={pode.excluir ? () => excluir(c) : undefined}
     />
   );
+  useOndeDetalhe(pasta?.nome);
   // Números da tela da pasta (a análise do conjunto).
   const valorHistorico = catalogos.reduce((t, c) => t + (c.tipo === "historico" ? c.valor : 0), 0);
   const contratosHistorico = catalogos.reduce((t, c) => t + (c.tipo === "historico" ? c.contratos : 0), 0);
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {pasta && (
-        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
-          <StatMini label="Catálogos da agenda" value={num(nAgenda)} />
-          <StatMini label="Itens da agenda" value={num(itens.length)} />
-          <StatMini label="Históricos de compra" value={num(nHistorico)} />
-          <StatMini label="Contratos" value={num(contratosHistorico)} />
-          <StatMini label="Valor comprado" value={brl(valorHistorico)} tone="accent" className="col-span-2 sm:col-span-1" />
-        </div>
-      )}
+      {/* A linha do topo: na pasta, o voltar à esquerda; as visões; "Exportar modelo" e as ações da pasta à direita. Sem título
+          (a pasta está no caminho do cabeçalho). */}
       <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
-        {pasta ? (
-          <div className="flex min-w-0 items-center gap-2">
-            <Link
-              href="/painel/catalogo"
-              aria-label="Voltar para o Catálogo"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-            >
-              <IconChevronLeft className="h-4 w-4" />
-            </Link>
-            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-control text-white" style={{ background: pasta.cor }}>
-              <IconPasta className="h-4 w-4" />
-            </span>
-            <h1 className="min-w-0 truncate text-[15px] font-bold text-text" title={pasta.nome}>
-              {pasta.nome}
-            </h1>
-            {podeEditar && (
-              <>
-                <Button
-                  size="sm"
-                  variant="icon"
-                  aria-label={`Editar a pasta ${pasta.nome}`}
-                  title="Editar pasta"
-                  icon={<IconPencil className="h-4 w-4" />}
-                  onClick={() => {
-                    setErroPasta(null);
-                    setEditorPasta({ aberto: true, pasta: { ...pasta, catalogos: catalogos.map((c) => c.id) } });
-                  }}
-                />
-                <Button
-                  size="sm"
-                  variant="icon"
-                  aria-label={`Excluir a pasta ${pasta.nome}`}
-                  title="Excluir pasta (os catálogos ficam)"
-                  icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-                  onClick={async () => {
-                    if (await confirmar({ titulo: `Excluir a pasta "${pasta.nome}"?`, texto: "Só a pasta sai — os catálogos dela voltam para a grade, como estão.", confirmar: "Excluir", perigo: true }))
-                      void excluirPasta(pasta);
-                  }}
-                />
-              </>
-            )}
-          </div>
-        ) : (
-          <h1 className="sr-only">Catálogo</h1>
-        )}
+        <h1 className="sr-only">{pasta ? pasta.nome : "Catálogo"}</h1>
+        {pasta && <BotaoVoltar href="/painel/catalogo" rotulo="Catálogo" />}
         {/* As visões à esquerda (principal); "Exportar modelo" à direita (secundário). */}
         <div className="flex min-w-0 max-w-full flex-1 flex-wrap items-center gap-2">
           <Segmented
@@ -886,19 +838,58 @@ export function CatalogoView({
                   ]),
             ].filter((o) => libera(CHAVE_VISTA[o.value]))}
           />
-          {papelImporta && !padronizacao && (
-            <Button
-              className="ml-auto"
-              variant="secondary"
-              icon={<IconDownload className="h-[18px] w-[18px]" />}
-              onClick={exportarModeloCatalogoXlsx}
-              title="Baixar um modelo .xlsx para preencher e importar"
-            >
-              Exportar modelo
-            </Button>
+          <div className="ml-auto flex items-center gap-2">
+            {papelImporta && !padronizacao && (
+              <Button
+                variant="secondary"
+                icon={<IconDownload className="h-[18px] w-[18px]" />}
+                onClick={exportarModeloCatalogoXlsx}
+                title="Baixar um modelo .xlsx para preencher e importar"
+              >
+                Exportar modelo
+              </Button>
+            )}
+            {pasta && podeEditar && (
+            <>
+              <Button
+                size="sm"
+                variant="icon"
+                aria-label={`Editar a pasta ${pasta.nome}`}
+                title="Editar pasta"
+                icon={<IconPencil className="h-4 w-4" />}
+                onClick={() => {
+                  setErroPasta(null);
+                  setEditorPasta({ aberto: true, pasta: { ...pasta, catalogos: catalogos.map((c) => c.id) } });
+                }}
+              />
+              <Button
+                size="sm"
+                variant="icon"
+                aria-label={`Excluir a pasta ${pasta.nome}`}
+                title="Excluir pasta (os catálogos ficam)"
+                icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                onClick={async () => {
+                  if (await confirmar({ titulo: `Excluir a pasta "${pasta.nome}"?`, texto: "Só a pasta sai — os catálogos dela voltam para a grade, como estão.", confirmar: "Excluir", perigo: true }))
+                    void excluirPasta(pasta);
+                }}
+              />
+            </>
           )}
+          </div>
         </div>
       </div>
+
+      {pasta && (
+        <IndicadoresKpi
+          chave="catalogo:pasta:indicadores"
+          cartoes={[
+            { label: "Valor comprado", value: brl(valorHistorico), cor: "var(--accent)", detalhes: [{ rotulo: "Contratos", valor: num(contratosHistorico) }, { rotulo: "Históricos", valor: num(nHistorico) }] },
+            { label: "Catálogos da agenda", value: num(nAgenda), detalhes: [{ rotulo: "Itens", valor: num(itens.length) }, { rotulo: "Na pasta", valor: num(catalogos.length) }] },
+            { label: "Itens da agenda", value: num(itens.length), detalhes: [{ rotulo: "Catálogos", valor: num(nAgenda) }, { rotulo: "Média", valor: nAgenda ? num(Math.round(itens.length / nAgenda)) : "—" }] },
+            { label: "Históricos de compra", value: num(nHistorico), detalhes: [{ rotulo: "Contratos", valor: num(contratosHistorico) }, { rotulo: "Valor", valor: brl(valorHistorico) }] },
+          ]}
+        />
+      )}
 
 
       {erroImport && !preview && !padronizacao && (

@@ -5573,6 +5573,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
+- **TELAS INTERNAS (v1.264.9) — regra firme:** a tela aberta a partir de outra (espaço do PCA, espaço do orçamento, quadro de
+  Tarefas, órgão, pasta do catálogo, card de Importações) NÃO tem título nem subtítulo: o nome vai ao caminho do cabeçalho
+  (`useOndeDetalhe`, mostrado pela `TrilhaCabecalho` em qualquer rota) e a PRIMEIRA linha é o `BotaoVoltar` (`AbasEspaco.tsx`) à
+  esquerda + as abas/visões + as ferramentas (`AbasEspaco voltar`/`fim`); os números (KPIs, `IndicadoresKpi`) vêm LOGO ABAIXO
+  dessa linha. Renomear o quadro = Configuração do quadro.
 - **UM SÓ ESQUELETO (v1.264.7) — regra firme:** a tela que busca os dados no navegador mostra, enquanto espera, o MESMO
   esqueleto do `loading.tsx` da rota (Execução = `DashboardExecucaoEsqueleto`; Frotas = `EsqueletoFrota`; Empenhos/
   Liquidações/Pagamentos = `EsqueletoIndicadores` + `EsqueletoTabela`) — nunca um segundo esqueleto diferente.

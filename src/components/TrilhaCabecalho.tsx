@@ -220,7 +220,8 @@ export function TrilhaCabecalho({
   const pca = pcaId ? pcas.find((p) => p.id === Number(pcaId)) : undefined;
   const espaco = ABAS_ESPACO.find((e) => e.re.test(pathname));
   const abaAtual = espaco ? (espaco.abas.find((a) => a.valor === sp.get("aba")) ?? espaco.abas.find((a) => a.valor === espaco.padrao)) : undefined;
-  const detalhe = !pca && espaco ? tela.detalhe : null;
+  // O nome da tela interna (o quadro, o orçamento, o órgão, a pasta) — as telas internas não têm título: está aqui.
+  const detalhe = !pca ? tela.detalhe : null;
   const filtro = FILTRADAS.test(pathname) ? pcas.find((p) => p.id === pcaFiltroId) : undefined;
   const fundo = tela.abertos.length > 0 || !!abaAtual;
   const secaoAtual = secao;

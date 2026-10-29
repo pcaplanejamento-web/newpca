@@ -1,12 +1,13 @@
 import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
-import { EsqueletoEspaco, EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoEspaco, EsqueletoIndicadores, EsqueletoTela } from "@/components/EsqueletoTela";
 
-/** O espaço do orçamento: a linha do espaço (nome, ano, números e as abas) e a tabela dos lançamentos. */
+/** O espaço do orçamento: o voltar e as abas, os indicadores e a tabela dos lançamentos. */
 export default function Carregando() {
   return (
     <EsqueletoTela cheia>
       <EsqueletoEspaco abas={4} />
-      <EsqueletoTabela cheia linhas={14} colunas={8} />
+      <EsqueletoIndicadores />
+      <EsqueletoTabela cheia linhas={12} colunas={8} />
     </EsqueletoTela>
   );
 }

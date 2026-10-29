@@ -52,19 +52,17 @@ export function EsqueletoIndicadores() {
 }
 
 /**
- * Esqueleto da LINHA DO ESPAÇO (PCA, orçamento, quadro, pasta): voltar · nome · selo à esquerda e, com `abas`, as abas à
- * direita — a identidade do espaço é a única linha de título que existe no sistema.
+ * Esqueleto da LINHA DAS TELAS INTERNAS (espaço do PCA, orçamento, pasta, órgão): o voltar à esquerda e, com `abas`, as
+ * abas logo depois — sem título (o nome está no caminho do cabeçalho).
  */
 export function EsqueletoEspaco({ abas = 0 }: { abas?: number }) {
   return (
     <div className="linha-topico flex flex-wrap items-center gap-2">
       <EsqueletoControle quadrado />
-      <Skeleton className="h-6 w-48 max-w-[50%]" />
-      <EsqueletoControle className="w-16" />
       {abas > 0 && (
-        <div className="ml-auto flex gap-1">
+        <div className="flex gap-1">
           {Array.from({ length: abas }, (_, i) => (
-            <EsqueletoControle key={i} className="w-20" />
+            <EsqueletoControle key={i} className="w-24" />
           ))}
         </div>
       )}

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { IconChevronLeft } from "./icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ComponentProps, createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -94,39 +96,48 @@ export function ConteudoAba({
 export function AbasEspaco<T extends string>({
   aba: abaServidor,
   opcoes,
-  cabecalho,
+  voltar,
+  fim,
   children,
 }: {
   /** A aba que o servidor montou (`children`). */
   aba: T;
   /** `curto` = o rótulo nos telefones quando todas as abas não cabem; `soIcone` + `icone` = a aba só com o ícone. */
   opcoes: ComponentProps<typeof Segmented<T>>["options"];
-  /** O título do espaço (voltar · nome · selos) — na MESMA linha das abas, à esquerda. */
-  cabecalho?: ReactNode;
+  /** O VOLTAR do espaço — à esquerda das abas. O espaço não tem título: o nome está no caminho do cabeçalho. */
+  voltar?: { href: string; rotulo: string };
+  /** Ação do espaço no fim da linha (ex.: excluir o orçamento). */
+  fim?: ReactNode;
   children: ReactNode;
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const { aba, trocar } = useTrocaAba(abaServidor);
-  const abas = <Segmented<T> value={aba} onChange={trocar} options={opcoes} />;
   return (
     <>
-      {cabecalho ? (
-        <div className="linha-topico flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-x-2">{cabecalho}</div>
-          <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
-            <div ref={setSlot} className="barra-ferramentas flex min-w-0 items-center gap-2 empty:hidden" />
-            {abas}
-          </div>
-        </div>
-      ) : (
-        <div className="linha-topico flex flex-wrap items-center gap-2">
-          {abas}
-          <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
-        </div>
-      )}
+      {/* UMA linha: voltar · as abas · as ferramentas da aba (principais à esquerda, ícones à direita) · a ação do espaço. */}
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        {voltar && <BotaoVoltar href={voltar.href} rotulo={voltar.rotulo} />}
+        <Segmented<T> value={aba} onChange={trocar} options={opcoes} />
+        <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
+        {fim && <div className="ml-auto flex items-center gap-2">{fim}</div>}
+      </div>
       <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot} className="space-y-[var(--gap-block)]">
         {children}
       </ConteudoAba>
     </>
+  );
+}
+
+/** O botão VOLTAR das telas internas (espaços, pastas, órgão): sempre o primeiro à esquerda da linha do topo. */
+export function BotaoVoltar({ href, rotulo }: { href: string; rotulo: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label={`Voltar para ${rotulo}`}
+      title={`Voltar para ${rotulo}`}
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+    >
+      <IconChevronLeft className="h-4 w-4" />
+    </Link>
   );
 }

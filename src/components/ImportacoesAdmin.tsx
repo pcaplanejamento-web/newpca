@@ -51,6 +51,8 @@ import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
 import { FrotaAdmin } from "./frota/FrotaAdmin";
+import { useOndeDetalhe } from "./CanalGrupo";
+import { type CartaoKpi, IndicadoresKpi } from "./IndicadoresKpi";
 import { Segmented } from "./Segmented";
 import { SecaoBanner } from "./SecaoBanner";
 import { SkeletonCartao } from "./Skeleton";
@@ -941,6 +943,8 @@ function CardAberto({
 
   // Enquanto o card chega, o resumo da lista (sem vínculos) já mostra a linha.
   const c = d?.card ?? cards.find((x) => x.id === id) ?? null;
+  // O nome do card no caminho do cabeçalho (a tela não tem título).
+  useOndeDetalhe(c?.nome);
   if (!c) {
     return (
       <div className="space-y-[var(--gap-block)]">
@@ -982,11 +986,16 @@ function CardAberto({
     toast.error(j?.error ?? "Não foi possível excluir o card.");
   }
 
-  const indicadores = [
-    { rotulo: nome.titulo, valor: num(c.empenhos) },
-    c.tipo === "pagamentos" ? { rotulo: "Pago líquido", valor: brl(c.liquidado) } : { rotulo: liq ? "Liquidado" : "Empenhado", valor: brl(c.soma) },
-    { rotulo: "Anos", valor: rotuloAnos(c.anos) },
-    { rotulo: "Última leitura", valor: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—" },
+  // Os números do card em indicadores, logo abaixo da linha do topo (o nome do card está no caminho do cabeçalho).
+  const cartoes: CartaoKpi[] = [
+    {
+      label: c.tipo === "pagamentos" ? "Pago líquido" : liq ? "Liquidado" : "Empenhado",
+      value: brl(c.tipo === "pagamentos" ? c.liquidado : c.soma),
+      cor: "var(--accent)",
+      detalhes: [{ rotulo: nome.titulo, valor: num(c.empenhos) }, { rotulo: "Anos", valor: rotuloAnos(c.anos) }],
+    },
+    { label: nome.titulo, value: num(c.empenhos), detalhes: [{ rotulo: "Anos", valor: rotuloAnos(c.anos) }, { rotulo: "Situação", valor: e.rotulo }] },
+    { label: "Última leitura", value: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—", detalhes: [{ rotulo: "Situação", valor: e.rotulo }, { rotulo: "Anos", valor: rotuloAnos(c.anos) }] },
   ];
 
   let conteudo: ReactNode = <SkeletonCartao />;
@@ -1033,74 +1042,11 @@ function CardAberto({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Voltar onFechar={onFechar} />
-            <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.cor }} />
-            <h2 className="min-w-0 truncate text-lg font-bold tracking-tight text-text" title={c.nome}>
-              {c.nome}
-            </h2>
-            <Badge tone={e.tom} dot vivo={c.lendo} tamanho="linha" className="shrink-0">
-              {e.rotulo}
-            </Badge>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Avisos
-              titulo="Avisos do card"
-              avisos={
-                pendencias.length
-                  ? [
-                      {
-                        id: "configurar",
-                        tom: "warn",
-                        texto: (
-                          <>
-                            <p className="font-semibold text-text">Configure o card antes de importar</p>
-                            <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
-                            <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                              {etapas.map((et) => (
-                                <button
-                                  key={et.aba}
-                                  type="button"
-                                  onClick={() => onSub(et.aba)}
-                                  className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}
-                                >
-                                  {et.feito && <IconCheck className="h-4 w-4" />}
-                                  {et.rotulo}
-                                </button>
-                              ))}
-                              <span className="text-muted">{liq ? "2" : "3"}. Importação</span>
-                            </p>
-                          </>
-                        ),
-                      },
-                    ]
-                  : []
-              }
-            />
-            <Button
-              size="sm"
-              variant="icon"
-              loading={excluindo}
-              aria-label={`Excluir o card ${c.nome}`}
-              title="Excluir card"
-              icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-              onClick={() => excluir(c)}
-            />
-          </div>
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-          {indicadores.map((i) => (
-            <div key={i.rotulo} className="flex items-baseline gap-1.5">
-              <dt className="text-muted">{i.rotulo}</dt>
-              <dd className="font-semibold tabular-nums text-text">{i.valor}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
+      {/* A linha do topo: o voltar à esquerda, as seções, as ferramentas da seção e, à direita, a situação, os avisos e excluir.
+          Sem título: o nome do card está no caminho do cabeçalho. */}
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        <h2 className="sr-only">{c.nome}</h2>
+        <Voltar onFechar={onFechar} />
         <Segmented<SubAba>
           value={aba}
           onChange={onSub}
@@ -1108,7 +1054,55 @@ function CardAberto({
           options={subs.map((s) => ({ value: s, label: s === "importacao" ? "Importação" : s === "vinculos" ? "Vínculos" : "Configuração", curto: s === "configuracao" ? "Config." : undefined }))}
         />
         <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <Badge tone={e.tom} dot vivo={c.lendo} className="shrink-0">
+            {e.rotulo}
+          </Badge>
+          <Avisos
+            titulo="Avisos do card"
+            avisos={
+              pendencias.length
+                ? [
+                    {
+                      id: "configurar",
+                      tom: "warn",
+                      texto: (
+                        <>
+                          <p className="font-semibold text-text">Configure o card antes de importar</p>
+                          <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
+                          <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            {etapas.map((et) => (
+                              <button
+                                key={et.aba}
+                                type="button"
+                                onClick={() => onSub(et.aba)}
+                                className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}
+                              >
+                                {et.feito && <IconCheck className="h-4 w-4" />}
+                                {et.rotulo}
+                              </button>
+                            ))}
+                            <span className="text-muted">{liq ? "2" : "3"}. Importação</span>
+                          </p>
+                        </>
+                      ),
+                    },
+                  ]
+                : []
+            }
+          />
+          <Button
+            size="sm"
+            variant="icon"
+            loading={excluindo}
+            aria-label={`Excluir o card ${c.nome}`}
+            title="Excluir card"
+            icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+            onClick={() => excluir(c)}
+          />
+        </div>
       </div>
+      <IndicadoresKpi chave="importacoes:card:indicadores" cartoes={cartoes} />
       {erro && d && <ErroCarga msg={erro} kind="warn" onTentar={carregar} />}
       <ConteudoAba aba={aba} abaServidor={aba} slot={slot} className="space-y-[var(--gap-block)]">
         {conteudo}

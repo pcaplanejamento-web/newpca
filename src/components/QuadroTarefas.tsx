@@ -44,7 +44,6 @@ import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { FaixaQuadro, MembrosQuadro, MenuQuadro, MolduraQuadro, PainelMoldura, PilulaVistas, RESERVA_PILULA } from "./MolduraQuadro";
 import { IndicadorTrello } from "./SincronizacaoTrello";
 import { ItensArquivados } from "./ItensArquivados";
-import { TextoNoLugar } from "./TextoNoLugar";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
@@ -534,13 +533,6 @@ export function QuadroTarefas({
     return true;
   };
 
-  /** RENOMEIA o quadro no lugar (o clique no nome, no cabeçalho). */
-  const renomearQuadro = async (nome: string) => {
-    await chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { nome });
-    router.refresh();
-    return true;
-  };
-
   /** "+ Adicionar outra lista": cria no fim do quadro (qualquer membro) e recarrega. */
   const novaLista = async (nome: string) => {
     await chamar(`/api/tarefas/quadros/${quadro.id}/listas`, "POST", { nome });
@@ -565,15 +557,9 @@ export function QuadroTarefas({
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Link>
-                <h1 className="min-w-0 max-w-[min(100%,32rem)]" title={dicaQuadro}>
-                  <TextoNoLugar
-                    valor={quadro.nome}
-                    onSalvar={podeConfigurar ? renomearQuadro : undefined}
-                    ariaLabel="Nome do quadro"
-                    maxLength={80}
-                    ajustar
-                    className="text-lg font-bold text-text"
-                  />
+                {/* Sem título: o nome do quadro está no caminho do cabeçalho (renomear na Configuração). */}
+                <h1 className="sr-only" title={dicaQuadro}>
+                  {quadro.nome}
                 </h1>
                 <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
                 {quadro.privado && (
