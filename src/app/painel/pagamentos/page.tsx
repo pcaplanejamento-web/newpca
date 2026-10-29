@@ -22,7 +22,7 @@ export default async function PagamentosPage() {
   return (
     <EmpenhosView tipo="pagamentos" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("pagamentos") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
-        <EmpenhoCardPagamentos key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Pagamentos - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={versao} />
+        <EmpenhoCardPagamentos key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Pagamentos - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
       </PermissaoExportar>
     </EmpenhosView>
   );

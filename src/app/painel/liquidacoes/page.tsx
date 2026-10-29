@@ -22,7 +22,7 @@ export default async function LiquidacoesPage() {
   return (
     <EmpenhosView tipo="liquidacoes" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("liquidacoes") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
-        <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Liquidações - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={versao} />
+        <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Liquidações - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
       </PermissaoExportar>
     </EmpenhosView>
   );

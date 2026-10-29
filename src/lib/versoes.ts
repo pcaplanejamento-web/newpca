@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.256.1",
+    data: "2026-10-29",
+    titulo: "Empenhos, liquidações e pagamentos sem recarregar",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "Ao voltar às telas de Empenhos, Liquidações e Pagamentos, a tabela aparece na hora — os dados já lidos ficam guardados na aba até uma importação nova.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.256.0",
     data: "2026-10-29",
     titulo: "Telas mais rápidas: cache que não se apaga à toa e telas pré-carregadas",

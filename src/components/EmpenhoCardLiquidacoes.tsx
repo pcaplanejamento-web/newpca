@@ -1,5 +1,6 @@
 "use client";
 
+import { lerGuardado } from "@/lib/memoria-aba";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
@@ -181,10 +182,12 @@ export function EmpenhoCardLiquidacoes({
     let vivo = true;
     void (async () => {
       try {
-        const r = await fetch(rota);
-        const j = (await r.json()) as { ok?: boolean; error?: string; anos?: { ano: number; n: number }[] };
+        const j = await lerGuardado(rota, versao, async (r) => {
+          const j = (await r.json()) as { ok?: boolean; error?: string; anos?: { ano: number; n: number }[] };
+          if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+          return j;
+        });
         if (!vivo) return;
-        if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
         setAnos(j.anos ?? []);
         // A 1ª carga abre em "Todos os anos"; uma recarga (versão nova) mantém o recorte escolhido, se o ano ainda existir —
         // um recorte NOVO (mesmo igual) relê as linhas já com a lista de anos nova (um ano novo entra no "Todos os anos").
@@ -201,7 +204,7 @@ export function EmpenhoCardLiquidacoes({
   }, [rota, versao]);
 
   const carregar = useCallback(
-    async (rc: { ano: number; removidos: boolean }) => {
+    async (rc: { ano: number; removidos: boolean }, fresco = false) => {
       const n = ++pedido.current;
       setCarregando(true);
       setErro(null);
@@ -210,9 +213,16 @@ export function EmpenhoCardLiquidacoes({
         // a falha de um é a falha da carga.
         const partes = await Promise.all(
           anosDoRecorte(rc.ano, anosRef.current).map(async (ano) => {
-            const r = await fetch(`${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`);
-            const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
-            if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+            const j = await lerGuardado(
+              `${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`,
+              versao,
+              async (r) => {
+                const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+                if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+                return j;
+              },
+              fresco,
+            );
             return (j.linhas ?? []).map((t) => daTupla(t, ano));
           }),
         );
@@ -228,7 +238,7 @@ export function EmpenhoCardLiquidacoes({
         if (n === pedido.current) setCarregando(false);
       }
     },
-    [rota],
+    [rota, versao],
   );
   // A VERSÃO dos dados da execução (importação promovida, vínculos, cards) vem da página: mudou, relê — o tipo (Nota de
   // Empenho × Restos a Pagar), o órgão e a unidade vêm do empenho ligado, lido na hora pelo número.
@@ -254,7 +264,7 @@ export function EmpenhoCardLiquidacoes({
             ))}
           </SelectField>
         )}
-        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" onClick={() => void carregar(recorte)} />}
+        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "liquidação", "liquidações"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
         <Ajuda titulo={cardId == null ? "Liquidações" : "Liquidações do card"} botao="sm">
           <p>

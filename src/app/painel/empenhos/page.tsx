@@ -34,7 +34,7 @@ export default async function EmpenhosPage({ searchParams }: { searchParams: Pro
           anoInicial={anoEscolhido(anos, sp.ano)}
           edicoes={edicoes}
           podePublicar={r.pode.configurar}
-          versao={versao}
+          versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`}
         />
       </PermissaoExportar>
     </EmpenhosView>
