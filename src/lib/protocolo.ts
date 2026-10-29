@@ -94,6 +94,8 @@ export type ProtocoloDetalhe = ProtocoloResumo & {
   observacao: string | null;
   localReparticao: string | null;
   nomeArquivo: string | null;
+  /** Última gravação da capa (o 409 do PATCH confere). */
+  atualizadoEm?: string | null;
   dfds: DfdResumo[];
 };
 
@@ -207,6 +209,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
       reparticaoCodigo: reparticoes.codigo,
       reparticaoNome: reparticoes.nome,
       criadoEm: dfdProtocolos.criadoEm,
+      atualizadoEm: dfdProtocolos.atualizadoEm,
       ...colunasGestao,
       ...colunasSobrescritos,
     })

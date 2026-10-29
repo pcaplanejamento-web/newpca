@@ -500,7 +500,7 @@ export function useProtocoloGravado({
       const bodyCapa = diffCapaGravada(capaDe(proto), capa);
       if (Object.keys(bodyCapa).length > 0) {
         setProgresso({ feito: 0, total: sujos.length + 1, label: "capa do protocolo" });
-        const falha = await enviar(`/api/protocolo/${proto.id}`, bodyCapa);
+        const falha = await enviar(`/api/protocolo/${proto.id}`, { ...bodyCapa, atualizadoEmLido: proto.atualizadoEm ?? undefined });
         if (falha) {
           falhas.push(`Capa: ${falha}`);
           preservar.capa = capa;

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.261.2",
+    data: "2026-10-29",
+    titulo: "Capa do protocolo protegida contra gravação sobre dado antigo",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Salvar a capa de um protocolo alterado por outra pessoa depois de aberto agora é recusado com o aviso, em vez de sobrescrever.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.261.1",
     data: "2026-10-29",
     titulo: "Salvar sobre alteração de outra pessoa é avisado e as abas dividem a conferência de dados novos",
