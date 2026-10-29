@@ -22,6 +22,12 @@ export const configFrotaSchema = z.object({
     tanquePct: z.number().int().min(0).max(100),
     kmMaximo: z.number().int().min(100).max(100_000),
   }),
+  cores: z
+    .object({
+      combustivel: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida (#rrggbb).").nullable(),
+      manutencao: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida (#rrggbb).").nullable(),
+    })
+    .optional(),
 });
 
 export const contratosFrotaSchema = z.object({

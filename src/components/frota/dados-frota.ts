@@ -5,7 +5,7 @@ import { type Classificacao, type ContextoFrota, contextoFrota, type Transacao, 
 import type { TipoTransacao } from "@/lib/volus-core";
 
 export type ContratoFrota = { codigo: string; sigla: string; nome: string };
-export type UnidadeFrota = { id: number; codigo: string; nome: string };
+export type UnidadeFrota = { id: number; codigo: string; nome: string; orgao?: string | null; orgaoNome?: string | null };
 
 /** Os VEÍCULOS e as classificações (`GET /api/frota/veiculos`) — as telas juntam pela placa. */
 export function useCadastroFrota() {

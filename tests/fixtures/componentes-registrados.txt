@@ -315,6 +315,7 @@ VisaoOrcamentoPca.tsx
 VitrineAcesso.tsx
 automacao/ProtocolosAutomacao.tsx
 charts/Barras.tsx
+charts/GraficoTemporal.tsx
 charts/ClassificacaoChart.tsx
 charts/MensalChart.tsx
 charts/MetricasChart.tsx

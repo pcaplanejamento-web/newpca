@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { type CSSProperties, type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 import { cardPorOrgao, NOME_TIPO, type TipoCard } from "@/lib/empenho-cards-core";
 import { num } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
-import { useAlturaTela } from "./AlturaCheia";
+import { AteOFim } from "./AlturaCheia";
 import { IconEmpenho, IconLiquidacao, IconPagamento, IconSettings } from "./icons";
 
 /**
@@ -105,16 +105,3 @@ export function EmpenhosView({
   );
 }
 
-/**
- * No desktop, o conteúdo vai no máximo até o fim do display e rola por dentro — a página nunca rola (o título fica à
- * vista). As tabelas `scrollInterno` já medem até o fim e cabem sem rolar aqui.
- */
-function AteOFim({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const altura = useAlturaTela(ref, 240);
-  return (
-    <div ref={ref} className="space-y-[var(--gap-block)] lg:max-h-[var(--h-aba)] lg:overflow-y-auto" style={altura ? ({ "--h-aba": `${altura}px` } as CSSProperties) : undefined}>
-      {children}
-    </div>
-  );
-}

@@ -4,6 +4,7 @@
  * as transações que a tela já tem (nenhuma consulta nova). Valores em reais; litros; km.
  */
 import type { LimitesAlertas } from "./frota-config-core.ts";
+import { baldesData, type BaldeData, type GranularidadeData } from "./mesa-metricas.ts";
 
 export type TipoNum = 0 | 1;
 
@@ -34,6 +35,12 @@ export type Transacao = {
   processo: string | null;
   qtdItens: number;
   removido: boolean;
+  /** A UNIDADE do SISTEMA (o cadastro — pela ligação da unidade da Vólus): a sigla única e o nome; `null` = sem unidade. */
+  unidadeSistema: string | null;
+  unidadeSistemaNome: string | null;
+  /** O ÓRGÃO do SISTEMA (o da unidade, senão o do contrato): a sigla e o nome; `null` = sem órgão. */
+  orgao: string | null;
+  orgaoNome: string | null;
 };
 
 type Celula = string | number | null;
@@ -68,6 +75,10 @@ export function transacoesDoPacote(tuplas: readonly Celula[][]): Transacao[] {
     processo: s(t[22]),
     qtdItens: n(t[23]) ?? 0,
     removido: Number(t[24]) === 1,
+    unidadeSistema: s(t[25]),
+    unidadeSistemaNome: s(t[26]),
+    orgao: s(t[27]),
+    orgaoNome: s(t[28]),
   }));
   return out.sort((a, b) => (b.dia + (b.hora ?? "")).localeCompare(a.dia + (a.hora ?? "")) || b.id - a.id);
 }
@@ -111,8 +122,10 @@ export function aplicarTravaOrigem<T extends Pick<Veiculo, "origem" | "fipe" | "
 
 /** As DIMENSÕES de filtro e de agrupamento da frota. `so` = só de um tipo (a do outro tipo não o filtra). */
 export const DIMS_FROTA = [
+  { chave: "orgao", rotulo: "Órgão" },
+  { chave: "unidadeSistema", rotulo: "Unidade" },
   { chave: "contrato", rotulo: "Contrato" },
-  { chave: "unidade", rotulo: "Setor" },
+  { chave: "unidade", rotulo: "Setor (Vólus)" },
   { chave: "placa", rotulo: "Placa" },
   { chave: "tipoVeiculo", rotulo: "Tipo" },
   { chave: "classificacao", rotulo: "Classificação" },
@@ -130,6 +143,10 @@ export type DimFrota = (typeof DIMS_FROTA)[number]["chave"] | "mes";
 export const ROTULO_DIM: Record<DimFrota, string> = { ...Object.fromEntries(DIMS_FROTA.map((d) => [d.chave, d.rotulo])), mes: "Mês" } as Record<DimFrota, string>;
 
 export const SEM_VALOR = "(não informado)";
+/** O registro sem a unidade / o órgão do SISTEMA (a unidade da Vólus sem ligação; o contrato sem órgão) — filtrável. */
+export const SEM_UNIDADE = "Sem unidade";
+export const SEM_ORGAO = "Sem órgão";
+const VAZIOS = new Set([SEM_VALOR, SEM_UNIDADE, SEM_ORGAO]);
 
 /** A dimensão que só existe num TIPO de transação (Combustível, Serviço) — a do outro tipo não é filtrada. */
 export function soDoTipo(dim: DimFrota): Transacao["tipo"] | undefined {
@@ -183,6 +200,10 @@ export function valorDim(t: Transacao, dim: DimFrota, ctx: ContextoFrota): strin
         return t.cidade ? `${t.cidade}${t.uf ? `/${t.uf}` : ""}` : null;
       case "unidade":
         return t.unidade;
+      case "unidadeSistema":
+        return t.unidadeSistema ?? SEM_UNIDADE;
+      case "orgao":
+        return t.orgao ?? SEM_ORGAO;
       case "mes":
         return t.dia.slice(0, 7);
     }
@@ -224,7 +245,18 @@ export function opcoesDim(trs: readonly Transacao[], dim: DimFrota, ctx: Context
   }
   return [...m]
     .map(([valor, k]) => ({ valor, n: k }))
-    .sort((a, b) => (a.valor === SEM_VALOR ? 1 : b.valor === SEM_VALOR ? -1 : a.valor.localeCompare(b.valor, "pt-BR")));
+    .sort((a, b) => Number(VAZIOS.has(a.valor)) - Number(VAZIOS.has(b.valor)) || a.valor.localeCompare(b.valor, "pt-BR"));
+}
+
+/** O NOME de cada valor de Unidade/Órgão do sistema (o detalhe das opções do filtro — a sigla em cima, o nome embaixo). */
+export function nomesDim(trs: readonly Transacao[], dim: DimFrota): Map<string, string> {
+  const m = new Map<string, string>();
+  if (dim !== "unidadeSistema" && dim !== "orgao") return m;
+  for (const t of trs) {
+    const [k, nome] = dim === "orgao" ? [t.orgao, t.orgaoNome] : [t.unidadeSistema, t.unidadeSistemaNome];
+    if (k && nome && nome !== k && !m.has(k)) m.set(k, nome);
+  }
+  return m;
 }
 
 // ─── CONSUMO ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -301,6 +333,12 @@ export type KpisFrota = {
   /** A MAIOR manutenção (o valor e a placa) e o total de itens das manutenções. */
   maiorManutencao: { valor: number; placa: string | null } | null;
   itens: number;
+  /** Os registros SEM a unidade do sistema (a unidade da Vólus sem ligação) e o valor deles. */
+  semUnidade: number;
+  valorSemUnidade: number;
+  /** Os fornecedores (postos/oficinas) e os motoristas distintos. */
+  fornecedores: number;
+  motoristas: number;
 };
 
 export function kpisFrota(trs: readonly Transacao[], consumo: ReadonlyMap<number, Consumo>): KpisFrota {
@@ -317,7 +355,17 @@ export function kpisFrota(trs: readonly Transacao[], consumo: ReadonlyMap<number
   let maiorManutencao: KpisFrota["maiorManutencao"] = null;
   const porPlaca = new Map<string, number>();
   const meses = new Set<string>();
+  const fornecedores = new Set<string>();
+  const motoristas = new Set<string>();
+  let semUnidade = 0;
+  let valorSemUnidade = 0;
   for (const t of trs) {
+    if (t.unidadeSistema == null) {
+      semUnidade++;
+      valorSemUnidade += t.valor;
+    }
+    if (t.estabelecimento) fornecedores.add(t.estabelecimento);
+    if (t.motorista) motoristas.add(t.motorista);
     if (t.placa) porPlaca.set(t.placa, (porPlaca.get(t.placa) ?? 0) + t.valor);
     if (t.valor > 0) meses.add(t.dia.slice(0, 7));
     if (t.tipo === "abastecimento") {
@@ -362,6 +410,10 @@ export function kpisFrota(trs: readonly Transacao[], consumo: ReadonlyMap<number
     precoMax,
     maiorManutencao,
     itens,
+    semUnidade,
+    valorSemUnidade,
+    fornecedores: fornecedores.size,
+    motoristas: motoristas.size,
   };
 }
 
@@ -496,6 +548,9 @@ export type FichaVeiculo = {
   precoMedio: number | null;
   ultimoHodometro: number | null;
   unidadeAtual: string | null;
+  /** A unidade e o órgão do SISTEMA do registro mais recente. */
+  unidadeSistemaAtual: string | null;
+  orgaoAtual: string | null;
   contratoAtual: string | null;
   unidades: string[];
   postos: { nome: string; valor: number; n: number }[];
@@ -546,6 +601,8 @@ export function fichaDoVeiculo(placa: string, trs: readonly Transacao[], consumo
     precoMedio: k.precoMedio,
     ultimoHodometro: hodo,
     unidadeAtual: recente?.unidade ?? null,
+    unidadeSistemaAtual: recente?.unidadeSistema ?? null,
+    orgaoAtual: recente?.orgao ?? null,
     contratoAtual: recente?.contrato ?? null,
     unidades: [...new Set(doVeiculo.map((t) => t.unidade).filter((u): u is string => !!u))].sort((a, b) => a.localeCompare(b, "pt-BR")),
     postos: [...postos]
@@ -676,3 +733,86 @@ export function alteracoesDaPlanilha(
 
 /** Onde o ADM configura a Vólus (Configurações → Importações → Frotas). */
 export const LINK_CONFIG_FROTA = "/painel/configuracoes?aba=importacoes&tipo=frotas";
+
+
+/** Um ponto da SÉRIE da frota no tempo (o balde, o que entrou nele e o acumulado até ele). */
+export type PontoFrota = {
+  chave: string;
+  rotulo: string;
+  titulo: string;
+  de: string;
+  ate: string;
+  atual: boolean;
+  combustivel: number;
+  manutencao: number;
+  acCombustivel: number;
+  acManutencao: number;
+  qComb: number;
+  qMan: number;
+};
+export type SerieFrota = { granularidade: GranularidadeData; pontos: PontoFrota[]; de: string | null; ate: string | null };
+
+/**
+ * A SÉRIE da frota para o gráfico no tempo — a MESMA régua da Execução (`serie`, `execucao-dash-core.ts`): os baldes de
+ * `baldesData` do período (sem ele, do 1º ao último dia com registro; o que passa de hoje vai só até hoje), na granularidade
+ * pedida ("auto" = a do tamanho), dia/semana com mais de `MAX_BALDES_FROTA` sobe. `acumularDesde` = o ZOOM: o acumulado
+ * começa com o que veio antes da janela. O último acumulado = a soma das transações do intervalo (testado).
+ */
+export function serieFrota(
+  trs: readonly Transacao[],
+  intervalo: { de?: string | null; ate?: string | null },
+  gran: "auto" | "dia" | "semana" | "mes",
+  hoje: string,
+  opc: { acumularDesde?: string | null } = {},
+): SerieFrota {
+  let mi: string | null = null;
+  let ma: string | null = null;
+  for (const t of trs) {
+    if (!t.dia) continue;
+    if (mi == null || t.dia < mi) mi = t.dia;
+    if (ma == null || t.dia > ma) ma = t.dia;
+  }
+  const de = intervalo.de ?? mi;
+  const limite = ma && ma > hoje ? ma : hoje;
+  const ateBruto = intervalo.ate ?? ma;
+  const ate = ateBruto && ateBruto > limite && (!de || de <= limite) ? limite : ateBruto;
+  if (!de || !ate || de > ate) return { granularidade: "dia", pontos: [], de, ate };
+  const nDias = Math.round((Date.parse(ate) - Date.parse(de)) / 86_400_000) + 1;
+  let forcar: GranularidadeData | undefined = gran === "auto" ? undefined : gran;
+  if (forcar === "dia" && nDias > MAX_BALDES_FROTA) forcar = "semana";
+  if (forcar === "semana" && nDias / 7 > MAX_BALDES_FROTA) forcar = "mes";
+  const { granularidade, baldes, chaveDoDia } = baldesData(de, ate, hoje, forcar);
+  const pos = new Map(baldes.map((x: BaldeData, i) => [x.chave, i]));
+  const c = new Float64Array(baldes.length);
+  const m = new Float64Array(baldes.length);
+  const qc = new Float64Array(baldes.length);
+  const qm = new Float64Array(baldes.length);
+  const inicio = baldes[0]?.de ?? de;
+  const desde = opc.acumularDesde ?? null;
+  let ac = 0;
+  let am = 0;
+  for (const t of trs) {
+    if (!t.dia) continue;
+    const p = pos.get(chaveDoDia(t.dia) ?? "");
+    if (p != null) {
+      if (t.tipo === "abastecimento") {
+        c[p] += t.valor;
+        qc[p]++;
+      } else {
+        m[p] += t.valor;
+        qm[p]++;
+      }
+    } else if (desde && t.dia >= desde && t.dia < inicio) {
+      if (t.tipo === "abastecimento") ac += t.valor;
+      else am += t.valor;
+    }
+  }
+  const pontos = baldes.map((x, i) => {
+    ac += c[i];
+    am += m[i];
+    return { chave: x.chave, rotulo: x.rotulo, titulo: x.titulo, de: x.de, ate: x.ate, atual: x.atual, combustivel: c[i], manutencao: m[i], acCombustivel: ac, acManutencao: am, qComb: qc[i], qMan: qm[i] };
+  });
+  return { granularidade, pontos, de, ate };
+}
+/** Dia/semana com mais baldes que isto sobe de granularidade (a mesma régua da Execução). */
+export const MAX_BALDES_FROTA = 400;

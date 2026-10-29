@@ -328,7 +328,17 @@ const COLUNAS_PACOTE = [
   `t."processo"`,
   `t."qtd_itens"`,
   `CASE WHEN t."removido_em" IS NULL THEN 0 ELSE 1 END`,
+  // A UNIDADE e o ÓRGÃO do SISTEMA (o cadastro): a unidade pela ligação da unidade da Vólus (a sigla, com " — ÓRGÃO" quando
+  // a mesma sigla existe em outra unidade — o rótulo único da Execução) e o nome; o órgão = o da unidade, senão o do contrato.
+  `CASE WHEN r."id" IS NULL THEN NULL ELSE r."codigo" || CASE WHEN dup."codigo" IS NOT NULL THEN ' — ' || COALESCE(NULLIF(o."sigla", ''), o."nome", '') ELSE '' END END`,
+  `r."nome"`,
+  `COALESCE(NULLIF(o."sigla", ''), o."nome")`,
+  `o."nome"`,
 ];
+/** As junções do pacote (por chave primária — uma busca por linha pelo índice, nada de varrer). */
+const JUNCOES_PACOTE = `LEFT JOIN "reparticoes" r ON r."id" = t."reparticao_id"
+      LEFT JOIN "orgaos" o ON o."id" = COALESCE(r."orgao_id", t."orgao_id")
+      LEFT JOIN (SELECT "codigo" FROM "reparticoes" GROUP BY "codigo" HAVING COUNT(*) > 1) dup ON dup."codigo" = r."codigo"`;
 /** Linhas por pedaço do pacote (cada texto bem abaixo do teto de 2 MB por valor do D1). */
 export const TUPLAS_POR_PEDACO_FROTA = 4000;
 
@@ -345,7 +355,7 @@ export async function consultaPacoteFrota(db: Db, ano: number, escopo: EscopoEmp
   const rows = await db.all<{ j: string; n: number }>(sql`
     SELECT json_group_array(json_array(${sql.raw(COLUNAS_PACOTE.map((_c, i) => `x."c${i}"`).join(", "))})) AS j, COUNT(*) AS n FROM (
       SELECT ${sql.raw(COLUNAS_PACOTE.map((c, i) => `${c} AS "c${i}"`).join(", "))}, row_number() OVER (ORDER BY t."dia" DESC, t."data_hora" DESC, t."id" DESC) AS "ord"
-      FROM "frota_transacoes" t WHERE ${sql.join(filtros, sql` AND `)}
+      FROM "frota_transacoes" t ${sql.raw(JUNCOES_PACOTE)} WHERE ${sql.join(filtros, sql` AND `)}
     ) x GROUP BY (x."ord" - 1) / ${TUPLAS_POR_PEDACO_FROTA} ORDER BY (x."ord" - 1) / ${TUPLAS_POR_PEDACO_FROTA}`);
   const partes = rows.map((r) => r.j.slice(1, -1)).filter(Boolean);
   return { texto: `[${partes.join(",")}]`, total: rows.reduce((s, r) => s + Number(r.n), 0) };

@@ -96,3 +96,12 @@ test("frota-config: o passo e a espera depois de uma falha", () => {
   assert.equal(avancarCursor("2026-10-28", "2026-10-29"), "2026-10-29");
   assert.equal(avancarCursor("2026-10-29", "2026-10-29"), null);
 });
+
+test("frota-config: as cores dos dados — só hex validado; o resto = a cor do tema", async () => {
+  const { cssCoresFrota } = await import("../src/lib/frota-config-core.ts");
+  assert.deepEqual(lerConfigFrota({}).cores, { combustivel: null, manutencao: null });
+  const c = lerConfigFrota({ cores: { combustivel: "#AABBCC", manutencao: "red;}body{x:1" } }).cores;
+  assert.deepEqual(c, { combustivel: "#aabbcc", manutencao: null });
+  assert.equal(cssCoresFrota(c), ":root{--frota-combustivel:#aabbcc}");
+  assert.equal(cssCoresFrota({ combustivel: null, manutencao: null }), "");
+});

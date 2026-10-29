@@ -346,6 +346,7 @@ export async function dadosDaPaginaFrota() {
     /** Os contratos ATIVOS com o produto (o "Importar agora" das KPIs, só o ADM). */
     ativos: contratos.filter((c) => c.ativo).map((c) => ({ codigo: c.codigo, produto: c.produto as ProdutoContrato })),
     alertas: cfg.alertas,
+    cores: cfg.cores,
     atualizadoEm,
     /** O canto das KPIs (o MESMO da Execução): a última leitura ok (UTC do banco → ISO) e quantos cursores lendo agora. */
     meta: {

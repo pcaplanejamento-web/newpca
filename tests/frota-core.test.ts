@@ -10,7 +10,11 @@ import {
   fichaDoVeiculo,
   filtrarFrota,
   kpisFrota,
+  nomesDim,
   opcoesDim,
+  SEM_ORGAO,
+  SEM_UNIDADE,
+  serieFrota,
   porMesFrota,
   type Transacao,
   transacoesDoPacote,
@@ -160,5 +164,67 @@ describe("planilha do cadastro", () => {
     assert.equal(r.alteracoes[1].classificacaoId, undefined);
     assert.equal(r.alteracoes.length, 2);
     assert.equal(r.avisos.length, 3);
+  });
+});
+
+describe("frota-core — Órgão e Unidade do sistema (v1.259.0)", () => {
+  const ctx = contextoFrota([], [], []);
+  // As colunas 25–28 do pacote: a unidade do sistema (sigla, nome) e o órgão (sigla, nome).
+  const comUnidade = (linha: (string | number | null)[], u: string | null, o: string | null) => [...linha, u, u ? `Unidade ${u}` : null, o, o ? `Órgão ${o}` : null];
+  const trs = transacoesDoPacote([
+    comUnidade(ab(1, "2026-01-02", "AAA1A11", 10, 6, null), "SMS", "PMRV"),
+    comUnidade(ab(2, "2026-03-05", "AAA1A11", 20, 6, null), "SMS", "PMRV"),
+    comUnidade(mn(3, "2026-03-10", "BBB2B22", 900), null, "PMRV"),
+    comUnidade(mn(4, "2026-04-10", "CCC3C33", 300), null, null),
+    ab(5, "2026-04-11", "CCC3C33", 5, 6, null), // pacote antigo (sem as colunas novas) = sem unidade e sem órgão
+  ]);
+  const consumo = consumoDosAbastecimentos(trs);
+
+  it("o registro sem ligação vira 'Sem unidade'/'Sem órgão' e é filtrável", () => {
+    const op = opcoesDim(trs, "unidadeSistema", ctx);
+    assert.deepEqual(
+      op.map((o) => [o.valor, o.n]),
+      [
+        ["SMS", 2],
+        [SEM_UNIDADE, 3],
+      ],
+    );
+    assert.deepEqual(
+      opcoesDim(trs, "orgao", ctx).map((o) => o.valor),
+      ["PMRV", SEM_ORGAO],
+    );
+    assert.deepEqual(
+      filtrarFrota(trs, { dims: { unidadeSistema: [SEM_UNIDADE] } }, ctx).map((t) => t.id).sort(),
+      [3, 4, 5],
+    );
+    assert.equal(nomesDim(trs, "unidadeSistema").get("SMS"), "Unidade SMS");
+    assert.equal(nomesDim(trs, "orgao").get("PMRV"), "Órgão PMRV");
+  });
+
+  it("os agrupamentos por Órgão e Unidade somam os indicadores; os sem unidade contam", () => {
+    const k = kpisFrota(trs, consumo);
+    for (const d of ["orgao", "unidadeSistema"] as const) {
+      const g = agruparFrota(trs, d, ctx, consumo);
+      assert.equal(Math.round(g.reduce((s, x) => s + x.total, 0) * 100), Math.round(k.total * 100), d);
+    }
+    assert.equal(k.semUnidade, 3);
+    assert.equal(k.valorSemUnidade, 900 + 300 + 30);
+  });
+
+  it("a série (a régua da Execução): o acumulado termina nos indicadores; por período soma o total; o zoom continua o acumulado", () => {
+    const k = kpisFrota(trs, consumo);
+    const s = serieFrota(trs, {}, "mes", "2026-12-31");
+    assert.equal(s.granularidade, "mes");
+    const fim = s.pontos.at(-1);
+    assert.equal(fim?.acCombustivel, k.combustivel);
+    assert.equal(fim?.acManutencao, k.manutencao);
+    assert.equal(
+      s.pontos.reduce((t, p) => t + p.combustivel + p.manutencao, 0),
+      k.total,
+    );
+    // Na janela do zoom, o acumulado começa com o que veio antes dela.
+    const ini = s.pontos[0].de;
+    const z = serieFrota(trs, { de: s.pontos.at(-1)?.de, ate: s.pontos.at(-1)?.ate }, "dia", "2026-12-31", { acumularDesde: ini });
+    assert.equal(Math.round(((z.pontos.at(-1)?.acCombustivel ?? 0) + (z.pontos.at(-1)?.acManutencao ?? 0)) * 100), Math.round(k.total * 100));
   });
 });

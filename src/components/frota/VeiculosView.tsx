@@ -31,7 +31,9 @@ import { Dropzone } from "../Dropzone";
 import { ErroCarga } from "../ErroCarga";
 import { TextField } from "../Field";
 import { IconEtiqueta, IconPlus, IconSave, IconUpload } from "../icons";
-import { type ImportacaoFrotaKpi, IndicadoresFrota } from "./FrotaView";
+import { type EdicoesFrota, type ImportacaoFrotaKpi, IndicadoresFrota, useTabelaFrota } from "./FrotaView";
+import { DadosCompletos } from "../DadosCompletos";
+import { useSemUnidade } from "../UnidadeUnica";
 import { Modal } from "../Modal";
 import { SkeletonCartao } from "../Skeleton";
 import { toast } from "../Toast";
@@ -65,6 +67,8 @@ export function VeiculosView({
   alertas,
   importacao,
   pode,
+  edicoes,
+  podePublicar = false,
 }: {
   anoInicial: number | null;
   versao: string;
@@ -73,6 +77,8 @@ export function VeiculosView({
   /** O canto das KPIs (há quanto tempo a Vólus foi lida; o "Importar agora" do ADM). */
   importacao?: ImportacaoFrotaKpi;
   pode: { manipular: boolean; importar: boolean; configurar: boolean; exportar: boolean };
+  edicoes?: EdicoesFrota;
+  podePublicar?: boolean;
 }) {
   const { transacoes, ctx, cadastro } = useDadosFrota({ ano: anoInicial, versao, contratos });
   const { veiculos, classificacoes, unidades, erro, recarregar } = cadastro;
@@ -101,7 +107,13 @@ export function VeiculosView({
     return (veiculos ?? []).map((v) => ({ ...v, ...(gastos.get(v.placa) ?? { gasto: 0, registros: 0, ultimo: null }) }));
   }, [veiculos, transacoes]);
   const nomeClassif = (id: number | null) => (id == null ? "" : (classificacoes.find((c) => c.id === id)?.nome ?? ""));
-  const nomeUnidade = (id: number | null) => (id == null ? "" : (unidades.find((u) => u.id === id)?.codigo ?? ""));
+  const unidade = (id: number | null) => (id == null ? undefined : unidades.find((u) => u.id === id));
+  const nomeUnidade = (id: number | null) => unidade(id)?.codigo ?? "";
+  const tabela = useTabelaFrota("frotas:veiculos:tabela", edicoes, podePublicar);
+  // Com UMA unidade no cabeçalho e todos os veículos dela, Unidade e Órgão saem (a interface enxuta).
+  const semUnidade = useSemUnidade(() => (veiculos ?? []).map((v) => nomeUnidade(v.reparticaoId) || null), "frotas");
+  const celulaSigla = (sigla: string | null | undefined, nome: string | null | undefined, vazio: string) =>
+    sigla ? <span title={nome && nome !== sigla ? `${sigla} — ${nome}` : sigla}>{sigla}</span> : <span className="text-faint">{vazio}</span>;
 
   const colunas: Column<Linha>[] = [
     { key: "placa", header: "Placa", value: (v) => v.placa, render: (v) => <strong className="font-mono text-[13px]">{v.placa}</strong>, nowrap: true },
@@ -140,7 +152,24 @@ export function VeiculosView({
     { key: "fipe", header: "FIPE", filter: "range", align: "right", numero: (v) => v.fipe, render: (v) => (v.fipe == null ? "—" : brl(v.fipe)), total: false },
     { key: "locacao", header: "Locação", filter: "range", align: "right", numero: (v) => v.locacao, render: (v) => (v.locacao == null ? "—" : brl(v.locacao)) },
     { key: "tanque", header: "Tanque (l)", filter: "range", numero: (v) => v.capacidadeTanque, value: (v) => (v.capacidadeTanque == null ? "—" : dec(v.capacidadeTanque)), render: (v) => (v.capacidadeTanque == null ? "—" : dec(v.capacidadeTanque)), formatarFaixa: dec, total: false },
-    { key: "unidade", header: "Unidade", value: (v) => nomeUnidade(v.reparticaoId) || "—", render: (v) => nomeUnidade(v.reparticaoId) || "—", nowrap: true },
+    ...(semUnidade
+      ? []
+      : ([
+          {
+            key: "orgao",
+            header: "Órgão",
+            value: (v) => unidade(v.reparticaoId)?.orgao ?? "Sem órgão",
+            render: (v) => celulaSigla(unidade(v.reparticaoId)?.orgao, unidade(v.reparticaoId)?.orgaoNome, "Sem órgão"),
+            nowrap: true,
+          },
+          {
+            key: "unidade",
+            header: "Unidade",
+            value: (v) => nomeUnidade(v.reparticaoId) || "Sem unidade",
+            render: (v) => celulaSigla(nomeUnidade(v.reparticaoId), unidade(v.reparticaoId)?.nome, "Sem unidade"),
+            nowrap: true,
+          },
+        ] as Column<Linha>[])),
     { key: "gasto", header: `Gasto ${anoInicial ?? ""}`.trim(), filter: "range", align: "right", numero: (v) => v.gasto, render: (v) => brl(v.gasto) },
     { key: "registros", header: "Registros", filter: "range", numero: (v) => v.registros, value: (v) => num(v.registros), render: (v) => num(v.registros), formatarFaixa: num },
     { key: "ultimo", header: "Último registro", filter: "date", value: (v) => v.ultimo ?? "", render: (v) => (v.ultimo ? dataBR(v.ultimo) : "—"), nowrap: true },
@@ -168,9 +197,11 @@ export function VeiculosView({
       {veiculos == null ? (
         <SkeletonCartao />
       ) : (
+        <DadosCompletos value={tabela.completo}>
         <DataTable
           scrollInterno
           density="compact"
+          edicoes={tabela.edicoes}
           rows={linhas}
           getKey={(v) => v.placa}
           columns={colunas}
@@ -186,6 +217,7 @@ export function VeiculosView({
           vazio="Nenhum veículo — as placas entram com as transações da Vólus."
           acoesRodape={
             <span className="flex items-center gap-1.5">
+              {tabela.botao}
               {pode.configurar && (
                 <BotaoAcao rotulo="Classificações" icon={<IconEtiqueta className="h-4 w-4" />} onClick={() => setClassifAberto(true)} />
               )}
@@ -210,6 +242,7 @@ export function VeiculosView({
             </span>
           }
         />
+        </DadosCompletos>
       )}
       {pode.manipular && selecao.size > 0 && (
         <BarraSelecao
@@ -270,7 +303,7 @@ export function VeiculosView({
             : undefined
         }
       />
-      <TransacaoFrotaDetalhe id={aberta} onClose={() => setAberta(null)} consumo={aberta != null ? consumo.get(aberta) : undefined} />
+      <TransacaoFrotaDetalhe id={aberta} onClose={() => setAberta(null)} consumo={aberta != null ? consumo.get(aberta) : undefined} resumo={transacoes?.find((x) => x.id === aberta)} />
       {classifAberto && <Classificacoes inicial={classificacoes} onClose={() => setClassifAberto(false)} onSalvo={() => void recarregar()} />}
       {planilhaAberta && (
         <PlanilhaVeiculos
@@ -293,6 +326,9 @@ function IndicadoresVeiculos({ linhas, importacao }: { linhas: Linha[]; importac
   const proprios = linhas.filter((l) => l.origem === "proprio");
   const contrato = linhas.filter((l) => l.origem === "contrato");
   const semClassif = linhas.filter((l) => l.classificacaoId == null).length;
+  const semUnidade = linhas.filter((l) => l.reparticaoId == null).length;
+  const comGasto = linhas.filter((l) => l.registros > 0).length;
+  const comTanque = linhas.filter((l) => l.capacidadeTanque != null).length;
   const gasto = linhas.reduce((s, l) => s + l.gasto, 0);
   const maior = linhas.reduce<Linha | null>((m, l) => (l.gasto > (m?.gasto ?? 0) ? l : m), null);
   const pct = (n: number) => (linhas.length ? `${((n / linhas.length) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : "—");
@@ -344,6 +380,38 @@ function IndicadoresVeiculos({ linhas, importacao }: { linhas: Linha[]; importac
           value: num(semClassif),
           hint: semClassif ? "classifique na tabela" : "todos classificados",
           cor: semClassif ? "var(--warn)" : undefined,
+          detalhes: [
+            { rotulo: "Classificados", valor: num(linhas.length - semClassif) },
+            { rotulo: "Da frota", valor: pct(semClassif) },
+          ],
+        },
+        {
+          label: "Sem unidade",
+          value: num(semUnidade),
+          hint: semUnidade ? "sem unidade de lotação" : "todos lotados",
+          cor: semUnidade ? "var(--warn)" : undefined,
+          detalhes: [
+            { rotulo: "Lotados", valor: num(linhas.length - semUnidade) },
+            { rotulo: "Da frota", valor: pct(semUnidade) },
+          ],
+        },
+        {
+          label: "Com gasto no ano",
+          value: num(comGasto),
+          hint: "abastecimento ou manutenção",
+          detalhes: [
+            { rotulo: "Sem gasto", valor: num(linhas.length - comGasto) },
+            { rotulo: "Registros", valor: num(linhas.reduce((s, l) => s + l.registros, 0)) },
+          ],
+        },
+        {
+          label: "Tanque cadastrado",
+          value: num(comTanque),
+          hint: "liga o alerta de litros",
+          detalhes: [
+            { rotulo: "Sem tanque", valor: num(linhas.length - comTanque) },
+            { rotulo: "Da frota", valor: pct(comTanque) },
+          ],
         },
       ]}
     />

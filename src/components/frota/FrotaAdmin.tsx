@@ -16,6 +16,7 @@ import { ErroCarga } from "../ErroCarga";
 import { PasswordField, SelectField, TextField } from "../Field";
 import { IconKey, IconPencil, IconPlay, IconPlus, IconRefresh } from "../icons";
 import { Modal } from "../Modal";
+import { ColorField } from "../ColorField";
 import { SecaoBanner } from "../SecaoBanner";
 import { AndamentoImportacao } from "../AndamentoImportacao";
 import { useImportacoesLocais } from "../ImportacoesAoVivo";
@@ -112,7 +113,15 @@ const edicaoDe = (c: ConfigFrotaView): Edicao => ({
   horaFim: c.horaFim,
   diasRecentes: c.diasRecentes,
   alertas: c.alertas,
+  cores: c.cores,
 });
+
+/** A cor do tema (a variável resolvida, em hex) — o ponto de partida do seletor quando o ADM ainda não escolheu. */
+function corDoTema(variavel: string): string {
+  if (typeof document === "undefined") return "#3b82f6";
+  const v = getComputedStyle(document.documentElement).getPropertyValue(variavel).trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : "#3b82f6";
+}
 
 /** As opções de um número (as da lista + a gravada, se for outra). */
 const opcoes = (vals: number[], atual: number, rotulo: (n: number) => string) =>
@@ -291,7 +300,7 @@ function Integracao({ d, onSalvo }: { d: Dados; onSalvo: () => void }) {
                   <p>Falha passageira espera e tenta de novo; credencial recusada espera 6 h.</p>
                 </Ajuda>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <SelectField
                   denso
                   label="Frequência"
@@ -426,6 +435,30 @@ function Integracao({ d, onSalvo }: { d: Dados; onSalvo: () => void }) {
                 >
                   {opcoes([500, 1000, 1500, 2000, 3000, 5000], v.alertas.kmMaximo, (n) => `Acima de ${num(n)} km`)}
                 </SelectField>
+              </div>
+            </SecaoBanner>
+            <SecaoBanner
+              titulo="Cores dos dados"
+              acao={
+                <Ajuda titulo="Cores dos dados" compacta>
+                  As cores de Combustível e Manutenção nos gráficos, nas barras e nos indicadores das telas de Frotas. Sem escolha, valem as cores do tema.
+                </Ajuda>
+              }
+            >
+              <div className="grid gap-[var(--gap-block)] sm:grid-cols-2">
+                {(
+                  [
+                    ["combustivel", "Combustível", "--serie-1"],
+                    ["manutencao", "Manutenção", "--serie-2"],
+                  ] as const
+                ).map(([k, rotulo, tema]) => (
+                  <div key={k} className="space-y-2">
+                    <ColorField label={rotulo} value={v.cores[k] ?? corDoTema(tema)} onChange={(hex) => muda("cores", { ...v.cores, [k]: hex.toLowerCase() })} />
+                    <Button size="sm" variant="ghost" disabled={!v.cores[k]} onClick={() => muda("cores", { ...v.cores, [k]: null })}>
+                      Usar a cor do tema
+                    </Button>
+                  </div>
+                ))}
               </div>
             </SecaoBanner>
           </div>

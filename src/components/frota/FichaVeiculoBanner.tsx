@@ -13,11 +13,14 @@ import {
   ROTULO_SITUACAO,
   ROTULO_TIPO_VEICULO,
   rotuloMes,
+  SEM_ORGAO,
+  SEM_UNIDADE,
   TIPOS_ALERTA,
   type Transacao,
 } from "@/lib/frota-core";
 import { Badge } from "../Badge";
-import { Button } from "../Button";
+import { BotaoAcao } from "../BotaoAcao";
+import { Campo } from "../LiquidacaoDetalhe";
 import { BarrasH, Colunas } from "../charts/Barras";
 import { useQuemExporta } from "../ConfigTabelas";
 import { DataTable } from "../DataTable";
@@ -91,6 +94,8 @@ export function FichaVeiculoBanner({
             { titulo: "Valor", peso: 2 },
           ],
           linhas: [
+            ["Órgão", f.orgaoAtual ?? SEM_ORGAO],
+            ["Unidade", f.unidadeSistemaAtual ?? SEM_UNIDADE],
             ["Situação", v ? ROTULO_SITUACAO[v.situacao] : "—"],
             ["Origem", v?.origem ? ROTULO_ORIGEM[v.origem] : "—"],
             ["FIPE", v?.fipe != null ? brl(v.fipe) : "—"],
@@ -154,16 +159,8 @@ export function FichaVeiculoBanner({
       acoesCabecalho={
         f ? (
           <span className="flex items-center gap-1.5">
-            {acaoExtra && (
-              <Button size="sm" variant="secondary" icon={<IconPencil className="h-4 w-4" />} onClick={acaoExtra}>
-                Editar
-              </Button>
-            )}
-            {podeExportar && (
-              <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => void baixarPdf()} loading={gerando} title="Baixar a ficha em PDF">
-                PDF
-              </Button>
-            )}
+            {acaoExtra && <BotaoAcao rotulo="Editar o cadastro" icon={<IconPencil className="h-4 w-4" />} onClick={acaoExtra} />}
+            {podeExportar && <BotaoAcao rotulo="Baixar a ficha em PDF" icon={<IconDownload className="h-4 w-4" />} onClick={() => void baixarPdf()} loading={gerando} />}
           </span>
         ) : undefined
       }
@@ -181,6 +178,14 @@ export function FichaVeiculoBanner({
             {v?.origem && <Badge tone="slate">{ROTULO_ORIGEM[v.origem]}</Badge>}
             {!v && <Badge tone="amber">Placa sem cadastro</Badge>}
           </div>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3.5 min-[480px]:grid-cols-2 lg:grid-cols-3">
+            <Campo label="Órgão" valor={f.orgaoAtual ?? SEM_ORGAO} />
+            <Campo label="Unidade" valor={f.unidadeSistemaAtual ?? SEM_UNIDADE} />
+            <Campo label="Setor (Vólus)" valor={f.unidadeAtual} />
+            <Campo label="Empresa (contrato)" valor={f.contratoAtual ? (ctx.contratos.get(f.contratoAtual) ?? f.contratoAtual) : null} />
+            <Campo label="Primeiro registro" valor={f.primeiroDia ? dataBR(f.primeiroDia) : null} />
+            <Campo label="Último registro" valor={f.ultimoDia ? dataBR(f.ultimoDia) : null} />
+          </dl>
           <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 lg:grid-cols-6">
             <StatMini label="Gasto total" value={brl(f.total)} tone="accent" />
             <StatMini label="Combustível" value={brl(f.combustivel)} hint={`${num(f.abastecimentos)} abastecimentos`} />
@@ -190,7 +195,7 @@ export function FichaVeiculoBanner({
             <StatMini label="Custo por km" value={f.custoPorKm ? brl(f.custoPorKm) : "—"} />
             <StatMini label="Posição na frota" value={`${f.posicao}º de ${f.frota}`} hint="pelo gasto total" />
             <StatMini
-              label="Comparado à média"
+              label="Vs. média"
               value={f.vsMedia == null ? "—" : `${f.vsMedia > 0 ? "+" : "−"}${Math.round(Math.abs(f.vsMedia) * 100)}%`}
               tone={f.vsMedia == null ? "default" : f.vsMedia > 0.5 ? "danger" : f.vsMedia > 0 ? "warn" : "ok"}
               hint={`média ${brl(f.mediaFrota)}`}

@@ -74,6 +74,7 @@ import { DashboardMesa } from "@/components/DashboardMesa";
 import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import { SerieTemporal } from "@/components/charts/SerieTemporal";
+import { GraficoTemporal } from "@/components/charts/GraficoTemporal";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { type Atividade, diaDoProtocolo, FILTRO_METRICAS_PADRAO, type FiltroMetricas } from "@/lib/mesa-metricas";
 import { PERIODO_TODO, type Periodo } from "@/lib/periodo";
@@ -1673,6 +1674,33 @@ function SerieTemporalDemo() {
         { chave: "pago", rotulo: "Pago", cor: 2 },
       ]}
       ariaLabel="Exemplo de evolução"
+      onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
+    />
+  );
+}
+
+function GraficoTemporalDemo() {
+  const [janela, setJanela] = useState(false);
+  let a = { combustivel: 0, manutencao: 0 };
+  const pontos = Array.from({ length: 10 }, (_, i) => {
+    a = { combustivel: a.combustivel + 18_000 + i * 900, manutencao: a.manutencao + 7_000 + (i % 3) * 2_500 };
+    return { chave: `2026-${i + 1}`, rotulo: ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out"][i], titulo: `Mês ${i + 1} de 2026`, atual: i === 9, valores: a };
+  });
+  return (
+    <GraficoTemporal
+      pontos={pontos}
+      series={[
+        { chave: "combustivel", rotulo: "Combustível", cor: 0 },
+        { chave: "manutencao", rotulo: "Manutenção", cor: 1 },
+      ]}
+      controles={[<Segmented key="t" ariaLabel="Tipo" value="a" onChange={() => {}} options={[{ value: "a", label: "Acumulado" }, { value: "p", label: "Por período" }]} />]}
+      gran="mês"
+      janela={null}
+      podeAproximar={!janela}
+      onZoom={() => setJanela(true)}
+      onRestaurar={() => setJanela(false)}
+      tabela={<p className="text-sm text-muted">A tabela dos pontos.</p>}
+      ariaLabel="Exemplo do gráfico no tempo"
       onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
     />
   );
@@ -3908,6 +3936,9 @@ export function Catalogo() {
 
       <Secao titulo="SerieTemporal (as ondas de evolução no tempo: áreas em camadas, sem legenda nem eixo Y — os valores na dica, linha de hoje, origem do ponto)">
         <SerieTemporalDemo />
+      </Secao>
+      <Secao titulo="GraficoTemporal (o gráfico no tempo do sistema — Execução e Frotas: o desenho no cartão, os controles em vidro, a legenda que liga e desliga, o zoom, a tabela e a origem)">
+        <GraficoTemporalDemo />
       </Secao>
 
       <Secao titulo="DashboardExecucaoEsqueleto (enquanto o Dashboard da Execução carrega — a MESMA grade)">

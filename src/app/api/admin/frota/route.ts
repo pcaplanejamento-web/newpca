@@ -55,6 +55,7 @@ export async function PATCH(req: Request) {
     antes.frequenciaMin !== cfg.frequenciaMin ? `frequência ${cfg.frequenciaMin} min` : "",
     antes.diasRecentes !== cfg.diasRecentes ? `relê os últimos ${cfg.diasRecentes} dias` : "",
     JSON.stringify(antes.alertas) !== JSON.stringify(cfg.alertas) ? "limites dos alertas" : "",
+    JSON.stringify(antes.cores) !== JSON.stringify(cfg.cores) ? "cores dos dados" : "",
   ].filter(Boolean);
   // Só o FATO — nunca o segredo.
   await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "frota", resumo: `Frotas (Vólus): ${partes.join("; ") || "configuração salva"}` });

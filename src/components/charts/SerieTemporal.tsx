@@ -11,7 +11,8 @@ import { ALTURA_PILULA, BASE_DATAS, RECUO_DICA, TOPO_DAS_DATAS } from "./serie-m
 import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
 /** Uma série do gráfico (o valor de cada ponto já em REAIS). */
-export type SerieTemporalDef = { chave: string; rotulo: string; cor: number };
+/** `hex` = a cor escolhida pelo ADM (vale mais que a da paleta `cor`). */
+export type SerieTemporalDef = { chave: string; rotulo: string; cor: number; hex?: string | null };
 /** Um ponto (balde de tempo): a chave, o rótulo do eixo, o título da dica e os valores de cada série (em reais). */
 export type PontoTemporal = {
   chave: string;
@@ -424,7 +425,7 @@ export function SerieTemporal({
     visiveis.map((s) => (
       <div key={s.chave} className="flex items-center justify-between gap-4">
         <span className="inline-flex items-center gap-1.5 text-muted">
-          <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: tk.serie[s.cor] }} />
+          <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: (s.hex ?? tk.serie[s.cor]) }} />
           {s.rotulo}
         </span>
         <span className="font-semibold tabular-nums text-text">{brl(p.valores[s.chave] ?? 0)}</span>
@@ -471,8 +472,8 @@ export function SerieTemporal({
     <defs>
       {series.map((s) => (
         <linearGradient key={s.chave} id={`${pref}-${s.chave}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={selecao ? tomSelecao(tk.serie[s.cor], escuro) : tk.serie[s.cor]} stopOpacity={selecao ? 1 : 0.92} />
-          <stop offset="100%" stopColor={selecao ? tomSelecao(tk.serie[s.cor], escuro) : tk.serie[s.cor]} stopOpacity={selecao ? 0.85 : 0.45} />
+          <stop offset="0%" stopColor={selecao ? tomSelecao((s.hex ?? tk.serie[s.cor]), escuro) : (s.hex ?? tk.serie[s.cor])} stopOpacity={selecao ? 1 : 0.92} />
+          <stop offset="100%" stopColor={selecao ? tomSelecao((s.hex ?? tk.serie[s.cor]), escuro) : (s.hex ?? tk.serie[s.cor])} stopOpacity={selecao ? 0.85 : 0.45} />
         </linearGradient>
       ))}
     </defs>
@@ -738,7 +739,7 @@ export function SerieTemporal({
                 fill={`url(#${id}-${s.chave})`}
                 fillOpacity={faixa ? 0.3 : 1}
                 dot={false}
-                activeDot={visiveis.includes(s) ? (d: { cx?: number; cy?: number }) => <PontoVivo cx={d.cx} cy={d.cy} cor={tk.serie[s.cor]} fundo={tk.fundo} /> : false}
+                activeDot={visiveis.includes(s) ? (d: { cx?: number; cy?: number }) => <PontoVivo cx={d.cx} cy={d.cy} cor={(s.hex ?? tk.serie[s.cor])} fundo={tk.fundo} /> : false}
                 isAnimationActive={false}
               />
             ))}
@@ -751,7 +752,7 @@ export function SerieTemporal({
                   className={`${id}-trecho`}
                   type="monotone"
                   dataKey={s.chave}
-                  stroke={tomSelecao(tk.serie[s.cor], escuro, 0.24)}
+                  stroke={tomSelecao((s.hex ?? tk.serie[s.cor]), escuro, 0.24)}
                   strokeWidth={2.5}
                   fill={`url(#${id}t-${s.chave})`}
                   dot={false}
@@ -771,8 +772,8 @@ export function SerieTemporal({
                       <g />
                     ) : (
                       <g>
-                        <circle key={pulso} cx={d.cx} cy={d.cy} r={5} fill="none" stroke={tk.serie[s.cor]} strokeWidth={2} className="pulso-ponto" />
-                        <PontoVivo cx={d.cx} cy={d.cy} cor={tk.serie[s.cor]} fundo={tk.fundo} />
+                        <circle key={pulso} cx={d.cx} cy={d.cy} r={5} fill="none" stroke={(s.hex ?? tk.serie[s.cor])} strokeWidth={2} className="pulso-ponto" />
+                        <PontoVivo cx={d.cx} cy={d.cy} cor={(s.hex ?? tk.serie[s.cor])} fundo={tk.fundo} />
                       </g>
                     )
                   }

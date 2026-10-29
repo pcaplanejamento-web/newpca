@@ -201,6 +201,11 @@ test("frota: grava só o que mudou, marca a ausência e restaura; veículos e un
   assert.equal(todos.length, 2);
   const so10 = JSON.parse((await consultaPacoteFrota(b.db, 2026, { unidades: [10], orgaos: [] })).texto) as unknown[][];
   assert.equal(so10.length, 2);
+  // A UNIDADE e o ÓRGÃO do SISTEMA no fim da tupla (a sigla e o nome; o órgão = o da unidade, antes do contrato).
+  assert.deepEqual(so10[0].slice(25), ["AMT", "Fiscalização", "AMT", "AMT"]);
+  b.raw.exec("UPDATE frota_transacoes SET reparticao_id = NULL");
+  const semLigacao = JSON.parse((await consultaPacoteFrota(b.db, 2026, null)).texto) as unknown[][];
+  assert.deepEqual(semLigacao[0].slice(25), [null, null, "AMT", "AMT"], "sem unidade: o órgão do contrato (o 2, depois do realinhamento)");
   assert.deepEqual((await consultaAnosFrota(b.db, null)).map((x) => ({ ...x })), [{ ano: 2026, n: 2 }]);
 });
 

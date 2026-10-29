@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { frotaVeiculos } from "@/db/schema";
+import { frotaVeiculos, orgaos, reparticoes } from "@/db/schema";
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -7,7 +7,6 @@ import { escopoDaFrota, listarClassificacoesFrota, veiculosDoEscopo } from "@/li
 import { aplicarTravaOrigem } from "@/lib/frota-core";
 import { veiculosEdicaoSchema } from "@/lib/frota-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { listarReparticoes } from "@/lib/grupos";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +14,15 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const g = await exigirAcesso(["veiculos", "frotas", "combustivel", "manutencao"], "visualizar");
   if ("erro" in g) return g.erro;
-  const [veiculos, classificacoes, unidades] = await Promise.all([veiculosDoEscopo(await escopoDaFrota()), listarClassificacoesFrota(), listarReparticoes()]);
-  return ok({ veiculos, classificacoes, unidades: unidades.filter((u) => u.codigo !== "GERAL").map((u) => ({ id: u.id, codigo: u.codigo, nome: u.nome })) });
+  // As unidades do cadastro com o ÓRGÃO de cada uma (as colunas Unidade e Órgão do cadastro dos veículos).
+  const unidades = getDb()
+    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgao: sql<string | null>`COALESCE(NULLIF(${orgaos.sigla}, ''), ${orgaos.nome})`, orgaoNome: orgaos.nome })
+    .from(reparticoes)
+    .leftJoin(orgaos, eq(orgaos.id, reparticoes.orgaoId))
+    .where(sql`${reparticoes.codigo} <> 'GERAL'`)
+    .orderBy(reparticoes.ordem, reparticoes.id);
+  const [veiculos, classificacoes, us] = await Promise.all([veiculosDoEscopo(await escopoDaFrota()), listarClassificacoesFrota(), unidades]);
+  return ok({ veiculos, classificacoes, unidades: us });
 }
 
 /**

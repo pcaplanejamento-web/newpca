@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.260.0",
+    data: "2026-10-29",
+    titulo: "Frotas: tabelas da Mesa, Órgão e Unidade do sistema e banners organizados",
+    mudancas: [
+      { tipo: "novo", area: "Frotas", texto: "As tabelas de combustível, manutenção, veículos, do demonstrativo e dos alertas funcionam como as da Mesa: escolher e reordenar colunas, edições salvas (só sua ou pública), filtros salvos e o botão \"Dados completos\" para ver o texto inteiro nas células.", link: "/painel/combustivel" },
+      { tipo: "novo", area: "Frotas", texto: "Colunas e filtros de Órgão e Unidade do sistema (a unidade da Vólus ligada ao cadastro; o órgão da unidade, senão o do contrato). O registro sem ligação aparece como \"Sem unidade\"/\"Sem órgão\" e pode ser filtrado; o novo indicador \"Sem unidade\" diz quantos são.", link: "/painel/manutencao" },
+      { tipo: "melhoria", area: "Frotas", texto: "O gasto no tempo usa o MESMO gráfico da Execução, com as mesmas funções: acumulado ou por período, agrupado por dia, semana ou mês, a legenda que liga e desliga, o zoom, a tabela, a dica e a origem do ponto ou do trecho. Os gráficos por veículo e por dimensão ficam lado a lado com a mesma altura e rolagem por dentro; Demonstrativo e Alertas em abas.", link: "/painel/frotas" },
+      { tipo: "novo", area: "Frotas", texto: "As cores de Combustível e Manutenção são escolhidas em Configurações → Importações → Frotas (\"Cores dos dados\") e valem nos gráficos, nas barras e nos indicadores.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "No computador, as telas de Frotas rolam por dentro, até o fim do display — a página não rola.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os banners do abastecimento, da manutenção e da ficha do veículo seguem o padrão dos banners da Execução: título curto, campos em colunas que nunca partem uma palavra e o Órgão e a Unidade do registro.", link: "/painel/combustivel" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores de \"Mais indicadores\" têm o mesmo desenho dos principais (com os detalhes) e a tabela acompanha a abertura e o fechamento deles, sempre rente ao fim da tela.", link: "/painel/veiculos" },
+    ],
+  },
+  {
     versao: "1.258.1",
     data: "2026-10-29",
     titulo: "Frotas: importação da Vólus mais rápida e mais segura",

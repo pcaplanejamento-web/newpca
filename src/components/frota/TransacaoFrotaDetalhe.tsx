@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { brl, dataBR, dec, num } from "@/lib/format";
-import { type Consumo, ROTULO_ORIGEM, type Veiculo } from "@/lib/frota-core";
-import { Button } from "../Button";
-import { CampoCongelado } from "../CampoCadeado";
+import { type Consumo, ROTULO_ORIGEM, SEM_ORGAO, SEM_UNIDADE, type Transacao, type Veiculo } from "@/lib/frota-core";
+import { BotaoAcao } from "../BotaoAcao";
 import { DataTable } from "../DataTable";
 import { ErroCarga } from "../ErroCarga";
 import { IconMapa, IconVeiculo } from "../icons";
 import { LinkExterno } from "../LinkExterno";
 import { Modal } from "../Modal";
-import { SecaoBanner } from "../SecaoBanner";
+import { Campo } from "../LiquidacaoDetalhe";
 import { SkeletonLinhas } from "../Skeleton";
 import { StatMini } from "../StatMini";
 import { CelulaTexto } from "../CelulaLista";
@@ -34,12 +33,15 @@ export function TransacaoFrotaDetalhe({
   veiculo,
   consumo,
   onVerVeiculo,
+  resumo,
 }: {
   id: number | null;
   onClose: () => void;
   veiculo?: Veiculo;
   consumo?: Consumo;
   onVerVeiculo?: (placa: string) => void;
+  /** A linha do pacote (o Órgão e a Unidade do sistema, que a transação gravada não traz por nome). */
+  resumo?: Transacao;
 }) {
   const [t, setT] = useState<TransacaoCompleta | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -73,19 +75,20 @@ export function TransacaoFrotaDetalhe({
   })();
   const s = (k: string) => (t?.[k] == null ? null : String(t[k]));
   const n = (k: string) => (t?.[k] == null ? null : Number(t[k]));
-  const titulo = t ? `${ab ? "Abastecimento" : "Manutenção"} · ${s("placa") ?? "sem placa"} · ${dataBR(s("dia"))}` : "Registro da frota";
+  const titulo = t ? `${ab ? "Abastecimento" : "Manutenção"} ${s("placa") ?? "sem placa"}` : "Registro da frota";
+  const quando = t ? `${dataBR(s("dia"))}${s("dataHora") ? ` ${String(s("dataHora")).slice(11, 16)}` : ""}` : null;
+  // Os campos em colunas de largura MÍNIMA (nunca quebram uma palavra no meio): 1 → 2 → 3 conforme o banner.
+  const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(13rem,100%),1fr))] gap-x-6 gap-y-3.5";
 
   return (
     <Modal
       open={id != null}
       onClose={onClose}
       titulo={titulo}
-      size="lg"
+      size="xl"
       acoesCabecalho={
         t?.placa && onVerVeiculo ? (
-          <Button size="sm" variant="secondary" icon={<IconVeiculo className="h-4 w-4" />} onClick={() => onVerVeiculo(String(t.placa))}>
-            Ficha do veículo
-          </Button>
+          <BotaoAcao rotulo="Ficha do veículo" icon={<IconVeiculo className="h-4 w-4" />} onClick={() => onVerVeiculo(String(t.placa))} />
         ) : undefined
       }
     >
@@ -95,57 +98,66 @@ export function TransacaoFrotaDetalhe({
         <SkeletonLinhas linhas={8} />
       ) : (
         <div className="space-y-[var(--gap-block)]">
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+          {/* Os números numa linha (4 no abastecimento, 3 na manutenção); no celular, duas colunas. */}
+          <div className={`grid gap-[var(--gap-block)] ${ab ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
             <StatMini label="Valor" value={brl(n("valor"))} tone="accent" />
             {ab ? (
               <>
                 <StatMini label="Litros" value={dec(n("litros"))} />
                 <StatMini label="Preço do litro" value={n("precoLitro") != null ? brl(n("precoLitro")) : "—"} />
-                <StatMini label="Km/l (sistema)" value={consumo?.kmPorLitro ? dec(consumo.kmPorLitro) : "—"} hint={consumo?.km ? `${num(consumo.km)} km desde o anterior` : undefined} />
+                <StatMini label="Km/l" value={consumo?.kmPorLitro ? dec(consumo.kmPorLitro) : "—"} hint={consumo?.km ? `${num(consumo.km)} km rodados` : undefined} />
               </>
             ) : (
               <>
                 <StatMini label="Itens" value={num(n("qtdItens"))} />
-                <StatMini label="Tipo" value={s("tipoManutencao") ?? "—"} />
                 <StatMini label="Hodômetro" value={n("hodometro") != null ? `${num(n("hodometro"))} km` : "—"} />
               </>
             )}
           </div>
-          <SecaoBanner titulo="Veículo">
-            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
-              <CampoCongelado label="Placa" valor={s("placa") ?? s("placaCrua")} />
-              <CampoCongelado label="Marca / modelo" valor={[s("marca") ?? veiculo?.marca, s("modelo") ?? veiculo?.modelo].filter(Boolean).join(" ")} />
-              <CampoCongelado label="Ano" valor={s("anoFabricacao") ?? (veiculo?.ano ? String(veiculo.ano) : null)} />
-              <CampoCongelado label="Prefixo" valor={s("prefixo")} />
-              <CampoCongelado label="Hodômetro" valor={n("hodometro") != null ? `${num(n("hodometro"))} km` : s("medidorTexto")} />
-              <CampoCongelado label="Km rodado (Vólus)" valor={n("kmRodado") != null ? num(n("kmRodado")) : null} />
-              <CampoCongelado label="Origem" valor={veiculo?.origem ? ROTULO_ORIGEM[veiculo.origem] : null} />
-              <CampoCongelado label="Cartão" valor={s("cartao")} />
-            </div>
-          </SecaoBanner>
-          <SecaoBanner titulo={ab ? "Posto" : "Estabelecimento"}>
-            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
-              <CampoCongelado label="Nome" valor={s("estabelecimento")} />
-              <CampoCongelado label="CNPJ" valor={s("estabCnpj")} />
-              <CampoCongelado label="Endereço" valor={[s("estabEndereco"), s("estabBairro")].filter(Boolean).join(" — ")} />
-              <CampoCongelado label="Cidade" valor={s("estabCidade") ? `${s("estabCidade")}${s("estabUf") ? `/${s("estabUf")}` : ""}` : null} />
-            </div>
-            {t.latitude != null && t.longitude != null && (
-              <LinkExterno href={`https://www.google.com/maps?q=${t.latitude},${t.longitude}`} icon={<IconMapa className="h-4 w-4" />}>
-                Abrir no mapa
-              </LinkExterno>
-            )}
-          </SecaoBanner>
-          <SecaoBanner titulo="Quem e quando">
-            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
-              <CampoCongelado label="Data e hora" valor={s("dataHora") ? `${dataBR(s("dia"))} ${String(s("dataHora")).slice(11, 16)}` : dataBR(s("dia"))} />
-              <CampoCongelado label={ab ? "Motorista" : "Operador"} valor={s("motorista")} />
-              <CampoCongelado label="CPF" valor={mascararCpf(s("motoristaCpf"))} />
-              <CampoCongelado label="Setor" valor={s("unidadeNome")} />
-            </div>
-          </SecaoBanner>
+
+          <dl className={GRADE}>
+            <Campo label="Data e hora" valor={quando} />
+            {!ab && <Campo label="Tipo de manutenção" valor={s("tipoManutencao")} />}
+            <Campo label="Órgão" valor={resumo ? (resumo.orgao ? nomeCompleto(resumo.orgao, resumo.orgaoNome) : SEM_ORGAO) : null} />
+            <Campo label="Unidade" valor={resumo ? (resumo.unidadeSistema ? nomeCompleto(resumo.unidadeSistema, resumo.unidadeSistemaNome) : SEM_UNIDADE) : null} />
+            <Campo label="Setor (Vólus)" valor={s("unidadeNome")} />
+            <Campo label={ab ? "Motorista" : "Operador"} valor={s("motorista")} />
+            <Campo label="CPF" valor={mascararCpf(s("motoristaCpf"))} />
+          </dl>
+
+          <Bloco titulo="Veículo">
+            <dl className={GRADE}>
+              <Campo label="Placa" valor={s("placa") ?? s("placaCrua")} />
+              <Campo label="Marca / modelo" valor={[s("marca") ?? veiculo?.marca, s("modelo") ?? veiculo?.modelo].filter(Boolean).join(" ")} />
+              <Campo label="Ano" valor={s("anoFabricacao") ?? (veiculo?.ano ? String(veiculo.ano) : null)} />
+              <Campo label="Prefixo" valor={s("prefixo")} />
+              <Campo label="Hodômetro" valor={n("hodometro") != null ? `${num(n("hodometro"))} km` : s("medidorTexto")} />
+              <Campo label="Km rodado (Vólus)" valor={n("kmRodado") != null ? num(n("kmRodado")) : null} />
+              <Campo label="Origem" valor={veiculo?.origem ? ROTULO_ORIGEM[veiculo.origem] : null} />
+              <Campo label="Cartão" valor={s("cartao")} />
+            </dl>
+          </Bloco>
+
+          <Bloco
+            titulo={ab ? "Posto" : "Estabelecimento"}
+            acao={
+              t.latitude != null && t.longitude != null ? (
+                <LinkExterno href={`https://www.google.com/maps?q=${t.latitude},${t.longitude}`} icon={<IconMapa className="h-4 w-4" />}>
+                  Abrir no mapa
+                </LinkExterno>
+              ) : undefined
+            }
+          >
+            <dl className={GRADE}>
+              <Campo label="Nome" valor={s("estabelecimento")} />
+              <Campo label="CNPJ" valor={s("estabCnpj")} />
+              <Campo label="Endereço" valor={[s("estabEndereco"), s("estabBairro")].filter(Boolean).join(" — ")} />
+              <Campo label="Cidade" valor={s("estabCidade") ? `${s("estabCidade")}${s("estabUf") ? `/${s("estabUf")}` : ""}` : null} />
+            </dl>
+          </Bloco>
+
           {itens.length > 0 && (
-            <SecaoBanner titulo={ab ? "Produtos" : "Itens da manutenção"}>
+            <Bloco titulo={ab ? "Produtos" : "Itens da manutenção"}>
               <DataTable
                 density="compact"
                 exportar={{ nome: `${ab ? "Abastecimento" : "Manutencao"} ${s("placa") ?? ""} ${s("dia") ?? ""}` }}
@@ -153,28 +165,47 @@ export function TransacaoFrotaDetalhe({
                 getKey={(r) => r.i}
                 columns={[
                   { key: "d", header: "Descrição", value: (r) => String(r.x[0] ?? ""), render: (r) => <CelulaTexto texto={String(r.x[0] ?? "")} />, align: "left", minWidth: 200 },
-                  ...(ab ? [] : [{ key: "tp", header: "Tipo", value: (r: { x: (string | number | null)[] }) => String(r.x[4] ?? "") , render: (r: { x: (string | number | null)[] }) => String(r.x[4] ?? "") }]),
+                  ...(ab
+                    ? []
+                    : [{ key: "tp", header: "Tipo", value: (r: { x: (string | number | null)[] }) => String(r.x[4] ?? ""), render: (r: { x: (string | number | null)[] }) => String(r.x[4] ?? ""), nowrap: true }]),
                   { key: "q", header: "Qtd.", filter: "range", numero: (r) => (r.x[1] == null ? null : Number(r.x[1])), value: (r) => dec(Number(r.x[1] ?? 0)), render: (r) => dec(Number(r.x[1] ?? 0)), formatarFaixa: dec, total: false },
                   { key: "u", header: "Vlr. unit.", filter: "range", align: "right", numero: (r) => (r.x[2] == null ? null : Number(r.x[2])), render: (r) => (r.x[2] == null ? "—" : brl(Number(r.x[2]))), total: false },
                   { key: "t", header: "Total", filter: "range", align: "right", numero: (r) => (r.x[3] == null ? null : Number(r.x[3])), render: (r) => (r.x[3] == null ? "—" : brl(Number(r.x[3]))) },
                 ]}
               />
-            </SecaoBanner>
+            </Bloco>
           )}
-          <SecaoBanner titulo="Nota e empenho">
-            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
-              <CampoCongelado label="Nota fiscal" valor={s("notaFiscal")} />
-              <CampoCongelado label="Valor da nota" valor={n("valorNota") != null ? brl(n("valorNota")) : null} />
-              <CampoCongelado label="Empenho" valor={s("empenho")} />
-              <CampoCongelado label="Processo" valor={s("processo")} />
-              <CampoCongelado label="Faturado" valor={t.faturado == null ? null : Number(t.faturado) ? "Sim" : "Não"} />
-              <CampoCongelado label="Contrato (Vólus)" valor={s("contrato")} />
-              <CampoCongelado label="Código da transação" valor={s("refId")} />
-              <CampoCongelado label="Atualizado no sistema" valor={s("atualizadoEm") ? dataBR(String(s("atualizadoEm")).slice(0, 10)) : null} />
-            </div>
-          </SecaoBanner>
+
+          <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Nota, empenho e registro</p>
+            <dl className={GRADE}>
+              <Campo label="Nota fiscal" valor={s("notaFiscal")} />
+              <Campo label="Valor da nota" valor={n("valorNota") != null ? brl(n("valorNota")) : null} />
+              <Campo label="Empenho" valor={s("empenho")} />
+              <Campo label="Processo" valor={s("processo")} />
+              <Campo label="Faturado" valor={t.faturado == null ? null : Number(t.faturado) ? "Sim" : "Não"} />
+              <Campo label="Contrato (Vólus)" valor={s("contrato")} />
+              <Campo label="Código da transação" valor={s("refId")} />
+              <Campo label="Atualizado no sistema" valor={s("atualizadoEm") ? dataBR(String(s("atualizadoEm")).slice(0, 10)) : null} />
+            </dl>
+          </div>
         </div>
       )}
     </Modal>
+  );
+}
+
+const nomeCompleto = (sigla: string, nome: string | null) => (nome && nome !== sigla ? `${sigla} — ${nome}` : sigla);
+
+/** Um bloco do banner (o padrão dos banners da Execução): o título em caixa-alta discreto, a ação à direita, o conteúdo. */
+function Bloco({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="rounded-card border border-border p-[var(--pad-card)]">
+      <div className="mb-2 flex min-h-6 flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-faint">{titulo}</p>
+        {acao}
+      </div>
+      {children}
+    </section>
   );
 }

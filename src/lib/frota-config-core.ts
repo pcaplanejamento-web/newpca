@@ -17,6 +17,8 @@ export type ConfigFrota = {
   diasRecentes: number;
   /** Os ALERTAS (os limites que o ADM ajusta). */
   alertas: LimitesAlertas;
+  /** As CORES dos dados (combustível e manutenção) em todo o sistema — `null` = a do tema (`--serie-1`/`--serie-2`). */
+  cores: CoresFrota;
   /** O último teste da credencial (quando deu certo e quantos contratos ela alcança). */
   testadoEm: string | null;
   empresasNoTeste: number;
@@ -35,6 +37,17 @@ export type LimitesAlertas = {
   kmMaximo: number;
 };
 
+export type CoresFrota = { combustivel: string | null; manutencao: string | null };
+/** As cores do tema que valem sem escolha (as mesmas da paleta dos gráficos). */
+export const COR_PADRAO_FROTA = { combustivel: "var(--serie-1)", manutencao: "var(--serie-2)" } as const;
+/** O hex aceito (#rrggbb) — qualquer outra coisa = a cor do tema (nada de CSS livre). */
+export const hexValido = (v: unknown): string | null => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toLowerCase() : null);
+/** As variáveis CSS das cores escolhidas (`--frota-combustivel`, `--frota-manutencao`), só com hex validado. */
+export function cssCoresFrota(c: CoresFrota): string {
+  const v = [c.combustivel ? `--frota-combustivel:${c.combustivel}` : "", c.manutencao ? `--frota-manutencao:${c.manutencao}` : ""].filter(Boolean);
+  return v.length ? `:root{${v.join(";")}}` : "";
+}
+
 export const ALERTAS_PADRAO: LimitesAlertas = { consumoPct: 40, precoPct: 20, horasEntre: 3, tanquePct: 10, kmMaximo: 2000 };
 
 export const OPCOES_FREQUENCIA_FROTA = [60, 120, 180, 360, 720, 1440];
@@ -50,6 +63,7 @@ export const CONFIG_FROTA_PADRAO: ConfigFrota = {
   horaFim: 22,
   diasRecentes: 45,
   alertas: ALERTAS_PADRAO,
+  cores: { combustivel: null, manutencao: null },
   testadoEm: null,
   empresasNoTeste: 0,
 };
@@ -63,6 +77,7 @@ const num = (v: unknown, d: number, min: number, max: number) => {
 export function lerConfigFrota(bruto: unknown): ConfigFrota {
   const r = (bruto && typeof bruto === "object" ? bruto : {}) as Record<string, unknown>;
   const a = (r.alertas && typeof r.alertas === "object" ? r.alertas : {}) as Record<string, unknown>;
+  const c = (r.cores && typeof r.cores === "object" ? r.cores : {}) as Record<string, unknown>;
   const p = CONFIG_FROTA_PADRAO;
   const horaInicio = num(r.horaInicio, p.horaInicio, 0, 23);
   const horaFim = num(r.horaFim, p.horaFim, 1, 24);
@@ -82,6 +97,7 @@ export function lerConfigFrota(bruto: unknown): ConfigFrota {
       tanquePct: num(a.tanquePct, ALERTAS_PADRAO.tanquePct, 0, 100),
       kmMaximo: num(a.kmMaximo, ALERTAS_PADRAO.kmMaximo, 100, 100_000),
     },
+    cores: { combustivel: hexValido(c.combustivel), manutencao: hexValido(c.manutencao) },
     testadoEm: typeof r.testadoEm === "string" ? r.testadoEm : null,
     empresasNoTeste: num(r.empresasNoTeste, 0, 0, 1000),
   };
