@@ -1,5 +1,6 @@
 "use client";
 
+import { lerGuardado } from "@/lib/memoria-aba";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
@@ -170,6 +171,8 @@ export function EmpenhosTabela({
   const [eds, setEds] = useState(edicoes);
   const guardados = useRef(new Map<string, EmpenhoNaTela[]>());
   const pedido = useRef(0);
+  const versaoRef = useRef(versao);
+  versaoRef.current = versao;
 
   // Um ano lido (e guardado nesta aba) — "Todos os anos" junta um pedido por ano, cada um com o próprio limite do servidor.
   const lerAno = useCallback(
@@ -177,10 +180,17 @@ export function EmpenhosTabela({
       const k = `${ano}:${removidos ? 1 : 0}`;
       const guardado = fresco ? undefined : guardados.current.get(k);
       if (guardado) return guardado;
-      const resp = await fetch(`/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`, { cache: "no-store" });
-      const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
-      if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
-      const lista = juntarAnos([{ ano, pacote: j.pacote }]);
+      // Na MEMÓRIA DA ABA pela versão: sair e voltar à tela não pede de novo.
+      const lista = await lerGuardado(
+        `/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`,
+        versaoRef.current ?? "",
+        async (resp) => {
+          const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
+          if (!resp.ok || !j.ok || !j.pacote) throw new Error(j.error ?? "Não foi possível carregar os empenhos.");
+          return juntarAnos([{ ano, pacote: j.pacote }]);
+        },
+        fresco,
+      );
       guardados.current.set(k, lista);
       return lista;
     },

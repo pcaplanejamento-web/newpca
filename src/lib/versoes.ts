@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.256.0",
+    versao: "1.257.0",
     data: "2026-10-29",
     titulo: "Frotas: combustível, manutenção e veículos com os dados da Vólus",
     mudancas: [
@@ -46,6 +46,24 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "novo", area: "Pesquisa", texto: "A pesquisa acha os veículos da frota pela placa, marca ou modelo (prefixo \"veiculo:\") e abre a ficha.", link: "/painel/veiculos" },
       { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram os quatro principais com dois detalhes cada (os mesmos cartões do Dashboard do PCA) e os demais em \"Mais indicadores\"; os filtros ficam com nomes curtos, em ordem, e conectados entre si — o valor marcado que outro filtro zerou continua na lista para ser desmarcado.", link: "/painel/frotas" },
       { tipo: "melhoria", area: "Tabelas", texto: "No rodapé de todas as tabelas, exportar, ações, linhas por página e paginação ficam numa linha só; o que não cabe na tela rola de lado.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.256.1",
+    data: "2026-10-29",
+    titulo: "Empenhos, liquidações e pagamentos sem recarregar",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "Ao voltar às telas de Empenhos, Liquidações e Pagamentos, a tabela aparece na hora — os dados já lidos ficam guardados na aba até uma importação nova.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.256.0",
+    data: "2026-10-29",
+    titulo: "Telas mais rápidas: cache que não se apaga à toa e telas pré-carregadas",
+    mudancas: [
+      { tipo: "melhoria", area: "Desempenho", texto: "Cada tela acompanha só os dados que mostra: a importação automática dos empenhos e as gravações de Tarefas não recarregam mais a Mesa, o PCA nem o Orçamento — sair e voltar a uma tela já vista abre na hora.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Desempenho", texto: "Tarefas, Calendário, Empenhos, Liquidações, Pagamentos e Execução só recarregam quando os dados deles mudam.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Desempenho", texto: "Com a tela pronta, o sistema pré-carrega em segundo plano as primeiras telas do menu, uma por vez: ir a elas abre sem esperar.", link: "/painel/mesa" },
     ],
   },
   {

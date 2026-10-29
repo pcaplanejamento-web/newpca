@@ -918,6 +918,7 @@ export const auditoria = sqliteTable(
   },
   (t) => [
     index("auditoria_entidade_idx").on(t.entidade, t.entidadeId),
+    index("auditoria_entidade_id_idx").on(t.entidade, t.id),
     index("auditoria_usuario_idx").on(t.usuarioId),
     index("auditoria_criado_idx").on(t.criadoEm),
     index("auditoria_protocolo_idx").on(t.protocoloId),
@@ -2697,7 +2698,7 @@ export const declaracaoItens = sqliteTable(
   (t) => [primaryKey({ columns: [t.declaracaoId, t.sequencial] }), index("declaracao_itens_pca_seq_idx").on(t.pcaId, t.sequencial)],
 );
 
-// ─── FROTAS (Vólus — migração `0168`) ────────────────────────────────────────────────────────────────────────
+// ─── FROTAS (Vólus — migração `0169`) ────────────────────────────────────────────────────────────────────────
 
 /** Os CONTRATOS (empresas) da Vólus: o código de 12 dígitos, o produto e o ÓRGÃO do cadastro a que pertence. */
 export const frotaContratos = sqliteTable("frota_contratos", {
