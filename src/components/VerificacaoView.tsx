@@ -4,7 +4,7 @@ import { type ComponentProps, useEffect, useState } from "react";
 import { Ajuda } from "./Ajuda";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { Dropzone } from "./Dropzone";
-import { IconClipboard, IconFile, IconVerificacao } from "./icons";
+import { IconClipboard, IconFile } from "./icons";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { vistaPermitida } from "@/lib/papeis-componentes-core";
 import { useComponente } from "./ComponentesPapel";
@@ -38,10 +38,7 @@ export function VerificacaoView({
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="linha-topico flex flex-wrap items-center gap-2">
-        <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-          <IconVerificacao className="h-5 w-5 text-accent" />
-          Verificação
-        </h1>
+        <h1 className="sr-only">Verificação</h1>
         <Ajuda titulo="Verificação">
           <p>Solte um protocolo ou um DFD para ver todos os erros e atenções, como na importação da Mesa.</p>
           <p>Escolha à direita se vai verificar um protocolo ou um DFD.</p>

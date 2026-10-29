@@ -133,6 +133,14 @@ export function jaGuardado<T>(recurso: string, url: string, versao: string): T |
   return entradaVale(e, chave, escopo, versao) ? (e.valor as T) : undefined;
 }
 
+/** Quando o dado guardado (na memória desta aba) foi buscado do servidor — o selo "Dados de hh:mm". */
+export function momentoDoDado(recurso: string, url: string, versao: string): number | null {
+  if (!escopo) return null;
+  const chave = chaveDado(escopo, recurso, url);
+  const e = memoria.get(chave);
+  return entradaVale(e, chave, escopo, versao) ? e.em : null;
+}
+
 /**
  * Lê um dado: a memória, depois o aparelho (IndexedDB), depois o servidor — com a MESMA versão; `fresco` = o servidor.
  * Pedidos iguais ao mesmo tempo = UM pedido. `ler` confere a resposta e lança na falha (a falha não é guardada).

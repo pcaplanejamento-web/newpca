@@ -8,7 +8,6 @@ import { Callout } from "./Callout";
 import { selectCls } from "./formStyles";
 import { Historico } from "./Historico";
 import { BotaoAtualizar } from "./BotaoAtualizar";
-import { IconClock } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
 import { Selecao } from "./Selecao";
 
@@ -59,13 +58,8 @@ export function AuditoriaAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <header className="linha-topico flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-            <IconClock className="h-5 w-5" /> Auditoria
-          </h1>
-          <p className="text-sm text-muted">Histórico de alterações de todo o sistema — quem, o quê e quando.</p>
-        </div>
+      <header className="flex flex-wrap items-center justify-end gap-3">
+        <h1 className="sr-only">Auditoria</h1>
         <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando o histórico…" onClick={() => void carregar()} />
       </header>
 

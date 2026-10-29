@@ -504,7 +504,7 @@ export function ConfiguracoesAdmin({
   return (
     <div className="space-y-[var(--gap-block)]">
       {confirmacao}
-      <h1 className="linha-topico text-xl font-bold text-text">Configurações</h1>
+      <h1 className="sr-only">Configurações</h1>
 
       <div>
         <Tabs

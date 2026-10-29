@@ -1,6 +1,6 @@
 "use client";
 
-import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, momentoDoDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
@@ -244,6 +244,7 @@ export function EmpenhoCardPagamentos({
       setCarregando(true);
       setErro(null);
       try {
+        const emDe: (number | null)[] = [];
         // "Todos os anos" = um pedido POR ANO (cada um com o próprio limite do servidor), juntos — nenhum ano fica de fora:
         // a falha de um é a falha da carga.
         const partes = await Promise.all(
@@ -259,11 +260,13 @@ export function EmpenhoCardPagamentos({
               },
               fresco,
             );
+            emDe.push(momentoDoDado("pagamentos", `${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`, versao));
             return (j.linhas ?? []).map((t) => daTupla(t, ano));
           }),
         );
         if (n !== pedido.current) return;
         const novas = partes.flat();
+        setDadosDe(emDe.every((x) => x != null) && emDe.length ? Math.min(...(emDe as number[])) : null);
         setLinhas(novas);
         setVista(null);
         // Recarregou com os dados novos (uma importação de empenhos muda o tipo e a unidade): o detalhe aberto segue, atualizado.
@@ -298,6 +301,7 @@ export function EmpenhoCardPagamentos({
   );
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
   const atalho = useAtalhoImportacoes();
+  const [dadosDe, setDadosDe] = useState<number | null>(null);
 
   return (
     <>
@@ -323,7 +327,7 @@ export function EmpenhoCardPagamentos({
             ))}
           </SelectField>
         )}
-        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" onClick={() => void carregar(recorte, true)} />}
+        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "pagamento", "pagamentos"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
         {atalho}
         <Ajuda titulo={cardId == null ? "Pagamentos" : "Pagamentos do card"} botao="sm">
@@ -357,8 +361,7 @@ export function EmpenhoCardPagamentos({
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (
-        <>
-          <DataTable
+        <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={colunas}
             rows={linhas}
@@ -385,7 +388,6 @@ export function EmpenhoCardPagamentos({
             vazio={recorte.removidos ? `Nenhum pagamento removido na Centi${recorte.ano === ANO_TODOS ? "" : " neste ano"}.` : `Nenhum pagamento${recorte.ano === ANO_TODOS ? "" : " neste ano"}.`}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "pagamento" : "pagamentos"} · Pago líquido ${brl(somaPaga(l, "valorLiquido"))}`}
           />
-        </>
       )}
 
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Ordem de pagamento ${aberto.id}` : "Pagamento"} size="lg">

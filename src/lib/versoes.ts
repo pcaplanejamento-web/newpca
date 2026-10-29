@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.2",
+    data: "2026-10-29",
+    titulo: "Telas sem título e o horário dos dados à vista",
+    mudancas: [
+      { tipo: "melhoria", area: "Telas", texto: "PCA, Orçamento, Tarefas, Documentos, Verificação, Automação, Configurações, Auditoria, Armazenamento, Integrações, Avaliação e Referência abrem direto no conteúdo, sem título nem subtítulo (os botões continuam no mesmo lugar).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Ao lado do Recarregar de empenhos, liquidações e pagamentos, o horário dos dados à vista (\"Dados de 10:42\") — quando vêm do que foi guardado no navegador.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.264.1",
     data: "2026-10-29",
     titulo: "Empenhos, liquidações e pagamentos com os indicadores das Frotas",

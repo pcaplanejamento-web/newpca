@@ -447,10 +447,7 @@ export function DocumentosView({
     <div className="space-y-[var(--gap-block)]">
       <div className={`flex flex-wrap items-center gap-2 ${noPca ? "" : "linha-topico"}`}>
         {!noPca && (
-          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-            <IconDocumentos className="h-5 w-5 text-accent" />
-            Documentos
-          </h1>
+          <h1 className="sr-only">Documentos</h1>
         )}
         <Ajuda titulo="Documentos">
           {noPca ? (

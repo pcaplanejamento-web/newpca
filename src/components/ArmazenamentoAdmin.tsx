@@ -12,7 +12,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { BotaoAtualizar } from "./BotaoAtualizar";
-import { IconDatabase, IconImage, IconLayers, IconTrash } from "./icons";
+import { IconImage, IconLayers, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { MonitoramentoWorker } from "./MonitoramentoWorker";
 import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
@@ -136,16 +136,8 @@ export function ArmazenamentoAdmin() {
   }
 
   const cabecalho = (
-    <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-          <IconDatabase className="h-5 w-5 text-accent" />
-          Armazenamento
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          Uso do banco de dados (D1) e do Worker: tamanho por tabela, consumo diário, monitoramento e manutenção.
-        </p>
-      </div>
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <h1 className="sr-only">Armazenamento</h1>
       <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando o armazenamento e o monitoramento…" onClick={() => void recarregar()} />
     </div>
   );

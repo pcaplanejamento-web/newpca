@@ -19,7 +19,6 @@ import { Segmented } from "./Segmented";
 export function PcaModuleView({
   podeCriar,
   pcas,
-  filtro = null,
 }: {
   /** O papel cria PCA (Configurar) — o card "+ Novo PCA". */
   podeCriar: boolean;
@@ -34,7 +33,6 @@ export function PcaModuleView({
   const [fonte, setFonte] = useState<FontePca>("protocolo");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const publicados = pcas.filter((p) => p.status === "publicado").length;
 
   async function criar() {
     setSalvando(true);
@@ -60,14 +58,7 @@ export function PcaModuleView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico">
-        <h1 className="text-xl font-bold text-text">PCA</h1>
-        <p className="text-sm text-muted">
-          {filtro
-            ? `Só o ${filtro} — o PCA escolhido no cabeçalho (escolha "Todos os PCAs" lá para ver os demais)`
-            : `${pcas.length} ${pcas.length === 1 ? "plano" : "planos"} · ${publicados} publicado(s) na tela inicial`}
-        </p>
-      </div>
+      <h1 className="sr-only">PCA</h1>
 
       {pcas.length === 0 && !podeCriar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">

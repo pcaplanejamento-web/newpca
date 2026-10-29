@@ -263,14 +263,7 @@ export function ReferenciaSistema({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico">
-        <h1 className="text-xl font-bold text-text">Referência do sistema</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted">
-          Todas as regras e comportamentos do sistema em um só lugar (somente leitura). O que
-          bloqueia, o que só avisa, o que é automático, os estados e os fluxos — com os valores
-          vigentes.
-        </p>
-      </div>
+      <h1 className="sr-only">Referência do sistema</h1>
 
       <div className="space-y-3">
         <SearchField

@@ -1,6 +1,6 @@
 "use client";
 
-import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, momentoDoDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
@@ -223,14 +223,18 @@ export function EmpenhosTabela({
       try {
         // Nenhum ano fica de fora: a falha de um é a falha da carga (com "Tentar de novo").
         const partes = await Promise.all(anosDoRecorte(r.ano, anos).map((ano) => lerAno(ano, r.removidos, fresco)));
-        if (n === pedido.current) setLinhas(partes.flat());
+        if (n === pedido.current) {
+          const em = anosDoRecorte(r.ano, anos).map((ano) => momentoDoDado("empenhos", urlAno(cardId, ano, r.removidos), versaoRef.current ?? ""));
+          setDadosDe(em.length && em.every((x) => x != null) ? Math.min(...(em as number[])) : null);
+          setLinhas(partes.flat());
+        }
       } catch (e) {
         if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os empenhos.");
       } finally {
         if (n === pedido.current) setCarregando(false);
       }
     },
-    [anos, lerAno],
+    [anos, lerAno, cardId],
   );
 
   useEffect(() => {
@@ -261,6 +265,7 @@ export function EmpenhosTabela({
   const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
   const atalho = useAtalhoImportacoes();
+  const [dadosDe, setDadosDe] = useState<number | null>(null);
 
   return (
     <>
@@ -286,7 +291,7 @@ export function EmpenhosTabela({
             ))}
           </SelectField>
         )}
-        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />}
+        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={avisoDeFalha(erro, linhas != null, () => recorte && void carregar(recorte, true))} />
         {atalho}
         <Ajuda titulo={cardId == null ? "Empenhos" : "Empenhos do card"} botao="sm">
