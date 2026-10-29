@@ -16,7 +16,10 @@ export async function POST() {
   if (!c.cliente) return erro(c.erro, 422);
   try {
     const t = await c.cliente.autenticar(true);
-    await gravarConfigFrota({ ...cfg, testadoEm: new Date().toISOString(), empresasNoTeste: t.empresas.length }, a.u.id);
+    // A configuração RELIDA agora (o teste leva segundos — uma gravação feita no meio nunca é desfeita): só o resultado do
+    // teste muda, e só se a credencial testada ainda é a gravada.
+    const atual = await getConfigFrota();
+    if (atual.clientId === cfg.clientId && atual.clientSecret === cfg.clientSecret) await gravarConfigFrota({ ...atual, testadoEm: new Date().toISOString(), empresasNoTeste: t.empresas.length }, a.u.id);
     const cadastrados = new Set((await listarContratos()).map((x) => x.codigo));
     return ok({
       empresas: t.empresas.map((e) => ({ ...e, cadastrado: cadastrados.has(e.id), produto: produtoProvavel(e.id) })),

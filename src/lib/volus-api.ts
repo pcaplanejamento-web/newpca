@@ -77,6 +77,15 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
     }
   }
 
+  async function chamarAuth(url: string, init: RequestInit, tempoMs: number) {
+    try {
+      return await chamar(url, init, tempoMs);
+    } catch (e) {
+      if (e instanceof ErroVolus && e.lento) throw new ErroVolus("A autenticação da Vólus demorou demais para responder.", 0);
+      throw e;
+    }
+  }
+
   /** O token (da memória, se ainda vale) + as empresas (contratos) que a credencial alcança. */
   async function autenticar(forcar = false): Promise<Token> {
     const guardado = tokens.get(chaveToken);
@@ -89,7 +98,8 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
   }
 
   async function novoToken(): Promise<Token> {
-    const { r, limpar } = await chamar(
+    // O tempo esgotado na AUTENTICAÇÃO não é o extrato lento: nunca encolhe o período (só tenta de novo depois).
+    const { r, limpar } = await chamarAuth(
       `${HOST_AUTH_VOLUS}/v1/partners/auth/token`,
       {
         method: "POST",

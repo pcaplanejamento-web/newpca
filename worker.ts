@@ -177,22 +177,22 @@ export default {
     // Esperar não gasta CPU (o cron tem até 15 min de relógio): a 2ª execução da importação cai no meio do minuto.
     if (evento.cron === "0-59 * * * *") await new Promise((ok) => setTimeout(ok, 30_000));
     const assinatura = await sha256(`${env.INTEGRACOES_CHAVE}:cron`);
-    const pedido = (vez: number) => new Request(`https://cron.interno${caminho}?vez=${vez}`, { method: "POST", headers: { "x-cron-trello": assinatura } });
+    const pedido = (vez: number, depois: number | null = null) => new Request(`https://cron.interno${caminho}?vez=${vez}${depois ? `&depois=${depois}` : ""}`, { method: "POST", headers: { "x-cron-trello": assinatura } });
     // AGUARDADO no próprio `scheduled` (não no `waitUntil`, que pode cortar a tarefa longa no meio — travas presas e
     // gravações pela metade).
     const self = env.SELF;
     if (self && EM_RODADA.has(rotulo)) {
       // A RODADA: cada chamada pelo binding é uma execução NOVA (o próprio limite de CPU e de consultas) — várias tarefas
       // pequenas por disparo, em sequência; as travas do lote e da leitura impedem duas na mesma página.
-      const r = await rodadaDoCron(async (vez) => {
+      const r = await rodadaDoCron(async (vez, depois) => {
         try {
-          const resp = await self.fetch(pedido(vez));
+          const resp = await self.fetch(pedido(vez, depois));
           if (!resp.ok) {
             console.error(`[${rotulo}] cron (vez ${vez}):`, resp.status, await resp.text());
             return { ok: false, trabalhou: false };
           }
-          const corpo = (await resp.json().catch(() => null)) as { trabalhou?: boolean } | null;
-          return { ok: true, trabalhou: corpo?.trabalhou === true };
+          const corpo = (await resp.json().catch(() => null)) as { trabalhou?: boolean; depois?: number } | null;
+          return { ok: true, trabalhou: corpo?.trabalhou === true, depois: corpo?.depois };
         } catch (e) {
           console.error(`[${rotulo}] cron falhou (vez ${vez}):`, e);
           return { ok: false, trabalhou: false };

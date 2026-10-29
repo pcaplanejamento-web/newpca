@@ -4616,6 +4616,39 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   a página…" em erro. Andamento PELOS BYTES: `andamentoDoLote` (`empenhos-fragmentos.ts` — a tela do card e o painel) +
   `consultaBytesDoAno` (o total da última importação promovida) → `fracaoDoAndamento` com `AndamentoLote.bytes`; o painel
   soma o capturado no "Baixado", os `recebidos` do passo em curso nos Registros e mostra a última atividade (`vistoEm`).
+- **AUDITORIA DAS IMPORTAÇÕES (v1.264.0, migração `0171` — `centi_leituras.progresso_em` + índice `centi_lote_passos_pedido_idx`):**
+  - **Pulo em qualquer tamanho:** a 1ª chamada lê a resposta INTEIRA pelo SHA-256 nativo (`baixarSeguro` `faixa.assinar` →
+    `crypto.DigestStream`; só a 1ª faixa é guardada; tempo esgotado no resto = segue sem a assinatura) e a página igual é
+    pulada antes de capturar. `consultaPaginaAnterior` acha a referência entre as 12 últimas importações PROMOVIDAS do mesmo
+    pedido (automáticas ou manuais) e não pula se alguma chave mudou depois dela (`lote_id` > o da referência).
+  - **Liquidações mês a mês na automática** (`lotePorMesAuto`; a divisão por datas segue). A "janela recente" do plano NÃO
+    foi feita: com o pulo valendo para qualquer tamanho, os meses iguais já custam só um download, sem mexer na regra dos
+    ausentes.
+  - **Orçamento:** depois de pulos, a página que MUDOU só é processada se couber uma real (`cabePaginaReal`,
+    `CUSTO_PAGINA_REAL`=22); senão `iniciarPaginaAuto(…, soPular)` a deixa para a próxima chamada. Os passos são lidos UMA vez
+    por chamada (as leituras do D1 contam por linha).
+  - **Erros:** os anteriores ao último AVANÇO da leitura fragmentada não contam (`esperaDoErro(…, desde)`); o "Guardando…"
+    parado há 5 min conta; execução sem avanço = `MSG_CPU` (passageiro) — só a 3ª vez no mesmo pedido vira "grande demais".
+  - **Rodada:** `rodadaDoCron` confere o tempo ANTES de cada chamada pela maior duração vista e passa `depois` (o card
+    servido) — `inicioDaFila` começa depois dele. Exceção de um card não para a fila nem mexe na última leitura dele. Travas:
+    lote 50 s, reserva da leitura 45 s.
+  - **Lote:** `comandosLimparStagingOrfao` + recontagem antes de conferir; a conclusão usa `passosDaRetomada` (sem teto);
+    `jaNoLote` só conta páginas ok e a que está sendo guardada; excluir passo = `comandosExcluirPassos` (sem órgão, o período
+    inteiro volta a faltar; por órgão, só o fim do período é desfeito); a página recomeçada encerra o "Guardando…" antigo; a
+    queda de liquidações/pagamentos compara com os MESMOS órgãos; empenhos por órgão com mais registros informados do que
+    mandados dividem o período. NÃO feito (de propósito): incluir o `idOrgaoCenti` na assinatura — mudaria o leitor e
+    regravaria tudo (o limite diário de escritas do D1).
+  - **Tela:** `abrirDivididos` (a fila da tela abre as metades de um período já dividido; ao dividir, os outros órgãos do
+    período saem da fila e o 409 dos que estavam em curso é ignorado); `lerPassosRetomada` (`?lote=` devolve `retomada` =
+    todos os passos mínimos); `useConfirmacao().perguntar` (null = a tela saiu → a pergunta da queda vai ao painel do canto);
+    Parar na pergunta = interrompido; batimento `acao: "manter"` a cada 60 s; Parar aborta downloads e esperas (`sinal`;
+    download com 10 min de teto); "Importar tudo" para ENTRE os cards (`pararEntreCards`); a tela do card reconhece a
+    importação da aba ao voltar; andamento monotônico; o painel lê os passos pela memória (`passosDoAndamento`, pelo
+    `vistoEm`).
+  - **Frota:** um dia lê até `MAX_BYTES_DIA_FROTA` (1 MB); maior que isso ou interrompido 5 vezes = dia PULADO com aviso; o
+    ciclo novo começa no dia em que o anterior terminou quando parado (até 92 dias); o passo não encolhe pelo pedaço final do
+    ciclo; a manual trava o par (`lerPeriodoManual`, `comandoTravarManual`); a trava respeita `esperaAte`; "Testar" relê a
+    configuração; tempo esgotado na autenticação não encolhe o passo; o painel identifica o ciclo e usa o dia de Brasília.
 - **RODADA DO CRON (v1.263.0, sem migração):** o `scheduled` (`worker.ts`) das rotas `empenhos` e `frota` chama o PRÓPRIO
   Worker pelo service binding `SELF` (`wrangler.jsonc` → `services`) em SEQUÊNCIA — cada chamada é uma execução NOVA, com o
   próprio limite de CPU e de 50 consultas; esperar não gasta CPU do pai. Núcleo puro **`rodada-cron-core.ts`** (testado —

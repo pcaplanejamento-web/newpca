@@ -51,6 +51,13 @@ test("atualização automática: os erros esperam (1, 2, 4… min) e só desiste
   assert.ok(MINUTOS_DESISTIR_AUTO >= 30);
   // Sem erro: segue.
   assert.deepEqual(esperaDoErro([], ped, agora), { esperar: false, desistir: false });
+  // A leitura fragmentada AVANÇOU depois dos erros velhos: eles não contam (só os posteriores ao avanço).
+  assert.equal(esperaDoErro(velhos, ped, agora, "2026-10-23 14:50:00").desistir, false);
+  assert.deepEqual(esperaDoErro(velhos, ped, agora, "2026-10-23 15:00:55"), { esperar: false, desistir: false });
+  // O "Guardando…" parado há mais de 5 min foi cortado no meio: conta como erro.
+  const parado = { ...erro("2026-10-23 14:50:00"), mensagem: "Guardando a página — 1 parte(s) recebida(s)" };
+  assert.equal(esperaDoErro([parado], ped, agora).esperar, false);
+  assert.equal(esperaDoErro([parado, erro("2026-10-23 15:00:50")], ped, agora).esperar, true);
 });
 
 test("atualização automática: só começa na hora (horário, dia útil, frequência)", () => {

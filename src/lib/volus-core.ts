@@ -143,6 +143,10 @@ export function dividirPeriodo(inicio: string, fim: string, partes: number): { i
 
 /** O teto de BYTES de uma resposta lida no servidor (o limite de CPU do Worker: ler o JSON custa ~20 ms por MB). */
 export const MAX_BYTES_EXTRATO = 200_000;
+/** O teto de UM DIA (não se divide mais): o dia movimentado passa dos 200 KB e tem de ser lido mesmo assim. */
+export const MAX_BYTES_DIA_FROTA = 1_000_000;
+/** O começo da mensagem do dia que nem com o teto de um dia cabe: a automática pula o dia (aviso) — nunca trava o par. */
+export const MSG_DIA_GRANDE = "Um único dia";
 /** Em quantas partes dividir quando a resposta passou do teto (`bytes` = o que já veio — pelo menos 2). */
 export const partesPara = (bytes: number) => Math.max(2, Math.ceil((bytes * 1.25) / MAX_BYTES_EXTRATO));
 

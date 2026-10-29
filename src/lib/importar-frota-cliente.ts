@@ -69,6 +69,7 @@ export function importarFrota(o: OpcoesFrota): { id: string; fim: Promise<Resumo
   const fila = filaDaFrota(o.contratos, o.ano, o.hoje ?? hojeIso());
   const id = `frota-${Date.now()}-${++seq}`;
   let parar = false;
+  let cortados = 0;
   const agora = () => Date.now();
   const novoPedido = (p: PedidoFrota): PedidoAndamento => ({
     chave: chaveDe(p),
@@ -163,10 +164,17 @@ export function importarFrota(o: OpcoesFrota): { id: string; fim: Promise<Resumo
             break;
           }
           // 409 = a atualização automática está lendo este contrato agora: espera ela terminar e tenta de novo.
-          if (!permanente && (status >= 500 || status === 0 || status === 409) && tentativa < 2 && !parar) {
+          // (a trava da automática dura até 150 s: até 6 esperas de 30 s cobrem uma leitura inteira dela).
+          if (!permanente && (status >= 500 || status === 0 || status === 409) && tentativa < (status === 409 ? 6 : 2) && !parar) {
             const espera = status === 409 ? 30_000 : 2000 * (tentativa + 1);
             mudarPedido(id, chave, (y) => ({ ...(y ?? novoPedido(p)), fase: "esperando", faseMs: agora(), espera, mensagem: msg }));
-            await esperar(espera);
+            // Parar interrompe a espera na hora (de segundo em segundo).
+            for (let t = 0; t < espera && !parar; t += 1000) await esperar(Math.min(1000, espera - t));
+            if (parar) {
+              mudarPedido(id, chave, (y) => ({ ...(y ?? novoPedido(p)), fase: "erro", faseMs: agora(), fimMs: agora(), mensagem: "Interrompido." }));
+              cortados++;
+              break;
+            }
             continue;
           }
           r.falhas.push(`${rotuloDe(p)} ${p.inicio}: ${msg}`);
@@ -212,7 +220,8 @@ export function importarFrota(o: OpcoesFrota): { id: string; fim: Promise<Resumo
       }
     };
     await Promise.all(Array.from({ length: n }, trabalhador));
-    r.interrompido = parar && fila.length > 0;
+    // Interrompida = Parar deixou algum pedido sem fazer (na fila ou cortado numa espera).
+    r.interrompido = parar && (fila.length > 0 || cortados > 0);
     const num = (n: number) => n.toLocaleString("pt-BR");
     const texto = r.interrompido
       ? `Interrompida: ${num(r.novos)} novos, ${num(r.alterados)} alterados.`

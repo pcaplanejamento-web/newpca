@@ -6,14 +6,14 @@ import type { EscopoEmpenhos } from "./empenhos-tela-core";
 import { chaveEscopoEmpenhos, escopoVazio } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
 import { unidadeDoModulo } from "./escopo-cabecalho";
-import { agoraBrasilia, avancarCursor, type ConfigFrota, credencialDefinida, esperaDaFalha, lerConfigFrota, motivoForaDaHora, novoPasso, proximoTrabalho } from "./frota-config-core";
-import { comandoLeituraSemGravar, comandoTravarCursor, comandoRealinharContrato, comandoRealinharUnidade, comandoSubirVersao, comandosGravarExtrato, consultaAnosFrota, contagensDoLote, consultaPacoteFrota, consultaVersaoFrota, type Gravacao } from "./frota-sql";
+import { agoraBrasilia, avancarCursor, type ConfigFrota, credencialDefinida, esperaDaFalha, lerConfigFrota, MSG_INTERROMPIDA, motivoForaDaHora, novoPasso, proximoTrabalho } from "./frota-config-core";
+import { comandoLeituraSemGravar, comandoSoltarManual, comandoTravarCursor, comandoTravarManual, comandoRealinharContrato, comandoRealinharUnidade, comandoSubirVersao, comandosGravarExtrato, consultaAnosFrota, contagensDoLote, consultaPacoteFrota, consultaVersaoFrota, type Gravacao } from "./frota-sql";
 import { cursoresLendo } from "./frota-andamento-core";
 import { lerBlobConfiguracoes } from "./integracoes";
 import { decifrarSegredo } from "./integracoes-segredos";
 import { criarMemoVersao } from "./memo-versao-core";
 import { clienteVolus, ErroVolus } from "./volus-api";
-import { diasEntre, linhasDoExtrato, MAX_BYTES_EXTRATO, partesPara, type ProdutoContrato, type TipoTransacao, tiposDoProduto, transacoesDaResposta } from "./volus-core";
+import { diasEntre, linhasDoExtrato, MAX_BYTES_DIA_FROTA, MAX_BYTES_EXTRATO, MSG_DIA_GRANDE, partesPara, type ProdutoContrato, type TipoTransacao, tiposDoProduto, transacoesDaResposta } from "./volus-core";
 
 /**
  * FROTAS — o motor no servidor: a configuração (blob `frota`), a leitura de UM período da Vólus (contrato × tipo × dias —
@@ -79,11 +79,13 @@ export async function lerPeriodo(
   if (!c.cliente) return falha(c.erro, false, 0);
   let texto: string;
   try {
-    const r = await c.cliente.extrato(p.tipo, p.contrato, p.inicio, p.fim, MAX_BYTES_EXTRATO);
+    // UM DIA não se divide: o teto é maior (o dia movimentado de uma frota grande passa dos 200 KB).
+    const umDia = diasEntre(p.inicio, p.fim) <= 1;
+    const r = await c.cliente.extrato(p.tipo, p.contrato, p.inicio, p.fim, umDia ? MAX_BYTES_DIA_FROTA : MAX_BYTES_EXTRATO);
     g.bytes = r.bytes;
     g.ms = r.ms;
     if (r.grande) {
-      if (diasEntre(p.inicio, p.fim) <= 1) return falha(`Um único dia (${p.inicio}) passa do limite de leitura (${Math.round(r.bytes / 1024)} KB).`, false, 0);
+      if (umDia) return falha(`${MSG_DIA_GRANDE} (${p.inicio}) passa do limite de leitura (${Math.round(r.bytes / 1024)} KB) — importe-o pela tela em partes menores ou confira na Vólus.`, false, 0);
       await db.batch([comandoLeituraSemGravar(db, g, "dividido", null)] as never).catch(() => {});
       return { estado: "dividir", partes: partesPara(r.bytes), bytes: r.bytes };
     }
@@ -133,13 +135,24 @@ async function garantirCursores() {
   return todos.filter((k) => vigentes.has(`${k.contrato}:${k.tipo}`));
 }
 
-/** A automática está lendo este contrato × tipo AGORA (a trava do cursor no futuro)? A manual espera. */
-export async function cursorLendo(contrato: string, tipo: string): Promise<boolean> {
-  const [c] = await getDb()
-    .select({ travaAte: frotaCursores.travaAte })
-    .from(frotaCursores)
-    .where(and(eq(frotaCursores.contrato, contrato), eq(frotaCursores.tipo, tipo)));
-  return !!c?.travaAte && c.travaAte > new Date().toISOString();
+/**
+ * A importação MANUAL de um período com a TRAVA do par (a mesma da automática): null = a automática (ou outra leitura) está
+ * nele agora — a tela espera e tenta de novo. O par sem cursor (contrato novo, a automática nunca o viu) lê sem trava.
+ */
+export async function lerPeriodoManual(cfg: ConfigFrota, p: { contrato: string; tipo: TipoTransacao; inicio: string; fim: string; por: string }): Promise<ResultadoLeitura | null> {
+  const db = getDb();
+  const agora = new Date();
+  const ate = new Date(agora.getTime() + TRAVA_CURSOR_MS).toISOString();
+  const pegou = await comandoTravarManual(db, p.contrato, p.tipo, agora.toISOString(), ate);
+  if (!pegou.length) {
+    const [existe] = await db.select({ c: frotaCursores.contrato }).from(frotaCursores).where(and(eq(frotaCursores.contrato, p.contrato), eq(frotaCursores.tipo, p.tipo)));
+    if (existe) return null;
+  }
+  try {
+    return await lerPeriodo(cfg, { ...p, origem: "manual" });
+  } finally {
+    if (pegou.length) await comandoSoltarManual(db, p.contrato, p.tipo, ate).catch(() => {});
+  }
 }
 
 /** A trava de um cursor durante a leitura: cobre o pior caso (autenticar 15 s + extrato 25 s, de novo depois de um 401)
@@ -170,9 +183,21 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
   const travou = await comandoTravarCursor(db, t, visto, iso, trava);
   if (!travou.length) return "Outra execução está lendo este contrato.";
   const dias = diasEntre(t.inicio, t.fim);
-  // Depois de execuções INTERROMPIDAS, o período já veio encolhido (`passoEfetivo`): o passo gravado parte dele.
-  const passo = Math.min(travou[0].passo, dias);
+  const hojeDia = agoraBrasilia(agora).dia;
+  // Depois de execuções INTERROMPIDAS, o período já veio encolhido (`passoEfetivo`): o passo gravado parte dele. O pedaço
+  // FINAL do ciclo (cortado em hoje) é curto por causa do calendário, não da Vólus: o passo aprendido não encolhe por ele.
+  const cortadoHoje = t.fim === hojeDia && dias < travou[0].passo && visto?.ultimoErro !== MSG_INTERROMPIDA;
+  const passo = cortadoHoje ? travou[0].passo : Math.min(travou[0].passo, dias);
   const onde = and(eq(frotaCursores.contrato, t.contrato), eq(frotaCursores.tipo, t.tipo));
+  // UM DIA que derruba a execução repetidas vezes (o limite de processamento): pulado com o aviso — o par nunca trava nele.
+  if (dias === 1 && visto?.ultimoErro === MSG_INTERROMPIDA && travou[0].falhas >= 5) {
+    const proximo = avancarCursor(t.fim, hojeDia);
+    await db
+      .update(frotaCursores)
+      .set({ travaAte: null, falhas: 0, esperaAte: null, ultimoErro: `Dia pulado: a leitura de ${t.inicio} foi interrompida ${travou[0].falhas - 1} vezes pelo limite do servidor.`, proximo, ...(proximo === null ? { cicloConcluidoEm: iso } : {}) })
+      .where(onde);
+    return `Dia pulado em ${t.contrato} ${t.tipo} (${t.inicio}): interrompido seguidamente.`;
+  }
   let r: Awaited<ReturnType<typeof lerPeriodo>>;
   try {
     r = await lerPeriodo(cfg, { contrato: t.contrato, tipo: t.tipo as TipoTransacao, inicio: t.inicio, fim: t.fim, origem: "auto", por: "Atualização automática" });
@@ -181,7 +206,7 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
     r = { estado: "erro", erro: `Falha na leitura: ${(e as Error)?.message ?? String(e)}`, transitorio: true, status: 0, lento: false };
   }
   if (r.estado === "ok") {
-    const proximo = avancarCursor(t.fim, agoraBrasilia(agora).dia);
+    const proximo = avancarCursor(t.fim, hojeDia);
     const terminou = proximo === null;
     await db
       .update(frotaCursores)
@@ -204,6 +229,16 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
       .set({ travaAte: null, falhas: 0, ultimoErro: null, passoDias: novoPasso(passo, dias, { dividir: r.partes }, MAX_BYTES_EXTRATO) })
       .where(onde);
     return `Período grande demais (${t.contrato} ${t.tipo}); o passo diminui.`;
+  }
+  // UM DIA que não cabe nem no teto do dia: o par NUNCA trava por ele — o dia é pulado com o aviso (fica no histórico e
+  // na situação) e o ciclo segue.
+  if (dias === 1 && r.erro.startsWith(MSG_DIA_GRANDE)) {
+    const proximo = avancarCursor(t.fim, agoraBrasilia(agora).dia);
+    await db
+      .update(frotaCursores)
+      .set({ travaAte: null, falhas: 0, esperaAte: null, ultimoErro: `Dia pulado: ${r.erro}`.slice(0, 300), proximo, ...(proximo === null ? { cicloConcluidoEm: iso } : {}) })
+      .where(onde);
+    return `Dia pulado em ${t.contrato} ${t.tipo}: ${r.erro}`;
   }
   // A falha já foi contada na TRAVA (antes da leitura).
   const falhas = travou[0].falhas;

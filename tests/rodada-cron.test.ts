@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_CHAMADAS_RODADA, frotaTrabalhou, registraNaVez, rodadaDoCron, textoTarefas, vezDaRodada } from "../src/lib/rodada-cron-core.ts";
+import { MAX_CHAMADAS_RODADA, depoisDaRodada, frotaTrabalhou, inicioDaFila, registraNaVez, rodadaDoCron, textoTarefas, vezDaRodada } from "../src/lib/rodada-cron-core.ts";
 
 test("rodada: segue enquanto trabalha e para no ocioso", async () => {
   const vezes: number[] = [];
@@ -23,7 +23,24 @@ test("rodada: para no erro, no teto e no tempo", async () => {
     },
     () => t,
   );
-  assert.deepEqual(r, { vezes: 3, tarefas: 3 });
+  // A MAIOR duração vista (10 s) é conferida antes de cada chamada: 0→10, 10→20; a 3ª passaria dos 25 s.
+  assert.deepEqual(r, { vezes: 2, tarefas: 2 });
+});
+
+test("rodada: cada chamada recebe o card servido pela anterior; a fila começa depois dele", async () => {
+  const vistos: (number | null)[] = [];
+  await rodadaDoCron(async (vez, depois) => {
+    vistos.push(depois);
+    return { ok: true, trabalhou: vez < 2, depois: 10 + vez };
+  });
+  assert.deepEqual(vistos, [null, 10, 11]);
+  assert.equal(inicioDaFila([5, 7, 9], 7, 0), 2);
+  assert.equal(inicioDaFila([5, 7, 9], 9, 0), 0);
+  assert.equal(inicioDaFila([5, 7, 9], null, 4), 1);
+  assert.equal(inicioDaFila([5, 7, 9], 99, 2), 2);
+  assert.equal(inicioDaFila([], 3, 1), 0);
+  assert.equal(depoisDaRodada("https://cron.interno/x?vez=1&depois=12"), 12);
+  assert.equal(depoisDaRodada("https://cron.interno/x?vez=1"), null);
 });
 
 test("vez da rodada, registro e textos", () => {

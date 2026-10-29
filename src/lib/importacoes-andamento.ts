@@ -3,7 +3,7 @@ import { centiLotes, empenhoCards, frotaCursores, frotaLeituras } from "@/db/sch
 import { getDb } from "./db";
 import type { TipoCard, TipoImportacao } from "./empenho-cards-core";
 import { frotaAoVivo, type LeituraFrotaAoVivo } from "./frota-andamento-core";
-import { listarPassos, paraLote } from "./empenhos";
+import { paraLote, passosDoAndamento } from "./empenhos";
 import { type AndamentoLote, fracaoDoAndamento, type LoteCenti, MARCA_GUARDANDO, type PassoLote, QUEM_AUTO } from "./empenhos-core";
 import { andamentoDoLote } from "./empenhos-fragmentos";
 import { consultaLotesAoVivo } from "./empenhos-sql";
@@ -104,7 +104,7 @@ async function andamentoCenti(ultimaDe?: TipoCard): Promise<{ lotes: LoteAoVivo[
       const lote = paraLote(l);
       const lendo = lote.estado === "lendo";
       const consultado = lote.id === ultimo?.l.id;
-      const passos = lendo || consultado ? await listarPassos(lote.id) : ([] as PassoLote[]);
+      const passos = lendo || consultado ? await passosDoAndamento(lote) : ([] as PassoLote[]);
       const andamento = lendo ? await andamentoDoLote({ ...lote, cardId: l.cardId }, passos) : null;
       const leitura = andamento?.leitura ?? null;
       const fracao = andamento ? fracaoDoAndamento(lote.ano, andamento) : 1;

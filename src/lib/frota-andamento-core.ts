@@ -1,4 +1,5 @@
 import type { LoteCenti, PassoLote } from "./empenhos-core.ts";
+import { agoraBrasilia } from "./frota-config-core.ts";
 import { codigoLegivel } from "./volus-core.ts";
 
 /**
@@ -134,7 +135,8 @@ export function frotaAoVivo(cursores: readonly CursorFrotaAoVivo[], leituras: re
     cardNome: "Frotas (Vólus)",
     tipo: "frotas",
     doCron,
-    fracao: lendo.length ? fracaoDosCursores(lendo, agoraIso.slice(0, 10)) : 1,
+    // O "hoje" dos cursores é o de Brasília (depois das 21 h o UTC já é o dia seguinte).
+    fracao: lendo.length ? fracaoDosCursores(lendo, agoraBrasilia(new Date(agoraIso)).dia) : 1,
     leitura: null,
     passos: ordenadas.slice(0, ULTIMOS).map((l) => ({
       id: l.id,

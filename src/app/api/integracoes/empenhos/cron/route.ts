@@ -3,7 +3,7 @@ import { atualizarEmpenhosAuto } from "@/lib/empenhos-auto";
 import { erro, ok } from "@/lib/http";
 import { registrarCron } from "@/lib/importacoes-cron";
 import { situacoesDaCenti } from "@/lib/importacoes-cron-sql";
-import { registraNaVez, textoTarefas, vezDaRodada } from "@/lib/rodada-cron-core";
+import { depoisDaRodada, registraNaVez, textoTarefas, vezDaRodada } from "@/lib/rodada-cron-core";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +13,12 @@ export async function POST(req: Request) {
   if (!(await cronAutorizado(req))) return erro("Não autorizado.", 401);
   const vez = vezDaRodada(req.url);
   try {
-    const { situacoes, trabalhou } = await atualizarEmpenhosAuto(new Date(), vez);
+    const { situacoes, trabalhou, servido } = await atualizarEmpenhosAuto(new Date(), vez, depoisDaRodada(req.url));
     if (registraNaVez(vez, trabalhou)) {
       const comTarefas = situacoes.map((s) => (s.card === 0 && s.situacao === "Ligada" ? { ...s, situacao: `Ligada · ${textoTarefas(vez, trabalhou)}` } : s));
       await registrarCron(situacoesDaCenti(comTarefas));
     }
-    return ok({ apis: situacoes, trabalhou });
+    return ok({ apis: situacoes, trabalhou, depois: servido });
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);
     console.error("[empenhos] cron:", msg);

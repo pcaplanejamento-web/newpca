@@ -114,6 +114,8 @@ export const importarCardSchema = z.discriminatedUnion("acao", [
   }),
   z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive(), condutor, aceitarQueda: z.boolean().optional() }),
   z.strictObject({ acao: z.literal("pausar"), lote: z.number().int().positive(), condutor }),
+  // O BATIMENTO de quem conduz (a cada minuto, também esperando a confirmação da queda): a trava nunca vence no meio.
+  z.strictObject({ acao: z.literal("manter"), lote: z.number().int().positive(), condutor }),
   z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), condutor: condutor.optional(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
 ]);
 

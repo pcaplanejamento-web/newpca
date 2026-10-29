@@ -249,7 +249,7 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
   const [linhas, setLinhas] = useState<LinhaImportacao[] | null>(null);
   const [rodando, setRodando] = useState(false);
   const parar = useRef(false);
-  const { confirmar, confirmacao } = useConfirmacao();
+  const { perguntar, confirmacao } = useConfirmacao();
 
   const muda = (id: number, l: Partial<LinhaImportacao>) => setLinhas((ls) => ls?.map((x) => (x.card.id === id ? { ...x, ...l } : x)) ?? ls);
 
@@ -269,7 +269,8 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
       await importarCards(todas, {
         regra,
         parar: () => parar.current,
-        confirmarQueda: perguntaDeQueda(confirmar),
+        pararEntreCards: true,
+        confirmarQueda: perguntaDeQueda(perguntar),
         onLinha: muda,
       });
     } finally {
@@ -600,7 +601,10 @@ function SituacaoAutomatica({ cron, cards }: { cron: LinhaCron[]; cards: ResumoC
     const id = Number(chave.slice(6));
     return cards?.find((c) => c.id === id)?.nome ?? `Card ${id}`;
   };
-  const parada = (c: LinhaCron) => !c.erro && agora - Date.parse(`${c.desde.replace(" ", "T")}Z`) > 30 * 60_000;
+  // "Parada" = a MESMA situação de TRABALHO há mais de 30 min (as de espera normal — fora da hora, intervalo, nada a fazer —
+  // ficam iguais por horas sem nada errado).
+  const espera = /fora da hora|intervalo mínimo|nada a atualizar|nenhum ano|nenhuma importação|desligada|conduzida por uma aba|importação manual/i;
+  const parada = (c: LinhaCron) => !c.erro && !espera.test(c.situacao) && agora - Date.parse(`${c.desde.replace(" ", "T")}Z`) > 30 * 60_000;
   const linhas = cron.filter((c) => c.chave !== "centi:geral").sort((a, b) => b.erro - a.erro || nome(a.chave).localeCompare(nome(b.chave), "pt-BR"));
   return (
     <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-[13px]">

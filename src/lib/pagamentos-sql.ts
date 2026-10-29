@@ -153,7 +153,8 @@ export async function pagamentosSuspeitos(db: Db, loteId: number): Promise<numbe
 }
 
 /** A última importação de pagamentos CONCLUÍDA do mesmo card e ano (a base da conferência de queda). */
-export async function ultimoPagamentoPromovido(db: Db, card: number, ano: number, exceto: number) {
+/** Com `orgaos`: só a importação dos MESMOS órgãos (um órgão a mais ou a menos mudaria a soma — uma queda falsa, ou escondida). */
+export async function ultimoPagamentoPromovido(db: Db, card: number, ano: number, exceto: number, orgaos?: readonly number[] | null) {
   const [l] = await db
     .select({ soma: centiLotes.soma, unicos: centiLotes.unicos })
     .from(centiLotes)
@@ -164,6 +165,7 @@ export async function ultimoPagamentoPromovido(db: Db, card: number, ano: number
         eq(centiLotes.modo, "pagamentos"),
         eq(centiLotes.estado, "promovido"),
         ne(centiLotes.id, exceto),
+        orgaos ? eq(centiLotes.orgaosCenti, JSON.stringify(orgaos)) : undefined,
       ),
     )
     .orderBy(desc(centiLotes.id))

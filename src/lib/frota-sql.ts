@@ -392,6 +392,24 @@ export const contratosDoBanco = (db: Db) => db.select({ codigo: frotaContratos.c
  * relê o período nem recomeça um ciclo por cima de um avanço). O ciclo novo grava o início junto. Devolve o passo e as
  * falhas do cursor travado (vazio = não travou).
  */
+/** A TRAVA da importação MANUAL de um contrato × tipo (a mesma coluna da automática — nunca as duas lendo o mesmo par):
+ * só a trava, sem mexer no ciclo nem nas falhas. Volta a linha só para quem a pegou. */
+export function comandoTravarManual(db: Db, contrato: string, tipo: string, agoraIso: string, travaAte: string) {
+  return db
+    .update(frotaCursores)
+    .set({ travaAte })
+    .where(and(eq(frotaCursores.contrato, contrato), eq(frotaCursores.tipo, tipo), or(isNull(frotaCursores.travaAte), lt(frotaCursores.travaAte, agoraIso))))
+    .returning({ ate: frotaCursores.travaAte });
+}
+
+/** Solta a trava manual — só se ainda for a desta leitura. */
+export function comandoSoltarManual(db: Db, contrato: string, tipo: string, travaAte: string) {
+  return db
+    .update(frotaCursores)
+    .set({ travaAte: null })
+    .where(and(eq(frotaCursores.contrato, contrato), eq(frotaCursores.tipo, tipo), eq(frotaCursores.travaAte, travaAte)));
+}
+
 export function comandoTravarCursor(
   db: Db,
   t: { contrato: string; tipo: string; inicio: string; novoCiclo: boolean },
@@ -409,6 +427,8 @@ export function comandoTravarCursor(
         eq(frotaCursores.contrato, t.contrato),
         eq(frotaCursores.tipo, t.tipo),
         or(isNull(frotaCursores.travaAte), lt(frotaCursores.travaAte, agoraIso)),
+        // A ESPERA depois de uma falha também vale aqui (outra execução pode tê-la gravado depois da escolha).
+        or(isNull(frotaCursores.esperaAte), lt(frotaCursores.esperaAte, agoraIso)),
         sql`${frotaCursores.proximo} IS ${visto?.proximo ?? null}`,
         sql`${frotaCursores.cicloConcluidoEm} IS ${visto?.cicloConcluidoEm ?? null}`,
       ),

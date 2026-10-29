@@ -95,7 +95,8 @@ const COLUNA_LISTA: Record<ListaChaves, string> = { iguais: "chaves_iguais", for
  */
 export function chavesDaLista(loteId: number, lista: ListaChaves, todas = false): SQL {
   const col = sql.raw(`p."${COLUNA_LISTA[lista]}"`);
-  const quais = todas ? sql`p."lote_id" = ${loteId} AND p."estado" <> 'dividido'` : sql`p."id" IN ${passosQueValem(loteId)}`;
+  // `todas` = as leituras ok e a que ainda recebe as partes ("Guardando a página…") — nunca as descartadas com erro.
+  const quais = todas ? sql`p."lote_id" = ${loteId} AND (p."estado" = 'ok' OR (p."estado" = 'erro' AND p."mensagem" LIKE 'Guardando a página%'))` : sql`p."id" IN ${passosQueValem(loteId)}`;
   return sql`(SELECT j."value" FROM "centi_lote_passos" p, json_each(COALESCE(${col}, '[]')) j WHERE ${quais})`;
 }
 
@@ -342,6 +343,15 @@ export function comandoRecontarLote(db: Db, loteId: number) {
     .where(and(eq(centiLotes.id, loteId), eq(centiLotes.estado, "lendo")));
 }
 
+/**
+ * O STAGING ÓRFÃO do lote: as linhas que nenhuma página que VALE guardou (a leitura descartada no meio, o passo excluído) —
+ * apagadas antes da conclusão: o registro que a Centi não traz mais nunca é promovido nem conta nos únicos.
+ */
+export function comandosLimparStagingOrfao(db: Db, loteId: number) {
+  const gravadas = chavesDaLista(loteId, "gravadas");
+  return [empenhosStaging, liquidacoesStaging, pagamentosStaging].map((t) => db.delete(t).where(and(eq(t.loteId, loteId), sql`${t.chave} NOT IN ${gravadas}`)));
+}
+
 /** As chaves GUARDADAS do lote (o staging do tipo dele — um lote é de um tipo só). */
 const chavesDoStaging = (loteId: number) =>
   sql`(SELECT "chave" FROM "empenhos_staging" WHERE "lote_id" = ${loteId} UNION ALL SELECT "chave" FROM "liquidacoes_staging" WHERE "lote_id" = ${loteId} UNION ALL SELECT "chave" FROM "pagamentos_staging" WHERE "lote_id" = ${loteId})`;
@@ -545,7 +555,7 @@ export function comandoConduzir(db: Db, loteId: number, condutor: string) {
 }
 
 /** Segundos da trava da EXECUÇÃO automática (a espera pela Centi é de até 30 s; a execução que caiu não prende o lote). */
-export const SEGUNDOS_EXECUCAO_AUTO = 90;
+export const SEGUNDOS_EXECUCAO_AUTO = 50;
 
 /** TRAVA a execução automática no lote (o cron roda DUAS vezes por minuto): a linha volta só para quem a pegou. */
 export function comandoTravarAuto(db: Db, loteId: number) {
@@ -707,14 +717,27 @@ export function comandosExcluirLotes(db: Db, cardId: number, loteIds: number[]) 
 }
 
 /**
- * Exclui PASSOS do lote (vários de uma vez — os ids num parâmetro JSON). O passo lido também sai: o período dele volta a
- * faltar e é lido de novo ao continuar (o que já está no staging fica — a releitura não duplica).
+ * Exclui PASSOS do lote (vários de uma vez — os ids num parâmetro JSON). O período do passo excluído volta a faltar DE
+ * VERDADE: o fim do período é desfeito nos passos dele e, na leitura SEM órgão (as páginas em sequência), as outras páginas
+ * do período também deixam de valer (o período é lido de novo desde a 1ª); por órgão, só o órgão excluído é pedido de novo.
+ * O staging órfão sai na conclusão (`comandosLimparStagingOrfao`). O último comando devolve os ids excluídos.
  */
-export function comandoExcluirPassos(db: Db, loteId: number, ids: number[]) {
-  return db
-    .delete(centiLotePassos)
-    .where(and(eq(centiLotePassos.loteId, loteId), sql`${centiLotePassos.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`))
-    .returning({ id: centiLotePassos.id });
+export function comandosExcluirPassos(db: Db, loteId: number, ids: number[], porOrgao: boolean) {
+  const lista = JSON.stringify(ids);
+  const doPeriodo = sql`EXISTS (SELECT 1 FROM "centi_lote_passos" x WHERE x."lote_id" = ${loteId} AND x."id" IN (SELECT value FROM json_each(${lista}))
+    AND x."inicio" = ${centiLotePassos.inicio} AND x."fim" = ${centiLotePassos.fim})`;
+  return [
+    porOrgao
+      ? db.update(centiLotePassos).set({ fimPeriodo: 0 }).where(and(eq(centiLotePassos.loteId, loteId), doPeriodo))
+      : db
+          .update(centiLotePassos)
+          .set({ estado: "erro", fimPeriodo: 0, mensagem: "Período lido de novo: um passo dele foi excluído." })
+          .where(and(eq(centiLotePassos.loteId, loteId), eq(centiLotePassos.estado, "ok"), doPeriodo, sql`${centiLotePassos.id} NOT IN (SELECT value FROM json_each(${lista}))`)),
+    db
+      .delete(centiLotePassos)
+      .where(and(eq(centiLotePassos.loteId, loteId), sql`${centiLotePassos.id} IN (SELECT value FROM json_each(${lista}))`))
+      .returning({ id: centiLotePassos.id }),
+  ];
 }
 
 /** O que a automática precisa saber da MESMA página na última volta (ver `podePular`, `empenhos-core.ts`). */
@@ -744,26 +767,30 @@ export async function consultaPaginaAnterior(
 ): Promise<PaginaAnterior | null> {
   const orgaos = lote.orgaosCenti ? JSON.stringify(lote.orgaosCenti) : null;
   const t = sql.raw(`"${tabela}"`);
+  // A REFERÊNCIA = o passo `ok` ASSINADO mais recente do MESMO pedido (período, página, modo, leitor e órgãos) entre as
+  // últimas importações promovidas do card e ano — automáticas ou manuais (a leitura pela tela também assina). O índice
+  // `centi_lote_passos_pedido_idx` acha o passo sem varrer o lote.
   const linhas = await db.all<{ passo: number; assinatura: string | null; concluido: number; vinculosDepois: number; fora: number; invalidos: number }>(sql`
-    WITH ultimo AS (
+    WITH lotes AS (
       SELECT "id", "concluido_em" FROM "centi_lotes"
       WHERE "card_id" = ${lote.cardId} AND "ano" = ${lote.ano} AND "estado" = 'promovido' AND "id" <> ${lote.id}
-      ORDER BY "id" DESC LIMIT 1
-    ), igual AS (
-      SELECT l."id", l."concluido_em" FROM "centi_lotes" l JOIN ultimo u ON u."id" = l."id"
-      WHERE l."modo" = ${lote.modo} AND l."leitor" = ${lote.leitor} AND l."orgaos_centi" IS ${orgaos}
+        AND "modo" = ${lote.modo} AND "leitor" = ${lote.leitor} AND "orgaos_centi" IS ${orgaos}
+      ORDER BY "id" DESC LIMIT 12
     ), p AS (
-      SELECT q.* FROM "centi_lote_passos" q JOIN igual i ON q."lote_id" = i."id"
-      WHERE q."inicio" = ${periodo.inicio} AND q."fim" = ${periodo.fim} AND q."pagina" = ${pagina} AND q."estado" = 'ok'
+      SELECT q.*, l."concluido_em" AS "ref_concluido" FROM lotes l CROSS JOIN "centi_lote_passos" q ON q."lote_id" = l."id"
+        AND q."inicio" = ${periodo.inicio} AND q."fim" = ${periodo.fim} AND q."pagina" = ${pagina}
+      WHERE q."estado" = 'ok' AND q."assinatura_bruta" IS NOT NULL
       ORDER BY q."id" DESC LIMIT 1
     )
-    SELECT p."id" AS "passo", p."assinatura_bruta" AS "assinatura", (SELECT "concluido_em" IS NOT NULL FROM igual) AS "concluido",
-      COALESCE((SELECT julianday(c."vinculos_em") >= julianday((SELECT "concluido_em" FROM igual)) FROM "empenho_cards" c WHERE c."id" = ${lote.cardId}), 0) AS "vinculosDepois",
+    SELECT p."id" AS "passo", p."assinatura_bruta" AS "assinatura", p."ref_concluido" IS NOT NULL AS "concluido",
+      COALESCE((SELECT julianday(c."vinculos_em") >= julianday(p."ref_concluido") FROM "empenho_cards" c WHERE c."id" = ${lote.cardId}), 0) AS "vinculosDepois",
       json_array_length(COALESCE(p."chaves_fora", '[]')) AS "fora",
+      -- Inválida = a chave que não vale hoje no banco OU que MUDOU depois da referência (outra importação gravou um valor
+      -- diferente — a mesma resposta de antes não pode ser pulada: o banco já não é o que ela traz).
       (SELECT COUNT(*) FROM (SELECT j."value" AS "c" FROM json_each(COALESCE(p."chaves_iguais", '[]')) j
          UNION SELECT g."value" FROM json_each(COALESCE(p."chaves_gravadas", '[]')) g) k
        WHERE NOT EXISTS (SELECT 1 FROM ${t} e WHERE e."card_id" = ${lote.cardId} AND e."chave" = k."c" AND e."hash" IS NOT NULL
-         AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL)) AS "invalidos"
+         AND e."removido_em" IS NULL AND e."ausente_desde_lote" IS NULL AND (e."lote_id" IS NULL OR e."lote_id" <= p."lote_id"))) AS "invalidos"
     FROM p`);
   const r = linhas[0];
   return r ? { passo: r.passo, assinatura: r.assinatura, concluido: !!r.concluido, vinculosDepois: !!r.vinculosDepois, fora: Number(r.fora), invalidos: Number(r.invalidos) } : null;

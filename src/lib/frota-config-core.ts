@@ -181,7 +181,12 @@ export function proximoTrabalho(cursores: readonly CursorFrota[], c: ConfigFrota
     }
     const concluido = k.cicloConcluidoEm ? Date.parse(k.cicloConcluidoEm.replace(" ", "T") + (/Z$/.test(k.cicloConcluidoEm) ? "" : "Z")) : 0;
     if (!k.cicloConcluidoEm || agora.getTime() - concluido >= c.frequenciaMin * 60_000) {
-      const inicio = somar(hoje, -(c.diasRecentes - 1));
+      // O ciclo novo começa nos dias RECENTES — ou no dia em que o anterior terminou, quando a automática ficou parada mais
+      // que isso (desligada, fora do horário, fim de semana): nenhum dia fica sem leitura (até 92 dias para trás).
+      const recentes = somar(hoje, -(c.diasRecentes - 1));
+      const fimAnterior = concluido ? agoraBrasilia(new Date(concluido)).dia : null;
+      const limite = somar(hoje, -91);
+      const inicio = fimAnterior && fimAnterior < recentes ? (fimAnterior > limite ? fimAnterior : limite) : recentes;
       const fim = somar(inicio, passo - 1);
       candidatos.push({ t: { contrato: k.contrato, tipo: k.tipo, inicio, fim: fim < hoje ? fim : hoje, novoCiclo: true }, ordem: `1${k.cicloConcluidoEm ?? ""}` });
     }

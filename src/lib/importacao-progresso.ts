@@ -97,12 +97,26 @@ export function fracaoDaLeitura(ano: number, concluidos: readonly Periodo[], ped
   const feitos = new Set(concluidos.map((p) => `${p.inicio}|${p.fim}`));
   let total = concluidos.reduce((s, p) => s + diasDoPeriodo(p), 0) / diasAno;
   const parte = (p: PedidoAndamento) => diasDoPeriodo(p.periodo) / diasAno / Math.max(1, orgaos ?? 1);
+  // SEM órgãos (as páginas de um período em sequência, sem saber quantas): cada página lida vale METADE do que falta do
+  // período — a barra nunca volta para trás ao começar a página seguinte.
+  const paginasLidas = new Map<string, number>();
+  if (!(orgaos && orgaos > 1)) for (const p of pedidos) if (p.fase === "concluido") paginasLidas.set(`${p.periodo.inicio}|${p.periodo.fim}`, (paginasLidas.get(`${p.periodo.inicio}|${p.periodo.fim}`) ?? 0) + 1);
+  const contados = new Set<string>();
   for (const p of pedidos) {
+    const k = `${p.periodo.inicio}|${p.periodo.fim}`;
     // O período já concluído inteiro está na conta acima (nunca duas vezes).
-    if (feitos.has(`${p.periodo.inicio}|${p.periodo.fim}`) || p.fase === "fila" || p.fase === "dividido") continue;
-    // O pedido concluído de um período ainda aberto (o órgão já lido, os outros não) conta inteiro; o em curso, o que fez.
-    if (p.fase === "concluido") total += orgaos && orgaos > 1 ? parte(p) : 0;
-    else total += parte(p) * fracaoDoPedido(p);
+    if (feitos.has(k) || p.fase === "fila" || p.fase === "dividido") continue;
+    if (orgaos && orgaos > 1) {
+      // O pedido concluído de um período ainda aberto (o órgão já lido, os outros não) conta inteiro; o em curso, o que fez.
+      total += parte(p) * (p.fase === "concluido" ? 1 : fracaoDoPedido(p));
+      continue;
+    }
+    const n = paginasLidas.get(k) ?? 0;
+    if (p.fase === "concluido") {
+      if (contados.has(k)) continue;
+      contados.add(k);
+      total += parte(p) * (1 - 0.5 ** n);
+    } else total += parte(p) * 0.5 ** (n + 1) * fracaoDoPedido(p);
   }
   return Math.min(1, total);
 }

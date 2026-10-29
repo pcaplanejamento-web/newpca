@@ -36,9 +36,10 @@ import {
   comandoSoltarAuto,
   comandoTravarAuto,
   comandoDividirPeriodo,
-  comandoExcluirPassos,
+  comandosExcluirPassos,
   comandosExcluirLotes,
   comandosGuardarPagina,
+  comandosLimparStagingOrfao,
   MAX_JSON_GUARDA,
   comandoRecontarLote,
   comandoRegistrarPasso,
@@ -359,8 +360,9 @@ test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote
   await guardar(b, lote, 1, [reg("1"), reg("2")], 2);
   b.raw.prepare("INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado) VALUES (?, '2026-01-01', '2026-01-07', 1, 'erro')").run(lote);
   const passos = b.raw.prepare("SELECT id, estado FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(lote) as { id: number; estado: string }[];
-  assert.equal((await comandoExcluirPassos(b.db, lote + 99, [passos[1].id])).length, 0, "de outro lote, não");
-  assert.equal((await comandoExcluirPassos(b.db, lote, passos.map((x) => x.id))).length, 2, "o lido e o com erro, juntos");
+  const excluir = async (l: number, ids: number[]) => ((await b.db.batch(comandosExcluirPassos(b.db, l, ids, false) as never)) as unknown[][])[1].length;
+  assert.equal(await excluir(lote + 99, [passos[1].id]), 0, "de outro lote, não");
+  assert.equal(await excluir(lote, passos.map((x) => x.id)), 2, "o lido e o com erro, juntos");
   await b.db.batch([comandoRecontarLote(b.db, lote)]);
   const l = b.raw.prepare("SELECT paginas, recebidos, unicos FROM centi_lotes WHERE id = ?").get(lote) as { paginas: number; recebidos: number; unicos: number };
   assert.deepEqual({ ...l }, { paginas: 0, recebidos: 0, unicos: 2 }, "recontado: o staging fica para a releitura");
@@ -375,6 +377,24 @@ test("empenhos (D1 real): EXCLUIR a tentativa tira os passos, o staging e o lote
   b.raw.prepare("DELETE FROM centi_lotes WHERE id = ?").run(deOutroCard);
   for (const t of ["centi_lotes", "centi_lote_passos", "empenhos_staging"]) assert.equal((b.raw.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as { n: number }).n, 0, t);
   assert.deepEqual(b.raw.prepare("SELECT numero, lote_id FROM empenhos").all().map((x) => ({ ...x })), [{ numero: "9", lote_id: null }]);
+  // Sem órgão: excluir UMA página do período faz o período inteiro ser lido de novo (as outras páginas deixam de valer).
+  b.raw.exec("UPDATE centi_lotes SET estado = 'cancelado'");
+  const l2 = b.novoLote();
+  for (const pg of [1, 2, 3]) b.raw.prepare("INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado, fim_periodo) VALUES (?, '2026-01-01', '2026-01-07', ?, 'ok', ?)").run(l2, pg, pg === 3 ? 1 : 0);
+  const p2 = b.raw.prepare("SELECT id FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(l2) as { id: number }[];
+  assert.equal(await excluir(l2, [p2[0].id]), 1);
+  assert.deepEqual(
+    b.raw.prepare("SELECT pagina, estado, fim_periodo f FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(l2).map((r) => ({ ...(r as object) })),
+    [{ pagina: 2, estado: "erro", f: 0 }, { pagina: 3, estado: "erro", f: 0 }],
+    "o período volta a faltar",
+  );
+  // Por órgão: só o fim do período é desfeito (o órgão excluído é pedido de novo; os outros valem).
+  b.raw.exec("UPDATE centi_lotes SET estado = 'cancelado'");
+  const l3 = b.novoLote();
+  for (const pg of [1, 2]) b.raw.prepare("INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado, fim_periodo) VALUES (?, '2026-01-01', '2026-01-31', ?, 'ok', ?)").run(l3, pg, pg === 2 ? 1 : 0);
+  const p3 = b.raw.prepare("SELECT id FROM centi_lote_passos WHERE lote_id = ? ORDER BY id").all(l3) as { id: number }[];
+  await b.db.batch(comandosExcluirPassos(b.db, l3, [p3[0].id], true) as never);
+  assert.deepEqual(b.raw.prepare("SELECT pagina, estado, fim_periodo f FROM centi_lote_passos WHERE lote_id = ?").all(l3).map((r) => ({ ...(r as object) })), [{ pagina: 2, estado: "ok", f: 0 }]);
 });
 
 test("empenhos (D1 real): PROMOVER grava, atualiza, marca removido o que sumiu e reativa o que voltou", async () => {
@@ -624,4 +644,21 @@ test("empenhos: o RESULTADO de cada passo e o resultado até agora (a última le
     resSemVinculo: 1,
     paginas: 2,
   });
+});
+
+test("empenhos (D1 real, v1.264.0): o STAGING ÓRFÃO (da leitura descartada) sai antes da conclusão; o já visto não conta as descartadas", async () => {
+  const b = banco();
+  const lote = b.novoLote();
+  // Uma página que VALE (conferida — as chaves gravadas no passo).
+  const linhas = lerPaginaEmpenhos(JSON.stringify([reg("1"), reg("2")]), 2026).linhas.map((l) => ({ ...l, hash: hashLinha("empenhos", l, 1) }));
+  const c = comandosConferirAssinatura(b.db, CONF_EMPENHOS, lote, 1, 1, linhas, [], []);
+  await b.db.batch([comandoRegistrarPasso(b.db, lote, { ...anoInteiro(2026), pagina: 1, estado: "ok", fimPeriodo: true, status: 200, bytes: 1, ms: 1, recebidos: 2, novos: 2, recusados: 0, repetidos: 0, total: 2, soma: 0, mensagem: null, corpo: "{}" }), ...c.cmds] as never);
+  // Uma leitura DESCARTADA no meio: o staging dela ficou (o registro "9" que a Centi não traz mais) e o passo virou erro.
+  await b.db.batch(comandosGuardarPagina(b.db, lote, 2, lerPaginaEmpenhos(JSON.stringify([reg("9")]), 2026).linhas) as never);
+  b.raw.prepare("INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado, mensagem, chaves_gravadas) VALUES (?, '2026-01-01', '2026-12-31', 2, 'erro', 'Leitura interrompida', ?)").run(lote, JSON.stringify(["2026|PREFEITURA|9"]));
+  assert.equal(await jaNoLote(b.db, lote, ["2026|PREFEITURA|1", "2026|PREFEITURA|7"]), 1, "a página que vale conta");
+  await b.db.batch([...comandosLimparStagingOrfao(b.db, lote), comandoRecontarLote(b.db, lote)] as never);
+  const chaves = (b.raw.prepare("SELECT chave FROM empenhos_staging WHERE lote_id = ? ORDER BY chave").all(lote) as { chave: string }[]).map((x) => x.chave);
+  assert.deepEqual(chaves, ["2026|PREFEITURA|1", "2026|PREFEITURA|2"], "o órfão saiu; os da página que vale ficam");
+  assert.equal((b.raw.prepare("SELECT unicos FROM centi_lotes WHERE id = ?").get(lote) as { unicos: number }).unicos, 2);
 });

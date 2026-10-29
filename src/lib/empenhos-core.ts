@@ -270,8 +270,33 @@ export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolea
   return lacunasDoAno(ano, lidos, hoje).flatMap(emSemanas);
 }
 
+/**
+ * Os pedidos já DIVIDIDOS no lote (pelo grande demais) viram as METADES — recursivamente, como a automática (`proximoPedido`):
+ * a tela nunca pede de novo um período inteiro já dividido (o servidor recusaria a página no fim). Nos pagamentos (`porMes`),
+ * o ano dividido vira os meses.
+ */
+export function abrirDivididos(periodos: Periodo[], passos: readonly PassoMin[], porMes = false): Periodo[] {
+  const divididos = new Set(passos.filter((p) => p.estado === "dividido").map(chaveP));
+  const abrir = (p: Periodo): Periodo[] => {
+    if (!divididos.has(chaveP(p))) return [p];
+    const partes = porMes ? (mesDoPeriodoCore(p) ? null : emMeses(p)) : dividirPeriodo(p);
+    return partes ? partes.flatMap(abrir) : [p];
+  };
+  return periodos.flatMap(abrir);
+}
+
+/** O período é um mês inteiro? */
+function mesDoPeriodoCore(p: Periodo): boolean {
+  const [a, m] = p.inicio.split("-").map(Number);
+  return p.inicio.endsWith("-01") && p.fim === paraIso(Date.UTC(a, m, 0)) && p.fim.slice(0, 7) === p.inicio.slice(0, 7);
+}
+
 /** O lote é lido mês a mês (os pagamentos)? */
 export const lotePorMes = (l: { modo: ModoLote }): boolean => l.modo === "pagamentos";
+
+/** Na AUTOMÁTICA, as liquidações também vão mês a mês (um pedido por mês e órgão — não um por semana): os meses que não
+ * mudaram são pulados pela assinatura; o mês grande demais se divide por datas (a API das liquidações aceita datas). */
+export const lotePorMesAuto = (l: { modo: ModoLote }): boolean => l.modo === "pagamentos" || l.modo === "liquidacoes";
 
 /** O lote lê ÓRGÃO POR ÓRGÃO (a "página" N = o N-ésimo órgão da lista do lote): liquidações e pagamentos (todos os órgãos
  * com o ID na Centi) e os EMPENHOS do card que lê por órgão (os órgãos dos vínculos — a lista gravada no lote). */
@@ -614,13 +639,22 @@ export const MARCA_GUARDANDO = "Guardando a página";
 type PassoErro = PassoMin & { mensagem?: string | null; em?: string };
 const guardando = (p: PassoErro) => p.estado === "erro" && !!p.mensagem?.startsWith(MARCA_GUARDANDO);
 
-/** Os passos de ERRO seguidos no fim, do MESMO pedido (os "Guardando a página…" não contam; o sucesso zera). */
-function sequenciaDeErros(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }): PassoErro[] {
+/** O "Guardando a página…" PARADO há mais disto foi cortado no meio (a execução morreu): conta como erro. */
+const GUARDANDO_PARADO_MS = 5 * 60_000;
+
+/**
+ * Os passos de ERRO seguidos no fim, do MESMO pedido (os "Guardando a página…" recentes não contam — os parados há mais de
+ * 5 min contam; o sucesso zera). `desde` = o último AVANÇO da leitura fragmentada: os erros anteriores a ele não contam (a
+ * leitura andou depois deles).
+ */
+function sequenciaDeErros(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs?: number, desde?: string | null): PassoErro[] {
   const r: PassoErro[] = [];
+  const limite = desde ? msSql(desde) : Number.NaN;
   for (let i = passos.length - 1; i >= 0; i--) {
     const p = passos[i];
-    if (guardando(p)) continue;
+    if (guardando(p) && !(agoraMs != null && p.em && agoraMs - msSql(p.em) > GUARDANDO_PARADO_MS)) continue;
     if (p.estado !== "erro" || p.inicio !== pedido.periodo.inicio || p.fim !== pedido.periodo.fim || p.pagina !== pedido.pagina) break;
+    if (Number.isFinite(limite) && p.em && msSql(p.em) < limite) break;
     r.push(p);
   }
   return r;
@@ -635,8 +669,8 @@ export function errosSeguidos(passos: PassoErro[], pedido: { periodo: Periodo; p
  * 8… até 16 min — a falha passageira da Centi passa sozinha); `desistir` = `MAX_ERROS_AUTO` erros seguidos E mais de
  * `MINUTOS_DESISTIR_AUTO` desde o 1º deles (sem avanço nenhum). Sem a hora dos passos, só a contagem decide.
  */
-export function esperaDoErro(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs: number): { esperar: boolean; desistir: boolean } {
-  const erros = sequenciaDeErros(passos, pedido);
+export function esperaDoErro(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs: number, desde?: string | null): { esperar: boolean; desistir: boolean } {
+  const erros = sequenciaDeErros(passos, pedido, agoraMs, desde);
   if (!erros.length) return { esperar: false, desistir: false };
   const ultimo = erros[0].em ? msSql(erros[0].em) : Number.NaN;
   const primeiro = erros[erros.length - 1].em ? msSql(erros[erros.length - 1].em as string) : Number.NaN;
@@ -736,5 +770,10 @@ export function podePular(
  */
 export const ORCAMENTO_CONSULTAS = 40;
 export const custoDoPulo = (porOrgao: boolean) => 2 + 3 + (porOrgao ? 2 : 0);
+/** O custo de uma página REAL (lida e gravada — `gravarParte` + a retomada + a leitura do anterior). */
+export const CUSTO_PAGINA_REAL = 22;
+/** Depois de `gasto` consultas, ainda cabe uma página REAL? Senão, a próxima página só é PULADA (se não mudou) — a que mudou
+ * fica para a próxima execução (nunca passa das 50 consultas). */
+export const cabePaginaReal = (gasto: number) => gasto + CUSTO_PAGINA_REAL <= ORCAMENTO_CONSULTAS;
 /** Ainda cabe um pulo INTEIRO depois de `gasto` consultas (empenhos: 8 por execução; por órgão: 5). */
 export const cabeOutroPulo = (gasto: number, porOrgao: boolean) => gasto + custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS;

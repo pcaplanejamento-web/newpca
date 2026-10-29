@@ -392,3 +392,25 @@ test("conferência da parte: nenhum comando varre os gravados do card (sem estat
     assert.ok(!plano.some(varre), `${q.sql.slice(0, 80)}\n${plano.join("\n")}`);
   }
 });
+
+test("D1 real (v1.264.0): o pulo acha a página em QUALQUER importação promovida recente do mesmo pedido — e não pula o que mudou depois", async () => {
+  const b = banco();
+  b.raw.exec("UPDATE empenho_cards SET vinculos_em = '2020-01-01T00:00:00.000Z' WHERE id = 1");
+  const lote = (id: number) => ({ id, cardId: 1, ano: 2026, modo: "dados", leitor: 0, orgaosCenti: null });
+  const periodo = { inicio: "2026-01-01", fim: "2026-12-31" };
+  // Volta 1 (automática): a página assinada.
+  const l1 = b.novoLote();
+  await pagina(b, l1, [reg("1"), reg("2")]);
+  b.raw.exec(`UPDATE centi_lote_passos SET assinatura_bruta = 'sha-a' WHERE lote_id = ${l1}`);
+  await promover(b, l1);
+  // Depois, uma importação MANUAL promovida com OUTROS períodos (o ano em duas metades): não apaga a referência da volta 1.
+  const l2 = b.novoLote();
+  b.raw.exec(`INSERT INTO centi_lote_passos (lote_id, inicio, fim, pagina, estado, fim_periodo) VALUES (${l2}, '2026-01-01', '2026-06-30', 1, 'ok', 1), (${l2}, '2026-07-01', '2026-12-31', 1, 'ok', 1)`);
+  b.raw.exec(`UPDATE centi_lotes SET estado = 'promovido', concluido_em = '2020-06-01 00:00:00' WHERE id = ${l2}`);
+  const l3 = b.novoLote();
+  const ant = await consultaPaginaAnterior(b.db, "empenhos", lote(l3), periodo, 1);
+  assert.ok(ant && podePular(ant, "sha-a", "empenhos"), "a referência é a volta 1, mesmo com a manual depois");
+  // Um registro da página MUDOU numa importação posterior (o lote dele é mais novo que a referência): não pula.
+  b.raw.exec(`UPDATE empenhos SET lote_id = ${l2} WHERE numero = '2'`);
+  assert.equal(podePular(await consultaPaginaAnterior(b.db, "empenhos", lote(l3), periodo, 1), "sha-a", "empenhos"), false);
+});

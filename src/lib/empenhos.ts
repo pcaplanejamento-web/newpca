@@ -114,6 +114,22 @@ export async function listarPassos(loteId: number, limite = 3000): Promise<Passo
   return l.map(paraPasso);
 }
 
+/**
+ * Os passos de um lote para o ANDAMENTO (o painel relê a cada poucos segundos): guardados na memória do Worker enquanto o
+ * lote não muda (`vistoEm` — toda página e toda parte o atualizam). As leituras do D1 contam por LINHA: sem isto, cada
+ * consulta do painel lia o lote inteiro (a cota diária do plano gratuito).
+ */
+const memoPassos = new Map<number, { visto: string; passos: Promise<PassoLote[]> }>();
+export function passosDoAndamento(lote: { id: number; vistoEm: string }): Promise<PassoLote[]> {
+  const m = memoPassos.get(lote.id);
+  if (m && m.visto === lote.vistoEm) return m.passos;
+  const passos = listarPassos(lote.id, 20_000);
+  passos.catch(() => memoPassos.delete(lote.id));
+  memoPassos.set(lote.id, { visto: lote.vistoEm, passos });
+  if (memoPassos.size > 30) memoPassos.delete(memoPassos.keys().next().value as number);
+  return passos;
+}
+
 /** A linha do banco → o passo da tela (o estado tipado, o fim do período booleano). */
 export function paraPasso({ loteId: _, estado, fimPeriodo, ...resto }: LinhaPasso): PassoLote {
   return { ...resto, estado: estado as EstadoPasso, fimPeriodo: fimPeriodo === 1 };

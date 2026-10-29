@@ -37,10 +37,10 @@ export function textoConclusao(fim: LoteCenti, regra: RegraRemovidos): string {
 }
 
 /** O `confirmar` do `useConfirmacao` (a confirmação do sistema). */
-type Confirmar = (p: { titulo: string; texto?: string; confirmar?: string; cancelar?: string; perigo?: boolean }) => Promise<boolean>;
+type Confirmar = (p: { titulo: string; texto?: string; confirmar?: string; cancelar?: string; perigo?: boolean }) => Promise<boolean | null>;
 
 /** A pergunta de cada QUEDA (os números caíram — gravar mesmo assim?), uma por vez. */
-export function perguntaDeQueda(confirmar: Confirmar): (l: LinhaImportacao, queda: string) => Promise<boolean> {
+export function perguntaDeQueda(confirmar: Confirmar): (l: LinhaImportacao, queda: string) => Promise<boolean | null> {
   let fila: Promise<unknown> = Promise.resolve();
   return (l, queda) => {
     const p = fila.then(() =>
@@ -92,7 +92,13 @@ export const ordemDeImportacao = (linhas: readonly LinhaImportacao[]): LinhaImpo
  */
 export async function importarCards(
   linhas: readonly LinhaImportacao[],
-  o: { regra: RegraRemovidos; parar: () => boolean; confirmarQueda?: (l: LinhaImportacao, queda: string) => Promise<boolean>; onLinha: (id: number, mudou: Partial<LinhaImportacao>) => void },
+  o: {
+    regra: RegraRemovidos;
+    parar: () => boolean;
+    /** `parar` só ENTRE os cards: o card em curso termina (o botão Interromper do "Importar tudo"; o Parar do painel do canto
+     * segue valendo para o card). */
+    pararEntreCards?: boolean;
+    confirmarQueda?: (l: LinhaImportacao, queda: string) => Promise<boolean | null>; onLinha: (id: number, mudou: Partial<LinhaImportacao>) => void },
 ): Promise<void> {
   const fila = ordemDeImportacao(linhas);
   let anterior: EstadoLinha | null = null;
@@ -116,7 +122,7 @@ async function umCard(l: LinhaImportacao, o: Parameters<typeof importarCards>[1]
       modo: l.card.tipo !== "empenhos" ? l.card.tipo : undefined,
       retomar: l.retomar,
       comPeriodo: usaPeriodo(l.card.parametros),
-      parar: o.parar,
+      parar: o.pararEntreCards ? () => false : o.parar,
       confirmarQueda: o.confirmarQueda ? (queda) => o.confirmarQueda?.(l, queda) ?? Promise.resolve(false) : undefined,
       titulo: `${l.card.nome} · ${l.ano}`,
       rota: linkImportacoes(l.card.tipo, l.card.id, "importacao"),

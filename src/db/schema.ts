@@ -2340,7 +2340,11 @@ export const centiLotePassos = sqliteTable(
      * assinatura na próxima volta da automática = a página não mudou e não é reprocessada. */
     assinaturaBruta: text("assinatura_bruta"),
   },
-  (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
+  (t) => [
+    index("centi_lote_passos_lote_idx").on(t.loteId, t.id),
+    // O PEDIDO de um lote (migração `0171`): a página anterior do mesmo pedido é achada sem varrer o lote.
+    index("centi_lote_passos_pedido_idx").on(t.loteId, t.inicio, t.fim, t.pagina),
+  ],
 );
 
 /**
@@ -2384,6 +2388,8 @@ export const centiLeituras = sqliteTable(
     assinatura: text("assinatura"),
     /** Execuções que pegaram a leitura sem avançar (migração `0170` — a cortada pelo limite de CPU conta; o avanço zera). */
     tentativas: integer("tentativas").notNull().default(0),
+    /** O último AVANÇO da leitura (migração `0171`): os erros anteriores a ele não contam para a espera e a desistência. */
+    progressoEm: text("progresso_em"),
   },
   (t) => [index("centi_leituras_lote_idx").on(t.loteId)],
 );

@@ -64,6 +64,7 @@ export async function leituraDoLote(loteId: number) {
       capturado: centiLeituras.capturado,
       pos: centiLeituras.pos,
       passoId: centiLeituras.passoId,
+      progressoEm: centiLeituras.progressoEm,
     })
     .from(centiLeituras)
     .where(eq(centiLeituras.loteId, loteId))
@@ -85,13 +86,13 @@ export async function andamentoDoLote(lote: LoteCenti & { cardId: number | null 
   };
 }
 
-/** Reserva a leitura por 90 s (duas execuções nunca avançam a mesma) e CONTA a tentativa ANTES do trabalho (a execução
+/** Reserva a leitura por 45 s — menos que a trava do lote (50 s), então a execução que pega o lote acha a leitura livre (duas execuções nunca avançam a mesma) e CONTA a tentativa ANTES do trabalho (a execução
  * cortada pelo limite de CPU não grava nada — a tentativa contada é o rastro dela; todo avanço zera); null = outra
  * execução está nela. */
 async function reservar(id: number): Promise<Leitura | null> {
   const [l] = await getDb()
     .update(centiLeituras)
-    .set({ reservadoAte: sql`datetime('now', '+90 seconds')`, tentativas: sql`${centiLeituras.tentativas} + 1` })
+    .set({ reservadoAte: sql`datetime('now', '+45 seconds')`, tentativas: sql`${centiLeituras.tentativas} + 1` })
     .where(and(eq(centiLeituras.id, id), sql`(${centiLeituras.reservadoAte} IS NULL OR ${centiLeituras.reservadoAte} < datetime('now'))`))
     .returning();
   return l ?? null;
@@ -110,13 +111,16 @@ export function descartarLeitura(l: { id: number; passoId: number | null }, moti
 const periodoDe = (l: Leitura): Periodo => ({ inicio: l.inicio, fim: l.fim });
 
 /** Baixa a faixa [de, ate) da resposta da página (o que vem antes é lido sem converter). */
-function baixarFaixa(card: CardEmpenho, ped: Pedido, de: number, ate: number) {
-  return baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", faixa: { de, ate } });
+function baixarFaixa(card: CardEmpenho, ped: Pedido, de: number, ate: number, assinar = false) {
+  return baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", faixa: { de, ate, assinar } });
 }
+
+/** O PROCESSAMENTO interrompido pelo limite do servidor (passageiro — não é "grande demais"). */
+export const MSG_CPU = "Processamento interrompido pelo limite do servidor";
 
 /** `pulou` = a página era IDÊNTICA à da última volta: nada foi lido nem gravado (uma tarefa LEVE — a execução segue);
  * `ocupada` = outra execução está na leitura (esta não trabalhou — a fila segue para o próximo card). */
-export type Avanco = { resultado?: ResultadoPagina; situacao: string; pulou?: boolean; ocupada?: boolean };
+export type Avanco = { resultado?: ResultadoPagina; situacao: string; pulou?: boolean; ocupada?: boolean; adiada?: boolean };
 
 /** O SHA-256 (hex) dos bytes exatos da resposta — nativo (`crypto.subtle`), sem custo de JS. */
 export async function assinaturaDosBytes(bytes: Uint8Array): Promise<string> {
@@ -146,30 +150,42 @@ async function pularSeIgual(card: CardEmpenho, lote: LoteCenti, periodo: Periodo
  * COMEÇA a página na automática: a resposta pequena é lida e guardada já; a grande abre a leitura fragmentada com o 1º
  * fragmento capturado.
  */
-export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, periodo: Periodo, pagina: number): Promise<Avanco> {
+export async function iniciarPaginaAuto(
+  card: CardEmpenho,
+  lote: LoteCenti,
+  periodo: Periodo,
+  pagina: number,
+  /** Só PULA: a página que mudou não é processada nesta execução (o orçamento de consultas não cobre) — fica para a próxima. */
+  soPular = false,
+): Promise<Avanco> {
   const db = getDb();
   const ped = prepararPedido(card, lote, periodo, pagina);
   const t0 = Date.now();
   let r: Awaited<ReturnType<typeof baixarFaixa>>;
   try {
-    r = await baixarFaixa(card, ped, 0, BYTES_CAPTURA);
+    // A resposta é lida até o FIM pelo SHA-256 nativo (só o 1º fragmento é guardado): a página IDÊNTICA à da última volta
+    // é pulada já aqui, qualquer que seja o tamanho — nada é capturado, processado nem gravado.
+    r = await baixarFaixa(card, ped, 0, BYTES_CAPTURA, true);
   } catch (e) {
     const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
     return { resultado: await registrarFalha(card, lote, periodo, ped, { mensagem, status: null, bytes: null, ms: Date.now() - t0 }), situacao: "erro" };
   }
   const ms = Date.now() - t0;
   const bytes = r.bytes ?? new Uint8Array();
-  // A resposta INTEIRA num pedido tem a assinatura dos bytes exatos: igual à da última volta = a página não mudou.
-  const assinatura = r.terminou ? await assinaturaDosBytes(bytes) : null;
+  // `inteira` = a resposta coube no 1º fragmento (o `terminou` da faixa assinada só diz que ela foi lida até o fim).
+  const inteira = r.terminou === true && (r.lidos ?? 0) <= BYTES_CAPTURA;
+  // Sem `crypto.DigestStream` (fora do Worker), a assinatura sai dos bytes quando a resposta coube inteira.
+  const assinatura = r.assinatura ?? (inteira ? await assinaturaDosBytes(bytes) : null);
   if (assinatura) {
     const igual = await pularSeIgual(card, lote, periodo, ped, assinatura);
     if (igual) return { resultado: igual, situacao: "sem mudança", pulou: true };
   }
-  if (r.terminou && bytes.length <= JANELA) {
+  if (soPular) return { situacao: "página com mudança — lida na próxima execução", adiada: true };
+  if (inteira && bytes.length <= JANELA) {
     const texto = new TextDecoder().decode(bytes);
     return { resultado: await gravarTextoInteiro(card, lote, periodo, ped, texto, r.status, ms, assinatura), situacao: "página lida" };
   }
-  const corte = r.terminou ? bytes.length : corteUtf8(bytes, bytes.length);
+  const corte = inteira ? bytes.length : corteUtf8(bytes, bytes.length);
   const texto = new TextDecoder().decode(bytes.subarray(0, corte));
   // A leitura e o 1º fragmento num lote ATÔMICO (a execução que cai no meio não deixa leitura sem o começo).
   await db.batch([
@@ -181,11 +197,12 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
       bytesCapturados: corte,
       charsCapturados: texto.length,
       cauda: hexDe(bytes.subarray(Math.max(0, corte - TAM_CAUDA), corte)),
-      capturado: r.terminou ? 1 : 0,
+      capturado: inteira ? 1 : 0,
       comprimento: r.comprimento ?? null,
       status: r.status,
       ms,
       assinatura,
+      progressoEm: sql`CURRENT_TIMESTAMP`,
     }),
     db.insert(centiBrutos).select(
       db
@@ -213,7 +230,14 @@ export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta:
   // descartada com o ERRO no passo — a espera e a desistência de sempre decidem o resto (nunca um laço eterno).
   // A resposta "grande demais" para o limite de processamento DIVIDE o período (a de um dia encerra o lote com o motivo).
   if (l.tentativas > MAX_TENTATIVAS_LEITURA) {
-    const motivo = `Página grande demais para processar no servidor: ${MAX_TENTATIVAS_LEITURA} execuções seguidas sem avançar.`;
+    // As primeiras vezes são PASSAGEIRAS (o mesmo trecho pode passar na próxima — a janela recomeça menor): a leitura é
+    // descartada e o pedido volta à espera de sempre. Só a TERCEIRA vez no mesmo pedido trata a resposta como grande demais
+    // (divide o período — a de um dia ou o mês dos pagamentos encerra o lote com o motivo).
+    const [{ n }] = await getDb()
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(centiLotePassos)
+      .where(and(eq(centiLotePassos.loteId, lote.id), eq(centiLotePassos.inicio, l.inicio), eq(centiLotePassos.fim, l.fim), eq(centiLotePassos.pagina, l.pagina), sql`${centiLotePassos.mensagem} LIKE ${`${MSG_CPU}%`}`));
+    const motivo = Number(n) >= 2 ? `Página grande demais para processar no servidor: ${MAX_TENTATIVAS_LEITURA} execuções seguidas sem avançar, ${Number(n) + 1}ª vez.` : `${MSG_CPU}: ${MAX_TENTATIVAS_LEITURA} execuções seguidas sem avançar — a leitura recomeça mais tarde.`;
     const ped = prepararPedido(card, lote, periodoDe(l), l.pagina);
     const resultado = await registrarFalha(card, lote, periodoDe(l), ped, { mensagem: motivo, status: l.status, bytes: l.bytesCapturados, ms: l.ms }, descartarLeitura(l, motivo));
     return { resultado, situacao: "leitura descartada (sem avançar)" };
@@ -264,7 +288,7 @@ async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Ped
       db.delete(centiBrutos).where(eq(centiBrutos.leituraId, l.id)),
       db
         .update(centiLeituras)
-        .set({ bytesCapturados: 0, charsCapturados: 0, cauda: null, comprimento: null, capturado: 0, reinicios: l.reinicios + 1, reservadoAte: null, tentativas: 0 })
+        .set({ bytesCapturados: 0, charsCapturados: 0, cauda: null, comprimento: null, capturado: 0, reinicios: l.reinicios + 1, reservadoAte: null, tentativas: 0, assinatura: null })
         .where(eq(centiLeituras.id, l.id)),
     ] as never);
     return { situacao: "a Centi mudou a resposta — a captura recomeça" };
@@ -287,6 +311,7 @@ async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Ped
         ms: (l.ms ?? 0) + (Date.now() - t0),
         reservadoAte: null,
         tentativas: 0,
+        progressoEm: sql`CURRENT_TIMESTAMP`,
       })
       .where(eq(centiLeituras.id, l.id)),
   ] as never);
@@ -337,13 +362,13 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
   }
   if (!lida || !lida.linhas.length) {
     // Nenhum registro terminou nesta janela (ou só recusados/repetidos): só avança — e conta o que veio.
-    await db.update(centiLeituras).set({ ...estado, ...contas, reservadoAte: null, tentativas: 0 }).where(eq(centiLeituras.id, l.id));
+    await db.update(centiLeituras).set({ ...estado, ...contas, reservadoAte: null, tentativas: 0, progressoEm: sql`CURRENT_TIMESTAMP` }).where(eq(centiLeituras.id, l.id));
     return { situacao: `processando (${Math.round((100 * r.estado.pos) / Math.max(1, l.charsCapturados))}%)` };
   }
   const passoNovo = sql<number>`(SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${centiLotePassos.loteId} = ${lote.id})`;
   const avancar = db
     .update(centiLeituras)
-    .set({ ...estado, ...contas, parte: l.parte + 1, passoId: l.passoId ?? passoNovo, reservadoAte: null, tentativas: 0 })
+    .set({ ...estado, ...contas, parte: l.parte + 1, passoId: l.passoId ?? passoNovo, reservadoAte: null, tentativas: 0, progressoEm: sql`CURRENT_TIMESTAMP` })
     .where(eq(centiLeituras.id, l.id));
   await gravarParte(card, lote, periodo, ped, { parte: l.parte, ultima: false, passo: l.passoId, linhas: lida.linhas, resumo: null }, [avancar]);
   return { situacao: `processando (${Math.round((100 * r.estado.pos) / Math.max(1, l.charsCapturados))}%)` };

@@ -58,5 +58,15 @@ export function useConfirmacao() {
       {pedido.texto}
     </AvisoFlutuante>
   ) : null;
-  return { confirmar, confirmacao };
+  /** Como `confirmar`, mas `null` quando o componente DESMONTOU antes de responder (ninguém viu a pergunta — quem chama
+   * pergunta de outro jeito; nunca um "não" que ninguém deu). */
+  const perguntar = useCallback(
+    async (p: Parameters<typeof confirmar>[0]): Promise<boolean | null> => {
+      if (!montado.current) return null;
+      const r = await confirmar(p);
+      return montado.current ? r : null;
+    },
+    [confirmar],
+  );
+  return { confirmar, perguntar, confirmacao };
 }

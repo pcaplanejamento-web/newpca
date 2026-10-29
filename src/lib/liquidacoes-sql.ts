@@ -165,7 +165,8 @@ export async function liquidacoesSuspeitas(db: Db, loteId: number): Promise<numb
 
 /** A última importação de liquidações CONCLUÍDA do mesmo card e ano, com todos os órgãos (a base da conferência de queda;
  * as antigas, de um órgão só, não servem de base). */
-export async function ultimaLiquidacaoPromovida(db: Db, card: number, ano: number, exceto: number) {
+/** Com `orgaos`: só a importação dos MESMOS órgãos (um órgão a mais ou a menos mudaria a soma — uma queda falsa, ou escondida). */
+export async function ultimaLiquidacaoPromovida(db: Db, card: number, ano: number, exceto: number, orgaos?: readonly number[] | null) {
   const [l] = await db
     .select({ soma: centiLotes.soma, unicos: centiLotes.unicos })
     .from(centiLotes)
@@ -177,6 +178,7 @@ export async function ultimaLiquidacaoPromovida(db: Db, card: number, ano: numbe
         isNotNull(centiLotes.orgaosCenti),
         eq(centiLotes.estado, "promovido"),
         ne(centiLotes.id, exceto),
+        orgaos ? eq(centiLotes.orgaosCenti, JSON.stringify(orgaos)) : undefined,
       ),
     )
     .orderBy(desc(centiLotes.id))

@@ -35,6 +35,22 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.0",
+    data: "2026-10-29",
+    titulo: "Importações auditadas: só relê o que mudou, sem travas e sem perder leituras",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A atualização automática agora reconhece a página que não mudou em QUALQUER tamanho (antes, só as pequenas): os meses e órgãos iguais à última leitura são pulados sem baixar em pedaços nem regravar — o ano inteiro deixa de ser reprocessado a cada ciclo.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "As liquidações passam a ser lidas mês a mês por órgão na atualização automática (antes, semana a semana): quatro vezes menos pedidos à Centi.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "O revezamento entre os cards ficou justo, cada rodada respeita o tempo do disparo seguinte e um card com erro não para mais a fila dos outros.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Uma resposta pesada para o servidor não encerra mais a importação de pagamentos na primeira vez: a leitura recomeça mais tarde (só a terceira vez divide o período) e os erros antigos não contam depois que a leitura avançou.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "A conclusão confere todos os passos (antes, só os 3.000 primeiros) e descarta os registros de leituras interrompidas; excluir um passo faz o período ser lido de novo de verdade.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Continuar pela tela um período já dividido pela automática não falha mais; a comparação de queda das liquidações e dos pagamentos usa só importações dos mesmos órgãos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "A pergunta \"os números caíram\" nunca mais é respondida sozinha quando a tela do card fecha (passa ao painel do canto); Parar durante a pergunta interrompe a série; Parar corta na hora os downloads em curso; a aba renova a posse do lote a cada minuto.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "O andamento não volta para trás entre as páginas, o painel não relê mais o lote inteiro a cada 3 segundos (economia no banco) e a situação \"parada\" só aparece para trabalho de verdade.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Frotas", texto: "Um dia muito movimentado não trava mais o contrato (lido com um teto maior; se nem assim couber, é pulado com o aviso), o ciclo novo começa onde o anterior parou, a importação manual e a automática nunca leem o mesmo contrato juntas e o \"Testar\" não desfaz uma configuração salva no meio.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+    ],
+  },
+  {
     versao: "1.263.0",
     data: "2026-10-29",
     titulo: "Importações automáticas várias vezes mais rápidas",

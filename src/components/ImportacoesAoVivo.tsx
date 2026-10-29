@@ -276,7 +276,8 @@ export function MonitorImportacoes() {
       // O desfecho só de quem foi visto lendo nesta sessão (abrir a tela não lista as que terminaram antes) — ou consultado.
       if (l.estado !== "lendo" && !vistosLendo.current.has(l.id) && !ehConsultada) continue;
       if (deAba.has(l.id)) continue;
-      const id = `imp-lote-${l.id}`;
+      // A Frota não tem lote: o ciclo se identifica pelo começo das leituras (dispensar esconde ESTE ciclo; o próximo aparece).
+      const id = l.cardId == null ? `imp-frota-${l.iniciadoEm}` : `imp-lote-${l.id}`;
       if (dispensados.current.has(id)) continue;
       const rodando = l.estado === "lendo";
       const t: Trabalho = {
