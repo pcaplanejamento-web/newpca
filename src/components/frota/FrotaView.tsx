@@ -51,7 +51,7 @@ import { Segmented } from "../Segmented";
 import { FiltrosDashboard } from "../FiltrosDashboard";
 import { type CartaoKpi, IndicadoresKpi } from "../IndicadoresKpi";
 import { PeriodoPicker } from "../PeriodoPicker";
-import { SkeletonCartao } from "../Skeleton";
+import { EsqueletoFrota } from "../FrotaEsqueleto";
 import { type ContratoFrota, useDadosFrota } from "./dados-frota";
 import { FichaVeiculoBanner } from "./FichaVeiculoBanner";
 import { TransacaoFrotaDetalhe } from "./TransacaoFrotaDetalhe";
@@ -194,7 +194,7 @@ export function FrotaView({
           )}
         </div>
       ) : transacoes == null ? (
-        <SkeletonCartao />
+        <EsqueletoFrota tipo={modo === "painel" ? "painel" : "tabela"} />
       ) : (
         <AteOFim className={`transition-opacity ${carregando ? "opacity-60" : ""}`}>
           <Indicadores modo={modo} trs={filtradas} consumo={consumo} importacao={importacao} />

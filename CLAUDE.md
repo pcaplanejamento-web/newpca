@@ -102,7 +102,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     arquivos sem "use client" (o esqueleto vem no HTML na hora, sem baixar o código da tela). Esqueleto de componente novo
     = no lugar dele, nunca medidas copiadas numa tela. Fica INVISÍVEL nos primeiros 450 ms (`.esqueleto-tela`, `globals.css`): a tela que
     chega antes entra direto, sem piscar; as já vistas voltam do cache sem passar por ele. NUNCA em página que só redireciona,
-    no `design-system`, em `[id]` nem nas telas do ADM que carregam no navegador e já têm o esqueleto delas (Usuários, Grupos,
+    no `design-system`, em `[id]` (menos os ESPAÇOS — `pca/[id]`, `orcamento/[id]`, `tarefas/[id]`, `catalogo/pasta/[id]`: sem o deles, valeria o da lista de cima; `EsqueletoEspaco`) nem nas telas do ADM que carregam no navegador e já têm o esqueleto delas (Usuários, Grupos,
     Auditoria, Armazenamento, Órgãos) — `tests/versao-dados-core.test.ts` confere. Trocar só o `?aba=`/
     `?mes=` não reexibe o esqueleto (a chave do Suspense não leva a busca; a navegação é transição). O `ALTURA_NO_HTML` das
     tabelas tenta a cada quadro enquanto o bloco chega escondido pelo streaming. **Troca de ABA (`ConteudoAba`, v1.132.0):** a aba
@@ -5573,6 +5573,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
+- **UM SÓ ESQUELETO (v1.264.7) — regra firme:** a tela que busca os dados no navegador mostra, enquanto espera, o MESMO
+  esqueleto do `loading.tsx` da rota (Execução = `DashboardExecucaoEsqueleto`; Frotas = `EsqueletoFrota`; Empenhos/
+  Liquidações/Pagamentos = `EsqueletoIndicadores` + `EsqueletoTabela`) — nunca um segundo esqueleto diferente.
+- **MENU LATERAL (v1.264.7):** a `.menu-vaga` troca de largura DE UMA VEZ e a coluna `[data-coluna-conteudo]` desliza por
+  transform (`alternarMenu`) — nada reflui a cada quadro. O `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes
+  em uma linha: a largura muda, a altura nunca.
 - **BARRA DE FERRAMENTAS (v1.264.4) — regra firme:** numa barra de botões, os PRINCIPAIS (seletores, campos, busca, filtros) à
   ESQUERDA e os SECUNDÁRIOS (só-ícone: recarregar, configurar, ajuda) à DIREITA. A classe `.barra-ferramentas` (`globals.css`)
   faz isso sozinha (`order` + `margin-left:auto` no 1º secundário), qualquer que seja a ordem do código; usada no

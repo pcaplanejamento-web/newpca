@@ -480,6 +480,10 @@ export function DfdsView({
   // inicial). `null` = ainda não buscado.
   const [itens, setItens] = useState<ItemDfdRow[] | null>(guardados?.itens ?? null);
   const [carregandoItens, setCarregandoItens] = useState(false);
+  // A lista mudou (gravação, outro PCA): os itens À VISTA ficam na tela enquanto os novos chegam (a tabela não some).
+  const [renovarItens, setRenovarItens] = useState(false);
+  const itensRef = useRef(itens);
+  itensRef.current = itens;
   // REVERIFICAR TUDO (botão da barra): recarrega a lista do banco e, terminada a recarga (`listaPendente`), reconfere
   // TODOS os protocolos, DFDs e itens — em QUALQUER visão (as conferências, normalmente lazy pela visão aberta, rodam
   // todas). Termina quando cada protocolo e DFD tem resultado (ou falhou) e os itens chegaram.
@@ -498,7 +502,9 @@ export function DfdsView({
     if (chaveVista.current === chaveAba) return;
     chaveVista.current = chaveAba;
     const g = itensGuardados(usuarioId, chaveAba, versaoItens) ?? (versaoArm ? jaGuardado<ItensGuardados>("mesa.itens", urlItens, versaoArm) : undefined);
-    setItens(g?.itens ?? null);
+    if (g) setItens(g.itens);
+    else if (itensRef.current) setRenovarItens(true);
+    else setItens(null);
     if (g) {
       setPadronizacao(g.padronizacao);
       setHistorico(g.historico);
@@ -506,7 +512,7 @@ export function DfdsView({
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
   }, [chaveAba, usuarioId, versaoItens, versaoArm, urlItens]);
   useEffect(() => {
-    if ((vista !== "itens" && !reverAtivo && !preItens) || itens !== null) return;
+    if ((vista !== "itens" && !reverAtivo && !preItens) || (itens !== null && !renovarItens)) return;
     let vivo = true;
     setCarregandoItens(true);
     // Guardado no NAVEGADOR (memória + aparelho) pela versão: voltar à Mesa, F5 ou reabrir não pede de novo.
@@ -522,13 +528,18 @@ export function DfdsView({
     }, reverAtivo)
       .then((v) => {
         if (!vivo) return;
+        setRenovarItens(false);
         setItens(v.itens);
         setPadronizacao(v.padronizacao);
         setHistorico(v.historico);
         guardarItensDaAba(usuarioId, chaveAba, v);
       })
       .catch(() => {
-        if (vivo) setItens([]);
+        if (!vivo) return;
+        // A falha à vista (aviso flutuante); os itens que já estavam na tela ficam.
+        setRenovarItens(false);
+        setItens((x) => x ?? []);
+        setErro("Não foi possível carregar os itens da Mesa — use “Atualizar” para tentar de novo.");
       })
       .finally(() => {
         if (vivo) setCarregandoItens(false);
@@ -536,7 +547,7 @@ export function DfdsView({
     return () => {
       vivo = false;
     };
-  }, [vista, itens, urlItens, chaveAba, usuarioId, versaoItens, versaoArm, reverAtivo, preItens]);
+  }, [vista, itens, renovarItens, urlItens, chaveAba, usuarioId, versaoItens, versaoArm, reverAtivo, preItens]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).

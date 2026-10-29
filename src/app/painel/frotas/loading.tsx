@@ -1,11 +1,11 @@
-import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
 import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoFrota } from "@/components/FrotaEsqueleto";
 
-/** Frotas: os indicadores, os filtros e os gráficos (a mesma grade do painel da Execução). */
+/** O MESMO esqueleto que a tela mostra enquanto os dados chegam (`EsqueletoFrota`) — um só, sem troca no meio. */
 export default function Carregando() {
   return (
     <EsqueletoTela>
-      <DashboardExecucaoEsqueleto />
+      <EsqueletoFrota tipo="painel" />
     </EsqueletoTela>
   );
 }

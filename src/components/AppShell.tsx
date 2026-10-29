@@ -358,7 +358,7 @@ export function AppShell({
       />
 
       {/* Coluna principal */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-coluna-conteudo className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp
           onMenu={() => setMenuAberto(true)}
           inicio={

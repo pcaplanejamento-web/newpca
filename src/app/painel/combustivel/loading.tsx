@@ -1,13 +1,11 @@
-import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
-import { EsqueletoBarra, EsqueletoIndicadores, EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoFrota } from "@/components/FrotaEsqueleto";
 
-/** Os indicadores primeiro (a tela não tem título), a barra (o ano à esquerda; recarregar e ajuda à direita) e a tabela. */
+/** O MESMO esqueleto que a tela mostra enquanto os dados chegam (`EsqueletoFrota`) — um só, sem troca no meio. */
 export default function Carregando() {
   return (
-    <EsqueletoTela cheia>
-      <EsqueletoIndicadores />
-      <EsqueletoBarra icones={3} />
-      <EsqueletoTabela cheia linhas={12} colunas={8} />
+    <EsqueletoTela>
+      <EsqueletoFrota tipo="tabela" />
     </EsqueletoTela>
   );
 }

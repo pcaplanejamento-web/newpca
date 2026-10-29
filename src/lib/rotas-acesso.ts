@@ -297,7 +297,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   // ── PCA ─────────────────────────────────────────────────────────────────────────────────────────────────
   "pca": { POST: tela("pca", "configurar", "criar o PCA (e a edição legada que une DFDs)") },
   "pca/[id]": {
-    PATCH: tela("pca", "configurar", "nome, ano, fonte, publicar, capa, marcados; só a visão do orçamento = Visualizar"),
+    PATCH: tela("pca", "configurar", "nome, ano, fonte, publicar, capa, marcados; a visão do orçamento também (vale para todos)"),
     DELETE: tela("pca", "excluir", "devolve os protocolos à Mesa e desfaz as incorporações"),
   },
   "pca/[id]/capa": { GET: publica("a do PCA publicado; em Preview, quem visualiza o PCA") },

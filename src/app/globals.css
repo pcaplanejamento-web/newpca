@@ -1277,7 +1277,9 @@ select:not([multiple]):not([size]) {
 /* ── MENU LATERAL recolhível (AppShell). A VAGA anima a largura e o conteúdo estica/encolhe junto (mesma curva); o menu é absoluto dentro dela:
    recolhido = trilho de 60px; com o mouse (ou o foco do teclado) abre POR CIMA, sem empurrar. Os ícones ficam parados
    (alinhados à esquerda, centrados no trilho); os rótulos acompanham a largura com reticências e entram deslizando. ── */
-.menu-vaga { width: 16rem; transition: width 300ms cubic-bezier(.32,.72,0,1); }
+/* A VAGA troca de largura DE UMA VEZ (um reflow só — tabelas e KPIs não recalculam a cada quadro); o conteúdo desliza por
+   transform (alternarMenu) no mesmo ritmo do menu, que anima a própria largura por cima. */
+.menu-vaga { width: 16rem; }
 .menu-lateral { --menu-curva: cubic-bezier(.32,.72,0,1); }
 .menu-lateral { width: 16rem; transition: width 300ms var(--menu-curva), box-shadow 300ms ease; }
 .menu-lateral .menu-esconde, .menu-lateral [data-marca-texto] {

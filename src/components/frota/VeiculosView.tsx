@@ -35,7 +35,7 @@ import { type EdicoesFrota, type ImportacaoFrotaKpi, IndicadoresFrota, useTabela
 import { DadosCompletos } from "../DadosCompletos";
 import { useSemUnidade } from "../UnidadeUnica";
 import { Modal } from "../Modal";
-import { SkeletonCartao } from "../Skeleton";
+import { EsqueletoFrota } from "../FrotaEsqueleto";
 import { toast } from "../Toast";
 import { type ContratoFrota, type UnidadeFrota, useDadosFrota } from "./dados-frota";
 import { FichaVeiculoBanner } from "./FichaVeiculoBanner";
@@ -195,7 +195,7 @@ export function VeiculosView({
       {veiculos != null && <IndicadoresVeiculos linhas={linhas} importacao={importacao} />}
       {erro && <ErroCarga msg={erro} onTentar={() => void recarregar()} />}
       {veiculos == null ? (
-        <SkeletonCartao />
+        <EsqueletoFrota tipo="veiculos" />
       ) : (
         <DadosCompletos value={tabela.completo}>
         <DataTable

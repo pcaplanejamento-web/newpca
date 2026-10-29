@@ -98,11 +98,15 @@ export function KpiStat({
           </span>
         )}
       </div>
-      <div
-        className={`mt-1 min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[clamp(1.1rem,17cqw,2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
-        title={typeof value === "string" ? value : undefined}
-      >
-        {value}
+      {/* O número acompanha a LARGURA do cartão, mas a ALTURA da linha é FIXA (a do maior tamanho): abrir/fechar o menu ou
+          mudar a janela muda só a largura dos cartões, nunca a altura. */}
+      <div className={`mt-1 flex min-w-0 items-center ${completo ? "h-[calc(1.9rem*1.05)]" : "h-[calc(2.05rem*1.05)]"}`}>
+        <div
+          className={`min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[clamp(1.1rem,17cqw,2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
+          title={typeof value === "string" ? value : undefined}
+        >
+          {value}
+        </div>
       </div>
       {spark && spark.length > 0 && (
         <div className="mt-3 flex h-7 items-end gap-[3px]">
@@ -118,10 +122,9 @@ export function KpiStat({
           ))}
         </div>
       )}
-      {/* A dica NUNCA estica o cartão (uma descrição de item tem milhares de caracteres): no máximo 2 linhas; o texto
-          inteiro fica na dica do mouse. */}
+      {/* A dica e os detalhes em UMA linha cada (o texto inteiro na dica do mouse): a altura do cartão não muda com a largura. */}
       {hint && (
-        <div className={`mt-1.5 text-[12px] text-faint ${completo ? "line-clamp-2 break-words" : "truncate"}`} title={hint}>
+        <div className="mt-1.5 truncate text-[12px] text-faint" title={hint}>
           {hint}
         </div>
       )}
@@ -144,10 +147,10 @@ export function KpiStat({
       {detalhes && detalhes.length > 0 && !emLinha && (
         <dl className="mt-3 space-y-1 border-t border-border/70 pt-2.5 text-[12px]">
           {detalhes.map((d) => (
-            <div key={d.rotulo} className="flex flex-wrap items-baseline justify-between gap-x-3">
-              <dt className="text-muted">{d.rotulo}</dt>
+            <div key={d.rotulo} className="flex items-baseline justify-between gap-x-3">
+              <dt className="min-w-0 shrink truncate text-muted">{d.rotulo}</dt>
               <dd
-                className="line-clamp-2 min-w-0 break-words font-medium tabular-nums text-text-2"
+                className="min-w-0 shrink-0 truncate font-medium tabular-nums text-text-2"
                 style={d.cor ? { color: d.cor } : undefined}
                 title={typeof d.valor === "string" ? d.valor : undefined}
               >

@@ -50,3 +50,24 @@ export function EsqueletoIndicadores() {
     </div>
   );
 }
+
+/**
+ * Esqueleto da LINHA DO ESPAÇO (PCA, orçamento, quadro, pasta): voltar · nome · selo à esquerda e, com `abas`, as abas à
+ * direita — a identidade do espaço é a única linha de título que existe no sistema.
+ */
+export function EsqueletoEspaco({ abas = 0 }: { abas?: number }) {
+  return (
+    <div className="linha-topico flex flex-wrap items-center gap-2">
+      <EsqueletoControle quadrado />
+      <Skeleton className="h-6 w-48 max-w-[50%]" />
+      <EsqueletoControle className="w-16" />
+      {abas > 0 && (
+        <div className="ml-auto flex gap-1">
+          {Array.from({ length: abas }, (_, i) => (
+            <EsqueletoControle key={i} className="w-20" />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

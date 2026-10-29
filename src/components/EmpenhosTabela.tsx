@@ -35,6 +35,7 @@ import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
 import { SelectField } from "./Field";
+import { EsqueletoIndicadores } from "./EsqueletoTela";
 import { IndicadoresKpi } from "./IndicadoresKpi";
 import { useAtalhoImportacoes } from "./EmpenhosView";
 
@@ -266,7 +267,8 @@ export function EmpenhosTabela({
 
   return (
     <>
-      {recorte && (
+      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {recorte && linhas != null && (
         <IndicadoresKpi
           chave="empenhos:indicadores"
           cartoes={[

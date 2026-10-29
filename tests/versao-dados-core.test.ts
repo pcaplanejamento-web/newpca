@@ -45,7 +45,9 @@ test("areaDaRota: cada tela acompanha só a versão do que mostra", () => {
   }
 });
 
-test("loading.tsx: compõe os esqueletos dos componentes (arquivos leves), nunca em página que só redireciona nem em [id]", () => {
+const ESPACOS_COM_ESQUELETO = ["pca/[id]", "orcamento/[id]", "tarefas/[id]", "catalogo/pasta/[id]"];
+
+test("loading.tsx: compõe os esqueletos dos componentes (arquivos leves), nunca em página que só redireciona; em [id], só os ESPAÇOS", () => {
   const raiz = "src/app/painel";
   const achados: string[] = [];
   const andar = (d: string) => {
@@ -68,7 +70,8 @@ test("loading.tsx: compõe os esqueletos dos componentes (arquivos leves), nunca
       const fonte = readFileSync(`src/components/${o.slice("@/components/".length)}.tsx`, "utf8");
       assert.doesNotMatch(fonte, /^"use client"/, `${p}: ${o} é "use client"`);
     }
-    assert.doesNotMatch(p, /\[/, p);
+    // Em [id], só os espaços (sem o deles, valeria o da LISTA de cima — a grade de cartões no lugar do espaço).
+    if (/\[/.test(p)) assert.ok(ESPACOS_COM_ESQUELETO.some((e) => p === join(raiz, e, "loading.tsx")), p);
   }
   // Páginas que só redirecionam e as que carregam os dados no próprio navegador (já têm o esqueleto delas) ficam sem.
   for (const r of ["dfds", "protocolos", "permissoes", "design-system", "usuarios", "grupos", "auditoria", "armazenamento", "orgaos"]) {

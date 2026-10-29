@@ -20,10 +20,15 @@ export type SecaoMenu = { chave: string; titulo?: string; itens: readonly ItemMe
 
 /** Durante a animação do menu, as grades de cartões (auto-fill) mudam de colunas no meio do caminho: o cartão que
  *  SALTA de lugar (nova coluna/linha) desliza da posição antiga até a nova (FLIP), em vez de pular. Só nesses 340 ms. */
-function deslizarGrades() {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+/** Movimento desligado (sistema ou o ADM em Aparência). */
+function movimentoReduzido(): boolean {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
   const m = document.documentElement.dataset.motion;
-  if (m === "off" || m === "reduced") return;
+  return m === "off" || m === "reduced";
+}
+
+function deslizarGrades() {
+  if (movimentoReduzido()) return;
   const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
   if (!itens.length) return;
   // A posição DENTRO da grade (não na página): a coluna inteira anda com o menu — isso não é salto.
@@ -139,7 +144,18 @@ export function MenuLateral({
   }, [guardar, inicial]);
   function alternarMenu() {
     const novo = !document.documentElement.hasAttribute(ATRIBUTO_MENU);
+    // O CONTEÚDO muda de largura UMA vez (a vaga não anima) e desliza por transform até o lugar novo — nada reflui a cada
+    // quadro (as tabelas não tremem, os KPIs não mudam de altura).
+    const conteudo = document.querySelector<HTMLElement>("[data-coluna-conteudo]");
+    const antes = conteudo?.getBoundingClientRect().left ?? 0;
     document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
+    if (conteudo && !movimentoReduzido()) {
+      const dx = antes - conteudo.getBoundingClientRect().left;
+      if (dx) {
+        for (const an of conteudo.getAnimations()) an.cancel();
+        conteudo.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], { duration: 300, easing: "cubic-bezier(.32,.72,0,1)" });
+      }
+    }
     deslizarGrades();
     if (guardar)
       try {

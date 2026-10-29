@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.7",
+    data: "2026-10-29",
+    titulo: "Correções do PCA, um só esqueleto e o menu que não mexe na altura",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "A edição antiga do PCA confere o grupo; o grupo é conferido antes de abrir um protocolo pelo link; só quem configura o PCA troca a visão do orçamento (vale para todos).", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Os itens da Mesa do PCA ficam na tela enquanto os novos chegam (não somem depois de gravar) e a falha ao carregá-los aparece; o nome do PCA não some mais do caminho no topo ao trocar de aba.", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Declarações: baixar de novo mostra o erro sem trocar a página e cancelar a exportação não fecha o PDF; Nova declaração à esquerda da ajuda. O Dashboard vazio por causa da unidade do cabeçalho diz isso.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Telas", texto: "Um só esqueleto em cada tela: o carregamento da rota e o da própria tela são o mesmo (Frotas, Execução, Empenhos, Liquidações, Pagamentos), e os espaços (PCA, orçamento, quadro, pasta) têm o esqueleto deles.", link: "/painel/frotas" },
+      { tipo: "correcao", area: "Telas", texto: "Abrir e fechar o menu lateral não faz mais as tabelas tremerem nem os indicadores mudarem de altura — só a largura muda.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Aparência", texto: "Uma prévia não salva não fica mais valendo nas outras telas; salvar e restaurar atualizam o sistema na hora e a confirmação é a do sistema.", link: "/painel/aparencia" },
+      { tipo: "correcao", area: "Órgãos", texto: "Rebaixar um órgão só aceita um destino válido e o destino não passa de um órgão para outro.", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.264.6",
     data: "2026-10-29",
     titulo: "Mesa, Catálogo e Verificação com os filtros à esquerda",
