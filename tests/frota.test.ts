@@ -129,7 +129,8 @@ const grav = (extra: Partial<Gravacao> = {}): Gravacao => ({
   contrato: "000617000002",
   inicio: "2026-05-01",
   fim: "2026-05-31",
-  carimbo: `2026-05-31T12:00:00.${String(++n).padStart(3, "0")}Z`,
+  // Cada leitura 11 min depois da anterior (a 2ª ausência só conta passada a janela de `JANELA_AUSENCIA_MS`).
+  carimbo: new Date(Date.UTC(2026, 4, 31, 12) + ++n * 11 * 60_000).toISOString(),
   origem: "manual",
   por: "Teste",
   bytes: 100,

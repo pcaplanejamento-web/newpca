@@ -1,7 +1,7 @@
-import { and, between, eq, isNull, type SQL, sql } from "drizzle-orm";
+import { and, between, eq, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { frotaContratos, frotaEstado, frotaLeituras, frotaTransacoes, frotaUnidades, frotaVeiculos } from "../db/schema.ts";
+import { frotaContratos, frotaCursores, frotaEstado, frotaLeituras, frotaTransacoes, frotaUnidades, frotaVeiculos } from "../db/schema.ts";
 import { type EscopoEmpenhos, escopoVazio } from "./empenhos-tela-core.ts";
 import { doEscopo } from "./empenhos-tela-sql.ts";
 import { assinaturaLinha, COLUNAS_TRANSACAO, chaveTexto, type LinhaTransacao, placaValida, type TipoTransacao, tuplaDaLinha } from "./volus-core.ts";
@@ -53,6 +53,16 @@ const N = COLUNAS_TRANSACAO.length;
 const I_TIPO = COLUNAS_TRANSACAO.indexOf("tipo");
 const I_CHAVE = COLUNAS_TRANSACAO.indexOf("chave");
 const jx = (i: number) => sql.raw(`json_extract(j.value, '$[${i}]')`);
+
+/** A 2ª ausência só conta numa leitura ao menos 10 min depois da 1ª (as duas leituras seguidas da regra são leituras de
+ * verdade, nunca a mesma resposta lida duas vezes quase juntas). */
+export const JANELA_AUSENCIA_MS = 10 * 60_000;
+
+/** O limite (texto comparável com o carimbo) antes do qual a ausência marcada já pode contar de novo; carimbo inválido = null. */
+export function limiteAusencia(carimbo: string): string | null {
+  const t = Date.parse(`${carimbo.slice(0, 23)}Z`);
+  return Number.isFinite(t) ? new Date(t - JANELA_AUSENCIA_MS).toISOString().slice(0, 23) : null;
+}
 
 /** O contexto de uma gravação: o extrato e o CARIMBO (único — as contagens e a versão saem dele). */
 export type Gravacao = {
@@ -137,7 +147,16 @@ export function comandosGravarExtrato(db: Db, g: Gravacao, linhas: readonly Linh
         removidoEm: sql`CASE WHEN "ausente" + 1 >= 2 THEN ${g.carimbo} ELSE NULL END`,
         atualizadoEm: g.carimbo,
       })
-      .where(and(doPeriodo, isNull(frotaTransacoes.removidoEm), sql`${frotaTransacoes.chave} NOT IN (SELECT value FROM json_each(${chaves}))`)),
+      .where(
+        and(
+          doPeriodo,
+          isNull(frotaTransacoes.removidoEm),
+          sql`${frotaTransacoes.chave} NOT IN (SELECT value FROM json_each(${chaves}))`,
+          // Uma ausência marcada há menos de `JANELA_AUSENCIA_MS` não conta de novo: duas leituras quase juntas do MESMO
+          // período (a manual e a automática, ou a nova tentativa de um pedido que já tinha gravado) nunca removem nada.
+          ...(limiteAusencia(g.carimbo) ? [sql`NOT (${frotaTransacoes.ausente} > 0 AND ${frotaTransacoes.atualizadoEm} > ${limiteAusencia(g.carimbo)})`] : []),
+        ),
+      ),
   );
   if (placas.size) {
     const json = JSON.stringify([...placas.values()]);
@@ -225,7 +244,8 @@ function comandoLeitura(db: Db, g: Gravacao, linhas: readonly LinhaTransacao[]) 
     alterados: sql`${alterados}`,
     iguais: sql`${linhas.length} - ${novos} - ${alterados}`,
     ausentes: sql`(SELECT COUNT(*) FROM "frota_transacoes" WHERE "atualizado_em" = ${c} AND "ausente" > 0 AND "removido_em" IS NULL)`,
-    removidos: sql`(SELECT COUNT(*) FROM "frota_transacoes" WHERE "removido_em" = ${c})`,
+    // Pelo índice do carimbo (a ausência grava `atualizado_em` = carimbo): sem ele, o `removido_em` varria a tabela inteira.
+    removidos: sql`(SELECT COUNT(*) FROM "frota_transacoes" WHERE "atualizado_em" = ${c} AND "removido_em" = ${c})`,
     fora: g.fora,
     valor: linhas.reduce((s, l) => s + Number(l.valor ?? 0), 0),
     bytes: g.bytes,
@@ -354,3 +374,31 @@ export async function consultaVersaoFrota(db: Db): Promise<string> {
 
 /** Os contratos (para o comando de realinhamento em todos — usado depois de trocar órgãos em massa). */
 export const contratosDoBanco = (db: Db) => db.select({ codigo: frotaContratos.codigo }).from(frotaContratos);
+
+/**
+ * TRAVA o cursor de um contrato × tipo para UMA leitura da automática: só se ninguém o trava agora E se ele ainda está como
+ * estava quando o trabalho foi escolhido (`visto`) — outra execução que o avançou no meio tempo faz esta desistir (nunca
+ * relê o período nem recomeça um ciclo por cima de um avanço). O ciclo novo grava o início junto. Devolve o passo e as
+ * falhas do cursor travado (vazio = não travou).
+ */
+export function comandoTravarCursor(
+  db: Db,
+  t: { contrato: string; tipo: string; inicio: string; novoCiclo: boolean },
+  visto: { proximo: string | null; cicloConcluidoEm: string | null } | undefined,
+  agoraIso: string,
+  travaAte: string,
+) {
+  return db
+    .update(frotaCursores)
+    .set({ travaAte, ...(t.novoCiclo ? { cicloInicio: t.inicio, proximo: t.inicio, cicloIniciadoEm: agoraIso } : {}) })
+    .where(
+      and(
+        eq(frotaCursores.contrato, t.contrato),
+        eq(frotaCursores.tipo, t.tipo),
+        or(isNull(frotaCursores.travaAte), lt(frotaCursores.travaAte, agoraIso)),
+        sql`${frotaCursores.proximo} IS ${visto?.proximo ?? null}`,
+        sql`${frotaCursores.cicloConcluidoEm} IS ${visto?.cicloConcluidoEm ?? null}`,
+      ),
+    )
+    .returning({ passo: frotaCursores.passoDias, falhas: frotaCursores.falhas });
+}

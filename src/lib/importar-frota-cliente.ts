@@ -1,15 +1,27 @@
 import { hojeIso } from "./empenhos-core.ts";
 import type { PedidoAndamento } from "./importacao-progresso.ts";
 import { type ImportacaoLocal, mudarImportacao, mudarPedido, publicarImportacao } from "./importacoes-ao-vivo-store.ts";
-import { codigoLegivel, dividirPeriodo, mesesDoAno, type ProdutoContrato, ROTULO_TIPO, type TipoTransacao, tiposDoProduto } from "./volus-core.ts";
+import { codigoLegivel, diasEntre, dividirPeriodo, MAX_BYTES_EXTRATO, mesesDoAno, type ProdutoContrato, ROTULO_TIPO, type TipoTransacao, tiposDoProduto } from "./volus-core.ts";
 
 /**
  * A IMPORTAÇÃO DA FROTA (Vólus) conduzida pelo navegador, no MESMO armazém ao vivo das importações da Centi
  * (`importacoes-ao-vivo-store`): roda em nível de módulo (sair da tela não a interrompe), cada período lido é um pedido
  * com a fase (pedindo · concluído · dividido · erro) e o painel do canto, a tela da Importação e o "Importar agora" das
  * KPIs leem o mesmo estado. A fila é contrato × tipo do produto × mês; o período grande demais volta em partes e a falha
- * passageira (rede, 5xx) tem 2 novas tentativas.
+ * passageira (rede, 5xx) tem 2 novas tentativas. EM PARALELO (`PARALELO_FROTA` pedidos ao mesmo tempo — os períodos nunca
+ * se sobrepõem, então cada gravação é independente) e, aprendido o tamanho por dia de um contrato × tipo, o mês seguinte já
+ * é pedido em partes (sem o pedido "grande demais" jogado fora a cada mês).
  */
+
+/** Quantos períodos ao mesmo tempo (cada um uma requisição — o D1 executa uma consulta por vez: poucos bastam). */
+export const PARALELO_FROTA = 3;
+
+/** Em quantas partes pedir `dias` dias com a densidade aprendida (bytes por dia); 1 = cabe inteiro. As partes ficam com
+ * folga de 25% (como `partesPara`) — a parte prevista nunca é dividida de novo pela previsão. */
+export function partesPrevistas(densidade: number | undefined, dias: number): number {
+  if (!densidade || dias <= 1 || densidade * dias <= MAX_BYTES_EXTRATO) return 1;
+  return Math.min(dias, Math.ceil((densidade * dias * 1.25) / MAX_BYTES_EXTRATO));
+}
 
 export const TIPO_FROTA = "frotas";
 export const ROTA_IMPORTACAO_FROTA = "/painel/configuracoes?aba=importacoes&tipo=frotas";
@@ -36,6 +48,8 @@ export type OpcoesFrota = {
   pedir?: (p: PedidoFrota) => Promise<Resultado>;
   /** A espera entre as tentativas (injetável nos testes). */
   esperar?: (ms: number) => Promise<void>;
+  /** Quantos pedidos ao mesmo tempo (padrão `PARALELO_FROTA`). */
+  paralelo?: number;
   hoje?: string;
 };
 
@@ -98,23 +112,40 @@ export function importarFrota(o: OpcoesFrota): { id: string; fim: Promise<Resumo
   };
   publicarImportacao(imp);
 
+  // O tamanho por dia de cada contrato × tipo (o maior visto): o mês seguinte já vai dividido no tamanho certo.
+  const densidade = new Map<string, number>();
+  const aprender = (p: PedidoFrota, bytes: number | undefined) => {
+    if (!bytes || bytes <= 0) return;
+    const k = `${p.contrato}|${p.tipo}`;
+    densidade.set(k, Math.max(densidade.get(k) ?? 0, bytes / diasEntre(p.inicio, p.fim)));
+  };
+  const dividirEmPartes = (p: PedidoFrota, n: number, bytes = 0) => {
+    const partes = dividirPeriodo(p.inicio, p.fim, n).map((q) => ({ ...p, ...q }));
+    fila.unshift(...partes);
+    mudarImportacao(id, (i) => ({ ...i, pedidos: [...i.pedidos, ...partes.map(novoPedido)], totalPedidos: (i.totalPedidos ?? 0) + partes.length }));
+    mudarPedido(id, chaveDe(p), (y) => ({ ...(y ?? novoPedido(p)), fase: "dividido", faseMs: agora(), fimMs: agora(), bytes }));
+  };
+
   const fim = (async (): Promise<ResumoFrota> => {
     const r: ResumoFrota = { registros: 0, novos: 0, alterados: 0, removidos: 0, falhas: [], interrompido: false };
-    while (fila.length && !parar) {
-      const p = fila.shift() as PedidoFrota;
+    const um = async (p: PedidoFrota) => {
       const chave = chaveDe(p);
+      const previstas = partesPrevistas(densidade.get(`${p.contrato}|${p.tipo}`), diasEntre(p.inicio, p.fim));
+      if (previstas > 1) {
+        dividirEmPartes(p, previstas);
+        return;
+      }
       for (let tentativa = 0; ; tentativa++) {
         mudarPedido(id, chave, (x) => ({ ...(x ?? novoPedido(p)), fase: "pedindo", tentativa: tentativa + 1, faseMs: agora(), inicioMs: tentativa ? (x?.inicioMs ?? agora()) : agora() }));
         try {
           const x = await pedir(p);
           if (x.estado === "dividir") {
-            const partes = dividirPeriodo(p.inicio, p.fim, x.partes ?? 2).map((q) => ({ ...p, ...q }));
-            fila.unshift(...partes);
-            mudarImportacao(id, (i) => ({ ...i, pedidos: [...i.pedidos, ...partes.map(novoPedido)], totalPedidos: (i.totalPedidos ?? 0) + partes.length }));
-            mudarPedido(id, chave, (y) => ({ ...(y ?? novoPedido(p)), fase: "dividido", faseMs: agora(), fimMs: agora(), bytes: x.bytes ?? 0 }));
+            aprender(p, x.bytes);
+            dividirEmPartes(p, Math.max(2, x.partes ?? 2), x.bytes ?? 0);
           } else if (x.estado === "erro") {
             throw Object.assign(new Error(x.erro ?? "Falhou"), { status: 0, permanente: true });
           } else {
+            aprender(p, x.bytes);
             r.registros += x.registros ?? 0;
             r.novos += x.novos ?? 0;
             r.alterados += x.alterados ?? 0;
@@ -137,7 +168,44 @@ export function importarFrota(o: OpcoesFrota): { id: string; fim: Promise<Resumo
           break;
         }
       }
-    }
+    };
+    // O POOL: até `paralelo` pedidos em curso; quem fica sem fila espera os outros (uma divisão pode trazer mais partes).
+    const n = Math.max(1, Math.floor(o.paralelo ?? PARALELO_FROTA));
+    let ativos = 0;
+    let acordar: (() => void) | null = null;
+    const avisar = () => {
+      const a = acordar;
+      acordar = null;
+      a?.();
+    };
+    const trabalhador = async () => {
+      for (;;) {
+        if (parar) return;
+        const p = fila.shift();
+        if (!p) {
+          if (!ativos) return;
+          await new Promise<void>((ok) => {
+            const antes = acordar;
+            acordar = () => {
+              antes?.();
+              ok();
+            };
+          });
+          continue;
+        }
+        ativos++;
+        try {
+          await um(p);
+        } catch (e) {
+          // Nunca para o pool em silêncio: o inesperado vira a falha DESTE período.
+          r.falhas.push(`${rotuloDe(p)} ${p.inicio}: ${(e as Error)?.message ?? "falha"}`);
+        } finally {
+          ativos--;
+          avisar();
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: n }, trabalhador));
     r.interrompido = parar && fila.length > 0;
     const num = (n: number) => n.toLocaleString("pt-BR");
     const texto = r.interrompido

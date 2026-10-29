@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.258.1",
+    data: "2026-10-29",
+    titulo: "Frotas: importação da Vólus mais rápida e mais segura",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação da Vólus lê até 3 períodos ao mesmo tempo e, aprendido o tamanho de um contrato, já pede os meses seguintes em partes que cabem — um ano de abastecimentos sai com cerca de metade dos pedidos e várias vezes mais rápido.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Importações", texto: "O período grande demais da Vólus é medido inteiro e dividido de uma vez no tamanho certo (antes era dividido ao meio repetidas vezes, com pedidos jogados fora).", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Frotas", texto: "Duas leituras quase juntas do mesmo período (a manual e a automática, ou a nova tentativa de um pedido) não dão mais uma transação como removida na Vólus: a 2ª ausência só conta 10 minutos depois da 1ª.", link: "/painel/combustivel" },
+      { tipo: "correcao", area: "Importações", texto: "A atualização automática da Frota não relê um período nem recomeça o ciclo por cima de outra execução, a trava cobre a leitura inteira, a autenticação da Vólus é compartilhada pelos pedidos em paralelo e a contagem das removidas não lê mais a tabela inteira.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+    ],
+  },
+  {
     versao: "1.258.0",
     data: "2026-10-29",
     titulo: "Frotas: a importação da Vólus igual à das outras importações",

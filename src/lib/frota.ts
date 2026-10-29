@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { cache } from "react";
 import { configuracoes, frotaClassificacoes, frotaContratos, frotaCursores, frotaLeituras, frotaTransacoes, frotaUnidades, frotaVeiculos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
@@ -7,7 +7,7 @@ import { chaveEscopoEmpenhos, escopoVazio } from "./empenhos-tela-core";
 import { doEscopo } from "./empenhos-tela-sql";
 import { unidadeDoModulo } from "./escopo-cabecalho";
 import { agoraBrasilia, avancarCursor, type ConfigFrota, credencialDefinida, esperaDaFalha, lerConfigFrota, motivoForaDaHora, novoPasso, proximoTrabalho } from "./frota-config-core";
-import { comandoLeituraSemGravar, comandoRealinharContrato, comandoRealinharUnidade, comandoSubirVersao, comandosGravarExtrato, consultaAnosFrota, contagensDoLote, consultaPacoteFrota, consultaVersaoFrota, type Gravacao } from "./frota-sql";
+import { comandoLeituraSemGravar, comandoTravarCursor, comandoRealinharContrato, comandoRealinharUnidade, comandoSubirVersao, comandosGravarExtrato, consultaAnosFrota, contagensDoLote, consultaPacoteFrota, consultaVersaoFrota, type Gravacao } from "./frota-sql";
 import { cursoresLendo } from "./frota-andamento-core";
 import { lerBlobConfiguracoes } from "./integracoes";
 import { decifrarSegredo } from "./integracoes-segredos";
@@ -131,8 +131,12 @@ async function garantirCursores() {
   return todos.filter((k) => vigentes.has(`${k.contrato}:${k.tipo}`));
 }
 
+/** A trava de um cursor durante a leitura: cobre o pior caso (autenticar 15 s + extrato 25 s, de novo depois de um 401)
+ * e fica abaixo do intervalo do cron (3 min). */
+export const TRAVA_CURSOR_MS = 150_000;
+
 /**
- * UM PASSO da automática (o cron chama a cada poucos minutos): escolhe o cursor mais atrasado, TRAVA ele (90 s — outra
+ * UM PASSO da automática (o cron chama a cada poucos minutos): escolhe o cursor mais atrasado, TRAVA ele (150 s — outra
  * execução nunca lê o mesmo), lê um período e avança. Devolve o que fez (para o log do cron).
  */
 export async function passoAutomaticoFrota(agora = new Date()): Promise<string> {
@@ -148,12 +152,11 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
   if (!t) return "Nada a atualizar agora.";
   const db = getDb();
   const iso = agora.toISOString();
-  const trava = new Date(agora.getTime() + 90_000).toISOString();
-  const travou = await db
-    .update(frotaCursores)
-    .set({ travaAte: trava, ...(t.novoCiclo ? { cicloInicio: t.inicio, proximo: t.inicio, cicloIniciadoEm: iso } : {}) })
-    .where(and(eq(frotaCursores.contrato, t.contrato), eq(frotaCursores.tipo, t.tipo), or(isNull(frotaCursores.travaAte), lt(frotaCursores.travaAte, iso))))
-    .returning({ passo: frotaCursores.passoDias, falhas: frotaCursores.falhas });
+  const trava = new Date(agora.getTime() + TRAVA_CURSOR_MS).toISOString();
+  // O cursor como estava quando o trabalho foi escolhido: outra execução que o avançou no meio tempo faz esta desistir
+  // (nunca relê o período nem recomeça o ciclo por cima de um avanço).
+  const visto = cursores.find((k) => k.contrato === t.contrato && k.tipo === t.tipo);
+  const travou = await comandoTravarCursor(db, t, visto, iso, trava);
   if (!travou.length) return "Outra execução está lendo este contrato.";
   const passo = travou[0].passo;
   const r = await lerPeriodo(cfg, { contrato: t.contrato, tipo: t.tipo as TipoTransacao, inicio: t.inicio, fim: t.fim, origem: "auto", por: "Atualização automática" });

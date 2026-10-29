@@ -35,7 +35,7 @@ test("importarFrota: divide o período grande, tenta de novo a falha passageira 
     }
     return { estado: "ok", registros: 10, novos: 2, alterados: 1 };
   };
-  const { id, fim } = importarFrota({ ano: 2026, contratos: C, hoje: "2026-02-10", pedir, esperar: sem });
+  const { id, fim } = importarFrota({ ano: 2026, contratos: C, hoje: "2026-02-10", pedir, esperar: sem, paralelo: 1 });
   const r = await fim;
   assert.deepEqual(chamadas, ["2026-01-01..2026-01-31", "2026-01-01..2026-01-16", "2026-01-17..2026-01-31", "2026-02-01..2026-02-10", "2026-02-01..2026-02-10"]);
   assert.equal(r.registros, 30);
@@ -66,6 +66,7 @@ test("importarFrota: erro permanente vira falha e parar interrompe", async () =>
     contratos: C,
     hoje: "2026-03-05",
     esperar: sem,
+    paralelo: 1,
     pedir: async () => {
       await esperarArmazem();
       // Pede a parada no 1º pedido: os meses seguintes não são lidos.

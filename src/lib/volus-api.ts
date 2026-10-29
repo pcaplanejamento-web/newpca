@@ -29,13 +29,34 @@ export class ErroVolus extends Error {
 export type EmpresaVolus = { id: string; nome: string };
 type Token = { token: string; vence: number; empresas: EmpresaVolus[] };
 const tokens = new Map<string, Token>();
+/** A autenticação EM CURSO por credencial: pedidos paralelos com o token vencido esperam a MESMA (um POST só). */
+const autenticando = new Map<string, Promise<Token>>();
+
+/**
+ * Até quantos bytes a resposta grande demais é MEDIDA (só contados, sem decodificar — custo de CPU desprezível) para dividir
+ * o período de uma vez no tamanho certo. Sem medir, a resposta sem `Content-Length` (comprimida) parecia ter só o teto e
+ * o período era dividido ao meio, de novo e de novo (um mês de abastecimentos = 4 níveis de pedidos jogados fora).
+ */
+export const MAX_BYTES_MEDIR = 16_000_000;
+
+/** A chave da memória do token: o Client ID + uma assinatura do segredo (o segredo em si nunca fica como chave). */
+function chaveDaCredencial(clientId: string, clientSecret: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x9e3779b9;
+  for (let i = 0; i < clientSecret.length; i++) {
+    const c = clientSecret.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x01000193) ^ (a >>> 13);
+  }
+  return `${clientId}:${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
+}
 
 /** O resultado da leitura de um extrato: o texto inteiro, ou `grande` (passou do teto — `bytes` = o que já tinha vindo). */
 export type Extrato = { grande: false; texto: string; bytes: number; ms: number } | { grande: true; bytes: number; ms: number };
 
 export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, init) => fetch(url, init), agora = () => Date.now() }: { clientId: string; clientSecret: string; fetch?: FetchLike; agora?: () => number }) {
   // A memória do token é por CREDENCIAL (trocar o segredo não reaproveita o token da anterior).
-  const chaveToken = `${clientId}:${clientSecret}`;
+  const chaveToken = chaveDaCredencial(clientId, clientSecret);
   async function chamar(url: string, init: RequestInit, tempoMs: number): Promise<Response> {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), tempoMs);
@@ -53,6 +74,14 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
   async function autenticar(forcar = false): Promise<Token> {
     const guardado = tokens.get(chaveToken);
     if (!forcar && guardado && agora() < guardado.vence - 120_000) return guardado;
+    const emCurso = autenticando.get(chaveToken);
+    if (emCurso) return emCurso;
+    const p = novoToken().finally(() => autenticando.delete(chaveToken));
+    autenticando.set(chaveToken, p);
+    return p;
+  }
+
+  async function novoToken(): Promise<Token> {
     const r = await chamar(
       `${HOST_AUTH_VOLUS}/v1/partners/auth/token`,
       {
@@ -116,10 +145,7 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
         const { done, value } = await leitor.read();
         if (done) break;
         lidos += value.byteLength;
-        if (lidos > maxBytes) {
-          await leitor.cancel().catch(() => {});
-          return { grande: true, bytes: lidos, ms: agora() - t0 };
-        }
+        if (lidos > maxBytes) return { grande: true, bytes: await medirResto(leitor, lidos), ms: agora() - t0 };
         s += dec.decode(value, { stream: true });
       }
       s += dec.decode();
@@ -128,6 +154,25 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
   }
 
   return { autenticar, extrato };
+}
+
+/** Conta o RESTO da resposta (sem decodificar) até `MAX_BYTES_MEDIR`; passou, cancela e devolve o que contou. */
+async function medirResto(leitor: ReadableStreamDefaultReader<Uint8Array>, lidos: number): Promise<number> {
+  let n = lidos;
+  try {
+    for (;;) {
+      if (n > MAX_BYTES_MEDIR) {
+        await leitor.cancel().catch(() => {});
+        return n;
+      }
+      const { done, value } = await leitor.read();
+      if (done) return n;
+      n += value.byteLength;
+    }
+  } catch {
+    await leitor.cancel().catch(() => {});
+    return n;
+  }
 }
 
 export type ClienteVolus = ReturnType<typeof clienteVolus>;
