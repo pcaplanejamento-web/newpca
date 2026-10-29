@@ -50,6 +50,7 @@ import { Modal } from "./Modal";
 import { ModulosAdmin } from "./ModulosAdmin";
 import { PapeisAdmin } from "./PapeisAdmin";
 import { ReferenciaSistema } from "./ReferenciaSistema";
+import { Switch } from "./Switch";
 import { Segmented } from "./Segmented";
 import { SituacoesAdmin } from "./SituacoesAdmin";
 import { FeriadosAdmin } from "./FeriadosAdmin";
@@ -105,6 +106,7 @@ export function ConfiguracoesAdmin({
   identidade,
   acesso,
   linhasTabela,
+  noAparelho,
   pcas,
   regras,
   abaInicial,
@@ -116,6 +118,8 @@ export function ConfiguracoesAdmin({
   acesso?: Aparencia["acesso"];
   /** Linhas por página com que as tabelas de rolagem interna abrem (a escolha atual do ADM). */
   linhasTabela: LinhasTabela;
+  /** Guardar os dados das telas no navegador de cada pessoa (padrão ligado). */
+  noAparelho: boolean;
   pcas: PcaResumo[];
   regras: RegrasAvaliacao;
 }) {
@@ -124,6 +128,7 @@ export function ConfiguracoesAdmin({
 
   // ---- Tabelas: linhas por página iniciais ----
   const [linhas, setLinhas] = useState<LinhasTabela>(linhasTabela);
+  const [guardar, setGuardar] = useState(noAparelho);
   const [salvandoLinhas, setSalvandoLinhas] = useState(false);
   async function salvarTabelas() {
     setSalvandoLinhas(true);
@@ -131,11 +136,11 @@ export function ConfiguracoesAdmin({
       const res = await fetch("/api/admin/aparencia", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tabelas: { linhas } }),
+        body: JSON.stringify({ tabelas: { linhas, noAparelho: guardar } }),
       });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
-      toast.success(`As tabelas abrem com ${linhas} linhas — já vale para todos.`);
+      toast.success("Configuração das tabelas salva — já vale para todos.");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -406,8 +411,18 @@ export function ConfiguracoesAdmin({
           options={LINHAS_TABELA.map((n) => ({ value: String(n), label: String(n) }))}
         />
       </div>
+      <div className="flex items-center gap-2 pt-2">
+        <Switch checked={guardar} onChange={setGuardar} label="Guardar os dados das telas no navegador" dica="Telas abrem na hora ao voltar a elas, também depois de fechar o navegador" />
+        <Ajuda titulo="Dados no navegador">
+          <p>
+            Ligado, os dados já lidos de cada tela ficam guardados no navegador da pessoa e voltam na hora — só são pedidos
+            de novo quando mudam no sistema. Saem ao sair da conta ou trocar de conta. Desligado, nada é guardado e o que
+            havia é apagado no próximo acesso.
+          </p>
+        </Ajuda>
+      </div>
       <div className="flex justify-end">
-        <Button size="sm" onClick={salvarTabelas} loading={salvandoLinhas} disabled={linhas === linhasTabela} title="Salvar as linhas por página">
+        <Button size="sm" onClick={salvarTabelas} loading={salvandoLinhas} disabled={linhas === linhasTabela && guardar === noAparelho} title="Salvar">
           Salvar
         </Button>
       </div>

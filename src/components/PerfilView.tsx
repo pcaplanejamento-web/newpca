@@ -1,5 +1,6 @@
 "use client";
 
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import { HistoricoAcessos } from "./HistoricoAcessos";
 import { useRouter } from "next/navigation";
 import { problemaSenha } from "@/lib/cadastro-core";
@@ -344,6 +345,7 @@ export function PerfilView({
     setSaindo(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      await apagarDadosLocais();
     } catch {
       /* ignora */
     }

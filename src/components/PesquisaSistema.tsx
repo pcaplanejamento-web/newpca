@@ -1,5 +1,6 @@
 "use client";
 
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import { EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
@@ -585,6 +586,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           } catch {
             /* segue para o login */
           }
+          await apagarDadosLocais();
           router.push("/login");
           router.refresh();
         },

@@ -147,6 +147,29 @@ export async function consultaVersaoExecucao(db: Db): Promise<string> {
   return String(r?.ver ?? "");
 }
 
+/** A versão de cada TIPO (empenhos ≠ liquidações ≠ pagamentos) + a do cadastro (nomes de órgãos/unidades): cada tela da
+ * execução só pede de novo quando o que ELA mostra mudou — importar pagamentos não renova os empenhos. */
+export type VersoesExecucao = { empenhos: string; liquidacoes: string; pagamentos: string; cadastro: string };
+
+function versaoTipoSql(t: "empenhos" | "liquidacoes" | "pagamentos"): string {
+  return `((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = '${t}' AND l.estado = 'promovido') || ':' || (SELECT COUNT(*) || '.' || IFNULL(MAX(id), 0) || '.' || IFNULL(MAX(vinculos_em), '') FROM empenho_cards WHERE tipo = '${t}'))`;
+}
+
+export async function consultaVersoesExecucao(db: Db): Promise<VersoesExecucao> {
+  const [r] = await db.all<{ e: string; l: string; p: string; c: number | null }>(
+    sql.raw(
+      `SELECT ${versaoTipoSql("empenhos")} AS e, ${versaoTipoSql("liquidacoes")} AS l, ${versaoTipoSql("pagamentos")} AS p, (SELECT MAX(id) FROM auditoria WHERE entidade IN ('orgao', 'reparticao')) AS c`,
+    ),
+  );
+  return { empenhos: String(r?.e ?? ""), liquidacoes: String(r?.l ?? ""), pagamentos: String(r?.p ?? ""), cadastro: String(r?.c ?? 0) };
+}
+
+/** A versão de cada TELA da execução: a do que ela mostra (liquidações e pagamentos trazem o órgão/unidade do empenho). */
+export function versaoDaTelaExecucao(v: VersoesExecucao, tela: "empenhos" | "liquidacoes" | "pagamentos" | "execucao"): string {
+  const partes = tela === "empenhos" ? [v.empenhos] : tela === "execucao" ? [v.empenhos, v.liquidacoes, v.pagamentos] : [tela === "liquidacoes" ? v.liquidacoes : v.pagamentos, v.empenhos];
+  return `${tela}|${partes.join("|")}|c${v.cadastro}`;
+}
+
 /** A situação de cada TIPO de card: quantos, a última importação promovida, lendo agora e com problema. */
 /** `livres` = os cards da etapa sem importação concluída (podem atualizar já); `ultimaCompleta` = a mais antiga das concluídas. */
 export type MetaSql = MetaExec & { livres: number; ultimaCompleta: string | null };

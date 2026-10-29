@@ -5,7 +5,7 @@ import { acessoPagina } from "@/lib/acesso-pagina";
 import { getDb } from "@/lib/db";
 import { fontesDoAcesso } from "@/lib/execucao-dados";
 import { carregarEdicoes } from "@/lib/edicoes-tabela";
-import { consultaVersaoExecucao } from "@/lib/execucao-sql";
+import { consultaVersoesExecucao, versaoDaTelaExecucao } from "@/lib/execucao-sql";
 import { getFiltrosIniciais } from "@/lib/filtros-iniciais";
 import { dataIsoBrasilia } from "@/lib/format";
 
@@ -20,7 +20,7 @@ export default async function ExecucaoPage() {
   const f = fontesDoAcesso(r.acesso);
   if (!f.empenhos) return <AcessoRestrito mensagem="O dashboard da execução precisa do acesso à tela Empenhos. Peça ao administrador." />;
   // O ESTADO INICIAL dos filtros (o ADM define) e as VISÕES salvas (as da pessoa e as públicas) — `execucao:filtros`.
-  const [versao, iniciais, edicoes] = await Promise.all([consultaVersaoExecucao(getDb()), getFiltrosIniciais(), carregarEdicoes(r.acesso.u.id, "execucao:")]);
+  const [versao, iniciais, edicoes] = await Promise.all([consultaVersoesExecucao(getDb()).then((v) => versaoDaTelaExecucao(v, "execucao")), getFiltrosIniciais(), carregarEdicoes(r.acesso.u.id, "execucao:")]);
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
       <ExecucaoView
