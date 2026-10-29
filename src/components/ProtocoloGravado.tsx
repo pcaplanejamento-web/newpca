@@ -514,7 +514,7 @@ export function useProtocoloGravado({
         setProgresso({ feito: k, total: sujos.length, label: `DFD ${d.numero} (${k + 1}/${sujos.length})` });
         const body = diffDfdGravado(o, d, repIds.get(id) ?? null, itensEditados.has(id));
         if (Object.keys(body).length === 0) continue;
-        const falha = await enviar(`/api/dfd/${id}`, body);
+        const falha = await enviar(`/api/dfd/${id}`, { ...body, atualizadoEmLido: o.atualizadoEm ?? undefined });
         if (falha) {
           falhas.push(`DFD ${d.numero}: ${falha}`);
           preservar.dfds.set(id, { d, rep: repIds.get(id) ?? null, itens: itensEditados.has(id) });

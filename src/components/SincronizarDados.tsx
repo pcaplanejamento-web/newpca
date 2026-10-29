@@ -50,6 +50,27 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
   }, [pathname]);
 
   useEffect(() => {
+    type Lida = { versao: string; dados: string; tarefas?: string; agenda?: string; execucao?: string };
+    const aplicar = (j: Lida) => {
+      definirVersaoGeral(j.versao);
+      const c = conhecida.current;
+      ultima.current = { completa: j.versao, dados: j.dados, tarefas: j.tarefas ?? c.tarefas, agenda: j.agenda ?? c.agenda, execucao: j.execucao ?? c.execucao };
+      recarregar.current(rota.current);
+    };
+    // Várias abas: a que consultou repassa às outras, que contam a consulta como feita — N abas, UM pedido por minuto.
+    let canal: BroadcastChannel | null = null;
+    try {
+      canal = typeof BroadcastChannel === "function" ? new BroadcastChannel("pca-versoes") : null;
+    } catch {
+      canal = null;
+    }
+    if (canal)
+      canal.onmessage = (e: MessageEvent) => {
+        const j = e.data as Partial<Lida> | null;
+        if (!j?.versao || !j.dados) return;
+        ultimaConsulta.current = Date.now();
+        aplicar(j as Lida);
+      };
     const conferir = async () => {
       if (consultando.current || document.visibilityState !== "visible") return;
       if (Date.now() - ultimaConsulta.current < INTERVALO_MS) return;
@@ -63,10 +84,12 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
           | { ok?: boolean; versao?: string; dados?: string; tarefas?: string; agenda?: string; execucao?: string }
           | null;
         if (j?.ok && j.versao && j.dados) {
-          definirVersaoGeral(j.versao);
-          const c = conhecida.current;
-          ultima.current = { completa: j.versao, dados: j.dados, tarefas: j.tarefas ?? c.tarefas, agenda: j.agenda ?? c.agenda, execucao: j.execucao ?? c.execucao };
-          recarregar.current(rota.current);
+          aplicar(j as Lida);
+          try {
+            canal?.postMessage(j);
+          } catch {
+            // sem canal: cada aba consulta por si
+          }
         }
       } catch {
         // sem rede: segue com o que está na tela
@@ -82,6 +105,7 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
       document.removeEventListener("visibilitychange", aoVoltar);
       window.removeEventListener("focus", aoVoltar);
       window.clearInterval(relogio);
+      canal?.close();
     };
   }, [router]);
 

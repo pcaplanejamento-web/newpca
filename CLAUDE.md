@@ -5466,7 +5466,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   banner POR CIMA dela (embaixo quando não cabe — o lado com mais espaço; `aria-expanded`) e a pílula ENCOLHE numa bolha
   (`.painel-pilula` anima só a largura, presa à borda do lado por `right`/`left`; o texto esmaece; o andamento vira o anel
   `.painel-anel`); de novo FECHA (`.animate-painel-sai`, suave) e a bolha volta a ser pílula. O `style` parado não fixa
-  `transition` (senão a da classe some). **O transform é só do DOM (v1.261.1):** o arrasto escreve `translate3d` direto no
+  `transition` (senão a da classe some). **O transform é só do DOM (v1.261.2):** o arrasto escreve `translate3d` direto no
   elemento a cada quadro (o React só sabe da lixeira — nenhuma renderização por movimento, colado ao ponteiro), parte de
   onde o painel está À VISTA (pegar no meio do voo não salta) e o pouso é um FLIP num `useLayoutEffect` (o contador
   `nPouso`); o clique até 400 ms depois de soltar é ignorado (`fimArrasto`). Pílula compacta (13,5rem: o título até o

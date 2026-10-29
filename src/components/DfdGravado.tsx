@@ -306,9 +306,11 @@ export function useDfdGravado({
       const r = await fetch(`/api/dfd/${orig.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, atualizadoEmLido: orig.atualizadoEm ?? undefined }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; excluido?: boolean; protocoloExcluido?: boolean };
+      // Outra pessoa salvou antes: recarrega o gravado (o rascunho daqui não sobrescreve o dela).
+      if (r.status === 409 && pedidoRef.current === orig.id) await carregar(orig.id, alvoAtual());
       if (!r.ok || !j.ok) throw new Error(j.error ?? `Não foi possível salvar (HTTP ${r.status}).`);
       onAlterado();
       // Sem itens, o DFD foi EXCLUÍDO (e o protocolo, se era o último DFD): o banner fecha.

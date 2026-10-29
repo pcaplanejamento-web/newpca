@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.261.1",
+    versao: "1.261.2",
     data: "2026-10-29",
     titulo: "Arrasto do painel colado ao dedo, pílula compacta e bolha fixa",
     mudancas: [
@@ -43,6 +43,16 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "Importações", texto: "A pílula ficou menor e resumida: o nome curto e só a porcentagem (o resto está no banner); os outros trabalhos aparecem num selo no canto.", link: "/painel/execucao" },
       { tipo: "novo", area: "Importações", texto: "“Manter como bolha” (no cabeçalho do banner): o painel fica circular também fechado, com o andamento no anel — guardado neste aparelho.", link: "/painel/execucao" },
       { tipo: "correcao", area: "Navegação", texto: "Recarregar as telas de Empenhos, Liquidações, Pagamentos e Frotas não dá mais o aviso de “a página foi refeita” (os dados guardados só desenham na hora ao voltar pela navegação).", link: "/painel/combustivel" },
+    ],
+  },
+  {
+    versao: "1.261.1",
+    data: "2026-10-29",
+    titulo: "Salvar sobre alteração de outra pessoa é avisado e as abas dividem a conferência de dados novos",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Salvar um DFD que outra pessoa alterou depois que você o abriu não sobrescreve mais a alteração dela: o sistema avisa e recarrega o DFD para você refazer a sua.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Navegação", texto: "Com várias abas abertas, só uma consulta se há dados novos e avisa as outras — menos pedidos ao servidor.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Checklist e eventos da tarefa e a planilha de Responsáveis mostram o esqueleto enquanto carregam, no lugar do texto “Carregando…”.", link: "/painel/tarefas" },
     ],
   },
   {

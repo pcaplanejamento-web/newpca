@@ -5,10 +5,10 @@ import { avisarProtocoloAtualizado, avisarResponsavelProtocolo } from "@/lib/avi
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
-import { erro, ok, parseCorpo } from "@/lib/http";
+import { erro, MSG_ALTERADO_POR_OUTRA, ok, parseCorpo } from "@/lib/http";
 import { redigirDfdDetalhe, redigirProtocoloDetalhe } from "@/lib/mesa-redacao";
 import { motivoResponsavel, MSG_RESPONSAVEL_MUDOU } from "@/lib/mesa-visao-core";
-import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
+import { atualizadoEmProtocolo, atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
@@ -56,13 +56,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!id) return erro("ID inválido.");
   const p = await parseCorpo(editarProtocoloSchema, req);
   if ("resp" in p) return p.resp;
-  const { origem, ...campos } = p.data;
+  const { origem, atualizadoEmLido, ...campos } = p.data;
 
   const proto = await getProtocolo(id);
   if (!proto) return erro("Protocolo não encontrado.", 404);
   const esc = await escopoMesa();
   if (!esc || !protocoloLegivel(esc, proto)) return erro(MSG_SEM_ACESSO_PROTOCOLO, 403);
   const { acessivel } = esc;
+  if (atualizadoEmLido) {
+    const gravado = await atualizadoEmProtocolo(id);
+    if (gravado && gravado !== atualizadoEmLido) return erro(MSG_ALTERADO_POR_OUTRA, 409);
+  }
   // O PAPEL manipula na Mesa em que o protocolo está (a do sistema ou a do PCA).
   const negado = recusa(a.acesso, telaDoRecurso(proto.pcaId), "manipular");
   if (negado) return negado;
