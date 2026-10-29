@@ -60,3 +60,13 @@ export function aApagar(entradas: readonly Pick<EntradaDado, "chave" | "pessoa" 
 export function sessaoEncerrada(status: number): boolean {
   return status === 401;
 }
+
+/** Um resumo CURTO e estável de um texto longo (FNV-1a 32 bits, base36) — para pôr na versão de um dado sem guardar o texto. */
+export function resumoTexto(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${s.length.toString(36)}${h.toString(36)}`;
+}

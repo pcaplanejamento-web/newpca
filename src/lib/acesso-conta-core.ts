@@ -66,6 +66,7 @@ export const CLAUSULAS_AUTO = [
   { id: "aparelhos", titulo: "Aparelhos vinculados à conta" },
   { id: "sessao", titulo: "Sessão e credenciais" },
   { id: "registros", titulo: "Registros de acesso e auditoria" },
+  { id: "navegador", titulo: "Dados guardados no navegador" },
   { id: "protecao", titulo: "Proteção das informações exibidas" },
   { id: "presenca", titulo: "Presença e comunicação interna" },
   { id: "email", titulo: "Comunicações por e-mail" },

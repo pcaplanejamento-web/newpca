@@ -1,6 +1,6 @@
 "use client";
 
-import { lerDado } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
@@ -150,9 +150,19 @@ export function EmpenhoCardLiquidacoes({
 }) {
   const rota = cardId == null ? "/api/empenhos/liquidacoes" : `/api/empenhos/cards/${cardId}/liquidacoes`;
   const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<Liquidacao>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
-  const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(null);
+  // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto); a versão confere depois.
+  const [inicio] = useState(() => {
+    const a = versao ? jaGuardado<{ anos?: { ano: number; n: number }[] }>("liquidacoes", rota, versao)?.anos : undefined;
+    if (!a?.length) return null;
+    const partes = anosDoRecorte(ANO_TODOS, a).map((ano) => {
+      const j = jaGuardado<{ linhas?: unknown[][] }>("liquidacoes", `${rota}?ano=${ano}`, versao);
+      return j ? (j.linhas ?? []).map((t) => daTupla(t, ano)) : null;
+    });
+    return { anos: a, linhas: partes.every(Boolean) ? (partes as Liquidacao[][]).flat() : null };
+  });
+  const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(inicio?.anos ?? null);
   const [recorte, setRecorte] = useState<{ ano: number; removidos: boolean } | null>(null);
-  const [linhas, setLinhas] = useState<Liquidacao[] | null>(null);
+  const [linhas, setLinhas] = useState<Liquidacao[] | null>(inicio?.linhas ?? null);
   const [vista, setVista] = useState<Liquidacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -160,7 +170,7 @@ export function EmpenhoCardLiquidacoes({
   // O link da PESQUISA DO SISTEMA (`?abrir=<id>`): abre a linha quando a tabela chega.
   useAbrirLinhaDaUrl(linhas, setAberto);
   const pedido = useRef(0);
-  const anosRef = useRef<{ ano: number; n: number }[]>([]);
+  const anosRef = useRef<{ ano: number; n: number }[]>(inicio?.anos ?? []);
   const [completo, setCompleto] = useState<LiquidacaoCompleta | null | undefined>(undefined);
 
   // O detalhe: o que a tabela tem na hora; o registro e o empenho ligado chegam depois.

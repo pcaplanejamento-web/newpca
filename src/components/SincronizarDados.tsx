@@ -2,6 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { apagarDadosLocais, definirVersaoGeral } from "@/lib/dados-cliente";
+import { sessaoEncerrada } from "@/lib/dados-cliente-core";
 import { type VersoesDados, versaoDaRota } from "@/lib/versao-dados-core";
 
 /** Intervalo mínimo entre duas consultas da versão (ms). */
@@ -20,6 +22,7 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
   const router = useRouter();
   const pathname = usePathname();
   const conhecida = useRef(versoes);
+  definirVersaoGeral(versoes.completa);
   const rota = useRef(pathname);
   const ultimaConsulta = useRef(Date.now());
   const consultando = useRef(false);
@@ -54,10 +57,13 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
       ultimaConsulta.current = Date.now();
       try {
         const r = await fetch("/api/dados/versao", { cache: "no-store" });
+        // Sessão encerrada (saiu em outro aparelho, inatividade): nada fica guardado neste navegador.
+        if (sessaoEncerrada(r.status)) void apagarDadosLocais();
         const j = (await r.json().catch(() => null)) as
           | { ok?: boolean; versao?: string; dados?: string; tarefas?: string; agenda?: string; execucao?: string }
           | null;
         if (j?.ok && j.versao && j.dados) {
+          definirVersaoGeral(j.versao);
           const c = conhecida.current;
           ultima.current = { completa: j.versao, dados: j.dados, tarefas: j.tarefas ?? c.tarefas, agenda: j.agenda ?? c.agenda, execucao: j.execucao ?? c.execucao };
           recarregar.current(rota.current);

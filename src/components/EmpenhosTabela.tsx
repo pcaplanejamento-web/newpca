@@ -1,6 +1,6 @@
 "use client";
 
-import { lerDado } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
@@ -132,6 +132,11 @@ const chaveRecorte = (r: Recorte) => `${r.ano}:${r.removidos ? 1 : 0}`;
  * COMPACTO (`empenhos-tela-core.ts`) e fica guardado nesta aba — trocar de ano e voltar não pede de novo; "Recarregar"
  * pede. Tocar numa linha = o detalhe. O ano e o Recarregar ficam na barra das abas (`FerramentasAba`).
  */
+/** O endereço de UM ano de empenhos (a mesma chave do armazém em toda leitura). */
+function urlAno(cardId: number | null, ano: number, removidos: boolean): string {
+  return `/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`;
+}
+
 export function EmpenhosTabela({
   cardId,
   nome,
@@ -161,7 +166,12 @@ export function EmpenhosTabela({
 }) {
   const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<EmpenhoNaTela>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
-  const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(null);
+  // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto).
+  const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(() => {
+    if (anoInicial == null || !versao) return null;
+    const partes = anosDoRecorte(anoInicial, anos).map((a) => jaGuardado<EmpenhoNaTela[]>("empenhos", urlAno(cardId, a, false), versao));
+    return partes.every(Boolean) ? (partes as EmpenhoNaTela[][]).flat() : null;
+  });
   const [vista, setVista] = useState<EmpenhoNaTela[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -183,7 +193,7 @@ export function EmpenhosTabela({
       // Guardado no NAVEGADOR pela versão: sair e voltar à tela não pede de novo.
       const lista = await lerDado(
         "empenhos",
-        `/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`,
+        urlAno(cardId, ano, removidos),
         versaoRef.current ?? "",
         async (resp) => {
           const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };

@@ -387,11 +387,10 @@ export function AppShell({
               </ChatAoVivo>
             )}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
-            {/* No celular o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos): o tema mora no Perfil → Aparência
-                e a página pública na marca do menu — a logo e a foto ficam SÓ no menu. */}
-            <div className="hidden items-center gap-1.5 sm:flex">
-              <ThemeToggle />
-              {/* O último item: atalho para a página pública. */}
+            <ThemeToggle />
+            {/* No celular o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos e o tema): a logo e a foto ficam SÓ
+                no menu e a página pública na marca do menu. O último item: o atalho para a página pública. */}
+            <div className="hidden sm:flex">
               <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
                 Site
               </Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { definirEscopo } from "@/lib/dados-cliente";
+import { definirEscopo, vigiarGravacoes } from "@/lib/dados-cliente";
 
 /**
  * O ESCOPO dos dados guardados no navegador (sem UI; layout do painel): a pessoa e a ASSINATURA do acesso dela (papel,
@@ -14,6 +14,7 @@ export function EscopoCliente({ pessoa, assinatura, guardar }: { pessoa: number;
   if (typeof window !== "undefined" && visto.current !== k) {
     visto.current = k;
     definirEscopo({ pessoa, assinatura }, guardar);
+    vigiarGravacoes();
   }
   return null;
 }

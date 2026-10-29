@@ -40,12 +40,51 @@ export const VERSOES: readonly Versao[] = [
     titulo: "Importações sem travas e o painel “Em segundo plano” manuseável como as bolhas do chat",
     mudancas: [
       { tipo: "novo", area: "Importações", texto: "O painel “Em segundo plano” é manuseado como as bolhas do chat: arraste para qualquer lugar (com o mouse ou o dedo), arremesse e ele encosta na borda mais perto; leve-o à lixeira para dispensar os que terminaram; Alt + setas movem pelo teclado; a posição fica guardada neste aparelho. As bolhas do chat desviam dele.", link: "/painel/execucao" },
-      { tipo: "melhoria", area: "Importações", texto: "Tocar no painel fechado abre o banner POR CIMA dele (a pílula continua à vista); tocar de novo fecha, suavemente.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Importações", texto: "Tocar no painel fechado abre o banner POR CIMA dele e a pílula encolhe numa BOLHA (com o andamento num anel); tocar de novo fecha suavemente e a bolha volta a ser pílula.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Navegação", texto: "Abrir e fechar “Mais indicadores” (e outros blocos que crescem) não faz mais o conteúdo dar um pulo para a direita e voltar: o lugar da barra de rolagem fica reservado no computador.", link: "/painel/execucao" },
       { tipo: "correcao", area: "Importações", texto: "Atualização automática da Centi: depois de ler um dia pesado ela segue direto para o dia seguinte (antes pedia de novo a semana e a dividia outra vez), a fila alterna entre os cards (uma leitura longa não deixa os outros sem a vez) e uma leitura que falha sem parar é descartada e pedida de novo.", link: "/painel/configuracoes?aba=importacoes" },
       { tipo: "correcao", area: "Importações", texto: "O andamento da importação automática anda pelos bytes (um dia de 5 MB conta o que pesa — antes ficava em 0%), mostra os registros que estão sendo gravados, o baixado de verdade e a última atividade; o passo “Gravando no banco…” que falhou vira erro em vez de girar para sempre.", link: "/painel/configuracoes?aba=importacoes" },
       { tipo: "correcao", area: "Frotas", texto: "Quando a Vólus não responde a tempo, o período seguinte é a metade (antes repetia os mesmos 24 dias para sempre); o tempo vale até ler a resposta inteira, a importação manual divide o período lento e espera a automática terminar o mesmo contrato.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
       { tipo: "correcao", area: "Frotas", texto: "No painel das importações, o passo com erro mostra o contrato e o tipo, “Falhou” só aparece com um contrato em espera depois de um erro (com o nome dele) e não há mais “100%” ao lado de “Falhou”.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
-      { tipo: "melhoria", area: "Navegação", texto: "No celular, o cabeçalho fica só com o essencial (menu, PCA, conversas e avisos): a logo e a foto do perfil ficam no menu, o tema no Perfil → Aparência e a página pública na marca do menu.", link: "/painel/perfil" },
+      { tipo: "melhoria", area: "Navegação", texto: "No celular, o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos e claro/escuro): a logo e a foto do perfil ficam no menu e a página pública na marca do menu.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.260.4",
+    data: "2026-10-29",
+    titulo: "Esqueleto padrão em Empenhos, Liquidações, Pagamentos e Frotas",
+    mudancas: [
+      { tipo: "melhoria", area: "Carregamento", texto: "Empenhos, Liquidações, Pagamentos, Frotas, Combustível, Manutenção e Veículos mostram o esqueleto padrão da tela enquanto abrem.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.260.3",
+    data: "2026-10-29",
+    titulo: "Telas da Administração guardadas no navegador",
+    mudancas: [
+      { tipo: "melhoria", area: "Administração", texto: "Grupos, Órgãos, Unidades, Responsáveis, Situações e Cargos reabrem na hora enquanto nada novo foi gravado; gravar qualquer coisa renova na hora.", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Histórico", texto: "Depois de gravar, o histórico guardado é renovado na hora (antes podia esperar até um minuto).", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.260.2",
+    data: "2026-10-29",
+    titulo: "Itens da Mesa e histórico guardados no navegador",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A visão Itens da Mesa (e da Mesa do PCA) fica guardada no navegador: voltar, F5 ou reabrir mostram os itens na hora; muda sozinha quando algum DFD é gravado.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Histórico", texto: "O histórico dos protocolos, DFDs e itens reabre na hora enquanto nada novo foi gravado.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.260.1",
+    data: "2026-10-29",
+    titulo: "Dados guardados: sem esqueleto ao voltar, Frotas e mais segurança",
+    mudancas: [
+      { tipo: "melhoria", area: "Desempenho", texto: "Voltar a Empenhos, Liquidações, Pagamentos e Execução desenha os dados guardados na hora, sem o esqueleto; as outras abas abertas aproveitam o dado já buscado.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Frotas", texto: "Frotas, Combustível, Manutenção e Veículos também ficam guardados no navegador.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Segurança", texto: "Sessão encerrada ou a tela de acesso apagam os dados guardados; papéis com proteção de dados guardam só enquanto a aba está aberta.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Termo de uso", texto: "Cláusula automática \"Dados guardados no navegador\".", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Armazenamento", texto: "\"Dados neste navegador\": quantas leituras vieram sem pedir ao servidor.", link: "/painel/armazenamento" },
     ],
   },
   {

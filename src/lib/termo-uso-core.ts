@@ -63,6 +63,12 @@ export function clausulasAutomaticas(c: ContextoClausulas): Clausula[] {
     texto:
       "Para segurança e prestação de contas, o sistema registra os acessos (entrada, saída e tempo de uso, navegador, endereço IP e aparelho), as cópias de texto, as capturas de tela e as impressões feitas no sistema (a tela, os documentos abertos e o texto copiado) e mantém histórico permanente das inclusões, alterações e exclusões de dados, com a identificação de quem as realizou. Os registros podem ser consultados pelo Administrador e utilizados em apurações administrativas, auditorias e pelos órgãos de controle. O próprio usuário pode consultar o seu histórico de acesso no Perfil.",
   });
+  out.push({
+    id: "navegador",
+    titulo: "Dados guardados no navegador",
+    texto:
+      "Para agilizar o uso, o sistema guarda neste navegador uma cópia dos dados das telas já visitadas, somente do que o usuário pode ver. A cópia é apagada ao sair da conta, ao trocar de conta, quando a sessão é encerrada e quando outra pessoa entra no mesmo navegador. O Administrador pode desligar esse recurso, e os papéis com proteção de dados mantêm a cópia apenas enquanto a aba estiver aberta. O usuário não deve usar o sistema em computadores públicos ou compartilhados sem sair da conta ao final.",
+  });
   if (c.protecao.ligada) {
     const medidas: string[] = [];
     if (c.protecao.copia) medidas.push("bloqueio de seleção e cópia do conteúdo das telas");

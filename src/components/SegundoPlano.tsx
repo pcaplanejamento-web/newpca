@@ -540,19 +540,28 @@ export function PainelSegundoPlano({
   };
   const terminados = trabalhos.filter((t) => !ATIVO(t.estado)).length;
   // Ainda sem a medida (o 1º quadro): no canto padrão, invisível — sem pular de lugar.
+  // Aberto, a pílula ENCOLHE numa bolha (o banner cresce por cima dela); fechando, volta a ser pílula — o inverso, juntos.
+  const bolha = aberto && !fechando;
+  const progresso = ATIVO(principal.estado) && temAndamento(principal);
+  // Presa à BORDA do lado (direita = `right`): a largura que anima não move a borda — nada treme durante a animação.
   const estilo: React.CSSProperties = lugar
     ? {
-        left: lugar.left,
+        ...(pos.lado === "esq" ? { left: lugar.left } : { right: MARGEM }),
         top: lugar.top,
         transform: arrasto ? `translate3d(${arrasto.dx}px, ${arrasto.dy}px, 0) scale(${arrasto.naLixeira ? 0.86 : 1.02})` : voo ? `translate3d(${voo.fase === "ini" ? voo.dx : 0}px, ${voo.fase === "ini" ? voo.dy : 0}px, 0)` : undefined,
-        transition: arrasto ? "transform 70ms linear" : voo?.fase === "voo" ? "transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1)" : "none",
+        // Parado, vale a transição da classe (a largura pílula ↔ bolha).
+        transition: arrasto ? "transform 70ms linear" : voo?.fase === "voo" ? "transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1)" : undefined,
       }
     : { right: MARGEM, bottom: 96, visibility: "hidden" };
   const dicaArrasto = "Arraste para mudar de lugar (Alt + setas no teclado); até a lixeira para dispensar os concluídos.";
 
   return createPortal(
     <>
-    <div ref={caixa} style={estilo} className={`fixed z-[58] w-[min(20rem,calc(100vw-1.5rem))] ${arrasto ? "z-[61]" : ""}`}>
+    <div
+      ref={caixa}
+      style={estilo}
+      className={`painel-pilula fixed ${arrasto ? "z-[61]" : "z-[58]"} ${bolha ? "w-11" : "w-[min(20rem,calc(100vw-1.5rem))]"}`}
+    >
       {aberto && (
         <section
           ref={secao}
@@ -657,18 +666,27 @@ export function PainelSegundoPlano({
           aria-controls="painel-segundo-plano"
           aria-label={`${trabalhos.length} trabalho(s) em segundo plano — ${principal.titulo}: ${ROTULO[principal.estado]}. ${aberto && !fechando ? "Fechar" : "Abrir"} o painel. Alt + setas movem o painel.`}
           title={`${aberto && !fechando ? "Fechar" : "Abrir"} — ${dicaArrasto}`}
-          className={`animate-fade-in-up relative flex min-h-11 w-full touch-none select-none items-center gap-2 overflow-hidden rounded-full bg-surface px-3 ring-1 ring-border ${arrasto ? "cursor-grabbing shadow-erguida" : "shadow-flutuante"}`}
+          className={`animate-fade-in-up relative flex min-h-11 w-full touch-none select-none items-center gap-2 overflow-hidden rounded-full bg-surface px-3.5 ring-1 ring-border ${arrasto ? "cursor-grabbing shadow-erguida" : "shadow-flutuante"}`}
         >
           {ICONE[principal.estado]}
-          <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">{principal.titulo}</span>
-          <span className="shrink-0 text-xs text-muted tabular-nums">
-            {temAndamento(principal) && ATIVO(principal.estado) ? andamento(principal) : ROTULO[principal.estado]}
+          {/* O texto some na bolha (só o ícone fica, no centro) e volta na pílula. */}
+          <span className={`painel-pilula-texto min-w-0 flex-1 truncate text-left text-sm font-medium ${bolha ? "opacity-0" : ""}`}>{principal.titulo}</span>
+          <span className={`painel-pilula-texto shrink-0 text-xs text-muted tabular-nums ${bolha ? "opacity-0" : ""}`}>
+            {progresso ? andamento(principal) : ROTULO[principal.estado]}
             {trabalhos.length > 1 ? ` · +${trabalhos.length - 1}` : ""}
           </span>
-          {ATIVO(principal.estado) && temAndamento(principal) && (
-            <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-track">
+          {progresso && (
+            <span aria-hidden className={`painel-pilula-texto absolute inset-x-0 bottom-0 h-0.5 bg-track ${bolha ? "opacity-0" : ""}`}>
               <span className="block h-full bg-accent transition-[width] duration-300" style={{ width: `${pct(principal)}%` }} />
             </span>
+          )}
+          {/* Na bolha, o andamento vira um ANEL em volta do ícone. */}
+          {progresso && (
+            <span
+              aria-hidden
+              className={`painel-pilula-texto painel-anel pointer-events-none absolute inset-0 rounded-full ${bolha ? "" : "opacity-0"}`}
+              style={{ "--pct": `${pct(principal)}%` } as React.CSSProperties}
+            />
           )}
         </button>
     </div>

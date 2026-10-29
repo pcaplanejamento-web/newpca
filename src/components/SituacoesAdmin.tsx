@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useState } from "react";
 import type { SituacaoComUso } from "@/lib/situacoes";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -32,9 +33,7 @@ export function SituacoesAdmin() {
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch("/api/admin/situacoes");
-      const j = (await r.json()) as { ok?: boolean; error?: string; situacoes?: SituacaoComUso[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar as situações.");
+      const j = await lerJsonGuardado<{ situacoes?: SituacaoComUso[] }>("adm.situacoes", "/api/admin/situacoes", "Erro ao carregar as situações.");
       setLista(j.situacoes ?? []);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar as situações.");

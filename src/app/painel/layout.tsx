@@ -134,7 +134,7 @@ export default async function PainelLayout({
       // O GRUPO ativo também libera (ou não) o chat — Grupos → "Chat liberado".
       chat={bloqueio ? null : presenca === undefined || configChat === null ? undefined : presenca && ativo?.chat && chatLigado(configChat) ? configChat : null}
     >
-      <EscopoCliente pessoa={usuario.id} assinatura={assinatura} guardar={guardarNoAparelho(aparencia)} />
+      <EscopoCliente pessoa={usuario.id} assinatura={assinatura} guardar={guardarNoAparelho(aparencia) && !protecao} />
       <RegistroProtecao ligado={!bloqueio && protecaoCfg.registrar} />
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}

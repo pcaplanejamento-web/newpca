@@ -328,6 +328,13 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
+  /* No computador, o lugar da barra de rolagem fica RESERVADO: um conteúdo que cresce e encolhe (abrir "Mais indicadores",
+     um acordeão) não faz a barra aparecer e sumir — a largura não muda e nada "pula" da direita e volta. */
+  @media (min-width: 64rem) {
+    html {
+      scrollbar-gutter: stable;
+    }
+  }
   body {
     @apply antialiased;
     background: var(--surface-2);
@@ -797,6 +804,29 @@
 .animate-painel-sai {
   animation: janela-sai calc(var(--motion-duration) * 1.4) cubic-bezier(0.4, 0, 0.2, 1) both;
   pointer-events: none;
+}
+/* O painel "Em segundo plano": a PÍLULA encolhe em BOLHA quando o banner abre (e volta ao fechar) — só a largura anima,
+   presa à borda do lado; o texto esmaece junto; na bolha, o andamento é um anel (máscara, sem SVG). */
+.painel-pilula {
+  transition: width calc(var(--motion-duration) * 1.6) cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.painel-pilula-texto {
+  transition: opacity calc(var(--motion-duration) * 0.8) ease;
+}
+.painel-anel {
+  background: conic-gradient(var(--accent) var(--pct, 0%), var(--track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+@media (prefers-reduced-motion: reduce) {
+  .painel-pilula,
+  .painel-pilula-texto {
+    transition: none;
+  }
+}
+[data-motion="off"] .painel-pilula,
+[data-motion="off"] .painel-pilula-texto {
+  transition: none;
 }
 /* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */
 @keyframes lixeira-entra {

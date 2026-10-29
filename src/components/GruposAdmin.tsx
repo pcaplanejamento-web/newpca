@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AbaKey } from "@/lib/abas";
 import { ABAS_FONTE, ehCodigoGeral, type EscopoTelas, type ModoUnidades } from "@/lib/escopo-unidades-core";
@@ -92,9 +93,7 @@ export function GruposAdmin() {
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      const r = await fetch("/api/admin/grupos");
-      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; orcamentos?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
+      const j = await lerJsonGuardado<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; orcamentos?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>("adm.grupos", "/api/admin/grupos", "Erro ao carregar.");
       setGrupos([...(j.grupos ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setModulosDisp(j.modulos ?? []);
       setPcasDisp(j.pcas ?? []);
