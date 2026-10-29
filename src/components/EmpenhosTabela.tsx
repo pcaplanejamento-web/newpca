@@ -282,14 +282,16 @@ export function EmpenhosTabela({
       )}
       <FerramentasAba>
         {anos.length > 0 && recorte && (
-          <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
-            <option value={ANO_TODOS}>Todos os anos</option>
-            {anos.map((a) => (
-              <option key={a.ano} value={a.ano}>
-                {a.ano}
-              </option>
-            ))}
-          </SelectField>
+          <div className="mr-auto">
+            <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
+              <option value={ANO_TODOS}>Todos os anos</option>
+              {anos.map((a) => (
+                <option key={a.ano} value={a.ano}>
+                  {a.ano}
+                </option>
+              ))}
+            </SelectField>
+          </div>
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={avisoDeFalha(erro, linhas != null, () => recorte && void carregar(recorte, true))} />

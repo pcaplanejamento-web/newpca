@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.3",
+    data: "2026-10-29",
+    titulo: "O ano à esquerda na barra das tabelas da execução",
+    mudancas: [{ tipo: "melhoria", area: "Empenhos", texto: "Em empenhos, liquidações e pagamentos, o seletor de ano fica à esquerda da barra; Recarregar, Importações e Ajuda à direita.", link: "/painel/empenhos" }],
+  },
+  {
     versao: "1.264.2",
     data: "2026-10-29",
     titulo: "Telas sem título e o horário dos dados à vista",
