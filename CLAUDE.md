@@ -5573,6 +5573,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
+- **BARRA DE FERRAMENTAS (v1.264.4) — regra firme:** numa barra de botões, os PRINCIPAIS (seletores, campos, busca, filtros) à
+  ESQUERDA e os SECUNDÁRIOS (só-ícone: recarregar, configurar, ajuda) à DIREITA. A classe `.barra-ferramentas` (`globals.css`)
+  faz isso sozinha (`order` + `margin-left:auto` no 1º secundário), qualquer que seja a ordem do código; usada no
+  `FerramentasAba`, nos slots do `AbasEspaco`/Importações e nos Documentos. Barra nova = a classe. Telas sem título nem
+  subtítulo (só `<h1 className="sr-only">`); com KPIs, elas vêm primeiro (`IndicadoresKpi`).
 - **ROLAGEM LEVE (v1.73.1) — regra firme:** as barras de rolagem são as NATIVAS do navegador (sem `scrollbar-width`,
   `scrollbar-color` nem `::-webkit-scrollbar` — a barra própria é desenhada/arrastada pela thread principal e travava o
   arrasto; a nativa é do compositor e segue o ponteiro; clara/escura pelo `color-scheme` do tema). Nada FIXO/STICKY sobre

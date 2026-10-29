@@ -1107,7 +1107,7 @@ function CardAberto({
           ariaLabel={`Seções do card ${c.nome}`}
           options={subs.map((s) => ({ value: s, label: s === "importacao" ? "Importação" : s === "vinculos" ? "Vínculos" : "Configuração", curto: s === "configuracao" ? "Config." : undefined }))}
         />
-        <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
+        <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
       </div>
       {erro && d && <ErroCarga msg={erro} kind="warn" onTentar={carregar} />}
       <ConteudoAba aba={aba} abaServidor={aba} slot={slot} className="space-y-[var(--gap-block)]">

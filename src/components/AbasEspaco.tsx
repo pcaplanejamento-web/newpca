@@ -16,7 +16,7 @@ const SlotFerramentas = createContext<HTMLElement | null | undefined>(undefined)
  */
 export function FerramentasAba({ children }: { children: ReactNode }) {
   const slot = useContext(SlotFerramentas);
-  if (slot === undefined) return <div className="flex flex-wrap items-center justify-end gap-2">{children}</div>;
+  if (slot === undefined) return <div className="barra-ferramentas flex flex-wrap items-center gap-2">{children}</div>;
   return slot ? createPortal(children, slot) : null;
 }
 
@@ -114,14 +114,14 @@ export function AbasEspaco<T extends string>({
         <div className="linha-topico flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-x-2">{cabecalho}</div>
           <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
-            <div ref={setSlot} className="flex min-w-0 items-center justify-end gap-2 empty:hidden" />
+            <div ref={setSlot} className="barra-ferramentas flex min-w-0 items-center gap-2 empty:hidden" />
             {abas}
           </div>
         </div>
       ) : (
         <div className="linha-topico flex flex-wrap items-center gap-2">
           {abas}
-          <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
+          <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
         </div>
       )}
       <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot} className="space-y-[var(--gap-block)]">

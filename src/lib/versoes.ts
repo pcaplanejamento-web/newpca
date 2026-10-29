@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.4",
+    data: "2026-10-29",
+    titulo: "Barras de botões no mesmo padrão em todas as telas",
+    mudancas: [
+      { tipo: "melhoria", area: "Telas", texto: "Em toda barra de ferramentas, os seletores, a busca e os filtros ficam à esquerda; recarregar, configurações e ajuda à direita.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.264.3",
     data: "2026-10-29",
     titulo: "O ano à esquerda na barra das tabelas da execução",

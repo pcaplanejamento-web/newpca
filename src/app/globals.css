@@ -1457,3 +1457,12 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
   height: 100% !important;
 }
 
+
+/* BARRA DE FERRAMENTAS (regra do sistema): os controles PRINCIPAIS (seletores, campos, busca, filtros) à ESQUERDA e os
+   SECUNDÁRIOS (botões só-ícone: recarregar, configurar, ajuda) à DIREITA — a ordem do código não importa. */
+.barra-ferramentas > :is(:has(select, input:not([type="checkbox"]):not([type="hidden"]), [role="combobox"]), select, input) {
+  order: -1;
+}
+.barra-ferramentas > :nth-child(1 of :not(.sr-only, :has(select, input:not([type="checkbox"]):not([type="hidden"]), [role="combobox"]), select, input)) {
+  margin-left: auto;
+}
