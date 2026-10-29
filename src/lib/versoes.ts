@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.257.0",
+    versao: "1.259.0",
     data: "2026-10-29",
     titulo: "Dados guardados no navegador, cada um com a sua atualização",
     mudancas: [
@@ -43,6 +43,41 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "Execução", texto: "Cada dado se atualiza sozinho: importar pagamentos renova só Pagamentos e Execução; importar empenhos renova Empenhos, Liquidações, Pagamentos e Execução.", link: "/painel/pagamentos" },
       { tipo: "melhoria", area: "Empenhos", texto: "Trocar o ano não apaga mais a tabela enquanto o novo ano chega.", link: "/painel/empenhos" },
       { tipo: "novo", area: "Configurações", texto: "Configurações → Tabelas: o ADM pode desligar a guarda dos dados no navegador. Sair ou trocar de conta apaga o que estava guardado.", link: "/painel/configuracoes?aba=tabelas" },
+    ],
+  },
+  {
+    versao: "1.258.1",
+    data: "2026-10-29",
+    titulo: "Frotas: importação da Vólus mais rápida e mais segura",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação da Vólus lê até 3 períodos ao mesmo tempo e, aprendido o tamanho de um contrato, já pede os meses seguintes em partes que cabem — um ano de abastecimentos sai com cerca de metade dos pedidos e várias vezes mais rápido.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Importações", texto: "O período grande demais da Vólus é medido inteiro e dividido de uma vez no tamanho certo (antes era dividido ao meio repetidas vezes, com pedidos jogados fora).", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Frotas", texto: "Duas leituras quase juntas do mesmo período (a manual e a automática, ou a nova tentativa de um pedido) não dão mais uma transação como removida na Vólus: a 2ª ausência só conta 10 minutos depois da 1ª.", link: "/painel/combustivel" },
+      { tipo: "correcao", area: "Importações", texto: "A atualização automática da Frota não relê um período nem recomeça o ciclo por cima de outra execução, a trava cobre a leitura inteira, a autenticação da Vólus é compartilhada pelos pedidos em paralelo e a contagem das removidas não lê mais a tabela inteira.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+    ],
+  },
+  {
+    versao: "1.258.0",
+    data: "2026-10-29",
+    titulo: "Frotas: a importação da Vólus igual à das outras importações",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação da Vólus mostra o andamento de cada período (lido, dividido, nova tentativa, erro) no mesmo quadro das outras importações e continua ao sair da tela.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Importações", texto: "O painel do canto inferior direito mostra também a Frota: a importação desta aba e a atualização automática da Vólus.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram há quanto tempo a Vólus foi lida e, para o administrador, o botão \"Importar agora\" — o mesmo canto da Execução.", link: "/painel/frotas" },
+    ],
+  },
+  {
+    versao: "1.257.0",
+    data: "2026-10-29",
+    titulo: "Frotas: combustível, manutenção e veículos com os dados da Vólus",
+    mudancas: [
+      { tipo: "novo", area: "Frotas", texto: "Módulo Frotas com o painel da frota: gasto total, combustível, manutenção, consumo médio (km/l pelo hodômetro), custo por km, gasto por mês e por veículo, demonstrativo por qualquer dimensão e os alertas (hodômetro que voltou, consumo e preço fora do padrão, abastecimentos próximos, litros acima do tanque, veículo inativo com gasto).", link: "/painel/frotas" },
+      { tipo: "novo", area: "Frotas", texto: "Telas Combustível e Manutenção: todos os abastecimentos e manutenções com os filtros do sistema, o total no rodapé, a exportação e o registro completo (veículo, posto ou oficina, itens, nota e empenho).", link: "/painel/combustivel" },
+      { tipo: "novo", area: "Frotas", texto: "Tela Veículos: o cadastro da frota (as placas entram sozinhas pela Vólus) com tipo, classificação, situação, origem (FIPE ou locação), tanque e unidade — edição, edição em massa, planilha e a ficha do veículo em PDF.", link: "/painel/veiculos" },
+      { tipo: "novo", area: "Importações", texto: "Integração com a Vólus em Configurações → Importações → Frotas: a credencial cifrada, testar a conexão, importar um ano, os contratos, as unidades ligadas ao cadastro, o histórico das leituras e a atualização automática que grava só o que mudou.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa acha os veículos da frota pela placa, marca ou modelo (prefixo \"veiculo:\") e abre a ficha.", link: "/painel/veiculos" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram os quatro principais com dois detalhes cada (os mesmos cartões do Dashboard do PCA) e os demais em \"Mais indicadores\"; os filtros ficam com nomes curtos, em ordem, e conectados entre si — o valor marcado que outro filtro zerou continua na lista para ser desmarcado.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Tabelas", texto: "No rodapé de todas as tabelas, exportar, ações, linhas por página e paginação ficam numa linha só; o que não cabe na tela rola de lado.", link: "/painel/mesa" },
     ],
   },
   {

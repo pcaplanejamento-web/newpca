@@ -6,7 +6,11 @@ import {
   ReceiptText,
   HandCoins,
   BanknoteArrowUp,
+  CarFront,
   ChartNoAxesCombined,
+  Fuel,
+  Gauge,
+  Truck,
   CaseSensitive,
   Redo2,
   RemoveFormatting,
@@ -431,5 +435,11 @@ export const IconLiquidacao = HandCoins;
 export const IconPagamento = BanknoteArrowUp;
 /** Execução da despesa (o dashboard de empenhos, liquidações e pagamentos). */
 export const IconExecucao = ChartNoAxesCombined;
+/** FROTAS (cartão Vólus): o painel da frota, os abastecimentos, as manutenções, os veículos e o hodômetro. */
+export const IconFrota = Truck;
+export const IconCombustivel = Fuel;
+export const IconManutencao = Wrench;
+export const IconVeiculo = CarFront;
+export const IconHodometro = Gauge;
 /** Uma VISÃO salva dos filtros (o conjunto de escolhas com nome). */
 export const IconVisao = Bookmark;

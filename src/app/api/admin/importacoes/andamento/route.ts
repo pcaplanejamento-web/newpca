@@ -1,5 +1,6 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { ok } from "@/lib/http";
+import { lerTipoImportacao } from "@/lib/empenho-cards-core";
 import { andamentoDasImportacoes } from "@/lib/importacoes-andamento";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
-  const pedido = new URL(req.url).searchParams.get("ultima");
-  const tipo = pedido === "empenhos" || pedido === "liquidacoes" || pedido === "pagamentos" ? pedido : undefined;
+  const tipo = lerTipoImportacao(new URL(req.url).searchParams.get("ultima"));
   const { lotes, ultima } = await andamentoDasImportacoes(tipo);
   return ok({ lotes, ultima, agora: new Date().toISOString() });
 }

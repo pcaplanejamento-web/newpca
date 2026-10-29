@@ -59,10 +59,17 @@ export const NOME_TIPO: Record<TipoCard, { titulo: string; um: string; varios: s
   liquidacoes: { titulo: "Liquidações", um: "liquidação", varios: "liquidações", masc: false },
   pagamentos: { titulo: "Pagamentos", um: "pagamento", varios: "pagamentos", masc: true },
 };
+/** O que aparece nas IMPORTAÇÕES (painel do canto, relógio das KPIs): os cards da Centi e a FROTA (Vólus). */
+export type TipoImportacao = TipoCard | "frotas";
+export const NOME_IMPORTACAO: Record<TipoImportacao, { titulo: string; um: string; varios: string; masc: boolean }> = {
+  ...NOME_TIPO,
+  frotas: { titulo: "Frotas (Vólus)", um: "leitura da frota", varios: "leituras da frota", masc: false },
+};
+export const lerTipoImportacao = (v: unknown): TipoImportacao | undefined => (v === "empenhos" || v === "liquidacoes" || v === "pagamentos" || v === "frotas" ? v : undefined);
 /** A TELA (permissão) de um card. */
 export const telaDoCard = (c: { tipo: TipoCard }): TipoCard => c.tipo;
 /** O endereço das IMPORTAÇÕES (Configurações → Importações — só o ADM): o tipo e, com `card`, o card aberto na sub-aba. */
-export const linkImportacoes = (tipo: TipoCard, card?: number, sub?: "importacao" | "vinculos" | "configuracao"): string =>
+export const linkImportacoes = (tipo: TipoImportacao, card?: number | null, sub?: "importacao" | "vinculos" | "configuracao"): string =>
   `/painel/configuracoes?aba=importacoes&tipo=${tipo}${card ? `&card=${card}${sub ? `&sub=${sub}` : ""}` : ""}`;
 
 export type CardEmpenho = {

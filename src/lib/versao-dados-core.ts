@@ -23,6 +23,8 @@ export const FORA_DOS_DADOS = [
   "feriado",
   "centi_api",
   "empenho_card",
+  "frota",
+  "veiculo",
 ] as const;
 
 /** A entidade da auditoria conta na versão `dados`? */

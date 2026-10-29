@@ -29,6 +29,8 @@ const ROTAS_CRON: Record<string, [string, string]> = {
   // A 2ª execução por minuto da importação automática (outro gatilho = outra invocação, com o PRÓPRIO limite de CPU), 30 s
   // depois da 1ª: dobra a vazão da leitura em fragmentos sem passar do limite de nenhuma execução.
   "0-59 * * * *": ["empenhos", "/api/integracoes/empenhos/cron"],
+  // A FROTA da Vólus: um período (contrato × tipo) por execução, pelo cursor mais atrasado.
+  "*/3 * * * *": ["frota", "/api/integracoes/frota/cron"],
 };
 
 /** As colunas do TERMO DE USO + APARELHOS lidas na mesma consulta da sessão. */

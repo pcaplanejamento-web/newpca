@@ -53,6 +53,7 @@ import { Button } from "./Button";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
+import { MaisIndicadores } from "./MaisIndicadores";
 import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./charts/Barras";
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
 import { TOPO_DAS_DATAS } from "./charts/serie-medidas";
@@ -66,18 +67,13 @@ import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconChevronLeft, IconClock, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
+import { IconChevronLeft, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
-import { BotaoAtualizar } from "./BotaoAtualizar";
-import { useImportacoesLocais } from "./ImportacoesAoVivo";
-import { consultarUltimaImportacao } from "@/lib/importacoes-ao-vivo-store";
+import { AtualizadoHa, ImportarAgora } from "./AtualizacaoKpi";
 import { toast } from "./Toast";
-import { useRouter } from "next/navigation";
 import { type ConfigImportacoes, lerRegraRemovidos, NOME_TIPO, type ResumoCard } from "@/lib/empenho-cards-core";
 import { anoMaisRecente, importarCards, prepararCards, resumoImportacao } from "@/lib/importar-cards";
-import { haQuanto } from "@/lib/acessos-core";
 import type { MetaExec } from "@/lib/execucao-dash-core";
-import { duracaoMotionMs } from "./Modal";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { coerceEstado, diferencas, ESTADO_VAZIO, type EstadoFiltros, paraGuardar, partesDefinidas, periodoEfetivo, voltarParte } from "@/lib/filtros-visao-core";
 import { OrigemDados } from "./OrigemDados";
@@ -121,15 +117,6 @@ type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 type RecorteOrigem = { recorte: string; sel: Selecao };
 /** A origem de um número; com `acumulado`, a do ponto do gráfico também oferece "Acumulado até aqui" (`noAcumulado` = abre nele). */
 type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem & { pontos: PontoDaSerie[]; ajustarY: boolean }; noAcumulado?: boolean };
-
-const CHAVE_MAIS = "execucao:mais-indicadores";
-const lerMais = () => {
-  try {
-    return localStorage.getItem(CHAVE_MAIS) === "1";
-  } catch {
-    return false;
-  }
-};
 
 const pctTexto = (p: number | null) => (p == null ? "—" : `${(p * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
 const plural = (n: number, um: string, varios: string) => `${num(n)} ${n === 1 ? um : varios}`;
@@ -198,18 +185,8 @@ export function DashboardExecucao({
   const setPeriodo = (p: Periodo) => setEstado((e) => ({ ...e, periodo: p }));
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
   const [gran, setGran] = useState<Granularidade>("dia");
-  const [mais, setMais] = useState(false);
-  /** A abertura terminou (só então os cartões podem passar da borda — a sombra, o realce). */
-  const [maisPronto, setMaisPronto] = useState(false);
-  const [animarMais, setAnimarMais] = useState(false);
   const [verDados, setVerDados] = useState(false);
   const [origem, setOrigem] = useState<Origem | null>(null);
-  useEffect(() => {
-    // A preferência guardada abre já pronta, sem animar na chegada.
-    const v = lerMais();
-    setMais(v);
-    setMaisPronto(v);
-  }, []);
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
   const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
@@ -468,7 +445,7 @@ export function DashboardExecucao({
         <KpiStat
           label="Saldo: empenhos"
           canto={<AtualizadoHa admin={admin} meta={base.meta.find((m) => m.tipo === "empenhos")} />}
-          acaoCanto={admin ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "empenhos")} /> : undefined}
+          acaoCanto={admin ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "empenhos")} executar={importarEtapa("empenhos")} /> : undefined}
           value={brl(empenhadoAnim)}
           completo
           cor={COR.empenhado}
@@ -480,7 +457,7 @@ export function DashboardExecucao({
         <KpiStat
           label="Saldo: liquidações"
           canto={<AtualizadoHa admin={admin && temLiq} meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
-          acaoCanto={admin && temLiq ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "liquidacoes")} /> : undefined}
+          acaoCanto={admin && temLiq ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "liquidacoes")} executar={importarEtapa("liquidacoes")} /> : undefined}
           value={temLiq ? brl(liquidadoAnim) : "—"}
           completo
           cor={COR.liquidado}
@@ -492,7 +469,7 @@ export function DashboardExecucao({
         <KpiStat
           label="Saldo: pagamentos"
           canto={<AtualizadoHa admin={admin && temPag} meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
-          acaoCanto={admin && temPag ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "pagamentos")} /> : undefined}
+          acaoCanto={admin && temPag ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "pagamentos")} executar={importarEtapa("pagamentos")} /> : undefined}
           value={temPag ? brl(pagoAnim) : "—"}
           completo
           cor={COR.pago}
@@ -502,16 +479,9 @@ export function DashboardExecucao({
           acao="ver os pagamentos"
         />
       </div>
-      {/* "Mais indicadores": abre e fecha pela ALTURA (grid-template-rows 0fr ↔ 1fr) — sempre montado, os de baixo deslizam
-          juntos e nada pisca; fechado = inerte (fora do Tab). O corte só durante a transição (as sombras não ficam presas). */}
-      <div
-        className={`grid ${animarMais ? "transition-[grid-template-rows,opacity,margin] duration-[calc(var(--motion-duration)*1.5)] ease-[var(--motion-ease)] motion-reduce:transition-none" : ""}`}
-        style={{ gridTemplateRows: mais ? "1fr" : "0fr", opacity: mais ? 1 : 0, marginTop: mais ? 0 : "calc(-1 * var(--gap-block))" }}
-        inert={!mais}
-        aria-hidden={!mais}
-        onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === "grid-template-rows" && setMaisPronto(mais)}
-      >
-        <div className={`min-h-0 ${mais && maisPronto ? "overflow-visible" : "overflow-hidden"}`}>
+      <MaisIndicadores
+        chave="execucao:mais-indicadores"
+        extras={
           <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
             <KpiStat
               label="Anulado: empenhos"
@@ -568,29 +538,8 @@ export function DashboardExecucao({
               acao="ver os pagamentos"
             />
           </div>
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-expanded={mais}
-        onClick={() => {
-          const novo = !mais;
-          try {
-            localStorage.setItem(CHAVE_MAIS, novo ? "1" : "0");
-          } catch {
-            /* sem armazenamento: vale só nesta visita */
-          }
-          // Sem movimento (sistema ou ADM) não há transição — nem o fim dela: fica pronto na hora.
-          const semTransicao = duracaoMotionMs() === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          setAnimarMais(!semTransicao);
-          setMaisPronto(semTransicao && novo);
-          setMais(novo);
-        }}
-        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)]"
-      >
-        {mais ? "Menos indicadores" : "Mais indicadores"}
-        <IconChevronDown className={`h-4 w-4 transition-transform ${mais ? "rotate-180" : ""}`} />
-      </button>
+        }
+      />
 
       {/* TODOS os filtros à vista, logo abaixo dos indicadores, no cartão padrão dos filtros: o Período primeiro e as dimensões em colunas. */}
       <section
@@ -1433,119 +1382,30 @@ function DemonstrativoExecucao({
   );
 }
 
-/**
- * IMPORTAR AGORA (só o ADM), no canto do indicador: importa os dados atualizados da etapa — todos os cards dela, cada um no
- * ano mais recente (o lote aberto do card é continuado), pelo MESMO executor do "Importar tudo" (`importarCards`). O
- * andamento aparece no painel do canto inferior direito e segue ao sair da tela; a queda pergunta aqui (fora da tela = não
- * grava). No fim, o resumo e a página relida (a versão nova traz os números).
- */
-function ImportarAgora({ meta }: { meta?: MetaExec }) {
-  const router = useRouter();
-  const { confirmar, confirmacao } = useConfirmacao();
-  const locais = useImportacoesLocais();
-  const [rodando, setRodando] = useState(false);
-  // O fim do intervalo mínimo destrava o botão sozinho (sem esperar a tela recarregar).
-  const [, setFimIntervalo] = useState(0);
-  const ateIntervalo = meta?.intervalo ? Date.parse(meta.intervalo.ate) : 0;
-  useEffect(() => {
-    const falta = ateIntervalo - Date.now();
-    if (!(falta > 0)) return;
-    const t = setTimeout(() => setFimIntervalo(Date.now()), falta + 500);
-    return () => clearTimeout(t);
-  }, [ateIntervalo]);
-  if (!meta?.cards) return null;
-  const tipo = meta.tipo;
-  const nome = NOME_TIPO[tipo].titulo;
-  // Travado com uma importação DESTE tipo lendo (no servidor — outra aba, a automática — ou nesta aba) ou dentro do
-  // INTERVALO MÍNIMO entre atualizações (Configurações → Importações): o toque mostra o motivo.
-  const lendo = meta.lendo > 0 || locais.some((i) => i.estado === "rodando" && i.tipo === tipo);
-  const intervalo = meta.intervalo && ateIntervalo > Date.now() ? meta.intervalo.texto : null;
-  const aviso = lendo ? `Há uma importação de ${nome.toLowerCase()} em andamento — o andamento está no canto inferior direito.` : (intervalo ?? undefined);
-  async function importar() {
-    if (rodando) return;
-    setRodando(true);
-    try {
-      const [rc, rf] = await Promise.all([fetch("/api/admin/importacoes", { cache: "no-store" }), fetch("/api/admin/importacoes/config", { cache: "no-store" })]);
-      const jc = (await rc.json().catch(() => ({}))) as { ok?: boolean; error?: string; cards?: ResumoCard[] };
-      const jf = (await rf.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes };
-      if (!rc.ok || !jc.ok || !jc.cards) throw new Error(jc.error ?? "Não foi possível ler os cards de importação.");
-      const cards = jc.cards.filter((c) => c.tipo === tipo);
-      if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito — pode sair desta tela.`, confirmar: "Importar" })))
-        return;
-      const anoAtual = new Date().getFullYear();
-      const linhas = await prepararCards(cards, (c) => anoMaisRecente(c, anoAtual), anoAtual);
-      await importarCards(linhas, {
-        regra: lerRegraRemovidos(jf.config?.removidos),
-        // O "Parar" do painel do canto interrompe o card e a série; a QUEDA é perguntada no painel (sobrevive a sair da tela).
-        parar: () => false,
-        onLinha: (id, mudou) => {
-          const l = linhas.find((x) => x.card.id === id);
-          if (l) Object.assign(l, mudou);
-        },
-      });
-      const r = resumoImportacao(linhas);
-      (r.tom === "erro" ? toast.error : r.tom === "aviso" ? toast.warning : toast.success)(`${nome}: ${r.texto}.`);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao importar.");
-    } finally {
-      setRodando(false);
-    }
-  }
-  return (
-    <>
-      <BotaoAtualizar
-        discreto
-        ativo={rodando}
-        aviso={aviso}
-        rotulo={`Importar agora os dados atualizados de ${nome.toLowerCase()}`}
-        dica={`Importar agora: ${nome.toLowerCase()}`}
-        detalhe={`Importando ${nome.toLowerCase()} — veja o andamento no canto inferior direito`}
-        onClick={() => void importar()}
-      />
-      {confirmacao}
-    </>
-  );
-}
-
-/**
- * DISCRETO, no canto do indicador: há quanto tempo a etapa foi atualizada (a última importação concluída de qualquer card
- * dela — `MetaExec.atualizado`); com uma importação lendo agora, o ponto que pulsa. O relógio anda a cada 30 s.
- */
-function AtualizadoHa({ meta, admin }: { meta?: MetaExec; admin: boolean }) {
-  const [agora, setAgora] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setAgora(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-  if (!meta?.cards) return null;
-  const lendo = meta.lendo > 0;
-  const quando = meta.atualizado ? haQuanto(meta.atualizado, agora) : "sem importação";
-  const dica = `${meta.atualizado ? `Última importação concluída: ${dataHoraBR(meta.atualizado)}` : "Nenhuma importação concluída"}${lendo ? " · importando agora" : ""}`;
-  const conteudo = (
-    <>
-      {lendo ? <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" /> : <IconClock aria-hidden className="h-3 w-3" />}
-      <span className="sr-only">Atualizado </span>
-      {quando}
-    </>
-  );
-  const classe = "inline-flex items-center gap-1 text-[11px] leading-none text-faint tabular-nums";
-  // O ADM toca no relógio e a ÚLTIMA importação da etapa abre no painel do canto inferior direito (o detalhe completo).
-  if (admin)
-    return (
-      <button
-        type="button"
-        onClick={() => consultarUltimaImportacao(meta.tipo)}
-        title={`${dica} — ver a última importação`}
-        className={`${classe} relative h-7 rounded-control px-1 transition-colors after:absolute after:-inset-2 hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-6 lg:after:hidden pointer-coarse:after:block`}
-      >
-        {conteudo}
-        <span className="sr-only"> — ver a última importação</span>
-      </button>
-    );
-  return (
-    <span className={classe} title={dica}>
-      {conteudo}
-    </span>
-  );
+/** O "Importar agora" da Execução: todos os cards da etapa, cada um no ano mais recente (o lote aberto do card é continuado),
+ * pelo MESMO executor do "Importar tudo" (`importarCards`); a queda é perguntada no painel do canto. */
+function importarEtapa(tipo: MetaExec["tipo"]) {
+  return async (confirmar: Parameters<Parameters<typeof ImportarAgora>[0]["executar"]>[0]) => {
+    const nome = NOME_TIPO[tipo].titulo;
+    const [rc, rf] = await Promise.all([fetch("/api/admin/importacoes", { cache: "no-store" }), fetch("/api/admin/importacoes/config", { cache: "no-store" })]);
+    const jc = (await rc.json().catch(() => ({}))) as { ok?: boolean; error?: string; cards?: ResumoCard[] };
+    const jf = (await rf.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes };
+    if (!rc.ok || !jc.ok || !jc.cards) throw new Error(jc.error ?? "Não foi possível ler os cards de importação.");
+    const cards = jc.cards.filter((c) => c.tipo === tipo);
+    if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito — pode sair desta tela.`, confirmar: "Importar" })))
+      return;
+    const anoAtual = new Date().getFullYear();
+    const linhas = await prepararCards(cards, (c) => anoMaisRecente(c, anoAtual), anoAtual);
+    await importarCards(linhas, {
+      regra: lerRegraRemovidos(jf.config?.removidos),
+      // O "Parar" do painel do canto interrompe o card e a série; a QUEDA é perguntada no painel (sobrevive a sair da tela).
+      parar: () => false,
+      onLinha: (id, mudou) => {
+        const l = linhas.find((x) => x.card.id === id);
+        if (l) Object.assign(l, mudou);
+      },
+    });
+    const r = resumoImportacao(linhas);
+    (r.tom === "erro" ? toast.error : r.tom === "aviso" ? toast.warning : toast.success)(`${nome}: ${r.texto}.`);
+  };
 }

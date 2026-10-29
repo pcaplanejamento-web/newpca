@@ -47,6 +47,15 @@ import { consultaIndiceExecucao } from "./pesquisa-execucao-sql";
 import { casaTermos } from "./pesquisa-sql";
 import { criarMemoVersao } from "./memo-versao-core";
 import { pastaVisivel, quadroVisivel } from "./tarefas-sql";
+import { escopoDaFrota, veiculosDoEscopo } from "./frota";
+
+const padroesSemAcento = (q: string) =>
+  q
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
 import { buscarNoCalendario } from "./tarefas";
 import { escopoAtivo, quadrosDoCalendario } from "./tarefas-dados";
 
@@ -271,6 +280,24 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       rotulo: r.titulo,
       detalhe: [dataBR(r.data), r.hora ?? "", r.local ?? ""].filter(Boolean).join(" · "),
       href: linkEvento(r.data, r.chave),
+    }));
+  }
+
+  if (tipo === "veiculo") {
+    // Os VEÍCULOS do escopo da frota (a placa sem traço; marca e modelo pelo texto).
+    if (!podeTela(a, "veiculos").visualizar && !podeTela(a, "frotas").visualizar) return null;
+    const placa = q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const vs = await veiculosDoEscopo(await escopoDaFrota());
+    const termos = padroesSemAcento(q);
+    const achados = vs
+      .filter((v) => (placa.length >= 3 && v.placa.includes(placa)) || termos.every((t) => padroesSemAcento(`${v.placa} ${v.marca ?? ""} ${v.modelo ?? ""}`).join(" ").includes(t)))
+      .slice(0, LIM);
+    const tela = podeTela(a, "veiculos").visualizar ? "/painel/veiculos" : "/painel/frotas";
+    return achados.map((v, i) => ({
+      id: i + 1,
+      rotulo: v.placa,
+      detalhe: [[v.marca, v.modelo].filter(Boolean).join(" "), v.ano, v.situacao === "inativo" ? "inativo" : ""].filter(Boolean).join(" · ") || "Veículo",
+      href: `${tela}?abrir=${encodeURIComponent(v.placa)}`,
     }));
   }
 
