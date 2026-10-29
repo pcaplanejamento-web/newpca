@@ -5,6 +5,7 @@ import { frotaContratos, frotaCursores, frotaEstado, frotaLeituras, frotaTransac
 import { type EscopoEmpenhos, escopoVazio } from "./empenhos-tela-core.ts";
 import { doEscopo } from "./empenhos-tela-sql.ts";
 import { assinaturaLinha, COLUNAS_TRANSACAO, chaveTexto, type LinhaTransacao, placaValida, type TipoTransacao, tuplaDaLinha } from "./volus-core.ts";
+import { MSG_INTERROMPIDA } from "./frota-config-core.ts";
 
 /**
  * FROTAS — os comandos da gravação como BUILDERS do Drizzle (testados pelo driver D1 REAL sobre `node:sqlite`, dentro de
@@ -400,7 +401,9 @@ export function comandoTravarCursor(
 ) {
   return db
     .update(frotaCursores)
-    .set({ travaAte, ...(t.novoCiclo ? { cicloInicio: t.inicio, proximo: t.inicio, cicloIniciadoEm: agoraIso } : {}) })
+    // A falha e a marca de INTERROMPIDA são gravadas ANTES da leitura: a execução cortada (limite de CPU, exceção) fica
+    // contada — o fim da leitura (ok ou erro) as substitui.
+    .set({ travaAte, falhas: sql`${frotaCursores.falhas} + 1`, ultimoErro: MSG_INTERROMPIDA, ...(t.novoCiclo ? { cicloInicio: t.inicio, proximo: t.inicio, cicloIniciadoEm: agoraIso } : {}) })
     .where(
       and(
         eq(frotaCursores.contrato, t.contrato),

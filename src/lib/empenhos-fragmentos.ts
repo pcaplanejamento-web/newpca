@@ -18,7 +18,21 @@ import { type AndamentoLote, fracaoDoAno, type LoteCenti, type PassoLote, type P
 import { comandoPaginaIgual, comandoRecontarLote, consultaBytesDoAno, consultaPaginaAnterior, consultaUltimoPasso, type LinhaPasso } from "./empenhos-sql";
 import { comandosFechoPeriodoLiquidacoes } from "./liquidacoes-sql";
 import { paraPasso } from "./empenhos";
-import { BYTES_CAPTURA, corteUtf8, type FormaResposta, hexDe, JANELA, janelaDosPedacos, MAX_REINICIOS, processarJanela, semRepetidos, TAM_CAUDA } from "./fragmentos-centi-core";
+import {
+  BYTES_CAPTURA,
+  capturaDaTentativa,
+  corteUtf8,
+  type FormaResposta,
+  hexDe,
+  JANELA,
+  janelaDaTentativa,
+  janelaDosPedacos,
+  MAX_REINICIOS,
+  MAX_TENTATIVAS_LEITURA,
+  processarJanela,
+  semRepetidos,
+  TAM_CAUDA,
+} from "./fragmentos-centi-core";
 import type { ResumoPagina } from "./importacao-partes-core";
 
 /**
@@ -49,7 +63,6 @@ export async function leituraDoLote(loteId: number) {
       comprimento: centiLeituras.comprimento,
       capturado: centiLeituras.capturado,
       pos: centiLeituras.pos,
-      criadoEm: centiLeituras.criadoEm,
       passoId: centiLeituras.passoId,
     })
     .from(centiLeituras)
@@ -72,11 +85,13 @@ export async function andamentoDoLote(lote: LoteCenti & { cardId: number | null 
   };
 }
 
-/** Reserva a leitura por 90 s (duas execuções nunca avançam a mesma); null = outra execução está nela. */
+/** Reserva a leitura por 90 s (duas execuções nunca avançam a mesma) e CONTA a tentativa ANTES do trabalho (a execução
+ * cortada pelo limite de CPU não grava nada — a tentativa contada é o rastro dela; todo avanço zera); null = outra
+ * execução está nela. */
 async function reservar(id: number): Promise<Leitura | null> {
   const [l] = await getDb()
     .update(centiLeituras)
-    .set({ reservadoAte: sql`datetime('now', '+90 seconds')` })
+    .set({ reservadoAte: sql`datetime('now', '+90 seconds')`, tentativas: sql`${centiLeituras.tentativas} + 1` })
     .where(and(eq(centiLeituras.id, id), sql`(${centiLeituras.reservadoAte} IS NULL OR ${centiLeituras.reservadoAte} < datetime('now'))`))
     .returning();
   return l ?? null;
@@ -194,6 +209,15 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
 export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta: { id: number }): Promise<Avanco> {
   const l = await reservar(aberta.id);
   if (!l) return { situacao: "leitura em andamento em outra execução", ocupada: true };
+  // Execuções seguidas sem avançar (cortadas pelo limite de processamento, a Centi ou o banco falhando): a leitura é
+  // descartada com o ERRO no passo — a espera e a desistência de sempre decidem o resto (nunca um laço eterno).
+  // A resposta "grande demais" para o limite de processamento DIVIDE o período (a de um dia encerra o lote com o motivo).
+  if (l.tentativas > MAX_TENTATIVAS_LEITURA) {
+    const motivo = `Página grande demais para processar no servidor: ${MAX_TENTATIVAS_LEITURA} execuções seguidas sem avançar.`;
+    const ped = prepararPedido(card, lote, periodoDe(l), l.pagina);
+    const resultado = await registrarFalha(card, lote, periodoDe(l), ped, { mensagem: motivo, status: l.status, bytes: l.bytesCapturados, ms: l.ms }, descartarLeitura(l, motivo));
+    return { resultado, situacao: "leitura descartada (sem avançar)" };
+  }
   let ped: Pedido;
   try {
     ped = prepararPedido(card, lote, periodoDe(l), l.pagina);
@@ -222,7 +246,7 @@ async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Ped
   const t0 = Date.now();
   let r: Awaited<ReturnType<typeof baixarFaixa>>;
   try {
-    r = await baixarFaixa(card, ped, de, l.bytesCapturados + BYTES_CAPTURA);
+    r = await baixarFaixa(card, ped, de, l.bytesCapturados + capturaDaTentativa(l.tentativas));
   } catch (e) {
     const mensagem = e instanceof Error ? e.message : "Não foi possível ler a página.";
     return { resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: null, bytes: l.bytesCapturados, ms: Date.now() - t0 }, [apagar(l.id)]), situacao: "erro" };
@@ -240,7 +264,7 @@ async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Ped
       db.delete(centiBrutos).where(eq(centiBrutos.leituraId, l.id)),
       db
         .update(centiLeituras)
-        .set({ bytesCapturados: 0, charsCapturados: 0, cauda: null, comprimento: null, capturado: 0, reinicios: l.reinicios + 1, reservadoAte: null })
+        .set({ bytesCapturados: 0, charsCapturados: 0, cauda: null, comprimento: null, capturado: 0, reinicios: l.reinicios + 1, reservadoAte: null, tentativas: 0 })
         .where(eq(centiLeituras.id, l.id)),
     ] as never);
     return { situacao: "a Centi mudou a resposta — a captura recomeça" };
@@ -262,6 +286,7 @@ async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Ped
         capturado: r.terminou ? 1 : 0,
         ms: (l.ms ?? 0) + (Date.now() - t0),
         reservadoAte: null,
+        tentativas: 0,
       })
       .where(eq(centiLeituras.id, l.id)),
   ] as never);
@@ -270,11 +295,13 @@ async function capturar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Ped
 
 async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pedido): Promise<Avanco> {
   const db = getDb();
+  // A janela ENCOLHE a cada execução que não avançou: o trecho pesado demais para o limite de CPU passa em pedaços menores.
+  const janela = janelaDaTentativa(l.tentativas);
   const pedacos = await db
     .select({ ini: centiBrutos.ini, texto: sql<string>`substr(${centiBrutos.texto}, max(1, ${l.pos} - ${centiBrutos.ini} + 1), ${JANELA})` })
     .from(centiBrutos)
-    .where(and(eq(centiBrutos.leituraId, l.id), lt(centiBrutos.ini, l.pos + JANELA), gt(sql`${centiBrutos.ini} + ${centiBrutos.chars}`, l.pos)));
-  const bruto = janelaDosPedacos(l.pos, JANELA, pedacos);
+    .where(and(eq(centiBrutos.leituraId, l.id), lt(centiBrutos.ini, l.pos + janela), gt(sql`${centiBrutos.ini} + ${centiBrutos.chars}`, l.pos)));
+  const bruto = janelaDosPedacos(l.pos, janela, pedacos);
   const r = processarJanela({ pos: l.pos, tamanho: l.charsCapturados, forma: (l.forma as FormaResposta | null) ?? null, resto: l.resto }, bruto);
   const falhar = async (mensagem: string) => ({
     resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: l.status, bytes: l.bytesCapturados, ms: l.ms }, descartarLeitura(l, mensagem)),
@@ -310,13 +337,13 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
   }
   if (!lida || !lida.linhas.length) {
     // Nenhum registro terminou nesta janela (ou só recusados/repetidos): só avança — e conta o que veio.
-    await db.update(centiLeituras).set({ ...estado, ...contas, reservadoAte: null }).where(eq(centiLeituras.id, l.id));
+    await db.update(centiLeituras).set({ ...estado, ...contas, reservadoAte: null, tentativas: 0 }).where(eq(centiLeituras.id, l.id));
     return { situacao: `processando (${Math.round((100 * r.estado.pos) / Math.max(1, l.charsCapturados))}%)` };
   }
   const passoNovo = sql<number>`(SELECT MAX(${centiLotePassos.id}) FROM ${centiLotePassos} WHERE ${centiLotePassos.loteId} = ${lote.id})`;
   const avancar = db
     .update(centiLeituras)
-    .set({ ...estado, ...contas, parte: l.parte + 1, passoId: l.passoId ?? passoNovo, reservadoAte: null })
+    .set({ ...estado, ...contas, parte: l.parte + 1, passoId: l.passoId ?? passoNovo, reservadoAte: null, tentativas: 0 })
     .where(eq(centiLeituras.id, l.id));
   await gravarParte(card, lote, periodo, ped, { parte: l.parte, ultima: false, passo: l.passoId, linhas: lida.linhas, resumo: null }, [avancar]);
   return { situacao: `processando (${Math.round((100 * r.estado.pos) / Math.max(1, l.charsCapturados))}%)` };

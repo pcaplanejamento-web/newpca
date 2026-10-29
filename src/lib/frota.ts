@@ -169,10 +169,17 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
   const visto = cursores.find((k) => k.contrato === t.contrato && k.tipo === t.tipo);
   const travou = await comandoTravarCursor(db, t, visto, iso, trava);
   if (!travou.length) return "Outra execução está lendo este contrato.";
-  const passo = travou[0].passo;
-  const r = await lerPeriodo(cfg, { contrato: t.contrato, tipo: t.tipo as TipoTransacao, inicio: t.inicio, fim: t.fim, origem: "auto", por: "Atualização automática" });
   const dias = diasEntre(t.inicio, t.fim);
+  // Depois de execuções INTERROMPIDAS, o período já veio encolhido (`passoEfetivo`): o passo gravado parte dele.
+  const passo = Math.min(travou[0].passo, dias);
   const onde = and(eq(frotaCursores.contrato, t.contrato), eq(frotaCursores.tipo, t.tipo));
+  let r: Awaited<ReturnType<typeof lerPeriodo>>;
+  try {
+    r = await lerPeriodo(cfg, { contrato: t.contrato, tipo: t.tipo as TipoTransacao, inicio: t.inicio, fim: t.fim, origem: "auto", por: "Atualização automática" });
+  } catch (e) {
+    // Uma exceção (o banco, um registro fora do esperado) segue o caminho do ERRO: solta a trava, espera e diz o motivo.
+    r = { estado: "erro", erro: `Falha na leitura: ${(e as Error)?.message ?? String(e)}`, transitorio: true, status: 0, lento: false };
+  }
   if (r.estado === "ok") {
     const proximo = avancarCursor(t.fim, agoraBrasilia(agora).dia);
     const terminou = proximo === null;
@@ -193,11 +200,13 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
   if (r.estado === "dividir") {
     await db
       .update(frotaCursores)
-      .set({ travaAte: null, passoDias: novoPasso(passo, dias, { dividir: r.partes }, MAX_BYTES_EXTRATO) })
+      // A Vólus respondeu (só grande demais): não é falha — a contada na trava sai.
+      .set({ travaAte: null, falhas: 0, ultimoErro: null, passoDias: novoPasso(passo, dias, { dividir: r.partes }, MAX_BYTES_EXTRATO) })
       .where(onde);
     return `Período grande demais (${t.contrato} ${t.tipo}); o passo diminui.`;
   }
-  const falhas = travou[0].falhas + 1;
+  // A falha já foi contada na TRAVA (antes da leitura).
+  const falhas = travou[0].falhas;
   const espera = new Date(agora.getTime() + esperaDaFalha(falhas, r.transitorio) * 60_000).toISOString();
   // A Vólus não respondeu a tempo: o MESMO período falharia de novo — a próxima tentativa pede a metade dos dias.
   await db

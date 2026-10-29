@@ -2382,6 +2382,8 @@ export const centiLeituras = sqliteTable(
     vistas: text("vistas").notNull().default(""),
     /** SHA-256 da resposta (só quando veio inteira no 1º pedido — migração `0163`), levada ao passo final. */
     assinatura: text("assinatura"),
+    /** Execuções que pegaram a leitura sem avançar (migração `0170` — a cortada pelo limite de CPU conta; o avanço zera). */
+    tentativas: integer("tentativas").notNull().default(0),
   },
   (t) => [index("centi_leituras_lote_idx").on(t.loteId)],
 );
@@ -2879,6 +2881,16 @@ export const frotaCursores = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.contrato, t.tipo] })],
 );
+
+/** A SITUAÇÃO de cada importação AUTOMÁTICA (migração `0170`): `centi:<card>`, `frota:<contrato>:<tipo>` e os gerais —
+ * `desde` = quando ela entrou nesta situação; `em` = a última execução que a confirmou. */
+export const importacoesCron = sqliteTable("importacoes_cron", {
+  chave: text("chave").primaryKey(),
+  situacao: text("situacao").notNull(),
+  erro: integer("erro").notNull().default(0),
+  em: text("em").notNull(),
+  desde: text("desde").notNull(),
+});
 
 /** O ESTADO da frota (uma linha): a VERSÃO dos dados — sobe a cada gravação que escreveu algo e a cada vínculo/cadastro. */
 export const frotaEstado = sqliteTable("frota_estado", {

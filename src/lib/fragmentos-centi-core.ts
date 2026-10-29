@@ -13,6 +13,11 @@
 
 /** Caracteres de UMA janela (~1–3 ms de CPU para ler, consertar e normalizar; ~6 ms no pior caso, com o JIT frio — medido). */
 export const JANELA = 80_000;
+/** Execuções seguidas que pegaram a leitura SEM avançar (a cortada pelo limite de CPU do Worker não grava nada — só a
+ * tentativa contada antes do trabalho) até a leitura ser descartada com o erro (a espera e a desistência de sempre). */
+export const MAX_TENTATIVAS_LEITURA = 6;
+/** A janela da tentativa: a cada execução que não avançou, a METADE (até 1/8) — o trecho pesado demais encolhe até caber. */
+export const janelaDaTentativa = (tentativa: number): number => JANELA >> Math.min(Math.max(0, tentativa - 1), 3);
 /** Teto do pedaço de registro carregado entre as janelas (um registro maior que isso não é da Centi). */
 export const MAX_RESTO = 1_000_000;
 
@@ -131,6 +136,8 @@ export function semRepetidos<L extends { chave: string }>(vistas: string, linhas
 
 /** Bytes capturados por execução. */
 export const BYTES_CAPTURA = 1_000_000;
+/** O fragmento da tentativa (a mesma régua da janela: a metade a cada execução que não avançou, até 1/8). */
+export const capturaDaTentativa = (tentativa: number): number => BYTES_CAPTURA >> Math.min(Math.max(0, tentativa - 1), 3);
 /** Bytes da cauda conferida entre as execuções. */
 export const TAM_CAUDA = 32;
 /** Recomeços da captura (a Centi mudando a resposta no meio) antes de desistir da página. */
