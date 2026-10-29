@@ -26,7 +26,7 @@ import {
   rotuloPeriodo,
   usaPeriodo,
 } from "./empenhos-core";
-import { avancarLeitura, iniciarPaginaAuto, leituraDoLote } from "./empenhos-fragmentos";
+import { avancarLeitura, descartarLeitura, iniciarPaginaAuto, leituraDoLote } from "./empenhos-fragmentos";
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, fecharParcial, PedidoInvalido, type ResultadoPagina } from "./empenhos-importacao";
 import { comandoConduzir, comandoSoltarAuto, comandosFecharLote, comandoTravarAuto } from "./empenhos-sql";
 import { listarFeriados } from "./feriados";
@@ -63,7 +63,10 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
   // A FILA ÚNICA: empenhos → liquidações → pagamentos (a unidade das liquidações e dos pagamentos vem do empenho); UMA
   // tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira) — o 1º card que trabalhar
   // encerra a execução; quem só espera (fora da hora, depois de um erro) passa a vez ao seguinte.
-  for (const card of cards) {
+  // RODÍZIO: a fila começa num card diferente a cada meio minuto — uma leitura longa (horas num dia pesado) nunca deixa os
+  // outros cards sem a vez.
+  const ini = Math.floor(agora.getTime() / 30_000) % cards.length;
+  for (const card of [...cards.slice(ini), ...cards.slice(0, ini)]) {
     try {
       const u = await umCard(card, cfg, instante);
       r.push({ card: card.id, situacao: u.situacao });
@@ -75,6 +78,8 @@ export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card:
       console.error(`[cron empenhos] card ${card.id}:`, (e as Error).message);
       r.push({ card: card.id, situacao: `erro: ${(e as Error).message}` });
       await registrarLeituraCard(card.id, "falhou", card.ultimaContagem ?? 0, card.ultimoTotal).catch(() => undefined);
+      // Uma tarefa pesada por execução: a que falhou já gastou a vez (o limite de CPU vale para a execução inteira).
+      break;
     }
   }
   return r;
@@ -102,6 +107,8 @@ export async function encerrarLotesAuto(
 }
 
 type Feito = { situacao: string; trabalhou: boolean };
+/** A leitura fragmentada parada há mais que isto (a Centi ou o banco falhando sem parar) é descartada e pedida de novo. */
+const HORAS_LEITURA = 3;
 
 
 const modoDoCard = (card: CardEmpenho): ModoLote => (card.tipo === "empenhos" ? "dados" : card.tipo);
@@ -145,8 +152,21 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
     const aberta = await leituraDoLote(lote.id);
     if (aberta) {
       pedidoAtual = { periodo: { inicio: aberta.inicio, fim: aberta.fim }, pagina: aberta.pagina };
+      // A leitura parada há horas (a Centi ou o banco falhando sem parar) é descartada: a página é pedida de novo.
+      if (agora.ms - Date.parse(`${aberta.criadoEm.replace(" ", "T")}Z`) > HORAS_LEITURA * 3_600_000) {
+        await db.batch([...descartarLeitura(aberta, `parada há mais de ${HORAS_LEITURA} h — a página será pedida de novo.`)] as never);
+        return { situacao: "leitura parada descartada", trabalhou: true };
+      }
+      // A MESMA espera e desistência dos erros da página: a falha que se repete na leitura não prende o lote para sempre.
+      const erro = esperaDoErro(await passosDaRetomada(lote.id), pedidoAtual, agora.ms);
+      if (erro.desistir) {
+        await db.batch(descartarLeitura(aberta, "erros seguidos") as never);
+        await fecharLoteEmpenhos(card, lote, "falhou", `${rotuloPeriodo(pedidoAtual.periodo)}, página ${pedidoAtual.pagina}: ${MAX_ERROS_AUTO} erros seguidos na leitura em mais de ${MINUTOS_DESISTIR_AUTO} minutos — a atualização automática desistiu.`);
+        return { situacao: "falhou (erros seguidos na leitura)", trabalhou: true };
+      }
+      if (erro.esperar) return { situacao: "esperando depois de um erro na leitura", trabalhou: false };
       const a = await avancarLeitura(card, lote, aberta);
-      return { situacao: (await tratarErro(card, lote, a.resultado)) ?? a.situacao, trabalhou: true };
+      return { situacao: (await tratarErro(card, lote, a.resultado)) ?? a.situacao, trabalhou: !a.ocupada };
     }
     // As páginas IDÊNTICAS à última volta são LEVES (nada é lido nem gravado): a execução segue com a próxima enquanto cabe
     // um pulo inteiro no ORÇAMENTO de consultas ao D1 (`cabeOutroPulo`); a 1ª página com mudança encerra a execução.

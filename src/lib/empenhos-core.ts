@@ -579,19 +579,29 @@ export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boole
   const emCurso = periodoEmCurso(passos, paginas);
   if (emCurso) return emCurso;
   const lidos = periodosLidos(passos);
-  const lidosSet = new Set(lidos.map(chaveP));
+  const lacunas = lacunasDoAno(ano, lidos);
   const divididos = new Set(passos.filter((p) => p.estado === "dividido").map(chaveP));
+  // O que ainda falta DENTRO de um período (as lacunas recortadas a ele).
+  const faltaEm = (p: Periodo) =>
+    lacunas.filter((l) => l.fim >= p.inicio && l.inicio <= p.fim).map((l) => ({ inicio: l.inicio > p.inicio ? l.inicio : p.inicio, fim: l.fim < p.fim ? l.fim : p.fim }));
   const abrir = (p: Periodo): Periodo | null => {
-    if (lidosSet.has(chaveP(p))) return null;
+    const falta = faltaEm(p);
+    if (!falta.length) return null;
     const metades = divididos.has(chaveP(p)) ? dividirPeriodo(p) : null;
-    if (!metades) return p;
-    for (const m of metades) {
-      const r = abrir(m);
-      if (r) return r;
+    if (metades) {
+      for (const m of metades) {
+        const r = abrir(m);
+        if (r) return r;
+      }
+      return null;
     }
-    return null;
+    // Lido em parte (por outra leitura — a da tela): só o que falta nele.
+    return falta.length === 1 && chaveP(falta[0]) === chaveP(p) ? p : abrir(falta[0]);
   };
-  for (const p of periodosAPedir(ano, lidos, comPeriodo, undefined, porMes)) {
+  // Na leitura semana a semana, a GRADE FIXA das semanas do ano: depois de ler 01/01 (de um 01–07 dividido), o próximo é
+  // 02/01 pelas metades já divididas — nunca um "02–07" novo, que se dividiria de novo.
+  const base = comPeriodo && !porMes ? emSemanas(anoInteiro(ano)) : periodosAPedir(ano, lidos, comPeriodo, undefined, porMes);
+  for (const p of base) {
     const r = abrir(p);
     if (r) return { periodo: r, pagina: 1 };
   }
@@ -671,6 +681,9 @@ export function fracaoDoAno(ano: number, passos: PassoMin[]): number {
  * sendo lida em fragmentos (capturada em bytes; processada em caracteres). */
 export type AndamentoLote = {
   fracao: number;
+  /** Os bytes já lidos neste lote e os da última importação promovida do ano (o esperado): com eles o andamento é pelos
+   * bytes — o dia pesado conta o que pesa. Sem a importação anterior, só os dias. */
+  bytes?: { lidos: number; esperados: number | null };
   leitura: { inicio: string; fim: string; bytes: number; comprimento: number | null; capturado: boolean; pos: number; chars: number } | null;
 };
 
@@ -683,7 +696,13 @@ export function fracaoDaLeitura(l: NonNullable<AndamentoLote["leitura"]>): numbe
 /** A fração acompanhada de fora: o ano lido + o período da resposta grande em leitura, na proporção do que já foi lido dele. */
 export function fracaoDoAndamento(ano: number, a: AndamentoLote): number {
   const extra = a.leitura ? (diasDoPeriodo(a.leitura) / diasDoPeriodo(periodoDoAno(ano))) * fracaoDaLeitura(a.leitura) : 0;
-  return Math.min(1, a.fracao + extra);
+  const dias = Math.min(1, a.fracao + extra);
+  const esperados = a.bytes?.esperados;
+  if (!esperados) return dias;
+  // Pelos bytes: os já lidos + a parte lida da resposta grande (o tamanho dela, ou o capturado até agora). Nunca 100% antes
+  // de concluir (o ano pode ter crescido desde a importação anterior).
+  const naLeitura = a.leitura ? (a.leitura.comprimento ?? a.leitura.bytes) * fracaoDaLeitura(a.leitura) : 0;
+  return Math.max(dias, Math.min(0.99, ((a.bytes?.lidos ?? 0) + naLeitura) / esperados));
 }
 
 /** O erro do índice ÚNICO — o Drizzle embrulha o erro do D1 (o texto fica em `cause`), como em `nomeDuplicado`. */

@@ -91,6 +91,11 @@ test("frota-config: o passo e a espera depois de uma falha", () => {
   assert.equal(novoPasso(7, 7, { bytes: 10_000 }, 200_000), 14, "sobrou muito: dobra");
   assert.equal(novoPasso(31, 31, { bytes: 10 }, 200_000), 31, "no máximo 31 dias");
   assert.equal(novoPasso(7, 7, { bytes: 150_000 }, 200_000), 7);
+  // A resposta LENTA não deixa o passo crescer; o tempo esgotado (ou 522/524) divide ao meio.
+  assert.equal(novoPasso(14, 14, { bytes: 1_000, ms: 20_000 }, 200_000), 14, "pequena mas lenta: não cresce");
+  assert.equal(novoPasso(14, 14, { bytes: 1_000, ms: 2_000 }, 200_000), 28, "pequena e rápida: dobra");
+  assert.equal(novoPasso(28, 24, { lento: true }, 200_000), 12, "não respondeu a tempo: metade dos dias");
+  assert.equal(novoPasso(1, 1, { lento: true }, 200_000), 1);
   assert.deepEqual([1, 2, 3, 6, 10].map((f) => esperaDaFalha(f, true)), [2, 4, 8, 60, 60]);
   assert.equal(esperaDaFalha(1, false), 360, "a falha permanente (credencial) espera 6 h");
   assert.equal(avancarCursor("2026-10-28", "2026-10-29"), "2026-10-29");

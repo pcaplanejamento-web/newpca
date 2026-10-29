@@ -120,3 +120,18 @@ test("frotaAoVivo: cursor travado = lendo; sem nada = null; leituras viram os pa
   assert.equal(fim?.estado, "promovido");
   assert.equal(fim?.fracao, 1);
 });
+
+test("frotaAoVivo: o passo de erro mantém o contrato no rótulo; Falhou vem do cursor em espera, não da última leitura", () => {
+  const agora = "2026-10-29T12:00:30.000Z";
+  const parado = { contrato: "000600000141", tipo: "manutencao", travaAte: null, cicloInicio: "2026-09-15", proximo: "2026-10-06" };
+  const erro = leitura({ id: 5, estado: "erro", erro: "A Vólus demorou demais para responder." });
+  // Só a última leitura com erro, sem cursor em espera (o tropeço já passou): não é falha.
+  const passou = frotaAoVivo([parado], [erro], agora);
+  assert.equal(passou?.estado, "promovido");
+  assert.match(passou?.passos[0].mensagem ?? "", /·/);
+  assert.equal(passou?.passos[0].erro, "A Vólus demorou demais para responder.");
+  // O cursor em espera depois do erro: Falhou, com o contrato na mensagem.
+  const espera = frotaAoVivo([{ ...parado, falhas: 2, esperaAte: "2026-10-29T12:10:00.000Z", ultimoErro: "tempo" }], [erro], agora);
+  assert.equal(espera?.estado, "falhou");
+  assert.match(espera?.mensagem ?? "", /000600/);
+});

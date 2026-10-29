@@ -146,15 +146,18 @@ export function AndamentoDoServidor({ lote: l }: { lote: LoteAoVivo }) {
   const restante = useEstimativa(l.fracao, lendo);
   const frota = l.cardId == null;
   const pag = (p: number, m?: string | null) => (frota ? (m ?? "") : l.orgaosCenti ? `órgão ${l.orgaosCenti[p - 1] ?? p}` : `página ${p}`);
+  // A última atividade (o lote anda a cada execução — o passo "Gravando…" guarda só quando começou).
+  const visto = lendo ? ` · ativo ${quando(l.vistoEm, agora)}` : "";
   return (
     <div className="@container space-y-3 text-[12.5px]">
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
           <span className="font-medium text-text">{lendo ? (l.doCron ? `Atualização automática lendo ${frota ? "a Vólus" : "a Centi"}` : `Importação manual de ${l.iniciadoPor}`) : (l.mensagem ?? "Terminou")}</span>
           <span className="text-muted tabular-nums">
-            {lendo ? textoPct(l.fracao) : textoPct(1, true)}
+            {lendo ? textoPct(l.fracao) : l.estado === "promovido" ? textoPct(1, true) : ""}
             {lendo && restante != null && ` · faltam ${textoDuracao(restante)}`}
             {` · começou ${quando(l.iniciadoEm, agora)}`}
+            {visto}
           </span>
         </div>
         {lendo && <Progress value={l.fracao * 100} label={`Ano lido: ${textoPct(l.fracao)}`} continuo />}
@@ -163,7 +166,7 @@ export function AndamentoDoServidor({ lote: l }: { lote: LoteAoVivo }) {
         {[
           ["Pedidos", num(l.pedidos)],
           ["Com erro", num(l.erros)],
-          ["Registros distintos", num(l.unicos)],
+          ["Registros", num(l.unicos)],
           ["Baixado", textoBytes(l.bytes)],
         ].map(([r, v]) => (
           <div key={r}>
@@ -192,15 +195,15 @@ export function AndamentoDoServidor({ lote: l }: { lote: LoteAoVivo }) {
                 <div className="flex items-center gap-2">
                   <IconeFase fase={fase} />
                   <span className="min-w-0 flex-1 truncate font-medium text-text tabular-nums">
-                    {rotuloPeriodo(p)} · {pag(p.pagina, p.estado === "erro" ? null : p.mensagem)}
+                    {rotuloPeriodo(p)} · {pag(p.pagina, frota || p.estado !== "erro" ? p.mensagem : null)}
                   </span>
-                  <span className="shrink-0 text-muted">{quando(p.em, agora)}</span>
+                  <span className="shrink-0 text-muted">{guardando ? `começou ${quando(p.em, agora)}` : quando(p.em, agora)}</span>
                 </div>
                 <p className={`pl-6 tabular-nums ${fase === "erro" ? "text-[var(--danger)]" : "text-muted"}`}>
                   {guardando
-                    ? "Gravando no banco…"
+                    ? `Gravando no banco… ${num(p.recebidos ?? 0)} registros até agora`
                     : fase === "erro"
-                      ? (p.mensagem ?? "Falhou")
+                      ? ((frota ? p.erro : p.mensagem) ?? "Falhou")
                       : fase === "dividido"
                         ? "Grande demais — dividido em períodos menores"
                         : `${num(p.recebidos)} registros · ${num(p.resNovos ?? 0)} novos, ${num(p.resAlterados ?? 0)} alterados, ${num(p.resIguais ?? 0)} iguais${p.bytes ? ` · ${textoBytes(p.bytes)}` : ""}${p.ms ? ` · ${textoDecorrido(p.ms)}` : ""}`}

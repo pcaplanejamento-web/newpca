@@ -832,6 +832,21 @@ export async function consultaBytesEsperados(db: Db, cardId: number, ano: number
   return r?.bytes != null ? Number(r.bytes) : null;
 }
 
+/**
+ * Os BYTES de uma importação inteira do ano: os da última promovida do card no ano (o esperado) — o andamento da que está
+ * lendo anda pelos bytes (um dia de 5 MB pesa o que pesa, não 1/365 do ano).
+ */
+export async function consultaBytesDoAno(db: Db, cardId: number, ano: number, modo: string): Promise<number | null> {
+  const [r] = await db
+    .select({ bytes: sql<number | null>`SUM(${centiLotePassos.bytes})` })
+    .from(centiLotePassos)
+    .where(
+      sql`${centiLotePassos.loteId} = (SELECT id FROM centi_lotes WHERE card_id = ${cardId} AND ano = ${ano} AND modo = ${modo} AND estado = 'promovido' ORDER BY id DESC LIMIT 1)
+        AND ${centiLotePassos.estado} = 'ok' AND ${centiLotePassos.bytes} > 0`,
+    );
+  return r?.bytes != null && Number(r.bytes) > 0 ? Number(r.bytes) : null;
+}
+
 /** Os lotes do PAINEL AO VIVO do ADM: os lendo e os que terminaram depois de `desde` (UTC "AAAA-MM-DD HH:MM:SS"). */
 export function consultaLotesAoVivo(db: Db, desde: string, limite = 30, parado = limiteParado()) {
   return db

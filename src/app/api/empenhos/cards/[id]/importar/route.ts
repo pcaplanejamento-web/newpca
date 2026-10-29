@@ -8,8 +8,8 @@ import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-ca
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
 import { anosDesatualizados, bytesEsperados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
-import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti, QUEM_AUTO } from "@/lib/empenhos-core";
-import { leituraDoLote } from "@/lib/empenhos-fragmentos";
+import { LEITOR_EMPENHOS, QUEM_AUTO } from "@/lib/empenhos-core";
+import { andamentoDoLote } from "@/lib/empenhos-fragmentos";
 import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
 import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
 import { comandoConduzir, comandoExcluirPassos, consultaAssinaturas, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
@@ -18,16 +18,6 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { getConfigImportacoes } from "@/lib/importacoes-config";
 
 export const dynamic = "force-dynamic";
-
-/** O andamento da importação em curso (a tela acompanha a da automática): o ano lido e a resposta grande em fragmentos. */
-async function andamentoDoLote(lote: LoteCenti): Promise<AndamentoLote> {
-  const l = await leituraDoLote(lote.id);
-  return {
-    fracao: fracaoDoAno(lote.ano, await listarPassos(lote.id)),
-    leitura: l ? { inicio: l.inicio, fim: l.fim, bytes: l.bytesCapturados, comprimento: l.comprimento, capturado: !!l.capturado, pos: l.pos, chars: l.charsCapturados } : null,
-  };
-}
-
 
 /** Os últimos lotes do card (o histórico da importação) + o que está lendo agora; com `?lote=`, os PASSOS daquele lote. */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -62,7 +52,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     lotes: await listarLotes(a.card.id),
     orgaosLiquidacao: cardPorOrgao(a.card.tipo) ? await orgaosLiquidacao() : null,
     emAndamento,
-    andamento: emAndamento ? await andamentoDoLote(emAndamento) : null,
+    andamento: emAndamento ? await andamentoDoLote({ ...emAndamento, cardId: a.card.id }, await listarPassos(emAndamento.id)) : null,
     desatualizados: await anosDesatualizados(a.card.id),
     leitor: LEITOR_EMPENHOS,
   });

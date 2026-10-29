@@ -70,3 +70,15 @@ test("atualização automática: o ano da vez — o nunca lido primeiro, depois 
   assert.equal(anoDaVez([2026, 2025], new Map([[2026, "2026-10-23 10:00:00"]])), 2025);
   assert.equal(anoDaVez([2026, 2025], new Map([[2026, "2026-10-23 10:00:00"], [2025, "2026-10-23 12:00:00"]])), 2026);
 });
+
+test("atualização automática: depois de ler o 1º dia de uma semana dividida, o próximo é o DIA seguinte — nunca um período novo que se divide de novo", () => {
+  const div = (inicio: string, fim: string): P => ({ inicio, fim, pagina: 1, estado: "dividido", fimPeriodo: false });
+  // A sequência real: 01–07, 01–04 e 01–02 divididos; 01/01 lido.
+  const passos = [div("2026-01-01", "2026-01-07"), div("2026-01-01", "2026-01-04"), div("2026-01-01", "2026-01-02"), ok("2026-01-01", "2026-01-01")];
+  assert.deepEqual(proximoPedido(2026, passos, true)?.periodo, { inicio: "2026-01-02", fim: "2026-01-02" });
+  // 02/01 lido: as metades já divididas seguem (03–04), depois 05–07.
+  assert.deepEqual(proximoPedido(2026, [...passos, ok("2026-01-02", "2026-01-02")], true)?.periodo, { inicio: "2026-01-03", fim: "2026-01-04" });
+  assert.deepEqual(proximoPedido(2026, [...passos, ok("2026-01-02", "2026-01-02"), ok("2026-01-03", "2026-01-04")], true)?.periodo, { inicio: "2026-01-05", fim: "2026-01-07" });
+  // Lido em parte por outro caminho (a tela leu 01–10): o resto da 2ª semana (11–14).
+  assert.deepEqual(proximoPedido(2026, [ok("2026-01-01", "2026-01-10")], true)?.periodo, { inicio: "2026-01-11", fim: "2026-01-14" });
+});

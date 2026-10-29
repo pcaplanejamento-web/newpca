@@ -55,7 +55,7 @@ export async function clienteDaConfig(cfg: ConfigFrota) {
 export type ResultadoLeitura =
   | { estado: "ok"; registros: number; novos: number; alterados: number; iguais: number; ausentes: number; removidos: number; fora: number; bytes: number; ms: number }
   | { estado: "dividir"; partes: number; bytes: number }
-  | { estado: "erro"; erro: string; transitorio: boolean; status: number };
+  | { estado: "erro"; erro: string; transitorio: boolean; status: number; lento: boolean };
 
 const carimbo = () => `${new Date().toISOString().slice(0, 23)}#${Math.random().toString(36).slice(2, 8)}`;
 
@@ -69,9 +69,11 @@ export async function lerPeriodo(
 ): Promise<ResultadoLeitura> {
   const db = getDb();
   const g: Gravacao = { tipo: p.tipo, contrato: p.contrato, inicio: p.inicio, fim: p.fim, carimbo: carimbo(), origem: p.origem, por: p.por, bytes: 0, ms: 0, fora: 0 };
-  const falha = async (erro: string, transitorio: boolean, status: number): Promise<ResultadoLeitura> => {
+  const t0 = Date.now();
+  const falha = async (erro: string, transitorio: boolean, status: number, lento = false): Promise<ResultadoLeitura> => {
+    if (!g.ms) g.ms = Date.now() - t0;
     await db.batch([comandoLeituraSemGravar(db, g, "erro", erro)] as never).catch(() => {});
-    return { estado: "erro", erro, transitorio, status };
+    return { estado: "erro", erro, transitorio, status, lento };
   };
   const c = await clienteDaConfig(cfg);
   if (!c.cliente) return falha(c.erro, false, 0);
@@ -88,7 +90,7 @@ export async function lerPeriodo(
     texto = r.texto;
   } catch (e) {
     const ev = e instanceof ErroVolus ? e : new ErroVolus("Falha ao ler a Vólus.", 0);
-    return falha(ev.message, ev.transitorio, ev.status);
+    return falha(ev.message, ev.transitorio, ev.status, ev.lento);
   }
   let json: unknown;
   try {
@@ -129,6 +131,15 @@ async function garantirCursores() {
   const vigentes = new Set(pares.map((x) => `${x.contrato}:${x.tipo}`));
   const todos = await db.select().from(frotaCursores).where(inArray(frotaCursores.contrato, cs.length ? cs.map((c) => c.codigo) : [""]));
   return todos.filter((k) => vigentes.has(`${k.contrato}:${k.tipo}`));
+}
+
+/** A automática está lendo este contrato × tipo AGORA (a trava do cursor no futuro)? A manual espera. */
+export async function cursorLendo(contrato: string, tipo: string): Promise<boolean> {
+  const [c] = await getDb()
+    .select({ travaAte: frotaCursores.travaAte })
+    .from(frotaCursores)
+    .where(and(eq(frotaCursores.contrato, contrato), eq(frotaCursores.tipo, tipo)));
+  return !!c?.travaAte && c.travaAte > new Date().toISOString();
 }
 
 /** A trava de um cursor durante a leitura: cobre o pior caso (autenticar 15 s + extrato 25 s, de novo depois de um 401)
@@ -172,7 +183,7 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
         falhas: 0,
         esperaAte: null,
         ultimoErro: null,
-        passoDias: novoPasso(passo, dias, { bytes: r.bytes }, MAX_BYTES_EXTRATO),
+        passoDias: novoPasso(passo, dias, { bytes: r.bytes, ms: r.ms }, MAX_BYTES_EXTRATO),
         proximo,
         ...(terminou ? { cicloConcluidoEm: iso } : {}),
       })
@@ -188,7 +199,11 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
   }
   const falhas = travou[0].falhas + 1;
   const espera = new Date(agora.getTime() + esperaDaFalha(falhas, r.transitorio) * 60_000).toISOString();
-  await db.update(frotaCursores).set({ travaAte: null, falhas, esperaAte: espera, ultimoErro: r.erro.slice(0, 300) }).where(onde);
+  // A Vólus não respondeu a tempo: o MESMO período falharia de novo — a próxima tentativa pede a metade dos dias.
+  await db
+    .update(frotaCursores)
+    .set({ travaAte: null, falhas, esperaAte: espera, ultimoErro: r.erro.slice(0, 300), ...(r.lento && dias > 1 ? { passoDias: novoPasso(passo, dias, { lento: true }, MAX_BYTES_EXTRATO) } : {}) })
+    .where(onde);
   return `Erro em ${t.contrato} ${t.tipo}: ${r.erro}`;
 }
 

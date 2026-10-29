@@ -185,10 +185,18 @@ export function avancarCursor(fim: string, hoje: string): string | null {
 
 const somar = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-/** O passo (dias por pedido) depois de um resultado: divide quando não coube; cresce (até 31) quando sobrou muito. */
-export function novoPasso(atual: number, dias: number, r: { dividir?: number; bytes?: number }, maxBytes: number): number {
+/** Acima disto (ms) a resposta é LENTA: o passo não cresce (a Vólus demora mais com mais dias — o próximo período maior
+ * esgotaria o tempo). Um terço do tempo de um extrato. */
+export const MS_RESPOSTA_RAPIDA = 8_000;
+
+/**
+ * O passo (dias por pedido) depois de um resultado: divide quando não coube ou quando a Vólus não respondeu a tempo
+ * (`lento` — o tempo esgotado, o 522/524: ao meio); cresce (até 31) só quando sobrou muito E a resposta foi rápida.
+ */
+export function novoPasso(atual: number, dias: number, r: { dividir?: number; bytes?: number; ms?: number; lento?: boolean }, maxBytes: number): number {
   if (r.dividir) return Math.max(1, Math.floor(dias / r.dividir));
-  if (r.bytes != null && r.bytes < maxBytes / 4 && dias >= atual) return Math.min(31, Math.max(atual, dias) * 2);
+  if (r.lento) return Math.max(1, Math.floor(dias / 2));
+  if (r.bytes != null && r.bytes < maxBytes / 4 && dias >= atual && (r.ms == null || r.ms < MS_RESPOSTA_RAPIDA)) return Math.min(31, Math.max(atual, dias) * 2);
   return Math.max(1, Math.min(31, atual));
 }
 

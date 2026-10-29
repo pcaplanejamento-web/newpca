@@ -11,7 +11,8 @@ import { caminhoExtrato, codigoEmpresa, HOST_AUTH_VOLUS, HOST_EXTRATO_VOLUS, men
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 const TEMPO_AUTH_MS = 15_000;
-const TEMPO_EXTRATO_MS = 25_000;
+/** O tempo de UM extrato inteiro — da chamada ao fim do corpo (a resposta lenta não passa da trava do cursor). */
+export const TEMPO_EXTRATO_MS = 25_000;
 
 /** Falha de uma chamada à Vólus: `status` HTTP (0 = rede/tempo); `transitorio` = vale tentar de novo depois. */
 export class ErroVolus extends Error {
@@ -24,7 +25,12 @@ export class ErroVolus extends Error {
   get transitorio() {
     return this.status === 0 || this.status === 429 || this.status >= 500;
   }
+  /** A Vólus não respondeu A TEMPO (o tempo esgotado aqui ou o 522/524 do proxy dela): um período MENOR responde. */
+  get lento() {
+    return this.message === MSG_TEMPO || this.status === 522 || this.status === 524;
+  }
 }
+const MSG_TEMPO = "A Vólus demorou demais para responder.";
 
 export type EmpresaVolus = { id: string; nome: string };
 type Token = { token: string; vence: number; empresas: EmpresaVolus[] };
@@ -57,16 +63,17 @@ export type Extrato = { grande: false; texto: string; bytes: number; ms: number 
 export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, init) => fetch(url, init), agora = () => Date.now() }: { clientId: string; clientSecret: string; fetch?: FetchLike; agora?: () => number }) {
   // A memória do token é por CREDENCIAL (trocar o segredo não reaproveita o token da anterior).
   const chaveToken = chaveDaCredencial(clientId, clientSecret);
-  async function chamar(url: string, init: RequestInit, tempoMs: number): Promise<Response> {
+  /** A chamada com o TEMPO valendo até `limpar()` — quem lê o corpo só limpa no fim (a resposta que chega devagar também
+   * esgota o tempo, nunca segura a leitura além da trava). */
+  async function chamar(url: string, init: RequestInit, tempoMs: number): Promise<{ r: Response; limpar: () => void }> {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), tempoMs);
+    const limpar = () => clearTimeout(t);
     try {
-      return await buscar(url, { ...init, signal: ctl.signal, redirect: "manual" });
+      return { r: await buscar(url, { ...init, signal: ctl.signal, redirect: "manual" }), limpar };
     } catch (e) {
-      const tempo = (e as Error)?.name === "AbortError";
-      throw new ErroVolus(tempo ? "A Vólus demorou demais para responder." : "Sem resposta da Vólus (rede).", 0);
-    } finally {
-      clearTimeout(t);
+      limpar();
+      throw erroDaRede(e);
     }
   }
 
@@ -82,7 +89,7 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
   }
 
   async function novoToken(): Promise<Token> {
-    const r = await chamar(
+    const { r, limpar } = await chamar(
       `${HOST_AUTH_VOLUS}/v1/partners/auth/token`,
       {
         method: "POST",
@@ -91,7 +98,7 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
       },
       TEMPO_AUTH_MS,
     );
-    const corpo = await r.text().catch(() => "");
+    const corpo = await r.text().catch(() => "").finally(limpar);
     if (r.status >= 300 && r.status < 400) throw new ErroVolus(`A Vólus redirecionou a autenticação (${r.status}).`, r.status);
     if (!r.ok) throw new ErroVolus(mensagemStatusVolus(r.status, corpo), r.status);
     let j: Record<string, unknown>;
@@ -121,35 +128,41 @@ export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, ini
     const t0 = agora();
     for (let tentativa = 0; ; tentativa++) {
       const { token } = await autenticar(tentativa > 0);
-      const r = await chamar(url, { method: "GET", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, TEMPO_EXTRATO_MS);
-      if (r.status === 401 && tentativa === 0) {
-        await r.body?.cancel().catch(() => {});
-        continue;
+      const { r, limpar } = await chamar(url, { method: "GET", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, TEMPO_EXTRATO_MS);
+      try {
+        if (r.status === 401 && tentativa === 0) {
+          await r.body?.cancel().catch(() => {});
+          continue;
+        }
+        if (r.status >= 300 && r.status < 400) throw new ErroVolus(`A Vólus redirecionou o extrato (${r.status}).`, r.status);
+        if (!r.ok) throw new ErroVolus(mensagemStatusVolus(r.status, await r.text().catch(() => "")), r.status);
+        const comprimento = Number(r.headers.get("content-length"));
+        if (Number.isFinite(comprimento) && comprimento > maxBytes) {
+          await r.body?.cancel().catch(() => {});
+          return { grande: true, bytes: comprimento, ms: agora() - t0 };
+        }
+        if (!r.body) {
+          const s = await r.text();
+          return s.length > maxBytes ? { grande: true, bytes: s.length, ms: agora() - t0 } : { grande: false, texto: s, bytes: s.length, ms: agora() - t0 };
+        }
+        const leitor = r.body.getReader();
+        const dec = new TextDecoder();
+        let s = "";
+        let lidos = 0;
+        for (;;) {
+          const { done, value } = await leitor.read();
+          if (done) break;
+          lidos += value.byteLength;
+          if (lidos > maxBytes) return { grande: true, bytes: await medirResto(leitor, lidos), ms: agora() - t0 };
+          s += dec.decode(value, { stream: true });
+        }
+        s += dec.decode();
+        return { grande: false, texto: s, bytes: lidos, ms: agora() - t0 };
+      } catch (e) {
+        throw e instanceof ErroVolus ? e : erroDaRede(e);
+      } finally {
+        limpar();
       }
-      if (r.status >= 300 && r.status < 400) throw new ErroVolus(`A Vólus redirecionou o extrato (${r.status}).`, r.status);
-      if (!r.ok) throw new ErroVolus(mensagemStatusVolus(r.status, await r.text().catch(() => "")), r.status);
-      const comprimento = Number(r.headers.get("content-length"));
-      if (Number.isFinite(comprimento) && comprimento > maxBytes) {
-        await r.body?.cancel().catch(() => {});
-        return { grande: true, bytes: comprimento, ms: agora() - t0 };
-      }
-      if (!r.body) {
-        const s = await r.text();
-        return s.length > maxBytes ? { grande: true, bytes: s.length, ms: agora() - t0 } : { grande: false, texto: s, bytes: s.length, ms: agora() - t0 };
-      }
-      const leitor = r.body.getReader();
-      const dec = new TextDecoder();
-      let s = "";
-      let lidos = 0;
-      for (;;) {
-        const { done, value } = await leitor.read();
-        if (done) break;
-        lidos += value.byteLength;
-        if (lidos > maxBytes) return { grande: true, bytes: await medirResto(leitor, lidos), ms: agora() - t0 };
-        s += dec.decode(value, { stream: true });
-      }
-      s += dec.decode();
-      return { grande: false, texto: s, bytes: lidos, ms: agora() - t0 };
     }
   }
 
@@ -173,6 +186,11 @@ async function medirResto(leitor: ReadableStreamDefaultReader<Uint8Array>, lidos
     await leitor.cancel().catch(() => {});
     return n;
   }
+}
+
+/** A falha de rede ou o TEMPO esgotado (o `abort` do cronômetro, também no meio do corpo). */
+function erroDaRede(e: unknown): ErroVolus {
+  return new ErroVolus((e as Error)?.name === "AbortError" ? MSG_TEMPO : "Sem resposta da Vólus (rede).", 0);
 }
 
 export type ClienteVolus = ReturnType<typeof clienteVolus>;

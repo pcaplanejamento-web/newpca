@@ -157,8 +157,14 @@ export function importarFrota(o: OpcoesFrota): { id: string; fim: Promise<Resumo
           const status = (e as { status?: number }).status ?? 0;
           const permanente = (e as { permanente?: boolean }).permanente;
           const msg = (e as Error).message;
-          if (!permanente && (status >= 500 || status === 0) && tentativa < 2 && !parar) {
-            const espera = 2000 * (tentativa + 1);
+          // A Vólus não respondeu a tempo (504 da rota — o tempo esgotado, o 522/524): o MESMO período falharia de novo; ao meio.
+          if (status === 504 && diasEntre(p.inicio, p.fim) > 1 && !parar) {
+            dividirEmPartes(p, 2);
+            break;
+          }
+          // 409 = a atualização automática está lendo este contrato agora: espera ela terminar e tenta de novo.
+          if (!permanente && (status >= 500 || status === 0 || status === 409) && tentativa < 2 && !parar) {
+            const espera = status === 409 ? 30_000 : 2000 * (tentativa + 1);
             mudarPedido(id, chave, (y) => ({ ...(y ?? novoPedido(p)), fase: "esperando", faseMs: agora(), espera, mensagem: msg }));
             await esperar(espera);
             continue;

@@ -4,8 +4,8 @@ import { getDb } from "./db";
 import type { TipoCard, TipoImportacao } from "./empenho-cards-core";
 import { frotaAoVivo, type LeituraFrotaAoVivo } from "./frota-andamento-core";
 import { listarPassos, paraLote } from "./empenhos";
-import { type AndamentoLote, fracaoDoAndamento, fracaoDoAno, type LoteCenti, type PassoLote, QUEM_AUTO } from "./empenhos-core";
-import { leituraDoLote } from "./empenhos-fragmentos";
+import { type AndamentoLote, fracaoDoAndamento, type LoteCenti, MARCA_GUARDANDO, type PassoLote, QUEM_AUTO } from "./empenhos-core";
+import { andamentoDoLote } from "./empenhos-fragmentos";
 import { consultaLotesAoVivo } from "./empenhos-sql";
 
 /**
@@ -14,7 +14,7 @@ import { consultaLotesAoVivo } from "./empenhos-sql";
  * fração lida (a MESMA régua da tela do card: o ano lido + a resposta grande em fragmentos), a leitura grande em curso e os
  * últimos passos à Centi.
  */
-export type PassoAoVivo = Omit<PassoLote, "corpo">;
+export type PassoAoVivo = Omit<PassoLote, "corpo"> & { erro?: string | null };
 export type LoteAoVivo = LoteCenti & {
   /** O card (Centi); null = a FROTA (Vólus — a automática pelos cursores e as leituras recentes). */
   cardId: number | null;
@@ -52,7 +52,18 @@ async function andamentoFrota(ultima: boolean): Promise<{ aoVivo: LoteAoVivo | n
   const agoraIso = new Date().toISOString();
   try {
     const [cursores, recentes, ultimas] = await Promise.all([
-      db.select({ contrato: frotaCursores.contrato, tipo: frotaCursores.tipo, travaAte: frotaCursores.travaAte, cicloInicio: frotaCursores.cicloInicio, proximo: frotaCursores.proximo }).from(frotaCursores),
+      db
+        .select({
+          contrato: frotaCursores.contrato,
+          tipo: frotaCursores.tipo,
+          travaAte: frotaCursores.travaAte,
+          cicloInicio: frotaCursores.cicloInicio,
+          proximo: frotaCursores.proximo,
+          falhas: frotaCursores.falhas,
+          esperaAte: frotaCursores.esperaAte,
+          ultimoErro: frotaCursores.ultimoErro,
+        })
+        .from(frotaCursores),
       db.select().from(frotaLeituras).where(gte(frotaLeituras.em, sqlAgoraMenos(MINUTOS_DESFECHO))).orderBy(desc(frotaLeituras.id)).limit(200),
       ultima ? db.select().from(frotaLeituras).orderBy(desc(frotaLeituras.id)).limit(8) : Promise.resolve([]),
     ]);
@@ -93,12 +104,14 @@ async function andamentoCenti(ultimaDe?: TipoCard): Promise<{ lotes: LoteAoVivo[
       const lote = paraLote(l);
       const lendo = lote.estado === "lendo";
       const consultado = lote.id === ultimo?.l.id;
-      const [passos, leituraBruta] = lendo ? await Promise.all([listarPassos(lote.id), leituraDoLote(lote.id)]) : consultado ? [await listarPassos(lote.id), null] : [[] as PassoLote[], null];
-      const leitura: AndamentoLote["leitura"] = leituraBruta
-        ? { inicio: leituraBruta.inicio, fim: leituraBruta.fim, bytes: leituraBruta.bytesCapturados, comprimento: leituraBruta.comprimento, capturado: !!leituraBruta.capturado, pos: leituraBruta.pos, chars: leituraBruta.charsCapturados }
-        : null;
-      const fracao = lendo ? fracaoDoAndamento(lote.ano, { fracao: fracaoDoAno(lote.ano, passos), leitura }) : 1;
-      const erros = passos.filter((p) => p.estado === "erro" && !(p.mensagem ?? "").startsWith("Guardando a página")).length;
+      const passos = lendo || consultado ? await listarPassos(lote.id) : ([] as PassoLote[]);
+      const andamento = lendo ? await andamentoDoLote({ ...lote, cardId: l.cardId }, passos) : null;
+      const leitura = andamento?.leitura ?? null;
+      const fracao = andamento ? fracaoDoAndamento(lote.ano, andamento) : 1;
+      const guardando = (p: PassoLote) => p.estado === "erro" && (p.mensagem ?? "").startsWith(MARCA_GUARDANDO);
+      const erros = passos.filter((p) => p.estado === "erro" && !guardando(p)).length;
+      // Os registros da página que AINDA chega em partes (o passo "Guardando…") já contam — o lote só reconta no fim dela.
+      const emCurso = passos.filter(guardando).reduce((s, p) => s + (p.recebidos ?? 0), 0);
       return {
         ...lote,
         cardId: l.cardId ?? 0,
@@ -113,7 +126,9 @@ async function andamentoCenti(ultimaDe?: TipoCard): Promise<{ lotes: LoteAoVivo[
           .map(({ corpo: _, ...p }) => p),
         pedidos: passos.length,
         erros,
-        bytes: passos.reduce((s, p) => s + (p.bytes ?? 0), 0),
+        unicos: (lote.unicos ?? 0) + emCurso,
+        // O baixado inclui a resposta grande capturada em fragmentos (o passo dela só tem os bytes no fim).
+        bytes: passos.reduce((s, p) => s + (p.bytes ?? 0), 0) + (leitura?.bytes ?? 0),
       };
     }),
   );

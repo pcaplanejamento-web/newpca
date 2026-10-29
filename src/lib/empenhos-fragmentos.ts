@@ -14,8 +14,8 @@ import {
   type ResultadoPagina,
   TEMPO_MS,
 } from "./empenhos-importacao";
-import { type LoteCenti, type Periodo, podePular } from "./empenhos-core";
-import { comandoPaginaIgual, comandoRecontarLote, consultaPaginaAnterior, consultaUltimoPasso, type LinhaPasso } from "./empenhos-sql";
+import { type AndamentoLote, fracaoDoAno, type LoteCenti, type PassoLote, type Periodo, podePular } from "./empenhos-core";
+import { comandoPaginaIgual, comandoRecontarLote, consultaBytesDoAno, consultaPaginaAnterior, consultaUltimoPasso, type LinhaPasso } from "./empenhos-sql";
 import { comandosFechoPeriodoLiquidacoes } from "./liquidacoes-sql";
 import { paraPasso } from "./empenhos";
 import { BYTES_CAPTURA, corteUtf8, type FormaResposta, hexDe, JANELA, janelaDosPedacos, MAX_REINICIOS, processarJanela, semRepetidos, TAM_CAUDA } from "./fragmentos-centi-core";
@@ -49,12 +49,27 @@ export async function leituraDoLote(loteId: number) {
       comprimento: centiLeituras.comprimento,
       capturado: centiLeituras.capturado,
       pos: centiLeituras.pos,
+      criadoEm: centiLeituras.criadoEm,
+      passoId: centiLeituras.passoId,
     })
     .from(centiLeituras)
     .where(eq(centiLeituras.loteId, loteId))
     .orderBy(centiLeituras.id)
     .limit(1);
   return l ?? null;
+}
+
+/**
+ * O ANDAMENTO de um lote que está lendo (a tela do card e o painel do canto — a MESMA conta): o ano lido pelos dias, a
+ * resposta grande em fragmentos e os bytes (os lidos × os da última importação promovida do ano).
+ */
+export async function andamentoDoLote(lote: LoteCenti & { cardId: number | null }, passos: PassoLote[]): Promise<AndamentoLote> {
+  const [l, esperados] = await Promise.all([leituraDoLote(lote.id), lote.cardId ? consultaBytesDoAno(getDb(), lote.cardId, lote.ano, lote.modo) : Promise.resolve(null)]);
+  return {
+    fracao: fracaoDoAno(lote.ano, passos),
+    leitura: l ? { inicio: l.inicio, fim: l.fim, bytes: l.bytesCapturados, comprimento: l.comprimento, capturado: !!l.capturado, pos: l.pos, chars: l.charsCapturados } : null,
+    bytes: { lidos: passos.reduce((s, p) => s + (p.estado === "ok" ? (p.bytes ?? 0) : 0), 0), esperados },
+  };
 }
 
 /** Reserva a leitura por 90 s (duas execuções nunca avançam a mesma); null = outra execução está nela. */
@@ -68,6 +83,15 @@ async function reservar(id: number): Promise<Leitura | null> {
 }
 
 const apagar = (id: number) => getDb().delete(centiLeituras).where(eq(centiLeituras.id, id));
+/** DESCARTA a leitura: apaga e, se ela já gravava partes, o passo "Guardando a página…" vira um ERRO com o motivo real
+ * (nunca fica girando para sempre no painel — e conta para a espera e a desistência). */
+export function descartarLeitura(l: { id: number; passoId: number | null }, motivo: string) {
+  const db = getDb();
+  return [
+    apagar(l.id),
+    ...(l.passoId ? [db.update(centiLotePassos).set({ estado: "erro", mensagem: `Leitura interrompida: ${motivo}`.slice(0, 400) }).where(eq(centiLotePassos.id, l.passoId))] : []),
+  ];
+}
 const periodoDe = (l: Leitura): Periodo => ({ inicio: l.inicio, fim: l.fim });
 
 /** Baixa a faixa [de, ate) da resposta da página (o que vem antes é lido sem converter). */
@@ -75,8 +99,9 @@ function baixarFaixa(card: CardEmpenho, ped: Pedido, de: number, ate: number) {
   return baixarSeguro(urlDoCard(card), { accept: "application/json", maxBytes: ped.maxBytes, quem: "A API da Centi", tempoMs: TEMPO_MS, post: ped.base.corpo ?? "", faixa: { de, ate } });
 }
 
-/** `pulou` = a página era IDÊNTICA à da última volta: nada foi lido nem gravado (uma tarefa LEVE — a execução segue). */
-export type Avanco = { resultado?: ResultadoPagina; situacao: string; pulou?: boolean };
+/** `pulou` = a página era IDÊNTICA à da última volta: nada foi lido nem gravado (uma tarefa LEVE — a execução segue);
+ * `ocupada` = outra execução está na leitura (esta não trabalhou — a fila segue para o próximo card). */
+export type Avanco = { resultado?: ResultadoPagina; situacao: string; pulou?: boolean; ocupada?: boolean };
 
 /** O SHA-256 (hex) dos bytes exatos da resposta — nativo (`crypto.subtle`), sem custo de JS. */
 export async function assinaturaDosBytes(bytes: Uint8Array): Promise<string> {
@@ -168,13 +193,13 @@ export async function iniciarPaginaAuto(card: CardEmpenho, lote: LoteCenti, peri
 /** CONTINUA a leitura fragmentada: captura o próximo fragmento ou processa a próxima janela. */
 export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta: { id: number }): Promise<Avanco> {
   const l = await reservar(aberta.id);
-  if (!l) return { situacao: "leitura em andamento em outra execução" };
+  if (!l) return { situacao: "leitura em andamento em outra execução", ocupada: true };
   let ped: Pedido;
   try {
     ped = prepararPedido(card, lote, periodoDe(l), l.pagina);
   } catch (e) {
     // O cadastro mudou (parâmetros, órgãos): a leitura não vale mais — quem chama encerra o lote.
-    await apagar(l.id);
+    await getDb().batch(descartarLeitura(l, e instanceof Error ? e.message : "o cadastro mudou") as never);
     throw e;
   }
   try {
@@ -182,9 +207,11 @@ export async function avancarLeitura(card: CardEmpenho, lote: LoteCenti, aberta:
   } catch (e) {
     // A página mudou por outro caminho (passo excluído, a tela leu de novo): a leitura recomeça do zero na próxima vez.
     if (e instanceof PedidoInvalido) {
-      await apagar(l.id);
+      await getDb().batch(descartarLeitura(l, e.message) as never);
       return { situacao: `leitura recomeça: ${e.message}` };
     }
+    // Qualquer outra falha SOLTA a reserva (a próxima execução pode tentar — quem chama conta o erro e desiste depois).
+    await getDb().update(centiLeituras).set({ reservadoAte: null }).where(eq(centiLeituras.id, l.id)).catch(() => {});
     throw e;
   }
 }
@@ -250,7 +277,7 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
   const bruto = janelaDosPedacos(l.pos, JANELA, pedacos);
   const r = processarJanela({ pos: l.pos, tamanho: l.charsCapturados, forma: (l.forma as FormaResposta | null) ?? null, resto: l.resto }, bruto);
   const falhar = async (mensagem: string) => ({
-    resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: l.status, bytes: l.bytesCapturados, ms: l.ms }, [apagar(l.id)]),
+    resultado: await registrarFalha(card, lote, periodoDe(l), ped, { mensagem, status: l.status, bytes: l.bytesCapturados, ms: l.ms }, descartarLeitura(l, mensagem)),
     situacao: "erro",
   });
   if (!r.ok) return falhar(r.erro);

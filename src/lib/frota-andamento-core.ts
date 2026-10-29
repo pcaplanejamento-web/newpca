@@ -11,7 +11,19 @@ import { codigoLegivel } from "./volus-core.ts";
 /** O id da entrada da frota no painel (os lotes da Centi são positivos). */
 export const ID_FROTA_AO_VIVO = -1;
 
-export type CursorFrotaAoVivo = { contrato: string; tipo: string; travaAte: string | null; cicloInicio: string | null; proximo: string | null };
+export type CursorFrotaAoVivo = {
+  contrato: string;
+  tipo: string;
+  travaAte: string | null;
+  cicloInicio: string | null;
+  proximo: string | null;
+  /** Falhas seguidas e até quando espera (a automática tenta de novo depois) — o "Falhou" do painel vem daqui. */
+  falhas?: number;
+  esperaAte?: string | null;
+  ultimoErro?: string | null;
+};
+/** Um passo da frota: o rótulo (contrato · tipo) fica sempre na `mensagem`; o erro, no campo próprio. */
+export type PassoFrotaAoVivo = Omit<PassoLote, "corpo"> & { erro?: string | null };
 export type LeituraFrotaAoVivo = {
   id: number;
   contrato: string;
@@ -39,7 +51,7 @@ export type FrotaAoVivo = LoteCenti & {
   doCron: boolean;
   fracao: number;
   leitura: null;
-  passos: Omit<PassoLote, "corpo">[];
+  passos: PassoFrotaAoVivo[];
   pedidos: number;
   erros: number;
   bytes: number;
@@ -49,6 +61,9 @@ const ULTIMOS = 8;
 
 /** Lendo = algum cursor com a trava no futuro (a automática está lendo um período agora). */
 export const cursoresLendo = (cs: readonly CursorFrotaAoVivo[], agoraIso: string) => cs.filter((c) => c.travaAte != null && c.travaAte > agoraIso);
+/** Em ESPERA depois de um erro (a automática tenta de novo na hora marcada): o "Falhou" com o contrato. */
+export const cursoresComErro = (cs: readonly CursorFrotaAoVivo[], agoraIso: string) => cs.filter((c) => (c.falhas ?? 0) > 0 && c.esperaAte != null && c.esperaAte > agoraIso);
+const rotuloCursor = (c: { contrato: string; tipo: string }) => `${codigoLegivel(c.contrato)} · ${c.tipo}`;
 
 /** A fração do ciclo dos cursores (os dias já lidos de cada um ÷ os dias do ciclo). */
 export function fracaoDosCursores(cs: readonly CursorFrotaAoVivo[], hoje: string): number {
@@ -73,16 +88,19 @@ export function fracaoDosCursores(cs: readonly CursorFrotaAoVivo[], hoje: string
  */
 export function frotaAoVivo(cursores: readonly CursorFrotaAoVivo[], leituras: readonly LeituraFrotaAoVivo[], agoraIso: string): FrotaAoVivo | null {
   const lendo = cursoresLendo(cursores, agoraIso);
+  const comErro = cursoresComErro(cursores, agoraIso);
   if (!lendo.length && !leituras.length) return null;
   const ordenadas = [...leituras].sort((a, b) => b.id - a.id);
   const ultima = ordenadas[0];
   const doCron = lendo.length > 0 || ultima?.origem === "auto";
   const erros = ordenadas.filter((l) => l.estado === "erro").length;
-  const estado: LoteCenti["estado"] = lendo.length ? "lendo" : ultima?.estado === "erro" ? "falhou" : "promovido";
+  // Falhou = algum cursor em espera depois de um erro (não a última leitura de qualquer contrato — um tropeço que já passou
+  // não é falha, e o erro de um contrato não some porque outro leu depois).
+  const estado: LoteCenti["estado"] = lendo.length ? "lendo" : comErro.length ? "falhou" : "promovido";
   const iniciadoEm = ordenadas.at(-1)?.em ?? agoraIso.slice(0, 19).replace("T", " ");
   const ano = Number((ultima?.inicio ?? agoraIso).slice(0, 4));
   const soma = (f: (l: LeituraFrotaAoVivo) => number) => ordenadas.reduce((s, l) => s + f(l), 0);
-  const emCurso = lendo.map((c) => `${codigoLegivel(c.contrato)} ${c.tipo}`).join(", ");
+  const emCurso = lendo.map(rotuloCursor).join(", ");
   return {
     id: ID_FROTA_AO_VIVO,
     ano,
@@ -105,8 +123,8 @@ export function frotaAoVivo(cursores: readonly CursorFrotaAoVivo[], leituras: re
     fora: soma((l) => l.fora),
     mensagem: lendo.length
       ? `Lendo a Vólus: ${emCurso}`
-      : ultima?.estado === "erro"
-        ? `Última leitura com erro: ${ultima.erro ?? "falha"}`
+      : comErro.length
+        ? `Em espera depois de erro: ${comErro.map((c) => `${rotuloCursor(c)}${c.ultimoErro ? ` (${c.ultimoErro})` : ""}`).join("; ")} — a atualização automática tenta de novo.`
         : `Concluída: ${soma((l) => l.registros).toLocaleString("pt-BR")} registros lidos, ${soma((l) => l.novos).toLocaleString("pt-BR")} novos, ${soma((l) => l.alterados).toLocaleString("pt-BR")} alterados.`,
     iniciadoPor: doCron ? "Atualização automática" : (ultima?.por ?? "—"),
     iniciadoEm,
@@ -134,7 +152,8 @@ export function frotaAoVivo(cursores: readonly CursorFrotaAoVivo[], leituras: re
       repetidos: 0,
       total: null,
       soma: null,
-      mensagem: l.erro ?? `${codigoLegivel(l.contrato)} · ${l.tipo}`,
+      mensagem: rotuloCursor(l),
+      erro: l.estado === "erro" ? (l.erro ?? "Falhou") : null,
       resNovos: l.novos,
       resAlterados: l.alterados,
       resIguais: l.iguais,
