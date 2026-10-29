@@ -21,6 +21,7 @@ import { SelectField } from "./Field";
 import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
 import { LiquidacaoDetalhe, SeloTipoExecucao } from "./LiquidacaoDetalhe";
 import { Modal } from "./Modal";
+import { EsqueletoIndicadores } from "./EsqueletoTela";
 import { IndicadoresKpi } from "./IndicadoresKpi";
 import { useAtalhoImportacoes } from "./EmpenhosView";
 
@@ -137,20 +138,17 @@ const COLUNAS: Column<Liquidacao>[] = [
  * (os do EMPENHO de mesmo número — o número do empenho liga empenhos, liquidações e pagamentos), por ano, no escopo da pessoa. Os números do topo acompanham os filtros; "Removidas na Centi" no rodapé.
  */
 export function EmpenhoCardLiquidacoes({
-  cardId,
   nome,
   versao,
   cards,
 }: {
-  /** `null` = a TABELA ÚNICA (todos os cards do tipo — o mesmo registro uma vez). */
-  cardId: number | null;
   nome: string;
   versao: string;
   /** O nome de cada card (a coluna Card da tabela única). */
   cards?: Record<number, string>;
 }) {
-  const rota = cardId == null ? "/api/empenhos/liquidacoes" : `/api/empenhos/cards/${cardId}/liquidacoes`;
-  const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<Liquidacao>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
+  const rota = "/api/empenhos/liquidacoes";
+  const colunas = useMemo(() => [COLUNAS[0], colunaCard<Liquidacao>(cards ?? {}), ...COLUNAS.slice(1)], [cards]);
   // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto); a versão confere depois.
   const noDesenho = useGuardadoNoDesenho();
   const [inicio] = useState(() => {
@@ -271,6 +269,7 @@ export function EmpenhoCardLiquidacoes({
 
   return (
     <>
+      {recorte && linhas == null && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
           chave="liquidacoes:indicadores"
@@ -284,25 +283,21 @@ export function EmpenhoCardLiquidacoes({
       )}
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
-          <div className="mr-auto">
-            <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
-              <option value={ANO_TODOS}>Todos os anos</option>
-              {anos.map((a) => (
-                <option key={a.ano} value={a.ano}>
-                  {a.ano}
-                </option>
-              ))}
-            </SelectField>
-          </div>
+          <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
+            <option value={ANO_TODOS}>Todos os anos</option>
+            {anos.map((a) => (
+              <option key={a.ano} value={a.ano}>
+                {a.ano}
+              </option>
+            ))}
+          </SelectField>
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "liquidação", "liquidações"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
         {atalho}
-        <Ajuda titulo={cardId == null ? "Liquidações" : "Liquidações do card"} botao="sm">
+        <Ajuda titulo="Liquidações" botao="sm">
           <p>
-            {cardId == null
-              ? "Todas as liquidações importadas, de todos os cards, numa tabela só (a mesma liquidação em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."
-              : "As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura."}
+            {"Todas as liquidações importadas, de todos os cards, numa tabela só (a mesma liquidação em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."}
           </p>
           <p>
             A Centi não informa a unidade da liquidação: o <strong>número do empenho</strong> liga a liquidação ao empenho, e as colunas
@@ -318,9 +313,7 @@ export function EmpenhoCardLiquidacoes({
 
       {anos && !anos.length ? (
         <Callout kind="info">
-          {cardId == null
-            ? "Nenhuma liquidação importada ainda. Abra “Importações” para criar um card e importar."
-            : "Nenhuma liquidação importada neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez."}
+          {"Nenhuma liquidação importada ainda. Abra “Importações” para criar um card e importar."}
         </Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />

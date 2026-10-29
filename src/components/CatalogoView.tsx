@@ -813,6 +813,15 @@ export function CatalogoView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
+      {pasta && (
+        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
+          <StatMini label="Catálogos da agenda" value={num(nAgenda)} />
+          <StatMini label="Itens da agenda" value={num(itens.length)} />
+          <StatMini label="Históricos de compra" value={num(nHistorico)} />
+          <StatMini label="Contratos" value={num(contratosHistorico)} />
+          <StatMini label="Valor comprado" value={brl(valorHistorico)} tone="accent" className="col-span-2 sm:col-span-1" />
+        </div>
+      )}
       <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
         {pasta ? (
           <div className="flex min-w-0 items-center gap-2">
@@ -826,14 +835,9 @@ export function CatalogoView({
             <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-control text-white" style={{ background: pasta.cor }}>
               <IconPasta className="h-4 w-4" />
             </span>
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold text-text" title={pasta.nome}>
-                {pasta.nome}
-              </h1>
-              <p className="text-sm text-muted">
-                Pasta · {num(catalogos.length)} {catalogos.length === 1 ? "catálogo" : "catálogos"}
-              </p>
-            </div>
+            <h1 className="min-w-0 truncate text-[15px] font-bold text-text" title={pasta.nome}>
+              {pasta.nome}
+            </h1>
             {podeEditar && (
               <>
                 <Button
@@ -862,26 +866,10 @@ export function CatalogoView({
             )}
           </div>
         ) : (
-          <div>
-            <h1 className="text-xl font-bold text-text">Catálogo</h1>
-            <p className="text-sm text-muted">
-              {num(nAgenda)} {nAgenda === 1 ? "catálogo da agenda" : "catálogos da agenda"} · {num(nHistorico)} {nHistorico === 1 ? "histórico de compra" : "históricos de compra"} ·{" "}
-              {num(pastas.length)} {pastas.length === 1 ? "pasta" : "pastas"}
-            </p>
-          </div>
+          <h1 className="sr-only">Catálogo</h1>
         )}
-        {/* "Exportar modelo" ANTES do Segmented: sem ele (nas visões da padronização), as visões não saem do lugar. */}
-        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-          {papelImporta && !padronizacao && (
-            <Button
-              variant="secondary"
-              icon={<IconDownload className="h-[18px] w-[18px]" />}
-              onClick={exportarModeloCatalogoXlsx}
-              title="Baixar um modelo .xlsx para preencher e importar"
-            >
-              Exportar modelo
-            </Button>
-          )}
+        {/* As visões à esquerda (principal); "Exportar modelo" à direita (secundário). */}
+        <div className="flex min-w-0 max-w-full flex-1 flex-wrap items-center gap-2">
           <Segmented
             value={vista}
             onChange={trocarVista}
@@ -898,18 +886,20 @@ export function CatalogoView({
                   ]),
             ].filter((o) => libera(CHAVE_VISTA[o.value]))}
           />
+          {papelImporta && !padronizacao && (
+            <Button
+              className="ml-auto"
+              variant="secondary"
+              icon={<IconDownload className="h-[18px] w-[18px]" />}
+              onClick={exportarModeloCatalogoXlsx}
+              title="Baixar um modelo .xlsx para preencher e importar"
+            >
+              Exportar modelo
+            </Button>
+          )}
         </div>
       </div>
 
-      {pasta && (
-        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
-          <StatMini label="Catálogos da agenda" value={num(nAgenda)} />
-          <StatMini label="Itens da agenda" value={num(itens.length)} />
-          <StatMini label="Históricos de compra" value={num(nHistorico)} />
-          <StatMini label="Contratos" value={num(contratosHistorico)} />
-          <StatMini label="Valor comprado" value={brl(valorHistorico)} tone="accent" className="col-span-2 sm:col-span-1" />
-        </div>
-      )}
 
       {erroImport && !preview && !padronizacao && (
         <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>

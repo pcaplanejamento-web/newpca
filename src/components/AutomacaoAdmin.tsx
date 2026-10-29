@@ -534,7 +534,7 @@ export function AutomacaoAdmin({
   );
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-center gap-2">
+      <div className="linha-topico barra-ferramentas flex flex-wrap items-center gap-2">
         <h1 className="sr-only">Automação</h1>
         <Ajuda titulo="Automação — fluxos com a Centi">
           <p>

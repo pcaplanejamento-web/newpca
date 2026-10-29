@@ -102,8 +102,8 @@ export function TarefasView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
+      <h1 className="sr-only">Tarefas</h1>
       <div className="flex flex-wrap items-center justify-end gap-3 empty:hidden">
-        <h1 className="sr-only">Tarefas</h1>
         {quadros.length > 0 && conj.estado.lista.length < MAX_CONJUNTOS && podeCriarPasta(ator) && (
           <Button
             size="sm"

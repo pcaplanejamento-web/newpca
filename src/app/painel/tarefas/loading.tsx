@@ -1,7 +1,7 @@
 import { EsqueletoGradeEspacos } from "@/components/CartaoEspacoEsqueleto";
 import { EsqueletoTela, EsqueletoBarra } from "@/components/EsqueletoTela";
 
-/** Tarefas: o título e a grade dos cards dos quadros. */
+/** Tarefas: a grade dos cards dos quadros. */
 export default function Carregando() {
   return (
     <EsqueletoTela>

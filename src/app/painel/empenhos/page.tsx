@@ -26,7 +26,7 @@ export default async function EmpenhosPage({ searchParams }: { searchParams: Pro
       <PermissaoExportar permitido={r.pode.exportar}>
         <EmpenhosTabela
           key={chaveEscopoEmpenhos(escopo)}
-          cardId={null}
+         
           nome="Empenhos - todos os cards"
           cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))}
           escopo={escopo}

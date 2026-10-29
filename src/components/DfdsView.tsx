@@ -2417,9 +2417,8 @@ export function DfdsView({
       )}
 
       {/* BARRA DA MESA (uma linha): à esquerda, as visões — o DASHBOARD (só o ícone, antes de Protocolos · DFDs · Itens;
-          fora da Mesa do PCA) — + a ferramenta do PCA; à direita, os FILTROS DE HIERARQUIA — responsável e assunto do
-          protocolo, que valem para todas as visões (e o Dashboard) e travam as colunas correspondentes da tabela de
-          protocolos. */}
+          fora da Mesa do PCA) — + a ferramenta do PCA e os FILTROS DE HIERARQUIA (responsável e assunto do protocolo, que
+          valem para todas as visões e o Dashboard e travam as colunas da tabela de protocolos); à direita, os botões só-ícone. */}
       <div className="flex flex-wrap items-center gap-2">
         {seletorMesa}
         <span role="none" className="contents" onPointerEnter={() => setPreItens(true)} onFocus={() => setPreItens(true)}>
@@ -2448,6 +2447,37 @@ export function DfdsView({
             ]}
           />
         )}
+        {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
+        {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
+        {pode.vis.responsavel.ver && (
+          <SeletorPessoa
+            variante="filtro"
+            rotulo="Responsável"
+            ariaLabel="Filtro: Responsável"
+            pessoas={opcoesResponsavel}
+            usuarioId={usuarioId}
+            valor={String(filtro.responsavel)}
+            ativo={filtro.responsavel !== "todos"}
+            extras={EXTRAS_FILTRO}
+            onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
+          />
+        )}
+        <SeletorFiltro
+          icone={<IconFilter className="h-4 w-4" />}
+          rotulo="Assunto"
+          valor={filtro.assunto == null ? "__todos" : filtro.assunto}
+          ativo={filtro.assunto != null}
+          onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
+          opcoes={[
+            { valor: "__todos", rotulo: "Todos" },
+            ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
+          ]}
+        />
+        {filtrado && (
+          <Button variant="ghost" size="sm" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
+            Limpar filtros
+          </Button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
           {/* REVERIFICAR TUDO: recarrega e reconfere protocolos, DFDs e itens (o anel mostra o andamento). */}
@@ -2464,37 +2494,6 @@ export function DfdsView({
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
           {vista !== "dashboard" && <ExcluidosMesa pcaId={pcaDaMesa ?? null} siglas={siglasExcluidos} podeLimpar={podeNoRecurso(pode, pcaDaMesa ?? null).excluir} />}
           {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao(false).rotulo} onEscolher={(id) => rodarAutomacao(id, false)} />}
-          {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
-          {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
-          {pode.vis.responsavel.ver && (
-            <SeletorPessoa
-              variante="filtro"
-              rotulo="Responsável"
-              ariaLabel="Filtro: Responsável"
-              pessoas={opcoesResponsavel}
-              usuarioId={usuarioId}
-              valor={String(filtro.responsavel)}
-              ativo={filtro.responsavel !== "todos"}
-              extras={EXTRAS_FILTRO}
-              onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
-            />
-          )}
-          <SeletorFiltro
-            icone={<IconFilter className="h-4 w-4" />}
-            rotulo="Assunto"
-            valor={filtro.assunto == null ? "__todos" : filtro.assunto}
-            ativo={filtro.assunto != null}
-            onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
-            opcoes={[
-              { valor: "__todos", rotulo: "Todos" },
-              ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
-            ]}
-          />
-          {filtrado && (
-            <Button variant="ghost" size="sm" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
-              Limpar filtros
-            </Button>
-          )}
         </div>
       </div>
 

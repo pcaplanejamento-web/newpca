@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.6",
+    data: "2026-10-29",
+    titulo: "Mesa, Catálogo e Verificação com os filtros à esquerda",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os filtros de Responsável e Assunto ficam à esquerda, junto das visões; atualizar, dados completos, lixeira e automações à direita.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Catálogo", texto: "O Catálogo abre sem título: as visões à esquerda e Exportar modelo à direita; na pasta, os números vêm primeiro.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Verificação", texto: "Protocolo | DFD à esquerda e a ajuda à direita; na Automação, a ajuda vai para a direita.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Liquidações", texto: "Liquidações e pagamentos mostram o esqueleto dos indicadores enquanto carregam (a barra não pula mais); as tabelas da execução ficaram sem o código morto dos cards.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Tarefas", texto: "A linha vazia acima dos quadros não ocupa mais espaço quando não há o botão Nova pasta.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.264.5",
     data: "2026-10-29",
     titulo: "O carregamento desenha a tela como ela é",

@@ -1,7 +1,7 @@
 import { EsqueletoTela } from "@/components/EsqueletoTela";
 import { EsqueletoOrcamentoCard, GRADE_ORCAMENTOS } from "@/components/OrcamentoCard";
 
-/** Os orçamentos: o título e a grade dos cards. */
+/** Os orçamentos: a grade dos cards. */
 export default function Carregando() {
   return (
     <EsqueletoTela>

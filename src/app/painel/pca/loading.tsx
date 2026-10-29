@@ -1,7 +1,7 @@
 import { EsqueletoTela } from "@/components/EsqueletoTela";
 import { EsqueletoPcaCard, GRADE_PCAS } from "@/components/PcaCard";
 
-/** Os PCAs: o título e a grade dos cards 4:5. */
+/** Os PCAs: a grade dos cards 4:5. */
 export default function Carregando() {
   return (
     <EsqueletoTela>

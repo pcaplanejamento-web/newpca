@@ -37,11 +37,11 @@ export function VerificacaoView({
   const comum = { reparticoes, pcas, regras, orgaos };
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-center gap-2">
+      <div className="linha-topico barra-ferramentas flex flex-wrap items-center gap-2">
         <h1 className="sr-only">Verificação</h1>
         <Ajuda titulo="Verificação">
           <p>Solte um protocolo ou um DFD para ver todos os erros e atenções, como na importação da Mesa.</p>
-          <p>Escolha à direita se vai verificar um protocolo ou um DFD.</p>
+          <p>Escolha à esquerda se vai verificar um protocolo ou um DFD.</p>
           <p>Nada é gravado e nada se edita: o banner serve só para visualizar. O arquivo é analisado como veio, sem comparar com o que já está cadastrado.</p>
           <p>
             No rodapé do banner, o indicador de pendências abre a lista completa: tocar numa pendência leva ao lugar dela, e
@@ -49,7 +49,6 @@ export function VerificacaoView({
           </p>
         </Ajuda>
         <Segmented
-          className="ml-auto"
           ariaLabel="O que verificar"
           value={tipo}
           onChange={setTipo}
