@@ -4,7 +4,7 @@ import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num, pct } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
@@ -21,7 +21,8 @@ import { SelectField } from "./Field";
 import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
 import { LiquidacaoDetalhe, SeloTipoExecucao } from "./LiquidacaoDetalhe";
 import { Modal } from "./Modal";
-import { StatMini } from "./StatMini";
+import { IndicadoresKpi } from "./IndicadoresKpi";
+import { useAtalhoImportacoes } from "./EmpenhosView";
 
 /** Uma LIQUIDAÇÃO na tela (a ordem das tuplas = `COLUNAS_LIQUIDACAO` de `liquidacoes-tela.ts`). */
 type Liquidacao = {
@@ -262,9 +263,21 @@ export function EmpenhoCardLiquidacoes({
   const base = vista ?? linhas ?? [];
   const tot = useMemo(() => ({ n: base.length, valor: soma(base, "valor"), anulado: soma(base, "valorAnulado"), liquido: soma(base, "valorLiquido"), pago: soma(base, "valorPago"), saldo: soma(base, "saldo") }), [base]);
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  const atalho = useAtalhoImportacoes();
 
   return (
     <>
+      {recorte && linhas != null && (
+        <IndicadoresKpi
+          chave="liquidacoes:indicadores"
+          cartoes={[
+            { label: "Liquidado líquido", value: brl(tot.liquido), cor: "var(--accent)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Valor", valor: brl(tot.valor) }, { rotulo: "Anulado", valor: brl(tot.anulado) }] },
+            { label: "Pago", value: brl(tot.pago), cor: "var(--ok)", detalhes: [{ rotulo: "Do liquidado", valor: pct(tot.pago, tot.liquido) }, { rotulo: "A pagar", valor: brl(Math.max(0, tot.liquido - tot.pago)) }] },
+            { label: "Saldo", value: brl(tot.saldo), detalhes: [{ rotulo: "Do liquidado", valor: pct(tot.saldo, tot.liquido) }, { rotulo: "Liquidações", valor: num(tot.n) }] },
+            { label: "Liquidações", value: num(tot.n), detalhes: [{ rotulo: "Média", valor: tot.n ? brl(tot.liquido / tot.n) : "—" }, { rotulo: "Recorte", valor: recorte?.removidos ? "Removidas na Centi" : "Vigentes" }] },
+          ]}
+        />
+      )}
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
@@ -278,6 +291,7 @@ export function EmpenhoCardLiquidacoes({
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "liquidação", "liquidações"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
+        {atalho}
         <Ajuda titulo={cardId == null ? "Liquidações" : "Liquidações do card"} botao="sm">
           <p>
             {cardId == null
@@ -306,14 +320,6 @@ export function EmpenhoCardLiquidacoes({
         !erro && <EsqueletoTabela cheia />
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
-            <StatMini label="Liquidações" value={num(tot.n)} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidas na Centi" : undefined} />
-            <StatMini label="Valor" value={brl(tot.valor)} tone="accent" />
-            <StatMini label="Anulado" value={brl(tot.anulado)} tone={tot.anulado ? "warn" : "default"} />
-            <StatMini label="Líquido" value={brl(tot.liquido)} />
-            <StatMini label="Pago" value={brl(tot.pago)} tone="ok" />
-            <StatMini label="Saldo" value={brl(tot.saldo)} />
-          </div>
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={colunas}

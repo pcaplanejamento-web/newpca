@@ -22,7 +22,7 @@ export default async function EmpenhosPage({ searchParams }: { searchParams: Pro
   const cards = await listarCards(escopo, "empenhos");
   const [anos, edicoes, versao] = await Promise.all([anosEmpenhos(null, escopo), carregarEdicoes(r.acesso.u.id, "empenhos:"), consultaVersoesExecucao(getDb()).then((v) => versaoDaTelaExecucao(v, "empenhos"))]);
   return (
-    <EmpenhosView tipo="empenhos" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("empenhos") : undefined}>
+    <EmpenhosView tipo="empenhos" importacoes={r.acesso.u.admin ? linkImportacoes("empenhos") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
         <EmpenhosTabela
           key={chaveEscopoEmpenhos(escopo)}

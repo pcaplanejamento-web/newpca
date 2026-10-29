@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.1",
+    data: "2026-10-29",
+    titulo: "Empenhos, liquidações e pagamentos com os indicadores das Frotas",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos", texto: "As telas de empenhos, liquidações e pagamentos abrem pelos indicadores (os mesmos cartões das Frotas, com dois detalhes cada), sem título; os botões ficam logo abaixo.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Liquidações", texto: "Indicadores: liquidado líquido, pago, saldo e liquidações, com os percentuais.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Pagamentos", texto: "Indicadores: pago líquido, ordens, retenções e anuladas.", link: "/painel/pagamentos" },
+    ],
+  },
+  {
     versao: "1.264.0",
     data: "2026-10-29",
     titulo: "Importações auditadas: só relê o que mudou, sem travas e sem perder leituras",

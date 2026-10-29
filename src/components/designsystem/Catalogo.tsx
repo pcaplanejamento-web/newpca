@@ -201,6 +201,7 @@ import {
 import { CadeadoBotao, CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
 import { MaisIndicadores } from "@/components/MaisIndicadores";
+import { IndicadoresKpi } from "@/components/IndicadoresKpi";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
@@ -3865,6 +3866,19 @@ export function Catalogo() {
             }
           />
         </div>
+      </Secao>
+
+      <Secao titulo="IndicadoresKpi (os indicadores padrão: 4 principais com 2 detalhes + Mais indicadores — Frotas, Empenhos, Liquidações, Pagamentos)">
+        <IndicadoresKpi
+          chave="designsystem:indicadores-kpi"
+          cartoes={[
+            { label: "Empenhado", value: "R$ 12,4 mi", detalhes: [{ rotulo: "Anulado", valor: "R$ 0,3 mi" }, { rotulo: "Empenhos", valor: "1.204" }] },
+            { label: "Liquidado", value: "R$ 9,1 mi", detalhes: [{ rotulo: "Do empenhado", valor: "73%" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },
+            { label: "Pago", value: "R$ 8,2 mi", detalhes: [{ rotulo: "Do empenhado", valor: "66%" }, { rotulo: "Do liquidado", valor: "90%" }] },
+            { label: "A pagar", value: "R$ 3,9 mi", detalhes: [{ rotulo: "Liquidado", valor: "R$ 0,9 mi" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },
+            { label: "Removidos", value: "3" },
+          ]}
+        />
       </Secao>
 
       <Secao titulo="StatCard (tile de estatística)">

@@ -4,7 +4,7 @@ import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num, pct } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { FerramentasAba } from "./AbasEspaco";
 import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
@@ -23,7 +23,8 @@ import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
 import { Modal } from "./Modal";
 import { PagamentoDetalhe } from "./PagamentoDetalhe";
-import { StatMini } from "./StatMini";
+import { IndicadoresKpi } from "./IndicadoresKpi";
+import { useAtalhoImportacoes } from "./EmpenhosView";
 
 /** Um PAGAMENTO na tela (a ordem das tuplas = `COLUNAS_PAGAMENTO` de `pagamentos-tela.ts`). */
 export type Pagamento = {
@@ -296,9 +297,21 @@ export function EmpenhoCardPagamentos({
     [base],
   );
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  const atalho = useAtalhoImportacoes();
 
   return (
     <>
+      {recorte && linhas != null && (
+        <IndicadoresKpi
+          chave="pagamentos:indicadores"
+          cartoes={[
+            { label: "Pago líquido", value: brl(tot.liquido), cor: "var(--ok)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Valor das ordens", valor: brl(tot.valor) }, { rotulo: "Retenções", valor: brl(tot.retencao) }] },
+            { label: "Ordens", value: num(tot.n), detalhes: [{ rotulo: "Empenhos", valor: num(tot.empenhos) }, { rotulo: "Média", valor: tot.n ? brl(tot.liquido / tot.n) : "—" }] },
+            { label: "Retenções", value: brl(tot.retencao), detalhes: [{ rotulo: "Das ordens", valor: pct(tot.retencao, tot.valor) }, { rotulo: "Líquido", valor: brl(tot.liquido) }] },
+            { label: "Anuladas", value: num(tot.anuladas), cor: tot.anuladas ? "var(--warn)" : undefined, detalhes: [{ rotulo: "Valor anulado", valor: brl(tot.valorAnulado) }, { rotulo: "Recorte", valor: recorte?.removidos ? "Removidos na Centi" : "Vigentes" }] },
+          ]}
+        />
+      )}
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
@@ -312,6 +325,7 @@ export function EmpenhoCardPagamentos({
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "pagamento", "pagamentos"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
+        {atalho}
         <Ajuda titulo={cardId == null ? "Pagamentos" : "Pagamentos do card"} botao="sm">
           <p>
             {cardId == null
@@ -344,13 +358,6 @@ export function EmpenhoCardPagamentos({
         !erro && <EsqueletoTabela cheia />
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
-            <StatMini label="Pagamentos" value={num(tot.n)} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidos na Centi" : `${num(tot.empenhos)} empenhos`} />
-            <StatMini label="Valor das ordens" value={brl(tot.valor)} tone="accent" hint="sem as anuladas" />
-            <StatMini label="Retenções" value={brl(tot.retencao)} />
-            <StatMini label="Pago líquido" value={brl(tot.liquido)} tone="ok" />
-            <StatMini label="Anuladas" value={num(tot.anuladas)} tone={tot.anuladas ? "warn" : "default"} hint={tot.anuladas ? brl(tot.valorAnulado) : undefined} />
-          </div>
           <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={colunas}

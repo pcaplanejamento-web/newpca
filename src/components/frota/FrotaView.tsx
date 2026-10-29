@@ -49,8 +49,7 @@ import { ErroCarga } from "../ErroCarga";
 import { SelectField } from "../Field";
 import { Segmented } from "../Segmented";
 import { FiltrosDashboard } from "../FiltrosDashboard";
-import { KpiStat } from "../KpiStat";
-import { MaisIndicadores } from "../MaisIndicadores";
+import { type CartaoKpi, IndicadoresKpi } from "../IndicadoresKpi";
 import { PeriodoPicker } from "../PeriodoPicker";
 import { SkeletonCartao } from "../Skeleton";
 import { type ContratoFrota, useDadosFrota } from "./dados-frota";
@@ -514,26 +513,11 @@ function cantoFrota(importacao?: ImportacaoFrotaKpi) {
   };
 }
 
-export type CartaoFrota = { label: string; value: ReactNode; hint?: string; cor?: string; detalhes?: { rotulo: string; valor: ReactNode }[] };
+export type CartaoFrota = CartaoKpi;
 
-/** Os indicadores das telas da Frota: os QUATRO principais à vista e os demais em "Mais indicadores" (o da Execução). */
+/** Os indicadores das telas da Frota — o `IndicadoresKpi` com o canto da Vólus. */
 export function IndicadoresFrota({ chave, cartoes, importacao, todos = false }: { chave: string; cartoes: CartaoFrota[]; importacao?: ImportacaoFrotaKpi; todos?: boolean }) {
-  // A atualização no canto (o MESMO par da Execução): no 1º cartão, ou nos quatro principais (o Painel).
-  const canto = cantoFrota(importacao);
-  const grade = (cs: CartaoFrota[], principais: boolean) => (
-    <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
-      {cs.map((c, i) => (
-        <KpiStat key={c.label} label={c.label} value={c.value} hint={c.hint} cor={c.cor} detalhes={c.detalhes} realce completo {...(principais && (todos || i === 0) ? canto : {})} />
-      ))}
-    </div>
-  );
-  const extras = cartoes.slice(4);
-  return (
-    <>
-      {grade(cartoes.slice(0, 4), true)}
-      {extras.length > 0 && <MaisIndicadores chave={chave} extras={grade(extras, false)} />}
-    </>
-  );
+  return <IndicadoresKpi chave={chave} cartoes={cartoes} canto={importacao ? cantoFrota(importacao) : undefined} todos={todos} />;
 }
 
 /** O corpo dos gráficos de barras lado a lado: a MESMA altura fixa (proporcional à tela), a rolagem por dentro. */

@@ -18,7 +18,7 @@ import {
   resumoEmpenhos,
   rotuloRecorteAno,
 } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num, pct } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
@@ -35,7 +35,8 @@ import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
 import { SelectField } from "./Field";
-import { StatMini } from "./StatMini";
+import { IndicadoresKpi } from "./IndicadoresKpi";
+import { useAtalhoImportacoes } from "./EmpenhosView";
 
 /** A chave das edições salvas da tabela (publicar para todos = Configurar em Empenhos). */
 export const CHAVE_TABELA_EMPENHOS = "empenhos:tabela";
@@ -259,9 +260,21 @@ export function EmpenhosTabela({
   const removidosNoRecorte = recorte ? anos.filter((a) => recorte.ano === ANO_TODOS || a.ano === recorte.ano).reduce((t, a) => t + a.removidos, 0) : 0;
   const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  const atalho = useAtalhoImportacoes();
 
   return (
     <>
+      {recorte && (
+        <IndicadoresKpi
+          chave="empenhos:indicadores"
+          cartoes={[
+            { label: "Empenhado", value: linhas ? brl(r.empenhado - r.anulado) : "…", cor: "var(--accent)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Anulado", valor: linhas ? brl(r.anulado) : "…" }, { rotulo: "Empenhos", valor: linhas ? num(r.n) : "…" }] },
+            { label: "Liquidado", value: linhas ? brl(r.liquidado) : "…", detalhes: [{ rotulo: "Do empenhado", valor: linhas ? pct(r.liquidado, r.empenhado - r.anulado) : "…" }, { rotulo: "A liquidar", valor: linhas ? brl(Math.max(0, r.empenhado - r.anulado - r.liquidado)) : "…" }] },
+            { label: "Pago", value: linhas ? brl(r.pago) : "…", cor: "var(--ok)", detalhes: [{ rotulo: "Do empenhado", valor: linhas ? pct(r.pago, r.empenhado - r.anulado) : "…" }, { rotulo: "Do liquidado", valor: linhas ? pct(r.pago, r.liquidado) : "…" }] },
+            { label: "A pagar", value: linhas ? brl(r.aPagar) : "…", detalhes: [{ rotulo: "Liquidado a pagar", valor: linhas ? brl(Math.max(0, r.liquidado - r.pago)) : "…" }, { rotulo: "Removidos na Centi", valor: num(removidosNoRecorte) }] },
+          ]}
+        />
+      )}
       <FerramentasAba>
         {anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
@@ -275,6 +288,7 @@ export function EmpenhosTabela({
         )}
         {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={avisoDeFalha(erro, linhas != null, () => recorte && void carregar(recorte, true))} />
+        {atalho}
         <Ajuda titulo={cardId == null ? "Empenhos" : "Empenhos do card"} botao="sm">
           <p>
             {cardId == null
@@ -301,14 +315,6 @@ export function EmpenhosTabela({
         </Callout>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-6">
-            <StatMini label="Empenhos" value={linhas ? num(r.n) : "…"} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidos na Centi" : undefined} />
-            <StatMini label="Empenhado" value={linhas ? brl(r.empenhado) : "…"} tone="accent" />
-            <StatMini label="Anulado" value={linhas ? brl(r.anulado) : "…"} tone={r.anulado ? "warn" : "default"} />
-            <StatMini label="Liquidado" value={linhas ? brl(r.liquidado) : "…"} />
-            <StatMini label="Pago" value={linhas ? brl(r.pago) : "…"} tone="ok" />
-            <StatMini label="A pagar" value={linhas ? brl(r.aPagar) : "…"} />
-          </div>
 
           {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => void carregar(recorte, true)} />}
 
