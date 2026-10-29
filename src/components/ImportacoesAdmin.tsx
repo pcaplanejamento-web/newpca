@@ -1102,7 +1102,7 @@ function CardAberto({
           />
         </div>
       </div>
-      <IndicadoresKpi chave="importacoes:card:indicadores" cartoes={cartoes} />
+      <IndicadoresKpi cartoes={cartoes} />
       {erro && d && <ErroCarga msg={erro} kind="warn" onTentar={carregar} />}
       <ConteudoAba aba={aba} abaServidor={aba} slot={slot} className="space-y-[var(--gap-block)]">
         {conteudo}

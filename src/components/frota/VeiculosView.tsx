@@ -335,7 +335,6 @@ function IndicadoresVeiculos({ linhas, importacao }: { linhas: Linha[]; importac
   // Dois detalhes por cartão principal, curtos e sem repetir dado entre os cartões (o padrão de `IndicadoresFrota`).
   return (
     <IndicadoresFrota
-      chave="frota:veiculos:mais-indicadores"
       importacao={importacao}
       cartoes={[
         {

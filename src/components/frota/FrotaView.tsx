@@ -486,7 +486,7 @@ function Indicadores({ modo, trs, consumo, importacao }: { modo: ModoFrota; trs:
             },
             semUnidade,
           ];
-  return <IndicadoresFrota chave={`frota:${modo}:mais-indicadores`} cartoes={cartoes} importacao={importacao} todos={modo === "painel"} />;
+  return <IndicadoresFrota cartoes={cartoes} importacao={importacao} todos={modo === "painel"} />;
 }
 
 /** O que o canto das KPIs da Frota precisa: o meta da importação, se é ADM e os contratos ativos (o "Importar agora"). */
@@ -516,8 +516,8 @@ function cantoFrota(importacao?: ImportacaoFrotaKpi) {
 export type CartaoFrota = CartaoKpi;
 
 /** Os indicadores das telas da Frota — o `IndicadoresKpi` com o canto da Vólus. */
-export function IndicadoresFrota({ chave, cartoes, importacao, todos = false }: { chave: string; cartoes: CartaoFrota[]; importacao?: ImportacaoFrotaKpi; todos?: boolean }) {
-  return <IndicadoresKpi chave={chave} cartoes={cartoes} canto={importacao ? cantoFrota(importacao) : undefined} todos={todos} />;
+export function IndicadoresFrota({ cartoes, importacao, todos = false }: { cartoes: CartaoFrota[]; importacao?: ImportacaoFrotaKpi; todos?: boolean }) {
+  return <IndicadoresKpi cartoes={cartoes} canto={importacao ? cantoFrota(importacao) : undefined} todos={todos} />;
 }
 
 /** O corpo dos gráficos de barras lado a lado: a MESMA altura fixa (proporcional à tela), a rolagem por dentro. */

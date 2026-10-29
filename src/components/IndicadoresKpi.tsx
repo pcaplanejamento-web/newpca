@@ -14,7 +14,7 @@ export type CantoKpi = { canto?: ReactNode; acaoCanto?: ReactNode };
  * OS INDICADORES PADRÃO das telas de dados (Frotas, Empenhos, Liquidações, Pagamentos): os QUATRO principais à vista e os
  * demais em "Mais indicadores". `canto` vai no 1º cartão (ou nos quatro, com `todos`).
  */
-export function IndicadoresKpi({ chave, cartoes, canto, todos = false }: { chave: string; cartoes: CartaoKpi[]; canto?: CantoKpi; todos?: boolean }) {
+export function IndicadoresKpi({ cartoes, canto, todos = false }: { cartoes: CartaoKpi[]; canto?: CantoKpi; todos?: boolean }) {
   const grade = (cs: CartaoKpi[], principais: boolean) => (
     <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
       {cs.map((c, i) => (
@@ -26,7 +26,7 @@ export function IndicadoresKpi({ chave, cartoes, canto, todos = false }: { chave
   return (
     <>
       {grade(cartoes.slice(0, 4), true)}
-      {extras.length > 0 && <MaisIndicadores chave={chave} extras={grade(extras, false)} />}
+      {extras.length > 0 && <MaisIndicadores extras={grade(extras, false)} />}
     </>
   );
 }

@@ -881,7 +881,6 @@ export function CatalogoView({
 
       {pasta && (
         <IndicadoresKpi
-          chave="catalogo:pasta:indicadores"
           cartoes={[
             { label: "Valor comprado", value: brl(valorHistorico), cor: "var(--accent)", detalhes: [{ rotulo: "Contratos", valor: num(contratosHistorico) }, { rotulo: "Históricos", valor: num(nHistorico) }] },
             { label: "Catálogos da agenda", value: num(nAgenda), detalhes: [{ rotulo: "Itens", valor: num(itens.length) }, { rotulo: "Na pasta", valor: num(catalogos.length) }] },

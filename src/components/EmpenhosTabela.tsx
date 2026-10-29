@@ -270,7 +270,6 @@ export function EmpenhosTabela({
       {recorte && linhas == null && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
-          chave="empenhos:indicadores"
           cartoes={[
             { label: "Empenhado", value: linhas ? brl(r.empenhado - r.anulado) : "…", cor: "var(--accent)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Anulado", valor: linhas ? brl(r.anulado) : "…" }, { rotulo: "Empenhos", valor: linhas ? num(r.n) : "…" }] },
             { label: "Liquidado", value: linhas ? brl(r.liquidado) : "…", detalhes: [{ rotulo: "Do empenhado", valor: linhas ? pct(r.liquidado, r.empenhado - r.anulado) : "…" }, { rotulo: "A liquidar", valor: linhas ? brl(Math.max(0, r.empenhado - r.anulado - r.liquidado)) : "…" }] },

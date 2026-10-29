@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.11",
+    data: "2026-10-29",
+    titulo: "Menu e Mais indicadores sem mexer na tela",
+    mudancas: [
+      { tipo: "correcao", area: "Interface", texto: "Abrir e fechar o menu lateral não move mais o conteúdo: a borda direita fica parada e o menu desliza por cima.", link: "/painel" },
+      { tipo: "melhoria", area: "Indicadores", texto: "“Mais indicadores” abre num painel por cima da tela — a barra e a tabela de baixo ficam no lugar; fecha ao tocar fora ou no Esc.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.264.10",
     data: "2026-10-29",
     titulo: "Componentes na escala certa em toda tela",

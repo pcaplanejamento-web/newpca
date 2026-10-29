@@ -3848,7 +3848,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="MaisIndicadores (os principais à vista; os complementares abrem pela altura — Execução e Frotas)">
+      <Secao titulo="MaisIndicadores (os principais à vista; os complementares abrem num painel por cima, sem mover o conteúdo)">
         <div className="space-y-[var(--gap-block)]">
           <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
             <KpiStat completo label="Gasto total" value="R$ 299.227,64" hint="792 registros" />
@@ -3857,7 +3857,6 @@ export function Catalogo() {
             <KpiStat completo label="Veículos" value="24" hint="R$ 12.467,82 por veículo" />
           </div>
           <MaisIndicadores
-            chave="designsystem:mais-indicadores"
             extras={
               <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
                 <KpiStat completo label="Consumo médio" value="9,41 km/l" hint="292.539 km rodados" />
@@ -3870,7 +3869,6 @@ export function Catalogo() {
 
       <Secao titulo="IndicadoresKpi (os indicadores padrão: 4 principais com 2 detalhes + Mais indicadores — Frotas, Empenhos, Liquidações, Pagamentos)">
         <IndicadoresKpi
-          chave="designsystem:indicadores-kpi"
           cartoes={[
             { label: "Empenhado", value: "R$ 12,4 mi", detalhes: [{ rotulo: "Anulado", valor: "R$ 0,3 mi" }, { rotulo: "Empenhos", valor: "1.204" }] },
             { label: "Liquidado", value: "R$ 9,1 mi", detalhes: [{ rotulo: "Do empenhado", valor: "73%" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },

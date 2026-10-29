@@ -5581,9 +5581,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **UM SÓ ESQUELETO (v1.264.7) — regra firme:** a tela que busca os dados no navegador mostra, enquanto espera, o MESMO
   esqueleto do `loading.tsx` da rota (Execução = `DashboardExecucaoEsqueleto`; Frotas = `EsqueletoFrota`; Empenhos/
   Liquidações/Pagamentos = `EsqueletoIndicadores` + `EsqueletoTabela`) — nunca um segundo esqueleto diferente.
-- **MENU LATERAL (v1.264.7):** a `.menu-vaga` troca de largura DE UMA VEZ e a coluna `[data-coluna-conteudo]` desliza por
-  transform (`alternarMenu`) — nada reflui a cada quadro. O `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes
-  em uma linha: a largura muda, a altura nunca.
+- **MENU LATERAL E "MAIS INDICADORES" FIXOS (v1.264.11) — regra firme:** abrir/fechar o menu NÃO move o conteúdo: a
+  `.menu-vaga` troca de largura UMA vez e a borda DIREITA fica parada; o menu (opaco, z-40) anima a própria largura por cima
+  — recolher alarga o conteúdo na hora (o menu, encolhendo, revela); expandir segura a vaga estreita
+  (`html[data-menu-abrindo]`) até o menu terminar de crescer (`alternarMenu`, `MenuLateral.tsx`); só os cartões que trocam
+  de lugar numa grade auto-fill deslizam (`trocarComGrades`, FLIP relativo à grade). O **`MaisIndicadores`** abre os
+  complementares num PAINEL POR CIMA (absoluto, preso abaixo do botão; fecha no toque fora/Esc) — nada embaixo se move. O
+  `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes em uma linha: a largura muda, a altura nunca.
 - **BARRA DE FERRAMENTAS (v1.264.4) — regra firme:** numa barra de botões, os PRINCIPAIS (seletores, campos, busca, filtros) à
   ESQUERDA e os SECUNDÁRIOS (só-ícone: recarregar, configurar, ajuda) à DIREITA. A classe `.barra-ferramentas` (`globals.css`)
   faz isso sozinha (`order` + `margin-left:auto` no 1º secundário), qualquer que seja a ordem do código; usada no

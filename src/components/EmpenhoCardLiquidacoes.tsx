@@ -272,7 +272,6 @@ export function EmpenhoCardLiquidacoes({
       {recorte && linhas == null && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
-          chave="liquidacoes:indicadores"
           cartoes={[
             { label: "Liquidado líquido", value: brl(tot.liquido), cor: "var(--accent)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Valor", valor: brl(tot.valor) }, { rotulo: "Anulado", valor: brl(tot.anulado) }] },
             { label: "Pago", value: brl(tot.pago), cor: "var(--ok)", detalhes: [{ rotulo: "Do liquidado", valor: pct(tot.pago, tot.liquido) }, { rotulo: "A pagar", valor: brl(Math.max(0, tot.liquido - tot.pago)) }] },

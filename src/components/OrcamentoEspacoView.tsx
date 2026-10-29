@@ -95,7 +95,7 @@ export function OrcamentoEspacoView({
           { value: "visoes", label: "Visões" },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >
-        <IndicadoresKpi chave="orcamento:indicadores" cartoes={cartoes} />
+        <IndicadoresKpi cartoes={cartoes} />
         {children}
       </AbasEspaco>
 

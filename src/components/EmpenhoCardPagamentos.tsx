@@ -306,7 +306,6 @@ export function EmpenhoCardPagamentos({
       {recorte && linhas == null && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
-          chave="pagamentos:indicadores"
           cartoes={[
             { label: "Pago líquido", value: brl(tot.liquido), cor: "var(--ok)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Valor das ordens", valor: brl(tot.valor) }, { rotulo: "Retenções", valor: brl(tot.retencao) }] },
             { label: "Ordens", value: num(tot.n), detalhes: [{ rotulo: "Empenhos", valor: num(tot.empenhos) }, { rotulo: "Média", valor: tot.n ? brl(tot.liquido / tot.n) : "—" }] },
