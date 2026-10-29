@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.261.1",
+    data: "2026-10-29",
+    titulo: "Arrasto do painel colado ao dedo, pílula compacta e bolha fixa",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "Arrastar o painel “Em segundo plano” acompanha o ponteiro ou o dedo sem atraso (antes ficava para trás num movimento rápido); pegá-lo enquanto ainda desliza para a borda não dá salto; soltar no toque não abre o banner sem querer.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Importações", texto: "A pílula ficou menor e resumida: o nome curto e só a porcentagem (o resto está no banner); os outros trabalhos aparecem num selo no canto.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Importações", texto: "“Manter como bolha” (no cabeçalho do banner): o painel fica circular também fechado, com o andamento no anel — guardado neste aparelho.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Navegação", texto: "Recarregar as telas de Empenhos, Liquidações, Pagamentos e Frotas não dá mais o aviso de “a página foi refeita” (os dados guardados só desenham na hora ao voltar pela navegação).", link: "/painel/combustivel" },
+    ],
+  },
+  {
     versao: "1.261.0",
     data: "2026-10-29",
     titulo: "Importações sem travas e o painel “Em segundo plano” manuseável como as bolhas do chat",

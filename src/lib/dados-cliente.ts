@@ -3,6 +3,7 @@
 // Nada aqui decide o que a pessoa pode ver (o servidor já filtrou o que mandou); qualquer falha do armazém cai no pedido
 // normal ao servidor. A pessoa e o escopo vêm do `EscopoCliente` (layout do painel).
 
+import { useSyncExternalStore } from "react";
 import { aApagar, chaveDado, type EntradaDado, type Escopo, entradaVale, FORMATO_DADOS, sessaoEncerrada } from "./dados-cliente-core";
 
 const BANCO = "pca-dados";
@@ -114,6 +115,17 @@ export async function apagarDadosLocais(): Promise<void> {
 }
 
 /** O valor já guardado NA MEMÓRIA desta aba (síncrono) — para desenhar a tela no 1º quadro, sem o esqueleto. */
+const semAviso = () => () => {};
+/**
+ * O guardado pode desenhar JÁ no 1º quadro? Só numa tela montada no CLIENTE (voltar a ela pela navegação). Na HIDRATAÇÃO
+ * (F5, 1º acesso) vale o que o servidor desenhou — o esqueleto —, senão o React acusa a diferença e refaz a árvore: a
+ * memória pode ter sido enchida (o aparelho, outra tela) antes de a página terminar de hidratar. Quem usa `jaGuardado` no
+ * estado inicial pergunta isto antes.
+ */
+export function useGuardadoNoDesenho(): boolean {
+  return useSyncExternalStore(semAviso, () => true, () => false);
+}
+
 export function jaGuardado<T>(recurso: string, url: string, versao: string): T | undefined {
   if (!escopo) return undefined;
   const chave = chaveDado(escopo, recurso, url);

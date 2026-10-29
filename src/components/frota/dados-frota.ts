@@ -1,6 +1,6 @@
 "use client";
 
-import { jaGuardado, lerDado } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Classificacao, type ContextoFrota, contextoFrota, type Transacao, transacoesDoPacote, type Veiculo } from "@/lib/frota-core";
 import type { TipoTransacao } from "@/lib/volus-core";
@@ -42,8 +42,9 @@ export function useDadosFrota({ tipo, ano, versao, contratos }: { tipo?: TipoTra
   const cadastro = useCadastroFrota();
   const url = ano == null ? "" : `/api/frota/dados?ano=${ano}${tipo ? `&tipo=${tipo}` : ""}`;
   // Voltar à tela: o pacote já na memória da aba desenha no 1º quadro (sem o esqueleto).
+  const noDesenho = useGuardadoNoDesenho();
   const [transacoes, setTransacoes] = useState<Transacao[] | null>(() => {
-    const p = url && versao ? jaGuardado<(string | number | null)[][]>("frota", url, versao) : undefined;
+    const p = noDesenho && url && versao ? jaGuardado<(string | number | null)[][]>("frota", url, versao) : undefined;
     return p ? transacoesDoPacote(p) : null;
   });
   const [erro, setErro] = useState<string | null>(null);

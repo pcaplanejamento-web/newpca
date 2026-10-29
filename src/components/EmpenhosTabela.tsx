@@ -1,6 +1,6 @@
 "use client";
 
-import { jaGuardado, lerDado } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
@@ -167,8 +167,9 @@ export function EmpenhosTabela({
   const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<EmpenhoNaTela>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto).
+  const noDesenho = useGuardadoNoDesenho();
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(() => {
-    if (anoInicial == null || !versao) return null;
+    if (!noDesenho || anoInicial == null || !versao) return null;
     const partes = anosDoRecorte(anoInicial, anos).map((a) => jaGuardado<EmpenhoNaTela[]>("empenhos", urlAno(cardId, a, false), versao));
     return partes.every(Boolean) ? (partes as EmpenhoNaTela[][]).flat() : null;
   });
