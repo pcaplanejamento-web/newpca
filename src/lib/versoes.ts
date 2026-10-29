@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.5",
+    data: "2026-10-29",
+    titulo: "O carregamento desenha a tela como ela é",
+    mudancas: [
+      { tipo: "correcao", area: "Telas", texto: "Enquanto as telas carregam, o esqueleto não mostra mais uma linha de título que a tela não tem: empenhos, liquidações, pagamentos e as telas das frotas começam pelos indicadores; as demais pela barra de botões ou direto no conteúdo.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.264.4",
     data: "2026-10-29",
     titulo: "Barras de botões no mesmo padrão em todas as telas",

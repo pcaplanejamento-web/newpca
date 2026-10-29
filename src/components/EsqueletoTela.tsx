@@ -23,12 +23,30 @@ export function EsqueletoTela({ cheia = false, children }: { cheia?: boolean; ch
   );
 }
 
-/** Esqueleto da LINHA DE TÍTULO de uma tela (`.linha-topico`: o título e, à direita, a ação da tela). */
-export function EsqueletoTitulo({ acao = true }: { acao?: boolean }) {
+/**
+ * Esqueleto da BARRA DE FERRAMENTAS de uma tela (as telas não têm título): `controles` = os principais à esquerda
+ * (seletores, busca), `icones` = os botões só-ícone à direita (recarregar, ajuda) — a regra da `.barra-ferramentas`.
+ */
+export function EsqueletoBarra({ controles = 1, icones = 2 }: { controles?: number; icones?: number }) {
   return (
-    <div className="linha-topico flex items-center gap-3">
-      <Skeleton className="h-7 w-44 max-w-[60%]" />
-      {acao && <EsqueletoControle className="ml-auto w-28" />}
+    <div className="flex flex-wrap items-center gap-2">
+      {Array.from({ length: controles }, (_, i) => (
+        <EsqueletoControle key={`c${i}`} className="w-40" />
+      ))}
+      {Array.from({ length: icones }, (_, i) => (
+        <EsqueletoControle key={`i${i}`} quadrado className={i === 0 ? "ml-auto" : ""} />
+      ))}
+    </div>
+  );
+}
+
+/** Esqueleto dos INDICADORES (`IndicadoresKpi`): os quatro cartões principais na MESMA grade. */
+export function EsqueletoIndicadores() {
+  return (
+    <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-[132px] rounded-card" />
+      ))}
     </div>
   );
 }

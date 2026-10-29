@@ -163,7 +163,7 @@ import { EsqueletoCalendario } from "@/components/CalendarioEsqueleto";
 import { DocumentoCard, EscolherTamanhoPdf } from "@/components/DocumentosView";
 import { COLUNAS_ESPACOS, EsqueletoCartaoEspaco } from "@/components/CartaoEspacoEsqueleto";
 import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
-import { EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoBarra } from "@/components/EsqueletoTela";
 import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
 import { EsqueletoTabsLaterais } from "@/components/TabsEsqueleto";
 import { EsqueletoControle, Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
@@ -4284,7 +4284,7 @@ export function Catalogo() {
           </span>
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <EsqueletoTitulo />
+              <EsqueletoBarra />
               <EsqueletoSegmented itens={4} />
               <EsqueletoControle quadrado />
             </div>
