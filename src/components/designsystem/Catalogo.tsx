@@ -561,7 +561,7 @@ function DemoEditorRico() {
   ];
   return (
     <div className="space-y-[var(--gap-block)]">
-      <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30vh] max-h-[50vh]" />
+      <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30dvh] max-h-[50dvh]" />
       <EditorRico compacto rotulo="Comentário" valor={c} onChange={setC} maxLength={5000} placeholder="Escrever um comentário… (@ menciona alguém)" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
       <EditorRico mensagem rotulo="Mensagem do chat" valor={m} onChange={setM} maxLength={2000} placeholder="Mensagem…" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
     </div>

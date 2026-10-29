@@ -99,7 +99,7 @@ export function TransacaoFrotaDetalhe({
       ) : (
         <div className="space-y-[var(--gap-block)]">
           {/* Os números numa linha (4 no abastecimento, 3 na manutenção); no celular, duas colunas. */}
-          <div className={`grid gap-[var(--gap-block)] ${ab ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+          <div className={`grid gap-[var(--gap-block)] ${ab ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
             <StatMini label="Valor" value={brl(n("valor"))} tone="accent" />
             {ab ? (
               <>

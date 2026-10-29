@@ -131,7 +131,7 @@ function Painel({
   const btn = "flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold";
 
   return (
-    <div className="flex max-h-[min(70vh,420px)] w-full flex-col">
+    <div className="flex max-h-[min(70dvh,420px)] w-full flex-col">
       {onSort && (
         <div className="flex gap-2 p-2">
           <button type="button" onClick={() => onSort("asc")} className={`${btn} inline-flex items-center justify-center gap-1 text-text-2 hover:bg-surface-2`}>

@@ -17,9 +17,9 @@ export function Pager({
   className?: string;
 }) {
   if (pages <= 1) return null;
-  // Alvo de toque de 44px no celular; 32px no desktop.
+  // Alvo de toque de 44px no celular; a altura dos controles (--h-control-sm) no desktop.
   const btn =
-    "inline-flex h-11 w-11 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface lg:h-8 lg:w-8";
+    "inline-flex h-11 w-11 items-center justify-center rounded-control border border-border-2 text-text-2 disabled:opacity-40 enabled:hover:bg-surface lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]";
   return (
     <div className={`flex items-center gap-1 ${className}`}>
       <button

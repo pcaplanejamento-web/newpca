@@ -383,7 +383,7 @@ export function CadastroForm({
               setTermoLido(true);
               setAceitou(true);
             }}
-            altura="max-h-[60vh]" />
+            altura="max-h-[60dvh]" />
         </Modal>
       )}
 

@@ -32,7 +32,7 @@ import { haQuanto } from "@/lib/acessos-core";
 import type { LinhaCron } from "@/lib/importacoes-cron-sql";
 import { type EstadoLinha, importarCards, type LinhaImportacao, perguntaDeQueda, prepararCards } from "@/lib/importar-cards";
 import { brl, dataHoraBR, num } from "@/lib/format";
-import { ConteudoAba } from "./AbasEspaco";
+import { BotaoVoltar, ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { type Aviso, Avisos } from "./Avisos";
 import { AndamentoImportacao } from "./AndamentoImportacao";
@@ -45,7 +45,7 @@ import { EmpenhoCardImportacao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
-import { IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
+import { IconCheck, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
@@ -1113,15 +1113,5 @@ function CardAberto({
 }
 
 function Voltar({ onFechar }: { onFechar: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onFechar}
-      aria-label="Voltar às importações"
-      title="Voltar às importações"
-      className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-    >
-      <IconChevronLeft className="h-4 w-4" />
-    </button>
-  );
+  return <BotaoVoltar onClick={onFechar} rotulo="as importações" />;
 }

@@ -467,7 +467,7 @@ export function ColunaTarefas({
           className="flex min-h-40 w-11 flex-col items-center gap-2 rounded-xl bg-[var(--lista-quadro)] py-3 text-text shadow-[var(--sombra-cartao)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <IconExpandir className="h-4 w-4 shrink-0 text-text-2" />
-          <span className="max-h-[60vh] truncate text-[14px] font-semibold [writing-mode:vertical-rl]">{l.nome}</span>
+          <span className="max-h-[60dvh] truncate text-[14px] font-semibold [writing-mode:vertical-rl]">{l.nome}</span>
           <span className="text-[12px] font-semibold text-muted tabular-nums">{qtd}</span>
         </button>
       </section>

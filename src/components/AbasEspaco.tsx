@@ -128,16 +128,23 @@ export function AbasEspaco<T extends string>({
   );
 }
 
-/** O botão VOLTAR das telas internas (espaços, pastas, órgão): sempre o primeiro à esquerda da linha do topo. */
-export function BotaoVoltar({ href, rotulo }: { href: string; rotulo: string }) {
+/**
+ * O botão VOLTAR das telas internas (espaços, pastas, órgão, card, fluxo): sempre o primeiro à esquerda da linha do topo, na
+ * altura dos controles. `href` = um link; `onClick` = voltar sem navegar (uma visão dentro da mesma tela).
+ */
+export function BotaoVoltar({ href, onClick, rotulo }: { href?: string; onClick?: () => void; rotulo: string }) {
+  const classe =
+    "grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]";
+  const icone = <IconChevronLeft className="h-4 w-4" />;
+  if (href)
+    return (
+      <Link href={href} aria-label={`Voltar para ${rotulo}`} title={`Voltar para ${rotulo}`} className={classe}>
+        {icone}
+      </Link>
+    );
   return (
-    <Link
-      href={href}
-      aria-label={`Voltar para ${rotulo}`}
-      title={`Voltar para ${rotulo}`}
-      className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-    >
-      <IconChevronLeft className="h-4 w-4" />
-    </Link>
+    <button type="button" onClick={onClick} aria-label={`Voltar para ${rotulo}`} title={`Voltar para ${rotulo}`} className={classe}>
+      {icone}
+    </button>
   );
 }

@@ -12,7 +12,7 @@ import { EsqueletoControle, Skeleton } from "./Skeleton";
 export function EsqueletoTela({ cheia = false, children }: { cheia?: boolean; children: ReactNode }) {
   return (
     <div
-      className={`esqueleto-tela ${cheia ? "flex flex-col gap-[var(--gap-block)] lg:h-[calc(100dvh-var(--h-header)-var(--pad-canvas-y)*2)]" : "space-y-[var(--gap-block)]"}`}
+      className={`esqueleto-tela ${cheia ? "flex flex-col gap-[var(--gap-block)] lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*2))]" : "space-y-[var(--gap-block)]"}`}
       aria-busy="true"
     >
       <span className="sr-only" role="status">

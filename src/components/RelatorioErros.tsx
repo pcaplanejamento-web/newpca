@@ -83,7 +83,7 @@ export function RelatorioErros({
         )}
         <pre
           id="relatorio-erros-texto"
-          className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-[var(--pad-card)] font-mono text-[12.5px] leading-relaxed text-text-2"
+          className="max-h-[55dvh] overflow-auto whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-[var(--pad-card)] font-mono text-[12.5px] leading-relaxed text-text-2"
         >
           {texto}
         </pre>

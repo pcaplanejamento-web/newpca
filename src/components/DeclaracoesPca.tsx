@@ -508,7 +508,7 @@ function DetalheDeclaracao({
           ) : (
             <Callout kind="ok">Exportada — válida e travada para edição.</Callout>
           )}
-          <div className="grid grid-cols-3 gap-[var(--gap-block)]">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
             <StatMini label="Itens" value={num(c.totalItens)} />
             <StatMini label="Parciais" value={num(parciais)} tone={parciais ? "warn" : "default"} />
             <StatMini label="Valor total" value={brl(c.valorTotal)} tone="accent" />

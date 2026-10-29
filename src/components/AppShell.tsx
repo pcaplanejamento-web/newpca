@@ -139,7 +139,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
           ) : (
             <IconUsers className="h-3.5 w-3.5 opacity-70" />
           )}
-          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
+          <span className="max-w-[9rem] truncate sm:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
@@ -376,7 +376,7 @@ export function AppShell({
                 <PcaSelect pcas={cartoesPca} ativoId={pcaFiltroId} />
               </div>
             )}
-            <div className="hidden items-center gap-1.5 sm:flex">
+            <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>

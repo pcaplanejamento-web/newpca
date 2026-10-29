@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.10",
+    data: "2026-10-29",
+    titulo: "Componentes na escala certa em toda tela",
+    mudancas: [
+      { tipo: "melhoria", area: "Interface", texto: "Botões, campos, listas e janelas com a mesma altura e o mesmo toque em todos os tamanhos de tela (celular, tablet e desktop); o botão Voltar padrão também no editor das automações, nos cards de Importações e nos quadros de Tarefas.", link: "/painel/tarefas" },
+      { tipo: "correcao", area: "Interface", texto: "Janelas e listas flutuantes respeitam a altura visível do celular (barra do navegador e teclado).", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.264.9",
     data: "2026-10-29",
     titulo: "Telas internas sem título, com o voltar à esquerda",

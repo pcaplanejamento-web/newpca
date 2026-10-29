@@ -414,7 +414,7 @@ export function OrcamentoComparativo({
             </SelectField>
           </div>
         )}
-        <div className="flex items-center gap-2 lg:ml-auto">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 lg:ml-auto">
           <Segmented<ModoCruzamento> ariaLabel="Ler as células como" value={modo} onChange={setModo} options={MODOS} />
           <Ajuda titulo="Comparativo">
             <TopicoAjuda icone={<IconTrocar className="h-4 w-4" />} titulo="Linhas × Colunas">

@@ -130,7 +130,7 @@ function ListaNivel({ opcoes, fechar }: { opcoes: Opcao[]; fechar: () => void })
           />
         </div>
       )}
-      <div className="max-h-[min(60vh,380px)] overflow-y-auto">
+      <div className="max-h-[min(60dvh,380px)] overflow-y-auto">
         {lista.length === 0 && <p className="px-2.5 py-3 text-[13px] text-muted">Nada encontrado</p>}
         {lista.map((o, i) => {
           const Ic = "recente" in o ? IconClock : o.icone;
