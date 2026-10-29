@@ -18,6 +18,7 @@ export const TIPOS_PESQUISA = [
   { tipo: "empenho", titulo: "Empenhos", prefixo: "empenho:", curto: "em:", texto: "Empenhos (nº, fornecedor, CPF/CNPJ, histórico, ação, elemento)" },
   { tipo: "liquidacao", titulo: "Liquidações", prefixo: "liquidacao:", curto: "li:", texto: "Liquidações (nº, nº do empenho, credor, CPF/CNPJ, histórico)" },
   { tipo: "pagamento", titulo: "Pagamentos", prefixo: "pagamento:", curto: "pg:", texto: "Pagamentos (nº da ordem, nº do empenho, credor, CPF/CNPJ, histórico)" },
+  { tipo: "veiculo", titulo: "Veículos da frota", prefixo: "veiculo:", curto: "ve:", texto: "Veículos da frota (placa, marca, modelo)" },
   { tipo: "declaracao", titulo: "Declarações do PCA", prefixo: "declaracao:", curto: "de:", texto: "Declarações do PCA (nº, processo, protocolo da Centi, finalidade)" },
   { tipo: "visao", titulo: "Visões do orçamento", prefixo: "visao:", curto: "vi:", texto: "Visões do orçamento (nome)" },
   { tipo: "padronizacao", titulo: "Medidas e classificações", prefixo: "medida:", curto: "me:", texto: "Medidas e classificações do Catálogo (sigla, nome, sinônimos, palavras-chave)" },
@@ -115,6 +116,8 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.ve("tarefas") || p.ve("calendario");
     case "pasta":
       return p.ve("tarefas");
+    case "veiculo":
+      return p.ve("veiculos") || p.ve("frotas");
     case "evento":
       return p.ve("calendario");
     case "orcamento":

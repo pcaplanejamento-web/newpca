@@ -337,6 +337,11 @@ fluxos/PainelNo.tsx
 fluxos/ProblemasFluxo.tsx
 fluxos/TabelaMesaFluxo.tsx
 fluxos/paineis.tsx
+frota/FichaVeiculoBanner.tsx
+frota/FrotaAdmin.tsx
+frota/FrotaView.tsx
+frota/TransacaoFrotaDetalhe.tsx
+frota/VeiculosView.tsx
 icons.tsx
 LiquidacaoDetalhe.tsx
 PagamentoDetalhe.tsx
@@ -348,3 +353,4 @@ CamposMesa.tsx
 SeletorColunas.tsx
 AndamentoImportacao.tsx
 ImportacoesAoVivo.tsx
+MaisIndicadores.tsx

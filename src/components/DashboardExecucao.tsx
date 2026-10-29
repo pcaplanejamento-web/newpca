@@ -53,6 +53,7 @@ import { Button } from "./Button";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
+import { MaisIndicadores } from "./MaisIndicadores";
 import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./charts/Barras";
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
 import { TOPO_DAS_DATAS } from "./charts/serie-medidas";
@@ -66,7 +67,7 @@ import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconChevronLeft, IconClock, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
+import { IconChevronLeft, IconClock, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { useImportacoesLocais } from "./ImportacoesAoVivo";
@@ -77,7 +78,6 @@ import { type ConfigImportacoes, lerRegraRemovidos, NOME_TIPO, type ResumoCard }
 import { anoMaisRecente, importarCards, prepararCards, resumoImportacao } from "@/lib/importar-cards";
 import { haQuanto } from "@/lib/acessos-core";
 import type { MetaExec } from "@/lib/execucao-dash-core";
-import { duracaoMotionMs } from "./Modal";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { coerceEstado, diferencas, ESTADO_VAZIO, type EstadoFiltros, paraGuardar, partesDefinidas, periodoEfetivo, voltarParte } from "@/lib/filtros-visao-core";
 import { OrigemDados } from "./OrigemDados";
@@ -121,15 +121,6 @@ type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 type RecorteOrigem = { recorte: string; sel: Selecao };
 /** A origem de um número; com `acumulado`, a do ponto do gráfico também oferece "Acumulado até aqui" (`noAcumulado` = abre nele). */
 type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem & { pontos: PontoDaSerie[]; ajustarY: boolean }; noAcumulado?: boolean };
-
-const CHAVE_MAIS = "execucao:mais-indicadores";
-const lerMais = () => {
-  try {
-    return localStorage.getItem(CHAVE_MAIS) === "1";
-  } catch {
-    return false;
-  }
-};
 
 const pctTexto = (p: number | null) => (p == null ? "—" : `${(p * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
 const plural = (n: number, um: string, varios: string) => `${num(n)} ${n === 1 ? um : varios}`;
@@ -198,18 +189,8 @@ export function DashboardExecucao({
   const setPeriodo = (p: Periodo) => setEstado((e) => ({ ...e, periodo: p }));
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
   const [gran, setGran] = useState<Granularidade>("dia");
-  const [mais, setMais] = useState(false);
-  /** A abertura terminou (só então os cartões podem passar da borda — a sombra, o realce). */
-  const [maisPronto, setMaisPronto] = useState(false);
-  const [animarMais, setAnimarMais] = useState(false);
   const [verDados, setVerDados] = useState(false);
   const [origem, setOrigem] = useState<Origem | null>(null);
-  useEffect(() => {
-    // A preferência guardada abre já pronta, sem animar na chegada.
-    const v = lerMais();
-    setMais(v);
-    setMaisPronto(v);
-  }, []);
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
   const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
@@ -502,16 +483,9 @@ export function DashboardExecucao({
           acao="ver os pagamentos"
         />
       </div>
-      {/* "Mais indicadores": abre e fecha pela ALTURA (grid-template-rows 0fr ↔ 1fr) — sempre montado, os de baixo deslizam
-          juntos e nada pisca; fechado = inerte (fora do Tab). O corte só durante a transição (as sombras não ficam presas). */}
-      <div
-        className={`grid ${animarMais ? "transition-[grid-template-rows,opacity,margin] duration-[calc(var(--motion-duration)*1.5)] ease-[var(--motion-ease)] motion-reduce:transition-none" : ""}`}
-        style={{ gridTemplateRows: mais ? "1fr" : "0fr", opacity: mais ? 1 : 0, marginTop: mais ? 0 : "calc(-1 * var(--gap-block))" }}
-        inert={!mais}
-        aria-hidden={!mais}
-        onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === "grid-template-rows" && setMaisPronto(mais)}
-      >
-        <div className={`min-h-0 ${mais && maisPronto ? "overflow-visible" : "overflow-hidden"}`}>
+      <MaisIndicadores
+        chave="execucao:mais-indicadores"
+        extras={
           <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
             <KpiStat
               label="Anulado: empenhos"
@@ -568,29 +542,8 @@ export function DashboardExecucao({
               acao="ver os pagamentos"
             />
           </div>
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-expanded={mais}
-        onClick={() => {
-          const novo = !mais;
-          try {
-            localStorage.setItem(CHAVE_MAIS, novo ? "1" : "0");
-          } catch {
-            /* sem armazenamento: vale só nesta visita */
-          }
-          // Sem movimento (sistema ou ADM) não há transição — nem o fim dela: fica pronto na hora.
-          const semTransicao = duracaoMotionMs() === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          setAnimarMais(!semTransicao);
-          setMaisPronto(semTransicao && novo);
-          setMais(novo);
-        }}
-        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)]"
-      >
-        {mais ? "Menos indicadores" : "Mais indicadores"}
-        <IconChevronDown className={`h-4 w-4 transition-transform ${mais ? "rotate-180" : ""}`} />
-      </button>
+        }
+      />
 
       {/* TODOS os filtros à vista, logo abaixo dos indicadores, no cartão padrão dos filtros: o Período primeiro e as dimensões em colunas. */}
       <section

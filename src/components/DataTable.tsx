@@ -891,7 +891,9 @@ export function DataTable<R>({
         <span>
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 sm:gap-x-3">
+        {/* Os CONTROLES numa linha só, alinhados: o que não cabe rola de lado (a rolagem nativa; os painéis abrem por portal,
+            nada é cortado). O respiro de 2px guarda o anel de foco. */}
+        <div className="-m-0.5 flex min-w-0 max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain p-0.5 sm:gap-3 [&>*]:shrink-0">
           {/* Com visões salvas, os filtros das colunas ficam no PainelFiltros — aqui só os de fora (o Recorte da Mesa). */}
           {(edicoes ? 0 : ativos.length) + (filtrosRodape?.n ?? 0) > 0 && (
             <FiltrosAtivos

@@ -602,3 +602,86 @@ export function BarraEdicaoMassaTarefas({
     />
   );
 }
+
+/** A ação em massa nos VEÍCULOS da frota: um campo do cadastro com o valor (`null` = limpar). */
+export type AcaoMassaVeiculos = { campo: "classificacaoId" | "reparticaoId"; valor: number | null } | { campo: "tipo" | "situacao" | "origem"; valor: string | null };
+
+/**
+ * Edição EM MASSA dos VEÍCULOS selecionados (tela Veículos): classificação, tipo, situação, origem ou a unidade de lotação —
+ * a MESMA moldura das demais barras de massa.
+ */
+export function BarraEdicaoMassaVeiculos({
+  classificacoes,
+  unidades,
+  aplicando = false,
+  onAplicar,
+}: {
+  classificacoes: { id: number; nome: string }[];
+  unidades: Rep[];
+  aplicando?: boolean;
+  onAplicar: (acao: AcaoMassaVeiculos) => void;
+}) {
+  type Campo = AcaoMassaVeiculos["campo"];
+  const campos: { value: Campo; label: string }[] = [
+    { value: "classificacaoId", label: "Classificação" },
+    { value: "tipo", label: "Tipo" },
+    { value: "situacao", label: "Situação" },
+    { value: "origem", label: "Origem" },
+    { value: "reparticaoId", label: "Unidade" },
+  ];
+  const [campo, setCampo] = useState<Campo>("classificacaoId");
+  const [valor, setValor] = useState("");
+  const opcoes: Record<Campo, { v: string; r: string }[]> = {
+    classificacaoId: classificacoes.map((c) => ({ v: String(c.id), r: c.nome })),
+    tipo: [
+      { v: "veiculo", r: "Veículo" },
+      { v: "maquina", r: "Máquina" },
+    ],
+    situacao: [
+      { v: "ativo", r: "Ativo" },
+      { v: "inativo", r: "Inativo" },
+    ],
+    origem: [
+      { v: "proprio", r: "Próprio" },
+      { v: "contrato", r: "Contrato" },
+    ],
+    reparticaoId: unidades.filter((u) => !u.oculto).map((u) => ({ v: String(u.id), r: `${u.codigo} · ${u.nome}` })),
+  };
+  // Classificação, origem e unidade aceitam LIMPAR ("0"); tipo e situação, não.
+  const limpavel = campo === "classificacaoId" || campo === "origem" || campo === "reparticaoId";
+  const acao: AcaoMassaVeiculos | null = !valor
+    ? null
+    : campo === "classificacaoId" || campo === "reparticaoId"
+      ? { campo, valor: valor === "0" ? null : Number(valor) }
+      : { campo, valor: valor === "0" ? null : valor };
+  return (
+    <Moldura
+      campos={campos}
+      campo={campo}
+      onCampo={(c) => {
+        setCampo(c);
+        setValor("");
+      }}
+      pronto={!!acao}
+      aplicando={aplicando}
+      onAplicar={() => acao && onAplicar(acao)}
+      controle={
+        <Selecao
+          aria-label={campos.find((c) => c.value === campo)?.label}
+          className={inputCls}
+          style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }}
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+        >
+          <option value="">— {campos.find((c) => c.value === campo)?.label} —</option>
+          {limpavel && <option value="0">Nenhum (limpar)</option>}
+          {opcoes[campo].map((o) => (
+            <option key={o.v} value={o.v}>
+              {o.r}
+            </option>
+          ))}
+        </Selecao>
+      }
+    />
+  );
+}

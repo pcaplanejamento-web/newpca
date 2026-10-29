@@ -24,7 +24,7 @@ test("lerModulos: inválido = padrão; tela em UM módulo (o 1º vence); nome ob
   assert.deepEqual(lerModulos([{ id: "x", nome: " ", telas: [] }]), MODULOS_PADRAO);
   assert.deepEqual(L[1].telas, ["tarefas", "calendario"]);
   assert.equal(lerModulos([{ id: "a", nome: "A", telas: [] }, { id: "a", nome: "B", telas: [] }]).length, 1);
-  assert.deepEqual(telasSemModulo(L), ["catalogo", "orcamento", "documentos", "empenhos", "liquidacoes", "pagamentos", "execucao"]);
+  assert.deepEqual(telasSemModulo(L), ["catalogo", "orcamento", "documentos", "empenhos", "liquidacoes", "pagamentos", "execucao", "frotas", "combustivel", "manutencao", "veiculos"]);
 });
 
 test("grupo pelos módulos; antigo pelas avulsas que têm módulo; módulo apagado não libera nada", () => {

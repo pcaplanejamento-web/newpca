@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.256.0",
+    data: "2026-10-29",
+    titulo: "Frotas: combustível, manutenção e veículos com os dados da Vólus",
+    mudancas: [
+      { tipo: "novo", area: "Frotas", texto: "Módulo Frotas com o painel da frota: gasto total, combustível, manutenção, consumo médio (km/l pelo hodômetro), custo por km, gasto por mês e por veículo, demonstrativo por qualquer dimensão e os alertas (hodômetro que voltou, consumo e preço fora do padrão, abastecimentos próximos, litros acima do tanque, veículo inativo com gasto).", link: "/painel/frotas" },
+      { tipo: "novo", area: "Frotas", texto: "Telas Combustível e Manutenção: todos os abastecimentos e manutenções com os filtros do sistema, o total no rodapé, a exportação e o registro completo (veículo, posto ou oficina, itens, nota e empenho).", link: "/painel/combustivel" },
+      { tipo: "novo", area: "Frotas", texto: "Tela Veículos: o cadastro da frota (as placas entram sozinhas pela Vólus) com tipo, classificação, situação, origem (FIPE ou locação), tanque e unidade — edição, edição em massa, planilha e a ficha do veículo em PDF.", link: "/painel/veiculos" },
+      { tipo: "novo", area: "Importações", texto: "Integração com a Vólus em Configurações → Importações → Frotas: a credencial cifrada, testar a conexão, importar um ano, os contratos, as unidades ligadas ao cadastro, o histórico das leituras e a atualização automática que grava só o que mudou.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa acha os veículos da frota pela placa, marca ou modelo (prefixo \"veiculo:\") e abre a ficha.", link: "/painel/veiculos" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram os quatro principais com dois detalhes cada (os mesmos cartões do Dashboard do PCA) e os demais em \"Mais indicadores\"; os filtros ficam com nomes curtos, em ordem, e conectados entre si — o valor marcado que outro filtro zerou continua na lista para ser desmarcado.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Tabelas", texto: "No rodapé de todas as tabelas, exportar, ações, linhas por página e paginação ficam numa linha só; o que não cabe na tela rola de lado.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.255.0",
     data: "2026-10-28",
     titulo: "Pesquisa por texto em empenhos, liquidações e pagamentos; pastas e usuários arquivados",

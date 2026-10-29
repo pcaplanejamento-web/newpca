@@ -1,7 +1,7 @@
 // Abas de módulo que um GRUPO pode liberar (gate de navegação). Módulo puro (sem deps de servidor) — usado no
 // cliente (navegação, telas de RBAC) e no servidor. A ORDEM é a da navegação: a 1ª liberada é a porta de entrada do
 // painel (`/painel` → a Mesa, onde ficam os protocolos, os DFDs e os itens).
-export const ABA_KEYS = ["dfd", "pca", "catalogo", "orcamento", "tarefas", "calendario", "verificacao", "documentos", "empenhos", "liquidacoes", "pagamentos", "execucao"] as const;
+export const ABA_KEYS = ["dfd", "pca", "catalogo", "orcamento", "tarefas", "calendario", "verificacao", "documentos", "empenhos", "liquidacoes", "pagamentos", "execucao", "frotas", "combustivel", "manutencao", "veiculos"] as const;
 export type AbaKey = (typeof ABA_KEYS)[number];
 
 export const ABAS: { key: AbaKey; label: string; href: string }[] = [
@@ -17,6 +17,10 @@ export const ABAS: { key: AbaKey; label: string; href: string }[] = [
   { key: "liquidacoes", label: "Liquidações", href: "/painel/liquidacoes" },
   { key: "pagamentos", label: "Pagamentos", href: "/painel/pagamentos" },
   { key: "execucao", label: "Execução", href: "/painel/execucao" },
+  { key: "frotas", label: "Frotas", href: "/painel/frotas" },
+  { key: "combustivel", label: "Combustível", href: "/painel/combustivel" },
+  { key: "manutencao", label: "Manutenção", href: "/painel/manutencao" },
+  { key: "veiculos", label: "Veículos", href: "/painel/veiculos" },
 ];
 
 const CONHECIDAS = new Set<string>(ABA_KEYS);

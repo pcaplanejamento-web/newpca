@@ -199,6 +199,7 @@ import {
 } from "@/components/icons";
 import { CadeadoBotao, CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
+import { MaisIndicadores } from "@/components/MaisIndicadores";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
@@ -316,6 +317,9 @@ import { RelatorioVariacao } from "@/components/RelatorioVariacao";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
 import { TokenEditor } from "./TokenEditor";
+import { FichaVeiculoBanner } from "@/components/frota/FichaVeiculoBanner";
+import { ALERTAS_PADRAO } from "@/lib/frota-config-core";
+import { consumoDosAbastecimentos, contextoFrota, transacoesDoPacote } from "@/lib/frota-core";
 
 // Biblioteca de componentes (fonte única, spec §39.25) — rota pública
 // `/design-system`. Mostra TODO componente do sistema (botões, ícones, status,
@@ -3449,6 +3453,30 @@ function DemoPainelFiltros() {
   );
 }
 
+/** A FROTA: a ficha do veículo sobre transações de exemplo (as telas Frotas/Combustível/Manutenção/Veículos e a
+ * configuração da Vólus — `FrotaView`, `VeiculosView`, `FrotaAdmin`, `TransacaoFrotaDetalhe` — são contêineres com dados). */
+function FichaVeiculoDemo() {
+  const [placa, setPlaca] = useState<string | null>(null);
+  const ab = (id: number, dia: string, litros: number, hodo: number) => [id, 0, dia, "09:30", "000617000001", "ABC1D23", "DIESEL S10", null, litros, 6.1, litros * 6.1, hodo, null, null, "POSTO CENTRAL", "RIO VERDE", "GO", "JOÃO", "SAÚDE", null, null, null, null, 1, 0];
+  const trs = transacoesDoPacote([
+    ab(1, "2026-03-02", 45, 20_000),
+    ab(2, "2026-03-09", 44, 20_420),
+    ab(3, "2026-04-01", 46, 20_850),
+    ab(4, "2026-04-15", 70, 20_700),
+    [5, 1, "2026-04-20", null, "000600000001", "ABC1D23", null, "PREVENTIVA", null, null, 1280, 21_000, null, null, "OFICINA BOA", "RIO VERDE", "GO", null, "SAÚDE", null, null, null, null, 6, 0],
+  ]);
+  const ctx = contextoFrota(
+    [{ placa: "ABC1D23", tipo: "veiculo", classificacaoId: 1, marca: "FIAT", modelo: "STRADA", ano: 2021, situacao: "ativo", origem: "proprio", fipe: 92_000, locacao: null, contrato: null, capacidadeTanque: 55, reparticaoId: null, observacao: null }],
+    [{ id: 1, nome: "Leve", cor: "#2563eb" }],
+  );
+  return (
+    <>
+      <Button onClick={() => setPlaca("ABC1D23")}>Abrir a ficha de ABC1D23</Button>
+      <FichaVeiculoBanner placa={placa} onClose={() => setPlaca(null)} trs={trs} ctx={ctx} consumo={consumoDosAbastecimentos(trs)} ano={2026} limites={ALERTAS_PADRAO} />
+    </>
+  );
+}
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -3782,6 +3810,26 @@ export function Catalogo() {
           <KpiStat realce completo label="Maior item (texto longo)" value="R$ 9.600.000,00" cor="var(--sit-devolvido)" hint={"GRAMADO SINTÉTICO FORNECIMENTO E A INSTALAÇÃO DE GRAMA SINTÉTICA COM DOIS TONS DE VERDE ".repeat(20)} detalhes={[{ rotulo: "Participação no total", valor: "21,3%" }]} />
           <KpiStat label="Finalizados" value="63" cor="var(--sit-finalizado)" delta={{ dir: "up", value: "11" }} spark={[35, 40, 50, 55, 65, 75, 90]} hint="no mês" />
           <KpiStat label="Devolvidos" value="12" cor="var(--sit-devolvido)" delta={{ dir: "down", value: "2" }} spark={[60, 50, 45, 40, 30, 25, 20]} hint="vs. mês anterior" />
+        </div>
+      </Secao>
+
+      <Secao titulo="MaisIndicadores (os principais à vista; os complementares abrem pela altura — Execução e Frotas)">
+        <div className="space-y-[var(--gap-block)]">
+          <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
+            <KpiStat completo label="Gasto total" value="R$ 299.227,64" hint="792 registros" />
+            <KpiStat completo label="Combustível" value="R$ 199.327,64" hint="720 abastecimentos" />
+            <KpiStat completo label="Manutenção" value="R$ 99.900,00" hint="72 manutenções" />
+            <KpiStat completo label="Veículos" value="24" hint="R$ 12.467,82 por veículo" />
+          </div>
+          <MaisIndicadores
+            chave="designsystem:mais-indicadores"
+            extras={
+              <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
+                <KpiStat completo label="Consumo médio" value="9,41 km/l" hint="292.539 km rodados" />
+                <KpiStat completo label="Custo por km" value="R$ 1,02" hint="combustível + manutenção" />
+              </div>
+            }
+          />
         </div>
       </Secao>
 
@@ -5321,6 +5369,10 @@ export function Catalogo() {
       </Secao>
       <Secao titulo="IntegracaoGoogle (Integrações → Login com Google: Client ID, Client secret write-only e a URI de redirecionamento a cadastrar no Google; e-mail novo vira cadastro pendente)">
         <IntegracaoGoogleDemo />
+      </Secao>
+
+      <Secao titulo="FichaVeiculoBanner (Frotas: a ficha do veículo — indicadores, gasto por mês, postos, alertas e registros; o PDF da ficha)">
+        <FichaVeiculoDemo />
       </Secao>
 
       <Secao titulo="Estado da ligação com o Trello (seloTrello — a seção Trello da Configuração do quadro, SincronizacaoTrello, é um contêiner com dados)">

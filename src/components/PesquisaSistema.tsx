@@ -34,8 +34,7 @@ import {
   IconShield,
   IconUser,
   IconUsers,
-  IconWallet,
-} from "./icons";
+  IconWallet, IconVeiculo } from "./icons";
 import { ChipsEscolha } from "./ChipsEscolha";
 import { useComponente } from "./ComponentesPapel";
 import { toast } from "./Toast";
@@ -140,6 +139,7 @@ const ICONE_TIPO: Record<string, Icone> = {
   orcamento: IconWallet,
   tarefa: IconKanban,
   pasta: IconPasta,
+  veiculo: IconVeiculo,
   evento: IconCalendar,
   lancamento: IconWallet,
   catalogo: IconDatabase,
@@ -692,6 +692,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
     ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
     ...(abre("/painel/tarefas") ? [{ value: "pasta", label: "Pastas" }] : []),
+    ...(abre("/painel/veiculos") || abre("/painel/frotas") ? [{ value: "veiculo", label: "Veículos" }] : []),
     ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
     ...(abre("/painel/orcamento")
       ? [{ value: "orcamento", label: "Orçamentos" }, ...(libera("orcamento.lancamentos") ? [{ value: "lancamento", label: "Lançamentos" }] : []), ...(libera("orcamento.visoes") ? [{ value: "visao", label: "Visões" }] : [])]

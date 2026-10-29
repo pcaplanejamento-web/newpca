@@ -48,6 +48,7 @@ import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
+import { FrotaAdmin } from "./frota/FrotaAdmin";
 import { Segmented } from "./Segmented";
 import { SecaoBanner } from "./SecaoBanner";
 import { SkeletonCartao } from "./Skeleton";
@@ -90,6 +91,8 @@ export function ImportacoesAdmin() {
   const [cards, setCards] = useState<ResumoCard[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [tipo, setTipo] = useState<TipoCard>("empenhos");
+  // A FROTA (Vólus) mora na mesma aba, sem cards (uma integração só) — `?tipo=frotas`.
+  const [frotas, setFrotas] = useState(false);
   const [aberto, setAberto] = useState<{ id: number; sub: SubAba } | null>(null);
   const [config, setConfig] = useState<ConfigImportacoes | null>(null);
   const [erroConfig, setErroConfig] = useState<string | null>(null);
@@ -120,6 +123,7 @@ export function ImportacoesAdmin() {
     const u = new URL(window.location.href);
     const t = u.searchParams.get("tipo");
     if (t && (TIPOS as readonly string[]).includes(t)) setTipo(t as TipoCard);
+    if (t === "frotas") setFrotas(true);
     const id = Number(u.searchParams.get("card"));
     const sub = u.searchParams.get("sub");
     if (Number.isInteger(id) && id > 0) setAberto({ id, sub: sub === "vinculos" || sub === "configuracao" ? sub : "importacao" });
@@ -145,7 +149,17 @@ export function ImportacoesAdmin() {
     gravarNaUrl(tipo, null, null);
     void carregar();
   };
-  const trocarTipo = (t: TipoCard) => {
+  const trocarTipo = (t: TipoCard | "frotas") => {
+    if (t === "frotas") {
+      setFrotas(true);
+      const u = new URL(window.location.href);
+      u.searchParams.set("tipo", "frotas");
+      u.searchParams.delete("card");
+      u.searchParams.delete("sub");
+      window.history.replaceState(null, "", u);
+      return;
+    }
+    setFrotas(false);
     setTipo(t);
     gravarNaUrl(t, null, null);
   };
@@ -173,17 +187,26 @@ export function ImportacoesAdmin() {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-2">
-        <Segmented<TipoCard>
-          value={tipo}
+        <Segmented<TipoCard | "frotas">
+          value={frotas ? "frotas" : tipo}
           onChange={trocarTipo}
           ariaLabel="Tipo de importação"
-          options={TIPOS.map((t) => ({ value: t, label: cards ? `${NOME_TIPO[t].titulo} (${num(contagem(t))})` : NOME_TIPO[t].titulo, curto: NOME_TIPO[t].titulo }))}
+          options={[
+            ...TIPOS.map((t) => ({ value: t, label: cards ? `${NOME_TIPO[t].titulo} (${num(contagem(t))})` : NOME_TIPO[t].titulo, curto: NOME_TIPO[t].titulo })),
+            { value: "frotas" as const, label: "Frotas (Vólus)", curto: "Frotas" },
+          ]}
         />
-        <div className="ml-auto flex items-center gap-2">
-          {cards && config && <ImportarTudo cards={cards} regra={config.removidos} onMudou={carregar} />}
-          <AjudaImportacoes />
-        </div>
+        {!frotas && (
+          <div className="ml-auto flex items-center gap-2">
+            {cards && config && <ImportarTudo cards={cards} regra={config.removidos} onMudou={carregar} />}
+            <AjudaImportacoes />
+          </div>
+        )}
       </div>
+      {frotas ? (
+        <FrotaAdmin />
+      ) : (
+        <>
       {config && <PainelAutomatica config={config} cards={cards} onSalvo={setConfig} />}
       {erroConfig && <ErroCarga msg={erroConfig} onTentar={carregarConfig} />}
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
@@ -195,6 +218,8 @@ export function ImportacoesAdmin() {
       ) : cards ? (
         <ListaCards tipo={tipo} cards={doTipo} todos={cards} config={config} onAbrir={(id, sub) => abrir(id, sub)} />
       ) : null}
+        </>
+      )}
     </div>
   );
 }

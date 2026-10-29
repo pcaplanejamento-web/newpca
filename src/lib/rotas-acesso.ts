@@ -61,6 +61,12 @@ const CARDS = ["empenhos", "liquidacoes", "pagamentos"] as const;
 /** Rota (caminho relativo a `src/app/api`, sem `/route.ts`) → método → regra. */
 export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = {
   // ── Administração (só o papel Administrador) ────────────────────────────────────────────────────────────
+  "admin/frota": { GET: ADMIN, PATCH: ADMIN },
+  "admin/frota/contratos": { PUT: ADMIN },
+  "admin/frota/unidades": { PUT: ADMIN },
+  "admin/frota/testar": { POST: ADMIN },
+  "admin/frota/importar": { POST: ADMIN },
+  "admin/frota/leituras": { GET: ADMIN },
   "admin/aparencia": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/armazenamento": { GET: ADMIN, POST: ADMIN },
   "admin/saude-dados": { GET: ADMIN },
@@ -202,6 +208,16 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "empenhos/cards/[id]/liquidacoes/[liqId]": { GET: recurso(CARDS, "visualizar", undefined, "uma liquidação com o empenho ligado pelo número (o banner)") },
   "empenhos/cards/[id]/pagamentos": { GET: recurso(CARDS, "visualizar", undefined, "os pagamentos de um card (os anos ou as linhas de um ano)") },
   "empenhos/cards/[id]/pagamentos/[pagId]": { GET: recurso(CARDS, "visualizar", undefined, "um pagamento com o empenho ligado pelo número (o banner)") },
+  "frota/dados": { GET: tela(["frotas", "combustivel", "manutencao"], "visualizar", "as transações de um ano (pacote compacto) — a tela do tipo pedido") },
+  "frota/transacoes/[id]": { GET: recurso(["combustivel", "manutencao", "frotas"], "visualizar", "podeTela(", "uma transação — a tela do tipo dela (ou o painel)") },
+  "frota/veiculos": {
+    GET: tela(["veiculos", "frotas", "combustivel", "manutencao"], "visualizar", "o cadastro dos veículos no escopo"),
+    PATCH: tela("veiculos", "manipular", "editar o cadastro (só o que mudou)"),
+  },
+  "frota/classificacoes": {
+    GET: tela(["veiculos", "frotas", "combustivel", "manutencao"], "visualizar", "as classificações dos veículos"),
+    PUT: tela("veiculos", "configurar", "a lista inteira das classificações"),
+  },
   "empenhos/[id]": { GET: tela("empenhos", "visualizar", "um empenho com o histórico") },
   "documentos/[id]/arquivo": { GET: tela("documentos", "visualizar", "ver o PDF; baixar (?baixar=1) exige Exportar") },
   "catalogo/pastas": { POST: tela("catalogo", "manipular") },
@@ -414,6 +430,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
 
   // ── Internas (sem sessão, com segredo/assinatura) ───────────────────────────────────────────────────────
   "integracoes/email/cron": { POST: interna("cron dos e-mails (cabeçalho secreto)") },
+  "integracoes/frota/cron": { POST: interna("cron da atualização automática da frota (Vólus — cabeçalho secreto)") },
   "integracoes/empenhos/cron": { POST: interna("cron da atualização automática dos empenhos (cabeçalho secreto)") },
   "integracoes/trello/cron": { POST: interna("cron do Trello (cabeçalho secreto)") },
   "integracoes/trello/webhook/[token]": { POST: interna("aviso do Trello (HMAC)") },

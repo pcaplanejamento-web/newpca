@@ -63,7 +63,10 @@ export type EntidadeAuditoria =
   | "automacao"
   /** Histórico: o cadastro das APIs da Centi (até a v1.204 — os registros antigos seguem legíveis). */
   | "centi_api"
-  | "empenho_card";
+  | "empenho_card"
+  /** FROTAS: a integração da Vólus (credencial, contratos, unidades), os veículos e as classificações. */
+  | "frota"
+  | "veiculo";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
 export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
@@ -125,6 +128,8 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   automacao: "Automação Centi",
   centi_api: "API da Centi",
   empenho_card: "Card de empenhos",
+  frota: "Frotas (Vólus)",
+  veiculo: "Veículo",
 };
 
 /** Ator do log — só id/nome/email (aceita `null` para sistema/anônimo). */
