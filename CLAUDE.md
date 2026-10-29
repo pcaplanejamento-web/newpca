@@ -5588,6 +5588,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `EscopoCliente` (layout) define a pessoa NO DESENHO; outra pessoa/formato/sem uso há 30 dias/além de 120 entradas saem.
   Sair/trocar de conta = `apagarDadosLocais` (+ as outras abas pelo `BroadcastChannel`). Configurações → Tabelas →
   "Guardar os dados das telas no navegador" (`aparencia.tabelas.noAparelho`, padrão ligado) desliga.
+- **Sem esqueleto ao voltar:** o estado inicial das telas lê `jaGuardado` (memória, síncrono); a abertura do painel aquece a
+  memória com o IndexedDB; as abas trocam o dado buscado pelo `BroadcastChannel`. **Versão geral** (`versaoGeralDados` =
+  a `completa` do `SincronizarDados` + as gravações desta aba — `vigiarGravacoes` envolve o `fetch`: POST/PUT/PATCH/DELETE em
+  `/api/` renova na hora) serve o que não tem versão própria (histórico, telas do ADM pelo `lerJsonGuardado`). Papéis com
+  Proteção de dados = só memória; a tela de acesso e o 401 da versão apagam tudo. Medição em Armazenamento → "Dados neste
+  navegador" (`estatisticasDados`). Usam hoje: Execução, Empenhos, Liquidações, Pagamentos, Frotas, Mesa → Itens, Histórico,
+  Grupos, Órgãos, Unidades, Responsáveis, Situações, Cargos. As telas que vêm do servidor (Mesa, PCA, Orçamento, Tarefas…)
+  seguem pelo cache de navegação (2 h).
 - **Versão POR DADO:** a tela recebe da página a versão do que ELA mostra — Execução: `consultaVersoesExecucao` +
   `versaoDaTelaExecucao` (empenhos ≠ liquidações ≠ pagamentos; liquidações/pagamentos dependem também dos empenhos; o
   cadastro de órgãos/unidades em todas). **Dado novo de tela = `lerDado` com a versão das dependências dele** (nunca um

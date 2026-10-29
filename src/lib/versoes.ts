@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.260.4",
+    data: "2026-10-29",
+    titulo: "Esqueleto padrão em Empenhos, Liquidações, Pagamentos e Frotas",
+    mudancas: [
+      { tipo: "melhoria", area: "Carregamento", texto: "Empenhos, Liquidações, Pagamentos, Frotas, Combustível, Manutenção e Veículos mostram o esqueleto padrão da tela enquanto abrem.", link: "/painel/empenhos" },
+    ],
+  },
+  {
     versao: "1.260.3",
     data: "2026-10-29",
     titulo: "Telas da Administração guardadas no navegador",
