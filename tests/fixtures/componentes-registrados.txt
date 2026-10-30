@@ -358,3 +358,5 @@ AndamentoImportacao.tsx
 ImportacoesAoVivo.tsx
 EscopoCliente.tsx
 MaisIndicadores.tsx
+IndicadoresKpi.tsx
+FrotaEsqueleto.tsx

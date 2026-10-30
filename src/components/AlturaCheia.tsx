@@ -128,7 +128,7 @@ export function AteOFim({ children, className = "" }: { children: ReactNode; cla
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 240);
   return (
-    <div ref={ref} className={`space-y-[var(--gap-block)] lg:max-h-[var(--h-aba)] lg:overflow-y-auto lg:[scrollbar-gutter:stable] ${className}`} style={altura ? ({ "--h-aba": `${altura}px` } as CSSProperties) : undefined}>
+    <div ref={ref} className={`space-y-[var(--gap-block)] lg:max-h-[var(--h-aba)] lg:overflow-y-auto ${className}`} style={altura ? ({ "--h-aba": `${altura}px` } as CSSProperties) : undefined}>
       {children}
     </div>
   );

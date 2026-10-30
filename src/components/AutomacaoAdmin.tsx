@@ -21,7 +21,7 @@ import { Dropdown } from "./Dropdown";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { IconDownload, IconKey, IconPlus, IconRobo, IconSettings } from "./icons";
+import { IconDownload, IconKey, IconPlus, IconSettings } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
@@ -534,9 +534,8 @@ export function AutomacaoAdmin({
   );
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-center gap-2">
-        <IconRobo className="h-5 w-5 text-muted" />
-        <h1 className="text-lg font-bold text-text">Automação</h1>
+      <div className="linha-topico barra-ferramentas flex flex-wrap items-center gap-2">
+        <h1 className="sr-only">Automação</h1>
         <Ajuda titulo="Automação — fluxos com a Centi">
           <p>
             Cada automação é um <strong>fluxo</strong> montado com componentes (buscar na Centi, dados do sistema, selecionar,

@@ -461,7 +461,6 @@ export function DashboardExecucao({
         />
       </div>
       <MaisIndicadores
-        chave="execucao:mais-indicadores"
         extras={
           <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
             <KpiStat

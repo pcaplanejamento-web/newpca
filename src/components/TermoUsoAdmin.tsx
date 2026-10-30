@@ -725,7 +725,7 @@ export function TermoUsoAdmin() {
         {versaoAberta && (
           <div className="space-y-[var(--gap-block)]">
             {versaoAberta.termo.texto ? (
-              <div className="max-h-[40vh] overflow-y-auto rounded-card border border-border p-[var(--pad-card)]">
+              <div className="max-h-[40dvh] overflow-y-auto rounded-card border border-border p-[var(--pad-card)]">
                 <TextoTermo texto={versaoAberta.termo.texto} />
               </div>
             ) : (

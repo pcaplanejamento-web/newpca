@@ -61,7 +61,7 @@ export function FalhaNaTela({
     <div
       role="alert"
       aria-busy={recuperando || undefined}
-      className={`flex items-center justify-center ${cheia ? "min-h-dvh bg-surface-2 px-[var(--pad-canvas)] py-16" : "min-h-[60vh] py-10"}`}
+      className={`flex items-center justify-center ${cheia ? "min-h-dvh bg-surface-2 px-[var(--pad-canvas)] py-16" : "min-h-[60dvh] py-10"}`}
     >
       <div className="w-full max-w-md rounded-card bg-surface p-[var(--pad-card)] text-center shadow-ring">
         <span

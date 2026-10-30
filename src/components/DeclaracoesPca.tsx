@@ -175,25 +175,35 @@ async function lerDeclaracao(pcaId: number, id: number): Promise<{ declaracao: D
 function useExportarPdf(pcaId: number, onMudou: () => void) {
   const { confirmar, confirmacao } = useConfirmacao();
   const exportar = useCallback(
-    async (d: Pick<DeclaracaoResumo, "id" | "rotulo" | "numero" | "ano" | "exportada" | "cancelada">) => {
+    async (d: Pick<DeclaracaoResumo, "id" | "rotulo" | "numero" | "ano" | "exportada" | "cancelada">): Promise<boolean> => {
+      // Baixar de novo: pelo fetch — a recusa (403/409) vira um aviso, nunca a página trocada pelo JSON do erro.
       if (d.exportada || d.cancelada) {
-        window.location.assign(urlPdf(pcaId, d.id, true));
-        return;
+        try {
+          const r = await fetch(urlPdf(pcaId, d.id, true));
+          if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "Não consegui baixar o PDF.");
+          baixarNoNavegador(nomePdf(d), await r.blob());
+          return true;
+        } catch (e) {
+          toast.error((e as Error).message);
+          return false;
+        }
       }
       const ok = await confirmar({
         titulo: `Exportar a declaração ${d.rotulo} em PDF?`,
         texto: "Depois de exportada, ela não pode mais ser editada (só cancelada).",
         confirmar: "Exportar PDF",
       });
-      if (!ok) return;
+      if (!ok) return false;
       try {
         const r = await fetch(urlPdf(pcaId, d.id), { method: "POST" });
         if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "Não consegui exportar.");
         baixarNoNavegador(nomePdf(d), await r.blob());
         toast.success(`Declaração ${d.rotulo} exportada — não pode mais ser editada.`);
         onMudou();
+        return true;
       } catch (e) {
         toast.error((e as Error).message);
+        return false;
       }
     },
     [pcaId, confirmar, onMudou],
@@ -280,6 +290,11 @@ export function DeclaracoesPca({
   return (
     <>
       <FerramentasAba>
+        {pode.emitir && !emissaoDesligada && (
+          <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => setNova(true)} disabled={comSaldo === 0} title={comSaldo === 0 ? "Nenhum item com saldo para declarar" : undefined}>
+            Nova declaração
+          </Button>
+        )}
         <Ajuda titulo="Declarações do PCA" rotulo="Sobre as declarações">
           <p>A declaração atesta que itens constam deste PCA — o item inteiro ou só parte da quantidade (ex.: 6 de 12).</p>
           <p>Cada item tem um SALDO: a quantidade no PCA menos o que já foi declarado. Cancelar uma declaração devolve o saldo.</p>
@@ -288,11 +303,6 @@ export function DeclaracoesPca({
           <p>Quem emite é definido na Configuração do PCA (todos com permissão, só os Administradores ou desligado).</p>
           {emissaoDesligada && <p>A emissão está DESLIGADA neste PCA: as declarações já emitidas seguem para consulta, PDF e cancelamento.</p>}
         </Ajuda>
-        {pode.emitir && !emissaoDesligada && (
-          <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => setNova(true)} disabled={comSaldo === 0} title={comSaldo === 0 ? "Nenhum item com saldo para declarar" : undefined}>
-            Nova declaração
-          </Button>
-        )}
       </FerramentasAba>
       <DataTable
         columns={colunas}
@@ -350,7 +360,7 @@ export function DeclaracoesPca({
           doc={{ id: vendo.id, nome: `Declaração nº ${vendo.rotulo}${vendo.exportada || vendo.cancelada ? "" : " — prévia"}`, nomeArquivo: nomePdf(vendo) }}
           url={urlPdf(pcaId, vendo.id)}
           rotuloBaixar={vendo.exportada || vendo.cancelada ? "Baixar o PDF" : "Exportar o PDF"}
-          onBaixar={pode.baixar ? () => exportar(vendo).then(() => setVendo(null)) : undefined}
+          onBaixar={pode.baixar ? () => exportar(vendo).then((feito) => feito && setVendo(null)) : undefined}
           onFechar={() => setVendo(null)}
         />
       )}
@@ -498,7 +508,7 @@ function DetalheDeclaracao({
           ) : (
             <Callout kind="ok">Exportada — válida e travada para edição.</Callout>
           )}
-          <div className="grid grid-cols-3 gap-[var(--gap-block)]">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
             <StatMini label="Itens" value={num(c.totalItens)} />
             <StatMini label="Parciais" value={num(parciais)} tone={parciais ? "warn" : "default"} />
             <StatMini label="Valor total" value={brl(c.valorTotal)} tone="accent" />

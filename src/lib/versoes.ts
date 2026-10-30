@@ -35,12 +35,133 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.264.1",
+    versao: "1.264.13",
     data: "2026-10-30",
     titulo: "Importações: a importação manual também ensina a automática a pular o que não mudou",
     mudancas: [
       { tipo: "melhoria", area: "Importações", texto: "A importação feita pela tela agora guarda a assinatura de cada página lida: a atualização automática reconhece depois as páginas iguais a ela e as pula sem reler.", link: "/painel/configuracoes?aba=importacoes" },
       { tipo: "correcao", area: "Importações", texto: "Quando uma resposta grande é processada em pedaços menores (depois de uma execução cortada), só o pedaço menor é lido do banco — antes o pedaço inteiro era carregado e só depois cortado.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.264.12",
+    data: "2026-10-29",
+    titulo: "Menu suave, direita fixa e engrenagem à direita",
+    mudancas: [
+      { tipo: "melhoria", area: "Interface", texto: "Ao abrir e fechar o menu lateral, o conteúdo estica junto com ele, suave; os cartões (PCA, Orçamento, Catálogo, Tarefas…) que mudam de coluna deslizam até o lugar novo.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Interface", texto: "A barra de rolagem da página tem o lugar reservado: ela aparecer nunca mais empurra a tela para a esquerda, e a margem direita fica igual à esquerda.", link: "/painel" },
+      { tipo: "melhoria", area: "Interface", texto: "A engrenagem das configurações fica sempre no fim da linha, à direita; no PCA, o ano e o status também ficam à direita.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Navegação", texto: "No caminho do cabeçalho, o nome da página atual fica em destaque.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.264.11",
+    data: "2026-10-29",
+    titulo: "Menu e Mais indicadores sem mexer na tela",
+    mudancas: [
+      { tipo: "correcao", area: "Interface", texto: "Abrir e fechar o menu lateral não move mais o conteúdo: a borda direita fica parada e o menu desliza por cima.", link: "/painel" },
+      { tipo: "melhoria", area: "Indicadores", texto: "“Mais indicadores” abre num painel por cima da tela — a barra e a tabela de baixo ficam no lugar; fecha ao tocar fora ou no Esc.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.264.10",
+    data: "2026-10-29",
+    titulo: "Componentes na escala certa em toda tela",
+    mudancas: [
+      { tipo: "melhoria", area: "Interface", texto: "Botões, campos, listas e janelas com a mesma altura e o mesmo toque em todos os tamanhos de tela (celular, tablet e desktop); o botão Voltar padrão também no editor das automações, nos cards de Importações e nos quadros de Tarefas.", link: "/painel/tarefas" },
+      { tipo: "correcao", area: "Interface", texto: "Janelas e listas flutuantes respeitam a altura visível do celular (barra do navegador e teclado).", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.264.9",
+    data: "2026-10-29",
+    titulo: "Telas internas sem título, com o voltar à esquerda",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Dentro de um PCA a primeira linha é o voltar à esquerda, as abas e as ferramentas — sem o nome, o ano e os selos (o nome está no caminho do cabeçalho).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Dentro de um orçamento: o voltar e as abas primeiro, os números em indicadores logo abaixo; excluir fica no fim da linha.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Tarefas", texto: "No quadro, o nome saiu do topo (está no caminho do cabeçalho) — renomear o quadro agora é na Configuração.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Catálogo", texto: "Na pasta: o voltar e as visões primeiro, os números da pasta em indicadores abaixo.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Órgãos", texto: "Nas unidades de um órgão, o voltar à esquerda das abas, sem o título.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Importações", texto: "No card aberto: o voltar, as seções e as ferramentas numa linha, a situação e excluir à direita, os números em indicadores abaixo.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.264.8",
+    data: "2026-10-29",
+    titulo: "A lateral direita sem recuo e as telas do ADM arrumadas",
+    mudancas: [
+      { tipo: "correcao", area: "Telas", texto: "A lateral direita das telas não fica mais recuada: o espaço reservado para a barra de rolagem ficava vazio quando a tela não rolava.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Armazenamento", texto: "Os indicadores abrem a tela, o carregamento tem o mesmo formato e a confirmação é a do sistema.", link: "/painel/armazenamento" },
+      { tipo: "melhoria", area: "Auditoria", texto: "Os filtros (entidade e ação) à esquerda e o recarregar à direita, numa linha só.", link: "/painel/auditoria" },
+      { tipo: "correcao", area: "PCA", texto: "Excluir uma planilha ou o PCA trata a falha de rede, não manda dois pedidos e diz o resultado; a Configuração explica que devolver o protocolo à Mesa só inativa os números.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Situações", texto: "A confirmação de excluir é a do sistema.", link: "/painel/configuracoes?aba=situacoes" },
+    ],
+  },
+  {
+    versao: "1.264.7",
+    data: "2026-10-29",
+    titulo: "Correções do PCA, um só esqueleto e o menu que não mexe na altura",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "A edição antiga do PCA confere o grupo; o grupo é conferido antes de abrir um protocolo pelo link; só quem configura o PCA troca a visão do orçamento (vale para todos).", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Os itens da Mesa do PCA ficam na tela enquanto os novos chegam (não somem depois de gravar) e a falha ao carregá-los aparece; o nome do PCA não some mais do caminho no topo ao trocar de aba.", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Declarações: baixar de novo mostra o erro sem trocar a página e cancelar a exportação não fecha o PDF; Nova declaração à esquerda da ajuda. O Dashboard vazio por causa da unidade do cabeçalho diz isso.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Telas", texto: "Um só esqueleto em cada tela: o carregamento da rota e o da própria tela são o mesmo (Frotas, Execução, Empenhos, Liquidações, Pagamentos), e os espaços (PCA, orçamento, quadro, pasta) têm o esqueleto deles.", link: "/painel/frotas" },
+      { tipo: "correcao", area: "Telas", texto: "Abrir e fechar o menu lateral não faz mais as tabelas tremerem nem os indicadores mudarem de altura — só a largura muda.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Aparência", texto: "Uma prévia não salva não fica mais valendo nas outras telas; salvar e restaurar atualizam o sistema na hora e a confirmação é a do sistema.", link: "/painel/aparencia" },
+      { tipo: "correcao", area: "Órgãos", texto: "Rebaixar um órgão só aceita um destino válido e o destino não passa de um órgão para outro.", link: "/painel/orgaos" },
+    ],
+  },
+  {
+    versao: "1.264.6",
+    data: "2026-10-29",
+    titulo: "Mesa, Catálogo e Verificação com os filtros à esquerda",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os filtros de Responsável e Assunto ficam à esquerda, junto das visões; atualizar, dados completos, lixeira e automações à direita.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Catálogo", texto: "O Catálogo abre sem título: as visões à esquerda e Exportar modelo à direita; na pasta, os números vêm primeiro.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Verificação", texto: "Protocolo | DFD à esquerda e a ajuda à direita; na Automação, a ajuda vai para a direita.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Liquidações", texto: "Liquidações e pagamentos mostram o esqueleto dos indicadores enquanto carregam (a barra não pula mais); as tabelas da execução ficaram sem o código morto dos cards.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Tarefas", texto: "A linha vazia acima dos quadros não ocupa mais espaço quando não há o botão Nova pasta.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.264.5",
+    data: "2026-10-29",
+    titulo: "O carregamento desenha a tela como ela é",
+    mudancas: [
+      { tipo: "correcao", area: "Telas", texto: "Enquanto as telas carregam, o esqueleto não mostra mais uma linha de título que a tela não tem: empenhos, liquidações, pagamentos e as telas das frotas começam pelos indicadores; as demais pela barra de botões ou direto no conteúdo.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.264.4",
+    data: "2026-10-29",
+    titulo: "Barras de botões no mesmo padrão em todas as telas",
+    mudancas: [
+      { tipo: "melhoria", area: "Telas", texto: "Em toda barra de ferramentas, os seletores, a busca e os filtros ficam à esquerda; recarregar, configurações e ajuda à direita.", link: "/painel/documentos" },
+    ],
+  },
+  {
+    versao: "1.264.3",
+    data: "2026-10-29",
+    titulo: "O ano à esquerda na barra das tabelas da execução",
+    mudancas: [{ tipo: "melhoria", area: "Empenhos", texto: "Em empenhos, liquidações e pagamentos, o seletor de ano fica à esquerda da barra; Recarregar, Importações e Ajuda à direita.", link: "/painel/empenhos" }],
+  },
+  {
+    versao: "1.264.2",
+    data: "2026-10-29",
+    titulo: "Telas sem título e o horário dos dados à vista",
+    mudancas: [
+      { tipo: "melhoria", area: "Telas", texto: "PCA, Orçamento, Tarefas, Documentos, Verificação, Automação, Configurações, Auditoria, Armazenamento, Integrações, Avaliação e Referência abrem direto no conteúdo, sem título nem subtítulo (os botões continuam no mesmo lugar).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Ao lado do Recarregar de empenhos, liquidações e pagamentos, o horário dos dados à vista (\"Dados de 10:42\") — quando vêm do que foi guardado no navegador.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.264.1",
+    data: "2026-10-29",
+    titulo: "Empenhos, liquidações e pagamentos com os indicadores das Frotas",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos", texto: "As telas de empenhos, liquidações e pagamentos abrem pelos indicadores (os mesmos cartões das Frotas, com dois detalhes cada), sem título; os botões ficam logo abaixo.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Liquidações", texto: "Indicadores: liquidado líquido, pago, saldo e liquidações, com os percentuais.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Pagamentos", texto: "Indicadores: pago líquido, ordens, retenções e anuladas.", link: "/painel/pagamentos" },
     ],
   },
   {

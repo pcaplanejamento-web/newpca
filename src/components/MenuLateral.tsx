@@ -18,13 +18,25 @@ import { IconClose, IconMenu, IconRecolherMenu } from "./icons";
 export type ItemMenu = { href: string; label: string; Icon: LucideIcon };
 export type SecaoMenu = { chave: string; titulo?: string; itens: readonly ItemMenu[] };
 
-/** Durante a animação do menu, as grades de cartões (auto-fill) mudam de colunas no meio do caminho: o cartão que
- *  SALTA de lugar (nova coluna/linha) desliza da posição antiga até a nova (FLIP), em vez de pular. Só nesses 340 ms. */
-function deslizarGrades() {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+/** Movimento desligado (sistema ou o ADM em Aparência). */
+function movimentoReduzido(): boolean {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
   const m = document.documentElement.dataset.motion;
-  if (m === "off" || m === "reduced") return;
-  const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
+  return m === "off" || m === "reduced";
+}
+
+/** A ANIMAÇÃO PADRÃO DOS CARTÕES ao abrir/fechar o menu: o conteúdo estica junto com o menu e, nas grades de cartões
+ *  (auto-fill ou `data-grade-cartoes`), o cartão que SALTA de lugar (nova coluna/linha) desliza da posição antiga até a nova
+ *  (FLIP), em vez de pular. Só nesses 340 ms. */
+function deslizarGrades() {
+  if (movimentoReduzido()) return;
+  // Os CARTÕES das grades (PCA, Orçamento, Catálogo, Tarefas, Documentos, Importações…) — só os à vista (medir os de fora
+  // a cada quadro só custaria).
+  const altura = window.innerHeight;
+  const itens = Array.from(document.querySelectorAll<HTMLElement>('main :is([class*="auto-fill"], [data-grade-cartoes]) > *')).filter((e) => {
+    const r = e.getBoundingClientRect();
+    return r.bottom > -200 && r.top < altura + 200;
+  });
   if (!itens.length) return;
   // A posição DENTRO da grade (não na página): a coluna inteira anda com o menu — isso não é salto.
   const naGrade = (e: HTMLElement) => {
@@ -139,6 +151,8 @@ export function MenuLateral({
   }, [guardar, inicial]);
   function alternarMenu() {
     const novo = !document.documentElement.hasAttribute(ATRIBUTO_MENU);
+    // A VAGA anima a largura junto com o menu (globals.css): o conteúdo ESTICA/ENCOLHE no mesmo ritmo, a borda direita
+    // fica parada; os cartões que saltam de coluna numa grade deslizam (deslizarGrades).
     document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
     deslizarGrades();
     if (guardar)
@@ -249,7 +263,7 @@ export function GavetaMenu({
  *  e os controles à direita. */
 export function CabecalhoApp({ onMenu, inicio, direita }: { onMenu: () => void; inicio?: ReactNode; direita: ReactNode }) {
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
+    <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface pl-[var(--pad-canvas)] pr-[var(--pad-direita)] print:hidden">
       <button
         type="button"
         aria-label="Abrir menu"

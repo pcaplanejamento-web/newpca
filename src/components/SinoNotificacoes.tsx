@@ -937,7 +937,7 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
       <div className="hidden lg:block">
         <Dropdown align="end" papel="dialog" ariaLabel={rotulo} title={aoVivo ? "Notificações (ao vivo)" : "Notificações"} triggerClassName={`${classeGatilho} inline-flex`} trigger={icone} width={400}>
           {(fechar) => (
-            <div className="flex max-h-[min(78vh,640px)] flex-col">
+            <div className="flex max-h-[min(78dvh,640px)] flex-col">
               <PainelNotificacoes caixa={caixa} fechar={fechar} configurarHref={configurarHref} onNovidades={abrirNovidades(fechar)} />
             </div>
           )}

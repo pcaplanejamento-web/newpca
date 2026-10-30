@@ -645,7 +645,8 @@ export function OrcamentoPca({
   const comprometido = t.comprometido;
   // A engrenagem fica no FIM da linha de controles (à direita); o ponto âmbar = a visão tem valores que este orçamento não traz.
   const tituloVisao = ausentes > 0 ? `Visão do orçamento do PCA — ${num(ausentes)} valor(es) da visão fora deste orçamento` : "Visão do orçamento do PCA";
-  const botaoVisao = consulta ? null : (
+  // Escolher a visão do PCA vale para TODOS (cartões, tela pública): só quem Configura o PCA (`podePublicar`).
+  const botaoVisao = consulta || !podePublicar ? null : (
     <span className="relative inline-flex">
       <Button size="sm" variant="icon" aria-label={tituloVisao} title={tituloVisao} icon={<IconSettings className="h-4 w-4" />} onClick={() => setEngrenagem(true)} />
       {ausentes > 0 && <span aria-hidden className="pointer-events-none absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />}

@@ -132,14 +132,19 @@ export function PcaConfiguracao({
     const sim = await confirmar({ titulo: `Excluir o ${pca.nome}?`, texto: `${extra}Não pode ser desfeito.`, confirmar: "Excluir PCA", perigo: true });
     if (!sim) return;
     setSalvando("excluir");
-    const r = await fetch(`/api/pca/${pca.id}`, { method: "DELETE" });
-    if (r.ok) {
-      router.push("/painel/pca");
-      router.refresh(); // depois da navegação: o layout (o seletor de PCA do cabeçalho) deixa de listá-lo
-      return;
+    try {
+      const r = await fetch(`/api/pca/${pca.id}`, { method: "DELETE" });
+      if (r.ok) {
+        router.push("/painel/pca");
+        router.refresh(); // depois da navegação: o layout (o seletor de PCA do cabeçalho) deixa de listá-lo
+        return;
+      }
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      setAviso({ kind: "danger", texto: j.error ?? "Não foi possível excluir o PCA." });
+    } catch {
+      setAviso({ kind: "danger", texto: "Sem conexão com o servidor — o PCA não foi excluído." });
     }
     setSalvando(null);
-    setAviso({ kind: "danger", texto: "Não foi possível excluir o PCA." });
   }
 
   const anoN = Number(ano);
@@ -281,7 +286,7 @@ export function PcaConfiguracao({
               </li>
               <li className="flex gap-2">
                 <IconCheck className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ok)" }} />
-                Incorporar é permanente: cada item ganha um nº sequencial único no PCA (retirar o item só inativa o nº)
+                Ao incorporar, cada item ganha um nº sequencial único no PCA — nunca reaproveitado (retirar o item ou devolver o protocolo à Mesa só inativa o nº)
               </li>
             </ul>
           </section>

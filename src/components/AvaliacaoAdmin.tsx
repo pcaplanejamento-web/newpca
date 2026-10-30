@@ -651,16 +651,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-text">Avaliação</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted">
-            Controle total de importação de DFD, correção de itens e protocolação. Crie e edite as{" "}
-            <strong>importâncias</strong> (nome, cor e se bloqueiam), atribua uma a cada dado, escolha se o usuário pode
-            editá-lo na análise e as palavras-chave do ajuste automático. Com exceções por tipo de DFD e por categoria
-            de protocolo.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={restaurar} disabled={salvando}>
             Restaurar padrão

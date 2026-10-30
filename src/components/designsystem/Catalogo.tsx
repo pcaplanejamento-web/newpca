@@ -163,7 +163,7 @@ import { EsqueletoCalendario } from "@/components/CalendarioEsqueleto";
 import { DocumentoCard, EscolherTamanhoPdf } from "@/components/DocumentosView";
 import { COLUNAS_ESPACOS, EsqueletoCartaoEspaco } from "@/components/CartaoEspacoEsqueleto";
 import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
-import { EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoBarra } from "@/components/EsqueletoTela";
 import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
 import { EsqueletoTabsLaterais } from "@/components/TabsEsqueleto";
 import { EsqueletoControle, Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
@@ -201,6 +201,7 @@ import {
 import { CadeadoBotao, CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
 import { MaisIndicadores } from "@/components/MaisIndicadores";
+import { IndicadoresKpi } from "@/components/IndicadoresKpi";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
@@ -560,7 +561,7 @@ function DemoEditorRico() {
   ];
   return (
     <div className="space-y-[var(--gap-block)]">
-      <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30vh] max-h-[50vh]" />
+      <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30dvh] max-h-[50dvh]" />
       <EditorRico compacto rotulo="Comentário" valor={c} onChange={setC} maxLength={5000} placeholder="Escrever um comentário… (@ menciona alguém)" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
       <EditorRico mensagem rotulo="Mensagem do chat" valor={m} onChange={setM} maxLength={2000} placeholder="Mensagem…" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
     </div>
@@ -3847,7 +3848,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="MaisIndicadores (os principais à vista; os complementares abrem pela altura — Execução e Frotas)">
+      <Secao titulo="MaisIndicadores (os principais à vista; os complementares abrem num painel por cima, sem mover o conteúdo)">
         <div className="space-y-[var(--gap-block)]">
           <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
             <KpiStat completo label="Gasto total" value="R$ 299.227,64" hint="792 registros" />
@@ -3856,7 +3857,6 @@ export function Catalogo() {
             <KpiStat completo label="Veículos" value="24" hint="R$ 12.467,82 por veículo" />
           </div>
           <MaisIndicadores
-            chave="designsystem:mais-indicadores"
             extras={
               <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
                 <KpiStat completo label="Consumo médio" value="9,41 km/l" hint="292.539 km rodados" />
@@ -3865,6 +3865,18 @@ export function Catalogo() {
             }
           />
         </div>
+      </Secao>
+
+      <Secao titulo="IndicadoresKpi (os indicadores padrão: 4 principais com 2 detalhes + Mais indicadores — Frotas, Empenhos, Liquidações, Pagamentos)">
+        <IndicadoresKpi
+          cartoes={[
+            { label: "Empenhado", value: "R$ 12,4 mi", detalhes: [{ rotulo: "Anulado", valor: "R$ 0,3 mi" }, { rotulo: "Empenhos", valor: "1.204" }] },
+            { label: "Liquidado", value: "R$ 9,1 mi", detalhes: [{ rotulo: "Do empenhado", valor: "73%" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },
+            { label: "Pago", value: "R$ 8,2 mi", detalhes: [{ rotulo: "Do empenhado", valor: "66%" }, { rotulo: "Do liquidado", valor: "90%" }] },
+            { label: "A pagar", value: "R$ 3,9 mi", detalhes: [{ rotulo: "Liquidado", valor: "R$ 0,9 mi" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },
+            { label: "Removidos", value: "3" },
+          ]}
+        />
       </Secao>
 
       <Secao titulo="StatCard (tile de estatística)">
@@ -4270,7 +4282,7 @@ export function Catalogo() {
           </span>
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <EsqueletoTitulo />
+              <EsqueletoBarra />
               <EsqueletoSegmented itens={4} />
               <EsqueletoControle quadrado />
             </div>

@@ -22,7 +22,7 @@ export function BottomNav({ telas }: { telas: readonly string[] }) {
   }, [pathname]);
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
-      <div className="mx-auto flex max-w-md items-stretch justify-around overflow-x-auto overscroll-x-contain">
+      <div className="mx-auto flex max-w-md items-stretch [justify-content:safe_space-around] overflow-x-auto overscroll-x-contain">
         {itens.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

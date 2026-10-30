@@ -11,5 +11,10 @@ export default async function OrgaosPage({ searchParams }: { searchParams: Promi
     return <AcessoRestrito mensagem="Somente administradores podem gerenciar órgãos." />;
   }
   const [{ aba }, edicoes] = await Promise.all([searchParams, carregarEdicoes(atual.id, "admin:orgaos:")]);
-  return <OrgaosAdmin abaInicial={aba === "responsaveis" ? "responsaveis" : "orgaos"} edicoes={edicoes} />;
+  return (
+    <>
+      <h1 className="sr-only">Órgãos e Unidades</h1>
+      <OrgaosAdmin abaInicial={aba === "responsaveis" ? "responsaveis" : "orgaos"} edicoes={edicoes} />
+    </>
+  );
 }

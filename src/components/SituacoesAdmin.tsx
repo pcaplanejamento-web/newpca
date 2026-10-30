@@ -6,6 +6,7 @@ import type { SituacaoComUso } from "@/lib/situacoes";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { ColorField } from "./ColorField";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoPonto } from "./EstadoCelula";
@@ -30,6 +31,7 @@ export function SituacoesAdmin() {
   const [nome, setNome] = useState("");
   const [cor, setCor] = useState(COR_PADRAO);
   const [salvando, setSalvando] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async () => {
     try {
@@ -86,7 +88,7 @@ export function SituacoesAdmin() {
       s.emUso > 0
         ? `Excluir a situação "${s.nome}"? ${s.emUso} protocolo(s) estão nela e ficarão SEM situação.`
         : `Excluir a situação "${s.nome}"?`;
-    if (!confirm(aviso)) return;
+    if (!(await confirmar({ titulo: aviso, confirmar: "Excluir", perigo: true }))) return;
     try {
       const r = await fetch(`/api/admin/situacoes/${s.id}`, { method: "DELETE" });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -153,6 +155,7 @@ export function SituacoesAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
+      {confirmacao}
       {erro && (
         <AvisoFlutuante kind="danger" titulo="Situações" onClose={() => setErro(null)}>
           {erro}

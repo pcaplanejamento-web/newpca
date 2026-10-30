@@ -20,9 +20,9 @@ export default async function PagamentosPage() {
   const cards = await listarCards(escopo, "pagamentos");
   const versao = await consultaVersoesExecucao(getDb()).then((v) => versaoDaTelaExecucao(v, "pagamentos"));
   return (
-    <EmpenhosView tipo="pagamentos" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("pagamentos") : undefined}>
+    <EmpenhosView tipo="pagamentos" importacoes={r.acesso.u.admin ? linkImportacoes("pagamentos") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
-        <EmpenhoCardPagamentos key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Pagamentos - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
+        <EmpenhoCardPagamentos key={chaveEscopoEmpenhos(escopo)} nome="Pagamentos - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
       </PermissaoExportar>
     </EmpenhosView>
   );

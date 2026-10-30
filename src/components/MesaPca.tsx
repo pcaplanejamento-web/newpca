@@ -28,6 +28,7 @@ import { Modal } from "./Modal";
 import { useComponente } from "./ComponentesPapel";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
+import { useConfirmacao } from "./Confirmacao";
 import { useOndeDetalhe } from "./CanalGrupo";
 import { Selecao } from "./Selecao";
 
@@ -65,10 +66,11 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
   const verEscopo = useComponente()("pca.escopoMesa");
-  useOndeDetalhe(pca.nome);
   const [incorporar, setIncorporar] = useState<ProtocoloNaMesa[] | null>(null);
   const [acoes, setAcoes] = useState<Record<number, AcaoDfdPca>>({});
+  useOndeDetalhe(pca.nome);
   const [gravando, setGravando] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const dfdsPorProto = useMemo(() => {
     const m = new Map<number, number>();
@@ -178,7 +180,12 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     if (
       !alvo.length ||
       gravando ||
-      !confirm(`Retirar ${alvo.length} item(ns) do ${pca.nome}? O nº sequencial fica INATIVO (nunca é reaproveitado) e o item sai do Dashboard.`)
+      !(await confirmar({
+        titulo: `Retirar ${alvo.length} item(ns) do ${pca.nome}?`,
+        texto: "O nº sequencial fica INATIVO (nunca é reaproveitado) e o item sai do Dashboard.",
+        confirmar: "Retirar",
+        perigo: true,
+      }))
     )
       return;
     setGravando(true);
@@ -220,19 +227,20 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
       ),
   };
 
-  function devolver(sel: ProtocoloNaMesa[], limpar: () => void) {
+  async function devolver(sel: ProtocoloNaMesa[], limpar: () => void) {
     const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
     const inc = alvo.filter(incorporado);
     // O incorporado DESINCORPORA: os DFDs saem do PCA e os itens perdem o nº (a confirmação diz quantos).
     const aviso = inc.length
       ? ` ${inc.length} incorporado(s): ${impactoSaidaPca(pca.nome, inc.reduce((t, p) => t + p.totalItens, 0))}`
       : "";
-    if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?${aviso}`)) return;
+    if (!alvo.length || !(await confirmar({ titulo: `Devolver ${alvo.length} protocolo(s) à Mesa principal?`, texto: aviso.trim() || undefined, confirmar: "Devolver" }))) return;
     void executar({ acao: "devolver", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) devolvido(s) à Mesa principal.`, limpar);
   }
 
   return (
     <>
+      {confirmacao}
       <DfdsView
         {...mesa}
         protocolos={protos}

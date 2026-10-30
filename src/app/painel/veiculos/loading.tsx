@@ -1,12 +1,11 @@
-import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
-import { EsqueletoTela, EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoFrota } from "@/components/FrotaEsqueleto";
 
-/** A tela dos dados: o título e a tabela até o fim do display (a mesma moldura da `DataTable`). */
+/** O MESMO esqueleto que a tela mostra enquanto os dados chegam (`EsqueletoFrota`) — um só, sem troca no meio. */
 export default function Carregando() {
   return (
-    <EsqueletoTela cheia>
-      <EsqueletoTitulo />
-      <EsqueletoTabela cheia linhas={14} colunas={8} />
+    <EsqueletoTela>
+      <EsqueletoFrota tipo="veiculos" />
     </EsqueletoTela>
   );
 }

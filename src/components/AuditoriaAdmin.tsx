@@ -5,12 +5,10 @@ import type { LinhaAuditoria } from "@/lib/auditoria";
 import { ROTULO_ACAO, ROTULO_ENTIDADE } from "@/lib/auditoria-core";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { selectCls } from "./formStyles";
+import { SelectField } from "./Field";
 import { Historico } from "./Historico";
 import { BotaoAtualizar } from "./BotaoAtualizar";
-import { IconClock } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
-import { Selecao } from "./Selecao";
 
 const ACOES = Object.entries(ROTULO_ACAO);
 const ENTIDADES = Object.entries(ROTULO_ENTIDADE);
@@ -59,56 +57,45 @@ export function AuditoriaAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <header className="linha-topico flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-            <IconClock className="h-5 w-5" /> Auditoria
-          </h1>
-          <p className="text-sm text-muted">Histórico de alterações de todo o sistema — quem, o quê e quando.</p>
-        </div>
-        <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando o histórico…" onClick={() => void carregar()} />
-      </header>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Entidade
-          <Selecao
-            className={selectCls}
-            value={entidade}
-            onChange={(e) => {
-              setPage(1);
-              setEntidade(e.target.value);
-            }}
-          >
-            <option value="">Todas</option>
-            {ENTIDADES.map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Selecao>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Ação
-          <Selecao
-            className={selectCls}
-            value={acao}
-            onChange={(e) => {
-              setPage(1);
-              setAcao(e.target.value);
-            }}
-          >
-            <option value="">Todas</option>
-            {ACOES.map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Selecao>
-        </label>
-        <span className="pb-2 text-xs text-muted">
+      <h1 className="sr-only">Auditoria</h1>
+      {/* A barra: os filtros à esquerda; a contagem e o recarregar à direita. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SelectField
+          compacto
+          label="Entidade"
+          value={entidade}
+          onChange={(e) => {
+            setPage(1);
+            setEntidade(e.target.value);
+          }}
+        >
+          <option value="">Todas</option>
+          {ENTIDADES.map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          compacto
+          label="Ação"
+          value={acao}
+          onChange={(e) => {
+            setPage(1);
+            setAcao(e.target.value);
+          }}
+        >
+          <option value="">Todas</option>
+          {ACOES.map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </SelectField>
+        <span className="ml-auto text-xs tabular-nums text-muted">
           {total} registro{total === 1 ? "" : "s"}
         </span>
+        <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando o histórico…" onClick={() => void carregar()} />
       </div>
 
       {erro && <Callout kind="danger">{erro}</Callout>}

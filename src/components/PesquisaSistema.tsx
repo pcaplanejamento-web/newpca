@@ -944,14 +944,14 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-stretch justify-center sm:items-start sm:px-[var(--pad-canvas)] sm:pt-[8vh] print:hidden">
+    <div className="fixed inset-0 z-[80] flex items-stretch justify-center sm:items-start sm:px-[var(--pad-canvas)] sm:pt-[8dvh] print:hidden">
       <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)]" onClick={fechar} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Pesquisa no sistema"
         onKeyDown={teclado}
-        className="relative flex h-dvh w-full animate-fade-in-up flex-col overflow-hidden bg-surface shadow-flutuante sm:h-[min(80vh,640px)] sm:max-w-3xl sm:rounded-card sm:border sm:border-border"
+        className="relative flex h-dvh w-full animate-fade-in-up flex-col overflow-hidden bg-surface shadow-flutuante sm:h-[min(80dvh,640px)] sm:max-w-3xl sm:rounded-card sm:border sm:border-border"
       >
         <div className="flex items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top)]">
           <IconSearch className="h-5 w-5 shrink-0 text-muted" aria-hidden="true" />

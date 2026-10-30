@@ -185,7 +185,7 @@ export function SeletorFundo({ valor, onChange, disabled = false, previa = true 
             ))}
           </div>
         ) : pesquisa.r.fotos.length ? (
-          <div className="grid max-h-[50vh] grid-cols-3 gap-2 overflow-y-auto">
+          <div className="grid max-h-[50dvh] grid-cols-3 gap-2 overflow-y-auto">
             {pesquisa.r.fotos.map((f) => (
               <Miniatura key={f.id} f={f} disabled={disabled} ativa={valor.tipo === "imagem" && valor.url === f.url} onEscolher={() => escolherFoto(f)} />
             ))}

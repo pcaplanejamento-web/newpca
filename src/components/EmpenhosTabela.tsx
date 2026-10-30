@@ -1,6 +1,6 @@
 "use client";
 
-import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, momentoDoDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
@@ -18,7 +18,7 @@ import {
   resumoEmpenhos,
   rotuloRecorteAno,
 } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num, pct } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
@@ -35,7 +35,9 @@ import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
 import { SelectField } from "./Field";
-import { StatMini } from "./StatMini";
+import { EsqueletoIndicadores } from "./EsqueletoTela";
+import { IndicadoresKpi } from "./IndicadoresKpi";
+import { useAtalhoImportacoes } from "./EmpenhosView";
 
 /** A chave das edições salvas da tabela (publicar para todos = Configurar em Empenhos). */
 export const CHAVE_TABELA_EMPENHOS = "empenhos:tabela";
@@ -133,12 +135,11 @@ const chaveRecorte = (r: Recorte) => `${r.ano}:${r.removidos ? 1 : 0}`;
  * pede. Tocar numa linha = o detalhe. O ano e o Recarregar ficam na barra das abas (`FerramentasAba`).
  */
 /** O endereço de UM ano de empenhos (a mesma chave do armazém em toda leitura). */
-function urlAno(cardId: number | null, ano: number, removidos: boolean): string {
-  return `/api/empenhos?${cardId == null ? "" : `card=${cardId}&`}ano=${ano}${removidos ? "&removidos=1" : ""}`;
+function urlAno(ano: number, removidos: boolean): string {
+  return `/api/empenhos?ano=${ano}${removidos ? "&removidos=1" : ""}`;
 }
 
 export function EmpenhosTabela({
-  cardId,
   nome,
   anos,
   anoInicial,
@@ -148,8 +149,6 @@ export function EmpenhosTabela({
   versao = "",
   cards,
 }: {
-  /** `null` = a TABELA ÚNICA (todos os cards de empenhos — o mesmo empenho uma vez; a coluna Card diz de onde veio). */
-  cardId: number | null;
   /** O nome do card (o nome do arquivo exportado). */
   nome: string;
   anos: AnoEmpenhos[];
@@ -164,13 +163,13 @@ export function EmpenhosTabela({
   /** O nome de cada card (a coluna Card da tabela única). */
   cards?: Record<number, string>;
 }) {
-  const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<EmpenhoNaTela>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
+  const colunas = useMemo(() => [COLUNAS[0], colunaCard<EmpenhoNaTela>(cards ?? {}), ...COLUNAS.slice(1)], [cards]);
   const [recorte, setRecorte] = useState<Recorte | null>(anoInicial != null ? { ano: anoInicial, removidos: false } : null);
   // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto).
   const noDesenho = useGuardadoNoDesenho();
   const [linhas, setLinhas] = useState<EmpenhoNaTela[] | null>(() => {
     if (!noDesenho || anoInicial == null || !versao) return null;
-    const partes = anosDoRecorte(anoInicial, anos).map((a) => jaGuardado<EmpenhoNaTela[]>("empenhos", urlAno(cardId, a, false), versao));
+    const partes = anosDoRecorte(anoInicial, anos).map((a) => jaGuardado<EmpenhoNaTela[]>("empenhos", urlAno(a, false), versao));
     return partes.every(Boolean) ? (partes as EmpenhoNaTela[][]).flat() : null;
   });
   const [vista, setVista] = useState<EmpenhoNaTela[] | null>(null);
@@ -194,7 +193,7 @@ export function EmpenhosTabela({
       // Guardado no NAVEGADOR pela versão: sair e voltar à tela não pede de novo.
       const lista = await lerDado(
         "empenhos",
-        urlAno(cardId, ano, removidos),
+        urlAno(ano, removidos),
         versaoRef.current ?? "",
         async (resp) => {
           const j = (await resp.json()) as { ok?: boolean; error?: string; pacote?: PacoteEmpenhos };
@@ -206,7 +205,7 @@ export function EmpenhosTabela({
       guardados.current.set(k, lista);
       return lista;
     },
-    [cardId],
+    [],
   );
 
   const carregar = useCallback(
@@ -222,7 +221,11 @@ export function EmpenhosTabela({
       try {
         // Nenhum ano fica de fora: a falha de um é a falha da carga (com "Tentar de novo").
         const partes = await Promise.all(anosDoRecorte(r.ano, anos).map((ano) => lerAno(ano, r.removidos, fresco)));
-        if (n === pedido.current) setLinhas(partes.flat());
+        if (n === pedido.current) {
+          const em = anosDoRecorte(r.ano, anos).map((ano) => momentoDoDado("empenhos", urlAno(ano, r.removidos), versaoRef.current ?? ""));
+          setDadosDe(em.length && em.every((x) => x != null) ? Math.min(...(em as number[])) : null);
+          setLinhas(partes.flat());
+        }
       } catch (e) {
         if (n === pedido.current) setErro(e instanceof Error ? e.message : "Não foi possível carregar os empenhos.");
       } finally {
@@ -259,9 +262,22 @@ export function EmpenhosTabela({
   const removidosNoRecorte = recorte ? anos.filter((a) => recorte.ano === ANO_TODOS || a.ano === recorte.ano).reduce((t, a) => t + a.removidos, 0) : 0;
   const r = useMemo(() => resumoEmpenhos(vista ?? linhas ?? []), [vista, linhas]);
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  const atalho = useAtalhoImportacoes();
+  const [dadosDe, setDadosDe] = useState<number | null>(null);
 
   return (
     <>
+      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {recorte && linhas != null && (
+        <IndicadoresKpi
+          cartoes={[
+            { label: "Empenhado", value: linhas ? brl(r.empenhado - r.anulado) : "…", cor: "var(--accent)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Anulado", valor: linhas ? brl(r.anulado) : "…" }, { rotulo: "Empenhos", valor: linhas ? num(r.n) : "…" }] },
+            { label: "Liquidado", value: linhas ? brl(r.liquidado) : "…", detalhes: [{ rotulo: "Do empenhado", valor: linhas ? pct(r.liquidado, r.empenhado - r.anulado) : "…" }, { rotulo: "A liquidar", valor: linhas ? brl(Math.max(0, r.empenhado - r.anulado - r.liquidado)) : "…" }] },
+            { label: "Pago", value: linhas ? brl(r.pago) : "…", cor: "var(--ok)", detalhes: [{ rotulo: "Do empenhado", valor: linhas ? pct(r.pago, r.empenhado - r.anulado) : "…" }, { rotulo: "Do liquidado", valor: linhas ? pct(r.pago, r.liquidado) : "…" }] },
+            { label: "A pagar", value: linhas ? brl(r.aPagar) : "…", detalhes: [{ rotulo: "Liquidado a pagar", valor: linhas ? brl(Math.max(0, r.liquidado - r.pago)) : "…" }, { rotulo: "Removidos na Centi", valor: num(removidosNoRecorte) }] },
+          ]}
+        />
+      )}
       <FerramentasAba>
         {anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
@@ -273,13 +289,12 @@ export function EmpenhosTabela({
             ))}
           </SelectField>
         )}
-        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" onClick={() => void carregar(recorte, true)} />}
+        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os empenhos…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={avisoDeFalha(erro, linhas != null, () => recorte && void carregar(recorte, true))} />
-        <Ajuda titulo={cardId == null ? "Empenhos" : "Empenhos do card"} botao="sm">
+        {atalho}
+        <Ajuda titulo="Empenhos" botao="sm">
           <p>
-            {cardId == null
-              ? "Todos os empenhos importados, de todos os cards, numa tabela só — o mesmo empenho em dois cards aparece uma vez (a coluna Card diz de onde veio). Só leitura: as importações ficam em “Importações”."
-              : "A tabela que o card importou da Centi — exatamente o que está gravado no banco. Só leitura: para atualizar, importe de novo (aba Importação) ou ligue a atualização automática (Configuração)."}
+            {"Todos os empenhos importados, de todos os cards, numa tabela só — o mesmo empenho em dois cards aparece uma vez (a coluna Card diz de onde veio). Só leitura: as importações ficam em “Importações”."}
           </p>
           <p>Os números do topo acompanham os filtros da tabela. Toque numa linha para ver o empenho inteiro, com o histórico.</p>
           <p>“Removidos na Centi” (rodapé) = os que a Centi não traz mais: ficam guardados, fora das somas (pela regra do card).</p>
@@ -292,23 +307,11 @@ export function EmpenhosTabela({
           {escopo
             ? escopoVazio(escopo)
               ? "Nenhum empenho para a unidade escolhida no cabeçalho."
-              : cardId == null
-                ? "Nenhum empenho vinculado à sua unidade foi importado ainda."
-                : "Nenhum empenho vinculado à sua unidade foi importado neste card ainda."
-            : cardId == null
-              ? "Nenhum empenho importado ainda. Abra “Importações” para criar um card, definir os vínculos e importar."
-              : "Nenhum empenho importado neste card ainda. Defina os vínculos e importe na aba Importação."}
+              : "Nenhum empenho vinculado à sua unidade foi importado ainda."
+            : "Nenhum empenho importado ainda. Abra “Importações” para criar um card, definir os vínculos e importar."}
         </Callout>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-6">
-            <StatMini label="Empenhos" value={linhas ? num(r.n) : "…"} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidos na Centi" : undefined} />
-            <StatMini label="Empenhado" value={linhas ? brl(r.empenhado) : "…"} tone="accent" />
-            <StatMini label="Anulado" value={linhas ? brl(r.anulado) : "…"} tone={r.anulado ? "warn" : "default"} />
-            <StatMini label="Liquidado" value={linhas ? brl(r.liquidado) : "…"} />
-            <StatMini label="Pago" value={linhas ? brl(r.pago) : "…"} tone="ok" />
-            <StatMini label="A pagar" value={linhas ? brl(r.aPagar) : "…"} />
-          </div>
 
           {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => void carregar(recorte, true)} />}
 

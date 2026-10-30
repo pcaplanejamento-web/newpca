@@ -1,10 +1,10 @@
 "use client";
 
-import { jaGuardado, lerDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
+import { jaGuardado, lerDado, momentoDoDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rotuloTipoExecucao, type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num, pct } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
@@ -21,7 +21,9 @@ import { SelectField } from "./Field";
 import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
 import { LiquidacaoDetalhe, SeloTipoExecucao } from "./LiquidacaoDetalhe";
 import { Modal } from "./Modal";
-import { StatMini } from "./StatMini";
+import { EsqueletoIndicadores } from "./EsqueletoTela";
+import { IndicadoresKpi } from "./IndicadoresKpi";
+import { useAtalhoImportacoes } from "./EmpenhosView";
 
 /** Uma LIQUIDAÇÃO na tela (a ordem das tuplas = `COLUNAS_LIQUIDACAO` de `liquidacoes-tela.ts`). */
 type Liquidacao = {
@@ -136,20 +138,17 @@ const COLUNAS: Column<Liquidacao>[] = [
  * (os do EMPENHO de mesmo número — o número do empenho liga empenhos, liquidações e pagamentos), por ano, no escopo da pessoa. Os números do topo acompanham os filtros; "Removidas na Centi" no rodapé.
  */
 export function EmpenhoCardLiquidacoes({
-  cardId,
   nome,
   versao,
   cards,
 }: {
-  /** `null` = a TABELA ÚNICA (todos os cards do tipo — o mesmo registro uma vez). */
-  cardId: number | null;
   nome: string;
   versao: string;
   /** O nome de cada card (a coluna Card da tabela única). */
   cards?: Record<number, string>;
 }) {
-  const rota = cardId == null ? "/api/empenhos/liquidacoes" : `/api/empenhos/cards/${cardId}/liquidacoes`;
-  const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<Liquidacao>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
+  const rota = "/api/empenhos/liquidacoes";
+  const colunas = useMemo(() => [COLUNAS[0], colunaCard<Liquidacao>(cards ?? {}), ...COLUNAS.slice(1)], [cards]);
   // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto); a versão confere depois.
   const noDesenho = useGuardadoNoDesenho();
   const [inicio] = useState(() => {
@@ -220,6 +219,7 @@ export function EmpenhoCardLiquidacoes({
       setCarregando(true);
       setErro(null);
       try {
+        const emDe: (number | null)[] = [];
         // "Todos os anos" = um pedido POR ANO (cada um com o próprio limite do servidor), juntos — nenhum ano fica de fora:
         // a falha de um é a falha da carga.
         const partes = await Promise.all(
@@ -235,11 +235,13 @@ export function EmpenhoCardLiquidacoes({
               },
               fresco,
             );
+            emDe.push(momentoDoDado("liquidacoes", `${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`, versao));
             return (j.linhas ?? []).map((t) => daTupla(t, ano));
           }),
         );
         if (n !== pedido.current) return;
         const novas = partes.flat();
+        setDadosDe(emDe.every((x) => x != null) && emDe.length ? Math.min(...(emDe as number[])) : null);
         setLinhas(novas);
         setVista(null);
         // Recarregou com os dados novos (uma importação de empenhos muda o tipo e a unidade): o detalhe aberto segue, atualizado.
@@ -262,9 +264,22 @@ export function EmpenhoCardLiquidacoes({
   const base = vista ?? linhas ?? [];
   const tot = useMemo(() => ({ n: base.length, valor: soma(base, "valor"), anulado: soma(base, "valorAnulado"), liquido: soma(base, "valorLiquido"), pago: soma(base, "valorPago"), saldo: soma(base, "saldo") }), [base]);
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  const atalho = useAtalhoImportacoes();
+  const [dadosDe, setDadosDe] = useState<number | null>(null);
 
   return (
     <>
+      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {recorte && linhas != null && (
+        <IndicadoresKpi
+          cartoes={[
+            { label: "Liquidado líquido", value: brl(tot.liquido), cor: "var(--accent)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Valor", valor: brl(tot.valor) }, { rotulo: "Anulado", valor: brl(tot.anulado) }] },
+            { label: "Pago", value: brl(tot.pago), cor: "var(--ok)", detalhes: [{ rotulo: "Do liquidado", valor: pct(tot.pago, tot.liquido) }, { rotulo: "A pagar", valor: brl(Math.max(0, tot.liquido - tot.pago)) }] },
+            { label: "Saldo", value: brl(tot.saldo), detalhes: [{ rotulo: "Do liquidado", valor: pct(tot.saldo, tot.liquido) }, { rotulo: "Liquidações", valor: num(tot.n) }] },
+            { label: "Liquidações", value: num(tot.n), detalhes: [{ rotulo: "Média", valor: tot.n ? brl(tot.liquido / tot.n) : "—" }, { rotulo: "Recorte", valor: recorte?.removidos ? "Removidas na Centi" : "Vigentes" }] },
+          ]}
+        />
+      )}
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
@@ -276,13 +291,12 @@ export function EmpenhoCardLiquidacoes({
             ))}
           </SelectField>
         )}
-        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" onClick={() => void carregar(recorte, true)} />}
+        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando as liquidações…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "liquidação", "liquidações"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
-        <Ajuda titulo={cardId == null ? "Liquidações" : "Liquidações do card"} botao="sm">
+        {atalho}
+        <Ajuda titulo="Liquidações" botao="sm">
           <p>
-            {cardId == null
-              ? "Todas as liquidações importadas, de todos os cards, numa tabela só (a mesma liquidação em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."
-              : "As liquidações que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura."}
+            {"Todas as liquidações importadas, de todos os cards, numa tabela só (a mesma liquidação em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."}
           </p>
           <p>
             A Centi não informa a unidade da liquidação: o <strong>número do empenho</strong> liga a liquidação ao empenho, e as colunas
@@ -298,23 +312,12 @@ export function EmpenhoCardLiquidacoes({
 
       {anos && !anos.length ? (
         <Callout kind="info">
-          {cardId == null
-            ? "Nenhuma liquidação importada ainda. Abra “Importações” para criar um card e importar."
-            : "Nenhuma liquidação importada neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez."}
+          {"Nenhuma liquidação importada ainda. Abra “Importações” para criar um card e importar."}
         </Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (
-        <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
-            <StatMini label="Liquidações" value={num(tot.n)} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidas na Centi" : undefined} />
-            <StatMini label="Valor" value={brl(tot.valor)} tone="accent" />
-            <StatMini label="Anulado" value={brl(tot.anulado)} tone={tot.anulado ? "warn" : "default"} />
-            <StatMini label="Líquido" value={brl(tot.liquido)} />
-            <StatMini label="Pago" value={brl(tot.pago)} tone="ok" />
-            <StatMini label="Saldo" value={brl(tot.saldo)} />
-          </div>
-          <DataTable
+        <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={colunas}
             rows={linhas}
@@ -341,7 +344,6 @@ export function EmpenhoCardLiquidacoes({
             vazio={recorte.removidos ? `Nenhuma liquidação removida na Centi${recorte.ano === ANO_TODOS ? "" : " neste ano"}.` : `Nenhuma liquidação${recorte.ano === ANO_TODOS ? "" : " neste ano"}.`}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "liquidação" : "liquidações"} · Valor ${brl(soma(l, "valor"))} · Pago ${brl(soma(l, "valorPago"))}`}
           />
-        </>
       )}
 
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Liquidação ${aberto.numero ?? aberto.id}` : "Liquidação"} size="lg">

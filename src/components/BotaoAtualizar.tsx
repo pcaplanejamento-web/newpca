@@ -49,6 +49,7 @@ export function BotaoAtualizar({
   disabled = false,
   discreto = false,
   aviso,
+  dadosDe = null,
 }: {
   ativo: boolean;
   progresso?: number | null;
@@ -64,17 +65,20 @@ export function BotaoAtualizar({
   discreto?: boolean;
   /** Travado COM O MOTIVO ao alcance (também no celular, que não tem dica): esmaecido e o toque mostra o aviso flutuante. */
   aviso?: string;
+  /** Quando os dados à vista foram buscados do servidor (o guardado do navegador): o selo discreto "dados de hh:mm". */
+  dadosDe?: number | null;
 }) {
   const R = 15;
   const C = 2 * Math.PI * R;
   const p = progresso == null ? 0.25 : Math.max(0.02, Math.min(1, progresso));
   const fazendo = detalhe ?? "Atualizando…";
-  return (
+  const selo = dadosDe ? textoDadosDe(dadosDe) : null;
+  const botao = (
     <button
       type="button"
       aria-label={ativo ? `${rotulo} — ${fazendo}` : rotulo}
       aria-busy={ativo || undefined}
-      title={ativo ? fazendo : (aviso ?? dica ?? rotulo)}
+      title={ativo ? fazendo : `${aviso ?? dica ?? rotulo}${selo ? ` · ${selo}` : ""}`}
       onClick={ativo ? undefined : aviso ? () => toast.info(aviso) : onClick}
       disabled={disabled && !ativo}
       aria-disabled={(!ativo && !!aviso) || undefined}
@@ -115,4 +119,19 @@ export function BotaoAtualizar({
       </span>
     </button>
   );
+  if (!selo) return botao;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {botao}
+      <span className="hidden whitespace-nowrap text-[11px] tabular-nums text-faint sm:inline">{selo}</span>
+    </span>
+  );
+}
+
+/** "Dados de 10:42" (hoje) ou "Dados de 28/10 10:42" — o horário de Brasília. */
+export function textoDadosDe(em: number): string {
+  const fuso = { timeZone: "America/Sao_Paulo" } as const;
+  const hora = new Date(em).toLocaleTimeString("pt-BR", { ...fuso, hour: "2-digit", minute: "2-digit" });
+  const dia = (d: Date) => d.toLocaleDateString("pt-BR", { ...fuso, day: "2-digit", month: "2-digit" });
+  return dia(new Date(em)) === dia(new Date()) ? `Dados de ${hora}` : `Dados de ${dia(new Date(em))} ${hora}`;
 }

@@ -84,7 +84,7 @@ export function FiltroLista({
         </>
       }
     >
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto p-2">
+      <div className="max-h-[60dvh] space-y-3 overflow-y-auto p-2">
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-semibold text-text">Filtrar a lista</p>
           {n > 0 && (

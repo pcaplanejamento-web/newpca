@@ -445,12 +445,9 @@ export function DocumentosView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className={`flex flex-wrap items-center gap-2 ${noPca ? "" : "linha-topico"}`}>
+      <div className={`barra-ferramentas flex flex-wrap items-center gap-2 ${noPca ? "" : "linha-topico"}`}>
         {!noPca && (
-          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-            <IconDocumentos className="h-5 w-5 text-accent" />
-            Documentos
-          </h1>
+          <h1 className="sr-only">Documentos</h1>
         )}
         <Ajuda titulo="Documentos">
           {noPca ? (
@@ -464,7 +461,7 @@ export function DocumentosView({
           )}
         </Ajuda>
         {documentos.length > 0 && (
-          <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             {!noPca && opcoesPca.length > 2 && (
               <SeletorFiltro
                 icone={<IconFilter className="h-4 w-4" />}

@@ -11,7 +11,7 @@ export const cellCls =
 
 /** Select compacto (ex.: papel do usuário). */
 export const selectCls =
-  "rounded-control border border-border-2 bg-surface px-2 py-1.5 text-xs text-text-2 outline-none transition-colors focus-visible:border-accent disabled:opacity-50";
+  "h-11 rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text-2 outline-none lg:h-[var(--h-control-sm)] transition-colors focus-visible:border-accent disabled:opacity-50";
 
 /** Rótulo padrão. */
 export const labelCls = "mb-1 block text-sm font-medium text-text-2";

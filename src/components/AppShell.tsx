@@ -139,7 +139,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
           ) : (
             <IconUsers className="h-3.5 w-3.5 opacity-70" />
           )}
-          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
+          <span className="max-w-[9rem] truncate sm:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
@@ -358,7 +358,7 @@ export function AppShell({
       />
 
       {/* Coluna principal */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-coluna-conteudo className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp
           onMenu={() => setMenuAberto(true)}
           inicio={
@@ -376,7 +376,7 @@ export function AppShell({
                 <PcaSelect pcas={cartoesPca} ativoId={pcaFiltroId} />
               </div>
             )}
-            <div className="hidden items-center gap-1.5 sm:flex">
+            <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
@@ -401,7 +401,7 @@ export function AppShell({
 
         {/* Laterais = --pad-canvas (a do menu e da borda); topo e base = --pad-canvas-y (as 4 distâncias proporcionais);
             no celular, a base soma a navegação inferior (4rem + área segura). */}
-        <main className="flex-1 px-[var(--pad-canvas)] py-[var(--pad-canvas-y)] pb-[calc(var(--pad-canvas-y)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas-y)]">
+        <main className="flex-1 pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)] pb-[calc(var(--pad-canvas-y)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas-y)]">
           {children}
         </main>
       </div>

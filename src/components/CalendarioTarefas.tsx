@@ -1364,7 +1364,6 @@ export function CalendarioTarefas({
       <div className="flex items-center gap-1">
         {menuVista}
         <Button variant="ghost" size="sm" aria-label="Atalhos do teclado" title="Atalhos (?)" className="max-lg:hidden" icon={<IconTeclado className="h-4 w-4" />} onClick={() => setAjuda(true)} />
-        <Button variant="ghost" size="sm" aria-label="Configurações do calendário" title="Configurações" icon={<IconSettings className="h-4 w-4" />} onClick={() => setConfig(true)} />
         {semPrazo && (
           <Button
             variant={painel ? "secondary" : "ghost"}
@@ -1389,6 +1388,7 @@ export function CalendarioTarefas({
             <span className="max-sm:hidden">Criar</span>
           </Button>
         )}
+        <Button variant="ghost" size="sm" aria-label="Configurações do calendário" title="Configurações" icon={<IconSettings className="h-4 w-4" />} onClick={() => setConfig(true)} />
       </div>
     </div>
   );

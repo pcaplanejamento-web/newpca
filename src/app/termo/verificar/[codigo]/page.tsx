@@ -38,9 +38,9 @@ export default async function VerificarTermoPage({ params }: { params: Promise<{
           ) : a && integro ? (
             <>
               <Callout kind={a.teste ? "warn" : "ok"}>{a.teste ? "Comprovante de TESTE — sem valor como aceite oficial." : "Comprovante válido: o registro da assinatura confere."}</Callout>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[14px]">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-[14px] sm:grid-cols-[auto_1fr]">
                 <dt className="text-muted">Código</dt>
-                <dd className="font-mono text-text">{a.codigo}</dd>
+                <dd className="min-w-0 break-all font-mono text-text">{a.codigo}</dd>
                 <dt className="text-muted">Termo</dt>
                 <dd className="text-text">Versão {a.versao}</dd>
                 <dt className="text-muted">Assinado em</dt>

@@ -80,7 +80,7 @@ export function TelaPublica({
     <div className="flex min-h-dvh bg-bg text-text lg:overflow-x-clip">
       <MenuLateral guardar={false} inicial={menuRecolhido} topo={marca} conteudo={itens()} rodape={<div className="menu-esconde mb-2 px-1">{entrar}</div>} />
       <GavetaMenu aberto={gaveta} onFechar={() => setGaveta(false)} topo={marca} conteudo={itens(() => setGaveta(false))} rodape={entrar} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-coluna-conteudo className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp
           onMenu={() => setGaveta(true)}
           inicio={
@@ -114,7 +114,7 @@ export function TelaPublica({
             </>
           }
         />
-        <main className="min-w-0 flex-1 space-y-[var(--gap-block)] px-[var(--pad-canvas)] py-[var(--pad-canvas-y)]">{children}</main>
+        <main className="min-w-0 flex-1 space-y-[var(--gap-block)] pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)]">{children}</main>
       </div>
     </div>
   );

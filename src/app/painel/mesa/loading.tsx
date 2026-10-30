@@ -3,12 +3,15 @@ import { EsqueletoTela } from "@/components/EsqueletoTela";
 import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
 import { EsqueletoControle } from "@/components/Skeleton";
 
-/** A Mesa: a barra (as visões + as ferramentas) e a tabela até o fim do display. */
+/** A Mesa: a barra (a Mesa, as visões e os filtros à esquerda; os botões só-ícone à direita) e a tabela até o fim do display. */
 export default function Carregando() {
   return (
     <EsqueletoTela cheia>
       <div className="flex items-center gap-2">
+        <EsqueletoControle className="w-40" />
         <EsqueletoSegmented itens={4} />
+        <EsqueletoControle quadrado />
+        <EsqueletoControle quadrado />
         <EsqueletoControle quadrado className="ml-auto" />
         <EsqueletoControle quadrado />
         <EsqueletoControle quadrado />

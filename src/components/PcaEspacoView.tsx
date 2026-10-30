@@ -1,21 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { type FontePca, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
-import { IconCalendar, IconCheck, IconChevronLeft, IconSettings } from "./icons";
+import { IconCalendar, IconCheck } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "declaracoes" | "configuracao";
 
 /**
- * ESPAÇO do PCA (`/painel/pca/[id]`) — enxuto como a tela do orçamento, usando a largura toda: UMA linha (voltar · nome ·
- * ano · status, à esquerda; as ferramentas da aba e as abas **Dashboard · Orçamento · Mesa|Importação · Documentos ·
- * Declarações · Configuração [ícone]**,
- * à direita — `AbasEspaco cabecalho` + `FerramentasAba`; o servidor monta SÓ a aba ativa). O Preview PULSA (ao vivo: o PCA
- * ainda em preparação). A capa fica no card e na Configuração.
+ * ESPAÇO do PCA (`/painel/pca/[id]`) — sem título (o nome do PCA está no caminho do cabeçalho): a PRIMEIRA linha é o voltar
+ * à esquerda, as abas **Dashboard · Orçamento · Mesa|Importação · Documentos · Declarações** e as ferramentas da aba;
+ * à DIREITA, o ano e o status do PCA e, por último, a engrenagem da Configuração (`AbasEspaco voltar` + `FerramentasAba`); o servidor monta SÓ a aba ativa.
  */
 export function PcaEspacoView({
   pca,
@@ -36,18 +33,9 @@ export function PcaEspacoView({
     <div className="space-y-[var(--gap-block)]">
       <AbasEspaco<AbaPca>
         aba={aba}
-        cabecalho={
+        voltar={{ href: "/painel/pca", rotulo: "PCA" }}
+        fim={
           <>
-            <Link
-              href="/painel/pca"
-              aria-label="Voltar para PCA"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-            >
-              <IconChevronLeft className="h-4 w-4" />
-            </Link>
-            <h1 className="min-w-0 truncate text-[26px] font-bold leading-[44px] tracking-tight lg:text-2xl text-text lg:leading-[var(--h-control-sm)]" title={pca.nome}>
-              {pca.nome}
-            </h1>
             {pca.ano != null && (
               <Badge tone="blue" tamanho="linha" title={`PCA ${pca.ano}`} className="shrink-0 tabular-nums">
                 <IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
@@ -74,7 +62,7 @@ export function PcaEspacoView({
           ...(pca.fonte === "lista" ? [{ value: "importacao", label: "Importação" } as const] : []),
           { value: "documentos", label: "Documentos" },
           { value: "declaracoes", label: "Declarações" },
-          { value: "configuracao", label: "Configuração", soIcone: true, icone: <IconSettings className="h-4 w-4" aria-hidden="true" /> },
+          { value: "configuracao", label: "Configuração" },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >
         {children}

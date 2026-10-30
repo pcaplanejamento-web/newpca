@@ -20,9 +20,9 @@ export default async function LiquidacoesPage() {
   const cards = await listarCards(escopo, "liquidacoes");
   const versao = await consultaVersoesExecucao(getDb()).then((v) => versaoDaTelaExecucao(v, "liquidacoes"));
   return (
-    <EmpenhosView tipo="liquidacoes" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("liquidacoes") : undefined}>
+    <EmpenhosView tipo="liquidacoes" importacoes={r.acesso.u.admin ? linkImportacoes("liquidacoes") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
-        <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Liquidações - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
+        <EmpenhoCardLiquidacoes key={chaveEscopoEmpenhos(escopo)} nome="Liquidações - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
       </PermissaoExportar>
     </EmpenhosView>
   );

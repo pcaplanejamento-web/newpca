@@ -180,7 +180,7 @@ export function ExploradorGrafico({
             />
           ) : (
             <div className="grid gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_18rem]">
-              <div className="max-h-[60vh] overflow-y-auto pr-1">
+              <div className="max-h-[60dvh] overflow-y-auto pr-1">
                 <BarrasH
                   ariaLabel={`Ranking — ${titulo}`}
                   ativa={sel}

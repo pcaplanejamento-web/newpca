@@ -661,7 +661,7 @@ function FormConjunto({
           Quadros <span className="font-normal text-muted">({c.quadros.length} na pasta)</span>
         </legend>
         <SearchField compacto placeholder="Buscar quadro" value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} aria-label="Buscar quadro" />
-        <div className="max-h-[40vh] space-y-0.5 overflow-y-auto rounded-control border border-border p-1">
+        <div className="max-h-[40dvh] space-y-0.5 overflow-y-auto rounded-control border border-border p-1">
           {visiveis.length ? (
             visiveis.map((q) => {
               const dentro = c.quadros.includes(q.id);

@@ -480,6 +480,10 @@ export function DfdsView({
   // inicial). `null` = ainda não buscado.
   const [itens, setItens] = useState<ItemDfdRow[] | null>(guardados?.itens ?? null);
   const [carregandoItens, setCarregandoItens] = useState(false);
+  // A lista mudou (gravação, outro PCA): os itens À VISTA ficam na tela enquanto os novos chegam (a tabela não some).
+  const [renovarItens, setRenovarItens] = useState(false);
+  const itensRef = useRef(itens);
+  itensRef.current = itens;
   // REVERIFICAR TUDO (botão da barra): recarrega a lista do banco e, terminada a recarga (`listaPendente`), reconfere
   // TODOS os protocolos, DFDs e itens — em QUALQUER visão (as conferências, normalmente lazy pela visão aberta, rodam
   // todas). Termina quando cada protocolo e DFD tem resultado (ou falhou) e os itens chegaram.
@@ -498,7 +502,9 @@ export function DfdsView({
     if (chaveVista.current === chaveAba) return;
     chaveVista.current = chaveAba;
     const g = itensGuardados(usuarioId, chaveAba, versaoItens) ?? (versaoArm ? jaGuardado<ItensGuardados>("mesa.itens", urlItens, versaoArm) : undefined);
-    setItens(g?.itens ?? null);
+    if (g) setItens(g.itens);
+    else if (itensRef.current) setRenovarItens(true);
+    else setItens(null);
     if (g) {
       setPadronizacao(g.padronizacao);
       setHistorico(g.historico);
@@ -506,7 +512,7 @@ export function DfdsView({
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
   }, [chaveAba, usuarioId, versaoItens, versaoArm, urlItens]);
   useEffect(() => {
-    if ((vista !== "itens" && !reverAtivo && !preItens) || itens !== null) return;
+    if ((vista !== "itens" && !reverAtivo && !preItens) || (itens !== null && !renovarItens)) return;
     let vivo = true;
     setCarregandoItens(true);
     // Guardado no NAVEGADOR (memória + aparelho) pela versão: voltar à Mesa, F5 ou reabrir não pede de novo.
@@ -522,13 +528,18 @@ export function DfdsView({
     }, reverAtivo)
       .then((v) => {
         if (!vivo) return;
+        setRenovarItens(false);
         setItens(v.itens);
         setPadronizacao(v.padronizacao);
         setHistorico(v.historico);
         guardarItensDaAba(usuarioId, chaveAba, v);
       })
       .catch(() => {
-        if (vivo) setItens([]);
+        if (!vivo) return;
+        // A falha à vista (aviso flutuante); os itens que já estavam na tela ficam.
+        setRenovarItens(false);
+        setItens((x) => x ?? []);
+        setErro("Não foi possível carregar os itens da Mesa — use “Atualizar” para tentar de novo.");
       })
       .finally(() => {
         if (vivo) setCarregandoItens(false);
@@ -536,7 +547,7 @@ export function DfdsView({
     return () => {
       vivo = false;
     };
-  }, [vista, itens, urlItens, chaveAba, usuarioId, versaoItens, versaoArm, reverAtivo, preItens]);
+  }, [vista, itens, renovarItens, urlItens, chaveAba, usuarioId, versaoItens, versaoArm, reverAtivo, preItens]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
@@ -2417,9 +2428,8 @@ export function DfdsView({
       )}
 
       {/* BARRA DA MESA (uma linha): à esquerda, as visões — o DASHBOARD (só o ícone, antes de Protocolos · DFDs · Itens;
-          fora da Mesa do PCA) — + a ferramenta do PCA; à direita, os FILTROS DE HIERARQUIA — responsável e assunto do
-          protocolo, que valem para todas as visões (e o Dashboard) e travam as colunas correspondentes da tabela de
-          protocolos. */}
+          fora da Mesa do PCA) — + a ferramenta do PCA e os FILTROS DE HIERARQUIA (responsável e assunto do protocolo, que
+          valem para todas as visões e o Dashboard e travam as colunas da tabela de protocolos); à direita, os botões só-ícone. */}
       <div className="flex flex-wrap items-center gap-2">
         {seletorMesa}
         <span role="none" className="contents" onPointerEnter={() => setPreItens(true)} onFocus={() => setPreItens(true)}>
@@ -2448,6 +2458,37 @@ export function DfdsView({
             ]}
           />
         )}
+        {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
+        {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
+        {pode.vis.responsavel.ver && (
+          <SeletorPessoa
+            variante="filtro"
+            rotulo="Responsável"
+            ariaLabel="Filtro: Responsável"
+            pessoas={opcoesResponsavel}
+            usuarioId={usuarioId}
+            valor={String(filtro.responsavel)}
+            ativo={filtro.responsavel !== "todos"}
+            extras={EXTRAS_FILTRO}
+            onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
+          />
+        )}
+        <SeletorFiltro
+          icone={<IconFilter className="h-4 w-4" />}
+          rotulo="Assunto"
+          valor={filtro.assunto == null ? "__todos" : filtro.assunto}
+          ativo={filtro.assunto != null}
+          onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
+          opcoes={[
+            { valor: "__todos", rotulo: "Todos" },
+            ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
+          ]}
+        />
+        {filtrado && (
+          <Button variant="ghost" size="sm" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
+            Limpar filtros
+          </Button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
           {/* REVERIFICAR TUDO: recarrega e reconfere protocolos, DFDs e itens (o anel mostra o andamento). */}
@@ -2464,37 +2505,6 @@ export function DfdsView({
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
           {vista !== "dashboard" && <ExcluidosMesa pcaId={pcaDaMesa ?? null} siglas={siglasExcluidos} podeLimpar={podeNoRecurso(pode, pcaDaMesa ?? null).excluir} />}
           {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao(false).rotulo} onEscolher={(id) => rodarAutomacao(id, false)} />}
-          {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
-          {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
-          {pode.vis.responsavel.ver && (
-            <SeletorPessoa
-              variante="filtro"
-              rotulo="Responsável"
-              ariaLabel="Filtro: Responsável"
-              pessoas={opcoesResponsavel}
-              usuarioId={usuarioId}
-              valor={String(filtro.responsavel)}
-              ativo={filtro.responsavel !== "todos"}
-              extras={EXTRAS_FILTRO}
-              onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
-            />
-          )}
-          <SeletorFiltro
-            icone={<IconFilter className="h-4 w-4" />}
-            rotulo="Assunto"
-            valor={filtro.assunto == null ? "__todos" : filtro.assunto}
-            ativo={filtro.assunto != null}
-            onChange={(v) => setFiltro((f) => ({ ...f, assunto: v === "__todos" ? null : v }))}
-            opcoes={[
-              { valor: "__todos", rotulo: "Todos" },
-              ...opcoesAssunto.map((a) => ({ valor: a, rotulo: a || "Sem assunto" })),
-            ]}
-          />
-          {filtrado && (
-            <Button variant="ghost" size="sm" onClick={() => setFiltro(FILTRO_MESA_TODOS)}>
-              Limpar filtros
-            </Button>
-          )}
         </div>
       </div>
 

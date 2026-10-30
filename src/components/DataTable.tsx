@@ -980,7 +980,7 @@ export function DataTable<R>({
                       localStorage.setItem(`tabela-linhas:${linhasSalvas}`, e.target.value);
                     } catch {}
                 }}
-                className="min-h-11 rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:min-h-0"
+                className="h-11 rounded-[8px] border border-border bg-surface px-2 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:h-[var(--h-control-sm)]"
               >
                 {LINHAS_TABELA.map((n) => (
                   <option key={n} value={n}>
