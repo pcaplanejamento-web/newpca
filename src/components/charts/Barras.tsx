@@ -2,9 +2,10 @@
 
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { num } from "@/lib/format";
+import { gradiente } from "./shared";
 
-// Gráficos de BARRAS em HTML (por token — sem biblioteca de gráficos): marcas finas, ponta arredondada de 4px,
-// 2px de respiro na cor da superfície entre segmentos, texto SEMPRE em tokens de texto (a cor fica na marca).
+// Gráficos de BARRAS em HTML (por token — sem biblioteca de gráficos): marcas em DEGRADÊ da própria cor (`gradiente`),
+// pontas totalmente arredondadas, 2px de respiro na cor da superfície entre segmentos, texto SEMPRE em tokens de texto (a cor fica na marca).
 // Os números ficam visíveis (rótulos) e cada marca tem nome acessível — a leitura nunca depende só da cor
 // nem do passar do mouse. Usados no Dashboard de governança da Mesa.
 
@@ -34,10 +35,10 @@ export function BarraSegmentada({
   const soma = visiveis.reduce((t, s) => t + s.valor, 0);
   const base = Math.max(max ?? soma, soma, 1e-9);
   return (
-    <div aria-hidden className={`flex w-full ${trilho ? "overflow-hidden rounded-[4px] bg-track" : ""}`} style={{ height: altura }}>
+    <div aria-hidden className={`flex w-full ${trilho ? "overflow-hidden rounded-full bg-track" : ""}`} style={{ height: altura }}>
       {soma > 0 && (
         <div
-          className="grafico-barra flex h-full overflow-hidden rounded-r-[4px]"
+          className="grafico-barra flex h-full overflow-hidden rounded-full"
           style={{ width: `${(soma / base) * 100}%`, minWidth: 4, "--atraso": `${atraso ?? 0}ms` } as CSSProperties}
         >
           {visiveis.map((s, i) => (
@@ -45,7 +46,7 @@ export function BarraSegmentada({
               key={s.chave}
               title={`${s.rotulo}: ${num(s.valor)}`}
               className="h-full"
-              style={{ flex: `${s.valor} 1 0%`, minWidth: 3, background: s.cor, borderLeft: i > 0 ? "2px solid var(--surface)" : undefined }}
+              style={{ flex: `${s.valor} 1 0%`, minWidth: 3, background: gradiente(s.cor), borderLeft: i > 0 ? "2px solid var(--surface)" : undefined }}
             />
           ))}
         </div>
@@ -104,7 +105,7 @@ export function BarrasH({
         const conteudo = (
           <>
             <span className={`min-w-0 truncate text-left text-[12.5px] ${l.apagada ? "text-muted" : "text-text-2"}`}>{l.rotulo}</span>
-            <BarraSegmentada segmentos={l.segmentos} max={escala} atraso={Math.min(i, 24) * 22} />
+            <BarraSegmentada segmentos={l.segmentos} max={escala} trilho atraso={Math.min(i, 24) * 22} />
             <span className="whitespace-nowrap text-right text-[12.5px] tabular-nums">
               <span className={`font-semibold ${l.apagada ? "text-muted" : "text-text"}`}>{l.valor}</span>
               {l.detalhe != null && <span className="ml-1.5 text-[11.5px] text-muted">{l.detalhe}</span>}
@@ -190,20 +191,21 @@ export function Colunas({
   const eixo = "absolute right-full mr-1.5 -translate-y-1/2 whitespace-nowrap text-[10.5px] leading-none text-faint tabular-nums";
   const rotuloTeto = formatar(teto);
   return (
-    // `pt-4`: o valor no topo de uma coluna cheia (no teto do eixo) tem espaço — não encosta no título do quadro. A
+    // `pt-6`: o valor (ou a pílula do pico) no topo de uma coluna cheia (no teto do eixo) tem espaço — não encosta no título do quadro. A
     // margem esquerda cabe o rótulo do eixo numa linha ("R$ 800 mi" pede mais que "12").
-    <div className={`pt-4 ${rotuloTeto.length > 5 ? "pl-14" : "pl-7"}`}>
+    <div className={`pt-6 ${rotuloTeto.length > 5 ? "pl-14" : "pl-7"}`}>
       <ul aria-label={ariaLabel} className="relative flex items-end gap-1" style={{ height: altura }}>
         {/* Grade: teto (com o valor), metade e a linha de base (zero) — finas e recessivas. */}
-        <li aria-hidden className="pointer-events-none absolute inset-x-0 top-0 border-t border-border">
+        <li aria-hidden className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-border">
           <span className={`${eixo} top-0`}>{rotuloTeto}</span>
         </li>
-        <li aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-border" />
+        <li aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-border" />
         <li aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-border-2">
           <span className={`${eixo} top-0`}>{formatar(0)}</span>
         </li>
         {colunas.map((c, i) => {
-          const rotular = rotularTodas || i === iMaior || i === n - 1;
+          // Sem `rotularTodas`: só o PICO (a pílula) e, com poucas colunas, a última — com muitas, o rótulo da última invadia a vizinha.
+          const rotular = rotularTodas || i === iMaior || (i === n - 1 && n <= 8);
           const alinhar = i < 2 ? "left-0" : i >= n - 2 ? "right-0" : "left-1/2 -translate-x-1/2";
           const abre = onEscolher != null && c.valor !== 0;
           return (
@@ -216,21 +218,30 @@ export function Colunas({
                 className="group flex h-full w-full items-end justify-center focus-visible:outline-none"
               >
                 <span
-                  className="grafico-coluna relative w-full max-w-6 rounded-t-[4px] group-hover:opacity-80 group-focus-visible:opacity-80"
+                  className="grafico-coluna relative w-full max-w-4 rounded-full group-hover:opacity-80 group-focus-visible:opacity-80"
                   style={
                     {
                       height: `${(c.valor / teto) * 100}%`,
                       minHeight: c.valor > 0 ? 2 : 0,
-                      background: c.cor ?? cor,
+                      background: gradiente(c.cor ?? cor, "180deg"),
+                      boxShadow: i === iMaior ? `0 10px 20px -10px ${c.cor ?? cor}` : undefined,
                       "--atraso": `${Math.min(i, 30) * 18}ms`,
                     } as CSSProperties
                   }
                 >
-                  {rotular && c.valor > 0 && (
+                  {/* O PICO ganha a pílula na cor da série; a última coluna, o valor discreto. */}
+                  {rotular && c.valor > 0 && (i === iMaior ? (
+                    <span
+                      className="absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-bold text-white tabular-nums"
+                      style={{ background: gradiente(c.cor ?? cor, "135deg") }}
+                    >
+                      {formatar(c.valor)}
+                    </span>
+                  ) : (
                     <span className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-text-2 tabular-nums">
                       {formatar(c.valor)}
                     </span>
-                  )}
+                  ))}
                   {/* Dica: o VALOR em destaque, depois o que é (alinhada para dentro nas pontas). */}
                   <span
                     role="tooltip"

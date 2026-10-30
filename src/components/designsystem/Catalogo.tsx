@@ -64,6 +64,7 @@ import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { ExploradorGrafico } from "@/components/ExploradorGrafico";
 import { MensalChart } from "@/components/charts/MensalChart";
 import { DefinicaoPrevisaoChart, PeriodicidadeChart } from "@/components/charts/PrevisaoChart";
+import { Pizza } from "@/components/charts/Pizza";
 import { PrioridadeChart } from "@/components/charts/PrioridadeChart";
 import type { ModoCronograma } from "@/lib/origem-dash";
 import { UnidadeRequisitanteChart } from "@/components/charts/UnidadeRequisitanteChart";
@@ -1701,6 +1702,18 @@ function GraficosDashboardDemo() {
         </ChartCard>
         <ChartCard title="Medida" subtitle="As 10 maiores + Outras; Itens ou Valor">
           <UnidadeChart data={G_UNID} ativos={unid} onSelecionar={(r) => r.dim === "unidadeMedida" && alterna(unid, r.labels, setUnid)} />
+        </ChartCard>
+        <ChartCard title="Pizza" subtitle="Poucas partes de um todo: o raio de cada fatia cresce com o valor, degradê da própria cor">
+          <Pizza
+            ariaLabel="Exemplo de pizza"
+            formatar={(v) => `R$ ${v} mi`}
+            fatias={[
+              { chave: "a", rotulo: "Material", valor: 27, cor: "var(--serie-1)" },
+              { chave: "b", rotulo: "Serviço", valor: 11, cor: "var(--serie-2)" },
+              { chave: "c", rotulo: "Obra", valor: 4, cor: "var(--serie-3)" },
+            ]}
+            onEscolher={() => undefined}
+          />
         </ChartCard>
         <ChartCard title="Prioridade dos DFDs" subtitle="Cores pela CATEGORIA (semáforo), nunca pela posição">
           <PrioridadeChart

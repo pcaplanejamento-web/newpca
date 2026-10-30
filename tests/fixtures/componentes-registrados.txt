@@ -318,6 +318,7 @@ charts/ClassificacaoChart.tsx
 charts/MensalChart.tsx
 charts/MetricasChart.tsx
 charts/PrevisaoChart.tsx
+charts/Pizza.tsx
 charts/PrioridadeChart.tsx
 charts/TopItensChart.tsx
 charts/UnidadeChart.tsx

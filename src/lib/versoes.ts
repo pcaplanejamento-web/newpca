@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.252.0",
+    data: "2026-10-30",
+    titulo: "Gráficos com novo visual: cores vivas, degradês e acabamento refinado",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Os gráficos do Dashboard do PCA ganharam novo visual: barras e colunas em degradê da própria cor, com pontas arredondadas e o trilho de fundo; a rosca da Classificação em degradê; e o mês de maior valor do cronograma destacado numa pílula.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "A Prioridade dos DFDs virou uma pizza moderna. O raio de cada fatia cresce com o valor e o percentual aparece dentro dela. Tocar numa fatia ou na legenda continua filtrando o Dashboard.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Mesa", texto: "O Dashboard de governança da Mesa e o das Tarefas usam o mesmo novo visual nas barras e colunas. Os indicadores do topo mostram a evolução numa linha suave e a variação numa pílula verde ou vermelha.", link: "/painel/mesa?vista=dashboard" },
+      { tipo: "melhoria", area: "Sistema", texto: "Os cartões dos gráficos ficaram mais leves, com sombra suave e títulos maiores. O gráfico em ondas da Execução não mudou.", link: "/painel/armazenamento" },
+    ],
+  },
+  {
     versao: "1.251.0",
     data: "2026-10-28",
     titulo: "Declarações mais completas e profissionais; a assinatura no lugar do carimbo",

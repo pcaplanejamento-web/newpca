@@ -14,11 +14,11 @@ type Props = {
 
 export function ChartCard({ title, subtitle, children, className, action, onExpandir }: Props) {
   return (
-    <div className={`rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring ${className ?? ""}`}>
+    <div className={`rounded-card border border-border/60 bg-surface p-[var(--pad-card)] shadow-soft ${className ?? ""}`}>
       {(title || action || onExpandir) && (
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="line-clamp-2 text-sm font-semibold text-text">{title}</h3>
+            <h3 className="line-clamp-2 text-[15px] font-semibold tracking-[-0.01em] text-text">{title}</h3>
             {subtitle ? (
               <p className="mt-0.5 line-clamp-2 text-xs text-muted" title={typeof subtitle === "string" ? subtitle : undefined}>
                 {subtitle}

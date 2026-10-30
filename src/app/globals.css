@@ -30,6 +30,7 @@
   --accent: #4f46e5;
   --accent-soft: #eef1ff;
   --track: #ebeef2;
+  --grad-forca: 60%;
   --sb-active: #f4f6f8;
   --kpi-bar: #dee2e8;
   --zebra: #f8f9fb;
@@ -155,6 +156,7 @@
   --accent: #818cf8;
   --accent-soft: #20233c;
   --track: #232834;
+  --grad-forca: 80%;
   --sb-active: #191d27;
   --kpi-bar: #2c3340;
   --zebra: #171b25;
@@ -186,6 +188,7 @@
   --border: #1e2a44;
   --border-2: #27365a;
   --track: #1e2a44;
+  --grad-forca: 80%;
   --sb-active: #141e33;
   --kpi-bar: #27365a;
   --zebra: #131d33;
@@ -199,6 +202,7 @@
   --border: #1f1f1f;
   --border-2: #2a2a2a;
   --track: #1f1f1f;
+  --grad-forca: 80%;
   --sb-active: #121212;
   --kpi-bar: #2a2a2a;
   --zebra: #0f0f0f;

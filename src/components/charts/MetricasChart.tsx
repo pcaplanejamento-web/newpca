@@ -3,7 +3,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { PontoMetrica } from "@/lib/cloudflare-core";
 import { num } from "@/lib/format";
-import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
+import { ChartEmpty, corClara, TooltipBox, useChartTokens } from "./shared";
 
 // Requisições por dia do Worker (monitoramento Cloudflare). Mesmo padrão do MensalChart; `onSelecionar` (opcional)
 // = clicar numa barra abre a ORIGEM dos dados daquele dia.
@@ -16,6 +16,12 @@ export function MetricasChart({ data, onSelecionar }: { data: PontoMetrica[]; on
     <div className="h-56">
       <ResponsiveContainer>
         <BarChart data={rows} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
+          <defs>
+            <linearGradient id="metricas-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" style={{ stopColor: corClara(tk.serie[0]) }} />
+              <stop offset="1" style={{ stopColor: tk.serie[0] }} />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={tk.grid} vertical={false} />
           <XAxis
             dataKey="label"
@@ -48,9 +54,9 @@ export function MetricasChart({ data, onSelecionar }: { data: PontoMetrica[]; on
           />
           <Bar
             dataKey="requests"
-            fill={tk.serie[0]}
-            radius={[6, 6, 0, 0]}
-            maxBarSize={40}
+            fill="url(#metricas-grad)"
+            radius={[99, 99, 99, 99]}
+            maxBarSize={18}
             onClick={onSelecionar ? (_, i) => onSelecionar(data[i]) : undefined}
             className={onSelecionar ? "cursor-pointer" : undefined}
           />

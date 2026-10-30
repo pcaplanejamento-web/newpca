@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Cell, Pie, PieChart, type PieSectorDataItem, ResponsiveContainer, Sector, Tooltip } from "recharts";
 import { brl, brlCompact, num, pct } from "@/lib/format";
 import type { RecorteDash } from "@/lib/origem-dash";
 import type { Fatia } from "@/lib/queries";
-import { ChartEmpty, corSerie, useChartTokens } from "./shared";
+import { ChartEmpty, corClara, corSerie, useChartTokens } from "./shared";
 
 const TOP = 8;
 
@@ -26,6 +26,7 @@ export function ClassificacaoChart({
   corDe?: (label: string) => number;
 }) {
   const tk = useChartTokens();
+  const idGrad = useId().replace(/:/g, "");
   const [foco, setFoco] = useState<number | null>(null);
   const sorted = [...data].sort((a, b) => b.total - a.total);
   const top = sorted.slice(0, TOP);
@@ -49,11 +50,20 @@ export function ClassificacaoChart({
       <div className="relative h-56">
         <ResponsiveContainer>
           <PieChart>
+            {/* Cada fatia em DEGRADÊ da própria cor (a cor da categoria não muda — só ganha profundidade). */}
+            <defs>
+              {slices.map((_, i) => (
+                <linearGradient key={i} id={`${idGrad}-${i}`} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" style={{ stopColor: corClara(cor(i)) }} />
+                  <stop offset="1" style={{ stopColor: cor(i) }} />
+                </linearGradient>
+              ))}
+            </defs>
             <Pie
               data={slices}
               dataKey="total"
               nameKey="label"
-              innerRadius={58}
+              innerRadius={62}
               outerRadius={86}
               paddingAngle={2}
               cornerRadius={4}
@@ -71,7 +81,7 @@ export function ClassificacaoChart({
               {slices.map((_, i) => (
                 <Cell
                   key={i}
-                  fill={cor(i)}
+                  fill={`url(#${idGrad}-${i})`}
                   fillOpacity={ativa(i) ? (foco == null || foco === i ? 1 : 0.55) : 0.22}
                   style={{ transition: "fill-opacity 0.25s ease" }}
                 />

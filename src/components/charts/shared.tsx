@@ -7,6 +7,14 @@ import { IconInbox } from "../icons";
 // `var()` direto (`corSerie`); o Recharts precisa da cor RESOLVIDA (`useChartTokens().serie`).
 export const N_SERIES = 8;
 export const corSerie = (i: number): string => `var(--serie-${(((i % N_SERIES) + N_SERIES) % N_SERIES) + 1})`;
+/**
+ * O DEGRADÊ de uma marca a partir da cor dela (token, var() ou hex): começa mais clara (`--grad-forca`: 60% da cor no claro, 80% no escuro) e termina na própria cor —
+ * as barras, colunas e fatias ganham vida sem uma segunda paleta (a cor da categoria continua a mesma). `dir` = a direção
+ * do CSS (90deg = da esquerda para a direita; 180deg = de cima para baixo).
+ */
+export const gradiente = (cor: string, dir = "90deg"): string => `linear-gradient(${dir}, color-mix(in oklab, ${cor} var(--grad-forca, 60%), #fff), ${cor})`;
+/** A cor clara do degradê (o começo) — para os <stop> de SVG. */
+export const corClara = (cor: string): string => `color-mix(in oklab, ${cor} var(--grad-forca, 60%), #fff)`;
 const SERIE_PADRAO = ["#3b82f6", "#10b981", "#f59e0b", "#a855f7", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
 const DEFAULTS = {
