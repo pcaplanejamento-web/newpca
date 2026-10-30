@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
@@ -88,6 +89,9 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
   }, lista != null);
   const [ocupado, setOcupado] = useState(false);
   const [destino, setDestino] = useState("");
+  // Outro órgão aberto: o destino escolhido para o anterior não vale para ele.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera a cada troca do órgão aberto.
+  useEffect(() => setDestino(""), [aberto]);
   const { confirmar, confirmacao } = useConfirmacao();
   // As EDIÇÕES SALVAS da tabela (guardadas aqui: trocar de aba remonta a tabela, que volta com as edições novas).
   const [ed, setEd] = useState(edicoes);
@@ -95,9 +99,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch("/api/admin/orgaos");
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; orgaos?: Orgao[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar os órgãos.");
+      const j = await lerJsonGuardado<{ orgaos?: Orgao[] }>("adm.orgaos", "/api/admin/orgaos", "Erro ao carregar os órgãos.");
       setLista(j.orgaos ?? []);
       setErro(null);
     } catch (e) {
@@ -237,7 +239,8 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
   }
 
   async function rebaixar(o: Orgao) {
-    const d = lista?.find((x) => String(x.id) === destino);
+    // Só um destino VÁLIDO (outro órgão, que não é também unidade) — o mesmo filtro da lista do seletor.
+    const d = lista?.find((x) => String(x.id) === destino && x.id !== o.id && !x.tambemUnidade);
     if (!d) return;
     const ok = await confirmar({
       titulo: `Rebaixar ${o.sigla} a unidade de ${d.sigla}?`,

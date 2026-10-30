@@ -1,5 +1,6 @@
 "use client";
 
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { motivoNomeAparelho, NOME_APARELHO_MAX } from "@/lib/acesso-conta-core";
@@ -67,6 +68,7 @@ export function BotaoSairAcesso({ disabled = false }: { disabled?: boolean }) {
       onClick={async () => {
         setSaindo(true);
         await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+        await apagarDadosLocais();
         router.replace("/login");
         router.refresh();
       }}

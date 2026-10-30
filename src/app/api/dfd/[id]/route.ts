@@ -9,7 +9,7 @@ import { atualizarDfdCampos, type DfdDetalhe, excluirDfd, getDfd, getDfdAssinatu
 import { semValorUnitario } from "@/lib/dfd-tratamento";
 import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
 import { getDb } from "@/lib/db";
-import { erro, ok, parseCorpo } from "@/lib/http";
+import { erro, MSG_ALTERADO_POR_OUTRA, ok, parseCorpo } from "@/lib/http";
 import { consultaDfdsRestantes } from "@/lib/mesa-excluidos-sql";
 import { redigirDfdDetalhe } from "@/lib/mesa-redacao";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -123,6 +123,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
   if (!acessivel(dfd.reparticaoId) || !(await dfdLegivelNaMesa(esc, { ...dfd, id }))) return erro(MSG_SEM_ACESSO_DFD, 403);
+  if (p.data.atualizadoEmLido && dfd.atualizadoEm && p.data.atualizadoEmLido !== dfd.atualizadoEm) return erro(MSG_ALTERADO_POR_OUTRA, 409);
   // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).
   const negado = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "manipular");
   if (negado) return negado;

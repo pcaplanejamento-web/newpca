@@ -94,6 +94,8 @@ export type ProtocoloDetalhe = ProtocoloResumo & {
   observacao: string | null;
   localReparticao: string | null;
   nomeArquivo: string | null;
+  /** Última gravação da capa (o 409 do PATCH confere). */
+  atualizadoEm?: string | null;
   dfds: DfdResumo[];
 };
 
@@ -207,6 +209,7 @@ export async function getProtocolo(id: number): Promise<ProtocoloDetalhe | null>
       reparticaoCodigo: reparticoes.codigo,
       reparticaoNome: reparticoes.nome,
       criadoEm: dfdProtocolos.criadoEm,
+      atualizadoEm: dfdProtocolos.atualizadoEm,
       ...colunasGestao,
       ...colunasSobrescritos,
     })
@@ -472,4 +475,10 @@ export async function excluirProtocolo(id: number, ator: number | null = null, q
   ];
   await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
   for (const pca of pcasAfetados) await sincronizarAtivosPca(pca, ator);
+}
+
+/** A última gravação da capa do protocolo — o PATCH recusa (409) quem editou sobre uma versão mais antiga. */
+export async function atualizadoEmProtocolo(id: number): Promise<string | null> {
+  const [r] = await getDb().select({ em: dfdProtocolos.atualizadoEm }).from(dfdProtocolos).where(eq(dfdProtocolos.id, id)).limit(1);
+  return r?.em ?? null;
 }

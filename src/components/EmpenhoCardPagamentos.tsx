@@ -1,11 +1,13 @@
 "use client";
 
+import { jaGuardado, lerDado, momentoDoDado, useGuardadoNoDesenho } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TipoExecucao, tipoDaExecucao } from "@/lib/execucao-empenho-core";
 import { ANO_TODOS, anosDoRecorte, rotuloRecorteAno } from "@/lib/empenhos-tela-core";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num, pct } from "@/lib/format";
 import type { PagamentoCompleto } from "@/lib/pagamentos-tela";
 import { FerramentasAba } from "./AbasEspaco";
+import { useAbrirLinhaDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
@@ -21,7 +23,9 @@ import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
 import { Modal } from "./Modal";
 import { PagamentoDetalhe } from "./PagamentoDetalhe";
-import { StatMini } from "./StatMini";
+import { EsqueletoIndicadores } from "./EsqueletoTela";
+import { IndicadoresKpi } from "./IndicadoresKpi";
+import { useAtalhoImportacoes } from "./EmpenhosView";
 
 /** Um PAGAMENTO na tela (a ordem das tuplas = `COLUNAS_PAGAMENTO` de `pagamentos-tela.ts`). */
 export type Pagamento = {
@@ -157,29 +161,39 @@ const COLUNAS: Column<Pagamento>[] = [
  * da pessoa. Os números do topo acompanham os filtros e somam só as ordens NÃO anuladas; "Removidos na Centi" no rodapé.
  */
 export function EmpenhoCardPagamentos({
-  cardId,
   nome,
   versao,
   cards,
 }: {
-  /** `null` = a TABELA ÚNICA (todos os cards do tipo — o mesmo registro uma vez). */
-  cardId: number | null;
   nome: string;
   versao: string;
   /** O nome de cada card (a coluna Card da tabela única). */
   cards?: Record<number, string>;
 }) {
-  const rota = cardId == null ? "/api/empenhos/pagamentos" : `/api/empenhos/cards/${cardId}/pagamentos`;
-  const colunas = useMemo(() => (cardId == null ? [COLUNAS[0], colunaCard<Pagamento>(cards ?? {}), ...COLUNAS.slice(1)] : COLUNAS), [cardId, cards]);
-  const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(null);
+  const rota = "/api/empenhos/pagamentos";
+  const colunas = useMemo(() => [COLUNAS[0], colunaCard<Pagamento>(cards ?? {}), ...COLUNAS.slice(1)], [cards]);
+  // Voltar à tela: o que já está na memória da aba desenha no 1º quadro (sem o esqueleto); a versão confere depois.
+  const noDesenho = useGuardadoNoDesenho();
+  const [inicio] = useState(() => {
+    const a = noDesenho && versao ? jaGuardado<{ anos?: { ano: number; n: number }[] }>("pagamentos", rota, versao)?.anos : undefined;
+    if (!a?.length) return null;
+    const partes = anosDoRecorte(ANO_TODOS, a).map((ano) => {
+      const j = jaGuardado<{ linhas?: unknown[][] }>("pagamentos", `${rota}?ano=${ano}`, versao);
+      return j ? (j.linhas ?? []).map((t) => daTupla(t, ano)) : null;
+    });
+    return { anos: a, linhas: partes.every(Boolean) ? (partes as Pagamento[][]).flat() : null };
+  });
+  const [anos, setAnos] = useState<{ ano: number; n: number }[] | null>(inicio?.anos ?? null);
   const [recorte, setRecorte] = useState<{ ano: number; removidos: boolean } | null>(null);
-  const [linhas, setLinhas] = useState<Pagamento[] | null>(null);
+  const [linhas, setLinhas] = useState<Pagamento[] | null>(inicio?.linhas ?? null);
   const [vista, setVista] = useState<Pagamento[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [aberto, setAberto] = useState<Pagamento | null>(null);
+  // O link da PESQUISA DO SISTEMA (`?abrir=<id>`): abre a linha quando a tabela chega.
+  useAbrirLinhaDaUrl(linhas, setAberto);
   const pedido = useRef(0);
-  const anosRef = useRef<{ ano: number; n: number }[]>([]);
+  const anosRef = useRef<{ ano: number; n: number }[]>(inicio?.anos ?? []);
   const [completo, setCompleto] = useState<PagamentoCompleto | null | undefined>(undefined);
 
   // O detalhe: o que a tabela tem na hora; o registro e o empenho ligado chegam depois.
@@ -201,10 +215,12 @@ export function EmpenhoCardPagamentos({
     let vivo = true;
     void (async () => {
       try {
-        const r = await fetch(rota);
-        const j = (await r.json()) as { ok?: boolean; error?: string; anos?: { ano: number; n: number }[] };
+        const j = await lerDado("pagamentos", rota, versao, async (r) => {
+          const j = (await r.json()) as { ok?: boolean; error?: string; anos?: { ano: number; n: number }[] };
+          if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+          return j;
+        });
         if (!vivo) return;
-        if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
         setAnos(j.anos ?? []);
         // A 1ª carga abre em "Todos os anos"; uma recarga (versão nova) mantém o recorte escolhido, se o ano ainda existir —
         // um recorte NOVO (mesmo igual) relê as linhas já com a lista de anos nova (um ano novo entra no "Todos os anos").
@@ -221,23 +237,34 @@ export function EmpenhoCardPagamentos({
   }, [rota, versao]);
 
   const carregar = useCallback(
-    async (rc: { ano: number; removidos: boolean }) => {
+    async (rc: { ano: number; removidos: boolean }, fresco = false) => {
       const n = ++pedido.current;
       setCarregando(true);
       setErro(null);
       try {
+        const emDe: (number | null)[] = [];
         // "Todos os anos" = um pedido POR ANO (cada um com o próprio limite do servidor), juntos — nenhum ano fica de fora:
         // a falha de um é a falha da carga.
         const partes = await Promise.all(
           anosDoRecorte(rc.ano, anosRef.current).map(async (ano) => {
-            const r = await fetch(`${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`);
-            const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
-            if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+            const j = await lerDado(
+              "pagamentos",
+              `${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`,
+              versao,
+              async (r) => {
+                const j = (await r.json()) as { ok?: boolean; error?: string; linhas?: unknown[][] };
+                if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+                return j;
+              },
+              fresco,
+            );
+            emDe.push(momentoDoDado("pagamentos", `${rota}?ano=${ano}${rc.removidos ? "&removidos=1" : ""}`, versao));
             return (j.linhas ?? []).map((t) => daTupla(t, ano));
           }),
         );
         if (n !== pedido.current) return;
         const novas = partes.flat();
+        setDadosDe(emDe.every((x) => x != null) && emDe.length ? Math.min(...(emDe as number[])) : null);
         setLinhas(novas);
         setVista(null);
         // Recarregou com os dados novos (uma importação de empenhos muda o tipo e a unidade): o detalhe aberto segue, atualizado.
@@ -248,7 +275,7 @@ export function EmpenhoCardPagamentos({
         if (n === pedido.current) setCarregando(false);
       }
     },
-    [rota],
+    [rota, versao],
   );
   // A VERSÃO dos dados da execução (importação promovida, vínculos, cards) vem da página: mudou, relê — o tipo (Nota de
   // Empenho × Restos a Pagar), o órgão e a unidade vêm do empenho ligado, lido na hora pelo número.
@@ -271,9 +298,22 @@ export function EmpenhoCardPagamentos({
     [base],
   );
   const filtrado = vista != null && linhas != null && vista.length !== linhas.length;
+  const atalho = useAtalhoImportacoes();
+  const [dadosDe, setDadosDe] = useState<number | null>(null);
 
   return (
     <>
+      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {recorte && linhas != null && (
+        <IndicadoresKpi
+          cartoes={[
+            { label: "Pago líquido", value: brl(tot.liquido), cor: "var(--ok)", hint: filtrado ? "com os filtros da tabela" : undefined, detalhes: [{ rotulo: "Valor das ordens", valor: brl(tot.valor) }, { rotulo: "Retenções", valor: brl(tot.retencao) }] },
+            { label: "Ordens", value: num(tot.n), detalhes: [{ rotulo: "Empenhos", valor: num(tot.empenhos) }, { rotulo: "Média", valor: tot.n ? brl(tot.liquido / tot.n) : "—" }] },
+            { label: "Retenções", value: brl(tot.retencao), detalhes: [{ rotulo: "Das ordens", valor: pct(tot.retencao, tot.valor) }, { rotulo: "Líquido", valor: brl(tot.liquido) }] },
+            { label: "Anuladas", value: num(tot.anuladas), cor: tot.anuladas ? "var(--warn)" : undefined, detalhes: [{ rotulo: "Valor anulado", valor: brl(tot.valorAnulado) }, { rotulo: "Recorte", valor: recorte?.removidos ? "Removidos na Centi" : "Vigentes" }] },
+          ]}
+        />
+      )}
       <FerramentasAba>
         {anos && anos.length > 0 && recorte && (
           <SelectField compacto label="Ano" value={String(recorte.ano)} onChange={(e) => setRecorte({ ano: Number(e.target.value), removidos: false })}>
@@ -285,13 +325,12 @@ export function EmpenhoCardPagamentos({
             ))}
           </SelectField>
         )}
-        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" onClick={() => void carregar(recorte)} />}
+        {recorte && <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando os pagamentos…" dadosDe={dadosDe} onClick={() => void carregar(recorte, true)} />}
         <Avisos avisos={[...avisoSemEmpenho(linhas, "pagamento", "pagamentos"), ...avisoDeFalha(erro, linhas != null, () => (recorte ? void carregar(recorte) : window.location.reload()))]} />
-        <Ajuda titulo={cardId == null ? "Pagamentos" : "Pagamentos do card"} botao="sm">
+        {atalho}
+        <Ajuda titulo="Pagamentos" botao="sm">
           <p>
-            {cardId == null
-              ? "Todos os pagamentos (ordens de pagamento) importados, de todos os cards, numa tabela só (o mesmo pagamento em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."
-              : "Os pagamentos (ordens de pagamento) que o card importou da Centi (aba Importação) — exatamente o que está gravado. Só leitura."}
+            {"Todos os pagamentos (ordens de pagamento) importados, de todos os cards, numa tabela só (o mesmo pagamento em dois cards aparece uma vez; a coluna Card diz de onde veio). Só leitura — as importações ficam em “Importações”."}
           </p>
           <p>
             A Centi não informa a unidade do pagamento: o <strong>número do empenho</strong> liga o pagamento ao empenho, e as colunas Órgão e
@@ -311,22 +350,12 @@ export function EmpenhoCardPagamentos({
 
       {anos && !anos.length ? (
         <Callout kind="info">
-          {cardId == null
-            ? "Nenhum pagamento importado ainda. Abra “Importações” para criar um card e importar."
-            : "Nenhum pagamento importado neste card ainda. Importe na aba Importação — todos os órgãos com o “ID na Centi” de uma vez, mês a mês."}
+          {"Nenhum pagamento importado ainda. Abra “Importações” para criar um card e importar."}
         </Callout>
       ) : !recorte || linhas == null ? (
         !erro && <EsqueletoTabela cheia />
       ) : (
-        <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9rem,100%),1fr))] gap-[var(--gap-block)]">
-            <StatMini label="Pagamentos" value={num(tot.n)} hint={filtrado ? "com os filtros da tabela" : recorte.removidos ? "removidos na Centi" : `${num(tot.empenhos)} empenhos`} />
-            <StatMini label="Valor das ordens" value={brl(tot.valor)} tone="accent" hint="sem as anuladas" />
-            <StatMini label="Retenções" value={brl(tot.retencao)} />
-            <StatMini label="Pago líquido" value={brl(tot.liquido)} tone="ok" />
-            <StatMini label="Anuladas" value={num(tot.anuladas)} tone={tot.anuladas ? "warn" : "default"} hint={tot.anuladas ? brl(tot.valorAnulado) : undefined} />
-          </div>
-          <DataTable
+        <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}
             columns={colunas}
             rows={linhas}
@@ -353,7 +382,6 @@ export function EmpenhoCardPagamentos({
             vazio={recorte.removidos ? `Nenhum pagamento removido na Centi${recorte.ano === ANO_TODOS ? "" : " neste ano"}.` : `Nenhum pagamento${recorte.ano === ANO_TODOS ? "" : " neste ano"}.`}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "pagamento" : "pagamentos"} · Pago líquido ${brl(somaPaga(l, "valorLiquido"))}`}
           />
-        </>
       )}
 
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo={aberto ? `Ordem de pagamento ${aberto.id}` : "Pagamento"} size="lg">

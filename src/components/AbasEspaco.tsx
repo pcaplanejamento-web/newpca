@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { IconChevronLeft, IconSettings } from "./icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ComponentProps, createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -16,7 +18,7 @@ const SlotFerramentas = createContext<HTMLElement | null | undefined>(undefined)
  */
 export function FerramentasAba({ children }: { children: ReactNode }) {
   const slot = useContext(SlotFerramentas);
-  if (slot === undefined) return <div className="flex flex-wrap items-center justify-end gap-2">{children}</div>;
+  if (slot === undefined) return <div className="barra-ferramentas flex flex-wrap items-center gap-2">{children}</div>;
   return slot ? createPortal(children, slot) : null;
 }
 
@@ -94,39 +96,85 @@ export function ConteudoAba({
 export function AbasEspaco<T extends string>({
   aba: abaServidor,
   opcoes,
-  cabecalho,
+  voltar,
+  fim,
   children,
 }: {
   /** A aba que o servidor montou (`children`). */
   aba: T;
   /** `curto` = o rótulo nos telefones quando todas as abas não cabem; `soIcone` + `icone` = a aba só com o ícone. */
   opcoes: ComponentProps<typeof Segmented<T>>["options"];
-  /** O título do espaço (voltar · nome · selos) — na MESMA linha das abas, à esquerda. */
-  cabecalho?: ReactNode;
+  /** O VOLTAR do espaço — à esquerda das abas. O espaço não tem título: o nome está no caminho do cabeçalho. */
+  voltar?: { href: string; rotulo: string };
+  /** Ação do espaço no fim da linha (ex.: excluir o orçamento). */
+  fim?: ReactNode;
   children: ReactNode;
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const { aba, trocar } = useTrocaAba(abaServidor);
-  const abas = <Segmented<T> value={aba} onChange={trocar} options={opcoes} />;
+  // A aba CONFIGURAÇÃO não fica entre as abas: é a engrenagem SEMPRE no fim da linha (o padrão do sistema).
+  const config = opcoes.find((o) => o.value === ("configuracao" as T));
+  const abas = config ? opcoes.filter((o) => o !== config) : opcoes;
   return (
     <>
-      {cabecalho ? (
-        <div className="linha-topico flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-x-2">{cabecalho}</div>
-          <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
-            <div ref={setSlot} className="flex min-w-0 items-center justify-end gap-2 empty:hidden" />
-            {abas}
+      {/* UMA linha: voltar · as abas · as ferramentas da aba (principais à esquerda, ícones à direita) · a ação do espaço ·
+          a engrenagem da Configuração. */}
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        {voltar && <BotaoVoltar href={voltar.href} rotulo={voltar.rotulo} />}
+        <Segmented<T> value={aba} onChange={trocar} options={abas} />
+        <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
+        {(fim || config) && (
+          <div className="ml-auto flex items-center gap-2">
+            {fim}
+            {config && <BotaoConfiguracoes ativo={aba === config.value} rotulo={String(config.label)} onClick={() => trocar(config.value)} />}
           </div>
-        </div>
-      ) : (
-        <div className="linha-topico flex flex-wrap items-center gap-2">
-          {abas}
-          <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
-        </div>
-      )}
+        )}
+      </div>
       <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot} className="space-y-[var(--gap-block)]">
         {children}
       </ConteudoAba>
     </>
+  );
+}
+
+/**
+ * O botão VOLTAR das telas internas (espaços, pastas, órgão, card, fluxo): sempre o primeiro à esquerda da linha do topo, na
+ * altura dos controles. `href` = um link; `onClick` = voltar sem navegar (uma visão dentro da mesma tela).
+ */
+export function BotaoVoltar({ href, onClick, rotulo }: { href?: string; onClick?: () => void; rotulo: string }) {
+  const classe =
+    "grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]";
+  const icone = <IconChevronLeft className="h-4 w-4" />;
+  if (href)
+    return (
+      <Link href={href} aria-label={`Voltar para ${rotulo}`} title={`Voltar para ${rotulo}`} className={classe}>
+        {icone}
+      </Link>
+    );
+  return (
+    <button type="button" onClick={onClick} aria-label={`Voltar para ${rotulo}`} title={`Voltar para ${rotulo}`} className={classe}>
+      {icone}
+    </button>
+  );
+}
+
+/**
+ * A ENGRENAGEM das configurações de uma tela/espaço — SEMPRE o último botão da linha, à direita. `ativo` = a configuração
+ * está aberta (a aba Configuração de um espaço). Mesma caixa do `BotaoVoltar`.
+ */
+export function BotaoConfiguracoes({ ativo = false, rotulo = "Configurações", onClick }: { ativo?: boolean; rotulo?: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={rotulo}
+      aria-pressed={ativo}
+      title={rotulo}
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
+        ativo ? "border-accent bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2 hover:text-text"
+      }`}
+    >
+      <IconSettings className="h-4 w-4" />
+    </button>
   );
 }

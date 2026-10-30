@@ -1,5 +1,6 @@
 "use client";
 
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
@@ -13,6 +14,7 @@ type Conta = { id: number; nome: string; email: string; foto: string | null; pap
 
 /** Tira deste navegador o que é de UMA pessoa (recentes, bolhas do chat…) e avisa as outras abas. */
 function trocouDePessoa(id: number | null) {
+  void apagarDadosLocais();
   for (const area of [localStorage, sessionStorage])
     try {
       for (const k of CHAVES_PESSOAIS) area.removeItem(k);

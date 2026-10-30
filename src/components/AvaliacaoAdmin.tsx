@@ -538,22 +538,22 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
     const setG = (patch: Partial<GateProtocolacao>) => setGate((v) => ({ ...v, ...patch }));
     return (
       <div className="space-y-[var(--gap-block)]">
-        <p className="text-[13px] text-muted">
-          Controle o que pode ser protocolado. Só é permitido protocolar quando o Assunto do protocolo
-          está cadastrado e todos os DFDs têm um tipo permitido — quando as travas abaixo estão ligadas.
-          Sem travas ligadas, nada muda (comportamento de hoje).
-        </p>
 
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-1 text-sm font-bold text-text">
               Assuntos permitidos
               <Ajuda titulo="Assuntos permitidos" compacta>
+                <p>
+                  Esta aba controla o que pode ser protocolado: com as travas ligadas, só se protocola quando o assunto está
+                  cadastrado e todos os DFDs têm um tipo permitido. Sem travas, nada muda.
+                </p>
                 <p>A lista dos assuntos que podem ser protocolados. O assunto da capa precisa CONTER um destes termos (sem diferenciar acento e maiúsculas).</p>
                 <p>Só vale com a trava “Exigir assunto cadastrado para protocolar” ligada; lista vazia com a trava ligada impede qualquer protocolação.</p>
               </Ajuda>
             </h2>
             <Button
+              size="sm"
               variant="secondary"
               onClick={() => setAssuntos((l) => [...l, { id: `as-${Date.now().toString(36)}`, termo: "" }])}
             >
@@ -651,16 +651,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-text">Avaliação</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted">
-            Controle total de importação de DFD, correção de itens e protocolação. Crie e edite as{" "}
-            <strong>importâncias</strong> (nome, cor e se bloqueiam), atribua uma a cada dado, escolha se o usuário pode
-            editá-lo na análise e as palavras-chave do ajuste automático. Com exceções por tipo de DFD e por categoria
-            de protocolo.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={restaurar} disabled={salvando}>
             Restaurar padrão
@@ -678,6 +669,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
       <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <Tabs
+          url="sub"
           tabs={[
             { key: "importancias", label: "Importâncias", content: painelImportancias() },
             { key: "protocolo", label: "Protocolo", content: painelSujeito("protocolo", "protocolo", ctxProto, setCtxProto) },

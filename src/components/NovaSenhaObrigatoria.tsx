@@ -1,5 +1,6 @@
 "use client";
 
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { problemaSenha } from "@/lib/cadastro-core";
@@ -65,6 +66,7 @@ export function NovaSenhaObrigatoria({ email, identidade, turnstile }: { email: 
     setSaindo(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      await apagarDadosLocais();
     } finally {
       router.replace("/login");
       router.refresh();

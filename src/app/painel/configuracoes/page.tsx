@@ -4,7 +4,7 @@ import { getAparencia } from "@/lib/aparencia";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { getUsuarioAtual } from "@/lib/auth";
 import { listarPcas } from "@/lib/dfd";
-import { linhasTabela } from "@/lib/theme";
+import { guardarNoAparelho, linhasTabela } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,7 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
       identidade={aparencia.identidade}
       acesso={aparencia.acesso}
       linhasTabela={linhasTabela(aparencia)}
+      noAparelho={guardarNoAparelho(aparencia)}
       pcas={pcas}
       regras={regras}
       abaInicial={aba}

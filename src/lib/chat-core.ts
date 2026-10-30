@@ -286,12 +286,16 @@ export function lerPosicaoBolhas(v: unknown): PosicaoBolhas {
  * está; as outras abrem espaço). A chave é a conversa (e "+" para a bolha das demais). */
 export type PosicaoBolha = { lado: "esq" | "dir"; y: number; t: number };
 export type PosicoesBolhas = Record<string, PosicaoBolha>;
-/** As medidas da tela que importam às bolhas (px): a área livre vai de `topo` a `altura - base`. */
-export type TelaBolhas = { largura: number; altura: number; topo: number; base: number; tam: number };
+/** Uma faixa OCUPADA por outro flutuante (o painel "Em segundo plano"): as bolhas do `lado` não pousam nela; `ambos` =
+ * ocupa a largura (no celular o painel cobre os dois lados). */
+export type FaixaFixa = { lado: "esq" | "dir"; top: number; altura: number; ambos?: boolean };
+/** As medidas da tela que importam às bolhas (px): a área livre vai de `topo` a `altura - base`, menos as `fixos`. */
+export type TelaBolhas = { largura: number; altura: number; topo: number; base: number; tam: number; fixos?: readonly FaixaFixa[] };
 /** O vão entre duas bolhas (px). */
 export const VAO_BOLHAS = 10;
 
-function lerUma(v: unknown): PosicaoBolha | null {
+/** Lê UMA posição guardada (inválida = null) — as bolhas e o painel "Em segundo plano". */
+export function lerPosicaoBolha(v: unknown): PosicaoBolha | null {
   if (!v || typeof v !== "object") return null;
   const o = v as Record<string, unknown>;
   const y = Number(o.y);
@@ -304,7 +308,7 @@ export function lerPosicoesBolhas(v: unknown): PosicoesBolhas {
   const r: PosicoesBolhas = {};
   if (!v || typeof v !== "object" || Array.isArray(v)) return r;
   for (const [k, x] of Object.entries(v as Record<string, unknown>).slice(0, 40)) {
-    const p = lerUma(x);
+    const p = lerPosicaoBolha(x);
     if (p && (k === "+" || conversaValida(k))) r[k] = p;
   }
   return r;
@@ -322,6 +326,11 @@ export function migrarPosicoes(antiga: PosicaoBolhas, ordem: readonly string[]):
 /** O lugar (px) de cada bolha: o lado e o topo. */
 export type LugarBolha = { lado: "esq" | "dir"; top: number };
 const faixa = (tela: TelaBolhas) => ({ min: tela.topo, max: Math.max(tela.topo, tela.altura - tela.base - tela.tam) });
+/** As faixas fixas que valem num lado. */
+const fixosDoLado = (tela: TelaBolhas, lado: "esq" | "dir") => (tela.fixos ?? []).filter((f) => f.ambos || f.lado === lado);
+/** O topo `y` cabe fora das faixas fixas do lado (com o vão)? */
+const foraDosFixos = (y: number, lado: "esq" | "dir", tela: TelaBolhas) =>
+  fixosDoLado(tela, lado).every((f) => y + tela.tam + VAO_BOLHAS <= f.top + 0.5 || y >= f.top + f.altura + VAO_BOLHAS - 0.5);
 /** O topo (px) de uma posição. */
 export function topoDaPosicao(p: Pick<PosicaoBolha, "y">, tela: TelaBolhas): number {
   const f = faixa(tela);
@@ -346,11 +355,12 @@ export function arrumarBolhas(posicoes: PosicoesBolhas, ordem: readonly string[]
   const postos: Record<"esq" | "dir", number[]> = { esq: [], dir: [] };
   for (const it of itens) {
     const ocupados = postos[it.lado];
-    const livre = (y: number) => y >= f.min - 0.5 && y <= f.max + 0.5 && ocupados.every((o) => Math.abs(o - y) >= passo - 0.5);
+    const livre = (y: number) => y >= f.min - 0.5 && y <= f.max + 0.5 && ocupados.every((o) => Math.abs(o - y) >= passo - 0.5) && foraDosFixos(y, it.lado, tela);
     const quer = Math.min(f.max, Math.max(f.min, it.quer));
     let top = quer;
     if (!livre(quer)) {
-      const candidatos = [f.min, f.max, ...ocupados.flatMap((o) => [o - passo, o + passo])].filter(livre);
+      const fixos = fixosDoLado(tela, it.lado).flatMap((x) => [x.top - tela.tam - VAO_BOLHAS, x.top + x.altura + VAO_BOLHAS]);
+      const candidatos = [f.min, f.max, ...fixos, ...ocupados.flatMap((o) => [o - passo, o + passo])].filter(livre);
       // Sem lugar livre (tela baixa demais): fica onde queria.
       if (candidatos.length) top = candidatos.reduce((m, c) => (Math.abs(c - quer) < Math.abs(m - quer) || (Math.abs(c - quer) === Math.abs(m - quer) && c > m) ? c : m));
     }
@@ -387,6 +397,7 @@ export function imaBolha(top: number, lado: "esq" | "dir", chave: string, lugare
     if (k === chave || l.lado !== lado) continue;
     for (const c of [l.top - passo, l.top + passo]) {
       if (c < f.min - 0.5 || c > f.max + 0.5) continue;
+      if (!foraDosFixos(c, lado, tela)) continue;
       if (Math.abs(c - top) <= raio && (melhor == null || Math.abs(c - top) < Math.abs(melhor - top))) melhor = c;
     }
   }

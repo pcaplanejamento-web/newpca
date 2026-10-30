@@ -329,8 +329,19 @@
 }
 
 @layer base {
+  /* A BARRA DE ROLAGEM da página tem o lugar RESERVADO (`scrollbar-gutter`): ela aparecer/sumir (uma tela que passa a
+     rolar, o menu animando, um painel abrindo) nunca empurra o conteúdo para a esquerda. Para a margem direita não ficar
+     maior que a esquerda, o conteúdo desconta a largura da barra (`--pad-direita`; `--barra-rolagem` medida por
+     SCRIPT_BARRA_ROLAGEM — 0 nas barras que flutuam, como no Mac e no celular). A faixa vazia tem as cores da tela: o
+     cabeçalho e a linha dele continuam até a borda (o fundo do html, preso à janela). */
   html {
     -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+    background: var(--surface-2);
+    --pad-direita: max(0px, calc(var(--pad-canvas) - var(--barra-rolagem, 0px)));
+  }
+  html:has([data-coluna-conteudo]) {
+    background: linear-gradient(to bottom, var(--surface) calc(var(--h-header) - 1px), var(--border) calc(var(--h-header) - 1px) var(--h-header), var(--surface-2) var(--h-header)) fixed;
   }
   body {
     @apply antialiased;
@@ -797,6 +808,34 @@
   animation: janela-sai 60ms cubic-bezier(0.4, 0, 1, 1) both;
   pointer-events: none;
 }
+/* O banner do painel "Em segundo plano" fecha SUAVE: encolhe de volta à pílula (a origem é ela) e some. */
+.animate-painel-sai {
+  animation: janela-sai calc(var(--motion-duration) * 1.4) cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+/* O painel "Em segundo plano": a PÍLULA encolhe em BOLHA quando o banner abre (e volta ao fechar) — só a largura anima,
+   presa à borda do lado; o texto esmaece junto; na bolha, o andamento é um anel (máscara, sem SVG). */
+.painel-pilula {
+  transition: width calc(var(--motion-duration) * 1.6) cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.painel-pilula-texto {
+  transition: opacity calc(var(--motion-duration) * 0.8) ease;
+}
+.painel-anel {
+  background: conic-gradient(var(--accent) var(--pct, 0%), var(--track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+@media (prefers-reduced-motion: reduce) {
+  .painel-pilula,
+  .painel-pilula-texto {
+    transition: none;
+  }
+}
+[data-motion="off"] .painel-pilula,
+[data-motion="off"] .painel-pilula-texto {
+  transition: none;
+}
 /* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */
 @keyframes lixeira-entra {
   0% {
@@ -831,6 +870,7 @@
   .animate-cabeca-entra,
   .animate-janela-cresce,
   .animate-janela-sai,
+  .animate-painel-sai,
   .animate-lixeira-entra,
   .animate-lixeira-sai {
     animation: none;
@@ -839,6 +879,7 @@
 [data-motion="off"] .animate-cabeca-entra,
 [data-motion="off"] .animate-janela-cresce,
 [data-motion="off"] .animate-janela-sai,
+[data-motion="off"] .animate-painel-sai,
 [data-motion="off"] .animate-lixeira-entra,
 [data-motion="off"] .animate-lixeira-sai,
 [data-motion="reduced"] .animate-cabeca-entra,
@@ -1244,8 +1285,10 @@ select:not([multiple]):not([size]) {
 /* ── MENU LATERAL recolhível (AppShell). A VAGA anima a largura e o conteúdo estica/encolhe junto (mesma curva); o menu é absoluto dentro dela:
    recolhido = trilho de 60px; com o mouse (ou o foco do teclado) abre POR CIMA, sem empurrar. Os ícones ficam parados
    (alinhados à esquerda, centrados no trilho); os rótulos acompanham a largura com reticências e entram deslizando. ── */
-.menu-vaga { width: 16rem; transition: width 300ms cubic-bezier(.32,.72,0,1); }
-.menu-lateral { --menu-curva: cubic-bezier(.32,.72,0,1); }
+/* A VAGA anima a largura NO MESMO RITMO do menu: o conteúdo estica/encolhe junto, a borda direita fica parada (o lugar da
+   barra de rolagem é reservado — html, abaixo). A KpiStat tem a altura fixa: só a largura muda. */
+.menu-vaga, .menu-lateral { --menu-curva: cubic-bezier(.32,.72,0,1); }
+.menu-vaga { width: 16rem; transition: width 300ms var(--menu-curva); }
 .menu-lateral { width: 16rem; transition: width 300ms var(--menu-curva), box-shadow 300ms ease; }
 .menu-lateral .menu-esconde, .menu-lateral [data-marca-texto] {
   transition: opacity 200ms ease 80ms, transform 300ms var(--menu-curva);
@@ -1424,3 +1467,12 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
   height: 100% !important;
 }
 
+
+/* BARRA DE FERRAMENTAS (regra do sistema): os controles PRINCIPAIS (seletores, campos, busca, filtros) à ESQUERDA e os
+   SECUNDÁRIOS (botões só-ícone: recarregar, configurar, ajuda) à DIREITA — a ordem do código não importa. */
+.barra-ferramentas > :is(:has(select, input:not([type="checkbox"]):not([type="hidden"]), [role="combobox"]), select, input) {
+  order: -1;
+}
+.barra-ferramentas > :nth-child(1 of :not(.sr-only, :has(select, input:not([type="checkbox"]):not([type="hidden"]), [role="combobox"]), select, input)) {
+  margin-left: auto;
+}

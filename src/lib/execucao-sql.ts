@@ -3,6 +3,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { type EscopoEmpenhos, escopoVazio } from "./empenhos-tela-core.ts";
 import { doEscopo } from "./empenhos-tela-sql.ts";
 import { DIMS_DICIONARIO, type DimDicionario, ESCALA, type MetaExec } from "./execucao-dash-core.ts";
+import { limiteParado } from "./empenhos-core.ts";
 
 /**
  * As CONSULTAS do Dashboard da EXECUÇÃO (testadas no D1 real sobre `node:sqlite` — `tests/execucao-sql.test.ts`). O
@@ -146,18 +147,48 @@ export async function consultaVersaoExecucao(db: Db): Promise<string> {
   return String(r?.ver ?? "");
 }
 
+/** A versão de cada TIPO (empenhos ≠ liquidações ≠ pagamentos) + a do cadastro (nomes de órgãos/unidades): cada tela da
+ * execução só pede de novo quando o que ELA mostra mudou — importar pagamentos não renova os empenhos. */
+export type VersoesExecucao = { empenhos: string; liquidacoes: string; pagamentos: string; cadastro: string };
+
+function versaoTipoSql(t: "empenhos" | "liquidacoes" | "pagamentos"): string {
+  return `((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = '${t}' AND l.estado = 'promovido') || ':' || (SELECT COUNT(*) || '.' || IFNULL(MAX(id), 0) || '.' || IFNULL(MAX(vinculos_em), '') FROM empenho_cards WHERE tipo = '${t}'))`;
+}
+
+export async function consultaVersoesExecucao(db: Db): Promise<VersoesExecucao> {
+  const [r] = await db.all<{ e: string; l: string; p: string; c: number | null }>(
+    sql.raw(
+      `SELECT ${versaoTipoSql("empenhos")} AS e, ${versaoTipoSql("liquidacoes")} AS l, ${versaoTipoSql("pagamentos")} AS p, (SELECT MAX(id) FROM auditoria WHERE entidade IN ('orgao', 'reparticao')) AS c`,
+    ),
+  );
+  return { empenhos: String(r?.e ?? ""), liquidacoes: String(r?.l ?? ""), pagamentos: String(r?.p ?? ""), cadastro: String(r?.c ?? 0) };
+}
+
+/** A versão de cada TELA da execução: a do que ela mostra (liquidações e pagamentos trazem o órgão/unidade do empenho). */
+export function versaoDaTelaExecucao(v: VersoesExecucao, tela: "empenhos" | "liquidacoes" | "pagamentos" | "execucao"): string {
+  const partes = tela === "empenhos" ? [v.empenhos] : tela === "execucao" ? [v.empenhos, v.liquidacoes, v.pagamentos] : [tela === "liquidacoes" ? v.liquidacoes : v.pagamentos, v.empenhos];
+  return `${tela}|${partes.join("|")}|c${v.cadastro}`;
+}
+
 /** A situação de cada TIPO de card: quantos, a última importação promovida, lendo agora e com problema. */
-export async function consultaMetaExecucao(db: Db): Promise<MetaExec[]> {
-  const l = await db.all<{ tipo: string; cards: number; atualizado: string | null; lendo: number; problemas: number }>(
+/** `livres` = os cards da etapa sem importação concluída (podem atualizar já); `ultimaCompleta` = a mais antiga das concluídas. */
+export type MetaSql = MetaExec & { livres: number; ultimaCompleta: string | null };
+
+export async function consultaMetaExecucao(db: Db, parado = limiteParado()): Promise<MetaSql[]> {
+  // "Lendo agora" = o lote com atividade recente (o PARADO há mais de 30 min é abandonado — `limiteParado`).
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(parado)) throw new Error("Limite inválido.");
+  const l = await db.all<{ tipo: string; cards: number; atualizado: string | null; lendo: number; problemas: number; livres: number; ultimaCompleta: string | null }>(
     sql.raw(`SELECT c.tipo AS tipo, COUNT(*) AS cards,
       (SELECT MAX(l.concluido_em) FROM centi_lotes l JOIN empenho_cards c2 ON c2.id = l.card_id WHERE c2.tipo = c.tipo AND l.estado = 'promovido') AS atualizado,
-      SUM(CASE WHEN EXISTS (SELECT 1 FROM centi_lotes l WHERE l.card_id = c.id AND l.estado = 'lendo') THEN 1 ELSE 0 END) AS lendo,
-      SUM(CASE WHEN c.ultimo_status IN ('falhou', 'parcial') THEN 1 ELSE 0 END) AS problemas
+      SUM(CASE WHEN EXISTS (SELECT 1 FROM centi_lotes l WHERE l.card_id = c.id AND l.estado = 'lendo' AND l.visto_em >= '${parado}') THEN 1 ELSE 0 END) AS lendo,
+      SUM(CASE WHEN c.ultimo_status IN ('falhou', 'parcial') THEN 1 ELSE 0 END) AS problemas,
+      SUM(CASE WHEN c.ultimo_status = 'completo' AND c.ultima_execucao IS NOT NULL THEN 0 ELSE 1 END) AS livres,
+      MIN(CASE WHEN c.ultimo_status = 'completo' THEN c.ultima_execucao END) AS ultimaCompleta
       FROM empenho_cards c GROUP BY c.tipo`),
   );
   return l
     .filter((m): m is typeof m & { tipo: MetaExec["tipo"] } => m.tipo === "empenhos" || m.tipo === "liquidacoes" || m.tipo === "pagamentos")
-    .map((m) => ({ tipo: m.tipo, cards: Number(m.cards), atualizado: m.atualizado ?? null, lendo: Number(m.lendo), problemas: Number(m.problemas) }));
+    .map((m) => ({ tipo: m.tipo, cards: Number(m.cards), atualizado: m.atualizado ?? null, lendo: Number(m.lendo), problemas: Number(m.problemas), livres: Number(m.livres), ultimaCompleta: m.ultimaCompleta ?? null }));
 }
 
 /** Os anos com empenhos no escopo (o seletor de anos — mais recente primeiro). */

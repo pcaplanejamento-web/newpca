@@ -19,6 +19,7 @@ import {
   totaisPorClassificacao,
 } from "@/lib/padronizacao-core";
 import { chamarPadronizacao } from "@/lib/padronizacao-cliente";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
@@ -60,6 +61,15 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [erroItens, setErroItens] = useState<string | null>(null);
   const [editando, setEditando] = useState<RascunhoClassificacao | null>(null);
+  // A PESQUISA DO SISTEMA (`?vista=classificacoes&editar=<id>`): abre a classificação quando o cadastro chega.
+  useAbrirDaUrl(
+    (v) => {
+      const c = cad?.classificacoes.find((x) => x.id === Number(v));
+      if (c) setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras, dominio: c.dominio ?? null });
+    },
+    cad != null,
+    "editar",
+  );
 
   const carregarCadastro = useCallback(async () => {
     try {

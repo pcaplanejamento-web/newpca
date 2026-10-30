@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { type AtorPasta, type ConjuntoQuadros, MAX_CONJUNTOS, type PastasQuadros, podeCriarPasta } from "@/lib/tarefas-core";
@@ -67,8 +66,6 @@ export function TarefasView({
   const modelo = modelos.find((m) => String(m.id) === modeloId);
   const [salvando, setSalvando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
-  const abertas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.abertas), 0);
-  const atrasadas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.atrasadas), 0);
 
   const abrirNovo = (pasta: ConjuntoQuadros | null = null) => {
     setNovo(NOVO);
@@ -105,14 +102,8 @@ export function TarefasView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-        <h1 className="text-xl font-bold text-text">Tarefas</h1>
-        <p className="text-sm text-muted">
-          {quadros.length} {quadros.length === 1 ? "quadro" : "quadros"} · {num(abertas)} {abertas === 1 ? "tarefa aberta" : "tarefas abertas"}
-          {atrasadas > 0 && <span style={{ color: "var(--danger)" }}> · {num(atrasadas)} atrasada{atrasadas === 1 ? "" : "s"}</span>} · do grupo ativo do cabeçalho
-        </p>
-        </div>
+      <h1 className="sr-only">Tarefas</h1>
+      <div className="flex flex-wrap items-center justify-end gap-3 empty:hidden">
         {quadros.length > 0 && conj.estado.lista.length < MAX_CONJUNTOS && podeCriarPasta(ator) && (
           <Button
             size="sm"

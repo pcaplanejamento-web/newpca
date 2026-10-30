@@ -45,7 +45,7 @@ export function StatCard({
       )}
       <div className="min-w-0">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</div>
-        <div className="mt-0.5 text-xl font-bold leading-tight text-text">{value}</div>
+        <div className="mt-0.5 truncate text-xl font-bold leading-tight text-text" title={typeof value === "string" ? value : undefined}>{value}</div>
         {hint && <div className="truncate text-[11px] text-faint">{hint}</div>}
       </div>
     </Comp>

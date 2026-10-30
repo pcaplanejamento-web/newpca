@@ -53,9 +53,10 @@ import { Button } from "./Button";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { ChartCard } from "./ChartCard";
+import { MaisIndicadores } from "./MaisIndicadores";
 import { BarraSegmentada, BarrasH, type LinhaBarra, type Segmento } from "./charts/Barras";
 import type { LinhaDica, PontoTemporal } from "./charts/SerieTemporal";
-import { TOPO_DAS_DATAS } from "./charts/serie-medidas";
+import { CARTAO_GRAFICO, ESCALA_CONTROLES, GraficoTemporal, VIDRO } from "./charts/GraficoTemporal";
 import { corSerie } from "./charts/shared";
 import { type Column, DataTable } from "./DataTable";
 import { SalvarEdicao, useEdicoesTabela } from "./EdicoesTabela";
@@ -66,17 +67,13 @@ import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconChevronDown, IconChevronLeft, IconClock, IconClose, IconChevronRight, IconDatabase, IconInfo, IconLayers, IconRestaurar, IconVisao, IconZoom, IconZoomOut } from "./icons";
+import { IconClose, IconDatabase, IconInfo, IconLayers, IconVisao, IconZoom } from "./icons";
 import { KpiStat } from "./KpiStat";
-import { BotaoAtualizar } from "./BotaoAtualizar";
-import { useImportacoesLocais } from "./ImportacoesAoVivo";
+import { AtualizadoHa, ImportarAgora } from "./AtualizacaoKpi";
 import { toast } from "./Toast";
-import { useRouter } from "next/navigation";
 import { type ConfigImportacoes, lerRegraRemovidos, NOME_TIPO, type ResumoCard } from "@/lib/empenho-cards-core";
-import { anoMaisRecente, importarCards, perguntaDeQueda, prepararCards, resumoImportacao } from "@/lib/importar-cards";
-import { haQuanto } from "@/lib/acessos-core";
+import { anoMaisRecente, importarCards, prepararCards, resumoImportacao } from "@/lib/importar-cards";
 import type { MetaExec } from "@/lib/execucao-dash-core";
-import { duracaoMotionMs } from "./Modal";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { coerceEstado, diferencas, ESTADO_VAZIO, type EstadoFiltros, paraGuardar, partesDefinidas, periodoEfetivo, voltarParte } from "@/lib/filtros-visao-core";
 import { OrigemDados } from "./OrigemDados";
@@ -103,32 +100,11 @@ const COR = { empenhado: corSerie(SERIES[0].cor), liquidado: corSerie(SERIES[1].
 /** Da mais fina à mais grossa (a granularidade do zoom nunca fica mais grossa que a escolhida). */
 const ORDEM_GRAN = { auto: 0, dia: 1, semana: 2, mes: 3, ano: 4 } as const;
 
-/** O "vidro" dos controles SOBRE o desenho do gráfico: a superfície translúcida, desfocada, com o anel. */
-/** O cartão do gráfico. O corte arredondado é feito pelo `clip-path` (e o `isolate`), não só pelo `overflow-hidden`: as camadas
- * que o navegador compõe à parte — o vidro com desfoque, as pílulas das datas, as animações de opacidade — escapavam do
- * raio depois de sair da tela e voltar (as pontas do desenho ficavam retas). */
-const CARTAO_GRAFICO = "relative isolate overflow-hidden rounded-card bg-surface-2/60 [clip-path:inset(0_round_var(--radius-card))]";
-const VIDRO = "vidro-controles rounded-[calc(var(--radius-control)+4px)] bg-surface/55 p-1 shadow-ring backdrop-blur-md";
-
-/** A escala dos controles sobre o desenho em telas menores (`zoom` reduz também o espaço que ocupam). */
-const ESCALA_CONTROLES = "max-lg:[zoom:0.9] max-sm:[zoom:0.8]";
-/** A pilha lateral (lupa, restaurar, tabela) encolhe mais: no celular cobriria boa parte da altura do desenho. */
-const ESCALA_PILHA = "max-lg:[zoom:0.85] max-sm:[zoom:0.7]";
-
 type Aba = "empenhos" | "liquidacoes" | "pagamentos";
 /** Um recorte da origem: o texto e os registros. */
 type RecorteOrigem = { recorte: string; sel: Selecao };
 /** A origem de um número; com `acumulado`, a do ponto do gráfico também oferece "Acumulado até aqui" (`noAcumulado` = abre nele). */
 type Origem = RecorteOrigem & { titulo: string; aba: Aba; acumulado?: RecorteOrigem & { pontos: PontoDaSerie[]; ajustarY: boolean }; noAcumulado?: boolean };
-
-const CHAVE_MAIS = "execucao:mais-indicadores";
-const lerMais = () => {
-  try {
-    return localStorage.getItem(CHAVE_MAIS) === "1";
-  } catch {
-    return false;
-  }
-};
 
 const pctTexto = (p: number | null) => (p == null ? "—" : `${(p * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
 const plural = (n: number, um: string, varios: string) => `${num(n)} ${n === 1 ? um : varios}`;
@@ -197,18 +173,7 @@ export function DashboardExecucao({
   const setPeriodo = (p: Periodo) => setEstado((e) => ({ ...e, periodo: p }));
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
   const [gran, setGran] = useState<Granularidade>("dia");
-  const [mais, setMais] = useState(false);
-  /** A abertura terminou (só então os cartões podem passar da borda — a sombra, o realce). */
-  const [maisPronto, setMaisPronto] = useState(false);
-  const [animarMais, setAnimarMais] = useState(false);
-  const [verDados, setVerDados] = useState(false);
   const [origem, setOrigem] = useState<Origem | null>(null);
-  useEffect(() => {
-    // A preferência guardada abre já pronta, sem animar na chegada.
-    const v = lerMais();
-    setMais(v);
-    setMaisPronto(v);
-  }, []);
 
   // Os filtros mudam na hora; o cálculo segue um quadro depois (a tela não trava com centenas de milhares de registros).
   const pedido = useMemo(() => ({ periodo, filtros, tipo }), [periodo, filtros, tipo]);
@@ -389,12 +354,6 @@ export function DashboardExecucao({
   }, [janela, hoje, s.pontos]);
   const diasJanela = janela ? (diaDoIso(janela.ate) ?? 0) - (diaDoIso(janela.de) ?? 0) + 1 : Number.POSITIVE_INFINITY;
   const seriesVistas = useMemo(() => SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true)), [temLiq, temPag]);
-  // As linhas que a pessoa desligou na legenda (só na tela); ao menos uma fica sempre à vista.
-  const [ocultas, setOcultas] = useState<ReadonlySet<string>>(() => new Set());
-  const seriesDesenho = useMemo(() => {
-    const v = seriesVistas.filter((x) => !ocultas.has(x.chave));
-    return v.length ? v : seriesVistas;
-  }, [seriesVistas, ocultas]);
   const rotuloGran = { dia: "dia", semana: "semana", mes: "mês", ano: "ano" }[s.granularidade];
 
   const recorteTexto = [
@@ -466,8 +425,8 @@ export function DashboardExecucao({
       <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
         <KpiStat
           label="Saldo: empenhos"
-          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "empenhos")} />}
-          acaoCanto={admin ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "empenhos")} /> : undefined}
+          canto={<AtualizadoHa admin={admin} meta={base.meta.find((m) => m.tipo === "empenhos")} />}
+          acaoCanto={admin ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "empenhos")} executar={importarEtapa("empenhos")} /> : undefined}
           value={brl(empenhadoAnim)}
           completo
           cor={COR.empenhado}
@@ -478,8 +437,8 @@ export function DashboardExecucao({
         />
         <KpiStat
           label="Saldo: liquidações"
-          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
-          acaoCanto={admin && temLiq ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "liquidacoes")} /> : undefined}
+          canto={<AtualizadoHa admin={admin && temLiq} meta={base.meta.find((m) => m.tipo === "liquidacoes")} />}
+          acaoCanto={admin && temLiq ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "liquidacoes")} executar={importarEtapa("liquidacoes")} /> : undefined}
           value={temLiq ? brl(liquidadoAnim) : "—"}
           completo
           cor={COR.liquidado}
@@ -490,8 +449,8 @@ export function DashboardExecucao({
         />
         <KpiStat
           label="Saldo: pagamentos"
-          canto={<AtualizadoHa meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
-          acaoCanto={admin && temPag ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "pagamentos")} /> : undefined}
+          canto={<AtualizadoHa admin={admin && temPag} meta={base.meta.find((m) => m.tipo === "pagamentos")} />}
+          acaoCanto={admin && temPag ? <ImportarAgora meta={base.meta.find((m) => m.tipo === "pagamentos")} executar={importarEtapa("pagamentos")} /> : undefined}
           value={temPag ? brl(pagoAnim) : "—"}
           completo
           cor={COR.pago}
@@ -501,16 +460,8 @@ export function DashboardExecucao({
           acao="ver os pagamentos"
         />
       </div>
-      {/* "Mais indicadores": abre e fecha pela ALTURA (grid-template-rows 0fr ↔ 1fr) — sempre montado, os de baixo deslizam
-          juntos e nada pisca; fechado = inerte (fora do Tab). O corte só durante a transição (as sombras não ficam presas). */}
-      <div
-        className={`grid ${animarMais ? "transition-[grid-template-rows,opacity,margin] duration-[calc(var(--motion-duration)*1.5)] ease-[var(--motion-ease)] motion-reduce:transition-none" : ""}`}
-        style={{ gridTemplateRows: mais ? "1fr" : "0fr", opacity: mais ? 1 : 0, marginTop: mais ? 0 : "calc(-1 * var(--gap-block))" }}
-        inert={!mais}
-        aria-hidden={!mais}
-        onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === "grid-template-rows" && setMaisPronto(mais)}
-      >
-        <div className={`min-h-0 ${mais && maisPronto ? "overflow-visible" : "overflow-hidden"}`}>
+      <MaisIndicadores
+        extras={
           <div className="grid grid-cols-1 gap-[var(--gap-block)] md:grid-cols-3">
             <KpiStat
               label="Anulado: empenhos"
@@ -567,29 +518,8 @@ export function DashboardExecucao({
               acao="ver os pagamentos"
             />
           </div>
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-expanded={mais}
-        onClick={() => {
-          const novo = !mais;
-          try {
-            localStorage.setItem(CHAVE_MAIS, novo ? "1" : "0");
-          } catch {
-            /* sem armazenamento: vale só nesta visita */
-          }
-          // Sem movimento (sistema ou ADM) não há transição — nem o fim dela: fica pronto na hora.
-          const semTransicao = duracaoMotionMs() === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          setAnimarMais(!semTransicao);
-          setMaisPronto(semTransicao && novo);
-          setMais(novo);
-        }}
-        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)]"
-      >
-        {mais ? "Menos indicadores" : "Mais indicadores"}
-        <IconChevronDown className={`h-4 w-4 transition-transform ${mais ? "rotate-180" : ""}`} />
-      </button>
+        }
+      />
 
       {/* TODOS os filtros à vista, logo abaixo dos indicadores, no cartão padrão dos filtros: o Período primeiro e as dimensões em colunas. */}
       <section
@@ -704,26 +634,28 @@ export function DashboardExecucao({
               <AjudaExecucao />
             </span>
           );
-          const botaoTabela = (
-            <Button
-              size="sm"
-              variant="icon"
-              aria-pressed={verDados}
-              aria-label={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
-              title={verDados ? "Ver o gráfico" : "Ver os dados do gráfico em tabela"}
-              onClick={() => setVerDados((v) => !v)}
-            >
-              <IconLayers className="h-4 w-4" />
-            </Button>
-          );
-          if (verDados)
-            return (
-              <>
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  {tipoGran}
-                  {botaoTabela}
-                  <div className="ml-auto flex items-center">{direita}</div>
-                </div>
+          return (
+            <GraficoTemporal
+              pontos={pontos}
+              series={seriesVistas}
+              controles={tipoGran}
+              direita={direita}
+              gran={rotuloGran}
+              janela={
+                janela && todo
+                  ? {
+                      ...janelaVista,
+                      podeVoltar: janela.de > todo.de,
+                      podeAvancar: janela.ate < todo.ate,
+                      onVoltar: () => setJanela(deslocarJanela(janela, todo, -1)),
+                      onAvancar: () => setJanela(deslocarJanela(janela, todo, 1)),
+                    }
+                  : null
+              }
+              podeAproximar={!!todo && diasJanela > MIN_DIAS_ZOOM}
+              onZoom={zoom}
+              onRestaurar={() => setJanela(null)}
+              tabela={
                 <DataTable
                   rows={[...s.pontos].reverse()}
                   getKey={(p) => p.chave}
@@ -734,107 +666,21 @@ export function DashboardExecucao({
                   columns={colunasSerie(temLiq, temPag)}
                   vazio="Nada no período escolhido."
                 />
-              </>
-            );
-          return (
-            <div className={CARTAO_GRAFICO}>
-              {/* Os controles sobre o desenho, em vidro; em telas menores, numa escala menor (cabem sem cobrir o gráfico). */}
-              <div data-reserva-dica="topo" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
-                {/* O tipo e o agrupamento: dois controles independentes, cada um em vidro sobre o desenho. */}
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <div className={`pointer-events-auto ${VIDRO}`}>{tipoGran[0]}</div>
-                  <div className={`pointer-events-auto ${VIDRO}`}>{tipoGran[1]}</div>
-                </div>
-                {/* No zoom, as setas e as datas da janela no alto, ao lado do tipo e do agrupamento. */}
-                  {janela && todo && (
-                    <div className={`pointer-events-auto flex items-center gap-1 pr-3 text-[13px] font-medium text-text ${VIDRO}`}>
-                      <Button size="sm" variant="icon" aria-label="Voltar no tempo" title="Voltar no tempo" disabled={janela.de <= todo.de} onClick={() => setJanela(deslocarJanela(janela, todo, -1))}>
-                        <IconChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="icon" aria-label="Avançar no tempo" title="Avançar no tempo" disabled={janela.ate >= todo.ate} onClick={() => setJanela(deslocarJanela(janela, todo, 1))}>
-                        <IconChevronRight className="h-4 w-4" />
-                      </Button>
-                      <span className="whitespace-nowrap tabular-nums" aria-live="polite" title={`${plural(janelaVista.dias, "dia", "dias")} à vista, por ${rotuloGran}`}>
-                        {dataBR(janelaVista.de)} a {dataBR(janelaVista.ate)}
-                        <span className="ml-1.5 text-muted">· {plural(janelaVista.dias, "dia", "dias")}</span>
-                      </span>
-                    </div>
-                  )}
-                {/* A legenda (uma bolinha por linha, que liga e desliga a linha no gráfico) e o funil/avisos/ajuda; no celular,
-                    um embaixo do outro — cabem ao lado do tipo e do agrupamento. */}
-                <div className="ml-auto flex shrink-0 items-start gap-2 max-md:flex-col max-md:items-end">
-                <fieldset className={`pointer-events-auto flex shrink-0 items-center ${VIDRO}`} aria-label="Linhas do gráfico">
-                  {seriesVistas.map((x) => {
-                    const vista = seriesDesenho.some((d) => d.chave === x.chave);
-                    const ultima = vista && seriesDesenho.length === 1;
-                    const rotulo = ultima ? `${x.rotulo}: ao menos uma linha fica no gráfico` : `${vista ? "Ocultar" : "Mostrar"} ${x.rotulo}`;
-                    return (
-                      <Button
-                        key={x.chave}
-                        size="sm"
-                        variant="icon"
-                        aria-pressed={vista}
-                        aria-label={rotulo}
-                        title={rotulo}
-                        disabled={ultima}
-                        onClick={() =>
-                          setOcultas((o) => {
-                            const n = new Set(o);
-                            if (n.has(x.chave)) n.delete(x.chave);
-                            else n.add(x.chave);
-                            return n;
-                          })
-                        }
-                      >
-                        <span
-                          aria-hidden
-                          className="block h-2.5 w-2.5 rounded-full border-2 transition-colors duration-[var(--motion-duration)]"
-                          style={{ borderColor: COR[x.chave], background: vista ? COR[x.chave] : "transparent" }}
-                        />
-                      </Button>
-                    );
-                  })}
-                </fieldset>
-                <div className={`pointer-events-auto flex shrink-0 items-center ${VIDRO}`}>{direita}</div>
-                </div>
-              </div>
-              <SerieTemporal
-                pontos={pontos}
-                preencher
-                altura={420}
-                ajustarY={!!janela && modo === "acumulado"}
-                series={seriesVistas}
-                ocultas={ocultas}
-                ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
-                onEscolher={(p) => abrirPonto(p.chave)}
-                extraDica={(p) => {
-                  const pt = pontoPorChave.get(p.chave);
-                  return pt ? dicaDoPonto(pt, modo, rotuloGran, sTodo.pontos.at(-1), temLiq, temPag) : [];
-                }}
-                onTrecho={(a, b) => abrirTrecho(a.chave, b.chave)}
-                dicaTrecho={(a, b) => {
-                  const pa = pontoPorChave.get(a.chave);
-                  const pb = pontoPorChave.get(b.chave);
-                  return pa && pb ? dicaDoTrecho(s.pontos, pa, pb, rotuloGran, temLiq, temPag) : [];
-                }}
-              />
-              {/* A lupa, o restaurar e a tabela empilhados à direita, ACIMA da linha das datas (a mesma distância da borda e da
-                  pílula da última data) — a última data fica à vista. A escala vai no conteúdo: a posição não encolhe junto. */}
-              <div className="pointer-events-none absolute right-2 z-10" style={{ bottom: TOPO_DAS_DATAS }}>
-                <div data-reserva-dica="lado" className={`pointer-events-auto flex flex-col items-center gap-1 ${VIDRO} ${ESCALA_PILHA}`}>
-                  <Button size="sm" variant="icon" aria-label="Aproximar" title="Aproximar (menos dias à vista, mais detalhe)" disabled={!todo || diasJanela <= MIN_DIAS_ZOOM} onClick={() => zoom(0.5)}>
-                    <IconZoom className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="icon" aria-label="Afastar" title="Afastar (mais dias à vista)" disabled={!janela} onClick={() => zoom(2)}>
-                    <IconZoomOut className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="icon" aria-label="Restaurar o zoom" title="Restaurar o zoom (o período inteiro)" disabled={!janela} onClick={() => setJanela(null)}>
-                    <IconRestaurar className="h-4 w-4" />
-                  </Button>
-                  {botaoTabela}
-                </div>
-              </div>
-            </div>
+              }
+              ajustarY={!!janela && modo === "acumulado"}
+              ariaLabel={modo === "acumulado" ? "Evolução acumulada do empenhado, liquidado e pago" : `Empenhado, liquidado e pago por ${rotuloGran}`}
+              onEscolher={(p) => abrirPonto(p.chave)}
+              extraDica={(p) => {
+                const pt = pontoPorChave.get(p.chave);
+                return pt ? dicaDoPonto(pt, modo, rotuloGran, sTodo.pontos.at(-1), temLiq, temPag) : [];
+              }}
+              onTrecho={(a, b) => abrirTrecho(a.chave, b.chave)}
+              dicaTrecho={(a, b) => {
+                const pa = pontoPorChave.get(a.chave);
+                const pb = pontoPorChave.get(b.chave);
+                return pa && pb ? dicaDoTrecho(s.pontos, pa, pb, rotuloGran, temLiq, temPag) : [];
+              }}
+            />
           );
         })()}
       </ChartCard>
@@ -1432,87 +1278,30 @@ function DemonstrativoExecucao({
   );
 }
 
-/**
- * IMPORTAR AGORA (só o ADM), no canto do indicador: importa os dados atualizados da etapa — todos os cards dela, cada um no
- * ano mais recente (o lote aberto do card é continuado), pelo MESMO executor do "Importar tudo" (`importarCards`). O
- * andamento aparece no painel do canto inferior direito e segue ao sair da tela; a queda pergunta aqui (fora da tela = não
- * grava). No fim, o resumo e a página relida (a versão nova traz os números).
- */
-function ImportarAgora({ meta }: { meta?: MetaExec }) {
-  const router = useRouter();
-  const { confirmar, confirmacao } = useConfirmacao();
-  const locais = useImportacoesLocais();
-  const [rodando, setRodando] = useState(false);
-  if (!meta?.cards) return null;
-  const tipo = meta.tipo;
-  const nome = NOME_TIPO[tipo].titulo;
-  const lendo = meta.lendo > 0 || locais.some((i) => i.estado === "rodando");
-  async function importar() {
-    if (rodando) return;
-    setRodando(true);
-    try {
-      const [rc, rf] = await Promise.all([fetch("/api/admin/importacoes", { cache: "no-store" }), fetch("/api/admin/importacoes/config", { cache: "no-store" })]);
-      const jc = (await rc.json().catch(() => ({}))) as { ok?: boolean; error?: string; cards?: ResumoCard[] };
-      const jf = (await rf.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes };
-      if (!rc.ok || !jc.ok || !jc.cards) throw new Error(jc.error ?? "Não foi possível ler os cards de importação.");
-      const cards = jc.cards.filter((c) => c.tipo === tipo);
-      if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito.`, confirmar: "Importar" })))
-        return;
-      const anoAtual = new Date().getFullYear();
-      const linhas = await prepararCards(cards, (c) => anoMaisRecente(c, anoAtual), anoAtual);
-      await importarCards(linhas, {
-        regra: lerRegraRemovidos(jf.config?.removidos),
-        parar: () => false,
-        confirmarQueda: perguntaDeQueda(confirmar),
-        onLinha: (id, mudou) => {
-          const l = linhas.find((x) => x.card.id === id);
-          if (l) Object.assign(l, mudou);
-        },
-      });
-      const r = resumoImportacao(linhas);
-      (r.tom === "erro" ? toast.error : r.tom === "aviso" ? toast.warning : toast.success)(`${nome}: ${r.texto}.`);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao importar.");
-    } finally {
-      setRodando(false);
-    }
-  }
-  return (
-    <>
-      <BotaoAtualizar
-        discreto
-        ativo={rodando}
-        disabled={lendo}
-        rotulo={`Importar agora os dados atualizados de ${nome.toLowerCase()}`}
-        dica={lendo ? "Há uma importação em andamento — o andamento está no canto inferior direito" : `Importar agora: ${nome.toLowerCase()}`}
-        detalhe={`Importando ${nome.toLowerCase()} — veja o andamento no canto inferior direito`}
-        onClick={() => void importar()}
-      />
-      {confirmacao}
-    </>
-  );
-}
-
-/**
- * DISCRETO, no canto do indicador: há quanto tempo a etapa foi atualizada (a última importação concluída de qualquer card
- * dela — `MetaExec.atualizado`); com uma importação lendo agora, o ponto que pulsa. O relógio anda a cada 30 s.
- */
-function AtualizadoHa({ meta }: { meta?: MetaExec }) {
-  const [agora, setAgora] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setAgora(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-  if (!meta?.cards) return null;
-  const lendo = meta.lendo > 0;
-  const quando = meta.atualizado ? haQuanto(meta.atualizado, agora) : "sem importação";
-  const dica = `${meta.atualizado ? `Última importação concluída: ${dataHoraBR(meta.atualizado)}` : "Nenhuma importação concluída"}${lendo ? " · importando agora" : ""}`;
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] leading-none text-faint tabular-nums" title={dica}>
-      {lendo ? <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" /> : <IconClock aria-hidden className="h-3 w-3" />}
-      <span className="sr-only">Atualizado </span>
-      {quando}
-    </span>
-  );
+/** O "Importar agora" da Execução: todos os cards da etapa, cada um no ano mais recente (o lote aberto do card é continuado),
+ * pelo MESMO executor do "Importar tudo" (`importarCards`); a queda é perguntada no painel do canto. */
+function importarEtapa(tipo: MetaExec["tipo"]) {
+  return async (confirmar: Parameters<Parameters<typeof ImportarAgora>[0]["executar"]>[0]) => {
+    const nome = NOME_TIPO[tipo].titulo;
+    const [rc, rf] = await Promise.all([fetch("/api/admin/importacoes", { cache: "no-store" }), fetch("/api/admin/importacoes/config", { cache: "no-store" })]);
+    const jc = (await rc.json().catch(() => ({}))) as { ok?: boolean; error?: string; cards?: ResumoCard[] };
+    const jf = (await rf.json().catch(() => ({}))) as { ok?: boolean; config?: ConfigImportacoes };
+    if (!rc.ok || !jc.ok || !jc.cards) throw new Error(jc.error ?? "Não foi possível ler os cards de importação.");
+    const cards = jc.cards.filter((c) => c.tipo === tipo);
+    if (!(await confirmar({ titulo: `Importar agora: ${nome.toLowerCase()}`, texto: `${cards.length} ${cards.length === 1 ? "card" : "cards"}, cada um no ano mais recente (a importação aberta é continuada). O andamento aparece no canto inferior direito — pode sair desta tela.`, confirmar: "Importar" })))
+      return;
+    const anoAtual = new Date().getFullYear();
+    const linhas = await prepararCards(cards, (c) => anoMaisRecente(c, anoAtual), anoAtual);
+    await importarCards(linhas, {
+      regra: lerRegraRemovidos(jf.config?.removidos),
+      // O "Parar" do painel do canto interrompe o card e a série; a QUEDA é perguntada no painel (sobrevive a sair da tela).
+      parar: () => false,
+      onLinha: (id, mudou) => {
+        const l = linhas.find((x) => x.card.id === id);
+        if (l) Object.assign(l, mudou);
+      },
+    });
+    const r = resumoImportacao(linhas);
+    (r.tom === "erro" ? toast.error : r.tom === "aviso" ? toast.warning : toast.success)(`${nome}: ${r.texto}.`);
+  };
 }

@@ -1,11 +1,12 @@
 "use client";
 
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import { EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { casaLocal, type LinhaIndice, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
+import { casaLocal, type LinhaIndice, linhasDaExecucao, pedeIndiceExecucao, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoExecucaoPesquisa, type TipoPesquisa, type TuplaExecucao } from "@/lib/pesquisa-core";
 import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
@@ -16,11 +17,17 @@ import {
   IconCalendar,
   IconDatabase,
   IconDocumentos,
+  IconEmpenho,
+  IconLiquidacao,
+  IconPagamento,
   IconClipboard,
   IconClock,
   IconClose,
   IconEstrela,
+  IconFile,
+  IconFilter,
   IconKanban,
+  IconPasta,
   IconLayers,
   IconRobo,
   IconSearch,
@@ -28,9 +35,9 @@ import {
   IconShield,
   IconUser,
   IconUsers,
-  IconWallet,
-} from "./icons";
+  IconWallet, IconVeiculo } from "./icons";
 import { ChipsEscolha } from "./ChipsEscolha";
+import { useComponente } from "./ComponentesPapel";
 import { toast } from "./Toast";
 import { gravarTemaPessoal, lerTemaPessoal } from "./TemaPessoal";
 
@@ -46,7 +53,8 @@ const RECENTES = "pesquisa:recentes";
 /** A 1ª fase da pesquisa sem prefixo (os tipos mais usados). */
 
 type GrupoServidor = { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] };
-type Indice = { versao: string; conferido: number; grupos: Map<string, LinhaIndice[]> };
+type EspacoIndice = { tipo: "orcamento" | "quadro" | "pca"; id: number; nome: string; abas: [string, string][] };
+type Indice = { versao: string; completa: string; conferido: number; grupos: Map<string, LinhaIndice[]>; espacos: EspacoIndice[] };
 
 // O ÍNDICE LOCAL (protocolos e DFDs que a pessoa vê) e as respostas do servidor por termo — só na MEMÓRIA da aba (somem
 // ao fechá-la; nada vai ao disco). O índice só é pedido de novo quando a VERSÃO dos dados muda (conferida ao abrir a
@@ -60,18 +68,27 @@ async function garantirIndice(): Promise<Indice | null> {
   if (indiceMem && Date.now() - indiceMem.conferido < 60_000) return indiceMem;
   carregandoIndice ??= (async () => {
     try {
+      let completa = "";
       if (indiceMem) {
-        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { dados?: string };
+        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { dados?: string; versao?: string };
+        completa = v.versao ?? "";
         if (v.dados === indiceMem.versao) {
+          // Os dados da Mesa são os mesmos; se mudou algo FORA deles (um quadro de Tarefas novo, renomeado), só os
+          // ESPAÇOS são pedidos de novo — o índice de protocolos e DFDs fica.
+          if (completa && completa !== indiceMem.completa) {
+            const r = await fetch("/api/pesquisa/indice?so=espacos", { cache: "no-store" });
+            const j = (await r.json()) as { ok?: boolean; espacos?: EspacoIndice[] };
+            if (r.ok && j.ok) indiceMem = { ...indiceMem, espacos: j.espacos ?? [], completa };
+          }
           indiceMem = { ...indiceMem, conferido: Date.now() };
           return indiceMem;
         }
       }
       const r = await fetch("/api/pesquisa/indice", { cache: "no-store" });
-      const j = (await r.json()) as { ok?: boolean; versao?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[] };
+      const j = (await r.json()) as { ok?: boolean; versao?: string; completa?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[]; espacos?: EspacoIndice[] };
       if (!r.ok || !j.ok || !j.versao) return indiceMem;
       respostas.clear();
-      indiceMem = { versao: j.versao, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])) };
+      indiceMem = { versao: j.versao, completa: j.completa ?? completa, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])), espacos: j.espacos ?? [] };
       return indiceMem;
     } catch {
       return indiceMem;
@@ -81,7 +98,34 @@ async function garantirIndice(): Promise<Indice | null> {
   })();
   return carregandoIndice;
 }
+
+type IndiceExecucao = { em: number; validade: number; grupos: Map<string, LinhaIndice[]> };
+// O ÍNDICE DE TEXTO da execução (empenhos, liquidações e pagamentos): pedido só quando a pessoa procura TEXTO sem prefixo
+// (`pedeIndiceExecucao`) e guardado na memória da aba pela validade que o servidor diz (horas — a cota de leituras do D1).
+let indiceExecMem: IndiceExecucao | null = null;
+let carregandoExec: Promise<IndiceExecucao | null> | null = null;
+
+async function garantirIndiceExecucao(): Promise<IndiceExecucao | null> {
+  if (indiceExecMem && Date.now() - indiceExecMem.em < indiceExecMem.validade) return indiceExecMem;
+  carregandoExec ??= (async () => {
+    try {
+      const r = await fetch("/api/pesquisa/indice-execucao", { cache: "no-store" });
+      const j = (await r.json()) as { ok?: boolean; validade?: number; grupos?: { tipo: TipoExecucaoPesquisa; completo: boolean; tuplas: TuplaExecucao[] }[] };
+      if (!r.ok || !j.ok) return indiceExecMem;
+      indiceExecMem = { em: Date.now(), validade: j.validade ?? 3_600_000, grupos: new Map((j.grupos ?? []).map((g) => [g.tipo, linhasDaExecucao(g.tipo, g.tuplas)])) };
+      return indiceExecMem;
+    } catch {
+      return indiceExecMem;
+    } finally {
+      carregandoExec = null;
+    }
+  })();
+  return carregandoExec;
+}
+
 const MAX_RECENTES = 6;
+/** Quantos tipos vão num pedido ao servidor (os demais em pedidos paralelos). */
+const TIPOS_POR_PEDIDO = 6;
 /** Fora do banner: abrir o banner e alternar o menu lateral (a AÇÃO "Recolher o menu"). */
 export const EVENTO_ABRIR_PESQUISA = "pesquisa-sistema:abrir";
 
@@ -95,11 +139,21 @@ const ICONE_TIPO: Record<string, Icone> = {
   pca: IconBox,
   orcamento: IconWallet,
   tarefa: IconKanban,
+  pasta: IconPasta,
+  veiculo: IconVeiculo,
   evento: IconCalendar,
   lancamento: IconWallet,
   catalogo: IconDatabase,
   historico: IconDatabase,
   documento: IconDocumentos,
+  declaracao: IconFile,
+  visao: IconFilter,
+  padronizacao: IconDatabase,
+  responsavel: IconUser,
+  importacao: IconEmpenho,
+  empenho: IconEmpenho,
+  liquidacao: IconLiquidacao,
+  pagamento: IconPagamento,
   usuario: IconUser,
   orgao: IconBuilding,
   unidade: IconBuilding,
@@ -125,13 +179,30 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
   "/painel/configuracoes": {
     param: "aba",
     abas: [
-      ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"], ["termo", "Termo de uso"],
+      ["identidade", "Identidade"], ["modulos", "Módulos"], ["papeis", "Papéis"], ["protecao", "Proteção de dados"], ["seguranca", "Segurança"], ["termo", "Termo de uso"], ["verificar-termo", "Verificar comprovante"],
       ["escopo", "Filtro da unidade"], ["publico", "Tela pública"], ["cargos", "Cargos e funções"], ["acesso", "Tela de acesso"], ["tabelas", "Tabelas"], ["pcas", "PCAs"], ["situacoes", "Situações"],
       ["feriados", "Feriados"], ["importacoes", "Importações"], ["presenca", "Presença e chat"], ["notificacoes", "Notificações"], ["avaliacao", "Avaliação"],
       ["referencia", "Referência"], ["mais", "Mais"],
     ],
   },
+  "/painel/usuarios": { param: "vista", abas: [["ativos", "Usuários ativos"], ["arquivados", "Usuários arquivados"]] },
   "/painel/orgaos": { param: "aba", abas: [["orgaos", "Órgãos"], ["responsaveis", "Responsáveis"]] },
+  "/painel/catalogo": { param: "vista", abas: [["catalogo", "Catálogos"], ["lista", "Lista de Itens"], ["unidades", "Medidas"], ["classificacoes", "Classificações"]] },
+  "/painel/verificacao": { param: "tipo", abas: [["protocolo", "Verificar protocolo"], ["dfd", "Verificar DFD"]] },
+  "/painel/calendario": { param: "vista", abas: [["dia", "Dia"], ["ndias", "4 dias"], ["semana", "Semana"], ["mes", "Mês"], ["ano", "Ano"], ["agenda", "Programação"]] },
+};
+/** O componente do papel que libera cada aba de tela (sem ele, a aba nem aparece na pesquisa — a tela também a esconde). */
+const COMPONENTE_ABA: Record<string, string> = {
+  "/painel/mesa?dashboard": "dfd.dashboard",
+  "/painel/mesa?protocolos": "dfd.protocolos",
+  "/painel/mesa?dfds": "dfd.dfds",
+  "/painel/mesa?itens": "dfd.itens",
+  "/painel/catalogo?catalogo": "catalogo.catalogos",
+  "/painel/catalogo?lista": "catalogo.lista",
+  "/painel/catalogo?unidades": "catalogo.unidades",
+  "/painel/catalogo?classificacoes": "catalogo.classificacoes",
+  "/painel/verificacao?protocolo": "verificacao.protocolo",
+  "/painel/verificacao?dfd": "verificacao.dfd",
 };
 /**
  * As PALAVRAS de cada tela/aba (o que se ajusta nelas): "turnstile" acha Integrações; "senha" acha Segurança. A chave é o
@@ -148,8 +219,10 @@ const PALAVRAS: Record<string, string> = {
   "/painel/execucao": "dashboard painel execução despesa empenhado liquidado pago a pagar evolução acumulada métricas diárias demonstrativo",
   "/painel/pagamentos": "despesa execução centi pagamento pago ordem de pagamento retenção anulação credor empenho",
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
+  "/painel/usuarios?arquivados": "arquivado arquivada restaurar excluir definitivamente desligado exonerado",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",
+  "/painel/configuracoes?verificar-termo": "comprovante aceite código autenticidade arquivo pdf conferir",
   "/painel/configuracoes?modulos": "menu telas seções",
   "/painel/configuracoes?papeis": "permissão ações visualizar manipular importar exportar excluir configurar detalhes componentes abas ocultar esconder dashboard orçamento documentos importação mesa do pca restrições só os meus responsável",
   "/painel/configuracoes?protecao": "cópia impressão captura marca d'água",
@@ -170,7 +243,15 @@ const ABAS_PERFIL: [string, string][] = [
   ["conta", "Conta"], ["seguranca", "Segurança"], ["acessos", "Histórico de acesso"], ["aparencia", "Aparência"],
   ["notificacoes", "Notificações"], ["trabalho", "Trabalho"], ["acesso", "Meu acesso"],
 ];
-const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["configuracao", "Configuração"]];
+/**
+ * As SUB-ABAS de Configurações (dentro de uma aba): as Importações por tipo, as de Notificações e as de Avaliação — o
+ * link já abre a sub-aba (`tipo`/`sub`). Só o ADM abre Configurações.
+ */
+const SUBABAS_CONFIG: { aba: string; rotuloAba: string; param: string; abas: [string, string][]; palavras?: string }[] = [
+  { aba: "importacoes", rotuloAba: "Importações", param: "tipo", abas: [["empenhos", "Importações de empenhos"], ["liquidacoes", "Importações de liquidações"], ["pagamentos", "Importações de pagamentos"]], palavras: "centi cards vínculos atualização automática" },
+  { aba: "notificacoes", rotuloAba: "Notificações", param: "sub", abas: [["avisos", "Avisos"], ["limpeza", "Limpeza dos avisos"], ["comunicado", "Comunicado"], ["alcance", "Alcance dos avisos"]], palavras: "sino e-mail" },
+  { aba: "avaliacao", rotuloAba: "Avaliação", param: "sub", abas: [["importancias", "Importâncias"], ["protocolo", "Avaliação do protocolo"], ["dfd", "Avaliação do DFD"], ["item", "Avaliação do item"], ["protocolacao", "Protocolação"]], palavras: "regras bloqueia avisa" },
+];
 
 function lerRecentes(): Resultado[] {
   try {
@@ -338,6 +419,8 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
 
   // O índice local: pedido ao abrir a pesquisa (só de novo quando a versão dos dados muda).
   const [indiceLocal, setIndiceLocal] = useState<Indice | null>(indiceMem);
+  // As abas/visões que o PAPEL esconde (Detalhes → Componentes) também não aparecem na pesquisa.
+  const libera = useComponente();
   useEffect(() => {
     if (!aberto) return;
     let vivo = true;
@@ -346,6 +429,18 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       vivo = false;
     };
   }, [aberto]);
+
+  // A EXECUÇÃO por texto: sem prefixo, o termo com letras pede o índice de texto (uma vez a cada poucas horas por aba).
+  const [indiceExec, setIndiceExec] = useState<IndiceExecucao | null>(indiceExecMem);
+  const querExec = aberto && !tipo && pedeIndiceExecucao(termo);
+  useEffect(() => {
+    if (!querExec) return;
+    let vivo = true;
+    void garantirIndiceExecucao().then((i) => vivo && setIndiceExec(i));
+    return () => {
+      vivo = false;
+    };
+  }, [querExec]);
 
   // Protocolos e DFDs no ÍNDICE LOCAL (na hora, sem pedido); o resto num pedido ÚNICO ao servidor, 400 ms depois da
   // última tecla, com a resposta do mesmo termo guardada e o pedido antigo CANCELADO quando o termo muda.
@@ -385,11 +480,39 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href }));
       return { tipo: t, total: achados.length, opcoes };
     });
-    const juntar = (srv: GrupoServidor[]) =>
-      [...gruposLocais, ...srv]
+    // Empenhos, liquidações e pagamentos pelo TEXTO no índice local; o servidor segue achando o nº exato (todos os anos) —
+    // os dois juntos, sem repetir.
+    const gruposExec: GrupoServidor[] =
+      !tipo && indiceExec && pedeIndiceExecucao(termo)
+        ? doServidor.flatMap((t) => {
+            const linhas = indiceExec.grupos.get(t);
+            if (!linhas) return [];
+            const achados = linhas.filter(casa);
+            const opcoes = achados
+              .map((o, i) => ({ o, i, p: pontuar(`${o.rotulo} ${o.detalhe}`, termo) }))
+              .sort((x, y) => y.p - x.p || x.i - y.i)
+              .slice(0, limite)
+              .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href }));
+            return [{ tipo: t, total: achados.length, opcoes }];
+          })
+        : [];
+    const comExec = (srv: GrupoServidor[]) => {
+      const out = srv.map((g) => {
+        const l = gruposExec.find((x) => x.tipo === g.tipo);
+        if (!l) return g;
+        const ids = new Set(g.opcoes.map((o) => o.id));
+        const extra = l.opcoes.filter((o) => !ids.has(o.id));
+        return { ...g, total: Math.max(g.total, l.total), opcoes: [...g.opcoes, ...extra].slice(0, limite) };
+      });
+      return [...out, ...gruposExec.filter((l) => !srv.some((g) => g.tipo === l.tipo))];
+    };
+    const juntar = (srvBruto: GrupoServidor[]) => {
+      const srv = comExec(srvBruto);
+      return [...gruposLocais, ...srv]
         .filter((g) => g.total > 0)
         .sort((x, y) => pedidos.indexOf(x.tipo as TipoPesquisa) - pedidos.indexOf(y.tipo as TipoPesquisa))
         .map(converter);
+    };
     setFalhou(false);
     const chave = `${doServidor.join(",")}|${limite}|${termo.toLowerCase()}`;
     const guardada = respostas.get(chave);
@@ -403,10 +526,19 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const ctl = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${doServidor.join(",")}&limite=${limite}`, { signal: ctl.signal });
-        const j = (await r.json()) as { ok?: boolean; grupos?: GrupoServidor[] };
-        if (!r.ok || !j.ok) throw new Error();
-        const grupos = j.grupos ?? [];
+        // Em PARTES de até `TIPOS_POR_PEDIDO` tipos, ao mesmo tempo: cada pedido tem o próprio limite de consultas do
+        // Worker (50) — todos os tipos num pedido só passariam dele. Com o prefixo, `prefixo=1` (procura também no texto).
+        const partes: TipoPesquisa[][] = [];
+        for (let i = 0; i < doServidor.length; i += TIPOS_POR_PEDIDO) partes.push(doServidor.slice(i, i + TIPOS_POR_PEDIDO));
+        const respostasPartes = await Promise.all(
+          partes.map(async (p) => {
+            const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${p.join(",")}&limite=${limite}${tipo ? "&prefixo=1" : ""}`, { signal: ctl.signal });
+            const j = (await r.json()) as { ok?: boolean; grupos?: GrupoServidor[] };
+            if (!r.ok || !j.ok) throw new Error();
+            return j.grupos ?? [];
+          }),
+        );
+        const grupos = respostasPartes.flat();
         if (respostas.size >= 60) respostas.delete(respostas.keys().next().value as string);
         respostas.set(chave, { em: Date.now(), versao: indiceLocal?.versao ?? "", grupos });
         setRemotos(juntar(grupos));
@@ -420,7 +552,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       ctl.abort();
       clearTimeout(t);
     };
-  }, [aberto, tipo, termo, tentativa, indiceLocal]);
+  }, [aberto, tipo, termo, tentativa, indiceLocal, indiceExec]);
 
   const fechar = useCallback(() => setAberto(false), []);
 
@@ -454,6 +586,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           } catch {
             /* segue para o login */
           }
+          await apagarDadosLocais();
           router.push("/login");
           router.refresh();
         },
@@ -467,7 +600,10 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const porTela = telas.flatMap((t) => {
       const def = ABAS_TELAS[t.href];
       return def
-        ? def.abas.map<Resultado>(([v, r]) => ({
+        ? def.abas.filter(([v]) => {
+            const comp = COMPONENTE_ABA[`${t.href}?${v}`];
+            return !comp || libera(comp);
+          }).map<Resultado>(([v, r]) => ({
             chave: `aba:${t.href}:${v}`,
             rotulo: r,
             caminho: [t.secao, t.label].filter(Boolean),
@@ -478,11 +614,23 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         : [];
     });
     const perfil = ABAS_PERFIL.map<Resultado>(([v, r]) => ({ chave: `aba:perfil:${v}`, rotulo: r, caminho: ["Conta", "Perfil"], href: `/painel/perfil?aba=${v}`, tipo: "aba" }));
-    const dosPcas = telas.some((t) => t.href === "/painel/pca")
-      ? pcas.flatMap((p) => ABAS_PCA.map<Resultado>(([v, r]) => ({ chave: `aba:pca:${p.id}:${v}`, rotulo: r, caminho: ["PCA", `${p.ano} · ${p.nome}`], href: `/painel/pca/${p.id}?aba=${v}`, tipo: "aba" })))
+    const subConfig = telas.some((t) => t.href === "/painel/configuracoes")
+      ? SUBABAS_CONFIG.flatMap((g) =>
+          g.abas.map<Resultado>(([v, r]) => ({ chave: `aba:config:${g.aba}:${v}`, rotulo: r, caminho: ["Configurações", g.rotuloAba], href: `/painel/configuracoes?aba=${g.aba}&${g.param}=${v}`, tipo: "aba", palavras: g.palavras })),
+        )
       : [];
-    return [...porTela, ...perfil, ...dosPcas];
-  }, [telas, pcas]);
+    // Os ESPAÇOS do índice (orçamentos e quadros de Tarefas): as abas que a pessoa abre em cada um.
+    const dosEspacos = (indiceLocal?.espacos ?? []).flatMap((e) =>
+      e.abas.map<Resultado>(([v, r]) =>
+        e.tipo === "pca"
+          ? { chave: `aba:pca:${e.id}:${v}`, rotulo: r, caminho: ["PCA", e.nome], href: `/painel/pca/${e.id}?aba=${v}`, tipo: "aba" }
+          : e.tipo === "orcamento"
+            ? { chave: `aba:orc:${e.id}:${v}`, rotulo: r, caminho: ["Orçamento", e.nome], href: `/painel/orcamento/${e.id}?aba=${v}`, tipo: "aba" }
+            : { chave: `aba:quadro:${e.id}:${v}`, rotulo: r, caminho: ["Tarefas", e.nome], href: `/painel/tarefas/${e.id}?aba=${v}`, tipo: "aba" },
+      ),
+    );
+    return [...porTela, ...subConfig, ...perfil, ...dosEspacos];
+  }, [telas, indiceLocal, libera]);
 
   const grupos = useMemo<Grupo[]>(() => {
     const casa = predicadoBusca(termo);
@@ -545,14 +693,27 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const todosFiltros: { value: string; label: string }[] = [
     ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
     ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
+    ...(abre("/painel/tarefas") ? [{ value: "pasta", label: "Pastas" }] : []),
+    ...(abre("/painel/veiculos") || abre("/painel/frotas") ? [{ value: "veiculo", label: "Veículos" }] : []),
     ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
-    ...(abre("/painel/orcamento") ? [{ value: "orcamento", label: "Orçamentos" }, { value: "lancamento", label: "Lançamentos" }] : []),
-    ...(abre("/painel/catalogo") ? [{ value: "catalogo", label: "Catálogo" }, { value: "historico", label: "Histórico" }] : []),
+    ...(abre("/painel/orcamento")
+      ? [{ value: "orcamento", label: "Orçamentos" }, ...(libera("orcamento.lancamentos") ? [{ value: "lancamento", label: "Lançamentos" }] : []), ...(libera("orcamento.visoes") ? [{ value: "visao", label: "Visões" }] : [])]
+      : []),
+    ...(abre("/painel/catalogo")
+      ? [
+          ...(libera("catalogo.catalogos") ? [{ value: "catalogo", label: "Catálogo" }] : []),
+          ...(libera("catalogo.historico") ? [{ value: "historico", label: "Histórico" }] : []),
+          ...(libera("catalogo.unidades") || libera("catalogo.classificacoes") ? [{ value: "padronizacao", label: "Medidas" }] : []),
+        ]
+      : []),
+    ...(abre("/painel/empenhos") ? [{ value: "empenho", label: "Empenhos" }] : []),
+    ...(abre("/painel/liquidacoes") ? [{ value: "liquidacao", label: "Liquidações" }] : []),
+    ...(abre("/painel/pagamentos") ? [{ value: "pagamento", label: "Pagamentos" }] : []),
     ...(abre("/painel/usuarios")
-      ? ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
+      ? ["usuario", "orgao", "unidade", "responsavel", "importacao", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
       : []),
     ...(abre("/painel/documentos") ? [{ value: "documento", label: "Documentos" }] : []),
-    ...(abre("/painel/pca") ? [{ value: "pca", label: "PCAs" }] : []),
+    ...(abre("/painel/pca") ? [{ value: "pca", label: "PCAs" }, ...(libera("pca.declaracoes") ? [{ value: "declaracao", label: "Declarações" }] : [])] : []),
     { value: "tela", label: "Telas" },
   ];
   // As DICAS só dos tipos que a pessoa pode pesquisar (os mesmos dos filtros) + as abas.
@@ -783,14 +944,14 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-stretch justify-center sm:items-start sm:px-[var(--pad-canvas)] sm:pt-[8vh] print:hidden">
+    <div className="fixed inset-0 z-[80] flex items-stretch justify-center sm:items-start sm:px-[var(--pad-canvas)] sm:pt-[8dvh] print:hidden">
       <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)]" onClick={fechar} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Pesquisa no sistema"
         onKeyDown={teclado}
-        className="relative flex h-dvh w-full animate-fade-in-up flex-col overflow-hidden bg-surface shadow-flutuante sm:h-[min(80vh,640px)] sm:max-w-3xl sm:rounded-card sm:border sm:border-border"
+        className="relative flex h-dvh w-full animate-fade-in-up flex-col overflow-hidden bg-surface shadow-flutuante sm:h-[min(80dvh,640px)] sm:max-w-3xl sm:rounded-card sm:border sm:border-border"
       >
         <div className="flex items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top)]">
           <IconSearch className="h-5 w-5 shrink-0 text-muted" aria-hidden="true" />

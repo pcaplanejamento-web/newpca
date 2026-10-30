@@ -1,4 +1,4 @@
-import { type LoteCenti, lerPaginaEmpenhos, lotePorMes, lotePorOrgao, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
+import { abrirDivididos, type LoteCenti, lerPaginaEmpenhos, lotePorMes, lotePorOrgao, type PassoLote, type Periodo, pedidosEmCurso, periodosAPedir, periodosLidos, rotuloPeriodo, type TipoErro } from "./empenhos-core.ts";
 import { type ModoParte, partesComIguais } from "./importacao-partes-core.ts";
 import type { EtapaImportacao, PedidoAndamento } from "./importacao-progresso.ts";
 import { importacoesLocais, mudarImportacao, mudarPedido, publicarImportacao, retirarImportacao } from "./importacoes-ao-vivo-store.ts";
@@ -64,10 +64,49 @@ export async function lerPaginaNoNavegador(
   leitor = 0,
   /** O ANDAMENTO deste pedido, fase a fase (os bytes que chegam, a leitura, a comparação, cada parte gravada). */
   fase: (f: Partial<PedidoAndamento> & Pick<PedidoAndamento, "fase">) => void = () => {},
+  /** PARAR aborta o download em curso na hora (nunca vira falha da página). */
+  sinal?: AbortSignal,
 ): Promise<RespostaPasso> {
   const t0 = performance.now();
   fase({ fase: "pedindo", bytes: 0, registros: null, iguais: null, mudaram: null, partes: 0, partesFeitas: 0 });
-  const r = await fetch(`/api/empenhos/cards/${cardId}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "baixar", ...base }) });
+  // O download tem um TEMPO máximo (uma conexão parada no meio nunca deixa o pedido "baixando" para sempre).
+  const tempo = new AbortController();
+  const relogio = setTimeout(() => tempo.abort(), TEMPO_DOWNLOAD_MS);
+  const aoParar = () => tempo.abort();
+  sinal?.addEventListener("abort", aoParar);
+  const interrompido = () => {
+    if (sinal?.aborted) throw new Error("Interrompida.");
+  };
+  try {
+    return await lerPaginaComSinal(cardId, modo, ano, base, gravados, leitor, fase, t0, tempo.signal, interrompido);
+  } finally {
+    clearTimeout(relogio);
+    sinal?.removeEventListener("abort", aoParar);
+  }
+}
+
+/** O tempo máximo de UM download pela tela (a resposta do ano inteiro pode ter dezenas de MB numa conexão lenta). */
+const TEMPO_DOWNLOAD_MS = 10 * 60_000;
+
+async function lerPaginaComSinal(
+  cardId: number,
+  modo: ModoParte,
+  ano: number,
+  base: { lote: number; condutor: string; inicio: string; fim: string; pagina: number },
+  gravados: ReadonlyMap<string, string>,
+  leitor: number,
+  fase: (f: Partial<PedidoAndamento> & Pick<PedidoAndamento, "fase">) => void,
+  t0: number,
+  signal: AbortSignal,
+  interrompido: () => void,
+): Promise<RespostaPasso> {
+  let r: Response;
+  try {
+    r = await fetch(`/api/empenhos/cards/${cardId}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "baixar", ...base }), signal });
+  } catch (e) {
+    interrompido();
+    throw e;
+  }
   const statusCenti = r.headers.get("x-centi-status");
   if (r.status >= 400 || statusCenti == null) {
     // O passo de ERRO (já registrado no servidor) ou a recusa — o JSON de sempre.
@@ -80,6 +119,8 @@ export async function lerPaginaNoNavegador(
   // O tamanho esperado: o informado pela Centi ou o da última importação do MESMO pedido (o servidor diz) — a fração exata.
   const esperado = Number(r.headers.get("x-centi-bytes")) || null;
   let bytes = 0;
+  // Os bytes crus (para a ASSINATURA da página — a mesma régua da automática, que pula a página idêntica).
+  let brutos: Uint8Array[] | null = null;
   try {
     fase({ fase: "baixando", bytes: 0, bytesEsperados: esperado });
     if (r.body) {
@@ -87,11 +128,13 @@ export async function lerPaginaNoNavegador(
       const leitor = r.body.getReader();
       const dec = new TextDecoder();
       const pedacos: string[] = [];
+      brutos = [];
       let aviso = 0;
       for (;;) {
         const { done, value } = await leitor.read();
         if (done) break;
         bytes += value.byteLength;
+        brutos.push(value);
         pedacos.push(dec.decode(value, { stream: true }));
         const t = performance.now();
         if (t - aviso > 150) {
@@ -106,6 +149,8 @@ export async function lerPaginaNoNavegador(
       bytes = texto.length;
     }
   } catch {
+    // PARAR no meio do download: interrompida (não é falha da página).
+    interrompido();
     // O REPASSE caiu no meio: a resposta passou do teto (ou a conexão caiu) — o período é dividido (pedidos menores).
     return pedirImportacao<RespostaPasso>(cardId, { acao: "falha", ...base, mensagem: "A API da Centi é grande demais para um pedido só (ou a conexão caiu no meio) — o período será dividido.", status: Number(statusCenti) || null, bytes: null, ms: Math.round(performance.now() - t0) });
   }
@@ -121,6 +166,8 @@ export async function lerPaginaNoNavegador(
     const mensagem = (e instanceof Error ? e.message : "Resposta inválida da Centi.").slice(0, 500);
     return pedirImportacao<RespostaPasso>(cardId, { acao: "falha", ...base, mensagem, status, bytes: texto.length || null, ms });
   }
+  const assinatura = brutos ? await assinaturaDe(brutos, bytes) : null;
+  brutos = null;
   // SÓ O QUE MUDOU vai inteiro: o registro com a assinatura gravada vai só como o par (chave + assinatura).
   fase({ fase: "comparando", registros: lida.linhas.length });
   await new Promise((ok) => setTimeout(ok, 0));
@@ -136,7 +183,7 @@ export async function lerPaginaNoNavegador(
   const enviar = async (i: number, passo: number | null) => {
     const ultima = i === partes.length - 1;
     const resumo = ultima ? { status, bytes: bytes || null, ms, recebidos: lida.recebidos, recusados: lida.recusados, repetidos: lida.repetidos, total: lida.total, reparado: lida.reparado } : null;
-    const resp = await pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i].tuplas, iguais: partes[i].iguais, resumo });
+    const resp = await pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i].tuplas, iguais: partes[i].iguais, resumo, ...(ultima ? { assinatura } : {}) });
     feitas++;
     fase({ fase: "gravando", partesFeitas: feitas });
     return resp;
@@ -154,6 +201,22 @@ export async function lerPaginaNoNavegador(
     },
   );
   return enviar(partes.length - 1, passo);
+}
+
+/** O SHA-256 (hex) dos bytes exatos da resposta — a mesma régua de `assinaturaDosBytes` (empenhos-fragmentos). */
+async function assinaturaDe(pedacos: Uint8Array[], total: number): Promise<string | null> {
+  try {
+    const tudo = new Uint8Array(total);
+    let pos = 0;
+    for (const p of pedacos) {
+      tudo.set(p, pos);
+      pos += p.byteLength;
+    }
+    const h = new Uint8Array(await crypto.subtle.digest("SHA-256", tudo));
+    return Array.from(h, (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
 }
 
 /** O modo das linhas do lote (os empenhos e o catálogo leem a mesma resposta). */
@@ -181,11 +244,19 @@ export async function lerAssinaturas(cardId: number, ano: number): Promise<Map<s
 
 /** Os passos já gravados de um lote (retomar, o detalhe do histórico). */
 export async function lerPassos(cardId: number, loteId: number): Promise<PassoLote[]> {
-  const r = await fetch(`/api/empenhos/cards/${cardId}/importar?lote=${loteId}`);
-  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; passos?: PassoLote[] };
-  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
-  return j.passos ?? [];
+  return (await lerPassosRetomada(cardId, loteId)).passos;
 }
+
+/** Os passos da tela (até 3000) e os da RETOMADA (todos, mínimos — o que falta ler sai deles). */
+export async function lerPassosRetomada(cardId: number, loteId: number): Promise<{ passos: PassoLote[]; retomada: PassoMinimo[] }> {
+  const r = await fetch(`/api/empenhos/cards/${cardId}/importar?lote=${loteId}`);
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; passos?: PassoLote[]; retomada?: PassoMinimo[] };
+  if (!r.ok || !j.ok) throw new Error(j.error ?? `Falha (${r.status}).`);
+  return { passos: j.passos ?? [], retomada: j.retomada ?? j.passos ?? [] };
+}
+
+/** O mínimo de um passo para decidir o que falta ler. */
+export type PassoMinimo = Pick<PassoLote, "inicio" | "fim" | "pagina" | "estado" | "fimPeriodo">;
 
 /** Um passo que NÃO chegou ao servidor (sem resposta do sistema) — fica só na tela. */
 export function passoVazio(id: number, periodo: Periodo, pagina: number): PassoLote {
@@ -220,7 +291,18 @@ export type Agora = { periodo: Periodo; pagina: number; tentativa: number; esper
 
 /** As esperas entre as tentativas de uma página que falhou (a Centi oscila — 500, sem resposta): ~1 min no total. */
 const ESPERA_TENTATIVAS = [2000, 4000, 8000, 15000, 30000];
-const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+/** Espera `ms` — ou até o `sinal` (Parar) abortar. */
+const esperar = (ms: number, sinal?: AbortSignal) =>
+  new Promise<void>((ok) => {
+    if (sinal?.aborted) return ok();
+    const t = setTimeout(fim, ms);
+    function fim() {
+      clearTimeout(t);
+      sinal?.removeEventListener("abort", fim);
+      ok();
+    }
+    sinal?.addEventListener("abort", fim);
+  });
 
 /** Uma fila de tarefas com no máximo `n` em curso; `parar()` deixa de começar novas e espera as que já começaram. A 1ª
  * falha para tudo (as em curso terminam) e é lançada no fim. */
@@ -252,7 +334,8 @@ async function emPool<T>(fila: T[], n: number, parar: () => boolean, fazer: (t: 
 export async function lerAnoNaCenti(o: {
   cardId: number;
   lote: LoteCenti;
-  anteriores: PassoLote[];
+  /** TODOS os passos do lote (mínimos) — o que falta ler sai deles. */
+  anteriores: PassoMinimo[];
   condutor: string;
   comPeriodo: boolean;
   parar: () => boolean;
@@ -266,6 +349,8 @@ export async function lerAnoNaCenti(o: {
   /** O ANDAMENTO ao vivo: cada pedido (pela chave período|página) e a etapa geral. */
   pedido?: (chave: string, f: (p: PedidoAndamento | undefined) => PedidoAndamento) => void;
   etapa?: (e: EtapaImportacao, extra?: { assinaturas?: number }) => void;
+  /** Parar aborta os downloads e as esperas em curso. */
+  sinal?: AbortSignal;
 }): Promise<LoteCenti> {
   let lote = o.lote;
   let falhou = false;
@@ -292,7 +377,8 @@ export async function lerAnoNaCenti(o: {
   let emCurso = 0;
   // O lote mais NOVO vence (as respostas paralelas chegam fora de ordem): pelo `vistoEm`, a contagem do banco.
   const aplicarLote = (l: LoteCenti | null) => {
-    if (l && l.vistoEm >= lote.vistoEm) {
+    // No MESMO segundo (o `vistoEm` tem segundos), vale a contagem maior — uma resposta atrasada nunca volta os números.
+    if (l && (l.vistoEm > lote.vistoEm || (l.vistoEm === lote.vistoEm && l.paginas + l.unicos >= lote.paginas + lote.unicos))) {
       lote = l;
       o.onLote(l);
     }
@@ -304,8 +390,10 @@ export async function lerAnoNaCenti(o: {
       marcar(periodo, pagina, { tentativa: t + 1, mensagem: undefined, espera: undefined });
       let r: RespostaPasso;
       try {
-        r = await lerPaginaNoNavegador(o.cardId, modoDoLote(lote), lote.ano, { lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina }, mapa, lote.leitor, (f) => marcar(periodo, pagina, f));
+        r = await lerPaginaNoNavegador(o.cardId, modoDoLote(lote), lote.ano, { lote: lote.id, condutor: o.condutor, inicio: periodo.inicio, fim: periodo.fim, pagina }, mapa, lote.leitor, (f) => marcar(periodo, pagina, f), o.sinal);
       } catch (e) {
+        // PARAR abortou o download: interrompida, sem passo de erro nem nova tentativa.
+        if (parar()) throw new Error("Interrompida.");
         if (e instanceof RecusaImportacao) {
           marcar(periodo, pagina, { fase: "erro", mensagem: e.message, fimMs: Date.now() });
           throw e;
@@ -319,7 +407,7 @@ export async function lerAnoNaCenti(o: {
         }
         o.onAgora({ periodo, pagina, tentativa: t + 1, espera: ESPERA_TENTATIVAS[t], emCurso });
         marcar(periodo, pagina, { fase: "esperando", espera: ESPERA_TENTATIVAS[t], mensagem });
-        await esperar(ESPERA_TENTATIVAS[t]);
+        await esperar(ESPERA_TENTATIVAS[t], o.sinal);
         continue;
       }
       o.onPasso(r.passo);
@@ -339,7 +427,7 @@ export async function lerAnoNaCenti(o: {
       }
       o.onAgora({ periodo, pagina, tentativa: t + 1, espera: ESPERA_TENTATIVAS[t], emCurso });
       marcar(periodo, pagina, { fase: "esperando", espera: ESPERA_TENTATIVAS[t], mensagem: r.erro.mensagem });
-      await esperar(ESPERA_TENTATIVAS[t]);
+      await esperar(ESPERA_TENTATIVAS[t], o.sinal);
     }
   }
   // LIQUIDAÇÕES e PAGAMENTOS: cada "página" é um órgão (todos de cada período, em paralelo); empenhos: as páginas em
@@ -352,7 +440,9 @@ export async function lerAnoNaCenti(o: {
   const fila: { periodo: Periodo; pagina: number }[] = [...emAndamento];
   const comecados = [...new Map(emAndamento.map((p) => [`${p.periodo.inicio}|${p.periodo.fim}`, p.periodo])).values()];
   // O ANO INTEIRO num pedido (por órgão: um pedido por órgão, todos em paralelo); grande demais, divide sozinho.
-  for (const p of periodosAPedir(lote.ano, [...periodosLidos(o.anteriores), ...comecados], o.comPeriodo || porMes, undefined, porMes, true)) fila.push(...todasAsPaginas(p));
+  // Os períodos já DIVIDIDOS (pela automática ou por uma leitura anterior) vão pelas metades — nunca o período inteiro de novo.
+  const aPedir = abrirDivididos(periodosAPedir(lote.ano, [...periodosLidos(o.anteriores), ...comecados], o.comPeriodo || porMes, undefined, porMes, true), o.anteriores, porMes);
+  for (const p of aPedir) fila.push(...todasAsPaginas(p));
   for (const f of fila) marcar(f.periodo, f.pagina, {});
   const divididos = new Set<string>();
   try {
@@ -365,6 +455,11 @@ export async function lerAnoNaCenti(o: {
           const k = `${item.periodo.inicio}|${item.periodo.fim}`;
           if (!divididos.has(k)) {
             divididos.add(k);
+            // Os outros órgãos do MESMO período ainda na fila não são pedidos (o período inteiro não vale mais).
+            for (let i = fila.length - 1; i >= 0; i--) if (`${fila[i].periodo.inicio}|${fila[i].periodo.fim}` === k) {
+              marcar(fila[i].periodo, fila[i].pagina, { fase: "dividido", fimMs: Date.now() });
+              fila.splice(i, 1);
+            }
             const novos = r.dividir.flatMap(todasAsPaginas);
             for (const n of novos) marcar(n.periodo, n.pagina, {});
             fila.unshift(...novos);
@@ -374,6 +469,12 @@ export async function lerAnoNaCenti(o: {
           fila.unshift({ periodo: item.periodo, pagina: item.pagina + 1 });
         }
       } catch (e) {
+        // O pedido JÁ EM CURSO de um período que esta leitura acabou de dividir: o servidor o recusa (o período não vale mais)
+        // — não é falha, as metades seguem.
+        if (e instanceof RecusaImportacao && divididos.has(`${item.periodo.inicio}|${item.periodo.fim}`)) {
+          marcar(item.periodo, item.pagina, { fase: "dividido", fimMs: Date.now() });
+          return;
+        }
         // Onde parou = o pedido que FALHOU primeiro (com vários em curso, nunca o último que começou).
         if (!falhou) o.onde(`${rotuloPeriodo(item.periodo)}, ${orgaos == null ? "página" : "órgão"} ${item.pagina}`);
         falhou = true;
@@ -405,7 +506,9 @@ export async function importarCard(o: {
   retomar: LoteCenti | null;
   comPeriodo: boolean;
   parar: () => boolean;
-  confirmarQueda: (queda: string) => Promise<boolean>;
+  /** Quem pergunta a QUEDA na tela; ausente (ou `null` — a tela saiu antes de responder) = o painel do canto pergunta
+   * (sobrevive a sair da tela). */
+  confirmarQueda?: (queda: string) => Promise<boolean | null>;
   onLote?: (l: LoteCenti) => void;
   onPasso?: (p: PassoLote) => void;
   onAnteriores?: (p: PassoLote[]) => void;
@@ -417,6 +520,9 @@ export async function importarCard(o: {
 }): Promise<FimImportacao> {
   const condutor = crypto.randomUUID();
   let local = -1;
+  let batida: ReturnType<typeof setInterval> | null = null;
+  let vigia: ReturnType<typeof setInterval> | null = null;
+  const abortar = new AbortController();
   let lote = o.retomar;
   // O ANDAMENTO AO VIVO desta importação (`importacoes-ao-vivo-store`): o card de antes que já terminou sai.
   const id = condutor;
@@ -440,6 +546,7 @@ export async function importarCard(o: {
     estado: "rodando",
     texto: null,
     aguardandoConfirmacao: false,
+    tipo: o.modo === "liquidacoes" || o.modo === "pagamentos" ? o.modo : "empenhos",
     parar: () => {
       pedidoParar = true;
     },
@@ -463,14 +570,23 @@ export async function importarCard(o: {
     if (!lote) aplicar((await pedirImportacao<{ lote: LoteCenti }>(o.cardId, { acao: "iniciar", ano: o.ano, condutor, ...(o.modo ? { modo: o.modo } : {}) })).lote);
     else aplicar(lote);
     const atual = lote as LoteCenti;
-    const anteriores = o.retomar ? await lerPassos(o.cardId, o.retomar.id) : [];
+    // O BATIMENTO: a cada minuto a trava desta aba é renovada (também esperando a confirmação da queda ou um download longo)
+    // — a automática nunca toma o lote no meio.
+    batida = setInterval(() => {
+      pedirImportacao(o.cardId, { acao: "manter", lote: atual.id, condutor }).catch(() => {});
+    }, 60_000);
+    // PARAR aborta na hora os downloads e as esperas em curso (o laço confere o pedido a cada meio segundo).
+    vigia = setInterval(() => {
+      if (parar()) abortar.abort();
+    }, 500);
+    const { passos: anteriores, retomada } = o.retomar ? await lerPassosRetomada(o.cardId, o.retomar.id) : { passos: [], retomada: [] };
     mudarImportacao(id, (i) => ({ ...i, passos: anteriores }));
     o.onAnteriores?.(anteriores);
     aplicar(
       await lerAnoNaCenti({
         cardId: o.cardId,
         lote: atual,
-        anteriores,
+        anteriores: retomada,
         condutor,
         comPeriodo: o.comPeriodo,
         parar,
@@ -481,6 +597,7 @@ export async function importarCard(o: {
         onde: o.onde ?? (() => {}),
         pedido: (chave, f) => mudarPedido(id, chave, f),
         etapa,
+        sinal: abortar.signal,
       }),
     );
     const loteId = (lote as LoteCenti).id;
@@ -493,9 +610,32 @@ export async function importarCard(o: {
     let c = await pedirImportacao<{ lote: LoteCenti; queda?: string }>(o.cardId, { acao: "concluir", lote: loteId, condutor });
     if (c.queda) {
       mudarImportacao(id, (i) => ({ ...i, aguardandoConfirmacao: true, texto: `Aguardando a confirmação: ${c.queda}` }));
-      const sim = await o.confirmarQueda(c.queda);
-      mudarImportacao(id, (i) => ({ ...i, aguardandoConfirmacao: false, texto: null }));
+      const queda = c.queda;
+      const naTela = o.confirmarQueda ? await o.confirmarQueda(queda) : null;
+      const sim =
+        naTela ??
+        (await new Promise<boolean>((resolve) => {
+          // Sem tela que pergunte: o painel do canto mostra "Gravar | Cancelar"; Parar também responde (não grava).
+          let respondido = false;
+          const responder = (v: boolean) => {
+            if (respondido) return;
+            respondido = true;
+            resolve(v);
+          };
+          const pararNaPergunta = () => {
+            pedidoParar = true;
+            responder(false);
+          };
+          mudarImportacao(id, (i) => ({ ...i, responder, parar: pararNaPergunta }));
+        }));
+      mudarImportacao(id, (i) => ({ ...i, aguardandoConfirmacao: false, texto: null, responder: null }));
       if (!sim) {
+        // PARAR durante a pergunta = interromper (a série de cards também para); "Cancelar" = só este card.
+        if (parar()) {
+          await cancelar("Interrompida por quem importava.");
+          terminar("interrompido", "Interrompida — nada foi gravado.");
+          return { estado: "interrompido", lote };
+        }
         await cancelar(`Cancelada: ${c.queda}`);
         terminar("cancelado", "Cancelada na queda — nada mudou.");
         return { estado: "cancelado", lote };
@@ -522,5 +662,8 @@ export async function importarCard(o: {
     if (lote) await pedirImportacao(o.cardId, { acao: "pausar", lote: lote.id, condutor }).catch(() => {});
     terminar("falhou", `${e instanceof Error ? e.message : "Falha na importação."} O que foi lido ficou guardado — Continuar lê só o que falta.`);
     throw e;
+  } finally {
+    if (batida) clearInterval(batida);
+    if (vigia) clearInterval(vigia);
   }
 }

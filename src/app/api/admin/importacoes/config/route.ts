@@ -6,6 +6,7 @@ import { todosOsCards } from "@/lib/empenho-cards";
 import { configImportacoesSchema } from "@/lib/empenho-cards-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getConfigImportacoes, gravarConfigImportacoes } from "@/lib/importacoes-config";
+import { situacoesCron } from "@/lib/importacoes-cron";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +19,16 @@ const ROTULOS: Record<string, string> = {
   quedaSoma: "queda da soma",
   quedaRegistros: "queda dos registros",
   removidos: "removidos na Centi",
+  intervaloMin: "intervalo mínimo entre atualizações",
 };
 
 /** A configuração CENTRAL das importações da Centi (Configurações → Importações — só o ADM). */
 export async function GET() {
   const a = await exigirAdmin();
   if ("erro" in a) return a.erro;
-  return ok({ config: await getConfigImportacoes() });
+  // + a SITUAÇÃO de cada importação automática (o que a última execução fez — a tela mostra por que não avança).
+  const [config, cron] = await Promise.all([getConfigImportacoes(), situacoesCron().catch(() => [])]);
+  return ok({ config, cron });
 }
 
 /** Grava a atualização automática e as regras da conferência — valem para TODOS os cards. */
@@ -35,7 +39,7 @@ export async function PATCH(req: Request) {
   if ("resp" in p) return p.resp;
   const antes = await getConfigImportacoes();
   // Sem a escolha no pedido, fica a gravada.
-  const pedido = { ...p.data, automaticas: p.data.automaticas === undefined ? antes.automaticas : p.data.automaticas };
+  const pedido = { ...p.data, automaticas: p.data.automaticas === undefined ? antes.automaticas : p.data.automaticas, intervaloMin: p.data.intervaloMin ?? antes.intervaloMin };
   const motivo = motivoConfigImportacoes(pedido);
   if (motivo) return erro(motivo, 422);
   const cards = await todosOsCards();

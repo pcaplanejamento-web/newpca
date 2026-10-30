@@ -37,13 +37,14 @@ import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-proto
 import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
 import type { FluxoAutomacao } from "@/lib/fluxos";
+import { BotaoVoltar } from "../AbasEspaco";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
 import { createPortal } from "react-dom";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
+import { IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
 import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
 import { useNaTela, useTrabalhoSegundoPlano } from "../SegundoPlano";
@@ -1394,9 +1395,7 @@ function EditorFluxo({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="icon" aria-label="Voltar aos fluxos" title="Voltar aos fluxos" onClick={onVoltar}>
-          <IconChevronLeft className="size-4" />
-        </Button>
+        <BotaoVoltar onClick={onVoltar} rotulo="os fluxos" />
         <input
           aria-label="Nome do fluxo"
           value={nome}
@@ -1446,9 +1445,6 @@ function EditorFluxo({
             <IconPlay className="size-4" />
           </Button>
         )}
-        <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
-          <IconSettings className="size-4" />
-        </Button>
         {onAtualizarModelo && (
           <Button size="sm" variant="icon" aria-label="Atualizar pelo modelo" title="Atualizar pelo modelo (volta ao diagrama do modelo de hoje)" disabled={rodando} onClick={onAtualizarModelo}>
             <IconRefresh className="size-4" />
@@ -1458,6 +1454,9 @@ function EditorFluxo({
           <IconTrash className="size-4" />
         </Button>
         <AjudaDoFluxo titulo={nome.trim() || fluxo.nome} ajuda={ajuda} />
+        <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
+          <IconSettings className="size-4" />
+        </Button>
         <ConfigFluxo
           open={configAberta}
           onClose={() => setConfigAberta(false)}
@@ -1597,7 +1596,7 @@ function EditorFluxo({
       </div>
       <JanelaFlutuante aberta={!!noConfig} ancora={config?.ancora ?? null} titulo={noConfig ? nomeDoNo(noConfig, REGISTRO_NOS) : "Configurar o nó"} largura={380} onFechar={() => setConfig(null)}>
         {noConfig && (
-          <div className="flex max-h-[min(70vh,36rem)] flex-col">
+          <div className="flex max-h-[min(70dvh,36rem)] flex-col">
             <PainelNo
               key={noConfig.id}
               no={noConfig}

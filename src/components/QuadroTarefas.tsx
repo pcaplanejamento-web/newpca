@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dataBR, num } from "@/lib/format";
@@ -33,7 +32,7 @@ import {
   vizinhos,
 } from "@/lib/tarefas-core";
 import type { AcaoMassaTarefas } from "@/lib/tarefas-validation";
-import { ConteudoAba, FerramentasAba, useTrocaAba } from "./AbasEspaco";
+import { BotaoVoltar, ConteudoAba, FerramentasAba, useTrocaAba } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { BarraEdicaoMassaTarefas } from "./BarraEdicaoMassa";
 import { BarraSelecao } from "./BarraSelecao";
@@ -44,12 +43,11 @@ import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
 import { FaixaQuadro, MembrosQuadro, MenuQuadro, MolduraQuadro, PainelMoldura, PilulaVistas, RESERVA_PILULA } from "./MolduraQuadro";
 import { IndicadorTrello } from "./SincronizacaoTrello";
 import { ItensArquivados } from "./ItensArquivados";
-import { TextoNoLugar } from "./TextoNoLugar";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
-import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
+import { IconArquivar, IconCalendar, IconLock, IconDashboard, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
 import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista, PessoaLista } from "./MenuLista";
 import { FundoQuadro } from "./FundoQuadro";
@@ -534,13 +532,6 @@ export function QuadroTarefas({
     return true;
   };
 
-  /** RENOMEIA o quadro no lugar (o clique no nome, no cabeçalho). */
-  const renomearQuadro = async (nome: string) => {
-    await chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { nome });
-    router.refresh();
-    return true;
-  };
-
   /** "+ Adicionar outra lista": cria no fim do quadro (qualquer membro) e recarrega. */
   const novaLista = async (nome: string) => {
     await chamar(`/api/tarefas/quadros/${quadro.id}/listas`, "POST", { nome });
@@ -558,26 +549,14 @@ export function QuadroTarefas({
           <FaixaQuadro
             esquerda={
               <>
-                <Link
-                  href="/painel/tarefas"
-                  aria-label="Voltar para Tarefas"
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-9 lg:w-9"
-                >
-                  <IconChevronLeft className="h-4 w-4" />
-                </Link>
-                <h1 className="min-w-0 max-w-[min(100%,32rem)]" title={dicaQuadro}>
-                  <TextoNoLugar
-                    valor={quadro.nome}
-                    onSalvar={podeConfigurar ? renomearQuadro : undefined}
-                    ariaLabel="Nome do quadro"
-                    maxLength={80}
-                    ajustar
-                    className="text-lg font-bold text-text"
-                  />
+                <BotaoVoltar href="/painel/tarefas" rotulo="Tarefas" />
+                {/* Sem título: o nome do quadro está no caminho do cabeçalho (renomear na Configuração). */}
+                <h1 className="sr-only" title={dicaQuadro}>
+                  {quadro.nome}
                 </h1>
                 <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
                 {quadro.privado && (
-                  <span className="grid h-11 w-9 shrink-0 place-items-center text-text-2 lg:h-9" title="Quadro privado — só você o vê">
+                  <span className="grid h-11 w-9 shrink-0 place-items-center text-text-2 lg:h-[var(--h-control-sm)]" title="Quadro privado — só você o vê">
                     <IconLock className="h-4 w-4" aria-label="Quadro privado" />
                   </span>
                 )}

@@ -679,7 +679,8 @@ export function CalendarioTarefas({
   // A vista e o painel lembrados neste aparelho (conveniência — sem armazenamento, só não lembra).
   // biome-ignore lint/correctness/useExhaustiveDependencies: só ao montar.
   useEffect(() => {
-    const v = lerLocal(CHAVE_VISTA) as VistaCalendario | null;
+    // A vista pedida no endereço (`?vista=` — a PESQUISA DO SISTEMA) vale mais que a lembrada.
+    const v = (new URL(window.location.href).searchParams.get("vista") ?? lerLocal(CHAVE_VISTA)) as VistaCalendario | null;
     if (v && v in ROTULO_VISTA && v !== "mes") trocarVista(v);
     setPainel(lerLocal(CHAVE_PAINEL) === "1");
   }, []);
@@ -1363,7 +1364,6 @@ export function CalendarioTarefas({
       <div className="flex items-center gap-1">
         {menuVista}
         <Button variant="ghost" size="sm" aria-label="Atalhos do teclado" title="Atalhos (?)" className="max-lg:hidden" icon={<IconTeclado className="h-4 w-4" />} onClick={() => setAjuda(true)} />
-        <Button variant="ghost" size="sm" aria-label="Configurações do calendário" title="Configurações" icon={<IconSettings className="h-4 w-4" />} onClick={() => setConfig(true)} />
         {semPrazo && (
           <Button
             variant={painel ? "secondary" : "ghost"}
@@ -1388,6 +1388,7 @@ export function CalendarioTarefas({
             <span className="max-sm:hidden">Criar</span>
           </Button>
         )}
+        <Button variant="ghost" size="sm" aria-label="Configurações do calendário" title="Configurações" icon={<IconSettings className="h-4 w-4" />} onClick={() => setConfig(true)} />
       </div>
     </div>
   );

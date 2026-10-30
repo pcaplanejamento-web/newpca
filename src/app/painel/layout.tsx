@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ComponentesPapel } from "@/components/ComponentesPapel";
 import { ConfigTabelas } from "@/components/ConfigTabelas";
+import { EscopoCliente } from "@/components/EscopoCliente";
 import { UnidadeUnica } from "@/components/UnidadeUnica";
 import { getConfigEscopo } from "@/lib/escopo-cabecalho";
 import { nomesDasSiglas } from "@/lib/reparticoes";
@@ -31,11 +32,17 @@ import { contarNaoLidas } from "@/lib/notificacoes";
 import { getConfigChat, getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
 import { MAX_GRUPOS_OBSERVADOS } from "@/lib/presenca-core";
 import { chatLigado } from "@/lib/chat-core";
-import { linhasTabela } from "@/lib/theme";
+import { guardarNoAparelho, linhasTabela } from "@/lib/theme";
 import { listarPessoasDoGrupo } from "@/lib/usuarios";
 import { versaoDados } from "@/lib/versao-dados";
 
 export const dynamic = "force-dynamic";
+
+async function assinaturaDoAcesso(dados: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(dados));
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(h.subarray(0, 12), (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export default async function PainelLayout({
   children,
@@ -88,6 +95,19 @@ export default async function PainelLayout({
   // Unidade fica à vista); nas de SOMA, o seletor do cabeçalho trava.
   const acessos = !usuario.admin && ativo && !bloqueio ? await acessosDoGrupo(ativo.id) : { todas: [], somas: [] };
   const telasTodas = acessos.todas;
+  // A ASSINATURA do acesso (os dados guardados no navegador só valem com ela): papel, telas, grupo, unidades e as regras
+  // que mudam o recorte. Mudou qualquer uma = outra chave (nunca o dado de outra permissão ou unidade).
+  const assinatura = await assinaturaDoAcesso({
+    papel: usuario.papel,
+    admin: usuario.admin,
+    telas: acesso.telas,
+    grupo: ativo?.id ?? null,
+    grupos: grupos.map((g) => g.id),
+    unidade: contexto.ativa?.id ?? null,
+    unidades: contexto.lista.map((r) => r.id),
+    acessos,
+    escopoCab,
+  });
   const unidadeDe = (r: { id: number; codigo: string; nome: string } | null) =>
     r && !ehGeral(r) ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
 
@@ -114,6 +134,7 @@ export default async function PainelLayout({
       // O GRUPO ativo também libera (ou não) o chat — Grupos → "Chat liberado".
       chat={bloqueio ? null : presenca === undefined || configChat === null ? undefined : presenca && ativo?.chat && chatLigado(configChat) ? configChat : null}
     >
+      <EscopoCliente pessoa={usuario.id} assinatura={assinatura} guardar={guardarNoAparelho(aparencia) && !protecao} />
       <RegistroProtecao ligado={!bloqueio && protecaoCfg.registrar} />
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}

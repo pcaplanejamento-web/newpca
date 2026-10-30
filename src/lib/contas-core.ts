@@ -35,6 +35,8 @@ export const CHAVES_PESSOAIS = [
   "chat:posicoes",
   "chat:posicao",
   "chat:fixada",
+  "segundo-plano:posicao",
+  "segundo-plano:bolha",
   "automacao:disparo",
 ] as const;
 

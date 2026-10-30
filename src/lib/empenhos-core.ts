@@ -270,8 +270,33 @@ export function periodosAPedir(ano: number, lidos: Periodo[], comPeriodo: boolea
   return lacunasDoAno(ano, lidos, hoje).flatMap(emSemanas);
 }
 
+/**
+ * Os pedidos já DIVIDIDOS no lote (pelo grande demais) viram as METADES — recursivamente, como a automática (`proximoPedido`):
+ * a tela nunca pede de novo um período inteiro já dividido (o servidor recusaria a página no fim). Nos pagamentos (`porMes`),
+ * o ano dividido vira os meses.
+ */
+export function abrirDivididos(periodos: Periodo[], passos: readonly PassoMin[], porMes = false): Periodo[] {
+  const divididos = new Set(passos.filter((p) => p.estado === "dividido").map(chaveP));
+  const abrir = (p: Periodo): Periodo[] => {
+    if (!divididos.has(chaveP(p))) return [p];
+    const partes = porMes ? (mesDoPeriodoCore(p) ? null : emMeses(p)) : dividirPeriodo(p);
+    return partes ? partes.flatMap(abrir) : [p];
+  };
+  return periodos.flatMap(abrir);
+}
+
+/** O período é um mês inteiro? */
+function mesDoPeriodoCore(p: Periodo): boolean {
+  const [a, m] = p.inicio.split("-").map(Number);
+  return p.inicio.endsWith("-01") && p.fim === paraIso(Date.UTC(a, m, 0)) && p.fim.slice(0, 7) === p.inicio.slice(0, 7);
+}
+
 /** O lote é lido mês a mês (os pagamentos)? */
 export const lotePorMes = (l: { modo: ModoLote }): boolean => l.modo === "pagamentos";
+
+/** Na AUTOMÁTICA, as liquidações também vão mês a mês (um pedido por mês e órgão — não um por semana): os meses que não
+ * mudaram são pulados pela assinatura; o mês grande demais se divide por datas (a API das liquidações aceita datas). */
+export const lotePorMesAuto = (l: { modo: ModoLote }): boolean => l.modo === "pagamentos" || l.modo === "liquidacoes";
 
 /** O lote lê ÓRGÃO POR ÓRGÃO (a "página" N = o N-ésimo órgão da lista do lote): liquidações e pagamentos (todos os órgãos
  * com o ID na Centi) e os EMPENHOS do card que lê por órgão (os órgãos dos vínculos — a lista gravada no lote). */
@@ -471,6 +496,13 @@ export const ROTULO_ESTADO_LOTE: Record<EstadoLote, { rotulo: string; tom: "blue
 /** Sem atividade há mais que isto, o lote "lendo" é considerado abandonado (outro pode começar). */
 export const MINUTOS_LOTE_PARADO = 30;
 
+/** O instante (texto do D1, "AAAA-MM-DD HH:MM:SS" em UTC) antes do qual um lote "lendo" está PARADO — a régua ÚNICA do
+ * fechamento (`loteEmAndamento`/`encerrarParados`), da contagem "lendo agora" da Execução e do andamento ao vivo. */
+export const limiteParado = (agoraMs = Date.now()): string => new Date(agoraMs - MINUTOS_LOTE_PARADO * 60_000).toISOString().replace("T", " ").slice(0, 19);
+
+/** O começo da mensagem do lote fechado por ABANDONO (falha passageira — não põe o ano em espera na automática). */
+export const MSG_ABANDONADO = "Abandonado:";
+
 /** A SAÚDE de uma importação: quantos pedidos à Centi, quantos com erro, os bytes baixados e o tempo de espera pela Centi. */
 /** A saúde do lote: os pedidos à Centi, os erros, o que foi baixado, a espera — e as páginas IDÊNTICAS à volta anterior (puladas na automática). */
 export type SaudeLote = { pedidos: number; erros: number; bytes: number; msCenti: number; semMudanca: number };
@@ -572,19 +604,29 @@ export function proximoPedido(ano: number, passos: PassoMin[], comPeriodo: boole
   const emCurso = periodoEmCurso(passos, paginas);
   if (emCurso) return emCurso;
   const lidos = periodosLidos(passos);
-  const lidosSet = new Set(lidos.map(chaveP));
+  const lacunas = lacunasDoAno(ano, lidos);
   const divididos = new Set(passos.filter((p) => p.estado === "dividido").map(chaveP));
+  // O que ainda falta DENTRO de um período (as lacunas recortadas a ele).
+  const faltaEm = (p: Periodo) =>
+    lacunas.filter((l) => l.fim >= p.inicio && l.inicio <= p.fim).map((l) => ({ inicio: l.inicio > p.inicio ? l.inicio : p.inicio, fim: l.fim < p.fim ? l.fim : p.fim }));
   const abrir = (p: Periodo): Periodo | null => {
-    if (lidosSet.has(chaveP(p))) return null;
+    const falta = faltaEm(p);
+    if (!falta.length) return null;
     const metades = divididos.has(chaveP(p)) ? dividirPeriodo(p) : null;
-    if (!metades) return p;
-    for (const m of metades) {
-      const r = abrir(m);
-      if (r) return r;
+    if (metades) {
+      for (const m of metades) {
+        const r = abrir(m);
+        if (r) return r;
+      }
+      return null;
     }
-    return null;
+    // Lido em parte (por outra leitura — a da tela): só o que falta nele.
+    return falta.length === 1 && chaveP(falta[0]) === chaveP(p) ? p : abrir(falta[0]);
   };
-  for (const p of periodosAPedir(ano, lidos, comPeriodo, undefined, porMes)) {
+  // Na leitura semana a semana, a GRADE FIXA das semanas do ano: depois de ler 01/01 (de um 01–07 dividido), o próximo é
+  // 02/01 pelas metades já divididas — nunca um "02–07" novo, que se dividiria de novo.
+  const base = comPeriodo && !porMes ? emSemanas(anoInteiro(ano)) : periodosAPedir(ano, lidos, comPeriodo, undefined, porMes);
+  for (const p of base) {
     const r = abrir(p);
     if (r) return { periodo: r, pagina: 1 };
   }
@@ -597,13 +639,22 @@ export const MARCA_GUARDANDO = "Guardando a página";
 type PassoErro = PassoMin & { mensagem?: string | null; em?: string };
 const guardando = (p: PassoErro) => p.estado === "erro" && !!p.mensagem?.startsWith(MARCA_GUARDANDO);
 
-/** Os passos de ERRO seguidos no fim, do MESMO pedido (os "Guardando a página…" não contam; o sucesso zera). */
-function sequenciaDeErros(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }): PassoErro[] {
+/** O "Guardando a página…" PARADO há mais disto foi cortado no meio (a execução morreu): conta como erro. */
+const GUARDANDO_PARADO_MS = 5 * 60_000;
+
+/**
+ * Os passos de ERRO seguidos no fim, do MESMO pedido (os "Guardando a página…" recentes não contam — os parados há mais de
+ * 5 min contam; o sucesso zera). `desde` = o último AVANÇO da leitura fragmentada: os erros anteriores a ele não contam (a
+ * leitura andou depois deles).
+ */
+function sequenciaDeErros(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs?: number, desde?: string | null): PassoErro[] {
   const r: PassoErro[] = [];
+  const limite = desde ? msSql(desde) : Number.NaN;
   for (let i = passos.length - 1; i >= 0; i--) {
     const p = passos[i];
-    if (guardando(p)) continue;
+    if (guardando(p) && !(agoraMs != null && p.em && agoraMs - msSql(p.em) > GUARDANDO_PARADO_MS)) continue;
     if (p.estado !== "erro" || p.inicio !== pedido.periodo.inicio || p.fim !== pedido.periodo.fim || p.pagina !== pedido.pagina) break;
+    if (Number.isFinite(limite) && p.em && msSql(p.em) < limite) break;
     r.push(p);
   }
   return r;
@@ -618,8 +669,8 @@ export function errosSeguidos(passos: PassoErro[], pedido: { periodo: Periodo; p
  * 8… até 16 min — a falha passageira da Centi passa sozinha); `desistir` = `MAX_ERROS_AUTO` erros seguidos E mais de
  * `MINUTOS_DESISTIR_AUTO` desde o 1º deles (sem avanço nenhum). Sem a hora dos passos, só a contagem decide.
  */
-export function esperaDoErro(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs: number): { esperar: boolean; desistir: boolean } {
-  const erros = sequenciaDeErros(passos, pedido);
+export function esperaDoErro(passos: PassoErro[], pedido: { periodo: Periodo; pagina: number }, agoraMs: number, desde?: string | null): { esperar: boolean; desistir: boolean } {
+  const erros = sequenciaDeErros(passos, pedido, agoraMs, desde);
   if (!erros.length) return { esperar: false, desistir: false };
   const ultimo = erros[0].em ? msSql(erros[0].em) : Number.NaN;
   const primeiro = erros[erros.length - 1].em ? msSql(erros[erros.length - 1].em as string) : Number.NaN;
@@ -664,6 +715,9 @@ export function fracaoDoAno(ano: number, passos: PassoMin[]): number {
  * sendo lida em fragmentos (capturada em bytes; processada em caracteres). */
 export type AndamentoLote = {
   fracao: number;
+  /** Os bytes já lidos neste lote e os da última importação promovida do ano (o esperado): com eles o andamento é pelos
+   * bytes — o dia pesado conta o que pesa. Sem a importação anterior, só os dias. */
+  bytes?: { lidos: number; esperados: number | null };
   leitura: { inicio: string; fim: string; bytes: number; comprimento: number | null; capturado: boolean; pos: number; chars: number } | null;
 };
 
@@ -676,7 +730,13 @@ export function fracaoDaLeitura(l: NonNullable<AndamentoLote["leitura"]>): numbe
 /** A fração acompanhada de fora: o ano lido + o período da resposta grande em leitura, na proporção do que já foi lido dele. */
 export function fracaoDoAndamento(ano: number, a: AndamentoLote): number {
   const extra = a.leitura ? (diasDoPeriodo(a.leitura) / diasDoPeriodo(periodoDoAno(ano))) * fracaoDaLeitura(a.leitura) : 0;
-  return Math.min(1, a.fracao + extra);
+  const dias = Math.min(1, a.fracao + extra);
+  const esperados = a.bytes?.esperados;
+  if (!esperados) return dias;
+  // Pelos bytes: os já lidos + a parte lida da resposta grande (o tamanho dela, ou o capturado até agora). Nunca 100% antes
+  // de concluir (o ano pode ter crescido desde a importação anterior).
+  const naLeitura = a.leitura ? (a.leitura.comprimento ?? a.leitura.bytes) * fracaoDaLeitura(a.leitura) : 0;
+  return Math.max(dias, Math.min(0.99, ((a.bytes?.lidos ?? 0) + naLeitura) / esperados));
 }
 
 /** O erro do índice ÚNICO — o Drizzle embrulha o erro do D1 (o texto fica em `cause`), como em `nomeDuplicado`. */
@@ -710,5 +770,10 @@ export function podePular(
  */
 export const ORCAMENTO_CONSULTAS = 40;
 export const custoDoPulo = (porOrgao: boolean) => 2 + 3 + (porOrgao ? 2 : 0);
+/** O custo de uma página REAL (lida e gravada — `gravarParte` + a retomada + a leitura do anterior). */
+export const CUSTO_PAGINA_REAL = 22;
+/** Depois de `gasto` consultas, ainda cabe uma página REAL? Senão, a próxima página só é PULADA (se não mudou) — a que mudou
+ * fica para a próxima execução (nunca passa das 50 consultas). */
+export const cabePaginaReal = (gasto: number) => gasto + CUSTO_PAGINA_REAL <= ORCAMENTO_CONSULTAS;
 /** Ainda cabe um pulo INTEIRO depois de `gasto` consultas (empenhos: 8 por execução; por órgão: 5). */
 export const cabeOutroPulo = (gasto: number, porOrgao: boolean) => gasto + custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS;

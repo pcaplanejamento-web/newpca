@@ -3,6 +3,9 @@ import { podeTela } from "./acesso";
 import { getDb } from "./db";
 import { chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
 import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, type FontesSql, textoPacoteExecucao } from "./execucao-sql";
+import { proximaAtualizacaoMs, textoIntervalo } from "./empenho-cards-core";
+import type { MetaExec } from "./execucao-dash-core";
+import { getConfigImportacoes } from "./importacoes-config";
 import { criarMemoVersao } from "./memo-versao-core";
 import { versaoDados } from "./versao-dados";
 
@@ -40,7 +43,13 @@ export function anosPedidos(texto: string | null, disponiveis: readonly number[]
 export async function respostaExecucao(anosTexto: string | null, fontes: FontesSql, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
   // A versão dos dados nunca derruba a resposta: sem ela, o pacote vale só pela versão das importações.
-  const [meta, ver, dados] = await Promise.all([consultaMetaExecucao(db), consultaVersaoExecucao(db), versaoDados().catch(() => ({ dados: "" }))]);
+  const [metaSql, ver, dados, cfg] = await Promise.all([consultaMetaExecucao(db), consultaVersaoExecucao(db), versaoDados().catch(() => ({ dados: "" })), getConfigImportacoes()]);
+  // O INTERVALO MÍNIMO: a etapa só fica travada quando NENHUM card dela pode começar outra importação (a mais antiga das
+  // concluídas ainda dentro do intervalo e nenhum card livre).
+  const meta: MetaExec[] = metaSql.map(({ livres, ultimaCompleta, ...m }) => {
+    const ate = livres > 0 ? null : proximaAtualizacaoMs(ultimaCompleta, cfg.intervaloMin);
+    return { ...m, intervalo: ate ? { ate: new Date(ate).toISOString(), texto: textoIntervalo(ate, cfg.intervaloMin) } : null };
+  });
   const disponiveis = await memoAnos.obter(chaveEscopoEmpenhos(escopo), ver, () => consultaAnosExecucao(db, escopo));
   const anos = anosPedidos(anosTexto, disponiveis);
   const extra = `,"anos":${JSON.stringify(anos)},"disponiveis":${JSON.stringify(disponiveis)},"fontes":${JSON.stringify(fontes)}`;

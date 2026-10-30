@@ -10,6 +10,9 @@ export type NivelAberto = { chave: string; rotulo: string; ordem: number };
 
 const ORDEM: Record<string, number> = { protocolo: 1, dfd: 2, item: 3, tarefa: 4 };
 let detalhe: string | null = null;
+/** Quem informou o nome, na ordem (o espaço e, dentro dele, a aba): sair de um devolve o do anterior. */
+const pilha: { id: number; texto: string }[] = [];
+let proximo = 0;
 let abertos: NivelAberto[] = [];
 let retrato: { detalhe: string | null; abertos: NivelAberto[] } = { detalhe, abertos };
 const ouvintes = new Set<() => void>();
@@ -34,11 +37,16 @@ export function useTrilhaTela() {
 export function useDetalheTrilha(texto: string | null | undefined) {
   useEffect(() => {
     if (!texto) return;
+    const id = ++proximo;
+    pilha.push({ id, texto });
     detalhe = texto;
     avisar();
     return () => {
-      if (detalhe === texto) {
-        detalhe = null;
+      const i = pilha.findIndex((x) => x.id === id);
+      if (i >= 0) pilha.splice(i, 1);
+      const novo = pilha.at(-1)?.texto ?? null;
+      if (novo !== detalhe) {
+        detalhe = novo;
         avisar();
       }
     };

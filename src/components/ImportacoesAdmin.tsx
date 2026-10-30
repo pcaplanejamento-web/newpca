@@ -13,6 +13,7 @@ import {
   FREQUENCIAS,
   motivoConfigImportacoes,
   NOME_TIPO,
+  OPCOES_INTERVALO,
   OPCOES_QUEDA,
   type OrgaoGestorCenti,
   orgaosDaLeitura,
@@ -27,9 +28,11 @@ import {
   type VinculoCard,
 } from "@/lib/empenho-cards-core";
 import { usaPeriodo } from "@/lib/empenhos-core";
+import { haQuanto } from "@/lib/acessos-core";
+import type { LinhaCron } from "@/lib/importacoes-cron-sql";
 import { type EstadoLinha, importarCards, type LinhaImportacao, perguntaDeQueda, prepararCards } from "@/lib/importar-cards";
 import { brl, dataHoraBR, num } from "@/lib/format";
-import { ConteudoAba } from "./AbasEspaco";
+import { BotaoConfiguracoes, BotaoVoltar, ConteudoAba } from "./AbasEspaco";
 import { Ajuda } from "./Ajuda";
 import { type Aviso, Avisos } from "./Avisos";
 import { AndamentoImportacao } from "./AndamentoImportacao";
@@ -42,11 +45,14 @@ import { EmpenhoCardImportacao } from "./EmpenhoCardImportacao";
 import { EmpenhoCardVinculos } from "./EmpenhoCardVinculos";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
-import { IconCheck, IconChevronLeft, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
+import { IconCheck, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
+import { FrotaAdmin } from "./frota/FrotaAdmin";
+import { useOndeDetalhe } from "./CanalGrupo";
+import { type CartaoKpi, IndicadoresKpi } from "./IndicadoresKpi";
 import { Segmented } from "./Segmented";
 import { SecaoBanner } from "./SecaoBanner";
 import { SkeletonCartao } from "./Skeleton";
@@ -89,15 +95,19 @@ export function ImportacoesAdmin() {
   const [cards, setCards] = useState<ResumoCard[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [tipo, setTipo] = useState<TipoCard>("empenhos");
+  // A FROTA (Vólus) mora na mesma aba, sem cards (uma integração só) — `?tipo=frotas`.
+  const [frotas, setFrotas] = useState(false);
   const [aberto, setAberto] = useState<{ id: number; sub: SubAba } | null>(null);
   const [config, setConfig] = useState<ConfigImportacoes | null>(null);
   const [erroConfig, setErroConfig] = useState<string | null>(null);
+  const [cron, setCron] = useState<LinhaCron[]>([]);
 
   const carregarConfig = useCallback(async () => {
     const r = await fetch("/api/admin/importacoes/config", { cache: "no-store" }).catch(() => null);
-    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigImportacoes } | undefined;
+    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigImportacoes; cron?: LinhaCron[] } | undefined;
     if (r?.ok && j?.ok && j.config) {
       setConfig(j.config);
+      setCron(j.cron ?? []);
       setErroConfig(null);
     } else setErroConfig(j?.error ?? "Não foi possível carregar a atualização automática.");
   }, []);
@@ -119,12 +129,21 @@ export function ImportacoesAdmin() {
     const u = new URL(window.location.href);
     const t = u.searchParams.get("tipo");
     if (t && (TIPOS as readonly string[]).includes(t)) setTipo(t as TipoCard);
+    if (t === "frotas") setFrotas(true);
     const id = Number(u.searchParams.get("card"));
     const sub = u.searchParams.get("sub");
     if (Number.isInteger(id) && id > 0) setAberto({ id, sub: sub === "vinculos" || sub === "configuracao" ? sub : "importacao" });
     void carregar();
     void carregarConfig();
   }, [carregar, carregarConfig]);
+
+  // A SITUAÇÃO da automática acompanha a cada minuto (só com a aba à vista).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void carregarConfig();
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [carregarConfig]);
 
   // O card aberto pelo endereço manda no tipo (um link só com `?card=` de outro tipo volta à lista certa).
   const tipoDoAberto = aberto ? cards?.find((c) => c.id === aberto.id)?.tipo : undefined;
@@ -144,7 +163,17 @@ export function ImportacoesAdmin() {
     gravarNaUrl(tipo, null, null);
     void carregar();
   };
-  const trocarTipo = (t: TipoCard) => {
+  const trocarTipo = (t: TipoCard | "frotas") => {
+    if (t === "frotas") {
+      setFrotas(true);
+      const u = new URL(window.location.href);
+      u.searchParams.set("tipo", "frotas");
+      u.searchParams.delete("card");
+      u.searchParams.delete("sub");
+      window.history.replaceState(null, "", u);
+      return;
+    }
+    setFrotas(false);
     setTipo(t);
     gravarNaUrl(t, null, null);
   };
@@ -172,18 +201,27 @@ export function ImportacoesAdmin() {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-2">
-        <Segmented<TipoCard>
-          value={tipo}
+        <Segmented<TipoCard | "frotas">
+          value={frotas ? "frotas" : tipo}
           onChange={trocarTipo}
           ariaLabel="Tipo de importação"
-          options={TIPOS.map((t) => ({ value: t, label: cards ? `${NOME_TIPO[t].titulo} (${num(contagem(t))})` : NOME_TIPO[t].titulo, curto: NOME_TIPO[t].titulo }))}
+          options={[
+            ...TIPOS.map((t) => ({ value: t, label: cards ? `${NOME_TIPO[t].titulo} (${num(contagem(t))})` : NOME_TIPO[t].titulo, curto: NOME_TIPO[t].titulo })),
+            { value: "frotas" as const, label: "Frotas (Vólus)", curto: "Frotas" },
+          ]}
         />
-        <div className="ml-auto flex items-center gap-2">
-          {cards && config && <ImportarTudo cards={cards} regra={config.removidos} onMudou={carregar} />}
-          <AjudaImportacoes />
-        </div>
+        {!frotas && (
+          <div className="ml-auto flex items-center gap-2">
+            {cards && config && <ImportarTudo cards={cards} regra={config.removidos} onMudou={carregar} />}
+            <AjudaImportacoes />
+          </div>
+        )}
       </div>
-      {config && <PainelAutomatica config={config} cards={cards} onSalvo={setConfig} />}
+      {frotas ? (
+        <FrotaAdmin />
+      ) : (
+        <>
+      {config && <PainelAutomatica config={config} cards={cards} cron={cron} onSalvo={setConfig} />}
       {erroConfig && <ErroCarga msg={erroConfig} onTentar={carregarConfig} />}
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
       {cards == null && !erro ? (
@@ -194,6 +232,8 @@ export function ImportacoesAdmin() {
       ) : cards ? (
         <ListaCards tipo={tipo} cards={doTipo} todos={cards} config={config} onAbrir={(id, sub) => abrir(id, sub)} />
       ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -211,7 +251,7 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
   const [linhas, setLinhas] = useState<LinhaImportacao[] | null>(null);
   const [rodando, setRodando] = useState(false);
   const parar = useRef(false);
-  const { confirmar, confirmacao } = useConfirmacao();
+  const { perguntar, confirmacao } = useConfirmacao();
 
   const muda = (id: number, l: Partial<LinhaImportacao>) => setLinhas((ls) => ls?.map((x) => (x.card.id === id ? { ...x, ...l } : x)) ?? ls);
 
@@ -231,7 +271,8 @@ function ImportarTudo({ cards, regra, onMudou }: { cards: ResumoCard[]; regra: R
       await importarCards(todas, {
         regra,
         parar: () => parar.current,
-        confirmarQueda: perguntaDeQueda(confirmar),
+        pararEntreCards: true,
+        confirmarQueda: perguntaDeQueda(perguntar),
         onLinha: muda,
       });
     } finally {
@@ -549,7 +590,49 @@ function propsDoCartao(c: ResumoCard, automatica: boolean) {
  * A ATUALIZAÇÃO AUTOMÁTICA e as REGRAS da conferência — CENTRAIS, valem para todos os cards: o resumo numa linha e
  * "Editar" abre os campos (`motivoConfigImportacoes`, a mesma régua do servidor). Gravar vale na próxima execução.
  */
-function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoes; cards: ResumoCard[] | null; onSalvo: (c: ConfigImportacoes) => void }) {
+/**
+ * O QUE A AUTOMÁTICA ESTÁ FAZENDO: a última execução e, por importação, a situação atual e há quanto tempo está nela
+ * (erro em vermelho; a mesma situação há mais de 30 min em âmbar) — o motivo de uma importação não avançar fica à vista.
+ */
+function SituacaoAutomatica({ cron, cards }: { cron: LinhaCron[]; cards: ResumoCard[] | null }) {
+  const agora = Date.now();
+  if (!cron.length) return <p className="mt-2 text-[13px] text-muted">A atualização automática ainda não registrou nenhuma execução.</p>;
+  const geral = cron.find((c) => c.chave === "centi:geral");
+  const nome = (chave: string) => {
+    if (chave === "frota:geral") return "Frotas (Vólus)";
+    const id = Number(chave.slice(6));
+    return cards?.find((c) => c.id === id)?.nome ?? `Card ${id}`;
+  };
+  // "Parada" = a MESMA situação de TRABALHO há mais de 30 min (as de espera normal — fora da hora, intervalo, nada a fazer —
+  // ficam iguais por horas sem nada errado).
+  const espera = /fora da hora|intervalo mínimo|nada a atualizar|nenhum ano|nenhuma importação|desligada|conduzida por uma aba|importação manual/i;
+  const parada = (c: LinhaCron) => !c.erro && !espera.test(c.situacao) && agora - Date.parse(`${c.desde.replace(" ", "T")}Z`) > 30 * 60_000;
+  const linhas = cron.filter((c) => c.chave !== "centi:geral").sort((a, b) => b.erro - a.erro || nome(a.chave).localeCompare(nome(b.chave), "pt-BR"));
+  return (
+    <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-[13px]">
+      {geral && (
+        <p className="text-text-2">
+          Última execução {haQuanto(geral.em, agora)} · {geral.situacao}
+        </p>
+      )}
+      <ul className="space-y-1">
+        {linhas.map((c) => (
+          <li key={c.chave} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <Badge tone={c.erro ? "red" : parada(c) ? "amber" : "slate"} dot>
+              {nome(c.chave)}
+            </Badge>
+            <span className={c.erro ? "text-[color:var(--danger)]" : "text-text-2"}>{c.situacao}</span>
+            <span className="text-faint tabular-nums" title={`Nesta situação desde ${dataHoraBR(`${c.desde.replace(" ", "T")}Z`)}`}>
+              {haQuanto(c.desde, agora)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PainelAutomatica({ config, cards, cron, onSalvo }: { config: ConfigImportacoes; cards: ResumoCard[] | null; cron: LinhaCron[]; onSalvo: (c: ConfigImportacoes) => void }) {
   const [editando, setEditando] = useState<ConfigImportacoes | null>(null);
   const [salvando, setSalvando] = useState(false);
   const v = editando;
@@ -601,8 +684,10 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
           )}
           <span className="text-muted">
             Queda: soma {queda(config.quedaSoma)} · registros {queda(config.quedaRegistros)} · {config.removidos === "apagar" ? "apaga" : "marca"} o que a Centi não traz mais
+            {config.intervaloMin > 0 && ` · intervalo mínimo de ${(OPCOES_INTERVALO.find((o) => o.valor === config.intervaloMin)?.rotulo ?? "").toLowerCase()}`}
           </span>
         </p>
+        <SituacaoAutomatica cron={cron} cards={cards} />
       </SecaoBanner>
       <Modal
         open={!!v}
@@ -671,6 +756,24 @@ function PainelAutomatica({ config, cards, onSalvo }: { config: ConfigImportacoe
                   ))}
                 </SelectField>
               </div>
+              <SelectField
+                denso
+                label="Intervalo mínimo entre atualizações"
+                value={String(v.intervaloMin)}
+                onChange={(e) => muda("intervaloMin", Number(e.target.value))}
+                rotuloExtra={
+                  <Ajuda titulo="Intervalo mínimo" compacta>
+                    Depois de uma importação concluída, o mesmo card só começa outra quando passar este tempo — vale para a importação do card, o “Importar tudo”, o
+                    “Importar agora” da Execução e a atualização automática. Continuar uma importação aberta e importar de novo depois de uma falha seguem livres.
+                  </Ajuda>
+                }
+              >
+                {OPCOES_INTERVALO.map((o) => (
+                  <option key={o.valor} value={o.valor}>
+                    {o.rotulo}
+                  </option>
+                ))}
+              </SelectField>
               <SelectField denso label="Registros que a Centi não traz mais" value={v.removidos} onChange={(e) => muda("removidos", e.target.value as RegraRemovidos)} rotuloExtra={<Ajuda titulo="Removidos na Centi" compacta>Marcar = ficam guardados, fora das somas (o rodapé das tabelas mostra “Removidos na Centi”). Apagar = saem do banco na importação conferida.</Ajuda>}>
                 {REGRAS_REMOVIDOS.map((r) => (
                   <option key={r.valor} value={r.valor}>
@@ -840,6 +943,8 @@ function CardAberto({
 
   // Enquanto o card chega, o resumo da lista (sem vínculos) já mostra a linha.
   const c = d?.card ?? cards.find((x) => x.id === id) ?? null;
+  // O nome do card no caminho do cabeçalho (a tela não tem título).
+  useOndeDetalhe(c?.nome);
   if (!c) {
     return (
       <div className="space-y-[var(--gap-block)]">
@@ -881,11 +986,16 @@ function CardAberto({
     toast.error(j?.error ?? "Não foi possível excluir o card.");
   }
 
-  const indicadores = [
-    { rotulo: nome.titulo, valor: num(c.empenhos) },
-    c.tipo === "pagamentos" ? { rotulo: "Pago líquido", valor: brl(c.liquidado) } : { rotulo: liq ? "Liquidado" : "Empenhado", valor: brl(c.soma) },
-    { rotulo: "Anos", valor: rotuloAnos(c.anos) },
-    { rotulo: "Última leitura", valor: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—" },
+  // Os números do card em indicadores, logo abaixo da linha do topo (o nome do card está no caminho do cabeçalho).
+  const cartoes: CartaoKpi[] = [
+    {
+      label: c.tipo === "pagamentos" ? "Pago líquido" : liq ? "Liquidado" : "Empenhado",
+      value: brl(c.tipo === "pagamentos" ? c.liquidado : c.soma),
+      cor: "var(--accent)",
+      detalhes: [{ rotulo: nome.titulo, valor: num(c.empenhos) }, { rotulo: "Anos", valor: rotuloAnos(c.anos) }],
+    },
+    { label: nome.titulo, value: num(c.empenhos), detalhes: [{ rotulo: "Anos", valor: rotuloAnos(c.anos) }, { rotulo: "Situação", valor: e.rotulo }] },
+    { label: "Última leitura", value: c.ultimaExecucao ? dataHoraBR(c.ultimaExecucao) : "—", detalhes: [{ rotulo: "Situação", valor: e.rotulo }, { rotulo: "Anos", valor: rotuloAnos(c.anos) }] },
   ];
 
   let conteudo: ReactNode = <SkeletonCartao />;
@@ -932,82 +1042,68 @@ function CardAberto({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Voltar onFechar={onFechar} />
-            <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.cor }} />
-            <h2 className="min-w-0 truncate text-lg font-bold tracking-tight text-text" title={c.nome}>
-              {c.nome}
-            </h2>
-            <Badge tone={e.tom} dot vivo={c.lendo} tamanho="linha" className="shrink-0">
-              {e.rotulo}
-            </Badge>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Avisos
-              titulo="Avisos do card"
-              avisos={
-                pendencias.length
-                  ? [
-                      {
-                        id: "configurar",
-                        tom: "warn",
-                        texto: (
-                          <>
-                            <p className="font-semibold text-text">Configure o card antes de importar</p>
-                            <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
-                            <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                              {etapas.map((et) => (
-                                <button
-                                  key={et.aba}
-                                  type="button"
-                                  onClick={() => onSub(et.aba)}
-                                  className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}
-                                >
-                                  {et.feito && <IconCheck className="h-4 w-4" />}
-                                  {et.rotulo}
-                                </button>
-                              ))}
-                              <span className="text-muted">{liq ? "2" : "3"}. Importação</span>
-                            </p>
-                          </>
-                        ),
-                      },
-                    ]
-                  : []
-              }
-            />
-            <Button
-              size="sm"
-              variant="icon"
-              loading={excluindo}
-              aria-label={`Excluir o card ${c.nome}`}
-              title="Excluir card"
-              icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-              onClick={() => excluir(c)}
-            />
-          </div>
-        </div>
-        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-          {indicadores.map((i) => (
-            <div key={i.rotulo} className="flex items-baseline gap-1.5">
-              <dt className="text-muted">{i.rotulo}</dt>
-              <dd className="font-semibold tabular-nums text-text">{i.valor}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
+      {/* A linha do topo: o voltar à esquerda, as seções, as ferramentas da seção e, à direita, a situação, os avisos e excluir.
+          Sem título: o nome do card está no caminho do cabeçalho. */}
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        <h2 className="sr-only">{c.nome}</h2>
+        <Voltar onFechar={onFechar} />
         <Segmented<SubAba>
           value={aba}
           onChange={onSub}
           ariaLabel={`Seções do card ${c.nome}`}
-          options={subs.map((s) => ({ value: s, label: s === "importacao" ? "Importação" : s === "vinculos" ? "Vínculos" : "Configuração", curto: s === "configuracao" ? "Config." : undefined }))}
+          options={subs.filter((s) => s !== "configuracao").map((s) => ({ value: s, label: s === "importacao" ? "Importação" : "Vínculos" }))}
         />
-        <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
+        <div ref={setSlot} className="barra-ferramentas flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center gap-2 empty:hidden" />
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <Badge tone={e.tom} dot vivo={c.lendo} className="shrink-0">
+            {e.rotulo}
+          </Badge>
+          <Avisos
+            titulo="Avisos do card"
+            avisos={
+              pendencias.length
+                ? [
+                    {
+                      id: "configurar",
+                      tom: "warn",
+                      texto: (
+                        <>
+                          <p className="font-semibold text-text">Configure o card antes de importar</p>
+                          <p>{pendencias.map((p) => p.texto).join(" ")} A importação (e a atualização automática) só é liberada depois.</p>
+                          <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            {etapas.map((et) => (
+                              <button
+                                key={et.aba}
+                                type="button"
+                                onClick={() => onSub(et.aba)}
+                                className={`inline-flex min-h-11 items-center gap-1.5 font-semibold lg:min-h-0 ${et.feito ? "text-[color:var(--ok)]" : "text-text underline underline-offset-2"}`}
+                              >
+                                {et.feito && <IconCheck className="h-4 w-4" />}
+                                {et.rotulo}
+                              </button>
+                            ))}
+                            <span className="text-muted">{liq ? "2" : "3"}. Importação</span>
+                          </p>
+                        </>
+                      ),
+                    },
+                  ]
+                : []
+            }
+          />
+          <Button
+            size="sm"
+            variant="icon"
+            loading={excluindo}
+            aria-label={`Excluir o card ${c.nome}`}
+            title="Excluir card"
+            icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+            onClick={() => excluir(c)}
+          />
+          <BotaoConfiguracoes ativo={aba === "configuracao"} rotulo="Configuração do card" onClick={() => onSub("configuracao")} />
+        </div>
       </div>
+      <IndicadoresKpi cartoes={cartoes} />
       {erro && d && <ErroCarga msg={erro} kind="warn" onTentar={carregar} />}
       <ConteudoAba aba={aba} abaServidor={aba} slot={slot} className="space-y-[var(--gap-block)]">
         {conteudo}
@@ -1018,15 +1114,5 @@ function CardAberto({
 }
 
 function Voltar({ onFechar }: { onFechar: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onFechar}
-      aria-label="Voltar às importações"
-      title="Voltar às importações"
-      className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-    >
-      <IconChevronLeft className="h-4 w-4" />
-    </button>
-  );
+  return <BotaoVoltar onClick={onFechar} rotulo="as importações" />;
 }

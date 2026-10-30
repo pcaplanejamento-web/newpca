@@ -21,3 +21,7 @@ export function aplicarMenuGuardado() {
   }
   document.documentElement.toggleAttribute(ATRIBUTO_MENU, r);
 }
+
+/** Mede a largura da BARRA DE ROLAGEM da página (o lugar reservado por `scrollbar-gutter`) em `--barra-rolagem`, antes da
+ *  1ª pintura e a cada mudança de tamanho/zoom — o conteúdo a desconta da margem direita (`--pad-direita`, globals.css). */
+export const SCRIPT_BARRA_ROLAGEM = `(function(){var d=document.documentElement,u=-1;function m(){var w=Math.max(0,window.innerWidth-d.clientWidth);if(w!==u){u=w;d.style.setProperty("--barra-rolagem",w+"px")}}m();window.addEventListener("resize",m);document.addEventListener("DOMContentLoaded",m)})();`;

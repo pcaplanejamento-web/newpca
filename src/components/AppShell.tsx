@@ -1,13 +1,11 @@
 "use client";
 
 import type { VersoesDados } from "@/lib/versao-dados-core";
-import Link from "next/link";
 import { Button } from "./Button";
 import { rotaInicial } from "@/lib/abas";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { chaveDaRota } from "@/lib/escopo-unidades-core";
 import { type ReactNode, useRef, useState } from "react";
-import { Avatar } from "./Avatar";
 import { ContasNavegador } from "./ContasNavegador";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
@@ -16,7 +14,7 @@ import { NAV_MODULOS } from "./navModulos";
 import type { PcaCardDados } from "./PcaCard";
 import { PcaSeletor } from "./PcaSeletor";
 import { AcessoNovidades, VersaoSistema } from "./Novidades";
-import { SincronizarDados } from "./SincronizarDados";
+import { PreCarregarTelas, SincronizarDados } from "./SincronizarDados";
 import { SetaDropdown } from "./SetaDropdown";
 import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
 import { PresencaGrupo } from "./PresencaGrupo";
@@ -30,7 +28,6 @@ import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral"
 import { SeletorUnidade } from "./SeletorUnidade";
 import { toast } from "./Toast";
 import {
-  IconBox,
   IconLandmark,
   IconCheck,
   IconClock,
@@ -46,7 +43,6 @@ import {
   IconWeb,
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
-import { nomeExibicao } from "@/lib/pessoa";
 
 type NavItem = {
   href: string;
@@ -143,7 +139,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
           ) : (
             <IconUsers className="h-3.5 w-3.5 opacity-70" />
           )}
-          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
+          <span className="max-w-[9rem] truncate sm:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
@@ -323,6 +319,7 @@ export function AppShell({
     <AcessoNovidades telas={abas} admin={usuario.admin}>
     <div className="min-h-dvh bg-bg text-text lg:flex lg:overflow-x-clip">
       {versaoDados != null && <SincronizarDados versoes={versaoDados} />}
+      <PreCarregarTelas telas={secoesVisiveis(usuario.admin, modulos).flatMap((sc) => sc.itens.map((i) => i.href))} versoes={versaoDados} />
       <MenuLateral
         topo={<MarcaLink href="/" dica={DICA_SITE} identidade={identidade} />}
         semMarca={<GatilhoPesquisa />}
@@ -361,15 +358,11 @@ export function AppShell({
       />
 
       {/* Coluna principal */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-coluna-conteudo className="flex min-w-0 flex-1 flex-col">
         <CabecalhoApp
           onMenu={() => setMenuAberto(true)}
           inicio={
             <>
-          {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
-          <div className={`shrink-0 sm:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
-            <MarcaLink href="/" dica={DICA_SITE} compacta identidade={identidade} />
-          </div>
           {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
           <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} pcaFiltroId={pcaFiltroId} />
             </>
@@ -383,7 +376,7 @@ export function AppShell({
                 <PcaSelect pcas={cartoesPca} ativoId={pcaFiltroId} />
               </div>
             )}
-            <div className="hidden items-center gap-1.5 sm:flex">
+            <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
@@ -395,20 +388,20 @@ export function AppShell({
             )}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
-            <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
-              <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
-            </Link>
-            {/* O último item: atalho para a página pública (no celular, só o ícone). */}
-            <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
-              <span className="hidden sm:inline">Site</span>
-            </Button>
+            {/* No celular o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos e o tema): a logo e a foto ficam SÓ
+                no menu e a página pública na marca do menu. O último item: o atalho para a página pública. */}
+            <div className="hidden sm:flex">
+              <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
+                Site
+              </Button>
+            </div>
             </>
           }
         />
 
         {/* Laterais = --pad-canvas (a do menu e da borda); topo e base = --pad-canvas-y (as 4 distâncias proporcionais);
             no celular, a base soma a navegação inferior (4rem + área segura). */}
-        <main className="flex-1 px-[var(--pad-canvas)] py-[var(--pad-canvas-y)] pb-[calc(var(--pad-canvas-y)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas-y)]">
+        <main className="flex-1 pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)] pb-[calc(var(--pad-canvas-y)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas-y)]">
           {children}
         </main>
       </div>

@@ -1,9 +1,12 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
+import { BotaoVoltar } from "./AbasEspaco";
+import { useOndeDetalhe } from "./CanalGrupo";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -12,7 +15,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
+import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
 import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
@@ -69,6 +72,7 @@ export function ReparticoesAdmin({
   abaInicial: AbaUnidades;
 }) {
   const router = useRouter();
+  useOndeDetalhe(`${orgaoSigla} — ${orgaoNome}`);
   const ctx = usePlanilhaResponsaveis();
   const [aba, setAba] = useState<AbaUnidades>(abaInicial);
   const [exonerados, setExonerados] = useState(false);
@@ -84,9 +88,7 @@ export function ReparticoesAdmin({
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch(`/api/admin/reparticoes?orgaoId=${orgaoId}`);
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; reparticoes?: Rep[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar as unidades.");
+      const j = await lerJsonGuardado<{ reparticoes?: Rep[] }>("adm.unidades", `/api/admin/reparticoes?orgaoId=${orgaoId}`, "Erro ao carregar as unidades.");
       setLista(j.reparticoes ?? []);
       setErro(null);
     } catch (e) {
@@ -290,15 +292,11 @@ export function ReparticoesAdmin({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="ghost" onClick={() => router.push("/painel/orgaos")} icon={<IconChevronLeft className="h-4 w-4" />} aria-label="Voltar aos órgãos">
-          Órgãos
-        </Button>
-        <Badge tone="violet">{orgaoSigla}</Badge>
-        <h1 className="min-w-0 truncate text-[15px] font-bold text-text">{orgaoNome}</h1>
-        {assinaturaUnica && <Badge tone="blue">Assinatura única</Badge>}
+      {/* A linha do topo: o voltar à esquerda e as abas — sem título (o órgão está no caminho do cabeçalho). */}
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        <h1 className="sr-only">{orgaoNome}</h1>
+        <BotaoVoltar href="/painel/orgaos" rotulo="Órgãos" />
         <Segmented<AbaUnidades>
-          className="sm:ml-auto"
           ariaLabel="Unidades ou responsáveis"
           value={aba}
           onChange={trocarAba}

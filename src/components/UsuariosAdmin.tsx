@@ -63,6 +63,8 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     if (u.arquivadoEm) setVerArquivados(true);
     setAbertoId(u.id);
   }, lista != null);
+  // `?vista=arquivados` (a pesquisa: "Usuários arquivados") abre direto nos arquivados.
+  useAbrirDaUrl((v) => setVerArquivados(v === "arquivados"), true, "vista");
   // A lista mostra os ATIVOS (e pendentes/inativos) ou só os ARQUIVADOS (restauráveis).
   const [verArquivados, setVerArquivados] = useState(false);
   const [ocupado, setOcupado] = useState(false);

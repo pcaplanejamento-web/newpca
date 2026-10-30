@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { aplicarVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
 import type { AlvosVinculo, VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { FerramentasAba } from "./AbasEspaco";
 import { AjudaVisoes } from "./AjudaVisoes";
 import { AvisoFlutuante } from "./AvisoFlutuante";
@@ -42,6 +43,11 @@ export function OrcamentoVisoes({
   const { confirmar, confirmacao } = useConfirmacao();
   const total = useMemo(() => itens.reduce((s, i) => s + i.valorInicial, 0), [itens]);
   const abrir = (v: VisaoOrcamento | "nova") => setEditando(v);
+  // A PESQUISA DO SISTEMA (`?aba=visoes&abrir=<id>`): abre a visão.
+  useAbrirDaUrl((v) => {
+    const x = visoes.find((y) => y.id === Number(v));
+    if (x) setEditando(x);
+  });
 
   async function excluir(v: VisaoOrcamento) {
     const ok = await confirmar({

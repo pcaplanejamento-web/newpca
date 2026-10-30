@@ -42,17 +42,22 @@ export function KpiStat({
   emLinha?: boolean;
   /** Uma informação DISCRETA no canto superior direito (ex.: há quanto tempo os dados foram atualizados). */
   canto?: ReactNode;
-  /** Uma AÇÃO pequena no canto superior direito (ex.: o "Importar agora" do ADM na Execução) — fica FORA do cartão-botão
-   * (botão dentro de botão é inválido), por cima dele; o `canto` abre espaço ao lado. */
+  /** Uma AÇÃO pequena no canto superior direito, ao lado do `canto` (ex.: o "Importar agora" do ADM na Execução). */
   acaoCanto?: ReactNode;
 }) {
   const idSpark = useId().replace(/:/g, "");
-  const Raiz = onClick ? "button" : "div";
-  const cartao = (
+  // Com o CANTO (que pode ter botões) num cartão que é botão: o toque do cartão vira uma CAMADA por baixo (botão dentro de
+  // botão é inválido) e o canto fica por cima, alinhado ao rótulo e preso no canto superior direito.
+  const temCanto = !!(canto || acaoCanto);
+  const camada = !!onClick && temCanto;
+  const Raiz = onClick && !camada ? "button" : "div";
+  const nome = `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}`;
+  const foco = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  return (
     <Raiz
-      {...(onClick ? { type: "button" as const, onClick, "aria-label": `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}` } : {})}
-      className={`kpi-card relative flex min-w-0 flex-col ${acaoCanto ? "flex-1" : ""} overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
-        onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
+      {...(onClick && !camada ? { type: "button" as const, onClick, "aria-label": nome } : {})}
+      className={`kpi-card relative flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
+        onClick ? `transition-colors hover:bg-surface-2 ${camada ? "" : foco}` : ""
       }`}
       style={
         {
@@ -65,14 +70,21 @@ export function KpiStat({
         } as CSSProperties
       }
     >
+      {camada && <button type="button" onClick={onClick} aria-label={nome} className={`absolute inset-0 rounded-card ${foco} focus-visible:ring-inset`} />}
       <span
         aria-hidden
         className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-[3px]"
         style={{ background: cor }}
       />
-      <div className="flex items-start justify-between gap-2">
+      <div className={`flex justify-between gap-2 items-start ${camada ? "pointer-events-none relative" : ""}`}>
         <span className="truncate text-[12.5px] text-muted">{label}</span>
-        {canto && <span className={`shrink-0 ${acaoCanto ? "mr-8 lg:mr-7" : ""}`}>{canto}</span>}
+        {temCanto && (
+          // Preso ao canto, com o MESMO recuo do topo e da direita (6px até a caixa); a margem de baixo negativa não deixa a linha do rótulo crescer.
+          <span className="pointer-events-auto relative -mb-4 -mr-[calc(var(--pad-card)-6px)] -mt-[calc(var(--pad-card)-6px)] flex shrink-0 items-center gap-1 self-start">
+            {canto}
+            {acaoCanto}
+          </span>
+        )}
         {delta && (
           <span
             className="inline-flex h-[22px] shrink-0 items-center gap-0.5 rounded-full px-2 text-[11.5px] font-semibold tabular-nums"
@@ -90,11 +102,15 @@ export function KpiStat({
           </span>
         )}
       </div>
-      <div
-        className={`mt-1 min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[clamp(1.1rem,17cqw,2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
-        title={typeof value === "string" ? value : undefined}
-      >
-        {value}
+      {/* O número acompanha a LARGURA do cartão, mas a ALTURA da linha é FIXA (a do maior tamanho): abrir/fechar o menu ou
+          mudar a janela muda só a largura dos cartões, nunca a altura. */}
+      <div className={`mt-1 flex min-w-0 items-center ${completo ? "h-[calc(1.9rem*1.05)]" : "h-[calc(2.05rem*1.05)]"}`}>
+        <div
+          className={`min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[clamp(1.1rem,17cqw,2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
+          title={typeof value === "string" ? value : undefined}
+        >
+          {value}
+        </div>
       </div>
       {spark && spark.length > 1 && (
         <svg aria-hidden viewBox="0 0 100 28" preserveAspectRatio="none" className="mt-3 h-7 w-full overflow-visible">
@@ -108,10 +124,9 @@ export function KpiStat({
           <path d={curvaSpark(spark)} fill="none" stroke={cor} strokeWidth={2} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         </svg>
       )}
-      {/* A dica NUNCA estica o cartão (uma descrição de item tem milhares de caracteres): no máximo 2 linhas; o texto
-          inteiro fica na dica do mouse. */}
+      {/* A dica e os detalhes em UMA linha cada (o texto inteiro na dica do mouse): a altura do cartão não muda com a largura. */}
       {hint && (
-        <div className={`mt-1.5 text-[12px] text-faint ${completo ? "line-clamp-2 break-words" : "truncate"}`} title={hint}>
+        <div className="mt-1.5 truncate text-[12px] text-faint" title={hint}>
           {hint}
         </div>
       )}
@@ -134,10 +149,10 @@ export function KpiStat({
       {detalhes && detalhes.length > 0 && !emLinha && (
         <dl className="mt-3 space-y-1 border-t border-border/70 pt-2.5 text-[12px]">
           {detalhes.map((d) => (
-            <div key={d.rotulo} className="flex flex-wrap items-baseline justify-between gap-x-3">
-              <dt className="text-muted">{d.rotulo}</dt>
+            <div key={d.rotulo} className="flex items-baseline justify-between gap-x-3">
+              <dt className="min-w-0 shrink truncate text-muted">{d.rotulo}</dt>
               <dd
-                className="line-clamp-2 min-w-0 break-words font-medium tabular-nums text-text-2"
+                className="min-w-0 shrink-0 truncate font-medium tabular-nums text-text-2"
                 style={d.cor ? { color: d.cor } : undefined}
                 title={typeof d.valor === "string" ? d.valor : undefined}
               >
@@ -148,13 +163,6 @@ export function KpiStat({
         </dl>
       )}
     </Raiz>
-  );
-  if (!acaoCanto) return cartao;
-  return (
-    <div className="relative flex min-w-0 flex-col">
-      {cartao}
-      <div className="absolute right-[calc(var(--pad-card)-6px)] top-[calc(var(--pad-card)-6px)] flex">{acaoCanto}</div>
-    </div>
   );
 }
 

@@ -125,13 +125,13 @@ describe("termo de uso — núcleo", () => {
   it("cláusulas automáticas seguem as configurações", async () => {
     const cl = clausulasAutomaticas(ctx);
     const ids = cl.map((c) => c.id);
-    assert.deepEqual(ids, ["aparelhos", "sessao", "registros", "protecao", "presenca", "email", "lgpd", "aceite"]);
+    assert.deepEqual(ids, ["aparelhos", "sessao", "registros", "navegador", "protecao", "presenca", "email", "lgpd", "aceite"]);
     assert.match(cl[0].texto, /no máximo 3 aparelhos/);
     assert.match(cl[0].texto, /15 dias/);
     assert.match(cl[1].texto, /30 minutos/);
     assert.match(cl.find((c) => c.id === "lgpd")?.texto ?? "", /Fulano · dpo@x/);
     const sem = clausulasAutomaticas({ ...ctx, protecao: { ...ctx.protecao, ligada: false }, presenca: false, email: false });
-    assert.deepEqual(sem.map((c) => c.id), ["aparelhos", "sessao", "registros", "lgpd", "aceite"]);
+    assert.deepEqual(sem.map((c) => c.id), ["aparelhos", "sessao", "registros", "navegador", "lgpd", "aceite"]);
     assert.notEqual(await assinaturaClausulas(cl), await assinaturaClausulas(sem));
   });
   it("monta, faz hash e sela", async () => {

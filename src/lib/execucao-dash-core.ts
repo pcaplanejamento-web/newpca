@@ -75,7 +75,16 @@ export const ROTULO_SEM_EMPENHO = "Sem empenho no sistema";
 export type Granularidade = "auto" | Exclude<GranularidadeData, "ano">;
 
 /** Situação de um TIPO de card (a faixa de confiança). */
-export type MetaExec = { tipo: "empenhos" | "liquidacoes" | "pagamentos"; cards: number; atualizado: string | null; lendo: number; problemas: number };
+export type MetaExec = {
+  tipo: "empenhos" | "liquidacoes" | "pagamentos";
+  cards: number;
+  atualizado: string | null;
+  lendo: number;
+  problemas: number;
+  /** O INTERVALO MÍNIMO entre atualizações: nenhum card da etapa pode começar outra importação antes de `ate` (o texto diz
+   * quando) — null = algum pode. */
+  intervalo?: { ate: string; texto: string } | null;
+};
 
 /** O que a rota entrega (TEXTO JSON montado no banco). */
 export type PacoteExec = {

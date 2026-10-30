@@ -18,5 +18,5 @@ export default async function PcaPage() {
   // Só os PCAs do GRUPO ATIVO (Grupos → PCAs do grupo; o ADM, todos).
   const permitidos = pcasDoAcesso(r.acesso);
   const pcas = permitidos ? todos.filter((p) => permitidos.has(p.id)) : todos;
-  return <PcaModuleView podeCriar={r.pode.configurar} pcas={filtro ? pcas.filter((p) => p.id === filtro.id) : pcas} filtro={filtro?.nome ?? null} />;
+  return <PcaModuleView podeCriar={r.pode.configurar} pcas={filtro ? pcas.filter((p) => p.id === filtro.id) : pcas} />;
 }

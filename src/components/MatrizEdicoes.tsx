@@ -25,7 +25,7 @@ export function MatrizEdicoes({ valor, original, onChange }: { valor: DetalhesPa
   const mudar = (t: TelaEdicoes, op: OperacaoEdicao, ligado: boolean) =>
     onChange?.(coerceDetalhes({ ...v, edicoes: { ...v.edicoes, [t]: { ...v.edicoes[t], [op]: ligado } } }));
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 overflow-x-auto">
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-border text-[12px] text-muted">

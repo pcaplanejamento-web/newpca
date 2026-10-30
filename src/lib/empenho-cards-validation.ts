@@ -26,6 +26,8 @@ export const configImportacoesSchema = z.strictObject({
   quedaSoma: z.number().int(),
   quedaRegistros: z.number().int(),
   removidos: z.enum(["marcar", "apagar"]),
+  /** O intervalo mínimo entre atualizações (min); ausente = mantém o gravado. */
+  intervaloMin: z.number().int().optional(),
   /** Quais importações atualizam sozinhas (id do card → anos); ausente = mantém a gravada; null = todas (o legado). */
   automaticas: z.record(z.string().regex(/^[1-9]\d{0,9}$/), z.array(z.number().int()).max(10)).nullable().optional(),
 });
@@ -97,6 +99,8 @@ export const importarCardSchema = z.discriminatedUnion("acao", [
     linhas: z.array(z.unknown()).max(MAX_LINHAS_PARTE),
     // Os IGUAIS ao gravado: só a chave e a assinatura (conferidos no banco — `paresDaParte`/`comandoParesIguais`).
     iguais: z.array(z.unknown()).max(MAX_PARES_PARTE).optional(),
+    // O SHA-256 dos bytes da resposta (só na última parte): a referência do pulo da página idêntica na automática.
+    assinatura: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(),
     resumo: z
       .strictObject({
         status: z.number().int().min(0).max(999).nullable(),
@@ -112,6 +116,8 @@ export const importarCardSchema = z.discriminatedUnion("acao", [
   }),
   z.strictObject({ acao: z.literal("concluir"), lote: z.number().int().positive(), condutor, aceitarQueda: z.boolean().optional() }),
   z.strictObject({ acao: z.literal("pausar"), lote: z.number().int().positive(), condutor }),
+  // O BATIMENTO de quem conduz (a cada minuto, também esperando a confirmação da queda): a trava nunca vence no meio.
+  z.strictObject({ acao: z.literal("manter"), lote: z.number().int().positive(), condutor }),
   z.strictObject({ acao: z.literal("cancelar"), lote: z.number().int().positive(), condutor: condutor.optional(), motivo: z.string().trim().max(300).optional(), falhou: z.boolean().optional() }),
 ]);
 

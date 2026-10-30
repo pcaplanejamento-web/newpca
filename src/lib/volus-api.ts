@@ -1,0 +1,206 @@
+import { caminhoExtrato, codigoEmpresa, HOST_AUTH_VOLUS, HOST_EXTRATO_VOLUS, mensagemStatusVolus, type TipoTransacao, texto } from "./volus-core.ts";
+
+/**
+ * Cliente MÍNIMO da API da Vólus — puro e testável (o `fetch` é injetável). Só os hosts FIXOS (`auth.api.volus.com` e
+ * `extrato.api.volus.com`), credenciais no corpo do formulário e o token no cabeçalho `Authorization` (nunca na URL nem nos
+ * logs). O token (1 h) fica na memória do processo e é renovado 2 min antes de vencer. O extrato é lido em STREAMING com
+ * teto de bytes: passou do teto, a leitura PARA e devolve o tamanho — quem chama divide o período (a resposta não tem
+ * paginação e ler um JSON grande estoura a CPU do Worker).
+ */
+
+export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+
+const TEMPO_AUTH_MS = 15_000;
+/** O tempo de UM extrato inteiro — da chamada ao fim do corpo (a resposta lenta não passa da trava do cursor). */
+export const TEMPO_EXTRATO_MS = 25_000;
+
+/** Falha de uma chamada à Vólus: `status` HTTP (0 = rede/tempo); `transitorio` = vale tentar de novo depois. */
+export class ErroVolus extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ErroVolus";
+    this.status = status;
+  }
+  get transitorio() {
+    return this.status === 0 || this.status === 429 || this.status >= 500;
+  }
+  /** A Vólus não respondeu A TEMPO (o tempo esgotado aqui ou o 522/524 do proxy dela): um período MENOR responde. */
+  get lento() {
+    return this.message === MSG_TEMPO || this.status === 522 || this.status === 524;
+  }
+}
+const MSG_TEMPO = "A Vólus demorou demais para responder.";
+
+export type EmpresaVolus = { id: string; nome: string };
+type Token = { token: string; vence: number; empresas: EmpresaVolus[] };
+const tokens = new Map<string, Token>();
+/** A autenticação EM CURSO por credencial: pedidos paralelos com o token vencido esperam a MESMA (um POST só). */
+const autenticando = new Map<string, Promise<Token>>();
+
+/**
+ * Até quantos bytes a resposta grande demais é MEDIDA (só contados, sem decodificar — custo de CPU desprezível) para dividir
+ * o período de uma vez no tamanho certo. Sem medir, a resposta sem `Content-Length` (comprimida) parecia ter só o teto e
+ * o período era dividido ao meio, de novo e de novo (um mês de abastecimentos = 4 níveis de pedidos jogados fora).
+ */
+export const MAX_BYTES_MEDIR = 16_000_000;
+
+/** A chave da memória do token: o Client ID + uma assinatura do segredo (o segredo em si nunca fica como chave). */
+function chaveDaCredencial(clientId: string, clientSecret: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x9e3779b9;
+  for (let i = 0; i < clientSecret.length; i++) {
+    const c = clientSecret.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x01000193) ^ (a >>> 13);
+  }
+  return `${clientId}:${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
+}
+
+/** O resultado da leitura de um extrato: o texto inteiro, ou `grande` (passou do teto — `bytes` = o que já tinha vindo). */
+export type Extrato = { grande: false; texto: string; bytes: number; ms: number } | { grande: true; bytes: number; ms: number };
+
+export function clienteVolus({ clientId, clientSecret, fetch: buscar = (url, init) => fetch(url, init), agora = () => Date.now() }: { clientId: string; clientSecret: string; fetch?: FetchLike; agora?: () => number }) {
+  // A memória do token é por CREDENCIAL (trocar o segredo não reaproveita o token da anterior).
+  const chaveToken = chaveDaCredencial(clientId, clientSecret);
+  /** A chamada com o TEMPO valendo até `limpar()` — quem lê o corpo só limpa no fim (a resposta que chega devagar também
+   * esgota o tempo, nunca segura a leitura além da trava). */
+  async function chamar(url: string, init: RequestInit, tempoMs: number): Promise<{ r: Response; limpar: () => void }> {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), tempoMs);
+    const limpar = () => clearTimeout(t);
+    try {
+      return { r: await buscar(url, { ...init, signal: ctl.signal, redirect: "manual" }), limpar };
+    } catch (e) {
+      limpar();
+      throw erroDaRede(e);
+    }
+  }
+
+  async function chamarAuth(url: string, init: RequestInit, tempoMs: number) {
+    try {
+      return await chamar(url, init, tempoMs);
+    } catch (e) {
+      if (e instanceof ErroVolus && e.lento) throw new ErroVolus("A autenticação da Vólus demorou demais para responder.", 0);
+      throw e;
+    }
+  }
+
+  /** O token (da memória, se ainda vale) + as empresas (contratos) que a credencial alcança. */
+  async function autenticar(forcar = false): Promise<Token> {
+    const guardado = tokens.get(chaveToken);
+    if (!forcar && guardado && agora() < guardado.vence - 120_000) return guardado;
+    const emCurso = autenticando.get(chaveToken);
+    if (emCurso) return emCurso;
+    const p = novoToken().finally(() => autenticando.delete(chaveToken));
+    autenticando.set(chaveToken, p);
+    return p;
+  }
+
+  async function novoToken(): Promise<Token> {
+    // O tempo esgotado na AUTENTICAÇÃO não é o extrato lento: nunca encolhe o período (só tenta de novo depois).
+    const { r, limpar } = await chamarAuth(
+      `${HOST_AUTH_VOLUS}/v1/partners/auth/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }).toString(),
+      },
+      TEMPO_AUTH_MS,
+    );
+    const corpo = await r.text().catch(() => "").finally(limpar);
+    if (r.status >= 300 && r.status < 400) throw new ErroVolus(`A Vólus redirecionou a autenticação (${r.status}).`, r.status);
+    if (!r.ok) throw new ErroVolus(mensagemStatusVolus(r.status, corpo), r.status);
+    let j: Record<string, unknown>;
+    try {
+      j = JSON.parse(corpo) as Record<string, unknown>;
+    } catch {
+      throw new ErroVolus("A autenticação da Vólus respondeu num formato inesperado.", r.status);
+    }
+    const dados = (j.data && typeof j.data === "object" ? j.data : j) as Record<string, unknown>;
+    const token = texto(dados.access_token, 8000);
+    if (!token) throw new ErroVolus("A autenticação da Vólus respondeu sem o token.", r.status);
+    const empresas = (Array.isArray(dados.companies) ? dados.companies : [])
+      .map((c) => {
+        const x = (c ?? {}) as Record<string, unknown>;
+        return { id: codigoEmpresa(x.id ?? x.company_id), nome: texto(x.name ?? x.company_name, 200) ?? "" };
+      })
+      .filter((c) => c.id);
+    const t: Token = { token, vence: agora() + (Number(dados.expires_in) > 0 ? Number(dados.expires_in) : 3600) * 1000, empresas };
+    tokens.set(chaveToken, t);
+    return t;
+  }
+
+  /** Um extrato (empresa × período), com teto de `maxBytes`. 401 renova o token UMA vez. */
+  async function extrato(tipo: TipoTransacao, contrato: string, inicio: string, fim: string, maxBytes: number): Promise<Extrato> {
+    const params = new URLSearchParams({ start_date: inicio, end_date: fim, company_id: contrato });
+    const url = `${HOST_EXTRATO_VOLUS}${caminhoExtrato(tipo)}?${params.toString()}`;
+    const t0 = agora();
+    for (let tentativa = 0; ; tentativa++) {
+      const { token } = await autenticar(tentativa > 0);
+      const { r, limpar } = await chamar(url, { method: "GET", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, TEMPO_EXTRATO_MS);
+      try {
+        if (r.status === 401 && tentativa === 0) {
+          await r.body?.cancel().catch(() => {});
+          continue;
+        }
+        if (r.status >= 300 && r.status < 400) throw new ErroVolus(`A Vólus redirecionou o extrato (${r.status}).`, r.status);
+        if (!r.ok) throw new ErroVolus(mensagemStatusVolus(r.status, await r.text().catch(() => "")), r.status);
+        const comprimento = Number(r.headers.get("content-length"));
+        if (Number.isFinite(comprimento) && comprimento > maxBytes) {
+          await r.body?.cancel().catch(() => {});
+          return { grande: true, bytes: comprimento, ms: agora() - t0 };
+        }
+        if (!r.body) {
+          const s = await r.text();
+          return s.length > maxBytes ? { grande: true, bytes: s.length, ms: agora() - t0 } : { grande: false, texto: s, bytes: s.length, ms: agora() - t0 };
+        }
+        const leitor = r.body.getReader();
+        const dec = new TextDecoder();
+        let s = "";
+        let lidos = 0;
+        for (;;) {
+          const { done, value } = await leitor.read();
+          if (done) break;
+          lidos += value.byteLength;
+          if (lidos > maxBytes) return { grande: true, bytes: await medirResto(leitor, lidos), ms: agora() - t0 };
+          s += dec.decode(value, { stream: true });
+        }
+        s += dec.decode();
+        return { grande: false, texto: s, bytes: lidos, ms: agora() - t0 };
+      } catch (e) {
+        throw e instanceof ErroVolus ? e : erroDaRede(e);
+      } finally {
+        limpar();
+      }
+    }
+  }
+
+  return { autenticar, extrato };
+}
+
+/** Conta o RESTO da resposta (sem decodificar) até `MAX_BYTES_MEDIR`; passou, cancela e devolve o que contou. */
+async function medirResto(leitor: ReadableStreamDefaultReader<Uint8Array>, lidos: number): Promise<number> {
+  let n = lidos;
+  try {
+    for (;;) {
+      if (n > MAX_BYTES_MEDIR) {
+        await leitor.cancel().catch(() => {});
+        return n;
+      }
+      const { done, value } = await leitor.read();
+      if (done) return n;
+      n += value.byteLength;
+    }
+  } catch {
+    await leitor.cancel().catch(() => {});
+    return n;
+  }
+}
+
+/** A falha de rede ou o TEMPO esgotado (o `abort` do cronômetro, também no meio do corpo). */
+function erroDaRede(e: unknown): ErroVolus {
+  return new ErroVolus((e as Error)?.name === "AbortError" ? MSG_TEMPO : "Sem resposta da Vólus (rede).", 0);
+}
+
+export type ClienteVolus = ReturnType<typeof clienteVolus>;

@@ -1,3 +1,5 @@
+import { brl, dataBR } from "./format.ts";
+
 /**
  * PESQUISA DO SISTEMA — o catálogo ÚNICO dos tipos que o servidor pesquisa (o banner Ctrl+K): o título do grupo, o
  * prefixo/atalho que restringe a pesquisa a ele e o que se pode digitar. Puro (a rota e a tela usam o mesmo).
@@ -7,15 +9,25 @@ export const TIPOS_PESQUISA = [
   { tipo: "dfd", titulo: "DFDs", prefixo: "dfd:", curto: "d:", texto: "DFDs (nº, planejamento, objeto, protocolo)" },
   { tipo: "item", titulo: "Itens", prefixo: "item:", curto: "i:", texto: "Itens dos DFDs (código, descrição)" },
   { tipo: "tarefa", titulo: "Tarefas", prefixo: "tarefa:", curto: "t:", texto: "Tarefas (título, nº do ticket)" },
+  { tipo: "pasta", titulo: "Pastas de quadros", prefixo: "pasta:", curto: "pa:", texto: "Pastas de quadros de Tarefas (nome)" },
   { tipo: "evento", titulo: "Calendário", prefixo: "evento:", curto: "e:", texto: "Eventos do calendário (título, local, descrição)" },
   { tipo: "orcamento", titulo: "Orçamentos", prefixo: "orcamento:", curto: "o:", texto: "Orçamentos (nome, ano)" },
   { tipo: "lancamento", titulo: "Lançamentos do orçamento", prefixo: "lancamento:", curto: "l:", texto: "Lançamentos (ficha, ação, elemento, unidade, função, programa, fonte)" },
   { tipo: "catalogo", titulo: "Catálogo", prefixo: "catalogo:", curto: "c:", texto: "Itens do catálogo (código, descrição)" },
   { tipo: "historico", titulo: "Histórico de compra", prefixo: "historico:", curto: "h:", texto: "Histórico de compra (código, produto, contrato, processo)" },
+  { tipo: "empenho", titulo: "Empenhos", prefixo: "empenho:", curto: "em:", texto: "Empenhos (nº, fornecedor, CPF/CNPJ, histórico, ação, elemento)" },
+  { tipo: "liquidacao", titulo: "Liquidações", prefixo: "liquidacao:", curto: "li:", texto: "Liquidações (nº, nº do empenho, credor, CPF/CNPJ, histórico)" },
+  { tipo: "pagamento", titulo: "Pagamentos", prefixo: "pagamento:", curto: "pg:", texto: "Pagamentos (nº da ordem, nº do empenho, credor, CPF/CNPJ, histórico)" },
+  { tipo: "veiculo", titulo: "Veículos da frota", prefixo: "veiculo:", curto: "ve:", texto: "Veículos da frota (placa, marca, modelo)" },
+  { tipo: "declaracao", titulo: "Declarações do PCA", prefixo: "declaracao:", curto: "de:", texto: "Declarações do PCA (nº, processo, protocolo da Centi, finalidade)" },
+  { tipo: "visao", titulo: "Visões do orçamento", prefixo: "visao:", curto: "vi:", texto: "Visões do orçamento (nome)" },
+  { tipo: "padronizacao", titulo: "Medidas e classificações", prefixo: "medida:", curto: "me:", texto: "Medidas e classificações do Catálogo (sigla, nome, sinônimos, palavras-chave)" },
   { tipo: "documento", titulo: "Documentos", prefixo: "documento:", curto: "do:", texto: "Documentos (nome, arquivo)" },
   { tipo: "usuario", titulo: "Usuários", prefixo: "usuario:", curto: "u:", texto: "Usuários (nome, apelido, e-mail, matrícula) — administração" },
   { tipo: "orgao", titulo: "Órgãos", prefixo: "orgao:", curto: "og:", texto: "Órgãos (nome, sigla) — administração" },
   { tipo: "unidade", titulo: "Unidades", prefixo: "unidade:", curto: "un:", texto: "Unidades (nome, sigla) — administração" },
+  { tipo: "responsavel", titulo: "Responsáveis por DFDs", prefixo: "responsavel:", curto: "re:", texto: "Responsáveis por DFDs (nome, matrícula, cargo) — administração" },
+  { tipo: "importacao", titulo: "Importações da Centi", prefixo: "importacao:", curto: "im:", texto: "Cards de importação (nome) — administração" },
   { tipo: "grupo", titulo: "Grupos", prefixo: "grupo:", curto: "g:", texto: "Grupos de acesso — administração" },
   { tipo: "cadastro", titulo: "Cadastros", prefixo: "cadastro:", curto: "ca:", texto: "Papéis, cargos, situações e feriados — administração" },
   { tipo: "fluxo", titulo: "Automações", prefixo: "automacao:", curto: "au:", texto: "Automações (nome, descrição) — administração" },
@@ -102,6 +114,10 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.ve("dfd") || (p.ve("pca") && p.libera("pca.mesa"));
     case "tarefa":
       return p.ve("tarefas") || p.ve("calendario");
+    case "pasta":
+      return p.ve("tarefas");
+    case "veiculo":
+      return p.ve("veiculos") || p.ve("frotas");
     case "evento":
       return p.ve("calendario");
     case "orcamento":
@@ -114,7 +130,87 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.ve("catalogo") && p.libera("catalogo.historico");
     case "documento":
       return p.ve("documentos");
+    case "declaracao":
+      return p.ve("pca") && p.libera("pca.declaracoes");
+    case "visao":
+      return p.ve("orcamento") && p.libera("orcamento.visoes");
+    case "padronizacao":
+      return p.ve("catalogo") && (p.libera("catalogo.unidades") || p.libera("catalogo.classificacoes"));
+    case "empenho":
+      return p.ve("empenhos");
+    case "liquidacao":
+      return p.ve("liquidacoes");
+    case "pagamento":
+      return p.ve("pagamentos");
     default:
-      return p.admin; // usuário, órgão, unidade, grupo, cadastro, automação
+      return p.admin; // usuário, órgão, unidade, responsável, importação, grupo, cadastro, automação
   }
 }
+
+/** Os tipos da EXECUÇÃO (empenhos, liquidações, pagamentos) — o índice de texto local da pesquisa. */
+export type TipoExecucaoPesquisa = "empenho" | "liquidacao" | "pagamento";
+export const TIPOS_EXECUCAO_PESQUISA: TipoExecucaoPesquisa[] = ["empenho", "liquidacao", "pagamento"];
+
+/** Teto de registros por tipo no índice de texto da execução (os MAIS RECENTES; os anteriores seguem pelo prefixo e pelo nº exato). */
+export const MAX_INDICE_EXECUCAO = 20000;
+
+/** Validade do índice da execução (na memória do Worker e da aba): fixa, não pela versão — a automática promove o dia todo. */
+export const VALIDADE_INDICE_EXECUCAO_MS = 6 * 60 * 60_000;
+
+type Txt = string | null;
+/** A tupla do banco: empenho `[id, ano, nº, fornecedor, CPF/CNPJ, valor, data]`; liquidação `[id, ano, nº, nº empenho, credor, CPF/CNPJ, valor, data]`; pagamento `[id, ano, ordem, nº empenho, credor, CPF/CNPJ, valor, data]`. */
+export type TuplaExecucao = (number | Txt)[];
+
+/** O resultado de um empenho/liquidação/pagamento — o MESMO no SQL (`pesquisarExecucao`) e no índice local. */
+export function resultadoEmpenho(r: { id: number; ano: number; numero: string; data: Txt; fornecedor: Txt; orgao?: Txt; valor: number | null }): ResultadoPesquisa {
+  return {
+    id: r.id,
+    rotulo: `Empenho ${r.numero}/${r.ano} · ${(r.fornecedor ?? "Sem fornecedor").slice(0, 80)}`,
+    detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), r.orgao ?? ""].filter(Boolean).join(" · "),
+    href: `/painel/empenhos?ano=${r.ano}&abrir=${r.id}`,
+  };
+}
+export function resultadoLiquidacao(r: { id: number; ano: number; numero: Txt; data: Txt; empenho: string; credor: Txt; valor: number | null }): ResultadoPesquisa {
+  return {
+    id: r.id,
+    rotulo: `Liquidação ${r.numero ?? r.id}/${r.ano} · ${(r.credor ?? "Sem credor").slice(0, 80)}`,
+    detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "),
+    href: `/painel/liquidacoes?abrir=${r.id}`,
+  };
+}
+export function resultadoPagamento(r: { id: number; ordem: string; data: Txt; empenho: string; credor: Txt; valor: number | null }): ResultadoPesquisa {
+  return {
+    id: r.id,
+    rotulo: `Ordem de pagamento ${r.ordem} · ${(r.credor ?? "Sem credor").slice(0, 80)}`,
+    detalhe: [r.data ? dataBR(r.data) : "", brl(r.valor), `Empenho ${r.empenho}`].filter(Boolean).join(" · "),
+    href: `/painel/pagamentos?abrir=${r.id}`,
+  };
+}
+
+const s = (v: number | Txt | undefined): Txt => (v == null ? null : String(v));
+const n = (v: number | Txt | undefined): number => Number(v ?? 0) || 0;
+
+/** As tuplas do índice da execução viram linhas do índice local (os campos de texto e os de número, como o SQL). */
+export function linhasDaExecucao(tipo: TipoExecucaoPesquisa, tuplas: TuplaExecucao[]): LinhaIndice[] {
+  return tuplas.map((t) => {
+    if (tipo === "empenho") {
+      const [id, ano, numero, forn, cpf, valor, data] = t;
+      const r = resultadoEmpenho({ id: n(id), ano: n(ano), numero: s(numero) ?? "", data: s(data), fornecedor: s(forn), valor: n(valor) });
+      return { ...r, campos: [s(numero), s(forn), s(cpf)].filter((x): x is string => !!x), numeros: [s(numero), s(cpf)].filter((x): x is string => !!x) };
+    }
+    if (tipo === "liquidacao") {
+      const [id, ano, numero, emp, credor, cpf, valor, data] = t;
+      const r = resultadoLiquidacao({ id: n(id), ano: n(ano), numero: s(numero), data: s(data), empenho: s(emp) ?? "", credor: s(credor), valor: n(valor) });
+      return { ...r, campos: [s(numero), s(emp), s(credor), s(cpf)].filter((x): x is string => !!x), numeros: [s(numero), s(emp), s(cpf)].filter((x): x is string => !!x) };
+    }
+    const [id, , ordem, emp, credor, cpf, valor, data] = t;
+    const r = resultadoPagamento({ id: n(id), ordem: s(ordem) ?? "", data: s(data), empenho: s(emp) ?? "", credor: s(credor), valor: n(valor) });
+    return { ...r, campos: [s(ordem), s(emp), s(credor), s(cpf)].filter((x): x is string => !!x), numeros: [s(ordem), s(emp), s(cpf)].filter((x): x is string => !!x) };
+  });
+}
+
+/**
+ * O termo merece o índice de TEXTO da execução: sem prefixo, com letras e ao menos 3 caracteres (o número exato segue
+ * pelo servidor, que acha todos os anos).
+ */
+export const pedeIndiceExecucao = (termo: string) => termo.trim().length >= 3 && /\p{L}/u.test(termo);

@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { type CSSProperties, type ReactNode, type RefObject, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ehDesktop, tokenPx } from "./espacamento";
 
 /**
@@ -50,6 +50,13 @@ export function useAlturaAteOFim(ref: RefObject<HTMLElement | null>, ativo: bool
     window.addEventListener("resize", calc);
     const ro = new ResizeObserver(calc);
     ro.observe(document.body);
+    // O que fica ACIMA do bloco muda de altura sem mudar o `body` (ex.: "Mais indicadores" abrindo e fechando numa página
+    // que já cabe no display): os IRMÃOS anteriores de cada ancestral até o `<main>` também são observados — a altura
+    // acompanha a transição quadro a quadro e o fim do bloco fica sempre rente ao fim do display.
+    for (let n: HTMLElement | null = ref.current; n && n !== document.body; n = n.parentElement) {
+      for (let irmao = n.previousElementSibling; irmao; irmao = irmao.previousElementSibling) ro.observe(irmao);
+      if (n.tagName === "MAIN") break;
+    }
     return () => {
       window.removeEventListener("resize", calc);
       ro.disconnect();
@@ -111,4 +118,18 @@ export function useAlturaTela(ref: RefObject<HTMLElement | null>, minimo = 460, 
     };
   }, [ref, minimo, reserva]);
   return h;
+}
+
+/**
+ * No desktop, o conteúdo vai no máximo até o fim do display e rola por dentro — a página nunca rola (o cabeçalho fica à
+ * vista). As tabelas `scrollInterno` já medem até o fim e cabem sem rolar aqui. Empenhos e Frotas.
+ */
+export function AteOFim({ children, className = "" }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const altura = useAlturaTela(ref, 240);
+  return (
+    <div ref={ref} className={`space-y-[var(--gap-block)] lg:max-h-[var(--h-aba)] lg:overflow-y-auto ${className}`} style={altura ? ({ "--h-aba": `${altura}px` } as CSSProperties) : undefined}>
+      {children}
+    </div>
+  );
 }

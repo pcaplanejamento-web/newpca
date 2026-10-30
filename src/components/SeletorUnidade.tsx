@@ -53,7 +53,7 @@ export function SeletorUnidade({
       trigger={
         <>
           {trocando ? <IconSpinner className="h-3.5 w-3.5" /> : <IconBuilding className="h-3.5 w-3.5 opacity-70" />}
-          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={rotulo}>
+          <span className="max-w-[9rem] truncate sm:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap" title={rotulo}>
             {ativa?.codigo && todas ? ativa.codigo : rotulo}
           </span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
@@ -82,7 +82,7 @@ function ListaUnidades({
   const linha = (ativa: boolean) =>
     `flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left lg:min-h-0 ${ativa ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2"}`;
   return (
-    <div className="flex max-h-[min(70vh,440px)] w-full flex-col">
+    <div className="flex max-h-[min(70dvh,440px)] w-full flex-col">
       {unidades.length > 8 && (
         <div className="border-b border-border p-2">
           <input

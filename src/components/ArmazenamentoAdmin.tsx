@@ -5,19 +5,22 @@ import { useCallback, useEffect, useState } from "react";
 import type { Armazenamento, TabelaArmazenamento } from "@/lib/armazenamento";
 import type { MonitoramentoArmazenamento, UsoOficial } from "@/lib/cf-analytics";
 import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
+import { estatisticasDados } from "@/lib/dados-cliente";
 import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { BotaoAtualizar } from "./BotaoAtualizar";
-import { IconDatabase, IconImage, IconLayers, IconTrash } from "./icons";
+import { IconImage, IconLayers, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { MonitoramentoWorker } from "./MonitoramentoWorker";
 import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
 import { useCanalGrupo } from "./CanalGrupo";
 import { SaudeDados } from "./SaudeDados";
-import { SkeletonLinhas } from "./Skeleton";
+import { EsqueletoIndicadores, GRADE_KPI } from "./EsqueletoTela";
+import { StatMini } from "./StatMini";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
 
@@ -37,6 +40,7 @@ export function ArmazenamentoAdmin() {
   const [erro, setErro] = useState<string | null>(null);
   const [recarregando, setRecarregando] = useState(false);
   const [expurgando, setExpurgando] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async (fresco = false) => {
     setErro(null);
@@ -110,10 +114,9 @@ export function ArmazenamentoAdmin() {
 
   async function expurgar() {
     if (!dados) return;
-    if (!confirm(`Expurgar ${dados.sessoes.expiradas} sessão(ões) expirada(s)? Elas já estão vencidas — ninguém é deslogado.`))
+    if (!(await confirmar({ titulo: `Expurgar ${dados.sessoes.expiradas} sessão(ões) expirada(s)?`, texto: "Elas já estão vencidas — ninguém é deslogado.", confirmar: "Expurgar" })))
       return;
     setExpurgando(true);
-    setErro(null);
     try {
       const r = await fetch("/api/admin/armazenamento", {
         method: "POST",
@@ -125,25 +128,15 @@ export function ArmazenamentoAdmin() {
       toast.success(`${num(j.removidas ?? 0)} sessão(ões) expirada(s) removida(s).`);
       await carregar();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Não foi possível expurgar.";
-      setErro(msg);
-      toast.error(msg);
+      toast.error(e instanceof Error ? e.message : "Não foi possível expurgar.");
     } finally {
       setExpurgando(false);
     }
   }
 
   const cabecalho = (
-    <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-          <IconDatabase className="h-5 w-5 text-accent" />
-          Armazenamento
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          Uso do banco de dados (D1) e do Worker: tamanho por tabela, consumo diário, monitoramento e manutenção.
-        </p>
-      </div>
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <h1 className="sr-only">Armazenamento</h1>
       <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando o armazenamento e o monitoramento…" onClick={() => void recarregar()} />
     </div>
   );
@@ -151,13 +144,16 @@ export function ArmazenamentoAdmin() {
   if (dados === null) {
     return (
       <div className="space-y-[var(--gap-block)]">
-        {cabecalho}
         {erro ? (
-          <Callout kind="danger">{erro}</Callout>
+          <>
+            {cabecalho}
+            <Callout kind="danger">{erro}</Callout>
+          </>
         ) : (
-          <div className="rounded-card border border-border p-[var(--pad-card)]">
-            <SkeletonLinhas linhas={6} />
-          </div>
+          <>
+            <EsqueletoIndicadores />
+            {cabecalho}
+          </>
         )}
         {secaoSaude}
       </div>
@@ -229,11 +225,9 @@ export function ArmazenamentoAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {cabecalho}
-      {erro && <Callout kind="danger">{erro}</Callout>}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {confirmacao}
+      {/* Os indicadores primeiro; a barra (recarregar) logo abaixo. */}
+      <div className={GRADE_KPI}>
         <KpiStat
           label="Tamanho do banco"
           value={formatBytes(dados.totalBytes)}
@@ -253,6 +247,10 @@ export function ArmazenamentoAdmin() {
           cor={dados.sessoes.expiradas > 0 ? "var(--warn)" : "var(--ok)"}
         />
       </div>
+      {cabecalho}
+      {erro && <Callout kind="danger">{erro}</Callout>}
+
+      <DadosNoNavegador />
 
       {/* Uso diário oficial (Cloudflare) — leituras/escritas vs. tetos do plano free */}
       <section className="space-y-2">
@@ -392,5 +390,28 @@ export function ArmazenamentoAdmin() {
         {dados.geradoEm ? new Date(dados.geradoEm).toLocaleString("pt-BR") : "—"}.
       </p>
     </div>
+  );
+}
+
+/** De onde vieram as leituras das telas NESTA aba: memória, o aparelho (IndexedDB) ou o servidor — a prova do ganho. */
+function DadosNoNavegador() {
+  const [e, setE] = useState<ReturnType<typeof estatisticasDados> | null>(null);
+  useEffect(() => {
+    setE(estatisticasDados());
+    const t = setInterval(() => setE(estatisticasDados()), 5000);
+    return () => clearInterval(t);
+  }, []);
+  if (!e) return null;
+  const total = e.memoria + e.aparelho + e.servidor;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Dados neste navegador (esta aba)</h2>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatMini label="Sem pedir ao servidor" value={total ? pct(e.memoria + e.aparelho, total) : "—"} hint={`${num(total)} leituras`} tone="ok" />
+        <StatMini label="Da memória da aba" value={num(e.memoria)} />
+        <StatMini label="Do aparelho" value={num(e.aparelho)} />
+        <StatMini label="Do servidor" value={num(e.servidor)} hint={e.servidor ? `média ${num(Math.round(e.msServidor / e.servidor))} ms` : undefined} />
+      </div>
+    </section>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apagarDadosLocais } from "@/lib/dados-cliente";
 import type { TextosAcesso } from "@/lib/acesso-core";
 import type { ModoAcesso } from "@/lib/modo-acesso";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
@@ -49,6 +50,10 @@ export function TelaAcesso({
   semCodigo: boolean;
   erroInicial: string | null;
 }) {
+  // Chegou à tela de acesso (saiu, a sessão caiu): nada de outra sessão fica guardado neste navegador.
+  useEffect(() => {
+    void apagarDadosLocais();
+  }, []);
   const [modo, setModo] = useState<ModoAcesso>(modoInicial);
   // A mensagem da volta (Google/erro na URL) vale só para o modo em que chegou.
   const [erroDoModo, setErroDoModo] = useState<{ modo: ModoAcesso; texto: string } | null>(erroInicial ? { modo: modoInicial, texto: erroInicial } : null);

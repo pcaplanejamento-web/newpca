@@ -177,6 +177,44 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       configurar: "Publicar visões dos filtros para todos e moderar as visões públicas de outras pessoas.",
     },
   },
+  frotas: {
+    na: "em Frotas",
+    a: "a Frotas",
+    acoes: {
+      visualizar: "Abrir o painel da frota (combustível e manutenção da Vólus): indicadores, gráficos, consumo, alertas e a ficha de cada veículo.",
+      exportar: "Baixar as tabelas do painel em XLSX e PDF e imprimir a ficha do veículo.",
+      configurar: "Publicar visões dos filtros para todos (a integração com a Vólus fica em Configurações → Importações — só o Administrador).",
+    },
+  },
+  combustivel: {
+    na: "em Combustível",
+    a: "a Combustível",
+    acoes: {
+      visualizar: "Abrir Combustível: a tabela de todos os abastecimentos importados da Vólus.",
+      exportar: "Baixar a tabela em XLSX e PDF.",
+      configurar: "Publicar edições da tabela para todos.",
+    },
+  },
+  manutencao: {
+    na: "em Manutenção",
+    a: "a Manutenção",
+    acoes: {
+      visualizar: "Abrir Manutenção: a tabela de todas as ordens de manutenção importadas da Vólus.",
+      exportar: "Baixar a tabela em XLSX e PDF.",
+      configurar: "Publicar edições da tabela para todos.",
+    },
+  },
+  veiculos: {
+    na: "em Veículos",
+    a: "a Veículos",
+    acoes: {
+      visualizar: "Abrir o cadastro dos veículos e a ficha de cada um.",
+      manipular: "Editar o cadastro (tipo, classificação, ano, situação, origem, FIPE, locação, contrato, tanque, lotação), também em massa.",
+      importar: "Atualizar o cadastro por planilha (.xlsx ou .csv).",
+      exportar: "Baixar a tabela em XLSX e PDF.",
+      configurar: "Cadastrar as classificações dos veículos e publicar edições da tabela para todos.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;

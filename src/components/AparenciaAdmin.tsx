@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useConfirmacao } from "@/components/Confirmacao";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/Button";
 import { ColorField } from "@/components/ColorField";
@@ -9,6 +11,10 @@ import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
 import { IconBell, IconClipboard, IconFile, IconLayers, IconTrash, IconUser } from "@/components/icons";
 import { type Aparencia, aparenciaToCss, DEFAULT_CORES, TOKENS_COR } from "@/lib/theme";
+
+/** O que a prévia muda no <html> (devolvido ao sair da tela sem salvar). */
+const ATTRS_PREVIA = ["data-density", "data-motion", "data-elevation", "data-kpi", "data-icons", "data-icon-tint", "data-icon-anim"];
+const PROPS_PREVIA = ["--icon-stroke", "--icon-tint"];
 
 // Painel de Personalização do ADM (spec §39). Só componentes do design-system.
 // Edita tokens com preview AO VIVO (injeta um <style> que espelha a produção) e
@@ -58,10 +64,24 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   const [iconTintOn, setIconTintOn] = useState(!!inicial.icones?.tint);
   const [iconTint, setIconTint] = useState(inicial.icones?.tint ?? "#4f46e5");
   const [salvando, setSalvando] = useState(false);
+  const router = useRouter();
+  const { confirmar, confirmacao } = useConfirmacao();
+  /** Restaurou o padrão: a próxima prévia aplicada passa a ser o "salvo". */
+  const retratarDepois = useRef(false);
 
   useEffect(() => setMounted(true), []);
   const tema: "light" | "dark" = mounted && resolvedTheme === "dark" ? "dark" : "light";
 
+  // A PRÉVIA mexe no <html>: ao sair da tela, volta ao que estava (o salvo — `salvo` é renovado ao salvar/restaurar), senão
+  // uma prévia não salva ficaria valendo nas outras telas até recarregar a página.
+  const salvo = useRef<{ attrs: Record<string, string | null>; props: Record<string, string> } | null>(null);
+  const retratar = useCallback(() => {
+    const root = document.documentElement;
+    salvo.current = {
+      attrs: Object.fromEntries(ATTRS_PREVIA.map((a) => [a, root.getAttribute(a)])),
+      props: Object.fromEntries(PROPS_PREVIA.map((p) => [p, root.style.getPropertyValue(p)])),
+    };
+  }, []);
   // Preview ao vivo: injeta o mesmo CSS que a produção usaria.
   useEffect(() => {
     let el = document.getElementById("preview-aparencia") as HTMLStyleElement | null;
@@ -90,13 +110,23 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
     else root.removeAttribute("data-icons");
     if (iconAnim === "hover") root.setAttribute("data-icon-anim", "hover");
     else root.removeAttribute("data-icon-anim");
-  }, [cores, radius, density, motion, elevation, kpi, iconStroke, iconFill, iconAnim, iconTintOn, iconTint]);
-  useEffect(
-    () => () => {
+    if (retratarDepois.current) {
+      retratarDepois.current = false;
+      retratar();
+    }
+  }, [cores, radius, density, motion, elevation, kpi, iconStroke, iconFill, iconAnim, iconTintOn, iconTint, retratar]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: o retrato é tirado UMA vez, antes da 1ª prévia.
+  useLayoutEffect(() => {
+    retratar();
+    return () => {
       document.getElementById("preview-aparencia")?.remove();
-    },
-    [],
-  );
+      const root = document.documentElement;
+      const r = salvo.current;
+      if (!r) return;
+      for (const [a, v] of Object.entries(r.attrs)) v == null ? root.removeAttribute(a) : root.setAttribute(a, v);
+      for (const [p, v] of Object.entries(r.props)) v ? root.style.setProperty(p, v) : root.style.removeProperty(p);
+    };
+  }, []);
 
   const setCor = (token: string, hex: string) =>
     setCores((c) => ({ ...c, [tema]: { ...c[tema], [token]: hex } }));
@@ -122,6 +152,8 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
       toast.success("Aparência salva — já vale para todos.");
+      retratar();
+      router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
@@ -130,7 +162,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
   }
 
   async function restaurar() {
-    if (!confirm("Restaurar a aparência padrão? As personalizações atuais serão substituídas.")) return;
+    if (!(await confirmar({ titulo: "Restaurar a aparência padrão?", texto: "As personalizações atuais serão substituídas.", confirmar: "Restaurar", perigo: true }))) return;
     setSalvando(true);
     try {
       const res = await fetch("/api/admin/aparencia", { method: "DELETE" });
@@ -146,7 +178,9 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       setIconAnim("none");
       setIconTintOn(false);
       setIconTint("#4f46e5");
+      retratarDepois.current = true;
       toast.success("Aparência restaurada ao padrão.");
+      router.refresh();
     } catch {
       toast.error("Erro ao restaurar.");
     } finally {
@@ -318,8 +352,9 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Personalize a identidade visual — vale para toda a plataforma.</p>
+      {confirmacao}
+      <h1 className="sr-only">Aparência</h1>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <Button variant="ghost" icon={<IconLayers className="h-4 w-4" />} href="/painel/design-system">
             Ver biblioteca

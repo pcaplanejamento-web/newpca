@@ -1,5 +1,8 @@
 "use client";
 
+import { SkeletonLinhas } from "@/components/Skeleton";
+
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resumoEstado } from "@/lib/dfd-tratamento";
 import { hojeISO } from "@/lib/reparticao-responsaveis";
@@ -25,6 +28,7 @@ import {
   usuarioSugerido,
   type VinculoComPessoa,
 } from "@/lib/responsaveis-planilha-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
@@ -71,9 +75,8 @@ export function usePlanilhaResponsaveis() {
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch("/api/admin/responsaveis");
-      const j = (await r.json().catch(() => ({}))) as Resposta;
-      if (!r.ok || !j.ok || !j.planilha) throw new Error(j.error ?? "Não foi possível carregar os responsáveis.");
+      const j = await lerJsonGuardado<Resposta>("adm.responsaveis", "/api/admin/responsaveis", "Não foi possível carregar os responsáveis.");
+      if (!j.planilha) throw new Error("Não foi possível carregar os responsáveis.");
       setPlanilha(j.planilha);
       setErro(null);
     } catch (e) {
@@ -266,6 +269,15 @@ export function BotaoExonerados({ ctx, ativo, onAlternar, className }: { ctx: Ct
 export function PlanilhaResponsaveis({ ctx, orgaoId, exonerados = false }: { ctx: CtxPlanilha; orgaoId?: number; exonerados?: boolean }) {
   const { planilha, grupos, hoje } = ctx;
   const [aberta, setAberta] = useState<number | "nova" | null>(null);
+  // A PESQUISA DO SISTEMA (`?aba=responsaveis&pessoa=<id>`): abre a pessoa.
+  useAbrirDaUrl(
+    (v) => {
+      const n = Number(v);
+      if (Number.isInteger(n) && n > 0) setAberta(n);
+    },
+    true,
+    "pessoa",
+  );
   const linhas = useMemo<LinhaPessoa[]>(() => {
     if (!planilha) return [];
     const doEscopo = (v: VinculoComPessoa) =>
@@ -734,7 +746,7 @@ function abrirNoLugarQueVale(grupo: readonly { orgaoId: number | null; repartica
 export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo: { orgaoId: number } | { reparticaoId: number }; nota?: string }) {
   const { planilha, grupos, hoje, ocupado, acoes } = ctx;
   const [editor, setEditor] = useState<AberturaVinculo | null>(null);
-  if (!planilha) return <p className="text-[13px] text-muted">Carregando os responsáveis…</p>;
+  if (!planilha) return <SkeletonLinhas linhas={8} />;
   const a = "orgaoId" in alvo ? { orgaoId: alvo.orgaoId, reparticaoId: null } : { orgaoId: null, reparticaoId: alvo.reparticaoId };
   const valor = a.orgaoId != null ? `o${a.orgaoId}` : `u${a.reparticaoId}`;
   const vinculos = grupos.get(valor) ?? [];

@@ -8,7 +8,7 @@ import { linkImportacoes } from "@/lib/empenho-cards-core";
 import { listarCards } from "@/lib/empenho-cards";
 import { anosEmpenhos, escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { anoEscolhido, chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
-import { consultaVersaoExecucao } from "@/lib/execucao-sql";
+import { consultaVersoesExecucao, versaoDaTelaExecucao } from "@/lib/execucao-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -20,13 +20,13 @@ export default async function EmpenhosPage({ searchParams }: { searchParams: Pro
   if (r.bloqueio) return r.bloqueio;
   const [sp, escopo] = await Promise.all([searchParams, escopoDosEmpenhos()]);
   const cards = await listarCards(escopo, "empenhos");
-  const [anos, edicoes, versao] = await Promise.all([anosEmpenhos(null, escopo), carregarEdicoes(r.acesso.u.id, "empenhos:"), consultaVersaoExecucao(getDb())]);
+  const [anos, edicoes, versao] = await Promise.all([anosEmpenhos(null, escopo), carregarEdicoes(r.acesso.u.id, "empenhos:"), consultaVersoesExecucao(getDb()).then((v) => versaoDaTelaExecucao(v, "empenhos"))]);
   return (
-    <EmpenhosView tipo="empenhos" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("empenhos") : undefined}>
+    <EmpenhosView tipo="empenhos" importacoes={r.acesso.u.admin ? linkImportacoes("empenhos") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
         <EmpenhosTabela
           key={chaveEscopoEmpenhos(escopo)}
-          cardId={null}
+         
           nome="Empenhos - todos os cards"
           cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))}
           escopo={escopo}
@@ -34,7 +34,7 @@ export default async function EmpenhosPage({ searchParams }: { searchParams: Pro
           anoInicial={anoEscolhido(anos, sp.ano)}
           edicoes={edicoes}
           podePublicar={r.pode.configurar}
-          versao={versao}
+          versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`}
         />
       </PermissaoExportar>
     </EmpenhosView>

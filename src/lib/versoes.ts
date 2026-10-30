@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.252.0",
+    versao: "1.265.0",
     data: "2026-10-30",
     titulo: "Gráficos com novo visual: cores vivas, degradês e acabamento refinado",
     mudancas: [
@@ -43,6 +43,403 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "novo", area: "PCA", texto: "A Prioridade dos DFDs virou uma pizza moderna. O raio de cada fatia cresce com o valor e o percentual aparece dentro dela. Tocar numa fatia ou na legenda continua filtrando o Dashboard.", link: "/painel/pca" },
       { tipo: "melhoria", area: "Mesa", texto: "O Dashboard de governança da Mesa e o das Tarefas usam o mesmo novo visual nas barras e colunas. Os indicadores do topo mostram a evolução numa linha suave e a variação numa pílula verde ou vermelha.", link: "/painel/mesa?vista=dashboard" },
       { tipo: "melhoria", area: "Sistema", texto: "Os cartões dos gráficos ficaram mais leves, com sombra suave e títulos maiores. O gráfico em ondas da Execução não mudou.", link: "/painel/armazenamento" },
+    ],
+  },
+  {
+    versao: "1.264.14",
+    data: "2026-10-30",
+    titulo: "Acabamento da padronização",
+    mudancas: [
+      { tipo: "melhoria", area: "Indicadores", texto: "Os cartões de indicadores do PCA, do Orçamento do PCA e do Armazenamento seguem a MESMA grade das demais telas.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Interface", texto: "Botões e campos de uma mesma barra com a mesma altura (Catálogo, Avaliação, chat e checklist); a câmera da foto do Perfil com área de toque maior.", link: "/painel/catalogo" },
+      { tipo: "correcao", area: "Perfil", texto: "O resultado de trocar ou remover a foto aparece no aviso flutuante — à vista em qualquer aba e no celular.", link: "/painel/perfil" },
+      { tipo: "correcao", area: "Configurações", texto: "Integrações: o Salvar só fica ativo quando algo mudou. Trocar de aba nas Configurações não leva mais a subaba anterior para a próxima.", link: "/painel/integracoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Avaliação → Protocolação: a explicação foi para a Ajuda (?); o Termo de uso avisa quando não carrega as pessoas, papéis e grupos.", link: "/painel/configuracoes?aba=avaliacao" },
+    ],
+  },
+  {
+    versao: "1.264.13",
+    data: "2026-10-30",
+    titulo: "Importações: a importação manual também ensina a automática a pular o que não mudou",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação feita pela tela agora guarda a assinatura de cada página lida: a atualização automática reconhece depois as páginas iguais a ela e as pula sem reler.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Quando uma resposta grande é processada em pedaços menores (depois de uma execução cortada), só o pedaço menor é lido do banco — antes o pedaço inteiro era carregado e só depois cortado.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.264.12",
+    data: "2026-10-29",
+    titulo: "Menu suave, direita fixa e engrenagem à direita",
+    mudancas: [
+      { tipo: "melhoria", area: "Interface", texto: "Ao abrir e fechar o menu lateral, o conteúdo estica junto com ele, suave; os cartões (PCA, Orçamento, Catálogo, Tarefas…) que mudam de coluna deslizam até o lugar novo.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Interface", texto: "A barra de rolagem da página tem o lugar reservado: ela aparecer nunca mais empurra a tela para a esquerda, e a margem direita fica igual à esquerda.", link: "/painel" },
+      { tipo: "melhoria", area: "Interface", texto: "A engrenagem das configurações fica sempre no fim da linha, à direita; no PCA, o ano e o status também ficam à direita.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Navegação", texto: "No caminho do cabeçalho, o nome da página atual fica em destaque.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.264.11",
+    data: "2026-10-29",
+    titulo: "Menu e Mais indicadores sem mexer na tela",
+    mudancas: [
+      { tipo: "correcao", area: "Interface", texto: "Abrir e fechar o menu lateral não move mais o conteúdo: a borda direita fica parada e o menu desliza por cima.", link: "/painel" },
+      { tipo: "melhoria", area: "Indicadores", texto: "“Mais indicadores” abre num painel por cima da tela — a barra e a tabela de baixo ficam no lugar; fecha ao tocar fora ou no Esc.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.264.10",
+    data: "2026-10-29",
+    titulo: "Componentes na escala certa em toda tela",
+    mudancas: [
+      { tipo: "melhoria", area: "Interface", texto: "Botões, campos, listas e janelas com a mesma altura e o mesmo toque em todos os tamanhos de tela (celular, tablet e desktop); o botão Voltar padrão também no editor das automações, nos cards de Importações e nos quadros de Tarefas.", link: "/painel/tarefas" },
+      { tipo: "correcao", area: "Interface", texto: "Janelas e listas flutuantes respeitam a altura visível do celular (barra do navegador e teclado).", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.264.9",
+    data: "2026-10-29",
+    titulo: "Telas internas sem título, com o voltar à esquerda",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Dentro de um PCA a primeira linha é o voltar à esquerda, as abas e as ferramentas — sem o nome, o ano e os selos (o nome está no caminho do cabeçalho).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Dentro de um orçamento: o voltar e as abas primeiro, os números em indicadores logo abaixo; excluir fica no fim da linha.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Tarefas", texto: "No quadro, o nome saiu do topo (está no caminho do cabeçalho) — renomear o quadro agora é na Configuração.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Catálogo", texto: "Na pasta: o voltar e as visões primeiro, os números da pasta em indicadores abaixo.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Órgãos", texto: "Nas unidades de um órgão, o voltar à esquerda das abas, sem o título.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Importações", texto: "No card aberto: o voltar, as seções e as ferramentas numa linha, a situação e excluir à direita, os números em indicadores abaixo.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.264.8",
+    data: "2026-10-29",
+    titulo: "A lateral direita sem recuo e as telas do ADM arrumadas",
+    mudancas: [
+      { tipo: "correcao", area: "Telas", texto: "A lateral direita das telas não fica mais recuada: o espaço reservado para a barra de rolagem ficava vazio quando a tela não rolava.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Armazenamento", texto: "Os indicadores abrem a tela, o carregamento tem o mesmo formato e a confirmação é a do sistema.", link: "/painel/armazenamento" },
+      { tipo: "melhoria", area: "Auditoria", texto: "Os filtros (entidade e ação) à esquerda e o recarregar à direita, numa linha só.", link: "/painel/auditoria" },
+      { tipo: "correcao", area: "PCA", texto: "Excluir uma planilha ou o PCA trata a falha de rede, não manda dois pedidos e diz o resultado; a Configuração explica que devolver o protocolo à Mesa só inativa os números.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Situações", texto: "A confirmação de excluir é a do sistema.", link: "/painel/configuracoes?aba=situacoes" },
+    ],
+  },
+  {
+    versao: "1.264.7",
+    data: "2026-10-29",
+    titulo: "Correções do PCA, um só esqueleto e o menu que não mexe na altura",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "A edição antiga do PCA confere o grupo; o grupo é conferido antes de abrir um protocolo pelo link; só quem configura o PCA troca a visão do orçamento (vale para todos).", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Os itens da Mesa do PCA ficam na tela enquanto os novos chegam (não somem depois de gravar) e a falha ao carregá-los aparece; o nome do PCA não some mais do caminho no topo ao trocar de aba.", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Declarações: baixar de novo mostra o erro sem trocar a página e cancelar a exportação não fecha o PDF; Nova declaração à esquerda da ajuda. O Dashboard vazio por causa da unidade do cabeçalho diz isso.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Telas", texto: "Um só esqueleto em cada tela: o carregamento da rota e o da própria tela são o mesmo (Frotas, Execução, Empenhos, Liquidações, Pagamentos), e os espaços (PCA, orçamento, quadro, pasta) têm o esqueleto deles.", link: "/painel/frotas" },
+      { tipo: "correcao", area: "Telas", texto: "Abrir e fechar o menu lateral não faz mais as tabelas tremerem nem os indicadores mudarem de altura — só a largura muda.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Aparência", texto: "Uma prévia não salva não fica mais valendo nas outras telas; salvar e restaurar atualizam o sistema na hora e a confirmação é a do sistema.", link: "/painel/aparencia" },
+      { tipo: "correcao", area: "Órgãos", texto: "Rebaixar um órgão só aceita um destino válido e o destino não passa de um órgão para outro.", link: "/painel/orgaos" },
+    ],
+  },
+  {
+    versao: "1.264.6",
+    data: "2026-10-29",
+    titulo: "Mesa, Catálogo e Verificação com os filtros à esquerda",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os filtros de Responsável e Assunto ficam à esquerda, junto das visões; atualizar, dados completos, lixeira e automações à direita.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Catálogo", texto: "O Catálogo abre sem título: as visões à esquerda e Exportar modelo à direita; na pasta, os números vêm primeiro.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Verificação", texto: "Protocolo | DFD à esquerda e a ajuda à direita; na Automação, a ajuda vai para a direita.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Liquidações", texto: "Liquidações e pagamentos mostram o esqueleto dos indicadores enquanto carregam (a barra não pula mais); as tabelas da execução ficaram sem o código morto dos cards.", link: "/painel/liquidacoes" },
+      { tipo: "correcao", area: "Tarefas", texto: "A linha vazia acima dos quadros não ocupa mais espaço quando não há o botão Nova pasta.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.264.5",
+    data: "2026-10-29",
+    titulo: "O carregamento desenha a tela como ela é",
+    mudancas: [
+      { tipo: "correcao", area: "Telas", texto: "Enquanto as telas carregam, o esqueleto não mostra mais uma linha de título que a tela não tem: empenhos, liquidações, pagamentos e as telas das frotas começam pelos indicadores; as demais pela barra de botões ou direto no conteúdo.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.264.4",
+    data: "2026-10-29",
+    titulo: "Barras de botões no mesmo padrão em todas as telas",
+    mudancas: [
+      { tipo: "melhoria", area: "Telas", texto: "Em toda barra de ferramentas, os seletores, a busca e os filtros ficam à esquerda; recarregar, configurações e ajuda à direita.", link: "/painel/documentos" },
+    ],
+  },
+  {
+    versao: "1.264.3",
+    data: "2026-10-29",
+    titulo: "O ano à esquerda na barra das tabelas da execução",
+    mudancas: [{ tipo: "melhoria", area: "Empenhos", texto: "Em empenhos, liquidações e pagamentos, o seletor de ano fica à esquerda da barra; Recarregar, Importações e Ajuda à direita.", link: "/painel/empenhos" }],
+  },
+  {
+    versao: "1.264.2",
+    data: "2026-10-29",
+    titulo: "Telas sem título e o horário dos dados à vista",
+    mudancas: [
+      { tipo: "melhoria", area: "Telas", texto: "PCA, Orçamento, Tarefas, Documentos, Verificação, Automação, Configurações, Auditoria, Armazenamento, Integrações, Avaliação e Referência abrem direto no conteúdo, sem título nem subtítulo (os botões continuam no mesmo lugar).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Ao lado do Recarregar de empenhos, liquidações e pagamentos, o horário dos dados à vista (\"Dados de 10:42\") — quando vêm do que foi guardado no navegador.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.264.1",
+    data: "2026-10-29",
+    titulo: "Empenhos, liquidações e pagamentos com os indicadores das Frotas",
+    mudancas: [
+      { tipo: "melhoria", area: "Empenhos", texto: "As telas de empenhos, liquidações e pagamentos abrem pelos indicadores (os mesmos cartões das Frotas, com dois detalhes cada), sem título; os botões ficam logo abaixo.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Liquidações", texto: "Indicadores: liquidado líquido, pago, saldo e liquidações, com os percentuais.", link: "/painel/liquidacoes" },
+      { tipo: "melhoria", area: "Pagamentos", texto: "Indicadores: pago líquido, ordens, retenções e anuladas.", link: "/painel/pagamentos" },
+    ],
+  },
+  {
+    versao: "1.264.0",
+    data: "2026-10-29",
+    titulo: "Importações auditadas: só relê o que mudou, sem travas e sem perder leituras",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A atualização automática agora reconhece a página que não mudou em QUALQUER tamanho (antes, só as pequenas): os meses e órgãos iguais à última leitura são pulados sem baixar em pedaços nem regravar — o ano inteiro deixa de ser reprocessado a cada ciclo.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Importações", texto: "As liquidações passam a ser lidas mês a mês por órgão na atualização automática (antes, semana a semana): quatro vezes menos pedidos à Centi.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "O revezamento entre os cards ficou justo, cada rodada respeita o tempo do disparo seguinte e um card com erro não para mais a fila dos outros.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Uma resposta pesada para o servidor não encerra mais a importação de pagamentos na primeira vez: a leitura recomeça mais tarde (só a terceira vez divide o período) e os erros antigos não contam depois que a leitura avançou.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "A conclusão confere todos os passos (antes, só os 3.000 primeiros) e descarta os registros de leituras interrompidas; excluir um passo faz o período ser lido de novo de verdade.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Continuar pela tela um período já dividido pela automática não falha mais; a comparação de queda das liquidações e dos pagamentos usa só importações dos mesmos órgãos.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "A pergunta \"os números caíram\" nunca mais é respondida sozinha quando a tela do card fecha (passa ao painel do canto); Parar durante a pergunta interrompe a série; Parar corta na hora os downloads em curso; a aba renova a posse do lote a cada minuto.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "O andamento não volta para trás entre as páginas, o painel não relê mais o lote inteiro a cada 3 segundos (economia no banco) e a situação \"parada\" só aparece para trabalho de verdade.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Frotas", texto: "Um dia muito movimentado não trava mais o contrato (lido com um teto maior; se nem assim couber, é pulado com o aviso), o ciclo novo começa onde o anterior parou, a importação manual e a automática nunca leem o mesmo contrato juntas e o \"Testar\" não desfaz uma configuração salva no meio.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+    ],
+  },
+  {
+    versao: "1.263.0",
+    data: "2026-10-29",
+    titulo: "Importações automáticas várias vezes mais rápidas",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A atualização automática da Centi faz várias tarefas por minuto em vez de uma: Empenhos, Liquidações e Pagamentos avançam juntos e uma resposta grande termina em minutos, não em horas.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "melhoria", area: "Frotas", texto: "A atualização automática da Vólus lê vários períodos por disparo.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Importações", texto: "A situação da atualização automática diz quantas tarefas a última rodada fez.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.262.1",
+    data: "2026-10-29",
+    titulo: "Banners do DFD e do protocolo reabrem na hora",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Reabrir um DFD ou um protocolo já visto usa os dados guardados no navegador, sem esperar o servidor; qualquer gravação, sua ou de outra pessoa, renova os dados, e Atualizar sempre busca do banco.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.262.0",
+    data: "2026-10-29",
+    titulo: "Importações automáticas que não ficam presas e o motivo de cada uma à vista",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "Um trecho pesado demais para o servidor não prende mais a importação da Centi para sempre: a cada execução que não avança, o pedaço lido encolhe; sem avançar seis vezes, o período é dividido (ou o erro aparece).", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Uma resposta grande da Centi que levava mais de 3 horas para ler não recomeça mais do zero.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Frotas", texto: "A leitura da Vólus interrompida no meio não repete o mesmo período para sempre: a falha é contada e o período encolhe até um dia.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Importações", texto: "Configurações → Importações mostra a última execução da atualização automática e, por importação, o que ela está fazendo e desde quando (erro em vermelho; parada há mais de 30 min em âmbar).", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
+    versao: "1.261.3",
+    data: "2026-10-29",
+    titulo: "Capa do protocolo protegida contra gravação sobre dado antigo",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Salvar a capa de um protocolo alterado por outra pessoa depois de aberto agora é recusado com o aviso, em vez de sobrescrever.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.261.2",
+    data: "2026-10-29",
+    titulo: "Arrasto do painel colado ao dedo, pílula compacta e bolha fixa",
+    mudancas: [
+      { tipo: "correcao", area: "Importações", texto: "Arrastar o painel “Em segundo plano” acompanha o ponteiro ou o dedo sem atraso (antes ficava para trás num movimento rápido); pegá-lo enquanto ainda desliza para a borda não dá salto; soltar no toque não abre o banner sem querer.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Importações", texto: "A pílula ficou menor e resumida: o nome curto e só a porcentagem (o resto está no banner); os outros trabalhos aparecem num selo no canto.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Importações", texto: "“Manter como bolha” (no cabeçalho do banner): o painel fica circular também fechado, com o andamento no anel — guardado neste aparelho.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Navegação", texto: "Recarregar as telas de Empenhos, Liquidações, Pagamentos e Frotas não dá mais o aviso de “a página foi refeita” (os dados guardados só desenham na hora ao voltar pela navegação).", link: "/painel/combustivel" },
+    ],
+  },
+  {
+    versao: "1.261.1",
+    data: "2026-10-29",
+    titulo: "Salvar sobre alteração de outra pessoa é avisado e as abas dividem a conferência de dados novos",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Salvar um DFD que outra pessoa alterou depois que você o abriu não sobrescreve mais a alteração dela: o sistema avisa e recarrega o DFD para você refazer a sua.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Navegação", texto: "Com várias abas abertas, só uma consulta se há dados novos e avisa as outras — menos pedidos ao servidor.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Checklist e eventos da tarefa e a planilha de Responsáveis mostram o esqueleto enquanto carregam, no lugar do texto “Carregando…”.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.261.0",
+    data: "2026-10-29",
+    titulo: "Importações sem travas e o painel “Em segundo plano” manuseável como as bolhas do chat",
+    mudancas: [
+      { tipo: "novo", area: "Importações", texto: "O painel “Em segundo plano” é manuseado como as bolhas do chat: arraste para qualquer lugar (com o mouse ou o dedo), arremesse e ele encosta na borda mais perto; leve-o à lixeira para dispensar os que terminaram; Alt + setas movem pelo teclado; a posição fica guardada neste aparelho. As bolhas do chat desviam dele.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Importações", texto: "Tocar no painel fechado abre o banner POR CIMA dele e a pílula encolhe numa BOLHA (com o andamento num anel); tocar de novo fecha suavemente e a bolha volta a ser pílula.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Navegação", texto: "Abrir e fechar “Mais indicadores” (e outros blocos que crescem) não faz mais o conteúdo dar um pulo para a direita e voltar: o lugar da barra de rolagem fica reservado no computador.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Importações", texto: "Atualização automática da Centi: depois de ler um dia pesado ela segue direto para o dia seguinte (antes pedia de novo a semana e a dividia outra vez), a fila alterna entre os cards (uma leitura longa não deixa os outros sem a vez) e uma leitura que falha sem parar é descartada e pedida de novo.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "O andamento da importação automática anda pelos bytes (um dia de 5 MB conta o que pesa — antes ficava em 0%), mostra os registros que estão sendo gravados, o baixado de verdade e a última atividade; o passo “Gravando no banco…” que falhou vira erro em vez de girar para sempre.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Frotas", texto: "Quando a Vólus não responde a tempo, o período seguinte é a metade (antes repetia os mesmos 24 dias para sempre); o tempo vale até ler a resposta inteira, a importação manual divide o período lento e espera a automática terminar o mesmo contrato.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Frotas", texto: "No painel das importações, o passo com erro mostra o contrato e o tipo, “Falhou” só aparece com um contrato em espera depois de um erro (com o nome dele) e não há mais “100%” ao lado de “Falhou”.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Navegação", texto: "No celular, o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos e claro/escuro): a logo e a foto do perfil ficam no menu e a página pública na marca do menu.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.260.4",
+    data: "2026-10-29",
+    titulo: "Esqueleto padrão em Empenhos, Liquidações, Pagamentos e Frotas",
+    mudancas: [
+      { tipo: "melhoria", area: "Carregamento", texto: "Empenhos, Liquidações, Pagamentos, Frotas, Combustível, Manutenção e Veículos mostram o esqueleto padrão da tela enquanto abrem.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.260.3",
+    data: "2026-10-29",
+    titulo: "Telas da Administração guardadas no navegador",
+    mudancas: [
+      { tipo: "melhoria", area: "Administração", texto: "Grupos, Órgãos, Unidades, Responsáveis, Situações e Cargos reabrem na hora enquanto nada novo foi gravado; gravar qualquer coisa renova na hora.", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Histórico", texto: "Depois de gravar, o histórico guardado é renovado na hora (antes podia esperar até um minuto).", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.260.2",
+    data: "2026-10-29",
+    titulo: "Itens da Mesa e histórico guardados no navegador",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A visão Itens da Mesa (e da Mesa do PCA) fica guardada no navegador: voltar, F5 ou reabrir mostram os itens na hora; muda sozinha quando algum DFD é gravado.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "Histórico", texto: "O histórico dos protocolos, DFDs e itens reabre na hora enquanto nada novo foi gravado.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.260.1",
+    data: "2026-10-29",
+    titulo: "Dados guardados: sem esqueleto ao voltar, Frotas e mais segurança",
+    mudancas: [
+      { tipo: "melhoria", area: "Desempenho", texto: "Voltar a Empenhos, Liquidações, Pagamentos e Execução desenha os dados guardados na hora, sem o esqueleto; as outras abas abertas aproveitam o dado já buscado.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Frotas", texto: "Frotas, Combustível, Manutenção e Veículos também ficam guardados no navegador.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Segurança", texto: "Sessão encerrada ou a tela de acesso apagam os dados guardados; papéis com proteção de dados guardam só enquanto a aba está aberta.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Termo de uso", texto: "Cláusula automática \"Dados guardados no navegador\".", link: "/painel/configuracoes?aba=termo" },
+      { tipo: "novo", area: "Armazenamento", texto: "\"Dados neste navegador\": quantas leituras vieram sem pedir ao servidor.", link: "/painel/armazenamento" },
+    ],
+  },
+  {
+    versao: "1.260.0",
+    data: "2026-10-29",
+    titulo: "Frotas: tabelas da Mesa, Órgão e Unidade do sistema e banners organizados",
+    mudancas: [
+      { tipo: "novo", area: "Frotas", texto: "As tabelas de combustível, manutenção, veículos, do demonstrativo e dos alertas funcionam como as da Mesa: escolher e reordenar colunas, edições salvas (só sua ou pública), filtros salvos e o botão \"Dados completos\" para ver o texto inteiro nas células.", link: "/painel/combustivel" },
+      { tipo: "novo", area: "Frotas", texto: "Colunas e filtros de Órgão e Unidade do sistema (a unidade da Vólus ligada ao cadastro; o órgão da unidade, senão o do contrato). O registro sem ligação aparece como \"Sem unidade\"/\"Sem órgão\" e pode ser filtrado; o novo indicador \"Sem unidade\" diz quantos são.", link: "/painel/manutencao" },
+      { tipo: "melhoria", area: "Frotas", texto: "O gasto no tempo usa o MESMO gráfico da Execução, com as mesmas funções: acumulado ou por período, agrupado por dia, semana ou mês, a legenda que liga e desliga, o zoom, a tabela, a dica e a origem do ponto ou do trecho. Os gráficos por veículo e por dimensão ficam lado a lado com a mesma altura e rolagem por dentro; Demonstrativo e Alertas em abas.", link: "/painel/frotas" },
+      { tipo: "novo", area: "Frotas", texto: "As cores de Combustível e Manutenção são escolhidas em Configurações → Importações → Frotas (\"Cores dos dados\") e valem nos gráficos, nas barras e nos indicadores.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "No computador, as telas de Frotas rolam por dentro, até o fim do display — a página não rola.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os banners do abastecimento, da manutenção e da ficha do veículo seguem o padrão dos banners da Execução: título curto, campos em colunas que nunca partem uma palavra e o Órgão e a Unidade do registro.", link: "/painel/combustivel" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores de \"Mais indicadores\" têm o mesmo desenho dos principais (com os detalhes) e a tabela acompanha a abertura e o fechamento deles, sempre rente ao fim da tela.", link: "/painel/veiculos" },
+    ],
+  },
+  {
+    versao: "1.259.0",
+    data: "2026-10-29",
+    titulo: "Dados guardados no navegador, cada um com a sua atualização",
+    mudancas: [
+      { tipo: "novo", area: "Desempenho", texto: "Empenhos, Liquidações, Pagamentos e Execução ficam guardados no navegador: voltar à tela, apertar F5 ou reabrir o navegador mostra os dados na hora.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "Cada dado se atualiza sozinho: importar pagamentos renova só Pagamentos e Execução; importar empenhos renova Empenhos, Liquidações, Pagamentos e Execução.", link: "/painel/pagamentos" },
+      { tipo: "melhoria", area: "Empenhos", texto: "Trocar o ano não apaga mais a tabela enquanto o novo ano chega.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Configurações", texto: "Configurações → Tabelas: o ADM pode desligar a guarda dos dados no navegador. Sair ou trocar de conta apaga o que estava guardado.", link: "/painel/configuracoes?aba=tabelas" },
+    ],
+  },
+  {
+    versao: "1.258.1",
+    data: "2026-10-29",
+    titulo: "Frotas: importação da Vólus mais rápida e mais segura",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação da Vólus lê até 3 períodos ao mesmo tempo e, aprendido o tamanho de um contrato, já pede os meses seguintes em partes que cabem — um ano de abastecimentos sai com cerca de metade dos pedidos e várias vezes mais rápido.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Importações", texto: "O período grande demais da Vólus é medido inteiro e dividido de uma vez no tamanho certo (antes era dividido ao meio repetidas vezes, com pedidos jogados fora).", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "correcao", area: "Frotas", texto: "Duas leituras quase juntas do mesmo período (a manual e a automática, ou a nova tentativa de um pedido) não dão mais uma transação como removida na Vólus: a 2ª ausência só conta 10 minutos depois da 1ª.", link: "/painel/combustivel" },
+      { tipo: "correcao", area: "Importações", texto: "A atualização automática da Frota não relê um período nem recomeça o ciclo por cima de outra execução, a trava cobre a leitura inteira, a autenticação da Vólus é compartilhada pelos pedidos em paralelo e a contagem das removidas não lê mais a tabela inteira.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+    ],
+  },
+  {
+    versao: "1.258.0",
+    data: "2026-10-29",
+    titulo: "Frotas: a importação da Vólus igual à das outras importações",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação da Vólus mostra o andamento de cada período (lido, dividido, nova tentativa, erro) no mesmo quadro das outras importações e continua ao sair da tela.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Importações", texto: "O painel do canto inferior direito mostra também a Frota: a importação desta aba e a atualização automática da Vólus.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram há quanto tempo a Vólus foi lida e, para o administrador, o botão \"Importar agora\" — o mesmo canto da Execução.", link: "/painel/frotas" },
+    ],
+  },
+  {
+    versao: "1.257.0",
+    data: "2026-10-29",
+    titulo: "Frotas: combustível, manutenção e veículos com os dados da Vólus",
+    mudancas: [
+      { tipo: "novo", area: "Frotas", texto: "Módulo Frotas com o painel da frota: gasto total, combustível, manutenção, consumo médio (km/l pelo hodômetro), custo por km, gasto por mês e por veículo, demonstrativo por qualquer dimensão e os alertas (hodômetro que voltou, consumo e preço fora do padrão, abastecimentos próximos, litros acima do tanque, veículo inativo com gasto).", link: "/painel/frotas" },
+      { tipo: "novo", area: "Frotas", texto: "Telas Combustível e Manutenção: todos os abastecimentos e manutenções com os filtros do sistema, o total no rodapé, a exportação e o registro completo (veículo, posto ou oficina, itens, nota e empenho).", link: "/painel/combustivel" },
+      { tipo: "novo", area: "Frotas", texto: "Tela Veículos: o cadastro da frota (as placas entram sozinhas pela Vólus) com tipo, classificação, situação, origem (FIPE ou locação), tanque e unidade — edição, edição em massa, planilha e a ficha do veículo em PDF.", link: "/painel/veiculos" },
+      { tipo: "novo", area: "Importações", texto: "Integração com a Vólus em Configurações → Importações → Frotas: a credencial cifrada, testar a conexão, importar um ano, os contratos, as unidades ligadas ao cadastro, o histórico das leituras e a atualização automática que grava só o que mudou.", link: "/painel/configuracoes?aba=importacoes&tipo=frotas" },
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa acha os veículos da frota pela placa, marca ou modelo (prefixo \"veiculo:\") e abre a ficha.", link: "/painel/veiculos" },
+      { tipo: "melhoria", area: "Frotas", texto: "Os indicadores mostram os quatro principais com dois detalhes cada (os mesmos cartões do Dashboard do PCA) e os demais em \"Mais indicadores\"; os filtros ficam com nomes curtos, em ordem, e conectados entre si — o valor marcado que outro filtro zerou continua na lista para ser desmarcado.", link: "/painel/frotas" },
+      { tipo: "melhoria", area: "Tabelas", texto: "No rodapé de todas as tabelas, exportar, ações, linhas por página e paginação ficam numa linha só; o que não cabe na tela rola de lado.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.256.1",
+    data: "2026-10-29",
+    titulo: "Empenhos, liquidações e pagamentos sem recarregar",
+    mudancas: [
+      { tipo: "melhoria", area: "Execução", texto: "Ao voltar às telas de Empenhos, Liquidações e Pagamentos, a tabela aparece na hora — os dados já lidos ficam guardados na aba até uma importação nova.", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.256.0",
+    data: "2026-10-29",
+    titulo: "Telas mais rápidas: cache que não se apaga à toa e telas pré-carregadas",
+    mudancas: [
+      { tipo: "melhoria", area: "Desempenho", texto: "Cada tela acompanha só os dados que mostra: a importação automática dos empenhos e as gravações de Tarefas não recarregam mais a Mesa, o PCA nem o Orçamento — sair e voltar a uma tela já vista abre na hora.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Desempenho", texto: "Tarefas, Calendário, Empenhos, Liquidações, Pagamentos e Execução só recarregam quando os dados deles mudam.", link: "/painel/execucao" },
+      { tipo: "novo", area: "Desempenho", texto: "Com a tela pronta, o sistema pré-carrega em segundo plano as primeiras telas do menu, uma por vez: ir a elas abre sem esperar.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.255.0",
+    data: "2026-10-28",
+    titulo: "Pesquisa por texto em empenhos, liquidações e pagamentos; pastas e usuários arquivados",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "Sem prefixo, a pesquisa do menu passa a achar empenhos, liquidações e pagamentos pelo fornecedor ou credor, CPF/CNPJ e números — os mais recentes, de um índice leve guardado na aba por algumas horas. O número exato continua achando todos os anos.", link: "/painel/empenhos" },
+      { tipo: "novo", area: "Pesquisa", texto: "As pastas de quadros de Tarefas são pesquisáveis (prefixo \"pasta:\") e o resultado abre a pasta no lugar.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Os usuários arquivados aparecem marcados com a data do arquivamento e há a entrada \"Usuários arquivados\", que abre a lista deles.", link: "/painel/usuarios" },
+      { tipo: "correcao", area: "Pesquisa", texto: "Um quadro de Tarefas criado ou renomeado aparece nas abas da pesquisa sem precisar recarregar a página.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.254.0",
+    data: "2026-10-28",
+    titulo: "Pesquisa completa: declarações, visões, medidas, responsáveis, importações e todas as sub-abas",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa do menu passa a achar as declarações do PCA (nº, processo, protocolo da Centi), as visões do orçamento, as medidas e classificações do Catálogo, os catálogos e as pastas pelo nome e, para o ADM, os responsáveis por DFDs e os cards de importação. Tocar abre o registro.", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Também são pesquisáveis as visões do Catálogo (Lista de Itens, Medidas, Classificações), da Verificação (protocolo ou DFD), as vistas do Calendário e as sub-abas de Notificações e Avaliação em Configurações. As abas de cada PCA aparecem só quando a pessoa pode abri-las, e as abas que o papel esconde também não aparecem.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Pesquisa", texto: "Os filtros rápidos da pesquisa passam a incluir Empenhos, Liquidações, Pagamentos e os tipos novos, e a pesquisa sem prefixo é dividida em pedidos menores (não passa do limite do servidor).", link: "/painel/empenhos" },
+    ],
+  },
+  {
+    versao: "1.253.0",
+    data: "2026-10-28",
+    titulo: "Pesquisa: empenhos, liquidações, pagamentos e todas as abas",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa do menu acha empenhos, liquidações e pagamentos pelo número do empenho. Com o prefixo (“empenho:”, “liquidacao:”, “pagamento:” ou “em:”, “li:”, “pg:”) procura também no fornecedor/credor, CPF/CNPJ e histórico. Tocar no resultado abre o registro na tabela da tela, no escopo de unidades de cada pessoa.", link: "/painel/empenhos" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Todas as abas são pesquisáveis: as de cada orçamento (Lançamentos, Comparativo, Vínculos, Visões), as de cada quadro de Tarefas, a Importação e as Declarações de cada PCA, o Verificar comprovante e as Importações de empenhos, liquidações e pagamentos em Configurações.", link: "/painel/orcamento" },
+    ],
+  },
+  {
+    versao: "1.252.1",
+    data: "2026-10-28",
+    titulo: "Execução: relógio e botão de importar no canto do indicador",
+    mudancas: [
+      { tipo: "correcao", area: "Execução", texto: "O relógio da última atualização e o botão de importar ficam mais perto do topo de cada indicador, com o mesmo recuo do topo e da lateral direita.", link: "/painel/execucao" },
+    ],
+  },
+  {
+    versao: "1.252.0",
+    data: "2026-10-28",
+    titulo: "Importações: intervalo mínimo entre atualizações, a última importação pelo relógio e correções",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Intervalo mínimo entre atualizações (Configurações → Importações → Editar): depois de uma importação concluída, o mesmo card só começa outra quando passar o tempo escolhido. Vale para a importação do card, o “Importar tudo”, o “Importar agora” da Execução e a atualização automática. Continuar uma importação aberta e importar de novo depois de uma falha seguem livres. O botão bloqueado diz a partir de que horas pode atualizar.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "novo", area: "Execução", texto: "Para o ADM, tocar no relógio da última atualização num indicador abre no painel do canto inferior direito a última importação da etapa, com todos os dados: pedidos, erros, registros e últimos passos.", link: "/painel/execucao" },
+      { tipo: "melhoria", area: "Execução", texto: "O relógio e o botão de importar ficam alinhados na linha do título, presos no canto superior direito de cada indicador.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "Uma importação parada há mais de 30 minutos (a aba foi fechada ou recarregada) não fica mais como “importando agora” para sempre. Ela é encerrada sozinha em até 1 minuto e não trava o botão de importar nem o painel do canto. Na atualização automática, ela é refeita na próxima vez do card, sem a espera de 12 horas.", link: "/painel/execucao" },
+      { tipo: "correcao", area: "Execução", texto: "O “Parar” do painel do canto interrompe a série inteira do “Importar agora” e do “Importar tudo”, não só o card em curso. Se os números caírem no “Importar agora”, a confirmação aparece no próprio painel e continua valendo mesmo depois de sair da tela.", link: "/painel/execucao" },
     ],
   },
   {

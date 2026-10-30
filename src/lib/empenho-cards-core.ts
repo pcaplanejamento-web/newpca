@@ -59,10 +59,17 @@ export const NOME_TIPO: Record<TipoCard, { titulo: string; um: string; varios: s
   liquidacoes: { titulo: "Liquidações", um: "liquidação", varios: "liquidações", masc: false },
   pagamentos: { titulo: "Pagamentos", um: "pagamento", varios: "pagamentos", masc: true },
 };
+/** O que aparece nas IMPORTAÇÕES (painel do canto, relógio das KPIs): os cards da Centi e a FROTA (Vólus). */
+export type TipoImportacao = TipoCard | "frotas";
+export const NOME_IMPORTACAO: Record<TipoImportacao, { titulo: string; um: string; varios: string; masc: boolean }> = {
+  ...NOME_TIPO,
+  frotas: { titulo: "Frotas (Vólus)", um: "leitura da frota", varios: "leituras da frota", masc: false },
+};
+export const lerTipoImportacao = (v: unknown): TipoImportacao | undefined => (v === "empenhos" || v === "liquidacoes" || v === "pagamentos" || v === "frotas" ? v : undefined);
 /** A TELA (permissão) de um card. */
 export const telaDoCard = (c: { tipo: TipoCard }): TipoCard => c.tipo;
 /** O endereço das IMPORTAÇÕES (Configurações → Importações — só o ADM): o tipo e, com `card`, o card aberto na sub-aba. */
-export const linkImportacoes = (tipo: TipoCard, card?: number, sub?: "importacao" | "vinculos" | "configuracao"): string =>
+export const linkImportacoes = (tipo: TipoImportacao, card?: number | null, sub?: "importacao" | "vinculos" | "configuracao"): string =>
   `/painel/configuracoes?aba=importacoes&tipo=${tipo}${card ? `&card=${card}${sub ? `&sub=${sub}` : ""}` : ""}`;
 
 export type CardEmpenho = {
@@ -244,7 +251,49 @@ export type ConfigImportacoes = {
    * antigo (todos os cards, todos os anos) — vale até o ADM salvar a escolha.
    */
   automaticas: Record<string, number[]> | null;
+  /** O INTERVALO MÍNIMO entre duas atualizações do mesmo card (min; 0 = sem intervalo): antes disso nenhuma importação NOVA
+   * começa — a manual, o "Importar tudo", o "Importar agora" da Execução e a automática (continuar a aberta pode). */
+  intervaloMin: number;
 };
+
+/** As opções do intervalo mínimo entre atualizações. */
+export const OPCOES_INTERVALO: { valor: number; rotulo: string }[] = [
+  { valor: 0, rotulo: "Sem intervalo mínimo" },
+  { valor: 5, rotulo: "5 minutos" },
+  { valor: 10, rotulo: "10 minutos" },
+  { valor: 15, rotulo: "15 minutos" },
+  { valor: 30, rotulo: "30 minutos" },
+  { valor: 60, rotulo: "1 hora" },
+  { valor: 120, rotulo: "2 horas" },
+  { valor: 240, rotulo: "4 horas" },
+  { valor: 480, rotulo: "8 horas" },
+  { valor: 1440, rotulo: "24 horas" },
+];
+
+/**
+ * Quando a próxima atualização pode COMEÇAR (ms desde 1970), dada a última (o texto do D1 "AAAA-MM-DD HH:MM:SS" em UTC, ou
+ * ISO) e o intervalo mínimo; `null` = já pode. A MESMA régua na rota da importação, na automática e nos botões.
+ */
+export function proximaAtualizacaoMs(ultima: string | null | undefined, intervaloMin: number, agoraMs = Date.now()): number | null {
+  if (!ultima || !(intervaloMin > 0)) return null;
+  const t = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(ultima) ? ultima : `${ultima.replace(" ", "T")}Z`);
+  if (!Number.isFinite(t)) return null;
+  const pode = t + intervaloMin * 60_000;
+  return pode > agoraMs ? pode : null;
+}
+
+/** A próxima atualização do CARD: o intervalo conta da última importação CONCLUÍDA (`completo`) — depois de uma falha ou
+ * parcial, importar de novo já pode (é a correção). */
+export const proximaDoCard = (c: Pick<CardEmpenho, "ultimaExecucao" | "ultimoStatus">, intervaloMin: number, agoraMs = Date.now()): number | null =>
+  c.ultimoStatus === "completo" ? proximaAtualizacaoMs(c.ultimaExecucao, intervaloMin, agoraMs) : null;
+
+/** "Atualizada há pouco — a próxima atualização a partir de 14:35 (intervalo mínimo de 30 minutos)." */
+export function textoIntervalo(proximaMs: number, intervaloMin: number, agoraMs = Date.now()): string {
+  const falta = Math.max(1, Math.ceil((proximaMs - agoraMs) / 60_000));
+  const hora = new Date(proximaMs).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+  const rot = OPCOES_INTERVALO.find((o) => o.valor === intervaloMin)?.rotulo ?? `${intervaloMin} minutos`;
+  return `Atualizada há pouco — a próxima atualização pode começar às ${hora} (em ${falta} min; intervalo mínimo de ${rot.toLowerCase()}).`;
+}
 
 /** Teto de cards na escolha das automáticas (o blob fica pequeno). */
 export const MAX_CARDS_AUTOMATICOS = 200;
@@ -260,6 +309,7 @@ export const IMPORTACOES_PADRAO: ConfigImportacoes = {
   quedaRegistros: 90,
   removidos: "marcar",
   automaticas: null,
+  intervaloMin: 0,
 };
 
 /** A escolha gravada → id → anos válidos, sem repetir (inválido = sai; nada válido e não-objeto = `null`, o legado). */
@@ -362,6 +412,7 @@ export function motivoConfigImportacoes(c: ConfigImportacoes): string | null {
   if (!HORA.test(c.horaInicio) || !HORA.test(c.horaFim)) return "Horário inválido (use HH:MM).";
   if (c.horaInicio >= c.horaFim) return "O horário de início tem de ser antes do fim.";
   if (!OPCOES_QUEDA.some((o) => o.valor === c.quedaSoma) || !OPCOES_QUEDA.some((o) => o.valor === c.quedaRegistros)) return "Regra de queda inválida.";
+  if (!OPCOES_INTERVALO.some((o) => o.valor === c.intervaloMin)) return "Intervalo mínimo inválido.";
   if (c.automaticas) {
     const ids = Object.keys(c.automaticas);
     if (ids.length > MAX_CARDS_AUTOMATICOS) return `No máximo ${MAX_CARDS_AUTOMATICOS} importações na escolha.`;
@@ -387,6 +438,7 @@ export function lerConfigImportacoes(v: unknown): ConfigImportacoes {
     quedaRegistros: OPCOES_QUEDA.some((q) => q.valor === o.quedaRegistros) ? (o.quedaRegistros as number) : IMPORTACOES_PADRAO.quedaRegistros,
     removidos: lerRegraRemovidos(o.removidos),
     automaticas: lerAutomaticas(o.automaticas),
+    intervaloMin: OPCOES_INTERVALO.some((q) => q.valor === o.intervaloMin) ? (o.intervaloMin as number) : IMPORTACOES_PADRAO.intervaloMin,
   };
   if (c.horaInicio >= c.horaFim) return { ...c, horaInicio: IMPORTACOES_PADRAO.horaInicio, horaFim: IMPORTACOES_PADRAO.horaFim };
   return c;

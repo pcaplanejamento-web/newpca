@@ -23,11 +23,14 @@ export type Baixado = {
   /** Com `faixa`: a resposta acabou dentro da faixa (então `lidos` = o tamanho dela) e o Content-Length, se veio. */
   terminou?: boolean;
   comprimento?: number | null;
+  /** Com `faixa` + `assinar`: o SHA-256 (hex) da resposta INTEIRA (lida até o fim, só a faixa guardada); null = o ambiente
+   * não tem `crypto.DigestStream`. */
+  assinatura?: string | null;
   /** Com `fluxo`: o corpo REPASSADO como chega (contado — passou do teto, o fluxo falha), sem guardar nada na memória. */
   corpo?: ReadableStream<Uint8Array>;
 };
 
-export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; pedacos?: boolean; fluxo?: boolean; faixa?: { de: number; ate: number }; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
+export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; pedacos?: boolean; fluxo?: boolean; faixa?: { de: number; ate: number; assinar?: boolean }; tempoMs?: number; post?: string; comErro?: boolean }): Promise<Baixado> {
   const url = urlAgendaValida(bruta);
   if (!url) throw new Error("Link inválido: use um endereço https:// público.");
   const grande = `${o.quem} é grande demais (máx. ${Math.round(o.maxBytes / 1_000_000) || 1} MB).`;
@@ -91,12 +94,29 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
     if (o.faixa) {
       // Só os bytes da FAIXA [de, ate) — o que vem antes é lido e descartado sem converter (quase nenhum trabalho de CPU);
       // ao chegar ao fim da faixa, a leitura para (o resto da resposta não é baixado).
-      const { de, ate } = o.faixa;
+      const { de, ate, assinar } = o.faixa;
       const pedacos: Uint8Array[] = [];
       let lidos = 0;
       let terminou = false;
+      // ASSINAR: a resposta é lida até o FIM pelo SHA-256 nativo (`crypto.DigestStream` — sem decodificar nem guardar nada
+      // além da faixa; quase nenhum trabalho de CPU), para decidir se a página mudou antes de capturar o resto.
+      const Digest = (crypto as unknown as { DigestStream?: new (alg: string) => WritableStream<Uint8Array> & { digest: Promise<ArrayBuffer> } }).DigestStream;
+      const digest = assinar && Digest ? new Digest("SHA-256") : null;
+      const escritor = digest?.getWriter() ?? null;
       for (;;) {
-        const { done, value } = await leitor.read();
+        let parte: ReadableStreamReadResult<Uint8Array>;
+        try {
+          parte = await leitor.read();
+        } catch (e) {
+          // ASSINANDO, a faixa já guardada vale sem a assinatura: o tempo acabou no resto da resposta (enorme ou lenta) —
+          // quem chama segue com a captura em fragmentos, como antes.
+          if (escritor && lidos >= ate) {
+            await escritor.abort().catch(() => {});
+            break;
+          }
+          throw e;
+        }
+        const { done, value } = parte;
         if (done) {
           terminou = true;
           break;
@@ -105,13 +125,21 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
         lidos += value.byteLength;
         if (lidos > o.maxBytes) {
           await leitor.cancel();
+          await escritor?.abort().catch(() => {});
           throw new Error(grande);
         }
+        if (escritor) await escritor.write(value);
         if (lidos > de && ini < ate) pedacos.push(value.subarray(Math.max(0, de - ini), Math.min(value.byteLength, ate - ini)));
-        if (lidos >= ate) {
+        if (lidos >= ate && !escritor) {
           await leitor.cancel();
           break;
         }
+      }
+      let assinatura: string | null = null;
+      if (escritor && !terminou) await escritor.abort().catch(() => {});
+      if (escritor && digest && terminou) {
+        await escritor.close();
+        assinatura = Array.from(new Uint8Array(await digest.digest), (b) => b.toString(16).padStart(2, "0")).join("");
       }
       const n = pedacos.reduce((t, p) => t + p.byteLength, 0);
       const bytes = new Uint8Array(n);
@@ -120,7 +148,7 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
         bytes.set(p, i);
         i += p.byteLength;
       }
-      return { texto: "", tipo, url: destino, status: r.status, bytes, lidos, terminou, comprimento };
+      return { texto: "", tipo, url: destino, status: r.status, bytes, lidos, terminou, comprimento, ...(assinar ? { assinatura } : {}) };
     }
     const dec = new TextDecoder();
     const partes: Uint8Array[] = [];

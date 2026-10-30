@@ -387,6 +387,11 @@ function AlcanceAdmin() {
  */
 export function NotificacoesAdmin() {
   const [aba, setAba] = useState<"avisos" | "limpeza" | "comunicado" | "alcance">("avisos");
+  // `?sub=` (a PESQUISA DO SISTEMA): abre na sub-aba pedida.
+  useEffect(() => {
+    const v = new URL(window.location.href).searchParams.get("sub");
+    if (v === "limpeza" || v === "comunicado" || v === "alcance") setAba(v);
+  }, []);
   return (
     <div className="space-y-[var(--gap-block)]">
       <Segmented<"avisos" | "limpeza" | "comunicado" | "alcance">

@@ -918,6 +918,7 @@ export const auditoria = sqliteTable(
   },
   (t) => [
     index("auditoria_entidade_idx").on(t.entidade, t.entidadeId),
+    index("auditoria_entidade_id_idx").on(t.entidade, t.id),
     index("auditoria_usuario_idx").on(t.usuarioId),
     index("auditoria_criado_idx").on(t.criadoEm),
     index("auditoria_protocolo_idx").on(t.protocoloId),
@@ -2339,7 +2340,11 @@ export const centiLotePassos = sqliteTable(
      * assinatura na próxima volta da automática = a página não mudou e não é reprocessada. */
     assinaturaBruta: text("assinatura_bruta"),
   },
-  (t) => [index("centi_lote_passos_lote_idx").on(t.loteId, t.id)],
+  (t) => [
+    index("centi_lote_passos_lote_idx").on(t.loteId, t.id),
+    // O PEDIDO de um lote (migração `0171`): a página anterior do mesmo pedido é achada sem varrer o lote.
+    index("centi_lote_passos_pedido_idx").on(t.loteId, t.inicio, t.fim, t.pagina),
+  ],
 );
 
 /**
@@ -2381,6 +2386,10 @@ export const centiLeituras = sqliteTable(
     vistas: text("vistas").notNull().default(""),
     /** SHA-256 da resposta (só quando veio inteira no 1º pedido — migração `0163`), levada ao passo final. */
     assinatura: text("assinatura"),
+    /** Execuções que pegaram a leitura sem avançar (migração `0170` — a cortada pelo limite de CPU conta; o avanço zera). */
+    tentativas: integer("tentativas").notNull().default(0),
+    /** O último AVANÇO da leitura (migração `0171`): os erros anteriores a ele não contam para a espera e a desistência. */
+    progressoEm: text("progresso_em"),
   },
   (t) => [index("centi_leituras_lote_idx").on(t.loteId)],
 );
@@ -2696,3 +2705,202 @@ export const declaracaoItens = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.declaracaoId, t.sequencial] }), index("declaracao_itens_pca_seq_idx").on(t.pcaId, t.sequencial)],
 );
+
+// ─── FROTAS (Vólus — migração `0169`) ────────────────────────────────────────────────────────────────────────
+
+/** Os CONTRATOS (empresas) da Vólus: o código de 12 dígitos, o produto e o ÓRGÃO do cadastro a que pertence. */
+export const frotaContratos = sqliteTable("frota_contratos", {
+  codigo: text("codigo").primaryKey(),
+  nome: text("nome").notNull().default(""),
+  sigla: text("sigla").notNull().default(""),
+  produto: text("produto").notNull().default("ambos"),
+  orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }),
+  ativo: integer("ativo", { mode: "boolean" }).notNull().default(true),
+  criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/** As UNIDADES que a Vólus manda nas transações (o texto) → a unidade do cadastro (o escopo da pessoa). */
+export const frotaUnidades = sqliteTable(
+  "frota_unidades",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    chave: text("chave").notNull(),
+    nome: text("nome").notNull(),
+    contrato: text("contrato"),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
+    vistoEm: text("visto_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("frota_unidades_chave_uq").on(t.chave)],
+);
+
+/** As CLASSIFICAÇÕES dos veículos (cadastradas em Veículos — Configurar). */
+export const frotaClassificacoes = sqliteTable("frota_classificacoes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  cor: text("cor").notNull().default("#2563eb"),
+  ordem: integer("ordem").notNull().default(0),
+  criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/** O CADASTRO da frota: uma linha por PLACA padronizada (as novas entram sozinhas pelas transações). */
+export const frotaVeiculos = sqliteTable(
+  "frota_veiculos",
+  {
+    placa: text("placa").primaryKey(),
+    tipo: text("tipo").notNull().default("veiculo"),
+    classificacaoId: integer("classificacao_id").references(() => frotaClassificacoes.id, { onDelete: "set null" }),
+    marca: text("marca"),
+    modelo: text("modelo"),
+    ano: integer("ano"),
+    situacao: text("situacao").notNull().default("ativo"),
+    origem: text("origem"),
+    fipe: real("fipe"),
+    locacao: real("locacao"),
+    contrato: text("contrato"),
+    capacidadeTanque: real("capacidade_tanque"),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
+    observacao: text("observacao"),
+    criadoEm: text("criado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoPor: text("atualizado_por"),
+  },
+  (t) => [index("frota_veiculos_classificacao_idx").on(t.classificacaoId)],
+);
+
+/** As TRANSAÇÕES da Vólus: abastecimentos e manutenções (`tipo`), únicas por tipo + chave; `hash` = a assinatura do que veio. */
+export const frotaTransacoes = sqliteTable(
+  "frota_transacoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tipo: text("tipo").notNull(),
+    chave: text("chave").notNull(),
+    contrato: text("contrato").notNull(),
+    refId: text("ref_id"),
+    dataHora: text("data_hora"),
+    dia: text("dia").notNull(),
+    ano: integer("ano").notNull(),
+    placa: text("placa"),
+    placaCrua: text("placa_crua"),
+    prefixo: text("prefixo"),
+    cartao: text("cartao"),
+    marca: text("marca"),
+    modelo: text("modelo"),
+    anoFabricacao: integer("ano_fabricacao"),
+    motorista: text("motorista"),
+    motoristaCnh: text("motorista_cnh"),
+    motoristaCpf: text("motorista_cpf"),
+    estabelecimento: text("estabelecimento"),
+    estabCnpj: text("estab_cnpj"),
+    estabEndereco: text("estab_endereco"),
+    estabBairro: text("estab_bairro"),
+    estabCidade: text("estab_cidade"),
+    estabUf: text("estab_uf"),
+    estabCep: text("estab_cep"),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    produtos: text("produtos"),
+    itens: text("itens"),
+    qtdItens: integer("qtd_itens").notNull().default(0),
+    litros: real("litros"),
+    precoLitro: real("preco_litro"),
+    valor: real("valor").notNull().default(0),
+    hodometro: real("hodometro"),
+    medidorTexto: text("medidor_texto"),
+    kmRodado: real("km_rodado"),
+    consumo: real("consumo"),
+    tipoManutencao: text("tipo_manutencao"),
+    notaFiscal: text("nota_fiscal"),
+    nfProdutos: text("nf_produtos"),
+    nfServicos: text("nf_servicos"),
+    valorNota: real("valor_nota"),
+    faturado: integer("faturado"),
+    empenho: text("empenho"),
+    processo: text("processo"),
+    unidadeNome: text("unidade_nome"),
+    unidadeCodigo: text("unidade_codigo"),
+    unidadeChave: text("unidade_chave"),
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
+    hash: text("hash").notNull(),
+    ausente: integer("ausente").notNull().default(0),
+    removidoEm: text("removido_em"),
+    criadoEm: text("criado_em").notNull(),
+    atualizadoEm: text("atualizado_em").notNull(),
+  },
+  (t) => [
+    uniqueIndex("frota_transacoes_chave_uq").on(t.tipo, t.chave),
+    index("frota_transacoes_periodo_idx").on(t.contrato, t.tipo, t.dia),
+    index("frota_transacoes_ano_idx").on(t.tipo, t.ano, t.removidoEm),
+    index("frota_transacoes_placa_idx").on(t.placa, t.dia),
+    index("frota_transacoes_atualizado_idx").on(t.atualizadoEm),
+    index("frota_transacoes_unidade_idx").on(t.unidadeChave),
+  ],
+);
+
+/** O histórico das LEITURAS da Vólus (cada pedido de contrato × tipo × período, com o resultado). */
+export const frotaLeituras = sqliteTable(
+  "frota_leituras",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contrato: text("contrato").notNull(),
+    tipo: text("tipo").notNull(),
+    inicio: text("inicio").notNull(),
+    fim: text("fim").notNull(),
+    origem: text("origem").notNull().default("manual"),
+    estado: text("estado").notNull(),
+    registros: integer("registros").notNull().default(0),
+    novos: integer("novos").notNull().default(0),
+    alterados: integer("alterados").notNull().default(0),
+    iguais: integer("iguais").notNull().default(0),
+    ausentes: integer("ausentes").notNull().default(0),
+    removidos: integer("removidos").notNull().default(0),
+    fora: integer("fora").notNull().default(0),
+    valor: real("valor").notNull().default(0),
+    bytes: integer("bytes").notNull().default(0),
+    ms: integer("ms").notNull().default(0),
+    erro: text("erro"),
+    por: text("por"),
+    em: text("em").notNull(),
+  },
+  (t) => [index("frota_leituras_contrato_idx").on(t.contrato, t.tipo, t.id), index("frota_leituras_em_idx").on(t.em)],
+);
+
+/** O CURSOR da atualização automática por contrato × tipo. */
+export const frotaCursores = sqliteTable(
+  "frota_cursores",
+  {
+    contrato: text("contrato")
+      .notNull()
+      .references(() => frotaContratos.codigo, { onDelete: "cascade" }),
+    tipo: text("tipo").notNull(),
+    cicloInicio: text("ciclo_inicio"),
+    proximo: text("proximo"),
+    passoDias: integer("passo_dias").notNull().default(7),
+    falhas: integer("falhas").notNull().default(0),
+    esperaAte: text("espera_ate"),
+    travaAte: text("trava_ate"),
+    cicloIniciadoEm: text("ciclo_iniciado_em"),
+    cicloConcluidoEm: text("ciclo_concluido_em"),
+    ultimoErro: text("ultimo_erro"),
+  },
+  (t) => [primaryKey({ columns: [t.contrato, t.tipo] })],
+);
+
+/** A SITUAÇÃO de cada importação AUTOMÁTICA (migração `0170`): `centi:<card>`, `frota:<contrato>:<tipo>` e os gerais —
+ * `desde` = quando ela entrou nesta situação; `em` = a última execução que a confirmou. */
+export const importacoesCron = sqliteTable("importacoes_cron", {
+  chave: text("chave").primaryKey(),
+  situacao: text("situacao").notNull(),
+  erro: integer("erro").notNull().default(0),
+  em: text("em").notNull(),
+  desde: text("desde").notNull(),
+});
+
+/** O ESTADO da frota (uma linha): a VERSÃO dos dados — sobe a cada gravação que escreveu algo e a cada vínculo/cadastro. */
+export const frotaEstado = sqliteTable("frota_estado", {
+  id: integer("id").primaryKey(),
+  versao: integer("versao").notNull().default(0),
+  em: text("em"),
+});

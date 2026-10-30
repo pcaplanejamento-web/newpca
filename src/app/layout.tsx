@@ -7,7 +7,7 @@ import { Toaster } from "@/components/Toast";
 import { ProtegerImagens } from "@/components/ProtegerImagens";
 import { getAparencia } from "@/lib/aparencia";
 import { aparenciaToCss } from "@/lib/theme";
-import { SCRIPT_MENU } from "@/lib/menu-lateral";
+import { SCRIPT_BARRA_ROLAGEM, SCRIPT_MENU } from "@/lib/menu-lateral";
 import { SCRIPT_TEMA } from "@/lib/tema-pessoal-core";
 
 // Dinâmico: lê a aparência do ADM (cacheada, fail-safe) para injetar os tokens
@@ -67,6 +67,8 @@ export default async function RootLayout({
         {/* O menu lateral recolhido (preferência deste navegador) — antes da 1ª pintura. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho 100% estático (SCRIPT_MENU), sem dados do usuário. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_MENU }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho 100% estático (SCRIPT_BARRA_ROLAGEM), sem dados do usuário. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_BARRA_ROLAGEM }} />
         {tokensCss && (
           // biome-ignore lint/security/noDangerouslySetInnerHtml: CSS gerado por aparenciaToCss (allowlist de tokens + valores só hex/número validados; anti-XSS).
           <style id="theme-tokens" dangerouslySetInnerHTML={{ __html: tokensCss }} />

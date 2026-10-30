@@ -4,7 +4,7 @@ import { getDb } from "./db";
 import { lerOrgaosCenti } from "./liquidacoes-core";
 import { registrarLeituraCard } from "./empenho-cards";
 import { COLUNAS_PASSO, comandosFecharLote, consultaBytesEsperados, type LinhaPasso, MSG_PAGINA_IGUAL } from "./empenhos-sql";
-import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroUnico, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
+import { CONDUTOR_AUTO, type EstadoLote, type SaudeLote, type EstadoPasso, erroUnico, LEITOR_EMPENHOS, type LoteCenti, MINUTOS_LOTE_PARADO, type ModoLote, limiteParado, MSG_ABANDONADO, type PassoLote, QUEM_AUTO, SEGUNDOS_CONDUCAO } from "./empenhos-core";
 
 /** Os LOTES de importação dos CARDS de empenhos (D1). Os comandos das páginas e da promoção ficam em `empenhos-sql.ts`. */
 
@@ -52,26 +52,39 @@ export async function getLote(id: number, cardId: number): Promise<LoteCenti | n
 }
 
 /**
- * O lote ainda lendo deste card. O parado há mais de 30 min (nenhuma página, nenhuma execução) é ENCERRADO como abandonado
- * antes — com a MESMA limpeza do fechamento (staging e a leitura fragmentada) e a leitura registrada no card (a próxima
- * atualização respeita a frequência). O índice `centi_lotes(card_id, estado, id)` faz as duas leituras pararem no lote certo.
+ * ENCERRA os lotes "lendo" PARADOS há mais de 30 min (nenhuma página, nenhuma execução) como abandonados — com a MESMA
+ * limpeza do fechamento (staging e a leitura fragmentada) e a leitura registrada no card (a próxima atualização respeita a
+ * frequência). Sem `cardId`, os de TODOS os cards (o cron, a cada minuto: nada fica "lendo" para sempre na tela).
  */
-export async function loteEmAndamento(cardId: number): Promise<LoteCenti | null> {
+export async function encerrarParados(cardId?: number): Promise<number> {
   const db = getDb();
-  const lendo = await db
+  const parados = await db
+    .select()
+    .from(centiLotes)
+    .where(and(cardId == null ? undefined : eq(centiLotes.cardId, cardId), eq(centiLotes.estado, "lendo"), lt(centiLotes.vistoEm, limiteParado())))
+    .orderBy(desc(centiLotes.id));
+  if (!parados.length) return 0;
+  const msg = `${MSG_ABANDONADO} sem atividade por mais de ${MINUTOS_LOTE_PARADO} minutos.`;
+  await db.batch(parados.flatMap((l) => comandosFecharLote(db, l.id, "falhou", msg)) as never);
+  const vistos = new Set<number>();
+  for (const l of parados) {
+    if (l.cardId == null || vistos.has(l.cardId)) continue;
+    vistos.add(l.cardId);
+    await registrarLeituraCard(l.cardId, "falhou", l.unicos + l.recusados, l.totalInformado);
+  }
+  return parados.length;
+}
+
+/** O lote ainda lendo deste card (os parados são encerrados antes — `encerrarParados`). O índice `centi_lotes(card_id,
+ * estado, id)` faz as leituras pararem no lote certo. */
+export async function loteEmAndamento(cardId: number): Promise<LoteCenti | null> {
+  await encerrarParados(cardId);
+  const [ativo] = await getDb()
     .select()
     .from(centiLotes)
     .where(and(eq(centiLotes.cardId, cardId), eq(centiLotes.estado, "lendo")))
-    .orderBy(desc(centiLotes.id));
-  const limite = new Date(Date.now() - MINUTOS_LOTE_PARADO * 60_000).toISOString().replace("T", " ").slice(0, 19);
-  const parados = lendo.filter((l) => l.vistoEm < limite);
-  if (parados.length) {
-    const msg = `Abandonado: sem atividade por mais de ${MINUTOS_LOTE_PARADO} minutos.`;
-    await db.batch(parados.flatMap((l) => comandosFecharLote(db, l.id, "falhou", msg)) as never);
-    const ultimo = parados[0];
-    await registrarLeituraCard(cardId, "falhou", ultimo.unicos + ultimo.recusados, ultimo.totalInformado);
-  }
-  const ativo = lendo.find((l) => l.vistoEm >= limite);
+    .orderBy(desc(centiLotes.id))
+    .limit(1);
   return ativo ? paraLote(ativo) : null;
 }
 
@@ -99,6 +112,22 @@ export async function criarLote(cardId: number, ano: number, quem: string, condu
 export async function listarPassos(loteId: number, limite = 3000): Promise<PassoLote[]> {
   const l = await getDb().select(COLUNAS_PASSO).from(centiLotePassos).where(eq(centiLotePassos.loteId, loteId)).orderBy(centiLotePassos.id).limit(limite);
   return l.map(paraPasso);
+}
+
+/**
+ * Os passos de um lote para o ANDAMENTO (o painel relê a cada poucos segundos): guardados na memória do Worker enquanto o
+ * lote não muda (`vistoEm` — toda página e toda parte o atualizam). As leituras do D1 contam por LINHA: sem isto, cada
+ * consulta do painel lia o lote inteiro (a cota diária do plano gratuito).
+ */
+const memoPassos = new Map<number, { visto: string; passos: Promise<PassoLote[]> }>();
+export function passosDoAndamento(lote: { id: number; vistoEm: string }): Promise<PassoLote[]> {
+  const m = memoPassos.get(lote.id);
+  if (m && m.visto === lote.vistoEm) return m.passos;
+  const passos = listarPassos(lote.id, 20_000);
+  passos.catch(() => memoPassos.delete(lote.id));
+  memoPassos.set(lote.id, { visto: lote.vistoEm, passos });
+  if (memoPassos.size > 30) memoPassos.delete(memoPassos.keys().next().value as number);
+  return passos;
 }
 
 /** A linha do banco → o passo da tela (o estado tipado, o fim do período booleano). */
@@ -129,7 +158,7 @@ export async function rodizioDosAnos(cardId: number, modo: ModoLote): Promise<{ 
       ano: centiLotes.ano,
       em: sql<string>`MAX(${centiLotes.iniciadoEm})`,
       promovido: sql<string | null>`MAX(CASE WHEN ${centiLotes.estado} = 'promovido' OR ${centiLotes.iniciadoPor} <> ${QUEM_AUTO} THEN ${centiLotes.iniciadoEm} END)`,
-      falha: sql<string | null>`MAX(CASE WHEN ${centiLotes.estado} IN ('falhou', 'parcial') AND ${centiLotes.iniciadoPor} = ${QUEM_AUTO} AND ${centiLotes.concluidoEm} > datetime('now', ${`-${HORAS_ESPERA_FALHA} hours`}) THEN ${centiLotes.iniciadoEm} END)`,
+      falha: sql<string | null>`MAX(CASE WHEN ${centiLotes.estado} IN ('falhou', 'parcial') AND ${centiLotes.iniciadoPor} = ${QUEM_AUTO} AND IFNULL(${centiLotes.mensagem}, '') NOT LIKE ${`${MSG_ABANDONADO}%`} AND ${centiLotes.concluidoEm} > datetime('now', ${`-${HORAS_ESPERA_FALHA} hours`}) THEN ${centiLotes.iniciadoEm} END)`,
     })
     .from(centiLotes)
     .where(and(eq(centiLotes.cardId, cardId), ne(centiLotes.estado, "lendo"), eq(centiLotes.modo, modo)))

@@ -75,6 +75,7 @@ import { DashboardMesa } from "@/components/DashboardMesa";
 import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import { SerieTemporal } from "@/components/charts/SerieTemporal";
+import { GraficoTemporal } from "@/components/charts/GraficoTemporal";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { type Atividade, diaDoProtocolo, FILTRO_METRICAS_PADRAO, type FiltroMetricas } from "@/lib/mesa-metricas";
 import { PERIODO_TODO, type Periodo } from "@/lib/periodo";
@@ -163,7 +164,7 @@ import { EsqueletoCalendario } from "@/components/CalendarioEsqueleto";
 import { DocumentoCard, EscolherTamanhoPdf } from "@/components/DocumentosView";
 import { COLUNAS_ESPACOS, EsqueletoCartaoEspaco } from "@/components/CartaoEspacoEsqueleto";
 import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
-import { EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoBarra } from "@/components/EsqueletoTela";
 import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
 import { EsqueletoTabsLaterais } from "@/components/TabsEsqueleto";
 import { EsqueletoControle, Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
@@ -200,6 +201,8 @@ import {
 } from "@/components/icons";
 import { CadeadoBotao, CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "@/components/CampoCadeado";
 import { KpiStat } from "@/components/KpiStat";
+import { MaisIndicadores } from "@/components/MaisIndicadores";
+import { IndicadoresKpi } from "@/components/IndicadoresKpi";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
@@ -237,6 +240,7 @@ import { ItemNotificacao } from "@/components/SinoNotificacoes";
 import { PresencaGrupo, SeloAoVivo } from "@/components/PresencaGrupo";
 import { CanalGrupoDemo } from "@/components/CanalGrupo";
 import { FotoBolha } from "@/components/BolhasChat";
+import { LixeiraFlutuante } from "@/components/LixeiraFlutuante";
 import { AtividadePessoa, PresencaNoItem } from "@/components/PresencaNoItem";
 import { Balao, ChatAoVivo, Digitando } from "@/components/ChatAoVivo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
@@ -286,6 +290,7 @@ import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
 import { PainelSegundoPlano } from "@/components/SegundoPlano";
 import { AndamentoImportacao } from "@/components/AndamentoImportacao";
+import { AtualizadoHa } from "@/components/AtualizacaoKpi";
 import type { ImportacaoLocal } from "@/lib/importacoes-ao-vivo-store";
 import { VERSOES } from "@/lib/versoes";
 import { PainelPendencias } from "@/components/PainelPendencias";
@@ -317,6 +322,9 @@ import { RelatorioVariacao } from "@/components/RelatorioVariacao";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
 import { TokenEditor } from "./TokenEditor";
+import { FichaVeiculoBanner } from "@/components/frota/FichaVeiculoBanner";
+import { ALERTAS_PADRAO } from "@/lib/frota-config-core";
+import { consumoDosAbastecimentos, contextoFrota, transacoesDoPacote } from "@/lib/frota-core";
 
 // Biblioteca de componentes (fonte única, spec §39.25) — rota pública
 // `/design-system`. Mostra TODO componente do sistema (botões, ícones, status,
@@ -554,7 +562,7 @@ function DemoEditorRico() {
   ];
   return (
     <div className="space-y-[var(--gap-block)]">
-      <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30vh] max-h-[50vh]" />
+      <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30dvh] max-h-[50dvh]" />
       <EditorRico compacto rotulo="Comentário" valor={c} onChange={setC} maxLength={5000} placeholder="Escrever um comentário… (@ menciona alguém)" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
       <EditorRico mensagem rotulo="Mensagem do chat" valor={m} onChange={setM} maxLength={2000} placeholder="Mensagem…" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
     </div>
@@ -1669,6 +1677,33 @@ function SerieTemporalDemo() {
         { chave: "pago", rotulo: "Pago", cor: 2 },
       ]}
       ariaLabel="Exemplo de evolução"
+      onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
+    />
+  );
+}
+
+function GraficoTemporalDemo() {
+  const [janela, setJanela] = useState(false);
+  let a = { combustivel: 0, manutencao: 0 };
+  const pontos = Array.from({ length: 10 }, (_, i) => {
+    a = { combustivel: a.combustivel + 18_000 + i * 900, manutencao: a.manutencao + 7_000 + (i % 3) * 2_500 };
+    return { chave: `2026-${i + 1}`, rotulo: ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out"][i], titulo: `Mês ${i + 1} de 2026`, atual: i === 9, valores: a };
+  });
+  return (
+    <GraficoTemporal
+      pontos={pontos}
+      series={[
+        { chave: "combustivel", rotulo: "Combustível", cor: 0 },
+        { chave: "manutencao", rotulo: "Manutenção", cor: 1 },
+      ]}
+      controles={[<Segmented key="t" ariaLabel="Tipo" value="a" onChange={() => {}} options={[{ value: "a", label: "Acumulado" }, { value: "p", label: "Por período" }]} />]}
+      gran="mês"
+      janela={null}
+      podeAproximar={!janela}
+      onZoom={() => setJanela(true)}
+      onRestaurar={() => setJanela(false)}
+      tabela={<p className="text-sm text-muted">A tabela dos pontos.</p>}
+      ariaLabel="Exemplo do gráfico no tempo"
       onEscolher={(p) => toast.info(`Origem de ${p.titulo}`)}
     />
   );
@@ -3462,6 +3497,30 @@ function DemoPainelFiltros() {
   );
 }
 
+/** A FROTA: a ficha do veículo sobre transações de exemplo (as telas Frotas/Combustível/Manutenção/Veículos e a
+ * configuração da Vólus — `FrotaView`, `VeiculosView`, `FrotaAdmin`, `TransacaoFrotaDetalhe` — são contêineres com dados). */
+function FichaVeiculoDemo() {
+  const [placa, setPlaca] = useState<string | null>(null);
+  const ab = (id: number, dia: string, litros: number, hodo: number) => [id, 0, dia, "09:30", "000617000001", "ABC1D23", "DIESEL S10", null, litros, 6.1, litros * 6.1, hodo, null, null, "POSTO CENTRAL", "RIO VERDE", "GO", "JOÃO", "SAÚDE", null, null, null, null, 1, 0];
+  const trs = transacoesDoPacote([
+    ab(1, "2026-03-02", 45, 20_000),
+    ab(2, "2026-03-09", 44, 20_420),
+    ab(3, "2026-04-01", 46, 20_850),
+    ab(4, "2026-04-15", 70, 20_700),
+    [5, 1, "2026-04-20", null, "000600000001", "ABC1D23", null, "PREVENTIVA", null, null, 1280, 21_000, null, null, "OFICINA BOA", "RIO VERDE", "GO", null, "SAÚDE", null, null, null, null, 6, 0],
+  ]);
+  const ctx = contextoFrota(
+    [{ placa: "ABC1D23", tipo: "veiculo", classificacaoId: 1, marca: "FIAT", modelo: "STRADA", ano: 2021, situacao: "ativo", origem: "proprio", fipe: 92_000, locacao: null, contrato: null, capacidadeTanque: 55, reparticaoId: null, observacao: null }],
+    [{ id: 1, nome: "Leve", cor: "#2563eb" }],
+  );
+  return (
+    <>
+      <Button onClick={() => setPlaca("ABC1D23")}>Abrir a ficha de ABC1D23</Button>
+      <FichaVeiculoBanner placa={placa} onClose={() => setPlaca(null)} trs={trs} ctx={ctx} consumo={consumoDosAbastecimentos(trs)} ano={2026} limites={ALERTAS_PADRAO} />
+    </>
+  );
+}
+
 export function Catalogo() {
   const [aba, setAba] = useState("todos");
   const [cor, setCor] = useState("#4f46e5");
@@ -3594,6 +3653,10 @@ export function Catalogo() {
 
       <Secao titulo="Andamento ao vivo de uma importação (AndamentoImportacao — etapas e cada pedido à Centi; o MonitorImportacoes leva o mesmo ao painel do canto para o ADM)">
         <AndamentoImportacao imp={DEMO_IMPORTACAO} />
+      </Secao>
+
+      <Secao titulo="Atualização no canto das KPIs (AtualizacaoKpi — AtualizadoHa · ImportarAgora; Execução e Frotas, por KpiStat canto/acaoCanto)">
+        <KpiStat label="Abastecimentos" value="R$ 1,2 mi" canto={<AtualizadoHa admin={false} meta={{ tipo: "frotas", atualizado: new Date(Date.now() - 12 * 60_000).toISOString(), lendo: 0 }} />} />
       </Secao>
 
       <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">
@@ -3798,6 +3861,37 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="MaisIndicadores (os principais à vista; os complementares abrem num painel por cima, sem mover o conteúdo)">
+        <div className="space-y-[var(--gap-block)]">
+          <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
+            <KpiStat completo label="Gasto total" value="R$ 299.227,64" hint="792 registros" />
+            <KpiStat completo label="Combustível" value="R$ 199.327,64" hint="720 abastecimentos" />
+            <KpiStat completo label="Manutenção" value="R$ 99.900,00" hint="72 manutenções" />
+            <KpiStat completo label="Veículos" value="24" hint="R$ 12.467,82 por veículo" />
+          </div>
+          <MaisIndicadores
+            extras={
+              <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
+                <KpiStat completo label="Consumo médio" value="9,41 km/l" hint="292.539 km rodados" />
+                <KpiStat completo label="Custo por km" value="R$ 1,02" hint="combustível + manutenção" />
+              </div>
+            }
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="IndicadoresKpi (os indicadores padrão: 4 principais com 2 detalhes + Mais indicadores — Frotas, Empenhos, Liquidações, Pagamentos)">
+        <IndicadoresKpi
+          cartoes={[
+            { label: "Empenhado", value: "R$ 12,4 mi", detalhes: [{ rotulo: "Anulado", valor: "R$ 0,3 mi" }, { rotulo: "Empenhos", valor: "1.204" }] },
+            { label: "Liquidado", value: "R$ 9,1 mi", detalhes: [{ rotulo: "Do empenhado", valor: "73%" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },
+            { label: "Pago", value: "R$ 8,2 mi", detalhes: [{ rotulo: "Do empenhado", valor: "66%" }, { rotulo: "Do liquidado", valor: "90%" }] },
+            { label: "A pagar", value: "R$ 3,9 mi", detalhes: [{ rotulo: "Liquidado", valor: "R$ 0,9 mi" }, { rotulo: "A liquidar", valor: "R$ 3,0 mi" }] },
+            { label: "Removidos", value: "3" },
+          ]}
+        />
+      </Secao>
+
       <Secao titulo="StatCard (tile de estatística)">
         <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total" value="122" tone="blue" icon={<IconClipboard className="h-5 w-5" />} hint="protocolos" />
@@ -3868,6 +3962,9 @@ export function Catalogo() {
 
       <Secao titulo="SerieTemporal (as ondas de evolução no tempo: áreas em camadas, sem legenda nem eixo Y — os valores na dica, linha de hoje, origem do ponto)">
         <SerieTemporalDemo />
+      </Secao>
+      <Secao titulo="GraficoTemporal (o gráfico no tempo do sistema — Execução e Frotas: o desenho no cartão, os controles em vidro, a legenda que liga e desliga, o zoom, a tabela e a origem)">
+        <GraficoTemporalDemo />
       </Secao>
 
       <Secao titulo="DashboardExecucaoEsqueleto (enquanto o Dashboard da Execução carrega — a MESMA grade)">
@@ -3999,6 +4096,14 @@ export function Catalogo() {
           <FotoBolha b={{ rotulo: "Carlão", fotos: [{ nome: PESSOAS_DEMO[1].nome, foto: PESSOAS_DEMO[1].foto }], presenca: "online" }} />
           <FotoBolha b={{ rotulo: "Compras", fotos: PESSOAS_DEMO.slice(1, 4).map((p) => ({ nome: p.nome, foto: p.foto })) }} />
           <FotoBolha b={{ rotulo: "Grupo · Planejamento", fotos: [], grupoAtivo: true }} />
+        </div>
+      </Secao>
+
+      <Secao titulo="LixeiraFlutuante (a LIXEIRA dos flutuantes — as bolhas do chat e o painel “Em segundo plano”: surge no centro embaixo enquanto um deles é arrastado; vermelha quando ele está sobre ela, âmbar quando não aceita — um trabalho ainda em andamento)">
+        <div className="relative flex h-24 gap-4 [transform:translateZ(0)]">
+          <LixeiraFlutuante x={40} y={44} aberta ativa={false} />
+          <LixeiraFlutuante x={120} y={44} aberta ativa />
+          <LixeiraFlutuante x={200} y={44} aberta ativa bloqueada />
         </div>
       </Secao>
 
@@ -4190,7 +4295,7 @@ export function Catalogo() {
           </span>
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <EsqueletoTitulo />
+              <EsqueletoBarra />
               <EsqueletoSegmented itens={4} />
               <EsqueletoControle quadrado />
             </div>
@@ -5334,6 +5439,10 @@ export function Catalogo() {
       </Secao>
       <Secao titulo="IntegracaoGoogle (Integrações → Login com Google: Client ID, Client secret write-only e a URI de redirecionamento a cadastrar no Google; e-mail novo vira cadastro pendente)">
         <IntegracaoGoogleDemo />
+      </Secao>
+
+      <Secao titulo="FichaVeiculoBanner (Frotas: a ficha do veículo — indicadores, gasto por mês, postos, alertas e registros; o PDF da ficha)">
+        <FichaVeiculoDemo />
       </Secao>
 
       <Secao titulo="Estado da ligação com o Trello (seloTrello — a seção Trello da Configuração do quadro, SincronizacaoTrello, é um contêiner com dados)">

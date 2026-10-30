@@ -54,6 +54,10 @@ describe("edicoes-tabela", () => {
     assert.deepEqual(telasDaChave(K), { telas: ["orcamento", "pca"], quadroId: null }, "o Comparativo está no Orçamento e no PCA");
     assert.deepEqual(telasDaChave("tarefas:12:lista"), { telas: ["tarefas"], quadroId: 12 }, "a Lista segue o grupo do quadro");
     assert.deepEqual(telasDaChave("orcamento-lancamentos:tabela"), { telas: ["orcamento"], quadroId: null }, "os Lançamentos do orçamento");
+    assert.deepEqual(telasDaChave("frotas:combustivel:tabela"), { telas: ["combustivel"], quadroId: null }, "Frotas: cada tabela segue a tela dela");
+    assert.deepEqual(telasDaChave("frotas:veiculos:tabela"), { telas: ["veiculos"], quadroId: null });
+    assert.deepEqual(telasDaChave("frotas:frotas:demonstrativo"), { telas: ["frotas"], quadroId: null });
+    assert.equal(telasDaChave("frotas:outra:x"), null);
     for (const k of ["tarefas:0:lista", "tarefas:abc:lista", "tarefas:12", "calendario:ocultos", "padrao:mesa:dfds", "x", "", "design-system:demo"])
       assert.equal(telasDaChave(k), null, k);
   });

@@ -46,7 +46,7 @@ export type Aparencia = {
   };
   identidade?: { nome?: string; subtitulo?: string; favicon?: string };
   /** TABELAS (Configurações → Tabelas): linhas por página com que as tabelas de rolagem interna (a Mesa) abrem. */
-  tabelas?: { linhas?: LinhasTabela };
+  tabelas?: { linhas?: LinhasTabela; noAparelho?: boolean };
   /** TELA DE ACESSO (Configurações → Tela de acesso): os textos da vitrine e o aviso do login (`textosAcesso`). */
   acesso?: Partial<TextosAcesso>;
 };
@@ -55,6 +55,11 @@ export type Aparencia = {
 export const LINHAS_TABELA = [30, 50, 100, 200] as const;
 export type LinhasTabela = (typeof LINHAS_TABELA)[number];
 export const LINHAS_TABELA_PADRAO: LinhasTabela = 30;
+
+/** Guardar os dados das telas no navegador (Configurações → Tabelas; padrão ligado). */
+export function guardarNoAparelho(a: Aparencia): boolean {
+  return a.tabelas?.noAparelho !== false;
+}
 
 /** As linhas iniciais das tabelas definidas pelo ADM (valor fora das opções = o padrão de fábrica). */
 export function linhasTabela(a: Aparencia): LinhasTabela {

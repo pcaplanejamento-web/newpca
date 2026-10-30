@@ -1,5 +1,5 @@
 import { type LoteCenti, type PassoLote, periodosLidos } from "./empenhos-core.ts";
-import { type EtapaImportacao, fracaoDaLeitura, fracaoGeral, type PedidoAndamento } from "./importacao-progresso.ts";
+import { type EtapaImportacao, fracaoDaLeitura, fracaoDoPedido, fracaoGeral, type PedidoAndamento } from "./importacao-progresso.ts";
 
 /**
  * AS IMPORTAÇÕES DESTA ABA, ao vivo: `importarCard` publica aqui o andamento de cada importação (as etapas, cada pedido à
@@ -16,7 +16,8 @@ export type EstadoImportacaoLocal = "rodando" | "gravado" | "parcial" | "falhou"
 export type ImportacaoLocal = {
   /** A chave desta importação nesta aba (o lote só existe depois de começar). */
   id: string;
-  cardId: number;
+  /** O card (Centi); null = a importação da FROTA (Vólus), sem card nem lote. */
+  cardId: number | null;
   titulo: string;
   ano: number;
   rota: string;
@@ -35,6 +36,13 @@ export type ImportacaoLocal = {
   texto: string | null;
   /** Aguardando a confirmação de uma queda na tela da importação. */
   aguardandoConfirmacao: boolean;
+  /** A queda perguntada no PAINEL DO CANTO (a importação sem tela que pergunte — o "Importar agora" da Execução): a
+   * resposta grava (true) ou cancela (false). Ausente = a tela da importação pergunta. */
+  responder?: ((sim: boolean) => void) | null;
+  /** O tipo de card (empenhos, liquidações, pagamentos) ou "frotas". */
+  tipo?: string;
+  /** Quantos pedidos a importação faz (a FROTA conhece a fila): com ele, a fração = os pedidos concluídos ÷ o total. */
+  totalPedidos?: number;
   /** Pede a interrupção (o laço confere a cada pedido). */
   parar: () => void;
 };
@@ -101,9 +109,30 @@ export function lotesDestaAba(): Set<number> {
 }
 
 /** A fração GERAL da importação desta aba (0..1), pela etapa, pelos períodos lidos e pelo que cada pedido em curso já fez. */
-export function fracaoDaImportacao(i: Pick<ImportacaoLocal, "etapa" | "etapaMs" | "ano" | "passos" | "pedidos" | "lote" | "estado">, agoraMs: number): number {
+export function fracaoDaImportacao(i: Pick<ImportacaoLocal, "etapa" | "etapaMs" | "ano" | "passos" | "pedidos" | "lote" | "estado"> & { totalPedidos?: number }, agoraMs: number): number {
   if (i.estado === "gravado") return 1;
+  if (i.totalPedidos != null) {
+    // A fila conhecida (a Frota): cada pedido concluído conta inteiro; o em curso, o que já fez.
+    if (i.totalPedidos <= 0) return 0;
+    const feito = i.pedidos.reduce((s, p) => s + (p.fase === "concluido" || p.fase === "dividido" || p.fase === "erro" ? 1 : fracaoDoPedido(p)), 0);
+    return Math.min(1, feito / i.totalPedidos);
+  }
   const orgaos = i.lote?.orgaosCenti?.length ?? null;
   const leitura = i.etapa === "leitura" || i.etapa === "conclusao" ? fracaoDaLeitura(i.ano, periodosLidos(i.passos), i.pedidos, orgaos) : 0;
   return fracaoGeral(i.etapa, i.etapa === "conclusao" ? 1 : leitura, agoraMs - i.etapaMs);
+}
+
+/**
+ * CONSULTAR A ÚLTIMA IMPORTAÇÃO de um tipo de card (o relógio dos indicadores da Execução): quem pede não precisa saber
+ * quem mostra — o monitor do painel do canto (`MonitorImportacoes`) ouve, busca e abre o painel nela.
+ */
+type OuvinteConsulta = (tipo: string) => void;
+const ouvintesConsulta = new Set<OuvinteConsulta>();
+export function consultarUltimaImportacao(tipo: string): boolean {
+  for (const o of ouvintesConsulta) o(tipo);
+  return ouvintesConsulta.size > 0;
+}
+export function aoConsultarImportacao(o: OuvinteConsulta): () => void {
+  ouvintesConsulta.add(o);
+  return () => ouvintesConsulta.delete(o);
 }

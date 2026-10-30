@@ -105,13 +105,26 @@ export function EmpenhoCardImportacao({
   const [ano, setAno] = useAnoDoCard(card.id, anos);
   const [lotes, setLotes] = useState<(LoteCenti & { saude?: SaudeLote })[] | null>(null);
   const [emAndamento, setEmAndamento] = useState<LoteCenti | null>(null);
+  // O INTERVALO MÍNIMO entre atualizações (Configurações → Importações): até `ate`, nenhuma importação NOVA começa.
+  const [intervalo, setIntervalo] = useState<{ ate: string; texto: string } | null>(null);
+  useEffect(() => {
+    if (!intervalo) return;
+    const t = setTimeout(() => setIntervalo(null), Math.max(0, Date.parse(intervalo.ate) - Date.now()) + 1000);
+    return () => clearTimeout(t);
+  }, [intervalo]);
   /** O andamento da importação em curso por OUTRO condutor (a atualização automática ou outra aba) — relido a cada 15 s. */
   const [andamento, setAndamento] = useState<AndamentoLote | null>(null);
-  const [atual, setAtual] = useState<LoteCenti | null>(null);
-  const [passos, setPassos] = useState<PassoLote[]>([]);
+  const [atualAqui, setAtual] = useState<LoteCenti | null>(null);
+  const [passosAqui, setPassos] = useState<PassoLote[]>([]);
   /** O ANDAMENTO AO VIVO da importação desta aba (fase a fase, pedido a pedido — o mesmo do painel do canto). */
   const aoVivo = useImportacaoDoCard(card.id);
-  const [rodando, setRodando] = useState(false);
+  const [rodandoAqui, setRodando] = useState(false);
+  // A importação DESTA ABA continua quando a tela do card sai e volta (ela mora no armazém, não no componente): voltar mostra
+  // a importação como desta aba — com o andamento, os passos e o Interromper — nunca como "de outra aba".
+  const daAba = !rodandoAqui && aoVivo?.estado === "rodando" ? aoVivo : null;
+  const rodando = rodandoAqui || !!daAba;
+  const atual = daAba?.lote ?? atualAqui;
+  const passos = daAba ? daAba.passos : passosAqui;
   const [historico, setHistorico] = useState<LoteCenti | null>(null);
   const [selLotes, setSelLotes] = useState<Set<number>>(new Set());
   const [desatualizados, setDesatualizados] = useState<{ ano: number; n: number }[]>([]);
@@ -120,7 +133,7 @@ export function EmpenhoCardImportacao({
   const liq = cardPorOrgao(tipo);
   const [orgaosLiq, setOrgaosLiq] = useState<OrgaoLiq[] | null>(null);
   const parar = useRef(false);
-  const { confirmar, confirmacao } = useConfirmacao();
+  const { confirmar, perguntar, confirmacao } = useConfirmacao();
   const comPeriodo = usaPeriodo(api.parametros);
 
   const carregar = useCallback(async () => {
@@ -133,8 +146,10 @@ export function EmpenhoCardImportacao({
         andamento?: AndamentoLote | null;
         desatualizados?: { ano: number; n: number }[];
         orgaosLiquidacao?: OrgaoLiq[] | null;
+        intervalo?: { ate: string; texto: string } | null;
       };
       if (j.ok) {
+        setIntervalo(j.intervalo ?? null);
         setOrgaosLiq(j.orgaosLiquidacao ?? null);
         setLotes(j.lotes ?? []);
         setEmAndamento(j.emAndamento ?? null);
@@ -195,7 +210,7 @@ export function EmpenhoCardImportacao({
         comPeriodo,
         parar: () => parar.current,
         confirmarQueda: (queda) =>
-          confirmar({ titulo: "Os números caíram — gravar mesmo assim?", texto: `${queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar importação", perigo: true }),
+          perguntar({ titulo: "Os números caíram — gravar mesmo assim?", texto: `${queda} Confira a Centi antes: se for um erro de leitura, cancele (nada é gravado).`, confirmar: "Gravar", cancelar: "Cancelar importação", perigo: true }),
         onLote: setAtual,
         onPasso: anotar,
         onAnteriores: setPassos,
@@ -239,6 +254,8 @@ export function EmpenhoCardImportacao({
   async function interromper() {
     if (await confirmar({ titulo: "Interromper a importação?", texto: "O que já foi lido é descartado; os empenhos ficam como estavam.", confirmar: "Interromper", perigo: true })) {
       parar.current = true;
+      // A importação que começou antes de a tela voltar para pelo armazém (o `parar` dela).
+      daAba?.parar?.();
     }
   }
 
@@ -406,9 +423,11 @@ export function EmpenhoCardImportacao({
           <Button
             size="sm"
             onClick={() => void importar(null)}
-            disabled={!!emAndamento || !anos.length || bloqueado}
+            disabled={!!emAndamento || !anos.length || bloqueado || !!intervalo}
             title={
-              bloqueado
+              intervalo && !emAndamento
+                ? intervalo.texto
+                : bloqueado
                 ? liq
                   ? "Configure o card antes de importar (Configuração) e cadastre o “ID na Centi” dos órgãos (Órgãos e Unidades)"
                   : "Configure o card antes de importar (Configuração e Vínculos)"
@@ -518,6 +537,7 @@ export function EmpenhoCardImportacao({
           leitor. Importe de novo para atualizar — nada é apagado; o que mudou é regravado.
         </Callout>
       )}
+      {intervalo && !emAndamento && !rodando && <Callout kind="info">{intervalo.texto}</Callout>}
       {emAndamento && !rodando && emAndamento.conduzido && (
         <Callout kind="info">
           <span className="block">

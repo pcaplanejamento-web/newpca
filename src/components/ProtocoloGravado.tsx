@@ -1,5 +1,6 @@
 "use client";
 
+import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, opcoesAssunto, type RegrasAvaliacao } from "@/lib/avaliacao-core";
 import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, gravacaoIncompleta, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
@@ -180,21 +181,19 @@ export function useProtocoloGravado({
     id: number,
     abrir: number | null,
     preservar?: Preservar,
+    fresco = true,
   ): Promise<{ protocolo: ProtocoloDetalhe; lista: DfdDetalhe[]; rascunhos: Map<number, DfdParseado> } | null> {
     const minha = ++cargaRef.current;
     setErro(null);
     try {
-      const r = await fetch(`/api/protocolo/${id}?completo=1`);
-      const j = (await r.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
+      const j = await lerJsonGuardado<{
         protocolo?: ProtocoloDetalhe;
         dfds?: DfdDetalhe[];
         unidades?: UnidadeConferencia[];
         sobrescritos?: DfdSobrescrito[];
-      };
+      }>("protocolo", `/api/protocolo/${id}?completo=1`, "Não foi possível abrir o protocolo.", fresco);
       if (minha !== cargaRef.current) return null;
-      if (!r.ok || !j.ok || !j.protocolo) throw new Error(j.error ?? "Não foi possível abrir o protocolo.");
+      if (!j.protocolo) throw new Error("Não foi possível abrir o protocolo.");
       const lista = j.dfds ?? [];
       const rascunhos = new Map(lista.map((d) => [d.id, detalheParaParseado(d)]));
       const reps = new Map(lista.map((d) => [d.id, d.reparticaoId]));
@@ -252,7 +251,7 @@ export function useProtocoloGravado({
     setPainel(null);
     setErro(null);
     setHistoricoAberto(false);
-    if (protocoloId != null) void carregar(protocoloId, dfdInicial);
+    if (protocoloId != null) void carregar(protocoloId, dfdInicial, undefined, false);
   }, [protocoloId, dfdInicial]);
 
   const capaSuja = !!proto && !!capa && Object.keys(diffCapaGravada(capaDe(proto), capa)).length > 0;
@@ -500,7 +499,7 @@ export function useProtocoloGravado({
       const bodyCapa = diffCapaGravada(capaDe(proto), capa);
       if (Object.keys(bodyCapa).length > 0) {
         setProgresso({ feito: 0, total: sujos.length + 1, label: "capa do protocolo" });
-        const falha = await enviar(`/api/protocolo/${proto.id}`, bodyCapa);
+        const falha = await enviar(`/api/protocolo/${proto.id}`, { ...bodyCapa, atualizadoEmLido: proto.atualizadoEm ?? undefined });
         if (falha) {
           falhas.push(`Capa: ${falha}`);
           preservar.capa = capa;
@@ -514,7 +513,7 @@ export function useProtocoloGravado({
         setProgresso({ feito: k, total: sujos.length, label: `DFD ${d.numero} (${k + 1}/${sujos.length})` });
         const body = diffDfdGravado(o, d, repIds.get(id) ?? null, itensEditados.has(id));
         if (Object.keys(body).length === 0) continue;
-        const falha = await enviar(`/api/dfd/${id}`, body);
+        const falha = await enviar(`/api/dfd/${id}`, { ...body, atualizadoEmLido: o.atualizadoEm ?? undefined });
         if (falha) {
           falhas.push(`DFD ${d.numero}: ${falha}`);
           preservar.dfds.set(id, { d, rep: repIds.get(id) ?? null, itens: itensEditados.has(id) });

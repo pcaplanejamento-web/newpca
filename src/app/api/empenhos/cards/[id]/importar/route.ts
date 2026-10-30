@@ -3,30 +3,21 @@ import { centiLeituras } from "@/db/schema";
 import { exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, telaDoCard } from "@/lib/empenho-cards-core";
+import { anosDoCard, cardPorOrgao, NOME_TIPO, pendenciasDoCard, proximaDoCard, telaDoCard, textoIntervalo } from "@/lib/empenho-cards-core";
 import { orgaosDoLote, orgaosLiquidacao, vinculosDoCard } from "@/lib/empenho-cards";
 import { cardDaRota } from "@/lib/empenho-card-rota";
 import { excluirImportacaoSchema, importarCardSchema } from "@/lib/empenho-cards-validation";
-import { anosDesatualizados, bytesEsperados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento } from "@/lib/empenhos";
-import { type AndamentoLote, fracaoDoAno, LEITOR_EMPENHOS, type LoteCenti, QUEM_AUTO } from "@/lib/empenhos-core";
-import { leituraDoLote } from "@/lib/empenhos-fragmentos";
+import { anosDesatualizados, bytesEsperados, criarLote, getLote, listarLotes, listarPassos, loteEmAndamento, passosDaRetomada, passosDoAndamento } from "@/lib/empenhos";
+import { LEITOR_EMPENHOS, lotePorOrgao, QUEM_AUTO } from "@/lib/empenhos-core";
+import { andamentoDoLote } from "@/lib/empenhos-fragmentos";
 import { baixarPaginaDoLote, concluirLoteEmpenhos, falhaDaPagina, fecharLoteEmpenhos, guardarParteDoLote, PedidoInvalido } from "@/lib/empenhos-importacao";
 import { MAX_CORPO_PARTE } from "@/lib/importacao-partes-core";
-import { comandoConduzir, comandoExcluirPassos, consultaAssinaturas, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
+import { comandoConduzir, comandosExcluirPassos, consultaAssinaturas, comandoRecontarLote, comandoSoltarLote, comandosExcluirLotes } from "@/lib/empenhos-sql";
 import { dataIsoBrasilia } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { getConfigImportacoes } from "@/lib/importacoes-config";
 
 export const dynamic = "force-dynamic";
-
-/** O andamento da importação em curso (a tela acompanha a da automática): o ano lido e a resposta grande em fragmentos. */
-async function andamentoDoLote(lote: LoteCenti): Promise<AndamentoLote> {
-  const l = await leituraDoLote(lote.id);
-  return {
-    fracao: fracaoDoAno(lote.ano, await listarPassos(lote.id)),
-    leitura: l ? { inicio: l.inicio, fim: l.fim, bytes: l.bytesCapturados, comprimento: l.comprimento, capturado: !!l.capturado, pos: l.pos, chars: l.charsCapturados } : null,
-  };
-}
-
 
 /** Os últimos lotes do card (o histórico da importação) + o que está lendo agora; com `?lote=`, os PASSOS daquele lote. */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -50,14 +41,21 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (loteId) {
     const lote = await getLote(loteId, a.card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
-    return ok({ lote, passos: await listarPassos(lote.id) });
+    // `passos` = para a tela (até 3000, as colunas do histórico); `retomada` = TODOS, mínimos — o que falta ler sai dela (um lote
+    // grande nunca pede de novo uma página já lida).
+    const [passos, retomada] = await Promise.all([listarPassos(lote.id), passosDaRetomada(lote.id)]);
+    return ok({ lote, passos, retomada: retomada.map(({ inicio, fim, pagina, estado, fimPeriodo }) => ({ inicio, fim, pagina, estado, fimPeriodo })) });
   }
   const emAndamento = await loteEmAndamento(a.card.id);
+  const { intervaloMin } = await getConfigImportacoes();
+  const proxima = emAndamento ? null : proximaDoCard(a.card, intervaloMin);
   return ok({
+    /** Antes disto nenhuma importação NOVA começa (o intervalo mínimo) — o texto do motivo. */
+    intervalo: proxima ? { ate: new Date(proxima).toISOString(), texto: textoIntervalo(proxima, intervaloMin) } : null,
     lotes: await listarLotes(a.card.id),
     orgaosLiquidacao: cardPorOrgao(a.card.tipo) ? await orgaosLiquidacao() : null,
     emAndamento,
-    andamento: emAndamento ? await andamentoDoLote(emAndamento) : null,
+    andamento: emAndamento ? await andamentoDoLote({ ...emAndamento, cardId: a.card.id }, await passosDoAndamento(emAndamento)) : null,
     desatualizados: await anosDesatualizados(a.card.id),
     leitor: LEITOR_EMPENHOS,
   });
@@ -103,6 +101,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (falta.length) return erro(`Antes de importar: ${falta.map((x) => x.texto).join(" ")}`, 409);
     const andando = await loteEmAndamento(card.id);
     if (andando) return erro(`Já há uma importação em andamento (${andando.ano}) — continue ou cancele aquela antes.`, 409);
+    // O INTERVALO MÍNIMO entre atualizações (Configurações → Importações): o catálogo ("Buscar na Centi") não grava dados.
+    if (corpo.modo !== "unidades") {
+      const { intervaloMin } = await getConfigImportacoes();
+      const proxima = proximaDoCard(card, intervaloMin);
+      if (proxima) return erro(textoIntervalo(proxima, intervaloMin), 409);
+    }
     return ok({ lote: await criarLote(card.id, corpo.ano, g.u.nome, corpo.condutor, corpo.modo, orgaos) });
   }
 
@@ -115,7 +119,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!conduz) return erro("Esta importação está em andamento em outra aba, com outra pessoa ou na atualização automática — acompanhe por lá ou espere 2 minutos sem atividade dela.", 409);
     // A aba que assume o lote descarta a leitura fragmentada que a automática deixou no meio (a página volta a ser lida
     // por quem conduz agora — nunca duas leituras da mesma página no lote).
-    if (lote.iniciadoPor === QUEM_AUTO) await db.delete(centiLeituras).where(eq(centiLeituras.loteId, lote.id));
+    // Só ao ASSUMIR (outro condutor antes) — nunca a cada pedido.
+    if (lote.iniciadoPor === QUEM_AUTO && !lote.conduzido) await db.delete(centiLeituras).where(eq(centiLeituras.loteId, lote.id));
+    if (corpo.acao === "manter") return ok({});
   } else if (lote.conduzido) {
     return erro("Esta importação está em andamento em outra aba — interrompa por lá.", 409);
   }
@@ -147,7 +153,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const r =
         corpo.acao === "falha"
           ? await falhaDaPagina(card, lote, periodo, corpo.pagina, { mensagem: corpo.mensagem, status: corpo.status, bytes: corpo.bytes, ms: corpo.ms })
-          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, iguais: corpo.iguais, resumo: corpo.resumo });
+          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, iguais: corpo.iguais, resumo: corpo.resumo, assinatura: corpo.assinatura ?? null });
       // A parte do meio não muda a contagem do lote (só a última reconta): não relê o lote.
       return ok({ lote: r.parcial ? null : await getLote(lote.id, card.id), ...r });
     } catch (e) {
@@ -191,8 +197,8 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     const lote = await getLote(p.data.lote, card.id);
     if (!lote) return erro("Importação não encontrada.", 404);
     const ids = [...new Set(p.data.passos)];
-    const res = (await db.batch([comandoExcluirPassos(db, lote.id, ids), ...(lote.estado === "lendo" ? [comandoRecontarLote(db, lote.id)] : [])] as never)) as unknown[][];
-    const excluidos = res[0].length;
+    const res = (await db.batch([...comandosExcluirPassos(db, lote.id, ids, lotePorOrgao(lote)), ...(lote.estado === "lendo" ? [comandoRecontarLote(db, lote.id)] : [])] as never)) as unknown[][];
+    const excluidos = res[1].length;
     await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "empenho_card", entidadeId: card.id, resumo: `${card.nome} ${lote.ano}: ${excluidos} passo(s) da importação ${lote.id} excluído(s)` });
     return ok({ excluidos, lote: await getLote(lote.id, card.id) });
   }

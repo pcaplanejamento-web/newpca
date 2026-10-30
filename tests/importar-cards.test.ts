@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ResumoCard } from "../src/lib/empenho-cards-core.ts";
-import { anoMaisRecente, type LinhaImportacao, ordemDeImportacao, perguntaDeQueda, prepararCards, resumoImportacao } from "../src/lib/importar-cards.ts";
+import { proximaAtualizacaoMs, proximaDoCard, textoIntervalo } from "../src/lib/empenho-cards-core.ts";
+import { anoMaisRecente, importarCards, type LinhaImportacao, ordemDeImportacao, perguntaDeQueda, prepararCards, resumoImportacao } from "../src/lib/importar-cards.ts";
 
 // O EXECUTOR do "Importar tudo" e do "Importar agora" das KPIs da Execução: o que vai, em que ano e em que ordem.
 
@@ -65,4 +66,35 @@ test("as quedas perguntam UMA por vez", async () => {
   assert.equal(ordem.length, 2);
   soltar(false);
   assert.equal(await b, false);
+});
+
+test("parar antes de começar: nenhum card é importado e todos ficam \"não iniciado\"", async () => {
+  const linhas: LinhaImportacao[] = [card(1), card(2, { tipo: "liquidacoes" })].map((c) => ({ card: c, estado: "fila", texto: "", fracao: 0, ano: 2026, retomar: null }));
+  const mudou: Record<number, Partial<LinhaImportacao>> = {};
+  await importarCards(linhas, { regra: "marcar", parar: () => true, onLinha: (id, m) => (mudou[id] = m) });
+  assert.equal(mudou[1]?.estado, "interrompido");
+  assert.equal(mudou[2]?.estado, "interrompido");
+});
+
+test("prepararCards: o card atualizado há pouco espera o intervalo mínimo", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, emAndamento: null, intervalo: { ate: "2099-01-01T00:00:00Z", texto: "espere" } }))) as typeof fetch;
+  try {
+    const [l] = await prepararCards([card(1)], () => 2026, 2026);
+    assert.equal(l.estado, "pulado");
+    assert.equal(l.texto, "espere");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("intervalo mínimo: conta da última importação CONCLUÍDA; depois de falha, já pode", () => {
+  const agora = Date.parse("2026-10-28T12:00:00Z");
+  assert.equal(proximaAtualizacaoMs("2026-10-28 11:50:00", 30, agora), Date.parse("2026-10-28T12:20:00Z"));
+  assert.equal(proximaAtualizacaoMs("2026-10-28 11:00:00", 30, agora), null, "passou o intervalo");
+  assert.equal(proximaAtualizacaoMs("2026-10-28 11:59:00", 0, agora), null, "sem intervalo");
+  assert.equal(proximaAtualizacaoMs(null, 30, agora), null);
+  assert.equal(proximaDoCard({ ultimaExecucao: "2026-10-28 11:50:00", ultimoStatus: "falhou" }, 30, agora), null, "a correção depois da falha");
+  assert.ok(proximaDoCard({ ultimaExecucao: "2026-10-28 11:50:00", ultimoStatus: "completo" }, 30, agora));
+  assert.match(textoIntervalo(Date.parse("2026-10-28T12:20:00Z"), 30, agora), /09:20 \(em 20 min; intervalo mínimo de 30 minutos\)/);
 });

@@ -28,7 +28,7 @@ export const TextoTermo = memo(function TextoTermo({ texto, className = "" }: { 
 });
 
 /** A caixa ROLÁVEL do termo: avisa quando a pessoa chegou ao fim (o aceite só destrava depois de ler tudo). */
-export function LeituraTermo({ texto, onFim, altura = "max-h-[46vh]" }: { texto: string; onFim: () => void; altura?: string }) {
+export function LeituraTermo({ texto, onFim, altura = "max-h-[46dvh]" }: { texto: string; onFim: () => void; altura?: string }) {
   const ref = useRef<HTMLElement>(null);
   const avisou = useRef(false);
   const fim = useRef(onFim);

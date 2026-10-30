@@ -253,7 +253,7 @@ export function EditorRico({
     const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "reduce";
     el.scrollBy({ left: dir * Math.max(120, el.clientWidth * 0.7), behavior: suave ? "smooth" : "auto" });
   };
-  const alturaFolha = altura ?? (mensagem ? "max-h-[140px]" : compacto ? "max-h-[50vh]" : "min-h-[50vh] max-h-[70vh]");
+  const alturaFolha = altura ?? (mensagem ? "max-h-[140px]" : compacto ? "max-h-[50dvh]" : "min-h-[50dvh] max-h-[70dvh]");
 
   // O valor de FORA (carga, "voltar ao modelo") redesenha a folha; o que o próprio editor emitiu, não (o cursor fica).
   useEffect(() => {
@@ -739,7 +739,7 @@ export function EditorRico({
               if (ref.current) limparDom(ref.current);
               emitir();
             }}
-            className={`outline-none ${mensagem ? `min-h-9 min-w-0 flex-1 py-1.5 ${CONTEUDO_COMPACTO}` : compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30vh] ${CONTEUDO}`}`}
+            className={`outline-none ${mensagem ? `min-h-9 min-w-0 flex-1 py-1.5 ${CONTEUDO_COMPACTO}` : compacto ? `min-h-[4.5rem] ${CONTEUDO_COMPACTO}` : `min-h-[30dvh] ${CONTEUDO}`}`}
           />
           {mensagem && (
             <button

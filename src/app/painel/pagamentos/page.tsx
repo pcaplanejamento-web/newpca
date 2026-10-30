@@ -7,7 +7,7 @@ import { linkImportacoes } from "@/lib/empenho-cards-core";
 import { listarCards } from "@/lib/empenho-cards";
 import { escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { chaveEscopoEmpenhos } from "@/lib/empenhos-tela-core";
-import { consultaVersaoExecucao } from "@/lib/execucao-sql";
+import { consultaVersoesExecucao, versaoDaTelaExecucao } from "@/lib/execucao-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +18,11 @@ export default async function PagamentosPage() {
   if (r.bloqueio) return r.bloqueio;
   const escopo = await escopoDosEmpenhos();
   const cards = await listarCards(escopo, "pagamentos");
-  const versao = await consultaVersaoExecucao(getDb());
+  const versao = await consultaVersoesExecucao(getDb()).then((v) => versaoDaTelaExecucao(v, "pagamentos"));
   return (
-    <EmpenhosView tipo="pagamentos" total={cards.reduce((t, c) => t + c.empenhos, 0)} importacoes={r.acesso.u.admin ? linkImportacoes("pagamentos") : undefined}>
+    <EmpenhosView tipo="pagamentos" importacoes={r.acesso.u.admin ? linkImportacoes("pagamentos") : undefined}>
       <PermissaoExportar permitido={r.pode.exportar}>
-        <EmpenhoCardPagamentos key={chaveEscopoEmpenhos(escopo)} cardId={null} nome="Pagamentos - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={versao} />
+        <EmpenhoCardPagamentos key={chaveEscopoEmpenhos(escopo)} nome="Pagamentos - todos os cards" cards={Object.fromEntries(cards.map((c) => [c.id, c.nome]))} versao={`${versao}|${chaveEscopoEmpenhos(escopo)}`} />
       </PermissaoExportar>
     </EmpenhosView>
   );

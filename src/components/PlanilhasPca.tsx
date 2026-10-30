@@ -170,6 +170,8 @@ export function PlanilhasPca({
     router.refresh();
   }
 
+  /** Um excluir por vez (dois toques não mandam dois pedidos). */
+  const excluindo = useRef(false);
   async function excluir(p: UploadPca) {
     const sim = await confirmar({
       titulo: `Excluir o upload ${p.nomeArquivo ?? ""}?`,
@@ -177,10 +179,18 @@ export function PlanilhasPca({
       confirmar: "Excluir upload",
       perigo: true,
     });
-    if (!sim) return;
-    const r = await fetch(`/api/pca/${pcaId}/planilhas/${p.id}`, { method: "DELETE" });
-    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!r.ok || !j.ok) setAviso({ kind: "danger", texto: j.error ?? "Não foi possível excluir." });
+    if (!sim || excluindo.current) return;
+    excluindo.current = true;
+    try {
+      const r = await fetch(`/api/pca/${pcaId}/planilhas/${p.id}`, { method: "DELETE" });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) setAviso({ kind: "danger", texto: j.error ?? "Não foi possível excluir." });
+      else setAviso({ kind: "ok", texto: `Upload ${p.nomeArquivo ?? ""} excluído.` });
+    } catch {
+      setAviso({ kind: "danger", texto: "Sem conexão com o servidor — o upload não foi excluído." });
+    } finally {
+      excluindo.current = false;
+    }
     router.refresh();
   }
 

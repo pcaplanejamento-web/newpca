@@ -82,6 +82,9 @@ export function telasDaChave(chave: string): { telas: readonly Tela[]; quadroId:
   if (chave.startsWith("orcamento-lancamentos:")) return { telas: ["orcamento"], quadroId: null };
   if (chave.startsWith("empenhos:")) return { telas: ["empenhos"], quadroId: null };
   if (chave.startsWith("execucao:")) return { telas: ["execucao"], quadroId: null };
+  // FROTAS: cada tabela segue a tela dela (`frotas:combustivel:…`, `frotas:manutencao:…`, `frotas:veiculos:…`, `frotas:frotas:…`).
+  const fr = /^frotas:(frotas|combustivel|manutencao|veiculos):/.exec(chave);
+  if (fr) return { telas: [fr[1] as Tela], quadroId: null };
   if (chave.startsWith("mesa-pca:")) return { telas: ["pca"], quadroId: null };
   if (chave.startsWith("mesa:")) return { telas: ["dfd"], quadroId: null };
   if (chave.startsWith("orcamento-comparativo:")) return { telas: ["orcamento", "pca"], quadroId: null };

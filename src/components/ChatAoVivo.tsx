@@ -651,7 +651,7 @@ function CabecalhoPainel({
   return (
     <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2 lg:h-12">
       {children}
-      <button type="button" onClick={onFechar} aria-label={rotuloFechar} title={rotuloFechar} className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
+      <button type="button" onClick={onFechar} aria-label={rotuloFechar} title={rotuloFechar} className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
         {iconeFechar ?? <IconClose className="h-4 w-4" />}
       </button>
     </div>
@@ -759,7 +759,7 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
                   onChange={(e) => setBusca(e.target.value)}
                   placeholder="Buscar pessoa…"
                   aria-label="Buscar pessoa"
-                  className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-9"
+                  className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-[var(--h-control-sm)]"
                 />
               </div>
             ) : null}
@@ -827,7 +827,7 @@ function NovaConversaGrupo({ onCriar, onVoltar, onFechar }: { onCriar: (membros:
   return (
     <>
       <CabecalhoPainel onFechar={onFechar}>
-        <button type="button" onClick={onVoltar} aria-label="Voltar às conversas" title="Voltar às conversas" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
+        <button type="button" onClick={onVoltar} aria-label="Voltar às conversas" title="Voltar às conversas" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
           <IconChevronLeft className="h-4 w-4" />
         </button>
         <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Nova conversa em grupo</p>
@@ -839,7 +839,7 @@ function NovaConversaGrupo({ onCriar, onVoltar, onFechar }: { onCriar: (membros:
           maxLength={MAX_NOME_CONVERSA}
           placeholder="Nome da conversa (opcional)"
           aria-label="Nome da conversa"
-          className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13.5px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-9"
+          className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13.5px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-[var(--h-control-sm)]"
         />
         {canal.pessoas.length > 9 && (
           <input
@@ -848,7 +848,7 @@ function NovaConversaGrupo({ onCriar, onVoltar, onFechar }: { onCriar: (membros:
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar pessoa…"
             aria-label="Buscar pessoa"
-            className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-9"
+            className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-[var(--h-control-sm)]"
           />
         )}
       </div>
@@ -878,7 +878,7 @@ function NovaConversaGrupo({ onCriar, onVoltar, onFechar }: { onCriar: (membros:
           type="button"
           disabled={!pode}
           onClick={() => onCriar([...marcados], nome)}
-          className="inline-flex h-11 items-center gap-1.5 rounded-control bg-accent px-4 text-[13px] font-semibold text-white disabled:opacity-40 lg:h-9"
+          className="inline-flex h-11 items-center gap-1.5 rounded-control bg-accent px-4 text-[13px] font-semibold text-white disabled:opacity-40 lg:h-[var(--h-control-sm)]"
         >
           <IconChat className="h-4 w-4" /> Criar conversa
         </button>
@@ -1050,7 +1050,7 @@ function ConversaChat({
           aria-pressed={fixada}
           aria-label={fixada ? "Manter aberta: ligado (tocar fora não minimiza)" : "Manter aberta: desligado (tocar fora minimiza)"}
           title={fixada ? "Fixada: tocar fora não minimiza — toque para soltar" : "Manter a conversa aberta ao tocar fora"}
-          className={`inline-flex h-11 w-11 items-center justify-center rounded-control transition-colors hover:bg-surface-2 lg:h-9 lg:w-9 ${fixada ? "text-accent" : "text-muted"}`}
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-control transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${fixada ? "text-accent" : "text-muted"}`}
         >
           <IconFixar className={`h-4 w-4 transition-transform duration-[var(--motion-duration)] ${fixada ? "-rotate-45" : ""}`} />
         </button>

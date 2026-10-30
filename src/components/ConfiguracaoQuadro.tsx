@@ -94,7 +94,7 @@ export function ConfiguracaoQuadro({
   const salvarQuadro = () =>
     gravar(
       "quadro",
-      () => chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { cor: campos.cor, descricao: campos.descricao.trim() || null }),
+      () => chamar(`/api/tarefas/quadros/${quadro.id}`, "PATCH", { ...(campos.nome.trim() && campos.nome.trim() !== quadro.nome ? { nome: campos.nome.trim() } : {}), cor: campos.cor, descricao: campos.descricao.trim() || null }),
       "Quadro salvo.",
     );
 
@@ -140,7 +140,7 @@ export function ConfiguracaoQuadro({
   return (
     <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
       <Secao titulo="Quadro">
-        <CamposQuadro valor={campos} onChange={setCampos} disabled={!podeEditar} semNome />
+        <CamposQuadro valor={campos} onChange={setCampos} disabled={!podeEditar} />
         {(podeEditar || pode.importar || pode.excluir) && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             {podeEditar && <Switch checked={quadro.arquivado} disabled={ocupado != null} onChange={arquivarQuadro} label="Quadro arquivado" />}

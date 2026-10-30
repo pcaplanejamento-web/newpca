@@ -1,21 +1,22 @@
 import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
-import { anosAutomaticos, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, cardsDaAutomatica, lotesForaDaEscolha } from "./empenho-cards-core";
-import { cardsAtivos, orgaosDoLote, registrarLeituraCard } from "./empenho-cards";
+import { anosAutomaticos, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, cardsDaAutomatica, lotesForaDaEscolha, proximaDoCard } from "./empenho-cards-core";
+import { cardsAtivos, orgaosDoLote } from "./empenho-cards";
 import { and, eq } from "drizzle-orm";
 import { centiLeituras, centiLotePassos, centiLotes } from "@/db/schema";
-import { criarLote, type getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
+import { criarLote, encerrarParados, type getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
 import {
   hojeIso,
   anoDaVez,
   CONDUTOR_AUTO,
   cabeOutroPulo,
+  cabePaginaReal,
   cardNaHora,
   custoDoPulo,
   esperaDoErro,
   LEITOR_EMPENHOS,
   type LoteCenti,
-  lotePorMes,
+  lotePorMesAuto,
   lotePorOrgao,
   MAX_ERROS_AUTO,
   MINUTOS_DESISTIR_AUTO,
@@ -26,11 +27,12 @@ import {
   rotuloPeriodo,
   usaPeriodo,
 } from "./empenhos-core";
-import { avancarLeitura, iniciarPaginaAuto, leituraDoLote } from "./empenhos-fragmentos";
+import { avancarLeitura, descartarLeitura, iniciarPaginaAuto, leituraDoLote } from "./empenhos-fragmentos";
 import { concluirLoteEmpenhos, fecharLoteEmpenhos, fecharParcial, PedidoInvalido, type ResultadoPagina } from "./empenhos-importacao";
 import { comandoConduzir, comandoSoltarAuto, comandosFecharLote, comandoTravarAuto } from "./empenhos-sql";
 import { listarFeriados } from "./feriados";
 import { getConfigImportacoes } from "./importacoes-config";
+import { inicioDaFila } from "./rodada-cron-core";
 import { horaAgoraBrasilia } from "./tarefas-core";
 
 /**
@@ -42,39 +44,65 @@ import { horaAgoraBrasilia } from "./tarefas-core";
  * QUEDA suspeita sozinha (o lote fecha como parcial — a pessoa confirma numa importação manual) e nunca disputa o lote com
  * uma aba (a trava de quem conduz). Nos cards de LIQUIDAÇÕES, o lote lê todos os órgãos do cadastro com o "ID na Centi".
  */
-export async function atualizarEmpenhosAuto(agora = new Date()): Promise<{ card: number; situacao: string }[]> {
+export async function atualizarEmpenhosAuto(
+  agora = new Date(),
+  /** A vez na RODADA do cron (`rodada-cron-core.ts`): a limpeza só na 1ª; o rodízio começa num card diferente a cada vez. */
+  vez = 0,
+  /** O card servido pela chamada anterior da RODADA: a fila começa depois dele (rodízio justo). */
+  depois: number | null = null,
+): Promise<{ situacoes: { card: number; situacao: string }[]; trabalhou: boolean; servido?: number }> {
+  const nada = (situacoes: { card: number; situacao: string }[]) => ({ situacoes, trabalhou: false });
+  // Os lotes PARADOS há mais de 30 min (a aba fechou, o Worker foi cortado) são encerrados em TODOS os cards — ligada ou
+  // não a automática: nada fica "lendo" para sempre na Execução e no painel do canto.
+  if (vez === 0) await encerrarParados().catch((e) => console.error("[empenhos-auto] encerrar parados", e));
   // A configuração CENTRAL (Configurações → Importações): desligada, nada roda; ligada, vale para todos os cards.
   const cfg = await getConfigImportacoes();
-  if (!cfg.ativa) return encerrarLotesAuto();
+  // `card` 0 = a automática inteira (a tela mostra se ela está desligada, sem nada escolhido ou rodando).
+  if (!cfg.ativa) return nada([{ card: 0, situacao: "Atualização automática desligada" }, ...(await encerrarLotesAuto())]);
   const hoje = hojeIso(agora);
   const anoAtual = Number(hoje.slice(0, 4));
   // SÓ as importações (card × ano) ESCOLHIDAS em Configurações → Importações; o lote da automática num card/ano que saiu
   // da escolha é cancelado (nada fica "Importando" para sempre).
   const prontos = await cardsAtivos();
   const cards = cardsDaAutomatica(prontos, cfg, anoAtual);
-  const cancelados = await encerrarLotesAuto((l) => lotesForaDaEscolha(l, prontos, cfg, anoAtual), "A importação saiu da atualização automática.");
-  if (!cards.length) return cancelados;
+  const cancelados = vez === 0 ? await encerrarLotesAuto((l) => lotesForaDaEscolha(l, prontos, cfg, anoAtual), "A importação saiu da atualização automática.") : [];
+  if (!cards.length) return nada([{ card: 0, situacao: "Nenhuma importação escolhida para a atualização automática" }, ...cancelados]);
   const util = cfg.diasUteis ? diaUtil(hoje, feriadosNoIntervalo(await listarFeriados(), hoje, hoje)) : true;
   const instante = { ms: agora.getTime(), hora: horaAgoraBrasilia(agora), diaUtil: util, ano: Number(hoje.slice(0, 4)) };
-  const r: { card: number; situacao: string }[] = [...cancelados];
+  const r: { card: number; situacao: string }[] = [{ card: 0, situacao: "Ligada" }, ...cancelados];
   // A FILA ÚNICA: empenhos → liquidações → pagamentos (a unidade das liquidações e dos pagamentos vem do empenho); UMA
   // tarefa pesada por execução (o limite de CPU do plano gratuito vale para a execução inteira) — o 1º card que trabalhar
   // encerra a execução; quem só espera (fora da hora, depois de um erro) passa a vez ao seguinte.
-  for (const card of cards) {
+  // RODÍZIO: a fila começa num card diferente a cada meio minuto — uma leitura longa (horas num dia pesado) nunca deixa os
+  // outros cards sem a vez.
+  // Na RODADA, cada vez começa no card seguinte: Empenhos, Liquidações e Pagamentos andam juntos.
+  // Na RODADA, a fila começa DEPOIS do card servido pela chamada anterior — um card com trabalho nunca recebe a vez em dobro
+  // só porque o anterior a ele está parado.
+  const ini = inicioDaFila(
+    cards.map((c) => c.id),
+    depois,
+    Math.floor(agora.getTime() / 30_000) + vez,
+  );
+  let trabalhou = false;
+  let servido: number | undefined;
+  for (const card of [...cards.slice(ini), ...cards.slice(0, ini)]) {
     try {
       const u = await umCard(card, cfg, instante);
       r.push({ card: card.id, situacao: u.situacao });
-      if (u.trabalhou) break;
+      if (u.trabalhou) {
+        trabalhou = true;
+        servido = card.id;
+        break;
+      }
     } catch (e) {
-      // Nunca em silêncio: o erro vira um passo do lote (umCard) e o log; a fila segue na próxima execução.
-      // O card que falha vai para a espera da frequência (a última leitura = falhou) e a fila SEGUE: um card com defeito
-      // nunca prende os outros.
+      // Nunca em silêncio: o erro vira um passo do lote (umCard — conta para a espera e a desistência) e o log. A fila SEGUE
+      // para o próximo card: um card com defeito nunca prende os outros. A última leitura do card NÃO muda (um erro passageiro
+      // no meio do lote não pode segurar o próximo lote pela frequência inteira) — o fim do lote é que registra.
       console.error(`[cron empenhos] card ${card.id}:`, (e as Error).message);
       r.push({ card: card.id, situacao: `erro: ${(e as Error).message}` });
-      await registrarLeituraCard(card.id, "falhou", card.ultimaContagem ?? 0, card.ultimoTotal).catch(() => undefined);
     }
   }
-  return r;
+  return { situacoes: r, trabalhou, servido };
 }
 
 /**
@@ -109,6 +137,8 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
   if (!lote) {
     // A PROGRAMAÇÃO é a central; a última leitura é a de cada card (cada um tem a sua vez na frequência).
     if (!cardNaHora({ ...cfg, ultimaExecucao: card.ultimaExecucao }, agora)) return { situacao: "fora da hora", trabalhou: false };
+    // O INTERVALO MÍNIMO entre atualizações vale também para a automática.
+    if (proximaDoCard(card, cfg.intervaloMin, agora.ms)) return { situacao: "intervalo mínimo", trabalhou: false };
     const { ultima, emEspera } = await rodizioDosAnos(card.id, modoDoCard(card));
     // Os anos cuja última automática falhou ou ficou parcial esperam (o mesmo motivo voltaria) — a manual os libera.
     const anos = anosAutomaticos(cfg, card, agora.ano).filter((a) => !emEspera.has(a));
@@ -140,16 +170,25 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
     const aberta = await leituraDoLote(lote.id);
     if (aberta) {
       pedidoAtual = { periodo: { inicio: aberta.inicio, fim: aberta.fim }, pagina: aberta.pagina };
+      // A MESMA espera e desistência dos erros da página: a falha que se repete na leitura não prende o lote para sempre.
+      const erro = esperaDoErro(await passosDaRetomada(lote.id), pedidoAtual, agora.ms, aberta.progressoEm);
+      if (erro.desistir) {
+        await db.batch(descartarLeitura(aberta, "erros seguidos") as never);
+        await fecharLoteEmpenhos(card, lote, "falhou", `${rotuloPeriodo(pedidoAtual.periodo)}, página ${pedidoAtual.pagina}: ${MAX_ERROS_AUTO} erros seguidos na leitura em mais de ${MINUTOS_DESISTIR_AUTO} minutos — a atualização automática desistiu.`);
+        return { situacao: "falhou (erros seguidos na leitura)", trabalhou: true };
+      }
+      if (erro.esperar) return { situacao: "esperando depois de um erro na leitura", trabalhou: false };
       const a = await avancarLeitura(card, lote, aberta);
-      return { situacao: (await tratarErro(card, lote, a.resultado)) ?? a.situacao, trabalhou: true };
+      return { situacao: (await tratarErro(card, lote, a.resultado)) ?? a.situacao, trabalhou: !a.ocupada };
     }
     // As páginas IDÊNTICAS à última volta são LEVES (nada é lido nem gravado): a execução segue com a próxima enquanto cabe
     // um pulo inteiro no ORÇAMENTO de consultas ao D1 (`cabeOutroPulo`); a 1ª página com mudança encerra a execução.
     let pulos = 0;
     const porOrgao = lotePorOrgao(lote);
+    // Os passos são lidos UMA vez por execução (as leituras do D1 contam por linha): cada página pulada entra na lista aqui.
+    const passos: Awaited<ReturnType<typeof passosDaRetomada>> = await passosDaRetomada(lote.id);
     for (;;) {
-      const passos = await passosDaRetomada(lote.id);
-      const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), porOrgao ? (lote.orgaosCenti?.length ?? 0) : undefined, lotePorMes(lote));
+      const pedido = proximoPedido(lote.ano, passos, usaPeriodo(card.parametros), porOrgao ? (lote.orgaosCenti?.length ?? 0) : undefined, lotePorMesAuto(lote));
       if (!pedido) {
         // A conclusão é pesada (a promoção): depois de pulos, fica para a próxima execução.
         if (pulos) return { situacao: `${lote.ano}: ${pulos} página(s) sem mudança — conclui na próxima execução`, trabalhou: true };
@@ -163,7 +202,14 @@ async function umCard(card: CardEmpenho, cfg: ConfigImportacoes, agora: { ms: nu
       }
       // Dentro da espera do último erro (1, 2, 4… min): a Centi tem tempo de voltar; o rodízio segue para outro card.
       if (erro.esperar) return { situacao: "esperando depois de um erro", trabalhou: pulos > 0 };
-      const a = await iniciarPaginaAuto(card, lote, pedido.periodo, pedido.pagina);
+      // Depois de pulos, a página que MUDOU só é lida se ainda couber uma página real no orçamento de consultas.
+      const gasto = pulos * custoDoPulo(porOrgao);
+      const a = await iniciarPaginaAuto(card, lote, pedido.periodo, pedido.pagina, pulos > 0 && !cabePaginaReal(gasto));
+      if (a.adiada) return { situacao: `${lote.ano}: ${pulos} página(s) sem mudança — a seguinte mudou (lida na próxima execução)`, trabalhou: true };
+      if (a.pulou && a.resultado) {
+        const p = a.resultado.passo;
+        passos.push({ inicio: p.inicio, fim: p.fim, pagina: p.pagina, estado: p.estado, fimPeriodo: p.fimPeriodo, mensagem: null, em: p.em });
+      }
       if (a.pulou && cabeOutroPulo(++pulos * custoDoPulo(porOrgao), porOrgao)) continue;
       const situacao = a.pulou ? `${pulos} página(s) sem mudança` : a.situacao;
       return { situacao: (await tratarErro(card, lote, a.resultado)) ?? `${lote.ano}: ${situacao}`, trabalhou: true };

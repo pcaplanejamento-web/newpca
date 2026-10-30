@@ -5,7 +5,13 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useL
 import { createPortal } from "react-dom";
 import { textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { Button } from "./Button";
-import { IconAlert, IconAmpliar, IconChevronDown, IconCirculoCheck, IconClose, IconParar, IconSpinner } from "./icons";
+import { type AmostraArrasto, lerPosicaoBolha, type PosicaoBolha, pousarBolha, projetarArremesso, topoDaPosicao, velocidadeArrasto } from "@/lib/chat-core";
+import { publicarFaixaFlutuante } from "@/lib/flutuantes-store";
+import { LIXEIRA, LixeiraFlutuante, semMovimento } from "./LixeiraFlutuante";
+import { definirVarRaiz, tokenPx } from "./espacamento";
+import { IconAlert, IconAmpliar, IconChevronDown, IconCirculo, IconCirculoCheck, IconClose, IconGrip, IconLimpar, IconParar, IconSpinner } from "./icons";
+import { duracaoMotionMs } from "./Modal";
+import { segurar } from "./segurar";
 import { Progress } from "./Progress";
 
 /**
@@ -14,7 +20,9 @@ import { Progress } from "./Progress";
  *   em curso não desmonta nada (o nó do DOM vai para um estacionamento escondido; voltar o devolve, com o estado inteiro).
  * - `useTrabalhoSegundoPlano` (no componente que executa): informa o andamento; o `PainelSegundoPlano` mostra, fora da
  *   página dona, uma pílula MINIMIZADA no canto inferior direito (tocar expande: abrir os detalhes / parar).
- * - A altura do painel vai em `--reserva-flutuante` (as bolhas do chat e os avisos flutuantes ficam acima dele).
+ * - O painel é manuseado como as BOLHAS do chat (arrastar, arremessar, encostar na borda, lixeira, Alt + setas); a faixa
+ *   que ocupa vai ao armazém dos flutuantes (as bolhas desviam) e, no canto inferior direito, em `--reserva-flutuante` (os
+ *   avisos flutuantes ficam acima).
  */
 export type EstadoTrabalho = "rodando" | "fila" | "concluido" | "falhou" | "cancelado";
 export type Trabalho = {
@@ -43,6 +51,11 @@ export type Trabalho = {
   corpo?: () => ReactNode;
   /** Não aparece no painel (só mantém a página dona viva — ex.: o ADM desligou o andamento das importações). */
   oculto?: boolean;
+  /** Uma PERGUNTA a responder no próprio painel (ex.: a queda de uma importação sem tela que pergunte): o painel abre
+   * sozinho e mostra os dois botões; a resposta segue o trabalho. */
+  pergunta?: { texto: string; sim: string; nao: string; responder: (sim: boolean) => void };
+  /** Pedido de ABRIR o painel neste trabalho (o instante do pedido — um novo valor abre de novo). */
+  abrirEm?: number;
 };
 
 type Ctx = {
@@ -229,7 +242,50 @@ const ICONE: Record<EstadoTrabalho, ReactNode> = {
 };
 const ROTULO: Record<EstadoTrabalho, string> = { rodando: "Executando", fila: "Na fila", concluido: "Concluído", falhou: "Falhou", cancelado: "Interrompido" };
 
-/** O painel MINIMIZADO no canto inferior direito (só os trabalhos de fora da página aberta). */
+/** Onde o painel fica (o lado, a altura e quando foi mexido) — neste aparelho. */
+const CHAVE_POSICAO = "segundo-plano:posicao";
+/** "Sempre bolha" (a pílula circular também fechada) — neste aparelho. */
+const CHAVE_BOLHA = "segundo-plano:bolha";
+const POSICAO_PADRAO: PosicaoBolha = { lado: "dir", y: 1, t: 0 };
+const MARGEM = 12;
+const LIMIAR = 6;
+/** Alt + ↑/↓ move o painel este tanto (px). */
+const PASSO_TECLADO = 56;
+
+function lerPosicaoGuardada(): PosicaoBolha {
+  try {
+    const v = localStorage.getItem(CHAVE_POSICAO);
+    return (v && lerPosicaoBolha(JSON.parse(v))) || POSICAO_PADRAO;
+  } catch {
+    return POSICAO_PADRAO;
+  }
+}
+
+/** As medidas da tela para o painel: a área livre das bolhas (o cabeçalho em cima; embaixo, a navegação do celular e a
+ * barra fixa de seleção). */
+function medirTela() {
+  const largura = document.documentElement.clientWidth || window.innerWidth;
+  const altura = window.innerHeight;
+  const desktop = largura >= 1024;
+  return { largura, altura, desktop, topo: 64, base: (desktop ? 16 : 84) + tokenPx("--reserva-rodape", 0) };
+}
+
+/** A página aberta é a dona do trabalho (o caminho e, quando a rota leva a busca — `?aba=` —, os mesmos parâmetros)? */
+function naRotaDona(rota: string, caminho: string): boolean {
+  const [path, busca] = rota.split("?");
+  if (caminho !== path) return false;
+  if (!busca || typeof window === "undefined") return true;
+  const atual = new URLSearchParams(window.location.search);
+  return [...new URLSearchParams(busca)].every(([k, v]) => atual.get(k) === v);
+}
+
+/**
+ * O painel FLUTUANTE dos trabalhos em segundo plano — manuseado como as BOLHAS do chat (o mesmo núcleo, `chat-core.ts`):
+ * ARRASTAR (mouse ou dedo, depois de 6px) leva a qualquer altura e, ao soltar, ARREMESSA e ENCOSTA na borda mais perto
+ * (o pouso com mola); na LIXEIRA (centro embaixo) dispensa os que terminaram (com trabalho em curso, não aceita); Alt +
+ * setas movem pelo teclado; a posição fica neste aparelho. A faixa que ocupa vai ao armazém dos flutuantes — as bolhas
+ * pousam fora dela.
+ */
 export function PainelSegundoPlano({
   trabalhos: todos,
   naTela,
@@ -243,40 +299,281 @@ export function PainelSegundoPlano({
   const caminho = usePathname();
   const [aberto, setAberto] = useState(false);
   const [montado, setMontado] = useState(false);
-  useEffect(() => setMontado(true), []);
-  // Ativo = sempre acompanhado (minimizado), também na página dona; concluído na página dona sai (o desfecho está à vista).
-  const trabalhos = todos.filter((t) => !t.oculto && (ATIVO(t.estado) || !(naTela.has(t.chave) && caminho === t.rota.split("?")[0])));
-  const caixa = useRef<HTMLDivElement>(null);
-
-  // A altura ocupada vai em --reserva-flutuante (as bolhas do chat e os avisos ficam acima); o "resize" re-mede as bolhas.
-  const visivel = trabalhos.length > 0;
-  useLayoutEffect(() => {
-    const raiz = document.documentElement;
-    const medir = () => {
-      const h = visivel && caixa.current ? caixa.current.offsetHeight + 8 : 0;
-      if (raiz.style.getPropertyValue("--reserva-flutuante") === `${h}px`) return;
-      raiz.style.setProperty("--reserva-flutuante", `${h}px`);
-      window.dispatchEvent(new Event("resize"));
-    };
+  const [pos, setPos] = useState<PosicaoBolha>(POSICAO_PADRAO);
+  const [tela, setTela] = useState<ReturnType<typeof medirTela> | null>(null);
+  const [caixaTam, setCaixaTam] = useState({ w: 0, h: 0 });
+  /** O arrasto em curso (só o que muda a TELA ao redor: a lixeira). O movimento em si vai DIRETO ao DOM, quadro a quadro —
+   * nenhuma renderização do React por movimento: o painel fica colado ao ponteiro/dedo. */
+  const [arrasto, setArrasto] = useState<{ naLixeira: boolean } | null>(null);
+  /** O POUSO (FLIP no DOM): de onde foi solto até o lugar novo — aplicado depois que o lugar novo entra na tela. */
+  const pouso = useRef<{ dx: number; dy: number } | null>(null);
+  const [nPouso, setNPouso] = useState(0);
+  /** Quando o último arrasto terminou: o clique que o navegador manda logo depois (no toque, às vezes atrasado) não abre. */
+  const fimArrasto = useRef(0);
+  /** SEMPRE BOLHA: a pílula fica circular mesmo fechada (a escolha deste aparelho). */
+  const [sempreBolha, setSempreBolha] = useState(false);
+  /** O banner FECHANDO (a animação de saída antes de desmontar). */
+  const [fechando, setFechando] = useState(false);
+  const secao = useRef<HTMLElement>(null);
+  const [secH, setSecH] = useState(0);
+  const tFechar = useRef(0);
+  const fechar = useCallback(() => {
+    if (semMovimento()) return setAberto(false);
+    setFechando(true);
+    window.clearTimeout(tFechar.current);
+    tFechar.current = window.setTimeout(() => {
+      setAberto(false);
+      setFechando(false);
+    }, duracaoMotionMs() * 1.4);
+  }, []);
+  /** Tocar na pílula: abre o banner por cima; de novo, fecha. */
+  const alternar = () => {
+    if (performance.now() - fimArrasto.current < 400) return;
+    if (aberto && !fechando) fechar();
+    else {
+      window.clearTimeout(tFechar.current);
+      setFechando(false);
+      setAberto(true);
+    }
+  };
+  useEffect(() => {
+    setMontado(true);
+    setPos(lerPosicaoGuardada());
+    try {
+      setSempreBolha(localStorage.getItem(CHAVE_BOLHA) === "1");
+    } catch {
+      // Sem o aparelho: pílula.
+    }
+    const medir = () => setTela(medirTela());
     medir();
-    const ro = caixa.current ? new ResizeObserver(medir) : null;
-    if (caixa.current) ro?.observe(caixa.current);
-    return () => {
-      ro?.disconnect();
-      raiz.style.removeProperty("--reserva-flutuante");
-    };
-  }, [visivel]);
+    window.addEventListener("resize", medir);
+    return () => window.removeEventListener("resize", medir);
+  }, []);
+  // Ativo = sempre acompanhado (minimizado), também na página dona; concluído na página dona sai (o desfecho está à vista).
+  const trabalhos = todos.filter((t) => !t.oculto && (ATIVO(t.estado) || !(naTela.has(t.chave) && naRotaDona(t.rota, caminho))));
+  const caixa = useRef<HTMLDivElement>(null);
+  const visivel = trabalhos.length > 0;
+
+  // O tamanho da caixa (recolhida, expandida, a lista crescendo) — a posição e a faixa dependem dele.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `montado` = a caixa acabou de entrar no DOM (a ref só existe depois)
+  useLayoutEffect(() => {
+    const el = caixa.current;
+    if (!visivel || !el) return;
+    const medir = () => setCaixaTam((a) => (a.w === el.offsetWidth && a.h === el.offsetHeight ? a : { w: el.offsetWidth, h: el.offsetHeight }));
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [visivel, montado]);
+
+  // A altura do banner aberto (fica por cima da pílula — ou por baixo, quando não cabe em cima).
+  useLayoutEffect(() => {
+    const el = secao.current;
+    if (!aberto || !el) return setSecH(0);
+    const medir = () => setSecH(el.offsetHeight);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [aberto]);
+
+  // Onde o painel está: encostado no lado, na altura guardada (fração da faixa livre — resiste a trocar o tamanho da tela).
+  const geo = tela ? { ...tela, tam: caixaTam.h } : null;
+  const lugar = geo ? { left: pos.lado === "esq" ? MARGEM : Math.max(MARGEM, geo.largura - MARGEM - caixaTam.w), top: topoDaPosicao(pos, geo) } : null;
+  const lixeira = tela ? { x: tela.largura / 2, y: tela.altura - tela.base - LIXEIRA.base - LIXEIRA.tam / 2 } : null;
+  const emCurso = trabalhos.some((t) => ATIVO(t.estado));
+  // O banner abre POR CIMA da pílula; sem espaço em cima (a pílula no alto da tela), por baixo — onde houver mais lugar.
+  const espaco = lugar && tela ? { acima: lugar.top - tela.topo - 8, abaixo: tela.altura - tela.base - (lugar.top + caixaTam.h) - 8 } : { acima: 0, abaixo: 0 };
+  const acima = espaco.acima >= Math.min(secH || 240, 240) || espaco.acima >= espaco.abaixo;
+  const comBanner = aberto && secH > 0;
+
+  // A faixa ocupada vai ao armazém dos flutuantes (as bolhas desviam); os avisos flutuantes ficam acima só quando o painel
+  // está no canto deles (à direita, embaixo).
+  useLayoutEffect(() => {
+    if (!visivel || !lugar || !tela || !caixaTam.h) {
+      publicarFaixaFlutuante(null);
+      definirVarRaiz("--reserva-flutuante", "0px");
+      return;
+    }
+    // A faixa inteira: a pílula e, aberto, o banner (em cima ou embaixo dela).
+    const extra = comBanner ? secH + 8 : 0;
+    const largura = comBanner ? Math.max(caixaTam.w, secao.current?.offsetWidth ?? 0) : caixaTam.w;
+    publicarFaixaFlutuante({ lado: pos.lado, top: comBanner && acima ? lugar.top - extra : lugar.top, altura: caixaTam.h + extra, ambos: largura > tela.largura / 2 - 2 * MARGEM });
+    definirVarRaiz("--reserva-flutuante", pos.lado === "dir" && pos.y > 0.97 ? `${caixaTam.h + (acima ? extra : 0) + 8}px` : "0px");
+  });
+  useEffect(
+    () => () => {
+      publicarFaixaFlutuante(null);
+      document.documentElement.style.removeProperty("--reserva-flutuante");
+    },
+    [],
+  );
   useEffect(() => {
     if (!visivel) setAberto(false);
   }, [visivel]);
+  // Uma PERGUNTA NOVA abre o painel (a resposta não pode ficar escondida na pílula) — uma vez por pergunta: minimizar vale.
+  const perguntas = trabalhos
+    .filter((t) => t.pergunta)
+    .map((t) => t.id)
+    .join("|");
+  // O pedido de abrir (ex.: o relógio da Execução consultando a última importação).
+  const pedidoAbrir = Math.max(0, ...trabalhos.map((t) => t.abrirEm ?? 0));
+  useEffect(() => {
+    if (perguntas || pedidoAbrir) setAberto(true);
+  }, [perguntas, pedidoAbrir]);
   // Voltou à página dona de um trabalho que terminou fora dela: o desfecho foi visto — sai do painel.
   useEffect(() => {
     for (const t of todos)
-      if (!ATIVO(t.estado) && naTela.has(t.chave) && caminho === t.rota.split("?")[0]) {
+      if (!ATIVO(t.estado) && naTela.has(t.chave) && naRotaDona(t.rota, caminho)) {
         t.onDispensar?.();
         onDispensar(t.id);
       }
   }, [todos, naTela, caminho, onDispensar]);
+
+  const guardar = useCallback((p: PosicaoBolha) => {
+    setPos(p);
+    try {
+      localStorage.setItem(CHAVE_POSICAO, JSON.stringify(p));
+    } catch {
+      // Sem o aparelho (janela anônima): vale nesta visita.
+    }
+  }, []);
+  const dispensarTerminados = useCallback(() => {
+    for (const t of trabalhos)
+      if (!ATIVO(t.estado)) {
+        t.onDispensar?.();
+        onDispensar(t.id);
+      }
+  }, [trabalhos, onDispensar]);
+
+  /** POUSA em `nova` vindo de onde está à vista agora (`de`, o canto superior esquerdo em px): o lugar novo entra na tela e
+   * o painel desliza até ele (FLIP — o `useLayoutEffect` abaixo); sem "reduzir movimento". */
+  const pousar = useCallback(
+    (nova: PosicaoBolha, de: { left: number; top: number }) => {
+      if (!geo) return;
+      const destino = { left: nova.lado === "esq" ? MARGEM : Math.max(MARGEM, geo.largura - MARGEM - caixaTam.w), top: topoDaPosicao(nova, geo) };
+      pouso.current = semMovimento() ? { dx: 0, dy: 0 } : { dx: de.left - destino.left, dy: de.top - destino.top };
+      guardar(nova);
+      setNPouso((n) => n + 1);
+    },
+    [geo, caixaTam.w, guardar],
+  );
+  // O VOO do pouso, antes da pintura: parte de onde foi solto (sem transição) e desliza com mola até o lugar (o novo
+  // `top`/`left` já está no DOM). A transição inline sai no fim — volta a da classe (a largura pílula ↔ bolha).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: roda a cada pouso (o contador)
+  useLayoutEffect(() => {
+    const el = caixa.current;
+    const v = pouso.current;
+    pouso.current = null;
+    if (!el || !v) return;
+    el.style.transition = "none";
+    el.style.transform = v.dx || v.dy ? `translate3d(${v.dx}px, ${v.dy}px, 0)` : "";
+    if (!v.dx && !v.dy) {
+      el.style.transition = "";
+      return;
+    }
+    void el.offsetWidth;
+    el.style.transition = "transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1)";
+    el.style.transform = "";
+    const fim = (e: TransitionEvent) => {
+      if (e.target !== el || e.propertyName !== "transform") return;
+      el.style.transition = "";
+      el.removeEventListener("transitionend", fim);
+    };
+    el.addEventListener("transitionend", fim);
+  }, [nPouso]);
+
+  const pegar = useCallback(
+    (e: React.PointerEvent) => {
+      const el = caixa.current;
+      if (!el || !geo || !lugar || !lixeira || e.button > 0 || !e.isPrimary) return;
+      // Os botões do cabeçalho (minimizar, dispensar) não arrastam.
+      if ((e.target as HTMLElement).closest("button") && !(e.target as HTMLElement).closest("[data-alca-painel]")) return;
+      if (e.pointerType === "mouse") e.preventDefault();
+      const id = e.pointerId;
+      const x0 = e.clientX;
+      const y0 = e.clientY;
+      const amostras: AmostraArrasto[] = [{ x: x0, y: y0, t: performance.now() }];
+      let ativo = false;
+      let soltarSeguro: (() => void) | null = null;
+      // Onde o painel está À VISTA ao ser pego (no meio de um voo, também): o arrasto parte daí, sem salto.
+      let base = { dx: 0, dy: 0 };
+      let ultimo = { dx: 0, dy: 0, naLixeira: false };
+      let quadro = 0;
+      const desenhar = () => {
+        quadro = 0;
+        el.style.transform = `translate3d(${base.dx + ultimo.dx}px, ${base.dy + ultimo.dy}px, 0) scale(${ultimo.naLixeira ? 0.86 : 1.02})`;
+      };
+      const mover = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        const dx = ev.clientX - x0;
+        const dy = ev.clientY - y0;
+        if (!ativo) {
+          if (Math.hypot(dx, dy) < LIMIAR) return;
+          ativo = true;
+          soltarSeguro = segurar("grabbing");
+          const r = el.getBoundingClientRect();
+          base = { dx: r.left - lugar.left, dy: r.top - lugar.top };
+          el.style.transition = "none";
+          setArrasto({ naLixeira: false });
+        }
+        ev.preventDefault();
+        amostras.push({ x: ev.clientX, y: ev.clientY, t: performance.now() });
+        if (amostras.length > 12) amostras.shift();
+        const naLixeira = Math.hypot(ev.clientX - lixeira.x, ev.clientY - lixeira.y) < LIXEIRA.ima;
+        if (naLixeira !== ultimo.naLixeira) {
+          if (naLixeira) navigator.vibrate?.(10);
+          setArrasto({ naLixeira });
+        }
+        ultimo = { dx, dy, naLixeira };
+        if (!quadro) quadro = requestAnimationFrame(desenhar);
+      };
+      const fim = (ev: PointerEvent | null, cancelado: boolean) => {
+        if (ev && ev.pointerId !== id) return;
+        window.removeEventListener("pointermove", mover);
+        window.removeEventListener("pointerup", soltar);
+        window.removeEventListener("pointercancel", cancelar);
+        window.removeEventListener("blur", perdeu);
+        if (quadro) cancelAnimationFrame(quadro);
+        soltarSeguro?.();
+        if (!ativo) return;
+        fimArrasto.current = performance.now();
+        const solto = { left: lugar.left + base.dx + ultimo.dx, top: lugar.top + base.dy + ultimo.dy };
+        setArrasto(null);
+        if (cancelado) return pousar(pos, solto);
+        if (ultimo.naLixeira && !emCurso) {
+          el.style.transition = "";
+          el.style.transform = "";
+          dispensarTerminados();
+          return;
+        }
+        // O ARREMESSO: a velocidade no fim leva o painel adiante; encosta na borda mais perto daquele ponto.
+        const alvo = projetarArremesso(solto.left + caixaTam.w / 2, solto.top, velocidadeArrasto(amostras));
+        pousar(pousarBolha(alvo.x, alvo.y, geo, Date.now()), solto);
+      };
+      const soltar = (ev: PointerEvent) => fim(ev, false);
+      const cancelar = (ev: PointerEvent) => fim(ev, true);
+      // A janela perdeu o foco no meio (troca de aba, alerta): volta ao lugar.
+      const perdeu = () => fim(null, true);
+      window.addEventListener("pointermove", mover, { passive: false });
+      window.addEventListener("pointerup", soltar);
+      window.addEventListener("pointercancel", cancelar);
+      window.addEventListener("blur", perdeu);
+    },
+    [geo, lugar, lixeira, pos, caixaTam.w, emCurso, pousar, dispensarTerminados],
+  );
+  /** Alt + ↑/↓ sobe/desce; Alt + ←/→ troca de lado. */
+  const tecla = (e: React.KeyboardEvent) => {
+    if (!e.altKey || !geo || !lugar) return;
+    const passo = { ArrowUp: -PASSO_TECLADO, ArrowDown: PASSO_TECLADO } as Record<string, number>;
+    if (e.key in passo) {
+      e.preventDefault();
+      pousar(pousarBolha(pos.lado === "esq" ? 0 : geo.largura, lugar.top + passo[e.key], geo, Date.now()), lugar);
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      pousar({ ...pos, lado: e.key === "ArrowLeft" ? "esq" : "dir", t: Date.now() }, lugar);
+    }
+  };
 
   if (!montado || !visivel) return null;
   const principal = trabalhos.find((t) => t.estado === "rodando") ?? trabalhos[0];
@@ -294,19 +591,73 @@ export function PainelSegundoPlano({
       onDispensar(t.id);
     }
   };
+  const terminados = trabalhos.filter((t) => !ATIVO(t.estado)).length;
+  // Ainda sem a medida (o 1º quadro): no canto padrão, invisível — sem pular de lugar.
+  // Aberto, a pílula ENCOLHE numa bolha (o banner cresce por cima dela); fechando, volta a ser pílula — o inverso, juntos.
+  const bolha = sempreBolha || (aberto && !fechando);
+  const progresso = ATIVO(principal.estado) && temAndamento(principal);
+  // Presa à BORDA do lado (direita = `right`): a largura que anima não move a borda — nada treme durante a animação.
+  const estilo: React.CSSProperties = lugar
+    ? {
+        ...(pos.lado === "esq" ? { left: lugar.left } : { right: MARGEM }),
+        top: lugar.top,
+        // O transform (arrasto e pouso) é do DOM — o React nunca o escreve (não desfaz o movimento no meio).
+      }
+    : { right: MARGEM, bottom: 96, visibility: "hidden" };
+  const dicaArrasto = "Arraste para mudar de lugar (Alt + setas no teclado); até a lixeira para dispensar os concluídos.";
 
   return createPortal(
+    <>
     <div
       ref={caixa}
-      className={`fixed right-3 bottom-[calc(4rem+env(safe-area-inset-bottom)+var(--reserva-rodape,0px)+0.5rem)] z-[58] lg:right-4 lg:bottom-[calc(var(--reserva-rodape,0px)+1rem)] ${aberto ? (trabalhos.some((t) => t.corpo) ? "w-[min(38rem,calc(100vw-1.5rem))]" : "w-[min(26rem,calc(100vw-1.5rem))]") : "w-[min(20rem,calc(100vw-1.5rem))]"}`}
+      style={estilo}
+      className={`painel-pilula fixed ${arrasto ? "z-[61]" : "z-[58]"} ${bolha ? "w-11" : "w-[min(13.5rem,calc(100vw-1.5rem))]"}`}
     >
-      {aberto ? (
-        <section aria-label="Trabalhos em segundo plano" className="animate-fade-in-up rounded-card bg-surface shadow-flutuante ring-1 ring-border">
-          <header className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">Em segundo plano</span>
-            <Button size="xs" variant="icon" aria-label="Minimizar" title="Minimizar" onClick={() => setAberto(false)} icon={<IconChevronDown className="size-4" />} />
+      {aberto && (
+        <section
+          ref={secao}
+          id="painel-segundo-plano"
+          aria-label="Trabalhos em segundo plano"
+          style={{ maxHeight: Math.max(160, acima ? espaco.acima : espaco.abaixo), transformOrigin: `${pos.lado === "esq" ? "left" : "right"} ${acima ? "bottom" : "top"}` }}
+          className={`absolute flex min-h-0 flex-col rounded-card bg-surface ring-1 ring-border ${acima ? "bottom-full mb-2" : "top-full mt-2"} ${pos.lado === "esq" ? "left-0" : "right-0"} ${trabalhos.some((t) => t.corpo) ? "w-[min(38rem,calc(100vw-1.5rem))]" : "w-[min(26rem,calc(100vw-1.5rem))]"} ${fechando ? "animate-painel-sai" : "animate-janela-cresce"} ${arrasto ? "shadow-erguida" : "shadow-flutuante"}`}
+        >
+          {/* O cabeçalho é a ALÇA: arrastar leva o painel (os botões dele não arrastam). */}
+          <header className="flex items-center gap-1 border-b border-border px-1.5 py-1">
+            <button
+              type="button"
+              data-alca-painel
+              onPointerDown={pegar}
+              onKeyDown={tecla}
+              aria-label="Em segundo plano — mover o painel (Alt + setas)"
+              title={dicaArrasto}
+              className={`flex min-h-9 min-w-0 flex-1 touch-none select-none items-center gap-2 rounded-control px-1.5 text-left pointer-coarse:min-h-11 ${arrasto ? "cursor-grabbing" : "cursor-grab"}`}
+            >
+              <IconGrip aria-hidden className="size-4 shrink-0 text-faint" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">Em segundo plano</span>
+            </button>
+            {terminados > 0 && (
+              <Button size="xs" variant="icon" aria-label={`Dispensar os concluídos (${terminados})`} title={`Dispensar os concluídos (${terminados})`} onClick={dispensarTerminados} icon={<IconLimpar className="size-4" />} />
+            )}
+            <Button
+              size="xs"
+              variant="icon"
+              aria-pressed={sempreBolha}
+              aria-label="Manter como bolha"
+              title={sempreBolha ? "Bolha sempre: ligada — fechado, o painel fica circular" : "Manter como bolha (fechado, o painel fica circular)"}
+              onClick={() => {
+                const v = !sempreBolha;
+                setSempreBolha(v);
+                try {
+                  localStorage.setItem(CHAVE_BOLHA, v ? "1" : "0");
+                } catch {
+                  // Sem o aparelho: vale nesta visita.
+                }
+              }}
+              icon={<IconCirculo className={`size-4 ${sempreBolha ? "fill-current text-accent" : ""}`} />}
+            />
+            <Button size="xs" variant="icon" aria-label="Minimizar" title="Minimizar (Alt + setas movem o painel)" onClick={fechar} icon={<IconChevronDown className="size-4" />} />
           </header>
-          <ul className="max-h-[70dvh] divide-y divide-border overflow-y-auto">
+          <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
             {trabalhos.map((t) => (
               <li key={t.id} className="space-y-2 px-3 py-2.5">
                 <div className="flex items-center gap-2">
@@ -331,6 +682,19 @@ export function PainelSegundoPlano({
                       </li>
                     ))}
                   </ul>
+                )}
+                {t.pergunta && (
+                  <div role="alert" className="space-y-2 rounded-md border border-[var(--warn)] bg-[color-mix(in_srgb,var(--warn)_8%,var(--surface))] p-2 text-xs">
+                    <p className="text-text-2">{t.pergunta.texto}</p>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <Button size="xs" variant="ghost" onClick={() => t.pergunta?.responder(false)}>
+                        {t.pergunta.nao}
+                      </Button>
+                      <Button size="xs" variant="danger" onClick={() => t.pergunta?.responder(true)}>
+                        {t.pergunta.sim}
+                      </Button>
+                    </div>
+                  </div>
                 )}
                 <div className="flex justify-end gap-1.5">
                   {t.estado === "rodando" && t.onParar && (
@@ -359,28 +723,54 @@ export function PainelSegundoPlano({
             ))}
           </ul>
         </section>
-      ) : (
+      )}
         <button
           type="button"
-          onClick={() => setAberto(true)}
-          aria-label={`${trabalhos.length} trabalho(s) em segundo plano — ${principal.titulo}: ${ROTULO[principal.estado]}. Expandir`}
-          title="Expandir"
-          className="animate-fade-in-up ml-auto flex min-h-11 w-full items-center gap-2 overflow-hidden rounded-full bg-surface px-3 shadow-flutuante ring-1 ring-border relative"
+          data-alca-painel
+          onPointerDown={pegar}
+          onKeyDown={tecla}
+          onClick={alternar}
+          aria-expanded={aberto && !fechando}
+          aria-controls="painel-segundo-plano"
+          aria-label={`${trabalhos.length} trabalho(s) em segundo plano — ${principal.titulo}: ${ROTULO[principal.estado]}. ${aberto && !fechando ? "Fechar" : "Abrir"} o painel. Alt + setas movem o painel.`}
+          title={`${aberto && !fechando ? "Fechar" : "Abrir"} — ${dicaArrasto}`}
+          className={`animate-fade-in-up relative flex min-h-11 w-full touch-none select-none items-center gap-2 overflow-hidden rounded-full bg-surface px-3.5 ring-1 ring-border ${arrasto ? "cursor-grabbing shadow-erguida" : "shadow-flutuante"}`}
         >
           {ICONE[principal.estado]}
-          <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">{principal.titulo}</span>
-          <span className="shrink-0 text-xs text-muted tabular-nums">
-            {temAndamento(principal) && ATIVO(principal.estado) ? andamento(principal) : ROTULO[principal.estado]}
-            {trabalhos.length > 1 ? ` · +${trabalhos.length - 1}` : ""}
+          {/* O texto some na bolha (só o ícone fica, no centro) e volta na pílula. */}
+          {/* Resumida: o título curto (o 1º trecho, sem o " · …") e só a % (ou o estado); o resto está no banner. */}
+          <span className={`painel-pilula-texto min-w-0 flex-1 truncate text-left text-[13px] font-medium ${bolha ? "opacity-0" : ""}`}>{principal.titulo.split(" · ")[0]}</span>
+          <span className={`painel-pilula-texto shrink-0 text-xs text-muted tabular-nums ${bolha ? "opacity-0" : ""}`}>
+            {progresso ? (principal.fracao != null ? textoPct(principal.fracao) : `${principal.feito}/${principal.total}`) : ROTULO[principal.estado]}
           </span>
-          {ATIVO(principal.estado) && temAndamento(principal) && (
-            <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-track">
+          {progresso && (
+            <span aria-hidden className={`painel-pilula-texto absolute inset-x-0 bottom-0 h-0.5 bg-track ${bolha ? "opacity-0" : ""}`}>
               <span className="block h-full bg-accent transition-[width] duration-300" style={{ width: `${pct(principal)}%` }} />
             </span>
           )}
+          {/* Na bolha, o andamento vira um ANEL em volta do ícone. */}
+          {progresso && (
+            <span
+              aria-hidden
+              className={`painel-pilula-texto painel-anel pointer-events-none absolute inset-0 rounded-full ${bolha ? "" : "opacity-0"}`}
+              style={{ "--pct": `${pct(principal)}%` } as React.CSSProperties}
+            />
+          )}
         </button>
-      )}
-    </div>,
+        {/* Os outros trabalhos: um selo no canto (visível também na bolha). */}
+        {trabalhos.length > 1 && (
+          <span aria-hidden className="pointer-events-none absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tabular-nums ring-2 ring-surface">
+            +{trabalhos.length - 1}
+          </span>
+        )}
+    </div>
+    {arrasto && lixeira && <LixeiraFlutuante x={lixeira.x} y={lixeira.y} aberta ativa={arrasto.naLixeira} bloqueada={emCurso} />}
+    {arrasto && (
+      <p aria-live="polite" className="sr-only">
+        {arrasto.naLixeira ? (emCurso ? "Há trabalho em andamento — o painel não sai" : "Solte para dispensar os concluídos") : "Solte para encostar na borda mais perto"}
+      </p>
+    )}
+    </>,
     document.body,
   );
 }

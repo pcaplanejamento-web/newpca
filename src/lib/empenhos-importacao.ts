@@ -28,7 +28,7 @@ import {
 import { registrarLeituraCard } from "./empenho-cards";
 import { comandoRegistrarCatalogo, comandoRegistrarGestores, consultaVinculosCard } from "./empenho-cards-sql";
 import { getDb } from "./db";
-import { listarPassos, paraPasso } from "./empenhos";
+import { getLote, paraPasso, passosDaRetomada } from "./empenhos";
 import {
   anoInteiro,
   conferirLote,
@@ -60,6 +60,7 @@ import {
   type LinhaPasso,
   comandoDividirPeriodo,
   comandoRecontarLote,
+  comandosLimparStagingOrfao,
   comandoRegistrarPasso,
   CONF_EMPENHOS,
   comandosConferirAssinatura,
@@ -307,7 +308,7 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     const mais = { recebidos: chaves.length, novos: novos - (antes?.novos ?? 0), soma: soma - (antes?.soma ?? 0) };
     const res = await db.batch([
       ...(p.passo == null
-        ? [comandoRegistrarPasso(db, lote.id, passo)]
+        ? [encerrarGuardando(db, lote.id, ped.base), comandoRegistrarPasso(db, lote.id, passo)]
         : [
             db
               .update(centiLotePassos)
@@ -341,6 +342,13 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
     .limit(1);
   if (repetida) throw new PedidoInvalido("Esta página já foi lida neste lote — a leitura repetida não entra.", 409);
   if (!resumoValido(r, linhasPagina)) throw new PedidoInvalido("O resumo da página não confere com as linhas recebidas — leia de novo.");
+  // EMPENHOS POR ÓRGÃO: o pedido é a página 1 do órgão — a Centi que informa MAIS registros do que mandou paginou a resposta:
+  // o período se divide (menor, cabe numa página); nunca uma importação "parcial" para sempre.
+  if (ped.porOrgao && ped.modo === "empenhos" && r.total != null && r.total > r.recebidos) {
+    const mensagem = `Página grande demais: a Centi informou ${r.total} registros do órgão e mandou ${r.recebidos}.`;
+    const fechar = p.passo == null ? [] : [db.update(centiLotePassos).set({ mensagem }).where(eq(centiLotePassos.id, p.passo))];
+    return registrarFalha(card, lote, periodo, ped, { mensagem, status: r.status, bytes: r.bytes, ms: r.ms }, [...fechar, ...extras]);
+  }
   // LIQUIDAÇÕES e PAGAMENTOS: o total é o DESTE órgão = os distintos + os recusados (contado aqui); o do período = a soma dos
   // órgãos (`comandoRecontarLote`), e o fim do período é decidido no banco quando todos chegaram (`comandosFechoPeriodoLiquidacoes`).
   const lido = ped.porOrgao ? null : await lidoNoPeriodo(db, lote.id, periodo);
@@ -369,7 +377,7 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   };
   const fecho = ped.porOrgao ? comandosFechoPeriodoLiquidacoes(db, lote.id, periodo, lote.orgaosCenti?.length ?? 0, alvo) : [];
   const res = await db.batch([
-    ...(p.passo == null ? [comandoRegistrarPasso(db, lote.id, { ...ped.base, ...final })] : []),
+    ...(p.passo == null ? [encerrarGuardando(db, lote.id, ped.base), comandoRegistrarPasso(db, lote.id, { ...ped.base, ...final })] : []),
     ...daParte,
     ...(p.passo == null ? [] : [db.update(centiLotePassos).set({ ...final, fimPeriodo: final.fimPeriodo ? 1 : 0 }).where(eq(centiLotePassos.id, p.passo))]),
     ...depois,
@@ -382,13 +390,31 @@ export async function gravarParte(card: CardEmpenho, lote: LoteCenti, periodo: P
   return { passo: paraPasso((res as Linha[][]).at(-1)?.[0] as Linha), continuar };
 }
 
+/** A página RECOMEÇOU (a leitura anterior caiu no meio das partes): o "Guardando a página…" dela vira erro — nunca fica
+ * girando no painel nem conta registros que não valem. */
+function encerrarGuardando(db: ReturnType<typeof getDb>, loteId: number, b: { inicio: string; fim: string; pagina: number }) {
+  return db
+    .update(centiLotePassos)
+    .set({ mensagem: "Leitura interrompida: a página recomeçou." })
+    .where(
+      and(
+        eq(centiLotePassos.loteId, loteId),
+        eq(centiLotePassos.inicio, b.inicio),
+        eq(centiLotePassos.fim, b.fim),
+        eq(centiLotePassos.pagina, b.pagina),
+        eq(centiLotePassos.estado, "erro"),
+        eq(centiLotePassos.mensagem, GUARDANDO),
+      ),
+    );
+}
+
 /** Uma PARTE mandada pelo navegador: confere cada linha (`linhasDaParte`) e guarda. */
 export async function guardarParteDoLote(
   card: CardEmpenho,
   lote: LoteCenti,
   periodo: Periodo,
   pagina: number,
-  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; iguais?: unknown; resumo: ResumoPagina | null },
+  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; iguais?: unknown; resumo: ResumoPagina | null; assinatura?: string | null },
 ): Promise<ResultadoPagina> {
   const ped = prepararPedido(card, lote, periodo, pagina);
   const v = linhasDaParte(ped.modo, lote.ano, p.tuplas);
@@ -396,7 +422,7 @@ export async function guardarParteDoLote(
   const pares = paresDaParte(p.iguais, new Set(v.linhas.map((l) => (l as { chave: string }).chave)));
   if (!pares.ok) throw new PedidoInvalido(`Parte recusada: ${pares.motivo}`);
   if (p.parte < 0 || p.parte >= p.partes) throw new PedidoInvalido("Parte fora de ordem — leia a página de novo.");
-  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, iguais: pares.pares, resumo: p.resumo });
+  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, iguais: pares.pares, resumo: p.resumo, assinatura: p.parte === p.partes - 1 ? (p.assinatura ?? null) : null });
 }
 
 /**
@@ -456,14 +482,20 @@ export async function fecharParcial(card: CardEmpenho, lote: LoteCenti, motivo: 
  * relação à última importação concluída do ano só passa com `aceitarQueda` (o lote segue aberto para a pessoa confirmar).
  * `usuario` null = a atualização automática.
  */
-export async function concluirLoteEmpenhos(card: CardEmpenho, lote: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
+export async function concluirLoteEmpenhos(card: CardEmpenho, loteLido: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
+  let lote = loteLido;
+  if (lote.modo !== "unidades") {
+    // O staging das leituras descartadas sai antes da conferência (o lote é recontado só com as páginas que valem).
+    await db.batch([...comandosLimparStagingOrfao(db, lote.id), comandoRecontarLote(db, lote.id)] as never);
+    lote = (await getLote(lote.id, card.id)) ?? lote;
+  }
   // As REGRAS da conferência são CENTRAIS (Configurações → Importações), as mesmas para todos os cards.
   const regras = await getConfigImportacoes();
   const quem = opcoes.usuario ? "" : " (atualização automática)";
   const parcial = (motivo: string, resumo: string) => fecharParcial(card, lote, motivo, resumo, opcoes.usuario);
   // O "hoje" é o do INÍCIO do lote: atravessar a meia-noite não cria uma lacuna nova na conclusão.
-  const lacunas = lacunasDoAno(lote.ano, periodosLidos(await listarPassos(lote.id)), hojeIso(new Date(`${lote.iniciadoEm.replace(" ", "T")}Z`)));
+  const lacunas = lacunasDoAno(lote.ano, periodosLidos(await passosDaRetomada(lote.id)), hojeIso(new Date(`${lote.iniciadoEm.replace(" ", "T")}Z`)));
   if (lote.modo === "unidades") {
     // Só PUXAR o catálogo: nada é gravado nos empenhos — o lote fecha com o que foi visto.
     const msg = `Catálogo da Centi atualizado com ${lote.ano}${lacunas.length ? ` — ${lacunas.length} período(s) não lido(s)` : ""}. Nenhum empenho foi gravado.`;
@@ -514,7 +546,7 @@ async function concluirLiquidacoes(card: CardEmpenho, lote: LoteCenti, opcoes: {
     const m = `${n} liquidação(ões) com valor negativo ou acima do limite — a leitura parece errada; nada foi gravado.`;
     return fecharParcial(card, lote, m, m, opcoes.usuario);
   }
-  const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, lote.id), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
+  const queda = quedaSuspeita(await ultimaLiquidacaoPromovida(db, card.id, lote.ano, lote.id, lote.orgaosCenti), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma liquidada").replace("os empenhos caíram", "as liquidações caíram") };
   const contagem = await contagemLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor);
   await db.batch(comandosPromoverLiquidacoes(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, regras.removidos, contagem) as never);
@@ -542,7 +574,7 @@ async function concluirPagamentos(card: CardEmpenho, lote: LoteCenti, opcoes: { 
     const m = `${n} pagamento(s) com valor negativo ou acima do limite — a leitura parece errada; nada foi gravado.`;
     return fecharParcial(card, lote, m, m, opcoes.usuario);
   }
-  const queda = quedaSuspeita(await ultimoPagamentoPromovido(db, card.id, lote.ano, lote.id), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
+  const queda = quedaSuspeita(await ultimoPagamentoPromovido(db, card.id, lote.ano, lote.id, lote.orgaosCenti), lote, { soma: regras.quedaSoma, registros: regras.quedaRegistros });
   if (queda && !opcoes.aceitarQueda) return { estado: "queda", queda: queda.replace("a soma empenhada", "a soma paga").replace("os empenhos caíram", "os pagamentos caíram") };
   const contagem = await contagemPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor);
   await db.batch(comandosPromoverPagamentos(db, lote.id, card.id, lote.ano, orgaos, lote.leitor, regras.removidos, contagem) as never);

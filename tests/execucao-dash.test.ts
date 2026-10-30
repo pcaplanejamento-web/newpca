@@ -258,6 +258,11 @@ test("execução (SQL): escopo, telas sem acesso, anos, versão e a situação d
   assert.match(av, /pagamentos com a última importação com erro/);
   assert.match(av, /liquidações tem mais de 2 dias/);
   assert.match(av, /Nenhuma importação de empenhos/);
+  // "Lendo agora" só com atividade recente: o lote PARADO há mais de 30 min não conta (é abandonado).
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, visto_em) VALUES (3, 2025, 'lendo', '2000-01-01 00:00:00')");
+  assert.equal((await consultaMetaExecucao(b.db)).find((m) => m.tipo === "liquidacoes")?.lendo, 0, "o parado não conta");
+  b.raw.exec("UPDATE centi_lotes SET visto_em = datetime('now') WHERE estado = 'lendo'");
+  assert.equal((await consultaMetaExecucao(b.db)).find((m) => m.tipo === "liquidacoes")?.lendo, 1, "o com atividade conta");
 });
 
 test("execução (núcleo): datas, linhas da origem e sparks", async () => {

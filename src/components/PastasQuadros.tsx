@@ -6,6 +6,7 @@ import { textoSobre } from "@/lib/color";
 import { num } from "@/lib/format";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { type ConjuntoQuadros, type DestinoGrade, type ItemGrade, itensDaGrade, type PastasQuadros } from "@/lib/tarefas-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { CartaoPreso } from "./ArrastoCartoes";
 import { IconClose, IconLock, IconNenhum, IconPasta, IconPastaAberta } from "./icons";
 import { duracaoMotionMs } from "./Modal";
@@ -623,6 +624,12 @@ export function GradePastas({
     }
   };
   const alternar = (id: string) => abrir(aberta === id ? null : id);
+  // A PESQUISA DO SISTEMA abre a pasta (`?pasta=<id>`): abre no lugar e a traz à vista.
+  useAbrirDaUrl((v) => {
+    if (!estado.lista.some((c) => c.id === v)) return;
+    abrir(v);
+    window.setTimeout(() => ref.current?.querySelector(`[data-pasta-id="${CSS.escape(v)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+  }, true, "pasta");
   // A ENTRADA em sequência dos cards vale só logo depois de ABRIR (mover o painel no DOM reiniciaria a animação).
   const [entrando, setEntrando] = useState<string | null>(null);
   useEffect(() => {

@@ -9,5 +9,10 @@ export default async function GruposPage() {
   if (!atual?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem gerenciar grupos." />;
   }
-  return <GruposAdmin />;
+  return (
+    <>
+      <h1 className="sr-only">Grupos</h1>
+      <GruposAdmin />
+    </>
+  );
 }

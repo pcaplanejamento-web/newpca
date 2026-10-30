@@ -63,6 +63,8 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
   const motivo = motivoSemModulos({ admin: u.admin, temGrupo: acesso.grupos.length > 0, abasDoGrupo: grupo?.abas ?? [], capacidades: u.papel.capacidades });
   const semModulos = motivo && acesso.grupos.length > 1 ? `${motivo} Você também pode trocar o grupo ativo no cabeçalho.` : motivo;
   return (
+    <>
+      <h1 className="sr-only">Perfil</h1>
     <PerfilView
       usuario={u}
       identidade={identidade}
@@ -75,5 +77,6 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
       contaGoogle={contaGoogle}
       retornoGoogle={retornoGoogle}
     />
+    </>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { num } from "@/lib/format";
 import type { OrcamentoResumo } from "@/lib/orcamento";
 import { IconInbox } from "./icons";
 import { ImportarOrcamento } from "./ImportarOrcamento";
@@ -28,18 +27,10 @@ export function OrcamentoView({
   existentes?: OrcamentoResumo[];
 }) {
   const [importar, setImportar] = useState(0); // cada valor novo abre o lançador (ImportarOrcamento)
-  const totalLancamentos = orcamentos.reduce((s, o) => s + o.totalItens, 0);
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico">
-        <h1 className="text-xl font-bold text-text">Orçamento</h1>
-        <p className="text-sm text-muted">
-          {orcamentos.length} {orcamentos.length === 1 ? "orçamento" : "orçamentos"} · {num(totalLancamentos)}{" "}
-          {totalLancamentos === 1 ? "lançamento" : "lançamentos"} ·{" "}
-          {filtro ? `do ano do ${filtro}, o PCA escolhido no cabeçalho` : "abra um orçamento para ver os lançamentos, vínculos e visões"}
-        </p>
-      </div>
+      <h1 className="sr-only">Orçamento</h1>
 
       {orcamentos.length === 0 && !podeImportar ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">

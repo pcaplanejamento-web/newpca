@@ -11,5 +11,10 @@ export default async function UsuariosPage() {
     return <AcessoRestrito mensagem="Somente administradores podem gerenciar usuários." />;
   }
 
-  return <UsuariosAdmin meuId={atual.id} />;
+  return (
+    <>
+      <h1 className="sr-only">Usuários</h1>
+      <UsuariosAdmin meuId={atual.id} />
+    </>
+  );
 }

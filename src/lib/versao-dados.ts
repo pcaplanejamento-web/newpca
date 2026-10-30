@@ -3,7 +3,7 @@ import { cache } from "react";
 import { auditoria, dfdItens, itens, orcamentoItens } from "@/db/schema";
 import { getDb } from "./db";
 import { criarMemoVersao } from "./memo-versao-core";
-import { FORA_DOS_DADOS, type VersoesDados } from "./versao-dados-core";
+import { DA_AGENDA, DA_EXECUCAO, DAS_TAREFAS, FORA_DOS_DADOS, type VersoesDados } from "./versao-dados-core";
 
 /**
  * VERSÃO DOS DADOS — o sinal de "há dado novo" do sistema inteiro, numa consulta barata: toda escrita passa por
@@ -24,6 +24,15 @@ const FORA = sql.join(
  */
 const BASE = sql`${auditoria.acao} NOT IN ('login', 'logout') AND ${auditoria.entidade} <> 'sessao'`;
 
+/**
+ * O último id de um conjunto de entidades: UMA busca no índice `(entidade, id)` por entidade (`max()` escalar das
+ * subconsultas) — nunca varre a tabela.
+ */
+function ultimoDe(entidades: readonly string[]) {
+  const partes = entidades.map((e) => sql`COALESCE((SELECT MAX(${auditoria.id}) FROM ${auditoria} WHERE ${auditoria.entidade} = ${e}), 0)`);
+  return partes.length === 1 ? partes[0] : sql`max(${sql.join(partes, sql`, `)})`;
+}
+
 export const versaoDados = cache(async (): Promise<VersoesDados> => {
   const [r] = await getDb()
     .select({
@@ -33,10 +42,19 @@ export const versaoDados = cache(async (): Promise<VersoesDados> => {
       i: sql<number | null>`(SELECT MAX(${dfdItens.id}) FROM ${dfdItens})`,
       o: sql<number | null>`(SELECT MAX(${orcamentoItens.id}) FROM ${orcamentoItens})`,
       p: sql<number | null>`(SELECT MAX(${itens.id}) FROM ${itens})`,
+      t: sql<number | null>`${ultimoDe(DAS_TAREFAS)}`,
+      g: sql<number | null>`${ultimoDe(DA_AGENDA)}`,
+      e: sql<number | null>`${ultimoDe(DA_EXECUCAO)}`,
     })
     .from(sql`(SELECT 1)`);
   const lotes = `${r?.i ?? 0}.${r?.o ?? 0}.${r?.p ?? 0}`;
-  return { completa: `${r?.a ?? 0}.${lotes}`, dados: `${r?.d ?? 0}.${lotes}` };
+  return {
+    completa: `${r?.a ?? 0}.${lotes}`,
+    dados: `${r?.d ?? 0}.${lotes}`,
+    tarefas: String(r?.t ?? 0),
+    agenda: String(r?.g ?? 0),
+    execucao: String(r?.e ?? 0),
+  };
 });
 
 const memo = criarMemoVersao({ max: 60, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });

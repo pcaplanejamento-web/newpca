@@ -16,6 +16,7 @@ AprendizTelaProtocolo.tsx
 ArmazenamentoAdmin.tsx
 ArrastoCartoes.tsx
 AssinaturaCalendario.tsx
+AtualizacaoKpi.tsx
 AtividadeTarefa.tsx
 AuditoriaAdmin.tsx
 AuthForm.tsx
@@ -166,6 +167,7 @@ KpiStat.tsx
 LinkCard.tsx
 LinkExterno.tsx
 ListaEscolhaIds.tsx
+LixeiraFlutuante.tsx
 MarcaSistema.tsx
 MatrizCapacidades.tsx
 MatrizEdicoes.tsx
@@ -314,6 +316,7 @@ VisaoOrcamentoPca.tsx
 VitrineAcesso.tsx
 automacao/ProtocolosAutomacao.tsx
 charts/Barras.tsx
+charts/GraficoTemporal.tsx
 charts/ClassificacaoChart.tsx
 charts/MensalChart.tsx
 charts/MetricasChart.tsx
@@ -338,6 +341,11 @@ fluxos/PainelNo.tsx
 fluxos/ProblemasFluxo.tsx
 fluxos/TabelaMesaFluxo.tsx
 fluxos/paineis.tsx
+frota/FichaVeiculoBanner.tsx
+frota/FrotaAdmin.tsx
+frota/FrotaView.tsx
+frota/TransacaoFrotaDetalhe.tsx
+frota/VeiculosView.tsx
 icons.tsx
 LiquidacaoDetalhe.tsx
 PagamentoDetalhe.tsx
@@ -349,3 +357,7 @@ CamposMesa.tsx
 SeletorColunas.tsx
 AndamentoImportacao.tsx
 ImportacoesAoVivo.tsx
+EscopoCliente.tsx
+MaisIndicadores.tsx
+IndicadoresKpi.tsx
+FrotaEsqueleto.tsx

@@ -1,5 +1,7 @@
 "use client";
 
+import { SkeletonLinhas } from "@/components/Skeleton";
+
 import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
@@ -583,13 +585,13 @@ export function TarefaDetalhe({
             onConverter={nova ? undefined : converterItem}
           />
         ) : (
-          <p className="text-[12.5px] text-muted">Carregando…</p>
+          <SkeletonLinhas linhas={3} />
         );
       case "vinculo":
         return <VinculosTarefa valor={r.vinculos} onChange={(v) => set("vinculos", v)} tarefaId={idAberto} hoje={hoje} />;
       case "eventos":
         return carregando ? (
-          <p className="text-[12.5px] text-muted">Carregando…</p>
+          <SkeletonLinhas linhas={3} />
         ) : (
           <EventosTarefa
             eventos={eventosVisiveis}
