@@ -414,7 +414,7 @@ export async function guardarParteDoLote(
   lote: LoteCenti,
   periodo: Periodo,
   pagina: number,
-  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; iguais?: unknown; resumo: ResumoPagina | null },
+  p: { parte: number; partes: number; passo: number | null; tuplas: unknown[]; iguais?: unknown; resumo: ResumoPagina | null; assinatura?: string | null },
 ): Promise<ResultadoPagina> {
   const ped = prepararPedido(card, lote, periodo, pagina);
   const v = linhasDaParte(ped.modo, lote.ano, p.tuplas);
@@ -422,7 +422,7 @@ export async function guardarParteDoLote(
   const pares = paresDaParte(p.iguais, new Set(v.linhas.map((l) => (l as { chave: string }).chave)));
   if (!pares.ok) throw new PedidoInvalido(`Parte recusada: ${pares.motivo}`);
   if (p.parte < 0 || p.parte >= p.partes) throw new PedidoInvalido("Parte fora de ordem — leia a página de novo.");
-  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, iguais: pares.pares, resumo: p.resumo });
+  return gravarParte(card, lote, periodo, ped, { parte: p.parte, ultima: p.parte === p.partes - 1, passo: p.passo, linhas: v.linhas, iguais: pares.pares, resumo: p.resumo, assinatura: p.parte === p.partes - 1 ? (p.assinatura ?? null) : null });
 }
 
 /**

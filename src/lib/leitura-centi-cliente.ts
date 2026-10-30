@@ -119,6 +119,8 @@ async function lerPaginaComSinal(
   // O tamanho esperado: o informado pela Centi ou o da última importação do MESMO pedido (o servidor diz) — a fração exata.
   const esperado = Number(r.headers.get("x-centi-bytes")) || null;
   let bytes = 0;
+  // Os bytes crus (para a ASSINATURA da página — a mesma régua da automática, que pula a página idêntica).
+  let brutos: Uint8Array[] | null = null;
   try {
     fase({ fase: "baixando", bytes: 0, bytesEsperados: esperado });
     if (r.body) {
@@ -126,11 +128,13 @@ async function lerPaginaComSinal(
       const leitor = r.body.getReader();
       const dec = new TextDecoder();
       const pedacos: string[] = [];
+      brutos = [];
       let aviso = 0;
       for (;;) {
         const { done, value } = await leitor.read();
         if (done) break;
         bytes += value.byteLength;
+        brutos.push(value);
         pedacos.push(dec.decode(value, { stream: true }));
         const t = performance.now();
         if (t - aviso > 150) {
@@ -162,6 +166,8 @@ async function lerPaginaComSinal(
     const mensagem = (e instanceof Error ? e.message : "Resposta inválida da Centi.").slice(0, 500);
     return pedirImportacao<RespostaPasso>(cardId, { acao: "falha", ...base, mensagem, status, bytes: texto.length || null, ms });
   }
+  const assinatura = brutos ? await assinaturaDe(brutos, bytes) : null;
+  brutos = null;
   // SÓ O QUE MUDOU vai inteiro: o registro com a assinatura gravada vai só como o par (chave + assinatura).
   fase({ fase: "comparando", registros: lida.linhas.length });
   await new Promise((ok) => setTimeout(ok, 0));
@@ -177,7 +183,7 @@ async function lerPaginaComSinal(
   const enviar = async (i: number, passo: number | null) => {
     const ultima = i === partes.length - 1;
     const resumo = ultima ? { status, bytes: bytes || null, ms, recebidos: lida.recebidos, recusados: lida.recusados, repetidos: lida.repetidos, total: lida.total, reparado: lida.reparado } : null;
-    const resp = await pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i].tuplas, iguais: partes[i].iguais, resumo });
+    const resp = await pedirImportacao<RespostaPasso>(cardId, { acao: "parte", ...base, parte: i, partes: partes.length, passo, linhas: partes[i].tuplas, iguais: partes[i].iguais, resumo, ...(ultima ? { assinatura } : {}) });
     feitas++;
     fase({ fase: "gravando", partesFeitas: feitas });
     return resp;
@@ -195,6 +201,22 @@ async function lerPaginaComSinal(
     },
   );
   return enviar(partes.length - 1, passo);
+}
+
+/** O SHA-256 (hex) dos bytes exatos da resposta — a mesma régua de `assinaturaDosBytes` (empenhos-fragmentos). */
+async function assinaturaDe(pedacos: Uint8Array[], total: number): Promise<string | null> {
+  try {
+    const tudo = new Uint8Array(total);
+    let pos = 0;
+    for (const p of pedacos) {
+      tudo.set(p, pos);
+      pos += p.byteLength;
+    }
+    const h = new Uint8Array(await crypto.subtle.digest("SHA-256", tudo));
+    return Array.from(h, (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
 }
 
 /** O modo das linhas do lote (os empenhos e o catálogo leem a mesma resposta). */

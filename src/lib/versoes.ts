@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.264.13",
+    versao: "1.264.14",
     data: "2026-10-30",
     titulo: "Acabamento da padronização",
     mudancas: [
@@ -44,6 +44,15 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "correcao", area: "Perfil", texto: "O resultado de trocar ou remover a foto aparece no aviso flutuante — à vista em qualquer aba e no celular.", link: "/painel/perfil" },
       { tipo: "correcao", area: "Configurações", texto: "Integrações: o Salvar só fica ativo quando algo mudou. Trocar de aba nas Configurações não leva mais a subaba anterior para a próxima.", link: "/painel/integracoes" },
       { tipo: "melhoria", area: "Configurações", texto: "Avaliação → Protocolação: a explicação foi para a Ajuda (?); o Termo de uso avisa quando não carrega as pessoas, papéis e grupos.", link: "/painel/configuracoes?aba=avaliacao" },
+    ],
+  },
+  {
+    versao: "1.264.13",
+    data: "2026-10-30",
+    titulo: "Importações: a importação manual também ensina a automática a pular o que não mudou",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação feita pela tela agora guarda a assinatura de cada página lida: a atualização automática reconhece depois as páginas iguais a ela e as pula sem reler.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Quando uma resposta grande é processada em pedaços menores (depois de uma execução cortada), só o pedaço menor é lido do banco — antes o pedaço inteiro era carregado e só depois cortado.", link: "/painel/configuracoes?aba=importacoes" },
     ],
   },
   {

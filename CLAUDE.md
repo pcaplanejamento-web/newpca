@@ -4649,6 +4649,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ciclo novo começa no dia em que o anterior terminou quando parado (até 92 dias); o passo não encolhe pelo pedaço final do
     ciclo; a manual trava o par (`lerPeriodoManual`, `comandoTravarManual`); a trava respeita `esperaAte`; "Testar" relê a
     configuração; tempo esgotado na autenticação não encolhe o passo; o painel identifica o ciclo e usa o dia de Brasília.
+  - **v1.264.13:** a leitura pela TELA manda na última parte o SHA-256 dos bytes da resposta (`assinatura` → `assinatura_bruta` do passo — a referência do pulo da automática); a janela reduzida da leitura fragmentada é a que o `substr` lê do banco.
 - **RODADA DO CRON (v1.263.0, sem migração):** o `scheduled` (`worker.ts`) das rotas `empenhos` e `frota` chama o PRÓPRIO
   Worker pelo service binding `SELF` (`wrangler.jsonc` → `services`) em SEQUÊNCIA — cada chamada é uma execução NOVA, com o
   próprio limite de CPU e de 50 consultas; esperar não gasta CPU do pai. Núcleo puro **`rodada-cron-core.ts`** (testado —
@@ -5591,7 +5592,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Importações…) ou `data-grade-cartoes` — o cartão que salta de coluna/linha desliza (FLIP), só os à vista. O
   **`MaisIndicadores`** abre os complementares num PAINEL POR CIMA (absoluto, abaixo do botão; fecha no toque fora/Esc) —
   nada embaixo se move. O `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes em uma linha.
-- **GRADE DOS INDICADORES + ALTURA NUMA BARRA (v1.264.13) — regra firme:** todo conjunto de cartões de KPI usa a
+- **GRADE DOS INDICADORES + ALTURA NUMA BARRA (v1.264.14) — regra firme:** todo conjunto de cartões de KPI usa a
   constante **`GRADE_KPI`** (`EsqueletoTela.tsx` — sem "use client", vale também nos esqueletos): `IndicadoresKpi`,
   Dashboard e Orçamento do PCA, Armazenamento. Numa mesma barra, os botões têm o MESMO tamanho (`Button size="sm"` ao lado
   de controles compactos; alturas fixas = o token `--h-control-sm`, nunca `lg:h-9`). `Tabs limparUrl` tira os parâmetros
