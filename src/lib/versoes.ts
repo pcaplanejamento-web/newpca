@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.13",
+    data: "2026-10-30",
+    titulo: "Acabamento da padronização",
+    mudancas: [
+      { tipo: "melhoria", area: "Indicadores", texto: "Os cartões de indicadores do PCA, do Orçamento do PCA e do Armazenamento seguem a MESMA grade das demais telas.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Interface", texto: "Botões e campos de uma mesma barra com a mesma altura (Catálogo, Avaliação, chat e checklist); a câmera da foto do Perfil com área de toque maior.", link: "/painel/catalogo" },
+      { tipo: "correcao", area: "Perfil", texto: "O resultado de trocar ou remover a foto aparece no aviso flutuante — à vista em qualquer aba e no celular.", link: "/painel/perfil" },
+      { tipo: "correcao", area: "Configurações", texto: "Integrações: o Salvar só fica ativo quando algo mudou. Trocar de aba nas Configurações não leva mais a subaba anterior para a próxima.", link: "/painel/integracoes" },
+      { tipo: "melhoria", area: "Configurações", texto: "Avaliação → Protocolação: a explicação foi para a Ajuda (?); o Termo de uso avisa quando não carrega as pessoas, papéis e grupos.", link: "/painel/configuracoes?aba=avaliacao" },
+    ],
+  },
+  {
     versao: "1.264.12",
     data: "2026-10-29",
     titulo: "Menu suave, direita fixa e engrenagem à direita",

@@ -75,6 +75,24 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState<"turnstile" | "monitoramento" | "trello" | "resend" | "google" | null>(null);
 
+  // Só o que MUDOU de fato ativa o Salvar (os segredos digitados contam; os gravados nunca voltam à tela).
+  const alterado =
+    tsAtivo !== integracoes.turnstile.ativo ||
+    siteKey.trim() !== integracoes.turnstile.siteKey ||
+    secret.length > 0 ||
+    monAtivo !== integracoes.monitoramento.ativo ||
+    trello.ativo !== integracoes.trello.ativo ||
+    trello.apiKey.trim() !== integracoes.trello.apiKey ||
+    !!trello.token ||
+    !!trello.segredo ||
+    resend.ativo !== integracoes.resend.ativo ||
+    !!resend.apiKey.trim() ||
+    resend.remetente.trim() !== integracoes.resend.remetente ||
+    resend.urlSistema.trim() !== integracoes.resend.urlSistema ||
+    google.ativo !== integracoes.google.ativo ||
+    google.clientId.trim() !== integracoes.google.clientId ||
+    !!google.clientSecret.trim();
+
   const secretDefinido = integracoes.turnstile.secretDefinido;
   const semChaveMestra = !integracoes.temChaveMestra;
 
@@ -161,7 +179,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-end gap-3">
         <h1 className="sr-only">Integrações</h1>
-        <Button onClick={salvar} loading={salvando}>
+        <Button onClick={salvar} loading={salvando} disabled={!alterado} title={alterado ? undefined : "Nada a salvar"}>
           Salvar
         </Button>
       </div>

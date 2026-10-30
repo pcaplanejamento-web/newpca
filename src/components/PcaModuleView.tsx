@@ -23,8 +23,6 @@ export function PcaModuleView({
   /** O papel cria PCA (Configurar) — o card "+ Novo PCA". */
   podeCriar: boolean;
   pcas: PcaCardDados[];
-  /** Nome do PCA escolhido no CABEÇALHO (filtro global) — só o card dele aparece. */
-  filtro?: string | null;
 }) {
   const router = useRouter();
   const [novo, setNovo] = useState(false);

@@ -27,6 +27,7 @@ export function Tabs({
   layout = "horizontal",
   alturaTela = false,
   url,
+  limparUrl,
   separado = false,
 }: {
   tabs: Tab[];
@@ -38,6 +39,8 @@ export function Tabs({
   alturaTela?: boolean;
   /** O parâmetro da URL que guarda a aba aberta (ex.: "aba"). */
   url?: string;
+  /** Parâmetros da URL das abas de DENTRO (ex.: "sub") — trocar de aba os tira, para não valerem na aba seguinte. */
+  limparUrl?: string[];
   /** Lateral: a lista e o conteúdo em cartões separados; a lista com a altura fixa do display. */
   separado?: boolean;
 }) {
@@ -96,6 +99,7 @@ export function Tabs({
     if (url) {
       const u = new URL(window.location.href);
       u.searchParams.set(url, chave);
+      for (const p of limparUrl ?? []) u.searchParams.delete(p);
       window.history.replaceState(window.history.state, "", u);
     }
   };

@@ -513,6 +513,7 @@ export function ConfiguracoesAdmin({
           separado
           alturaTela
           url="aba"
+          limparUrl={["sub", "tipo", "card", "abrir"]}
           tabs={[
             { key: "identidade", label: "Identidade", icon: <IconImage />, dica: "Nome, subtítulo e favicon do site", content: abaIdentidade },
             { key: "modulos", label: "Módulos", icon: <IconLayers />, dica: "Os módulos do menu e as telas de cada um (os grupos liberam módulos)", content: <ModulosAdmin /> },

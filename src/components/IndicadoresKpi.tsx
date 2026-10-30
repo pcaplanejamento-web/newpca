@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { KpiStat } from "./KpiStat";
 import { MaisIndicadores } from "./MaisIndicadores";
+import { GRADE_KPI } from "./EsqueletoTela";
 
 /** Um cartão dos indicadores: o valor, até dois detalhes curtos e a cor. */
 export type CartaoKpi = { label: string; value: ReactNode; hint?: string; cor?: string; detalhes?: { rotulo: string; valor: ReactNode }[] };
@@ -16,7 +17,7 @@ export type CantoKpi = { canto?: ReactNode; acaoCanto?: ReactNode };
  */
 export function IndicadoresKpi({ cartoes, canto, todos = false }: { cartoes: CartaoKpi[]; canto?: CantoKpi; todos?: boolean }) {
   const grade = (cs: CartaoKpi[], principais: boolean) => (
-    <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
+    <div className={GRADE_KPI}>
       {cs.map((c, i) => (
         <KpiStat key={c.label} label={c.label} value={c.value} hint={c.hint} cor={c.cor} detalhes={c.detalhes} realce completo {...(principais && canto && (todos || i === 0) ? canto : {})} />
       ))}

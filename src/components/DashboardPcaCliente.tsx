@@ -53,6 +53,7 @@ import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 import { useContagem } from "./useContagem";
+import { GRADE_KPI } from "./EsqueletoTela";
 
 /** Consulta do PCA de fonte protocolo (Protocolos · DFDs · Itens + banners discretos); `foraDaSoma` = os DFDs que a
  * consolidação deixou fora (só no painel; ausente na tela pública). */
@@ -422,7 +423,7 @@ export function DashboardPcaCliente({
     <>
       {!soConsulta && (
       <>
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
+      <div className={GRADE_KPI}>
         <KpiStat
           realce
           completo

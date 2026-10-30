@@ -40,10 +40,13 @@ export function EsqueletoBarra({ controles = 1, icones = 2 }: { controles?: numb
   );
 }
 
+/** A GRADE ÚNICA dos cartões de indicadores (KPIs) — `IndicadoresKpi`, Dashboard e Orçamento do PCA, Armazenamento. */
+export const GRADE_KPI = "grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4";
+
 /** Esqueleto dos INDICADORES (`IndicadoresKpi`): os quatro cartões principais na MESMA grade. */
 export function EsqueletoIndicadores() {
   return (
-    <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
+    <div className={GRADE_KPI}>
       {[0, 1, 2, 3].map((i) => (
         <Skeleton key={i} className="h-[132px] rounded-card" />
       ))}

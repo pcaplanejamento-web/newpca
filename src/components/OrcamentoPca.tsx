@@ -52,6 +52,7 @@ import { type GrupoOrcamento, refsDosGrupos } from "@/lib/orcamento-grupos";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
 import { orcamentoNaVisao } from "@/lib/orcamento-pca-visao";
 import { SeletorVisaoPca, VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
+import { GRADE_KPI } from "./EsqueletoTela";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
@@ -655,7 +656,7 @@ export function OrcamentoPca({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
+      <div className={GRADE_KPI}>
         <KpiStat
           realce
           completo

@@ -296,7 +296,7 @@ export function TermoUsoAdmin() {
         setPapeis(j.papeis.map((p) => ({ id: p.id, nome: p.nome })));
         setGrupos(j.grupos.map((g) => ({ id: g.id, nome: g.nome })));
       })
-      .catch(() => {});
+      .catch(() => toast.error("Não foi possível carregar as pessoas, os papéis e os grupos — recarregue a página."));
   }, [carregar]);
 
   const cfgMudou = useMemo(() => !!d && !!cfg && JSON.stringify(d.config) !== JSON.stringify(cfg), [d, cfg]);

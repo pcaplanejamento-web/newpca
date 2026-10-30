@@ -252,6 +252,8 @@ export function PerfilView({
 
   /** Grava o apelido e/ou a foto (o que vier) — a foto na hora em que é escolhida ou removida. */
   async function gravarPerfil(corpo: { apelido?: string; foto?: string }, ok: string) {
+    // A FOTO é trocada no cabeçalho (vale em qualquer aba): o resultado sai no aviso flutuante, à vista também no celular.
+    const avisar = (m: NonNullable<Msg>) => (corpo.foto === undefined ? setMsgPerfil(m) : m.tipo === "ok" ? toast.success(m.texto) : toast.error(m.texto));
     setSalvando(true);
     setMsgPerfil(null);
     try {
@@ -262,11 +264,11 @@ export function PerfilView({
       });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
-      setMsgPerfil({ tipo: "ok", texto: ok });
+      avisar({ tipo: "ok", texto: ok });
       router.refresh(); // reflete a foto/apelido no menu
       return true;
     } catch (err) {
-      setMsgPerfil({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
+      avisar({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
       return false;
     } finally {
       setSalvando(false);
@@ -277,15 +279,15 @@ export function PerfilView({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) return setMsgPerfil({ tipo: "erro", texto: "Selecione um arquivo de imagem." });
-    if (file.size > 8 * 1024 * 1024) return setMsgPerfil({ tipo: "erro", texto: "Imagem muito grande (máx. 8 MB)." });
+    if (!file.type.startsWith("image/")) return toast.error("Selecione um arquivo de imagem.");
+    if (file.size > 8 * 1024 * 1024) return toast.error("Imagem muito grande (máx. 8 MB).");
     try {
       const nova = await redimensionarImagem(file);
       const anterior = foto;
       setFoto(nova);
       if (!(await gravarPerfil({ foto: nova }, "Foto atualizada."))) setFoto(anterior);
     } catch (err) {
-      setMsgPerfil({ tipo: "erro", texto: err instanceof Error ? err.message : "Falha na imagem." });
+      toast.error(err instanceof Error ? err.message : "Falha na imagem.");
     }
   }
 
@@ -418,7 +420,7 @@ export function PerfilView({
             disabled={salvando}
             aria-label="Alterar foto"
             title="Alterar foto"
-            className="absolute -right-1 -bottom-1 grid h-9 w-9 place-items-center rounded-full border-2 border-surface bg-text text-surface transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+            className="absolute -right-1 -bottom-1 grid h-9 w-9 place-items-center rounded-full border-2 after:absolute after:-inset-1 after:content-[''] border-surface bg-text text-surface transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
           >
             <IconCamera className="h-4 w-4" />
           </button>

@@ -19,7 +19,7 @@ import { MonitoramentoWorker } from "./MonitoramentoWorker";
 import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
 import { useCanalGrupo } from "./CanalGrupo";
 import { SaudeDados } from "./SaudeDados";
-import { EsqueletoIndicadores } from "./EsqueletoTela";
+import { EsqueletoIndicadores, GRADE_KPI } from "./EsqueletoTela";
 import { StatMini } from "./StatMini";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
@@ -227,7 +227,7 @@ export function ArmazenamentoAdmin() {
     <div className="space-y-[var(--gap-block)]">
       {confirmacao}
       {/* Os indicadores primeiro; a barra (recarregar) logo abaixo. */}
-      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
+      <div className={GRADE_KPI}>
         <KpiStat
           label="Tamanho do banco"
           value={formatBytes(dados.totalBytes)}

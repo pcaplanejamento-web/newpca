@@ -841,8 +841,9 @@ export function CatalogoView({
           <div className="ml-auto flex items-center gap-2">
             {papelImporta && !padronizacao && (
               <Button
+                size="sm"
                 variant="secondary"
-                icon={<IconDownload className="h-[18px] w-[18px]" />}
+                icon={<IconDownload className="h-4 w-4" />}
                 onClick={exportarModeloCatalogoXlsx}
                 title="Baixar um modelo .xlsx para preencher e importar"
               >

@@ -449,7 +449,7 @@ function UmChecklist({
                 fecharNome(false);
               }
             }}
-            className="h-11 min-w-0 flex-1 rounded-control border border-accent bg-surface px-2 text-[13.5px] font-bold text-text outline-none ring-4 ring-accent/20 lg:h-9"
+            className="h-11 min-w-0 flex-1 rounded-control border border-accent bg-surface px-2 text-[13.5px] font-bold text-text outline-none ring-4 ring-accent/20 lg:h-[var(--h-control-sm)]"
           />
         ) : (
           <h4 className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text" title={c.nome}>
@@ -494,7 +494,7 @@ function UmChecklist({
           return (
             <li key={i.id} className="flex min-h-11 items-center gap-2 px-2 py-1">
               {rascunho ? (
-                <span className="grid h-11 w-6 shrink-0 place-items-center text-[12px] tabular-nums text-faint lg:h-9">{idx + 1}.</span>
+                <span className="grid h-11 w-6 shrink-0 place-items-center text-[12px] tabular-nums text-faint lg:h-[var(--h-control-sm)]">{idx + 1}.</span>
               ) : (
                 <Checkbox alvo checked={i.feito} disabled={disabled} onChange={() => acoes.alternar(i.id)} label="" aria-label={`Concluir: ${i.texto}`} />
               )}
@@ -516,7 +516,7 @@ function UmChecklist({
                       fecharEdicao(false);
                     }
                   }}
-                  className="h-11 min-w-0 flex-1 rounded-control border border-accent bg-surface px-2 text-[13px] text-text outline-none ring-4 ring-accent/20 lg:h-9"
+                  className="h-11 min-w-0 flex-1 rounded-control border border-accent bg-surface px-2 text-[13px] text-text outline-none ring-4 ring-accent/20 lg:h-[var(--h-control-sm)]"
                 />
               ) : rascunho || disabled ? (
                 <span className={`min-w-0 flex-1 truncate text-[13px] ${i.feito ? "text-muted line-through decoration-faint" : "text-text"}`} title={i.texto}>
@@ -603,7 +603,7 @@ function UmChecklist({
                   adicionar();
                 }
               }}
-              className="h-11 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-faint lg:h-9"
+              className="h-11 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-faint lg:h-[var(--h-control-sm)]"
             />
             {novo.trim() && <Button size="xs" variant="ghost" aria-label="Adicionar item" icon={<IconCheck className="h-4 w-4" />} onClick={adicionar} />}
           </li>
@@ -638,7 +638,7 @@ function MenuItem({
               type="date"
               value={i.prazo ?? ""}
               onChange={(e) => onEditar({ prazo: e.target.value || null })}
-              className="mt-1 h-11 w-full rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text lg:h-9"
+              className="mt-1 h-11 w-full rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text lg:h-[var(--h-control-sm)]"
             />
           </label>
           <label className="block text-[12px] font-semibold text-text-2">
@@ -646,7 +646,7 @@ function MenuItem({
             <Selecao
               value={i.responsavelId ?? ""}
               onChange={(e) => onEditar({ responsavelId: e.target.value ? Number(e.target.value) : null })}
-              className="mt-1 h-11 w-full rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text lg:h-9"
+              className="mt-1 h-11 w-full rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text lg:h-[var(--h-control-sm)]"
             >
               <option value="">Ninguém</option>
               {pessoas.map((p) => (

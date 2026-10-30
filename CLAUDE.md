@@ -5591,6 +5591,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Importações…) ou `data-grade-cartoes` — o cartão que salta de coluna/linha desliza (FLIP), só os à vista. O
   **`MaisIndicadores`** abre os complementares num PAINEL POR CIMA (absoluto, abaixo do botão; fecha no toque fora/Esc) —
   nada embaixo se move. O `KpiStat` tem a linha do número de ALTURA FIXA e a dica/detalhes em uma linha.
+- **GRADE DOS INDICADORES + ALTURA NUMA BARRA (v1.264.13) — regra firme:** todo conjunto de cartões de KPI usa a
+  constante **`GRADE_KPI`** (`EsqueletoTela.tsx` — sem "use client", vale também nos esqueletos): `IndicadoresKpi`,
+  Dashboard e Orçamento do PCA, Armazenamento. Numa mesma barra, os botões têm o MESMO tamanho (`Button size="sm"` ao lado
+  de controles compactos; alturas fixas = o token `--h-control-sm`, nunca `lg:h-9`). `Tabs limparUrl` tira os parâmetros
+  das subabas ao trocar de aba (Configurações: `sub`, `tipo`, `card`, `abrir`).
 - **BARRA DE FERRAMENTAS (v1.264.4) — regra firme:** numa barra de botões, os PRINCIPAIS (seletores, campos, busca, filtros) à
   ESQUERDA e os SECUNDÁRIOS (só-ícone: recarregar, configurar, ajuda) à DIREITA. A classe `.barra-ferramentas` (`globals.css`)
   faz isso sozinha (`order` + `margin-left:auto` no 1º secundário), qualquer que seja a ordem do código; usada no

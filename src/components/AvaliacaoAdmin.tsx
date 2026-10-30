@@ -538,22 +538,22 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
     const setG = (patch: Partial<GateProtocolacao>) => setGate((v) => ({ ...v, ...patch }));
     return (
       <div className="space-y-[var(--gap-block)]">
-        <p className="text-[13px] text-muted">
-          Controle o que pode ser protocolado. Só é permitido protocolar quando o Assunto do protocolo
-          está cadastrado e todos os DFDs têm um tipo permitido — quando as travas abaixo estão ligadas.
-          Sem travas ligadas, nada muda (comportamento de hoje).
-        </p>
 
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-1 text-sm font-bold text-text">
               Assuntos permitidos
               <Ajuda titulo="Assuntos permitidos" compacta>
+                <p>
+                  Esta aba controla o que pode ser protocolado: com as travas ligadas, só se protocola quando o assunto está
+                  cadastrado e todos os DFDs têm um tipo permitido. Sem travas, nada muda.
+                </p>
                 <p>A lista dos assuntos que podem ser protocolados. O assunto da capa precisa CONTER um destes termos (sem diferenciar acento e maiúsculas).</p>
                 <p>Só vale com a trava “Exigir assunto cadastrado para protocolar” ligada; lista vazia com a trava ligada impede qualquer protocolação.</p>
               </Ajuda>
             </h2>
             <Button
+              size="sm"
               variant="secondary"
               onClick={() => setAssuntos((l) => [...l, { id: `as-${Date.now().toString(36)}`, termo: "" }])}
             >
