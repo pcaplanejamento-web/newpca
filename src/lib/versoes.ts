@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.265.2",
+    data: "2026-10-30",
+    titulo: "Pizza mostra as fatias pequenas",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "Nos gráficos de pizza, as fatias muito pequenas (como Baixa com 0,6% na Prioridade) voltam a aparecer: cada fatia tem um tamanho mínimo visível e o espaço entre elas não apaga mais as menores. A pizza também fica com folga das bordas do cartão.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.265.1",
     data: "2026-10-30",
     titulo: "Cartões dos gráficos no tamanho certo",

@@ -2,16 +2,16 @@
 
 import { useId, useState } from "react";
 import { pct } from "@/lib/format";
+import { angulosPizza } from "@/lib/pizza-core";
 import { ChartEmpty, corClara } from "./shared";
 
 /** Uma fatia da pizza: a cor é a da CATEGORIA (token) — nunca a da posição. */
 export type FatiaPizza = { chave: string; rotulo: string; valor: number; cor: string; detalhe?: string };
 
 const C = 100;
-const R_MAX = 92;
-const R_MIN = 58;
+const R_MAX = 88;
+const R_MIN = 56;
 const VAO = 0.035;
-
 /**
  * PIZZA moderna — o todo dividido em POUCAS partes (até ~5). Cada fatia tem o RAIO proporcional ao valor (a maior sai
  * mais), degradê radial da própria cor, o % dentro das fatias com mais de 8% e a legenda ao lado (abaixo, em cartão
@@ -39,6 +39,7 @@ export function Pizza({
   const total = visiveis.reduce((t, f) => t + f.valor, 0);
   if (!total) return <ChartEmpty />;
   const maior = Math.max(...visiveis.map((f) => f.valor));
+  const angulos = angulosPizza(visiveis.map((f) => f.valor));
   let a = -Math.PI / 2;
   const P = (ang: number, r: number) => `${(C + r * Math.cos(ang)).toFixed(2)},${(C + r * Math.sin(ang)).toFixed(2)}`;
   return (
@@ -54,9 +55,10 @@ export function Pizza({
           ))}
         </defs>
         {visiveis.map((f, i) => {
-          const ang = (f.valor / total) * 2 * Math.PI;
-          const a0 = a + VAO / 2;
-          const a1 = a + ang - VAO / 2;
+          const ang = angulos[i];
+          const vao = Math.min(VAO, ang * 0.2);
+          const a0 = a + vao / 2;
+          const a1 = a + ang - vao / 2;
           const meio = (a0 + a1) / 2;
           a += ang;
           const r = R_MIN + Math.sqrt(f.valor / maior) * (R_MAX - R_MIN);
@@ -72,7 +74,7 @@ export function Pizza({
               className="transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none"
               style={{ transform: sai ? `translate(${Math.cos(meio) * 6}px, ${Math.sin(meio) * 6}px)` : undefined, opacity: apagada ? 0.3 : 1 }}
             >
-              <path d={d} fill={`url(#${id}-${i})`} stroke="var(--surface)" strokeWidth={2} strokeLinejoin="round" />
+              <path d={d} fill={`url(#${id}-${i})`} />
               {f.valor / total > 0.08 && (
                 <text
                   x={C + r * 0.62 * Math.cos(meio)}
