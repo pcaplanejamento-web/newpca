@@ -14,7 +14,7 @@ type Props = {
 
 export function ChartCard({ title, subtitle, children, className, action, onExpandir }: Props) {
   return (
-    <div className={`rounded-card border border-border/60 bg-surface p-[var(--pad-card)] shadow-soft ${className ?? ""}`}>
+    <div className={`flex flex-col rounded-card border border-border/60 bg-surface p-[var(--pad-card)] shadow-soft ${className ?? ""}`}>
       {(title || action || onExpandir) && (
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -43,7 +43,8 @@ export function ChartCard({ title, subtitle, children, className, action, onExpa
           )}
         </div>
       )}
-      {children}
+      {/* Esticado até a altura da linha (cartões lado a lado), o gráfico fica CENTRADO no espaço — sem um vão embaixo. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">{children}</div>
     </div>
   );
 }

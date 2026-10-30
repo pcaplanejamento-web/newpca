@@ -595,9 +595,7 @@ export function DashboardPcaCliente({
                   <PeriodicidadeChart data={periodicos} onSelecionar={filtrar} ativos={labels("previsao")} />
                 </ChartCard>
               ) : null,
-              <ChartCard key="item" title={TITULO.item} subtitle={`Os ${num(tops.length)} maiores itens — role a lista; toque para filtrar`} onExpandir={() => setExplorar("item")}>
-                <TopItensChart data={tops} onSelecionar={filtrar} ativo={itemAtivo} alturaMax={420} />
-              </ChartCard>,
+
               <ChartCard key="unidadeMedida" title={TITULO.unidadeMedida} subtitle="Itens por medida — toque para filtrar" onExpandir={() => setExplorar("unidadeMedida")}>
                 <UnidadeChart data={unids} onSelecionar={filtrar} ativos={labels("unidadeMedida")} />
               </ChartCard>,
@@ -616,10 +614,18 @@ export function DashboardPcaCliente({
                   <UnidadeRequisitanteChart data={unidades} onSelecionar={filtrar} ativos={labels("unidade")} />
                 </ChartCard>
               ) : null,
+              // O Top 100 (lista alta que rola) ocupa a LINHA INTEIRA no fim: nenhum cartão vizinho estica até a altura dele.
+              <ChartCard key="item" title={TITULO.item} subtitle={`Os ${num(tops.length)} maiores itens — role a lista; toque para filtrar`} onExpandir={() => setExplorar("item")}>
+                <TopItensChart data={tops} onSelecionar={filtrar} ativo={itemAtivo} alturaMax={420} />
+              </ChartCard>,
             ]
               .filter(Boolean)
               .map((card, i) => (
-                <div key={(card as { key: string }).key} className="grafico-entrada min-w-0 [&>*]:h-full" style={{ "--atraso": `${i * 70}ms` } as CSSProperties}>
+                <div
+                  key={(card as { key: string }).key}
+                  className={`grafico-entrada min-w-0 [&>*]:h-full ${(card as { key: string }).key === "item" ? "lg:col-span-2" : ""}`}
+                  style={{ "--atraso": `${i * 70}ms` } as CSSProperties}
+                >
                   {card}
                 </div>
               ))}

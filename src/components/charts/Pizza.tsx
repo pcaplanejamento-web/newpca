@@ -43,8 +43,8 @@ export function Pizza({
   const P = (ang: number, r: number) => `${(C + r * Math.cos(ang)).toFixed(2)},${(C + r * Math.sin(ang)).toFixed(2)}`;
   return (
     <div className="@container">
-    <div className="grid items-center gap-4 @[30rem]:grid-cols-[13rem_1fr]">
-      <svg viewBox="0 0 200 200" role="img" aria-label={ariaLabel} className="mx-auto h-48 w-48 overflow-visible">
+    <div className="grid items-center gap-4 @[30rem]:grid-cols-[minmax(12rem,15rem)_1fr]">
+      <svg viewBox="0 0 200 200" role="img" aria-label={ariaLabel} className="mx-auto aspect-square w-full max-w-[15rem] overflow-visible">
         <defs>
           {visiveis.map((f, i) => (
             <radialGradient key={f.chave} id={`${id}-${i}`} cx="30%" cy="25%" r="90%">

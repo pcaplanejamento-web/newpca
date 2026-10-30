@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.265.1",
+    data: "2026-10-30",
+    titulo: "Cartões dos gráficos no tamanho certo",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "No Dashboard do PCA, o Top 100 Itens passa a ocupar a linha inteira no fim. Os cartões ao lado não esticam mais até a altura da lista, e a pizza da Prioridade não fica com um vão embaixo.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Sistema", texto: "Quando um cartão de gráfico fica mais alto que o conteúdo (lado a lado com outro maior), o gráfico aparece centrado no cartão, sem espaço vazio embaixo. A pizza cresce com o espaço disponível.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.265.0",
     data: "2026-10-30",
     titulo: "Gráficos com novo visual: cores vivas, degradês e acabamento refinado",
