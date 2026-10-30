@@ -99,6 +99,8 @@ export const importarCardSchema = z.discriminatedUnion("acao", [
     linhas: z.array(z.unknown()).max(MAX_LINHAS_PARTE),
     // Os IGUAIS ao gravado: só a chave e a assinatura (conferidos no banco — `paresDaParte`/`comandoParesIguais`).
     iguais: z.array(z.unknown()).max(MAX_PARES_PARTE).optional(),
+    // O SHA-256 dos bytes da resposta (só na última parte): a referência do pulo da página idêntica na automática.
+    assinatura: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(),
     resumo: z
       .strictObject({
         status: z.number().int().min(0).max(999).nullable(),

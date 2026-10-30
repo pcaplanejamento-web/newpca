@@ -140,3 +140,28 @@ test("página no navegador: SÓ O QUE MUDOU vai inteiro — o registro com a ass
   assert.deepEqual((parte.iguais as [string, string][]).map((p) => p[0]), lidas.slice(0, 4).map((l) => l.chave), "os iguais, só a chave + a assinatura");
   assert.equal((parte.resumo as { recebidos: number }).recebidos, 6);
 });
+
+test("página no navegador: a ÚLTIMA parte leva o SHA-256 dos bytes da resposta (a referência do pulo da automática)", async () => {
+  const { createHash } = await import("node:crypto");
+  const regs = Array.from({ length: 3 }, (_, i) => ({ IdOrdemPagamento: i + 1, IdNotaEmpenho: 9, Orgao: "P", ValorLiquido: 1, PossuiAnulacao: false }));
+  const bytes = new TextEncoder().encode(JSON.stringify(regs));
+  const enviados: Record<string, unknown>[] = [];
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    const c = JSON.parse(init.body);
+    enviados.push(c);
+    if (c.acao === "baixar") {
+      const body = new ReadableStream<Uint8Array>({
+        start(ctl) {
+          ctl.enqueue(bytes.slice(0, 10));
+          ctl.enqueue(bytes.slice(10));
+          ctl.close();
+        },
+      });
+      return { status: 200, ok: true, headers: { get: (h: string) => (h === "x-centi-status" ? "200" : null) }, body };
+    }
+    return { status: 200, ok: true, headers: { get: () => null }, json: async () => ({ ok: true, lote: LOTE, passo: { ...passoVazio(7, c, 1), id: 7 } }) };
+  }) as never;
+  await lerPaginaNoNavegador(1, "pagamentos", 2025, { lote: 1, condutor: "x", inicio: "2025-01-01", fim: "2025-12-31", pagina: 1 });
+  const [parte] = enviados.filter((c) => c.acao === "parte");
+  assert.equal(parte.assinatura, createHash("sha256").update(bytes).digest("hex"));
+});

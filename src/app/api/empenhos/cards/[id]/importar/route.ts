@@ -153,7 +153,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const r =
         corpo.acao === "falha"
           ? await falhaDaPagina(card, lote, periodo, corpo.pagina, { mensagem: corpo.mensagem, status: corpo.status, bytes: corpo.bytes, ms: corpo.ms })
-          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, iguais: corpo.iguais, resumo: corpo.resumo });
+          : await guardarParteDoLote(card, lote, periodo, corpo.pagina, { parte: corpo.parte, partes: corpo.partes, passo: corpo.passo, tuplas: corpo.linhas, iguais: corpo.iguais, resumo: corpo.resumo, assinatura: corpo.assinatura ?? null });
       // A parte do meio não muda a contagem do lote (só a última reconta): não relê o lote.
       return ok({ lote: r.parcial ? null : await getLote(lote.id, card.id), ...r });
     } catch (e) {

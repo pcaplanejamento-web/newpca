@@ -323,7 +323,7 @@ async function processar(card: CardEmpenho, lote: LoteCenti, l: Leitura, ped: Pe
   // A janela ENCOLHE a cada execução que não avançou: o trecho pesado demais para o limite de CPU passa em pedaços menores.
   const janela = janelaDaTentativa(l.tentativas);
   const pedacos = await db
-    .select({ ini: centiBrutos.ini, texto: sql<string>`substr(${centiBrutos.texto}, max(1, ${l.pos} - ${centiBrutos.ini} + 1), ${JANELA})` })
+    .select({ ini: centiBrutos.ini, texto: sql<string>`substr(${centiBrutos.texto}, max(1, ${l.pos} - ${centiBrutos.ini} + 1), ${janela})` })
     .from(centiBrutos)
     .where(and(eq(centiBrutos.leituraId, l.id), lt(centiBrutos.ini, l.pos + janela), gt(sql`${centiBrutos.ini} + ${centiBrutos.chars}`, l.pos)));
   const bruto = janelaDosPedacos(l.pos, janela, pedacos);

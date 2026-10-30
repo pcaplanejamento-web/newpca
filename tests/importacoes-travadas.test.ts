@@ -95,3 +95,9 @@ test("situação com erro: falha, erro e espera depois de um erro", () => {
   assert.ok(!situacaoComErro("fora da hora"));
   assert.ok(!situacaoComErro("2026: página lida"));
 });
+
+test("leitura fragmentada: a janela REDUZIDA é a que se lê do banco (o substr usa a janela da tentativa, não a cheia)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const fonte = readFileSync(new URL("../src/lib/empenhos-fragmentos.ts", import.meta.url), "utf8");
+  assert.match(fonte, /substr\(\$\{centiBrutos\.texto\}, [^`]*\$\{janela\}\)/);
+});

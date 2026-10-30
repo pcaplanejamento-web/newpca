@@ -4649,6 +4649,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ciclo novo começa no dia em que o anterior terminou quando parado (até 92 dias); o passo não encolhe pelo pedaço final do
     ciclo; a manual trava o par (`lerPeriodoManual`, `comandoTravarManual`); a trava respeita `esperaAte`; "Testar" relê a
     configuração; tempo esgotado na autenticação não encolhe o passo; o painel identifica o ciclo e usa o dia de Brasília.
+  - **v1.264.1:** a leitura pela TELA manda na última parte o SHA-256 dos bytes da resposta (`assinatura` → `assinatura_bruta` do passo — a referência do pulo da automática); a janela reduzida da leitura fragmentada é a que o `substr` lê do banco.
 - **RODADA DO CRON (v1.263.0, sem migração):** o `scheduled` (`worker.ts`) das rotas `empenhos` e `frota` chama o PRÓPRIO
   Worker pelo service binding `SELF` (`wrangler.jsonc` → `services`) em SEQUÊNCIA — cada chamada é uma execução NOVA, com o
   próprio limite de CPU e de 50 consultas; esperar não gasta CPU do pai. Núcleo puro **`rodada-cron-core.ts`** (testado —

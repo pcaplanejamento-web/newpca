@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.264.1",
+    data: "2026-10-30",
+    titulo: "Importações: a importação manual também ensina a automática a pular o que não mudou",
+    mudancas: [
+      { tipo: "melhoria", area: "Importações", texto: "A importação feita pela tela agora guarda a assinatura de cada página lida: a atualização automática reconhece depois as páginas iguais a ela e as pula sem reler.", link: "/painel/configuracoes?aba=importacoes" },
+      { tipo: "correcao", area: "Importações", texto: "Quando uma resposta grande é processada em pedaços menores (depois de uma execução cortada), só o pedaço menor é lido do banco — antes o pedaço inteiro era carregado e só depois cortado.", link: "/painel/configuracoes?aba=importacoes" },
+    ],
+  },
+  {
     versao: "1.264.0",
     data: "2026-10-29",
     titulo: "Importações auditadas: só relê o que mudou, sem travas e sem perder leituras",
