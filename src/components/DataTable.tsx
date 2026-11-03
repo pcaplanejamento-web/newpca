@@ -897,7 +897,7 @@ export function DataTable<R>({
         </span>
         {/* Os CONTROLES numa linha só, alinhados: o que não cabe rola de lado (a rolagem nativa; os painéis abrem por portal,
             nada é cortado). O respiro de 2px guarda o anel de foco. */}
-        <div className="-m-0.5 flex min-w-0 max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain p-0.5 sm:gap-3 [&>*]:shrink-0">
+        <div className="-mx-0.5 -my-1 flex min-w-0 max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain px-0.5 py-1 sm:gap-3 [&>*]:shrink-0">
           {/* Com visões salvas, os filtros das colunas ficam no PainelFiltros — aqui só os de fora (o Recorte da Mesa). */}
           {(edicoes ? 0 : ativos.length) + (filtrosRodape?.n ?? 0) > 0 && (
             <FiltrosAtivos
@@ -1056,7 +1056,7 @@ export function FiltrosAtivos({
       trigger={
         <>
           <IconFilter className="h-4 w-4" />
-          <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums">
+          <span className="pointer-events-none absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums ring-2 ring-surface">
             {total}
           </span>
         </>

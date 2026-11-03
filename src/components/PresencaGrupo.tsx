@@ -219,7 +219,7 @@ function IconeConversas({ naoLidas, so = false }: { naoLidas: number; /** Sem a 
     <span className={`relative inline-flex h-7 w-7 items-center justify-center text-muted ${so ? "" : "ml-1 border-l border-border pl-1.5"}`}>
       <IconChat className="h-[18px] w-[18px]" />
       {naoLidas > 0 && (
-        <span key={naoLidas} className="animate-selo-pop absolute -top-1 -right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white">
+        <span key={naoLidas} className="animate-selo-pop pointer-events-none absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface">
           {naoLidas > 99 ? "99+" : naoLidas}
         </span>
       )}

@@ -1420,7 +1420,7 @@ function EditorFluxo({
           <Button size="sm" variant="icon" className="relative" aria-label="Relatório da última execução" title={`Relatório da última execução${resultado.apontados.length ? ` (${resultado.apontados.length})` : ""}`} onClick={() => setRelatorio(true)}>
             <IconClipboard className="size-4" />
             {resultado.apontados.length > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-[var(--danger)] px-1 text-[10px] font-semibold leading-4 text-white">
+              <span className="pointer-events-none absolute right-0.5 top-0.5 min-w-4 rounded-full bg-[var(--danger)] px-1 text-[10px] font-semibold leading-4 text-white ring-2 ring-surface">
                 {resultado.apontados.length > 999 ? "999+" : resultado.apontados.length}
               </span>
             )}
