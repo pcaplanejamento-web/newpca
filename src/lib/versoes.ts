@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.4",
+    data: "2026-11-03",
+    titulo: "Unidades × Centro de Custo busca cada DFD pelo ID, como o Baixar DFDs",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A automação “Unidades dos DFDs × Centro de Custo” não lê mais a lista da CM002: busca cada DFD na Centi pelo nº de planejamento (o ID), no órgão dele — o mesmo pedido do “Baixar DFDs” — e confere a unidade pelo Centro de Custo do próprio planejamento. Use “Atualizar pelo modelo” no fluxo salvo.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O “Buscar DFD na Centi” traz também o Centro de Custo e a Finalidade e usa o órgão no mesmo formato da Centi aberta; o planejamento não encontrado é apontado, e o que vier sem centro de custo diz os campos que a Centi devolveu.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.3",
     data: "2026-11-03",
     titulo: "CM002 lida inteira mesmo com a paginação diferente",

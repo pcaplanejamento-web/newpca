@@ -216,14 +216,22 @@ export function conferirUnidades(
   const porId = new Map(unidades.map((u) => [u.id, u]));
   const out = { divergentes: [] as Item[], desconhecidas: [] as Item[], conformes: [] as Item[] };
   for (const it of itens) {
-    const linha = (it.encontrado && typeof it.encontrado === "object" ? it.encontrado : {}) as Item;
+    // A linha da Centi: a achada na lista da CM002 (`encontrado`) ou o registro do planejamento lido pelo ID (`centi`).
+    const fonte = it.encontrado && typeof it.encontrado === "object" ? it.encontrado : it.centi && typeof it.centi === "object" ? it.centi : null;
+    const linha = (fonte ?? {}) as Item;
     const centro = String(linha.centroCusto ?? "").trim();
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
+    if (!fonte && "centi" in it) {
+      const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
+      out.desconhecidas.push({ ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` });
+      continue;
+    }
     const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
     const atual = typeof it.reparticaoId === "number" ? it.reparticaoId : null;
     const base = { ...it, unidadeCentroCusto: centro ? unidadeDoCentroCusto(centro).nome : "", unidadeSistema: String(it.sigla ?? "") };
     if (!centro) {
-      out.desconhecidas.push({ ...base, mensagem: `${ref}: a linha da CM002 não tem centro de custo` });
+      const campos = Array.isArray(linha.camposCenti) && linha.camposCenti.length ? ` (campos que vieram: ${linha.camposCenti.join(", ")})` : "";
+      out.desconhecidas.push({ ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` });
       continue;
     }
     const { nome, truncado } = unidadeDoCentroCusto(centro);

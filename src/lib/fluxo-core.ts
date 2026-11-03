@@ -806,6 +806,30 @@ export function acharValor(v: unknown, re: RegExp, prof = 0): unknown {
   return undefined;
 }
 
+/** Os NOMES dos campos de uma resposta da Centi (chaves e os `Key` dos pares {Key, Value}), sem valores — o diagnóstico
+ * quando um campo esperado não veio. Até `max`, sem repetir. Puro. */
+export function nomesDosCampos(v: unknown, max = 40): string[] {
+  const out = new Set<string>();
+  const ir = (x: unknown, prof: number) => {
+    if (out.size >= max || prof > 4 || x == null || typeof x !== "object") return;
+    if (Array.isArray(x)) {
+      for (const y of x) {
+        if (y && typeof y === "object" && "Key" in y && typeof (y as { Key: unknown }).Key === "string") out.add((y as { Key: string }).Key);
+        else ir(y, prof + 1);
+        if (out.size >= max) return;
+      }
+      return;
+    }
+    for (const [k, y] of Object.entries(x as Record<string, unknown>)) {
+      if (y == null || typeof y !== "object") out.add(k);
+      else ir(y, prof + 1);
+      if (out.size >= max) return;
+    }
+  };
+  ir(v, 0);
+  return [...out].slice(0, max);
+}
+
 // ———————————————————————————————————————————————— subfluxos (um fluxo usado dentro de outro)
 
 export const TIPOS_SUBFLUXO = ["fluxo.executar", "fluxo.paralelo"] as const;

@@ -2,7 +2,7 @@
 
 import { type MutableRefObject, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AberturaItem } from "@/lib/fluxo-tipo-item";
-import { chaveOrgaoCenti, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { chaveOrgaoCenti, formatoEntidade, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import type { PedirExtensao } from "@/lib/arquivo-navegador";
 import { dataHoraBR } from "@/lib/format";
 import {
@@ -326,7 +326,8 @@ export function FluxosAutomacao({
         return importarProtocolo(lido, apontamentos, importacao);
       },
       lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean, completo?: boolean) =>
-        lerDfdCentiPorCodigo(emissor, plan, entidade, pdf !== false, completo === true),
+        // A entidade no MESMO formato da aberta na Centi — como o "Baixar DFDs" (6 → "06" quando a aberta é "02").
+        lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true),
       substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {

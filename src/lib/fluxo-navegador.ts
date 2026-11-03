@@ -5,7 +5,7 @@
  */
 import { analisarRespostaCenti, operacaoRecusada } from "./automacao-centi-core";
 import { carregarPlanejamento, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
-import { acharValor } from "./fluxo-core";
+import { acharValor, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdDetalhe } from "./dfd";
@@ -108,13 +108,17 @@ export async function lerDfdCentiPorCodigo(
   if ("erro" in l) throw new Error(l.erro);
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
   const situacao = s(acharValor(l.j, /^situa/i));
-  if (!comPdf) return { planejamento: plan, situacao };
+  // O Centro de Custo e a Finalidade do PRÓPRIO registro do planejamento (o ID da CM002) — sem depender da lista.
+  const centroCusto = s(acharValor(l.j, /^(id)?centro.?(de)?.?custo/i));
+  const finalidade = s(acharValor(l.j, /^finalidade/i));
+  const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
+  if (!comPdf) return { planejamento: plan, situacao, ...extra };
   const e = await emitirUm(c, plan, entidade || undefined, false, true);
   if (!e.pdf) throw new Error(e.recusada ? `A Centi recusou o Emitir DFD — ${e.erro}` : (e.erro ?? "Falha ao emitir."));
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr: completo }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
-  const resumo = { numero: d.numero, planejamento: d.planejamento, tipo: d.tipo, objeto: d.objeto, valor: d.valorTotal ?? 0, totalItens: d.itens.length, situacao };
+  const resumo = { numero: d.numero, planejamento: d.planejamento, tipo: d.tipo, objeto: d.objeto, valor: d.valorTotal ?? 0, totalItens: d.itens.length, situacao, ...extra };
   return completo ? { ...resumo, dfd: d as unknown as Item } : resumo;
 }
 
