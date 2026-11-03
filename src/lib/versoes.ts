@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.1",
+    data: "2026-11-03",
+    titulo: "Conferência das unidades × Centro de Custo mais segura",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Uma unidade do Centro de Custo que não existe no sistema sempre aparece como “unidade desconhecida” — a sigla da Finalidade só desempata quando o nome casa mais de uma unidade, nunca leva o DFD para outra.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Centro de Custo longo (cortado pela extensão), com vírgula no fim ou com “ - SIGLA” no nome agora casa a unidade certa.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Mesa", texto: "Na edição em massa de DFDs, o DFD excluído enquanto a ação rodava aparece como falha, nunca como alterado.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.266.0",
     data: "2026-11-03",
     titulo: "Unidades dos DFDs conferidas com o Centro de Custo da CM002",

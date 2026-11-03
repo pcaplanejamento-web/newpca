@@ -228,10 +228,12 @@ export function conferirUnidades(
     }
     const { nome, truncado } = unidadeDoCentroCusto(centro);
     let c = casarUnidadePorNome(nome, truncado, unidades, orgaoId);
-    if (c.tipo !== "ok") {
+    // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
+    // continua "desconhecida", nunca vira outra unidade.
+    if (c.tipo === "ambigua") {
       const sigla = siglaDaFinalidade(String(linha.finalidade ?? ""));
       const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
-      if (s?.tipo === "ok") c = s;
+      if (s?.tipo === "ok" && c.ids.includes(s.id)) c = s;
     }
     if (c.tipo !== "ok") {
       const motivo = c.tipo === "ambigua" ? "casa mais de uma unidade cadastrada" : "não existe no sistema";

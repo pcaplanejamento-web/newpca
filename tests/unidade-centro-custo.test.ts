@@ -54,3 +54,18 @@ test("Conferir unidades: iguais, divergentes (com a da Centi) e desconhecidas (c
   assert.match(String(r.desconhecidas[0].mensagem), /unidade desconhecida no centro de custo — “GUARDA CIVIL MUNICIPAL” não existe no sistema/);
   assert.equal(r.desconhecidas[0].unidadeCentroCusto, "GUARDA CIVIL MUNICIPAL");
 });
+
+test("Auditoria: o desconhecido nunca vira outra unidade; vírgula no fim, corte de 200 e ' - SIGLA'", () => {
+  const r = conferirUnidades(
+    [{ id: 60, numero: "6", planejamento: "66", reparticaoId: 2, sigla: "GGIM", orgaoId: 1, encontrado: { centroCusto: "PM RV, DEPARTAMENTO NOVO", finalidade: "PCA - 2026 - INICIAL - SEPLAN" } }],
+    UNIDADES,
+  );
+  assert.deepEqual(r.divergentes, [], "a sigla da Finalidade só desempata, nunca troca um desconhecido");
+  assert.match(String(r.desconhecidas[0].mensagem), /“DEPARTAMENTO NOVO” não existe no sistema/);
+  assert.deepEqual(unidadeDoCentroCusto("PM RV, SECRETARIA MUNICIPAL DE SAÚDE,"), { nome: "SECRETARIA MUNICIPAL DE SAÚDE", truncado: false });
+  const longo = `PM RV, ${"X".repeat(150)}, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO`.slice(0, 200);
+  const u = unidadeDoCentroCusto(longo);
+  assert.equal(u.truncado, true, "a extensão corta em 200 sem reticência");
+  assert.deepEqual(casarUnidadePorNome(u.nome, u.truncado, UNIDADES), { tipo: "ok", id: 1 });
+  assert.deepEqual(casarUnidadePorNome("SECRETARIA DE PLANEJAMENTO - SEPLAN", false, UNIDADES), { tipo: "ok", id: 1 });
+});

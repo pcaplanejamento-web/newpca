@@ -184,10 +184,15 @@ export function orgaoDivergeDaUnidade(
  * ("PM RV, GABINETE DO PREFEITO, GGIM" → "GGIM"). A Centi corta os nomes longos com reticência
  * ("…, PROCURADORIA-GE..."): sem ela, `truncado` marca que só o COMEÇO do nome é conhecido. */
 export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
-  const ultimo = String(texto ?? "").split(",").pop() ?? "";
+  const t = String(texto ?? "");
+  const ultimo = t.split(",").filter((x) => x.trim()).pop() ?? "";
   const sem = ultimo.replace(/\s*(\.{2,}|…)\s*$/, "");
-  return { nome: sem.trim().replace(/\s+/g, " "), truncado: sem.length !== ultimo.length };
+  // A extensão corta o valor em MAX_CENTRO_CUSTO sem reticência: o texto nesse tamanho também está cortado.
+  return { nome: sem.trim().replace(/\s+/g, " "), truncado: sem.length !== ultimo.length || t.trim().length >= MAX_CENTRO_CUSTO };
 }
+
+/** O tamanho em que a extensão corta os textos da CM002 (`centi-anexo.js`). */
+export const MAX_CENTRO_CUSTO = 200;
 
 /** A sigla no fim da Finalidade da CM002 ("PCA - 2026 - INICIAL - SMAUSP" → "SMAUSP"), só quando é uma
  * palavra curta de letras (nunca um ano nem um texto). */
@@ -211,12 +216,15 @@ export function casarUnidadePorNome(
 ): CasamentoUnidade {
   const validas = unidades.filter((u) => !u.oculto && norm(u.codigo) !== "GERAL");
   const k = chaveNome(semPrefixo(nome));
-  const sigla = norm(nome);
   if (!k) return { tipo: "desconhecida" };
+  // O nome inteiro e cada trecho " - " ("SECRETARIA DE PLANEJAMENTO - SEPLAN").
+  const trechos = nome.split(/\s+[-–—]\s+/).map((x) => x.trim()).filter(Boolean);
+  const chaves = new Set([k, ...trechos.map(chaveNome)].filter(Boolean));
+  const siglas = new Set([nome, ...trechos].map(norm).filter(Boolean));
   const pelo = (f: (u: ReparticaoMatch) => boolean) => validas.filter(f);
-  let achadas = pelo((u) => chaveNome(u.nome) === k);
-  if (!achadas.length) achadas = pelo((u) => norm(u.codigo) === sigla);
-  if (!achadas.length) achadas = pelo((u) => !!u.setorRequisitante && chaveNome(u.setorRequisitante) === k);
+  let achadas = pelo((u) => chaves.has(chaveNome(u.nome)));
+  if (!achadas.length) achadas = pelo((u) => siglas.has(norm(u.codigo)));
+  if (!achadas.length) achadas = pelo((u) => !!u.setorRequisitante && chaves.has(chaveNome(u.setorRequisitante)));
   if (!achadas.length && truncado && k.length >= 4) achadas = pelo((u) => chaveNome(u.nome).startsWith(k));
   if (achadas.length > 1 && orgaoId != null) {
     const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);

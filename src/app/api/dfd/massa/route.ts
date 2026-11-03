@@ -60,6 +60,9 @@ export async function POST(req: Request) {
   const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
+  // O DFD pedido que não existe mais (excluído entre a leitura e a gravação) é uma falha — nunca "alterado".
+  const lidos = new Set(dfds.map((d) => d.id));
+  for (const id of ids) if (!lidos.has(id)) falhas.push({ id, numero: "", motivo: "DFD não encontrado (excluído?)." });
   // Categoria do protocolo de cada DFD (exceções do ADM, a MESMA régua do banner) — só consultada quando a assinatura
   // não confere, com cache por protocolo (poucas consultas por lote).
   const categorias = new Map<number | null, string | null>();

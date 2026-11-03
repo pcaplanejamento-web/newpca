@@ -5436,8 +5436,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   iguais) → divergentes → `entrada.selecionar` (nada marcado = nada muda) → **`saida.trocarUnidade`** (`POST
   /api/dfd/massa` `{campo:"reparticao"}` por destino em fatias de 20 — escopo, trava do ADM, reconferência da
   assinatura e auditoria da Mesa; recusas → `erros` com o `motivo`). A `TabelaMesaFluxo` mostra "Unidade na Centi" e
-  "Centro de custo" quando os itens os trazem. Testes: `tests/unidade-centro-custo.test.ts` + o modelo em
-  `tests/fluxo-dados.test.ts`.
+  "Centro de custo" quando os itens os trazem. **v1.266.1:** a sigla da Finalidade só DESEMPATA o `ambigua` (o id dela
+  tem de estar entre os ambíguos — o nome que não existe é SEMPRE desconhecida); o último trecho NÃO VAZIO; texto com
+  ≥ `MAX_CENTRO_CUSTO`=200 (o corte da extensão, sem reticência) conta como cortado; nome e sigla também por trecho
+  " - "; a massa de DFDs devolve falha para o id que não existe mais. Testes: `tests/unidade-centro-custo.test.ts` + o
+  modelo em `tests/fluxo-dados.test.ts`.
 - **CM002 INTEIRA + ÓRGÃO NA CENTI (v1.47.0, extensão 1.21.0, protocolo 38):** a ação `cm002` tenta a consulta guardada
   como a tela pediu e com o tamanho "todos" (`comPagina(…, null, todos)` — 100000, 0, -1, null), vale a de MAIS linhas
   (completa quando bate `totalDaResposta`) e, senão, página a página (≤ 2000) → `{linhas, total, lidas, paginas, modo}`; o
