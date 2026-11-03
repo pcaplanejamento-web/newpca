@@ -1241,6 +1241,24 @@ select:not([multiple]):not([size]) {
   margin-block-end: var(--pad-canvas-y);
 }
 
+/* SELO DE CONTAGEM (o desenho do selo do sino, o padrão do sistema): o número no canto de DENTRO de um botão. A cor fica em
+   quem usa pelo significado (bg-accent = contagem · var(--danger) = alerta/não lida · a gravidade nos avisos) e a posição
+   também (absolute top-0.5 right-0.5). Sem contorno; acima de 99, "99+". */
+@utility selo-contagem {
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  height: 1rem;
+  min-width: 1rem;
+  padding-inline: 0.25rem;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: white;
+  font-variant-numeric: tabular-nums;
+}
+
 /* CAIXA DE MARCAR (seleção das tabelas e das listas de filtro): o desenho do sistema no lugar do quadrado nativo — o
    arredondamento segue o do ADM (Configurações → Aparência: o raio dos chips, no máximo um círculo). O mesmo do `Checkbox`. */
 .caixa-marcar {

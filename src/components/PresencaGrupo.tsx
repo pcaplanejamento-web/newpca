@@ -194,11 +194,11 @@ export function PresencaGrupo({
       <button type="button" aria-label={rotuloGatilho} title={rotuloGatilho} aria-haspopup="dialog" onClick={() => setFolha(true)} className={`${gatilho} inline-flex h-11 w-11 lg:hidden`}>
         {verOnline ? <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} /> : <IconChat className="h-5 w-5" />}
         {naoLidas > 0 ? (
-          <span key={`c${naoLidas}`} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white">
+          <span key={`c${naoLidas}`} className="animate-selo-pop selo-contagem absolute top-1 right-1 bg-accent">
             {naoLidas > 99 ? "99+" : naoLidas}
           </span>
         ) : verOnline && online > 0 && (
-          <span key={online} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ok)] px-1 text-[10px] font-bold leading-none text-white">
+          <span key={online} className="animate-selo-pop selo-contagem absolute top-1 right-1 bg-[var(--ok)]">
             <span aria-hidden="true" className="ponto-vivo absolute inset-0 -z-10 rounded-full bg-[var(--ok)]" />
             {online > 99 ? "99+" : online}
           </span>
@@ -219,7 +219,7 @@ function IconeConversas({ naoLidas, so = false }: { naoLidas: number; /** Sem a 
     <span className={`relative inline-flex h-7 w-7 items-center justify-center text-muted ${so ? "" : "ml-1 border-l border-border pl-1.5"}`}>
       <IconChat className="h-[18px] w-[18px]" />
       {naoLidas > 0 && (
-        <span key={naoLidas} className="animate-selo-pop pointer-events-none absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface">
+        <span key={naoLidas} className="animate-selo-pop selo-contagem absolute top-0 right-0 bg-accent">
           {naoLidas > 99 ? "99+" : naoLidas}
         </span>
       )}

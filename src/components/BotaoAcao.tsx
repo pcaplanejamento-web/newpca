@@ -53,7 +53,7 @@ export function BotaoAcao({
       {temContagem && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-0.5 right-0.5 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-bold leading-4 text-white tabular-nums ring-2 ring-surface"
+          className="selo-contagem absolute top-0.5 right-0.5 bg-accent"
         >
           {contagem}
         </span>

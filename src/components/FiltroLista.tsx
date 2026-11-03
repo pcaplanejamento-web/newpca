@@ -80,7 +80,7 @@ export function FiltroLista({
       trigger={
         <>
           <IconFilter className="h-4 w-4" aria-hidden />
-          {n > 0 && <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-[var(--sobre-escuro)] tabular-nums">{n}</span>}
+          {n > 0 && <span className="selo-contagem absolute top-0.5 right-0.5 bg-accent">{n > 99 ? "99+" : n}</span>}
         </>
       }
     >

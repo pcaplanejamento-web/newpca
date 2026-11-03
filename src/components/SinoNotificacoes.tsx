@@ -922,7 +922,7 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
       {n > 0 && (
         <span
           key={`n${n}`}
-          className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold leading-none text-white lg:top-0 lg:right-0"
+          className="animate-selo-pop selo-contagem absolute top-1 right-1 bg-[var(--danger)] lg:top-0 lg:right-0"
         >
           {n > 99 ? "99+" : n}
         </span>
