@@ -44,8 +44,6 @@ import { aplicarRegra, conferirUnidades, escolherColunas, filtrarMarcados, lerCo
 import type { ReparticaoMatch } from "./reparticao-match.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
-/** Com ao menos tantos planejamentos pedidos num órgão, menos da metade na CM002 = leitura cortada ou filtrada. */
-const MIN_PEDIDOS_PROPORCAO = 10;
 /** "17 a 56" — a faixa dos IDs (numéricos) de um conjunto, para a mensagem. */
 function faixaIds(ids: Set<string>): string {
   const n = [...ids].map(Number).filter((x) => Number.isFinite(x));
@@ -430,17 +428,13 @@ const NOS: DefNo[] = [
           typeof r.diagnostico === "string" && r.diagnostico ? `consulta: ${r.diagnostico}` : "",
         ].filter(Boolean);
         const extra = `${detalhe.length ? ` [${detalhe.join("; ")}]` : ""}${r.completa === undefined ? " Atualize a extensão da Centi (botão Baixar extensão) e tente de novo." : ""}`;
-        // A extensão diz que a lista veio cortada (a Centi não paginou): para.
-        if (r.completa === false)
-          throw new Error(
-            `A CM002 do órgão ${ent} veio só com ${linhas.length} linhas${typeof r.tamanho === "number" && r.tamanho ? ` (uma página de ${r.tamanho})` : ""} — a Centi não entregou a lista inteira. Na CM002 da Centi limpe os filtros, escolha Mostrar: Todos e clique em Pesquisar UMA vez; depois execute de novo.${extra}`,
-          );
+        // A mesma régua da "Execução dos DFDs" (que funciona): só PARA quando NENHUM planejamento dos DFDs do órgão veio
+        // (a consulta aprendida está filtrada). Leitura sinalizada como cortada pela extensão = só um aviso.
+        if (r.completa === false) ctx.aviso(`CM002 do órgão ${ent}: a extensão não confirmou a lista inteira (${linhas.length} linhas).${extra}`);
         const achados = [...pedidos].filter((x) => ids.has(x)).length;
-        // Os DFDs vêm da própria Centi: a MAIORIA fora da CM002 só acontece com a leitura cortada ou filtrada — para, em
-        // vez de apontar cada DFD como "não está na CM002" (vale também com a extensão antiga).
-        if (c.dosItens === true && pedidos.size && ((linhas.length && !achados) || (pedidos.size >= MIN_PEDIDOS_PROPORCAO && achados * 2 < pedidos.size)))
+        if (c.dosItens === true && pedidos.size && linhas.length && !achados)
           throw new Error(
-            `Só ${achados} de ${pedidos.size} planejamentos do órgão ${ent} vieram na CM002 (${linhas.length}${total != null ? ` de ${total}` : ""} linhas lidas, IDs ${faixaIds(ids)}; pedidos ${faixaIds(pedidos)}). A leitura veio cortada ou a consulta aprendida está filtrada — na CM002 da Centi limpe os filtros (Referência/Finalidade), escolha Mostrar: Todos e clique em Pesquisar UMA vez; depois execute de novo.${extra}`,
+            `Nenhum dos ${pedidos.size} planejamentos do órgão ${ent} veio na CM002 (${linhas.length} linhas lidas, IDs ${faixaIds(ids)}). A consulta aprendida está filtrada — na CM002 da Centi, limpe os filtros (Referência/Finalidade) e clique em Pesquisar UMA vez.${extra}`,
           );
         for (const p of linhas) out.push({ ...p, planejamento: str(p.id), entidade: ent });
       }

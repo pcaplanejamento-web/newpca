@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.5",
+    data: "2026-11-03",
+    titulo: "Unidades × Centro de Custo com a mesma régua da Execução dos DFDs",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A automação “Unidades dos DFDs × Centro de Custo” volta a ler a CM002 do jeito da “Execução dos DFDs” (a lista de cada órgão e cada DFD achado pelo nº de planejamento = ID, no mesmo órgão). Use “Atualizar pelo modelo” no fluxo salvo.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O nó CM002 não para mais com “Só N de M planejamentos”: como antes, só para quando NENHUM planejamento do órgão vem; a lista que a extensão não confirma inteira vira um aviso, e os DFDs fora dela são apontados como “não está na CM002”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.4",
     data: "2026-11-03",
     titulo: "Unidades × Centro de Custo busca cada DFD pelo ID, como o Baixar DFDs",

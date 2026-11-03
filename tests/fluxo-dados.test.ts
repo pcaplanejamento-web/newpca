@@ -280,23 +280,15 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
     { id: 3, numero: "30", planejamento: "300", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
     { id: 4, numero: "40", planejamento: "400", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
   ];
-  dfds.push({ id: 5, numero: "50", planejamento: "500", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 });
-  // O load do planejamento pelo ID (como o "Baixar DFDs") — nenhuma leitura da lista da CM002.
-  const centros: Record<string, string> = {
-    "100": "PM RV, GABINETE DO PREFEITO, GGIM",
-    "200": "PM RV, GABINETE DO PREFEITO, GGIM",
-    "300": "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL",
-    "400": "PM RV, GABINETE DO PREFEITO, GGIM",
-  };
-  const pedidos: [string, string | undefined, boolean | undefined][] = [];
-  const lerDfdCenti = async (plan: string, ent?: string, pdf?: boolean) => {
-    pedidos.push([plan, ent, pdf]);
-    if (!centros[plan]) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
-    return { planejamento: plan, situacao: "Executado", centroCusto: centros[plan] };
-  };
-  const centi = async () => {
-    throw new Error("a lista da CM002 não deve ser lida");
-  };
+  const centi = async () => ({
+    ok: true,
+    linhas: [
+      { id: "100", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+      { id: "200", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+      { id: "300", situacao: "Executado", centroCusto: "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL" },
+      { id: "400", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+    ],
+  });
   const grafo = lerGrafo(m.grafo);
   const sel = grafo.nos.find((n) => n.tipo === "entrada.selecionar");
   assert.ok(sel);
@@ -306,17 +298,14 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
     posts.push({ c, body: (init as { body?: unknown } | undefined)?.body });
     return { ok: true, alterados: 1, falhas: [] };
   };
-  const r = await executarFluxo(grafo, REGISTRO_NOS, { centi, api, cancelado: () => false, host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) } });
+  const r = await executarFluxo(grafo, REGISTRO_NOS, { centi, api, cancelado: () => false, host: { protocolos: [], unidades, __cache: new Map([["dfds", Promise.resolve(dfds)]]) } });
   assert.equal(r.estado, "concluido", r.erro);
-  assert.deepEqual(pedidos.map((p) => p[0]), ["100", "200", "300", "400", "500"], "um pedido por DFD, pelo planejamento");
-  assert.ok(pedidos.every((p) => p[1] === "2" && p[2] === false), "no órgão do DFD, sem o PDF");
   const massa = posts.filter((p) => p.c === "/api/dfd/massa");
   assert.deepEqual(massa.map((p) => p.body), [{ ids: [2], acao: { campo: "reparticao", reparticaoId: 2 } }], "só o marcado, para a unidade da Centi");
   const msgs = r.apontados.map((a) => a.mensagem).sort();
   assert.ok(msgs.some((t) => String(t).startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")));
   assert.ok(msgs.some((t) => String(t).includes("“GUARDA CIVIL MUNICIPAL” não existe no sistema")));
   assert.ok(!msgs.some((t) => String(t).startsWith("DFD 40")), "a unidade igual não é apontada");
-  assert.ok(msgs.some((t) => String(t).startsWith("DFD 50 (planejamento 500): não encontrado na Centi")));
 });
 
 test("Conferir unidade: o planejamento lido sem centro de custo diz os campos que a Centi devolveu", async () => {
@@ -348,25 +337,21 @@ test("Trocar a unidade: agrupa por destino em fatias de 20 e devolve as recusas 
   assert.deepEqual(r.erros?.map((x) => [x.id, x.motivo]), [[100, "Sem o DFD ou a unidade nova."], [1, "assinatura"], [21, "assinatura"], [99, "assinatura"]]);
 });
 
-test("CM002 cortada (v1.266.2): uma página de 50 nunca vira 1000+ “não está na CM002” — o nó para e diz como reler", async () => {
+test("Nó CM002: a mesma régua da Execução — só para quando NENHUM planejamento do órgão veio; a lista parcial segue", async () => {
   const def = REGISTRO_NOS.get("centi.cm002") as DefNo;
   const dfds = Array.from({ length: 1300 }, (_, i) => ({ id: i + 1, planejamento: String(i + 17), entidade: "2" }));
+  const avisos: string[] = [];
   const ctx = (resp: Record<string, unknown>) =>
-    ({ centi: async () => resp, api: async () => ({ ok: false }), cancelado: () => false, host: {}, aviso: () => {} }) as never;
+    ({ centi: async () => resp, api: async () => ({ ok: false }), cancelado: () => false, host: {}, aviso: (t: string) => avisos.push(t) }) as never;
   const pagina = Array.from({ length: 50 }, (_, i) => ({ id: String(i + 17), situacao: "Executado" }));
-  // (a) extensão antiga: 50 linhas, sem total — a trava por proporção para.
-  await assert.rejects(def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: pagina }), {}), /Só 50 de 1300 planejamentos do órgão 2.*IDs 17 a 66.*Mostrar: Todos/);
-  // (b) a extensão diz que veio cortada.
-  await assert.rejects(
-    def.executar({ entrada: dfds.slice(0, 5) }, { dosItens: true }, ctx({ ok: true, linhas: pagina, completa: false, tamanho: 50 }), {}),
-    /veio só com 50 linhas \(uma página de 50\)/,
-  );
-  // (c) a leitura completa segue: os poucos fora da CM002 viram “não está” no Procurar.
-  const todas = Array.from({ length: 1295 }, (_, i) => ({ id: String(i + 17), situacao: "Executado" }));
-  const r = await def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: todas, total: 1295, completa: true }), {});
-  assert.equal(r.saida?.length, 1295);
+  // Parte dos planejamentos na lista: segue (os de fora viram “não está na CM002” no Procurar).
+  const r = await def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: pagina, completa: false, tamanho: 50 }), {});
+  assert.equal(r.saida?.length, 50);
+  assert.ok(avisos.some((t) => t.includes("não confirmou a lista inteira")));
+  // Nenhum: a consulta aprendida está filtrada — para.
+  const fora = Array.from({ length: 50 }, (_, i) => ({ id: String(i + 5000), situacao: "Executado" }));
+  await assert.rejects(def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: fora }), {}), /Nenhum dos 1300 planejamentos do órgão 2/);
 });
-
 test("Extensão: leitura completa da CM002, nomes de página/tamanho/total e total em texto", () => {
   const ctx: Record<string, unknown> = { URL };
   vmDados.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
