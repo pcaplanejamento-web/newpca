@@ -368,3 +368,50 @@ test("Extensão: leitura completa da CM002, nomes de página/tamanho/total e tot
   assert.equal(r.tamanho, 50);
   assert.deepEqual(JSON.parse(JSON.stringify(r.corpo)), { Filtro: { PageNumber: 3, PerPage: 50 } });
 });
+
+test("Extensão 1.29: o tamanho da página descoberto pelos DADOS, página e total por trecho e o diagnóstico", () => {
+  const ctx: Record<string, unknown> = { URL };
+  vmDados.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const p = Number(/const PROTOCOLO = (\d+)/.exec(readFileSync("extensao-centi/centi-main.js", "utf8"))?.[1]);
+  const A = ctx[`__pcaCentiAnexo_p${p}`] as {
+    campoDoTamanho: (c: string, b: unknown, lidas: number) => string | null;
+    comPagina: (c: string, b: unknown, i: number | null, todos?: number | null, campo?: string | null) => { corpo: unknown; tamanho: number };
+    totalDaResposta: (j: unknown) => number | null;
+    diagnosticoConsulta: (c: string, b: unknown) => string;
+    leituraCompleta: (o: { total: number | null; lidas: number; tamanho: number; curta: boolean }) => boolean;
+  };
+  const corpo = { Filtro: { Qtde: 50, NumeroDaPagina: 1, Nome: "X" } };
+  // "Qtde" não é um nome conhecido: o valor = as 50 linhas que vieram ⇒ é o tamanho.
+  assert.equal(A.comPagina("restauth/postdata", corpo, 0).tamanho, 0);
+  const campo = A.campoDoTamanho("restauth/postdata", corpo, 50);
+  assert.equal(campo, "Qtde");
+  assert.equal(A.campoDoTamanho("restauth/postdata", corpo, 37), null);
+  const r = A.comPagina("restauth/postdata", corpo, 2, 100000, campo);
+  assert.equal(r.tamanho, 50);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.corpo)), { Filtro: { Qtde: 50, NumeroDaPagina: 3, Nome: "X" } });
+  const todos = A.comPagina("restauth/postdata", corpo, null, 100000, campo);
+  assert.deepEqual(JSON.parse(JSON.stringify(todos.corpo)), { Filtro: { Qtde: 100000, NumeroDaPagina: 1, Nome: "X" } });
+  // Na URL também.
+  assert.equal(A.campoDoTamanho("restauth/list?entity=5&lote=50", null, 50), "lote");
+  // Total por trecho (o exato ainda vale primeiro).
+  assert.equal(A.totalDaResposta({ Data: { Lista: [{ Id: 1 }], TotalDeLinhas: 1294 } }), 1294);
+  assert.equal(A.totalDaResposta({ Data: { Lista: [{ Id: 1 }], Total: 10, QtdeTotal: 99 } }), 10);
+  // A leitura parada no tamanho descoberto é incompleta.
+  assert.equal(A.leituraCompleta({ total: null, lidas: 50, tamanho: 50, curta: false }), false);
+  // Diagnóstico: só nomes e números, nunca texto.
+  const d = A.diagnosticoConsulta("restauth/postdata?p=1&q=abc", { Filtro: { Qtde: 50, Nome: "Fulano", Ref: null }, Token: "segredo" });
+  assert.equal(d, "Filtro.Qtde=50, Filtro.Ref=null, ?p=1");
+});
+
+test("Nó CM002: a extensão antiga pede atualização e o diagnóstico vai na mensagem", async () => {
+  const def = REGISTRO_NOS.get("centi.cm002") as DefNo;
+  const dfds = Array.from({ length: 100 }, (_, i) => ({ id: i + 1, planejamento: String(i + 1), entidade: "6" }));
+  const pagina = Array.from({ length: 50 }, (_, i) => ({ id: String(i + 500), situacao: "Executado" }));
+  const ctx = (resp: Record<string, unknown>) =>
+    ({ centi: async () => resp, api: async () => ({ ok: false }), cancelado: () => false, host: {}, aviso: () => {} }) as never;
+  await assert.rejects(def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: pagina }), {}), /Atualize a extensão da Centi/);
+  await assert.rejects(
+    def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: pagina, completa: false, tamanho: 50, modo: "página a página", paginas: 1, diagnostico: "Filtro.Qtde=50" }), {}),
+    /modo página a página; 1 pág\.; consulta: Filtro\.Qtde=50/,
+  );
+});

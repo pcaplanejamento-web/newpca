@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.3",
+    data: "2026-11-03",
+    titulo: "CM002 lida inteira mesmo com a paginação diferente",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Extensão da Centi 1.29.0: descobre o tamanho da página da CM002 pela própria resposta (o campo que vale o nº de linhas que vieram) e lê a lista inteira, também com nomes de página e total diferentes.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Quando a CM002 ainda vier cortada, a mensagem diz como a extensão leu (modo, páginas e os campos numéricos da consulta) e avisa quando a extensão precisa ser atualizada.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.2",
     data: "2026-11-03",
     titulo: "CM002 lida pela metade não aponta mais todos os DFDs",

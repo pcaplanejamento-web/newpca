@@ -803,21 +803,42 @@
       }
       const linhas = A.planejamentosCm002(j, true, d?.colunas === true);
       if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
-      return { linhas, total: A.totalDaResposta(j) };
+      const t = A.totalDaResposta(j);
+      // Um "total" menor que as linhas lidas não é o total da lista.
+      return { linhas, total: t != null && t >= linhas.length ? t : null };
     };
     // `completa` = a lista INTEIRA (o sistema nunca aponta "não está na CM002" com uma leitura parcial).
-    const fim = (linhas, total, paginas, modo, completa) => ({ ok: true, entidade: ent ?? entidadeAtual(), linhas, total, lidas: linhas.length, paginas, modo, tamanho, completa });
+    const fim = (linhas, total, paginas, modo, completa) => ({
+      ok: true,
+      entidade: ent ?? entidadeAtual(),
+      linhas,
+      total,
+      lidas: linhas.length,
+      paginas,
+      modo,
+      tamanho,
+      completa,
+      ...(completa ? {} : { diagnostico: A.diagnosticoConsulta(g.caminho, g.corpo), campoTamanho: campo }),
+    });
     // "MOSTRAR: TODOS": a consulta como a tela pediu e, depois, o tamanho "todos" nas formas que a Centi aceita — vale a
     // que trouxer MAIS linhas (completa quando bate o total informado).
-    const tamanho = A.comPagina(g.caminho, g.corpo, 0).tamanho;
-    const tentativas = [{ modo: "como a tela", caminho: g.caminho, corpo: g.corpo }];
+    const primeira = await consultar(g.caminho, g.corpo);
+    if (primeira.fora) return { ok: false, erro: "Destino fora da API da Centi." };
+    // O tamanho da página: pelo nome conhecido ou, sem ele, pelos DADOS (o campo cujo valor = as linhas que vieram).
+    let campo = null;
+    let tamanho = A.comPagina(g.caminho, g.corpo, 0).tamanho;
+    if (!tamanho && primeira.linhas?.length && primeira.total == null) {
+      campo = A.campoDoTamanho(g.caminho, g.corpo, primeira.linhas.length);
+      if (campo) tamanho = A.comPagina(g.caminho, g.corpo, 0, 100000, campo).tamanho;
+    }
+    const tentativas = [];
     for (const v of [100000, 0, -1, null]) {
-      const p = A.comPagina(g.caminho, g.corpo, null, v);
+      const p = A.comPagina(g.caminho, g.corpo, null, v, campo);
       tentativas.push({ modo: `todos (${v})`, caminho: p.caminho, corpo: p.corpo });
     }
-    let melhor = null;
-    let primeiroErro = null;
-    for (const t of tentativas) {
+    let melhor = primeira.linhas ? { ...primeira, modo: "como a tela" } : null;
+    let primeiroErro = primeira.linhas ? null : primeira;
+    for (const t of melhor?.total != null && melhor.linhas.length >= melhor.total ? [] : tentativas) {
       const r = await consultar(t.caminho, t.corpo);
       if (r.fora) return { ok: false, erro: "Destino fora da API da Centi." };
       if (!r.linhas) {
@@ -837,7 +858,7 @@
     let paginas = 0;
     let curta = false;
     for (let i = 0; i < 2000 && tamanho; i++) {
-      const p = A.comPagina(g.caminho, g.corpo, i);
+      const p = A.comPagina(g.caminho, g.corpo, i, 100000, campo);
       const r = await consultar(p.caminho, p.corpo);
       if (!r.linhas) break;
       paginas++;

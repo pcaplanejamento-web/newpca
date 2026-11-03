@@ -651,6 +651,46 @@
   const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
   const RE_TAMANHO = /^(take|pagesize|page_size|perpage|per_page|tamanhopagina|limit|top|rows|rowsperpage|recordsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|maxitems|count)$/i;
   const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|page_index|pagenumber|pageno|numeropagina|paginaatual|currentpage)$/i;
+  // Nome da página por TRECHO (PageNumber, NumeroDaPagina…) — só quando o exato não casa e nunca total/contagem.
+  const RE_INICIO_PARCIAL = /page|pagina|skip|offset|start|inicio|first/i;
+  const RE_NAO_INICIO = /total|count|qtd|quantidade|registro|size|tamanho|pages|paginas/i;
+  /** O campo do TAMANHO da página descoberto pelos DADOS: o campo numérico (corpo ou URL) cujo valor é o nº de linhas
+   * que a resposta trouxe (a página cheia) — para nomes que não são os conhecidos. Prefere o que não parece página. */
+  function campoDoTamanho(caminho, corpo, lidas) {
+    if (!Number.isInteger(lidas) || lidas < 2) return null;
+    const achados = [];
+    const ir = (v, prof) => {
+      if (prof > 6 || v == null || typeof v !== "object") return;
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" && x === lidas) achados.push(k);
+        else ir(x, prof + 1);
+      }
+    };
+    ir(corpo, 0);
+    try {
+      const u = new URL(String(caminho), "https://x/");
+      for (const [k, v] of u.searchParams) if (/^\d+$/.test(v) && Number(v) === lidas) achados.push(k);
+    } catch {}
+    return achados.find((k) => !RE_INICIO_PARCIAL.test(k) && !/id$/i.test(k)) ?? achados.find((k) => !RE_INICIO_PARCIAL.test(k)) ?? null;
+  }
+  /** O DIAGNÓSTICO da consulta: só os NOMES e os valores NUMÉRICOS/nulos do corpo e da URL (nunca texto, token ou dado
+   * pessoal), até 300 caracteres — para ver como a Centi pagina quando a leitura não fica completa. */
+  function diagnosticoConsulta(caminho, corpo) {
+    const partes = [];
+    const ir = (v, prof, pre) => {
+      if (prof > 4 || v == null || typeof v !== "object" || Array.isArray(v)) return;
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" || x === null || typeof x === "boolean") partes.push(`${pre}${k}=${x}`);
+        else if (x && typeof x === "object" && !Array.isArray(x)) ir(x, prof + 1, `${pre}${k}.`);
+      }
+    };
+    ir(corpo, 0, "");
+    try {
+      const u = new URL(String(caminho), "https://x/");
+      for (const [k, v] of u.searchParams) if (/^-?\d+$/.test(v)) partes.push(`?${k}=${v}`);
+    } catch {}
+    return partes.join(", ").slice(0, 300);
+  }
   /** Alguma lista vazia na resposta (a lista de linhas que veio sem nenhuma). */
   function temListaVazia(j) {
     const ir = (v, prof) => v != null && typeof v === "object" && prof <= 5 && (Array.isArray(v) ? !v.length : Object.values(v).some((x) => ir(x, prof + 1)));
@@ -659,12 +699,15 @@
   /** O pedido da lista numa PÁGINA: `pagina` null = sem paginação (tamanho → 100000, início → o primeiro); senão a página
    * `pagina` (0, 1, 2…) no tamanho ORIGINAL da consulta — o início vira o nº da página (page/pagina, 1 em diante quando a
    * consulta contava de 1) ou o deslocamento (skip/offset/start = página × tamanho). Devolve também o `tamanho` original. */
-  function comPagina(caminho, corpo, pagina, todos = 100000) {
+  function comPagina(caminho, corpo, pagina, todos = 100000, campo = null) {
+    // `campo` = o nome do tamanho DESCOBERTO pelos dados (campoDoTamanho) quando o nome não é um dos conhecidos.
+    const ehTamanho = (k) => RE_TAMANHO.test(k) || (campo != null && k === campo);
+    const ehInicio = (k) => RE_INICIO.test(k) || (!ehTamanho(k) && RE_INICIO_PARCIAL.test(k) && !RE_NAO_INICIO.test(k));
     let tamanho = 0;
     const achar = (v, prof) => {
       if (prof > 6 || v == null || typeof v !== "object") return;
       for (const [k, x] of Object.entries(v)) {
-        if (typeof x === "number" && RE_TAMANHO.test(k) && !tamanho) tamanho = x;
+        if (typeof x === "number" && ehTamanho(k) && !tamanho) tamanho = x;
         else achar(x, prof + 1);
       }
     };
@@ -673,7 +716,7 @@
     let u = null;
     try {
       u = new URL(c, "https://x/");
-      for (const [k, v] of u.searchParams) if (!tamanho && /^\d+$/.test(v) && RE_TAMANHO.test(k)) tamanho = Number(v);
+      for (const [k, v] of u.searchParams) if (!tamanho && /^\d+$/.test(v) && ehTamanho(k)) tamanho = Number(v);
     } catch {}
     const inicio = (k, x) => {
       const base1 = /page|pagina/i.test(k) && !/index/i.test(k) && x >= 1;
@@ -686,8 +729,8 @@
       if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
       const o = {};
       for (const [k, x] of Object.entries(v)) {
-        if ((typeof x === "number" || (x === null && pagina == null)) && RE_TAMANHO.test(k)) o[k] = pagina == null ? todos : x;
-        else if (typeof x === "number" && RE_INICIO.test(k)) o[k] = inicio(k, x);
+        if ((typeof x === "number" || (x === null && pagina == null)) && ehTamanho(k)) o[k] = pagina == null ? todos : x;
+        else if (typeof x === "number" && ehInicio(k)) o[k] = inicio(k, x);
         else o[k] = ir(x, prof + 1);
       }
       return o;
@@ -696,8 +739,8 @@
       for (const k of [...u.searchParams.keys()]) {
         const v = u.searchParams.get(k);
         if (!/^-?\d+$/.test(v ?? "")) continue;
-        if (RE_TAMANHO.test(k) && pagina == null) u.searchParams.set(k, String(todos ?? ""));
-        else if (RE_INICIO.test(k)) u.searchParams.set(k, String(inicio(k, Number(v))));
+        if (ehTamanho(k) && pagina == null) u.searchParams.set(k, String(todos ?? ""));
+        else if (ehInicio(k)) u.searchParams.set(k, String(inicio(k, Number(v))));
       }
       c = `${u.pathname.replace(/^\//, "")}${u.search}`;
     }
@@ -712,12 +755,16 @@
       for (const [k, x] of Object.entries(v)) {
         const n = typeof x === "string" && /^\d{1,9}$/.test(x.trim()) ? Number(x) : x;
         if (typeof n === "number" && Number.isInteger(n) && n >= 0 && RE_TOTAL.test(k)) t = Math.max(t ?? 0, n);
+        else if (typeof n === "number" && Number.isInteger(n) && n >= 0 && RE_TOTAL_PARCIAL.test(k) && !/pag|page|id$/i.test(k)) parcial = Math.max(parcial ?? 0, n);
         else ir(x, prof + 1);
       }
     };
+    let parcial = null;
     ir(j, 0);
-    return t;
+    // Total por TRECHO (TotalDeRegistros, QtdeTotal…) só quando o exato não veio.
+    return t ?? parcial;
   }
+  const RE_TOTAL_PARCIAL = /total|count|qtd|quantidade|registros/i;
   const RE_TOTAL = /^(total|totalitems|totalitens|totalitemscount|totalcount|totalrecord|totalrecords|totalregistro|totalregistros|totalrows|totallinhas|totalelements|totalresults|recordcount|recordstotal|recordsfiltered|itemscount|quantidadetotal|quantidaderegistros|qtdtotal|qtdregistros|count)$/i;
   /** A leitura da CM002 é a lista INTEIRA? Com total: lidas ≥ total. Sem total: a última página veio MENOR que o tamanho
    * (`curta`) ou a leitura sem paginação passou do tamanho. Página repetida (a Centi ignorou a página) = incompleta. */
@@ -753,7 +800,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, leituraCompleta, comPagina, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
