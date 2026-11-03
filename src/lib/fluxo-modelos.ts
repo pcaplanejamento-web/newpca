@@ -302,7 +302,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         n("org1", "centi.orgao", 280, 416, { origem: "itens", campo: "entidade", entrega: "todos" }),
         n("err1", "erros.apontar", 576, 560, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): o órgão não tem o ID da Centi cadastrado", nivel: "atencao" }),
         n("ord1", "dados.ordenar", 576, 96, { campo: "entidade", ordem: "asc", limite: 0 }),
-        { ...n("cm1", "centi.cm002", 576, 352, { dosItens: true }), tentar: { vezes: 2, esperaS: 30 } },
+        { ...n("cm1", "centi.cm002", 576, 352, { dosItens: true, colunas: true }), tentar: { vezes: 2, esperaS: 30 } },
         n("proc1", "logica.procurar", 880, 96, { valor: "{{planejamento}}", onde: "coluna", coluna: "planejamento", operador: "igual", resultado: "primeiro", extraCampo: "entidade", extraColuna: "entidade" }),
         n("err2", "erros.apontar", 1184, 352, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não está na CM002 do órgão {{entidade}}", nivel: "atencao" }),
         n("conf1", "dados.conferirUnidade", 1184, 96),

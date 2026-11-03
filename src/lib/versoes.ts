@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.6",
+    data: "2026-11-03",
+    titulo: "Unidades × Centro de Custo: o centro de custo chega da CM002",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A extensão 1.30.0 reconhece a coluna do centro de custo da CM002 com qualquer nome (“CentroDeCusto”, “Centro de Custo”, coluna junto da Finalidade) e não a corta mais depois dos 60 primeiros campos. Baixe a extensão nova e use “Atualizar pelo modelo” no fluxo salvo.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Sem a coluna do centro de custo, o nó CM002 avisa quais colunas a Centi entregou e o erro de cada DFD lista os campos que vieram.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.5",
     data: "2026-11-03",
     titulo: "Unidades × Centro de Custo com a mesma régua da Execução dos DFDs",

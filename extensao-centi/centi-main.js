@@ -805,7 +805,7 @@
       if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
       const t = A.totalDaResposta(j);
       // Um "total" menor que as linhas lidas não é o total da lista.
-      return { linhas, total: t != null && t >= linhas.length ? t : null };
+      return { linhas, total: t != null && t >= linhas.length ? t : null, semCc: linhas.length ? A.colunasSemCentroCusto(j) : null };
     };
     // `completa` = a lista INTEIRA (o sistema nunca aponta "não está na CM002" com uma leitura parcial).
     const fim = (linhas, total, paginas, modo, completa) => ({
@@ -818,6 +818,7 @@
       modo,
       tamanho,
       completa,
+      ...(primeira?.semCc ? { colunasSemCentroCusto: primeira.semCc } : {}),
       ...(completa ? {} : { diagnostico: A.diagnosticoConsulta(g.caminho, g.corpo), campoTamanho: campo }),
     });
     // "MOSTRAR: TODOS": a consulta como a tela pediu e, depois, o tamanho "todos" nas formas que a Centi aceita — vale a

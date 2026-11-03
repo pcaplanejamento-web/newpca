@@ -430,6 +430,8 @@ const NOS: DefNo[] = [
         const extra = `${detalhe.length ? ` [${detalhe.join("; ")}]` : ""}${r.completa === undefined ? " Atualize a extensão da Centi (botão Baixar extensão) e tente de novo." : ""}`;
         // A mesma régua da "Execução dos DFDs" (que funciona): só PARA quando NENHUM planejamento dos DFDs do órgão veio
         // (a consulta aprendida está filtrada). Leitura sinalizada como cortada pela extensão = só um aviso.
+        if (Array.isArray(r.colunasSemCentroCusto) && r.colunasSemCentroCusto.length)
+          ctx.aviso(`A CM002 do órgão ${ent} não trouxe a coluna de centro de custo — colunas: ${r.colunasSemCentroCusto.map((x: unknown) => str(x)).join(", ").slice(0, 600)}`);
         if (r.completa === false) ctx.aviso(`CM002 do órgão ${ent}: a extensão não confirmou a lista inteira (${linhas.length} linhas).${extra}`);
         const achados = [...pedidos].filter((x) => ids.has(x)).length;
         if (c.dosItens === true && pedidos.size && linhas.length && !achados)

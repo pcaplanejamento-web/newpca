@@ -491,10 +491,12 @@
     return JSON.stringify(limpo).length <= 16384 ? limpo : undefined;
   }
   /** Uma linha da resposta em "chave → texto" (o padrão {Fields:[{Key,Value}]} da Centi achatado), até 60 campos. */
-  function linhaPlana(o) {
+  // `.map(linhaPlana)` passa o ÍNDICE como 2º argumento — o limite vem por linhaPlanaAte.
+  const linhaPlana = (o) => linhaPlanaAte(o, 60);
+  function linhaPlanaAte(o, max) {
     const r = {};
     const ir = (v, pre, prof) => {
-      if (Object.keys(r).length >= 60 || prof > 3 || v == null) return;
+      if (Object.keys(r).length >= max || prof > 3 || v == null) return;
       if (Array.isArray(v)) return;
       if (typeof v === "object") {
         if (Array.isArray(v.Fields))
@@ -567,17 +569,27 @@
     const texto = (k) => linhas.filter((l) => l[k] != null && l[k] !== "" && !/^-?\d+$/.test(String(l[k]))).length;
     return chaves.sort((a, b) => texto(b) - texto(a) || a.length - b.length)[0] ?? null;
   }
+  const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
+  /** Os NOMES das colunas da lista da CM002 quando nenhuma é de centro de custo (o diagnóstico) — senão null. */
+  function colunasSemCentroCusto(j) {
+    const l = acharLista(j);
+    if (!l) return null;
+    const chaves = [...new Set(l.itens.slice(0, 20).flatMap((x) => Object.keys(linhaPlanaAte(x, 200))))];
+    return chaves.some((k) => RE_CENTRO_CUSTO.test(k)) ? null : chaves.slice(0, 80);
+  }
   /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
   function planejamentosCm002(j, conhecida = false, colunas = false) {
     const l = acharLista(j);
     // A consulta já aprendida que volta SEM linhas (entidade sem planejamentos) é uma lista vazia, não "outra forma".
     if (!l) return conhecida && temListaVazia(j) ? [] : null;
-    const linhas = l.itens.map(linhaPlana);
+    // Todas as colunas (a CM002 tem muitas — o centro de custo vem no fim e ficava fora dos 60 primeiros campos).
+    const linhas = l.itens.map((x) => linhaPlanaAte(x, 200));
     const amostra = linhas.slice(0, 50);
     const kId = [...new Set(amostra.flatMap((x) => Object.keys(x)))].filter((k) => /^id$/i.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0];
     const kSit = campoTexto(amostra, /situa/i);
     const kFin = campoTexto(amostra, /finalidade/i);
-    const kCc = campoTexto(amostra, /centro.?custo/i);
+    // "CentroCusto", "CentroDeCusto", "Centro de Custo", "C. Custo".
+    const kCc = campoTexto(amostra, RE_CENTRO_CUSTO);
     // Na consulta já aprendida basta Id + Situação (finalidade/centro de custo podem vir vazios).
     if (!kId || !kSit || (!conhecida && !kFin && !kCc)) return null;
     return linhas
@@ -585,7 +597,8 @@
         id: String(x[kId] ?? "").replace(/\D/g, "").replace(/^0+/, ""),
         situacao: String(x[kSit] ?? "").trim().slice(0, 40),
         finalidade: kFin ? String(x[kFin] ?? "").trim().slice(0, 200) : "",
-        centroCusto: kCc && kCc !== kFin ? String(x[kCc] ?? "").trim().slice(0, 200) : "",
+        // Coluna única "Finalidade/Centro de custo" = o texto vale nos dois.
+        centroCusto: kCc ? String(x[kCc] ?? "").trim().slice(0, 200) : "",
         // TODAS as colunas da linha (o nó "Escolher colunas" do fluxo escolhe as que analisa).
         ...(colunas ? { centi: x } : {}),
       }))
@@ -800,7 +813,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
+    comReparticoes, planejamentosCm002, colunasSemCentroCusto, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

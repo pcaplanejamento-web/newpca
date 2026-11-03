@@ -133,3 +133,17 @@ test("CM002: o total informado e o tamanho “Mostrar: Todos”", () => {
   }
   assert.equal((comPagina("restauth/x?take=50&skip=0", null, null, -1) as { caminho: string }).caminho, "restauth/x?take=-1&skip=0");
 });
+
+test("CM002: o centro de custo com outros nomes, depois de 60 campos e na coluna única com a Finalidade", () => {
+  const { planejamentosCm002 } = pecasCm002();
+  const extras = Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`Campo${i}`, `v${i}`]));
+  const r1 = planejamentosCm002({ Items: [{ Id: 1, Situacao: "Executado", Finalidade: "PCA", ...extras, CentroDeCusto: "PM RV, SEPLAN" }] });
+  assert.equal(r1?.[0]?.centroCusto, "PM RV, SEPLAN");
+  const r2 = planejamentosCm002({ Items: [{ Id: 2, Situacao: "Executado", "Centro de Custo": "PM RV, GGIM" }] }, true);
+  assert.equal(r2?.[0]?.centroCusto, "PM RV, GGIM");
+  const r3 = planejamentosCm002({ Items: [{ Id: 3, Situacao: "Executado", FinalidadeCentroCusto: "PM RV, PGM" }] }, true);
+  assert.equal(r3?.[0]?.centroCusto, "PM RV, PGM");
+  const p = pecasCm002() as unknown as { colunasSemCentroCusto: (j: unknown) => string[] | null };
+  assert.deepEqual(JSON.parse(JSON.stringify(p.colunasSemCentroCusto({ Items: [{ Id: 1, Situacao: "x" }] }))), ["Id", "Situacao"]);
+  assert.equal(p.colunasSemCentroCusto({ Items: [{ Id: 1, CentroDeCusto: "x" }] }), null);
+});

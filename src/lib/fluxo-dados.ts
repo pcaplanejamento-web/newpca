@@ -203,6 +203,9 @@ export function filtrarMarcados(itens: Item[], marcados: unknown, chave: (it: It
   return m.size ? itens.filter((it, i) => m.has(chave(it, i))) : itens;
 }
 
+/** O nome da coluna do centro de custo ("CentroCusto", "CentroDeCusto", "Centro de Custo", "C. Custo"). */
+const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
+
 /**
  * A unidade de cada DFD × a do Centro de Custo da CM002 (a linha achada pelo "Procurar" — `encontrado`). A unidade da
  * Centi (depois da última vírgula) é casada com as CADASTRADAS (`casarUnidadePorNome`; sem casar pelo nome, a sigla no
@@ -219,7 +222,10 @@ export function conferirUnidades(
     // A linha da Centi: a achada na lista da CM002 (`encontrado`) ou o registro do planejamento lido pelo ID (`centi`).
     const fonte = it.encontrado && typeof it.encontrado === "object" ? it.encontrado : it.centi && typeof it.centi === "object" ? it.centi : null;
     const linha = (fonte ?? {}) as Item;
-    const centro = String(linha.centroCusto ?? "").trim();
+    // Reserva: as colunas cruas da Centi ("Trazer todas as colunas") — "CentroDeCusto", "Centro de Custo"…
+    const cru = linha.centi && typeof linha.centi === "object" ? (linha.centi as Item) : null;
+    const chaveCru = cru ? Object.keys(cru).find((k) => RE_CENTRO_CUSTO.test(k) && String(cru[k] ?? "").trim() && !/^-?\d+$/.test(String(cru[k]).trim())) : undefined;
+    const centro = String(linha.centroCusto ?? "").trim() || (cru && chaveCru ? String(cru[chaveCru]).trim() : "");
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
     if (!fonte && "centi" in it) {
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
@@ -230,7 +236,8 @@ export function conferirUnidades(
     const atual = typeof it.reparticaoId === "number" ? it.reparticaoId : null;
     const base = { ...it, unidadeCentroCusto: centro ? unidadeDoCentroCusto(centro).nome : "", unidadeSistema: String(it.sigla ?? "") };
     if (!centro) {
-      const campos = Array.isArray(linha.camposCenti) && linha.camposCenti.length ? ` (campos que vieram: ${linha.camposCenti.join(", ")})` : "";
+      const nomes = Array.isArray(linha.camposCenti) && linha.camposCenti.length ? linha.camposCenti.map(String) : cru ? Object.keys(cru) : [];
+      const campos = nomes.length ? ` (campos que vieram: ${nomes.slice(0, 40).join(", ")})` : "";
       out.desconhecidas.push({ ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` });
       continue;
     }

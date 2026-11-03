@@ -69,3 +69,13 @@ test("Auditoria: o desconhecido nunca vira outra unidade; vírgula no fim, corte
   assert.deepEqual(casarUnidadePorNome(u.nome, u.truncado, UNIDADES), { tipo: "ok", id: 1 });
   assert.deepEqual(casarUnidadePorNome("SECRETARIA DE PLANEJAMENTO - SEPLAN", false, UNIDADES), { tipo: "ok", id: 1 });
 });
+
+test("Conferir unidades: reserva pelas colunas cruas da Centi e as colunas na mensagem", () => {
+  const r = conferirUnidades(
+    [{ id: 90, numero: "9", planejamento: "99", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1, encontrado: { centroCusto: "", centi: { Id: "99", CentroDeCusto: "PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO" } } }],
+    UNIDADES,
+  );
+  assert.equal(r.conformes.length, 1);
+  const s = conferirUnidades([{ id: 91, numero: "8", planejamento: "88", reparticaoId: 1, orgaoId: 1, encontrado: { centroCusto: "", centi: { Id: "88", Situacao: "x" } } }], UNIDADES);
+  assert.match(String(s.desconhecidas[0]?.mensagem), /campos que vieram: Id, Situacao/);
+});
