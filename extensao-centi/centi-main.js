@@ -805,7 +805,8 @@
       if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
       return { linhas, total: A.totalDaResposta(j) };
     };
-    const fim = (linhas, total, paginas, modo) => ({ ok: true, entidade: ent ?? entidadeAtual(), linhas, total, lidas: linhas.length, paginas, modo });
+    // `completa` = a lista INTEIRA (o sistema nunca aponta "não está na CM002" com uma leitura parcial).
+    const fim = (linhas, total, paginas, modo, completa) => ({ ok: true, entidade: ent ?? entidadeAtual(), linhas, total, lidas: linhas.length, paginas, modo, tamanho, completa });
     // "MOSTRAR: TODOS": a consulta como a tela pediu e, depois, o tamanho "todos" nas formas que a Centi aceita — vale a
     // que trouxer MAIS linhas (completa quando bate o total informado).
     const tamanho = A.comPagina(g.caminho, g.corpo, 0).tamanho;
@@ -828,12 +829,13 @@
     }
     // Completa: bate o total, ou (sem total) não parou exatamente no tamanho de uma página.
     if (melhor && (melhor.total != null ? melhor.linhas.length >= melhor.total : !tamanho || melhor.linhas.length !== tamanho))
-      return fim(melhor.linhas, melhor.total, 1, melhor.modo);
+      return fim(melhor.linhas, melhor.total, 1, melhor.modo, true);
     // Página a página, no tamanho da tela, até o total (ou até a última página).
     const linhas = [];
     const vistos = new Set();
     let total = melhor?.total ?? null;
     let paginas = 0;
+    let curta = false;
     for (let i = 0; i < 2000 && tamanho; i++) {
       const p = A.comPagina(g.caminho, g.corpo, i);
       const r = await consultar(p.caminho, p.corpo);
@@ -843,10 +845,13 @@
       const novas = r.linhas.filter((x) => !vistos.has(x.id));
       for (const x of novas) vistos.add(x.id);
       linhas.push(...novas);
+      // Página menor que o tamanho = a última; página REPETIDA (sem nenhuma nova) = a Centi ignorou a página.
+      if (r.linhas.length < tamanho) curta = true;
       if (!novas.length || r.linhas.length < tamanho || (total != null && linhas.length >= total)) break;
     }
-    if (melhor && melhor.linhas.length >= linhas.length) return fim(melhor.linhas, melhor.total, 1, melhor.modo);
-    if (linhas.length) return fim(linhas, total, paginas, "página a página");
+    const completa = (n) => A.leituraCompleta({ total, lidas: n, tamanho, curta });
+    if (melhor && melhor.linhas.length >= linhas.length) return fim(melhor.linhas, melhor.total ?? total, 1, melhor.modo, completa(melhor.linhas.length));
+    if (linhas.length) return fim(linhas, total, paginas, "página a página", completa(linhas.length));
     const motivo = primeiroErro?.status ? `recusou a consulta (${primeiroErro.status})` : `devolveu outra forma (${primeiroErro?.forma ?? "?"})`;
     return { ok: false, erro: `A Centi ${motivo} na CM002 — abra a CM002 na Centi, escolha Mostrar: Todos e clique em Pesquisar para o sistema reaprender.`, semConsulta: true };
   }

@@ -649,8 +649,8 @@
   }
   /** "Em análise" (sem acento/caixa). */
   const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
-  const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|count)$/i;
-  const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|currentpage)$/i;
+  const RE_TAMANHO = /^(take|pagesize|page_size|perpage|per_page|tamanhopagina|limit|top|rows|rowsperpage|recordsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|maxitems|count)$/i;
+  const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|page_index|pagenumber|pageno|numeropagina|paginaatual|currentpage)$/i;
   /** Alguma lista vazia na resposta (a lista de linhas que veio sem nenhuma). */
   function temListaVazia(j) {
     const ir = (v, prof) => v != null && typeof v === "object" && prof <= 5 && (Array.isArray(v) ? !v.length : Object.values(v).some((x) => ir(x, prof + 1)));
@@ -710,14 +710,22 @@
     const ir = (v, prof) => {
       if (v == null || typeof v !== "object" || Array.isArray(v) || prof > 4) return;
       for (const [k, x] of Object.entries(v)) {
-        if (typeof x === "number" && Number.isInteger(x) && x >= 0 && RE_TOTAL.test(k)) t = Math.max(t ?? 0, x);
+        const n = typeof x === "string" && /^\d{1,9}$/.test(x.trim()) ? Number(x) : x;
+        if (typeof n === "number" && Number.isInteger(n) && n >= 0 && RE_TOTAL.test(k)) t = Math.max(t ?? 0, n);
         else ir(x, prof + 1);
       }
     };
     ir(j, 0);
     return t;
   }
-  const RE_TOTAL = /^(total|totalitems|totalitens|totalcount|totalrecords|totalregistros|totalrows|totallinhas|recordcount|recordstotal|quantidadetotal|qtdtotal|count)$/i;
+  const RE_TOTAL = /^(total|totalitems|totalitens|totalitemscount|totalcount|totalrecord|totalrecords|totalregistro|totalregistros|totalrows|totallinhas|totalelements|totalresults|recordcount|recordstotal|recordsfiltered|itemscount|quantidadetotal|quantidaderegistros|qtdtotal|qtdregistros|count)$/i;
+  /** A leitura da CM002 é a lista INTEIRA? Com total: lidas ≥ total. Sem total: a última página veio MENOR que o tamanho
+   * (`curta`) ou a leitura sem paginação passou do tamanho. Página repetida (a Centi ignorou a página) = incompleta. */
+  function leituraCompleta({ total, lidas, tamanho, curta }) {
+    if (total != null) return lidas >= total;
+    if (curta) return true;
+    return !tamanho || lidas > tamanho;
+  }
   function semPaginacao(caminho, corpo) {
     const p = comPagina(caminho, corpo, null);
     return { caminho: p.caminho, corpo: p.corpo };
@@ -745,7 +753,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, leituraCompleta, comPagina, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

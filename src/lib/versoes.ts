@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.2",
+    data: "2026-11-03",
+    titulo: "CM002 lida pela metade não aponta mais todos os DFDs",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Quando a Centi entrega só uma página da CM002, as automações “Unidades × Centro de Custo” e “Execução dos DFDs” param e dizem como reler (Mostrar: Todos + Pesquisar), em vez de apontar cada DFD como “não está na CM002”.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Extensão da Centi 1.28.0: lê a CM002 página a página em mais formatos da Centi e avisa o sistema quando a lista veio incompleta.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.1",
     data: "2026-11-03",
     titulo: "Conferência das unidades × Centro de Custo mais segura",

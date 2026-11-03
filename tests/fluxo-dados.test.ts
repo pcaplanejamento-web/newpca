@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import vmDados from "node:vm";
 import { type DefNo, esperar, executarFluxo, type Grafo, lerGrafo, lerTentar, nomeVariavel } from "../src/lib/fluxo-core.ts";
 import { aplicarRegra, escolherColunas, lerColunas, lerRegras, operarVariavel, procurarNaTabela } from "../src/lib/fluxo-dados.ts";
 import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
@@ -325,4 +327,44 @@ test("Trocar a unidade: agrupa por destino em fatias de 20 e devolve as recusas 
   assert.deepEqual(corpos.map((b) => [b.acao.reparticaoId, b.ids.length]), [[7, 20], [7, 5], [8, 1]]);
   assert.equal(r.alterados?.length, 23);
   assert.deepEqual(r.erros?.map((x) => [x.id, x.motivo]), [[100, "Sem o DFD ou a unidade nova."], [1, "assinatura"], [21, "assinatura"], [99, "assinatura"]]);
+});
+
+test("CM002 cortada (v1.266.2): uma página de 50 nunca vira 1000+ “não está na CM002” — o nó para e diz como reler", async () => {
+  const def = REGISTRO_NOS.get("centi.cm002") as DefNo;
+  const dfds = Array.from({ length: 1300 }, (_, i) => ({ id: i + 1, planejamento: String(i + 17), entidade: "2" }));
+  const ctx = (resp: Record<string, unknown>) =>
+    ({ centi: async () => resp, api: async () => ({ ok: false }), cancelado: () => false, host: {}, aviso: () => {} }) as never;
+  const pagina = Array.from({ length: 50 }, (_, i) => ({ id: String(i + 17), situacao: "Executado" }));
+  // (a) extensão antiga: 50 linhas, sem total — a trava por proporção para.
+  await assert.rejects(def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: pagina }), {}), /Só 50 de 1300 planejamentos do órgão 2.*IDs 17 a 66.*Mostrar: Todos/);
+  // (b) a extensão diz que veio cortada.
+  await assert.rejects(
+    def.executar({ entrada: dfds.slice(0, 5) }, { dosItens: true }, ctx({ ok: true, linhas: pagina, completa: false, tamanho: 50 }), {}),
+    /veio só com 50 linhas \(uma página de 50\)/,
+  );
+  // (c) a leitura completa segue: os poucos fora da CM002 viram “não está” no Procurar.
+  const todas = Array.from({ length: 1295 }, (_, i) => ({ id: String(i + 17), situacao: "Executado" }));
+  const r = await def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: todas, total: 1295, completa: true }), {});
+  assert.equal(r.saida?.length, 1295);
+});
+
+test("Extensão: leitura completa da CM002, nomes de página/tamanho/total e total em texto", () => {
+  const ctx: Record<string, unknown> = { URL };
+  vmDados.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const p = Number(/const PROTOCOLO = (\d+)/.exec(readFileSync("extensao-centi/centi-main.js", "utf8"))?.[1]);
+  const A = ctx[`__pcaCentiAnexo_p${p}`] as {
+    leituraCompleta: (o: { total: number | null; lidas: number; tamanho: number; curta: boolean }) => boolean;
+    totalDaResposta: (j: unknown) => number | null;
+    comPagina: (c: string, b: unknown, i: number | null) => { corpo: unknown; tamanho: number };
+  };
+  assert.equal(A.leituraCompleta({ total: 1294, lidas: 50, tamanho: 50, curta: false }), false);
+  assert.equal(A.leituraCompleta({ total: 1294, lidas: 1294, tamanho: 50, curta: false }), true);
+  assert.equal(A.leituraCompleta({ total: null, lidas: 50, tamanho: 50, curta: false }), false, "página repetida");
+  assert.equal(A.leituraCompleta({ total: null, lidas: 120, tamanho: 50, curta: true }), true, "terminou numa página curta");
+  assert.equal(A.leituraCompleta({ total: null, lidas: 700, tamanho: 50, curta: false }), true, "sem paginação passou do tamanho");
+  assert.equal(A.totalDaResposta({ Data: { Lista: [{ Id: 1 }], TotalRecords: "1294" } }), 1294);
+  assert.equal(A.totalDaResposta({ Data: { Lista: [{ Id: 1 }], QtdRegistros: 88 } }), 88);
+  const r = A.comPagina("restauth/postdata", { Filtro: { PageNumber: 1, PerPage: 50 } }, 2);
+  assert.equal(r.tamanho, 50);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.corpo)), { Filtro: { PageNumber: 3, PerPage: 50 } });
 });
