@@ -274,6 +274,8 @@ export function FluxosAutomacao({
         return { ...emissor.mapa(), ...emissor.cadastradas() };
       },
       chaveOrgao: chaveOrgaoCenti,
+      // As unidades cadastradas (as que a pessoa acessa) — o "Conferir unidade × Centro de Custo" casa a da Centi com elas.
+      unidades: importacao.reparticoes,
       protocolos: protocolos as unknown as Item[],
       lerProtocolo: async (it: Item) => {
         emissao.current ??= emissaoDoServidor();

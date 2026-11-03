@@ -40,7 +40,8 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, escolherColunas, filtrarMarcados, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
+import { aplicarRegra, conferirUnidades, escolherColunas, filtrarMarcados, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
+import type { ReparticaoMatch } from "./reparticao-match.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
 export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] = [
@@ -1106,6 +1107,20 @@ const NOS: DefNo[] = [
     executar: async (e, c) => compararDfdCenti(so(e), { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false }),
   },
 
+  {
+    tipo: "dados.conferirUnidade",
+    categoria: "dados",
+    rotulo: "Conferir unidade × Centro de Custo",
+    descricao:
+      "A unidade de cada DFD × a do Centro de Custo da CM002 (o nome depois da última vírgula), casada com as unidades cadastradas: iguais, divergentes ou desconhecidas no sistema.",
+    icone: "building",
+    entradas: ["entrada"],
+    saidas: ["divergentes", "desconhecidas", "conformes"],
+    rotulosPortas: { divergentes: "Divergentes", desconhecidas: "Unidade desconhecida", conformes: "Iguais" },
+    campos: [],
+    executar: async (e, _c, ctx) => conferirUnidades(so(e), (ctx.host.unidades ?? []) as ReparticaoMatch[]),
+  },
+
   // ——— Fluxos: reutilizar um fluxo salvo dentro deste
   {
     tipo: "fluxo.executar",
@@ -1521,6 +1536,59 @@ const NOS: DefNo[] = [
         out.push({ marcados: r.marcados, convergentes: r.convergentes, divergentes: r.divergentes });
       }
       return { saida: out };
+    },
+  },
+  {
+    tipo: "saida.trocarUnidade",
+    categoria: "saida",
+    rotulo: "Trocar a unidade do DFD",
+    descricao:
+      "Grava nos DFDs que chegam a unidade indicada (a da Centi, pelo “Conferir unidade”) — a mesma edição em massa da Mesa: escopo, trava do ADM, reconferência da assinatura e histórico.",
+    icone: "save",
+    entradas: ["entrada"],
+    saidas: ["alterados", "erros"],
+    rotulosPortas: { alterados: "Alterados", erros: "Não alterados" },
+    campos: [
+      { chave: "campoUnidade", rotulo: "Campo da unidade nova", tipo: "caminho", padrao: "unidadeCentiId", ajuda: "O dado com o id da unidade cadastrada que o DFD passa a ter (o “Conferir unidade” entrega “unidadeCentiId”)." },
+      { chave: "campoId", rotulo: "Campo do id do DFD", tipo: "caminho", padrao: "id", ajuda: "O dado com o id do DFD no sistema (o “Ler do sistema” entrega “id”)." },
+    ],
+    executar: async (e, c, ctx) => {
+      const campoU = str(c.campoUnidade, "unidadeCentiId");
+      const campoId = str(c.campoId, "id");
+      const alterados: Item[] = [];
+      const erros: Item[] = [];
+      const porDestino = new Map<number, Item[]>();
+      for (const it of so(e)) {
+        const destino = numeroDe(resolverCaminho(it, campoU));
+        const id = numeroDe(resolverCaminho(it, campoId));
+        if (!destino || !id) erros.push({ ...it, motivo: "Sem o DFD ou a unidade nova." });
+        else porDestino.set(destino, [...(porDestino.get(destino) ?? []), it]);
+      }
+      const total = [...porDestino.values()].reduce((n, l) => n + l.length, 0);
+      let feitos = 0;
+      for (const [destino, lista] of porDestino) {
+        for (let i = 0; i < lista.length; i += 20) {
+          if (ctx.cancelado()) return { alterados, erros };
+          const fatia = lista.slice(i, i + 20);
+          ctx.aviso(`Trocando a unidade (${Math.min(feitos + fatia.length, total)} de ${total})…`);
+          const r = await ctx.api("/api/dfd/massa", {
+            method: "POST",
+            body: { ids: fatia.map((it) => numeroDe(resolverCaminho(it, campoId))), acao: { campo: "reparticao", reparticaoId: destino } },
+          });
+          feitos += fatia.length;
+          if (!r.ok) {
+            for (const it of fatia) erros.push({ ...it, motivo: r.error || "Não consegui trocar a unidade." });
+            continue;
+          }
+          const falhas = new Map((Array.isArray(r.falhas) ? r.falhas : []).map((f) => [Number(obj(f).id), String(obj(f).motivo ?? "")]));
+          for (const it of fatia) {
+            const m = falhas.get(Number(numeroDe(resolverCaminho(it, campoId))));
+            if (m != null) erros.push({ ...it, motivo: m || "Não alterado." });
+            else alterados.push(it);
+          }
+        }
+      }
+      return { alterados, erros };
     },
   },
   {

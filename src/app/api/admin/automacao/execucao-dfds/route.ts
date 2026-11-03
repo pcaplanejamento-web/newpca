@@ -28,6 +28,8 @@ const lerDfds = () =>
       orgaoNome: orgaos.nome,
       // As colunas da planilha de DFDs da Mesa (a tabela das automações): a unidade, o protocolo e a conferência.
       sigla: reparticoes.codigo,
+      reparticaoId: dfds.reparticaoId,
+      unidadeNome: reparticoes.nome,
       protocolo: dfdProtocolos.numero,
       protocoloId: dfds.protocoloId,
       conferenciaCenti: dfds.conferenciaCenti,

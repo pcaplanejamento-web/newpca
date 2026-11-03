@@ -263,3 +263,66 @@ test("Órgão na Centi: o do item (com trava), fixos e um órgão por vez trocan
   assert.equal(f.fim?.length, 2);
   assert.deepEqual(trocas, [["trocarOrgao", "2"], ["trocarOrgao", "6"], ["trocarOrgao", null]]);
 });
+
+test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências/desconhecidas e troca SÓ os marcados, por destino", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
+  assert.ok(m);
+  const unidades = [
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1 },
+  ];
+  const dfds = [
+    { id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 2, numero: "20", planejamento: "200", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 3, numero: "30", planejamento: "300", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 4, numero: "40", planejamento: "400", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+  ];
+  const centi = async () => ({
+    ok: true,
+    linhas: [
+      { id: "100", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+      { id: "200", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+      { id: "300", situacao: "Executado", centroCusto: "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL" },
+      { id: "400", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+    ],
+  });
+  const grafo = lerGrafo(m.grafo);
+  const sel = grafo.nos.find((n) => n.tipo === "entrada.selecionar");
+  assert.ok(sel);
+  sel.config = { ...sel.config, marcados: ["2"] };
+  const posts: { c: string; body: unknown }[] = [];
+  const api = async (c: string, init?: unknown) => {
+    posts.push({ c, body: (init as { body?: unknown } | undefined)?.body });
+    return { ok: true, alterados: 1, falhas: [] };
+  };
+  const r = await executarFluxo(grafo, REGISTRO_NOS, { centi, api, cancelado: () => false, host: { protocolos: [], unidades, __cache: new Map([["dfds", Promise.resolve(dfds)]]) } });
+  assert.equal(r.estado, "concluido", r.erro);
+  const massa = posts.filter((p) => p.c === "/api/dfd/massa");
+  assert.deepEqual(massa.map((p) => p.body), [{ ids: [2], acao: { campo: "reparticao", reparticaoId: 2 } }], "só o marcado, para a unidade da Centi");
+  const msgs = r.apontados.map((a) => a.mensagem).sort();
+  assert.ok(msgs.some((t) => String(t).startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")));
+  assert.ok(msgs.some((t) => String(t).includes("“GUARDA CIVIL MUNICIPAL” não existe no sistema")));
+  assert.ok(!msgs.some((t) => String(t).startsWith("DFD 40")), "a unidade igual não é apontada");
+});
+
+test("Trocar a unidade: agrupa por destino em fatias de 20 e devolve as recusas do servidor com o motivo", async () => {
+  const def = REGISTRO_NOS.get("saida.trocarUnidade") as DefNo;
+  const corpos: { ids: number[]; acao: { reparticaoId: number } }[] = [];
+  const ctx = {
+    centi: async () => ({}),
+    api: async (_c: string, init?: unknown) => {
+      const b = (init as { body: { ids: number[]; acao: { reparticaoId: number } } }).body;
+      corpos.push(b);
+      return { ok: true, alterados: b.ids.length - 1, falhas: [{ id: b.ids[0], numero: "", motivo: "assinatura" }] };
+    },
+    cancelado: () => false,
+    host: {},
+    aviso: () => {},
+  } as never;
+  const itens = [...Array.from({ length: 25 }, (_, i) => ({ id: i + 1, unidadeCentiId: 7 })), { id: 99, unidadeCentiId: 8 }, { id: 100 }];
+  const r = await def.executar({ entrada: itens }, {}, ctx, {});
+  assert.deepEqual(corpos.map((b) => [b.acao.reparticaoId, b.ids.length]), [[7, 20], [7, 5], [8, 1]]);
+  assert.equal(r.alterados?.length, 23);
+  assert.deepEqual(r.erros?.map((x) => [x.id, x.motivo]), [[100, "Sem o DFD ou a unidade nova."], [1, "assinatura"], [21, "assinatura"], [99, "assinatura"]]);
+});

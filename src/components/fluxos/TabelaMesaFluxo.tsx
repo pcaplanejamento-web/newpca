@@ -5,11 +5,30 @@ import type { ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import type { Item } from "@/lib/fluxo-core";
 import { type AberturaItem, aberturaDoItem, dadosDfdDoItem, type TipoItemMesa, tipoDosItens } from "@/lib/fluxo-tipo-item";
 import { COLUNAS_PROTOCOLOS, type GestaoAutomacao, useColunasGestao } from "../automacao/ProtocolosAutomacao";
+import { CelulaTexto } from "../CelulaLista";
 import { colunasItemMesa, type LinhaItemMesa } from "../ColunasItensMesa";
 import { type Column, DataTable } from "../DataTable";
 import { type LinhaDfd, PlanilhaDfds } from "../PlanilhaDfds";
 
 type Chave = string | number;
+
+/** A unidade da Centi ao lado da do sistema (o "Conferir unidade × Centro de Custo"): só quando os itens a trazem. */
+const COLUNAS_UNIDADE_CENTI: Column<Item>[] = [
+  {
+    key: "unidadeCenti",
+    header: "Unidade na Centi",
+    nowrap: true,
+    value: (it) => String(it.unidadeCentiSigla || "Desconhecida"),
+    render: (it) => <span title={String(it.unidadeCentiNome ?? "")}>{String(it.unidadeCentiSigla || "Desconhecida")}</span>,
+  },
+  {
+    key: "centroCusto",
+    header: "Centro de custo",
+    minWidth: 220,
+    value: (it) => String(it.unidadeCentroCusto ?? ""),
+    render: (it) => <CelulaTexto texto={String(it.unidadeCentroCusto ?? "")} />,
+  },
+];
 
 /** Leva colunas de um ITEM (ex.: o Estado/Detalhe da análise) para uma tabela cujas linhas são outra forma do mesmo item. */
 function adaptar<R>(cols: Column<Item>[], item: (r: R) => Item): Column<R>[] {
@@ -32,7 +51,7 @@ export function TabelaMesaFluxo({
   itens,
   chave,
   genericas,
-  extras = [],
+  extras: extrasDoHost = [],
   gestao,
   onAbrir,
   selected,
@@ -73,6 +92,8 @@ export function TabelaMesaFluxo({
   onOrdem?: (chaves: string[], filtrada: boolean) => void;
 }) {
   const tipo: TipoItemMesa | null = useMemo(() => tipoDosItens(itens), [itens]);
+  const comUnidadeCenti = useMemo(() => itens.some((it) => "unidadeCentroCusto" in it), [itens]);
+  const extras = comUnidadeCenti ? [...COLUNAS_UNIDADE_CENTI, ...extrasDoHost] : extrasDoHost;
   const colGestao = useColunasGestao(gestao);
   const abrir = onAbrir ? (it: Item) => {
     const a = aberturaDoItem(it);

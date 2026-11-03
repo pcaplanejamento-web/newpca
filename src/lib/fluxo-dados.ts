@@ -3,6 +3,7 @@
  * qualquer item), PROCURAR um valor nas linhas de uma tabela (numa coluna ou em todas), a REGRA "se encontrar X grava Y" e
  * as VARIÁVEIS (o estado guardado para terminar laços).
  */
+import { casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
@@ -200,4 +201,47 @@ export function recorteTabela(linhas: Item[], colunas: ColunaEscolhida[], de?: n
 export function filtrarMarcados(itens: Item[], marcados: unknown, chave: (it: Item, i: number) => string): Item[] {
   const m = new Set((Array.isArray(marcados) ? marcados : []).map((x) => String(x)));
   return m.size ? itens.filter((it, i) => m.has(chave(it, i))) : itens;
+}
+
+/**
+ * A unidade de cada DFD × a do Centro de Custo da CM002 (a linha achada pelo "Procurar" — `encontrado`). A unidade da
+ * Centi (depois da última vírgula) é casada com as CADASTRADAS (`casarUnidadePorNome`; sem casar pelo nome, a sigla no
+ * fim da Finalidade). Iguais = `conformes`; outra unidade cadastrada = `divergentes`; sem nenhuma (ou várias) =
+ * `desconhecidas`. Cada item leva `unidadeCentroCusto`, `unidadeCentiId/Sigla/Nome` e a `mensagem`.
+ */
+export function conferirUnidades(
+  itens: Item[],
+  unidades: ReparticaoMatch[],
+): { divergentes: Item[]; desconhecidas: Item[]; conformes: Item[] } {
+  const porId = new Map(unidades.map((u) => [u.id, u]));
+  const out = { divergentes: [] as Item[], desconhecidas: [] as Item[], conformes: [] as Item[] };
+  for (const it of itens) {
+    const linha = (it.encontrado && typeof it.encontrado === "object" ? it.encontrado : {}) as Item;
+    const centro = String(linha.centroCusto ?? "").trim();
+    const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
+    const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
+    const atual = typeof it.reparticaoId === "number" ? it.reparticaoId : null;
+    const base = { ...it, unidadeCentroCusto: centro ? unidadeDoCentroCusto(centro).nome : "", unidadeSistema: String(it.sigla ?? "") };
+    if (!centro) {
+      out.desconhecidas.push({ ...base, mensagem: `${ref}: a linha da CM002 não tem centro de custo` });
+      continue;
+    }
+    const { nome, truncado } = unidadeDoCentroCusto(centro);
+    let c = casarUnidadePorNome(nome, truncado, unidades, orgaoId);
+    if (c.tipo !== "ok") {
+      const sigla = siglaDaFinalidade(String(linha.finalidade ?? ""));
+      const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
+      if (s?.tipo === "ok") c = s;
+    }
+    if (c.tipo !== "ok") {
+      const motivo = c.tipo === "ambigua" ? "casa mais de uma unidade cadastrada" : "não existe no sistema";
+      out.desconhecidas.push({ ...base, mensagem: `${ref}: unidade desconhecida no centro de custo — “${nome}” ${motivo}` });
+      continue;
+    }
+    const u = porId.get(c.id);
+    const x = { ...base, unidadeCentiId: c.id, unidadeCentiSigla: u?.codigo ?? "", unidadeCentiNome: u?.nome ?? "" };
+    if (atual === c.id) out.conformes.push(x);
+    else out.divergentes.push({ ...x, mensagem: `${ref}: no sistema ${x.unidadeSistema || "sem unidade"}, na Centi ${x.unidadeCentiSigla} (${nome})` });
+  }
+  return out;
 }

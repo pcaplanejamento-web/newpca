@@ -179,3 +179,49 @@ export function orgaoDivergeDaUnidade(
   if (orgaoDoCampo == null) return false;
   return orgaoDoCampo !== orgaoIdDaUnidade;
 }
+
+/** A UNIDADE do "Centro custo" da CM002 da Centi = o trecho depois da ÚLTIMA vírgula
+ * ("PM RV, GABINETE DO PREFEITO, GGIM" → "GGIM"). A Centi corta os nomes longos com reticência
+ * ("…, PROCURADORIA-GE..."): sem ela, `truncado` marca que só o COMEÇO do nome é conhecido. */
+export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
+  const ultimo = String(texto ?? "").split(",").pop() ?? "";
+  const sem = ultimo.replace(/\s*(\.{2,}|…)\s*$/, "");
+  return { nome: sem.trim().replace(/\s+/g, " "), truncado: sem.length !== ultimo.length };
+}
+
+/** A sigla no fim da Finalidade da CM002 ("PCA - 2026 - INICIAL - SMAUSP" → "SMAUSP"), só quando é uma
+ * palavra curta de letras (nunca um ano nem um texto). */
+export function siglaDaFinalidade(texto: string | null | undefined): string | null {
+  const ultimo = String(texto ?? "").split(/\s+[-–—]\s+/).pop()?.trim() ?? "";
+  return /^[A-Za-zÀ-ú][A-Za-zÀ-ú0-9]{1,14}$/.test(ultimo) && !/^\d+$/.test(ultimo) ? ultimo : null;
+}
+
+export type CasamentoUnidade = { tipo: "ok"; id: number } | { tipo: "desconhecida" } | { tipo: "ambigua"; ids: number[] };
+
+/**
+ * O nome de uma unidade da Centi (o Centro de Custo) → a unidade CADASTRADA. Pelo NOME (a `chaveNome`), pela
+ * SIGLA (o código) ou pelo "Setor Requisitante"; com o nome cortado (`truncado`), pelo começo do nome. Ocultas e
+ * a "Geral" nunca casam; no empate, as do ÓRGÃO do documento; ainda mais de uma = `ambigua` (nunca chuta).
+ */
+export function casarUnidadePorNome(
+  nome: string,
+  truncado: boolean,
+  unidades: ReparticaoMatch[],
+  orgaoId?: number | null,
+): CasamentoUnidade {
+  const validas = unidades.filter((u) => !u.oculto && norm(u.codigo) !== "GERAL");
+  const k = chaveNome(semPrefixo(nome));
+  const sigla = norm(nome);
+  if (!k) return { tipo: "desconhecida" };
+  const pelo = (f: (u: ReparticaoMatch) => boolean) => validas.filter(f);
+  let achadas = pelo((u) => chaveNome(u.nome) === k);
+  if (!achadas.length) achadas = pelo((u) => norm(u.codigo) === sigla);
+  if (!achadas.length) achadas = pelo((u) => !!u.setorRequisitante && chaveNome(u.setorRequisitante) === k);
+  if (!achadas.length && truncado && k.length >= 4) achadas = pelo((u) => chaveNome(u.nome).startsWith(k));
+  if (achadas.length > 1 && orgaoId != null) {
+    const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);
+    if (doOrgao.length) achadas = doOrgao;
+  }
+  if (achadas.length === 1) return { tipo: "ok", id: achadas[0].id };
+  return achadas.length ? { tipo: "ambigua", ids: achadas.map((u) => u.id) } : { tipo: "desconhecida" };
+}
