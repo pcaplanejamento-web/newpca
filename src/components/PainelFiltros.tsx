@@ -131,9 +131,9 @@ export function PainelFiltros({
           {total > 0 && (
             <span
               key={total}
-              className="animate-selo-pop pointer-events-none absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums ring-2 ring-surface"
+              className="animate-selo-pop selo-contagem absolute top-0.5 right-0.5 bg-accent"
             >
-              {total}
+              {total > 99 ? "99+" : total}
             </span>
           )}
         </>

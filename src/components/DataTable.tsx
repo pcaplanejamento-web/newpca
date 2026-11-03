@@ -1056,8 +1056,8 @@ export function FiltrosAtivos({
       trigger={
         <>
           <IconFilter className="h-4 w-4" />
-          <span className="pointer-events-none absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums ring-2 ring-surface">
-            {total}
+          <span className="selo-contagem absolute top-0.5 right-0.5 bg-accent">
+            {total > 99 ? "99+" : total}
           </span>
         </>
       }

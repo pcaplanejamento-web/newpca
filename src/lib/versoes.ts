@@ -44,6 +44,15 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.265.6",
+    data: "2026-11-03",
+    titulo: "Contagens dos botões no padrão do sistema",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O número no canto dos botões (visão salva, filtros ativos, Duplicados, Diferenças, Tarefas) tem o mesmo desenho do selo do sino de notificações: mesmo tamanho e fonte, sem a borda branca, até 99+.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Sistema", texto: "O mesmo nos avisos (!) das telas, no filtro das listas de Tarefas, no relatório das automações e nas conversas do cabeçalho.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.265.5",
     data: "2026-11-03",
     titulo: "Contagens dos botões sempre inteiras",
