@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.0",
+    data: "2026-11-03",
+    titulo: "Unidades dos DFDs conferidas com o Centro de Custo da CM002",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Modelo “Unidades dos DFDs × Centro de Custo da CM002”: cada DFD é achado na CM002 pelo nº de planejamento e a unidade dele é comparada com a do Centro de Custo (o nome depois da última vírgula), casada com as unidades cadastradas. Aponta as divergências e as unidades que não existem no sistema.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Na tabela “Selecionar”, os DFDs divergentes com a unidade do sistema e a da Centi lado a lado: só os marcados passam para a unidade da Centi, com o histórico e a reconferência da assinatura de sempre.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.265.5",
     data: "2026-11-03",
     titulo: "Contagens dos botões sempre inteiras",

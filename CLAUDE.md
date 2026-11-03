@@ -5426,6 +5426,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `recorteTabela`); visão "Tabela" no painel (`VistaTabela`, relê do servidor a cada execução, exportável). D1
   `automacao-tabelas.ts`; puro `linhasParaTabela`/`recorteTabela`/`chaveTabela` (`fluxo-dados.ts`); rotas `GET` (lista |
   `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`. **v1.45.1:** `limparSituacao` recusa situação só de dígitos (nunca grava código) e a migração `0097` apagou os códigos antigos; o `saida.gravarExecucao` ganhou `situacaoFixa` — no modelo, os DFDs de órgão cadastrado fora da CM002 gravam “Não encontrado na CM002” (SE `entidade` não vazio → `grav2`); na interface “entidade” virou “órgão” (o código segue `entidade`).
+- **UNIDADES DOS DFDs × CENTRO DE CUSTO (v1.266.0, sem migração):** modelo **`unidades-cm002`** = Ler do sistema (DFDs —
+  o `GET …/execucao-dfds` traz `reparticaoId` e `unidadeNome`) → Órgão na Centi → CM002 `{dosItens}` (a linha já traz
+  `centroCusto`) → `logica.procurar` (planejamento + órgão) → **`dados.conferirUnidade`** (puro `conferirUnidades`,
+  `fluxo-dados.ts`: a unidade da Centi = o trecho depois da ÚLTIMA vírgula — `unidadeDoCentroCusto`, reticência =
+  `truncado` —, casada pelo ponto único `casarUnidadePorNome` de `reparticao-match.ts` [`chaveNome` do nome · sigla ·
+  setor requisitante · começo do nome cortado; empate = o órgão do DFD; várias = ambígua, nunca chuta; reserva =
+  `siglaDaFinalidade`] com `ctx.host.unidades` = `importacao.reparticoes`; portas divergentes · desconhecidas ·
+  iguais) → divergentes → `entrada.selecionar` (nada marcado = nada muda) → **`saida.trocarUnidade`** (`POST
+  /api/dfd/massa` `{campo:"reparticao"}` por destino em fatias de 20 — escopo, trava do ADM, reconferência da
+  assinatura e auditoria da Mesa; recusas → `erros` com o `motivo`). A `TabelaMesaFluxo` mostra "Unidade na Centi" e
+  "Centro de custo" quando os itens os trazem. Testes: `tests/unidade-centro-custo.test.ts` + o modelo em
+  `tests/fluxo-dados.test.ts`.
 - **CM002 INTEIRA + ÓRGÃO NA CENTI (v1.47.0, extensão 1.21.0, protocolo 38):** a ação `cm002` tenta a consulta guardada
   como a tela pediu e com o tamanho "todos" (`comPagina(…, null, todos)` — 100000, 0, -1, null), vale a de MAIS linhas
   (completa quando bate `totalDaResposta`) e, senão, página a página (≤ 2000) → `{linhas, total, lidas, paginas, modo}`; o
