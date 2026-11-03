@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.265.5",
+    data: "2026-11-03",
+    titulo: "Contagens dos botões sempre inteiras",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O número no canto dos botões (visão salva, filtros ativos, Duplicados, Diferenças, Tarefas) fica dentro do botão e nunca é mais cortado, também no rodapé da tabela que rola de lado.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Sistema", texto: "O mesmo nos avisos (!) das telas, no relatório das automações e nas conversas do cabeçalho.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.265.4",
     data: "2026-11-03",
     titulo: "Gráficos da Mesa e de Tarefas alinhados",

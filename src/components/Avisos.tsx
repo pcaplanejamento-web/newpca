@@ -35,7 +35,7 @@ export function Avisos({ avisos, titulo = "Avisos" }: { avisos: readonly Aviso[]
           {alerta > 0 && (
             <span
               aria-hidden
-              className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold leading-none text-white tabular-nums"
+              className="pointer-events-none absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold leading-none text-white tabular-nums ring-2 ring-surface"
               style={{ background: COR[pior] }}
             >
               {alerta}

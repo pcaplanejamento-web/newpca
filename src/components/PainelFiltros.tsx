@@ -121,7 +121,7 @@ export function PainelFiltros({
       }}
       ariaLabel={rotulo}
       title={rotulo}
-      triggerClassName={`relative h-11 min-w-11 shrink-0 justify-center gap-1.5 rounded-control border px-2.5 transition-colors lg:h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)] ${
+      triggerClassName={`relative h-11 min-w-11 shrink-0 justify-center gap-1.5 rounded-control border px-2.5 transition-colors ${visao && total ? "pr-5" : ""} lg:h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)] ${
         total ? "border-accent/40 bg-accent-soft text-accent hover:bg-accent/15" : "border-transparent text-muted hover:bg-surface-2 hover:text-text"
       }`}
       trigger={
@@ -131,7 +131,7 @@ export function PainelFiltros({
           {total > 0 && (
             <span
               key={total}
-              className="animate-selo-pop absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums"
+              className="animate-selo-pop pointer-events-none absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums ring-2 ring-surface"
             >
               {total}
             </span>
