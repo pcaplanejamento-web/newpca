@@ -43,8 +43,9 @@ export function ChartCard({ title, subtitle, children, className, action, onExpa
           )}
         </div>
       )}
-      {/* Esticado até a altura da linha (cartões lado a lado), o gráfico fica CENTRADO no espaço — sem um vão embaixo. */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">{children}</div>
+      {/* Esticado até a altura da linha (cartões lado a lado), o conteúdo fica no TOPO, logo abaixo do título — centrado,
+          ele "flutuava" no meio de um vão (ex.: a Saúde dos prazos ao lado de uma Carga por pessoa longa). */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }

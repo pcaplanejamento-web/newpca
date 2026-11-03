@@ -621,6 +621,7 @@ export function DashboardMesa({
           pageSize={20}
           minWidth={1080}
           density="compact"
+          completar={false}
           vazio={semNada}
           onRowClick={(l) =>
             abrirOrigem({

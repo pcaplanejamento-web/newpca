@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.265.4",
+    data: "2026-11-03",
+    titulo: "Gráficos da Mesa e de Tarefas alinhados",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "No Dashboard da Mesa, as barras de todas as linhas começam e terminam no mesmo ponto (antes o tamanho do número empurrava cada barra), sem o vão grande entre o nome e a barra. A tabela do Desempenho por pessoa não ganha mais linhas vazias até o fim da tela.", link: "/painel/mesa?vista=dashboard" },
+      { tipo: "correcao", area: "Tarefas", texto: "No Dashboard do quadro, o conteúdo de cada cartão fica logo abaixo do título (antes flutuava no meio do cartão quando o vizinho era mais alto), e as barras de Carga por pessoa, Tarefas por lista e Prioridade ficam alinhadas.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.265.3",
     data: "2026-11-03",
     titulo: "Gráficos sem marcas sumindo nem rótulos cortados",

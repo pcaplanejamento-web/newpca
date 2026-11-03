@@ -159,6 +159,7 @@ export function DataTable<R>({
   reservaInferior = 0,
   acoesRodape,
   vazio,
+  completar = true,
   edicoes,
   exportar,
   ocultas,
@@ -219,6 +220,9 @@ export function DataTable<R>({
   /** Mensagem do corpo quando NÃO há linhas (sem dados) — com linhas escondidas pelos filtros das colunas,
    * vale a mensagem padrão dos filtros. */
   vazio?: ReactNode;
+  /** `false` = sem as linhas VAZIAS que completam a página até o fim do display (tabelas dentro de painéis e cartões —
+   * ex.: o desempenho por pessoa do Dashboard da Mesa). Padrão: completa. */
+  completar?: boolean;
   /**
    * EDIÇÃO DA TABELA + EDIÇÕES SALVAS (opt-in — ex.: as tabelas da Mesa): o LÁPIS no rodapé liga a edição direto no
    * cabeçalho (arrastar a coluna, congelar, ocultar, ordenar, largura — as MESMAS peças do Comparativo, `EdicaoColunas`)
@@ -590,7 +594,7 @@ export function DataTable<R>({
       ro.disconnect();
     };
   }, [cheia, tamPagina, visiveis.length, reservaInferior]);
-  const preencher = tamPagina && visiveis.length > 0 ? Math.max(0, Math.min(tamPagina, cabem, 200) - visiveis.length) : 0;
+  const preencher = completar && tamPagina && visiveis.length > 0 ? Math.max(0, Math.min(tamPagina, cabem, 200) - visiveis.length) : 0;
   const { arrasto, vista, fantasma, iniciar, mover, congelar } = useArrastoColunas({
     raiz: wrapRef,
     rolagem: rolagemRef,

@@ -98,9 +98,11 @@ export function BarrasH({
   acao?: string;
 }) {
   const escala = max ?? Math.max(0, ...linhas.map((l) => l.segmentos.reduce((t, s) => t + s.valor, 0)));
-  const grade = "grid w-full grid-cols-[minmax(0,40%)_minmax(2.5rem,1fr)_auto] items-center gap-x-2.5";
+  // As linhas são SUBGRADES da lista: as três colunas (rótulo | barra | valor) têm a MESMA largura em todas — as barras
+  // começam e terminam no mesmo ponto, qualquer que seja o tamanho do número. O rótulo ocupa até 40% (no máximo 16rem).
+  const grade = "col-span-3 grid grid-cols-subgrid items-center";
   return (
-    <ul aria-label={ariaLabel} className="space-y-0.5">
+    <ul aria-label={ariaLabel} className="grid w-full grid-cols-[minmax(0,min(40%,16rem))_minmax(2.5rem,1fr)_auto] gap-x-2.5 gap-y-0.5">
       {linhas.map((l, i) => {
         const conteudo = (
           <>
@@ -114,7 +116,7 @@ export function BarrasH({
         );
         const marcada = ativa != null && l.chave === ativa;
         return (
-          <li key={l.chave} title={l.titulo}>
+          <li key={l.chave} title={l.titulo} className="col-span-3 grid grid-cols-subgrid">
             {onEscolher && (!l.apagada || l.clicavel) ? (
               <button
                 type="button"
