@@ -35,7 +35,7 @@ import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { alternarAutomacaoMesa, EVENTO_DISPARO_MESA, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
-import { grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
+import { desatualizadoDoModelo, grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
 import type { FluxoAutomacao } from "@/lib/fluxos";
 import { BotaoVoltar } from "../AbasEspaco";
 import { Badge } from "../Badge";
@@ -693,6 +693,7 @@ export function FluxosAutomacao({
           key={`${fluxo.id}:${versaoEditor}`}
           fluxo={fluxo}
           onAtualizarModelo={modeloDoAberto ? () => void atualizarPeloModelo(fluxo, modeloDoAberto) : undefined}
+          desatualizado={modeloDoAberto ? desatualizadoDoModelo(lerGrafo(fluxo.grafo), modeloDoAberto) : false}
           rodando={rodando === fluxo.id}
           outroRodando={rodando != null && rodando !== fluxo.id}
           passos={exec?.id === fluxo.id ? passos : {}}
@@ -1247,10 +1248,13 @@ function EditorFluxo({
   naMesa,
   onNaMesa,
   onAtualizarModelo,
+  desatualizado,
 }: {
   fluxo: FluxoAutomacao;
   /** Há um modelo de mesmo nome: regrava o fluxo com o modelo de hoje. */
   onAtualizarModelo?: () => void;
+  /** O diagrama salvo ficou para trás do modelo de hoje (o botão Atualizar ganha o ponto âmbar). */
+  desatualizado?: boolean;
   naMesa: boolean;
   onNaMesa: (ligado: boolean) => void;
   rodando: boolean;
@@ -1449,8 +1453,17 @@ function EditorFluxo({
           </Button>
         )}
         {onAtualizarModelo && (
-          <Button size="sm" variant="icon" aria-label="Atualizar pelo modelo" title="Atualizar pelo modelo (volta ao diagrama do modelo de hoje)" disabled={rodando} onClick={onAtualizarModelo}>
+          <Button
+            size="sm"
+            variant="icon"
+            aria-label={desatualizado ? "Atualizar pelo modelo — há uma versão mais nova" : "Atualizar pelo modelo"}
+            title={desatualizado ? "O modelo desta automação mudou — toque para usar o diagrama de hoje" : "Atualizar pelo modelo (volta ao diagrama do modelo de hoje)"}
+            disabled={rodando}
+            onClick={onAtualizarModelo}
+            className="relative"
+          >
             <IconRefresh className="size-4" />
+            {desatualizado && <span aria-hidden="true" className="absolute top-1 right-1 size-2 rounded-full bg-[var(--warn)]" />}
           </Button>
         )}
         <Button size="sm" variant="icon" aria-label="Excluir o fluxo" title="Excluir o fluxo" disabled={rodando} onClick={onExcluir}>

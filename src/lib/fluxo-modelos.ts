@@ -448,3 +448,12 @@ export function grafoDoModelo(m: ModeloFluxo, criados: ReadonlyMap<string, numbe
     }),
   };
 }
+
+/**
+ * O fluxo salvo ficou para trás do modelo de mesmo nome: os TIPOS dos nós diferem (o modelo ganhou/perdeu etapas).
+ * Só a estrutura conta — posições e configurações ajustadas pela pessoa não acusam.
+ */
+export function desatualizadoDoModelo(g: Pick<Grafo, "nos">, m: Pick<ModeloFluxo, "grafo">): boolean {
+  const tipos = (nos: readonly { tipo: string }[]) => nos.map((n) => n.tipo).sort().join("|");
+  return tipos(g.nos) !== tipos(m.grafo.nos);
+}

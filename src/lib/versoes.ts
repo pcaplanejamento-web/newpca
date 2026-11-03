@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.8",
+    data: "2026-11-03",
+    titulo: "Unidades × Centro de Custo também no fluxo salvo antigo",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A conferência da unidade lê o planejamento pelo ID sozinha quando a linha da CM002 não traz o centro de custo — vale também na automação salva antes da v1.266.7, sem atualizar.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O botão “Atualizar pelo modelo” ganha um ponto âmbar quando o modelo da automação mudou.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.7",
     data: "2026-11-03",
     titulo: "Unidades × Centro de Custo: sem a coluna na CM002, lê o planejamento pelo ID",

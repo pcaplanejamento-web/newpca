@@ -40,7 +40,7 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, conferirUnidades, escolherColunas, filtrarMarcados, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
+import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
@@ -73,6 +73,54 @@ export const corCategoria = (c: CategoriaNo) => CATEGORIAS.find((x) => x.valor =
 
 const so = (entradas: Portas, porta = "entrada") => entradas[porta] ?? [];
 const str = (v: unknown, padrao = "") => (typeof v === "string" ? v : v == null ? padrao : String(v));
+
+/**
+ * Lê cada DFD na Centi pelo nº de planejamento (o load da Execução e do "Baixar DFDs" — `host.lerDfdCenti`) → `centi`.
+ * Falha de comunicação = `centi:null` + `centiErro`/`centiFalha` (ou erro, com `falhaErro`); interrompido ou a operação
+ * recusada PARAM o fluxo (os demais falhariam igual). A ordem dos itens é mantida.
+ */
+async function lerPlanejamentosPeloId(
+  itens: Item[],
+  ctx: ContextoNo,
+  op: { pdf: boolean; completo?: boolean; falhaErro?: boolean; paralelo?: number; rotulo?: string },
+): Promise<(Item | undefined)[]> {
+  const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean) => Promise<Item>) | undefined;
+  if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
+  const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
+  const chave = ctx.host.chaveOrgao as ((id: number | null, ent: string | null) => string | null) | undefined;
+  // A entidade da Centi do DFD: a dele; senão a do órgão (cadastro/mapa) — o load e a emissão vão nela.
+  const entidadeDe = (d: Item) => {
+    if (str(d.entidade)) return str(d.entidade);
+    const k = chave?.((d.orgaoId as number | null) ?? null, str(d.orgaoEntidade ?? d.orgao) || null);
+    return (k && mapa[k]?.replace(/^0+(?=\d)/, "")) || "";
+  };
+  let feitos = 0;
+  const lidos = await executarEmPool(
+    itens,
+    op.paralelo ?? 1,
+    async (it0) => {
+      const it: Item = { ...it0, entidade: entidadeDe(it0) };
+      ctx.aviso(`${op.rotulo ?? ""}DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${feitos + 1} de ${itens.length})…`);
+      let r: Item;
+      try {
+        r = { ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true) };
+      } catch (x) {
+        const msg = x instanceof Error ? x.message : String(x);
+        // O lote acabou ou a Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
+        if (/interrompido|recusou o Emitir DFD/i.test(msg)) throw x;
+        // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
+        const nao = msg.startsWith("NAO_ENCONTRADO: ");
+        if (!nao && op.falhaErro) throw new Error(`DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) não conferido: ${msg}`);
+        r = { ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao };
+      }
+      feitos++;
+      ctx.parcial?.([r]);
+      return r;
+    },
+    ctx.cancelado,
+  );
+  return lidos; // cancelado = os não começados ficam `undefined`
+}
 /** Opções numéricas de um campo de seleção (o valor gravado é o número em texto — `numeroDe` lê). */
 const opcoesNum = (ns: number[], rot: (n: number) => string = (n) => n.toLocaleString("pt-BR")) => ns.map((n) => ({ valor: String(n), rotulo: rot(n) }));
 const rotSeg = (n: number) => (n < 60 ? `${n} segundo${n === 1 ? "" : "s"}` : `${n / 60} minuto${n === 60 ? "" : "s"}`);
@@ -672,38 +720,8 @@ const NOS: DefNo[] = [
       },
     ],
     executar: async (e, c, ctx) => {
-      const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean) => Promise<Item>) | undefined;
-      if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
-      const itens = so(e).slice(0, max);
-      const out: Item[] = [];
-      const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
-      const chave = ctx.host.chaveOrgao as ((id: number | null, ent: string | null) => string | null) | undefined;
-      // A entidade da Centi do DFD: a dele; senão a do órgão (cadastro/mapa) — o load e a emissão vão nela.
-      const entidadeDe = (d: Item) => {
-        if (str(d.entidade)) return str(d.entidade);
-        const k = chave?.((d.orgaoId as number | null) ?? null, str(d.orgaoEntidade ?? d.orgao) || null);
-        return (k && mapa[k]?.replace(/^0+(?=\d)/, "")) || "";
-      };
-      for (const [i, it0] of itens.entries()) {
-        const it: Item = { ...it0, entidade: entidadeDe(it0) };
-        if (ctx.cancelado()) break;
-        ctx.aviso(`DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${i + 1} de ${itens.length})…`);
-        try {
-          out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, c.pdf !== false, c.completo === true) });
-          ctx.parcial?.([out[out.length - 1]]);
-        } catch (x) {
-          const msg = x instanceof Error ? x.message : String(x);
-          if (/interrompido/i.test(msg)) throw x;
-          // A Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
-          if (/recusou o Emitir DFD|Interrompido/i.test(msg)) throw x;
-          // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
-          const nao = msg.startsWith("NAO_ENCONTRADO: ");
-          if (!nao && c.falhaErro === true) throw new Error(`DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) não conferido: ${msg}`);
-          out.push({ ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao });
-          ctx.parcial?.([out[out.length - 1]]);
-        }
-      }
+      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true, falhaErro: c.falhaErro === true })).filter((x): x is Item => x !== undefined);
       return { saida: out };
     },
   },
@@ -1146,7 +1164,18 @@ const NOS: DefNo[] = [
     saidas: ["divergentes", "desconhecidas", "conformes"],
     rotulosPortas: { divergentes: "Divergentes", desconhecidas: "Unidade desconhecida", conformes: "Iguais" },
     campos: [],
-    executar: async (e, _c, ctx) => conferirUnidades(so(e), (ctx.host.unidades ?? []) as ReparticaoMatch[]),
+    executar: async (e, _c, ctx) => {
+      // Sem o centro de custo na linha da CM002 (a consulta aprendida costuma trazer só Id + Situação), o planejamento é
+      // lido pelo ID AQUI — vale em qualquer diagrama salvo, antigo ou novo; o que já veio lido (`centi`) não é relido.
+      const itens = so(e);
+      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => !("centi" in it) && !centroCustoDoItem(it)) : [];
+      if (!faltam.length) return conferirUnidades(itens, (ctx.host.unidades ?? []) as ReparticaoMatch[]);
+      const lidos = await lerPlanejamentosPeloId(faltam, ctx, { pdf: false, paralelo: 3, rotulo: "Lendo o planejamento pelo ID — " });
+      const porItem = new Map(faltam.map((it, i) => [it, lidos[i]]));
+      // Interrompido no meio: os não lidos ficam de fora (não viram "sem centro de custo").
+      const juntos = itens.flatMap((it) => (porItem.has(it) ? (porItem.get(it) ? [porItem.get(it) as Item] : []) : [it]));
+      return conferirUnidades(juntos, (ctx.host.unidades ?? []) as ReparticaoMatch[]);
+    },
   },
 
   // ——— Fluxos: reutilizar um fluxo salvo dentro deste

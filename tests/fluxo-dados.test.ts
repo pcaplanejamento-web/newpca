@@ -344,6 +344,53 @@ test("Modelo “Unidades × Centro de Custo”: a CM002 SEM a coluna — cada DF
   assert.ok(!msgs.some((t) => t.includes("o planejamento na Centi não trouxe")));
 });
 
+test("Conferir unidade no fluxo salvo ANTIGO (sem o SE/Buscar): o próprio nó lê o planejamento pelo ID", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
+  assert.ok(m);
+  // O diagrama de antes da v1.266.7: o Procurar ligado direto ao Conferir.
+  const g = lerGrafo(m.grafo);
+  const se = g.nos.find((n) => n.tipo === "logica.se");
+  const busca = g.nos.find((n) => n.tipo === "leitura.dfdCenti");
+  const proc = g.nos.find((n) => n.tipo === "logica.procurar");
+  const conf = g.nos.find((n) => n.tipo === "dados.conferirUnidade");
+  assert.ok(se && busca && proc && conf);
+  g.nos = g.nos.filter((n) => n !== se && n !== busca);
+  g.conexoes = g.conexoes.filter((c) => ![se.id, busca.id].includes(c.de) && ![se.id, busca.id].includes(c.para));
+  g.conexoes.push({ de: proc.id, saida: "encontrados", para: conf.id, entrada: "entrada" });
+  const unidades = [
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1 },
+  ];
+  const dfds = [
+    { id: 1, numero: "93", planejamento: "132", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 2, numero: "94", planejamento: "133", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+  ];
+  const centi = async () => ({
+    ok: true,
+    linhas: [
+      { id: "132", situacao: "Executado", centroCusto: "" },
+      { id: "133", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+    ],
+  });
+  const lidos: string[] = [];
+  const lerDfdCenti = async (plan: string, entidade?: string, pdf?: boolean) => {
+    lidos.push(`${plan}@${entidade}:${pdf}`);
+    return { planejamento: plan, centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM", finalidade: "" };
+  };
+  const r = await executarFluxo(g, REGISTRO_NOS, {
+    centi,
+    api: async () => ({ ok: true, alterados: 0, falhas: [] }),
+    cancelado: () => false,
+    host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
+  });
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(lidos, ["132@2:false"], "só o que veio sem centro de custo, sem PDF");
+  const msgs = r.apontados.map((a) => String(a.mensagem));
+  assert.ok(msgs.some((t) => t.startsWith("DFD 93 (planejamento 132): no sistema SEPLAN, na Centi GGIM")), msgs.join("\n"));
+  assert.ok(!msgs.some((t) => t.includes("não trouxe o centro de custo")), msgs.join("\n"));
+});
+
 test("Conferir unidade: sem nenhuma fonte de centro de custo, a mensagem lista as colunas da linha da CM002", async () => {
   const { conferirUnidades } = await import("../src/lib/fluxo-dados.ts");
   const r = conferirUnidades([{ numero: "1", planejamento: "9", encontrado: { id: "9", situacao: "Executado", centroCusto: "", finalidade: "" } }], []);
@@ -472,4 +519,13 @@ test("Nó CM002: a extensão antiga pede atualização e o diagnóstico vai na m
     def.executar({ entrada: dfds }, { dosItens: true }, ctx({ ok: true, linhas: pagina, completa: false, tamanho: 50, modo: "página a página", paginas: 1, diagnostico: "Filtro.Qtde=50" }), {}),
     /modo página a página; 1 pág\.; consulta: Filtro\.Qtde=50/,
   );
+});
+
+test("Fluxo salvo desatualizado: só os tipos dos nós contam", async () => {
+  const { MODELOS_FLUXO, desatualizadoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
+  assert.ok(m);
+  const g = lerGrafo(m.grafo);
+  assert.equal(desatualizadoDoModelo({ nos: g.nos.map((n) => ({ ...n, x: 0, config: {} })) }, m), false);
+  assert.equal(desatualizadoDoModelo({ nos: g.nos.filter((n) => n.tipo !== "logica.se") }, m), true);
 });

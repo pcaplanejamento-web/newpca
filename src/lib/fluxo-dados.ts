@@ -212,6 +212,27 @@ const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
  * fim da Finalidade). Iguais = `conformes`; outra unidade cadastrada = `divergentes`; sem nenhuma (ou várias) =
  * `desconhecidas`. Cada item leva `unidadeCentroCusto`, `unidadeCentiId/Sigla/Nome` e a `mensagem`.
  */
+/** As fontes do centro de custo de um item, na ordem: a linha da CM002 (`encontrado`), as colunas cruas dela e o load. */
+function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; cru: Item | null; centro: string } {
+  const obj = (x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? (x as Item) : null);
+  const lista = obj(it.encontrado);
+  const load = obj(it.centi);
+  const cru = lista ? obj(lista.centi) : null;
+  const doCru = (o: Item | null) => {
+    const k = o ? Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) : undefined;
+    return o && k ? String(o[k]).trim() : "";
+  };
+  const opcoes: [Item | null, string][] = [
+    [lista, String(lista?.centroCusto ?? "").trim()],
+    [lista, doCru(cru)],
+    [load, String(load?.centroCusto ?? "").trim()],
+  ];
+  return { lista, load, cru, centro: opcoes.find(([f, c]) => f && /\p{L}/u.test(c))?.[1] ?? "" };
+}
+
+/** O centro de custo (texto) que alguma fonte do item já traz; "" = é preciso ler o planejamento pelo ID. */
+export const centroCustoDoItem = (it: Item): string => fontesCentroCusto(it).centro;
+
 export function conferirUnidades(
   itens: Item[],
   unidades: ReparticaoMatch[],
@@ -221,22 +242,8 @@ export function conferirUnidades(
   for (const it of itens) {
     // As fontes da Centi, na ordem: a linha da lista da CM002 (`encontrado`, com as colunas cruas em `centi`) e o
     // registro do planejamento lido pelo ID (`it.centi`). Vale a 1ª que TEM centro de custo.
-    const obj = (x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? (x as Item) : null);
-    const lista = obj(it.encontrado);
-    const load = obj(it.centi);
-    const cru = lista ? obj(lista.centi) : null;
-    const doCru = (o: Item | null) => {
-      const k = o ? Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) : undefined;
-      return o && k ? String(o[k]).trim() : "";
-    };
-    const opcoes: [Item | null, string][] = [
-      [lista, String(lista?.centroCusto ?? "").trim()],
-      [lista, doCru(cru)],
-      [load, String(load?.centroCusto ?? "").trim()],
-    ];
-    const achada = opcoes.find(([f, c]) => f && /\p{L}/u.test(c));
+    const { lista, load, cru, centro } = fontesCentroCusto(it);
     const finalidadeDe = String(lista?.finalidade ?? "").trim() || String(load?.finalidade ?? "").trim();
-    const centro = achada?.[1] ?? "";
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
     if (!lista && !load && "centi" in it) {
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
