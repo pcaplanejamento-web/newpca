@@ -62,7 +62,7 @@ export function MensalChart({
               valor: brl(d.total),
               rotulo: `${mesLabel(d.mes, d.ano)} · ${num(d.count)} itens${modo === "acumulado" ? " (acumulado)" : modo === "distribuido" ? " (com os genéricos)" : ""}`,
             },
-            cor: ativos?.length && !ativos.includes(chave(d)) ? "color-mix(in srgb, var(--accent) 30%, transparent)" : undefined,
+            apagada: !!ativos?.length && !ativos.includes(chave(d)),
           }))}
           onEscolher={
             onSelecionar

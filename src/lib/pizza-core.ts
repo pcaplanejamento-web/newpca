@@ -1,5 +1,5 @@
-/** Menor ângulo desenhado (~2,3°): a fatia de 0,5% continua visível; o que falta sai das fatias maiores. */
-export const ANG_MIN = 0.04;
+/** Menor ângulo desenhado (~5°): a fatia de 0,5% continua visível; o que falta sai das fatias maiores. */
+export const ANG_MIN = 0.09;
 
 /** Ângulos das fatias: proporcionais, com piso ANG_MIN — a soma segue sendo a volta inteira. */
 export function angulosPizza(valores: number[]): number[] {

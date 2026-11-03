@@ -46,7 +46,7 @@ export function BarraSegmentada({
               key={s.chave}
               title={`${s.rotulo}: ${num(s.valor)}`}
               className="h-full"
-              style={{ flex: `${s.valor} 1 0%`, minWidth: 3, background: gradiente(s.cor), borderLeft: i > 0 ? "2px solid var(--surface)" : undefined }}
+              style={{ flex: `${s.valor} 1 0%`, minWidth: i > 0 ? 5 : 3, background: gradiente(s.cor), borderLeft: i > 0 ? "2px solid var(--surface)" : undefined }}
             />
           ))}
         </div>
@@ -146,6 +146,8 @@ export type Coluna = {
   /** A dica: o valor em destaque + o que é (ex.: "3 protocolos · R$ 1,2 mi" / "Semana de 14/09"). */
   dica: { valor: string; rotulo: string };
   cor?: string;
+  /** Fora do filtro ativo: a coluna fica esmaecida (a cor da série não muda). */
+  apagada?: boolean;
 };
 
 /** Teto "redondo" do eixo (1, 2, 5 × 10ⁿ) — a grade marca valores limpos. */
@@ -206,7 +208,7 @@ export function Colunas({
         {colunas.map((c, i) => {
           // Sem `rotularTodas`: só o PICO (a pílula) e, com poucas colunas, a última — com muitas, o rótulo da última invadia a vizinha.
           const rotular = rotularTodas || i === iMaior || (i === n - 1 && n <= 8);
-          const alinhar = i < 2 ? "left-0" : i >= n - 2 ? "right-0" : "left-1/2 -translate-x-1/2";
+          const alinhar = i === n - 1 && n > 1 ? "right-0" : i < 2 ? "left-0" : i >= n - 2 ? "right-0" : "left-1/2 -translate-x-1/2";
           const abre = onEscolher != null && c.valor !== 0;
           return (
             <li key={c.chave} className="relative flex h-full min-w-0 flex-1 items-end justify-center">
@@ -222,7 +224,8 @@ export function Colunas({
                   style={
                     {
                       height: `${(c.valor / teto) * 100}%`,
-                      minHeight: c.valor > 0 ? 2 : 0,
+                      minHeight: c.valor > 0 ? 3 : 0,
+                      opacity: c.apagada ? 0.3 : undefined,
                       background: gradiente(c.cor ?? cor, "180deg"),
                       boxShadow: i === iMaior ? `0 10px 20px -10px ${c.cor ?? cor}` : undefined,
                       "--atraso": `${Math.min(i, 30) * 18}ms`,
@@ -232,13 +235,13 @@ export function Colunas({
                   {/* O PICO ganha a pílula na cor da série; a última coluna, o valor discreto. */}
                   {rotular && c.valor > 0 && (i === iMaior ? (
                     <span
-                      className="absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-bold text-white tabular-nums"
+                      className={`absolute bottom-full mb-1.5 whitespace-nowrap rounded-full ${alinhar} px-2 py-0.5 text-[10.5px] font-bold text-white tabular-nums`}
                       style={{ background: gradiente(c.cor ?? cor, "135deg") }}
                     >
                       {formatar(c.valor)}
                     </span>
                   ) : (
-                    <span className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-text-2 tabular-nums">
+                    <span className={`absolute bottom-full mb-0.5 whitespace-nowrap text-[11px] font-semibold text-text-2 tabular-nums ${alinhar}`}>
                       {formatar(c.valor)}
                     </span>
                   ))}

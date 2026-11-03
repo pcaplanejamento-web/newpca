@@ -66,6 +66,7 @@ export function ClassificacaoChart({
               innerRadius={62}
               outerRadius={86}
               paddingAngle={2}
+              minAngle={3}
               cornerRadius={4}
               stroke="none"
               animationDuration={700}

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.265.3",
+    data: "2026-11-03",
+    titulo: "Gráficos sem marcas sumindo nem rótulos cortados",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "Na rosca da Classificação, as categorias muito pequenas aparecem (antes sumiam no espaço entre as fatias), e um valor que existe mostra \"< 0,1%\" em vez de \"0%\" em todo o sistema.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Sistema", texto: "Nas barras empilhadas, os pedaços pequenos ficam visíveis. Nas colunas, o valor do pico na primeira ou na última coluna não sai mais da borda do cartão, e as colunas fora do filtro ficam esmaecidas também no tema escuro.", link: "/painel/mesa?vista=dashboard" },
+      { tipo: "correcao", area: "Administração", texto: "No monitoramento do Worker, os dias com poucas requisições ganham uma barra visível.", link: "/painel/armazenamento" },
+    ],
+  },
+  {
     versao: "1.265.2",
     data: "2026-10-30",
     titulo: "Pizza mostra as fatias pequenas",

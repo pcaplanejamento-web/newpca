@@ -89,7 +89,10 @@ export function dataIsoBrasilia(ts?: string | null): string {
 
 export function pct(part: number, whole: number): string {
   if (!whole) return "0%";
-  return `${((part / whole) * 100).toLocaleString("pt-BR", {
+  const v = (part / whole) * 100;
+  // Uma parte que existe nunca aparece como "0%" (some do olho): abaixo de 0,05% vira "< 0,1%".
+  if (v > 0 && v < 0.05) return "< 0,1%";
+  return `${(v).toLocaleString("pt-BR", {
     maximumFractionDigits: 1,
   })}%`;
 }
