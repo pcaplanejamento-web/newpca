@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.7",
+    data: "2026-11-03",
+    titulo: "Unidades × Centro de Custo: sem a coluna na CM002, lê o planejamento pelo ID",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Quando a lista da CM002 não traz o Centro de Custo (a consulta aprendida só tem Id e Situação), cada DFD é lido pelo REGISTRO do planejamento na Centi — o mesmo load do “Baixar DFDs”, sem emitir PDF. A execução fica mais longa e mostra DFD n de N. Use “Atualizar pelo modelo” no fluxo salvo.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O centro de custo lido do planejamento é sempre o NOME (nunca o Id numérico ao lado dele); falha de leitura aparece como “não conferido na Centi” com o motivo, e sem centro de custo o apontamento sempre lista os campos que vieram.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.6",
     data: "2026-11-03",
     titulo: "Unidades × Centro de Custo: o centro de custo chega da CM002",

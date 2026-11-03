@@ -5,7 +5,7 @@
  */
 import { analisarRespostaCenti, operacaoRecusada } from "./automacao-centi-core";
 import { carregarPlanejamento, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
-import { acharValor, nomesDosCampos } from "./fluxo-core";
+import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdDetalhe } from "./dfd";
@@ -109,8 +109,9 @@ export async function lerDfdCentiPorCodigo(
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
   const situacao = s(acharValor(l.j, /^situa/i));
   // O Centro de Custo e a Finalidade do PRÓPRIO registro do planejamento (o ID da CM002) — sem depender da lista.
-  const centroCusto = s(acharValor(l.j, /^(id)?centro.?(de)?.?custo/i));
-  const finalidade = s(acharValor(l.j, /^finalidade/i));
+  // Só TEXTO: o `IdCentroCusto` numérico ao lado do nome nunca vale como unidade.
+  const centroCusto = s(acharValor(l.j, /^(id)?centro.?(de)?.?custo|^(id)?c\.?\s?custo/i, 0, ehTextoComLetras));
+  const finalidade = s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
   const e = await emitirUm(c, plan, entidade || undefined, false, true);

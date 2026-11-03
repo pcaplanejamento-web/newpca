@@ -219,15 +219,26 @@ export function conferirUnidades(
   const porId = new Map(unidades.map((u) => [u.id, u]));
   const out = { divergentes: [] as Item[], desconhecidas: [] as Item[], conformes: [] as Item[] };
   for (const it of itens) {
-    // A linha da Centi: a achada na lista da CM002 (`encontrado`) ou o registro do planejamento lido pelo ID (`centi`).
-    const fonte = it.encontrado && typeof it.encontrado === "object" ? it.encontrado : it.centi && typeof it.centi === "object" ? it.centi : null;
-    const linha = (fonte ?? {}) as Item;
-    // Reserva: as colunas cruas da Centi ("Trazer todas as colunas") — "CentroDeCusto", "Centro de Custo"…
-    const cru = linha.centi && typeof linha.centi === "object" ? (linha.centi as Item) : null;
-    const chaveCru = cru ? Object.keys(cru).find((k) => RE_CENTRO_CUSTO.test(k) && String(cru[k] ?? "").trim() && !/^-?\d+$/.test(String(cru[k]).trim())) : undefined;
-    const centro = String(linha.centroCusto ?? "").trim() || (cru && chaveCru ? String(cru[chaveCru]).trim() : "");
+    // As fontes da Centi, na ordem: a linha da lista da CM002 (`encontrado`, com as colunas cruas em `centi`) e o
+    // registro do planejamento lido pelo ID (`it.centi`). Vale a 1ª que TEM centro de custo.
+    const obj = (x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? (x as Item) : null);
+    const lista = obj(it.encontrado);
+    const load = obj(it.centi);
+    const cru = lista ? obj(lista.centi) : null;
+    const doCru = (o: Item | null) => {
+      const k = o ? Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) : undefined;
+      return o && k ? String(o[k]).trim() : "";
+    };
+    const opcoes: [Item | null, string][] = [
+      [lista, String(lista?.centroCusto ?? "").trim()],
+      [lista, doCru(cru)],
+      [load, String(load?.centroCusto ?? "").trim()],
+    ];
+    const achada = opcoes.find(([f, c]) => f && /\p{L}/u.test(c));
+    const finalidadeDe = String(lista?.finalidade ?? "").trim() || String(load?.finalidade ?? "").trim();
+    const centro = achada?.[1] ?? "";
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
-    if (!fonte && "centi" in it) {
+    if (!lista && !load && "centi" in it) {
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
       out.desconhecidas.push({ ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` });
       continue;
@@ -235,8 +246,20 @@ export function conferirUnidades(
     const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
     const atual = typeof it.reparticaoId === "number" ? it.reparticaoId : null;
     const base = { ...it, unidadeCentroCusto: centro ? unidadeDoCentroCusto(centro).nome : "", unidadeSistema: String(it.sigla ?? "") };
+    if (!centro && "centi" in it && !load) {
+      // A lista da CM002 não trouxe o centro de custo e o planejamento não foi lido pelo ID: não conferido (tente de novo).
+      const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
+      out.desconhecidas.push({ ...base, mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo} (a CM002 não trouxe o centro de custo)` });
+      continue;
+    }
     if (!centro) {
-      const nomes = Array.isArray(linha.camposCenti) && linha.camposCenti.length ? linha.camposCenti.map(String) : cru ? Object.keys(cru) : [];
+      // O diagnóstico SEMPRE: os campos do registro (load) › as colunas cruas › as chaves da linha da CM002.
+      const nomes =
+        Array.isArray(load?.camposCenti) && (load.camposCenti as unknown[]).length
+          ? (load.camposCenti as unknown[]).map(String)
+          : cru
+            ? Object.keys(cru)
+            : Object.keys(lista ?? load ?? {});
       const campos = nomes.length ? ` (campos que vieram: ${nomes.slice(0, 40).join(", ")})` : "";
       out.desconhecidas.push({ ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` });
       continue;
@@ -246,7 +269,7 @@ export function conferirUnidades(
     // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
     // continua "desconhecida", nunca vira outra unidade.
     if (c.tipo === "ambigua") {
-      const sigla = siglaDaFinalidade(String(linha.finalidade ?? ""));
+      const sigla = siglaDaFinalidade(finalidadeDe);
       const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
       if (s?.tipo === "ok" && c.ids.includes(s.id)) c = s;
     }

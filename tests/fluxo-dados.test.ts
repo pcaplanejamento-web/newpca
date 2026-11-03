@@ -308,6 +308,60 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
   assert.ok(!msgs.some((t) => String(t).startsWith("DFD 40")), "a unidade igual não é apontada");
 });
 
+test("Modelo “Unidades × Centro de Custo”: a CM002 SEM a coluna — cada DFD é lido pelo ID (o registro do planejamento)", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
+  assert.ok(m);
+  const unidades = [
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1 },
+  ];
+  const dfds = [
+    { id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 2, numero: "20", planejamento: "200", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+    { id: 3, numero: "30", planejamento: "300", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+  ];
+  // A consulta aprendida traz só Id + Situação (a da Execução).
+  const centi = async () => ({ ok: true, linhas: dfds.map((d) => ({ id: d.planejamento, situacao: "Executado", centroCusto: "" })) });
+  const lidos: string[] = [];
+  const lerDfdCenti = async (plan: string, entidade?: string, pdf?: boolean) => {
+    lidos.push(`${plan}@${entidade}:${pdf}`);
+    if (plan === "300") throw new Error("Sem resposta do sistema");
+    return { planejamento: plan, situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM", finalidade: "" };
+  };
+  const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
+    centi,
+    api: async () => ({ ok: true, alterados: 0, falhas: [] }),
+    cancelado: () => false,
+    host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
+  });
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(lidos.sort(), ["100@2:false", "200@2:false", "300@2:false"], "só o load (sem PDF), na entidade do órgão");
+  const msgs = r.apontados.map((a) => String(a.mensagem));
+  assert.ok(msgs.some((t) => t.startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")), msgs.join("\n"));
+  assert.ok(!msgs.some((t) => t.startsWith("DFD 20")), "a unidade igual não é apontada");
+  assert.ok(msgs.some((t) => t.startsWith("DFD 30") && t.includes("não conferido na Centi")), msgs.join("\n"));
+  assert.ok(!msgs.some((t) => t.includes("o planejamento na Centi não trouxe")));
+});
+
+test("Conferir unidade: sem nenhuma fonte de centro de custo, a mensagem lista as colunas da linha da CM002", async () => {
+  const { conferirUnidades } = await import("../src/lib/fluxo-dados.ts");
+  const r = conferirUnidades([{ numero: "1", planejamento: "9", encontrado: { id: "9", situacao: "Executado", centroCusto: "", finalidade: "" } }], []);
+  assert.match(String(r.desconhecidas[0]?.mensagem), /campos que vieram: id, situacao, centroCusto, finalidade/);
+  // A linha da CM002 sem o centro de custo cede ao registro lido pelo ID.
+  const u = [{ id: 5, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 }];
+  const ok = conferirUnidades([{ numero: "1", planejamento: "9", reparticaoId: 5, orgaoId: 1, encontrado: { id: "9", centroCusto: "" }, centi: { centroCusto: "PM RV, SEPLAN" } }], u);
+  assert.equal(ok.conformes.length, 1);
+});
+
+test("acharValor com filtro: o nome do centro de custo, nunca o Id numérico ao lado", async () => {
+  const { acharValor, ehTextoComLetras } = await import("../src/lib/fluxo-core.ts");
+  const re = /^(id)?centro.?(de)?.?custo|^(id)?c\.?\s?custo/i;
+  assert.equal(acharValor({ Entity: { IdCentroCusto: 12, CentroCusto: { Descricao: "PM RV, SEPLAN" } } }, re, 0, ehTextoComLetras), "PM RV, SEPLAN");
+  assert.equal(acharValor({ Entity: { Fields: [{ Key: "IdCentroCusto", Value: { Id: 12, Descricao: "PM RV, GGIM" } }] } }, re, 0, ehTextoComLetras), "PM RV, GGIM");
+  assert.equal(acharValor({ IdCentroCusto: 12 }, re, 0, ehTextoComLetras), undefined);
+});
+
 test("Conferir unidade: o planejamento lido sem centro de custo diz os campos que a Centi devolveu", async () => {
   const { conferirUnidades } = await import("../src/lib/fluxo-dados.ts");
   const { nomesDosCampos } = await import("../src/lib/fluxo-core.ts");

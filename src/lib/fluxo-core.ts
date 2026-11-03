@@ -772,8 +772,8 @@ export function novoIdNo(g: Grafo, tipo: string): string {
 }
 
 /** O 1º valor de uma chave que casa `re` em qualquer profundidade (também os pares {Key, Value} da Centi); objeto →
- * a Descricao/Description/Value dele. Puro. */
-export function acharValor(v: unknown, re: RegExp, prof = 0): unknown {
+ * a Descricao/Description/Value dele. `aceita` = filtra o valor (ex.: só texto, nunca o Id numérico). Puro. */
+export function acharValor(v: unknown, re: RegExp, prof = 0, aceita?: (t: unknown) => boolean): unknown {
   if (prof > 8 || v == null || typeof v !== "object") return undefined;
   const texto = (x: unknown): unknown => {
     if (x == null || typeof x !== "object") return x;
@@ -784,11 +784,11 @@ export function acharValor(v: unknown, re: RegExp, prof = 0): unknown {
     for (const x of v) {
       if (x && typeof x === "object" && "Key" in x && re.test(String((x as { Key: unknown }).Key))) {
         const t = texto((x as { Value: unknown }).Value);
-        if (t != null && t !== "") return t;
+        if (t != null && t !== "" && (!aceita || aceita(t))) return t;
       }
     }
     for (const x of v) {
-      const r = acharValor(x, re, prof + 1);
+      const r = acharValor(x, re, prof + 1, aceita);
       if (r !== undefined) return r;
     }
     return undefined;
@@ -796,15 +796,18 @@ export function acharValor(v: unknown, re: RegExp, prof = 0): unknown {
   for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
     if (re.test(k)) {
       const t = texto(x);
-      if (t != null && t !== "") return t;
+      if (t != null && t !== "" && (!aceita || aceita(t))) return t;
     }
   }
   for (const x of Object.values(v as Record<string, unknown>)) {
-    const r = acharValor(x, re, prof + 1);
+    const r = acharValor(x, re, prof + 1, aceita);
     if (r !== undefined) return r;
   }
   return undefined;
 }
+
+/** Um TEXTO de verdade (com letras) — o nome do centro de custo/finalidade, nunca o Id numérico ao lado dele. */
+export const ehTextoComLetras = (t: unknown): boolean => typeof t === "string" && /\p{L}/u.test(t);
 
 /** Os NOMES dos campos de uma resposta da Centi (chaves e os `Key` dos pares {Key, Value}), sem valores — o diagnóstico
  * quando um campo esperado não veio. Até `max`, sem repetir. Puro. */

@@ -432,6 +432,8 @@ const NOS: DefNo[] = [
         // (a consulta aprendida está filtrada). Leitura sinalizada como cortada pela extensão = só um aviso.
         if (Array.isArray(r.colunasSemCentroCusto) && r.colunasSemCentroCusto.length)
           ctx.aviso(`A CM002 do órgão ${ent} não trouxe a coluna de centro de custo — colunas: ${r.colunasSemCentroCusto.map((x: unknown) => str(x)).join(", ").slice(0, 600)}`);
+        const semCc = linhas.filter((p) => !/\p{L}/u.test(str(p.centroCusto))).length;
+        if (linhas.length && semCc) ctx.aviso(`CM002 do órgão ${ent}: ${semCc} de ${linhas.length} linhas sem centro de custo — onde precisar, o planejamento é lido pelo ID.`);
         if (r.completa === false) ctx.aviso(`CM002 do órgão ${ent}: a extensão não confirmou a lista inteira (${linhas.length} linhas).${extra}`);
         const achados = [...pedidos].filter((x) => ids.has(x)).length;
         if (c.dosItens === true && pedidos.size && linhas.length && !achados)
