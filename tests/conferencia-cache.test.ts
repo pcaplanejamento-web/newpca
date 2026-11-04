@@ -29,6 +29,7 @@ const dfd: BaseDfdCampos = {
   anoPca: 2027,
   protocoloAnoPca: 2027,
   totalItens: 3,
+  subunidadeId: null,
   centroCusto: "PM RV, SEPLAN",
 };
 const proto: BaseProtocoloCampos = {
@@ -57,7 +58,7 @@ describe("conferência guardada — assinatura", () => {
       { anoPca: 2028 },
       { protocoloAnoPca: 2028 },
       { totalItens: 4 },
-      { centroCusto: "PM RV, X" },
+      { subunidadeId: 7 },
       { centroCusto: null },
     ];
     for (const v of variacoes) assert.notEqual(assinaturaDfd({ ...dfd, ...v }, ctx, u), base, JSON.stringify(v));

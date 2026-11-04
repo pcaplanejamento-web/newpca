@@ -1175,11 +1175,13 @@ export function DfdsView({
     for (const r of reparticoes) {
       const cfg = r.subunidade;
       if (!cfg) continue;
-      for (const sub of cfg.subunidades) {
-        const nome = cfg.modo === "unico" ? cfg.codigo : sub.nome;
-        const txt = `${cfg.modo === "unico" ? `${r.nome} · toda a unidade` : `${r.codigo} — ${r.nome}`} · ${sub.centros.join(" | ")}`;
-        m.set(nome, [...(m.get(nome) ?? []), txt]);
-      }
+      const add = (nome: string, centros: string[], extra = "") =>
+        m.set(nome, [...(m.get(nome) ?? []), `${r.codigo} — ${r.nome}${extra} · ${centros.join(" | ")}`]);
+      if (cfg.modo === "unico") {
+        if (!cfg.centros.length) continue;
+        if (!cfg.subunidades.length) add(cfg.codigo, cfg.centros, " · toda a unidade");
+        for (const sub of cfg.subunidades) add(sub.nome, cfg.centros, " · escolhida no DFD");
+      } else for (const sub of cfg.subunidades) add(sub.nome, sub.centros);
     }
     return new Map([...m].map(([k, v]) => [k, v.join(" / ")]));
   }, [reparticoes]);
@@ -1206,6 +1208,15 @@ export function DfdsView({
     );
   }, [dfds, reparticoes, regras, detalheSubunidades]);
   const gravadosDe = (id: number) => gravadosPorId.get(id) ?? {};
+  // A SUBUNIDADE em massa: só quando os DFDs selecionados são da MESMA unidade, no modo "um centro para toda a unidade"
+  // com subunidades (as dela).
+  const subunidadeDaSelecao = (() => {
+    const unidades = new Set([...selDfds].map((id) => dfdPorId.get(Number(id))?.reparticaoId ?? null));
+    const [unica] = [...unidades];
+    if (unidades.size !== 1 || unica == null) return null;
+    const cfg = reparticoes.find((r) => r.id === unica)?.subunidade;
+    return cfg?.modo === "unico" && cfg.subunidades.length ? { opcoes: cfg.subunidades } : null;
+  })();
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {
@@ -2431,7 +2442,7 @@ export function DfdsView({
         acoes={automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {progressoMassa}
-        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
+        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} subunidade={subunidadeDaSelecao} />
       </BarraSelecaoDfds>
     );
   } else if (podeAqui.manipular && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {

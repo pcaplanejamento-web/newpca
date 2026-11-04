@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.271.0",
+    data: "2026-11-04",
+    titulo: "Um centro de custo para toda a unidade: a subunidade é escolhida no DFD",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "No modo “Um para toda a unidade”, o centro de custo é da unidade e as subunidades (só o nome) são escolhidas em cada DFD; sem subunidades, a subunidade é a própria unidade. No “Um por subunidade”, cada uma tem o seu centro.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Mesa", texto: "A subunidade dessas unidades é escolhida no DFD gravado ou em massa na seleção (DFDs da mesma unidade); sem a escolha, o DFD fica com o erro “Subunidade não definida”.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.270.0",
     data: "2026-11-04",
     titulo: "Subunidade só pelo Centro de Custo — obrigatório em cada unidade",

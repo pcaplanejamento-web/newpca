@@ -177,9 +177,9 @@ export function DfdConferir({
   onAssinaturasChange?: (assinaturas: DfdParseado["assinaturas"]) => void;
   /** Clique numa linha de item (Seção 4) → abre o detalhe do item ao lado (renderizado pelo pai). */
   onItemClick?: (idx: number) => void;
-  /** Só o DFD GRAVADO: o CENTRO DE CUSTO da Centi e a SUBUNIDADE que ele define (só leitura). Ausente = a análise de um
-   * arquivo (o bloco não aparece). */
-  gravado?: { centroCusto: string | null };
+  /** Só o DFD GRAVADO: o CENTRO DE CUSTO da Centi (só leitura) e a SUBUNIDADE (escolhida no modo "um centro para toda a
+   * unidade" — `onSubunidadeChange`; ausente = só leitura). Ausente = a análise de um arquivo (o bloco não aparece). */
+  gravado?: { centroCusto: string | null; onSubunidadeChange?: (id: number | null) => void };
 }) {
   const rep = reparticoes.find((r) => r.id === repId) ?? null;
   // Divergência órgão × unidade (item 6.3): o "Órgão/Entidade" do DFD aponta um órgão diferente
@@ -336,8 +336,8 @@ export function DfdConferir({
         )}
       </div>
 
-      {/* SUBUNIDADE (definida pelo centro de custo) e CENTRO DE CUSTO da Centi — só o DFD GRAVADO. */}
-      {gravado && rep && <SubunidadeECentro rep={rep} centroCusto={gravado.centroCusto} />}
+      {/* SUBUNIDADE (escolhida ou pelo centro de custo) e CENTRO DE CUSTO da Centi — só o DFD GRAVADO. */}
+      {gravado && rep && <SubunidadeECentro dfd={dfd} rep={rep} centroCusto={gravado.centroCusto} readOnly={readOnly} onChange={gravado.onSubunidadeChange} />}
 
       {/* TIPO do DFD (DFD-S/R/O/E) — obrigatório conforme o nível do ADM (`dfd.tipo`); por seleção. */}
       <div data-ancora="tipo">
@@ -698,26 +698,63 @@ function CampoDataAssinatura({ data, hojeIso, onData }: { data: string; hojeIso:
   );
 }
 
-/** A SUBUNIDADE do DFD gravado (definida pelo centro de custo no cadastro da unidade) e o CENTRO DE CUSTO que a automação
- * gravou — só leitura; as âncoras das pendências `dfd.subunidade`/`dfd.centroCusto`. */
-function SubunidadeECentro({ rep, centroCusto }: { rep: Rep; centroCusto: string | null }) {
-  const r = subunidadeDoDfd({ reparticaoId: rep.id, centroCusto }, rep.subunidade ?? null);
+/** A SUBUNIDADE do DFD gravado (escolhida no modo "um centro para toda a unidade"; definida pelo centro de custo no "um
+ * por subunidade") e o CENTRO DE CUSTO que a automação gravou (só leitura) — as âncoras das pendências
+ * `dfd.subunidade`/`dfd.centroCusto`. */
+function SubunidadeECentro({
+  dfd,
+  rep,
+  centroCusto,
+  readOnly,
+  onChange,
+}: {
+  dfd: DfdParseado;
+  rep: Rep;
+  centroCusto: string | null;
+  readOnly: boolean;
+  onChange?: (id: number | null) => void;
+}) {
+  const cfg = rep.subunidade ?? null;
+  const r = subunidadeDoDfd({ reparticaoId: rep.id, subunidadeId: dfd.subunidadeId ?? null, centroCusto }, cfg);
+  const escolhe = cfg?.modo === "unico" && cfg.subunidades.length > 0;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div data-ancora="subunidade">
-        <span className={labelCls}>Subunidade</span>
-        <p className="min-h-[var(--h-control-sm)] break-words py-1.5 text-[13.5px] text-text">
-          {r.subunidade ? (
-            <>
-              {r.subunidade.nome}
-              <span className="text-muted"> · pelo centro de custo</span>
-            </>
-          ) : r.falta ? (
-            <span style={{ color: "var(--danger)" }}>{textoFaltaSubunidade(r.falta, centroCusto)}</span>
-          ) : (
-            <span className="text-faint">Sai do centro de custo (ainda não gravado).</span>
-          )}
-        </p>
+        <label className={labelCls} htmlFor="dfd-subunidade">
+          Subunidade
+        </label>
+        {escolhe ? (
+          <>
+            <Selecao
+              id="dfd-subunidade"
+              className={inputCls}
+              value={dfd.subunidadeId ?? ""}
+              disabled={readOnly || !onChange}
+              onChange={(e) => onChange?.(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">— Escolha a subunidade —</option>
+              {cfg.subunidades.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nome}
+                </option>
+              ))}
+            </Selecao>
+            {r.falta && r.falta !== "naoEscolhida" && <p className="mt-1 text-[12px] text-[var(--danger)]">{textoFaltaSubunidade(r.falta, centroCusto)}</p>}
+          </>
+        ) : (
+          <p id="dfd-subunidade" className="min-h-[var(--h-control-sm)] break-words py-1.5 text-[13.5px] text-text">
+            {r.subunidade ? (
+              <>
+                {r.subunidade.nome}
+                <span className="text-muted"> · {r.subunidade.id == null ? "a própria unidade" : "pelo centro de custo"}</span>
+              </>
+            ) : r.falta ? (
+              <span style={{ color: "var(--danger)" }}>{textoFaltaSubunidade(r.falta, centroCusto)}</span>
+            ) : (
+              <span className="text-faint">Sai do centro de custo (ainda não gravado).</span>
+            )}
+          </p>
+        )}
       </div>
       <div data-ancora="centroCusto">
         <span className={labelCls}>Centro de Custo (Centi)</span>

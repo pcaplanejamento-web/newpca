@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { dfdItens, dfdProtocolos, dfds, mesaExcluidos, orgaos, pcas, protocoloSituacoes, reparticoes, usuarios } from "@/db/schema";
+import { dfdItens, dfdProtocolos, dfds, mesaExcluidos, orgaos, pcas, protocoloSituacoes, reparticoes, subunidades, usuarios } from "@/db/schema";
 import type { EscopoMesa } from "./acesso-mesa";
 import { getDb } from "./db";
 import { comandoTotaisDfd } from "./dfd-sql";
@@ -47,11 +47,17 @@ export type Plano = { ok: true; resumo: ResumoRestauracao; executar: (u: Ator) =
 const falha = (erro: string, status = 409): Plano => ({ ok: false, erro, status });
 
 /** Os FKs que ainda existem (o que sumiu volta vazio). */
-async function existentes(db: Db, ids: { usuarios: number[]; orgaos: number[]; reparticoes: number[]; pcas: number[] }) {
-  const q = async (tabela: typeof usuarios | typeof orgaos | typeof reparticoes | typeof pcas, l: number[]) =>
+async function existentes(db: Db, ids: { usuarios: number[]; orgaos: number[]; reparticoes: number[]; pcas: number[]; subunidades?: number[] }) {
+  const q = async (tabela: typeof usuarios | typeof orgaos | typeof reparticoes | typeof pcas | typeof subunidades, l: number[]) =>
     l.length ? new Set((await db.select({ id: tabela.id }).from(tabela).where(inArray(tabela.id, l))).map((r) => r.id)) : new Set<number>();
-  const [u, o, r, p] = await Promise.all([q(usuarios, ids.usuarios), q(orgaos, ids.orgaos), q(reparticoes, ids.reparticoes), q(pcas, ids.pcas)]);
-  return { u, o, r, p };
+  const [u, o, r, p, sub] = await Promise.all([
+    q(usuarios, ids.usuarios),
+    q(orgaos, ids.orgaos),
+    q(reparticoes, ids.reparticoes),
+    q(pcas, ids.pcas),
+    q(subunidades, ids.subunidades ?? []),
+  ]);
+  return { u, o, r, p, sub };
 }
 const so = (set: Set<number>, v: number | null) => (v != null && set.has(v) ? v : null);
 const lista = (...v: (number | null)[]) => [...new Set(v.filter((x): x is number => x != null))];
@@ -111,7 +117,8 @@ function dfdDoRetrato(id: number, d: Record<string, unknown>, protocoloId: numbe
     execucaoCentiEm: s(d.execucaoCentiEm),
     conferenciaCenti: s(d.conferenciaCenti),
     conferenciaCentiMotivo: s(d.conferenciaCentiMotivo),
-    // O centro de custo da Centi volta junto (ele define a subunidade).
+    // A subunidade escolhida volta se ainda existir (excluída = sem subunidade); o centro de custo da Centi volta junto.
+    subunidadeId: so(fk.sub, n(d.subunidadeId)),
     centroCusto: s(d.centroCusto),
     centroCustoEm: s(d.centroCustoEm),
     criadoPor: so(fk.u, n(d.criadoPor)),
@@ -176,6 +183,7 @@ async function planoProtocolo(db: Db, e: Linha, esc: EscopoMesa, usuarioId: numb
     orgaos: lista(n(r.orgaoId), ...retratos.map((x) => n(x.d.orgaoId))),
     reparticoes: lista(n(r.reparticaoId), ...retratos.map((x) => n(x.d.reparticaoId))),
     pcas: lista(n(r.pcaId)),
+    subunidades: lista(...retratos.map((x) => n(x.d.subunidadeId))),
   });
   const pcaId = so(fk.p, n(r.pcaId));
   const incorporado = pcaId != null && s(r.pcaIncorporadoEm) != null;
@@ -251,7 +259,7 @@ async function planoDfd(db: Db, e: Linha, esc: EscopoMesa): Promise<Plano> {
   const dest = await destinoPara(db, e.protocoloId, e.protocoloNumero);
   if ("erro" in dest) return falha(dest.erro);
   const destino = dest.destino;
-  const fk = await existentes(db, { usuarios: lista(n(d.criadoPor)), orgaos: lista(n(d.orgaoId)), reparticoes: lista(n(d.reparticaoId)), pcas: [] });
+  const fk = await existentes(db, { usuarios: lista(n(d.criadoPor)), orgaos: lista(n(d.orgaoId)), reparticoes: lista(n(d.reparticaoId)), pcas: [], subunidades: lista(n(d.subunidadeId)) });
   if (!esc.acessivel(so(fk.r, n(d.reparticaoId)))) return falha("A unidade deste DFD está fora do seu acesso.", 403);
   const seqs = sequenciaisQueVoltam(itensBrutos(d), destino);
   return {

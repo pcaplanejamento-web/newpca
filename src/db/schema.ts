@@ -348,9 +348,12 @@ export const reparticoes = sqliteTable(
     ordem: integer("ordem").notNull().default(0),
     numeroInteressado: text("numero_interessado"), // casa o Interessado do protocolo → unidade
     setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
-    // O MODO do CENTRO DE CUSTO (migrações 0176/0177): unico (um para a unidade) | subunidades (um por subunidade) —
-    // `subunidades-core.ts`. (`centro_custo`, da 0172, ficou DORMENTE.)
+    // O MODO do CENTRO DE CUSTO (migrações 0176–0178): unico (um centro para a unidade inteira — a subunidade é escolhida
+    // no DFD) | subunidades (um por subunidade — o centro define a subunidade) — `subunidades-core.ts`.
     modoCentro: text("vinculo_subunidade").notNull().default("proprio"),
+    // Os CENTROS DE CUSTO da unidade no modo único (JSON `string[]`, como a Centi escreve — migração 0178; a 0172 o criou
+    // como texto). No modo por subunidade, os centros moram em `subunidades.centros_custo`.
+    centrosCusto: text("centro_custo"),
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
     // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
     // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.
@@ -364,9 +367,9 @@ export const reparticoes = sqliteTable(
 );
 
 /**
- * SUBUNIDADES de uma unidade (migrações 0176/0177) — quantas o ADM quiser (no modo único, UMA linha com o nome da
- * unidade). `centros_custo` (JSON `string[]`, como a Centi escreve, obrigatório) liga a subunidade aos centros de custo
- * dos DFDs — um centro em UMA subunidade do sistema (`conflitosCentros`).
+ * SUBUNIDADES de uma unidade (migrações 0176–0178) — quantas o ADM quiser. No modo por subunidade, `centros_custo` (JSON
+ * `string[]`, como a Centi escreve, obrigatório) liga a subunidade aos centros de custo dos DFDs — um centro em UMA
+ * subunidade do sistema (`conflitosCentros`); no modo único, a lista fica vazia e a subunidade é escolhida no DFD.
  */
 export const subunidades = sqliteTable(
   "subunidades",
@@ -588,9 +591,9 @@ export const dfds = sqliteTable(
     conferenciaCenti: text("conferencia_centi"),
     conferenciaCentiMotivo: text("conferencia_centi_motivo"),
     conferenciaCentiEm: text("conferencia_centi_em"),
-    // O CENTRO DE CUSTO da Centi (CM002), gravado pela Automação "Unidades × Centro de Custo" (migração 0176) — define a
-    // SUBUNIDADE do DFD. Sem centro (ou fora do cadastro da unidade) = erro no Estado do DFD gravado. (`subunidade_id`,
-    // a escolha manual da 0176, ficou DORMENTE desde a 0177.)
+    // A SUBUNIDADE escolhida no DFD (modo único da unidade) e o CENTRO DE CUSTO da Centi (CM002), gravado pela Automação
+    // "Unidades × Centro de Custo" (migração 0176). Sem centro (ou fora do cadastro da unidade) = erro no DFD gravado.
+    subunidadeId: integer("subunidade_id").references((): AnySQLiteColumn => subunidades.id, { onDelete: "set null" }),
     centroCusto: text("centro_custo"),
     centroCustoEm: text("centro_custo_em"),
     criadoPor: integer("criado_por").references(() => usuarios.id, {

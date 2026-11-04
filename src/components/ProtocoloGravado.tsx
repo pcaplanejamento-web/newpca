@@ -285,10 +285,10 @@ export function useProtocoloGravado({
     const o = id != null ? orig.get(id) : undefined;
     return o ? gravacaoIncompleta(o) : null;
   };
-  /** Os dados do DFD GRAVADO (o centro de custo do banco) — os pontos `dfd.centroCusto`/`dfd.subunidade`. */
-  const gravadoDe = (id: number | null) => {
+  /** Os dados do DFD GRAVADO (o centro de custo do banco, a subunidade do rascunho) — os pontos `dfd.centroCusto`/`subunidade`. */
+  const gravadoDe = (id: number | null, d: DfdParseado | null) => {
     const o = id != null ? orig.get(id) : undefined;
-    return o ? { centroCusto: o.centroCusto } : null;
+    return o && d ? { centroCusto: o.centroCusto, subunidadeId: d.subunidadeId ?? null } : null;
   };
 
   // Conferência por LINHA — a MESMA da análise (`avaliarLinhaDfd`), com cache por objeto de DFD.
@@ -299,8 +299,8 @@ export function useProtocoloGravado({
     const editado = editados.has(id) || itensEditados.has(id);
     const anoPca = d.anoPca ?? proto?.anoPca ?? null;
     const inc = incompletoDe(id);
-    const g = gravadoDe(id);
-    const k = `${rid}|${anoPca}|${categoria}|${editado}|${inc ? `${inc.gravados}/${inc.total}` : ""}|${g?.centroCusto ?? ""}`;
+    const g = gravadoDe(id, d);
+    const k = `${rid}|${anoPca}|${categoria}|${editado}|${inc ? `${inc.gravados}/${inc.total}` : ""}|${g?.centroCusto ?? ""}|${g?.subunidadeId ?? ""}`;
     const c = cache.get(d);
     if (c && c.k === k) return c.r;
     const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: inc, gravado: g }, repConf(rid), { anoPca, regras, categoria, orgaos, editado });
@@ -311,7 +311,7 @@ export function useProtocoloGravado({
   const coresGravadas = { sub: corDaFalta(regras, "dfd.subunidade"), centro: corDaFalta(regras, "dfd.centroCusto") };
   const colunasGravadas = (rid: number | null, d: DfdParseado, o: DfdDetalhe | undefined): Pick<LinhaDfd, "subunidade" | "centroCusto"> => {
     if (!o) return {};
-    const r = subunidadeDoDfd({ reparticaoId: rid, centroCusto: o.centroCusto }, rid != null ? repConf(rid)?.subunidade : null);
+    const r = subunidadeDoDfd({ reparticaoId: rid, subunidadeId: d.subunidadeId ?? null, centroCusto: o.centroCusto }, rid != null ? repConf(rid)?.subunidade : null);
     return {
       subunidade: { nome: r.subunidade?.nome ?? null, falta: !!r.falta, cor: coresGravadas.sub, dica: r.falta ? textoFaltaSubunidade(r.falta, o.centroCusto) : undefined },
       centroCusto: { texto: o.centroCusto, cor: coresGravadas.centro },
@@ -365,7 +365,7 @@ export function useProtocoloGravado({
   const anoAberto = dfdAberto ? (dfdAberto.anoPca ?? proto?.anoPca ?? null) : null;
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagensAberto = dfdAberto
-    ? mensagensDoDfd({ ...dfdAberto, gravacaoIncompleta: incompletoDe(abertoId), gravado: gravadoDe(abertoId) }, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter(
+    ? mensagensDoDfd({ ...dfdAberto, gravacaoIncompleta: incompletoDe(abertoId), gravado: gravadoDe(abertoId, dfdAberto) }, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter(
         (m) => m.chave !== "dfd.anoPca",
       )
     : [];
@@ -843,7 +843,7 @@ export function useProtocoloGravado({
           onAssinaturasChange={(assinaturas) => editarAberto((d) => ({ ...d, assinaturas }))}
           gravado={
             abertoId != null && orig.get(abertoId)
-              ? { centroCusto: orig.get(abertoId)?.centroCusto ?? null }
+              ? { centroCusto: orig.get(abertoId)?.centroCusto ?? null, onSubunidadeChange: (subunidadeId) => editarAberto((d) => ({ ...d, subunidadeId })) }
               : undefined
           }
         />

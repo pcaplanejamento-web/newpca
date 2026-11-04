@@ -5,6 +5,7 @@ import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } f
 import type { ConferenciaCompacta } from "./catalogo-conferencia";
 import { getDb } from "./db";
 import { comandoApagarFaixaItens, comandoTotaisDfd, filtroAnoPcaDfd, gruposAssinaturaSql, prioridadeTextoSql } from "./dfd-sql";
+import { subunidadeDaUnidade } from "./subunidades-sql";
 import { type GrupoAssinatura, gruposAssinatura, gruposDoTexto, prioridadeDoDfd } from "./dfd-tratamento";
 import { normPrioridade, type Prioridade } from "./normalize";
 import { baixarNumeros, baixarNumerosPendentes, retratarNumeros } from "./pca-itens-sql";
@@ -92,8 +93,9 @@ export type DfdResumo = {
   /** Conferência com a CM002 (Automação → Fluxos): convergente | divergente + o motivo; null = não conferido. */
   conferenciaCenti: string | null;
   conferenciaCentiMotivo: string | null;
-  /** CENTRO DE CUSTO da Centi (CM002), gravado pela Automação "Unidades × Centro de Custo" — define a SUBUNIDADE
-   * (`subunidades-core.ts`); vazio = ERRO no Estado. */
+  /** SUBUNIDADE escolhida no DFD (modo "um centro para toda a unidade" — `subunidades-core.ts`; no outro modo, ignorada). */
+  subunidadeId: number | null;
+  /** CENTRO DE CUSTO da Centi (CM002), gravado pela Automação "Unidades × Centro de Custo"; vazio = ERRO no Estado. */
   centroCusto: string | null;
   /** Responsável do protocolo de origem — o filtro de responsável da Mesa vale também para DFDs/itens. */
   protocoloResponsavelId: number | null;
@@ -233,6 +235,7 @@ const colunasDfd = {
   execucaoCenti: dfds.execucaoCenti,
   conferenciaCenti: dfds.conferenciaCenti,
   conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
+  subunidadeId: dfds.subunidadeId,
   centroCusto: dfds.centroCusto,
   protocoloResponsavelId: dfdProtocolos.responsavelId,
   numeroContrato: dfds.numeroContrato,
@@ -525,6 +528,7 @@ export async function listarCamposMassa(ids: number[]): Promise<
     planejamento: string | null;
     protocoloId: number | null;
     reparticaoId: number | null;
+    subunidadeId: number | null;
     tipo: string | null;
     nomeArquivo: string | null;
     secoes: DfdSecaoRow[];
@@ -541,6 +545,7 @@ export async function listarCamposMassa(ids: number[]): Promise<
         planejamento: dfds.planejamento,
         protocoloId: dfds.protocoloId,
         reparticaoId: dfds.reparticaoId,
+        subunidadeId: dfds.subunidadeId,
         tipo: dfds.tipo,
         nomeArquivo: dfds.nomeArquivo,
         secoes: dfds.secoes,
@@ -727,8 +732,8 @@ export async function upsertDfdCabecalho(
   const upsert = db
     .insert(dfds)
     .values({ numero: dados.numero, criadoPor: criadoPor ?? null, protocoloId: dados.protocoloId ?? null, ...set })
-    // A sobrescrita mantém o centro de custo da Centi (não está no `set`).
-    .onConflictDoUpdate({ target: dfds.numero, set })
+    // A sobrescrita mantém a SUBUNIDADE escolhida (e o centro de custo da Centi) — a subunidade só se ainda for da unidade.
+    .onConflictDoUpdate({ target: dfds.numero, set: { ...set, subunidadeId: subunidadeDaUnidade(dados.reparticaoId ?? null) } })
     .returning({ id: dfds.id });
   // O id do DFD DENTRO do lote (a linha é criada/atualizada nele mesmo): pelo `numero` (único).
   const idDoDfd = sql`(SELECT id FROM dfds WHERE numero = ${dados.numero})`;
@@ -790,6 +795,7 @@ export async function atualizarDfdCampos(
   id: number,
   campos: {
     reparticaoId?: number | null;
+    subunidadeId?: number | null;
     tipo?: string | null;
     assinaturas?: Assinatura[];
     secoes?: DfdSecaoRow[];
@@ -810,7 +816,10 @@ export async function atualizarDfdCampos(
     set.reparticaoId = campos.reparticaoId;
     // O DFD registra o ÓRGÃO derivado da unidade (como no `upsertDfdCabecalho`) — segue a troca.
     set.orgaoId = campos.reparticaoId != null ? sql`(SELECT orgao_id FROM reparticoes WHERE id = ${campos.reparticaoId})` : null;
+    // A subunidade escolhida só fica se for da unidade nova (cada unidade tem as suas).
+    if (campos.subunidadeId === undefined) set.subunidadeId = subunidadeDaUnidade(campos.reparticaoId);
   }
+  if (campos.subunidadeId !== undefined) set.subunidadeId = campos.subunidadeId;
   if (campos.tipo !== undefined) set.tipo = campos.tipo || null;
   if (campos.assinaturas !== undefined) set.assinaturas = campos.assinaturas.length > 0 ? JSON.stringify(campos.assinaturas) : null;
   if (campos.secoes !== undefined) set.secoes = campos.secoes.length > 0 ? JSON.stringify(campos.secoes) : null;

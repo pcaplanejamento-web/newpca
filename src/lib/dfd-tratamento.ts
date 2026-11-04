@@ -99,6 +99,9 @@ export type CampoMassa = "reparticao" | "tipo" | "prioridade" | "previsao" | "fu
 /** Uma ação de massa: a UNIDADE (vive fora do conteúdo do DFD — o host aplica) ou um campo de CONTEÚDO. */
 export type AcaoMassa =
   | { campo: "reparticao"; reparticaoId: number }
+  // A SUBUNIDADE (só na Mesa, DFDs GRAVADOS da mesma unidade no modo "um centro para toda a unidade" — o servidor
+  // confere); null = tira a escolha.
+  | { campo: "subunidade"; subunidadeId: number | null }
   | { campo: Exclude<CampoMassa, "reparticao">; valor: string };
 
 /**
@@ -108,7 +111,7 @@ export type AcaoMassa =
  * `reparticao` é do host. Puro/genérico (DfdParseado ou o registro do servidor).
  */
 export function aplicarMassaDfd<T extends { tipo: string | null; secoes: DfdSecao[] }>(d: T, acao: AcaoMassa): T {
-  if (acao.campo === "reparticao") return d;
+  if (acao.campo === "reparticao" || acao.campo === "subunidade") return d;
   const v = acao.valor.trim();
   if (!v) return d;
   if (acao.campo === "tipo") {
@@ -1024,7 +1027,7 @@ export const ROTULO_CURTO: Record<string, string> = {
   "dfd.fundamentacao": "Sem fundamentação",
   "dfd.referenciaRenovacao": "DFD-R sem referência",
   "dfd.centroCusto": "Centro de custo",
-  "dfd.subunidade": "Centro não cadastrado",
+  "dfd.subunidade": "Subunidade não definida",
   "dfd.assinatura": "Assinatura não conferida",
   "dfd.assinaturaValidar": "Validar assinatura",
   "protocolo.dfdDuplicado": "DFD duplicado",

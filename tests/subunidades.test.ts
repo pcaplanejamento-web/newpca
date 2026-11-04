@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
 import * as schema from "../src/db/schema.ts";
 import { regrasPadrao } from "../src/lib/avaliacao-core.ts";
 import { avaliarLinhaDfd, mensagensDoGravado, type RepConferencia } from "../src/lib/conferencia-dfd.ts";
@@ -14,6 +15,7 @@ import {
   conflitosCentros,
   lerCentros,
   lerModo,
+  subunidadeEscolhivel,
   motivoSubunidadesInvalidas,
   subunidadeDoDfd,
 } from "../src/lib/subunidades-core.ts";
@@ -21,11 +23,11 @@ import * as q from "../src/lib/subunidades-sql.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
-// SUBUNIDADES (v1.270.0): a subunidade de cada DFD é definida SÓ pelo CENTRO DE CUSTO — um para toda a unidade (a
-// subunidade = a própria unidade) ou um por subunidade. O centro é obrigatório: sem cadastro, ou com o centro do DFD fora
-// dele, o DFD gravado fica com ERRO.
+// SUBUNIDADES (v1.271.0): o CENTRO DE CUSTO do DFD tem de estar no cadastro da unidade — um para toda a unidade (a
+// subunidade é ESCOLHIDA no DFD; sem subunidades, a própria unidade) ou um por subunidade (o centro define a subunidade).
+// Sem cadastro, com o centro fora dele ou sem a escolha, o DFD gravado fica com ERRO.
 
-const POR_SUB = (subunidades: ConfigSubunidades["subunidades"]): ConfigSubunidades => ({ codigo: "SEPLAN", modo: "subunidades", subunidades });
+const POR_SUB = (subunidades: ConfigSubunidades["subunidades"]): ConfigSubunidades => ({ codigo: "SEPLAN", modo: "subunidades", centros: [], subunidades });
 
 test("subunidadeDoDfd: os dois modos e as bordas (sem unidade, sem centro, sem cadastro, fora do cadastro, ambígua)", () => {
   assert.deepEqual(subunidadeDoDfd({ reparticaoId: null, centroCusto: "X" }, POR_SUB([])), { subunidade: null, falta: null }, "sem unidade: nada");
@@ -34,9 +36,18 @@ test("subunidadeDoDfd: os dois modos e as bordas (sem unidade, sem centro, sem c
   assert.equal(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "PM RV, X" }, POR_SUB([])).falta, "semCadastro");
   assert.equal(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "PM RV, X" }, POR_SUB([{ id: 9, nome: "S", centros: [] }])).falta, "semCadastro", "subunidade sem centro não conta");
 
-  const unico: ConfigSubunidades = { codigo: "SMS", modo: "unico", subunidades: [{ id: 5, nome: "SMS", centros: ["PM RV, SMS", "PM RV, SAÚDE"] }] };
-  assert.deepEqual(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "pm rv, saude" }, unico).subunidade, { id: 5, nome: "SMS" }, "modo único: a própria unidade");
+  const unico: ConfigSubunidades = { codigo: "SMS", modo: "unico", centros: ["PM RV, SMS", "PM RV, SAÚDE"], subunidades: [] };
+  assert.deepEqual(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "pm rv, saude" }, unico).subunidade, { id: null, nome: "SMS" }, "único sem subunidades: a própria unidade");
   assert.equal(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "PM RV, EDUCAÇÃO" }, unico).falta, "centroNaoCadastrado");
+  assert.equal(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "PM RV, SMS" }, { ...unico, centros: [] }).falta, "semCadastro");
+  const escolhe: ConfigSubunidades = { ...unico, subunidades: [{ id: 5, nome: "Atenção Básica", centros: [] }, { id: 6, nome: "Hospital", centros: [] }] };
+  assert.equal(subunidadeDoDfd({ reparticaoId: 1, centroCusto: "PM RV, SMS" }, escolhe).falta, "naoEscolhida", "único com subunidades: tem de escolher");
+  assert.deepEqual(subunidadeDoDfd({ reparticaoId: 1, subunidadeId: 6, centroCusto: "PM RV, SMS" }, escolhe).subunidade, { id: 6, nome: "Hospital" });
+  assert.equal(subunidadeDoDfd({ reparticaoId: 1, subunidadeId: 99, centroCusto: "PM RV, SMS" }, escolhe).falta, "naoEscolhida", "de outra unidade não vale");
+  assert.equal(subunidadeDoDfd({ reparticaoId: 1, subunidadeId: 6, centroCusto: "PM RV, OUTRA" }, escolhe).falta, "centroNaoCadastrado", "a escolha não dispensa o centro");
+  assert.equal(subunidadeEscolhivel(escolhe, 6), true);
+  assert.equal(subunidadeEscolhivel(escolhe, 9), false);
+  assert.equal(subunidadeEscolhivel(POR_SUB([{ id: 6, nome: "H", centros: ["X"] }]), 6), false, "no por subunidade, nunca escolhida");
 
   const cfg = POR_SUB([
     { id: 1, nome: "Compras", centros: ["PM RV, SEPLAN, COMPRAS"] },
@@ -59,32 +70,38 @@ test("cadastro: centro obrigatório, modo único com um só cadastro, nomes/cent
   assert.deepEqual(lerCentros('["a", " A ", "", "b"]'), ["a", "b"]);
   assert.deepEqual(lerCentros("{inválido"), []);
   assert.equal(chaveCentro("Câmara, GGIM"), "CAMARA GGIM");
-  assert.equal(motivoSubunidadesInvalidas("subunidades", [{ nome: "A", centros: ["X"] }]), null);
-  assert.equal(motivoSubunidadesInvalidas("unico", []), null, "sem cadastro é permitido (os DFDs ficam com erro)");
-  assert.match(String(motivoSubunidadesInvalidas("subunidades", [{ nome: "A", centros: [] }])), /Cadastre o centro de custo da subunidade “A”/);
-  assert.match(String(motivoSubunidadesInvalidas("unico", [{ nome: "SMS", centros: [] }])), /Cadastre o centro de custo da unidade/);
-  assert.match(String(motivoSubunidadesInvalidas("unico", [{ nome: "A", centros: ["X"] }, { nome: "B", centros: ["Y"] }])), /um só cadastro/);
-  assert.match(String(motivoSubunidadesInvalidas("subunidades", [{ nome: "A", centros: ["X"] }, { nome: "a", centros: ["Y"] }])), /Duas subunidades/);
-  assert.match(String(motivoSubunidadesInvalidas("subunidades", [{ nome: "A", centros: ["X"] }, { nome: "B", centros: ["x"] }])), /pertence a uma subunidade/);
-  assert.match(String(motivoSubunidadesInvalidas("subunidades", [{ nome: " ", centros: ["X"] }])), /nome/);
-  assert.deepEqual(conflitosCentros([{ nome: "A", centros: ["PM RV, GGIM"] }], [{ unidade: "GAB", subunidade: "Gabinete", centros: ["pm rv, ggim"] }]), ["“PM RV, GGIM” já está em Gabinete (GAB)"]);
+  assert.equal(motivoSubunidadesInvalidas("subunidades", [], [{ nome: "A", centros: ["X"] }]), null);
+  assert.equal(motivoSubunidadesInvalidas("unico", [], []), null, "sem cadastro é permitido (os DFDs ficam com erro)");
+  assert.equal(motivoSubunidadesInvalidas("unico", ["PM RV, SMS"], [{ nome: "AB", centros: [] }]), null);
+  assert.match(String(motivoSubunidadesInvalidas("unico", [], [{ nome: "AB", centros: [] }])), /Cadastre o centro de custo da unidade/);
+  assert.match(String(motivoSubunidadesInvalidas("unico", ["X"], [{ nome: "AB", centros: ["Y"] }])), /não têm centro de custo próprio/);
+  assert.match(String(motivoSubunidadesInvalidas("subunidades", ["X"], [])), /é de cada subunidade/);
+  assert.match(String(motivoSubunidadesInvalidas("subunidades", [], [{ nome: "A", centros: [] }])), /Cadastre o centro de custo da subunidade “A”/);
+  assert.match(String(motivoSubunidadesInvalidas("subunidades", [], [{ nome: "A", centros: ["X"] }, { nome: "a", centros: ["Y"] }])), /Duas subunidades/);
+  assert.match(String(motivoSubunidadesInvalidas("subunidades", [], [{ nome: "A", centros: ["X"] }, { nome: "B", centros: ["x"] }])), /pertence a um só cadastro/);
+  assert.match(String(motivoSubunidadesInvalidas("subunidades", [], [{ nome: " ", centros: ["X"] }])), /nome/);
+  assert.deepEqual(conflitosCentros([], [{ nome: "A", centros: ["PM RV, GGIM"] }], [{ unidade: "GAB", subunidade: "Gabinete", centros: ["pm rv, ggim"] }]), ["“PM RV, GGIM” já está em Gabinete (GAB)"]);
+  assert.deepEqual(conflitosCentros(["PM RV, SMS"], [], [{ unidade: "SMS2", subunidade: "", centros: ["PM RV, SMS"] }]), ["“PM RV, SMS” já está em SMS2"], "o centro da unidade também");
   assert.deepEqual(centrosDaConfig(POR_SUB([{ id: 1, nome: "A", centros: ["C1", "C2"] }])), ["C1", "C2"]);
-  assert.deepEqual(centrosDaConfig({ codigo: "X", modo: "unico", subunidades: [{ id: 1, nome: "X", centros: ["C1"] }] }), ["C1"], "o modo único também casa");
+  assert.deepEqual(centrosDaConfig({ codigo: "X", modo: "unico", centros: ["C1"], subunidades: [{ id: 1, nome: "A", centros: [] }] }), ["C1"], "o modo único: os da unidade");
 });
 
 test("conferência: Centro de Custo e cadastro só no DFD GRAVADO — ERRO sem cadastro; a análise de um arquivo nunca os aponta", () => {
   const regras = regrasPadrao();
-  const semCadastro: RepConferencia = { id: 1, responsaveis: { padroes: [], temporarios: [] } as never, subunidade: { codigo: "SMS", modo: "unico", subunidades: [] } };
-  const rep: RepConferencia = { ...semCadastro, subunidade: { codigo: "SMS", modo: "unico", subunidades: [{ id: 5, nome: "SMS", centros: ["PM RV, SMS"] }] } };
+  const semCadastro: RepConferencia = { id: 1, responsaveis: { padroes: [], temporarios: [] } as never, subunidade: { codigo: "SMS", modo: "unico", centros: [], subunidades: [] } };
+  const rep: RepConferencia = { ...semCadastro, subunidade: { codigo: "SMS", modo: "unico", centros: ["PM RV, SMS"], subunidades: [] } };
   const c = { dfdTipo: null, categoria: null };
-  assert.deepEqual(mensagensDoGravado({ centroCusto: null }, rep, regras, c).map((m) => [m.chave, m.status]), [["dfd.centroCusto", "erro"]], "sem centro: só a do centro");
-  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, SMS" }, semCadastro, regras, c).map((m) => [m.chave, m.status]), [["dfd.subunidade", "erro"]], "sem cadastro: ERRO");
-  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, OUTRA" }, rep, regras, c).map((m) => [m.chave, m.status]), [["dfd.subunidade", "erro"]], "fora do cadastro: ERRO");
-  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, SMS" }, rep, regras, c), [], "cadastrado: nada");
-  assert.deepEqual(mensagensDoGravado({ centroCusto: null }, null, regras, c), [], "sem unidade: a falta é a da unidade");
+  assert.deepEqual(mensagensDoGravado({ centroCusto: null, subunidadeId: null }, rep, regras, c).map((m) => [m.chave, m.status]), [["dfd.centroCusto", "erro"]], "sem centro: só a do centro");
+  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, SMS", subunidadeId: null }, semCadastro, regras, c).map((m) => [m.chave, m.status]), [["dfd.subunidade", "erro"]], "sem cadastro: ERRO");
+  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, OUTRA", subunidadeId: null }, rep, regras, c).map((m) => [m.chave, m.status]), [["dfd.subunidade", "erro"]], "fora do cadastro: ERRO");
+  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, SMS", subunidadeId: null }, rep, regras, c), [], "cadastrado: nada");
+  const comSubs: RepConferencia = { ...rep, subunidade: { codigo: "SMS", modo: "unico", centros: ["PM RV, SMS"], subunidades: [{ id: 5, nome: "AB", centros: [] }] } };
+  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, SMS", subunidadeId: null }, comSubs, regras, c).map((m) => [m.chave, m.status]), [["dfd.subunidade", "erro"]], "sem a escolha: ERRO");
+  assert.deepEqual(mensagensDoGravado({ centroCusto: "PM RV, SMS", subunidadeId: 5 }, comSubs, regras, c), [], "escolhida: nada");
+  assert.deepEqual(mensagensDoGravado({ centroCusto: null, subunidadeId: null }, null, regras, c), [], "sem unidade: a falta é a da unidade");
   // O ADM ignora o ponto: nada.
   const ignora = { ...regras, pontos: { "dfd.subunidade": "ignorar" as never } };
-  assert.ok(!mensagensDoGravado({ centroCusto: "PM RV, SMS" }, semCadastro, ignora, c).length);
+  assert.ok(!mensagensDoGravado({ centroCusto: "PM RV, SMS", subunidadeId: null }, semCadastro, ignora, c).length);
   // Na linha: o DFD sem `gravado` (a análise) não ganha a pendência; o gravado sim.
   const d = {
     planejamento: "1",
@@ -101,7 +118,7 @@ test("conferência: Centro de Custo e cadastro só no DFD GRAVADO — ERRO sem c
   };
   const analise = avaliarLinhaDfd(d, semCadastro, { regras });
   assert.ok(!analise.mensagens.some((m) => m.chave === "dfd.centroCusto" || m.chave === "dfd.subunidade"));
-  const gravado = avaliarLinhaDfd({ ...d, gravado: { centroCusto: "PM RV, SMS" } }, semCadastro, { regras });
+  const gravado = avaliarLinhaDfd({ ...d, gravado: { centroCusto: "PM RV, SMS", subunidadeId: null } }, semCadastro, { regras });
   assert.ok(gravado.mensagens.some((m) => m.chave === "dfd.subunidade" && m.status === "erro"));
   assert.equal(gravado.estado, "erro");
 });
@@ -109,27 +126,32 @@ test("conferência: Centro de Custo e cadastro só no DFD GRAVADO — ERRO sem c
 const orm = (db: DatabaseSync) => drizzle(d1Sobre(db) as never, { schema }) as never as Parameters<typeof q.comandosGravarSubunidades>[0];
 const lote = (o: unknown, cmds: unknown[]) => (o as { batch: (c: unknown[]) => Promise<unknown> }).batch(cmds);
 
-test("builders: gravar o cadastro inteiro (modo, ordem, saem/ficam/novas) e nunca mexer em outra unidade (D1 real)", async () => {
+test("builders: gravar o cadastro inteiro (modo, centros da unidade, ordem, saem/ficam/novas) e nunca mexer em outra unidade (D1 real)", async () => {
   const db = bancoMigrado();
   db.exec("INSERT INTO reparticoes (id, codigo, nome) VALUES (1, 'SMS', 'Saúde'), (2, 'SEPLAN', 'Planejamento')");
   const o = orm(db);
-  await lote(o, q.comandosGravarSubunidades(o, 1, "subunidades", [{ nome: "Atenção Básica", centros: ["PM RV, AB"] }, { nome: "Hospital", centros: ["PM RV, HMU"] }]));
+  await lote(o, q.comandosGravarSubunidades(o, 1, "subunidades", [], [{ nome: "Atenção Básica", centros: ["PM RV, AB"] }, { nome: "Hospital", centros: ["PM RV, HMU"] }]));
   const ids = (db.prepare("SELECT id, nome, ordem FROM subunidades WHERE reparticao_id = 1 ORDER BY ordem").all() as { id: number; nome: string }[]).map((r) => r.id);
   assert.equal(ids.length, 2);
   assert.equal((db.prepare("SELECT vinculo_subunidade AS v FROM reparticoes WHERE id = 1").get() as { v: string }).v, "subunidades");
   // Sai a 1ª, a 2ª muda de nome e vai ao topo, entra uma nova.
-  await lote(o, q.comandosGravarSubunidades(o, 1, "subunidades", [{ id: ids[1], nome: "Hospital Municipal", centros: ["PM RV, HMU"] }, { nome: "UPA", centros: ["PM RV, UPA"] }]));
+  await lote(o, q.comandosGravarSubunidades(o, 1, "subunidades", [], [{ id: ids[1], nome: "Hospital Municipal", centros: ["PM RV, HMU"] }, { nome: "UPA", centros: ["PM RV, UPA"] }]));
   const depois = db.prepare("SELECT id, nome, ordem, centros_custo AS c FROM subunidades WHERE reparticao_id = 1 ORDER BY ordem").all() as { id: number; nome: string; ordem: number; c: string }[];
   assert.deepEqual(depois.map((r) => [r.nome, r.ordem]), [["Hospital Municipal", 0], ["UPA", 1]]);
   assert.equal(depois[0].id, ids[1], "a que fica é a MESMA linha");
   assert.deepEqual(JSON.parse(depois[0].c), ["PM RV, HMU"]);
-  // Para o modo único: uma linha só.
-  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", [{ id: ids[1], nome: "SMS", centros: ["PM RV, HMU", "PM RV, UPA"] }]));
-  assert.equal((db.prepare("SELECT vinculo_subunidade AS v FROM reparticoes WHERE id = 1").get() as { v: string }).v, "unico");
+  // Para o modo único: os centros na unidade, as subunidades só com o nome; a escolhida no DFD cai com a excluída.
+  db.prepare("INSERT INTO dfds (id, numero, reparticao_id, subunidade_id) VALUES (10, '10', 1, ?)").run(ids[1]);
+  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", ["PM RV, HMU", "PM RV, UPA"], [{ id: ids[1], nome: "Hospital Municipal", centros: [] }]));
+  const u = db.prepare("SELECT vinculo_subunidade AS v, centro_custo AS c FROM reparticoes WHERE id = 1").get() as { v: string; c: string };
+  assert.deepEqual([u.v, JSON.parse(u.c)], ["unico", ["PM RV, HMU", "PM RV, UPA"]]);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM subunidades WHERE reparticao_id = 1").get() as { n: number }).n, 1);
+  assert.equal((db.prepare("SELECT subunidade_id AS s FROM dfds WHERE id = 10").get() as { s: number }).s, ids[1]);
+  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", ["PM RV, HMU"], []));
+  assert.equal((db.prepare("SELECT subunidade_id AS s FROM dfds WHERE id = 10").get() as { s: number | null }).s, null, "a excluída deixa o DFD sem subunidade");
   // Nunca mexe nas de outra unidade.
-  await lote(o, q.comandosGravarSubunidades(o, 2, "subunidades", [{ nome: "Compras", centros: ["PM RV, COMPRAS"] }]));
-  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", [{ id: ids[1], nome: "SMS", centros: ["PM RV, HMU"] }]));
+  await lote(o, q.comandosGravarSubunidades(o, 2, "subunidades", [], [{ nome: "Compras", centros: ["PM RV, COMPRAS"] }]));
+  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", ["PM RV, HMU"], []));
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM subunidades WHERE reparticao_id = 2").get() as { n: number }).n, 1);
 });
 
@@ -197,4 +219,39 @@ test("migração 0177: saem Próprio e Marcado — as subunidades sem centro sae
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM dfds WHERE subunidade_id IS NOT NULL").get() as { n: number }).n, 0);
   db.exec(sql(arqs[i]));
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM subunidades").get() as { n: number }).n, 4, "idempotente");
+});
+
+test("a troca de unidade do DFD mantém a subunidade escolhida SÓ se for da unidade nova (D1 real)", async () => {
+  const db = bancoMigrado();
+  db.exec("INSERT INTO reparticoes (id, codigo, nome) VALUES (1, 'A', 'A'), (2, 'B', 'B')");
+  db.exec("INSERT INTO subunidades (id, reparticao_id, nome) VALUES (7, 1, 'S1')");
+  db.exec("INSERT INTO dfds (id, numero, reparticao_id, subunidade_id) VALUES (1, '1', 1, 7), (2, '2', 1, 7)");
+  const o = orm(db);
+  await o.update(schema.dfds).set({ reparticaoId: 2, subunidadeId: q.subunidadeDaUnidade(2) }).where(eq(schema.dfds.id, 1));
+  await o.update(schema.dfds).set({ reparticaoId: 1, subunidadeId: q.subunidadeDaUnidade(1) }).where(eq(schema.dfds.id, 2));
+  const r = db.prepare("SELECT id, subunidade_id AS s FROM dfds ORDER BY id").all() as { s: number | null }[];
+  assert.deepEqual(r.map((x) => x.s), [null, 7]);
+});
+
+test("migração 0178: no modo único o centro passa à unidade e a linha com o nome dela sai; o por subunidade fica", () => {
+  const arqs = readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort();
+  const i = arqs.indexOf("0178_centro_da_unidade.sql");
+  assert.ok(i > 0);
+  const sql = (arq: string) => readFileSync(join(process.cwd(), "drizzle", arq), "utf8");
+  const db = new DatabaseSync(":memory:");
+  db.exec("PRAGMA foreign_keys = ON");
+  for (const arq of arqs.slice(0, i)) db.exec(sql(arq));
+  db.exec(`INSERT INTO reparticoes (id, codigo, nome, vinculo_subunidade, centro_custo) VALUES
+    (101, 'GGIM', 'Gabinete', 'unico', 'PM RV, GGIM'), (102, 'SEPLAN', 'Planejamento', 'unico', NULL), (104, 'SEMED', 'Educação', 'subunidades', 'velho')`);
+  db.exec(`INSERT INTO subunidades (id, reparticao_id, nome, centros_custo) VALUES
+    (10, 101, 'GGIM', '["PM RV, GGIM"]'), (40, 104, 'Escolas', '["E"]'), (41, 104, 'Creches', '["C"]')`);
+  db.exec(sql(arqs[i]));
+  const reps = db.prepare("SELECT centro_custo AS c FROM reparticoes WHERE id > 100 ORDER BY id").all() as { c: string }[];
+  assert.deepEqual(reps.map((r) => JSON.parse(r.c)), [["PM RV, GGIM"], [], []]);
+  assert.deepEqual((db.prepare("SELECT id FROM subunidades ORDER BY id").all() as { id: number }[]).map((s) => s.id), [40, 41]);
+  // Reaplicar não muda nada (as subunidades do único, só com o nome, ficam).
+  db.exec("INSERT INTO subunidades (id, reparticao_id, nome, centros_custo) VALUES (11, 101, 'AB', '[]')");
+  db.exec(sql(arqs[i]));
+  assert.deepEqual(JSON.parse((db.prepare("SELECT centro_custo AS c FROM reparticoes WHERE id = 101").get() as { c: string }).c), ["PM RV, GGIM"]);
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM subunidades WHERE id = 11").get() as { n: number }).n, 1);
 });

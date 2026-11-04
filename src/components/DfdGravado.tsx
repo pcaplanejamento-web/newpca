@@ -241,7 +241,7 @@ export function useDfdGravado({
     ? // O DFD GRAVADO pela metade (lido do gravado, nunca do rascunho) é erro até reenviar.
       // O centro de custo e a subunidade (pontos do DFD GRAVADO): o centro do banco, a subunidade do rascunho.
       mensagensDoDfd(
-        { ...dfd, gravacaoIncompleta: orig ? gravacaoIncompleta(orig) : null, gravado: orig ? { centroCusto: orig.centroCusto } : null },
+        { ...dfd, gravacaoIncompleta: orig ? gravacaoIncompleta(orig) : null, gravado: orig ? { centroCusto: orig.centroCusto, subunidadeId: dfd.subunidadeId ?? null } : null },
         rep,
         anoPca,
         regras,
@@ -469,7 +469,7 @@ export function useDfdGravado({
         onCamposChange={(campos) => editar((d) => ({ ...d, ...campos }))}
         onTipoChange={(tipo) => editar((d) => ({ ...d, tipo }))}
         onAssinaturasChange={(assinaturas) => editar((d) => ({ ...d, assinaturas }))}
-        gravado={orig ? { centroCusto: orig.centroCusto } : undefined}
+        gravado={orig ? { centroCusto: orig.centroCusto, onSubunidadeChange: (subunidadeId) => editar((d) => ({ ...d, subunidadeId })) } : undefined}
       />
     ),
   };

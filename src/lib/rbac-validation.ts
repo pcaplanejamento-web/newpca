@@ -185,21 +185,21 @@ export type GrupoInput = z.infer<typeof grupoCreateSchema>;
 export type ReparticaoInput = z.infer<typeof reparticaoSchema>;
 export type OrgaoInput = z.infer<typeof orgaoSchema>;
 
-/** O cadastro de SUBUNIDADES de uma unidade (`PUT /api/admin/reparticoes/[id]/subunidades`) — a lista INTEIRA, na ordem;
- * `id` ausente = nova; o centro de custo é OBRIGATÓRIO. A régua do conteúdo (modo, nomes/centros repetidos) é
- * `motivoSubunidadesInvalidas`. */
+const centrosSchema = z.array(z.string().trim().min(1).max(LIMITES_SUBUNIDADE.centro)).max(LIMITES_SUBUNIDADE.centros);
+/** O cadastro de CENTRO DE CUSTO de uma unidade (`PUT /api/admin/reparticoes/[id]/subunidades`) — o modo, os centros da
+ * unidade e a lista INTEIRA das subunidades, na ordem; `id` ausente = nova. A régua do conteúdo (centro obrigatório, nomes/
+ * centros repetidos) é `motivoSubunidadesInvalidas`. */
 export const subunidadesSchema = z.strictObject({
   modo: z.enum(MODOS_CENTRO),
+  // Os centros da UNIDADE (modo único); no por subunidade, vazio (os centros são de cada uma).
+  centros: centrosSchema,
   subunidades: z
     .array(
       z.strictObject({
         id: z.number().int().positive().optional(),
         nome: z.string().trim().min(1, "Informe o nome da subunidade.").max(LIMITES_SUBUNIDADE.nome),
-        centros: z
-          .array(z.string().trim().min(1).max(LIMITES_SUBUNIDADE.centro))
-          .min(1, "Cadastre o centro de custo.")
-          .max(LIMITES_SUBUNIDADE.centros),
+        centros: centrosSchema,
       }),
     )
     .max(LIMITES_SUBUNIDADE.subunidades),
-});
+})

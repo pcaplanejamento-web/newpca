@@ -23,7 +23,8 @@ export type BaseDfdCampos = {
   anoPca: number | null;
   protocoloAnoPca: number | null;
   totalItens: number | null;
-  /** O centro de custo (o ponto do DFD gravado — muda sem mexer no `atualizadoEm`). */
+  /** A subunidade escolhida e o centro de custo (os pontos do DFD gravado — mudam sem mexer no `atualizadoEm`). */
+  subunidadeId: number | null;
   centroCusto: string | null;
 };
 /** Os campos de um protocolo que entram na assinatura. */
@@ -43,7 +44,7 @@ const v = (x: unknown) => (x == null ? "" : String(x));
 
 /** A base de um DFD — texto puro (muda a cada gravação; guardada sem hash, então nunca colide). */
 export const baseDfd = (d: BaseDfdCampos) =>
-  [d.id, d.atualizadoEm, d.reparticaoId, d.protocoloId, d.protocoloAssunto, d.anoPca, d.protocoloAnoPca, d.totalItens, d.centroCusto]
+  [d.id, d.atualizadoEm, d.reparticaoId, d.protocoloId, d.protocoloAssunto, d.anoPca, d.protocoloAnoPca, d.totalItens, d.subunidadeId, d.centroCusto]
     .map(v)
     .join("|");
 /** A base de um protocolo (a capa, o assunto, o ano e o agregado dos DFDs). */

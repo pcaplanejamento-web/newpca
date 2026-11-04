@@ -32,8 +32,8 @@ import {
 /** Unidade para a conferência: id + órgão dono + responsáveis EFETIVOS por DFDs + a configuração das SUBUNIDADES. */
 export type RepConferencia = { id: number; orgaoId?: number | null; responsaveis: Responsaveis; subunidade?: ConfigSubunidades | null };
 
-/** O que só o DFD GRAVADO tem: o centro de custo da Centi (define a subunidade). */
-export type DadosGravados = { centroCusto: string | null };
+/** O que só o DFD GRAVADO tem: o centro de custo da Centi e a subunidade escolhida (modo "um centro para toda a unidade"). */
+export type DadosGravados = { centroCusto: string | null; subunidadeId: number | null };
 
 /** O que a conferência lê de um DFD — `DfdParseado` (análise) e `DfdDetalhe` (gravado) servem. */
 export type DfdConferivel = {
@@ -57,7 +57,10 @@ export type DfdConferivel = {
 };
 
 /** Os `DadosGravados` de um DFD lido do banco (o cliente e o servidor montam igual). */
-export const dadosGravados = (d: { centroCusto: string | null }): DadosGravados => ({ centroCusto: d.centroCusto });
+export const dadosGravados = (d: { centroCusto: string | null; subunidadeId: number | null }): DadosGravados => ({
+  centroCusto: d.centroCusto,
+  subunidadeId: d.subunidadeId,
+});
 
 /**
  * As mensagens do CENTRO DE CUSTO e da SUBUNIDADE de um DFD GRAVADO — pela importância do ADM (a régua do `add` de
@@ -77,7 +80,7 @@ export function mensagensDoGravado(
   };
   if (!rep) return out;
   if (!temCentroCusto(g.centroCusto)) falta("dfd.centroCusto", "centroCusto", "Sem centro de custo — execute a automação “Unidades dos DFDs × Centro de Custo” para gravar o da Centi.");
-  const s = subunidadeDoDfd({ reparticaoId: rep.id, centroCusto: g.centroCusto }, rep.subunidade);
+  const s = subunidadeDoDfd({ reparticaoId: rep.id, subunidadeId: g.subunidadeId, centroCusto: g.centroCusto }, rep.subunidade);
   if (s.falta) falta("dfd.subunidade", "subunidade", textoFaltaSubunidade(s.falta, g.centroCusto));
   return out;
 }

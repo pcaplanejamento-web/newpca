@@ -19,7 +19,7 @@ async function unidade(id: number) {
   return r && !ehCodigoGeral(r.codigo) ? r : null;
 }
 
-/** O cadastro de CENTRO DE CUSTO da unidade: o modo, as subunidades, as opções de centro de custo (os gravados nos DFDs)
+/** O cadastro de CENTRO DE CUSTO da unidade: o modo, os centros, as subunidades (com os DFDs que as escolheram), as opções de centro de custo (os gravados nos DFDs)
  * e os centros que já são de subunidades de outras unidades. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
@@ -30,8 +30,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return c ? ok(c) : erro("Unidade não encontrada.", 404);
 }
 
-/** Grava o cadastro INTEIRO (o modo + a lista na ordem) num lote atômico. O centro de custo é obrigatório (422) e
- * pertence a UMA subunidade do sistema (409). No modo único, a única entrada leva o nome da unidade. */
+/** Grava o cadastro INTEIRO (o modo, os centros da unidade e a lista na ordem) num lote atômico. O centro de custo é
+ * obrigatório (422) e pertence a um só cadastro do sistema (409); as subunidades que saem deixam sem subunidade os DFDs
+ * em que estavam escolhidas. */
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -42,26 +43,28 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const corpo = await parseCorpo(subunidadesSchema, req);
   if ("resp" in corpo) return corpo.resp;
   const modo = corpo.data.modo;
-  const lista = corpo.data.subunidades.map((s) => ({ ...s, nome: modo === "unico" ? u.codigo : s.nome.trim(), centros: lerCentros(s.centros) }));
-  const motivo = motivoSubunidadesInvalidas(modo, lista);
+  const centros = lerCentros(corpo.data.centros);
+  const lista = corpo.data.subunidades.map((s) => ({ ...s, nome: s.nome.trim(), centros: lerCentros(s.centros) }));
+  const motivo = motivoSubunidadesInvalidas(modo, centros, lista);
   if (motivo) return erro(motivo, 422);
   const antes = (await lerConfigSubunidades([id])).get(id);
   const deles = new Set((antes?.subunidades ?? []).map((s) => s.id));
   if (lista.some((s) => s.id != null && !deles.has(s.id))) return erro("Subunidade de outra unidade — recarregue a tela.", 422);
-  const conflitos = conflitosCentros(lista, await centrosDeOutrasUnidades(id));
-  if (conflitos.length) return erro(`Um centro de custo pertence a uma subunidade: ${conflitos.slice(0, 5).join("; ")}${conflitos.length > 5 ? "…" : ""}.`, 409);
+  const conflitos = conflitosCentros(centros, lista, await centrosDeOutrasUnidades(id));
+  if (conflitos.length) return erro(`Um centro de custo pertence a um só cadastro: ${conflitos.slice(0, 5).join("; ")}${conflitos.length > 5 ? "…" : ""}.`, 409);
   const db = getDb();
-  const cmds = comandosGravarSubunidades(db, id, modo, lista);
+  const cmds = comandosGravarSubunidades(db, id, modo, centros, lista);
   await db.batch(cmds as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
-  const nomes = (l: { nome: string; centros: string[] }[]) => l.map((s) => `${s.nome} (${s.centros.join(" | ")})`).join(", ") || "nenhum";
+  const texto = (c: string[], l: { nome: string; centros: string[] }[]) =>
+    [c.length ? `centro ${c.join(" | ")}` : "", ...l.map((s) => (s.centros.length ? `${s.nome} (${s.centros.join(" | ")})` : s.nome))].filter(Boolean).join(", ") || "nenhum";
   await registrarAuditoria({
     usuario: g.u,
     acao: "editar",
     entidade: "reparticao",
     entidadeId: id,
-    resumo: `Centro de custo de ${u.codigo}: ${ROTULO_MODO[antes?.modo ?? "unico"]} → ${ROTULO_MODO[modo]}; ${nomes(antes?.subunidades ?? [])} → ${nomes(lista)}`,
-    antes: { modo: antes?.modo ?? "unico", subunidades: antes?.subunidades ?? [] },
-    depois: { modo, subunidades: lista },
+    resumo: `Centro de custo de ${u.codigo}: ${ROTULO_MODO[antes?.modo ?? "unico"]} → ${ROTULO_MODO[modo]}; ${texto(antes?.centros ?? [], antes?.subunidades ?? [])} → ${texto(centros, lista)}`,
+    antes: { modo: antes?.modo ?? "unico", centros: antes?.centros ?? [], subunidades: antes?.subunidades ?? [] },
+    depois: { modo, centros, subunidades: lista },
   });
   const c = await cadastroDaUnidade(id);
   return ok(c ?? {});
