@@ -12,17 +12,25 @@ type Db = DrizzleD1Database<Record<string, unknown>>;
 export const LOTE_VALORES = 30;
 
 /** Cria a coluna (a mesma de nome igual, sem caixa/acento, já existente não é criada de novo). */
-export function comandoCriarColuna(db: Db, entidade: EntidadeColuna, nome: string, usuarioId: number | null) {
+export function comandoCriarColuna(db: Db, entidade: EntidadeColuna, nome: string, usuarioId: number | null, nosItens = false) {
   return db
     .insert(mesaColunas)
-    .values({ entidade, nome: nomeColuna(nome), chave: chaveColuna(nome), criadoPor: usuarioId })
+    .values({ entidade, nome: nomeColuna(nome), chave: chaveColuna(nome), criadoPor: usuarioId, nosItens: entidade === "dfd" && nosItens ? 1 : 0 })
     .onConflictDoNothing({ target: [mesaColunas.entidade, mesaColunas.chave] });
 }
 export function consultaColunaPorNome(db: Db, entidade: EntidadeColuna, nome: string) {
   return db
-    .select({ id: mesaColunas.id, entidade: mesaColunas.entidade, nome: mesaColunas.nome })
+    .select({ id: mesaColunas.id, entidade: mesaColunas.entidade, nome: mesaColunas.nome, nosItens: mesaColunas.nosItens })
     .from(mesaColunas)
     .where(and(eq(mesaColunas.entidade, entidade), eq(mesaColunas.chave, chaveColuna(nome))));
+}
+
+/** Liga/desliga "também na tabela de Itens" — só vale para a coluna de DFD. */
+export function comandoNosItens(db: Db, colunaId: number, nosItens: boolean) {
+  return db
+    .update(mesaColunas)
+    .set({ nosItens: nosItens ? 1 : 0 })
+    .where(and(eq(mesaColunas.id, colunaId), eq(mesaColunas.entidade, "dfd")));
 }
 
 /** Grava os valores (o mesmo registro de novo troca o valor; `null` apaga) — INSERTs de 30 + um DELETE dos vazios. */

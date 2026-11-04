@@ -1917,6 +1917,8 @@ export const mesaColunas = sqliteTable(
     chave: text("chave").notNull(),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** 1 = a coluna de DFD aparece também na tabela de Itens (o item herda o valor do DFD dele — v1.268.0). */
+    nosItens: integer("nos_itens").notNull().default(0),
   },
   (t) => [uniqueIndex("mesa_colunas_uq").on(t.entidade, t.chave)],
 );

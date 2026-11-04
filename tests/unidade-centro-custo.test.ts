@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { conferirUnidades } from "../src/lib/fluxo-dados.ts";
-import { casarUnidadePorNome, siglaDaFinalidade, unidadeDoCentroCusto } from "../src/lib/reparticao-match.ts";
+import { CONFERE_CENTRO_CUSTO, conferirUnidades } from "../src/lib/fluxo-dados.ts";
+import { casarUnidadePorNome, centroCustoConfere, siglaDaFinalidade, unidadeDoCentroCusto } from "../src/lib/reparticao-match.ts";
 
 const UNIDADES = [
   { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
@@ -178,4 +178,54 @@ test("Auditoria: pelo valor, a Finalidade nunca vira o centro de custo; o últim
   assert.match(String(s.desconhecidas[0]?.mensagem), /não trouxe o centro de custo/);
   const CAD = [{ id: 5, codigo: "GGIM", nome: "Outro nome", orgaoId: 1, centroCusto: "PM RV, CAMARA MUNICIPAL, GGIM" }];
   assert.deepEqual(casarPorCentroCusto("PM RV, GABINETE DO PREFEITO, GGIM", CAD), { tipo: "ok", id: 5 }, "sempre o último nome");
+});
+
+test("centroCustoConfere: o texto inteiro ou o último nome, sem caixa/acento/pontuação; vazio nunca confere", () => {
+  assert.equal(centroCustoConfere("PM RV, GABINETE DO PREFEITO, GGIM", "pm rv,  gabinete do prefeito, ggim"), true);
+  assert.equal(centroCustoConfere("GGIM", "PM RV, GABINETE DO PREFEITO, GGIM"), true, "o cadastrado = o último nome");
+  assert.equal(centroCustoConfere("PM RV, CÂMARA, GGIM", "PM RV, GABINETE DO PREFEITO, GGIM"), true, "o mesmo último nome");
+  assert.equal(centroCustoConfere("Secretaria de Ação Urbana", "PM RV, SECRETARIA DE ACAO URBANA"), true);
+  assert.equal(centroCustoConfere("PM RV, SEPLAN", "PM RV, GABINETE DO PREFEITO, GGIM"), false);
+  assert.equal(centroCustoConfere("", "PM RV, GGIM"), false);
+  assert.equal(centroCustoConfere("GGIM", ""), false);
+});
+
+test("conferirUnidades: a porta “todos” leva CADA DFD com o centro de custo da Centi e a conferência do cadastrado", () => {
+  const K = CONFERE_CENTRO_CUSTO;
+  const cad = [
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centroCusto: "PM RV, SEC. MUN. DE PLANEJAMENTO E GESTAO" },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+    { id: 3, codigo: "PGM", nome: "Procuradoria-Geral do Município", orgaoId: 1 },
+  ];
+  const base = { numero: "1", planejamento: "1", orgaoId: 1, entidade: "2" };
+  const r = conferirUnidades(
+    [
+      { ...base, id: 1, reparticaoId: 2, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
+      { ...base, id: 2, reparticaoId: 1, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
+      { ...base, id: 3, reparticaoId: 3, encontrado: { centroCusto: "PM RV, PROCURADORIA-GERAL DO MUNICIPIO" } },
+      { ...base, id: 4, reparticaoId: 1, encontrado: { centroCusto: "" } },
+      { ...base, id: 5, reparticaoId: 1, centi: null, centiErro: "Sem resposta", centiFalha: true },
+      { ...base, id: 6, reparticaoId: 1 },
+      { ...base, id: 7, reparticaoId: 1, entidade: "" },
+      { ...base, id: 8, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
+      { ...base, id: 9, reparticaoId: 2, encontrado: { centroCusto: "PM RV" } },
+    ],
+    cad,
+  );
+  const por = Object.fromEntries(r.todos.map((x) => [x.id, [x.centroCustoCenti, x.centroCustoConfere]]));
+  assert.deepEqual(por, {
+    1: ["PM RV, GABINETE DO PREFEITO, GGIM", K.confere],
+    2: ["PM RV, GABINETE DO PREFEITO, GGIM", K.naoConfere],
+    3: ["PM RV, PROCURADORIA-GERAL DO MUNICIPIO", K.semCadastro],
+    4: ["", K.semCentroCusto],
+    5: ["", K.naoConferido],
+    6: ["", K.foraCm002],
+    7: ["", K.semOrgao],
+    8: ["PM RV, GABINETE DO PREFEITO, GGIM", K.semUnidade],
+    9: ["PM RV", K.naoConfere],
+  });
+  // Os fora da CM002 / sem órgão vão SÓ para “todos” (o apontamento é do nó anterior — sem duplicar).
+  const nasPortas = [...r.divergentes, ...r.desconhecidas, ...r.conformes].map((x) => x.id);
+  assert.ok(!nasPortas.includes(6) && !nasPortas.includes(7));
+  assert.equal(r.todos.length, 9);
 });

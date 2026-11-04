@@ -4,7 +4,7 @@ import { jaGuardado, lerDado } from "@/lib/dados-cliente";
 import { resumoTexto } from "@/lib/dados-cliente-core";
 import { dominioPorDescricao } from "@/lib/padronizacao-core";
 import type { ColunasMesa } from "@/lib/mesa-colunas-core";
-import { colunasDaAutomacao } from "./ColunasAutomacao";
+import { colunasDaAutomacao, colunasDoDfdNosItens } from "./ColunasAutomacao";
 import { useComponente } from "./ComponentesPapel";
 import { useSemUnidade } from "./UnidadeUnica";
 import dynamic from "next/dynamic";
@@ -2254,7 +2254,7 @@ export function DfdsView({
     <DataTable
       visao={visaoTabela}
       trocando={trocando}
-      columns={semColUnidade([...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id), ...colunasCamposMesa<ItemDfdRow>("itens", (r, e) => (e === "dfd" ? r.dfdId : protoDoDfd.get(r.dfdId)), valorCampo, semCamposDe("itens"))])}
+      columns={semColUnidade([...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDoDfdNosItens<ItemDfdRow>(colunasAuto, (r) => r.dfdId), ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id), ...colunasCamposMesa<ItemDfdRow>("itens", (r, e) => (e === "dfd" ? r.dfdId : protoDoDfd.get(r.dfdId)), valorCampo, semCamposDe("itens"))])}
       rows={itensR ?? []}
       getKey={(r) => r.id}
       filtrosRodape={filtrosRodape}

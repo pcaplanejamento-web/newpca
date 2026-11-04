@@ -285,14 +285,14 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "unidades-cm002",
     nome: "Unidades dos DFDs × Centro de Custo da CM002",
     descricao:
-      "A unidade de cada DFD é comparada com a do Centro de Custo da CM002 (o nome depois da última vírgula), pelo nº de planejamento; aponta as divergências e as unidades desconhecidas e troca, só nos DFDs escolhidos, pela unidade da Centi.",
+      "A unidade de cada DFD é comparada com a do Centro de Custo da CM002 (o nome depois da última vírgula), pelo nº de planejamento; grava as colunas “Centro de Custo” e “Centro de Custo confere” em Mesa → DFDs e Itens; aponta as divergências e as unidades desconhecidas e troca, só nos DFDs escolhidos, pela unidade da Centi.",
     ajuda: {
       funciona:
         "Lê os DFDs do sistema e, de cada órgão (o ID da Centi cadastrado), a lista INTEIRA da CM002. Cada DFD é achado pelo nº de planejamento = ID da CM002, no mesmo órgão. A unidade da Centi é o trecho depois da ÚLTIMA vírgula do Centro de Custo (“PM RV, GABINETE DO PREFEITO, GGIM” → GGIM), quando a lista da CM002 não traz o Centro de Custo, ele é lido do REGISTRO do planejamento pelo ID (o mesmo load do “Baixar DFDs”); casada com as unidades cadastradas pelo nome, pela sigla ou pelo setor requisitante — com o nome cortado pela Centi, pelo começo; sem casar, a sigla no fim da Finalidade.",
       executa:
         "Execute com a extensão pronta (a consulta da CM002 aprendida). Sem a coluna na CM002, a etapa “Buscar DFD na Centi” lê cada planejamento pelo ID — a execução fica mais longa (o andamento mostra DFD n de N). A tabela “Selecionar” lista os DFDs com a unidade DIVERGENTE (a do sistema e a da Centi lado a lado): marque os que devem passar para a unidade da Centi e execute de novo. Nada é trocado sem marcar.",
       resultado:
-        "Os apontamentos das divergências e das unidades desconhecidas no centro de custo (que não existem no sistema — cadastre-as em Órgãos e Unidades); os DFDs marcados com a unidade da Centi (com o histórico e a reconferência da assinatura); os que o sistema recusou, com o motivo.",
+        "As colunas “Centro de Custo” (o texto da Centi) e “Centro de Custo confere” (o cadastrado na unidade do DFD — Órgãos e Unidades — × o da Centi: Confere · Não confere · Sem cadastro · Sem centro de custo na Centi · Não conferido na Centi · Não está na CM002 · Órgão sem ID da Centi · DFD sem unidade) em Mesa → DFDs e Mesa → Itens (cada item com o do DFD dele), regravadas a cada execução; os apontamentos das divergências e das unidades desconhecidas no centro de custo (que não existem no sistema — cadastre-as em Órgãos e Unidades); os DFDs marcados com a unidade da Centi (com o histórico e a reconferência da assinatura); os que o sistema recusou, com o motivo.",
     },
     grafo: {
       v: 1,
@@ -313,6 +313,8 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         n("sel1", "entrada.selecionar", 2400, 0, { chave: "id", semMarcar: "nenhum" }),
         n("troca1", "saida.trocarUnidade", 2704, 0, { campoUnidade: "unidadeCentiId", campoId: "id" }),
         n("err5", "erros.apontar", 3008, 96, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): a unidade não foi trocada — {{motivo}}", nivel: "erro" }),
+        n("col1", "saida.gravarColuna", 2096, 448, { entidade: "dfd", coluna: "Centro de Custo", campoValor: "centroCustoCenti", campoId: "id", apagar: true, nosItens: true }),
+        n("col2", "saida.gravarColuna", 2096, 640, { entidade: "dfd", coluna: "Centro de Custo confere", campoValor: "centroCustoConfere", campoId: "id", apagar: true, nosItens: true }),
       ],
       conexoes: [
         c("inicio1", "dfds1"),
@@ -332,6 +334,10 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         c("conf1", "sel1", "divergentes"),
         c("sel1", "troca1"),
         c("troca1", "err5", "erros"),
+        c("org1", "conf1", "semOrgao"),
+        c("proc1", "conf1", "naoEncontrados"),
+        c("conf1", "col1", "todos"),
+        c("conf1", "col2", "todos"),
       ],
     },
   },

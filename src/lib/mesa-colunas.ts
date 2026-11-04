@@ -2,14 +2,19 @@ import { eq } from "drizzle-orm";
 import { dfdItens, mesaColunas, mesaColunasValores } from "@/db/schema";
 import { getDb } from "./db";
 import { type ColunaMesa, type ColunasMesa, COLUNAS_MESA_VAZIAS, ENTIDADES_COLUNA, type EntidadeColuna, MAX_COLUNAS_POR_ENTIDADE } from "./mesa-colunas-core";
-import { comandoCriarColuna, comandosGravarValores, consultaColunaPorNome } from "./mesa-colunas-sql";
+import { comandoCriarColuna, comandoNosItens, comandosGravarValores, consultaColunaPorNome } from "./mesa-colunas-sql";
 
 const entidade = (e: string): EntidadeColuna => ((ENTIDADES_COLUNA as readonly string[]).includes(e) ? (e as EntidadeColuna) : "dfd");
+const SEL = { id: mesaColunas.id, entidade: mesaColunas.entidade, nome: mesaColunas.nome, nosItens: mesaColunas.nosItens };
+const daLinha = (l: { id: number; entidade: string; nome: string; nosItens: number | null }): ColunaMesa => {
+  const e = entidade(l.entidade);
+  return { id: l.id, entidade: e, nome: l.nome, nosItens: e === "dfd" && l.nosItens === 1 };
+};
 
 /** As colunas cadastradas (todas as entidades). */
 export async function listarColunasMesa(): Promise<ColunaMesa[]> {
-  const ls = await getDb().select({ id: mesaColunas.id, entidade: mesaColunas.entidade, nome: mesaColunas.nome }).from(mesaColunas).orderBy(mesaColunas.id);
-  return ls.map((l) => ({ ...l, entidade: entidade(l.entidade) }));
+  const ls = await getDb().select(SEL).from(mesaColunas).orderBy(mesaColunas.id);
+  return ls.map(daLinha);
 }
 
 /**
@@ -39,21 +44,38 @@ export async function colunasDaMesa(visiveis: { protocolos: Set<number>; dfds: S
   }
 }
 
-/** A coluna de nome igual (sem caixa/acento), criada quando ainda não existe. `null` = passou do teto da entidade. */
-export async function colunaPorNome(e: EntidadeColuna, nome: string, usuarioId: number | null): Promise<{ coluna: ColunaMesa; criada: boolean } | null> {
-  const achar = async () => (await consultaColunaPorNome(getDb(), e, nome))[0];
+/**
+ * A coluna de nome igual (sem caixa/acento), criada quando ainda não existe. `nosItens` informado (só DFD) grava o
+ * "também na tabela de Itens" — na criação e na coluna já existente quando difere. `null` = passou do teto da entidade.
+ */
+export async function colunaPorNome(
+  e: EntidadeColuna,
+  nome: string,
+  usuarioId: number | null,
+  nosItens?: boolean,
+): Promise<{ coluna: ColunaMesa; criada: boolean } | null> {
+  const achar = async () => {
+    const l = (await consultaColunaPorNome(getDb(), e, nome))[0];
+    return l ? daLinha(l) : undefined;
+  };
   const ja = await achar();
-  if (ja) return { coluna: { ...ja, entidade: e }, criada: false };
+  if (ja) {
+    if (e === "dfd" && nosItens != null && ja.nosItens !== nosItens) {
+      await comandoNosItens(getDb(), ja.id, nosItens);
+      return { coluna: { ...ja, nosItens }, criada: false };
+    }
+    return { coluna: ja, criada: false };
+  }
   const total = (await getDb().select({ id: mesaColunas.id }).from(mesaColunas).where(eq(mesaColunas.entidade, e))).length;
   if (total >= MAX_COLUNAS_POR_ENTIDADE) return null;
-  await comandoCriarColuna(getDb(), e, nome, usuarioId);
+  await comandoCriarColuna(getDb(), e, nome, usuarioId, nosItens === true);
   const nova = await achar();
-  return nova ? { coluna: { ...nova, entidade: e }, criada: true } : null;
+  return nova ? { coluna: nova, criada: true } : null;
 }
 
 export async function getColunaMesa(id: number): Promise<ColunaMesa | null> {
-  const l = (await getDb().select({ id: mesaColunas.id, entidade: mesaColunas.entidade, nome: mesaColunas.nome }).from(mesaColunas).where(eq(mesaColunas.id, id)))[0];
-  return l ? { ...l, entidade: entidade(l.entidade) } : null;
+  const l = (await getDb().select(SEL).from(mesaColunas).where(eq(mesaColunas.id, id)))[0];
+  return l ? daLinha(l) : null;
 }
 
 /** Grava os valores (null apaga) num lote atômico. */

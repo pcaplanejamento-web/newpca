@@ -1177,17 +1177,19 @@ const NOS: DefNo[] = [
     categoria: "dados",
     rotulo: "Conferir unidade × Centro de Custo",
     descricao:
-      "A unidade de cada DFD × a do Centro de Custo da CM002 (o nome depois da última vírgula), casada com as unidades cadastradas: iguais, divergentes ou desconhecidas no sistema.",
+      "A unidade de cada DFD × a do Centro de Custo da CM002 (o nome depois da última vírgula), casada com as unidades cadastradas: iguais, divergentes ou desconhecidas no sistema. A porta “Todos” leva cada DFD com o centro de custo da Centi (centroCustoCenti) e se ele confere com o cadastrado na unidade (centroCustoConfere) — para as colunas da Mesa.",
     icone: "building",
     entradas: ["entrada"],
-    saidas: ["divergentes", "desconhecidas", "conformes"],
-    rotulosPortas: { divergentes: "Divergentes", desconhecidas: "Unidade desconhecida", conformes: "Iguais" },
+    saidas: ["divergentes", "desconhecidas", "conformes", "todos"],
+    rotulosPortas: { divergentes: "Divergentes", desconhecidas: "Unidade desconhecida", conformes: "Iguais", todos: "Todos (para as colunas)" },
     campos: [],
     executar: async (e, _c, ctx) => {
       // Sem o centro de custo na linha da CM002 (a consulta aprendida costuma trazer só Id + Situação), o planejamento é
       // lido pelo ID AQUI — vale em qualquer diagrama salvo, antigo ou novo; o que já veio lido (`centi`) não é relido.
       const itens = so(e);
-      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => !("centi" in it) && !centroCustoDoItem(it)) : [];
+      // Só os que TÊM a linha da CM002 (`encontrado`): os de fora da CM002 / sem órgão vão direto para as colunas.
+      const temLinha = (it: Item) => !!it.encontrado && typeof it.encontrado === "object";
+      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => temLinha(it) && !("centi" in it) && !centroCustoDoItem(it)) : [];
       if (!faltam.length) return conferirUnidades(itens, (ctx.host.unidades ?? []) as ReparticaoMatch[]);
       const lidos = await lerPlanejamentosPeloId(faltam, ctx, { pdf: false, paralelo: 3, rotulo: "Lendo o planejamento pelo ID — " });
       const porItem = new Map(faltam.map((it, i) => [it, lidos[i]]));
@@ -1689,11 +1691,20 @@ const NOS: DefNo[] = [
       { chave: "campoValor", rotulo: "Campo do valor", tipo: "caminho", padrao: "valor", ajuda: "O dado de cada item que vai para a coluna (ex.: valor — o da Regra — ou encontrado.situacao)." },
       { chave: "campoId", rotulo: "Campo do id do registro", tipo: "caminho", padrao: "id", ajuda: "O dado que diz em qual linha da Mesa gravar: o id do protocolo, DFD ou item no sistema." },
       { chave: "apagar", rotulo: "Valor vazio apaga o da coluna", ajuda: "Ligado: quando o valor vem vazio, apaga o que já estava na coluna. Desligado: mantém.", tipo: "booleano", padrao: false },
+      {
+        chave: "nosItens",
+        rotulo: "Mostrar também na tabela de Itens",
+        ajuda: "Só para a tabela DFDs: a coluna aparece também em Mesa → Itens, e cada item mostra o valor do DFD dele (sempre o atual, mesmo depois de o DFD ser regravado).",
+        tipo: "booleano",
+        padrao: false,
+        visivel: (c) => str(c.entidade, "dfd") === "dfd",
+      },
     ],
     executar: async (e, c, ctx) => {
       const entidade = (ENTIDADES_COLUNA as readonly string[]).includes(str(c.entidade)) ? (str(c.entidade) as EntidadeColuna) : "dfd";
       const nome = str(c.coluna).trim();
       if (!nome) throw new Error("Informe o nome da coluna.");
+      // "Também nos Itens" só vai ao servidor quando o nó o define (o diagrama antigo não mexe na coluna já existente).
       const gravar: { alvoId: number; valor: string | null }[] = [];
       const saida: Item[] = [];
       const ignorados: Item[] = [];
@@ -1707,7 +1718,7 @@ const NOS: DefNo[] = [
         }
       }
       if (!gravar.length) return { saida, ignorados };
-      const r = await ctx.api("/api/admin/automacao/colunas", { method: "POST", body: { entidade, nome } });
+      const r = await ctx.api("/api/admin/automacao/colunas", { method: "POST", body: entidade === "dfd" && typeof c.nosItens === "boolean" ? { entidade, nome, nosItens: c.nosItens } : { entidade, nome } });
       const id = (r.coluna as { id?: number } | undefined)?.id;
       if (!r.ok || !id) throw new Error(r.error || "Não consegui criar/achar a coluna.");
       for (let i = 0; i < gravar.length; i += 500) {

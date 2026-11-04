@@ -20,7 +20,8 @@ export const chaveColuna = (nome: string) =>
 /** O nome exibido (limpo, ≤ 60). */
 export const nomeColuna = (nome: string) => nome.replace(/[\p{Cc}\p{Cf}]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NOME_COLUNA);
 
-export type ColunaMesa = { id: number; entidade: EntidadeColuna; nome: string };
+/** `nosItens` = a coluna de DFD aparece também na tabela de Itens (o item herda o valor do DFD dele). */
+export type ColunaMesa = { id: number; entidade: EntidadeColuna; nome: string; nosItens: boolean };
 /** As colunas + os valores (`valores[colunaId][alvoId]`) que a Mesa recebe. */
 export type ColunasMesa = { colunas: ColunaMesa[]; valores: Record<number, Record<number, string>> };
 export const COLUNAS_MESA_VAZIAS: ColunasMesa = { colunas: [], valores: {} };
@@ -34,3 +35,5 @@ export function valorParaColuna(v: unknown): string | null {
 
 /** As colunas de uma entidade (na ordem de criação). */
 export const colunasDe = (c: ColunasMesa | undefined, e: EntidadeColuna) => (c?.colunas ?? []).filter((x) => x.entidade === e);
+/** As colunas de DFD que aparecem também na tabela de Itens (o valor é o do DFD do item). */
+export const colunasNosItens = (c: ColunasMesa | undefined) => colunasDe(c, "dfd").filter((x) => x.nosItens);

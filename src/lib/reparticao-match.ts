@@ -253,19 +253,28 @@ function palavrasEmComum(a: string[], b: string[]): number {
   return proprias >= 2 ? proprias : 0;
 }
 
-/** O CENTRO DE CUSTO cadastrado na unidade (como a Centi escreve) × o da CM002: o texto inteiro ou o último nome, sem
- * caixa/acento/pontuação. Vem ANTES da comparação por nome — o ADM sincroniza o nome uma vez e o casamento é exato. */
+/** O texto comparável do centro de custo (sem caixa/acento/pontuação) e o do ÚLTIMO nome (depois da última vírgula). */
+const chaveCentro = (t: string) => stripAccents(String(t ?? "")).toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+const ultimoCentro = (t: string) => chaveCentro(String(t ?? "").split(",").filter((x) => x.trim()).pop() ?? "");
+
+/**
+ * O CENTRO DE CUSTO cadastrado (como a Centi escreve) confere com o da CM002? O texto inteiro igual, o cadastrado igual
+ * ao último nome da Centi, ou os dois com o mesmo último nome — sem caixa/acento/pontuação. Vazio nunca confere.
+ */
+export function centroCustoConfere(cadastrado: string | null | undefined, centi: string | null | undefined): boolean {
+  const k = chaveCentro(String(cadastrado ?? ""));
+  const inteiro = chaveCentro(String(centi ?? ""));
+  if (!k || !inteiro) return false;
+  const ultimo = ultimoCentro(String(centi ?? ""));
+  return k === inteiro || k === ultimo || (!!ultimo && ultimoCentro(String(cadastrado)) === ultimo);
+}
+
+/** O CENTRO DE CUSTO cadastrado na unidade (como a Centi escreve) × o da CM002 (`centroCustoConfere`). Vem ANTES da
+ * comparação por nome — o ADM sincroniza o nome uma vez e o casamento é exato. */
 export function casarPorCentroCusto(centro: string, unidades: ReparticaoMatch[], orgaoId?: number | null): CasamentoUnidade | null {
   const validas = unidades.filter((u) => !u.oculto && norm(u.codigo) !== "GERAL" && u.centroCusto?.trim());
   if (!validas.length) return null;
-  const chave = (t: string) => stripAccents(t).toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
-  const inteiro = chave(centro);
-  const ultimo = chave(String(centro).split(",").filter((x) => x.trim()).pop() ?? "");
-  const ultimoDe = (t: string) => chave(t.split(",").filter((x) => x.trim()).pop() ?? "");
-  let achadas = validas.filter((u) => {
-    const k = chave(String(u.centroCusto));
-    return !!k && (k === inteiro || k === ultimo || (!!ultimo && ultimoDe(String(u.centroCusto)) === ultimo));
-  });
+  let achadas = validas.filter((u) => centroCustoConfere(u.centroCusto, centro));
   if (!achadas.length) return null;
   if (achadas.length > 1 && orgaoId != null) {
     const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);

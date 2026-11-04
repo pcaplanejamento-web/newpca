@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.268.0",
+    data: "2026-11-04",
+    titulo: "Centro de Custo da Centi nas tabelas de DFDs e Itens",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Colunas “Centro de Custo” (o da Centi) e “Centro de Custo confere” (o cadastrado na unidade × o da Centi: Confere, Não confere, Sem cadastro…) nas tabelas de DFDs e de Itens, preenchidas pela automação “Unidades dos DFDs × Centro de Custo da CM002”.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "melhoria", area: "Automação", texto: "O nó “Gravar na coluna da Mesa” mostra a coluna de DFDs também na tabela de Itens (cada item com o valor do DFD dele); o modelo das unidades grava as duas colunas para TODO DFD — também os fora da CM002 e os de órgão sem ID da Centi. Use “Atualizar pelo modelo”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.267.1",
     data: "2026-11-04",
     titulo: "Auditoria do Centro de Custo e da captura de colunas",
