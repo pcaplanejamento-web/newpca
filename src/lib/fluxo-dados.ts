@@ -275,8 +275,12 @@ export function conferirUnidades(
       out.desconhecidas.push({ ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` });
       continue;
     }
-    // A unidade é a escrita ANTES da última vírgula (com 2 trechos, a depois dela); sem casar, os outros trechos.
+    // A unidade é SEMPRE o último trecho; só a entidade ("PM RV") = o planejamento não tem unidade na Centi.
     const trechos = trechosDoCentroCusto(centro);
+    if (!trechos.length) {
+      out.desconhecidas.push({ ...base, mensagem: `${ref}: o centro de custo na Centi não tem unidade (só “${centro}”)` });
+      continue;
+    }
     let { nome } = trechos[0] ?? { nome: "" };
     let c: CasamentoUnidade = { tipo: "desconhecida" };
     for (const [i, t] of trechos.entries()) {

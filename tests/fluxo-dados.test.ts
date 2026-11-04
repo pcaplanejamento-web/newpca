@@ -304,7 +304,7 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
   assert.deepEqual(massa.map((p) => p.body), [{ ids: [2], acao: { campo: "reparticao", reparticaoId: 2 } }], "só o marcado, para a unidade da Centi");
   const msgs = r.apontados.map((a) => a.mensagem).sort();
   assert.ok(msgs.some((t) => String(t).startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")));
-  assert.ok(msgs.some((t) => String(t).includes("“CAMARA MUNICIPAL” não existe no sistema")));
+  assert.ok(msgs.some((t) => String(t).includes("“GUARDA CIVIL MUNICIPAL” não existe no sistema")));
   assert.ok(!msgs.some((t) => String(t).startsWith("DFD 40")), "a unidade igual não é apontada");
 });
 

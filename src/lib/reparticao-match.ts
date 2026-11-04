@@ -180,28 +180,20 @@ export function orgaoDivergeDaUnidade(
   return orgaoDoCampo !== orgaoIdDaUnidade;
 }
 
-/** Os nomes de UNIDADE do "Centro custo" da CM002, na ordem em que valem. O 1º trecho é a ENTIDADE ("PM RV") e sai.
- * Com 3+ trechos, a unidade é a escrita ANTES da última vírgula ("PM RV, SEC. MUNIC. DE AÇÃO URBANA…, SECRETARIA DE ACAO
- * URBANA" → "SEC. MUNIC. DE AÇÃO URBANA…"); com 2, a depois dela. Os demais trechos ficam de reserva (o último primeiro).
- * A Centi corta os nomes (reticência ou ~45 caracteres por trecho): `truncado` marca que só o COMEÇO é conhecido. */
+/** A UNIDADE do "Centro custo" da CM002 = SEMPRE o último trecho ("PM RV, CAMARA MUNICIPAL, GGIM" → "GGIM"). O 1º trecho
+ * é a ENTIDADE ("PM RV"): sozinho, não há unidade (lista vazia). A Centi corta os nomes (reticência ou 45 caracteres por
+ * trecho): `truncado` marca que só o COMEÇO é conhecido. */
 export function trechosDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean }[] {
   const t = String(texto ?? "");
   const brutos = t.split(",").filter((x) => x.trim());
-  if (!brutos.length) return [];
-  const corteTotal = t.trim().length >= MAX_CENTRO_CUSTO;
-  const trecho = (bruto: string, ultimo: boolean) => {
-    const sem = bruto.replace(/\s*(\.{2,}|…)\s*$/, "");
-    const nome = sem.trim().replace(/\s+/g, " ");
-    return { nome, truncado: sem.length !== bruto.length || nome.length >= CORTE_TRECHO_CENTI || (ultimo && corteTotal) };
-  };
-  const todos = brutos.map((b, i) => trecho(b, i === brutos.length - 1));
-  if (todos.length === 1) return todos;
-  const resto = todos.slice(1);
-  const principal = resto.length >= 2 ? resto.length - 2 : 0;
-  return [resto[principal], ...resto.filter((_, i) => i !== principal).reverse()];
+  if (brutos.length < 2) return [];
+  const bruto = brutos[brutos.length - 1];
+  const sem = bruto.replace(/\s*(\.{2,}|…)\s*$/, "");
+  const nome = sem.trim().replace(/\s+/g, " ");
+  return [{ nome, truncado: sem.length !== bruto.length || nome.length >= CORTE_TRECHO_CENTI || t.trim().length >= MAX_CENTRO_CUSTO }];
 }
 
-/** O nome PRINCIPAL da unidade no "Centro custo" (ver `trechosDoCentroCusto`). */
+/** O nome da unidade no "Centro custo" (o último trecho — ver `trechosDoCentroCusto`); só a entidade = "". */
 export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
   return trechosDoCentroCusto(texto)[0] ?? { nome: "", truncado: false };
 }

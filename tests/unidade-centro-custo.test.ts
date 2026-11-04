@@ -14,13 +14,13 @@ const UNIDADES = [
   { id: 8, codigo: "FMS", nome: "Secretaria Municipal de Saúde", orgaoId: 2 },
 ];
 
-test("Centro de Custo: sem a entidade; com 3 trechos, a escrita ANTES da última vírgula; reticência = nome cortado", () => {
+test("Centro de Custo: a unidade é SEMPRE o último nome; só a entidade = sem unidade; reticência = nome cortado", () => {
   assert.deepEqual(unidadeDoCentroCusto("PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO"), { nome: "SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO", truncado: true }, "45 caracteres = o corte da Centi");
   assert.deepEqual(unidadeDoCentroCusto("PM RV, SUBPREFEITURA DE OUROANA"), { nome: "SUBPREFEITURA DE OUROANA", truncado: false });
-  assert.deepEqual(unidadeDoCentroCusto("PM RV, GABINETE DO PREFEITO, GGIM"), { nome: "GABINETE DO PREFEITO", truncado: false });
-  assert.deepEqual(trechosDoCentroCusto("PM RV, GABINETE DO PREFEITO, GGIM").map((t) => t.nome), ["GABINETE DO PREFEITO", "GGIM"]);
-  assert.deepEqual(trechosDoCentroCusto("PM RV, PROCURADORIA-GERAL DO MUNICÍPIO, PROCURADORIA-GE...")[1], { nome: "PROCURADORIA-GE", truncado: true });
-  assert.deepEqual(unidadeDoCentroCusto("SÓ UM NOME"), { nome: "SÓ UM NOME", truncado: false });
+  assert.deepEqual(unidadeDoCentroCusto("PM RV, CAMARA MUNICIPAL, GGIM"), { nome: "GGIM", truncado: false });
+  assert.deepEqual(trechosDoCentroCusto("PM RV"), [], "só a entidade: sem unidade");
+  assert.deepEqual(unidadeDoCentroCusto("PM RV, PROCURADORIA-GERAL DO MUNICÍPIO, PROCURADORIA-GE..."), { nome: "PROCURADORIA-GE", truncado: true });
+  assert.deepEqual(unidadeDoCentroCusto("SÓ UM NOME"), { nome: "", truncado: false });
   assert.deepEqual(unidadeDoCentroCusto(""), { nome: "", truncado: false });
   assert.equal(siglaDaFinalidade("PCA - 2026 - INICIAL - SMAUSP"), "SMAUSP");
   assert.equal(siglaDaFinalidade("PCA - 2026"), null);
@@ -42,9 +42,9 @@ test("Casar a unidade da Centi: nome, sigla, começo do nome cortado, órgão no
 test("Conferir unidades: iguais, divergentes (com a da Centi) e desconhecidas (com a sigla da Finalidade como reserva)", () => {
   const itens = [
     { id: 10, numero: "1", planejamento: "11", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1, encontrado: { centroCusto: "PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO" } },
-    { id: 20, numero: "2", planejamento: "22", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
+    { id: 20, numero: "2", planejamento: "22", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1, encontrado: { centroCusto: "PM RV, CAMARA MUNICIPAL, GGIM" } },
     { id: 30, numero: "3", planejamento: "33", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1, encontrado: { centroCusto: "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL" } },
-    { id: 40, numero: "4", planejamento: "44", reparticaoId: null, sigla: null, orgaoId: 1, encontrado: { centroCusto: "PM RV, SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO, SECR...", finalidade: "PCA - 2026 - INICIAL - SMAUSP" } },
+    { id: 40, numero: "4", planejamento: "44", reparticaoId: null, sigla: null, orgaoId: 1, encontrado: { centroCusto: "PM RV, SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO", finalidade: "PCA - 2026 - INICIAL - SMAUSP" } },
     { id: 50, numero: "5", planejamento: "55", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1, encontrado: { centroCusto: "" } },
   ];
   const r = conferirUnidades(itens, UNIDADES);
@@ -53,8 +53,8 @@ test("Conferir unidades: iguais, divergentes (com a da Centi) e desconhecidas (c
   assert.equal(r.divergentes[0].mensagem, "DFD 2 (planejamento 22): no sistema SEPLAN, na Centi GGIM (GGIM)");
   assert.equal(r.divergentes[1].mensagem, "DFD 4 (planejamento 44): no sistema sem unidade, na Centi SMAUSP (SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO)");
   assert.deepEqual(r.desconhecidas.map((x) => x.id), [30, 50]);
-  assert.match(String(r.desconhecidas[0].mensagem), /unidade desconhecida no centro de custo — “CAMARA MUNICIPAL” não existe no sistema/);
-  assert.equal(r.desconhecidas[0].unidadeCentroCusto, "CAMARA MUNICIPAL");
+  assert.match(String(r.desconhecidas[0].mensagem), /unidade desconhecida no centro de custo — “GUARDA CIVIL MUNICIPAL” não existe no sistema/);
+  assert.equal(r.desconhecidas[0].unidadeCentroCusto, "GUARDA CIVIL MUNICIPAL");
 });
 
 test("Auditoria: o desconhecido nunca vira outra unidade; vírgula no fim, corte de 200 e ' - SIGLA'", () => {
@@ -66,7 +66,7 @@ test("Auditoria: o desconhecido nunca vira outra unidade; vírgula no fim, corte
   assert.match(String(r.desconhecidas[0].mensagem), /“DEPARTAMENTO NOVO” não existe no sistema/);
   assert.deepEqual(unidadeDoCentroCusto("PM RV, SECRETARIA MUNICIPAL DE SAÚDE,"), { nome: "SECRETARIA MUNICIPAL DE SAÚDE", truncado: false });
   const longo = `PM RV, ${"X".repeat(150)}, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO`.slice(0, 200);
-  const u = trechosDoCentroCusto(longo)[1];
+  const u = unidadeDoCentroCusto(longo);
   assert.equal(u.truncado, true, "a extensão corta em 200 sem reticência");
   assert.deepEqual(casarUnidadePorNome(u.nome, u.truncado, UNIDADES), { tipo: "ok", id: 1 });
   assert.deepEqual(casarUnidadePorNome("SECRETARIA DE PLANEJAMENTO - SEPLAN", false, UNIDADES), { tipo: "ok", id: 1 });
@@ -78,6 +78,8 @@ test("Conferir unidades: reserva pelas colunas cruas da Centi e as colunas na me
     UNIDADES,
   );
   assert.equal(r.conformes.length, 1);
+  const so = conferirUnidades([{ id: 92, numero: "7", planejamento: "77", reparticaoId: 1, orgaoId: 1, encontrado: { centroCusto: "PM RV" } }], UNIDADES);
+  assert.match(String(so.desconhecidas[0]?.mensagem), /não tem unidade \(só “PM RV”\)/);
   const s = conferirUnidades([{ id: 91, numero: "8", planejamento: "88", reparticaoId: 1, orgaoId: 1, encontrado: { centroCusto: "", centi: { Id: "88", Situacao: "x" } } }], UNIDADES);
   assert.match(String(s.desconhecidas[0]?.mensagem), /campos que vieram: Id, Situacao/);
 });
@@ -93,18 +95,24 @@ test("Centro de Custo REAL da CM002: a escrita da Centi (abreviada e cortada) ca
     { id: 7, codigo: "CGM", nome: "Controladoria Geral do Município", orgaoId: 1 },
     { id: 8, codigo: "SEDEST", nome: "Secretaria Municipal de Desenvolvimento Econômico Sustentável e do Trabalho", orgaoId: 1 },
     { id: 9, codigo: "CAMARA", nome: "Câmara Municipal", orgaoId: 2 },
+    { id: 10, codigo: "GCM", nome: "Guarda Civil Municipal", orgaoId: 1 },
+    { id: 11, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1 },
+    { id: 12, codigo: "SAU", nome: "Secretaria de Ação Urbana", orgaoId: 1 },
+    { id: 13, codigo: "DEC", nome: "Desenvolvimento Econômico", orgaoId: 1 },
   ];
   const casos: [string, number][] = [
     ["PM RV, SEC MUNICIPAL DE INFRAESTRUTURA RURAL", 1],
     ["PM RV, SECRETARIA MUNICIPAL DE MEIO AMBIENTE", 2],
     ["PM RV, SUBPREFEITURA DE OUROANA", 3],
     ["PM RV, SEC. MUNIC. DE INFRAESTRUTURA E DESENV. URBAN", 4],
-    ["PM RV, SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO, SECRETARIA DE ACAO URBANA", 5],
+    ["PM RV, SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO", 5],
+    ["PM RV, SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO, SECRETARIA DE ACAO URBANA", 12],
     ["PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO", 6],
     ["PM RV, CONTROLADORIA GERAL DO MUNICIPIO", 7],
-    ["PM RV, SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL, DESENVOLVIMENTO ECONOMICO", 8],
+    ["PM RV, SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL, DESENVOLVIMENTO ECONOMICO", 13],
     ["PM RV, SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL", 8],
-    ["PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL", 9],
+    ["PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL", 10],
+    ["PM RV, CAMARA MUNICIPAL, GGIM", 11],
   ];
   for (const [centro, id] of casos) {
     const r = conferirUnidades([{ id: 1, numero: "1", planejamento: "1", reparticaoId: id, orgaoId: 1, encontrado: { centroCusto: centro } }], CAD);

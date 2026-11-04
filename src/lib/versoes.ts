@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.10",
+    data: "2026-11-04",
+    titulo: "Unidades × Centro de Custo: a unidade é sempre o último nome",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A unidade do Centro de Custo da CM002 é SEMPRE o último nome (“PM RV, CAMARA MUNICIPAL, GGIM” → GGIM); o centro de custo só com “PM RV” é apontado como sem unidade na Centi.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.9",
     data: "2026-11-04",
     titulo: "Unidades × Centro de Custo: a coluna lida como a Centi escreve",
