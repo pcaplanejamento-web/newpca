@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.271.1",
+    data: "2026-11-04",
+    titulo: "Cadastro do centro de custo mais claro",
+    mudancas: [
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "Os centros de custo escolhidos e salvos aparecem inteiros, um por chip (remover no ×; digitar + Enter acrescenta), com “Escolher dos lidos nos DFDs” logo abaixo; a lista de subunidades no padrão dos campos do sistema.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "As mensagens do cadastro (centro obrigatório, nomes ou centros repetidos) ficam no (!) ao lado da ajuda; a subunidade sem nome recebe a sigla da unidade; no modo “Um para toda a unidade” as subunidades nunca guardam centro próprio.", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "A coluna Subunidades mostra as subunidades (sem nenhuma, a sigla da própria unidade); sem centro de custo cadastrado, o aviso em vermelho.", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.271.0",
     data: "2026-11-04",
     titulo: "Um centro de custo para toda a unidade: a subunidade é escolhida no DFD",

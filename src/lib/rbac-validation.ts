@@ -197,7 +197,7 @@ export const subunidadesSchema = z.strictObject({
     .array(
       z.strictObject({
         id: z.number().int().positive().optional(),
-        nome: z.string().trim().min(1, "Informe o nome da subunidade.").max(LIMITES_SUBUNIDADE.nome),
+        nome: z.string().trim().max(LIMITES_SUBUNIDADE.nome), // vazio = o da unidade
         centros: centrosSchema,
       }),
     )

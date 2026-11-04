@@ -44,7 +44,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   if ("resp" in corpo) return corpo.resp;
   const modo = corpo.data.modo;
   const centros = lerCentros(corpo.data.centros);
-  const lista = corpo.data.subunidades.map((s) => ({ ...s, nome: s.nome.trim(), centros: lerCentros(s.centros) }));
+  // No modo único o centro é da unidade: as subunidades nunca guardam centro próprio.
+  const lista = corpo.data.subunidades.map((s) => ({ ...s, nome: s.nome.trim() || u.codigo, centros: modo === "unico" ? [] : lerCentros(s.centros) }));
   const motivo = motivoSubunidadesInvalidas(modo, centros, lista);
   if (motivo) return erro(motivo, 422);
   const antes = (await lerConfigSubunidades([id])).get(id);

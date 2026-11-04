@@ -255,3 +255,34 @@ test("migração 0178: no modo único o centro passa à unidade e a linha com o 
   assert.deepEqual(JSON.parse((db.prepare("SELECT centro_custo AS c FROM reparticoes WHERE id = 101").get() as { c: string }).c), ["PM RV, GGIM"]);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM subunidades WHERE id = 11").get() as { n: number }).n, 1);
 });
+
+test("ida e volta no D1 real: o cadastro gravado é o lido (modo, centros da unidade, subunidades) e define a subunidade do DFD", async () => {
+  const db = bancoMigrado();
+  db.exec("INSERT INTO reparticoes (id, codigo, nome) VALUES (1, 'PGM', 'Procuradoria')");
+  const o = orm(db);
+  const centros = lerCentros(["PM RV, PROCURADORIA-GERAL DO MUNICÍPIO, PGM", " pm rv, procuradoria-geral do município, pgm "]);
+  assert.equal(centros.length, 1, "repetido sem caixa/espaço sai antes de gravar");
+  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", centros, [{ nome: "Contencioso", centros: [] }, { nome: "Consultivo", centros: [] }]));
+  // A leitura como `lerConfigSubunidades` faz (as MESMAS colunas e a régua `lerModo`/`lerCentros`).
+  const u = db.prepare("SELECT codigo, vinculo_subunidade AS modo, centro_custo AS centros FROM reparticoes WHERE id = 1").get() as { codigo: string; modo: string; centros: string };
+  const subs = await q.consultaSubunidades(o, [1]);
+  const cfg: ConfigSubunidades = {
+    codigo: u.codigo,
+    modo: lerModo(u.modo),
+    centros: lerModo(u.modo) === "unico" ? lerCentros(u.centros) : [],
+    subunidades: subs.map((s) => ({ id: s.id, nome: s.nome, centros: lerCentros(s.centros) })),
+  };
+  assert.deepEqual(cfg.centros, ["PM RV, PROCURADORIA-GERAL DO MUNICÍPIO, PGM"]);
+  assert.deepEqual(cfg.subunidades.map((s) => [s.nome, s.centros]), [["Contencioso", []], ["Consultivo", []]]);
+  // O DFD com o centro gravado pela automação e a subunidade escolhida.
+  db.exec("INSERT INTO dfds (id, numero, reparticao_id) VALUES (1, '1', 1)");
+  await (o as unknown as { all: (s: unknown) => Promise<unknown[]> }).all(q.sqlCentroCusto([{ id: 1, centro: "PM RV, PROCURADORIA-GERAL DO MUNICÍPIO, PGM" }]));
+  const d = db.prepare("SELECT centro_custo AS c FROM dfds WHERE id = 1").get() as { c: string };
+  assert.equal(subunidadeDoDfd({ reparticaoId: 1, centroCusto: d.c }, cfg).falta, "naoEscolhida");
+  const escolhida = cfg.subunidades[1].id;
+  db.prepare("UPDATE dfds SET subunidade_id = ? WHERE id = 1").run(escolhida);
+  assert.deepEqual(subunidadeDoDfd({ reparticaoId: 1, subunidadeId: escolhida, centroCusto: d.c }, cfg).subunidade, { id: escolhida, nome: "Consultivo" });
+  // Regravar o mesmo cadastro mantém as linhas (os mesmos ids) — a escolha do DFD continua valendo.
+  await lote(o, q.comandosGravarSubunidades(o, 1, "unico", centros, cfg.subunidades.map((s) => ({ id: s.id, nome: s.nome, centros: [] }))));
+  assert.equal((db.prepare("SELECT subunidade_id AS s FROM dfds WHERE id = 1").get() as { s: number }).s, escolhida);
+});
