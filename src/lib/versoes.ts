@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.275.0",
+    data: "2026-11-04",
+    titulo: "Subunidade em massa no banner do protocolo",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto:
+          "No banner do protocolo, a barra de seleção dos DFDs ganhou o campo Subunidade — a MESMA da Mesa → DFDs: só aplica quando toda a seleção pode (os que não podem ficam em vermelho, os de outra unidade em âmbar) e vai ao banco no \"Salvar alterações\".",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.274.0",
     data: "2026-11-04",
     titulo: "Subunidade em massa na Mesa",

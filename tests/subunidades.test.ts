@@ -322,3 +322,35 @@ test("builders: as opções contam os DFDs DA UNIDADE (primeiro) e o mover tira 
   assert.deepEqual(JSON.parse((db.prepare("SELECT centro_custo AS c FROM reparticoes WHERE id = 3").get() as { c: string }).c), []);
   assert.deepEqual(JSON.parse((db.prepare("SELECT centros_custo AS c FROM subunidades WHERE id = 7").get() as { c: string }).c), ["FMAS, ASSIST"]);
 });
+
+test("subunidadeEmMassa: a régua única da Mesa e do banner do protocolo", async () => {
+  const { subunidadeEmMassa } = await import("../src/lib/subunidades-core.ts");
+  const cfgs = new Map([
+    [1, { codigo: "FMS", modo: "unico" as const, centros: ["A"], subunidades: [{ id: 10, nome: "S1", centros: [] }] }],
+    [2, { codigo: "SME", modo: "unico" as const, centros: ["B"], subunidades: [{ id: 20, nome: "S2", centros: [] }] }],
+    [3, { codigo: "SAS", modo: "subunidades" as const, centros: [], subunidades: [] }],
+  ]);
+  const cfg = (id: number) => cfgs.get(id) as never;
+  const sig = (id: number) => cfgs.get(id)?.codigo;
+  const ok = subunidadeEmMassa([{ id: 1, reparticaoId: 1, sigla: "FMS" }, { id: 2, reparticaoId: 1, sigla: "FMS" }], cfg, sig);
+  assert.equal(ok.sub.motivo, null);
+  assert.deepEqual(ok.sub.opcoes.map((s) => s.id), [10]);
+  const r = subunidadeEmMassa(
+    [
+      { id: 1, reparticaoId: 1, sigla: "FMS" },
+      { id: 2, reparticaoId: 1, sigla: "FMS" },
+      { id: 3, reparticaoId: 2, sigla: "SME" },
+      { id: 4, reparticaoId: 3, sigla: "SAS" },
+      { id: 5, reparticaoId: null, sigla: null },
+      { id: 6, reparticaoId: 9, sigla: "X" },
+      { id: 7, reparticaoId: 1, sigla: "FMS", bloqueio: "unidade sem acesso" },
+    ],
+    cfg,
+    sig,
+  );
+  assert.equal(r.motivos.get(3)?.tom, "warn");
+  for (const id of [4, 5, 6, 7]) assert.equal(r.motivos.get(id)?.tom, "danger");
+  assert.ok(!r.motivos.has(1) && !r.motivos.has(2));
+  assert.match(r.motivos.get(7)?.dica ?? "", /sem acesso/);
+  assert.match(r.sub.motivo ?? "", /4 DFD\(s\).*1 de outra unidade/);
+});

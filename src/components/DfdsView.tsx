@@ -13,7 +13,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useT
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { baseDfd, baseProtocolo, type ConfLinha, type ConfProto, type ConfsGuardadas } from "@/lib/conferencia-cache-core";
 import { avaliarProtocolo, corDaFalta } from "@/lib/conferencia-dfd";
-import { type ConfigSubunidades, subunidadeDoDfd, textoFaltaSubunidade } from "@/lib/subunidades-core";
+import { type ConfigSubunidades, subunidadeDoDfd, subunidadeEmMassa, textoFaltaSubunidade } from "@/lib/subunidades-core";
 import type { ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import type { DfdNaMesa, ProtocoloNaMesa } from "@/lib/mesa-redacao";
 import { metricasPermitidas, ocultasDe, podeTrocarResponsavel } from "@/lib/mesa-visao-core";
@@ -1211,41 +1211,14 @@ export function DfdsView({
   // A SUBUNIDADE em massa: só quando TODA a seleção pode — DFDs de UMA unidade no modo "um centro para toda a unidade"
   // com subunidades (as dela). Os que não podem ficam com o chip vermelho (âmbar = de outra unidade) e o motivo.
   const [campoMassa, setCampoMassa] = useState<CampoBarra | null>(null);
-  const subMassa = (() => {
-    const motivos = new Map<number, { tom: "danger" | "warn"; dica: string }>();
-    const porUnidade = new Map<number, number[]>();
-    for (const k of selDfds) {
+  const subMassa = subunidadeEmMassa(
+    [...selDfds].flatMap((k) => {
       const d = dfdPorId.get(Number(k));
-      if (!d) continue;
-      const cfg = d.reparticaoId != null ? reparticoes.find((r) => r.id === d.reparticaoId)?.subunidade : null;
-      const sigla = d.reparticaoCodigo ?? "a unidade";
-      const motivo =
-        d.reparticaoId == null
-          ? "DFD sem unidade"
-          : !cfg
-            ? `${sigla} não tem centro de custo cadastrado`
-            : cfg.modo === "subunidades"
-              ? `em ${sigla} a subunidade vem do centro de custo (um por subunidade)`
-              : !cfg.subunidades.length
-                ? `${sigla} não tem subunidades`
-                : null;
-      if (motivo) motivos.set(d.id, { tom: "danger", dica: `Subunidade não permitida: ${motivo}.` });
-      else porUnidade.set(d.reparticaoId as number, [...(porUnidade.get(d.reparticaoId as number) ?? []), d.id]);
-    }
-    // Várias unidades permitidas: vale a de MAIS DFDs; os das outras ficam em âmbar.
-    const [unica] = [...porUnidade.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? [];
-    const sigla = (id: number) => reparticoes.find((r) => r.id === id)?.codigo ?? "outra unidade";
-    for (const [u, ids] of porUnidade)
-      if (u !== unica) for (const id of ids) motivos.set(id, { tom: "warn", dica: `De ${sigla(u)} — a subunidade em massa vale para os DFDs de UMA unidade (${sigla(unica as number)}).` });
-    const cfg = unica != null ? reparticoes.find((r) => r.id === unica)?.subunidade : null;
-    const nao = [...motivos.values()].filter((m) => m.tom === "danger").length;
-    const outras = motivos.size - nao;
-    const motivo = motivos.size
-      ? [nao ? `${num(nao)} DFD(s) não permitem subunidade (em vermelho)` : "", outras ? `${num(outras)} de outra unidade (em âmbar)` : ""].filter(Boolean).join(" · ") +
-        " — tire-os da seleção para definir a subunidade."
-      : null;
-    return { motivos, sub: { opcoes: cfg?.subunidades ?? [], motivo } };
-  })();
+      return d ? [{ id: d.id, reparticaoId: d.reparticaoId ?? null, sigla: d.reparticaoCodigo ?? null }] : [];
+    }),
+    (id) => reparticoes.find((r) => r.id === id)?.subunidade,
+    (id) => reparticoes.find((r) => r.id === id)?.codigo,
+  );
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {

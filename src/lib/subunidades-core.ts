@@ -230,3 +230,50 @@ export function planoMover(mover: string[], outras: CentrosDeOutro[]) {
   }
   return alvos;
 }
+
+/** Um DFD da seleção para a subunidade EM MASSA: a unidade (do rascunho, no banner) e, quando não pode ser alterado, o motivo. */
+export type AlvoSubunidadeMassa = { id: number; reparticaoId: number | null; sigla: string | null; bloqueio?: string | null };
+export type MotivoSubunidadeMassa = { tom: "danger" | "warn"; dica: string };
+
+/**
+ * A subunidade EM MASSA — a régua ÚNICA da Mesa e do banner do protocolo: só aplica quando TODA a seleção pode (unidade
+ * no modo "único" com subunidades, a MESMA unidade). Os que não podem ficam em vermelho (`danger`, com o motivo); os de
+ * outra unidade em âmbar (`warn` — vale a de MAIS DFDs). `sub.motivo` = por que o campo fica travado.
+ */
+export function subunidadeEmMassa(
+  alvos: AlvoSubunidadeMassa[],
+  cfgDe: (reparticaoId: number) => ConfigSubunidades | null | undefined,
+  siglaDe: (reparticaoId: number) => string | null | undefined,
+): { motivos: Map<number, MotivoSubunidadeMassa>; sub: { opcoes: Subunidade[]; motivo: string | null } } {
+  const motivos = new Map<number, MotivoSubunidadeMassa>();
+  const porUnidade = new Map<number, number[]>();
+  for (const a of alvos) {
+    const cfg = a.reparticaoId != null ? cfgDe(a.reparticaoId) : null;
+    const sigla = a.sigla || "a unidade";
+    const motivo = a.bloqueio
+      ? a.bloqueio
+      : a.reparticaoId == null
+        ? "DFD sem unidade"
+        : !cfg
+          ? `${sigla} não tem centro de custo cadastrado`
+          : cfg.modo === "subunidades"
+            ? `em ${sigla} a subunidade vem do centro de custo (um por subunidade)`
+            : !cfg.subunidades.length
+              ? `${sigla} não tem subunidades`
+              : null;
+    if (motivo) motivos.set(a.id, { tom: "danger", dica: `Subunidade não permitida: ${motivo}.` });
+    else porUnidade.set(a.reparticaoId as number, [...(porUnidade.get(a.reparticaoId as number) ?? []), a.id]);
+  }
+  const [unica] = [...porUnidade.entries()].sort((x, y) => y[1].length - x[1].length)[0] ?? [];
+  const sig = (id: number) => siglaDe(id) || "outra unidade";
+  for (const [u, ids] of porUnidade)
+    if (u !== unica) for (const id of ids) motivos.set(id, { tom: "warn", dica: `De ${sig(u)} — a subunidade em massa vale para os DFDs de UMA unidade (${sig(unica as number)}).` });
+  const cfg = unica != null ? cfgDe(unica) : null;
+  const nao = [...motivos.values()].filter((m) => m.tom === "danger").length;
+  const outras = motivos.size - nao;
+  const motivo = motivos.size
+    ? [nao ? `${nao} DFD(s) não permitem subunidade (em vermelho)` : "", outras ? `${outras} de outra unidade (em âmbar)` : ""].filter(Boolean).join(" · ") +
+      " — tire-os da seleção para definir a subunidade."
+    : null;
+  return { motivos, sub: { opcoes: cfg?.subunidades ?? [], motivo } };
+}

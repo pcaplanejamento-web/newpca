@@ -23,9 +23,9 @@ import { type AlvoPendencia, pendenciaDaCapa, pendenciasDoDfd, type ProtocoloPen
 import type { DfdSobrescrito, ProtocoloDetalhe } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
-import { type ConfigSubunidades, subunidadeDoDfd, textoFaltaSubunidade } from "@/lib/subunidades-core";
+import { type ConfigSubunidades, subunidadeDoDfd, subunidadeEmMassa, textoFaltaSubunidade } from "@/lib/subunidades-core";
 import { type AjusteRevisao, podeRevisarItens, resumoRevisao, resumoRevisaoLote, revisarCapa, revisarDfd } from "@/lib/revisao-dfd";
-import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
+import { BarraEdicaoMassa, type CampoBarra } from "./BarraEdicaoMassa";
 import { BarraSelecaoDfds } from "./BarraSelecao";
 import { BotaoAcao } from "./BotaoAcao";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
@@ -344,6 +344,17 @@ export function useProtocoloGravado({
     ];
   });
   const linhasSel = linhas.filter((l) => sel.has(l.key));
+  // Subunidade EM MASSA — a MESMA régua da Mesa (`subunidadeEmMassa`), pela unidade do RASCUNHO.
+  const [campoMassa, setCampoMassa] = useState<CampoBarra | null>(null);
+  const subMassa = subunidadeEmMassa(
+    linhasSel.map((l) => {
+      const id = Number(l.key);
+      const rid = repIds.get(id) ?? null;
+      return { id, reparticaoId: rid, sigla: rid != null ? (repConf(rid)?.codigo ?? null) : null, bloqueio: editavelDfd(id) ? null : "unidade sem acesso" };
+    }),
+    (rid) => repConf(rid)?.subunidade,
+    (rid) => repConf(rid)?.codigo,
+  );
   const somatorio = linhas.reduce((s, l) => s + (l.valor ?? 0), 0);
   const totalItens = linhas.reduce((s, l) => s + (l.itens ?? 0), 0);
   // A capa foi emitida com os DFDs que o processo TINHA — os sobrescritos depois por outro protocolo (o rastro,
@@ -461,7 +472,16 @@ export function useProtocoloGravado({
   /** Edição EM MASSA (mesma barra da análise) no RASCUNHO — só nos DFDs editáveis (unidade com acesso). */
   function aplicarMassa(acao: AcaoMassa) {
     const ids = [...sel].map(Number).filter(editavelDfd);
-    if (acao.campo === "reparticao") {
+    if (acao.campo === "subunidade") {
+      setDfds((m) => {
+        const n = new Map(m);
+        for (const id of ids) {
+          const d = n.get(id);
+          if (d) n.set(id, { ...d, subunidadeId: acao.subunidadeId });
+        }
+        return n;
+      });
+    } else if (acao.campo === "reparticao") {
       setRepIds((m) => {
         const n = new Map(m);
         for (const id of ids) n.set(id, acao.reparticaoId);
@@ -681,11 +701,25 @@ export function useProtocoloGravado({
         )}
         {sel.size > 0 && podeEditar && !travado && (
           <BarraSelecaoDfds
-            dfds={linhasSel.map((l) => ({ key: l.key, numero: l.numero, planejamento: l.planejamento, valor: l.valor, itens: l.itens }))}
+            dfds={linhasSel.map((l) => ({
+              key: l.key,
+              numero: l.numero,
+              planejamento: l.planejamento,
+              valor: l.valor,
+              itens: l.itens,
+              ...(campoMassa === "subunidade" ? subMassa.motivos.get(Number(l.key)) : undefined),
+            }))}
             onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
             onLimpar={() => setSel(new Set())}
           >
-            <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={proto?.anoPca ?? null} regras={regras} onAplicar={aplicarMassa} />
+            <BarraEdicaoMassa
+              reparticoes={reparticoes}
+              anoPadrao={proto?.anoPca ?? null}
+              regras={regras}
+              onAplicar={aplicarMassa}
+              subunidade={subMassa.sub}
+              onCampo={setCampoMassa}
+            />
           </BarraSelecaoDfds>
         )}
         <div className="flex flex-nowrap items-center gap-2">
