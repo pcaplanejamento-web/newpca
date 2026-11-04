@@ -276,19 +276,37 @@ export function ReparticoesAdmin({
       nowrap: true,
       value: (u) => textoSubunidades(u),
       valores: (u) => (u.temCentro && u.subunidades.length ? u.subunidades : [textoSubunidades(u)]),
-      render: (u) =>
-        u.subunidades.length ? (
-          <span className="inline-flex items-center gap-1.5" title={u.temCentro ? undefined : SEM_CADASTRO}>
-            {!u.temCentro && <IconAlert className="h-3.5 w-3.5 shrink-0 text-[var(--danger)]" aria-label={SEM_CADASTRO} />}
-            <CelulaLista valores={u.subunidades} mono />
-          </span>
-        ) : u.temCentro ? (
-          <span className="font-mono text-[12px] font-semibold text-text" title="Um centro de custo para toda a unidade: a subunidade é a própria unidade">
-            {u.codigo}
+      render: (u) => {
+        // A subunidade com o NOME DA UNIDADE (a sigla — sem subunidades ou sem nome informado) × as CRIADAS pelo ADM.
+        const daUnidade = (n: string) => chaveCentro(n) === chaveCentro(u.codigo) || chaveCentro(n) === chaveCentro(u.nome);
+        const criadas = u.subunidades.filter((n) => !daUnidade(n)).length;
+        const selo = (unidade: boolean) =>
+          unidade ? (
+            <Badge tone="slate" title="O nome é o da própria unidade">
+              Unidade
+            </Badge>
+          ) : (
+            <Badge tone="blue" title="Subunidades criadas no cadastro">
+              Criada{criadas > 1 ? "s" : ""}
+            </Badge>
+          );
+        if (u.subunidades.length)
+          return (
+            <span className="inline-flex items-center gap-1.5" title={u.temCentro ? undefined : SEM_CADASTRO}>
+              {!u.temCentro && <IconAlert className="h-3.5 w-3.5 shrink-0 text-[var(--danger)]" aria-label={SEM_CADASTRO} />}
+              <CelulaLista valores={u.subunidades.map((n) => (daUnidade(n) ? `${n} (unidade)` : n))} mono />
+              {selo(criadas === 0)}
+            </span>
+          );
+        return u.temCentro ? (
+          <span className="inline-flex items-center gap-1.5" title="Um centro de custo para toda a unidade: a subunidade é a própria unidade">
+            <span className="font-mono text-[12px] font-semibold text-text">{u.codigo}</span>
+            {selo(true)}
           </span>
         ) : (
           <span className="text-[12px] text-[var(--danger)]">{SEM_CADASTRO}</span>
-        ),
+        );
+      },
     },
     {
       key: "responsaveis",

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.271.2",
+    data: "2026-11-04",
+    titulo: "Subunidade da unidade × criada",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "A coluna Subunidades aponta quando a subunidade tem o nome da própria unidade (selo “Unidade”, o nome com “(unidade)”) ou foi criada no cadastro (selo “Criada”).", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.271.1",
     data: "2026-11-04",
     titulo: "Cadastro do centro de custo mais claro",
