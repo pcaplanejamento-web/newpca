@@ -529,3 +529,48 @@ test("Fluxo salvo desatualizado: só os tipos dos nós contam", async () => {
   assert.equal(desatualizadoDoModelo({ nos: g.nos.map((n) => ({ ...n, x: 0, config: {} })) }, m), false);
   assert.equal(desatualizadoDoModelo({ nos: g.nos.filter((n) => n.tipo !== "logica.se") }, m), true);
 });
+
+test("Captura de colunas da tela: o nome do campo pelo título, a escolha gravada e o valor de cada coluna", async () => {
+  const { chaveDoTitulo, lerCaptura, valorCapturado } = await import("../src/lib/fluxo-dados.ts");
+  assert.equal(chaveDoTitulo("Centro Custo"), "centroCusto");
+  assert.equal(chaveDoTitulo("DATA INICIAL"), "dataInicial");
+  assert.equal(chaveDoTitulo("Código"), "codigo");
+  assert.equal(chaveDoTitulo("Nº"), "n");
+  assert.deepEqual(lerCaptura("CentroCustoDescricao|Centro Custo; Codigo|Código; X|Código"), [
+    { campo: "CentroCustoDescricao", titulo: "Centro Custo", chave: "centroCusto" },
+    { campo: "Codigo", titulo: "Código", chave: "codigo" },
+    { campo: "X", titulo: "Código", chave: "codigo2" },
+  ]);
+  assert.equal(valorCapturado({ tela: { Codigo: "03.52.000" } }, "Codigo"), "03.52.000");
+  assert.equal(valorCapturado({ centi: { "Lotacao.Id": "4", "Lotacao.Descricao": "PM RV, GGIM" } }, "Lotacao"), "PM RV, GGIM");
+  assert.equal(valorCapturado({}, "Codigo"), "");
+});
+
+test("Nó CM002: as colunas escolhidas viram campos do item (e o item fica leve sem 'Trazer todas')", async () => {
+  const pedidos: unknown[] = [];
+  const centi = async (acao: string, dados: unknown) => {
+    pedidos.push({ acao, dados });
+    return {
+      ok: true,
+      total: 1,
+      completa: true,
+      colunasTela: [{ titulo: "Centro Custo", campo: "CC" }],
+      linhas: [{ id: "1769", situacao: "Não Executado", finalidade: "", centroCusto: "PM RV, GGIM", centi: { Id: "1769", CC: "PM RV, GGIM", Codigo: "03.52.000" }, tela: { CC: "PM RV, GGIM", Codigo: "03.52.000" } }],
+    };
+  };
+  const grafo = {
+    v: 1,
+    nos: [
+      { id: "a", tipo: "gatilho.inicio", x: 0, y: 0, config: {} },
+      { id: "b", tipo: "centi.cm002", x: 0, y: 0, config: { entidades: "2", capturar: "CC|Centro Custo; Codigo|Código" } },
+    ],
+    conexoes: [{ de: "a", saida: "saida", para: "b", entrada: "entrada" }],
+  };
+  const r = await executarFluxo(grafo as never, REGISTRO_NOS, { centi: centi as never, api: (async () => ({})) as never, cancelado: () => false, host: {} });
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual((pedidos[0] as { dados: { colunas: boolean } }).dados.colunas, true, "pede as colunas quando há captura");
+  const it = r.retorno[0] as Record<string, unknown> | undefined;
+  assert.equal(it?.centroCusto, "PM RV, GGIM");
+  assert.equal(it?.codigo, "03.52.000");
+  assert.equal("centi" in (it ?? {}), false);
+});

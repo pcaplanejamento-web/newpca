@@ -64,7 +64,7 @@ import { PainelFluxo } from "./PainelFluxo";
 import { useEstimativa } from "./useEstimativa";
 import { progressoFluxo } from "@/lib/fluxo-progresso";
 import { PainelNo } from "./PainelNo";
-import { type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
+import { type ColunaTela, type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
 import { ProblemasFluxo } from "./ProblemasFluxo";
 import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
 import { CartaoPreso } from "../ArrastoCartoes";
@@ -248,6 +248,19 @@ export function FluxosAutomacao({
     const lista = Array.isArray(r.departamentos) ? r.departamentos.filter((d): d is string => typeof d === "string" && !!d.trim()) : null;
     setReps({ lista: lista ?? null, buscando: false });
     if (!r.ok) toast.error(r.erro ?? "A extensão não respondeu.");
+  }, [pedir]);
+  // As colunas da TELA da CM002 (título → campo) — a lista do "Capturar colunas" (lidas uma vez, ao pedir).
+  const [colsCm002, setColsCm002] = useState<{ lista: ColunaTela[] | null; buscando: boolean }>({ lista: null, buscando: false });
+  const buscarColunasCm002 = useCallback(async () => {
+    setColsCm002((r) => ({ ...r, buscando: true }));
+    const r = (await pedir("cm002Colunas", null, 15_000)) as { ok?: boolean; erro?: string; colunas?: unknown };
+    const lista = Array.isArray(r.colunas)
+      ? (r.colunas as Record<string, unknown>[])
+          .map((c) => ({ titulo: String(c.titulo ?? ""), campo: String(c.campo ?? ""), exemplo: String(c.exemplo ?? ""), visivel: c.visivel !== false }))
+          .filter((c) => c.campo)
+      : null;
+    setColsCm002((a) => ({ lista: lista ?? a.lista, buscando: false }));
+    if (!r.ok) toast.error(r.erro ?? "A extensão não respondeu — atualize a extensão da Centi.");
   }, [pedir]);
   // "Na Centi": quantos documentos o sistema registrou como anexados em cada protocolo.
   const carregarNaCenti = useCallback(async () => {
@@ -650,6 +663,7 @@ export function FluxosAutomacao({
       abrirAnalise: (it) => void abrirAnalise(it),
       rodando: rodando != null,
       reparticoes: { ...reps, buscar: () => void buscarReparticoes() },
+      colunasCm002: { ...colsCm002, buscar: () => void buscarColunasCm002() },
       conferirAlvo: async (al) => {
         const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: ProtocoloCenti };
         return r.ok && r.protocolo ? { protocolo: r.protocolo } : { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
@@ -683,7 +697,7 @@ export function FluxosAutomacao({
       },
       orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),
-    [importacao.orgaos, previas, carregarPrevia, fluxos, executar, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirMesa, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+    [importacao.orgaos, previas, carregarPrevia, fluxos, executar, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirMesa, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, colsCm002, buscarColunasCm002, pedir, emissor, confirmar],
   );
   return (
     <HostPainelCtx.Provider value={hostPainel}>

@@ -75,6 +75,7 @@ export const MAX_ITERACOES_LACO = 500;
 /** `reparticoesCenti` = as repartições da Tela Protocolo da Centi (escolha múltipla; o valor = "a; b"). */
 /** `fluxo`/`fluxos` = um/vários fluxos salvos (subfluxos — o valor é o id / "1; 2"). */
 /** `orgaosCenti` = os órgãos cadastrados com o ID na Centi (escolha múltipla; o valor = os IDs "2; 3"). */
+/** `colunasCm002` = as colunas da TELA da CM002 (título → campo, lidas pela extensão; o valor = "campo|Título; …"). */
 export type TipoCampo =
   | "texto"
   | "textoLongo"
@@ -85,6 +86,7 @@ export type TipoCampo =
   | "lista"
   | "reparticoesCenti"
   | "orgaosCenti"
+  | "colunasCm002"
   | "nomeLista"
   | "fluxo"
   | "fluxos";
@@ -124,6 +126,8 @@ export const AJUDA_TIPO_CAMPO: Record<TipoCampo, string> = {
     "Toque no campo e escolha um dos dados que o nó anterior entrega. Se a lista estiver vazia, use “Ler os campos” no topo do painel. Não achou? Escolha “Outro (digitar)”.",
   lista: "Toque no campo e marque um ou mais valores.",
   reparticoesCenti: "Toque em “Buscar” para trazer as repartições da Centi e marque as que entram.",
+  colunasCm002:
+    "Toque em “Ler colunas” (com a CM002 pesquisada uma vez na Centi) e marque as colunas a capturar — cada uma vira um campo do item com o nome do título (ex.: “Centro Custo” → centroCusto).",
   orgaosCenti: "Toque no campo e marque os órgãos. Sem nenhum marcado, entram todos os órgãos que têm o ID na Centi.",
   nomeLista: "Escolha um nome que já existe na lista ou “Novo nome…” para criar outro.",
   fluxo: "Toque no campo e escolha um dos fluxos salvos.",

@@ -133,6 +133,8 @@ export const reparticaoSchema = z.object({
   // protocolo), padrão do Setor Requisitante do DFD e o órgão dono da unidade.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   setorRequisitante: z.string().trim().max(200).optional().nullable(),
+  // O "Centro de Custo" da CM002 da Centi (como ela escreve) — a conferência das unidades casa por ele primeiro.
+  centroCusto: z.string().trim().max(300).optional().nullable(),
   // Toda unidade pertence a um ÓRGÃO (obrigatório).
   orgaoId: z.number({ error: "Escolha o órgão da unidade." }).int().positive(),
   oculto: z.boolean().default(false),

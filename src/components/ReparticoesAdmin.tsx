@@ -30,6 +30,8 @@ type Rep = {
   ordem: number;
   numeroInteressado: string | null;
   setorRequisitante: string | null;
+  /** O "Centro de Custo" da CM002 da Centi, como ela escreve (a conferência das unidades casa por ele). */
+  centroCusto: string | null;
   orgaoId: number | null;
   /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
   orgaoProprio: boolean;
@@ -43,6 +45,14 @@ const CAMPOS: CampoCadastro[] = [
   { chave: "numeroInteressado", label: "Nº do interessado (protocolo em nome da unidade)", placeholder: "Ex.: 1008171", max: 60, mono: true, inputMode: "numeric", dica: "Único no sistema (órgãos e unidades)." },
   { chave: "nome", label: "Nome da unidade", max: 160, obrigatorio: true, span: true },
   { chave: "setorRequisitante", label: "Setor Requisitante (padrão do DFD)", placeholder: "Ex.: SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", max: 200, span: true },
+  {
+    chave: "centroCusto",
+    label: "Centro de Custo (como a Centi escreve na CM002)",
+    placeholder: "Ex.: PM RV, CAMARA MUNICIPAL, GGIM — ou só GGIM",
+    max: 300,
+    span: true,
+    dica: "Copie da coluna Centro Custo da CM002. A conferência “Unidades × Centro de Custo” casa por ele antes de comparar nomes.",
+  },
 ];
 
 const valoresDe = (u: Rep | null): Record<string, string> => ({
@@ -50,6 +60,7 @@ const valoresDe = (u: Rep | null): Record<string, string> => ({
   nome: u?.nome ?? "",
   numeroInteressado: u?.numeroInteressado ?? "",
   setorRequisitante: u?.setorRequisitante ?? "",
+  centroCusto: u?.centroCusto ?? "",
 });
 
 /**
@@ -155,6 +166,7 @@ export function ReparticoesAdmin({
     nome: v.nome,
     numeroInteressado: v.numeroInteressado || null,
     setorRequisitante: v.setorRequisitante || null,
+    centroCusto: v.centroCusto || null,
     orgaoId, // a unidade pertence ao órgão desta tela
     oculto: extra.oculto ?? u?.oculto ?? false,
   });
@@ -243,6 +255,13 @@ export function ReparticoesAdmin({
       value: (u) => u.setorRequisitante ?? "—",
       render: (u) =>
         u.setorRequisitante ? <span className="line-clamp-1 text-[12px] text-text-2" title={u.setorRequisitante}>{u.setorRequisitante}</span> : <span className="text-faint">—</span>,
+    },
+    {
+      key: "centroCusto",
+      header: "Centro de Custo",
+      minWidth: 200,
+      value: (u) => u.centroCusto ?? "—",
+      render: (u) => (u.centroCusto ? <span className="line-clamp-1 text-[12px] text-text-2" title={u.centroCusto}>{u.centroCusto}</span> : <span className="text-faint">—</span>),
     },
     {
       key: "responsaveis",

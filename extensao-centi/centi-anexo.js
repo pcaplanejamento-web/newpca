@@ -604,6 +604,42 @@
     return colunaCentroCustoPeloValor(linhas) ?? k;
   }
   const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
+  // ——— As COLUNAS DA TELA (a grade Wijmo da CM002: o TÍTULO que a pessoa vê → o CAMPO da API): a base para capturar
+  // QUALQUER coluna, escolhida pelo título.
+  const semAcento = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+  /** As colunas de uma grade ([{header, binding, visible}]) → [{titulo, campo, visivel}] (sem as de campo vazio/repetido). */
+  function colunasDaTela(cols) {
+    const vistos = new Set();
+    const out = [];
+    for (const c of Array.isArray(cols) ? cols : []) {
+      const campo = String(c?.binding ?? "").trim();
+      const titulo = String(c?.header ?? "").replace(/\s+/g, " ").trim() || campo;
+      if (!campo || campo.length > 120 || vistos.has(campo) || SEGREDO.test(campo)) continue;
+      vistos.add(campo);
+      out.push({ titulo: titulo.slice(0, 80), campo, visivel: c?.visible !== false });
+    }
+    return out.slice(0, 120);
+  }
+  /** É a grade da CM002? Os títulos trazem o ID, a SITUAÇÃO e o CENTRO DE CUSTO ou a FINALIDADE. */
+  function ehGradeCm002(cols) {
+    const t = colunasDaTela(cols).map((c) => semAcento(c.titulo));
+    return t.some((x) => x === "ID") && t.some((x) => x.startsWith("SITUA")) && t.some((x) => /CENTRO.*CUSTO|FINALIDADE/.test(x));
+  }
+  /** O VALOR de uma coluna (o campo da grade) numa linha já achatada (`linhaPlanaAte`): o campo exato, sem caixa, o texto
+   * do valor-objeto (`campo.Descricao`/Nome/Text) ou o último nome do caminho. "" = a linha não traz. */
+  function valorDaColuna(x, campo) {
+    if (!x || !campo) return "";
+    const chaves = Object.keys(x);
+    const c = String(campo);
+    const baixo = c.toLowerCase();
+    let k = chaves.find((y) => y === c) ?? chaves.find((y) => y.toLowerCase() === baixo);
+    if (!k) {
+      const filhos = chaves.filter((y) => y.toLowerCase().startsWith(`${baixo}.`) && !/\$type$/i.test(y));
+      k = filhos.find((y) => /\.(descricao|description|nome|text|texto|display|label|value)$/i.test(y)) ?? filhos.find((y) => /\p{L}/u.test(String(x[y] ?? "")));
+    }
+    if (!k) k = chaves.find((y) => ULTIMO(y).toLowerCase() === baixo.split(".").pop());
+    return k ? String(x[k] ?? "").trim().slice(0, 300) : "";
+  }
   /** Os NOMES das colunas da lista da CM002 quando nenhuma é de centro de custo (o diagnóstico) — senão null. */
   function colunasSemCentroCusto(j) {
     const l = acharLista(j);
@@ -613,7 +649,7 @@
     return colunaCentroCusto(linhas) ? null : chaves.slice(0, 80);
   }
   /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
-  function planejamentosCm002(j, conhecida = false, colunas = false) {
+  function planejamentosCm002(j, conhecida = false, colunas = false, colunasTela = null) {
     const l = acharLista(j);
     // A consulta já aprendida que volta SEM linhas (entidade sem planejamentos) é uma lista vazia, não "outra forma".
     if (!l) return conhecida && temListaVazia(j) ? [] : null;
@@ -624,8 +660,11 @@
     const kSit = campoTexto(amostra, /situa/i);
     const kFin = campoTexto(amostra, /finalidade/i);
     // "CentroCusto", "CentroDeCusto", "Centro de Custo", "C. Custo".
-    // Pelo nome do campo; sem ele, pelo valor ("PM RV, …").
-    const kCc = colunaCentroCusto(amostra);
+    // A coluna "CENTRO CUSTO" DA TELA (o campo que a grade mostra) vale mais; sem ela, pelo nome do campo e pelo valor.
+    const tela = Array.isArray(colunasTela) ? colunasTela : [];
+    const cTela = tela.find((c) => /CENTRO.*CUSTO/.test(semAcento(c.titulo)));
+    const ccTela = cTela && amostra.some((x) => /\p{L}/u.test(valorDaColuna(x, cTela.campo))) ? cTela.campo : null;
+    const kCc = ccTela ? null : colunaCentroCusto(amostra);
     // Na consulta já aprendida basta Id + Situação (finalidade/centro de custo podem vir vazios).
     if (!kId || !kSit || (!conhecida && !kFin && !kCc)) return null;
     return linhas
@@ -634,9 +673,9 @@
         situacao: String(x[kSit] ?? "").trim().slice(0, 40),
         finalidade: kFin ? String(x[kFin] ?? "").trim().slice(0, 200) : "",
         // Coluna única "Finalidade/Centro de custo" = o texto vale nos dois.
-        centroCusto: kCc ? String(x[kCc] ?? "").trim().slice(0, 200) : "",
-        // TODAS as colunas da linha (o nó "Escolher colunas" do fluxo escolhe as que analisa).
-        ...(colunas ? { centi: x } : {}),
+        centroCusto: (ccTela ? valorDaColuna(x, ccTela) : kCc ? String(x[kCc] ?? "").trim() : "").slice(0, 200),
+        // TODAS as colunas da linha (o nó "Escolher colunas" do fluxo escolhe as que analisa) e as da TELA pelo título.
+        ...(colunas ? { centi: x, ...(tela.length ? { tela: Object.fromEntries(tela.map((c) => [c.campo, valorDaColuna(x, c.campo)])) } : {}) } : {}),
       }))
       .filter((x) => x.id);
   }
@@ -849,7 +888,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
+    comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, colunasDaTela, ehGradeCm002, valorDaColuna, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.267.0",
+    data: "2026-11-04",
+    titulo: "Centro de Custo nas unidades e captura de qualquer coluna da CM002",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "Campo e coluna “Centro de Custo” na unidade — o nome como a Centi escreve na CM002; a conferência das unidades casa por ele antes de comparar nomes.", link: "/painel/orgaos" },
+      { tipo: "novo", area: "Automação", texto: "Nó CM002: “Capturar colunas” — escolha qualquer coluna da tela da CM002 (ID, datas, Código, Centro Custo, Situação, Finalidade…); cada uma vira um campo para os próximos nós do diagrama. Extensão 1.32.0 (lê as colunas da própria grade da Centi).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O Centro de Custo é lido pelo campo que a grade da Centi mostra, e os nomes próprios da Centi (palavras a mais ou abreviadas) casam com o cadastro.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.10",
     data: "2026-11-04",
     titulo: "Unidades × Centro de Custo: a unidade é sempre o último nome",

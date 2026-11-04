@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       ordem: reparticoes.ordem,
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
+      centroCusto: reparticoes.centroCusto,
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
       ordem: Number(max) + 1,
       numeroInteressado,
       setorRequisitante: corpo.data.setorRequisitante ?? null,
+      centroCusto: corpo.data.centroCusto?.trim() || null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
     })

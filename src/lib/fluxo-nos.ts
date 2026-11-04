@@ -40,7 +40,7 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
+import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
@@ -431,7 +431,14 @@ const NOS: DefNo[] = [
     saidas: ["saida"],
     campos: [
       { chave: "entidades", rotulo: "Órgãos (ID na Centi)", tipo: "orgaosCenti", entrada: true, ajuda: "Marque os órgãos a ler. Nenhum marcado = todos os cadastrados em Órgãos e Unidades com o ID na Centi." },
-      { chave: "colunas", rotulo: "Trazer todas as colunas da Centi", tipo: "booleano", padrao: false, ajuda: "Em “centi.<coluna>” — escolha as que analisa no nó “Escolher colunas”." },
+      {
+        chave: "capturar",
+        rotulo: "Capturar colunas",
+        tipo: "colunasCm002",
+        entrada: true,
+        ajuda: "As colunas da tela da CM002 (ID, Data inicial, Código, Centro Custo, Situação, Finalidade…) que cada planejamento traz como campo — para usar nos próximos nós (SE, Comparar, Filtrar, Salvar em tabela…).",
+      },
+      { chave: "colunas", rotulo: "Trazer todas as colunas da Centi", tipo: "booleano", padrao: false, ajuda: "Em “centi.<coluna>” (os nomes internos da API) — escolha as que analisa no nó “Escolher colunas”." },
       {
         chave: "dosItens",
         rotulo: "Só os órgãos dos itens que chegam",
@@ -447,6 +454,8 @@ const NOS: DefNo[] = [
       const base = lista(c.entidades).length ? lista(c.entidades) : doItens.length ? doItens : Object.values(mapa);
       const ents = [...new Set(base.map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
       if (!ents.length) throw new Error("Nenhum órgão — informe no nó ou cadastre o ID da Centi nos órgãos.");
+      // As colunas da TELA escolhidas: cada uma vira um campo do item (o nome do título — "Centro Custo" → centroCusto).
+      const captura = lerCaptura(c.capturar);
       const out: Item[] = [];
       // Uma entidade que falha não derruba as outras: segue e avisa; só falha quando NENHUMA respondeu.
       const falhas: string[] = [];
@@ -454,7 +463,7 @@ const NOS: DefNo[] = [
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Órgão ${ent} (${i + 1} de ${ents.length})…`);
-        const r = await ctx.centi("cm002", { entidade: ent, colunas: c.colunas === true }, 300_000);
+        const r = await ctx.centi("cm002", { entidade: ent, colunas: c.colunas === true || captura.length > 0 }, 300_000);
         if (r.interrompido) throw new Error("Interrompido na extensão.");
         if (!r.ok) {
           falhas.push(`órgão ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);
@@ -488,7 +497,14 @@ const NOS: DefNo[] = [
           throw new Error(
             `Nenhum dos ${pedidos.size} planejamentos do órgão ${ent} veio na CM002 (${linhas.length} linhas lidas, IDs ${faixaIds(ids)}). A consulta aprendida está filtrada — na CM002 da Centi, limpe os filtros (Referência/Finalidade) e clique em Pesquisar UMA vez.${extra}`,
           );
-        for (const p of linhas) out.push({ ...p, planejamento: str(p.id), entidade: ent });
+        if (captura.length && !Array.isArray(r.colunasTela))
+          ctx.aviso(`CM002 do órgão ${ent}: a extensão não leu as colunas da tela — na Centi, abra a CM002, clique em Pesquisar e execute de novo (o valor vem pelo nome interno, quando bate).`);
+        for (const p of linhas) {
+          const capturados = Object.fromEntries(captura.map((k) => [k.chave, valorCapturado(p, k.campo)]));
+          // Sem "Trazer todas as colunas", o item fica leve: só os campos escolhidos.
+          const { tela: _tela, centi: _centi, ...resto } = p;
+          out.push({ ...(c.colunas === true ? p : resto), ...capturados, planejamento: str(p.id), entidade: ent });
+        }
       }
       if (falhas.length && falhas.length === ents.length) throw new Error(falhas.join(" · "));
       if (falhas.length) ctx.aviso(`Sem a lista de ${falhas.length} órgão(s) — ${falhas.join(" · ")}`);

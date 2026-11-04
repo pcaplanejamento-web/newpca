@@ -9,6 +9,7 @@ import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, type Grafo, type Item, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
 import { buscaDoNo, type FontesSistema, opcoesDaBusca } from "@/lib/fluxo-ler-sistema";
+import { lerCaptura } from "@/lib/fluxo-dados";
 import { chaveSelecao, REGISTRO_NOS, selecionados } from "@/lib/fluxo-nos";
 import { Badge, type Tone } from "../Badge";
 import { BotaoAtualizar } from "../BotaoAtualizar";
@@ -47,6 +48,8 @@ export type HostPainel = {
   rodando: boolean;
   /** As repartições da Tela Protocolo da Centi (pela API; null = ainda não buscadas). */
   reparticoes: { lista: string[] | null; buscando: boolean; buscar: () => void };
+  /** As colunas da TELA da CM002 (título → campo, lidas pela extensão; null = ainda não lidas). */
+  colunasCm002: { lista: ColunaTela[] | null; buscando: boolean; buscar: () => void };
   /** Abre o protocolo indicado na Centi (só leitura) e confere Id + nº; e o TESTE do anexo (sem emitir DFD). */
   /** "Testar protocolo": abre o protocolo na Centi (só leitura) — pelo Id + nº, ou só pelo Id (nº vazio). */
   conferirAlvo: (alvo: AlvoCenti) => Promise<{ protocolo: ProtocoloCenti } | { erro: string }>;
@@ -107,6 +110,47 @@ export function CampoReparticoesCenti({ rotulo, valor, onValor, somenteLeitura }
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Uma coluna da tela de uma grade da Centi: o TÍTULO que se vê, o CAMPO da API e um exemplo do valor. */
+export type ColunaTela = { titulo: string; campo: string; exemplo: string; visivel: boolean };
+
+/**
+ * As COLUNAS da tela da CM002 a capturar (escolha múltipla com busca; o valor = "campo|Título; …"). As opções vêm da
+ * extensão ("Ler colunas"), com o exemplo do valor; as já escolhidas ficam à vista mesmo antes de ler.
+ */
+export function CampoColunasCm002({ rotulo, valor, onValor, somenteLeitura }: { rotulo: string; valor: string; onValor: (v: string) => void; somenteLeitura?: boolean }) {
+  const host = useHost();
+  const escolhidas = lerCaptura(valor);
+  const lista = host?.colunasCm002.lista ?? null;
+  const porCampo = new Map<string, ColunaTela>();
+  for (const c of lista ?? []) porCampo.set(c.campo, c);
+  for (const e of escolhidas) if (!porCampo.has(e.campo)) porCampo.set(e.campo, { titulo: e.titulo, campo: e.campo, exemplo: "", visivel: true });
+  const opcoes = [...porCampo.values()].map((c) => ({
+    valor: c.campo,
+    rotulo: c.titulo,
+    detalhe: `${c.campo}${c.exemplo ? ` · ex.: ${c.exemplo}` : ""}${c.visivel ? "" : " · oculta na tela"}`,
+  }));
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <SeletorMultiplo
+          suspenso
+          rotulo={rotulo}
+          textoVazio="Nenhuma"
+          opcoes={opcoes}
+          selecionados={escolhidas.map((e) => e.campo)}
+          onChange={(v) => onValor(v.map((campo) => `${campo}|${porCampo.get(campo)?.titulo ?? campo}`).join("; "))}
+          disabled={somenteLeitura || !opcoes.length}
+        />
+      </div>
+      {host && (
+        <Button size="sm" variant="secondary" onClick={host.colunasCm002.buscar} loading={host.colunasCm002.buscando} disabled={somenteLeitura} title="Ler as colunas da tela da CM002 na Centi (pesquise uma vez na CM002 antes)">
+          {lista ? "Atualizar" : "Ler colunas"}
+        </Button>
+      )}
     </div>
   );
 }

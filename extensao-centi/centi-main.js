@@ -184,6 +184,35 @@
   // corpo, sem segredos) para o sistema repeti-la sem paginação, sem mexer na tela. No localStorage da Centi.
   const CM002 = "__pcaCm002_v1";
   const TELA = "__pcaTelaProtocolo_v1";
+  // As COLUNAS da grade da CM002 (título → campo), lidas da PRÓPRIA tela (Wijmo) — a base da captura por título.
+  const COLUNAS_CM002 = "__pcaCm002Colunas_v1";
+  /** Lê as colunas da grade da CM002 aberta (null = não está à vista) e guarda; devolve as guardadas sem ela. */
+  function colunasCm002(ler = true) {
+    const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+    if (ler && A?.ehGradeCm002) {
+      for (const el of document.querySelectorAll(".wj-flexgrid")) {
+        try {
+          const g = el["wj-Control"] || globalThis.wijmo?.Control?.getControl?.(el);
+          const cols = g?.columns ? Array.from(g.columns).map((c) => ({ header: c.header, binding: c.binding, visible: c.visible })) : [];
+          if (!A.ehGradeCm002(cols)) continue;
+          const item = g.collectionView?.items?.[0] ?? g.itemsSource?.[0];
+          const lista = A.colunasDaTela(cols).map((c) => {
+            let v = item ? c.campo.split(".").reduce((o, k) => (o == null ? o : o[k]), item) : undefined;
+            if (v && typeof v === "object") v = v.Descricao ?? v.Description ?? v.Nome ?? v.Text ?? "";
+            return { ...c, exemplo: v == null ? "" : String(v).slice(0, 120) };
+          });
+          localStorage.setItem(COLUNAS_CM002, JSON.stringify({ colunas: lista, em: new Date().toISOString() }));
+          return lista;
+        } catch {}
+      }
+    }
+    try {
+      const g = JSON.parse(localStorage.getItem(COLUNAS_CM002) || "null");
+      return Array.isArray(g?.colunas) ? g.colunas : null;
+    } catch {
+      return null;
+    }
+  }
   const DIAG_TELA = "__pcaAprendizTela_v1";
   // Como a TELA abre um protocolo (o load aprendido — ver `loadDoProtocolo`).
   const LOAD_PROTOCOLO = "__pcaLoadProtocolo_v1";
@@ -227,6 +256,8 @@
           atual = JSON.parse(localStorage.getItem(CM002) || "null");
         } catch {}
         if (!atual || atual.caminho !== c.caminho || !(atual.linhas > pl.length)) localStorage.setItem(CM002, JSON.stringify({ ...JSON.parse(forma), linhas: pl.length }));
+        // A grade desenha depois da resposta: as colunas da tela são lidas logo em seguida.
+        setTimeout(() => colunasCm002(), 1500);
         return;
       }
       // Tela Protocolo: a lista da aba "Em Análise" (com situação, só a que traz algum "em análise"; sem ela, a última pedida).
@@ -789,6 +820,8 @@
     if (!A.consultaPermitida(g.caminho, g.metodo, g.corpo)) return { ok: false, erro: "Consulta guardada inválida." };
     const ent = d?.entidade == null || d.entidade === "" ? orgaoFixo() : String(d.entidade);
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Órgão inválido." };
+    // As colunas da TELA (título → campo): o centro de custo pelo campo que a grade mostra e a captura por título.
+    const tela = colunasCm002() ?? [];
     // Um pedido: o corpo/caminho já montados → {linhas, total} | {status} | {forma}.
     const consultar = async (caminho, corpo) => {
       const url = destino(caminho);
@@ -801,7 +834,7 @@
       } catch {
         return { forma: "não é JSON" };
       }
-      const linhas = A.planejamentosCm002(j, true, d?.colunas === true);
+      const linhas = A.planejamentosCm002(j, true, d?.colunas === true, tela);
       if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
       const t = A.totalDaResposta(j);
       // Um "total" menor que as linhas lidas não é o total da lista.
@@ -818,7 +851,8 @@
       modo,
       tamanho,
       completa,
-      ...(primeira?.semCc ? { colunasSemCentroCusto: primeira.semCc } : {}),
+      ...(primeira?.semCc && !tela.some((c) => /centro.*custo/i.test(c.titulo)) ? { colunasSemCentroCusto: primeira.semCc } : {}),
+      ...(tela.length ? { colunasTela: tela } : {}),
       ...(completa ? {} : { diagnostico: A.diagnosticoConsulta(g.caminho, g.corpo), campoTamanho: campo }),
     });
     // "MOSTRAR: TODOS": a consulta como a tela pediu e, depois, o tamanho "todos" nas formas que a Centi aceita — vale a
@@ -981,7 +1015,13 @@
     const nomes = [...new Set(l.map((r) => String(r?.Descricao ?? "").trim()).filter(Boolean))];
     return { ok: true, departamentos: nomes };
   }
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, cm002, telaApi, reparticoesApi, trocarOrgao };
+  // As colunas da CM002 (título → campo + um exemplo) — a lista de escolha do componente de captura no fluxo.
+  function cm002Colunas() {
+    const colunas = colunasCm002();
+    if (!colunas?.length) return { ok: false, semColunas: true, erro: "Abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — a extensão lê as colunas da tela." };
+    return { ok: true, colunas };
+  }
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, cm002, telaApi, reparticoesApi, trocarOrgao, cm002Colunas };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

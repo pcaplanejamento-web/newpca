@@ -62,6 +62,7 @@ export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pc
     responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
     numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
     setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
+    centroCusto: matchMap[r.id]?.centroCusto ?? null,
     orgaoId: matchMap[r.id]?.orgaoId ?? null,
     orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,

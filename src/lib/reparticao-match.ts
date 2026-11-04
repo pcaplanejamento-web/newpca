@@ -17,6 +17,8 @@ export type ReparticaoMatch = {
   /** Padrão do "Setor Requisitante" (cadastro do ADM). **Não** é mais usado na previsão da
    * unidade (ponto 1 — só a assinatura prevê); mantido como dado do cadastro. */
   setorRequisitante?: string | null;
+  /** O "Centro de Custo" da CM002 da Centi, como ela escreve (o texto inteiro ou só o último nome). */
+  centroCusto?: string | null;
   /** Número do Interessado do protocolo (cadastro do ADM) — identifica a unidade. */
   numeroInteressado?: string | null;
   /** Órgão dono da unidade (derivado para o órgão do documento). */
@@ -230,6 +232,48 @@ function casaPorPrefixo(a: string[], b: string[], truncado: boolean): boolean {
   });
 }
 
+/** As palavras genéricas que não identificam uma unidade (contam na ordem, não no placar). */
+const GENERICAS = /^(SEC|SECRET|SECRETARIA|SECRETARIAS|GERAL|DEPARTAMENTO|DEPTO|DIRETORIA|COORDENADORIA|SUPERINTENDENCIA)$/;
+
+/** Uma palavra da Centi × uma cadastrada: iguais, ou uma o começo da outra (3+ letras — abreviação/corte). */
+const mesmaPalavra = (w: string, x: string) => w === x || (Math.min(w.length, x.length) >= 3 && (x.startsWith(w) || w.startsWith(x)));
+
+/** Quantas palavras PRÓPRIAS (não genéricas) os dois nomes têm em comum quando TODAS as palavras do menor aparecem, na
+ * ordem, no maior; senão 0. Ao menos 2 próprias (uma só palavra em comum não identifica). */
+function palavrasEmComum(a: string[], b: string[]): number {
+  const [menor, maior] = a.length <= b.length ? [a, b] : [b, a];
+  if (!menor.length) return 0;
+  let j = 0;
+  let proprias = 0;
+  for (const w of menor) {
+    while (j < maior.length && !mesmaPalavra(w, maior[j])) j++;
+    if (j >= maior.length) return 0;
+    if (!GENERICAS.test(w)) proprias++;
+    j++;
+  }
+  return proprias >= 2 ? proprias : 0;
+}
+
+/** O CENTRO DE CUSTO cadastrado na unidade (como a Centi escreve) × o da CM002: o texto inteiro ou o último nome, sem
+ * caixa/acento/pontuação. Vem ANTES da comparação por nome — o ADM sincroniza o nome uma vez e o casamento é exato. */
+export function casarPorCentroCusto(centro: string, unidades: ReparticaoMatch[], orgaoId?: number | null): CasamentoUnidade | null {
+  const validas = unidades.filter((u) => !u.oculto && norm(u.codigo) !== "GERAL" && u.centroCusto?.trim());
+  if (!validas.length) return null;
+  const chave = (t: string) => stripAccents(t).toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  const inteiro = chave(centro);
+  const ultimo = chave(String(centro).split(",").filter((x) => x.trim()).pop() ?? "");
+  let achadas = validas.filter((u) => {
+    const k = chave(String(u.centroCusto));
+    return !!k && (k === inteiro || k === ultimo);
+  });
+  if (!achadas.length) return null;
+  if (achadas.length > 1 && orgaoId != null) {
+    const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);
+    if (doOrgao.length) achadas = doOrgao;
+  }
+  return achadas.length === 1 ? { tipo: "ok", id: achadas[0].id } : { tipo: "ambigua", ids: achadas.map((u) => u.id) };
+}
+
 export type CasamentoUnidade = { tipo: "ok"; id: number } | { tipo: "desconhecida" } | { tipo: "ambigua"; ids: number[] };
 
 /**
@@ -260,6 +304,18 @@ export function casarUnidadePorNome(
   if (!achadas.length) {
     const t = tokensNome(nome);
     if (t.length >= 2) achadas = pelo((u) => casaPorPrefixo(t, tokensNome(u.nome), truncado));
+  }
+  // A Centi tem os PRÓPRIOS nomes (palavra a mais ou a menos: "SEC. MUNIC. DE INFRAESTRUTURA E DESENV. URBAN" ×
+  // "Secretaria de Infraestrutura Urbana"): todas as palavras do nome MENOR aparecem, na ordem, no maior. Vale a unidade
+  // com mais palavras próprias em comum — empate = ambígua (nunca chuta).
+  if (!achadas.length) {
+    const t = tokensNome(nome);
+    let melhor = 0;
+    for (const u of validas) {
+      const n = palavrasEmComum(t, tokensNome(u.nome));
+      if (n > melhor) [melhor, achadas] = [n, [u]];
+      else if (n && n === melhor) achadas.push(u);
+    }
   }
   if (achadas.length > 1 && orgaoId != null) {
     const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);

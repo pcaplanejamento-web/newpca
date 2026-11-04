@@ -30,7 +30,7 @@ import { IconLock, IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
-import { CampoFluxo, CampoOrgaosCenti, CampoReparticoesCenti, CampoValoresSistema, RecomecarSubfluxo } from "./paineis";
+import { CampoColunasCm002, CampoFluxo, CampoOrgaosCenti, CampoReparticoesCenti, CampoValoresSistema, RecomecarSubfluxo } from "./paineis";
 
 /**
  * O painel do NÓ marcado: o nome, os campos do tipo (formulário DECLARATIVO do registro — novo tipo de nó não pede tela
@@ -382,6 +382,8 @@ function ControleCampo({
       return <CampoFluxo rotulo={c.rotulo} valor={s} varios={c.tipo === "fluxos"} onValor={onValor} somenteLeitura={somenteLeitura} />;
     case "reparticoesCenti":
       return <CampoReparticoesCenti rotulo={c.rotulo} valor={s} onValor={onValor} somenteLeitura={somenteLeitura} />;
+    case "colunasCm002":
+      return <CampoColunasCm002 rotulo={c.rotulo} valor={s} onValor={onValor} somenteLeitura={somenteLeitura} />;
     case "orgaosCenti":
       return <CampoOrgaosCenti rotulo={c.rotulo} valor={s} onValor={onValor} somenteLeitura={somenteLeitura} />;
     case "caminho":

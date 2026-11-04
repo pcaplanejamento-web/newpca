@@ -59,6 +59,7 @@ export async function orgaoIdDaReparticao(reparticaoId: number | null | undefine
 export type DadosMatchReparticao = {
   numeroInteressado: string | null;
   setorRequisitante: string | null;
+  centroCusto: string | null;
   orgaoId: number | null;
   orgaoProprio: boolean;
   oculto: boolean;
@@ -75,6 +76,7 @@ export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<num
             id: reparticoes.id,
             numeroInteressado: reparticoes.numeroInteressado,
             setorRequisitante: reparticoes.setorRequisitante,
+            centroCusto: reparticoes.centroCusto,
             orgaoId: reparticoes.orgaoId,
             orgaoProprio: reparticoes.orgaoProprio,
             oculto: reparticoes.oculto,
@@ -89,6 +91,7 @@ export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<num
     out[l.id] = {
       numeroInteressado: l.numeroInteressado,
       setorRequisitante: l.setorRequisitante,
+      centroCusto: l.centroCusto,
       orgaoId: l.orgaoId,
       orgaoProprio: l.orgaoProprio,
       oculto: l.oculto,

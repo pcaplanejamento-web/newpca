@@ -10,7 +10,7 @@ const SISTEMA = ["https://governarv.com.br/painel/automacao*", "https://www.gove
 const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br"];
 const POPUP = chrome.runtime.getURL("popup.html");
 const TITULO_GRUPO = "Automação PCA";
-const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "cm002", "telaApi", "reparticoesApi", "trocarOrgao"];
+const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "cm002", "telaApi", "reparticoesApi", "trocarOrgao", "cm002Colunas"];
 // O cofre do login (usuário e senha cifrados SÓ na extensão — cofre.js).
 if (typeof importScripts === "function" && !globalThis.CofreCenti) importScripts("cofre.js");
 

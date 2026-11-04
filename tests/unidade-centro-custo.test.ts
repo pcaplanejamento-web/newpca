@@ -122,3 +122,46 @@ test("Centro de Custo REAL da CM002: a escrita da Centi (abreviada e cortada) ca
   assert.equal(casarUnidadePorNome("SECRETARIA AMBIENTE", false, CAD).tipo, "desconhecida");
   assert.equal(casarUnidadePorNome("SEC MUN DE INFRAESTRUTURA", false, CAD).tipo, "desconhecida");
 });
+
+test("Centro de Custo × o CADASTRO REAL de Órgãos e Unidades (PMRV): os nomes próprios da Centi casam", () => {
+  const CAD = [
+    ["GP", "Gabinete do Prefeito"], ["PGM", "Procuradoria Geral do Município"], ["CGM", "CONTROLADORIA GERAL DO MUNICÍPIO"], ["GCM", "Guarda Civil Municipal"],
+    ["SMPG", "Secretaria Municipal de Planejamento e Gestão"], ["SEFAZ", "Secretaria da Fazenda"], ["SMAUSP", "Secretaria Municipal de Ação Urbana e Serviços Públicos"],
+    ["SMIDU", "Secretaria de Infraestrutura Urbana"], ["SMIR", "Secretaria Municipal de Infraestrutura Rural"], ["SMDES", "Secretaria Municipal de Desenvolvimento Econômico Sustentável"],
+    ["SMAPA", "Secretaria Municipal de Agricultura, Pecuária e Abastecimento"], ["SMEL", "Secretaria Municipal de Esportes e Lazer"], ["SMC", "Secretaria Municipal de Comunicação Social"],
+    ["SMMA", "Secretaria Municipal de Meio Ambiente"], ["SMCULT", "Secretaria Municipal de Cultura"], ["SMHRF", "Secretaria Municipal de Habitação e Regularização Fundiária"],
+    ["SMTUR", "Secretaria Municipal de Turismo"], ["SETIA", "Secretaria de Tecnologia, Inovação e Inteligência Artificial"], ["GGIM", "Gabinete de Gestão Integrada Municipal"],
+  ].map(([codigo, nome], i) => ({ id: i + 1, codigo, nome, orgaoId: 1 }));
+  const casos: [string, string | null][] = [
+    ["PM RV, SEC MUNICIPAL DE INFRAESTRUTURA RURAL", "SMIR"],
+    ["PM RV, SECRETARIA MUNICIPAL DE MEIO AMBIENTE", "SMMA"],
+    ["PM RV, SEC. MUNIC. DE INFRAESTRUTURA E DESENV. URBAN", "SMIDU"],
+    ["PM RV, SEC. MUNIC. DE AÇÃO URBANA E SERVICOS PÚBLICO, SECRETARIA DE ACAO URBANA", "SMAUSP"],
+    ["PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL", "GCM"],
+    ["PM RV, CAMARA MUNICIPAL, GGIM", "GGIM"],
+    ["PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO", "SMPG"],
+    ["PM RV, CONTROLADORIA GERAL DO MUNICIPIO", "CGM"],
+    ["PM RV, SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL, DESENVOLVIMENTO ECONOMICO", "SMDES"],
+    ["PM RV, SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL", "SMDES"],
+    ["PM RV, SUBPREFEITURA DE OUROANA", null],
+  ];
+  for (const [centro, sigla] of casos) {
+    const r = conferirUnidades([{ id: 1, numero: "1", planejamento: "1", reparticaoId: 999, orgaoId: 1, encontrado: { centroCusto: centro } }], CAD);
+    assert.equal(r.divergentes[0]?.unidadeCentiSigla ?? null, sigla, `${centro}: ${r.desconhecidas[0]?.mensagem ?? ""}`);
+  }
+  assert.equal(casarUnidadePorNome("SECRETARIA MUNICIPAL", false, CAD).tipo, "desconhecida", "só palavras genéricas não identificam");
+});
+
+test("Centro de Custo CADASTRADO na unidade: o casamento exato vem antes do nome (texto inteiro ou o último nome)", async () => {
+  const { casarPorCentroCusto } = await import("../src/lib/reparticao-match.ts");
+  const CAD = [
+    { id: 1, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centroCusto: "PM RV, CAMARA MUNICIPAL, GGIM" },
+    { id: 2, codigo: "SUBOU", nome: "Subprefeitura do Distrito", orgaoId: 1, centroCusto: "SUBPREFEITURA DE OUROANA" },
+    { id: 3, codigo: "SMS", nome: "Secretaria Municipal de Saúde", orgaoId: 1, centroCusto: null },
+  ];
+  assert.deepEqual(casarPorCentroCusto("pm rv, câmara municipal, ggim", CAD), { tipo: "ok", id: 1 }, "sem caixa/acento");
+  assert.deepEqual(casarPorCentroCusto("PM RV, SUBPREFEITURA DE OUROANA", CAD), { tipo: "ok", id: 2 }, "o último nome");
+  assert.equal(casarPorCentroCusto("PM RV, SECRETARIA MUNICIPAL DE SAÚDE", CAD), null, "sem cadastro = a comparação por nome segue");
+  const r = conferirUnidades([{ id: 9, numero: "1", planejamento: "1", reparticaoId: 9, orgaoId: 1, encontrado: { centroCusto: "PM RV, SUBPREFEITURA DE OUROANA" } }], CAD);
+  assert.equal(r.divergentes[0]?.unidadeCentiSigla, "SUBOU", "o nome diferente casa pelo Centro de Custo cadastrado");
+});

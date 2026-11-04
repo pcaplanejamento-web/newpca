@@ -348,6 +348,7 @@ export const reparticoes = sqliteTable(
     ordem: integer("ordem").notNull().default(0),
     numeroInteressado: text("numero_interessado"), // casa o Interessado do protocolo → unidade
     setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
+    centroCusto: text("centro_custo"), // o "Centro de Custo" da CM002 da Centi, como ela escreve (match da automação)
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
     // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
     // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.

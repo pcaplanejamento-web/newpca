@@ -89,6 +89,40 @@ test("CM002 pela API: o CENTRO DE CUSTO pelo valor (o nome do campo na API não 
   assert.equal(porNome?.[0]?.centroCusto, centros[0], "o valor-objeto dá a Descricao, nunca o $type");
 });
 
+test("CM002: as COLUNAS DA TELA (título → campo) capturam qualquer coluna e o Centro Custo pelo campo da grade", () => {
+  const p = pecasCm002() as unknown as {
+    colunasDaTela: (c: unknown) => { titulo: string; campo: string; visivel: boolean }[];
+    ehGradeCm002: (c: unknown) => boolean;
+    valorDaColuna: (x: Record<string, string>, campo: string) => string;
+    planejamentosCm002: (j: unknown, c: boolean, col: boolean, tela: unknown) => { id: string; centroCusto: string; tela?: Record<string, string> }[] | null;
+  };
+  const cols = [
+    { header: "ID", binding: "Id" },
+    { header: "Data Inicial", binding: "DtInicial" },
+    { header: "Código", binding: "Codigo" },
+    { header: "Centro Custo", binding: "CentroCustoDescricao" },
+    { header: "Situação", binding: "SituacaoDescricao" },
+    { header: "Finalidade", binding: "Finalidade" },
+    { header: "Token", binding: "RefreshToken" },
+  ];
+  assert.equal(p.ehGradeCm002(cols), true);
+  assert.equal(p.ehGradeCm002([{ header: "Protocolo", binding: "NrProtocolo" }]), false);
+  const tela = p.colunasDaTela(cols);
+  assert.deepEqual(JSON.parse(JSON.stringify(tela.map((c) => c.campo))), ["Id", "DtInicial", "Codigo", "CentroCustoDescricao", "SituacaoDescricao", "Finalidade"], "nunca campo de segredo");
+  assert.equal(p.valorDaColuna({ "Lotacao.$type": "X", "Lotacao.Id": "4", "Lotacao.Descricao": "PM RV, GGIM" }, "Lotacao"), "PM RV, GGIM");
+  const itens = [{ Id: 1769, DtInicial: "01/01/2027", Codigo: "03.52.000", CentroCustoDescricao: "PM RV, CAMARA MUNICIPAL, GGIM", SituacaoDescricao: "Não Executado", Finalidade: "CONTRATO Nº 40" }];
+  const r = p.planejamentosCm002({ Data: { Items: itens } }, true, true, tela);
+  assert.equal(r?.[0]?.centroCusto, "PM RV, CAMARA MUNICIPAL, GGIM", "o Centro Custo pelo campo que a TELA mostra");
+  assert.deepEqual(JSON.parse(JSON.stringify(r?.[0]?.tela)), {
+    Id: "1769",
+    DtInicial: "01/01/2027",
+    Codigo: "03.52.000",
+    CentroCustoDescricao: "PM RV, CAMARA MUNICIPAL, GGIM",
+    SituacaoDescricao: "Não Executado",
+    Finalidade: "CONTRATO Nº 40",
+  });
+});
+
 test("CM002 pela API: a consulta repetida sem paginação (corpo e URL)", () => {
   const { semPaginacao } = pecasCm002();
   const r = semPaginacao("restauth/list?entity=9&take=50&skip=100", { Take: 50, Skip: 50, Filtros: [{ Campo: "x" }], Page: 3 });

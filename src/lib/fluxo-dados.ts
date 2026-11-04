@@ -3,7 +3,7 @@
  * qualquer item), PROCURAR um valor nas linhas de uma tabela (numa coluna ou em todas), a REGRA "se encontrar X grava Y" e
  * as VARIÁVEIS (o estado guardado para terminar laços).
  */
-import { type CasamentoUnidade, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, trechosDoCentroCusto, unidadeDoCentroCusto } from "./reparticao-match.ts";
+import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, trechosDoCentroCusto, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
@@ -282,8 +282,10 @@ export function conferirUnidades(
       continue;
     }
     let { nome } = trechos[0] ?? { nome: "" };
-    let c: CasamentoUnidade = { tipo: "desconhecida" };
-    for (const [i, t] of trechos.entries()) {
+    // O Centro de Custo CADASTRADO na unidade (sincronizado com a Centi) vale primeiro — casamento exato.
+    const pelaUnidade = casarPorCentroCusto(centro, unidades, orgaoId);
+    let c: CasamentoUnidade = pelaUnidade ?? { tipo: "desconhecida" };
+    for (const [i, t] of pelaUnidade?.tipo === "ok" ? [] : trechos.entries()) {
       let r = casarUnidadePorNome(t.nome, t.truncado, unidades, orgaoId);
       // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
       // continua "desconhecida", nunca vira outra unidade.
@@ -297,7 +299,7 @@ export function conferirUnidades(
         nome = t.nome;
         break;
       }
-      if (i === 0) c = r;
+      if (i === 0 && !pelaUnidade) c = r;
     }
     base.unidadeCentroCusto = nome;
     if (c.tipo !== "ok") {
@@ -311,4 +313,50 @@ export function conferirUnidades(
     else out.divergentes.push({ ...x, mensagem: `${ref}: no sistema ${x.unidadeSistema || "sem unidade"}, na Centi ${x.unidadeCentiSigla} (${nome})` });
   }
   return out;
+}
+
+// ———————————————————————————————————————————————— captura de COLUNAS da tela (CM002 e outras grades da Centi)
+
+/** O nome do campo do item a partir do TÍTULO da coluna ("Centro Custo" → "centroCusto", "Data Inicial" → "dataInicial"). */
+export function chaveDoTitulo(titulo: string): string {
+  const p = String(titulo ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .trim()
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean);
+  const k = p.map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w)).join("");
+  return /^\d/.test(k) ? `c${k}` : k || "coluna";
+}
+
+/** As colunas escolhidas no campo "Capturar" ("campo|Título; …") → [{campo, titulo, chave}] sem repetir a chave. */
+export function lerCaptura(v: unknown): { campo: string; titulo: string; chave: string }[] {
+  const vistos = new Set<string>();
+  const out: { campo: string; titulo: string; chave: string }[] = [];
+  for (const t of String(v ?? "").split(";")) {
+    const [campo, ...resto] = t.split("|");
+    const c = (campo ?? "").trim();
+    if (!c) continue;
+    const titulo = resto.join("|").trim() || c;
+    let chave = chaveDoTitulo(titulo);
+    for (let i = 2; vistos.has(chave); i++) chave = `${chaveDoTitulo(titulo)}${i}`;
+    vistos.add(chave);
+    out.push({ campo: c, titulo, chave });
+  }
+  return out.slice(0, 120);
+}
+
+/** O valor de uma coluna (o campo da grade) na linha capturada: o mapa da TELA (`tela`) ou as colunas cruas (`centi`). */
+export function valorCapturado(linha: Item, campo: string): string {
+  const tela = linha.tela && typeof linha.tela === "object" ? (linha.tela as Item) : null;
+  if (tela && campo in tela) return String(tela[campo] ?? "");
+  const cru = linha.centi && typeof linha.centi === "object" ? (linha.centi as Item) : null;
+  if (!cru) return "";
+  const baixo = campo.toLowerCase();
+  const k =
+    Object.keys(cru).find((x) => x.toLowerCase() === baixo) ??
+    Object.keys(cru).find((x) => x.toLowerCase().startsWith(`${baixo}.`) && /\.(descricao|description|nome|text|texto|display|label|value)$/i.test(x));
+  return k ? String(cru[k] ?? "") : "";
 }
