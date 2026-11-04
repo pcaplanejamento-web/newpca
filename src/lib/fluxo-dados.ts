@@ -3,7 +3,7 @@
  * qualquer item), PROCURAR um valor nas linhas de uma tabela (numa coluna ou em todas), a REGRA "se encontrar X grava Y" e
  * as VARIÁVEIS (o estado guardado para terminar laços).
  */
-import { casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
+import { type CasamentoUnidade, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, trechosDoCentroCusto, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
@@ -219,7 +219,11 @@ function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; c
   const load = obj(it.centi);
   const cru = lista ? obj(lista.centi) : null;
   const doCru = (o: Item | null) => {
-    const k = o ? Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) : undefined;
+    // Pelo nome da coluna; sem ele, pelo VALOR — a entidade curta e a vírgula ("PM RV, SECRETARIA…").
+    const k = o
+      ? (Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && !/\$type$/i.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) ??
+        Object.keys(o).find((x) => !/\$type$/i.test(x) && /^[^,]{2,15},\s*\p{L}/u.test(String(o[x] ?? "").trim())))
+      : undefined;
     return o && k ? String(o[k]).trim() : "";
   };
   const opcoes: [Item | null, string][] = [
@@ -271,15 +275,27 @@ export function conferirUnidades(
       out.desconhecidas.push({ ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` });
       continue;
     }
-    const { nome, truncado } = unidadeDoCentroCusto(centro);
-    let c = casarUnidadePorNome(nome, truncado, unidades, orgaoId);
-    // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
-    // continua "desconhecida", nunca vira outra unidade.
-    if (c.tipo === "ambigua") {
-      const sigla = siglaDaFinalidade(finalidadeDe);
-      const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
-      if (s?.tipo === "ok" && c.ids.includes(s.id)) c = s;
+    // A unidade é a escrita ANTES da última vírgula (com 2 trechos, a depois dela); sem casar, os outros trechos.
+    const trechos = trechosDoCentroCusto(centro);
+    let { nome } = trechos[0] ?? { nome: "" };
+    let c: CasamentoUnidade = { tipo: "desconhecida" };
+    for (const [i, t] of trechos.entries()) {
+      let r = casarUnidadePorNome(t.nome, t.truncado, unidades, orgaoId);
+      // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
+      // continua "desconhecida", nunca vira outra unidade.
+      if (r.tipo === "ambigua") {
+        const sigla = siglaDaFinalidade(finalidadeDe);
+        const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
+        if (s?.tipo === "ok" && r.ids.includes(s.id)) r = s;
+      }
+      if (r.tipo === "ok") {
+        c = r;
+        nome = t.nome;
+        break;
+      }
+      if (i === 0) c = r;
     }
+    base.unidadeCentroCusto = nome;
     if (c.tipo !== "ok") {
       const motivo = c.tipo === "ambigua" ? "casa mais de uma unidade cadastrada" : "não existe no sistema";
       out.desconhecidas.push({ ...base, mensagem: `${ref}: unidade desconhecida no centro de custo — “${nome}” ${motivo}` });

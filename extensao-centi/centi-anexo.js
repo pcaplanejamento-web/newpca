@@ -564,18 +564,53 @@
   // itens trazem um Id, a Situação e a Finalidade/Centro de custo —; o sistema a repete SEM paginação (todas as linhas).
   const ULTIMO = (k) => String(k).split(".").pop();
   function campoTexto(linhas, re) {
-    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => re.test(ULTIMO(k)) || re.test(k));
+    // O `$type` (o nome da classe) de um valor-objeto nunca é o dado; o texto do objeto vem em Descricao/Nome/Text.
+    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => !/\$type$/i.test(k) && (re.test(ULTIMO(k)) || re.test(k)));
+    const descr = (k) => (/^(descricao|description|nome|text|texto|display|label)$/i.test(ULTIMO(k)) ? 0 : 1);
     // A de TEXTO (a Situação por extenso) vence o código numérico.
     const texto = (k) => linhas.filter((l) => l[k] != null && l[k] !== "" && !/^-?\d+$/.test(String(l[k]))).length;
-    return chaves.sort((a, b) => texto(b) - texto(a) || a.length - b.length)[0] ?? null;
+    return chaves.sort((a, b) => texto(b) - texto(a) || descr(a) - descr(b) || a.length - b.length)[0] ?? null;
+  }
+  /** A coluna do CENTRO DE CUSTO pelo VALOR (o nome do campo na API não é o da tela): a de texto em que ≥ 60% dos valores
+   * têm vírgula e o MESMO 1º trecho (a entidade — "PM RV, SECRETARIA…") se repete em ≥ 60%. Vence a com mais linhas
+   * assim; empate = nenhuma (nunca chuta). */
+  function colunaCentroCustoPeloValor(linhas) {
+    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => !/\$type$/i.test(k));
+    let melhor = null;
+    let nMelhor = 0;
+    let empate = false;
+    for (const k of chaves) {
+      const vals = linhas.map((l) => String(l[k] ?? "").trim()).filter((v) => v && /\p{L}/u.test(v));
+      if (vals.length < Math.max(1, Math.ceil(linhas.length * 0.3))) continue;
+      const com = vals.filter((v) => v.includes(","));
+      if (com.length < vals.length * 0.6) continue;
+      const conta = new Map();
+      for (const v of com) {
+        const p = v.split(",")[0].trim().toUpperCase();
+        conta.set(p, (conta.get(p) ?? 0) + 1);
+      }
+      const max = Math.max(...conta.values());
+      if (max < vals.length * 0.6) continue;
+      if (max > nMelhor) [melhor, nMelhor, empate] = [k, max, false];
+      else if (max === nMelhor) empate = true;
+    }
+    return empate ? null : melhor;
+  }
+  /** A coluna do centro de custo: pelo NOME e, sem ele, pelo VALOR. */
+  function colunaCentroCusto(linhas) {
+    const k = campoTexto(linhas, RE_CENTRO_CUSTO);
+    // O de nome certo só vale com TEXTO (o `IdCentroCusto` numérico sozinho não é o centro de custo).
+    if (k && linhas.some((l) => /\p{L}/u.test(String(l[k] ?? "")))) return k;
+    return colunaCentroCustoPeloValor(linhas) ?? k;
   }
   const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
   /** Os NOMES das colunas da lista da CM002 quando nenhuma é de centro de custo (o diagnóstico) — senão null. */
   function colunasSemCentroCusto(j) {
     const l = acharLista(j);
     if (!l) return null;
-    const chaves = [...new Set(l.itens.slice(0, 20).flatMap((x) => Object.keys(linhaPlanaAte(x, 200))))];
-    return chaves.some((k) => RE_CENTRO_CUSTO.test(k)) ? null : chaves.slice(0, 80);
+    const linhas = l.itens.slice(0, 50).map((x) => linhaPlanaAte(x, 200));
+    const chaves = [...new Set(linhas.flatMap((x) => Object.keys(x)))];
+    return colunaCentroCusto(linhas) ? null : chaves.slice(0, 80);
   }
   /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
   function planejamentosCm002(j, conhecida = false, colunas = false) {
@@ -589,7 +624,8 @@
     const kSit = campoTexto(amostra, /situa/i);
     const kFin = campoTexto(amostra, /finalidade/i);
     // "CentroCusto", "CentroDeCusto", "Centro de Custo", "C. Custo".
-    const kCc = campoTexto(amostra, RE_CENTRO_CUSTO);
+    // Pelo nome do campo; sem ele, pelo valor ("PM RV, …").
+    const kCc = colunaCentroCusto(amostra);
     // Na consulta já aprendida basta Id + Situação (finalidade/centro de custo podem vir vazios).
     if (!kId || !kSit || (!conhecida && !kFin && !kCc)) return null;
     return linhas
@@ -813,7 +849,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, colunasSemCentroCusto, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
+    comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

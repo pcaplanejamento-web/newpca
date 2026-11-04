@@ -76,6 +76,19 @@ test("CM002 pela API: a lista reconhecida pela forma, todas as linhas, a Situaç
   assert.equal(planejamentosCm002({ Items: [{ Id: 1, Nome: "x" }] }), null);
 });
 
+test("CM002 pela API: o CENTRO DE CUSTO pelo valor (o nome do campo na API não é o da tela) e o valor-objeto", () => {
+  const { planejamentosCm002 } = pecasCm002();
+  const centros = ["PM RV, SECRETARIA MUNICIPAL DE MEIO AMBIENTE", "PM RV, SUBPREFEITURA DE OUROANA", "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL"];
+  const fields = (o: Record<string, unknown>) => ({ Fields: Object.entries(o).map(([Key, Value]) => ({ Key, Value })) });
+  const itens = centros.map((c, i) =>
+    fields({ Id: 1769 - i, Situacao: "Não Executado", Finalidade: `CONTRATO Nº ${i}, DE 2026, PRESTAÇÃO`, Lotacao: { $type: "Centi.Model.Lotacao, Centi", Id: 40 + i, Descricao: c } }),
+  );
+  const r = planejamentosCm002({ Data: { Items: itens } }, true);
+  assert.deepEqual(r?.map((x) => x.centroCusto), centros, "a coluna achada pelo valor 'PM RV, …', nunca o $type nem a Finalidade");
+  const porNome = planejamentosCm002({ Data: { Items: [{ Id: 1, Situacao: "Executado", CentroCusto: { $type: "Centi.X, Centi", Id: 7, Descricao: centros[0] } }] } }, true);
+  assert.equal(porNome?.[0]?.centroCusto, centros[0], "o valor-objeto dá a Descricao, nunca o $type");
+});
+
 test("CM002 pela API: a consulta repetida sem paginação (corpo e URL)", () => {
   const { semPaginacao } = pecasCm002();
   const r = semPaginacao("restauth/list?entity=9&take=50&skip=100", { Take: 50, Skip: 50, Filtros: [{ Campo: "x" }], Page: 3 });

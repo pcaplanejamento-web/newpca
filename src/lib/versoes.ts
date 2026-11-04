@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.266.9",
+    data: "2026-11-04",
+    titulo: "Unidades × Centro de Custo: a coluna lida como a Centi escreve",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Extensão 1.31.0: a coluna Centro de Custo da CM002 é achada pelo VALOR (“PM RV, …”) quando o nome do campo na API não é o da tela — e o valor-objeto dá a descrição.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "A unidade é a escrita antes da última vírgula (com um só trecho depois da entidade, ele mesmo) e casa com as abreviações e o corte de 45 caracteres da Centi (“SEC. MUNIC.”, “DESENV.”, “TRABAL”).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Quando a Centi não abre o planejamento pelo ID, o erro mostra a mensagem dela.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.266.8",
     data: "2026-11-03",
     titulo: "Unidades × Centro de Custo também no fluxo salvo antigo",

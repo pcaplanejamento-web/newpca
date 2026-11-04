@@ -180,16 +180,34 @@ export function orgaoDivergeDaUnidade(
   return orgaoDoCampo !== orgaoIdDaUnidade;
 }
 
-/** A UNIDADE do "Centro custo" da CM002 da Centi = o trecho depois da ÚLTIMA vírgula
- * ("PM RV, GABINETE DO PREFEITO, GGIM" → "GGIM"). A Centi corta os nomes longos com reticência
- * ("…, PROCURADORIA-GE..."): sem ela, `truncado` marca que só o COMEÇO do nome é conhecido. */
-export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
+/** Os nomes de UNIDADE do "Centro custo" da CM002, na ordem em que valem. O 1º trecho é a ENTIDADE ("PM RV") e sai.
+ * Com 3+ trechos, a unidade é a escrita ANTES da última vírgula ("PM RV, SEC. MUNIC. DE AÇÃO URBANA…, SECRETARIA DE ACAO
+ * URBANA" → "SEC. MUNIC. DE AÇÃO URBANA…"); com 2, a depois dela. Os demais trechos ficam de reserva (o último primeiro).
+ * A Centi corta os nomes (reticência ou ~45 caracteres por trecho): `truncado` marca que só o COMEÇO é conhecido. */
+export function trechosDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean }[] {
   const t = String(texto ?? "");
-  const ultimo = t.split(",").filter((x) => x.trim()).pop() ?? "";
-  const sem = ultimo.replace(/\s*(\.{2,}|…)\s*$/, "");
-  // A extensão corta o valor em MAX_CENTRO_CUSTO sem reticência: o texto nesse tamanho também está cortado.
-  return { nome: sem.trim().replace(/\s+/g, " "), truncado: sem.length !== ultimo.length || t.trim().length >= MAX_CENTRO_CUSTO };
+  const brutos = t.split(",").filter((x) => x.trim());
+  if (!brutos.length) return [];
+  const corteTotal = t.trim().length >= MAX_CENTRO_CUSTO;
+  const trecho = (bruto: string, ultimo: boolean) => {
+    const sem = bruto.replace(/\s*(\.{2,}|…)\s*$/, "");
+    const nome = sem.trim().replace(/\s+/g, " ");
+    return { nome, truncado: sem.length !== bruto.length || nome.length >= CORTE_TRECHO_CENTI || (ultimo && corteTotal) };
+  };
+  const todos = brutos.map((b, i) => trecho(b, i === brutos.length - 1));
+  if (todos.length === 1) return todos;
+  const resto = todos.slice(1);
+  const principal = resto.length >= 2 ? resto.length - 2 : 0;
+  return [resto[principal], ...resto.filter((_, i) => i !== principal).reverse()];
 }
+
+/** O nome PRINCIPAL da unidade no "Centro custo" (ver `trechosDoCentroCusto`). */
+export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
+  return trechosDoCentroCusto(texto)[0] ?? { nome: "", truncado: false };
+}
+
+/** A Centi corta cada trecho do "Centro custo" em 45 caracteres ("SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL"). */
+export const CORTE_TRECHO_CENTI = 45;
 
 /** O tamanho em que a extensão corta os textos da CM002 (`centi-anexo.js`). */
 export const MAX_CENTRO_CUSTO = 200;
@@ -199,6 +217,25 @@ export const MAX_CENTRO_CUSTO = 200;
 export function siglaDaFinalidade(texto: string | null | undefined): string | null {
   const ultimo = String(texto ?? "").split(/\s+[-–—]\s+/).pop()?.trim() ?? "";
   return /^[A-Za-zÀ-ú][A-Za-zÀ-ú0-9]{1,14}$/.test(ultimo) && !/^\d+$/.test(ultimo) ? ultimo : null;
+}
+
+/** As palavras de um nome sem as de ligação e sem MUNICIPAL (e as abreviações MUN/MUNIC). */
+function tokensNome(s: string): string[] {
+  return chaveNome(s)
+    .split(" ")
+    .filter((w) => w && !/^(MUN|MUNIC|MUNICIP|MUNICIPAIS|MUNICIPIO)$/.test(w));
+}
+
+/** As palavras da Centi (`a`) × as cadastradas (`b`): cada par na mesma posição, uma o começo da outra (3+ letras; a
+ * palavra de 1 letra só igual). Cortado, a cadastrada pode ter palavras a mais no fim. */
+function casaPorPrefixo(a: string[], b: string[], truncado: boolean): boolean {
+  if (a.length > b.length || (!truncado && a.length !== b.length)) return false;
+  return a.every((w, i) => {
+    const x = b[i];
+    if (w === x) return true;
+    const curta = w.length <= x.length ? w : x;
+    return curta.length >= 3 && (x.startsWith(w) || w.startsWith(x));
+  });
 }
 
 export type CasamentoUnidade = { tipo: "ok"; id: number } | { tipo: "desconhecida" } | { tipo: "ambigua"; ids: number[] };
@@ -226,6 +263,12 @@ export function casarUnidadePorNome(
   if (!achadas.length) achadas = pelo((u) => siglas.has(norm(u.codigo)));
   if (!achadas.length) achadas = pelo((u) => !!u.setorRequisitante && chaves.has(chaveNome(u.setorRequisitante)));
   if (!achadas.length && truncado && k.length >= 4) achadas = pelo((u) => chaveNome(u.nome).startsWith(k));
+  // As ABREVIAÇÕES e os cortes da Centi ("SEC. MUNIC. DE INFRAESTRUTURA E DESENV. URBAN"): palavra a palavra, cada uma
+  // é o começo da cadastrada na mesma posição.
+  if (!achadas.length) {
+    const t = tokensNome(nome);
+    if (t.length >= 2) achadas = pelo((u) => casaPorPrefixo(t, tokensNome(u.nome), truncado));
+  }
   if (achadas.length > 1 && orgaoId != null) {
     const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);
     if (doOrgao.length) achadas = doOrgao;

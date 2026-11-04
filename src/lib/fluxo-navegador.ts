@@ -107,6 +107,13 @@ export async function lerDfdCentiPorCodigo(
   const l = await carregarPlanejamento(c, plan, entidade || undefined);
   if ("erro" in l) throw new Error(l.erro);
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
+  // A Centi responde `{Entity: null, Message}` quando NÃO abre o registro: o motivo é a mensagem dela, nunca "sem o campo".
+  const resp = l.j as { Entity?: unknown; Message?: unknown };
+  if (typeof l.j === "object" && "Entity" in resp && (resp.Entity == null || typeof resp.Entity !== "object")) {
+    const msg = s(typeof resp.Message === "string" ? resp.Message : (resp.Message as { Text?: unknown; Descricao?: unknown } | null)?.Text ?? (resp.Message as { Descricao?: unknown } | null)?.Descricao);
+    if (!msg || /n[aã]o (foi )?encontrad|inexist|n[aã]o existe/i.test(msg)) throw new Error(`NAO_ENCONTRADO: a Centi não abriu o planejamento ${plan}${entidade ? ` (órgão ${entidade})` : ""}${msg ? ` — ${msg}` : ""}.`);
+    throw new Error(`A Centi não abriu o planejamento ${plan}${entidade ? ` (órgão ${entidade})` : ""} — ${msg}`);
+  }
   const situacao = s(acharValor(l.j, /^situa/i));
   // O Centro de Custo e a Finalidade do PRÓPRIO registro do planejamento (o ID da CM002) — sem depender da lista.
   // Só TEXTO: o `IdCentroCusto` numérico ao lado do nome nunca vale como unidade.
