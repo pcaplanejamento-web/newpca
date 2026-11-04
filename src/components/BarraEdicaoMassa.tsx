@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type ChaveAvaliacao, editavelDe, opcoesAssunto, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import { type AcaoMassa, buildPrevisao, type CampoMassa, DEFINICOES_PREVISAO } from "@/lib/dfd-tratamento";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
@@ -98,7 +98,7 @@ const CAMPOS: { value: CampoMassa; label: string; chave: ChaveAvaliacao }[] = [
 const SEM_SUBUNIDADE = "sem";
 
 /** Os campos da barra: os de conteúdo/unidade + a escolha GRAVADO × NOVO da sobrescrita (quando o host a oferece). */
-type CampoBarra = CampoMassa | "versao" | "subunidade";
+export type CampoBarra = CampoMassa | "versao" | "subunidade";
 
 /**
  * Edição EM MASSA dos DFDs selecionados — a MESMA na análise do protocolo, no protocolo gravado e na
@@ -114,6 +114,7 @@ export function BarraEdicaoMassa({
   onAplicar,
   versao = null,
   subunidade = null,
+  onCampo,
 }: {
   reparticoes: Rep[];
   /** Ano padrão da previsão (o do PCA do processo). */
@@ -126,7 +127,10 @@ export function BarraEdicaoMassa({
    * desabilitado). */
   versao?: { alvos: number; onAplicar: (lado: Lado) => void; aviso?: string | null } | null;
   /** A SUBUNIDADE (Mesa: os selecionados são DFDs gravados da MESMA unidade no modo "um centro para toda a unidade") — as dela. */
-  subunidade?: { opcoes: { id: number; nome: string }[] } | null;
+  /** `motivo` = por que a seleção NÃO pode receber a subunidade (o campo fica à vista, travado, com o motivo). */
+  subunidade?: { opcoes: { id: number; nome: string }[]; motivo?: string | null } | null;
+  /** Avisa o host do campo escolhido (a Mesa pinta os selecionados que não servem para ele). */
+  onCampo?: (campo: CampoBarra) => void;
 }) {
   const campos: { value: CampoBarra; label: string }[] = [
     ...(versao ? [{ value: "versao" as const, label: "Gravado × novo" }] : []),
@@ -136,6 +140,12 @@ export function BarraEdicaoMassa({
   const [campoSel, setCampo] = useState<CampoBarra>(campos[0]?.value ?? "reparticao");
   // O campo escolhido pode sair da lista (ex.: a seleção deixou de ter DFD gravado) — vale o 1º.
   const campo = campos.some((c) => c.value === campoSel) ? campoSel : (campos[0]?.value ?? "reparticao");
+  const campoRef = useRef<CampoBarra | null>(null);
+  useEffect(() => {
+    if (campoRef.current === campo) return;
+    campoRef.current = campo;
+    onCampo?.(campo);
+  });
   const [lado, setLado] = useState<Lado | "">("");
   const [rep, setRep] = useState<number | null>(null);
   const [tipo, setTipo] = useState("");
@@ -153,7 +163,7 @@ export function BarraEdicaoMassa({
     campo === "versao"
       ? null
       : campo === "subunidade"
-      ? sub
+      ? sub && !subunidade?.motivo
         ? { campo, subunidadeId: sub === SEM_SUBUNIDADE ? null : Number(sub) }
         : null
       : campo === "reparticao"
@@ -209,7 +219,8 @@ export function BarraEdicaoMassa({
             </>
           )}
           {campo === "reparticao" && <SeletorUnidade value={rep} onChange={setRep} reparticoes={reparticoes} />}
-          {campo === "subunidade" && subunidade && (
+          {campo === "subunidade" && subunidade?.motivo && <Nota>{subunidade.motivo}</Nota>}
+          {campo === "subunidade" && subunidade && !subunidade.motivo && (
             <Selecao
               aria-label="Subunidade"
               className={inputCls}

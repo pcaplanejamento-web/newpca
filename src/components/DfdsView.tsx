@@ -60,7 +60,7 @@ import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { nomeExibicao, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
-import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "./BarraEdicaoMassa";
+import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos, type CampoBarra } from "./BarraEdicaoMassa";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
@@ -1208,14 +1208,43 @@ export function DfdsView({
     );
   }, [dfds, reparticoes, regras, detalheSubunidades]);
   const gravadosDe = (id: number) => gravadosPorId.get(id) ?? {};
-  // A SUBUNIDADE em massa: só quando os DFDs selecionados são da MESMA unidade, no modo "um centro para toda a unidade"
-  // com subunidades (as dela).
-  const subunidadeDaSelecao = (() => {
-    const unidades = new Set([...selDfds].map((id) => dfdPorId.get(Number(id))?.reparticaoId ?? null));
-    const [unica] = [...unidades];
-    if (unidades.size !== 1 || unica == null) return null;
-    const cfg = reparticoes.find((r) => r.id === unica)?.subunidade;
-    return cfg?.modo === "unico" && cfg.subunidades.length ? { opcoes: cfg.subunidades } : null;
+  // A SUBUNIDADE em massa: só quando TODA a seleção pode — DFDs de UMA unidade no modo "um centro para toda a unidade"
+  // com subunidades (as dela). Os que não podem ficam com o chip vermelho (âmbar = de outra unidade) e o motivo.
+  const [campoMassa, setCampoMassa] = useState<CampoBarra | null>(null);
+  const subMassa = (() => {
+    const motivos = new Map<number, { tom: "danger" | "warn"; dica: string }>();
+    const porUnidade = new Map<number, number[]>();
+    for (const k of selDfds) {
+      const d = dfdPorId.get(Number(k));
+      if (!d) continue;
+      const cfg = d.reparticaoId != null ? reparticoes.find((r) => r.id === d.reparticaoId)?.subunidade : null;
+      const sigla = d.reparticaoCodigo ?? "a unidade";
+      const motivo =
+        d.reparticaoId == null
+          ? "DFD sem unidade"
+          : !cfg
+            ? `${sigla} não tem centro de custo cadastrado`
+            : cfg.modo === "subunidades"
+              ? `em ${sigla} a subunidade vem do centro de custo (um por subunidade)`
+              : !cfg.subunidades.length
+                ? `${sigla} não tem subunidades`
+                : null;
+      if (motivo) motivos.set(d.id, { tom: "danger", dica: `Subunidade não permitida: ${motivo}.` });
+      else porUnidade.set(d.reparticaoId as number, [...(porUnidade.get(d.reparticaoId as number) ?? []), d.id]);
+    }
+    // Várias unidades permitidas: vale a de MAIS DFDs; os das outras ficam em âmbar.
+    const [unica] = [...porUnidade.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? [];
+    const sigla = (id: number) => reparticoes.find((r) => r.id === id)?.codigo ?? "outra unidade";
+    for (const [u, ids] of porUnidade)
+      if (u !== unica) for (const id of ids) motivos.set(id, { tom: "warn", dica: `De ${sigla(u)} — a subunidade em massa vale para os DFDs de UMA unidade (${sigla(unica as number)}).` });
+    const cfg = unica != null ? reparticoes.find((r) => r.id === unica)?.subunidade : null;
+    const nao = [...motivos.values()].filter((m) => m.tom === "danger").length;
+    const outras = motivos.size - nao;
+    const motivo = motivos.size
+      ? [nao ? `${num(nao)} DFD(s) não permitem subunidade (em vermelho)` : "", outras ? `${num(outras)} de outra unidade (em âmbar)` : ""].filter(Boolean).join(" · ") +
+        " — tire-os da seleção para definir a subunidade."
+      : null;
+    return { motivos, sub: { opcoes: cfg?.subunidades ?? [], motivo } };
   })();
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
@@ -2438,13 +2467,20 @@ export function DfdsView({
         fixa
         onAltura={setAlturaBarra}
         bloqueada={!!aplicandoMassa}
-        dfds={sel.map((d) => ({ key: d.id, numero: d.numero, planejamento: d.planejamento, valor: d.valorTotal, itens: d.totalItens }))}
+        dfds={sel.map((d) => ({
+          key: d.id,
+          numero: d.numero,
+          planejamento: d.planejamento,
+          valor: d.valorTotal,
+          itens: d.totalItens,
+          ...(campoMassa === "subunidade" ? subMassa.motivos.get(d.id) : undefined),
+        }))}
         onRemover={tirar(setSelDfds)}
         onLimpar={() => setSelDfds(new Set())}
         acoes={automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {progressoMassa}
-        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} subunidade={subunidadeDaSelecao} />
+        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} subunidade={subMassa.sub} onCampo={setCampoMassa} />
       </BarraSelecaoDfds>
     );
   } else if (podeAqui.manipular && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {

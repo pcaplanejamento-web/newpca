@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.274.0",
+    data: "2026-11-04",
+    titulo: "Subunidade em massa na Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "A barra de seleção dos DFDs tem sempre o campo “Subunidade”: define a subunidade de todos os selecionados de uma vez, quando a seleção inteira pode recebê-la (DFDs de UMA unidade no modo “Um para toda a unidade”, com subunidades).", link: "/painel/mesa?vista=dfds" },
+      { tipo: "melhoria", area: "Mesa", texto: "Com o campo Subunidade escolhido, os DFDs que não podem recebê-la ficam em vermelho na seleção (e os de outra unidade em âmbar), com o motivo na dica; o Aplicar fica travado até tirá-los.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.273.0",
     data: "2026-11-04",
     titulo: "Centros de custo lidos sempre à vista",

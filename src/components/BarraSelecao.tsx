@@ -10,7 +10,8 @@ import { definirVarRaiz, tokenPx } from "./espacamento";
 import { IconChevronDown, IconClose } from "./icons";
 
 /** Um registro selecionado (vira um chip removível). */
-export type RegistroSelecao = { key: string | number; rotulo: string };
+/** `tom` = o registro NÃO serve para a edição escolhida (danger = não permitido; warn = de outra unidade) — `dica`, o motivo. */
+export type RegistroSelecao = { key: string | number; rotulo: string; tom?: "danger" | "warn"; dica?: string };
 
 /** Chips renderizados (acima disso, um "+N" — a seleção em si segue completa). */
 const MAX_CHIPS = 80;
@@ -132,7 +133,14 @@ export function BarraSelecao({
             {registros.slice(0, MAX_CHIPS).map((r) => (
               <li
                 key={r.key}
-                className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-chip border border-accent/30 bg-accent-soft pl-2.5 pr-0.5 text-[12px] font-medium text-accent"
+                title={r.dica}
+                className={`inline-flex h-8 shrink-0 items-center gap-0.5 rounded-chip border pl-2.5 pr-0.5 text-[12px] font-medium ${
+                  r.tom === "danger"
+                    ? "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]"
+                    : r.tom === "warn"
+                      ? "border-[var(--warn)]/40 bg-[var(--warn)]/10 text-[var(--warn)]"
+                      : "border-accent/30 bg-accent-soft text-accent"
+                }`}
               >
                 <span className="max-w-[16rem] truncate">{r.rotulo}</span>
                 <button
@@ -186,7 +194,7 @@ export function BarraSelecao({
 }
 
 /** Um DFD selecionado (as três planilhas de DFDs mapeiam para isto). */
-export type DfdSelecionado = { key: string | number; numero: string; planejamento: string | null; valor: number | null; itens: number | null };
+export type DfdSelecionado = { key: string | number; numero: string; planejamento: string | null; valor: number | null; itens: number | null; tom?: "danger" | "warn"; dica?: string };
 
 /**
  * Barra de seleção da PLANILHA DE DFDs — a MESMA na Mesa, no protocolo gravado e na análise: chips "DFD
@@ -203,7 +211,7 @@ export function BarraSelecaoDfds({
   return (
     <BarraSelecao
       {...props}
-      registros={dfds.map((d) => ({ key: d.key, rotulo: `DFD ${d.numero}` }))}
+      registros={dfds.map((d) => ({ key: d.key, rotulo: `DFD ${d.numero}`, tom: d.tom, dica: d.dica }))}
       resumo={
         <ResumoSelecao
           qtd={dfds.length}
