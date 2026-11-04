@@ -19,7 +19,7 @@ import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
-import { CelulaCentroCusto, CelulaSubunidade, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
+import { CelulaCentroCusto, CelulaSubunidade, EstadoPonto, EstadoProcessando, EstadoResumo, SUB_EM_BRANCO, SUB_NAO_DEFINIDA } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
 import { PresencaNoItem } from "./PresencaNoItem";
 
@@ -79,7 +79,8 @@ export type LinhaDfd = {
 
 /** O texto da subunidade nos filtros/ordem/exportação (a MESMA régua nas tabelas de DFDs e Itens). */
 export const SEM_CENTRO_CUSTO = "Sem centro de custo";
-export const rotuloSubunidade = (s: { nome: string | null; falta: boolean } | null | undefined) => s?.nome ?? (s?.falta ? "Não definida" : "—");
+export const rotuloSubunidade = (s: { nome: string | null; falta: boolean } | null | undefined) =>
+  s?.nome ?? (s?.falta ? SUB_NAO_DEFINIDA : SUB_EM_BRANCO);
 
 /** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
 export type PcaDaLinha = { ano: number; nome: string };

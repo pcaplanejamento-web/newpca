@@ -129,6 +129,11 @@ export function CelulaCentroCusto({ centro, cor = "var(--danger)" }: { centro: s
 
 /** A SUBUNIDADE efetiva do DFD (`subunidadeDoDfd`): o nome, "Não definida" na cor da importância (`dfd.subunidade`) ou
  * "—" (DFD sem unidade). */
+/** Os dois "sem subunidade" — opções SEPARADAS no filtro: o ERRO (o cadastro não define) × o EM BRANCO (o DFD ainda sem
+ * centro de custo ou sem unidade — a falta é de outro ponto). A célula mostra o MESMO texto do filtro. */
+export const SUB_NAO_DEFINIDA = "Não definida";
+export const SUB_EM_BRANCO = "Em branco";
+
 export function CelulaSubunidade({ nome, falta, cor = "var(--warn)", dica }: { nome: string | null; falta: boolean; cor?: string; dica?: string }) {
   if (nome)
     return (
@@ -136,11 +141,16 @@ export function CelulaSubunidade({ nome, falta, cor = "var(--warn)", dica }: { n
         {nome}
       </span>
     );
-  if (!falta) return <span className="text-faint">—</span>;
+  if (!falta)
+    return (
+      <span className="whitespace-nowrap text-[12px] text-faint" title="Sem centro de custo gravado (ou sem unidade) — a subunidade sai dele">
+        {SUB_EM_BRANCO}
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium" style={{ color: cor }} title={dica}>
       <IconAlert className="h-3.5 w-3.5 shrink-0" />
-      Não definida
+      {SUB_NAO_DEFINIDA}
     </span>
   );
 }

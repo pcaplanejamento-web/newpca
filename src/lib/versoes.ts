@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.271.3",
+    data: "2026-11-04",
+    titulo: "Filtro da Subunidade: “Não definida” × “Em branco”",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "No filtro e na célula da coluna Subunidade, “Não definida” (o cadastro não define — erro) e “Em branco” (o DFD ainda sem centro de custo ou sem unidade) aparecem separados, com o mesmo texto na tabela.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.271.2",
     data: "2026-11-04",
     titulo: "Subunidade da unidade × criada",
