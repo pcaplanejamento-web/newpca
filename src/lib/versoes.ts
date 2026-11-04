@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.273.0",
+    data: "2026-11-04",
+    titulo: "Centros de custo lidos sempre à vista",
+    mudancas: [
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "“Escolher dos lidos nos DFDs” aparece sempre, com TODOS os centros de custo lidos — os dos DFDs da unidade primeiro, com quantos DFDs cada um. Antes ele sumia quando os centros já estavam em outro cadastro.", link: "/painel/orgaos" },
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "O centro de custo cadastrado em outra unidade aparece com o dono (“Está em …”); marcá-lo pede confirmação e, ao salvar, ele é MOVIDO para esta unidade no mesmo lote.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "O (!) do centro de custo aponta os centros dos DFDs da unidade ainda sem cadastro ou cadastrados em outra unidade, e a coluna Subunidades da lista mostra “N a cadastrar” (filtrável).", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.272.0",
     data: "2026-11-04",
     titulo: "Unidade: um botão salva tudo",

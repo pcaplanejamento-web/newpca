@@ -202,4 +202,6 @@ export const subunidadesSchema = z.strictObject({
       }),
     )
     .max(LIMITES_SUBUNIDADE.subunidades),
+  // Os centros que o ADM MOVE de outro cadastro para este (saem de lá no mesmo lote); ausente = nenhum.
+  mover: centrosSchema.optional(),
 })

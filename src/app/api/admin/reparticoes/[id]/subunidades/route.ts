@@ -8,8 +8,8 @@ import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { subunidadesSchema } from "@/lib/rbac-validation";
 import { cadastroDaUnidade, centrosDeOutrasUnidades, lerConfigSubunidades } from "@/lib/subunidades";
-import { conflitosCentros, lerCentros, motivoSubunidadesInvalidas, ROTULO_MODO } from "@/lib/subunidades-core";
-import { comandosGravarSubunidades } from "@/lib/subunidades-sql";
+import { chaveCentro, conflitosCentros, lerCentros, motivoSubunidadesInvalidas, planoMover, ROTULO_MODO } from "@/lib/subunidades-core";
+import { comandosGravarSubunidades, comandosTirarCentros } from "@/lib/subunidades-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -51,10 +51,19 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const antes = (await lerConfigSubunidades([id])).get(id);
   const deles = new Set((antes?.subunidades ?? []).map((s) => s.id));
   if (lista.some((s) => s.id != null && !deles.has(s.id))) return erro("Subunidade de outra unidade — recarregue a tela.", 422);
-  const conflitos = conflitosCentros(centros, lista, await centrosDeOutrasUnidades(id));
+  // MOVER: só os centros que ficam neste cadastro saem do outro (o mesmo lote); o resto do conflito é recusado (409).
+  const noCadastro = new Set([...centros, ...lista.flatMap((s) => s.centros)].map(chaveCentro));
+  const mover = lerCentros(corpo.data.mover ?? []).filter((c) => noCadastro.has(chaveCentro(c)));
+  const outras = await centrosDeOutrasUnidades(id);
+  const plano = planoMover(mover, outras);
+  const restantes = outras.map((o) => {
+    const p = plano.find((x) => x.reparticaoId === o.reparticaoId && x.subunidadeId === o.subunidadeId);
+    return p ? { ...o, centros: p.centros } : o;
+  });
+  const conflitos = conflitosCentros(centros, lista, restantes);
   if (conflitos.length) return erro(`Um centro de custo pertence a um só cadastro: ${conflitos.slice(0, 5).join("; ")}${conflitos.length > 5 ? "…" : ""}.`, 409);
   const db = getDb();
-  const cmds = comandosGravarSubunidades(db, id, modo, centros, lista);
+  const cmds = [...comandosTirarCentros(db, plano), ...comandosGravarSubunidades(db, id, modo, centros, lista)];
   await db.batch(cmds as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
   const texto = (c: string[], l: { nome: string; centros: string[] }[]) =>
     [c.length ? `centro ${c.join(" | ")}` : "", ...l.map((s) => (s.centros.length ? `${s.nome} (${s.centros.join(" | ")})` : s.nome))].filter(Boolean).join(", ") || "nenhum";
@@ -67,6 +76,16 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     antes: { modo: antes?.modo ?? "unico", centros: antes?.centros ?? [], subunidades: antes?.subunidades ?? [] },
     depois: { modo, centros, subunidades: lista },
   });
+  for (const p of plano)
+    await registrarAuditoria({
+      usuario: g.u,
+      acao: "editar",
+      entidade: "reparticao",
+      entidadeId: p.reparticaoId,
+      resumo: `Centro de custo movido de ${p.rotulo} para ${u.codigo}: ${p.tirados.join(" | ")}`,
+      antes: { centros: [...p.centros, ...p.tirados] },
+      depois: { centros: p.centros },
+    });
   const c = await cadastroDaUnidade(id);
   return ok(c ?? {});
 }

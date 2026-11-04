@@ -7,7 +7,7 @@ import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
-import { nomesDasSubunidades } from "@/lib/subunidades";
+import { nomesDasSubunidades, pendentesPorUnidade } from "@/lib/subunidades";
 import { lerCentros, lerModo } from "@/lib/subunidades-core";
 
 export const dynamic = "force-dynamic";
@@ -38,12 +38,12 @@ export async function GET(req: Request) {
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`); as subunidades (nomes, na ordem) — a coluna da lista.
-  const subs = await nomesDasSubunidades();
+  const [subs, pendentes] = await Promise.all([nomesDasSubunidades(), pendentesPorUnidade(rows.map((r) => r.id))]);
   return ok({ reparticoes: rows.map(({ centrosCusto, ...r }) => {
       const modoCentro = lerModo(r.modoCentro);
       const subunidades = subs.get(r.id) ?? [];
       // Tem o centro de custo cadastrado? (no único, o da unidade; no por subunidade, as subunidades — todas têm centro)
-      return { ...r, modoCentro, subunidades, temCentro: modoCentro === "unico" ? lerCentros(centrosCusto).length > 0 : subunidades.length > 0 };
+      return { ...r, modoCentro, subunidades, temCentro: modoCentro === "unico" ? lerCentros(centrosCusto).length > 0 : subunidades.length > 0, pendentes: pendentes.get(r.id) ?? [] };
     }) });
 }
 

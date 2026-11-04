@@ -51,14 +51,42 @@ export function comandosGravarSubunidades(db: Db, unidadeId: number, modo: ModoC
   return cmds;
 }
 
-/** Os CENTROS DE CUSTO distintos gravados nos DFDs, com quantos DFDs têm cada um (as opções do cadastro). Builder puro. */
-export function consultaCentrosDosDfds(db: Db) {
+/** Os CENTROS DE CUSTO distintos gravados nos DFDs, com quantos DFDs têm cada um e quantos são DA UNIDADE
+ * pedida (as opções do cadastro — os da unidade primeiro). Builder puro. */
+export function consultaCentrosDosDfds(db: Db, unidadeId = 0) {
+  const daUnidade = sql<number>`SUM(CASE WHEN ${dfds.reparticaoId} = ${unidadeId} THEN 1 ELSE 0 END)`;
   return db
-    .select({ centro: dfds.centroCusto, dfds: sql<number>`COUNT(*)` })
+    .select({
+      centro: dfds.centroCusto,
+      dfds: sql<number>`COUNT(*)`,
+      daUnidade,
+    })
     .from(dfds)
     .where(sql`trim(COALESCE(${dfds.centroCusto}, '')) <> ''`)
     .groupBy(dfds.centroCusto)
-    .orderBy(asc(dfds.centroCusto));
+    .orderBy(sql`${daUnidade} DESC`, asc(dfds.centroCusto));
+}
+
+/** Os centros de custo distintos dos DFDs POR UNIDADE (os "a cadastrar" da lista de unidades). Builder puro. */
+export function consultaCentrosPorUnidade(db: Db) {
+  return db
+    .select({ reparticaoId: dfds.reparticaoId, centro: dfds.centroCusto })
+    .from(dfds)
+    .where(sql`${dfds.reparticaoId} IS NOT NULL AND trim(COALESCE(${dfds.centroCusto}, '')) <> ''`)
+    .groupBy(dfds.reparticaoId, dfds.centroCusto);
+}
+
+/** Tira centros de custo de OUTROS cadastros (o MOVER para esta unidade): cada alvo recebe a lista nova — a unidade
+ * (modo único, `subunidadeId` null) ou a subunidade. Builders para o MESMO `db.batch` da gravação. */
+export function comandosTirarCentros(db: Db, alvos: { reparticaoId: number; subunidadeId: number | null; centros: string[] }[]) {
+  return alvos.map((a) =>
+    a.subunidadeId == null
+      ? db.update(reparticoes).set({ centrosCusto: JSON.stringify(a.centros), atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(reparticoes.id, a.reparticaoId))
+      : db
+          .update(subunidades)
+          .set({ centrosCusto: JSON.stringify(a.centros) })
+          .where(and(eq(subunidades.id, a.subunidadeId), eq(subunidades.reparticaoId, a.reparticaoId))),
+  );
 }
 
 /** DFDs por comando do Centro de Custo (a lista vai num só parâmetro JSON). */

@@ -192,3 +192,41 @@ export function conflitosCentros(
   }
   return out;
 }
+
+/** Os centros de custo dos DFDs da unidade que ainda NÃO estão no cadastro dela (pela chave, sem repetir) — os
+ * "a cadastrar" da lista e do (!) do banner. */
+export function centrosPendentes(cfg: ConfigSubunidades | null | undefined, centrosDosDfds: string[]): string[] {
+  const tem = new Set(centrosDaConfig(cfg).map(chaveCentro));
+  const vistos = new Set<string>();
+  const out: string[] = [];
+  for (const c of centrosDosDfds) {
+    const k = chaveCentro(c);
+    if (!k || tem.has(k) || vistos.has(k)) continue;
+    vistos.add(k);
+    out.push(limparCentro(c));
+  }
+  return out;
+}
+
+/** Um cadastro (de OUTRA unidade) que guarda centros de custo: a própria unidade (modo único — `subunidadeId` null) ou
+ * uma subunidade dela. */
+export type CentrosDeOutro = { reparticaoId: number; unidade: string; subunidadeId: number | null; subunidade: string; centros: string[] };
+
+/** MOVER centros de custo de outros cadastros para esta unidade: a lista NOVA de cada cadastro de origem (sem os
+ * movidos — pela chave) e os rótulos para a auditoria. Só os cadastros que mudam. */
+export function planoMover(mover: string[], outras: CentrosDeOutro[]) {
+  const chaves = new Set(mover.map(chaveCentro).filter(Boolean));
+  const alvos: { reparticaoId: number; subunidadeId: number | null; centros: string[]; rotulo: string; tirados: string[] }[] = [];
+  for (const o of outras) {
+    const tirados = o.centros.filter((c) => chaves.has(chaveCentro(c)));
+    if (!tirados.length) continue;
+    alvos.push({
+      reparticaoId: o.reparticaoId,
+      subunidadeId: o.subunidadeId,
+      centros: o.centros.filter((c) => !chaves.has(chaveCentro(c))),
+      rotulo: o.subunidade ? `${o.subunidade} (${o.unidade})` : o.unidade,
+      tirados,
+    });
+  }
+  return alvos;
+}

@@ -3,8 +3,8 @@ import { cache } from "react";
 import { reparticoes, subunidades } from "@/db/schema";
 import { getDb } from "./db";
 import { CODIGO_GERAL } from "./escopo-unidades-core";
-import { type ConfigSubunidades, lerCentros, lerModo, type Subunidade } from "./subunidades-core";
-import { consultaCentrosDosDfds, consultaMarcadosPorSubunidade, consultaSubunidades } from "./subunidades-sql";
+import { type CentrosDeOutro, type ConfigSubunidades, centrosPendentes, lerCentros, lerModo, type Subunidade } from "./subunidades-core";
+import { consultaCentrosDosDfds, consultaCentrosPorUnidade, consultaMarcadosPorSubunidade, consultaSubunidades } from "./subunidades-sql";
 
 /** As subunidades de várias unidades (`id da unidade → lista`) — uma consulta. */
 async function subunidadesDe(ids: number[]): Promise<Map<number, Subunidade[]>> {
@@ -49,7 +49,7 @@ export async function cadastroDaUnidade(id: number) {
   const [cfg, marcados, centros, outras] = await Promise.all([
     lerConfigSubunidades([id]),
     consultaMarcadosPorSubunidade(db, id),
-    consultaCentrosDosDfds(db),
+    consultaCentrosDosDfds(db, id),
     centrosDeOutrasUnidades(id),
   ]);
   const c = cfg.get(id);
@@ -59,30 +59,30 @@ export async function cadastroDaUnidade(id: number) {
     modo: c.modo,
     centrosUnidade: c.centros,
     subunidades: c.subunidades.map((s) => ({ ...s, marcados: n.get(s.id) ?? 0 })),
-    centros: centros.map((x) => ({ centro: String(x.centro), dfds: Number(x.dfds) })),
+    centros: centros.map((x) => ({ centro: String(x.centro), dfds: Number(x.dfds), daUnidade: Number(x.daUnidade ?? 0) })),
     outras,
   };
 }
 
 /** Os centros de custo das OUTRAS unidades (os delas no modo único e os das subunidades — a unicidade no sistema), com
  * quem é o dono (`subunidade` vazia = a unidade). */
-export async function centrosDeOutrasUnidades(id: number) {
+export async function centrosDeOutrasUnidades(id: number): Promise<CentrosDeOutro[]> {
   const db = getDb();
   const [subs, unidades] = await Promise.all([
     db
-      .select({ unidade: reparticoes.codigo, subunidade: subunidades.nome, centros: subunidades.centrosCusto })
+      .select({ reparticaoId: reparticoes.id, unidade: reparticoes.codigo, subunidadeId: subunidades.id, subunidade: subunidades.nome, centros: subunidades.centrosCusto })
       .from(subunidades)
       .innerJoin(reparticoes, eq(reparticoes.id, subunidades.reparticaoId))
       .where(ne(subunidades.reparticaoId, id))
       .orderBy(asc(reparticoes.codigo), asc(subunidades.ordem)),
     db
-      .select({ unidade: reparticoes.codigo, centros: reparticoes.centrosCusto })
+      .select({ reparticaoId: reparticoes.id, unidade: reparticoes.codigo, centros: reparticoes.centrosCusto })
       .from(reparticoes)
       .where(and(ne(reparticoes.id, id), eq(reparticoes.modoCentro, "unico"))),
   ]);
   return [
-    ...unidades.map((u) => ({ unidade: u.unidade, subunidade: "", centros: lerCentros(u.centros) })),
-    ...subs.map((l) => ({ unidade: l.unidade, subunidade: l.subunidade, centros: lerCentros(l.centros) })),
+    ...unidades.map((u) => ({ reparticaoId: u.reparticaoId, unidade: u.unidade, subunidadeId: null, subunidade: "", centros: lerCentros(u.centros) })),
+    ...subs.map((l) => ({ reparticaoId: l.reparticaoId, unidade: l.unidade, subunidadeId: l.subunidadeId, subunidade: l.subunidade, centros: lerCentros(l.centros) })),
   ].filter((l) => l.centros.length);
 }
 
@@ -97,4 +97,17 @@ export async function nomesDasSubunidades(): Promise<Map<number, string[]>> {
   const m = new Map<number, string[]>();
   for (const l of linhas) m.set(l.reparticaoId, [...(m.get(l.reparticaoId) ?? []), l.nome]);
   return m;
+}
+
+/** Quantos centros de custo dos DFDs de cada unidade ainda NÃO estão no cadastro dela (a lista do ADM). Três consultas. */
+export async function pendentesPorUnidade(ids: number[]): Promise<Map<number, string[]>> {
+  const [cfg, linhas] = await Promise.all([lerConfigSubunidades(ids), consultaCentrosPorUnidade(getDb())]);
+  const por = new Map<number, string[]>();
+  for (const l of linhas) if (l.reparticaoId != null) por.set(l.reparticaoId, [...(por.get(l.reparticaoId) ?? []), String(l.centro)]);
+  const out = new Map<number, string[]>();
+  for (const id of ids) {
+    const p = centrosPendentes(cfg.get(id), por.get(id) ?? []);
+    if (p.length) out.set(id, p);
+  }
+  return out;
 }

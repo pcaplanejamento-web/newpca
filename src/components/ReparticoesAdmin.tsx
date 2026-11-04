@@ -56,11 +56,55 @@ type Rep = {
   subunidades: string[];
   /** Tem o centro de custo cadastrado? (sem ele, os DFDs da unidade ficam com erro). */
   temCentro: boolean;
+  /** Os centros de custo dos DFDs da unidade que ainda não estão no cadastro dela. */
+  pendentes: string[];
   orgaoId: number | null;
   /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
   orgaoProprio: boolean;
   oculto: boolean;
 };
+
+const A_CADASTRAR = "Centro de custo a cadastrar";
+/** O selo âmbar dos centros de custo dos DFDs da unidade ainda fora do cadastro (a lista na dica). */
+const seloPendentes = (p: string[]) =>
+  p.length ? (
+    <Badge tone="amber" title={`${A_CADASTRAR}:\n${p.slice(0, 12).join("\n")}${p.length > 12 ? `\ne mais ${p.length - 12}` : ""}`}>
+      {p.length} a cadastrar
+    </Badge>
+  ) : null;
+
+/** A célula Subunidades: as subunidades (com o selo da origem do nome), a própria unidade ou "Sem centro de custo". */
+function celulaSubunidades(u: Rep) {
+  // A subunidade com o NOME DA UNIDADE (a sigla — sem subunidades ou sem nome informado) × as CRIADAS pelo ADM.
+  const daUnidade = (n: string) => chaveCentro(n) === chaveCentro(u.codigo) || chaveCentro(n) === chaveCentro(u.nome);
+  const criadas = u.subunidades.filter((n) => !daUnidade(n)).length;
+  const selo = (unidade: boolean) =>
+    unidade ? (
+      <Badge tone="slate" title="O nome é o da própria unidade">
+        Unidade
+      </Badge>
+    ) : (
+      <Badge tone="blue" title="Subunidades criadas no cadastro">
+        Criada{criadas > 1 ? "s" : ""}
+      </Badge>
+    );
+  if (u.subunidades.length)
+    return (
+      <span className="inline-flex items-center gap-1.5" title={u.temCentro ? undefined : SEM_CADASTRO}>
+        {!u.temCentro && <IconAlert className="h-3.5 w-3.5 shrink-0 text-[var(--danger)]" aria-label={SEM_CADASTRO} />}
+        <CelulaLista valores={u.subunidades.map((n) => (daUnidade(n) ? `${n} (unidade)` : n))} mono />
+        {selo(criadas === 0)}
+      </span>
+    );
+  return u.temCentro ? (
+    <span className="inline-flex items-center gap-1.5" title="Um centro de custo para toda a unidade: a subunidade é a própria unidade">
+      <span className="font-mono text-[12px] font-semibold text-text">{u.codigo}</span>
+      {selo(true)}
+    </span>
+  ) : (
+    <span className="text-[12px] text-[var(--danger)]">{SEM_CADASTRO}</span>
+  );
+}
 
 export type AbaUnidades = "unidades" | "responsaveis";
 
@@ -277,38 +321,8 @@ export function ReparticoesAdmin({
       header: "Subunidades",
       nowrap: true,
       value: (u) => textoSubunidades(u),
-      valores: (u) => (u.temCentro && u.subunidades.length ? u.subunidades : [textoSubunidades(u)]),
-      render: (u) => {
-        // A subunidade com o NOME DA UNIDADE (a sigla — sem subunidades ou sem nome informado) × as CRIADAS pelo ADM.
-        const daUnidade = (n: string) => chaveCentro(n) === chaveCentro(u.codigo) || chaveCentro(n) === chaveCentro(u.nome);
-        const criadas = u.subunidades.filter((n) => !daUnidade(n)).length;
-        const selo = (unidade: boolean) =>
-          unidade ? (
-            <Badge tone="slate" title="O nome é o da própria unidade">
-              Unidade
-            </Badge>
-          ) : (
-            <Badge tone="blue" title="Subunidades criadas no cadastro">
-              Criada{criadas > 1 ? "s" : ""}
-            </Badge>
-          );
-        if (u.subunidades.length)
-          return (
-            <span className="inline-flex items-center gap-1.5" title={u.temCentro ? undefined : SEM_CADASTRO}>
-              {!u.temCentro && <IconAlert className="h-3.5 w-3.5 shrink-0 text-[var(--danger)]" aria-label={SEM_CADASTRO} />}
-              <CelulaLista valores={u.subunidades.map((n) => (daUnidade(n) ? `${n} (unidade)` : n))} mono />
-              {selo(criadas === 0)}
-            </span>
-          );
-        return u.temCentro ? (
-          <span className="inline-flex items-center gap-1.5" title="Um centro de custo para toda a unidade: a subunidade é a própria unidade">
-            <span className="font-mono text-[12px] font-semibold text-text">{u.codigo}</span>
-            {selo(true)}
-          </span>
-        ) : (
-          <span className="text-[12px] text-[var(--danger)]">{SEM_CADASTRO}</span>
-        );
-      },
+      valores: (u) => [...(u.temCentro && u.subunidades.length ? u.subunidades : [textoSubunidades(u)]), ...(u.pendentes.length ? [A_CADASTRAR] : [])],
+      render: (u) => <span className="inline-flex items-center gap-1.5">{celulaSubunidades(u)}{seloPendentes(u.pendentes)}</span>,
     },
     {
       key: "responsaveis",
@@ -502,9 +516,11 @@ type CadastroSubunidades = {
   modo: ModoCentro;
   centrosUnidade: string[];
   subunidades: { id: number; nome: string; centros: string[]; marcados: number }[];
-  centros: { centro: string; dfds: number }[];
-  outras: { unidade: string; subunidade: string; centros: string[] }[];
+  centros: CentroLido[];
+  outras: { reparticaoId: number; unidade: string; subunidadeId: number | null; subunidade: string; centros: string[] }[];
 };
+/** Um centro de custo lido nos DFDs: quantos DFDs no total e quantos DESTA unidade. */
+type CentroLido = { centro: string; dfds: number; daUnidade: number };
 type SubRascunho = { key: string; id?: number; nome: string; centros: string[]; marcados: number };
 
 const MODOS_OPCOES = MODOS_CENTRO.map((v) => ({ value: v, label: ROTULO_MODO[v], dica: DESCRICAO_MODO[v] }));
@@ -516,8 +532,8 @@ const MODOS_OPCOES = MODOS_CENTRO.map((v) => ({ value: v, label: ROTULO_MODO[v],
  * lidos nos DFDs (ou digitado) e pertence a um só cadastro do sistema.
  */
 /** A forma comparável do cadastro (o rascunho × o gravado). */
-const chaveRascunho = (m: ModoCentro, c: string[], l: { id?: number; nome: string; centros: string[] }[]) =>
-  JSON.stringify([m, c, l.map((s) => [s.id, s.nome, s.centros])]);
+const chaveRascunho = (m: ModoCentro, c: string[], l: { id?: number; nome: string; centros: string[] }[], mover: string[] = []) =>
+  JSON.stringify([m, c, l.map((s) => [s.id, s.nome, s.centros]), mover]);
 
 function SubunidadesDaUnidade({
   unidadeId,
@@ -539,10 +555,13 @@ function SubunidadesDaUnidade({
   const [lista, setLista] = useState<SubRascunho[]>([]);
   const [editando, setEditando] = useState<number | "nova" | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // Os centros de OUTROS cadastros que o ADM move para esta unidade (saem de lá ao salvar).
+  const [moverCentros, setMover] = useState<string[]>([]);
   const { confirmar, confirmacao } = useConfirmacao();
 
   const aplicar = useCallback((c: CadastroSubunidades) => {
     setCad(c);
+    setMover([]);
     setModo(c.modo);
     setCentros(c.centrosUnidade);
     // No modo único as subunidades não guardam centro próprio (o centro é da unidade).
@@ -563,7 +582,9 @@ function SubunidadesDaUnidade({
     void carregar();
   }, [carregar]);
 
-  const sujo = !!cad && chaveRascunho(modo, centros, lista) !== chaveRascunho(cad.modo, cad.centrosUnidade, cad.subunidades.map((s) => (cad.modo === "unico" ? { ...s, centros: [] } : s)));
+  const noRascunhoTodo = new Set([...centros, ...lista.flatMap((s) => s.centros)].map(chaveCentro));
+  const moverValidos = moverCentros.filter((c) => noRascunhoTodo.has(chaveCentro(c)));
+  const sujo = !!cad && chaveRascunho(modo, centros, lista, moverValidos) !== chaveRascunho(cad.modo, cad.centrosUnidade, cad.subunidades.map((s) => (cad.modo === "unico" ? { ...s, centros: [] } : s)));
   const motivo = cad ? motivoSubunidadesInvalidas(modo, centros, lista) : null;
   // O "Salvar alterações" do banner chama a gravação desta seção (a versão do render atual).
   const salvarRef = useRef<() => Promise<boolean>>(async () => true);
@@ -576,8 +597,31 @@ function SubunidadesDaUnidade({
     return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregar()} /> : <SkeletonLinhas linhas={3} />;
   }
   // Os centros de custo das OUTRAS unidades (não se escolhem aqui) e o dono de cada centro dentro deste rascunho.
+  // (os que o ADM está movendo para cá deixam de ser de lá.)
+  const movendo = new Set(moverCentros.map(chaveCentro));
   const deOutras = new Map<string, string>();
-  for (const o of cad.outras) for (const c of o.centros) deOutras.set(chaveCentro(c), o.subunidade ? `${o.subunidade} (${o.unidade})` : o.unidade);
+  for (const o of cad.outras)
+    for (const c of o.centros) if (!movendo.has(chaveCentro(c))) deOutras.set(chaveCentro(c), o.subunidade ? `${o.subunidade} (${o.unidade})` : o.unidade);
+  const fora = (c: string) => deOutras.get(chaveCentro(c));
+  const moverPara = (lista: string[]) => setMover((m) => lerCentros([...m, ...lista]));
+  // Os centros dos DFDs DESTA unidade fora do rascunho: os de outro cadastro (mover) e os sem cadastro.
+  const lidosDaUnidade = cad.centros.filter((c) => c.daUnidade > 0 && !noRascunhoTodo.has(chaveCentro(c.centro)));
+  const emOutro = lidosDaUnidade.filter((c) => fora(c.centro));
+  const semCadastro = lidosDaUnidade.filter((c) => !fora(c.centro));
+  const ondeEscolher = modo === "unico" ? "em “Escolher dos lidos nos DFDs”" : "numa subunidade (editar → “Escolher dos lidos nos DFDs”)";
+  const lista5 = (l: CentroLido[], dono?: boolean) =>
+    l
+      .slice(0, 5)
+      .map((c) => `“${c.centro}”${dono ? ` (em ${fora(c.centro)})` : ""}`)
+      .join("; ") + (l.length > 5 ? `; e mais ${l.length - 5}` : "");
+  const avisosLidos: Aviso[] = [
+    ...(semCadastro.length
+      ? [{ id: "sem-cadastro", texto: `${semCadastro.length} centro(s) de custo dos DFDs desta unidade ainda sem cadastro — escolha ${ondeEscolher}: ${lista5(semCadastro)}.`, tom: "danger" as const }]
+      : []),
+    ...(emOutro.length
+      ? [{ id: "em-outro", texto: `${emOutro.length} centro(s) de custo dos DFDs desta unidade estão cadastrados em OUTRA unidade — marque ${ondeEscolher} para movê-los para cá: ${lista5(emOutro, true)}.`, tom: "warn" as const }]
+      : []),
+  ];
   const donosNoRascunho = (exceto: number | null) => {
     const m = new Map<string, string>();
     lista.forEach((x, k) => {
@@ -594,6 +638,7 @@ function SubunidadesDaUnidade({
     ...(modo === "subunidades" && !lista.length
       ? [{ id: "sem-sub", texto: "Nenhuma subunidade — adicione e cadastre o centro de custo de cada uma.", tom: "danger" as const }]
       : []),
+    ...avisosLidos,
   ];
 
   async function trocarModo(novo: ModoCentro) {
@@ -636,7 +681,12 @@ function SubunidadesDaUnidade({
       const r = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modo, centros, subunidades: lista.map((s) => ({ ...(s.id != null ? { id: s.id } : {}), nome: s.nome, centros: s.centros })) }),
+        body: JSON.stringify({
+          modo,
+          centros,
+          subunidades: lista.map((s) => ({ ...(s.id != null ? { id: s.id } : {}), nome: s.nome, centros: s.centros })),
+          ...(moverValidos.length ? { mover: moverValidos } : {}),
+        }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & Partial<CadastroSubunidades>;
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar o centro de custo.");
@@ -682,7 +732,7 @@ function SubunidadesDaUnidade({
         </Ajuda>
         <Avisos avisos={avisos} titulo="Centro de custo" />
       </div>
-      {unico && <CamposCentros centros={centros} centrosLidos={cad.centros} dono={(c) => deOutras.get(chaveCentro(c))} disabled={salvando} onChange={setCentros} />}
+      {unico && <CamposCentros centros={centros} centrosLidos={cad.centros} dono={() => undefined} fora={fora} onMover={moverPara} disabled={salvando} onChange={setCentros} />}
       <div>
         <div className="mb-2 flex items-center gap-1.5">
           <span className="text-[13.5px] font-bold text-text">Subunidades ({lista.length})</span>
@@ -741,7 +791,8 @@ function SubunidadesDaUnidade({
           padrao={codigo}
           comCentros={!unico}
           centrosLidos={cad.centros}
-          deOutras={deOutras}
+          fora={fora}
+          avisos={avisosLidos}
           noRascunho={(() => {
             const m = donosNoRascunho(editando === "nova" ? null : editando);
             for (const c of centros) m.set(chaveCentro(c), "a unidade");
@@ -749,8 +800,9 @@ function SubunidadesDaUnidade({
           })()}
           onFechar={() => setEditando(null)}
           onSalvar={(v) => {
+            moverPara(v.mover);
             if (editando === "nova") setLista([...lista, { key: `n${Date.now()}`, nome: v.nome, centros: v.centros, marcados: 0 }]);
-            else setLista(lista.map((x, k) => (k === editando ? { ...x, ...v } : x)));
+            else setLista(lista.map((x, k) => (k === editando ? { ...x, nome: v.nome, centros: v.centros } : x)));
             setEditando(null);
           }}
         />
@@ -761,26 +813,58 @@ function SubunidadesDaUnidade({
 }
 
 /** Os CENTROS DE CUSTO de um cadastro: TODOS os escolhidos/salvos à vista em chips (remover no ×; digitar + Enter
- * acrescenta, como a Centi escreve) e "Escolher dos lidos nos DFDs" (com quantos DFDs têm cada um). Os centros de outro
- * cadastro (`dono`) não são oferecidos. */
+ * acrescenta, como a Centi escreve) e "Escolher dos lidos nos DFDs" — SEMPRE à vista, com TODOS os lidos: os dos DFDs
+ * desta unidade primeiro (com quantos DFDs cada um). O de OUTRA unidade (`fora`) aparece com o dono e marcá-lo pede
+ * confirmação para MOVER (`onMover`); o de outro cadastro DESTA unidade (`dono`) acusa o conflito no editor. */
 function CamposCentros({
   centros,
   centrosLidos,
   dono,
+  fora,
+  onMover,
   disabled,
   onChange,
 }: {
   centros: string[];
-  centrosLidos: { centro: string; dfds: number }[];
+  centrosLidos: CentroLido[];
+  /** O dono do centro DENTRO deste rascunho (outra subunidade, a unidade). */
   dono: (c: string) => string | undefined;
+  /** O dono do centro em OUTRA unidade (ainda não movido). */
+  fora: (c: string) => string | undefined;
+  onMover: (centros: string[]) => void;
   disabled?: boolean;
   onChange: (centros: string[]) => void;
 }) {
+  const { confirmar, confirmacao } = useConfirmacao();
+  const marcados = new Set(centros.map(chaveCentro));
   const lidos = new Set(centrosLidos.map((c) => chaveCentro(c.centro)));
-  const escolhidos = centros.filter((c) => lidos.has(chaveCentro(c)));
+  // Pela CHAVE (caixa/acento/pontuação não importam) — o valor da opção é o texto lido.
+  const escolhidos = centrosLidos.filter((c) => marcados.has(chaveCentro(c.centro))).map((c) => c.centro);
   const digitados = centros.filter((c) => !lidos.has(chaveCentro(c)));
-  const opcoes = centrosLidos.filter((c) => !dono(c.centro) || escolhidos.includes(c.centro)).map((c) => ({ valor: c.centro, contagem: c.dfds }));
-  const ocupados = centrosLidos.length - opcoes.length;
+  const opcoes = centrosLidos.map((c) => {
+    const d = fora(c.centro) ?? dono(c.centro);
+    return {
+      valor: c.centro,
+      contagem: c.dfds,
+      grupo: c.daUnidade > 0 ? "Dos DFDs desta unidade" : "De outras unidades",
+      detalhe: [c.daUnidade > 0 ? `${c.daUnidade} DFD(s) desta unidade` : `${c.dfds} DFD(s) de outras unidades`, d ? `Está em ${d}` : ""].filter(Boolean).join(" · "),
+    };
+  });
+  async function escolher(v: string[]) {
+    const novos = v.filter((c) => !marcados.has(chaveCentro(c)));
+    const externos = novos.filter((c) => fora(c));
+    let aceitos = v;
+    if (externos.length) {
+      const ok = await confirmar({
+        titulo: externos.length === 1 ? "Mover o centro de custo para esta unidade?" : `Mover ${externos.length} centros de custo para esta unidade?`,
+        texto: `${externos.map((c) => `“${c}” está em ${fora(c)}`).join("; ")}. Ao salvar, ${externos.length === 1 ? "ele sai" : "eles saem"} de lá — uma subunidade que ficar sem centro passa a “Sem centro de custo”.`,
+        confirmar: "Mover",
+      });
+      if (ok) onMover(externos);
+      else aceitos = v.filter((c) => !externos.includes(c));
+    }
+    onChange(lerCentros([...aceitos, ...digitados]));
+  }
   return (
     <div className="space-y-2">
       <CampoLista
@@ -792,22 +876,21 @@ function CamposCentros({
         placeholder="Digite como a Centi escreve e tecle Enter"
         rotuloExtra={
           <Ajuda titulo="Centros de custo" compacta>
-            Os centros de custo deste cadastro. Escolha dos que a automação “Unidades dos DFDs × Centro de Custo” já gravou nos DFDs ou digite como a Centi escreve.
-            {ocupados > 0 ? ` ${ocupados} já pertence(m) a outro cadastro e não aparece(m) na lista dos lidos.` : ""}
+            Os centros de custo deste cadastro. Escolha dos que a automação “Unidades dos DFDs × Centro de Custo” já gravou nos DFDs (os desta unidade primeiro) ou digite
+            como a Centi escreve. Um centro de custo pertence a um só cadastro: o de outra unidade aparece com o dono e, marcado, é movido para cá ao salvar.
           </Ajuda>
         }
       />
-      {opcoes.length > 0 && (
-        <SeletorMultiplo
-          suspenso
-          rotulo="Escolher dos lidos nos DFDs"
-          opcoes={opcoes}
-          selecionados={escolhidos}
-          onChange={(v) => onChange(lerCentros([...v, ...digitados]))}
-          disabled={disabled}
-          textoVazio="Nenhum"
-        />
-      )}
+      <SeletorMultiplo
+        suspenso
+        rotulo="Escolher dos lidos nos DFDs"
+        opcoes={opcoes}
+        selecionados={escolhidos}
+        onChange={(v) => void escolher(v)}
+        disabled={disabled || !opcoes.length}
+        textoVazio={opcoes.length ? "Nenhum" : "Nenhum centro lido nos DFDs"}
+      />
+      {confirmacao}
     </div>
   );
 }
@@ -818,7 +901,8 @@ function EditorSubunidade({
   padrao,
   comCentros,
   centrosLidos,
-  deOutras,
+  fora,
+  avisos,
   noRascunho,
   onFechar,
   onSalvar,
@@ -827,15 +911,22 @@ function EditorSubunidade({
   /** O nome quando nenhum é informado (o da unidade). */
   padrao: string;
   comCentros: boolean;
-  centrosLidos: { centro: string; dfds: number }[];
-  deOutras: Map<string, string>;
+  centrosLidos: CentroLido[];
+  fora: (c: string) => string | undefined;
+  /** Os avisos dos centros dos DFDs da unidade fora do cadastro (os mesmos da seção). */
+  avisos: Aviso[];
   noRascunho: Map<string, string>;
   onFechar: () => void;
-  onSalvar: (v: { nome: string; centros: string[] }) => void;
+  onSalvar: (v: { nome: string; centros: string[]; mover: string[] }) => void;
 }) {
   const [nome, setNome] = useState(inicial?.nome ?? "");
   const [centros, setCentros] = useState<string[]>(inicial?.centros ?? []);
-  const dono = (c: string) => deOutras.get(chaveCentro(c)) ?? noRascunho.get(chaveCentro(c));
+  // Os de outra unidade que este editor move (só valem ao Aplicar).
+  const [mover, setMover] = useState<string[]>([]);
+  const movendo = new Set(mover.map(chaveCentro));
+  const foraAqui = (c: string) => (movendo.has(chaveCentro(c)) ? undefined : fora(c));
+  const doRascunho = (c: string) => noRascunho.get(chaveCentro(c));
+  const dono = (c: string) => foraAqui(c) ?? doRascunho(c);
   const conflito = centros.map((c) => [c, dono(c)] as const).find(([, d]) => d);
   const nomeFinal = nome.trim() || padrao;
   const motivo = conflito
@@ -852,12 +943,12 @@ function EditorSubunidade({
       rodape={
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <span className="mr-auto">
-            <Avisos avisos={motivo ? [{ id: "motivo", texto: motivo, tom: "danger" }] : []} titulo="Subunidade" />
+            <Avisos avisos={[...(motivo ? [{ id: "motivo", texto: motivo, tom: "danger" as const }] : []), ...(comCentros ? avisos : [])]} titulo="Subunidade" />
           </span>
           <Button size="sm" variant="ghost" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button size="sm" disabled={!!motivo} onClick={() => onSalvar({ nome: nomeFinal, centros })}>
+          <Button size="sm" disabled={!!motivo} onClick={() => onSalvar({ nome: nomeFinal, centros, mover: mover.filter((c) => centros.some((x) => chaveCentro(x) === chaveCentro(c))) })}>
             Aplicar
           </Button>
         </div>
@@ -872,7 +963,16 @@ function EditorSubunidade({
           onChange={(e) => setNome(e.target.value)}
           autoFocus
         />
-        {comCentros && <CamposCentros centros={centros} centrosLidos={centrosLidos} dono={dono} onChange={setCentros} />}
+        {comCentros && (
+          <CamposCentros
+            centros={centros}
+            centrosLidos={centrosLidos}
+            dono={doRascunho}
+            fora={foraAqui}
+            onMover={(l) => setMover((m) => lerCentros([...m, ...l]))}
+            onChange={setCentros}
+          />
+        )}
       </div>
     </Modal>
   );

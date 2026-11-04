@@ -12,11 +12,13 @@ import {
   type ConfigSubunidades,
   centrosDaConfig,
   chaveCentro,
+  centrosPendentes,
   conflitosCentros,
   lerCentros,
   lerModo,
   subunidadeEscolhivel,
   motivoSubunidadesInvalidas,
+  planoMover,
   subunidadeDoDfd,
 } from "../src/lib/subunidades-core.ts";
 import * as q from "../src/lib/subunidades-sql.ts";
@@ -285,4 +287,38 @@ test("ida e volta no D1 real: o cadastro gravado é o lido (modo, centros da uni
   // Regravar o mesmo cadastro mantém as linhas (os mesmos ids) — a escolha do DFD continua valendo.
   await lote(o, q.comandosGravarSubunidades(o, 1, "unico", centros, cfg.subunidades.map((s) => ({ id: s.id, nome: s.nome, centros: [] }))));
   assert.equal((db.prepare("SELECT subunidade_id AS s FROM dfds WHERE id = 1").get() as { s: number }).s, escolhida);
+});
+
+test("centrosPendentes e planoMover: os centros dos DFDs fora do cadastro e o MOVER entre cadastros (pela chave)", () => {
+  const unico: ConfigSubunidades = { codigo: "FMS", modo: "unico", centros: ["PM RV, FMS"], subunidades: [] };
+  assert.deepEqual(centrosPendentes(unico, ["pm rv, fms", "FUNDO SAÚDE, FARMÁCIA", "Fundo Saude, Farmacia", " "]), ["FUNDO SAÚDE, FARMÁCIA"], "sem repetir e sem os cadastrados");
+  assert.deepEqual(centrosPendentes(null, ["X"]), ["X"], "sem cadastro: todos pendentes");
+  const outras = [
+    { reparticaoId: 2, unidade: "FMAS", subunidadeId: 7, subunidade: "Farmacêutica", centros: ["FUNDO SAUDE, FARMACIA", "FMAS, ASSIST"] },
+    { reparticaoId: 3, unidade: "SMS", subunidadeId: null, subunidade: "", centros: ["PM RV, SMS"] },
+  ];
+  const p = planoMover(["fundo saúde, farmácia"], outras);
+  assert.equal(p.length, 1, "só o cadastro que muda");
+  assert.deepEqual([p[0].reparticaoId, p[0].subunidadeId, p[0].centros, p[0].tirados, p[0].rotulo], [2, 7, ["FMAS, ASSIST"], ["FUNDO SAUDE, FARMACIA"], "Farmacêutica (FMAS)"]);
+  assert.deepEqual(planoMover([], outras), []);
+});
+
+test("builders: as opções contam os DFDs DA UNIDADE (primeiro) e o mover tira o centro do outro cadastro no mesmo lote (D1 real)", async () => {
+  const db = bancoMigrado();
+  db.exec("INSERT INTO reparticoes (id, codigo, nome, vinculo_subunidade, centro_custo) VALUES (1, 'FMS', 'Saúde', 'unico', '[]'), (2, 'FMAS', 'Assistência', 'subunidades', '[]'), (3, 'SMS', 'SMS', 'unico', '[\"PM RV, SMS\"]')");
+  db.exec(`INSERT INTO subunidades (id, reparticao_id, nome, centros_custo) VALUES (7, 2, 'Farmacêutica', '["FUNDO SAUDE, FARMACIA","FMAS, ASSIST"]')`);
+  db.exec("INSERT INTO dfds (id, numero, reparticao_id, centro_custo) VALUES (1, '1', 2, 'A OUTRA'), (2, '2', 2, 'A OUTRA'), (3, '3', 1, 'FUNDO SAUDE, FARMACIA'), (4, '4', 1, 'Z FMS')");
+  const o = orm(db);
+  const opcoes = await q.consultaCentrosDosDfds(o, 1);
+  assert.deepEqual(opcoes.map((x) => [x.centro, Number(x.dfds), Number(x.daUnidade)]), [["FUNDO SAUDE, FARMACIA", 1, 1], ["Z FMS", 1, 1], ["A OUTRA", 2, 0]], "os da unidade primeiro");
+  const porUnidade = await q.consultaCentrosPorUnidade(o);
+  assert.equal(porUnidade.length, 3);
+  const plano = planoMover(["FUNDO SAUDE, FARMACIA"], [{ reparticaoId: 2, unidade: "FMAS", subunidadeId: 7, subunidade: "Farmacêutica", centros: ["FUNDO SAUDE, FARMACIA", "FMAS, ASSIST"] }, { reparticaoId: 3, unidade: "SMS", subunidadeId: null, subunidade: "", centros: ["PM RV, SMS"] }]);
+  await lote(o, [...q.comandosTirarCentros(o, plano), ...q.comandosGravarSubunidades(o, 1, "unico", ["FUNDO SAUDE, FARMACIA"], [])]);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT centros_custo AS c FROM subunidades WHERE id = 7").get() as { c: string }).c), ["FMAS, ASSIST"]);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT centro_custo AS c FROM reparticoes WHERE id = 1").get() as { c: string }).c), ["FUNDO SAUDE, FARMACIA"]);
+  // Tirar da UNIDADE (modo único) e nunca da subunidade de outra unidade com o mesmo id.
+  await lote(o, q.comandosTirarCentros(o, [{ reparticaoId: 3, subunidadeId: null, centros: [] }, { reparticaoId: 3, subunidadeId: 7, centros: [] }]));
+  assert.deepEqual(JSON.parse((db.prepare("SELECT centro_custo AS c FROM reparticoes WHERE id = 3").get() as { c: string }).c), []);
+  assert.deepEqual(JSON.parse((db.prepare("SELECT centros_custo AS c FROM subunidades WHERE id = 7").get() as { c: string }).c), ["FMAS, ASSIST"]);
 });
