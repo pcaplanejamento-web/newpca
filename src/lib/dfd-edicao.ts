@@ -29,7 +29,6 @@ export function detalheParaParseado(d: DfdDetalhe): DfdParseado {
     nomeArquivo: d.nomeArquivo ?? "",
     secoes: d.secoes,
     assinaturas: d.assinaturas,
-    subunidadeId: d.subunidadeId,
     itens: d.itens.map((it) => ({
       item: it.item,
       codigo: it.codigo,
@@ -58,7 +57,7 @@ const CAMPOS_DFD = [
 ] as const;
 
 /**
- * Corpo do `PATCH /api/dfd/[id]` com SÓ o que mudou entre o gravado e o rascunho (unidade, subunidade, campos de
+ * Corpo do `PATCH /api/dfd/[id]` com SÓ o que mudou entre o gravado e o rascunho (unidade, campos de
  * texto, seções, assinaturas e — se editados — os itens). `{}` = nada a salvar. Enviar só o que mudou
  * evita reconferências desnecessárias no servidor (ex.: assinatura ao salvar uma seção).
  */
@@ -70,7 +69,6 @@ export function diffDfdGravado(
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   if (reparticaoId !== o.reparticaoId) body.reparticaoId = reparticaoId;
-  if (d.subunidadeId !== undefined && (d.subunidadeId ?? null) !== (o.subunidadeId ?? null)) body.subunidadeId = d.subunidadeId ?? null;
   for (const k of CAMPOS_DFD) if ((d[k] ?? null) !== (o[k] ?? null)) body[k] = d[k] ?? null;
   if (JSON.stringify(d.secoes) !== JSON.stringify(o.secoes)) body.secoes = d.secoes;
   if (JSON.stringify(d.assinaturas) !== JSON.stringify(o.assinaturas)) body.assinaturas = d.assinaturas;

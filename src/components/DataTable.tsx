@@ -56,6 +56,8 @@ export type Column<R> = {
   /** O GRUPO da coluna no seletor de colunas (ex.: "Protocolo (mais dados)"); sem ele, "Colunas". */
   grupo?: string;
   render?: (row: R) => ReactNode;
+  /** A 2ª linha de cada opção do filtro (e a busca por ela) — vale mais que o nome das siglas (ex.: a Subunidade). */
+  detalhe?: (opcao: string) => string | undefined;
   /** Alinhamento horizontal da coluna. Padrão = **center** (dados centralizados); use "right"
    * para valores monetários (R$) e "left" só em exceções. */
   align?: "left" | "center" | "right";
@@ -705,7 +707,7 @@ export function DataTable<R>({
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
                       label={c.header}
-                      detalhe={detalheSigla(c.header)}
+                      detalhe={c.detalhe ?? detalheSigla(c.header)}
                       options={opcoes}
                       value={externo.valor}
                       onApply={(v) => {
@@ -746,7 +748,7 @@ export function DataTable<R>({
                 ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
                   <MultiSelectHeader
                     label={c.header}
-                    detalhe={detalheSigla(c.header)}
+                    detalhe={c.detalhe ?? detalheSigla(c.header)}
                     options={opcoes}
                     value={(filters[c.key] as string[] | undefined) ?? []}
                     onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}

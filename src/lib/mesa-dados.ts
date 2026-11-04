@@ -65,7 +65,7 @@ export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pc
     responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
     numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
     setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
-    // As SUBUNIDADES (o vínculo + o cadastro) e os centros de custo delas (a automação casa a unidade por eles).
+    // O CADASTRO de centro de custo (o modo + as subunidades) e os centros de custo delas (a automação casa a unidade por eles).
     subunidade: subMap.get(r.id) ?? null,
     centrosCusto: centrosDaConfig(subMap.get(r.id)),
     orgaoId: matchMap[r.id]?.orgaoId ?? null,

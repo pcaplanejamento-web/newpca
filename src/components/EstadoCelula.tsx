@@ -130,7 +130,12 @@ export function CelulaCentroCusto({ centro, cor = "var(--danger)" }: { centro: s
 /** A SUBUNIDADE efetiva do DFD (`subunidadeDoDfd`): o nome, "Não definida" na cor da importância (`dfd.subunidade`) ou
  * "—" (DFD sem unidade). */
 export function CelulaSubunidade({ nome, falta, cor = "var(--warn)", dica }: { nome: string | null; falta: boolean; cor?: string; dica?: string }) {
-  if (nome) return <span className="line-clamp-1 text-left text-[12px] font-medium text-text" title={dica ?? nome}>{nome}</span>;
+  if (nome)
+    return (
+      <span className="whitespace-nowrap font-mono text-[12px] font-semibold text-text" title={dica ?? nome}>
+        {nome}
+      </span>
+    );
   if (!falta) return <span className="text-faint">—</span>;
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium" style={{ color: cor }} title={dica}>

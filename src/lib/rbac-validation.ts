@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ehCodigoGeral } from "./escopo-unidades-core.ts";
-import { LIMITES_SUBUNIDADE, VINCULOS_SUBUNIDADE } from "./subunidades-core.ts";
+import { LIMITES_SUBUNIDADE, MODOS_CENTRO } from "./subunidades-core.ts";
 
 // Validação da tela de Grupos (RBAC): o grupo guarda os MÓDULOS que libera (as telas vêm deles — Configurações →
 // Módulos), se o chat é liberado, os PCAs que acessa (`null` = todos), as pessoas e as unidades.
@@ -186,15 +186,19 @@ export type ReparticaoInput = z.infer<typeof reparticaoSchema>;
 export type OrgaoInput = z.infer<typeof orgaoSchema>;
 
 /** O cadastro de SUBUNIDADES de uma unidade (`PUT /api/admin/reparticoes/[id]/subunidades`) — a lista INTEIRA, na ordem;
- * `id` ausente = nova. A régua do conteúdo (nomes/centros repetidos) é `motivoSubunidadesInvalidas`. */
+ * `id` ausente = nova; o centro de custo é OBRIGATÓRIO. A régua do conteúdo (modo, nomes/centros repetidos) é
+ * `motivoSubunidadesInvalidas`. */
 export const subunidadesSchema = z.strictObject({
-  vinculo: z.enum(VINCULOS_SUBUNIDADE),
+  modo: z.enum(MODOS_CENTRO),
   subunidades: z
     .array(
       z.strictObject({
         id: z.number().int().positive().optional(),
         nome: z.string().trim().min(1, "Informe o nome da subunidade.").max(LIMITES_SUBUNIDADE.nome),
-        centros: z.array(z.string().trim().min(1).max(LIMITES_SUBUNIDADE.centro)).max(LIMITES_SUBUNIDADE.centros),
+        centros: z
+          .array(z.string().trim().min(1).max(LIMITES_SUBUNIDADE.centro))
+          .min(1, "Cadastre o centro de custo.")
+          .max(LIMITES_SUBUNIDADE.centros),
       }),
     )
     .max(LIMITES_SUBUNIDADE.subunidades),

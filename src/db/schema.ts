@@ -348,9 +348,9 @@ export const reparticoes = sqliteTable(
     ordem: integer("ordem").notNull().default(0),
     numeroInteressado: text("numero_interessado"), // casa o Interessado do protocolo → unidade
     setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
-    // O tipo de VÍNCULO das SUBUNIDADES (migração 0176): proprio | centro_custo | marcado — `subunidades-core.ts`.
-    // (`centro_custo`, da 0172, ficou DORMENTE: virou a subunidade por centro de custo.)
-    vinculoSubunidade: text("vinculo_subunidade").notNull().default("proprio"),
+    // O MODO do CENTRO DE CUSTO (migrações 0176/0177): unico (um para a unidade) | subunidades (um por subunidade) —
+    // `subunidades-core.ts`. (`centro_custo`, da 0172, ficou DORMENTE.)
+    modoCentro: text("vinculo_subunidade").notNull().default("proprio"),
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
     // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
     // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.
@@ -364,9 +364,9 @@ export const reparticoes = sqliteTable(
 );
 
 /**
- * SUBUNIDADES de uma unidade (migração 0176) — quantas o ADM quiser. No vínculo "centro_custo", `centros_custo` (JSON
- * `string[]`, como a Centi escreve) liga a subunidade aos centros de custo dos DFDs — um centro em UMA subunidade do
- * sistema (`conflitosCentros`); no "marcado", a subunidade é escolhida no DFD (`dfds.subunidade_id`).
+ * SUBUNIDADES de uma unidade (migrações 0176/0177) — quantas o ADM quiser (no modo único, UMA linha com o nome da
+ * unidade). `centros_custo` (JSON `string[]`, como a Centi escreve, obrigatório) liga a subunidade aos centros de custo
+ * dos DFDs — um centro em UMA subunidade do sistema (`conflitosCentros`).
  */
 export const subunidades = sqliteTable(
   "subunidades",
@@ -588,9 +588,9 @@ export const dfds = sqliteTable(
     conferenciaCenti: text("conferencia_centi"),
     conferenciaCentiMotivo: text("conferencia_centi_motivo"),
     conferenciaCentiEm: text("conferencia_centi_em"),
-    // SUBUNIDADE escolhida no DFD (vínculo "marcado" da unidade) e o CENTRO DE CUSTO da Centi (CM002), gravado pela
-    // Automação "Unidades × Centro de Custo" (migração 0176). Sem centro de custo = erro no Estado do DFD gravado.
-    subunidadeId: integer("subunidade_id").references((): AnySQLiteColumn => subunidades.id, { onDelete: "set null" }),
+    // O CENTRO DE CUSTO da Centi (CM002), gravado pela Automação "Unidades × Centro de Custo" (migração 0176) — define a
+    // SUBUNIDADE do DFD. Sem centro (ou fora do cadastro da unidade) = erro no Estado do DFD gravado. (`subunidade_id`,
+    // a escolha manual da 0176, ficou DORMENTE desde a 0177.)
     centroCusto: text("centro_custo"),
     centroCustoEm: text("centro_custo_em"),
     criadoPor: integer("criado_por").references(() => usuarios.id, {

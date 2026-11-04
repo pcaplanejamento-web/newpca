@@ -179,6 +179,8 @@ export type PropsPlanilhaDfds = {
   filtrosRodape?: { n: number; conteudo: ReactNode };
   /** Sem a coluna Sigla (UMA unidade no cabeçalho e todos os DFDs dela — `useSemUnidade`). */
   semSigla?: boolean;
+  /** A 2ª linha das opções do filtro da Subunidade (a unidade e os centros de custo de cada uma). */
+  detalheSubunidade?: (nome: string) => string | undefined;
 };
 
 /** As props do `DataTable` da planilha de DFDs — a Mesa usa direto, na TABELA ÚNICA das visões (sem trocar de componente). */
@@ -204,6 +206,7 @@ export function propsPlanilhaDfds({
   filtrosRodape,
   onOrdenadas,
   semSigla = false,
+  detalheSubunidade,
 }: PropsPlanilhaDfds) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -301,7 +304,8 @@ export function propsPlanilhaDfds({
           {
             key: "subunidade",
             header: "Subunidade",
-            minWidth: 140,
+            nowrap: true,
+            detalhe: detalheSubunidade,
             value: (r: LinhaDfd) => rotuloSubunidade(r.subunidade),
             render: (r: LinhaDfd) => <CelulaSubunidade nome={r.subunidade?.nome ?? null} falta={!!r.subunidade?.falta} cor={r.subunidade?.cor} dica={r.subunidade?.dica} />,
           },

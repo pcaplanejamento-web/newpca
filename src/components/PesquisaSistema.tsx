@@ -220,7 +220,7 @@ const PALAVRAS: Record<string, string> = {
   "/painel/pagamentos": "despesa execução centi pagamento pago ordem de pagamento retenção anulação credor empenho",
   "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
   "/painel/usuarios?arquivados": "arquivado arquivada restaurar excluir definitivamente desligado exonerado",
-  "/painel/orgaos": "unidades subunidades subunidade centro de custo vínculo marcado próprio responsáveis assinatura interessado",
+  "/painel/orgaos": "unidades subunidades subunidade centro de custo responsáveis assinatura interessado",
   "/painel/grupos": "permissões telas módulos pcas chat acesso de cada tela todas as unidades unidade de cadastro várias unidades fonte dos dados orçamentos do grupo pcas do grupo escopo mesa do pca",
   "/painel/configuracoes?identidade": "nome logo favicon subtítulo",
   "/painel/configuracoes?verificar-termo": "comprovante aceite código autenticidade arquivo pdf conferir",

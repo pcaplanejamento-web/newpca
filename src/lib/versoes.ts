@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.270.0",
+    data: "2026-11-04",
+    titulo: "Subunidade só pelo Centro de Custo — obrigatório em cada unidade",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "Saem os vínculos Próprio e Marcado: a subunidade é definida só pelo centro de custo. Cada unidade escolhe “Um para toda a unidade” (a subunidade é a própria unidade) ou “Um por subunidade”; o centro de custo é obrigatório. A coluna Subunidades mostra a prévia dos nomes com o +N.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Mesa", texto: "Coluna Subunidade no padrão da Sigla, com o filtro mostrando a unidade e os centros de custo de cada subunidade; saiu a escolha da subunidade no DFD e na edição em massa.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "melhoria", area: "Avaliação", texto: "“Centro não cadastrado” passa a ERRO: a unidade sem centro de custo cadastrado, ou o DFD com o centro fora do cadastro, fica apontado (importância configurável).", link: "/painel/configuracoes?aba=avaliacao" },
+    ],
+  },
+  {
     versao: "1.269.0",
     data: "2026-11-04",
     titulo: "Subunidades por unidade e o Centro de Custo em cada DFD",

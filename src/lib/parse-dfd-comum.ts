@@ -249,8 +249,6 @@ export type DfdParseado = {
   secoes: DfdSecao[];
   itens: DfdItemParseado[];
   assinaturas: Assinatura[];
-  /** A SUBUNIDADE escolhida (só o DFD GRAVADO — vínculo "marcado" da unidade; o arquivo lido nunca traz). */
-  subunidadeId?: number | null;
 };
 
 /** Adivinha o ano do PCA e as referências de renovação (DFD-R) do texto do DFD (objeto +

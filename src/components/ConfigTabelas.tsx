@@ -54,7 +54,7 @@ export const useLinhasTabela = () => useContext(LinhasTabelaCtx);
 export const useNomesUnidades = () => useContext(NomesCtx);
 
 const COLUNA_SIGLA = /sigla|unidade|reparti|[óo]rg[ãa]o/i;
-const NAO_SIGLA = /medida|unid\.|cadastrada|planilha/i;
+const NAO_SIGLA = /medida|unid\.|cadastrada|planilha|subunidade/i;
 
 /** O ÚNICO ponto das colunas de UNIDADE/ÓRGÃO/SIGLA: pelo título da coluna, a função que dá o NOME de cada sigla (a 2ª
  * linha do filtro, que também busca por ele) — `undefined` nas demais colunas (nunca a unidade de MEDIDA). */

@@ -11,8 +11,8 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
-### Subunidades e Centro de Custo (v1.269.0) — entregue
-- Subunidades por unidade com o vínculo Próprio · Centro de custo · Marcado (Órgãos e Unidades); colunas Subunidade e Centro de Custo na Mesa (DFDs, Itens, Consolidada), escolha da subunidade no DFD e em massa; pendências "Sem centro de custo" (erro) e "Subunidade não definida" (atenção) no DFD gravado.
+### Subunidades e Centro de Custo (v1.269.0 → v1.270.0) — entregue
+- A subunidade é definida SÓ pelo centro de custo (saíram Próprio e Marcado na v1.270.0): cada unidade cadastra "Um para toda a unidade" ou "Um por subunidade", com o centro obrigatório (Órgãos e Unidades); colunas Subunidade e Centro de Custo na Mesa (DFDs, Itens, Consolidada); pendências "Sem centro de custo" e "Centro não cadastrado" (erro) no DFD gravado.
 - 🔜 Próximo: a subunidade nos filtros do cabeçalho e nos relatórios/Dashboard; o centro de custo nos itens de planilha do PCA.
 
 ### Execução da despesa (empenhos, liquidações e pagamentos pela API pública da Centi) — em andamento

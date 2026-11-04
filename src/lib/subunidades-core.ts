@@ -2,37 +2,36 @@ import { stripAccents } from "./normalize.ts";
 import { centroCustoConfere } from "./reparticao-match.ts";
 
 /**
- * SUBUNIDADES — núcleo PURO (testado em `tests/subunidades.test.ts`). Cada UNIDADE escolhe UM tipo de VÍNCULO, que decide
- * a subunidade de cada DFD dela:
- * - **proprio** (padrão): a subunidade É a própria unidade — nada a cadastrar;
- * - **centro_custo**: a subunidade cujo CENTRO DE CUSTO (lista do ADM) confere com o do DFD (gravado pela automação);
- * - **marcado**: a subunidade é ESCOLHIDA no DFD, entre as cadastradas da unidade.
+ * SUBUNIDADES — núcleo PURO (testado em `tests/subunidades.test.ts`). A subunidade de cada DFD é definida SÓ pelo CENTRO DE
+ * CUSTO (gravado pela automação). Cada UNIDADE escolhe o MODO do cadastro:
+ * - **unico**: UM centro de custo (ou as variações dele) para a unidade inteira — a subunidade do DFD é a própria unidade;
+ * - **subunidades**: cada subunidade com o(s) seu(s) centro(s) de custo — a do DFD é a que tem o centro dele.
+ * O centro é OBRIGATÓRIO: sem cadastro, ou com o centro do DFD fora dele, a subunidade não é definida (ERRO).
  * `subunidadeDoDfd` é a régua ÚNICA (Mesa, banners, conferência, filtros).
  */
 
-export const VINCULOS_SUBUNIDADE = ["proprio", "centro_custo", "marcado"] as const;
-export type VinculoSubunidade = (typeof VINCULOS_SUBUNIDADE)[number];
+export const MODOS_CENTRO = ["unico", "subunidades"] as const;
+export type ModoCentro = (typeof MODOS_CENTRO)[number];
 
-export const ROTULO_VINCULO: Record<VinculoSubunidade, string> = {
-  proprio: "Próprio",
-  centro_custo: "Centro de custo",
-  marcado: "Marcado",
+export const ROTULO_MODO: Record<ModoCentro, string> = {
+  unico: "Um para toda a unidade",
+  subunidades: "Um por subunidade",
 };
 
-export const DESCRICAO_VINCULO: Record<VinculoSubunidade, string> = {
-  proprio: "A subunidade é a própria unidade — não há cadastro.",
-  centro_custo: "Cada subunidade tem os seus centros de custo: a do DFD é a que tem o centro de custo dele.",
-  marcado: "A subunidade é escolhida em cada DFD, entre as cadastradas aqui.",
+export const DESCRICAO_MODO: Record<ModoCentro, string> = {
+  unico: "Um centro de custo para a unidade inteira: a subunidade do DFD é a própria unidade.",
+  subunidades: "Cada subunidade tem o seu centro de custo: a do DFD é a que tem o centro de custo dele.",
 };
 
 /** Os limites do cadastro (a mesma régua na tela e no Zod). */
 export const LIMITES_SUBUNIDADE = { nome: 120, centro: 300, centros: 100, subunidades: 200 } as const;
 
 export type Subunidade = { id: number; nome: string; centros: string[] };
-/** A configuração de UMA unidade (o código = o nome da subunidade "própria"). */
-export type ConfigSubunidades = { codigo: string; vinculo: VinculoSubunidade; subunidades: Subunidade[] };
+/** O cadastro de UMA unidade (`codigo` = o nome da subunidade no modo único). */
+export type ConfigSubunidades = { codigo: string; modo: ModoCentro; subunidades: Subunidade[] };
 
-export const lerVinculo = (v: unknown): VinculoSubunidade => (VINCULOS_SUBUNIDADE.includes(v as VinculoSubunidade) ? (v as VinculoSubunidade) : "proprio");
+/** O modo gravado — qualquer outro valor (os vínculos antigos) = único. */
+export const lerModo = (v: unknown): ModoCentro => (v === "subunidades" ? "subunidades" : "unico");
 
 /** Texto de um centro de custo como gravado (espaços colapsados). */
 export const limparCentro = (t: unknown) => String(t ?? "").replace(/\s+/g, " ").trim();
@@ -70,58 +69,54 @@ export function lerCentros(json: unknown): string[] {
 /** O DFD tem centro de custo? (algum caractere de letra ou número). */
 export const temCentroCusto = (c: string | null | undefined) => chaveCentro(c) !== "";
 
-/** Os centros de custo de uma unidade (os das subunidades no vínculo "centro_custo"; nos demais, nenhum). */
-export const centrosDaConfig = (cfg: ConfigSubunidades | null | undefined): string[] =>
-  cfg?.vinculo === "centro_custo" ? cfg.subunidades.flatMap((s) => s.centros) : [];
+/** Os centros de custo cadastrados de uma unidade. */
+export const centrosDaConfig = (cfg: ConfigSubunidades | null | undefined): string[] => cfg?.subunidades.flatMap((s) => s.centros) ?? [];
 
-/** Por que a subunidade do DFD não foi definida (a pendência `dfd.subunidade`). */
-export type FaltaSubunidade = "naoEscolhida" | "centroSemSubunidade" | "ambigua";
+/** Por que a subunidade do DFD não foi definida (a pendência `dfd.subunidade` — erro). */
+export type FaltaSubunidade = "semCadastro" | "centroNaoCadastrado" | "ambigua";
 
-export type SubunidadeEfetiva = { id: number | null; nome: string; origem: "propria" | "centro" | "marcada" };
+export type SubunidadeEfetiva = { id: number; nome: string };
 export type ResultadoSubunidade = { subunidade: SubunidadeEfetiva | null; falta: FaltaSubunidade | null };
 
 const NENHUMA: ResultadoSubunidade = { subunidade: null, falta: null };
 
 /**
- * A SUBUNIDADE efetiva de um DFD pela configuração da unidade dele. Sem unidade (ou sem a configuração) = nenhuma e sem
- * falta (a falta da unidade é outra pendência). No centro de custo: o DFD sem centro = nenhuma e sem falta (a falta é do
- * centro — `dfd.centroCusto`); o centro igual vence o que só confere pelo último nome; duas = `ambigua` (nunca chuta).
+ * A SUBUNIDADE efetiva de um DFD pelo cadastro da unidade dele. Sem unidade = nenhuma e sem falta (a falta da unidade é
+ * outra pendência); o DFD sem centro = nenhuma e sem falta (a falta é do centro — `dfd.centroCusto`). A unidade sem centro
+ * cadastrado = `semCadastro`; o centro igual vence o que só confere pelo último nome; nenhum = `centroNaoCadastrado`; dois =
+ * `ambigua` (nunca chuta). No modo único o nome é o da unidade.
  */
 export function subunidadeDoDfd(
-  d: { reparticaoId: number | null; subunidadeId?: number | null; centroCusto?: string | null },
+  d: { reparticaoId: number | null; centroCusto?: string | null },
   cfg: ConfigSubunidades | null | undefined,
 ): ResultadoSubunidade {
-  if (d.reparticaoId == null || !cfg) return NENHUMA;
-  if (cfg.vinculo === "proprio") return { subunidade: { id: null, nome: cfg.codigo, origem: "propria" }, falta: null };
-  if (cfg.vinculo === "marcado") {
-    const s = d.subunidadeId != null ? cfg.subunidades.find((x) => x.id === d.subunidadeId) : undefined;
-    return s ? { subunidade: { id: s.id, nome: s.nome, origem: "marcada" }, falta: null } : { subunidade: null, falta: "naoEscolhida" };
-  }
-  if (!temCentroCusto(d.centroCusto)) return NENHUMA;
+  if (d.reparticaoId == null || !temCentroCusto(d.centroCusto)) return NENHUMA;
+  const lista = cfg?.subunidades.filter((s) => s.centros.length) ?? [];
+  if (!cfg || !lista.length) return { subunidade: null, falta: "semCadastro" };
   const k = chaveCentro(d.centroCusto);
-  const exatas = cfg.subunidades.filter((s) => s.centros.some((c) => chaveCentro(c) === k));
-  const achadas = exatas.length ? exatas : cfg.subunidades.filter((s) => s.centros.some((c) => centroCustoConfere(c, d.centroCusto)));
-  if (achadas.length === 1) return { subunidade: { id: achadas[0].id, nome: achadas[0].nome, origem: "centro" }, falta: null };
-  return { subunidade: null, falta: achadas.length ? "ambigua" : "centroSemSubunidade" };
+  const exatas = lista.filter((s) => s.centros.some((c) => chaveCentro(c) === k));
+  const achadas = exatas.length ? exatas : lista.filter((s) => s.centros.some((c) => centroCustoConfere(c, d.centroCusto)));
+  if (achadas.length === 1)
+    return { subunidade: { id: achadas[0].id, nome: cfg.modo === "unico" ? cfg.codigo : achadas[0].nome }, falta: null };
+  return { subunidade: null, falta: achadas.length ? "ambigua" : "centroNaoCadastrado" };
 }
 
 /** O texto da pendência da subunidade (mensagem do DFD e despacho). */
 export function textoFaltaSubunidade(f: FaltaSubunidade, centro?: string | null): string {
-  if (f === "naoEscolhida") return "Subunidade não escolhida — escolha a subunidade do DFD.";
-  if (f === "ambigua") return `O centro de custo “${limparCentro(centro)}” está ligado a mais de uma subunidade — ajuste o cadastro em Órgãos e Unidades.`;
-  return `O centro de custo “${limparCentro(centro)}” não está ligado a nenhuma subunidade da unidade — ligue-o em Órgãos e Unidades.`;
-}
-
-/** A subunidade escolhível no DFD? (só no vínculo "marcado" e entre as da unidade). */
-export function subunidadeEscolhivel(cfg: ConfigSubunidades | null | undefined, id: number): boolean {
-  return !!cfg && cfg.vinculo === "marcado" && cfg.subunidades.some((s) => s.id === id);
+  if (f === "semCadastro") return "A unidade do DFD não tem centro de custo cadastrado — cadastre-o em Órgãos e Unidades.";
+  if (f === "ambigua") return `O centro de custo “${limparCentro(centro)}” confere com mais de uma subunidade — ajuste o cadastro em Órgãos e Unidades.`;
+  return `O centro de custo “${limparCentro(centro)}” não está cadastrado na unidade do DFD — cadastre-o em Órgãos e Unidades.`;
 }
 
 /** Um item do cadastro enviado pela tela (`id` ausente = nova). */
 export type SubunidadeEnviada = { id?: number; nome: string; centros: string[] };
 
-/** O cadastro de UMA unidade é válido? (nome, nomes repetidos sem caixa, centros repetidos, limites). `null` = válido. */
-export function motivoSubunidadesInvalidas(lista: SubunidadeEnviada[]): string | null {
+/**
+ * O cadastro de UMA unidade é válido? Todo item com ao menos um centro de custo (obrigatório); no modo único, no máximo um
+ * item; nomes sem repetir (sem caixa), centros sem repetir, limites. `null` = válido.
+ */
+export function motivoSubunidadesInvalidas(modo: ModoCentro, lista: SubunidadeEnviada[]): string | null {
+  if (modo === "unico" && lista.length > 1) return "No modo “Um para toda a unidade” há um só cadastro de centro de custo.";
   if (lista.length > LIMITES_SUBUNIDADE.subunidades) return `No máximo ${LIMITES_SUBUNIDADE.subunidades} subunidades por unidade.`;
   const nomes = new Set<string>();
   const centros = new Map<string, string>();
@@ -132,6 +127,8 @@ export function motivoSubunidadesInvalidas(lista: SubunidadeEnviada[]): string |
     const kn = chaveCentro(nome);
     if (nomes.has(kn)) return `Duas subunidades com o nome “${nome}”.`;
     nomes.add(kn);
+    if (!s.centros.length)
+      return modo === "unico" ? "Cadastre o centro de custo da unidade." : `Cadastre o centro de custo da subunidade “${nome}”.`;
     if (s.centros.length > LIMITES_SUBUNIDADE.centros) return `No máximo ${LIMITES_SUBUNIDADE.centros} centros de custo por subunidade.`;
     for (const c of s.centros) {
       const k = chaveCentro(c);

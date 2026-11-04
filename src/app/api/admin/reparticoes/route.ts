@@ -8,7 +8,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
 import { nomesDasSubunidades } from "@/lib/subunidades";
-import { lerVinculo } from "@/lib/subunidades-core";
+import { lerModo } from "@/lib/subunidades-core";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       ordem: reparticoes.ordem,
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
-      vinculoSubunidade: reparticoes.vinculoSubunidade,
+      modoCentro: reparticoes.modoCentro,
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`); as subunidades (nomes, na ordem) — a coluna da lista.
   const subs = await nomesDasSubunidades();
-  return ok({ reparticoes: rows.map((r) => ({ ...r, vinculoSubunidade: lerVinculo(r.vinculoSubunidade), subunidades: subs.get(r.id) ?? [] })) });
+  return ok({ reparticoes: rows.map((r) => ({ ...r, modoCentro: lerModo(r.modoCentro), subunidades: subs.get(r.id) ?? [] })) });
 }
 
 export async function POST(req: Request) {

@@ -1168,6 +1168,22 @@ export function DfdsView({
   }, [pcas]);
   const pcaDe = (ano: number | null | undefined): PcaDaLinha | null => (ano != null ? { ano, nome: nomePcaPorAno.get(ano) ?? `PCA ${ano}` } : null);
   // SUBUNIDADE efetiva + CENTRO DE CUSTO de cada DFD (a régua `subunidadeDoDfd`) — as colunas de DFDs e Itens.
+  // O DETALHE de cada subunidade nos filtros e na dica: a unidade e os centros de custo (o mesmo nome em duas unidades
+  // junta as duas).
+  const detalheSubunidades = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of reparticoes) {
+      const cfg = r.subunidade;
+      if (!cfg) continue;
+      for (const sub of cfg.subunidades) {
+        const nome = cfg.modo === "unico" ? cfg.codigo : sub.nome;
+        const txt = `${cfg.modo === "unico" ? `${r.nome} · toda a unidade` : `${r.codigo} — ${r.nome}`} · ${sub.centros.join(" | ")}`;
+        m.set(nome, [...(m.get(nome) ?? []), txt]);
+      }
+    }
+    return new Map([...m].map(([k, v]) => [k, v.join(" / ")]));
+  }, [reparticoes]);
+  const detalheSubunidade = useCallback((nome: string) => detalheSubunidades.get(nome), [detalheSubunidades]);
   const gravadosPorId = useMemo(() => {
     const cfg = new Map(reparticoes.map((r) => [r.id, r.subunidade ?? null]));
     const cores = { sub: corDaFalta(regras, "dfd.subunidade"), centro: corDaFalta(regras, "dfd.centroCusto") };
@@ -1177,22 +1193,19 @@ export function DfdsView({
         return [
           d.id,
           {
-            subunidade: { nome: r.subunidade?.nome ?? null, falta: !!r.falta, cor: cores.sub, dica: r.falta ? textoFaltaSubunidade(r.falta, d.centroCusto) : undefined },
+            subunidade: {
+              nome: r.subunidade?.nome ?? null,
+              falta: !!r.falta,
+              cor: cores.sub,
+              dica: r.falta ? textoFaltaSubunidade(r.falta, d.centroCusto) : r.subunidade ? detalheSubunidades.get(r.subunidade.nome) : undefined,
+            },
             centroCusto: { texto: d.centroCusto, cor: cores.centro },
           },
         ] as const;
       }),
     );
-  }, [dfds, reparticoes, regras]);
+  }, [dfds, reparticoes, regras, detalheSubunidades]);
   const gravadosDe = (id: number) => gravadosPorId.get(id) ?? {};
-  // A SUBUNIDADE em massa: só quando os DFDs selecionados são da MESMA unidade, em vínculo "marcado" (as dela).
-  const subunidadeDaSelecao = (() => {
-    const unidades = new Set([...selDfds].map((id) => dfdPorId.get(Number(id))?.reparticaoId ?? null));
-    const [unica] = [...unidades];
-    if (unidades.size !== 1 || unica == null) return null;
-    const cfg = reparticoes.find((r) => r.id === unica)?.subunidade;
-    return cfg?.vinculo === "marcado" && cfg.subunidades.length ? { opcoes: cfg.subunidades } : null;
-  })();
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {
@@ -1825,7 +1838,8 @@ export function DfdsView({
     {
       key: "subunidade",
       header: "Subunidade",
-      minWidth: 140,
+      nowrap: true,
+      detalhe: detalheSubunidade,
       value: atributoItem.subunidade.valor,
       render: (r) => {
         const g = gravadosPorId.get(r.dfdId)?.subunidade;
@@ -2155,9 +2169,10 @@ export function DfdsView({
       key: "subunidade",
       header: "Subunidade",
       nowrap: true,
+      detalhe: detalheSubunidade,
       value: (l) => infoDe(l).subunidades.join(" · ") || "—",
       filtroExterno: filtroExterno("subunidade"),
-      render: (l) => <CelulaLista valores={infoDe(l).subunidades} />,
+      render: (l) => <CelulaLista valores={infoDe(l).subunidades} mono />,
     },
     {
       key: "centroCusto",
@@ -2293,6 +2308,7 @@ export function DfdsView({
       rows={linhasDfdR}
       scrollInterno
       {...propsPlanilhaDfds({
+        detalheSubunidade,
         semSigla: semUnidade,
         linhas: linhasDfdR,
         filtrosRodape: filtrosRodape,
@@ -2415,7 +2431,7 @@ export function DfdsView({
         acoes={automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {progressoMassa}
-        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} subunidade={subunidadeDaSelecao} />
+        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
       </BarraSelecaoDfds>
     );
   } else if (podeAqui.manipular && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {

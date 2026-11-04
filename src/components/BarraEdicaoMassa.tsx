@@ -94,11 +94,8 @@ const CAMPOS: { value: CampoMassa; label: string; chave: ChaveAvaliacao }[] = [
   { value: "fundamentacao", label: "Fund. legal", chave: "dfd.fundamentacao" },
 ];
 
-/** O valor do seletor que TIRA a subunidade escolhida. */
-const SEM_SUBUNIDADE = "sem";
-
 /** Os campos da barra: os de conteúdo/unidade + a escolha GRAVADO × NOVO da sobrescrita (quando o host a oferece). */
-type CampoBarra = CampoMassa | "versao" | "subunidade";
+type CampoBarra = CampoMassa | "versao";
 
 /**
  * Edição EM MASSA dos DFDs selecionados — a MESMA na análise do protocolo, no protocolo gravado e na
@@ -113,7 +110,6 @@ export function BarraEdicaoMassa({
   aplicando = false,
   onAplicar,
   versao = null,
-  subunidade = null,
 }: {
   reparticoes: Rep[];
   /** Ano padrão da previsão (o do PCA do processo). */
@@ -125,13 +121,10 @@ export function BarraEdicaoMassa({
    * para o lado escolhido (o "todos" do painel Diferenças, de uma vez). `aviso` = por que ainda não dá (o Aplicar fica
    * desabilitado). */
   versao?: { alvos: number; onAplicar: (lado: Lado) => void; aviso?: string | null } | null;
-  /** A SUBUNIDADE (Mesa: os selecionados são DFDs gravados da MESMA unidade em vínculo "marcado") — as dela. */
-  subunidade?: { opcoes: { id: number; nome: string }[] } | null;
 }) {
   const campos: { value: CampoBarra; label: string }[] = [
     ...(versao ? [{ value: "versao" as const, label: "Gravado × novo" }] : []),
     ...CAMPOS.filter((c) => editavelDe(regras, c.chave)).map(({ value, label }) => ({ value, label })),
-    ...(subunidade ? [{ value: "subunidade" as const, label: "Subunidade" }] : []),
   ];
   const [campoSel, setCampo] = useState<CampoBarra>(campos[0]?.value ?? "reparticao");
   // O campo escolhido pode sair da lista (ex.: a seleção deixou de ter DFD gravado) — vale o 1º.
@@ -144,7 +137,6 @@ export function BarraEdicaoMassa({
   const [ano, setAno] = useState(anoPadrao != null ? String(anoPadrao) : "");
   const [periodo, setPeriodo] = useState<PeriodoPrevisao | "">("");
   const [fund, setFund] = useState("Lei 14.133/2021");
-  const [sub, setSub] = useState("");
   if (campos.length === 0) return <Nota>Os campos editáveis em massa estão travados nas Configurações → Avaliação.</Nota>;
 
   // O ano é SEMPRE o do PCA (travado); sem PCA definido, o digitado.
@@ -152,10 +144,6 @@ export function BarraEdicaoMassa({
   const acao: AcaoMassa | null =
     campo === "versao"
       ? null
-      : campo === "subunidade"
-      ? sub
-        ? { campo, subunidadeId: sub === SEM_SUBUNIDADE ? null : Number(sub) }
-        : null
       : campo === "reparticao"
       ? rep != null
         ? { campo, reparticaoId: rep }
@@ -209,23 +197,6 @@ export function BarraEdicaoMassa({
             </>
           )}
           {campo === "reparticao" && <SeletorUnidade value={rep} onChange={setRep} reparticoes={reparticoes} />}
-          {campo === "subunidade" && subunidade && (
-            <Selecao
-              aria-label="Subunidade"
-              className={inputCls}
-              style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }}
-              value={sub}
-              onChange={(e) => setSub(e.target.value)}
-            >
-              <option value="">— Subunidade —</option>
-              {subunidade.opcoes.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.nome}
-                </option>
-              ))}
-              <option value={SEM_SUBUNIDADE}>Nenhuma (tirar a escolha)</option>
-            </Selecao>
-          )}
           {campo === "tipo" && (
             <Selecao
               aria-label="Tipo do DFD"

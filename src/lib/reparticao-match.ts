@@ -17,7 +17,7 @@ export type ReparticaoMatch = {
   /** Padrão do "Setor Requisitante" (cadastro do ADM). **Não** é mais usado na previsão da
    * unidade (ponto 1 — só a assinatura prevê); mantido como dado do cadastro. */
   setorRequisitante?: string | null;
-  /** Os CENTROS DE CUSTO das subunidades da unidade (vínculo "centro_custo" — `subunidades-core.ts`), como a Centi escreve. */
+  /** Os CENTROS DE CUSTO cadastrados na unidade (`subunidades-core.ts`), como a Centi escreve. */
   centrosCusto?: string[] | null;
   /** Número do Interessado do protocolo (cadastro do ADM) — identifica a unidade. */
   numeroInteressado?: string | null;
