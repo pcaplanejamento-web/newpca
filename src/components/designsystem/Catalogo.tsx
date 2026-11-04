@@ -4215,6 +4215,10 @@ export function Catalogo() {
           <div className="rounded-control border border-border bg-surface-2 px-2">
             <MultiSelectHeader label="Órgão" options={ORGAOS} value={orgaos} onApply={setOrgaos} onSort={setSortOrgao} sortDir={sortOrgao} />
           </div>
+          {/* `noTopo`: opções fixas no topo, separadas das demais por um divisor (ex.: a coluna Subunidade da Mesa). */}
+          <div className="rounded-control border border-border bg-surface-2 px-2">
+            <MultiSelectHeader label="Subunidade" options={["Compras", "Em branco", "Licitações", "Não definida"]} noTopo={["Não definida", "Em branco"]} value={[]} onApply={() => {}} />
+          </div>
           {/* Filtro de FAIXA (colunas R$): barra de arrasto do menor ao maior valor, crescente/decrescente e
               "Valor cheio" (a faixa inteira) — arrastar desmarca; marcar limpa a barra. */}
           <div className="w-48 rounded-control border border-border bg-surface-2 px-2">

@@ -23,6 +23,7 @@ export function MultiSelectHeader({
   align = "start",
   marcado,
   detalhe,
+  noTopo,
 }: {
   label: string;
   options: string[];
@@ -35,6 +36,8 @@ export function MultiSelectHeader({
   marcado?: boolean;
   /** A 2ª linha de cada opção (ex.: o NOME da sigla da unidade) — a busca acha pelos dois. */
   detalhe?: (opcao: string) => string | undefined;
+  /** Opções FIXAS no topo da lista (na ordem dada), separadas das demais por um divisor — ex.: "Não definida" · "Em branco". */
+  noTopo?: string[];
 }) {
   const filtrado = marcado ?? (value.length > 0 && !options.every((o) => value.includes(o)));
 
@@ -53,6 +56,7 @@ export function MultiSelectHeader({
           options={options}
           value={value}
           detalhe={detalhe}
+          noTopo={noTopo}
           onApply={(s) => {
             onApply(s);
             close();
@@ -69,6 +73,7 @@ function Painel({
   options,
   value,
   detalhe,
+  noTopo,
   onApply,
   onCancel,
   onSort,
@@ -77,6 +82,7 @@ function Painel({
   options: string[];
   value: string[];
   detalhe?: (opcao: string) => string | undefined;
+  noTopo?: string[];
   onApply: (sel: string[]) => void;
   onCancel: () => void;
   onSort?: (dir: "asc" | "desc") => void;
@@ -99,6 +105,13 @@ function Painel({
     const ja = new Set(achados);
     return options.filter((o, i) => ja.has(o) || (segundas[i] !== "" && peloNome.has(segundas[i])));
   }, [q, options, detalhe, partes]);
+  // As fixas no topo (na ordem dada) e as demais, na ordem de sempre — a seleção e o Aplicar valem para as duas.
+  const [topo, resto] = useMemo(() => {
+    if (!noTopo?.length) return [[] as string[], visiveis];
+    const ha = new Set(visiveis);
+    const fixas = new Set(noTopo);
+    return [noTopo.filter((o) => ha.has(o)), visiveis.filter((o) => !fixas.has(o))];
+  }, [visiveis, noTopo]);
   const buscando = q.trim() !== "";
   // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
   const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
@@ -127,6 +140,31 @@ function Painel({
   function aplicar() {
     if (podeAplicar) onApply(aplicaveis ?? [...sel]);
   }
+
+  const opcao = (o: string) => (
+    <label
+      key={o}
+      className="flex cursor-pointer items-start gap-2.5 px-3 py-1.5 [&>input]:mt-0.5 text-[13px] text-text-2 hover:bg-surface-2"
+    >
+      <input
+        type="checkbox"
+        checked={marcadas.has(o)}
+        onChange={() => alternar(o)}
+        className="caixa-marcar"
+      />
+      {(() => {
+        const [principal, segunda] = partes.get(o) ?? [o, undefined];
+        return segunda ? (
+          <span className="flex min-w-0 flex-col">
+            <span className="break-words">{principal}</span>
+            <span className="break-words text-[11px] leading-snug text-faint">{segunda}</span>
+          </span>
+        ) : (
+          <span className="min-w-0 break-words">{o}</span>
+        );
+      })()}
+    </label>
+  );
 
   const btn = "flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold";
 
@@ -167,30 +205,9 @@ function Painel({
         {buscando ? `Selecionar os ${visiveis.length} encontrados` : "Selecionar todos"}
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
-        {visiveis.map((o) => (
-          <label
-            key={o}
-            className="flex cursor-pointer items-start gap-2.5 px-3 py-1.5 [&>input]:mt-0.5 text-[13px] text-text-2 hover:bg-surface-2"
-          >
-            <input
-              type="checkbox"
-              checked={marcadas.has(o)}
-              onChange={() => alternar(o)}
-              className="caixa-marcar"
-            />
-            {(() => {
-              const [principal, segunda] = partes.get(o) ?? [o, undefined];
-              return segunda ? (
-                <span className="flex min-w-0 flex-col">
-                  <span className="break-words">{principal}</span>
-                  <span className="break-words text-[11px] leading-snug text-faint">{segunda}</span>
-                </span>
-              ) : (
-                <span className="min-w-0 break-words">{o}</span>
-              );
-            })()}
-          </label>
-        ))}
+        {topo.map(opcao)}
+        {topo.length > 0 && resto.length > 0 && <hr className="my-1 border-border" />}
+        {resto.map(opcao)}
         {visiveis.length === 0 && (
           <div className="px-3 py-4 text-center text-[12px] text-faint">Nada encontrado</div>
         )}

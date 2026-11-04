@@ -79,6 +79,9 @@ export type LinhaDfd = {
 
 /** O texto da subunidade nos filtros/ordem/exportação (a MESMA régua nas tabelas de DFDs e Itens). */
 export const SEM_CENTRO_CUSTO = "Sem centro de custo";
+/** As duas situações sem subunidade — juntas no topo do filtro da coluna Subunidade. */
+export const SUBUNIDADE_NO_TOPO = [SUB_NAO_DEFINIDA, SUB_EM_BRANCO];
+
 export const rotuloSubunidade = (s: { nome: string | null; falta: boolean } | null | undefined) =>
   s?.nome ?? (s?.falta ? SUB_NAO_DEFINIDA : SUB_EM_BRANCO);
 
@@ -307,6 +310,7 @@ export function propsPlanilhaDfds({
             header: "Subunidade",
             nowrap: true,
             detalhe: detalheSubunidade,
+            noTopo: SUBUNIDADE_NO_TOPO,
             value: (r: LinhaDfd) => rotuloSubunidade(r.subunidade),
             render: (r: LinhaDfd) => <CelulaSubunidade nome={r.subunidade?.nome ?? null} falta={!!r.subunidade?.falta} cor={r.subunidade?.cor} dica={r.subunidade?.dica} />,
           },

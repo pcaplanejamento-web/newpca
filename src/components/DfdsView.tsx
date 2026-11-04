@@ -90,7 +90,7 @@ import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, propsPlanilhaDfds, rotuloSubunidade, SEM_CENTRO_CUSTO } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, propsPlanilhaDfds, rotuloSubunidade, SEM_CENTRO_CUSTO, SUBUNIDADE_NO_TOPO } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -1851,6 +1851,7 @@ export function DfdsView({
       header: "Subunidade",
       nowrap: true,
       detalhe: detalheSubunidade,
+      noTopo: SUBUNIDADE_NO_TOPO,
       value: atributoItem.subunidade.valor,
       render: (r) => {
         const g = gravadosPorId.get(r.dfdId)?.subunidade;
@@ -2181,6 +2182,7 @@ export function DfdsView({
       header: "Subunidade",
       nowrap: true,
       detalhe: detalheSubunidade,
+      noTopo: SUBUNIDADE_NO_TOPO,
       value: (l) => infoDe(l).subunidades.join(" · ") || "—",
       filtroExterno: filtroExterno("subunidade"),
       render: (l) => <CelulaLista valores={infoDe(l).subunidades} mono />,

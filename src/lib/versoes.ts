@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.271.4",
+    data: "2026-11-04",
+    titulo: "Filtro da Subunidade: as faltas no topo",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "No filtro da coluna Subunidade (DFDs, Itens e Consolidada), “Não definida” e “Em branco” ficam juntas no topo da lista, separadas das subunidades por um divisor — filtrar as que faltam fica a um clique.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.271.3",
     data: "2026-11-04",
     titulo: "Filtro da Subunidade: “Não definida” × “Em branco”",
