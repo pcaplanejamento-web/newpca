@@ -20,11 +20,11 @@ import { StatMini } from "./StatMini";
 /** Onde a pesquisa procura. */
 type Escopo = "tudo" | "centro" | "unidade" | "subunidade";
 
-const ESCOPOS: { value: Escopo; label: string; dica: string }[] = [
+const ESCOPOS: { value: Escopo; label: string; curto?: string; dica: string }[] = [
   { value: "tudo", label: "Tudo", dica: "Procura no centro de custo, na unidade e na subunidade" },
-  { value: "centro", label: "Centro de custo", dica: "Procura só no texto do centro de custo" },
+  { value: "centro", label: "Centro de custo", curto: "Centro", dica: "Procura só no texto do centro de custo" },
   { value: "unidade", label: "Unidade", dica: "Procura na sigla e no nome da unidade" },
-  { value: "subunidade", label: "Subunidade", dica: "Procura no nome da subunidade" },
+  { value: "subunidade", label: "Subunidade", curto: "Subunid.", dica: "Procura no nome da subunidade" },
 ];
 
 /** Os campos de cada escopo da pesquisa. */
@@ -75,7 +75,8 @@ export function CentrosCustoUnidades({ aberto, onFechar, onAbrir }: { aberto: bo
     return {
       centros: new Set(l.map((x) => x.chave)).size,
       unidades: new Set(l.map((x) => x.reparticaoId)).size,
-      subunidades: new Set(l.filter((x) => x.subunidadeId != null).map((x) => x.subunidadeId)).size,
+      // As subunidades de verdade (a própria unidade, no modo único sem subunidades, não conta).
+      subunidades: new Set(l.flatMap((x) => x.subunidades.filter((n) => n !== x.unidade).map((n) => `${x.reparticaoId}:${n}`))).size,
       dfds: l.reduce((s, x) => s + x.dfds, 0),
     };
   }, [filtradas]);
@@ -180,7 +181,7 @@ export function CentrosCustoUnidades({ aberto, onFechar, onAbrir }: { aberto: bo
             <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
               <StatMini label="Centros de custo" value={resumo.centros} />
               <StatMini label="Unidades" value={resumo.unidades} />
-              <StatMini label="Subunidades" value={resumo.subunidades} hint="As donas de um centro (modo por subunidade)" />
+              <StatMini label="Subunidades" value={resumo.subunidades} />
               <StatMini label="DFDs" value={resumo.dfds} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -190,7 +191,7 @@ export function CentrosCustoUnidades({ aberto, onFechar, onAbrir }: { aberto: bo
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                   onClear={() => setBusca("")}
-                  placeholder={`Pesquisar ${escopo === "tudo" ? "centro, unidade ou subunidade" : ESCOPOS.find((x) => x.value === escopo)?.label.toLowerCase()}…`}
+                  placeholder={escopo === "tudo" ? "Pesquisar…" : `Pesquisar ${ESCOPOS.find((x) => x.value === escopo)?.label.toLowerCase()}…`}
                   aria-label="Pesquisar centros de custo"
                 />
               </div>

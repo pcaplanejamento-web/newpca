@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.276.1",
+    data: "2026-11-04",
+    titulo: "Centros de custo no celular",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Órgãos e Unidades",
+        texto: "No banner \"Centros de custo\", a contagem de subunidades soma as dos dois modos e, no celular, a pesquisa e as opções \"Centro · Unidade · Subunid.\" cabem sem cortar.",
+        link: "/painel/orgaos",
+      },
+    ],
+  },
+  {
     versao: "1.276.0",
     data: "2026-11-04",
     titulo: "Verificar os centros de custo",
