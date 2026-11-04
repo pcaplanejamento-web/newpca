@@ -21,6 +21,7 @@ function colunaDe<T>(c: ColunasMesa | undefined, col: ColunaMesa, idDe: (r: T) =
   return {
     key: `${prefixo}:${col.id}`,
     header: col.nome,
+    grupo: "Automação",
     minWidth: 140,
     value: (r: T) => valor(r) || "—",
     render: (r: T) => (valor(r) ? <CelulaTexto texto={valor(r)} /> : <span className="text-faint">—</span>),

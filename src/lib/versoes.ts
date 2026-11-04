@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.268.2",
+    data: "2026-11-04",
+    titulo: "Coluna Centro de Custo já na Mesa",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "A coluna “Centro de Custo” já aparece nas tabelas de DFDs e de Itens (vazia até a automação preencher); as colunas das automações ficam no grupo “Automação” do seletor de colunas.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.268.1",
     data: "2026-11-04",
     titulo: "Centro de Custo: a automação só escreve o texto da Centi",

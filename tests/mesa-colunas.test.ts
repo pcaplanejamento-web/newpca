@@ -39,7 +39,7 @@ test("builders: coluna única por entidade + nome; valores em lotes (≤ 100 par
   await q.comandoCriarColuna(orm, "item", "Situação Centi", null);
   const [col] = await q.consultaColunaPorNome(orm, "dfd", "SITUAÇÃO CENTI");
   assert.equal(col.nome, "Situação Centi");
-  assert.equal((db.prepare("SELECT count(*) AS n FROM mesa_colunas").get() as { n: number }).n, 2);
+  assert.equal((db.prepare("SELECT count(*) AS n FROM mesa_colunas WHERE chave <> 'centro de custo'").get() as { n: number }).n, 2, "sem a semeada pela 0175");
   const valores = Array.from({ length: 70 }, (_, i) => ({ alvoId: i + 1, valor: `v${i}` }));
   const cmds = q.comandosGravarValores(orm, col.id, [...valores, { alvoId: 1, valor: "novo" }]);
   assert.equal(cmds.length, Math.ceil(70 / q.LOTE_VALORES));
@@ -84,4 +84,26 @@ test("migração 0174: tira só a coluna de DFD “Centro de Custo confere” (o
   const restantes = db.prepare("SELECT entidade, nome FROM mesa_colunas ORDER BY id").all();
   assert.deepEqual(JSON.parse(JSON.stringify(restantes)), [{ entidade: "dfd", nome: "Centro de Custo" }, { entidade: "item", nome: "Centro de Custo confere" }]);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM mesa_colunas_valores").get() as { n: number }).n, 2);
+});
+
+test("migração 0175: semeia a coluna de DFD “Centro de Custo” (também nos Itens) sem duplicar nem perder valores", () => {
+  const arqs = readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort();
+  const i = arqs.indexOf("0175_semear_coluna_centro_custo.sql");
+  assert.ok(i > 0);
+  const sql = (arq: string) => readFileSync(join(process.cwd(), "drizzle", arq), "utf8");
+  // banco sem a coluna: nasce com nos_itens = 1
+  const a = new DatabaseSync(":memory:");
+  for (const arq of arqs) a.exec(sql(arq));
+  a.exec(sql(arqs[i]));
+  const linhas = a.prepare("SELECT nome, chave, nos_itens FROM mesa_colunas WHERE entidade = 'dfd'").all();
+  assert.deepEqual(JSON.parse(JSON.stringify(linhas)), [{ nome: "Centro de Custo", chave: chaveColuna("Centro de Custo"), nos_itens: 1 }]);
+  // coluna já criada pela automação (sem nos_itens): fica a mesma linha, com os valores
+  const b = new DatabaseSync(":memory:");
+  b.exec("PRAGMA foreign_keys = ON");
+  for (const arq of arqs.slice(0, i)) b.exec(sql(arq));
+  b.prepare("INSERT INTO mesa_colunas (entidade, nome, chave, nos_itens) VALUES ('dfd', 'Centro de Custo', ?, 0)").run(chaveColuna("Centro de Custo"));
+  b.exec("INSERT INTO mesa_colunas_valores (coluna_id, alvo_id, valor) SELECT id, 7, 'PM RV, GGIM' FROM mesa_colunas");
+  for (const arq of arqs.slice(i)) b.exec(sql(arq));
+  assert.deepEqual(JSON.parse(JSON.stringify(b.prepare("SELECT nos_itens FROM mesa_colunas").all())), [{ nos_itens: 1 }]);
+  assert.equal((b.prepare("SELECT COUNT(*) AS n FROM mesa_colunas_valores").get() as { n: number }).n, 1);
 });
