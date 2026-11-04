@@ -348,7 +348,9 @@ export const reparticoes = sqliteTable(
     ordem: integer("ordem").notNull().default(0),
     numeroInteressado: text("numero_interessado"), // casa o Interessado do protocolo → unidade
     setorRequisitante: text("setor_requisitante"), // padrão do "Setor Requisitante" do DFD → unidade (match)
-    centroCusto: text("centro_custo"), // o "Centro de Custo" da CM002 da Centi, como ela escreve (match da automação)
+    // O tipo de VÍNCULO das SUBUNIDADES (migração 0176): proprio | centro_custo | marcado — `subunidades-core.ts`.
+    // (`centro_custo`, da 0172, ficou DORMENTE: virou a subunidade por centro de custo.)
+    vinculoSubunidade: text("vinculo_subunidade").notNull().default("proprio"),
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }), // órgão dono da unidade
     // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
     // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.
@@ -359,6 +361,26 @@ export const reparticoes = sqliteTable(
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId), index("reparticoes_codigo_idx").on(t.codigo)],
+);
+
+/**
+ * SUBUNIDADES de uma unidade (migração 0176) — quantas o ADM quiser. No vínculo "centro_custo", `centros_custo` (JSON
+ * `string[]`, como a Centi escreve) liga a subunidade aos centros de custo dos DFDs — um centro em UMA subunidade do
+ * sistema (`conflitosCentros`); no "marcado", a subunidade é escolhida no DFD (`dfds.subunidade_id`).
+ */
+export const subunidades = sqliteTable(
+  "subunidades",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    reparticaoId: integer("reparticao_id")
+      .notNull()
+      .references(() => reparticoes.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    ordem: integer("ordem").notNull().default(0),
+    centrosCusto: text("centros_custo").notNull().default("[]"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("subunidades_reparticao_idx").on(t.reparticaoId, t.ordem)],
 );
 
 /**
@@ -566,6 +588,11 @@ export const dfds = sqliteTable(
     conferenciaCenti: text("conferencia_centi"),
     conferenciaCentiMotivo: text("conferencia_centi_motivo"),
     conferenciaCentiEm: text("conferencia_centi_em"),
+    // SUBUNIDADE escolhida no DFD (vínculo "marcado" da unidade) e o CENTRO DE CUSTO da Centi (CM002), gravado pela
+    // Automação "Unidades × Centro de Custo" (migração 0176). Sem centro de custo = erro no Estado do DFD gravado.
+    subunidadeId: integer("subunidade_id").references((): AnySQLiteColumn => subunidades.id, { onDelete: "set null" }),
+    centroCusto: text("centro_custo"),
+    centroCustoEm: text("centro_custo_em"),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),

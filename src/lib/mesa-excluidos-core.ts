@@ -59,6 +59,7 @@ export type RetratoDfd = {
   execucaoCenti: string | null;
   conferenciaCenti: string | null;
   conferenciaCentiMotivo: string | null;
+  centroCusto: string | null;
   itens: ItemExcluido[];
 };
 
@@ -155,6 +156,7 @@ export function lerRetratoDfd(txt: string | null | undefined): RetratoDfd | null
     execucaoCenti: s(o.execucaoCenti),
     conferenciaCenti: s(o.conferenciaCenti),
     conferenciaCentiMotivo: s(o.conferenciaCentiMotivo),
+    centroCusto: s(o.centroCusto),
     itens,
   };
 }

@@ -153,12 +153,12 @@ test("Centro de Custo × o CADASTRO REAL de Órgãos e Unidades (PMRV): os nomes
   assert.equal(casarUnidadePorNome("SECRETARIA MUNICIPAL", false, CAD).tipo, "desconhecida", "só palavras genéricas não identificam");
 });
 
-test("Centro de Custo CADASTRADO na unidade: o casamento exato vem antes do nome (texto inteiro ou o último nome)", async () => {
+test("Centros de Custo das SUBUNIDADES da unidade: o casamento exato vem antes do nome (texto inteiro ou o último nome)", async () => {
   const { casarPorCentroCusto } = await import("../src/lib/reparticao-match.ts");
   const CAD = [
-    { id: 1, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centroCusto: "PM RV, CAMARA MUNICIPAL, GGIM" },
-    { id: 2, codigo: "SUBOU", nome: "Subprefeitura do Distrito", orgaoId: 1, centroCusto: "SUBPREFEITURA DE OUROANA" },
-    { id: 3, codigo: "SMS", nome: "Secretaria Municipal de Saúde", orgaoId: 1, centroCusto: null },
+    { id: 1, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, CAMARA MUNICIPAL, GGIM"] },
+    { id: 2, codigo: "SUBOU", nome: "Subprefeitura do Distrito", orgaoId: 1, centrosCusto: ["SUBPREFEITURA DE OUROANA"] },
+    { id: 3, codigo: "SMS", nome: "Secretaria Municipal de Saúde", orgaoId: 1, centrosCusto: [] },
   ];
   assert.deepEqual(casarPorCentroCusto("pm rv, câmara municipal, ggim", CAD), { tipo: "ok", id: 1 }, "sem caixa/acento");
   assert.deepEqual(casarPorCentroCusto("PM RV, SUBPREFEITURA DE OUROANA", CAD), { tipo: "ok", id: 2 }, "o último nome");
@@ -176,7 +176,7 @@ test("Auditoria: pelo valor, a Finalidade nunca vira o centro de custo; o últim
   assert.equal(r.conformes.length, 1, JSON.stringify(r.desconhecidas[0]?.mensagem));
   const s = conferirUnidades([{ id: 2, numero: "2", planejamento: "2", reparticaoId: 1, orgaoId: 1, encontrado: { centroCusto: "", centi: { Finalidade: "CONTRATO Nº 40, DE 2026" } } }], UNIDADES);
   assert.match(String(s.desconhecidas[0]?.mensagem), /não trouxe o centro de custo/);
-  const CAD = [{ id: 5, codigo: "GGIM", nome: "Outro nome", orgaoId: 1, centroCusto: "PM RV, CAMARA MUNICIPAL, GGIM" }];
+  const CAD = [{ id: 5, codigo: "GGIM", nome: "Outro nome", orgaoId: 1, centrosCusto: ["PM RV, CAMARA MUNICIPAL, GGIM"] }];
   assert.deepEqual(casarPorCentroCusto("PM RV, GABINETE DO PREFEITO, GGIM", CAD), { tipo: "ok", id: 5 }, "sempre o último nome");
 });
 
@@ -192,8 +192,8 @@ test("centroCustoConfere: o texto inteiro ou o último nome, sem caixa/acento/po
 
 test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO da Centi; a leitura que falhou fica de fora", () => {
   const cad = [
-    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centroCusto: "PM RV, SEC. MUN. DE PLANEJAMENTO E GESTAO" },
-    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centrosCusto: ["PM RV, SEC. MUN. DE PLANEJAMENTO E GESTAO"] },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] },
     { id: 3, codigo: "PGM", nome: "Procuradoria-Geral do Município", orgaoId: 1 },
   ];
   const base = { numero: "1", planejamento: "1", orgaoId: 1, entidade: "2" };

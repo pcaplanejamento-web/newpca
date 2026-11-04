@@ -4,7 +4,7 @@ import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
 import { gravarGuardadas, guardadoValido, lerGuardadas } from "@/lib/conferencia-cache";
 import { assinaturaDfd, type ConfLinha, chavesUnidades, chaveContexto } from "@/lib/conferencia-cache-core";
-import { avaliarLinhaDfd, gravacaoIncompleta } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, dadosGravados, gravacaoIncompleta } from "@/lib/conferencia-dfd";
 import { listarDfdsCompletosPorIds } from "@/lib/dfd";
 import { conferenciaDfdsSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     const guardado = guardadoValido<ConfLinha>(guardadas.get(d.id), assinatura);
     if (guardado) return { ...guardado, id: d.id };
     // O DFD GRAVADO pela metade (gravação em lotes que falhou no meio) é ERRO até reenviar.
-    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: gravacaoIncompleta(d) }, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
+    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: gravacaoIncompleta(d), gravado: dadosGravados(d) }, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
       anoPca: d.anoPca ?? d.protocoloAnoPca,
       regras,
       categoria: classificarAssunto(d.protocoloAssunto),

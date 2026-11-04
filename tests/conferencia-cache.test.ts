@@ -29,6 +29,8 @@ const dfd: BaseDfdCampos = {
   anoPca: 2027,
   protocoloAnoPca: 2027,
   totalItens: 3,
+  subunidadeId: null,
+  centroCusto: "PM RV, SEPLAN",
 };
 const proto: BaseProtocoloCampos = {
   id: 1,
@@ -56,12 +58,16 @@ describe("conferência guardada — assinatura", () => {
       { anoPca: 2028 },
       { protocoloAnoPca: 2028 },
       { totalItens: 4 },
+      { subunidadeId: 7 },
+      { centroCusto: null },
     ];
     for (const v of variacoes) assert.notEqual(assinaturaDfd({ ...dfd, ...v }, ctx, u), base, JSON.stringify(v));
     assert.notEqual(assinaturaDfd(dfd, await chaveContexto({ a: 2 }, [{ id: 2 }]), u), base, "regras");
     assert.notEqual(assinaturaDfd(dfd, await chaveContexto({ a: 1 }, [{ id: 3 }]), u), base, "órgãos");
     const outraU = await chavesUnidades([{ ...unidade, responsaveis: { padrao: [{ nome: "BIA" }] } }]);
     assert.notEqual(assinaturaDfd(dfd, ctx, outraU), base, "responsáveis");
+    const outraSub = await chavesUnidades([{ ...unidade, subunidade: { codigo: "X", vinculo: "marcado", subunidades: [] } }]);
+    assert.notEqual(assinaturaDfd(dfd, ctx, outraSub), base, "subunidades da unidade");
     assert.equal(assinaturaDfd({ ...dfd }, ctx, u), base, "as mesmas entradas = a mesma assinatura");
   });
 

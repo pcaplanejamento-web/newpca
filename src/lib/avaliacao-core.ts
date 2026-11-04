@@ -83,6 +83,8 @@ export type ChaveAvaliacao =
   | "dfd.anoPca"
   | "dfd.assinatura"
   | "dfd.referenciaRenovacao"
+  | "dfd.centroCusto"
+  | "dfd.subunidade"
   | "item.valorUnitario"
   | "item.quantidade"
   | "item.quantidadeFracionada"
@@ -139,6 +141,10 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "dfd.anoPca", sujeito: "dfd", rotulo: "Ano do PCA", descricao: "PCA (ano) definido no DFD.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "dfd.assinatura", sujeito: "dfd", rotulo: "Assinatura digital", descricao: "Assinatura digital válida (PDF exige assinatura; .xlsx é opcional).", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "dfd.referenciaRenovacao", sujeito: "dfd", rotulo: "Referência de renovação (DFD-R)", descricao: "DFD-R com contrato, ARP ou licitação.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", suportaEdicao: true, editavelPadrao: true },
+  // CENTRO DE CUSTO e SUBUNIDADE — dados do DFD GRAVADO (a automação grava o centro; a subunidade sai do vínculo da
+  // unidade): conferidos só no DFD gravado, nunca na importação/protocolação (o centro de custo ainda não existe lá).
+  { chave: "dfd.centroCusto", sujeito: "dfd", rotulo: "Centro de Custo", descricao: "DFD gravado com o Centro de Custo da Centi (CM002). Sem ele, o DFD fica apontado até a automação “Unidades dos DFDs × Centro de Custo” gravar o centro de custo. Não vale na importação nem na protocolação.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia", ajuda: "O Centro de Custo é escrito pela Automação (Unidades dos DFDs × Centro de Custo da CM002) — execute-a para tirar o apontamento. É conferido só nos DFDs já gravados: a importação e a protocolação nunca são travadas por ele." },
+  { chave: "dfd.subunidade", sujeito: "dfd", rotulo: "Subunidade", descricao: "DFD gravado com a subunidade definida pelo vínculo da unidade (Órgãos e Unidades → a unidade → Subunidades): escolhida no DFD (vínculo Marcado) ou pelo centro de custo ligado a uma subunidade (vínculo Centro de custo). No vínculo Próprio, a subunidade é a própria unidade.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", ajuda: "Aponta “Subunidade não definida” quando o DFD da unidade em vínculo Marcado ainda não tem a subunidade escolhida, ou quando o centro de custo dele não está ligado a nenhuma (ou está a mais de uma) subunidade da unidade. Conferido só nos DFDs gravados." },
   // ---- ITEM ----
   { chave: "item.valorUnitario", sujeito: "item", rotulo: "Valor unitário", descricao: "Todo item com valor unitário maior que zero.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "item.quantidade", sujeito: "item", rotulo: "Quantidade", descricao: "Todo item com quantidade maior que zero. Quantidade vazia aponta “Item sem quantidade”; zero ou negativa, “Quantidade zerada” (o valor total do item fica R$ 0,00). O item sempre marca em vermelho; o nível decide se bloqueia.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", ajuda: "Confere cada item da tabela da Seção 4. A quantidade é lida do DFD; corrija no detalhe do item (cadeado da Quantidade), pela edição em massa dos itens ou reimportando o DFD corrigido no Centi." },

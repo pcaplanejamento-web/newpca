@@ -5,9 +5,16 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { chaveColuna, colunasDe, colunasNosItens, nomeColuna, valorParaColuna } from "../src/lib/mesa-colunas-core.ts";
+import { chaveColuna, colunaReservada, colunasDe, colunasNosItens, nomeColuna, valorParaColuna } from "../src/lib/mesa-colunas-core.ts";
 import * as q from "../src/lib/mesa-colunas-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
+
+test("Centro de Custo e Subunidade são COLUNAS DO SISTEMA nas tabelas de DFDs e Itens (a automação não as cria)", () => {
+  assert.equal(colunaReservada("dfd", " centro de  CUSTO "), true);
+  assert.equal(colunaReservada("item", "Subunidade"), true);
+  assert.equal(colunaReservada("protocolo", "Centro de Custo"), false, "nos protocolos não há essas colunas");
+  assert.equal(colunaReservada("dfd", "Situação na Centi"), false);
+});
 
 test("núcleo: chave sem caixa/acento, nome limpo, valor ≤ 500 (vazio = apagar)", () => {
   assert.equal(chaveColuna("  Situação   na CENTI "), "situacao na centi");
@@ -39,7 +46,7 @@ test("builders: coluna única por entidade + nome; valores em lotes (≤ 100 par
   await q.comandoCriarColuna(orm, "item", "Situação Centi", null);
   const [col] = await q.consultaColunaPorNome(orm, "dfd", "SITUAÇÃO CENTI");
   assert.equal(col.nome, "Situação Centi");
-  assert.equal((db.prepare("SELECT count(*) AS n FROM mesa_colunas WHERE chave <> 'centro de custo'").get() as { n: number }).n, 2, "sem a semeada pela 0175");
+  assert.equal((db.prepare("SELECT count(*) AS n FROM mesa_colunas").get() as { n: number }).n, 2, "a 0176 tirou a semeada pela 0175");
   const valores = Array.from({ length: 70 }, (_, i) => ({ alvoId: i + 1, valor: `v${i}` }));
   const cmds = q.comandosGravarValores(orm, col.id, [...valores, { alvoId: 1, valor: "novo" }]);
   assert.equal(cmds.length, Math.ceil(70 / q.LOTE_VALORES));
@@ -58,16 +65,16 @@ test("“também nos Itens”: gravado na criação, trocado depois, e só na co
   const db = new DatabaseSync(":memory:");
   for (const arq of readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort()) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
   const orm = drizzle(d1Sobre(db) as never, { schema }) as never as Parameters<typeof q.comandoCriarColuna>[0];
-  await q.comandoCriarColuna(orm, "dfd", "Centro de Custo", null, true);
-  await q.comandoCriarColuna(orm, "item", "Centro de Custo", null, true);
-  const [dfd] = await q.consultaColunaPorNome(orm, "dfd", "centro de custo");
-  const [item] = await q.consultaColunaPorNome(orm, "item", "centro de custo");
+  await q.comandoCriarColuna(orm, "dfd", "Situação Centi", null, true);
+  await q.comandoCriarColuna(orm, "item", "Situação Centi", null, true);
+  const [dfd] = await q.consultaColunaPorNome(orm, "dfd", "situacao centi");
+  const [item] = await q.consultaColunaPorNome(orm, "item", "situacao centi");
   assert.equal(dfd.nosItens, 1);
   assert.equal(item.nosItens, 0, "coluna de item nunca é “também nos Itens”");
   await q.comandoNosItens(orm, dfd.id, false);
   await q.comandoNosItens(orm, item.id, true);
-  assert.equal((await q.consultaColunaPorNome(orm, "dfd", "Centro de Custo"))[0].nosItens, 0);
-  assert.equal((await q.consultaColunaPorNome(orm, "item", "Centro de Custo"))[0].nosItens, 0, "o comando só vale para DFD");
+  assert.equal((await q.consultaColunaPorNome(orm, "dfd", "Situação Centi"))[0].nosItens, 0);
+  assert.equal((await q.consultaColunaPorNome(orm, "item", "Situação Centi"))[0].nosItens, 0, "o comando só vale para DFD");
 });
 
 test("migração 0174: tira só a coluna de DFD “Centro de Custo confere” (os valores caem pela cascata)", () => {
@@ -80,7 +87,8 @@ test("migração 0174: tira só a coluna de DFD “Centro de Custo confere” (o
   const criar = db.prepare("INSERT INTO mesa_colunas (entidade, nome, chave, nos_itens) VALUES (?, ?, ?, ?)");
   for (const [e, nome] of [["dfd", "Centro de Custo confere"], ["dfd", "Centro de Custo"], ["item", "Centro de Custo confere"]]) criar.run(e, nome, chaveColuna(nome), e === "dfd" ? 1 : 0);
   db.exec("INSERT INTO mesa_colunas_valores (coluna_id, alvo_id, valor) SELECT id, 1, 'x' FROM mesa_colunas");
-  for (const arq of arqs.slice(i)) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
+  // Até a 0175 (a 0176 levou o Centro de Custo ao próprio DFD — testada em `subunidades.test.ts`).
+  for (const arq of arqs.slice(i, arqs.indexOf("0176_subunidades.sql"))) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
   const restantes = db.prepare("SELECT entidade, nome FROM mesa_colunas ORDER BY id").all();
   assert.deepEqual(JSON.parse(JSON.stringify(restantes)), [{ entidade: "dfd", nome: "Centro de Custo" }, { entidade: "item", nome: "Centro de Custo confere" }]);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM mesa_colunas_valores").get() as { n: number }).n, 2);
@@ -92,8 +100,10 @@ test("migração 0175: semeia a coluna de DFD “Centro de Custo” (também nos
   assert.ok(i > 0);
   const sql = (arq: string) => readFileSync(join(process.cwd(), "drizzle", arq), "utf8");
   // banco sem a coluna: nasce com nos_itens = 1
+  // Até a 0175 (a 0176 levou o Centro de Custo ao próprio DFD — testada em `subunidades.test.ts`).
+  const ate = arqs.indexOf("0176_subunidades.sql");
   const a = new DatabaseSync(":memory:");
-  for (const arq of arqs) a.exec(sql(arq));
+  for (const arq of arqs.slice(0, ate)) a.exec(sql(arq));
   a.exec(sql(arqs[i]));
   const linhas = a.prepare("SELECT nome, chave, nos_itens FROM mesa_colunas WHERE entidade = 'dfd'").all();
   assert.deepEqual(JSON.parse(JSON.stringify(linhas)), [{ nome: "Centro de Custo", chave: chaveColuna("Centro de Custo"), nos_itens: 1 }]);
@@ -103,7 +113,7 @@ test("migração 0175: semeia a coluna de DFD “Centro de Custo” (também nos
   for (const arq of arqs.slice(0, i)) b.exec(sql(arq));
   b.prepare("INSERT INTO mesa_colunas (entidade, nome, chave, nos_itens) VALUES ('dfd', 'Centro de Custo', ?, 0)").run(chaveColuna("Centro de Custo"));
   b.exec("INSERT INTO mesa_colunas_valores (coluna_id, alvo_id, valor) SELECT id, 7, 'PM RV, GGIM' FROM mesa_colunas");
-  for (const arq of arqs.slice(i)) b.exec(sql(arq));
+  for (const arq of arqs.slice(i, ate)) b.exec(sql(arq));
   assert.deepEqual(JSON.parse(JSON.stringify(b.prepare("SELECT nos_itens FROM mesa_colunas").all())), [{ nos_itens: 1 }]);
   assert.equal((b.prepare("SELECT COUNT(*) AS n FROM mesa_colunas_valores").get() as { n: number }).n, 1);
 });

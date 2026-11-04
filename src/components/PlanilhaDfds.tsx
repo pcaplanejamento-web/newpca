@@ -19,7 +19,7 @@ import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
-import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
+import { CelulaCentroCusto, CelulaSubunidade, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
 import { PresencaNoItem } from "./PresencaNoItem";
 
@@ -71,7 +71,15 @@ export type LinhaDfd = {
   execucao?: string | null;
   /** Conferência com a CM002: convergente | divergente (+ o motivo); undefined = a tela não traz a coluna. */
   conferencia?: { status: string | null; motivo: string | null };
+  /** A SUBUNIDADE efetiva (`subunidadeDoDfd`) e o CENTRO DE CUSTO da Centi — só o DFD GRAVADO (undefined = sem as
+   * colunas); `cor` = a da importância do ADM para a falta. */
+  subunidade?: { nome: string | null; falta: boolean; cor?: string; dica?: string };
+  centroCusto?: { texto: string | null; cor?: string };
 };
+
+/** O texto da subunidade nos filtros/ordem/exportação (a MESMA régua nas tabelas de DFDs e Itens). */
+export const SEM_CENTRO_CUSTO = "Sem centro de custo";
+export const rotuloSubunidade = (s: { nome: string | null; falta: boolean } | null | undefined) => s?.nome ?? (s?.falta ? "Não definida" : "—");
 
 /** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
 export type PcaDaLinha = { ano: number; nome: string };
@@ -204,6 +212,7 @@ export function propsPlanilhaDfds({
   const temPrioridade = linhas.some((l) => l.prioridade !== undefined);
   const temExecucao = linhas.some((l) => l.execucao != null);
   const temConferencia = linhas.some((l) => l.conferencia?.status);
+  const temGravados = linhas.some((l) => l.centroCusto !== undefined);
 
   const colEstado: Column<LinhaDfd>[] = semEstado
     ? []
@@ -287,6 +296,24 @@ export function propsPlanilhaDfds({
         </span>
       ),
     },
+    ...(temGravados
+      ? [
+          {
+            key: "subunidade",
+            header: "Subunidade",
+            minWidth: 140,
+            value: (r: LinhaDfd) => rotuloSubunidade(r.subunidade),
+            render: (r: LinhaDfd) => <CelulaSubunidade nome={r.subunidade?.nome ?? null} falta={!!r.subunidade?.falta} cor={r.subunidade?.cor} dica={r.subunidade?.dica} />,
+          },
+          {
+            key: "centroCusto",
+            header: "Centro de Custo",
+            minWidth: 200,
+            value: (r: LinhaDfd) => r.centroCusto?.texto || SEM_CENTRO_CUSTO,
+            render: (r: LinhaDfd) => <CelulaCentroCusto centro={r.centroCusto?.texto} cor={r.centroCusto?.cor} />,
+          },
+        ]
+      : []),
     { key: "tipo", header: "Tipo", nowrap: true, value: (r) => r.tipo ?? "—", render: (r) => <span className="text-[12px]">{r.tipo ?? "—"}</span> },
     ...(temPrioridade
       ? [
@@ -415,7 +442,7 @@ export function propsPlanilhaDfds({
   // (tabela cinza à parte).
   const descartado = linhas.filter((l) => foraDoEnvio(l.estado));
   const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && !foraDoEnvio(l.estado));
-  const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0);
+  const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0) + (temGravados ? 340 : 0);
   // Densidade COMPACTA em todo lugar: a MESMA altura de linha das tabelas de protocolos e itens.
   const comum = {
     columns: semSigla ? cols.filter((c) => c.key !== "sigla") : cols,

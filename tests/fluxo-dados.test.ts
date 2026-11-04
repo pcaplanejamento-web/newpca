@@ -285,8 +285,8 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
   const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
   assert.ok(m);
   const unidades = [
-    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centroCusto: "PM RV, SEPLAN" },
-    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centrosCusto: ["PM RV, SEPLAN"] },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] },
     { id: 3, codigo: "SMC", nome: "Secretaria Municipal de Comunicação", orgaoId: 1 },
   ];
   const dfds = [
@@ -316,20 +316,18 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
   const api = async (c: string, init?: unknown) => {
     const body = (init as { body?: unknown } | undefined)?.body;
     posts.push({ c, body });
-    if (c === "/api/admin/automacao/colunas") return { ok: true, coluna: { id: 11 } };
     return { ok: true, alterados: 1, falhas: [] };
   };
   const r = await executarFluxo(grafo, REGISTRO_NOS, { centi, api, cancelado: () => false, host: { protocolos: [], unidades, __cache: new Map([["dfds", Promise.resolve(dfds)]]) } });
   assert.equal(r.estado, "concluido", r.erro);
-  // UMA coluna na Mesa (DFDs, também nos Itens) com o texto da Centi de TODO DFD — os de fora da CM002 e sem órgão
-  // ficam vazios; nada de “confere” (a comparação com o cadastro é do sistema).
-  const colunas = posts.filter((p) => p.c === "/api/admin/automacao/colunas").map((p) => p.body);
-  assert.deepEqual(colunas, [{ entidade: "dfd", nome: "Centro de Custo", nosItens: true }]);
+  // O Centro de Custo da Centi de TODO DFD vai ao PRÓPRIO DFD (a coluna fixa da Mesa — os itens herdam) — os de fora da
+  // CM002 e sem órgão ficam vazios (o DFD volta a ser apontado); nada vai a uma coluna genérica da automação.
+  assert.equal(posts.filter((p) => p.c.startsWith("/api/admin/automacao/colunas")).length, 0);
   const valores = Object.fromEntries(
     posts
-      .filter((p) => p.c === "/api/admin/automacao/colunas/11")
-      .flatMap((p) => (p.body as { valores: { alvoId: number; valor: string | null }[] }).valores)
-      .map((v) => [v.alvoId, v.valor]),
+      .filter((p) => p.c === "/api/admin/automacao/centro-custo-dfds")
+      .flatMap((p) => (p.body as { itens: { dfdId: number; centro: string | null }[] }).itens)
+      .map((v) => [v.dfdId, v.centro]),
   );
   assert.deepEqual(valores, {
     1: "PM RV, GABINETE DO PREFEITO, GGIM",
@@ -373,9 +371,9 @@ test("Modelo “Unidades × Centro de Custo”: a CM002 SEM a coluna — cada DF
   const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
     centi,
     api: async (c: string, init?: unknown) => {
-      const body = (init as { body?: { valores?: { alvoId: number; valor: string | null }[] } } | undefined)?.body;
-      if (c === "/api/admin/automacao/colunas/1") for (const v of body?.valores ?? []) gravados.set(v.alvoId, v.valor);
-      return c === "/api/admin/automacao/colunas" ? { ok: true, coluna: { id: 1 } } : { ok: true, alterados: 0, falhas: [] };
+      const body = (init as { body?: { itens?: { dfdId: number; centro: string | null }[] } } | undefined)?.body;
+      if (c === "/api/admin/automacao/centro-custo-dfds") for (const v of body?.itens ?? []) gravados.set(v.dfdId, v.centro);
+      return { ok: true, alterados: 0, falhas: [] };
     },
     cancelado: () => false,
     host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
@@ -426,7 +424,7 @@ test("Conferir unidade no fluxo salvo ANTIGO (sem o SE/Buscar): o próprio nó l
   };
   const r = await executarFluxo(g, REGISTRO_NOS, {
     centi,
-    api: async (c: string) => (c === "/api/admin/automacao/colunas" ? { ok: true, coluna: { id: 1 } } : { ok: true, alterados: 0, falhas: [] }),
+    api: async () => ({ ok: true, alterados: 0, falhas: [] }),
     cancelado: () => false,
     host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
   });

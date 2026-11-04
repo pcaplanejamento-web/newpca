@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ehCodigoGeral } from "./escopo-unidades-core.ts";
+import { LIMITES_SUBUNIDADE, VINCULOS_SUBUNIDADE } from "./subunidades-core.ts";
 
 // Validação da tela de Grupos (RBAC): o grupo guarda os MÓDULOS que libera (as telas vêm deles — Configurações →
 // Módulos), se o chat é liberado, os PCAs que acessa (`null` = todos), as pessoas e as unidades.
@@ -133,8 +134,6 @@ export const reparticaoSchema = z.object({
   // protocolo), padrão do Setor Requisitante do DFD e o órgão dono da unidade.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   setorRequisitante: z.string().trim().max(200).optional().nullable(),
-  // O "Centro de Custo" da CM002 da Centi (como ela escreve) — a conferência das unidades casa por ele primeiro.
-  centroCusto: z.string().trim().max(300).optional().nullable(),
   // Toda unidade pertence a um ÓRGÃO (obrigatório).
   orgaoId: z.number({ error: "Escolha o órgão da unidade." }).int().positive(),
   oculto: z.boolean().default(false),
@@ -185,3 +184,18 @@ export const unidadePropriaSchema = z.object({
 export type GrupoInput = z.infer<typeof grupoCreateSchema>;
 export type ReparticaoInput = z.infer<typeof reparticaoSchema>;
 export type OrgaoInput = z.infer<typeof orgaoSchema>;
+
+/** O cadastro de SUBUNIDADES de uma unidade (`PUT /api/admin/reparticoes/[id]/subunidades`) — a lista INTEIRA, na ordem;
+ * `id` ausente = nova. A régua do conteúdo (nomes/centros repetidos) é `motivoSubunidadesInvalidas`. */
+export const subunidadesSchema = z.strictObject({
+  vinculo: z.enum(VINCULOS_SUBUNIDADE),
+  subunidades: z
+    .array(
+      z.strictObject({
+        id: z.number().int().positive().optional(),
+        nome: z.string().trim().min(1, "Informe o nome da subunidade.").max(LIMITES_SUBUNIDADE.nome),
+        centros: z.array(z.string().trim().min(1).max(LIMITES_SUBUNIDADE.centro)).max(LIMITES_SUBUNIDADE.centros),
+      }),
+    )
+    .max(LIMITES_SUBUNIDADE.subunidades),
+});

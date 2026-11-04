@@ -13,6 +13,8 @@ import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { categoriaDoProtocolo } from "@/lib/protocolo";
 import { carregarResponsaveis } from "@/lib/reparticoes";
+import { lerConfigSubunidades } from "@/lib/subunidades";
+import { subunidadeEscolhivel } from "@/lib/subunidades-core";
 
 import { telaDoRecurso } from "@/lib/papeis-core";
 export const dynamic = "force-dynamic";
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
   const { ids, acao } = p.data;
 
   const regras = await getRegrasAvaliacao();
-  if (!editavelDe(regras, CHAVE_CAMPO[acao.campo])) return erro("Campo travado nas Configurações → Avaliação.", 403);
+  if (acao.campo !== "subunidade" && !editavelDe(regras, CHAVE_CAMPO[acao.campo])) return erro("Campo travado nas Configurações → Avaliação.", 403);
   const esc = await escopoMesa();
   if (!esc) return erro("Faça login.", 401);
   const { acessivel } = esc;
@@ -58,6 +60,8 @@ export async function POST(req: Request) {
   const pcaDe = await pcaDosProtocolos(dfds.map((d) => d.protocoloId));
   // Siglas das unidades (histórico) — UMA consulta para o lote inteiro (≤ 50 DFDs + o destino).
   const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
+  // SUBUNIDADE: a configuração das unidades dos DFDs (cada DFD só recebe uma subunidade da PRÓPRIA unidade).
+  const cfgSub = acao.campo === "subunidade" ? await lerConfigSubunidades(dfds.flatMap((d) => (d.reparticaoId != null ? [d.reparticaoId] : []))) : null;
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
   // O DFD pedido que não existe mais (excluído entre a leitura e a gravação) é uma falha — nunca "alterado".
@@ -81,6 +85,31 @@ export async function POST(req: Request) {
       const semPapel = motivoRecusa(a.acesso, telaDoRecurso(d.protocoloId != null ? pcaDe.get(d.protocoloId) : null), "manipular");
       if (semPapel) {
         falhas.push({ id: d.id, numero: d.numero, motivo: semPapel });
+        continue;
+      }
+      if (acao.campo === "subunidade") {
+        const cfg = d.reparticaoId != null ? cfgSub?.get(d.reparticaoId) : undefined;
+        if (acao.subunidadeId != null && !subunidadeEscolhivel(cfg, acao.subunidadeId)) {
+          falhas.push({ id: d.id, numero: d.numero, motivo: "A subunidade não é da unidade deste DFD (ou a unidade não está no vínculo Marcado)." });
+          continue;
+        }
+        if ((d.subunidadeId ?? null) === acao.subunidadeId) continue; // já está assim
+        const nome = (sid: number | null) => (sid == null ? "nenhuma" : (cfg?.subunidades.find((x) => x.id === sid)?.nome ?? `#${sid}`));
+        await atualizarDfdCampos(d.id, { subunidadeId: acao.subunidadeId });
+        await registrarAuditoria({
+          usuario: a.u,
+          acao: "editar",
+          entidade: "dfd",
+          entidadeId: d.id,
+          resumo: `DFD ${d.numero}: subunidade ${nome(d.subunidadeId)} → ${nome(acao.subunidadeId)} (edição em massa)`,
+          protocoloId: d.protocoloId,
+          origem: "massa",
+          detalhe: {
+            alvo: { numero: d.numero, planejamento: d.planejamento },
+            campos: [{ campo: "subunidadeId", rotulo: "Subunidade", antes: nome(d.subunidadeId), depois: nome(acao.subunidadeId) }],
+          },
+        });
+        alterados++;
         continue;
       }
       if (acao.campo === "reparticao") {

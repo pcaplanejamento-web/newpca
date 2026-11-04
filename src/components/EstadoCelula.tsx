@@ -106,3 +106,36 @@ export function CelulaUnidadeCadastrada({ texto, unidade }: { texto: string | nu
     </span>
   );
 }
+
+/** O CENTRO DE CUSTO da Centi do DFD (a coluna das tabelas de DFDs e Itens): o texto (uma linha, o inteiro na dica — ou na
+ * célula com os dados completos) ou "Sem centro de custo" na cor da importância do ADM (`dfd.centroCusto`). */
+export function CelulaCentroCusto({ centro, cor = "var(--danger)" }: { centro: string | null | undefined; cor?: string }) {
+  const completo = useDadosCompletos();
+  if (!centro?.trim())
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium" style={{ color: cor }} title="Execute a automação “Unidades dos DFDs × Centro de Custo” para gravar o centro de custo da Centi.">
+        <IconAlert className="h-3.5 w-3.5 shrink-0" />
+        Sem centro de custo
+      </span>
+    );
+  return completo ? (
+    <span className="block whitespace-normal break-words text-left text-[12px]">{centro}</span>
+  ) : (
+    <span className="line-clamp-1 text-left text-[12px] text-text-2" title={centro}>
+      {centro}
+    </span>
+  );
+}
+
+/** A SUBUNIDADE efetiva do DFD (`subunidadeDoDfd`): o nome, "Não definida" na cor da importância (`dfd.subunidade`) ou
+ * "—" (DFD sem unidade). */
+export function CelulaSubunidade({ nome, falta, cor = "var(--warn)", dica }: { nome: string | null; falta: boolean; cor?: string; dica?: string }) {
+  if (nome) return <span className="line-clamp-1 text-left text-[12px] font-medium text-text" title={dica ?? nome}>{nome}</span>;
+  if (!falta) return <span className="text-faint">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium" style={{ color: cor }} title={dica}>
+      <IconAlert className="h-3.5 w-3.5 shrink-0" />
+      Não definida
+    </span>
+  );
+}

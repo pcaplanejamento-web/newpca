@@ -2,7 +2,7 @@ import { z } from "zod";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { ENTIDADES_COLUNA, MAX_COLUNAS_POR_ENTIDADE, MAX_NOME_COLUNA, nomeColuna } from "@/lib/mesa-colunas-core";
+import { colunaReservada, ENTIDADES_COLUNA, MAX_COLUNAS_POR_ENTIDADE, MAX_NOME_COLUNA, nomeColuna } from "@/lib/mesa-colunas-core";
 import { colunaPorNome, listarColunasMesa } from "@/lib/mesa-colunas";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,8 @@ export async function POST(req: Request) {
   const p = await parseCorpo(corpoSchema, req);
   if ("resp" in p) return p.resp;
   if (!nomeColuna(p.data.nome)) return erro("Informe o nome da coluna.", 422);
+  if (colunaReservada(p.data.entidade, p.data.nome))
+    return erro(`“${nomeColuna(p.data.nome)}” é uma coluna do sistema nas tabelas de DFDs e Itens — o Centro de Custo é gravado pelo componente “Gravar o Centro de Custo” (use “Atualizar pelo modelo” na automação).`, 422);
   if (p.data.nosItens != null && p.data.entidade !== "dfd") return erro("“Também nos Itens” só vale para uma coluna de DFDs.", 422);
   const r = await colunaPorNome(p.data.entidade, p.data.nome, g.u.id, p.data.nosItens);
   if (!r) return erro(`No máximo ${MAX_COLUNAS_POR_ENTIDADE} colunas por tabela da Mesa.`, 409);

@@ -21,6 +21,11 @@ export const chaveColuna = (nome: string) =>
 export const nomeColuna = (nome: string) => nome.replace(/[\p{Cc}\p{Cf}]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NOME_COLUNA);
 
 /** `nosItens` = a coluna de DFD aparece também na tabela de Itens (o item herda o valor do DFD dele). */
+/** Os nomes que são COLUNAS DO SISTEMA nas tabelas de DFDs e Itens (dados do DFD — nunca uma coluna da automação). */
+const RESERVADAS = new Set(["centro de custo", "subunidade"]);
+/** O nome é de uma coluna do sistema nessa tabela? (o "Gravar na coluna da Mesa" recusa — use o componente próprio). */
+export const colunaReservada = (entidade: EntidadeColuna, nome: string) => entidade !== "protocolo" && RESERVADAS.has(chaveColuna(nome));
+
 export type ColunaMesa = { id: number; entidade: EntidadeColuna; nome: string; nosItens: boolean };
 /** As colunas + os valores (`valores[colunaId][alvoId]`) que a Mesa recebe. */
 export type ColunasMesa = { colunas: ColunaMesa[]; valores: Record<number, Record<number, string>> };

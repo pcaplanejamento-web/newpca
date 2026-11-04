@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.269.0",
+    data: "2026-11-04",
+    titulo: "Subunidades por unidade e o Centro de Custo em cada DFD",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "Cada unidade cadastra quantas SUBUNIDADES quiser e escolhe o vínculo: Próprio (a subunidade é a própria unidade), Centro de custo (cada subunidade com os centros de custo dela — escolhidos dos lidos da Centi ou digitados; um centro pertence a uma só subunidade) ou Marcado (escolhida em cada DFD).", link: "/painel/orgaos" },
+      { tipo: "novo", area: "Mesa", texto: "Colunas Subunidade e Centro de Custo, sempre à vista, filtráveis nas tabelas de DFDs e de Itens (também na Consolidada); a subunidade do vínculo Marcado é escolhida no DFD ou em massa na seleção.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Avaliação", texto: "Pendências “Sem centro de custo” (erro — sai quando a automação grava o centro de custo da Centi) e “Subunidade não definida” (atenção), com a importância configurável.", link: "/painel/configuracoes?aba=avaliacao" },
+      { tipo: "melhoria", area: "Automação", texto: "A automação “Unidades dos DFDs × Centro de Custo da CM002” grava o centro de custo no próprio DFD e casa a unidade pelos centros das subunidades. Use “Atualizar pelo modelo”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.268.2",
     data: "2026-11-04",
     titulo: "Coluna Centro de Custo já na Mesa",

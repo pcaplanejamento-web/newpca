@@ -18,6 +18,8 @@ import { gravacaoParcial } from "@/lib/pca-core";
 import { categoriaDoProtocolo, getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
+import { lerConfigSubunidades } from "@/lib/subunidades";
+import { subunidadeEscolhivel } from "@/lib/subunidades-core";
 
 export const dynamic = "force-dynamic";
 
@@ -195,6 +197,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // move p/ unidade inacessível.
   const editaCampos =
     p.data.reparticaoId !== undefined ||
+    p.data.subunidadeId !== undefined ||
     p.data.tipo !== undefined ||
     p.data.assinaturas !== undefined ||
     p.data.secoes !== undefined ||
@@ -211,9 +214,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // Snapshot "antes" (para o diff do log) — buscado 1× quando há edição de campos ou itens.
   const antes = editaCampos || p.data.itens !== undefined ? await getDfd(id) : null;
   let assinaturasGravadas: Assinatura[] | undefined;
+  let trocaSubunidade: string | null = null;
   if (editaCampos) {
     if (p.data.reparticaoId != null && !acessivel(p.data.reparticaoId)) {
       return erro("Sem acesso à unidade de destino.", 403);
+    }
+    // SUBUNIDADE: só uma das cadastradas da unidade (a nova, se ela também muda) e só no vínculo "marcado".
+    const unidadeSub = p.data.reparticaoId !== undefined ? p.data.reparticaoId : dfd.reparticaoId;
+    const cfgSub = unidadeSub != null ? (await lerConfigSubunidades([unidadeSub])).get(unidadeSub) : undefined;
+    if (p.data.subunidadeId != null && !subunidadeEscolhivel(cfgSub, p.data.subunidadeId))
+      return erro("Subunidade inválida — escolha uma das subunidades da unidade do DFD (vínculo Marcado).", 422);
+    if (p.data.subunidadeId !== undefined && antes && (antes.subunidadeId ?? null) !== p.data.subunidadeId) {
+      const nome = (sid: number | null) => (sid == null ? "nenhuma" : (cfgSub?.subunidades.find((x) => x.id === sid)?.nome ?? `#${sid}`));
+      trocaSubunidade = `subunidade ${nome(antes.subunidadeId)} → ${nome(p.data.subunidadeId)}`;
     }
     // Assinaturas (validação pela EQUIPE / desfazer): quem/quando vêm da SESSÃO — uma validação já
     // gravada idêntica mantém o carimbo original.
@@ -245,6 +258,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
     await atualizarDfdCampos(id, {
       reparticaoId: p.data.reparticaoId,
+      subunidadeId: p.data.subunidadeId,
       tipo: p.data.tipo,
       assinaturas,
       secoes: p.data.secoes,
@@ -291,6 +305,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const alvo = { numero: antes.numero, planejamento: antes.planejamento };
     const partes = c ? [...c.campos.map((x) => x.rotulo), ...c.secoes.map((x) => x.rotulo), ...(c.assinaturas ? ["assinaturas"] : [])] : ["editado"];
     if (c && c.itens.length > 0) partes.push(`${c.itens.length} item(ns)`);
+    if (trocaSubunidade) partes.push(trocaSubunidade);
     await registrarAuditoria({
       usuario: a.u,
       acao: "editar",

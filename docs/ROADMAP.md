@@ -11,9 +11,9 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
-### Centro de Custo da Centi na Mesa (v1.268.1) — em andamento
-- Entregue: a automação "Unidades dos DFDs × Centro de Custo da CM002" escreve o texto completo do Centro de Custo da Centi em cada DFD (coluna "Centro de Custo" em Mesa → DFDs e Itens; os itens herdam).
-- Próximo: o SISTEMA compara o texto gravado com o Centro de Custo cadastrado na unidade do DFD e aponta o erro na Mesa (régua `centroCustoConfere`).
+### Subunidades e Centro de Custo (v1.269.0) — entregue
+- Subunidades por unidade com o vínculo Próprio · Centro de custo · Marcado (Órgãos e Unidades); colunas Subunidade e Centro de Custo na Mesa (DFDs, Itens, Consolidada), escolha da subunidade no DFD e em massa; pendências "Sem centro de custo" (erro) e "Subunidade não definida" (atenção) no DFD gravado.
+- 🔜 Próximo: a subunidade nos filtros do cabeçalho e nos relatórios/Dashboard; o centro de custo nos itens de planilha do PCA.
 
 ### Execução da despesa (empenhos, liquidações e pagamentos pela API pública da Centi) — em andamento
 Trazer para o sistema o que o Dattago faz, sem as falhas dele (página do meio que falha contada como completa; chave da

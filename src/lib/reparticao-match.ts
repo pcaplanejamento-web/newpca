@@ -17,8 +17,8 @@ export type ReparticaoMatch = {
   /** Padrão do "Setor Requisitante" (cadastro do ADM). **Não** é mais usado na previsão da
    * unidade (ponto 1 — só a assinatura prevê); mantido como dado do cadastro. */
   setorRequisitante?: string | null;
-  /** O "Centro de Custo" da CM002 da Centi, como ela escreve (o texto inteiro ou só o último nome). */
-  centroCusto?: string | null;
+  /** Os CENTROS DE CUSTO das subunidades da unidade (vínculo "centro_custo" — `subunidades-core.ts`), como a Centi escreve. */
+  centrosCusto?: string[] | null;
   /** Número do Interessado do protocolo (cadastro do ADM) — identifica a unidade. */
   numeroInteressado?: string | null;
   /** Órgão dono da unidade (derivado para o órgão do documento). */
@@ -269,12 +269,14 @@ export function centroCustoConfere(cadastrado: string | null | undefined, centi:
   return k === inteiro || k === ultimo || (!!ultimo && ultimoCentro(String(cadastrado)) === ultimo);
 }
 
-/** O CENTRO DE CUSTO cadastrado na unidade (como a Centi escreve) × o da CM002 (`centroCustoConfere`). Vem ANTES da
- * comparação por nome — o ADM sincroniza o nome uma vez e o casamento é exato. */
+/** Os CENTROS DE CUSTO das subunidades das unidades (como a Centi escreve) × o da CM002: o texto igual vence o que só
+ * confere pelo último nome (`centroCustoConfere`). Vem ANTES da comparação por nome — o casamento é exato. */
 export function casarPorCentroCusto(centro: string, unidades: ReparticaoMatch[], orgaoId?: number | null): CasamentoUnidade | null {
-  const validas = unidades.filter((u) => !u.oculto && norm(u.codigo) !== "GERAL" && u.centroCusto?.trim());
+  const validas = unidades.filter((u) => !u.oculto && norm(u.codigo) !== "GERAL" && u.centrosCusto?.length);
   if (!validas.length) return null;
-  let achadas = validas.filter((u) => centroCustoConfere(u.centroCusto, centro));
+  const k = chaveCentro(centro);
+  const exatas = k ? validas.filter((u) => u.centrosCusto?.some((c) => chaveCentro(c) === k)) : [];
+  let achadas = exatas.length ? exatas : validas.filter((u) => u.centrosCusto?.some((c) => centroCustoConfere(c, centro)));
   if (!achadas.length) return null;
   if (achadas.length > 1 && orgaoId != null) {
     const doOrgao = achadas.filter((u) => u.orgaoId === orgaoId);

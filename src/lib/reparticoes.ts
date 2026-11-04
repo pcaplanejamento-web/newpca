@@ -4,6 +4,8 @@ import { getDb } from "./db";
 import { RESPONSAVEIS_VAZIO, type Responsaveis } from "./reparticao-responsaveis";
 import { alvoEfetivo, responsaveisEfetivosDasUnidades } from "./responsaveis-planilha-core";
 import { consultaVinculosDosAlvos, linhaVinculo } from "./responsaveis-sql";
+import { configDasUnidades } from "./subunidades";
+import type { ConfigSubunidades } from "./subunidades-core";
 
 /**
  * Acesso aos RESPONSÁVEIS por DFDs das unidades — os VÍNCULOS da planilha única (`responsaveis` +
@@ -59,7 +61,6 @@ export async function orgaoIdDaReparticao(reparticaoId: number | null | undefine
 export type DadosMatchReparticao = {
   numeroInteressado: string | null;
   setorRequisitante: string | null;
-  centroCusto: string | null;
   orgaoId: number | null;
   orgaoProprio: boolean;
   oculto: boolean;
@@ -76,7 +77,6 @@ export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<num
             id: reparticoes.id,
             numeroInteressado: reparticoes.numeroInteressado,
             setorRequisitante: reparticoes.setorRequisitante,
-            centroCusto: reparticoes.centroCusto,
             orgaoId: reparticoes.orgaoId,
             orgaoProprio: reparticoes.orgaoProprio,
             oculto: reparticoes.oculto,
@@ -91,7 +91,6 @@ export async function dadosMatchPorReparticao(ids: number[]): Promise<Record<num
     out[l.id] = {
       numeroInteressado: l.numeroInteressado,
       setorRequisitante: l.setorRequisitante,
-      centroCusto: l.centroCusto,
       orgaoId: l.orgaoId,
       orgaoProprio: l.orgaoProprio,
       oculto: l.oculto,
@@ -112,7 +111,15 @@ export async function unidadeTemVinculo(reparticaoId: number): Promise<boolean> 
 }
 
 /** Unidade para a CONFERÊNCIA de DFDs (código/nome p/ exibir + órgão + responsáveis EFETIVOS). */
-export type UnidadeConferencia = { id: number; codigo: string; nome: string; orgaoId: number | null; responsaveis: Responsaveis };
+export type UnidadeConferencia = {
+  id: number;
+  codigo: string;
+  nome: string;
+  orgaoId: number | null;
+  responsaveis: Responsaveis;
+  /** A configuração das SUBUNIDADES (a conferência do DFD gravado — `dfd.subunidade`). */
+  subunidade: ConfigSubunidades | null;
+};
 
 /**
  * Unidades REFERENCIADAS por DFDs (inclusive fora da lista do usuário — ex.: DFD de outra unidade num
@@ -133,7 +140,8 @@ export async function unidadesConferencia(ids: (number | null | undefined)[]): P
     ),
     responsaveisPorReparticao(lotes.flat()),
   ]);
-  return linhas.flat().map((l) => ({ ...l, responsaveis: resp[l.id] ?? RESPONSAVEIS_VAZIO }));
+  const subs = await configDasUnidades(lotes.flat());
+  return linhas.flat().map((l) => ({ ...l, responsaveis: resp[l.id] ?? RESPONSAVEIS_VAZIO, subunidade: subs.get(l.id) ?? null }));
 }
 
 /** Uma unidade que se pode ESCOLHER como local de trabalho (cadastro, ADM): nem oculta nem a "Geral" virtual. */

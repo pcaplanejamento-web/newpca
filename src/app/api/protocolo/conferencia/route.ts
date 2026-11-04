@@ -4,7 +4,7 @@ import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
 import { gravarGuardadas, guardadoValido, lerGuardadas } from "@/lib/conferencia-cache";
 import { assinaturaDfd, assinaturaProtocolo, type ConfProto, chavesUnidades, chaveContexto } from "@/lib/conferencia-cache-core";
-import { avaliarLinhaDfd, avaliarProtocolo, gravacaoIncompleta } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, avaliarProtocolo, dadosGravados, gravacaoIncompleta } from "@/lib/conferencia-dfd";
 import { type DfdDetalhe, listarDfdsCompletosDosProtocolos } from "@/lib/dfd";
 import { conferenciaProtocolosSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     const doProtocolo = dfdsDele.map((d) => ({
       numero: d.numero,
       planejamento: d.planejamento,
-      mensagens: avaliarLinhaDfd({ ...d, gravacaoIncompleta: gravacaoIncompleta(d) }, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
+      mensagens: avaliarLinhaDfd({ ...d, gravacaoIncompleta: gravacaoIncompleta(d), gravado: dadosGravados(d) }, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
         anoPca: d.anoPca ?? pr.anoPca,
         regras,
         categoria,

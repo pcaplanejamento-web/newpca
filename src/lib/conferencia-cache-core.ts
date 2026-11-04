@@ -23,6 +23,9 @@ export type BaseDfdCampos = {
   anoPca: number | null;
   protocoloAnoPca: number | null;
   totalItens: number | null;
+  /** A subunidade escolhida e o centro de custo (os pontos do DFD gravado — mudam sem mexer no `atualizadoEm`). */
+  subunidadeId: number | null;
+  centroCusto: string | null;
 };
 /** Os campos de um protocolo que entram na assinatura. */
 export type BaseProtocoloCampos = {
@@ -41,7 +44,9 @@ const v = (x: unknown) => (x == null ? "" : String(x));
 
 /** A base de um DFD — texto puro (muda a cada gravação; guardada sem hash, então nunca colide). */
 export const baseDfd = (d: BaseDfdCampos) =>
-  [d.id, d.atualizadoEm, d.reparticaoId, d.protocoloId, d.protocoloAssunto, d.anoPca, d.protocoloAnoPca, d.totalItens].map(v).join("|");
+  [d.id, d.atualizadoEm, d.reparticaoId, d.protocoloId, d.protocoloAssunto, d.anoPca, d.protocoloAnoPca, d.totalItens, d.subunidadeId, d.centroCusto]
+    .map(v)
+    .join("|");
 /** A base de um protocolo (a capa, o assunto, o ano e o agregado dos DFDs). */
 export const baseProtocolo = (p: BaseProtocoloCampos) =>
   [p.id, p.dfdsAtualizadoEm, p.totalDfds, p.valorTotal, p.sobrescritos, p.valorSobrescritos, p.valorCapa, p.assunto, p.anoPca].map(v).join("|");
@@ -58,9 +63,9 @@ export async function sha256(texto: string): Promise<string> {
 export const chaveContexto = (regras: unknown, orgaos: unknown) => sha256(JSON.stringify([regras ?? null, orgaos ?? null]));
 
 /** A UNIDADE efetiva de um DFD (o órgão e os responsáveis que conferem a assinatura). */
-export type UnidadeAssinatura = { id: number; orgaoId: number | null; responsaveis: unknown };
+export type UnidadeAssinatura = { id: number; orgaoId: number | null; responsaveis: unknown; subunidade?: unknown };
 export const chaveUnidade = (u: UnidadeAssinatura | null | undefined) =>
-  u ? sha256(JSON.stringify([u.id, u.orgaoId ?? null, u.responsaveis ?? null])) : Promise.resolve("-");
+  u ? sha256(JSON.stringify([u.id, u.orgaoId ?? null, u.responsaveis ?? null, u.subunidade ?? null])) : Promise.resolve("-");
 
 /** Os hashes de várias unidades de uma vez (`id → hash`). */
 export async function chavesUnidades(us: UnidadeAssinatura[]): Promise<Map<number, string>> {

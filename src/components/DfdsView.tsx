@@ -12,7 +12,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { baseDfd, baseProtocolo, type ConfLinha, type ConfProto, type ConfsGuardadas } from "@/lib/conferencia-cache-core";
-import { avaliarProtocolo } from "@/lib/conferencia-dfd";
+import { avaliarProtocolo, corDaFalta } from "@/lib/conferencia-dfd";
+import { type ConfigSubunidades, subunidadeDoDfd, textoFaltaSubunidade } from "@/lib/subunidades-core";
 import type { ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import type { DfdNaMesa, ProtocoloNaMesa } from "@/lib/mesa-redacao";
 import { metricasPermitidas, ocultasDe, podeTrocarResponsavel } from "@/lib/mesa-visao-core";
@@ -84,12 +85,12 @@ import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import { CelulaHistoricoCompra } from "./ProdutoHistorico";
-import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
+import { CelulaCatalogo, CelulaCentroCusto, CelulaClassificacao, CelulaSubunidade, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, propsPlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, propsPlanilhaDfds, rotuloSubunidade, SEM_CENTRO_CUSTO } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -119,6 +120,8 @@ type Rep = {
   orgaoProprio?: boolean | null;
   oculto?: boolean | null;
   responsaveis: Responsaveis;
+  /** A configuração das SUBUNIDADES da unidade (a coluna Subunidade e a conferência do DFD gravado). */
+  subunidade?: ConfigSubunidades | null;
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 /** Campos de GESTÃO editados na célula (valem na hora, até a lista recarregar do servidor). */
@@ -171,6 +174,8 @@ const SEM_INFO = {
   pcas: [] as string[],
   dfds: [] as string[],
   siglas: [] as string[],
+  subunidades: [] as string[],
+  centros: [] as string[],
   prioridades: [] as string[],
   planejamentos: [] as string[],
   tipos: [] as string[],
@@ -719,7 +724,7 @@ export function DfdsView({
   // DFDs que MUDARAM são reconferidos. Regras/órgãos/unidades novos (contexto) zeram o cache.
   const siglasExcluidos = useMemo(() => new Map(reparticoes.map((r) => [r.id, r.codigo])), [reparticoes]);
   const ctxConf = useMemo(
-    () => JSON.stringify([regras, orgaos, reparticoes.map((r) => [r.id, r.orgaoId ?? null, r.responsaveis])]),
+    () => JSON.stringify([regras, orgaos, reparticoes.map((r) => [r.id, r.orgaoId ?? null, r.responsaveis, r.subunidade ?? null])]),
     [regras, orgaos, reparticoes],
   );
   const cacheAba = useMemo(() => confsDaAba(usuarioId, ctxConf), [usuarioId, ctxConf]);
@@ -1162,6 +1167,32 @@ export function DfdsView({
     return m;
   }, [pcas]);
   const pcaDe = (ano: number | null | undefined): PcaDaLinha | null => (ano != null ? { ano, nome: nomePcaPorAno.get(ano) ?? `PCA ${ano}` } : null);
+  // SUBUNIDADE efetiva + CENTRO DE CUSTO de cada DFD (a régua `subunidadeDoDfd`) — as colunas de DFDs e Itens.
+  const gravadosPorId = useMemo(() => {
+    const cfg = new Map(reparticoes.map((r) => [r.id, r.subunidade ?? null]));
+    const cores = { sub: corDaFalta(regras, "dfd.subunidade"), centro: corDaFalta(regras, "dfd.centroCusto") };
+    return new Map(
+      dfds.map((d) => {
+        const r = subunidadeDoDfd(d, d.reparticaoId != null ? cfg.get(d.reparticaoId) : null);
+        return [
+          d.id,
+          {
+            subunidade: { nome: r.subunidade?.nome ?? null, falta: !!r.falta, cor: cores.sub, dica: r.falta ? textoFaltaSubunidade(r.falta, d.centroCusto) : undefined },
+            centroCusto: { texto: d.centroCusto, cor: cores.centro },
+          },
+        ] as const;
+      }),
+    );
+  }, [dfds, reparticoes, regras]);
+  const gravadosDe = (id: number) => gravadosPorId.get(id) ?? {};
+  // A SUBUNIDADE em massa: só quando os DFDs selecionados são da MESMA unidade, em vínculo "marcado" (as dela).
+  const subunidadeDaSelecao = (() => {
+    const unidades = new Set([...selDfds].map((id) => dfdPorId.get(Number(id))?.reparticaoId ?? null));
+    const [unica] = [...unidades];
+    if (unidades.size !== 1 || unica == null) return null;
+    const cfg = reparticoes.find((r) => r.id === unica)?.subunidade;
+    return cfg?.vinculo === "marcado" && cfg.subunidades.length ? { opcoes: cfg.subunidades } : null;
+  })();
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {
@@ -1181,6 +1212,7 @@ export function DfdsView({
       prioridade: d.prioridade,
       execucao: d.execucaoCenti,
       conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo },
+      ...gravadosDe(d.id),
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
   });
@@ -1602,6 +1634,9 @@ export function DfdsView({
       sigla: { valor: (r) => r.sigla ?? "—" },
       tipo: { valor: (r) => tipoCurtoDfd(r.dfdTipo) ?? "—" },
       prioridade: { valor: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—" },
+      // A SUBUNIDADE e o CENTRO DE CUSTO são os do DFD de origem (o item herda).
+      subunidade: { valor: (r) => rotuloSubunidade(gravadosPorId.get(r.dfdId)?.subunidade) },
+      centroCusto: { valor: (r) => dfdPorId.get(r.dfdId)?.centroCusto || SEM_CENTRO_CUSTO },
       catalogo: { valor: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—" },
       historico: { valor: (r) => rotuloComparacaoHistorico(r.valorUnitario, historico?.[normalizarCodigo(r.codigo)]) },
       descricao: { valor: (r) => r.descricao ?? "" },
@@ -1615,7 +1650,7 @@ export function DfdsView({
       codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
       pcaSeq: { valor: (r) => (r.pcaSequencial == null ? "" : String(r.pcaSequencial)) },
     } satisfies Record<string, Atributo>;
-  }, [repDoItem, dfdPorId, regras, unidadeDoItem, classeDoItem, historico]);
+  }, [repDoItem, dfdPorId, gravadosPorId, regras, unidadeDoItem, classeDoItem, historico]);
 
   // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
   const consolidada = vista === "itens" && modoItens === "consolidada";
@@ -1641,6 +1676,8 @@ export function DfdsView({
       "dfd",
       "protocolo",
       "sigla",
+      "subunidade",
+      "centroCusto",
       "tipo",
       ...(emPca ? [] : (["pca"] as const)),
       "prioridade",
@@ -1707,6 +1744,8 @@ export function DfdsView({
             dfds: distintos(l.itens, atributoItem.dfd.valor),
             planejamentos: distintos(l.itens, atributoItem.planejamento.valor),
             siglas: distintos(l.itens, atributoItem.sigla.valor),
+            subunidades: distintos(l.itens, atributoItem.subunidade.valor),
+            centros: distintos(l.itens, atributoItem.centroCusto.valor),
             tipos: distintos(l.itens, atributoItem.tipo.valor),
             prioridades: distintos(l.itens, atributoItem.prioridade.valor),
             classificacoes: classeDoItem ? distintos(l.itens, atributoItem.classificacao.valor) : [],
@@ -1783,6 +1822,23 @@ export function DfdsView({
     ci.planejamento,
     ci.dfd,
     ci.sigla,
+    {
+      key: "subunidade",
+      header: "Subunidade",
+      minWidth: 140,
+      value: atributoItem.subunidade.valor,
+      render: (r) => {
+        const g = gravadosPorId.get(r.dfdId)?.subunidade;
+        return <CelulaSubunidade nome={g?.nome ?? null} falta={!!g?.falta} cor={g?.cor} dica={g?.dica} />;
+      },
+    },
+    {
+      key: "centroCusto",
+      header: "Centro de Custo",
+      minWidth: 200,
+      value: atributoItem.centroCusto.valor,
+      render: (r) => <CelulaCentroCusto centro={dfdPorId.get(r.dfdId)?.centroCusto} cor={gravadosPorId.get(r.dfdId)?.centroCusto.cor} />,
+    },
     ci.tipo,
     {
       key: "prioridade",
@@ -2095,6 +2151,22 @@ export function DfdsView({
       filtroExterno: filtroExterno("sigla"),
       render: (l) => <CelulaLista valores={infoDe(l).siglas} mono destaque />,
     },
+    {
+      key: "subunidade",
+      header: "Subunidade",
+      nowrap: true,
+      value: (l) => infoDe(l).subunidades.join(" · ") || "—",
+      filtroExterno: filtroExterno("subunidade"),
+      render: (l) => <CelulaLista valores={infoDe(l).subunidades} />,
+    },
+    {
+      key: "centroCusto",
+      header: "Centro de Custo",
+      minWidth: 200,
+      value: (l) => infoDe(l).centros.join(" · ") || "—",
+      filtroExterno: filtroExterno("centroCusto"),
+      render: (l) => <CelulaLista valores={infoDe(l).centros} />,
+    },
     // Os tipos são 4 (S/R/O/E): todos à vista, sem "+N".
     {
       key: "tipo",
@@ -2343,7 +2415,7 @@ export function DfdsView({
         acoes={automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {progressoMassa}
-        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
+        <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} subunidade={subunidadeDaSelecao} />
       </BarraSelecaoDfds>
     );
   } else if (podeAqui.manipular && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {

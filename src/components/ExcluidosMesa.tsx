@@ -490,6 +490,7 @@ function DetalheExcluido({
             ["Última alteração", dataOuNull(x.atualizadoEm)],
             ["Situação na Centi (CM002)", x.execucaoCenti],
             ["Conferência com a Centi", x.conferenciaCenti ? `${x.conferenciaCenti}${x.conferenciaCentiMotivo ? ` — ${x.conferenciaCentiMotivo}` : ""}` : null],
+            ["Centro de Custo (Centi)", x.centroCusto],
           ]}
         />
       </div>

@@ -1670,6 +1670,44 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.gravarCentroCusto",
+    categoria: "saida",
+    rotulo: "Gravar o Centro de Custo",
+    descricao:
+      "Grava em cada DFD do sistema o CENTRO DE CUSTO da Centi (o texto completo, como a CM002 escreve) — a coluna “Centro de Custo” de Mesa → DFDs e Itens. Vazio = a Centi não tem o dado: o centro do DFD é limpo e ele volta a ser apontado.",
+    icone: "save",
+    entradas: ["entrada"],
+    saidas: ["saida", "ignorados"],
+    rotulosPortas: { saida: "Gravados", ignorados: "Sem id" },
+    campos: [
+      { chave: "campoCentro", rotulo: "Campo do centro de custo", tipo: "caminho", padrao: "centroCustoCenti", ajuda: "O dado com o texto completo do Centro de Custo (o “Conferir unidade” entrega “centroCustoCenti” na porta Todos)." },
+      { chave: "campoId", rotulo: "Campo do id do DFD", tipo: "caminho", padrao: "id", ajuda: "O dado com o id do DFD no sistema (o “Ler do sistema” entrega “id”)." },
+    ],
+    executar: async (e, c, ctx) => {
+      // O mesmo DFD vale UMA vez (o último que chegou) — o lote nunca grava duas vezes o mesmo DFD.
+      const porDfd = new Map<number, string | null>();
+      const saida: Item[] = [];
+      const ignorados: Item[] = [];
+      for (const it of so(e)) {
+        const id = Number(resolverCaminho(it, str(c.campoId, "id") || "id"));
+        if (!Number.isInteger(id) || id <= 0) ignorados.push(it);
+        else {
+          porDfd.set(id, str(resolverCaminho(it, str(c.campoCentro, "centroCustoCenti") || "centroCustoCenti")).trim() || null);
+          saida.push(it);
+        }
+      }
+      const itens = [...porDfd].map(([dfdId, centro]) => ({ dfdId, centro }));
+      for (let i = 0; i < itens.length; i += 2000) {
+        if (ctx.cancelado()) throw new Error("Interrompido.");
+        ctx.aviso(`Gravando o Centro de Custo (${Math.min(i + 2000, itens.length)} de ${itens.length})…`);
+        const r = await ctx.api("/api/admin/automacao/centro-custo-dfds", { method: "POST", body: { itens: itens.slice(i, i + 2000) } });
+        if (!r.ok) throw new Error(r.error || "Não consegui gravar o Centro de Custo dos DFDs.");
+      }
+      if (ignorados.length) ctx.aviso(`${ignorados.length} item(ns) sem o id do DFD — não gravados.`);
+      return { saida, ignorados };
+    },
+  },
+  {
     tipo: "saida.gravarColuna",
     categoria: "saida",
     rotulo: "Gravar na coluna da Mesa",

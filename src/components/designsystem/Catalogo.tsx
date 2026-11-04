@@ -100,7 +100,7 @@ import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
-import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
+import { CelulaCatalogo, CelulaCentroCusto, CelulaClassificacao, CelulaSubunidade, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "@/components/EstadoCelula";
 import { AcoesCadastro } from "@/components/AcoesCadastro";
 import { ClassificacaoDosItens, EditorClassificacao, type RascunhoClassificacao } from "@/components/ClassificacoesView";
 import { ComparacaoUnidades, EditorUnidadeMedida, type RascunhoUnidade } from "@/components/UnidadesMedidaView";
@@ -1946,6 +1946,12 @@ function PadronizacaoDemo() {
         <CelulaClassificacao resultado={CLASSIFICADOR_DEMO("Manutenção de ar condicionado", "SV")} />
         <CelulaClassificacao resultado={CLASSIFICADOR_DEMO("Locação de veículo", "MÊS")} />
         <CelulaClassificacao resultado={null} />
+        <span className="text-xs text-muted">Centro de Custo:</span>
+        <CelulaCentroCusto centro="PM RV, GABINETE DO PREFEITO, GGIM" />
+        <CelulaCentroCusto centro={null} />
+        <span className="text-xs text-muted">Subunidade:</span>
+        <CelulaSubunidade nome="Departamento de Compras" falta={false} />
+        <CelulaSubunidade nome={null} falta />
         <span className="text-xs text-muted">Ações do cadastro:</span>
         <AcoesCadastro nome="UN" primeira ultima={false} onMover={() => toast.info("Mover")} onEditar={() => toast.info("Editar")} onExcluir={() => toast.info("Excluir")} />
       </div>

@@ -22,6 +22,21 @@ import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
+import { CelulaLista } from "./CelulaLista";
+import { ErroCarga } from "./ErroCarga";
+import { CampoLista, TextField } from "./Field";
+import { Modal } from "./Modal";
+import { SeletorMultiplo } from "./SeletorMultiplo";
+import {
+  chaveCentro,
+  DESCRICAO_VINCULO,
+  LIMITES_SUBUNIDADE,
+  lerCentros,
+  motivoSubunidadesInvalidas,
+  ROTULO_VINCULO,
+  VINCULOS_SUBUNIDADE,
+  type VinculoSubunidade,
+} from "@/lib/subunidades-core";
 
 type Rep = {
   id: number;
@@ -30,8 +45,9 @@ type Rep = {
   ordem: number;
   numeroInteressado: string | null;
   setorRequisitante: string | null;
-  /** O "Centro de Custo" da CM002 da Centi, como ela escreve (a conferência das unidades casa por ele). */
-  centroCusto: string | null;
+  /** O tipo de VÍNCULO das subunidades e os nomes delas (a coluna da lista — o cadastro abre no banner). */
+  vinculoSubunidade: VinculoSubunidade;
+  subunidades: string[];
   orgaoId: number | null;
   /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
   orgaoProprio: boolean;
@@ -45,14 +61,6 @@ const CAMPOS: CampoCadastro[] = [
   { chave: "numeroInteressado", label: "Nº do interessado (protocolo em nome da unidade)", placeholder: "Ex.: 1008171", max: 60, mono: true, inputMode: "numeric", dica: "Único no sistema (órgãos e unidades)." },
   { chave: "nome", label: "Nome da unidade", max: 160, obrigatorio: true, span: true },
   { chave: "setorRequisitante", label: "Setor Requisitante (padrão do DFD)", placeholder: "Ex.: SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", max: 200, span: true },
-  {
-    chave: "centroCusto",
-    label: "Centro de Custo (como a Centi escreve na CM002)",
-    placeholder: "Ex.: PM RV, CAMARA MUNICIPAL, GGIM — ou só GGIM",
-    max: 300,
-    span: true,
-    dica: "Copie da coluna Centro Custo da CM002. A conferência “Unidades × Centro de Custo” casa por ele antes de comparar nomes.",
-  },
 ];
 
 const valoresDe = (u: Rep | null): Record<string, string> => ({
@@ -60,7 +68,6 @@ const valoresDe = (u: Rep | null): Record<string, string> => ({
   nome: u?.nome ?? "",
   numeroInteressado: u?.numeroInteressado ?? "",
   setorRequisitante: u?.setorRequisitante ?? "",
-  centroCusto: u?.centroCusto ?? "",
 });
 
 /**
@@ -166,7 +173,6 @@ export function ReparticoesAdmin({
     nome: v.nome,
     numeroInteressado: v.numeroInteressado || null,
     setorRequisitante: v.setorRequisitante || null,
-    centroCusto: v.centroCusto || null,
     orgaoId, // a unidade pertence ao órgão desta tela
     oculto: extra.oculto ?? u?.oculto ?? false,
   });
@@ -257,11 +263,20 @@ export function ReparticoesAdmin({
         u.setorRequisitante ? <span className="line-clamp-1 text-[12px] text-text-2" title={u.setorRequisitante}>{u.setorRequisitante}</span> : <span className="text-faint">—</span>,
     },
     {
-      key: "centroCusto",
-      header: "Centro de Custo",
-      minWidth: 200,
-      value: (u) => u.centroCusto ?? "—",
-      render: (u) => (u.centroCusto ? <span className="line-clamp-1 text-[12px] text-text-2" title={u.centroCusto}>{u.centroCusto}</span> : <span className="text-faint">—</span>),
+      key: "subunidades",
+      header: "Subunidades",
+      nowrap: true,
+      value: (u) => (u.vinculoSubunidade === "proprio" ? "Próprio" : u.subunidades.join(", ") || "—"),
+      valores: (u) => (u.vinculoSubunidade === "proprio" ? ["Próprio"] : u.subunidades.length ? u.subunidades : ["—"]),
+      render: (u) =>
+        u.vinculoSubunidade === "proprio" ? (
+          <span className="text-[12px] text-muted">Próprio</span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5" title={DESCRICAO_VINCULO[u.vinculoSubunidade]}>
+            <Badge tone={u.vinculoSubunidade === "marcado" ? "cyan" : "violet"}>{ROTULO_VINCULO[u.vinculoSubunidade]}</Badge>
+            <CelulaLista valores={u.subunidades} />
+          </span>
+        ),
     },
     {
       key: "responsaveis",
@@ -418,6 +433,9 @@ export function ReparticoesAdmin({
       >
         {unidade && (
           <>
+            <SecaoBanner titulo="Subunidades">
+              <SubunidadesDaUnidade key={unidade.id} unidadeId={unidade.id} codigo={unidade.codigo} onMudou={() => void carregar()} />
+            </SecaoBanner>
             <SecaoBanner titulo="Responsáveis por DFDs">
               <ResponsaveisDoAlvo
                 ctx={ctx}
@@ -443,5 +461,279 @@ export function ReparticoesAdmin({
       {confirmacao}
       {ctx.confirmacao}
     </div>
+  );
+}
+
+/** O cadastro como o servidor devolve (`GET /api/admin/reparticoes/[id]/subunidades`). */
+type CadastroSubunidades = {
+  vinculo: VinculoSubunidade;
+  subunidades: { id: number; nome: string; centros: string[]; marcados: number }[];
+  centros: { centro: string; dfds: number }[];
+  outras: { unidade: string; subunidade: string; centros: string[] }[];
+};
+type SubRascunho = { key: string; id?: number; nome: string; centros: string[]; marcados: number };
+
+const VINCULOS_OPCOES = VINCULOS_SUBUNIDADE.map((v) => ({ value: v, label: ROTULO_VINCULO[v], dica: DESCRICAO_VINCULO[v] }));
+
+/**
+ * As SUBUNIDADES de uma unidade (seção do banner): o tipo de VÍNCULO (Próprio · Centro de custo · Marcado) e a lista —
+ * quantas quiser — num RASCUNHO; "Salvar subunidades" grava o cadastro inteiro num lote (`PUT …/subunidades`). No vínculo
+ * Centro de custo, cada subunidade escolhe os centros de custo lidos nos DFDs (ou digitados) — um centro em UMA subunidade
+ * do sistema. Trocar o vínculo guarda a lista (ela volta se o vínculo voltar).
+ */
+function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: number; codigo: string; onMudou: () => void }) {
+  const url = `/api/admin/reparticoes/${unidadeId}/subunidades`;
+  const [cad, setCad] = useState<CadastroSubunidades | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  const [vinculo, setVinculo] = useState<VinculoSubunidade>("proprio");
+  const [lista, setLista] = useState<SubRascunho[]>([]);
+  const [editando, setEditando] = useState<number | "nova" | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
+
+  const aplicar = useCallback((c: CadastroSubunidades) => {
+    setCad(c);
+    setVinculo(c.vinculo);
+    setLista(c.subunidades.map((s) => ({ key: `s${s.id}`, id: s.id, nome: s.nome, centros: s.centros, marcados: s.marcados })));
+  }, []);
+  const carregar = useCallback(async () => {
+    try {
+      const r = await fetch(url);
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & Partial<CadastroSubunidades>;
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar as subunidades.");
+      aplicar(j as CadastroSubunidades);
+      setErroCarga(null);
+    } catch (e) {
+      setErroCarga(e instanceof Error ? e.message : "Erro ao carregar as subunidades.");
+    }
+  }, [url, aplicar]);
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  if (!cad) {
+    return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregar()} /> : <SkeletonLinhas linhas={3} />;
+  }
+
+  const original = JSON.stringify([cad.vinculo, cad.subunidades.map((s) => [s.id, s.nome, s.centros])]);
+  const sujo = JSON.stringify([vinculo, lista.map((s) => [s.id, s.nome, s.centros])]) !== original;
+  // Os centros de custo das OUTRAS unidades (não se escolhem aqui) e o dono de cada centro dentro deste rascunho.
+  const deOutras = new Map<string, string>();
+  for (const o of cad.outras) for (const c of o.centros) deOutras.set(chaveCentro(c), `${o.subunidade} (${o.unidade})`);
+  const motivo = motivoSubunidadesInvalidas(lista);
+
+  async function salvar() {
+    const saem = (cad?.subunidades ?? []).filter((s) => s.marcados > 0 && !lista.some((x) => x.id === s.id));
+    if (saem.length) {
+      const n = saem.reduce((t, s) => t + s.marcados, 0);
+      const ok = await confirmar({
+        titulo: "Tirar subunidades com DFDs?",
+        texto: `${saem.map((s) => s.nome).join(", ")} ${saem.length === 1 ? "tem" : "têm"} ${n} DFD(s) com a subunidade escolhida — eles ficam sem subunidade.`,
+        confirmar: "Salvar",
+        perigo: true,
+      });
+      if (!ok) return;
+    }
+    setSalvando(true);
+    try {
+      const r = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vinculo, subunidades: lista.map((s) => ({ ...(s.id != null ? { id: s.id } : {}), nome: s.nome, centros: s.centros })) }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string } & Partial<CadastroSubunidades>;
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar as subunidades.");
+      aplicar(j as CadastroSubunidades);
+      toast.success("Subunidades salvas.");
+      onMudou();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar as subunidades.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function mover(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= lista.length) return;
+    const nova = [...lista];
+    [nova[i], nova[j]] = [nova[j], nova[i]];
+    setLista(nova);
+  }
+  async function excluir(i: number) {
+    const s = lista[i];
+    if (s.marcados > 0) {
+      const ok = await confirmar({ titulo: `Tirar a subunidade ${s.nome}?`, texto: `${s.marcados} DFD(s) estão com ela escolhida — ficam sem subunidade ao salvar.`, confirmar: "Tirar", perigo: true });
+      if (!ok) return;
+    }
+    setLista(lista.filter((_, k) => k !== i));
+  }
+
+  const aberta = editando === "nova" ? null : editando != null ? lista[editando] : null;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented<VinculoSubunidade> ariaLabel="Tipo de vínculo das subunidades" value={vinculo} onChange={setVinculo} options={VINCULOS_OPCOES} disabled={salvando} />
+        <Ajuda titulo="Subunidades" botao>
+          <p>A subunidade de cada DFD da unidade sai do tipo de vínculo — ela aparece na coluna Subunidade de Mesa → DFDs e Itens (com o filtro).</p>
+          <TopicoAjuda titulo="Próprio">{DESCRICAO_VINCULO.proprio}</TopicoAjuda>
+          <TopicoAjuda titulo="Centro de custo">
+            {DESCRICAO_VINCULO.centro_custo} O centro de custo é o que a automação “Unidades dos DFDs × Centro de Custo” grava em cada DFD; cada centro pertence a uma única subunidade do sistema.
+          </TopicoAjuda>
+          <TopicoAjuda titulo="Marcado">{DESCRICAO_VINCULO.marcado} O DFD sem a escolha fica apontado “Subunidade não definida”.</TopicoAjuda>
+        </Ajuda>
+      </div>
+      <p className="text-[13px] text-muted">{vinculo === "proprio" ? `A subunidade de todo DFD é a própria unidade (${codigo}).` : DESCRICAO_VINCULO[vinculo]}</p>
+      {vinculo !== "proprio" && (
+        <div className="space-y-1.5">
+          {lista.length === 0 && <p className="text-[13px] text-faint">Nenhuma subunidade — use “Adicionar subunidade”.</p>}
+          {lista.map((s, i) => (
+            <div key={s.key} className="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-1.5">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13.5px] font-medium text-text">{s.nome}</span>
+                {vinculo === "centro_custo" && (
+                  <span className={`block truncate text-[12px] ${s.centros.length ? "text-muted" : "text-[var(--warn)]"}`} title={s.centros.join("\n")}>
+                    {s.centros.length ? `${s.centros.length} centro(s) de custo: ${s.centros.join(" · ")}` : "Sem centro de custo ligado"}
+                  </span>
+                )}
+              </span>
+              {s.marcados > 0 && <Badge tone="slate">{s.marcados} DFD(s)</Badge>}
+              <AcoesCadastro
+                nome={s.nome}
+                primeira={i === 0}
+                ultima={i === lista.length - 1}
+                disabled={salvando}
+                onMover={(d) => mover(i, d)}
+                onEditar={() => setEditando(i)}
+                onExcluir={() => void excluir(i)}
+              />
+            </div>
+          ))}
+          <Button size="sm" variant="secondary" icon={<IconPlus className="h-4 w-4" />} disabled={salvando} onClick={() => setEditando("nova")}>
+            Adicionar subunidade
+          </Button>
+        </div>
+      )}
+      {motivo && <Callout kind="danger">{motivo}</Callout>}
+      {sujo && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button size="sm" variant="ghost" disabled={salvando} onClick={() => aplicar(cad)}>
+            Descartar
+          </Button>
+          <Button size="sm" loading={salvando} disabled={!!motivo} onClick={() => void salvar()}>
+            Salvar subunidades
+          </Button>
+        </div>
+      )}
+      {editando != null && (
+        <EditorSubunidade
+          inicial={aberta}
+          porCentro={vinculo === "centro_custo"}
+          centrosLidos={cad.centros}
+          deOutras={deOutras}
+          noRascunho={(() => {
+            const m = new Map<string, string>();
+            lista.forEach((x, k) => {
+              if (k !== editando) for (const c of x.centros) m.set(chaveCentro(c), x.nome);
+            });
+            return m;
+          })()}
+          onFechar={() => setEditando(null)}
+          onSalvar={(v) => {
+            if (editando === "nova") setLista([...lista, { key: `n${Date.now()}`, nome: v.nome, centros: v.centros, marcados: 0 }]);
+            else setLista(lista.map((x, k) => (k === editando ? { ...x, ...v } : x)));
+            setEditando(null);
+          }}
+        />
+      )}
+      {confirmacao}
+    </div>
+  );
+}
+
+/** O editor de UMA subunidade: o nome e, no vínculo Centro de custo, os centros de custo — escolhidos dos que a automação
+ * gravou nos DFDs (com quantos DFDs têm cada um) ou digitados. Os centros de outras subunidades não são oferecidos. */
+function EditorSubunidade({
+  inicial,
+  porCentro,
+  centrosLidos,
+  deOutras,
+  noRascunho,
+  onFechar,
+  onSalvar,
+}: {
+  inicial: SubRascunho | null;
+  porCentro: boolean;
+  centrosLidos: { centro: string; dfds: number }[];
+  deOutras: Map<string, string>;
+  noRascunho: Map<string, string>;
+  onFechar: () => void;
+  onSalvar: (v: { nome: string; centros: string[] }) => void;
+}) {
+  const [nome, setNome] = useState(inicial?.nome ?? "");
+  const lidos = new Map(centrosLidos.map((c) => [chaveCentro(c.centro), c]));
+  const inicialCentros = inicial?.centros ?? [];
+  const [escolhidos, setEscolhidos] = useState<string[]>(inicialCentros.filter((c) => lidos.has(chaveCentro(c))));
+  const [digitados, setDigitados] = useState<string[]>(inicialCentros.filter((c) => !lidos.has(chaveCentro(c))));
+  const dono = (c: string) => deOutras.get(chaveCentro(c)) ?? noRascunho.get(chaveCentro(c));
+  const opcoes = centrosLidos
+    .filter((c) => !dono(c.centro) || escolhidos.includes(c.centro))
+    .map((c) => ({ valor: c.centro, contagem: c.dfds }));
+  const ocupados = centrosLidos.length - opcoes.length;
+  const centros = lerCentros([...escolhidos, ...digitados]);
+  const conflito = centros.map((c) => [c, dono(c)] as const).find(([, d]) => d);
+  const motivo = !nome.trim()
+    ? "Informe o nome da subunidade."
+    : conflito
+      ? `O centro de custo “${conflito[0]}” já está em ${conflito[1]}.`
+      : motivoSubunidadesInvalidas([{ nome, centros }]);
+  return (
+    <Modal
+      open
+      onClose={onFechar}
+      titulo={inicial ? `Subunidade · ${inicial.nome}` : "Nova subunidade"}
+      size="md"
+      rodape={
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          {motivo && <span className="mr-auto text-[12px] text-[var(--danger)]">{motivo}</span>}
+          <Button size="sm" variant="ghost" onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button size="sm" disabled={!!motivo} onClick={() => onSalvar({ nome: nome.trim(), centros })}>
+            Aplicar
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-[var(--gap-block)]">
+        <TextField label="Nome da subunidade" value={nome} maxLength={LIMITES_SUBUNIDADE.nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+        {porCentro && (
+          <>
+            <SeletorMultiplo
+              rotulo="Centros de custo lidos nos DFDs"
+              opcoes={opcoes}
+              selecionados={escolhidos}
+              onChange={setEscolhidos}
+              campo={{
+                extra: (
+                  <Ajuda titulo="Centros de custo" compacta>
+                    Os centros de custo que a automação “Unidades dos DFDs × Centro de Custo” gravou nos DFDs, com quantos DFDs têm cada um.
+                    {ocupados > 0 ? ` ${ocupados} já pertence(m) a outra subunidade e não aparece(m) aqui.` : ""}
+                  </Ajuda>
+                ),
+              }}
+              textoVazio="Nenhum escolhido"
+            />
+            <CampoLista
+              label="Outros centros de custo (digitar)"
+              valores={digitados}
+              onChange={(v) => setDigitados(lerCentros(v))}
+              maxItem={LIMITES_SUBUNIDADE.centro}
+              placeholder="Como a Centi escreve — Enter acrescenta"
+            />
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }

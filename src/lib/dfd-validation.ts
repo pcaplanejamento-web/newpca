@@ -236,6 +236,8 @@ export const editarDfdSchema = z
   .object({
     protocoloId: z.number().int().positive().nullable().optional(),
     reparticaoId: z.number().int().positive().nullable().optional(),
+    // SUBUNIDADE escolhida (só na unidade em vínculo "marcado" — conferida na rota); null = sem subunidade.
+    subunidadeId: z.number().int().positive().nullable().optional(),
     // Tipo do DFD (DFD-S/R/O/E) — escolhido por seleção (muitos formulários não o trazem).
     tipo: textoCurtoOpc,
     // Assinaturas (validação manual pela EQUIPE / desfazer) — o servidor carimba quem/quando.
@@ -262,6 +264,7 @@ export const editarDfdSchema = z
     (d) =>
       d.protocoloId !== undefined ||
       d.reparticaoId !== undefined ||
+      d.subunidadeId !== undefined ||
       d.tipo !== undefined ||
       d.assinaturas !== undefined ||
       d.secoes !== undefined ||
@@ -315,6 +318,8 @@ export const massaDfdsSchema = z.object({
   acao: z.discriminatedUnion("campo", [
     z.object({ campo: z.literal("reparticao"), reparticaoId: z.number().int().positive() }),
     z.object({ campo: z.enum(["tipo", "prioridade", "previsao", "fundamentacao"]), valor: z.string().trim().min(1).max(4000) }),
+    // A SUBUNIDADE (vínculo "marcado" — uma das subunidades da unidade de cada DFD); null = tira a escolha.
+    z.object({ campo: z.literal("subunidade"), subunidadeId: z.number().int().positive().nullable() }),
   ]),
 });
 export type MassaDfdsPayload = z.infer<typeof massaDfdsSchema>;

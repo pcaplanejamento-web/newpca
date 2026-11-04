@@ -1,4 +1,4 @@
-import { type RegrasAvaliacao, regrasPadrao } from "./avaliacao-core.ts";
+import { type ChaveAvaliacao, comportamentoDe, comportamentoNo, corImportancia, nivelDaFalta, type RegrasAvaliacao, regrasPadrao } from "./avaliacao-core.ts";
 import type { ConferenciaItem } from "./catalogo-conferencia.ts";
 import {
   conciliacaoCapa,
@@ -11,8 +11,9 @@ import {
   type ResumoEstado,
   resumoEstado,
 } from "./dfd-tratamento.ts";
-import { type Assinatura, arredondarValor, type DfdItemParseado, refDfd } from "./parse-dfd-comum.ts";
+import { type Assinatura, arredondarValor, type DfdItemParseado, refDfd, tipoCurtoDfd } from "./parse-dfd-comum.ts";
 import { casarOrgao, type OrgaoMatch, orgaoDivergeDaUnidade } from "./reparticao-match.ts";
+import { type ConfigSubunidades, subunidadeDoDfd, temCentroCusto, textoFaltaSubunidade } from "./subunidades-core.ts";
 import {
   pdfExigeAssinatura,
   type Responsaveis,
@@ -28,8 +29,11 @@ import {
  * painel "Ver mensagens" saem da MESMA lista de mensagens, então nunca se contradizem.
  */
 
-/** Unidade para a conferência: id + órgão dono + responsáveis EFETIVOS por DFDs. */
-export type RepConferencia = { id: number; orgaoId?: number | null; responsaveis: Responsaveis };
+/** Unidade para a conferência: id + órgão dono + responsáveis EFETIVOS por DFDs + a configuração das SUBUNIDADES. */
+export type RepConferencia = { id: number; orgaoId?: number | null; responsaveis: Responsaveis; subunidade?: ConfigSubunidades | null };
+
+/** O que só o DFD GRAVADO tem: o centro de custo da Centi e a subunidade escolhida (vínculo "marcado"). */
+export type DadosGravados = { centroCusto: string | null; subunidadeId: number | null };
 
 /** O que a conferência lê de um DFD — `DfdParseado` (análise) e `DfdDetalhe` (gravado) servem. */
 export type DfdConferivel = {
@@ -47,7 +51,39 @@ export type DfdConferivel = {
   /** DFD GRAVADO pela metade (uma gravação em lotes que falhou no meio — `gravacaoIncompleta`): ERRO até reenviar. Só o
    * DFD gravado o tem (calculado do gravado, nunca do rascunho); a análise de um arquivo nunca. */
   gravacaoIncompleta?: { gravados: number; total: number } | null;
+  /** Os dados do DFD GRAVADO (centro de custo e subunidade — `dfd.centroCusto`/`dfd.subunidade`). Só quem confere um
+   * DFD gravado os passa; ausente (análise de um arquivo, portões de gravação) = esses pontos não são conferidos. */
+  gravado?: DadosGravados | null;
 };
+
+/** Os `DadosGravados` de um DFD lido do banco (o cliente e o servidor montam igual). */
+export const dadosGravados = (d: { centroCusto: string | null; subunidadeId: number | null }): DadosGravados => ({
+  centroCusto: d.centroCusto,
+  subunidadeId: d.subunidadeId,
+});
+
+/**
+ * As mensagens do CENTRO DE CUSTO e da SUBUNIDADE de um DFD GRAVADO — pela importância do ADM (a régua do `add` de
+ * `mensagensDfd`). Sem a unidade, nada (a falta da unidade é outra pendência); sem centro de custo, só a do centro.
+ */
+export function mensagensDoGravado(
+  g: DadosGravados,
+  rep: RepConferencia | null,
+  regras: RegrasAvaliacao,
+  c: { dfdTipo: string | null; categoria: string | null },
+): MensagemDfd[] {
+  const out: MensagemDfd[] = [];
+  const falta = (chave: ChaveAvaliacao, ancora: string, texto: string) => {
+    if (comportamentoNo(regras, chave, c) === "ignora") return;
+    const id = nivelDaFalta(regras, chave, c);
+    out.push({ chave, status: comportamentoDe(regras, id) === "bloqueia" ? "erro" : "atencao", texto, ancora, cor: corImportancia(regras, id) });
+  };
+  if (!rep) return out;
+  if (!temCentroCusto(g.centroCusto)) falta("dfd.centroCusto", "centroCusto", "Sem centro de custo — execute a automação “Unidades dos DFDs × Centro de Custo” para gravar o da Centi.");
+  const s = subunidadeDoDfd({ reparticaoId: rep.id, subunidadeId: g.subunidadeId, centroCusto: g.centroCusto }, rep.subunidade);
+  if (s.falta) falta("dfd.subunidade", "subunidade", textoFaltaSubunidade(s.falta, g.centroCusto));
+  return out;
+}
 
 /** O DFD GRAVADO ficou pela metade? Menos itens do que o total declarado na gravação (a sobrescrita que falhou num lote
  * posterior mantém o que gravou — a importação completa fecha o total pelos itens). `null` = completo. Puro. */
@@ -110,6 +146,7 @@ function mensagensComAssinatura(
     regras,
     { categoria, orgaoNaoIdentificado, orgaoUnidadeDivergente, conformidade },
   );
+  if (d.gravado) msgs.push(...mensagensDoGravado(d.gravado, rep, regras, { dfdTipo: tipoCurtoDfd(d.tipo), categoria }));
   return d.gravacaoIncompleta ? [mensagemGravacaoIncompleta(d.gravacaoIncompleta), ...msgs] : msgs;
 }
 
@@ -301,4 +338,11 @@ export function avaliarProtocolo(
     // A célula mostra quantos DFDs têm o problema principal; o filtro segue com os rótulos puros.
     resumo: { ...r, rotulo: principal.n > 1 ? `${principal.rotulo} (${principal.n})` : principal.rotulo, titulo: `${contagem}${r.titulo}` },
   };
+}
+
+/** A COR da falta de um ponto do DFD gravado (a da importância do ADM; o ponto em "ignorar" = neutro) — as células das
+ * colunas Centro de Custo e Subunidade seguem a MESMA régua das mensagens. */
+export function corDaFalta(regras: RegrasAvaliacao, chave: "dfd.centroCusto" | "dfd.subunidade"): string {
+  if (comportamentoNo(regras, chave) === "ignora") return "var(--muted)";
+  return corImportancia(regras, nivelDaFalta(regras, chave));
 }

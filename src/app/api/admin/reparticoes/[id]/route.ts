@@ -39,8 +39,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       nome: corpo.data.nome,
       numeroInteressado,
       setorRequisitante: corpo.data.setorRequisitante ?? null,
-      // Sem o campo no pedido, fica o gravado (um PATCH de outra tela não apaga o Centro de Custo).
-      ...(corpo.data.centroCusto !== undefined ? { centroCusto: corpo.data.centroCusto?.trim() || null } : {}),
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,

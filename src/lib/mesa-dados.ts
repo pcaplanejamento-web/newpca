@@ -28,6 +28,8 @@ import { listarProtocolos, listarProtocolosDoPca } from "./protocolo";
 import { RESPONSAVEIS_VAZIO } from "./reparticao-responsaveis";
 import { dadosMatchPorReparticao, responsaveisPorReparticao } from "./reparticoes";
 import { listarSituacoes } from "./situacoes";
+import { configDasUnidades } from "./subunidades";
+import { centrosDaConfig } from "./subunidades-core";
 import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./usuarios";
 
 /**
@@ -50,9 +52,10 @@ export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pc
   const un = await unidadesDaSessao(u, acesso ? acesso.grupoAtivo : undefined, tela, tela === "pca" ? "mesa" : undefined);
   const lista = await unidadesAcessiveis(un);
   const ids = lista.map((r) => r.id);
-  const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([
+  const [respMap, matchMap, subMap, pcas, regras, orgaos] = await Promise.all([
     responsaveisPorReparticao(ids),
     dadosMatchPorReparticao(ids),
+    configDasUnidades(ids),
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
@@ -62,7 +65,9 @@ export async function contextoBanners(u: UsuarioSessao | null, tela: "dfd" | "pc
     responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
     numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
     setorRequisitante: matchMap[r.id]?.setorRequisitante ?? null,
-    centroCusto: matchMap[r.id]?.centroCusto ?? null,
+    // As SUBUNIDADES (o vínculo + o cadastro) e os centros de custo delas (a automação casa a unidade por eles).
+    subunidade: subMap.get(r.id) ?? null,
+    centrosCusto: centrosDaConfig(subMap.get(r.id)),
     orgaoId: matchMap[r.id]?.orgaoId ?? null,
     orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,

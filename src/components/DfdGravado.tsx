@@ -12,6 +12,7 @@ import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
+import type { ConfigSubunidades } from "@/lib/subunidades-core";
 import { podeRevisarItens, resumoRevisao, revisarDfd } from "@/lib/revisao-dfd";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { BotaoAcao } from "./BotaoAcao";
@@ -42,6 +43,7 @@ type Rep = {
   numeroInteressado?: string | null;
   oculto?: boolean | null;
   responsaveis: Responsaveis;
+  subunidade?: ConfigSubunidades | null;
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 /** Referência de um item da visão "Itens" (nº do item no DFD + código). */
@@ -237,7 +239,16 @@ export function useDfdGravado({
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagens = dfd
     ? // O DFD GRAVADO pela metade (lido do gravado, nunca do rascunho) é erro até reenviar.
-      mensagensDoDfd({ ...dfd, gravacaoIncompleta: orig ? gravacaoIncompleta(orig) : null }, rep, anoPca, regras, categoria, orgaos, conformidade).filter(
+      // O centro de custo e a subunidade (pontos do DFD GRAVADO): o centro do banco, a subunidade do rascunho.
+      mensagensDoDfd(
+        { ...dfd, gravacaoIncompleta: orig ? gravacaoIncompleta(orig) : null, gravado: orig ? { centroCusto: orig.centroCusto, subunidadeId: dfd.subunidadeId ?? null } : null },
+        rep,
+        anoPca,
+        regras,
+        categoria,
+        orgaos,
+        conformidade,
+      ).filter(
         (m) => m.chave !== "dfd.anoPca",
       )
     : [];
@@ -458,6 +469,7 @@ export function useDfdGravado({
         onCamposChange={(campos) => editar((d) => ({ ...d, ...campos }))}
         onTipoChange={(tipo) => editar((d) => ({ ...d, tipo }))}
         onAssinaturasChange={(assinaturas) => editar((d) => ({ ...d, assinaturas }))}
+        gravado={orig ? { centroCusto: orig.centroCusto, onSubunidadeChange: (subunidadeId) => editar((d) => ({ ...d, subunidadeId })) } : undefined}
       />
     ),
   };

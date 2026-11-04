@@ -36,6 +36,7 @@ const RETRATO_DFD = sql`json_object(
   'protocoloNumero', (SELECT p."numero" FROM "dfd_protocolos" p WHERE p."id" = "dfds"."protocolo_id"),
   'execucaoCenti', "dfds"."execucao_centi", 'execucaoCentiEm', "dfds"."execucao_centi_em",
   'conferenciaCenti', "dfds"."conferencia_centi", 'conferenciaCentiMotivo', "dfds"."conferencia_centi_motivo",
+  'subunidadeId', "dfds"."subunidade_id", 'centroCusto', "dfds"."centro_custo", 'centroCustoEm', "dfds"."centro_custo_em",
   'itens', (SELECT json_group_array(${jsonItem("di")}) FROM "dfd_itens" di WHERE di."dfd_id" = "dfds"."id")
 )`;
 

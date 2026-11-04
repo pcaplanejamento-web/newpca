@@ -7,6 +7,8 @@ import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
+import { nomesDasSubunidades } from "@/lib/subunidades";
+import { lerVinculo } from "@/lib/subunidades-core";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export async function GET(req: Request) {
       ordem: reparticoes.ordem,
       numeroInteressado: reparticoes.numeroInteressado,
       setorRequisitante: reparticoes.setorRequisitante,
-      centroCusto: reparticoes.centroCusto,
+      vinculoSubunidade: reparticoes.vinculoSubunidade,
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
@@ -34,8 +36,9 @@ export async function GET(req: Request) {
     .from(reparticoes)
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
-  // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
-  return ok({ reparticoes: rows });
+  // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`); as subunidades (nomes, na ordem) — a coluna da lista.
+  const subs = await nomesDasSubunidades();
+  return ok({ reparticoes: rows.map((r) => ({ ...r, vinculoSubunidade: lerVinculo(r.vinculoSubunidade), subunidades: subs.get(r.id) ?? [] })) });
 }
 
 export async function POST(req: Request) {
@@ -62,7 +65,6 @@ export async function POST(req: Request) {
       ordem: Number(max) + 1,
       numeroInteressado,
       setorRequisitante: corpo.data.setorRequisitante ?? null,
-      centroCusto: corpo.data.centroCusto?.trim() || null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
     })
