@@ -370,9 +370,9 @@ export function CampoLista({
         {valores.map((v) => (
           <span
             key={v}
-            className="inline-flex h-8 max-w-full items-center gap-0.5 rounded-chip border border-border-2 bg-surface pl-2.5 pr-0.5 font-mono text-[12.5px] text-text"
+            className="inline-flex min-h-8 max-w-full items-center gap-0.5 rounded-chip border border-border-2 bg-surface py-0.5 pl-2.5 pr-0.5 font-mono text-[12.5px] leading-snug text-text"
           >
-            <span className="truncate">{v}</span>
+            <span className="min-w-0 break-words py-0.5">{v}</span>
             {!disabled && (
               <button
                 type="button"

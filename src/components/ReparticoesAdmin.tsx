@@ -671,21 +671,35 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
             </p>
           )}
           {lista.map((s, i) => (
-            <div key={s.key} className="flex items-center gap-2 rounded-control border border-border bg-surface px-3 py-2">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px] font-semibold text-text">{s.nome}</span>
-                {!unico && <CelulaLista valores={s.centros} max={3} mono />}
+            <div key={s.key} className="flex items-start gap-2 rounded-control border border-border bg-surface p-[var(--pad-card)]">
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-[13.5px] font-semibold text-text">{s.nome}</p>
+                {!unico && s.centros.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {s.centros.map((c) => (
+                      <li key={c} className="break-words font-mono text-[12px] leading-snug text-text-2">
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {unico && s.marcados > 0 && (
+                <span className="shrink-0">
+                  <Badge tone="slate">{s.marcados} DFD(s)</Badge>
+                </span>
+              )}
+              <span className="shrink-0">
+                <AcoesCadastro
+                  nome={s.nome}
+                  primeira={i === 0}
+                  ultima={i === lista.length - 1}
+                  disabled={salvando}
+                  onMover={(d) => mover(i, d)}
+                  onEditar={() => setEditando(i)}
+                  onExcluir={() => setLista(lista.filter((_, k) => k !== i))}
+                />
               </span>
-              {unico && s.marcados > 0 && <Badge tone="slate">{s.marcados} DFD(s)</Badge>}
-              <AcoesCadastro
-                nome={s.nome}
-                primeira={i === 0}
-                ultima={i === lista.length - 1}
-                disabled={salvando}
-                onMover={(d) => mover(i, d)}
-                onEditar={() => setEditando(i)}
-                onExcluir={() => setLista(lista.filter((_, k) => k !== i))}
-              />
             </div>
           ))}
           <Button size="sm" variant="secondary" icon={<IconPlus className="h-4 w-4" />} disabled={salvando} onClick={() => setEditando("nova")}>

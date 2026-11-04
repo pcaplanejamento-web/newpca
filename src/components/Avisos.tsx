@@ -28,16 +28,13 @@ export function Avisos({ avisos, titulo = "Avisos" }: { avisos: readonly Aviso[]
       width={360}
       ariaLabel={rotulo}
       title={rotulo}
-      triggerClassName="relative h-11 w-11 shrink-0 justify-center !rounded-control border border-border-2 bg-surface transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      triggerClassName={`h-11 min-w-11 shrink-0 justify-center gap-1 !rounded-control border border-border-2 bg-surface transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)] ${alerta > 0 ? "px-2" : ""}`}
       trigger={
         <>
-          <IconAvisos className="h-4 w-4" style={{ color: pior === "info" ? "var(--text-2)" : COR[pior] }} />
+          <IconAvisos className="h-4 w-4 shrink-0" style={{ color: pior === "info" ? "var(--text-2)" : COR[pior] }} />
+          {/* A contagem AO LADO do ícone, dentro do botão — no canto ela cobria o ícone no botão compacto. */}
           {alerta > 0 && (
-            <span
-              aria-hidden
-              className="selo-contagem absolute top-0.5 right-0.5"
-              style={{ background: COR[pior] }}
-            >
+            <span aria-hidden className="selo-contagem" style={{ background: COR[pior] }}>
               {alerta > 99 ? "99+" : alerta}
             </span>
           )}

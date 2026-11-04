@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.271.5",
+    data: "2026-11-04",
+    titulo: "Cadastro das subunidades: textos inteiros",
+    mudancas: [
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "Na lista das subunidades, cada centro de custo aparece INTEIRO numa linha própria, sem passar por baixo dos botões de ordenar, editar e excluir.", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "No editor da subunidade, o centro de custo escolhido aparece inteiro no campo (quebra a linha em vez de cortar com reticências).", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Sistema", texto: "O botão de avisos (!) mostra a contagem ao lado do ícone, sem cobri-lo.", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.271.4",
     data: "2026-11-04",
     titulo: "Filtro da Subunidade: as faltas no topo",
