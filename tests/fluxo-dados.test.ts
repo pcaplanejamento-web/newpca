@@ -160,6 +160,20 @@ test("Gravar na coluna da Mesa: cria/acha a coluna e grava por id; sem id/valor 
   assert.equal(r.passos.g.itens, 3, "1 gravado + 2 ignorados (valor vazio e sem id)");
 });
 
+test("Gravar na coluna da Mesa: o mesmo alvo vale UMA vez (o último que chegou)", async () => {
+  const chamadas: { c: string; body: unknown }[] = [];
+  const api = async (c: string, init?: unknown) => {
+    chamadas.push({ c, body: (init as { body?: unknown } | undefined)?.body });
+    return c.endsWith("/colunas") ? { ok: true, coluna: { id: 7 } } : { ok: true };
+  };
+  const g: Grafo = { v: 1, nos: [no("i", "gatilho.inicio"), no("g", "saida.gravarColuna", { entidade: "dfd", coluna: "X", campoValor: "v", apagar: true })], conexoes: [lig("i", "g")] };
+  const reg = new Map(REGISTRO_NOS);
+  reg.set("gatilho.inicio", { ...(REGISTRO_NOS.get("gatilho.inicio") as DefNo), executar: async () => ({ saida: [{ id: 1, v: "A" }, { id: 2, v: "B" }, { id: 1, v: "C" }] }) });
+  const r = await executarFluxo(g, reg, ctx({}, api));
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(chamadas[1].body, { valores: [{ alvoId: 1, valor: "C" }, { alvoId: 2, valor: "B" }] });
+});
+
 test("Procurar com a chave extra (entidade): o mesmo nº em outra entidade não casa", () => {
   const tabela = [
     { planejamento: "10", entidade: "2", situacao: "Executado" },
@@ -302,28 +316,22 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
   const api = async (c: string, init?: unknown) => {
     const body = (init as { body?: unknown } | undefined)?.body;
     posts.push({ c, body });
-    if (c === "/api/admin/automacao/colunas") return { ok: true, coluna: { id: (body as { nome: string }).nome === "Centro de Custo" ? 11 : 12 } };
+    if (c === "/api/admin/automacao/colunas") return { ok: true, coluna: { id: 11 } };
     return { ok: true, alterados: 1, falhas: [] };
   };
   const r = await executarFluxo(grafo, REGISTRO_NOS, { centi, api, cancelado: () => false, host: { protocolos: [], unidades, __cache: new Map([["dfds", Promise.resolve(dfds)]]) } });
   assert.equal(r.estado, "concluido", r.erro);
-  // As duas colunas da Mesa (DFDs, também nos Itens) com TODO DFD — os de fora da CM002 e sem órgão também.
+  // UMA coluna na Mesa (DFDs, também nos Itens) com o texto da Centi de TODO DFD — os de fora da CM002 e sem órgão
+  // ficam vazios; nada de “confere” (a comparação com o cadastro é do sistema).
   const colunas = posts.filter((p) => p.c === "/api/admin/automacao/colunas").map((p) => p.body);
-  assert.deepEqual(
-    colunas.sort((a, b) => (a as { nome: string }).nome.length - (b as { nome: string }).nome.length),
-    [
-      { entidade: "dfd", nome: "Centro de Custo", nosItens: true },
-      { entidade: "dfd", nome: "Centro de Custo confere", nosItens: true },
-    ],
+  assert.deepEqual(colunas, [{ entidade: "dfd", nome: "Centro de Custo", nosItens: true }]);
+  const valores = Object.fromEntries(
+    posts
+      .filter((p) => p.c === "/api/admin/automacao/colunas/11")
+      .flatMap((p) => (p.body as { valores: { alvoId: number; valor: string | null }[] }).valores)
+      .map((v) => [v.alvoId, v.valor]),
   );
-  const valoresDe = (id: number) =>
-    Object.fromEntries(
-      posts
-        .filter((p) => p.c === `/api/admin/automacao/colunas/${id}`)
-        .flatMap((p) => (p.body as { valores: { alvoId: number; valor: string | null }[] }).valores)
-        .map((v) => [v.alvoId, v.valor]),
-    );
-  assert.deepEqual(valoresDe(11), {
+  assert.deepEqual(valores, {
     1: "PM RV, GABINETE DO PREFEITO, GGIM",
     2: "PM RV, GABINETE DO PREFEITO, GGIM",
     3: "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL",
@@ -331,15 +339,6 @@ test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências
     5: "PM RV, SECRETARIA MUNICIPAL DE COMUNICAÇÃO",
     6: null,
     7: null,
-  });
-  assert.deepEqual(valoresDe(12), {
-    1: "Não confere",
-    2: "Não confere",
-    3: "Não confere",
-    4: "Confere",
-    5: "Sem cadastro",
-    6: "Órgão sem ID da Centi",
-    7: "Não está na CM002",
   });
   const massa = posts.filter((p) => p.c === "/api/dfd/massa");
   assert.deepEqual(massa.map((p) => p.body), [{ ids: [2], acao: { campo: "reparticao", reparticaoId: 2 } }], "só o marcado, para a unidade da Centi");
@@ -388,7 +387,7 @@ test("Modelo “Unidades × Centro de Custo”: a CM002 SEM a coluna — cada DF
   assert.ok(!msgs.some((t) => t.startsWith("DFD 20")), "a unidade igual não é apontada");
   assert.ok(msgs.some((t) => t.startsWith("DFD 30") && t.includes("não conferido na Centi")), msgs.join("\n"));
   assert.ok(!msgs.some((t) => t.includes("o planejamento na Centi não trouxe")));
-  assert.deepEqual([...gravados.keys()].sort(), [1, 2, 3], "os lidos pelo ID mantêm o id do DFD para as colunas");
+  assert.deepEqual([...gravados.entries()].sort(), [[1, "PM RV, GABINETE DO PREFEITO, GGIM"], [2, "PM RV, GABINETE DO PREFEITO, GGIM"]], "os lidos pelo ID mantêm o id do DFD; o que falhou não é gravado (o valor anterior fica)");
 });
 
 test("Conferir unidade no fluxo salvo ANTIGO (sem o SE/Buscar): o próprio nó lê o planejamento pelo ID", async () => {

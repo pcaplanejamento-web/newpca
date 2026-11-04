@@ -69,3 +69,19 @@ test("“também nos Itens”: gravado na criação, trocado depois, e só na co
   assert.equal((await q.consultaColunaPorNome(orm, "dfd", "Centro de Custo"))[0].nosItens, 0);
   assert.equal((await q.consultaColunaPorNome(orm, "item", "Centro de Custo"))[0].nosItens, 0, "o comando só vale para DFD");
 });
+
+test("migração 0174: tira só a coluna de DFD “Centro de Custo confere” (os valores caem pela cascata)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("PRAGMA foreign_keys = ON");
+  const arqs = readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort();
+  const i = arqs.indexOf("0174_remover_coluna_centro_custo_confere.sql");
+  assert.ok(i > 0);
+  for (const arq of arqs.slice(0, i)) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
+  const criar = db.prepare("INSERT INTO mesa_colunas (entidade, nome, chave, nos_itens) VALUES (?, ?, ?, ?)");
+  for (const [e, nome] of [["dfd", "Centro de Custo confere"], ["dfd", "Centro de Custo"], ["item", "Centro de Custo confere"]]) criar.run(e, nome, chaveColuna(nome), e === "dfd" ? 1 : 0);
+  db.exec("INSERT INTO mesa_colunas_valores (coluna_id, alvo_id, valor) SELECT id, 1, 'x' FROM mesa_colunas");
+  for (const arq of arqs.slice(i)) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
+  const restantes = db.prepare("SELECT entidade, nome FROM mesa_colunas ORDER BY id").all();
+  assert.deepEqual(JSON.parse(JSON.stringify(restantes)), [{ entidade: "dfd", nome: "Centro de Custo" }, { entidade: "item", nome: "Centro de Custo confere" }]);
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM mesa_colunas_valores").get() as { n: number }).n, 2);
+});

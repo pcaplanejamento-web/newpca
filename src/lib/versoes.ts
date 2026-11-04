@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.268.1",
+    data: "2026-11-04",
+    titulo: "Centro de Custo: a automação só escreve o texto da Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A automação “Unidades dos DFDs × Centro de Custo da CM002” escreve o Centro de Custo COMPLETO da Centi em cada DFD (os itens herdam o do DFD); a leitura que falha não apaga o valor já gravado. Use “Atualizar pelo modelo”.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Mesa", texto: "Saiu a coluna “Centro de Custo confere”: a comparação com o Centro de Custo cadastrado na unidade será feita pelo sistema.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.268.0",
     data: "2026-11-04",
     titulo: "Centro de Custo da Centi nas tabelas de DFDs e Itens",

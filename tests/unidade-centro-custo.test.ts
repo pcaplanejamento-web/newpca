@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CONFERE_CENTRO_CUSTO, conferirUnidades } from "../src/lib/fluxo-dados.ts";
+import { conferirUnidades } from "../src/lib/fluxo-dados.ts";
 import { casarUnidadePorNome, centroCustoConfere, siglaDaFinalidade, unidadeDoCentroCusto } from "../src/lib/reparticao-match.ts";
 
 const UNIDADES = [
@@ -190,8 +190,7 @@ test("centroCustoConfere: o texto inteiro ou o último nome, sem caixa/acento/po
   assert.equal(centroCustoConfere("GGIM", ""), false);
 });
 
-test("conferirUnidades: a porta “todos” leva CADA DFD com o centro de custo da Centi e a conferência do cadastrado", () => {
-  const K = CONFERE_CENTRO_CUSTO;
+test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO da Centi; a leitura que falhou fica de fora", () => {
   const cad = [
     { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centroCusto: "PM RV, SEC. MUN. DE PLANEJAMENTO E GESTAO" },
     { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
@@ -200,7 +199,7 @@ test("conferirUnidades: a porta “todos” leva CADA DFD com o centro de custo 
   const base = { numero: "1", planejamento: "1", orgaoId: 1, entidade: "2" };
   const r = conferirUnidades(
     [
-      { ...base, id: 1, reparticaoId: 2, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
+      { ...base, id: 1, reparticaoId: 2, encontrado: { centroCusto: "  PM RV, GABINETE DO PREFEITO, GGIM  " } },
       { ...base, id: 2, reparticaoId: 1, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
       { ...base, id: 3, reparticaoId: 3, encontrado: { centroCusto: "PM RV, PROCURADORIA-GERAL DO MUNICIPIO" } },
       { ...base, id: 4, reparticaoId: 1, encontrado: { centroCusto: "" } },
@@ -209,23 +208,28 @@ test("conferirUnidades: a porta “todos” leva CADA DFD com o centro de custo 
       { ...base, id: 7, reparticaoId: 1, entidade: "" },
       { ...base, id: 8, encontrado: { centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" } },
       { ...base, id: 9, reparticaoId: 2, encontrado: { centroCusto: "PM RV" } },
+      { ...base, id: 10, reparticaoId: 1, centi: null, centiErro: "Não encontrado", centiFalha: false },
+      { ...base, id: 11, reparticaoId: 1, encontrado: { centroCusto: "" }, centi: null, centiErro: "Sem resposta", centiFalha: true },
     ],
     cad,
   );
-  const por = Object.fromEntries(r.todos.map((x) => [x.id, [x.centroCustoCenti, x.centroCustoConfere]]));
+  const por = Object.fromEntries(r.todos.map((x) => [x.id, x.centroCustoCenti]));
   assert.deepEqual(por, {
-    1: ["PM RV, GABINETE DO PREFEITO, GGIM", K.confere],
-    2: ["PM RV, GABINETE DO PREFEITO, GGIM", K.naoConfere],
-    3: ["PM RV, PROCURADORIA-GERAL DO MUNICIPIO", K.semCadastro],
-    4: ["", K.semCentroCusto],
-    5: ["", K.naoConferido],
-    6: ["", K.foraCm002],
-    7: ["", K.semOrgao],
-    8: ["PM RV, GABINETE DO PREFEITO, GGIM", K.semUnidade],
-    9: ["PM RV", K.naoConfere],
+    1: "PM RV, GABINETE DO PREFEITO, GGIM",
+    2: "PM RV, GABINETE DO PREFEITO, GGIM",
+    3: "PM RV, PROCURADORIA-GERAL DO MUNICIPIO",
+    4: "",
+    6: "",
+    7: "",
+    8: "PM RV, GABINETE DO PREFEITO, GGIM",
+    9: "PM RV",
+    10: "",
   });
+  // A leitura que FALHOU não vai à coluna (o valor já gravado fica); a automação não compara com o cadastro.
+  assert.ok(!(5 in por) && !(11 in por));
+  assert.ok(r.todos.every((x) => !("centroCustoConfere" in x)));
   // Os fora da CM002 / sem órgão vão SÓ para “todos” (o apontamento é do nó anterior — sem duplicar).
   const nasPortas = [...r.divergentes, ...r.desconhecidas, ...r.conformes].map((x) => x.id);
   assert.ok(!nasPortas.includes(6) && !nasPortas.includes(7));
-  assert.equal(r.todos.length, 9);
+  assert.ok(nasPortas.includes(5) && nasPortas.includes(11), "a falha segue apontada");
 });

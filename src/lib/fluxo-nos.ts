@@ -1177,7 +1177,7 @@ const NOS: DefNo[] = [
     categoria: "dados",
     rotulo: "Conferir unidade × Centro de Custo",
     descricao:
-      "A unidade de cada DFD × a do Centro de Custo da CM002 (o nome depois da última vírgula), casada com as unidades cadastradas: iguais, divergentes ou desconhecidas no sistema. A porta “Todos” leva cada DFD com o centro de custo da Centi (centroCustoCenti) e se ele confere com o cadastrado na unidade (centroCustoConfere) — para as colunas da Mesa.",
+      "A unidade de cada DFD × a do Centro de Custo da CM002 (o nome depois da última vírgula), casada com as unidades cadastradas: iguais, divergentes ou desconhecidas no sistema. A porta “Todos” leva cada DFD com o texto completo do Centro de Custo da Centi (centroCustoCenti; vazio = a Centi não tem o dado) — para a coluna da Mesa; o DFD cuja leitura falhou não vai a ela (o valor já gravado fica).",
     icone: "building",
     entradas: ["entrada"],
     saidas: ["divergentes", "desconhecidas", "conformes", "todos"],
@@ -1705,7 +1705,8 @@ const NOS: DefNo[] = [
       const nome = str(c.coluna).trim();
       if (!nome) throw new Error("Informe o nome da coluna.");
       // "Também nos Itens" só vai ao servidor quando o nó o define (o diagrama antigo não mexe na coluna já existente).
-      const gravar: { alvoId: number; valor: string | null }[] = [];
+      // O mesmo alvo vale UMA vez (o último que chegou) — o lote nunca grava duas vezes a mesma célula.
+      const porAlvo = new Map<number, string | null>();
       const saida: Item[] = [];
       const ignorados: Item[] = [];
       for (const it of so(e)) {
@@ -1713,10 +1714,11 @@ const NOS: DefNo[] = [
         const valor = valorParaColuna(resolverCaminho(it, str(c.campoValor, "valor") || "valor"));
         if (!Number.isInteger(alvoId) || alvoId <= 0 || (valor == null && c.apagar !== true)) ignorados.push(it);
         else {
-          gravar.push({ alvoId, valor });
+          porAlvo.set(alvoId, valor);
           saida.push({ ...it, colunaGravada: nome });
         }
       }
+      const gravar = [...porAlvo].map(([alvoId, valor]) => ({ alvoId, valor }));
       if (!gravar.length) return { saida, ignorados };
       const r = await ctx.api("/api/admin/automacao/colunas", { method: "POST", body: entidade === "dfd" && typeof c.nosItens === "boolean" ? { entidade, nome, nosItens: c.nosItens } : { entidade, nome } });
       const id = (r.coluna as { id?: number } | undefined)?.id;

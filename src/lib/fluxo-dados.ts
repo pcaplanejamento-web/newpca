@@ -3,7 +3,7 @@
  * qualquer item), PROCURAR um valor nas linhas de uma tabela (numa coluna ou em todas), a REGRA "se encontrar X grava Y" e
  * as VARIÁVEIS (o estado guardado para terminar laços).
  */
-import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, centroCustoConfere, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
+import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
@@ -206,12 +206,6 @@ export function filtrarMarcados(itens: Item[], marcados: unknown, chave: (it: It
 /** O nome da coluna do centro de custo ("CentroCusto", "CentroDeCusto", "Centro de Custo", "C. Custo"). */
 const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
 
-/**
- * A unidade de cada DFD × a do Centro de Custo da CM002 (a linha achada pelo "Procurar" — `encontrado`). A unidade da
- * Centi (depois da última vírgula) é casada com as CADASTRADAS (`casarUnidadePorNome`; sem casar pelo nome, a sigla no
- * fim da Finalidade). Iguais = `conformes`; outra unidade cadastrada = `divergentes`; sem nenhuma (ou várias) =
- * `desconhecidas`. Cada item leva `unidadeCentroCusto`, `unidadeCentiId/Sigla/Nome` e a `mensagem`.
- */
 /** As fontes do centro de custo de um item, na ordem: a linha da CM002 (`encontrado`), as colunas cruas dela e o load. */
 function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; cru: Item | null; centro: string } {
   const obj = (x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? (x as Item) : null);
@@ -237,34 +231,26 @@ function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; c
 /** O centro de custo (texto) que alguma fonte do item já traz; "" = é preciso ler o planejamento pelo ID. */
 export const centroCustoDoItem = (it: Item): string => fontesCentroCusto(it).centro;
 
-/** O que a coluna "Centro de Custo confere" mostra (o cadastrado na unidade do DFD × o da Centi). */
-export const CONFERE_CENTRO_CUSTO = {
-  confere: "Confere",
-  naoConfere: "Não confere",
-  semCadastro: "Sem cadastro",
-  semCentroCusto: "Sem centro de custo na Centi",
-  naoConferido: "Não conferido na Centi",
-  foraCm002: "Não está na CM002",
-  semOrgao: "Órgão sem ID da Centi",
-  semUnidade: "DFD sem unidade",
-} as const;
-
+/**
+ * A unidade de cada DFD × a do Centro de Custo da CM002 (a linha achada pelo "Procurar" — `encontrado`). A unidade da
+ * Centi (depois da última vírgula) é casada com as CADASTRADAS (`casarUnidadePorNome`; sem casar pelo nome, a sigla no
+ * fim da Finalidade). Iguais = `conformes`; outra unidade cadastrada = `divergentes`; sem nenhuma (ou várias) =
+ * `desconhecidas`. Cada item leva `unidadeCentroCusto`, `unidadeCentiId/Sigla/Nome` e a `mensagem`;
+ * `todos` = cada DFD com o texto do Centro de Custo para a coluna da Mesa (a comparação com o cadastro é do sistema).
+ */
 export function conferirUnidades(
   itens: Item[],
   unidades: ReparticaoMatch[],
 ): { divergentes: Item[]; desconhecidas: Item[]; conformes: Item[]; todos: Item[] } {
   const porId = new Map(unidades.map((u) => [u.id, u]));
   const out = { divergentes: [] as Item[], desconhecidas: [] as Item[], conformes: [] as Item[], todos: [] as Item[] };
-  const K = CONFERE_CENTRO_CUSTO;
-  // Cada item vai à sua porta E a `todos` (as colunas da Mesa), com o centro de custo da Centi e a conferência do
-  // cadastrado na unidade do DFD (`centroCustoConfere`; sem o cadastrado = "Sem cadastro" — nunca pelo nome).
-  const enviar = (porta: "divergentes" | "desconhecidas" | "conformes" | null, x: Item, centro: string, semCentro: string) => {
-    const atual = typeof x.reparticaoId === "number" ? x.reparticaoId : null;
-    const cadastrado = atual != null ? String(porId.get(atual)?.centroCusto ?? "").trim() : "";
-    const confere = !centro ? semCentro : atual == null ? K.semUnidade : !cadastrado ? K.semCadastro : centroCustoConfere(cadastrado, centro) ? K.confere : K.naoConfere;
-    const y = { ...x, centroCustoCenti: centro, centroCustoConfere: confere };
+  // Cada item vai à sua porta e a `todos` (a coluna "Centro de Custo" da Mesa) com o texto COMPLETO da Centi
+  // (`centroCustoCenti`; "" = a Centi respondeu e não tem o dado — a coluna é limpa). A leitura que FALHOU
+  // (`todos: false`) não vai a `todos`: o valor já gravado fica.
+  const enviar = (porta: "divergentes" | "desconhecidas" | "conformes" | null, x: Item, centro: string, todos = true) => {
+    const y = { ...x, centroCustoCenti: centro };
     if (porta) out[porta].push(y);
-    out.todos.push(y);
+    if (todos) out.todos.push(y);
   };
   for (const it of itens) {
     // As fontes da Centi, na ordem: a linha da lista da CM002 (`encontrado`, com as colunas cruas em `centi`) e o
@@ -274,12 +260,12 @@ export function conferirUnidades(
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
     if (!lista && !load && !("centi" in it)) {
       // Fora da CM002 (ou o órgão sem o ID da Centi): só para as colunas — o apontamento é do nó anterior.
-      enviar(null, { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? "") }, "", Number(it.entidade) > 0 ? K.foraCm002 : K.semOrgao);
+      enviar(null, { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? "") }, "");
       continue;
     }
     if (!lista && !load) {
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
-      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` }, "", K.naoConferido);
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` }, "", !it.centiFalha);
       continue;
     }
     const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
@@ -288,7 +274,7 @@ export function conferirUnidades(
     if (!centro && "centi" in it && !load) {
       // A lista da CM002 não trouxe o centro de custo e o planejamento não foi lido pelo ID: não conferido (tente de novo).
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
-      enviar("desconhecidas", { ...base, mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo} (a CM002 não trouxe o centro de custo)` }, "", K.naoConferido);
+      enviar("desconhecidas", { ...base, mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo} (a CM002 não trouxe o centro de custo)` }, "", !it.centiFalha);
       continue;
     }
     if (!centro) {
@@ -300,13 +286,13 @@ export function conferirUnidades(
             ? Object.keys(cru)
             : Object.keys(lista ?? load ?? {});
       const campos = nomes.length ? ` (campos que vieram: ${nomes.slice(0, 40).join(", ")})` : "";
-      enviar("desconhecidas", { ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` }, "", K.semCentroCusto);
+      enviar("desconhecidas", { ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` }, "");
       continue;
     }
     // A unidade é SEMPRE o último nome; só a entidade ("PM RV") = o planejamento não tem unidade na Centi.
     const { nome, truncado } = unidadeDoCentroCusto(centro);
     if (!nome) {
-      enviar("desconhecidas", { ...base, mensagem: `${ref}: o centro de custo na Centi não tem unidade (só “${centro}”)` }, centro, K.semCentroCusto);
+      enviar("desconhecidas", { ...base, mensagem: `${ref}: o centro de custo na Centi não tem unidade (só “${centro}”)` }, centro);
       continue;
     }
     // O Centro de Custo CADASTRADO na unidade (sincronizado com a Centi) vale primeiro — casamento exato; depois o nome.
@@ -320,13 +306,13 @@ export function conferirUnidades(
     }
     if (c.tipo !== "ok") {
       const motivo = c.tipo === "ambigua" ? "casa mais de uma unidade cadastrada" : "não existe no sistema";
-      enviar("desconhecidas", { ...base, mensagem: `${ref}: unidade desconhecida no centro de custo — “${nome}” ${motivo}` }, centro, K.semCentroCusto);
+      enviar("desconhecidas", { ...base, mensagem: `${ref}: unidade desconhecida no centro de custo — “${nome}” ${motivo}` }, centro);
       continue;
     }
     const u = porId.get(c.id);
     const x = { ...base, unidadeCentiId: c.id, unidadeCentiSigla: u?.codigo ?? "", unidadeCentiNome: u?.nome ?? "" };
-    if (atual === c.id) enviar("conformes", x, centro, K.semCentroCusto);
-    else enviar("divergentes", { ...x, mensagem: `${ref}: no sistema ${x.unidadeSistema || "sem unidade"}, na Centi ${x.unidadeCentiSigla} (${nome})` }, centro, K.semCentroCusto);
+    if (atual === c.id) enviar("conformes", x, centro);
+    else enviar("divergentes", { ...x, mensagem: `${ref}: no sistema ${x.unidadeSistema || "sem unidade"}, na Centi ${x.unidadeCentiSigla} (${nome})` }, centro);
   }
   return out;
 }

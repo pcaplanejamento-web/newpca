@@ -11,6 +11,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Centro de Custo da Centi na Mesa (v1.268.1) — em andamento
+- Entregue: a automação "Unidades dos DFDs × Centro de Custo da CM002" escreve o texto completo do Centro de Custo da Centi em cada DFD (coluna "Centro de Custo" em Mesa → DFDs e Itens; os itens herdam).
+- Próximo: o SISTEMA compara o texto gravado com o Centro de Custo cadastrado na unidade do DFD e aponta o erro na Mesa (régua `centroCustoConfere`).
+
 ### Execução da despesa (empenhos, liquidações e pagamentos pela API pública da Centi) — em andamento
 Trazer para o sistema o que o Dattago faz, sem as falhas dele (página do meio que falha contada como completa; chave da
 deduplicação diferente da do banco; erro de gravação engolido; o que some na origem nunca sai; pagamento sem id gravado
