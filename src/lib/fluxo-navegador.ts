@@ -109,7 +109,8 @@ export async function lerDfdCentiPorCodigo(
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
   // A Centi responde `{Entity: null, Message}` quando NÃO abre o registro: o motivo é a mensagem dela, nunca "sem o campo".
   const resp = l.j as { Entity?: unknown; Message?: unknown };
-  if (typeof l.j === "object" && "Entity" in resp && (resp.Entity == null || typeof resp.Entity !== "object")) {
+  // Só a leitura SEM o PDF depende do registro; com o PDF, a emissão segue como no "Baixar DFDs" (que não lê o load).
+  if (!comPdf && typeof l.j === "object" && "Entity" in resp && (resp.Entity == null || typeof resp.Entity !== "object")) {
     const msg = s(typeof resp.Message === "string" ? resp.Message : (resp.Message as { Text?: unknown; Descricao?: unknown } | null)?.Text ?? (resp.Message as { Descricao?: unknown } | null)?.Descricao);
     if (!msg || /n[aã]o (foi )?encontrad|inexist|n[aã]o existe/i.test(msg)) throw new Error(`NAO_ENCONTRADO: a Centi não abriu o planejamento ${plan}${entidade ? ` (órgão ${entidade})` : ""}${msg ? ` — ${msg}` : ""}.`);
     throw new Error(`A Centi não abriu o planejamento ${plan}${entidade ? ` (órgão ${entidade})` : ""} — ${msg}`);

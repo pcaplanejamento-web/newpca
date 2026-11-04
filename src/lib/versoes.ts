@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.267.1",
+    data: "2026-11-04",
+    titulo: "Auditoria do Centro de Custo e da captura de colunas",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O “Buscar DFD na Centi” com PDF volta a emitir quando a Centi não abre o registro do planejamento (como o Baixar DFDs); só a leitura sem PDF mostra a mensagem dela.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Pelo valor, a Finalidade (“CONTRATO Nº 40, …”) nunca é tomada como o Centro de Custo; o Centro de Custo cadastrado na unidade casa também pelo último nome.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Um nome de unidade sem vírgula (ex.: “GUARDA CIVIL MUNICIPAL”) vale como unidade; só a entidade curta (“PM RV”) é “sem unidade”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.267.0",
     data: "2026-11-04",
     titulo: "Centro de Custo nas unidades e captura de qualquer coluna da CM002",

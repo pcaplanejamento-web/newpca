@@ -142,7 +142,7 @@ export function CampoColunasCm002({ rotulo, valor, onValor, somenteLeitura }: { 
           textoVazio="Nenhuma"
           opcoes={opcoes}
           selecionados={escolhidas.map((e) => e.campo)}
-          onChange={(v) => onValor(v.map((campo) => `${campo}|${porCampo.get(campo)?.titulo ?? campo}`).join("; "))}
+          onChange={(v) => onValor(v.map((campo) => `${campo}|${(porCampo.get(campo)?.titulo ?? campo).replace(/[;|]/g, " ")}`).join("; "))}
           disabled={somenteLeitura || !opcoes.length}
         />
       </div>

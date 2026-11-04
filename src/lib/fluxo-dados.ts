@@ -3,7 +3,7 @@
  * qualquer item), PROCURAR um valor nas linhas de uma tabela (numa coluna ou em todas), a REGRA "se encontrar X grava Y" e
  * as VARIÁVEIS (o estado guardado para terminar laços).
  */
-import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, trechosDoCentroCusto, unidadeDoCentroCusto } from "./reparticao-match.ts";
+import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
@@ -222,7 +222,7 @@ function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; c
     // Pelo nome da coluna; sem ele, pelo VALOR — a entidade curta e a vírgula ("PM RV, SECRETARIA…").
     const k = o
       ? (Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && !/\$type$/i.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) ??
-        Object.keys(o).find((x) => !/\$type$/i.test(x) && /^[^,]{2,15},\s*\p{L}/u.test(String(o[x] ?? "").trim())))
+        Object.keys(o).find((x) => !/\$type$/i.test(x) && !/finalidade|descri|observ|objeto|justific/i.test(x.split(".")[0]) && /^[^,\d]{2,15},\s*\p{L}/u.test(String(o[x] ?? "").trim())))
       : undefined;
     return o && k ? String(o[k]).trim() : "";
   };
@@ -275,33 +275,21 @@ export function conferirUnidades(
       out.desconhecidas.push({ ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` });
       continue;
     }
-    // A unidade é SEMPRE o último trecho; só a entidade ("PM RV") = o planejamento não tem unidade na Centi.
-    const trechos = trechosDoCentroCusto(centro);
-    if (!trechos.length) {
+    // A unidade é SEMPRE o último nome; só a entidade ("PM RV") = o planejamento não tem unidade na Centi.
+    const { nome, truncado } = unidadeDoCentroCusto(centro);
+    if (!nome) {
       out.desconhecidas.push({ ...base, mensagem: `${ref}: o centro de custo na Centi não tem unidade (só “${centro}”)` });
       continue;
     }
-    let { nome } = trechos[0] ?? { nome: "" };
-    // O Centro de Custo CADASTRADO na unidade (sincronizado com a Centi) vale primeiro — casamento exato.
-    const pelaUnidade = casarPorCentroCusto(centro, unidades, orgaoId);
-    let c: CasamentoUnidade = pelaUnidade ?? { tipo: "desconhecida" };
-    for (const [i, t] of pelaUnidade?.tipo === "ok" ? [] : trechos.entries()) {
-      let r = casarUnidadePorNome(t.nome, t.truncado, unidades, orgaoId);
-      // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
-      // continua "desconhecida", nunca vira outra unidade.
-      if (r.tipo === "ambigua") {
-        const sigla = siglaDaFinalidade(finalidadeDe);
-        const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
-        if (s?.tipo === "ok" && r.ids.includes(s.id)) r = s;
-      }
-      if (r.tipo === "ok") {
-        c = r;
-        nome = t.nome;
-        break;
-      }
-      if (i === 0 && !pelaUnidade) c = r;
+    // O Centro de Custo CADASTRADO na unidade (sincronizado com a Centi) vale primeiro — casamento exato; depois o nome.
+    let c: CasamentoUnidade = casarPorCentroCusto(centro, unidades, orgaoId) ?? casarUnidadePorNome(nome, truncado, unidades, orgaoId);
+    // A sigla da Finalidade só DESEMPATA (entre as que o centro de custo casa) — um nome que não existe
+    // continua "desconhecida", nunca vira outra unidade.
+    if (c.tipo === "ambigua") {
+      const sigla = siglaDaFinalidade(finalidadeDe);
+      const s = sigla ? casarUnidadePorNome(sigla, false, unidades, orgaoId) : null;
+      if (s?.tipo === "ok" && c.ids.includes(s.id)) c = s;
     }
-    base.unidadeCentroCusto = nome;
     if (c.tipo !== "ok") {
       const motivo = c.tipo === "ambigua" ? "casa mais de uma unidade cadastrada" : "não existe no sistema";
       out.desconhecidas.push({ ...base, mensagem: `${ref}: unidade desconhecida no centro de custo — “${nome}” ${motivo}` });

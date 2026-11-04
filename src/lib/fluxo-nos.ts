@@ -456,6 +456,7 @@ const NOS: DefNo[] = [
       if (!ents.length) throw new Error("Nenhum órgão — informe no nó ou cadastre o ID da Centi nos órgãos.");
       // As colunas da TELA escolhidas: cada uma vira um campo do item (o nome do título — "Centro Custo" → centroCusto).
       const captura = lerCaptura(c.capturar);
+      let avisouColunas = false;
       const out: Item[] = [];
       // Uma entidade que falha não derruba as outras: segue e avisa; só falha quando NENHUMA respondeu.
       const falhas: string[] = [];
@@ -497,8 +498,10 @@ const NOS: DefNo[] = [
           throw new Error(
             `Nenhum dos ${pedidos.size} planejamentos do órgão ${ent} veio na CM002 (${linhas.length} linhas lidas, IDs ${faixaIds(ids)}). A consulta aprendida está filtrada — na CM002 da Centi, limpe os filtros (Referência/Finalidade) e clique em Pesquisar UMA vez.${extra}`,
           );
-        if (captura.length && !Array.isArray(r.colunasTela))
+        if (captura.length && !Array.isArray(r.colunasTela) && !avisouColunas) {
+          avisouColunas = true;
           ctx.aviso(`CM002 do órgão ${ent}: a extensão não leu as colunas da tela — na Centi, abra a CM002, clique em Pesquisar e execute de novo (o valor vem pelo nome interno, quando bate).`);
+        }
         for (const p of linhas) {
           const capturados = Object.fromEntries(captura.map((k) => [k.chave, valorCapturado(p, k.campo)]));
           // Sem "Trazer todas as colunas", o item fica leve: só os campos escolhidos.

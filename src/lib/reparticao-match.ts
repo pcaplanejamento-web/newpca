@@ -182,23 +182,22 @@ export function orgaoDivergeDaUnidade(
   return orgaoDoCampo !== orgaoIdDaUnidade;
 }
 
-/** A UNIDADE do "Centro custo" da CM002 = SEMPRE o último trecho ("PM RV, CAMARA MUNICIPAL, GGIM" → "GGIM"). O 1º trecho
- * é a ENTIDADE ("PM RV"): sozinho, não há unidade (lista vazia). A Centi corta os nomes (reticência ou 45 caracteres por
- * trecho): `truncado` marca que só o COMEÇO é conhecido. */
-export function trechosDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean }[] {
+/** A UNIDADE do "Centro custo" da CM002 = SEMPRE o último nome ("PM RV, CAMARA MUNICIPAL, GGIM" → "GGIM"). Sem vírgula,
+ * um nome curto (até `MAX_ENTIDADE` letras — "PM RV") é só a ENTIDADE: sem unidade (`nome` vazio). A Centi corta os nomes
+ * (reticência ou 45 caracteres por trecho): `truncado` marca que só o COMEÇO é conhecido. */
+export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
   const t = String(texto ?? "");
   const brutos = t.split(",").filter((x) => x.trim());
-  if (brutos.length < 2) return [];
-  const bruto = brutos[brutos.length - 1];
+  const bruto = brutos[brutos.length - 1] ?? "";
+  if (brutos.length === 1 && bruto.trim().length <= MAX_ENTIDADE) return { nome: "", truncado: false };
   const sem = bruto.replace(/\s*(\.{2,}|…)\s*$/, "");
   const nome = sem.trim().replace(/\s+/g, " ");
-  return [{ nome, truncado: sem.length !== bruto.length || nome.length >= CORTE_TRECHO_CENTI || t.trim().length >= MAX_CENTRO_CUSTO }];
+  if (!nome) return { nome: "", truncado: false };
+  return { nome, truncado: sem.length !== bruto.length || nome.length >= CORTE_TRECHO_CENTI || t.trim().length >= MAX_CENTRO_CUSTO };
 }
 
-/** O nome da unidade no "Centro custo" (o último trecho — ver `trechosDoCentroCusto`); só a entidade = "". */
-export function unidadeDoCentroCusto(texto: string | null | undefined): { nome: string; truncado: boolean } {
-  return trechosDoCentroCusto(texto)[0] ?? { nome: "", truncado: false };
-}
+/** O tamanho da ENTIDADE no começo do "Centro custo" ("PM RV"): sem vírgula, um texto assim curto não é unidade. */
+export const MAX_ENTIDADE = 12;
 
 /** A Centi corta cada trecho do "Centro custo" em 45 caracteres ("SEC MUN. DE DESENV. ECONOMICO SUST. DO TRABAL"). */
 export const CORTE_TRECHO_CENTI = 45;
@@ -221,7 +220,7 @@ function tokensNome(s: string): string[] {
 }
 
 /** As palavras da Centi (`a`) × as cadastradas (`b`): cada par na mesma posição, uma o começo da outra (3+ letras; a
- * palavra de 1 letra só igual). Cortado, a cadastrada pode ter palavras a mais no fim. */
+ * palavra mais curta que 3 letras só igual). Cortado, a cadastrada pode ter palavras a mais no fim. */
 function casaPorPrefixo(a: string[], b: string[], truncado: boolean): boolean {
   if (a.length > b.length || (!truncado && a.length !== b.length)) return false;
   return a.every((w, i) => {
@@ -262,9 +261,10 @@ export function casarPorCentroCusto(centro: string, unidades: ReparticaoMatch[],
   const chave = (t: string) => stripAccents(t).toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
   const inteiro = chave(centro);
   const ultimo = chave(String(centro).split(",").filter((x) => x.trim()).pop() ?? "");
+  const ultimoDe = (t: string) => chave(t.split(",").filter((x) => x.trim()).pop() ?? "");
   let achadas = validas.filter((u) => {
     const k = chave(String(u.centroCusto));
-    return !!k && (k === inteiro || k === ultimo);
+    return !!k && (k === inteiro || k === ultimo || (!!ultimo && ultimoDe(String(u.centroCusto)) === ultimo));
   });
   if (!achadas.length) return null;
   if (achadas.length > 1 && orgaoId != null) {

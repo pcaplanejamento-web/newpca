@@ -575,7 +575,7 @@
    * têm vírgula e o MESMO 1º trecho (a entidade — "PM RV, SECRETARIA…") se repete em ≥ 60%. Vence a com mais linhas
    * assim; empate = nenhuma (nunca chuta). */
   function colunaCentroCustoPeloValor(linhas) {
-    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => !/\$type$/i.test(k));
+    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => !/\$type$/i.test(k) && !/finalidade|descri|observ|objeto|justific/i.test(k.split(".")[0]));
     let melhor = null;
     let nMelhor = 0;
     let empate = false;

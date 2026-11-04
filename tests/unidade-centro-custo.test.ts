@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conferirUnidades } from "../src/lib/fluxo-dados.ts";
-import { casarUnidadePorNome, siglaDaFinalidade, trechosDoCentroCusto, unidadeDoCentroCusto } from "../src/lib/reparticao-match.ts";
+import { casarUnidadePorNome, siglaDaFinalidade, unidadeDoCentroCusto } from "../src/lib/reparticao-match.ts";
 
 const UNIDADES = [
   { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
@@ -18,7 +18,8 @@ test("Centro de Custo: a unidade é SEMPRE o último nome; só a entidade = sem 
   assert.deepEqual(unidadeDoCentroCusto("PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO"), { nome: "SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO", truncado: true }, "45 caracteres = o corte da Centi");
   assert.deepEqual(unidadeDoCentroCusto("PM RV, SUBPREFEITURA DE OUROANA"), { nome: "SUBPREFEITURA DE OUROANA", truncado: false });
   assert.deepEqual(unidadeDoCentroCusto("PM RV, CAMARA MUNICIPAL, GGIM"), { nome: "GGIM", truncado: false });
-  assert.deepEqual(trechosDoCentroCusto("PM RV"), [], "só a entidade: sem unidade");
+  assert.deepEqual(unidadeDoCentroCusto("PM RV"), { nome: "", truncado: false }, "só a entidade: sem unidade");
+  assert.deepEqual(unidadeDoCentroCusto("GUARDA CIVIL MUNICIPAL"), { nome: "GUARDA CIVIL MUNICIPAL", truncado: false }, "sem vírgula, um nome longo é a unidade");
   assert.deepEqual(unidadeDoCentroCusto("PM RV, PROCURADORIA-GERAL DO MUNICÍPIO, PROCURADORIA-GE..."), { nome: "PROCURADORIA-GE", truncado: true });
   assert.deepEqual(unidadeDoCentroCusto("SÓ UM NOME"), { nome: "", truncado: false });
   assert.deepEqual(unidadeDoCentroCusto(""), { nome: "", truncado: false });
@@ -164,4 +165,17 @@ test("Centro de Custo CADASTRADO na unidade: o casamento exato vem antes do nome
   assert.equal(casarPorCentroCusto("PM RV, SECRETARIA MUNICIPAL DE SAÚDE", CAD), null, "sem cadastro = a comparação por nome segue");
   const r = conferirUnidades([{ id: 9, numero: "1", planejamento: "1", reparticaoId: 9, orgaoId: 1, encontrado: { centroCusto: "PM RV, SUBPREFEITURA DE OUROANA" } }], CAD);
   assert.equal(r.divergentes[0]?.unidadeCentiSigla, "SUBOU", "o nome diferente casa pelo Centro de Custo cadastrado");
+});
+
+test("Auditoria: pelo valor, a Finalidade nunca vira o centro de custo; o último nome do cadastrado vale", async () => {
+  const { casarPorCentroCusto } = await import("../src/lib/reparticao-match.ts");
+  const r = conferirUnidades(
+    [{ id: 1, numero: "1", planejamento: "1", reparticaoId: 1, orgaoId: 1, encontrado: { centroCusto: "", centi: { Finalidade: "CONTRATO Nº 40, DE 2026", Lotacao: "PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO" } } }],
+    UNIDADES,
+  );
+  assert.equal(r.conformes.length, 1, JSON.stringify(r.desconhecidas[0]?.mensagem));
+  const s = conferirUnidades([{ id: 2, numero: "2", planejamento: "2", reparticaoId: 1, orgaoId: 1, encontrado: { centroCusto: "", centi: { Finalidade: "CONTRATO Nº 40, DE 2026" } } }], UNIDADES);
+  assert.match(String(s.desconhecidas[0]?.mensagem), /não trouxe o centro de custo/);
+  const CAD = [{ id: 5, codigo: "GGIM", nome: "Outro nome", orgaoId: 1, centroCusto: "PM RV, CAMARA MUNICIPAL, GGIM" }];
+  assert.deepEqual(casarPorCentroCusto("PM RV, GABINETE DO PREFEITO, GGIM", CAD), { tipo: "ok", id: 5 }, "sempre o último nome");
 });
