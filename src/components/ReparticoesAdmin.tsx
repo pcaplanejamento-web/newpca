@@ -2,7 +2,7 @@
 
 import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { BotaoVoltar } from "./AbasEspaco";
@@ -11,7 +11,7 @@ import { AcoesCadastro } from "./AcoesCadastro";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { type Aviso, Avisos } from "./Avisos";
 import { Badge } from "./Badge";
-import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
+import { BannerCadastro, type CampoCadastro, type RascunhoSecao } from "./BannerCadastro";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
@@ -105,6 +105,8 @@ export function ReparticoesAdmin({
   const [lista, setLista] = useState<Rep[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  // O rascunho do centro de custo e das subunidades — o "Salvar alterações" do banner também o grava.
+  const [rascunhoSub, setRascunhoSub] = useState<RascunhoSecao | null>(null);
   // A PESQUISA DO SISTEMA abre o banner da unidade (`?abrir=<id>`), quando a lista chega.
   useAbrirDaUrl((v) => {
     if (lista?.some((u) => u.id === Number(v))) setAberto(Number(v));
@@ -440,6 +442,7 @@ export function ReparticoesAdmin({
         onSalvar={salvar}
         onFechar={() => setAberto(null)}
         confirmarDescarte={() => confirmar({ titulo: "Descartar as alterações?", texto: "Os dados alterados não foram salvos.", confirmar: "Descartar", perigo: true })}
+        rascunho={rascunhoSub}
         rodapeEsquerda={
           unidade ? (
             <div className="flex flex-wrap gap-2">
@@ -464,7 +467,7 @@ export function ReparticoesAdmin({
         {unidade && (
           <>
             <SecaoBanner titulo="Centro de custo e subunidades">
-              <SubunidadesDaUnidade key={unidade.id} unidadeId={unidade.id} codigo={unidade.codigo} onMudou={() => void carregar()} />
+              <SubunidadesDaUnidade key={unidade.id} unidadeId={unidade.id} codigo={unidade.codigo} onMudou={() => void carregar()} onRascunho={setRascunhoSub} />
             </SecaoBanner>
             <SecaoBanner titulo="Responsáveis por DFDs">
               <ResponsaveisDoAlvo
@@ -512,7 +515,22 @@ const MODOS_OPCOES = MODOS_CENTRO.map((v) => ({ value: v, label: ROTULO_MODO[v],
  * cada DFD. **Um por subunidade:** cada subunidade com os seus centros. O centro é obrigatório; cada um é escolhido dos
  * lidos nos DFDs (ou digitado) e pertence a um só cadastro do sistema.
  */
-function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: number; codigo: string; onMudou: () => void }) {
+/** A forma comparável do cadastro (o rascunho × o gravado). */
+const chaveRascunho = (m: ModoCentro, c: string[], l: { id?: number; nome: string; centros: string[] }[]) =>
+  JSON.stringify([m, c, l.map((s) => [s.id, s.nome, s.centros])]);
+
+function SubunidadesDaUnidade({
+  unidadeId,
+  codigo,
+  onMudou,
+  onRascunho,
+}: {
+  unidadeId: number;
+  codigo: string;
+  onMudou: () => void;
+  /** O rascunho desta seção para o "Salvar alterações" do banner (null = nada a salvar). */
+  onRascunho: (r: RascunhoSecao | null) => void;
+}) {
   const url = `/api/admin/reparticoes/${unidadeId}/subunidades`;
   const [cad, setCad] = useState<CadastroSubunidades | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -545,16 +563,21 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
     void carregar();
   }, [carregar]);
 
+  const sujo = !!cad && chaveRascunho(modo, centros, lista) !== chaveRascunho(cad.modo, cad.centrosUnidade, cad.subunidades.map((s) => (cad.modo === "unico" ? { ...s, centros: [] } : s)));
+  const motivo = cad ? motivoSubunidadesInvalidas(modo, centros, lista) : null;
+  // O "Salvar alterações" do banner chama a gravação desta seção (a versão do render atual).
+  const salvarRef = useRef<() => Promise<boolean>>(async () => true);
+  useEffect(() => {
+    onRascunho(sujo ? { sujo, bloqueio: motivo, salvar: () => salvarRef.current() } : null);
+  }, [sujo, motivo, onRascunho]);
+  useEffect(() => () => onRascunho(null), [onRascunho]);
+
   if (!cad) {
     return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregar()} /> : <SkeletonLinhas linhas={3} />;
   }
-
-  const chave = (m: ModoCentro, c: string[], l: { id?: number; nome: string; centros: string[] }[]) => JSON.stringify([m, c, l.map((s) => [s.id, s.nome, s.centros])]);
-  const sujo = chave(modo, centros, lista) !== chave(cad.modo, cad.centrosUnidade, cad.subunidades.map((s) => (cad.modo === "unico" ? { ...s, centros: [] } : s)));
   // Os centros de custo das OUTRAS unidades (não se escolhem aqui) e o dono de cada centro dentro deste rascunho.
   const deOutras = new Map<string, string>();
   for (const o of cad.outras) for (const c of o.centros) deOutras.set(chaveCentro(c), o.subunidade ? `${o.subunidade} (${o.unidade})` : o.unidade);
-  const motivo = motivoSubunidadesInvalidas(modo, centros, lista);
   const donosNoRascunho = (exceto: number | null) => {
     const m = new Map<string, string>();
     lista.forEach((x, k) => {
@@ -565,6 +588,7 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
   const escolhidos = lista.reduce((t, s) => t + s.marcados, 0);
   // TODAS as mensagens da seção no (!) — nada de faixas que empurram a tela.
   const avisos: Aviso[] = [
+    ...(sujo ? [{ id: "sujo", texto: "Alterações ainda não salvas — use “Salvar alterações” no rodapé.", tom: "warn" as const }] : []),
     ...(motivo ? [{ id: "motivo", texto: motivo, tom: "danger" as const }] : []),
     ...(modo === "unico" && !centros.length ? [{ id: "sem-centro", texto: "Sem centro de custo cadastrado — os DFDs da unidade ficam com erro.", tom: "danger" as const }] : []),
     ...(modo === "subunidades" && !lista.length
@@ -595,7 +619,7 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
     setModo(novo);
   }
 
-  async function salvar() {
+  async function salvar(): Promise<boolean> {
     const saem = (cad?.subunidades ?? []).filter((s) => s.marcados > 0 && !lista.some((x) => x.id === s.id));
     if (saem.length) {
       const n = saem.reduce((t, s) => t + s.marcados, 0);
@@ -605,7 +629,7 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
         confirmar: "Salvar",
         perigo: true,
       });
-      if (!ok) return;
+      if (!ok) return false;
     }
     setSalvando(true);
     try {
@@ -619,12 +643,16 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
       aplicar(j as CadastroSubunidades);
       toast.success("Centro de custo salvo.");
       onMudou();
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar o centro de custo.");
+      return false;
     } finally {
       setSalvando(false);
     }
   }
+
+  salvarRef.current = salvar;
 
   function mover(i: number, dir: -1 | 1) {
     const j = i + dir;
@@ -707,16 +735,6 @@ function SubunidadesDaUnidade({ unidadeId, codigo, onMudou }: { unidadeId: numbe
           </Button>
         </div>
       </div>
-      {sujo && (
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button size="sm" variant="ghost" disabled={salvando} onClick={() => aplicar(cad)}>
-            Descartar
-          </Button>
-          <Button size="sm" loading={salvando} disabled={!!motivo} onClick={() => void salvar()}>
-            Salvar
-          </Button>
-        </div>
-      )}
       {editando != null && (
         <EditorSubunidade
           inicial={aberta}

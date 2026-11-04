@@ -4148,7 +4148,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `Dropzone` (importação: soltar OU clicar p/ escolher), **`ListaVinculos`**/**`EditorVinculo`**/**`CelulaResponsaveis`**
   (`VinculosResponsaveis.tsx` — os responsáveis da planilha única: os vínculos com o estado, o editor do vínculo com a
   pessoa da planilha ou cadastrada na hora, a célula dos vigentes), **`BannerCadastro`** (o banner de um cadastro — órgão,
-  unidade — com os dados por cadeado e só o que mudou ao salvar) + **`SecaoBanner`**/`ValorCampo`, `Modal` (trava o scroll da página; `acoesCabecalho` = slot
+  unidade — com os dados por cadeado e só o que mudou ao salvar) — `rascunho` (`RascunhoSecao`) = uma seção com rascunho próprio que o "Salvar alterações" também grava e que entra na confirmação ao fechar/sair (o centro de custo e as subunidades da unidade) + **`SecaoBanner`**/`ValorCampo`, `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`
   textual — ex.: `DfdCabecalho`/`ProtocoloCabecalho` com nº + badges (tipo/Id) + planejamento/assunto; + painel `lateral`
   mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir + **`lateral2`** = 3º banner à direita

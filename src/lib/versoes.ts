@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.272.0",
+    data: "2026-11-04",
+    titulo: "Unidade: um botão salva tudo",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "O “Salvar alterações” do banner da unidade grava também o centro de custo e as subunidades — saiu o botão Salvar separado da seção.", link: "/painel/orgaos" },
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "Fechar o banner, recarregar a página ou sair dela com subunidades ou centros de custo não salvos pede confirmação; o (!) da seção avisa que há alterações a salvar.", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.271.5",
     data: "2026-11-04",
     titulo: "Cadastro das subunidades: textos inteiros",

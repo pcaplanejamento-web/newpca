@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "./Button";
 import { LinhaCampo, useCadeados } from "./CampoCadeado";
 import { cellCls } from "./formStyles";
@@ -28,6 +28,18 @@ export type CampoCadastro = {
 };
 
 /**
+ * Uma SEÇÃO com rascunho próprio (ex.: o centro de custo e as subunidades da unidade): entra no "Salvar alterações" do
+ * banner (grava depois dos dados) e na confirmação ao fechar/sair — nada fica só na tela.
+ */
+export type RascunhoSecao = {
+  sujo: boolean;
+  /** O que impede gravar (o botão trava com o motivo na dica). */
+  bloqueio?: string | null;
+  /** Grava o rascunho; devolve se deu certo. */
+  salvar: () => Promise<boolean>;
+};
+
+/**
  * O BANNER DE UM CADASTRO (órgão, unidade) no padrão do banner do usuário: os dados por CADEADO (no cadastro NOVO, já
  * abertos), "Salvar alterações" com SÓ o que mudou (fechar com alteração pede confirmação) e as demais seções e ações de
  * quem usa (`children`, `rodapeEsquerda`).
@@ -44,6 +56,7 @@ export function BannerCadastro({
   onSalvar,
   onFechar,
   confirmarDescarte,
+  rascunho,
   children,
 }: {
   aberto: boolean;
@@ -58,6 +71,8 @@ export function BannerCadastro({
   onSalvar: (patch: Record<string, string>) => Promise<boolean>;
   onFechar: () => void;
   confirmarDescarte: () => Promise<boolean>;
+  /** A seção com rascunho próprio que o "Salvar alterações" também grava. */
+  rascunho?: RascunhoSecao | null;
   children?: ReactNode;
 }) {
   const chave = JSON.stringify(inicial) + (novo ? ":novo" : "");
@@ -72,26 +87,51 @@ export function BannerCadastro({
   const patch: Record<string, string> = {};
   for (const c of campos) if (novo || (r[c.chave] ?? "").trim() !== (inicial[c.chave] ?? "").trim()) patch[c.chave] = (r[c.chave] ?? "").trim();
   const mudou = campos.some((c) => (r[c.chave] ?? "").trim() !== (inicial[c.chave] ?? "").trim());
+  const [gravando, setGravando] = useState(false);
+  const extraSujo = !novo && !!rascunho?.sujo;
   const sujo = !novo && mudou;
+  const algumSujo = mudou || extraSujo;
   const faltando = campos.find((c) => c.obrigatorio && !(r[c.chave] ?? "").trim());
+  const bloqueio = faltando ? `Informe: ${faltando.label}` : extraSujo ? (rascunho?.bloqueio ?? null) : null;
+
+  // Sair da página (recarregar, nova versão, fechar a aba) com alteração não salva pede confirmação do navegador.
+  useEffect(() => {
+    if (!aberto || !algumSujo) return;
+    const aviso = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [aberto, algumSujo]);
 
   async function fechar() {
-    if (ocupado) return;
-    if (mudou && !(await confirmarDescarte())) return;
+    if (ocupado || gravando) return;
+    if (algumSujo && !(await confirmarDescarte())) return;
     setR(inicial);
     setAbertos(new Set());
     onFechar();
   }
 
   async function salvar() {
-    if (await onSalvar(patch)) setAbertos(new Set());
+    if (gravando) return;
+    setGravando(true);
+    try {
+      if (sujo || novo) {
+        if (!(await onSalvar(patch))) return;
+        setAbertos(new Set());
+      }
+      if (extraSujo && rascunho) await rascunho.salvar();
+    } finally {
+      setGravando(false);
+    }
   }
 
   return (
     <Modal
       open={aberto}
       onClose={() => void fechar()}
-      bloqueado={ocupado}
+      bloqueado={ocupado || gravando}
       size="xl"
       titulo={titulo}
       cabecalho={cabecalho}
@@ -104,9 +144,9 @@ export function BannerCadastro({
             </Button>
             <Button
               size="sm"
-              loading={ocupado}
-              disabled={(!novo && !sujo) || !!faltando}
-              title={faltando ? `Informe: ${faltando.label}` : undefined}
+              loading={ocupado || gravando}
+              disabled={(!novo && !sujo && !extraSujo) || !!bloqueio}
+              title={bloqueio ?? undefined}
               icon={<IconSave className="h-4 w-4" />}
               onClick={() => void salvar()}
             >
