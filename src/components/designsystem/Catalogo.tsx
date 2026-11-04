@@ -40,6 +40,7 @@ import { type CampoFiltroDash, FiltrosDashboard } from "@/components/FiltrosDash
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
 import { SeletorVisaoPca } from "@/components/VisaoOrcamentoPca";
 import { AjudaVisoes } from "@/components/AjudaVisoes";
+import { CentrosCustoUnidades } from "@/components/CentrosCustoUnidades";
 import { EscopoVinculo, type ValorEscopo } from "@/components/EditorVinculoOrcamento";
 import { DicaFlutuante } from "@/components/DicaFlutuante";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
@@ -5176,6 +5177,10 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="Órgãos e Unidades — CentrosCustoUnidades (onde cada centro de custo cadastrado está vinculado: unidade, órgão e subunidade, com a pesquisa por centro, unidade ou subunidade; abre pelo botão “Centros de custo” da tabela de unidades)">
+        <CentrosCustoDemo />
+      </Secao>
+
       <Secao titulo="Documentos — EscolherTamanhoPdf (o ADM escolhe o tamanho do PDF numa barra: do mínimo legível ao original, com a prévia da 1ª página)">
         <EscolherTamanhoDemo />
       </Secao>
@@ -5685,6 +5690,18 @@ const VINCULOS_DEMO: VinculoComPessoa[] = [
   { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", cargo: "Secretária", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: "2025-01-01", fim: null, ordem: 0 },
   { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", cargo: "Diretor", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "Secretário Adjunto", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
 ];
+
+function CentrosCustoDemo() {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+        Centros de custo
+      </Button>
+      <CentrosCustoUnidades aberto={aberto} onFechar={() => setAberto(false)} onAbrir={() => setAberto(false)} />
+    </>
+  );
+}
 
 function EscolherTamanhoDemo() {
   const [aberto, setAberto] = useState(false);

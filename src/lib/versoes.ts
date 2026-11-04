@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.276.0",
+    data: "2026-11-04",
+    titulo: "Verificar os centros de custo",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Órgãos e Unidades",
+        texto:
+          "Na tabela de unidades, o botão \"Centros de custo\" abre um banner com TODOS os centros de custo cadastrados e onde cada um está vinculado — unidade, órgão e subunidade, o modo e quantos DFDs o têm. Pesquise por centro de custo, unidade ou subunidade; o mesmo centro em dois cadastros é apontado; tocar numa linha abre a unidade.",
+        link: "/painel/orgaos",
+      },
+    ],
+  },
+  {
     versao: "1.275.0",
     data: "2026-11-04",
     titulo: "Subunidade em massa no banner do protocolo",

@@ -132,6 +132,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/reparticoes/[id]/subunidades": { GET: ADMIN, PUT: ADMIN },
   "admin/reparticoes/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/reparticoes/ordem": { PATCH: ADMIN },
+  "admin/reparticoes/centros-custo": { GET: ADMIN },
   "admin/reparticoes": { GET: ADMIN, POST: ADMIN },
   "admin/responsaveis/vinculos/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/responsaveis/vinculos": { POST: ADMIN },

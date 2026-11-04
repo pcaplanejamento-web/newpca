@@ -1,9 +1,9 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { cache } from "react";
-import { reparticoes, subunidades } from "@/db/schema";
+import { orgaos, reparticoes, subunidades } from "@/db/schema";
 import { getDb } from "./db";
 import { CODIGO_GERAL } from "./escopo-unidades-core";
-import { type CentrosDeOutro, type ConfigSubunidades, centrosPendentes, lerCentros, lerModo, type Subunidade } from "./subunidades-core";
+import { type CentrosDeOutro, type ConfigSubunidades, centrosPendentes, lerCentros, lerModo, mapaCentrosCusto, type Subunidade } from "./subunidades-core";
 import { consultaCentrosDosDfds, consultaCentrosPorUnidade, consultaMarcadosPorSubunidade, consultaSubunidades } from "./subunidades-sql";
 
 /** As subunidades de várias unidades (`id da unidade → lista`) — uma consulta. */
@@ -110,4 +110,29 @@ export async function pendentesPorUnidade(ids: number[]): Promise<Map<number, st
     if (p.length) out.set(id, p);
   }
   return out;
+}
+
+/** O MAPA dos centros de custo de TODAS as unidades (sem a GERAL): onde cada centro está vinculado e quantos DFDs o
+ * têm. Quatro consultas para qualquer quantidade. */
+export async function mapaDosCentros() {
+  const db = getDb();
+  const [unidades, dfdsCentros] = await Promise.all([
+    db
+      .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, orgao: orgaos.sigla })
+      .from(reparticoes)
+      .leftJoin(orgaos, eq(orgaos.id, reparticoes.orgaoId))
+      .where(ne(reparticoes.codigo, CODIGO_GERAL)),
+    consultaCentrosPorUnidade(db),
+  ]);
+  const cfg = await lerConfigSubunidades(unidades.map((u) => u.id));
+  const porUnidade = new Map<number, { centro: string; n: number }[]>();
+  for (const d of dfdsCentros)
+    if (d.reparticaoId != null) porUnidade.set(d.reparticaoId, [...(porUnidade.get(d.reparticaoId) ?? []), { centro: String(d.centro), n: Number(d.n) }]);
+  return mapaCentrosCusto(
+    unidades.flatMap((u) => {
+      const c = cfg.get(u.id);
+      return c ? [{ id: u.id, codigo: u.codigo, nome: u.nome, orgaoId: u.orgaoId, orgao: u.orgao ?? "", cfg: c }] : [];
+    }),
+    porUnidade,
+  );
 }

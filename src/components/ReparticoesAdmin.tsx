@@ -16,7 +16,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { IconAlert, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
+import { IconAlert, IconEye, IconSearch, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
 import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
@@ -24,6 +24,7 @@ import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
 import { CelulaLista } from "./CelulaLista";
+import { CentrosCustoUnidades } from "./CentrosCustoUnidades";
 import { ErroCarga } from "./ErroCarga";
 import { CampoLista, TextField } from "./Field";
 import { Modal } from "./Modal";
@@ -151,6 +152,8 @@ export function ReparticoesAdmin({
   const [aberto, setAberto] = useState<number | "novo" | null>(null);
   // O rascunho do centro de custo e das subunidades — o "Salvar alterações" do banner também o grava.
   const [rascunhoSub, setRascunhoSub] = useState<RascunhoSecao | null>(null);
+  // O banner dos CENTROS DE CUSTO (onde cada um está vinculado, em todas as unidades).
+  const [verCentros, setVerCentros] = useState(false);
   // A PESQUISA DO SISTEMA abre o banner da unidade (`?abrir=<id>`), quando a lista chega.
   useAbrirDaUrl((v) => {
     if (lista?.some((u) => u.id === Number(v))) setAberto(Number(v));
@@ -413,6 +416,9 @@ export function ReparticoesAdmin({
                 >
                   Nova unidade
                 </Button>
+                <Button size="sm" variant="secondary" icon={<IconSearch className="h-4 w-4" />} title="Ver onde cada centro de custo está vinculado" onClick={() => setVerCentros(true)}>
+                  Centros de custo
+                </Button>
                 <Ajuda titulo="Unidades">
                   <p>Toque numa linha para abrir a unidade: os dados (cadeado), os responsáveis, promover a órgão, ocultar e excluir.</p>
                   <TopicoAjuda titulo="Responsáveis">
@@ -434,6 +440,17 @@ export function ReparticoesAdmin({
           </div>
         )}
       </div>
+
+      <CentrosCustoUnidades
+        aberto={verCentros}
+        onFechar={() => setVerCentros(false)}
+        onAbrir={(l) => {
+          setVerCentros(false);
+          // A unidade deste órgão abre aqui; a de outro órgão, na tela dele (o `?abrir=` abre o banner).
+          if (l.orgaoId === orgaoId) setAberto(l.reparticaoId);
+          else if (l.orgaoId != null) router.push(`/painel/orgaos/${l.orgaoId}?abrir=${l.reparticaoId}`);
+        }}
+      />
 
       <BannerCadastro
         aberto={aberto != null}

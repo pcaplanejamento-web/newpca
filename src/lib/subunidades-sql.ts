@@ -67,10 +67,11 @@ export function consultaCentrosDosDfds(db: Db, unidadeId = 0) {
     .orderBy(sql`${daUnidade} DESC`, asc(dfds.centroCusto));
 }
 
-/** Os centros de custo distintos dos DFDs POR UNIDADE (os "a cadastrar" da lista de unidades). Builder puro. */
+/** Os centros de custo distintos dos DFDs POR UNIDADE, com quantos DFDs (os "a cadastrar" da lista de unidades e o
+ * mapa dos centros). Builder puro. */
 export function consultaCentrosPorUnidade(db: Db) {
   return db
-    .select({ reparticaoId: dfds.reparticaoId, centro: dfds.centroCusto })
+    .select({ reparticaoId: dfds.reparticaoId, centro: dfds.centroCusto, n: sql<number>`COUNT(*)` })
     .from(dfds)
     .where(sql`${dfds.reparticaoId} IS NOT NULL AND trim(COALESCE(${dfds.centroCusto}, '')) <> ''`)
     .groupBy(dfds.reparticaoId, dfds.centroCusto);

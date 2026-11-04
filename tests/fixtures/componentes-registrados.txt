@@ -62,6 +62,7 @@ CatalogoItemDetalhe.tsx
 CatalogoView.tsx
 CelulaExecucao.tsx
 CelulaLista.tsx
+CentrosCustoUnidades.tsx
 ChartCard.tsx
 ChatAoVivo.tsx
 ChecklistTarefa.tsx

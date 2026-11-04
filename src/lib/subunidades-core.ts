@@ -277,3 +277,61 @@ export function subunidadeEmMassa(
     : null;
   return { motivos, sub: { opcoes: cfg?.subunidades ?? [], motivo } };
 }
+
+/** Uma unidade para o MAPA dos centros de custo (o cadastro + quem ela é). */
+export type UnidadeMapaCentros = {
+  id: number;
+  codigo: string;
+  nome: string;
+  orgaoId: number | null;
+  orgao: string;
+  cfg: ConfigSubunidades;
+};
+
+/** Uma linha do mapa: UM centro de custo cadastrado e o DONO dele (a unidade no modo único; a subunidade no outro). */
+export type LinhaMapaCentro = {
+  chave: string;
+  centro: string;
+  reparticaoId: number;
+  orgaoId: number | null;
+  unidade: string;
+  unidadeNome: string;
+  orgao: string;
+  modo: ModoCentro;
+  /** No modo único, as subunidades ESCOLHIDAS no DFD (sem nenhuma, a própria unidade); no outro, a dona. */
+  subunidades: string[];
+  subunidadeId: number | null;
+  /** Os DFDs da unidade com este centro (o mesmo texto, senão o que só confere pelo último nome — a régua do DFD). */
+  dfds: number;
+  /** A mesma chave em mais de um cadastro (a regra é um centro, um dono). */
+  repetido: boolean;
+};
+
+/**
+ * O MAPA dos centros de custo cadastrados: onde cada um está vinculado (a verificação da tabela de unidades). Os DFDs
+ * de cada unidade (`dfdsPorUnidade`: centro gravado + quantos) contam na linha cujo centro o DFD confere — a mesma chave
+ * vence o último nome; conferindo com mais de uma, não conta (é ambíguo). Ordem: o centro, depois a unidade.
+ */
+export function mapaCentrosCusto(unidades: UnidadeMapaCentros[], dfdsPorUnidade: Map<number, { centro: string; n: number }[]>): LinhaMapaCentro[] {
+  const linhas: LinhaMapaCentro[] = [];
+  for (const u of unidades) {
+    const base = { reparticaoId: u.id, orgaoId: u.orgaoId, unidade: u.codigo, unidadeNome: u.nome, orgao: u.orgao, modo: u.cfg.modo };
+    const daUnidade: LinhaMapaCentro[] = [];
+    const nova = (centro: string, subunidades: string[], subunidadeId: number | null) =>
+      daUnidade.push({ ...base, chave: chaveCentro(centro), centro: limparCentro(centro), subunidades, subunidadeId, dfds: 0, repetido: false });
+    if (u.cfg.modo === "unico") {
+      const subs = u.cfg.subunidades.length ? u.cfg.subunidades.map((s) => s.nome) : [u.codigo];
+      for (const c of u.cfg.centros) nova(c, subs, null);
+    } else for (const s of u.cfg.subunidades) for (const c of s.centros) nova(c, [s.nome], s.id);
+    for (const d of dfdsPorUnidade.get(u.id) ?? []) {
+      const exatas = daUnidade.filter((l) => l.chave === chaveCentro(d.centro));
+      const achadas = exatas.length ? exatas : daUnidade.filter((l) => centroCustoConfere(l.centro, d.centro));
+      if (achadas.length === 1) achadas[0].dfds += d.n;
+    }
+    linhas.push(...daUnidade.filter((l) => l.chave));
+  }
+  const vezes = new Map<string, number>();
+  for (const l of linhas) vezes.set(l.chave, (vezes.get(l.chave) ?? 0) + 1);
+  for (const l of linhas) l.repetido = (vezes.get(l.chave) ?? 0) > 1;
+  return linhas.sort((a, b) => a.centro.localeCompare(b.centro, "pt-BR") || a.unidade.localeCompare(b.unidade, "pt-BR"));
+}

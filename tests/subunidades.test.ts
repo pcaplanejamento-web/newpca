@@ -16,6 +16,7 @@ import {
   conflitosCentros,
   lerCentros,
   lerModo,
+  mapaCentrosCusto,
   subunidadeEscolhivel,
   motivoSubunidadesInvalidas,
   planoMover,
@@ -313,6 +314,7 @@ test("builders: as opções contam os DFDs DA UNIDADE (primeiro) e o mover tira 
   assert.deepEqual(opcoes.map((x) => [x.centro, Number(x.dfds), Number(x.daUnidade)]), [["FUNDO SAUDE, FARMACIA", 1, 1], ["Z FMS", 1, 1], ["A OUTRA", 2, 0]], "os da unidade primeiro");
   const porUnidade = await q.consultaCentrosPorUnidade(o);
   assert.equal(porUnidade.length, 3);
+  assert.equal(Number(porUnidade.find((x) => x.centro === "A OUTRA")?.n), 2, "a contagem dos DFDs por unidade + centro");
   const plano = planoMover(["FUNDO SAUDE, FARMACIA"], [{ reparticaoId: 2, unidade: "FMAS", subunidadeId: 7, subunidade: "Farmacêutica", centros: ["FUNDO SAUDE, FARMACIA", "FMAS, ASSIST"] }, { reparticaoId: 3, unidade: "SMS", subunidadeId: null, subunidade: "", centros: ["PM RV, SMS"] }]);
   await lote(o, [...q.comandosTirarCentros(o, plano), ...q.comandosGravarSubunidades(o, 1, "unico", ["FUNDO SAUDE, FARMACIA"], [])]);
   assert.deepEqual(JSON.parse((db.prepare("SELECT centros_custo AS c FROM subunidades WHERE id = 7").get() as { c: string }).c), ["FMAS, ASSIST"]);
@@ -353,4 +355,37 @@ test("subunidadeEmMassa: a régua única da Mesa e do banner do protocolo", asyn
   assert.ok(!r.motivos.has(1) && !r.motivos.has(2));
   assert.match(r.motivos.get(7)?.dica ?? "", /sem acesso/);
   assert.match(r.sub.motivo ?? "", /4 DFD\(s\).*1 de outra unidade/);
+});
+
+test("mapaCentrosCusto: onde cada centro de custo está vinculado (a verificação da tabela de unidades)", () => {
+  const unico: ConfigSubunidades = { codigo: "SEMED", modo: "unico", centros: ["PM RV, SEC. EDUCACAO, SEMED"], subunidades: [{ id: 1, nome: "Escolas", centros: [] }, { id: 2, nome: "CMEIs", centros: [] }] };
+  const sozinha: ConfigSubunidades = { codigo: "GGIM", modo: "unico", centros: ["GGIM"], subunidades: [] };
+  const porSub: ConfigSubunidades = {
+    codigo: "SMS",
+    modo: "subunidades",
+    centros: [],
+    subunidades: [
+      { id: 3, nome: "Hospital", centros: ["PM RV, SAUDE, HOSPITAL"] },
+      { id: 4, nome: "UBS", centros: ["PM RV, SAUDE, UBS", "GGIM"] },
+    ],
+  };
+  const vazia: ConfigSubunidades = { codigo: "X", modo: "unico", centros: [], subunidades: [] };
+  const u = (id: number, codigo: string, cfg: ConfigSubunidades) => ({ id, codigo, nome: `Nome ${codigo}`, orgaoId: 1, orgao: "PMRV", cfg });
+  const dfds = new Map([
+    [10, [{ centro: "pm rv, sec. educação, semed", n: 3 }, { centro: "OUTRO", n: 9 }]],
+    [30, [{ centro: "HOSPITAL", n: 2 }, { centro: "PM RV, SAUDE, UBS", n: 1 }]],
+  ]);
+  const m = mapaCentrosCusto([u(10, "SEMED", unico), u(20, "GGIM", sozinha), u(30, "SMS", porSub), u(40, "X", vazia)], dfds);
+  // A unidade sem centro não gera linha; ordem pelo centro.
+  assert.deepEqual(m.map((l) => l.centro), ["GGIM", "GGIM", "PM RV, SAUDE, HOSPITAL", "PM RV, SAUDE, UBS", "PM RV, SEC. EDUCACAO, SEMED"]);
+  const semed = m.find((l) => l.unidade === "SEMED");
+  assert.deepEqual(semed?.subunidades, ["Escolas", "CMEIs"]);
+  assert.equal(semed?.subunidadeId, null);
+  assert.equal(semed?.dfds, 3); // a mesma chave (sem caixa/acento); o centro fora do cadastro não conta
+  assert.deepEqual(m.find((l) => l.unidade === "GGIM")?.subunidades, ["GGIM"]); // sem subunidades = a própria unidade
+  const hospital = m.find((l) => l.subunidadeId === 3);
+  assert.equal(hospital?.dfds, 2); // o mesmo último nome confere
+  assert.equal(m.find((l) => l.centro === "PM RV, SAUDE, UBS")?.dfds, 1);
+  // O mesmo centro em dois cadastros é apontado.
+  assert.deepEqual(m.filter((l) => l.repetido).map((l) => `${l.unidade}:${l.subunidadeId}`), ["GGIM:null", "SMS:4"]);
 });
