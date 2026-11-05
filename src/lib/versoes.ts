@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.276.3",
+    data: "2026-11-05",
+    titulo: "Execução lida em partes menores",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Execução",
+        texto: "O painel da Execução lê os dados em partes, duas de cada vez, e, se o banco atingir o limite de tempo ou de tamanho, tenta de novo com partes menores. Uma falha mostra o motivo do banco, não mais a consulta.",
+        link: "/painel/execucao",
+      },
+    ],
+  },
+  {
     versao: "1.276.2",
     data: "2026-11-05",
     titulo: "Execução sem o falso \"sendo atualizados\"",

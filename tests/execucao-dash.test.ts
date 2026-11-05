@@ -31,7 +31,7 @@ import {
   serie,
   sparks,
 } from "../src/lib/execucao-dash-core.ts";
-import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, EMP_POR_PEDACO, textoPacoteExecucao } from "../src/lib/execucao-sql.ts";
+import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, EMP_POR_PEDACO, erroDeLimite, motivoDoErro, textoPacoteExecucao } from "../src/lib/execucao-sql.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -409,4 +409,14 @@ test("execução (núcleo): o resumo de uma seleção = as KPIs; o saldo entre e
   assert.deepEqual(saldoEtapa(100, 30), { valor: 70, excedente: false });
   assert.deepEqual(saldoEtapa(30, 100), { valor: 70, excedente: true });
   assert.deepEqual(saldoEtapa(50, 50), { valor: 0, excedente: false });
+});
+
+test("motivoDoErro devolve a causa do D1, nunca o SQL; erroDeLimite reconhece tempo e tamanho", () => {
+  const d1 = new Error("D1_ERROR: string or blob too big: SQLITE_TOOBIG");
+  const drizzle = new Error("Failed query: WITH empU AS (SELECT e.id …)\nparams: 2025", { cause: d1 });
+  assert.equal(motivoDoErro(drizzle), "D1_ERROR: string or blob too big: SQLITE_TOOBIG");
+  assert.equal(erroDeLimite(drizzle), true);
+  assert.equal(erroDeLimite(new Error("Failed query: x", { cause: new Error("D1_ERROR: no such column: e.x") })), false);
+  assert.equal(motivoDoErro(new Error("Failed query: só o SQL")), "erro do banco de dados");
+  assert.equal(erroDeLimite(new Error("D1 DB storage operation exceeded timeout which caused object to be reset.")), true);
 });

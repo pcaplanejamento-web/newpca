@@ -2,7 +2,7 @@ import type { Acesso } from "./acesso";
 import { podeTela } from "./acesso";
 import { getDb } from "./db";
 import { chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
-import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, type FontesSql, textoPacoteExecucao } from "./execucao-sql";
+import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, type FontesSql, motivoDoErro, textoPacoteExecucao } from "./execucao-sql";
 import { proximaAtualizacaoMs, textoIntervalo } from "./empenho-cards-core";
 import type { MetaExec } from "./execucao-dash-core";
 import { getConfigImportacoes } from "./importacoes-config";
@@ -70,7 +70,7 @@ export async function respostaExecucao(anosTexto: string | null, fontes: FontesS
       // Uma importação concluída no meio de TODAS as leituras: vale o último pacote bom desta chave (melhor que a tela vazia).
       if (e instanceof DadosMudando) return ultimoBom.get(chave) ?? null;
       // Qualquer outra falha é REAL (limite do D1, consulta): vai aos logs e à tela com o motivo — nunca "atualizando".
-      console.error("[execucao] falha ao montar o pacote:", e);
+      console.error(`[execucao] falha ao montar o pacote (anos ${anos.join(",")}): ${motivoDoErro(e)}`, e);
       throw e;
     });
   if (texto == null) return null;

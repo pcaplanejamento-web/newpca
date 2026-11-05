@@ -1,6 +1,7 @@
 import { exigirAcesso } from "@/lib/api-auth";
 import { escopoDosEmpenhos } from "@/lib/empenhos-tela";
 import { fontesDoAcesso, respostaExecucao } from "@/lib/execucao-dados";
+import { motivoDoErro } from "@/lib/execucao-sql";
 import { erro } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +20,8 @@ export async function GET(req: Request) {
   try {
     texto = await respostaExecucao(new URL(req.url).searchParams.get("anos"), { liquidacoes: f.liquidacoes, pagamentos: f.pagamentos }, await escopoDosEmpenhos());
   } catch (e) {
-    const motivo = e instanceof Error ? e.message.slice(0, 200) : "erro desconhecido";
-    return erro(`Não foi possível montar os dados da execução: ${motivo}`, 500);
+    // O motivo do BANCO (o `cause` do D1) — nunca o SQL que o Drizzle põe na mensagem.
+    return erro(`Não foi possível montar os dados da execução: ${motivoDoErro(e)}`, 500);
   }
   if (texto == null) return erro("Os dados estão sendo atualizados agora — tente de novo em instantes.", 503);
   return new Response(texto, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });

@@ -246,12 +246,25 @@ async function lerUmaVez(db: Db, anos: readonly number[], escopo: EscopoEmpenhos
   const nl = Number(c?.nl ?? 0);
   const np = Number(c?.np ?? 0);
   const pedacos = (n: number, por: number) => Array.from({ length: Math.ceil(n / por) }, (_, p) => p);
-  const [e, l, p] = await Promise.all([
-    Promise.all(pedacos(ne, tam.emp).map((k) => db.all<{ j: string | null; ver: string }>(sqlEmpenhos(anos, escopo, f, k, tam.emp)))),
-    Promise.all(pedacos(nl, tam.eventos).map((k) => db.all<{ j: string | null; ver: string }>(sqlEventos("lg", anos, escopo, f, k, tam.eventos)))),
-    Promise.all(pedacos(np, tam.eventos).map((k) => db.all<{ j: string | null; ver: string }>(sqlEventos("pg", anos, escopo, f, k, tam.eventos)))),
-  ]);
-  if ([...e, ...l, ...p].some((r) => String(r[0]?.ver) !== String(c?.ver))) return null;
+  // Cada pedaço refaz a CTE inteira: no máximo PARALELO_PEDACOS ao mesmo tempo (todos juntos esgotavam o tempo do D1).
+  const consultas: SQL[] = [
+    ...pedacos(ne, tam.emp).map((k) => sqlEmpenhos(anos, escopo, f, k, tam.emp)),
+    ...pedacos(nl, tam.eventos).map((k) => sqlEventos("lg", anos, escopo, f, k, tam.eventos)),
+    ...pedacos(np, tam.eventos).map((k) => sqlEventos("pg", anos, escopo, f, k, tam.eventos)),
+  ];
+  const res: { j: string | null; ver: string }[][] = new Array(consultas.length);
+  let proxima = 0;
+  const trabalhar = async () => {
+    while (proxima < consultas.length) {
+      const i = proxima++;
+      res[i] = await db.all<{ j: string | null; ver: string }>(consultas[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PARALELO_PEDACOS, consultas.length) }, trabalhar));
+  if (res.some((r) => String(r[0]?.ver) !== String(c?.ver))) return null;
+  const e = res.slice(0, Math.ceil(ne / tam.emp));
+  const l = res.slice(e.length, e.length + Math.ceil(nl / tam.eventos));
+  const p = res.slice(e.length + l.length);
   return `{"v":${JSON.stringify(String(c?.ver ?? ""))},"dic":${c?.dic ?? "{}"},"orgaos":${c?.orgaos ?? "[]"},"emp":[${corpo(e)}],"liq":[${corpo(l)}],"pag":[${corpo(p)}]${extra}}`;
 }
 
@@ -268,9 +281,42 @@ export async function textoPacoteExecucao(
   tam: TamanhoPedacos = PEDACOS_PADRAO,
 ): Promise<string | null> {
   if (escopoVazio(escopo) || !anos.length) return `{"v":"","dic":{},"orgaos":[],"emp":[],"liq":[],"pag":[]${extra}}`;
+  let t = tam;
   for (let i = 0; i < 3; i++) {
-    const t = await lerUmaVez(db, anos, escopo, f, extra, tam);
-    if (t != null) return t;
+    try {
+      const r = await lerUmaVez(db, anos, escopo, f, extra, t);
+      if (r != null) return r;
+    } catch (e) {
+      // LIMITE do D1 (tempo ou tamanho): de novo com os pedaços pela metade; qualquer outro erro sobe com o motivo.
+      const menor = { emp: Math.max(PEDACO_MINIMO.emp, Math.floor(t.emp / 2)), eventos: Math.max(PEDACO_MINIMO.eventos, Math.floor(t.eventos / 2)) };
+      if (!erroDeLimite(e) || (menor.emp === t.emp && menor.eventos === t.eventos)) throw e;
+      console.warn(`[execucao] limite do D1 (${motivoDoErro(e)}) — pedaços ${t.emp}/${t.eventos} → ${menor.emp}/${menor.eventos}`);
+      t = menor;
+      i--;
+    }
   }
   return null;
 }
+
+/** No máximo quantos pedaços do pacote o D1 lê ao mesmo tempo. */
+const PARALELO_PEDACOS = 2;
+/** O menor pedaço tentado depois de um limite do D1. */
+const PEDACO_MINIMO: TamanhoPedacos = { emp: 1_250, eventos: 5_000 };
+
+/**
+ * O motivo REAL de uma falha do banco: o Drizzle embrulha o erro do D1 em "Failed query: <SQL>" e guarda o original em
+ * `cause` — devolve a mensagem mais interna, nunca o SQL.
+ */
+export function motivoDoErro(e: unknown): string {
+  let atual: unknown = e;
+  let msg = "";
+  for (let n = 0; atual instanceof Error && n < 5; n++) {
+    if (atual.message && !atual.message.startsWith("Failed query")) msg = atual.message;
+    atual = atual.cause;
+  }
+  if (!msg && typeof atual === "string") msg = atual;
+  return (msg || "erro do banco de dados").slice(0, 300);
+}
+
+/** Falha por LIMITE do D1 (tempo esgotado, resultado grande demais, objeto reiniciado). */
+export const erroDeLimite = (e: unknown): boolean => /too ?big|toobig|timeout|timed out|exceeded|reset|overloaded|memory/i.test(motivoDoErro(e));
