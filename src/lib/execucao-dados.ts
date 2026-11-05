@@ -2,7 +2,7 @@ import type { Acesso } from "./acesso";
 import { podeTela } from "./acesso";
 import { getDb } from "./db";
 import { chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
-import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, type FontesSql, motivoDoErro, textoPacoteExecucao } from "./execucao-sql";
+import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, erroDeSobrecarga, type FontesSql, motivoDoErro, textoPacoteExecucao } from "./execucao-sql";
 import { proximaAtualizacaoMs, textoIntervalo } from "./empenho-cards-core";
 import type { MetaExec } from "./execucao-dash-core";
 import { getConfigImportacoes } from "./importacoes-config";
@@ -17,12 +17,12 @@ import { versaoDados } from "./versao-dados";
  */
 // Até 4 pacotes (cada um tem alguns MB — a memória do Worker é de 128 MB, junto com o resto do sistema).
 const memo = criarMemoVersao({ max: 4, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
-/** A leitura do pacote nunca fechou na mesma versão (importações concluindo no meio). */
-class DadosMudando extends Error {}
-
-/** O último pacote BOM de cada chave — servido quando a versão muda em todas as leituras (em geral o MESMO texto do memo). */
+/** O último pacote BOM de cada chave — servido quando o D1 está sobrecarregado (em geral o MESMO texto do memo). */
 const ultimoBom = new Map<string, string>();
 const MAX_ULTIMOS = 2;
+/** Depois de uma SOBRECARGA do D1, a chave fica sem ir ao banco por este tempo (repetir na hora só piora). */
+const ESPERA_SOBRECARGA_MS = 30_000;
+const sobrecarga = new Map<string, number>();
 // Os ANOS do escopo (percorre os empenhos): lidos UMA vez por versão e escopo, nunca a cada pedido.
 const memoAnos = criarMemoVersao({ max: 24, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
 
@@ -45,7 +45,7 @@ export function anosPedidos(texto: string | null, disponiveis: readonly number[]
   return l.sort((a, b) => b - a).slice(0, MAX_ANOS_EXECUCAO);
 }
 
-/** O texto JSON da resposta (`{"ok":true,"pacote":…}`); `null` = uma importação concluída no meio impediu ler (e não há pacote anterior desta chave); outra falha LANÇA. */
+/** O texto JSON da resposta (`{"ok":true,"pacote":…}`); `null` = o D1 está sobrecarregado e não há pacote anterior desta chave; outra falha LANÇA. */
 export async function respostaExecucao(anosTexto: string | null, fontes: FontesSql, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
   // A versão dos dados nunca derruba a resposta: sem ela, o pacote vale só pela versão das importações.
@@ -60,19 +60,27 @@ export async function respostaExecucao(anosTexto: string | null, fontes: FontesS
   const anos = anosPedidos(anosTexto, disponiveis);
   const extra = `,"anos":${JSON.stringify(anos)},"disponiveis":${JSON.stringify(disponiveis)},"fontes":${JSON.stringify(fontes)}`;
   const chave = `${anos.join(",")}|${fontes.liquidacoes ? 1 : 0}${fontes.pagamentos ? 1 : 0}|${chaveEscopoEmpenhos(escopo)}`;
-  const texto = await memo
-    .obter(chave, `${ver}|${dados.dados}`, async () => {
-      const t = await textoPacoteExecucao(db, anos, escopo, fontes, extra);
-      if (t == null) throw new DadosMudando();
-      return t;
-    })
-    .catch((e: unknown) => {
-      // Uma importação concluída no meio de TODAS as leituras: vale o último pacote bom desta chave (melhor que a tela vazia).
-      if (e instanceof DadosMudando) return ultimoBom.get(chave) ?? null;
-      // Qualquer outra falha é REAL (limite do D1, consulta): vai aos logs e à tela com o motivo — nunca "atualizando".
-      console.error(`[execucao] falha ao montar o pacote (anos ${anos.join(",")}): ${motivoDoErro(e)}`, e);
-      throw e;
-    });
+  const ultimo = ultimoBom.get(chave);
+  let texto: string | null;
+  if ((sobrecarga.get(chave) ?? 0) > Date.now()) texto = ultimo ?? null;
+  else
+    texto = await memo
+      .obter(chave, `${ver}|${dados.dados}`, async () => {
+        const t = await textoPacoteExecucao(db, anos, escopo, fontes, extra);
+        sobrecarga.delete(chave);
+        return t;
+      })
+      .catch((e: unknown) => {
+        // D1 SOBRECARREGADO (importações rodando): o último pacote bom desta chave e uma pausa antes de pedir de novo.
+        if (erroDeSobrecarga(e)) {
+          console.warn(`[execucao] D1 sobrecarregado (anos ${anos.join(",")}): ${motivoDoErro(e)}`);
+          sobrecarga.set(chave, Date.now() + ESPERA_SOBRECARGA_MS);
+          return ultimo ?? null;
+        }
+        // Qualquer outra falha é REAL (tamanho, consulta): vai aos logs e à tela com o motivo.
+        console.error(`[execucao] falha ao montar o pacote (anos ${anos.join(",")}): ${motivoDoErro(e)}`, e);
+        throw e;
+      });
   if (texto == null) return null;
   ultimoBom.delete(chave);
   ultimoBom.set(chave, texto);

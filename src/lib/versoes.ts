@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.276.4",
+    data: "2026-11-05",
+    titulo: "Execução sem sobrecarregar o banco",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Execução",
+        texto: "O dashboard é montado numa consulta só ao banco (antes eram várias, que esgotavam o limite do banco com as importações rodando) e, com o banco ocupado, mostra os últimos dados em vez do erro.",
+        link: "/painel/execucao",
+      },
+    ],
+  },
+  {
     versao: "1.276.3",
     data: "2026-11-05",
     titulo: "Execução lida em partes menores",

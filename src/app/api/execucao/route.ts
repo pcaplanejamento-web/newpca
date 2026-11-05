@@ -23,6 +23,6 @@ export async function GET(req: Request) {
     // O motivo do BANCO (o `cause` do D1) — nunca o SQL que o Drizzle põe na mensagem.
     return erro(`Não foi possível montar os dados da execução: ${motivoDoErro(e)}`, 500);
   }
-  if (texto == null) return erro("Os dados estão sendo atualizados agora — tente de novo em instantes.", 503);
+  if (texto == null) return erro("O banco está ocupado agora (importações em andamento) — tente de novo em alguns segundos.", 503);
   return new Response(texto, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 }

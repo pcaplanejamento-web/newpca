@@ -31,7 +31,7 @@ import {
   serie,
   sparks,
 } from "../src/lib/execucao-dash-core.ts";
-import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, EMP_POR_PEDACO, erroDeLimite, motivoDoErro, textoPacoteExecucao } from "../src/lib/execucao-sql.ts";
+import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, EMP_POR_PEDACO, erroDeSobrecarga, erroDeTamanho, motivoDoErro, textoPacoteExecucao } from "../src/lib/execucao-sql.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -333,8 +333,17 @@ test("execução (SQL): pedaços pequenos — a costura não repete nem perde gr
   b.liq(2026, "10", null, 13, 0, 1, 6);
   b.pag(2025, "10", null, 7, 0, 0, 1, 6);
   const extra = `,"anos":[2025],"disponiveis":[],"fontes":${JSON.stringify(TUDO)},"meta":[]`;
-  const inteiro = JSON.parse((await textoPacoteExecucao(b.db, [2025], null, TUDO, extra)) ?? "{}") as PacoteExec;
-  const picado = JSON.parse((await textoPacoteExecucao(b.db, [2025], null, TUDO, extra, { emp: 1, eventos: 1 })) ?? "{}") as PacoteExec;
+  // O pacote INTEIRO numa consulta só (a CTE calculada uma vez — várias consultas sobrecarregavam o D1).
+  const all = b.db.all.bind(b.db);
+  let consultas = 0;
+  b.db.all = ((q: Parameters<typeof all>[0]) => {
+    consultas++;
+    return all(q);
+  }) as typeof b.db.all;
+  const inteiro = JSON.parse(await textoPacoteExecucao(b.db, [2025], null, TUDO, extra)) as PacoteExec;
+  assert.equal(consultas, 1, "uma consulta por pacote");
+  const picado = JSON.parse(await textoPacoteExecucao(b.db, [2025], null, TUDO, extra, { emp: 1, eventos: 1 })) as PacoteExec;
+  assert.equal(consultas, 2, "pedaços pequenos continuam numa consulta");
   const ord = (l: unknown[][]) => l.map((t) => JSON.stringify(t)).sort();
   assert.deepEqual(ord(picado.emp), ord(inteiro.emp));
   assert.deepEqual(ord(picado.liq), ord(inteiro.liq));
@@ -411,12 +420,17 @@ test("execução (núcleo): o resumo de uma seleção = as KPIs; o saldo entre e
   assert.deepEqual(saldoEtapa(50, 50), { valor: 0, excedente: false });
 });
 
-test("motivoDoErro devolve a causa do D1, nunca o SQL; erroDeLimite reconhece tempo e tamanho", () => {
+test("motivoDoErro devolve a causa do D1, nunca o SQL; tamanho × sobrecarga", () => {
   const d1 = new Error("D1_ERROR: string or blob too big: SQLITE_TOOBIG");
   const drizzle = new Error("Failed query: WITH empU AS (SELECT e.id …)\nparams: 2025", { cause: d1 });
   assert.equal(motivoDoErro(drizzle), "D1_ERROR: string or blob too big: SQLITE_TOOBIG");
-  assert.equal(erroDeLimite(drizzle), true);
-  assert.equal(erroDeLimite(new Error("Failed query: x", { cause: new Error("D1_ERROR: no such column: e.x") })), false);
+  assert.equal(erroDeTamanho(drizzle), true);
+  assert.equal(erroDeSobrecarga(drizzle), false);
+  const outra = new Error("Failed query: x", { cause: new Error("D1_ERROR: no such column: e.x") });
+  assert.equal(erroDeTamanho(outra) || erroDeSobrecarga(outra), false);
   assert.equal(motivoDoErro(new Error("Failed query: só o SQL")), "erro do banco de dados");
-  assert.equal(erroDeLimite(new Error("D1 DB storage operation exceeded timeout which caused object to be reset.")), true);
+  const cheio = new Error("Failed query: x", { cause: new Error("D1 DB is overloaded. Too many resources consumed within a 10 second window") });
+  assert.equal(erroDeSobrecarga(cheio), true, "a sobrecarga nunca vira repetição");
+  assert.equal(erroDeTamanho(cheio), false);
+  assert.equal(erroDeSobrecarga(new Error("D1 DB storage operation exceeded timeout which caused object to be reset.")), true);
 });

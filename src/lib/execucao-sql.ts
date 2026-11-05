@@ -89,8 +89,8 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
     anoNos("e.ano"),
     ...citados,
     ")), ",
-    "emp AS (SELECT u.*, row_number() OVER (ORDER BY u.id) - 1 AS ix FROM (SELECT empU.*, row_number() OVER (PARTITION BY empU.chave ORDER BY empU.card_id) AS k FROM empU) u WHERE u.k = 1), ",
-    "canon AS (SELECT c.numero, c.ix FROM (SELECT emp.numero, emp.ix, row_number() OVER (PARTITION BY emp.numero ORDER BY emp.reparticao_id IS NULL, emp.id) AS k FROM emp) c WHERE c.k = 1)",
+    "emp AS MATERIALIZED (SELECT u.*, row_number() OVER (ORDER BY u.id) - 1 AS ix FROM (SELECT empU.*, row_number() OVER (PARTITION BY empU.chave ORDER BY empU.card_id) AS k FROM empU) u WHERE u.k = 1), ",
+    "canon AS MATERIALIZED (SELECT c.numero, c.ix FROM (SELECT emp.numero, emp.ix, row_number() OVER (PARTITION BY emp.numero ORDER BY emp.reparticao_id IS NULL, emp.id) AS k FROM emp) c WHERE c.k = 1)",
   ];
   if (f.liquidacoes)
     partes.push(
@@ -104,7 +104,7 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
       anoNos("l.ano"),
       "), ",
       "liq AS (SELECT u.* FROM (SELECT liqU.*, row_number() OVER (PARTITION BY liqU.chave ORDER BY liqU.card_id) AS k FROM liqU) u WHERE u.k = 1), ",
-      `lg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN liq.orgao_id END AS o, ${DIA("liq.data")} AS d, SUM(liq.v) AS v, SUM(liq.a) AS a, COUNT(*) AS n, SUM(CASE WHEN liq.a > 0 THEN 1 ELSE 0 END) AS na FROM liq LEFT JOIN canon c ON c.numero = liq.numero_empenho GROUP BY 1, 2, 3) g)`,
+      `lg AS MATERIALIZED (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN liq.orgao_id END AS o, ${DIA("liq.data")} AS d, SUM(liq.v) AS v, SUM(liq.a) AS a, COUNT(*) AS n, SUM(CASE WHEN liq.a > 0 THEN 1 ELSE 0 END) AS na FROM liq LEFT JOIN canon c ON c.numero = liq.numero_empenho GROUP BY 1, 2, 3) g)`,
     );
   if (f.pagamentos)
     partes.push(
@@ -120,7 +120,7 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
       anoNos("p.ano"),
       "), ",
       "pag AS (SELECT u.* FROM (SELECT pagU.*, row_number() OVER (PARTITION BY pagU.chave ORDER BY pagU.card_id) AS k FROM pagU) u WHERE u.k = 1), ",
-      `pg AS (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN pag.orgao_id END AS o, ${DIA("pag.data")} AS d,
+      `pg AS MATERIALIZED (SELECT g.*, row_number() OVER (ORDER BY g.ei, g.d, g.o) AS rn FROM (SELECT COALESCE(c.ix, -1) AS ei, CASE WHEN c.ix IS NULL THEN pag.orgao_id END AS o, ${DIA("pag.data")} AS d,
         SUM(CASE WHEN pag.anulado = 0 THEN pag.v ELSE 0 END) AS v, SUM(CASE WHEN pag.anulado = 0 THEN pag.rt ELSE 0 END) AS rt,
         SUM(CASE WHEN pag.anulado = 0 THEN pag.lq ELSE 0 END) AS lq, SUM(CASE WHEN pag.anulado = 0 THEN 0 ELSE pag.v END) AS an,
         SUM(CASE WHEN pag.anulado = 0 THEN 1 ELSE 0 END) AS n, SUM(CASE WHEN pag.anulado = 0 THEN 0 ELSE 1 END) AS na
@@ -129,7 +129,7 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
   // O dicionário de cada dimensão (os valores distintos, numerados em ordem).
   partes.push(
     ", ",
-    DIMS_DICIONARIO.map((d, k) => `d${k} AS (SELECT v, row_number() OVER (ORDER BY v) - 1 AS i FROM (SELECT DISTINCT ${COLUNA[d]} AS v FROM emp))`).join(", "),
+    DIMS_DICIONARIO.map((d, k) => `d${k} AS MATERIALIZED (SELECT v, row_number() OVER (ORDER BY v) - 1 AS i FROM (SELECT DISTINCT ${COLUNA[d]} AS v FROM emp))`).join(", "),
     " ",
   );
   return juntar(partes);
@@ -197,80 +197,41 @@ export async function consultaAnosExecucao(db: Db, escopo: EscopoEmpenhos): Prom
   return l.map((a) => Number(a.ano)).filter((a) => Number.isInteger(a));
 }
 
-const SEL_VERSAO = `, ${VERSAO_SQL} AS ver`;
-
-/** A cabeça: quantos de cada, o dicionário e os órgãos citados. */
-function sqlCabeca(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQL {
+/**
+ * O PACOTE INTEIRO numa consulta só: as CTEs (as funções de janela sobre empenhos, liquidações e pagamentos) são
+ * calculadas UMA vez (`MATERIALIZED`) e cada pedaço sai como uma LINHA (`t` c = a cabeça · e = empenhos · l = liquidações ·
+ * p = pagamentos; `k` = o pedaço). Antes, a cabeça e cada pedaço eram consultas separadas que refaziam tudo — o D1
+ * respondia "overloaded" (recursos demais em 10 s). Uma consulta = os dados de uma versão só.
+ */
+function sqlPacote(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, tam: TamanhoPedacos): SQL {
   const dic = DIMS_DICIONARIO.map((d, k) => `'${d}', (SELECT json_group_array(json_array(i, v)) FROM d${k})`).join(", ");
   const orgaosDe = ["SELECT orgao_id FROM emp", ...(f.liquidacoes ? ["SELECT o FROM lg"] : []), ...(f.pagamentos ? ["SELECT o FROM pg"] : [])].join(" UNION ");
-  return juntar([
-    ctes(anos, escopo, f),
-    `SELECT (SELECT COUNT(*) FROM emp) AS ne, ${f.liquidacoes ? "(SELECT COUNT(*) FROM lg)" : "0"} AS nl, ${f.pagamentos ? "(SELECT COUNT(*) FROM pg)" : "0"} AS np, json_object(${dic}) AS dic,
-      (SELECT json_group_array(json_array(o.id, COALESCE(NULLIF(o.sigla, ''), o.nome), o.nome)) FROM orgaos o WHERE o.id IN (${orgaosDe})) AS orgaos${SEL_VERSAO}`,
-  ]);
-}
-
-function sqlEmpenhos(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number, por: number): SQL {
-  const tupla = ["e.id", "e.numero", "e.r", "e.orgao_id", DIA("e.data"), ...DIMS_DICIONARIO.map((_, k) => `d${k}.i`), "e.vb", "e.va", "e.vl", "e.vp", "e.vs"].join(", ");
+  const tuplaEmp = ["e.id", "e.numero", "e.r", "e.orgao_id", DIA("e.data"), ...DIMS_DICIONARIO.map((_, k) => `d${k}.i`), "e.vb", "e.va", "e.vl", "e.vp", "e.vs"].join(", ");
   const juncoes = DIMS_DICIONARIO.map((d, k) => `LEFT JOIN d${k} ON d${k}.v IS e.${COLUNA[d]}`).join(" ");
-  const de = pedaco * por;
+  const eventos = (t: "l" | "p", cte: "lg" | "pg", tupla: string) =>
+    ` UNION ALL SELECT '${t}' AS t, q.k AS k, (SELECT json_group_array(json_array(${tupla})) FROM (SELECT * FROM ${cte} WHERE (rn - 1) / ${tam.eventos} = q.k ORDER BY rn) g) AS j, NULL AS o, NULL AS ver FROM (SELECT DISTINCT (rn - 1) / ${tam.eventos} AS k FROM ${cte}) q`;
   return juntar([
     ctes(anos, escopo, f),
-    `SELECT (SELECT json_group_array(json_array(${tupla})) FROM (SELECT * FROM emp WHERE ix >= `,
-    sql`${de} AND ix < ${de + por}`,
-    ` ORDER BY ix) e ${juncoes}) AS j${SEL_VERSAO}`,
+    `SELECT 'c' AS t, 0 AS k, json_object(${dic}) AS j, (SELECT json_group_array(json_array(o.id, COALESCE(NULLIF(o.sigla, ''), o.nome), o.nome)) FROM orgaos o WHERE o.id IN (${orgaosDe})) AS o, ${VERSAO_SQL} AS ver`,
+    ` UNION ALL SELECT 'e' AS t, q.k AS k, (SELECT json_group_array(json_array(${tuplaEmp})) FROM (SELECT * FROM emp WHERE ix / ${tam.emp} = q.k ORDER BY ix) e ${juncoes}) AS j, NULL AS o, NULL AS ver FROM (SELECT DISTINCT ix / ${tam.emp} AS k FROM emp) q`,
+    f.liquidacoes ? eventos("l", "lg", "g.ei, g.o, g.d, g.v, g.a, g.n, g.na") : "",
+    f.pagamentos ? eventos("p", "pg", "g.ei, g.o, g.d, g.v, g.rt, g.lq, g.an, g.n, g.na") : "",
+    " ORDER BY t, k",
   ]);
 }
 
-function sqlEventos(tipo: "lg" | "pg", anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, pedaco: number, por: number): SQL {
-  const tupla = tipo === "lg" ? "g.ei, g.o, g.d, g.v, g.a, g.n, g.na" : "g.ei, g.o, g.d, g.v, g.rt, g.lq, g.an, g.n, g.na";
-  const de = pedaco * por;
-  return juntar([
-    ctes(anos, escopo, f),
-    `SELECT (SELECT json_group_array(json_array(${tupla})) FROM (SELECT * FROM ${tipo} WHERE rn > `,
-    sql`${de} AND rn <= ${de + por}`,
-    ` ORDER BY rn) g) AS j${SEL_VERSAO}`,
-  ]);
-}
-
-const corpo = (r: { j: string | null }[][]) =>
-  r
-    .map((x) => (x[0]?.j ?? "[]").slice(1, -1))
-    .filter((t) => t.length > 0)
+/** Os pedaços de um tipo, na ordem, costurados num só array JSON (sem os colchetes). */
+const corpo = (linhas: { t: string; j: string | null }[], t: string) =>
+  linhas
+    .filter((x) => x.t === t)
+    .map((x) => (x.j ?? "[]").slice(1, -1))
+    .filter((x) => x.length > 0)
     .join(",");
 
-/** Uma leitura completa — `null` quando os dados mudaram no meio (versões diferentes entre as consultas). */
-async function lerUmaVez(db: Db, anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, extra: string, tam: TamanhoPedacos): Promise<string | null> {
-  const [c] = await db.all<{ ne: number; nl: number; np: number; dic: string; orgaos: string | null; ver: string }>(sqlCabeca(anos, escopo, f));
-  const ne = Number(c?.ne ?? 0);
-  const nl = Number(c?.nl ?? 0);
-  const np = Number(c?.np ?? 0);
-  const pedacos = (n: number, por: number) => Array.from({ length: Math.ceil(n / por) }, (_, p) => p);
-  // Cada pedaço refaz a CTE inteira: no máximo PARALELO_PEDACOS ao mesmo tempo (todos juntos esgotavam o tempo do D1).
-  const consultas: SQL[] = [
-    ...pedacos(ne, tam.emp).map((k) => sqlEmpenhos(anos, escopo, f, k, tam.emp)),
-    ...pedacos(nl, tam.eventos).map((k) => sqlEventos("lg", anos, escopo, f, k, tam.eventos)),
-    ...pedacos(np, tam.eventos).map((k) => sqlEventos("pg", anos, escopo, f, k, tam.eventos)),
-  ];
-  const res: { j: string | null; ver: string }[][] = new Array(consultas.length);
-  let proxima = 0;
-  const trabalhar = async () => {
-    while (proxima < consultas.length) {
-      const i = proxima++;
-      res[i] = await db.all<{ j: string | null; ver: string }>(consultas[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(PARALELO_PEDACOS, consultas.length) }, trabalhar));
-  if (res.some((r) => String(r[0]?.ver) !== String(c?.ver))) return null;
-  const e = res.slice(0, Math.ceil(ne / tam.emp));
-  const l = res.slice(e.length, e.length + Math.ceil(nl / tam.eventos));
-  const p = res.slice(e.length + l.length);
-  return `{"v":${JSON.stringify(String(c?.ver ?? ""))},"dic":${c?.dic ?? "{}"},"orgaos":${c?.orgaos ?? "[]"},"emp":[${corpo(e)}],"liq":[${corpo(l)}],"pag":[${corpo(p)}]${extra}}`;
-}
-
 /**
- * O PACOTE da Execução como TEXTO JSON (`PacoteExec`). Os dados mudaram no meio (uma importação concluída agora)? Lê de
- * novo, até 3 vezes; depois, `null`. `extra` = os campos já serializados que vão junto (anos, fontes, meta).
+ * O PACOTE da Execução como TEXTO JSON (`PacoteExec`), numa consulta só. `extra` = os campos já serializados que vão
+ * junto (anos, fontes, meta). Resultado GRANDE DEMAIS: de novo UMA vez com os pedaços pela metade (continua uma consulta).
+ * A SOBRECARGA do D1 nunca repete aqui (repetir só piora) — sobe para quem chamou servir o último pacote bom.
  */
 export async function textoPacoteExecucao(
   db: Db,
@@ -279,29 +240,19 @@ export async function textoPacoteExecucao(
   f: FontesSql,
   extra = "",
   tam: TamanhoPedacos = PEDACOS_PADRAO,
-): Promise<string | null> {
+): Promise<string> {
   if (escopoVazio(escopo) || !anos.length) return `{"v":"","dic":{},"orgaos":[],"emp":[],"liq":[],"pag":[]${extra}}`;
-  let t = tam;
-  for (let i = 0; i < 3; i++) {
-    try {
-      const r = await lerUmaVez(db, anos, escopo, f, extra, t);
-      if (r != null) return r;
-    } catch (e) {
-      // LIMITE do D1 (tempo ou tamanho): de novo com os pedaços pela metade; qualquer outro erro sobe com o motivo.
-      const menor = { emp: Math.max(PEDACO_MINIMO.emp, Math.floor(t.emp / 2)), eventos: Math.max(PEDACO_MINIMO.eventos, Math.floor(t.eventos / 2)) };
-      if (!erroDeLimite(e) || (menor.emp === t.emp && menor.eventos === t.eventos)) throw e;
-      console.warn(`[execucao] limite do D1 (${motivoDoErro(e)}) — pedaços ${t.emp}/${t.eventos} → ${menor.emp}/${menor.eventos}`);
-      t = menor;
-      i--;
-    }
+  let linhas: { t: string; k: number; j: string | null; o: string | null; ver: string | null }[];
+  try {
+    linhas = await db.all(sqlPacote(anos, escopo, f, tam));
+  } catch (e) {
+    if (!erroDeTamanho(e)) throw e;
+    console.warn(`[execucao] resultado grande demais (${motivoDoErro(e)}) — pedaços pela metade`);
+    linhas = await db.all(sqlPacote(anos, escopo, f, { emp: Math.max(1, Math.floor(tam.emp / 2)), eventos: Math.max(1, Math.floor(tam.eventos / 2)) }));
   }
-  return null;
+  const c = linhas.find((x) => x.t === "c");
+  return `{"v":${JSON.stringify(String(c?.ver ?? ""))},"dic":${c?.j ?? "{}"},"orgaos":${c?.o ?? "[]"},"emp":[${corpo(linhas, "e")}],"liq":[${corpo(linhas, "l")}],"pag":[${corpo(linhas, "p")}]${extra}}`;
 }
-
-/** No máximo quantos pedaços do pacote o D1 lê ao mesmo tempo. */
-const PARALELO_PEDACOS = 2;
-/** O menor pedaço tentado depois de um limite do D1. */
-const PEDACO_MINIMO: TamanhoPedacos = { emp: 1_250, eventos: 5_000 };
 
 /**
  * O motivo REAL de uma falha do banco: o Drizzle embrulha o erro do D1 em "Failed query: <SQL>" e guarda o original em
@@ -318,5 +269,7 @@ export function motivoDoErro(e: unknown): string {
   return (msg || "erro do banco de dados").slice(0, 300);
 }
 
-/** Falha por LIMITE do D1 (tempo esgotado, resultado grande demais, objeto reiniciado). */
-export const erroDeLimite = (e: unknown): boolean => /too ?big|toobig|timeout|timed out|exceeded|reset|overloaded|memory/i.test(motivoDoErro(e));
+/** Resultado GRANDE DEMAIS para o D1 (um pedaço acima do limite de tamanho). */
+export const erroDeTamanho = (e: unknown): boolean => /too ?big|toobig|memory/i.test(motivoDoErro(e));
+/** O D1 SOBRECARREGADO (recursos demais na janela, tempo esgotado, objeto reiniciado) — repetir na hora só piora. */
+export const erroDeSobrecarga = (e: unknown): boolean => /overloaded|timeout|timed out|exceeded|reset/i.test(motivoDoErro(e));
