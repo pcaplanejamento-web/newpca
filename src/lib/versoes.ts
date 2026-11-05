@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.276.2",
+    data: "2026-11-05",
+    titulo: "Execução sem o falso \"sendo atualizados\"",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Execução",
+        texto: "A Execução deixou de mostrar \"Os dados estão sendo atualizados agora\" com a atualização automática ligada: só uma importação que muda dados renova a versão, e, se uma importação concluir durante a leitura, vale o último painel carregado.",
+        link: "/painel/execucao",
+      },
+      {
+        tipo: "correcao",
+        area: "Execução",
+        texto: "Uma falha real ao montar o painel agora mostra o motivo, em vez de dizer que os dados estão sendo atualizados.",
+        link: "/painel/execucao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Empenhos",
+        texto: "As tabelas de empenhos, liquidações e pagamentos só recarregam quando uma importação traz dado novo.",
+        link: "/painel/empenhos",
+      },
+    ],
+  },
+  {
     versao: "1.276.1",
     data: "2026-11-04",
     titulo: "Centros de custo no celular",

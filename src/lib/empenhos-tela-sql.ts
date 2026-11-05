@@ -54,14 +54,22 @@ const onde = (card: number | null, ano: number, removidos: boolean, escopo: Esco
 };
 
 /**
- * A VERSÃO dos empenhos do ano no card = a última importação PROMOVIDA dele + a data dos vínculos do card — os empenhos
+ * O lote PROMOVIDO que MUDOU dados (criou, atualizou ou removeu registros). A automática conclui e promove um lote por
+ * card × ano a cada rodada, quase sempre sem mudança: contar esses lotes trocava a versão o tempo todo — a leitura do
+ * pacote (vários pedaços) nunca fechava na mesma versão e as memórias eram refeitas sem dado novo. `a` = o alias da tabela.
+ */
+export const loteMudou = (a: string) =>
+  `${a}.estado = 'promovido' AND COALESCE(${a}.inseridos, 0) + COALESCE(${a}.atualizados, 0) + COALESCE(${a}.removidos, 0) > 0`;
+
+/**
+ * A VERSÃO dos empenhos do ano no card = as importações PROMOVIDAS dele que mudaram dados (`loteMudou`) + a data dos vínculos do card — os empenhos
  * só mudam na promoção de um lote (atômico: os empenhos e o estado "promovido" no MESMO comando) ou quando os vínculos
  * mudam (no mesmo lote da data), então a versão nova chega junto dos dados.
  */
 const versaoSql = (card: number | null, ano: number): SQL =>
   card === null
-    ? sql`((SELECT IFNULL(MAX(l.id), 0) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = 'empenhos' AND l.ano = ${ano} AND l.estado = 'promovido') || ':' || (SELECT IFNULL(MAX(vinculos_em), '') || ':' || COUNT(*) || ':' || IFNULL(MAX(id), 0) FROM empenho_cards WHERE tipo = 'empenhos'))`
-    : sql`((SELECT IFNULL(MAX(id), 0) FROM centi_lotes WHERE card_id = ${card} AND ano = ${ano} AND estado = 'promovido') || ':' || (SELECT IFNULL(vinculos_em, '') FROM empenho_cards WHERE id = ${card}))`;
+    ? sql`((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = 'empenhos' AND l.ano = ${ano} AND ${sql.raw(loteMudou("l"))}) || ':' || (SELECT IFNULL(MAX(vinculos_em), '') || ':' || COUNT(*) || ':' || IFNULL(MAX(id), 0) FROM empenho_cards WHERE tipo = 'empenhos'))`
+    : sql`((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l WHERE l.card_id = ${card} AND l.ano = ${ano} AND ${sql.raw(loteMudou("l"))}) || ':' || (SELECT IFNULL(vinculos_em, '') FROM empenho_cards WHERE id = ${card}))`;
 
 export async function consultaVersaoEmpenhos(db: Db, card: number | null, ano: number): Promise<string> {
   const [r] = await db.all<{ ver: string }>(sql.join([sql.raw("SELECT "), versaoSql(card, ano), sql.raw(" AS ver")], sql.raw("")));

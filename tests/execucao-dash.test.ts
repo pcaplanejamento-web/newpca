@@ -247,9 +247,15 @@ test("execução (SQL): escopo, telas sem acesso, anos, versão e a situação d
   assert.equal(semPag.pag.length, 0, "sem a tela de Pagamentos, nenhum pagamento sai do servidor");
   assert.deepEqual(await consultaAnosExecucao(b.db, null), [2025, 2024]);
   const v1 = await consultaVersaoExecucao(b.db);
-  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, concluido_em) VALUES (3, 2025, 'promovido', '2025-06-01 10:00:00')");
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, concluido_em, inseridos, atualizados, removidos) VALUES (3, 2025, 'promovido', '2025-06-01 10:00:00', 0, 0, 0)");
+  assert.equal(await consultaVersaoExecucao(b.db), v1, "a importação promovida SEM mudança não muda a versão (a automática promove a toda rodada)");
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, concluido_em, inseridos, atualizados, removidos) VALUES (3, 2024, 'promovido', '2025-05-01 10:00:00', 0, 2, 0)");
   const v2 = await consultaVersaoExecucao(b.db);
-  assert.notEqual(v1, v2, "uma importação promovida muda a versão");
+  assert.notEqual(v1, v2, "uma importação promovida com mudança muda a versão");
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, concluido_em, inseridos, atualizados, removidos) VALUES (3, 2023, 'promovido', '2025-04-01 10:00:00', 1, 0, 0)");
+  const v3 = await consultaVersaoExecucao(b.db);
+  b.raw.exec("DELETE FROM centi_lotes WHERE ano = 2023");
+  assert.notEqual(await consultaVersaoExecucao(b.db), v3, "excluir uma importação que não era a última também muda a versão");
   b.raw.exec("UPDATE empenho_cards SET ultimo_status = 'falhou' WHERE id = 4");
   const meta = await consultaMetaExecucao(b.db);
   const liq = meta.find((m) => m.tipo === "liquidacoes");

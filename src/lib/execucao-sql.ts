@@ -1,7 +1,7 @@
 import { type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { type EscopoEmpenhos, escopoVazio } from "./empenhos-tela-core.ts";
-import { doEscopo } from "./empenhos-tela-sql.ts";
+import { doEscopo, loteMudou } from "./empenhos-tela-sql.ts";
 import { DIMS_DICIONARIO, type DimDicionario, ESCALA, type MetaExec } from "./execucao-dash-core.ts";
 import { limiteParado } from "./empenhos-core.ts";
 
@@ -139,8 +139,7 @@ function ctes(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql): SQ
  * A VERSÃO dos dados da Execução: a última importação promovida de QUALQUER card + a última mudança de vínculos + os
  * cards (criar/excluir um card leva ou tira dados sem lote novo).
  */
-export const VERSAO_SQL =
-  "((SELECT IFNULL(MAX(id), 0) FROM centi_lotes WHERE estado = 'promovido') || ':' || (SELECT IFNULL(MAX(vinculos_em), '') FROM empenho_cards) || ':' || (SELECT COUNT(*) || '.' || IFNULL(MAX(id), 0) FROM empenho_cards))";
+export const VERSAO_SQL = `((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l WHERE ${loteMudou("l")}) || ':' || (SELECT IFNULL(MAX(vinculos_em), '') FROM empenho_cards) || ':' || (SELECT COUNT(*) || '.' || IFNULL(MAX(id), 0) FROM empenho_cards))`;
 
 export async function consultaVersaoExecucao(db: Db): Promise<string> {
   const [r] = await db.all<{ ver: string }>(sql.raw(`SELECT ${VERSAO_SQL} AS ver`));
@@ -152,7 +151,7 @@ export async function consultaVersaoExecucao(db: Db): Promise<string> {
 export type VersoesExecucao = { empenhos: string; liquidacoes: string; pagamentos: string; cadastro: string };
 
 function versaoTipoSql(t: "empenhos" | "liquidacoes" | "pagamentos"): string {
-  return `((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = '${t}' AND l.estado = 'promovido') || ':' || (SELECT COUNT(*) || '.' || IFNULL(MAX(id), 0) || '.' || IFNULL(MAX(vinculos_em), '') FROM empenho_cards WHERE tipo = '${t}'))`;
+  return `((SELECT COUNT(*) || '.' || IFNULL(MAX(l.id), 0) FROM centi_lotes l JOIN empenho_cards c ON c.id = l.card_id WHERE c.tipo = '${t}' AND ${loteMudou("l")}) || ':' || (SELECT COUNT(*) || '.' || IFNULL(MAX(id), 0) || '.' || IFNULL(MAX(vinculos_em), '') FROM empenho_cards WHERE tipo = '${t}'))`;
 }
 
 export async function consultaVersoesExecucao(db: Db): Promise<VersoesExecucao> {

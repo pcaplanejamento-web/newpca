@@ -105,17 +105,19 @@ test("tela de empenhos: o ano da URL só vale se existe; senão o mais recente",
   assert.deepEqual(empenhosDoPacote({ n: 1, dic: {}, linhas: [[5, "7"]] })[0].valorPago, 0);
 });
 
-test("tela de empenhos: a VERSÃO do ano = a última importação promovida DO CARD + a data dos vínculos dele", async () => {
+test("tela de empenhos: a VERSÃO do ano = as importações promovidas DO CARD que mudaram dados + a data dos vínculos dele", async () => {
   const b = banco();
-  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "0:");
-  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado) VALUES (1, 2026, 'promovido'), (1, 2026, 'parcial'), (1, 2025, 'promovido'), (2, 2026, 'promovido')");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "1:");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2025), "3:");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2, 2026), "4:", "cada card tem a sua versão");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "0.0:");
+  b.raw.exec(
+    "INSERT INTO centi_lotes (card_id, ano, estado, inseridos) VALUES (1, 2026, 'promovido', 3), (1, 2026, 'parcial', 1), (1, 2025, 'promovido', 1), (2, 2026, 'promovido', 1), (1, 2026, 'promovido', 0)",
+  );
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "1.1:", "o lote 5 foi promovido sem mudança: não conta");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2025), "1.3:");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 2, 2026), "1.4:", "cada card tem a sua versão");
   // Mudar os vínculos do card muda a versão (a tela relê o ano).
   b.raw.exec("UPDATE empenho_cards SET vinculos_em = '2026-10-21T10:00:00.000Z' WHERE id = 1");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "1:2026-10-21T10:00:00.000Z");
-  assert.equal(await consultaVersaoEmpenhos(b.db, 2, 2026), "4:");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 1, 2026), "1.1:2026-10-21T10:00:00.000Z");
+  assert.equal(await consultaVersaoEmpenhos(b.db, 2, 2026), "1.4:");
   b.raw.exec("UPDATE centi_lotes SET concluido_em = '2026-10-20 12:00:00' WHERE id = 1");
   b.ins.run("2026|A|1", 2026, "1", null, "A", null, null, null, null, 1, 0, 0, 0, 1, null, 1, null);
   assert.equal((await consultaAnosEmpenhos(b.db, 1))[0].atualizadoEm, "2026-10-20 12:00:00");
@@ -204,13 +206,15 @@ test("tabela ÚNICA (todos os cards): o mesmo empenho em dois cards UMA vez (o d
 test("tabela ÚNICA: a VERSÃO muda com a promoção de QUALQUER card de empenhos, os vínculos e os cards (excluir um card)", async () => {
   const b = banco();
   const v0 = await consultaVersaoEmpenhos(b.db, null, 2026);
-  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado) VALUES (2, 2026, 'promovido')");
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, atualizados) VALUES (2, 2026, 'promovido', 0)");
+  assert.equal(await consultaVersaoEmpenhos(b.db, null, 2026), v0, "promovido sem mudança não muda a versão");
+  b.raw.exec("INSERT INTO centi_lotes (card_id, ano, estado, atualizados) VALUES (2, 2026, 'promovido', 1)");
   const v1 = await consultaVersaoEmpenhos(b.db, null, 2026);
   assert.notEqual(v1, v0);
   b.raw.exec("UPDATE empenho_cards SET vinculos_em = '2026-10-26T10:00:00.000Z' WHERE id = 1");
   const v2 = await consultaVersaoEmpenhos(b.db, null, 2026);
   assert.notEqual(v2, v1);
-  b.raw.exec("INSERT INTO empenho_cards (id, nome, tipo) VALUES (3, 'Liq', 'liquidacoes'); INSERT INTO centi_lotes (card_id, ano, estado) VALUES (3, 2026, 'promovido')");
+  b.raw.exec("INSERT INTO empenho_cards (id, nome, tipo) VALUES (3, 'Liq', 'liquidacoes'); INSERT INTO centi_lotes (card_id, ano, estado, inseridos) VALUES (3, 2026, 'promovido', 1)");
   assert.equal(await consultaVersaoEmpenhos(b.db, null, 2026), v2, "card de liquidações não mexe na versão dos empenhos");
   b.raw.exec("DELETE FROM empenho_cards WHERE id = 1");
   assert.notEqual(await consultaVersaoEmpenhos(b.db, null, 2026), v2);

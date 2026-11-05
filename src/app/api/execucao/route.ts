@@ -15,7 +15,13 @@ export async function GET(req: Request) {
   if ("erro" in g) return g.erro;
   const f = fontesDoAcesso(g.acesso);
   if (!f.empenhos) return erro("O dashboard da execução precisa do acesso à tela Empenhos.", 403);
-  const texto = await respostaExecucao(new URL(req.url).searchParams.get("anos"), { liquidacoes: f.liquidacoes, pagamentos: f.pagamentos }, await escopoDosEmpenhos());
+  let texto: string | null;
+  try {
+    texto = await respostaExecucao(new URL(req.url).searchParams.get("anos"), { liquidacoes: f.liquidacoes, pagamentos: f.pagamentos }, await escopoDosEmpenhos());
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message.slice(0, 200) : "erro desconhecido";
+    return erro(`Não foi possível montar os dados da execução: ${motivo}`, 500);
+  }
   if (texto == null) return erro("Os dados estão sendo atualizados agora — tente de novo em instantes.", 503);
   return new Response(texto, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 }
