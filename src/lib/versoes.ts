@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.278.1",
+    data: "2026-11-05",
+    titulo: "Consulta do PCA cabe na tela",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Consulta do PCA",
+        texto: "A página da consulta não rola mais: as abas e a busca no alto e a tabela até o fim da tela, rolando por dentro, sem cartão em volta.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.278.0",
     data: "2026-11-05",
     titulo: "Consulta do PCA mais fácil de pesquisar",

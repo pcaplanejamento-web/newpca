@@ -419,6 +419,22 @@ export function DashboardPcaCliente({
   // A vista FIXA da consulta (menu da tela pública) é só a consulta: os indicadores e os filtros do topo repetiriam os
   // filtros da própria tabela.
   const soConsulta = vista === "consulta";
+  // Na vista fixa a tabela É o cartão (cartão em volta somava o padding abaixo dela e a página rolava).
+  const tabelaConsulta = consultaVista ? (
+    <ConsultaPca
+      protocolos={consultaVista.protocolos}
+      dfds={consultaVista.dfds}
+      foraDaSoma={consultaVista.foraDaSoma}
+      itens={filtrados}
+      showUnidade={showUnidade}
+      aberto={aberto}
+      onAbrir={setAberto}
+      fim={ajudaConsulta}
+      alturaCheia={soConsulta}
+    />
+  ) : (
+    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={soConsulta} />
+  );
   return (
     <>
       {!soConsulta && (
@@ -630,24 +646,10 @@ export function DashboardPcaCliente({
                 </div>
               ))}
           </div>
+        ) : soConsulta ? (
+          tabelaConsulta
         ) : (
-          <ChartCard>
-            {consultaVista ? (
-              <ConsultaPca
-                protocolos={consultaVista.protocolos}
-                dfds={consultaVista.dfds}
-                foraDaSoma={consultaVista.foraDaSoma}
-                itens={filtrados}
-                showUnidade={showUnidade}
-                aberto={aberto}
-                onAbrir={setAberto}
-                fim={ajudaConsulta}
-                alturaCheia={vista === "consulta"}
-              />
-            ) : (
-              <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={vista === "consulta"} />
-            )}
-          </ChartCard>
+          <ChartCard>{tabelaConsulta}</ChartCard>
         )}
       </div>
 
