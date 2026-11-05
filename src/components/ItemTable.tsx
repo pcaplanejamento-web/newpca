@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useMemo, useState } from "react";
-import { brl, dataBR, dec, num, numeroSemAno } from "@/lib/format";
+import { brl, dataBR, dec, numeroSemAno } from "@/lib/format";
 import type { ItemRow } from "@/lib/queries";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { CelulaCopiavel } from "./BotaoCopiar";
@@ -11,9 +11,9 @@ import { SearchField } from "./Field";
 
 /**
  * Tabela de ITENS do Dashboard do PCA (painel e tela inicial) — o MESMO `DataTable` das demais telas: TODAS as
- * colunas filtráveis/ordenáveis (facetas conectadas; faixa nas colunas numéricas/R$; período na data), sem quebra
- * nos dados curtos, linha compacta e busca por produto/código (vários de uma vez com ":"). Com `origem` (painel, PCA
- * de fonte protocolo) mostra o Protocolo/DFD de cada item e a linha abre o banner do item (`onRowClick`/`ativo`).
+ * colunas filtráveis/ordenáveis (facetas conectadas; o Seq. em LISTA com busca; faixa nas quantidades/R$; período na
+ * data), sem quebra nos dados curtos, linha compacta e busca por produto/código/protocolo/DFD (vários com ":"). Com
+ * `origem` (PCA de fonte protocolo) mostra o Protocolo/DFD de cada item — só quando algum item os tem — e a linha abre o banner do item (`onRowClick`/`ativo`).
  * Só dados — nenhum estado/erro de protocolo, DFD ou item é apontado aqui. Linhas na altura padrão (o produto em UMA
  * linha, inteiro na dica). A busca fica numa barra de UMA linha (`fim` = ao lado, ex.: o (?)); com `busca`, quem usa a
  * controla e a põe na barra dele (a Consulta do PCA: abas + busca + (?) na mesma linha).
@@ -46,24 +46,27 @@ export function ItemTable({
   const q = busca ?? qLocal;
 
   const filtradas = useMemo(() => {
-    const casa = predicadoBusca(q); // vários produtos de uma vez com ":"
-    return casa ? rows.filter((r) => casa([r.nomeProduto, r.idProduto])) : rows;
+    const casa = predicadoBusca(q); // vários de uma vez com ":"
+    return casa ? rows.filter((r) => casa([r.nomeProduto, r.idProduto, r.protocoloNumero, r.dfdNumero])) : rows;
   }, [rows, q]);
 
   const temDominio = useMemo(() => rows.some((r) => r.dominio), [rows]);
+  // Protocolo · Nº DFD · Tipo só quando algum item vem de DFD (um PCA só de planilhas não mostra colunas de "—").
+  const temOrigem = useMemo(() => origem && rows.some((r) => r.protocoloNumero || r.dfdNumero), [origem, rows]);
   const colunas = useMemo<Column<ItemRow>[]>(() => {
     const cols: Column<ItemRow>[] = [
       {
         key: "seq",
         header: "Seq.",
         nowrap: true,
-        filter: "range",
-        formatarFaixa: num,
-        total: false, numero: (r) => r.sequencial,
+        // Lista com busca (vários com ":"); a ordem segue numérica pelo `numero`.
+        total: false,
+        value: (r) => (r.sequencial != null ? String(r.sequencial) : "—"),
+        numero: (r) => r.sequencial,
         render: (r) => <span className="tabular-nums text-faint">{r.sequencial ?? "—"}</span>,
       },
     ];
-    if (origem)
+    if (temOrigem)
       cols.push(
         {
           key: "protocolo",
@@ -84,11 +87,14 @@ export function ItemTable({
           header: "Nº DFD",
           nowrap: true,
           value: (r) => r.dfdNumero ?? "—",
-          render: (r) => (
-            <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
-              <span className="font-mono text-[12px]">{r.dfdNumero ?? "—"}</span>
-            </CelulaCopiavel>
-          ),
+          render: (r) =>
+            r.dfdNumero ? (
+              <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
+                <span className="font-mono text-[12px]">{r.dfdNumero}</span>
+              </CelulaCopiavel>
+            ) : (
+              <span className="text-faint">—</span>
+            ),
         },
       );
     cols.push(
@@ -117,14 +123,14 @@ export function ItemTable({
           </CelulaCopiavel>
         ),
       },
-      ...(origem
+      ...(temOrigem
         ? [
             {
               key: "tipoDfd",
               header: "Tipo",
               nowrap: true,
               value: (r: ItemRow) => r.tipoDfd ?? "—",
-              render: (r: ItemRow) => <span className="text-xs text-text-2">{r.tipoDfd ?? "—"}</span>,
+              render: (r: ItemRow) => (r.tipoDfd ? <span className="text-xs text-text-2">{r.tipoDfd}</span> : <span className="text-faint">—</span>),
             },
           ]
         : []),
@@ -197,7 +203,7 @@ export function ItemTable({
       },
     );
     return cols;
-  }, [showUnidade, origem, temDominio]);
+  }, [showUnidade, temOrigem, temDominio]);
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -212,8 +218,10 @@ export function ItemTable({
         rows={filtradas}
         getKey={(r) => r.id}
         {...(alturaCheia ? { scrollInterno: true } : { pageSize: 20 })}
+        linhasSalvas="consulta-itens"
+        exportar={{ nome: "Itens do PCA" }}
         density="compact"
-        minWidth={origem ? 1180 : showUnidade ? 980 : 900}
+        minWidth={temOrigem ? 1180 : showUnidade ? 980 : 900}
         onRowClick={onRowClick}
         activeKey={ativo}
         ordemInicial={{ key: "seq", dir: "desc" }}
@@ -223,11 +231,20 @@ export function ItemTable({
   );
 }
 
-/** A busca dos itens (produto ou código; vários com ":") — compacta, na altura das barras. */
-export function BuscaItens({ valor, onMudar }: { valor: string; onMudar: (v: string) => void }) {
+/** A busca da consulta (itens: produto, código, protocolo ou DFD; vários com ":") — compacta, na altura das barras. */
+export function BuscaItens({
+  valor,
+  onMudar,
+  placeholder = "Buscar produto, código, protocolo ou DFD",
+}: {
+  valor: string;
+  onMudar: (v: string) => void;
+  /** O que a busca procura (padrão: a dos itens). */
+  placeholder?: string;
+}) {
   return (
     <div className="min-w-[min(100%,12rem)] flex-1 sm:max-w-xs">
-      <SearchField compacto value={valor} onChange={(e) => onMudar(e.target.value)} onClear={() => onMudar("")} placeholder="Buscar produto ou código" aria-label="Buscar produto ou código (vários com :)" />
+      <SearchField compacto value={valor} onChange={(e) => onMudar(e.target.value)} onClear={() => onMudar("")} placeholder={placeholder} aria-label={`${placeholder} (vários com :)`} />
     </div>
   );
 }

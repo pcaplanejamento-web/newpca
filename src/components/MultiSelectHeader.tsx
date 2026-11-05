@@ -12,6 +12,8 @@ import { IconArrowDown, IconArrowUp } from "./icons";
 // BUSCA como no Excel: vários valores de uma vez com ":" ("168:170:174" — `opcoesDaBusca`); os resultados
 // começam TODOS marcados e "Aplicar" (ou Enter) aplica SÓ os resultados marcados.
 type Dir = "asc" | "desc" | null;
+/** Quantas opções a lista DESENHA de uma vez (ex.: o Seq. com 20 mil itens) — marcar todos e Aplicar valem para todas as encontradas. */
+const MAX_OPCOES_VISIVEIS = 300;
 
 export function MultiSelectHeader({
   label,
@@ -107,11 +109,13 @@ function Painel({
   }, [q, options, detalhe, partes]);
   // As fixas no topo (na ordem dada) e as demais, na ordem de sempre — a seleção e o Aplicar valem para as duas.
   const [topo, resto] = useMemo(() => {
-    if (!noTopo?.length) return [[] as string[], visiveis];
+    if (!noTopo?.length) return [[] as string[], visiveis.slice(0, MAX_OPCOES_VISIVEIS)];
     const ha = new Set(visiveis);
     const fixas = new Set(noTopo);
-    return [noTopo.filter((o) => ha.has(o)), visiveis.filter((o) => !fixas.has(o))];
+    const t = noTopo.filter((o) => ha.has(o));
+    return [t, visiveis.filter((o) => !fixas.has(o)).slice(0, Math.max(0, MAX_OPCOES_VISIVEIS - t.length))];
   }, [visiveis, noTopo]);
+  const ocultas = visiveis.length - topo.length - resto.length;
   const buscando = q.trim() !== "";
   // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
   const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
@@ -208,6 +212,11 @@ function Painel({
         {topo.map(opcao)}
         {topo.length > 0 && resto.length > 0 && <hr className="my-1 border-border" />}
         {resto.map(opcao)}
+        {ocultas > 0 && (
+          <div className="px-3 py-2 text-center text-[11px] text-faint">
+            Mostrando {topo.length + resto.length} de {visiveis.length} — refine a busca
+          </div>
+        )}
         {visiveis.length === 0 && (
           <div className="px-3 py-4 text-center text-[12px] text-faint">Nada encontrado</div>
         )}

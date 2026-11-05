@@ -173,6 +173,8 @@ export type PropsPlanilhaDfds = {
   ocultasPadrao?: readonly string[];
   /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
   exportar?: { nome: string } | false;
+  /** As linhas por página guardadas no aparelho (ver `DataTable.linhasSalvas`) — a tabela principal. */
+  linhasSalvas?: string;
   /** As linhas na ordem e com os filtros da tabela PRINCIPAL (a Seleção da automação segue essa sequência). */
   onOrdenadas?: (linhas: LinhaDfd[]) => void;
   /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
@@ -205,6 +207,7 @@ export function propsPlanilhaDfds({
   edicoes,
   ocultasPadrao,
   exportar,
+  linhasSalvas,
   colunasExtras = [],
   conexao,
   filtrosRodape,
@@ -468,7 +471,7 @@ export function propsPlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas, conexao, filtrosRodape } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, linhasSalvas, ocultasPadrao, onOrdenadas, conexao, filtrosRodape } as const;
   return { principal, comum, erro, atencao, descartado, ok };
 }
 

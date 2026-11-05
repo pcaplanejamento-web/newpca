@@ -3,6 +3,7 @@
 import { useSemUnidade } from "./UnidadeUnica";
 import { type ReactNode, useMemo, useState } from "react";
 import { brl, num, numeroSemAno } from "@/lib/format";
+import { predicadoBusca } from "@/lib/tabela-filtros";
 import type { DfdDoPca, DfdForaDaSoma, ProtocoloDoPca } from "@/lib/pca-espaco";
 import type { ItemRow } from "@/lib/queries";
 import type { AberturaMesa } from "./BannersMesa";
@@ -14,6 +15,20 @@ import { type LinhaDfd, PlanilhaDfds } from "./PlanilhaDfds";
 import { Segmented } from "./Segmented";
 
 type Visao = "protocolos" | "dfds" | "itens" | "fora";
+
+/** O que a busca de cada aba procura (vários de uma vez com ":"). */
+const BUSCA_DA_ABA: Record<Exclude<Visao, "itens">, string> = {
+  protocolos: "Buscar protocolo, assunto ou unidade",
+  dfds: "Buscar DFD, planejamento ou protocolo",
+  fora: "Buscar DFD, planejamento, protocolo ou motivo",
+};
+const SEM_BUSCA: Record<Visao, string> = { protocolos: "", dfds: "", itens: "", fora: "" };
+
+/** As linhas que passam na busca da aba (`campos` = onde procurar). */
+function buscar<T>(linhas: T[], q: string, campos: (l: T) => (string | null | undefined)[]): T[] {
+  const casa = predicadoBusca(q);
+  return casa ? linhas.filter((l) => casa(campos(l))) : linhas;
+}
 
 const COLS_PROTOCOLO: Column<ProtocoloDoPca>[] = [
   {
@@ -99,13 +114,21 @@ export function ConsultaPca({
   alturaCheia?: boolean;
 }) {
   const [visao, setVisao] = useState<Visao>("itens");
-  const [busca, setBusca] = useState("");
+  // Uma busca POR ABA (trocar de aba não perde nem mistura o que foi digitado).
+  const [buscas, setBuscas] = useState(SEM_BUSCA);
+  const busca = buscas[visao];
+  const setBusca = (v: string) => setBuscas((b) => ({ ...b, [visao]: v }));
   // UMA unidade no cabeçalho e todos os protocolos dela: a coluna Unidade sai.
   const semSigla = useSemUnidade(() => protocolos.map((p) => p.sigla), "pca");
 
+  const protocolosF = useMemo(() => buscar(protocolos, buscas.protocolos, (p) => [p.numero, p.assunto, p.sigla]), [protocolos, buscas.protocolos]);
+  const foraF = useMemo(
+    () => buscar(foraDaSoma, buscas.fora, (d) => [d.numero, d.planejamento, d.protocoloNumero, d.motivo]),
+    [foraDaSoma, buscas.fora],
+  );
   const linhas = useMemo<LinhaDfd[]>(
     () =>
-      dfds.map((d) => ({
+      buscar(dfds, buscas.dfds, (d) => [d.numero, d.planejamento, d.protocoloNumero, d.sigla]).map((d) => ({
         key: d.id,
         numero: d.numero,
         planejamento: d.planejamento,
@@ -116,12 +139,12 @@ export function ConsultaPca({
         valor: d.valor,
         estado: "regular", // não exibido (`semEstado`)
       })),
-    [dfds],
+    [dfds, buscas.dfds],
   );
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {/* UMA linha: as abas + a busca dos itens + o fim (na altura padrão dos controles). */}
+      {/* UMA linha: as abas + a busca da aba + o fim (na altura padrão dos controles). */}
       <div className="flex flex-wrap items-center gap-2">
         <Segmented<Visao>
           value={visao}
@@ -134,7 +157,7 @@ export function ConsultaPca({
             ...(foraDaSoma.length ? [{ value: "fora" as const, label: `Fora da soma (${foraDaSoma.length})` }] : []),
           ]}
         />
-        {visao === "itens" && <BuscaItens valor={busca} onMudar={setBusca} />}
+        <BuscaItens valor={busca} onMudar={setBusca} placeholder={visao === "itens" ? undefined : BUSCA_DA_ABA[visao]} />
         {fim && <div className="ml-auto flex shrink-0 items-center gap-2">{fim}</div>}
       </div>
       <div key={visao} className="animate-cat-morph">
@@ -151,22 +174,25 @@ export function ConsultaPca({
         ) : visao === "fora" ? (
           <DataTable
             columns={COLS_FORA}
-            rows={foraDaSoma}
+            rows={foraF}
             getKey={(d) => d.id}
             {...(alturaCheia ? { scrollInterno: true } : { pageSize: 20 })}
+            linhasSalvas="consulta-fora"
             minWidth={820}
             density="compact"
             exportar={{ nome: "DFDs fora da soma" }}
             resumo={(l) => `${l.length} DFD${l.length === 1 ? "" : "s"} fora da soma · ${num(l.reduce((s, d) => s + d.itens, 0))} itens · ${brl(l.reduce((s, d) => s + d.valor, 0))}`}
           />
         ) : visao === "dfds" ? (
-          <PlanilhaDfds linhas={linhas} scrollInterno={alturaCheia} semEstado onRowClick={(id) => setAberto({ tipo: "dfd", id })} ativa={aberto?.tipo === "dfd" ? aberto.id : null} />
+          <PlanilhaDfds linhas={linhas} scrollInterno={alturaCheia} semEstado linhasSalvas="consulta-dfds" exportar={{ nome: "DFDs do PCA" }} onRowClick={(id) => setAberto({ tipo: "dfd", id })} ativa={aberto?.tipo === "dfd" ? aberto.id : null} />
         ) : (
           <DataTable
             columns={semSigla ? COLS_PROTOCOLO.filter((c) => c.key !== "sigla") : COLS_PROTOCOLO}
-            rows={protocolos}
+            rows={protocolosF}
             getKey={(p) => p.id}
             {...(alturaCheia ? { scrollInterno: true } : { pageSize: 20 })}
+            linhasSalvas="consulta-protocolos"
+            exportar={{ nome: "Protocolos do PCA" }}
             minWidth={760}
             onRowClick={(p) => setAberto({ tipo: "protocolo", id: p.id })}
             activeKey={aberto?.tipo === "protocolo" ? aberto.id : null}

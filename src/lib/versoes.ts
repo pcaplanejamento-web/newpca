@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.278.0",
+    data: "2026-11-05",
+    titulo: "Consulta do PCA mais fácil de pesquisar",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Consulta do PCA",
+        texto: "A coluna Seq. dos itens agora filtra por uma lista com busca: digite um ou vários sequenciais separados por “:” (ex.: 7933:7940) e escolha exatamente os que precisa.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "novo",
+        area: "Consulta do PCA",
+        texto: "Busca também nas abas Protocolos e DFDs; nos itens, a busca acha ainda pelo nº do protocolo e do DFD.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "melhoria",
+        area: "Tabelas",
+        texto: "Filtros com milhares de valores abrem na hora (a lista mostra os 300 primeiros e a busca encontra o resto); colunas sem nenhum dado somem; exportação com o nome da tabela e as linhas por página lembradas neste aparelho.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.277.0",
     data: "2026-11-05",
     titulo: "Execução sempre pronta e importações que cedem a vez",

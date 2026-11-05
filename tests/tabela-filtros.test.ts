@@ -178,3 +178,18 @@ describe("ordenarIndices", () => {
     assert.deepEqual(ordenarIndices([0, 1, 2, 3], ["—", "DFD-S", " ", "DFD-O"], "desc"), [1, 3, 0, 2]);
   });
 });
+
+describe("coluna de SEQUENCIAL em lista (consulta do PCA)", () => {
+  const seqs = ["7968", "10", "985", "—", "8985", "2"];
+  it("as opções saem em ordem NUMÉRICA e a busca com \":\" marca exatamente os pedidos", () => {
+    const r = aplicarFiltros(seqs.length, [{ tipo: "values", vals: seqs.map((s) => [s]) }], []);
+    const opcoes = r.opcoes[0] ?? [];
+    assert.deepEqual(
+      opcoes.filter((o) => o !== "—"),
+      ["2", "10", "985", "7968", "8985"],
+    );
+    assert.deepEqual(opcoesDaBusca(opcoes, "7968:10"), ["10", "7968"]);
+    const f = aplicarFiltros(seqs.length, [{ tipo: "values", vals: seqs.map((s) => [s]) }], [["10", "7968"]]);
+    assert.deepEqual(f.passam, [0, 1]);
+  });
+});
