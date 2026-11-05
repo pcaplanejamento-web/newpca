@@ -31,7 +31,28 @@ import {
   serie,
   sparks,
 } from "../src/lib/execucao-dash-core.ts";
-import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, EMP_POR_PEDACO, erroDeSobrecarga, erroDeTamanho, motivoDoErro, textoPacoteExecucao } from "../src/lib/execucao-sql.ts";
+import { sql } from "drizzle-orm";
+import {
+  comandoLimparPacotes,
+  comandoTravarMontagem,
+  consultaAnosExecucao,
+  consultaMetaExecucao,
+  consultaMontagemEmCurso,
+  consultaPacoteGuardado,
+  consultaPacotesEmUso,
+  consultaVersaoExecucao,
+  EMP_POR_PEDACO,
+  erroDeSobrecarga,
+  erroDeTamanho,
+  lerPedidoPacote,
+  MAX_CHARS_PARTE,
+  motivoDoErro,
+  PacoteEmMontagem,
+  pacotePronto,
+  partesDoTexto,
+  sqlPacote,
+  textoPacoteExecucao,
+} from "../src/lib/execucao-sql.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -433,4 +454,112 @@ test("motivoDoErro devolve a causa do D1, nunca o SQL; tamanho × sobrecarga", (
   assert.equal(erroDeSobrecarga(cheio), true, "a sobrecarga nunca vira repetição");
   assert.equal(erroDeTamanho(cheio), false);
   assert.equal(erroDeSobrecarga(new Error("D1 DB storage operation exceeded timeout which caused object to be reset.")), true);
+});
+
+/** O VOLUME REAL (20 mil empenhos, 60 mil liquidações, 60 mil pagamentos) — a regressão que derrubou a tela em produção. */
+function volumeReal() {
+  const b = banco();
+  const ins = b.raw.prepare(
+    "INSERT INTO empenhos (card_id, chave, ano, numero, data, orgao_gestor, fornecedor, elemento, valor_empenhado, orgao_id, reparticao_id) VALUES (1, ?, 2025, ?, ?, 'G', ?, ?, ?, 1, 5)",
+  );
+  const insL = b.raw.prepare("INSERT INTO liquidacoes (card_id, chave, ano, data, numero_empenho, valor, orgao_id, reparticao_id, id_orgao_centi) VALUES (3, ?, 2025, ?, ?, 1.5, 1, 5, 2)");
+  const insP = b.raw.prepare(
+    "INSERT INTO pagamentos (card_id, chave, ano, data, numero_empenho, valor, valor_liquido, orgao_id, reparticao_id, id_orgao_centi) VALUES (4, ?, 2025, ?, ?, 1.25, 1.25, 1, 5, 2)",
+  );
+  b.raw.exec("BEGIN");
+  for (let i = 0; i < 20_000; i++) {
+    const d = `2025-${String((i % 12) + 1).padStart(2, "0")}-${String((i % 28) + 1).padStart(2, "0")}`;
+    ins.run(`2025|G|${i}`, String(i), d, `F${i % 900}`, `E${i % 40}`, 10);
+    for (let k = 0; k < 3; k++) {
+      insL.run(`L${i}-${k}`, d, String(i));
+      insP.run(`P${i}-${k}`, d, String(i));
+    }
+  }
+  b.raw.exec("COMMIT");
+  return b;
+}
+
+test("execução (SQL): volume real — UMA consulta, no tempo, sem subconsulta correlacionada que varre tabela", async () => {
+  const b = volumeReal();
+  let consultas = 0;
+  const all = b.db.all.bind(b.db);
+  b.db.all = ((q: never) => {
+    consultas++;
+    return all(q);
+  }) as typeof b.db.all;
+  const t0 = performance.now();
+  const t = await textoPacoteExecucao(b.db, [2025], null, TUDO, `,"anos":[2025],"disponiveis":[],"fontes":${JSON.stringify(TUDO)},"meta":[]`);
+  const ms = performance.now() - t0;
+  assert.equal(consultas, 1);
+  const base = montarBase(JSON.parse(t) as PacoteExec);
+  assert.equal(base.emp.n, 20_000);
+  assert.equal(reais(calcular(base, {}, {}).totais.liquidado), 60_000 * 1.5);
+  // Medido: ~0,8 s (node:sqlite) — o teto folgado só pega a regressão de ordem de grandeza.
+  assert.ok(ms < 6_000, `pacote em ${ms} ms`);
+  const plano = (await b.db.all(sql`EXPLAIN QUERY PLAN ${sqlPacote([2025], null, TUDO, { emp: EMP_POR_PEDACO, eventos: 20_000 })}`)) as { detail: string }[];
+  const linhas = plano.map((p) => p.detail);
+  // As CTEs MATERIALIZADAS (calculadas uma vez) e as varreduras que não são de tabela.
+  const naoTabela = /^SCAN (json_each|CONSTANT|\(subquery|emp$|canon$|lg$|pg$|u$|d\d+$)/;
+  // Toda subconsulta CORRELACIONADA (roda por linha/pedaço) vai por índice ou sobre a CTE — nunca varre uma tabela.
+  linhas.forEach((l, i) => {
+    const prox = linhas[i + 1] ?? "";
+    if (l.startsWith("CORRELATED") && prox.startsWith("SCAN ")) assert.match(prox, naoTabela, `${l} → ${prox}`);
+  });
+  // As varreduras de TABELA ficam no número de hoje (uma por fonte): uma consulta nova que varre de novo quebra aqui.
+  const varreduras = linhas.filter((l) => l.startsWith("SCAN ") && !naoTabela.test(l) && !l.includes("COVERING INDEX"));
+  assert.ok(varreduras.length <= 16, varreduras.join(" | "));
+});
+
+test("execução (pacote PRONTO): guardado em partes, lido igual, trava de uma montagem por vez, uso e limpeza", async () => {
+  const b = volumeReal();
+  const pedido = { anos: [2025], fontes: TUDO, escopo: null };
+  const extra = `,"anos":[2025],"disponiveis":[2025],"fontes":${JSON.stringify(TUDO)}`;
+  const agora = new Date("2026-11-05T12:00:00Z");
+  const t = await pacotePronto(b.db, "k", "v1", pedido, extra, agora);
+  assert.equal(t, await textoPacoteExecucao(b.db, [2025], null, TUDO, extra));
+  assert.ok(t.length > MAX_CHARS_PARTE, "o pacote real passa de uma parte");
+  const g = await consultaPacoteGuardado(b.db, "k");
+  assert.equal(g?.versao, "v1");
+  assert.equal(g?.texto, t);
+  assert.equal(g?.montandoAte, null);
+  // A mesma versão = só a leitura (nenhuma CTE).
+  let consultas = 0;
+  const all = b.db.all.bind(b.db);
+  b.db.all = ((q: never) => {
+    consultas++;
+    return all(q);
+  }) as typeof b.db.all;
+  assert.equal(await pacotePronto(b.db, "k", "v1", pedido, extra, agora), t);
+  assert.equal(consultas, 0);
+  b.db.all = all;
+  // Outra execução trava a versão nova: quem chega serve o ANTERIOR, sem montar junto.
+  const ate = new Date(agora.getTime() + 60_000).toISOString();
+  assert.equal((await comandoTravarMontagem(b.db, "k", "{}", agora.toISOString(), ate)).length, 1);
+  assert.equal((await comandoTravarMontagem(b.db, "k", "{}", agora.toISOString(), ate)).length, 0);
+  assert.equal((await consultaMontagemEmCurso(b.db, agora.toISOString())).length, 1);
+  await assert.rejects(pacotePronto(b.db, "k", "v2", pedido, extra, agora), (e) => e instanceof PacoteEmMontagem && e.anterior === t);
+  // A trava vencida é retomada: monta a v2, guarda e solta.
+  const depois = new Date(agora.getTime() + 120_000);
+  assert.equal(await pacotePronto(b.db, "k", "v2", pedido, extra, depois), t);
+  assert.equal((await consultaPacoteGuardado(b.db, "k"))?.versao, "v2");
+  assert.equal((await consultaMontagemEmCurso(b.db, depois.toISOString())).length, 0);
+  // O uso: aberta agora entra na pré-montagem; sem uso há 7 dias, sai inteira (todas as partes).
+  const usados = await consultaPacotesEmUso(b.db, agora.toISOString());
+  assert.deepEqual(lerPedidoPacote(usados[0]?.pedido ?? null), pedido);
+  await b.db.batch([comandoLimparPacotes(b.db, "2026-11-01T00:00:00Z", depois.toISOString())]);
+  assert.ok(await consultaPacoteGuardado(b.db, "k"));
+  await b.db.batch([comandoLimparPacotes(b.db, "2026-12-01T00:00:00Z", depois.toISOString())]);
+  assert.equal(await consultaPacoteGuardado(b.db, "k"), null);
+  assert.equal(Number((b.raw.prepare("SELECT COUNT(*) AS n FROM execucao_pacotes").get() as { n: number }).n), 0);
+});
+
+test("execução (pacote PRONTO): partes sem partir caractere e o pedido guardado conferido", () => {
+  assert.deepEqual(partesDoTexto("abcdef", 4), ["abcd", "ef"]);
+  assert.deepEqual(partesDoTexto("", 4), [""]);
+  const emoji = "ab😀cd"; // o par substituto nunca é partido
+  assert.equal(partesDoTexto(emoji, 3).join(""), emoji);
+  assert.deepEqual(partesDoTexto(emoji, 3), ["ab", "😀c", "d"]);
+  assert.equal(lerPedidoPacote("lixo"), null);
+  assert.equal(lerPedidoPacote(JSON.stringify({ anos: ["x"], fontes: TUDO, escopo: null })), null);
+  assert.deepEqual(lerPedidoPacote(JSON.stringify({ anos: [2025], fontes: TUDO, escopo: { unidades: [1], orgaos: [] } })), { anos: [2025], fontes: TUDO, escopo: { unidades: [1], orgaos: [] } });
 });

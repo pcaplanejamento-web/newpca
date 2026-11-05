@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { esperaReconexao, lerCookie, origemDoProprioSite } from "../src/lib/ao-vivo-core.ts";
-import { CATALOGO_AVISOS, compactarNotificacoes, emailsDaPessoa, lerPrefsEmail, noSino, querEmail, resolverNotificacoes } from "../src/lib/notificacoes-config-core.ts";
+import { AVISOS_DIRETOS, CATALOGO_AVISOS, chaveFalhaSistema, compactarNotificacoes, emailsDaPessoa, lerPrefsEmail, noSino, querEmail, resolverNotificacoes } from "../src/lib/notificacoes-config-core.ts";
 import { comandoMarcarLidas, comandosExcluirNotificacoes, comandosRetencaoNotificacoes, consultaDispensadas } from "../src/lib/notificacoes-sql.ts";
 const TETO_NOTIFICACOES = 200;
 import { dataHoraCompleta, grupoDoDia, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, textoDoAviso, tituloComContagem } from "../src/lib/notificacoes-tela-core.ts";
@@ -25,7 +25,7 @@ describe("notificações — configuração do ADM (o e-mail no mínimo)", () =>
   it("o padrão manda por e-mail SÓ o fundamental", () => {
     const cfg = resolverNotificacoes(undefined);
     const porEmail = CATALOGO_AVISOS.filter((i) => cfg[i.chave].email).map((i) => i.chave);
-    assert.deepEqual(porEmail.sort(), ["acesso", "atrasada", "atribuida", "cadastro", "convite", "protocolo", "seguranca"].sort());
+    assert.deepEqual(porEmail.sort(), ["acesso", "atrasada", "atribuida", "cadastro", "convite", "protocolo", "seguranca", "sistema"].sort());
     // Tudo existe no sino (menos o só-e-mail).
     assert.equal(noSino(cfg, "comentario"), true);
     assert.equal(noSino(cfg, "acesso"), false);
@@ -321,5 +321,17 @@ describe("notificações — validação dos pedidos novos", () => {
     assert.equal(textoDoAviso({ tipo: "comunicado", texto: "**Prazo** hoje\n\n- a" }), "Prazo hoje\n\n• a");
     assert.equal(textoDoAviso({ tipo: "comunicado", texto: null }), null);
     assert.equal(textoDoAviso({ tipo: "atribuida", texto: "**x**" }), "**x**");
+  });
+});
+
+describe("aviso de FALHA NO SISTEMA (aos ADMs)", () => {
+  it("um por tipo a cada hora, no sino e no e-mail, sem desligar", () => {
+    const a = new Date("2026-11-05T13:05:00Z");
+    assert.equal(chaveFalhaSistema("execucao", a), chaveFalhaSistema("execucao", new Date("2026-11-05T13:59:59Z")));
+    assert.notEqual(chaveFalhaSistema("execucao", a), chaveFalhaSistema("execucao", new Date("2026-11-05T14:00:00Z")));
+    assert.notEqual(chaveFalhaSistema("execucao", a), chaveFalhaSistema("tela", a));
+    const item = CATALOGO_AVISOS.find((i) => i.chave === "sistema");
+    assert.deepEqual(item?.padrao, { sino: true, email: true, desligavel: false });
+    assert.ok(AVISOS_DIRETOS.includes("sistema"));
   });
 });

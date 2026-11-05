@@ -2,7 +2,23 @@ import type { Acesso } from "./acesso";
 import { podeTela } from "./acesso";
 import { getDb } from "./db";
 import { chaveEscopoEmpenhos, type EscopoEmpenhos } from "./empenhos-tela-core";
-import { consultaAnosExecucao, consultaMetaExecucao, consultaVersaoExecucao, erroDeSobrecarga, type FontesSql, motivoDoErro, textoPacoteExecucao } from "./execucao-sql";
+import {
+  consultaAnosExecucao,
+  consultaMetaExecucao,
+  consultaPacotesEmUso,
+  consultaVersaoExecucao,
+  comandoLimparPacotes,
+  erroDeSobrecarga,
+  type FontesSql,
+  lerPedidoPacote,
+  motivoDoErro,
+  PacoteEmMontagem,
+  type PedidoPacote,
+  pacotePronto,
+} from "./execucao-sql";
+import { sinalizarBancoOcupado } from "./importacoes-cron";
+import { avisarFalhaSistema } from "./notificacoes";
+import { depoisDaResposta } from "./segundo-plano";
 import { proximaAtualizacaoMs, textoIntervalo } from "./empenho-cards-core";
 import type { MetaExec } from "./execucao-dash-core";
 import { getConfigImportacoes } from "./importacoes-config";
@@ -45,6 +61,51 @@ export function anosPedidos(texto: string | null, disponiveis: readonly number[]
   return l.sort((a, b) => b - a).slice(0, MAX_ANOS_EXECUCAO);
 }
 
+/** Os campos que vão junto com o pacote (anos pedidos, os disponíveis e as etapas). */
+const extraDoPacote = (p: PedidoPacote, disponiveis: readonly number[]) => `,"anos":${JSON.stringify(p.anos)},"disponiveis":${JSON.stringify(disponiveis)},"fontes":${JSON.stringify(p.fontes)}`;
+/** A chave do pacote: os anos, as etapas e o escopo — nunca a pessoa. */
+const chaveDoPacote = (p: PedidoPacote) => `${p.anos.join(",")}|${p.fontes.liquidacoes ? 1 : 0}${p.fontes.pagamentos ? 1 : 0}|${chaveEscopoEmpenhos(p.escopo)}`;
+
+/** Pacotes abertos nas últimas 24 h são remontados quando a versão muda; sem uso há 7 dias, saem. */
+const DIA_MS = 24 * 3_600_000;
+
+/**
+ * PRÉ-MONTAGEM (o cron dos e-mails e o fim de cada promoção de lote): os pacotes que alguém abriu nas últimas 24 h e cuja
+ * versão mudou são montados e GUARDADOS antes de a pessoa pedir — a tela só lê. No máximo `max` por chamada (o limite de
+ * consultas por execução); cada um com a trava de `pacotePronto` (nunca dois montando a mesma chave). Nunca lança.
+ */
+export async function premontarExecucao(max = 2): Promise<number> {
+  const db = getDb();
+  const agora = new Date();
+  let feitos = 0;
+  try {
+    await db.batch([comandoLimparPacotes(db, new Date(agora.getTime() - 7 * DIA_MS).toISOString(), agora.toISOString())]);
+    const [ver, dados, usados] = await Promise.all([consultaVersaoExecucao(db), versaoDados().catch(() => ({ dados: "" })), consultaPacotesEmUso(db, new Date(agora.getTime() - DIA_MS).toISOString())]);
+    const versao = `${ver}|${dados.dados}`;
+    for (const u of usados) {
+      if (feitos >= max) break;
+      if (u.versao === versao) continue;
+      const pedido = lerPedidoPacote(u.pedido);
+      if (!pedido || chaveDoPacote(pedido) !== u.chave) continue;
+      const disponiveis = await memoAnos.obter(chaveEscopoEmpenhos(pedido.escopo), ver, () => consultaAnosExecucao(db, pedido.escopo));
+      feitos++;
+      await pacotePronto(db, u.chave, versao, pedido, extraDoPacote(pedido, disponiveis), agora).catch((e: unknown) => {
+        if (!(e instanceof PacoteEmMontagem)) console.warn(`[execucao] pré-montagem: ${motivoDoErro(e)}`);
+      });
+    }
+  } catch (e) {
+    console.warn(`[execucao] pré-montagem: ${motivoDoErro(e)}`);
+  }
+  return feitos;
+}
+
+/** A sobrecarga do D1: a chave pausa (o último bom) e a importação automática CEDE a vez às telas. */
+function cederAoUso(chave: string, e: unknown) {
+  console.warn(`[execucao] D1 sobrecarregado: ${motivoDoErro(e)}`);
+  sobrecarga.set(chave, Date.now() + ESPERA_SOBRECARGA_MS);
+  depoisDaResposta(sinalizarBancoOcupado(), "importacoes");
+}
+
 /** O texto JSON da resposta (`{"ok":true,"pacote":…}`); `null` = o D1 está sobrecarregado e não há pacote anterior desta chave; outra falha LANÇA. */
 export async function respostaExecucao(anosTexto: string | null, fontes: FontesSql, escopo: EscopoEmpenhos): Promise<string | null> {
   const db = getDb();
@@ -58,27 +119,35 @@ export async function respostaExecucao(anosTexto: string | null, fontes: FontesS
   });
   const disponiveis = await memoAnos.obter(chaveEscopoEmpenhos(escopo), ver, () => consultaAnosExecucao(db, escopo));
   const anos = anosPedidos(anosTexto, disponiveis);
-  const extra = `,"anos":${JSON.stringify(anos)},"disponiveis":${JSON.stringify(disponiveis)},"fontes":${JSON.stringify(fontes)}`;
-  const chave = `${anos.join(",")}|${fontes.liquidacoes ? 1 : 0}${fontes.pagamentos ? 1 : 0}|${chaveEscopoEmpenhos(escopo)}`;
+  const pedido: PedidoPacote = { anos, fontes, escopo };
+  const extra = extraDoPacote(pedido, disponiveis);
+  const chave = chaveDoPacote(pedido);
+  const versao = `${ver}|${dados.dados}`;
   const ultimo = ultimoBom.get(chave);
   let texto: string | null;
   if ((sobrecarga.get(chave) ?? 0) > Date.now()) texto = ultimo ?? null;
   else
     texto = await memo
-      .obter(chave, `${ver}|${dados.dados}`, async () => {
-        const t = await textoPacoteExecucao(db, anos, escopo, fontes, extra);
+      .obter(chave, versao, async () => {
+        const t = await pacotePronto(db, chave, versao, pedido, extra);
         sobrecarga.delete(chave);
         return t;
       })
       .catch((e: unknown) => {
+        // Outra execução está montando a versão nova (ou o banco ficou sobrecarregado no meio): o pacote ANTERIOR guardado.
+        if (e instanceof PacoteEmMontagem) {
+          if (e.cause) cederAoUso(chave, e.cause);
+          return e.anterior;
+        }
         // D1 SOBRECARREGADO (importações rodando): o último pacote bom desta chave e uma pausa antes de pedir de novo.
         if (erroDeSobrecarga(e)) {
-          console.warn(`[execucao] D1 sobrecarregado (anos ${anos.join(",")}): ${motivoDoErro(e)}`);
-          sobrecarga.set(chave, Date.now() + ESPERA_SOBRECARGA_MS);
+          cederAoUso(chave, e);
+          if (!ultimo) depoisDaResposta(avisarFalhaSistema("banco", `O banco ficou sobrecarregado ao abrir a Execução e não havia dados anteriores para mostrar: ${motivoDoErro(e)}`, "/painel/execucao"), "notificacao");
           return ultimo ?? null;
         }
-        // Qualquer outra falha é REAL (tamanho, consulta): vai aos logs e à tela com o motivo.
+        // Qualquer outra falha é REAL (tamanho, consulta): vai aos logs, à tela com o motivo e ao sino dos ADMs.
         console.error(`[execucao] falha ao montar o pacote (anos ${anos.join(",")}): ${motivoDoErro(e)}`, e);
+        depoisDaResposta(avisarFalhaSistema("execucao", `Os dados da Execução não foram montados: ${motivoDoErro(e)}`, "/painel/execucao"), "notificacao");
         throw e;
       });
   if (texto == null) return null;

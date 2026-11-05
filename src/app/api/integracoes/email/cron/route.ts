@@ -20,6 +20,7 @@ import { resendDaConfig } from "@/lib/resend-config";
 import { limparSegurancaVencida } from "@/lib/seguranca-acesso";
 import { limparExcluidosVencidos } from "@/lib/mesa-excluidos";
 import { limparLeiturasFrota } from "@/lib/frota";
+import { premontarExecucao } from "@/lib/execucao-dados";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,9 @@ export async function POST(req: Request) {
   await db.batch([o1, o2]).catch((e) => console.error("[cron] conferências órfãs:", (e as Error).message));
   // A classificação/domínio GRAVADOS dos itens novos (um lote por passada — o resto nas próximas).
   await reclassificarPendentes();
+  // O PACOTE PRONTO da Execução: as chaves abertas nas últimas 24 h com dado novo são montadas e guardadas antes de alguém
+  // pedir (a tela só lê); as sem uso há 7 dias saem.
+  await premontarExecucao(2);
   if ("erro" in (await resendDaConfig())) return ok({ ativo: false });
   const [{ n }] = await db.select({ n: count() }).from(usuarios).where(eq(usuarios.status, "ativo"));
   const total = Number(n) || 0;

@@ -1,4 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
+import { premontarExecucao } from "./execucao-dados";
+import { depoisDaResposta } from "./segundo-plano";
 import { centiLotePassos, centiLotes } from "@/db/schema";
 import type { Ator } from "./auditoria-core";
 import { registrarAuditoria } from "./auditoria";
@@ -480,9 +482,16 @@ export async function fecharParcial(card: CardEmpenho, lote: LoteCenti, motivo: 
  * CONCLUI o lote: a CONFERÊNCIA decide — todo o ano lido (nenhum período faltando), a contagem batendo com a Centi e os
  * valores no esperado — e só então PROMOVE; senão fecha como parcial (nada é gravado). A QUEDA (pelas regras do card) em
  * relação à última importação concluída do ano só passa com `aceitarQueda` (o lote segue aberto para a pessoa confirmar).
- * `usuario` null = a atualização automática.
+ * `usuario` null = a atualização automática. Promovido = o PACOTE PRONTO da Execução é remontado depois da resposta
+ * (`premontarExecucao` — a próxima pessoa encontra os dados novos já guardados).
  */
 export async function concluirLoteEmpenhos(card: CardEmpenho, loteLido: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
+  const c = await concluirLote(card, loteLido, opcoes);
+  if (c.estado === "promovido") depoisDaResposta(premontarExecucao(1), "execucao");
+  return c;
+}
+
+async function concluirLote(card: CardEmpenho, loteLido: LoteCenti, opcoes: { aceitarQueda: boolean; usuario: Ator }): Promise<Conclusao> {
   const db = getDb();
   let lote = loteLido;
   if (lote.modo !== "unidades") {

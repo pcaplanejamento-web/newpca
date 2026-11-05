@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.277.0",
+    data: "2026-11-05",
+    titulo: "Execução sempre pronta e importações que cedem a vez",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Execução",
+        texto: "Os dados do dashboard ficam guardados prontos no banco e são atualizados logo depois de cada importação: abrir a tela só lê o que já está pronto, sem recalcular.",
+        link: "/painel/execucao",
+      },
+      {
+        tipo: "novo",
+        area: "Importações",
+        texto: "Ritmo leve no horário de expediente (ligado por padrão) e a atualização automática pausa sozinha quando as telas encontram o banco ocupado.",
+        link: "/painel/configuracoes?aba=importacoes",
+      },
+      {
+        tipo: "novo",
+        area: "Notificações",
+        texto: "Aviso “Falha no sistema” aos administradores (sino e e-mail): banco sobrecarregado, tela que falhou no servidor e importação automática que parou — um por tipo a cada hora.",
+        link: "/painel/configuracoes?aba=notificacoes",
+      },
+    ],
+  },
+  {
     versao: "1.276.4",
     data: "2026-11-05",
     titulo: "Execução sem sobrecarregar o banco",

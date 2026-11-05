@@ -2931,6 +2931,24 @@ export const importacoesCron = sqliteTable("importacoes_cron", {
   desde: text("desde").notNull(),
 });
 
+/** O PACOTE PRONTO da Execução (migração `0179`): o texto por chave (anos · etapas · escopo) e versão, em partes de até
+ * `MAX_CHARS_PARTE`; a parte 0 guarda o pedido, o último uso e a trava da montagem. */
+export const execucaoPacotes = sqliteTable(
+  "execucao_pacotes",
+  {
+    chave: text("chave").notNull(),
+    parte: integer("parte").notNull(),
+    versao: text("versao").notNull(),
+    partes: integer("partes").notNull(),
+    texto: text("texto").notNull(),
+    pedido: text("pedido"),
+    em: text("em").notNull(),
+    usadoEm: text("usado_em"),
+    montandoAte: text("montando_ate"),
+  },
+  (t) => [primaryKey({ columns: [t.chave, t.parte] })],
+);
+
 /** O ESTADO da frota (uma linha): a VERSÃO dos dados — sobe a cada gravação que escreveu algo e a cada vínculo/cadastro. */
 export const frotaEstado = sqliteTable("frota_estado", {
   id: integer("id").primaryKey(),

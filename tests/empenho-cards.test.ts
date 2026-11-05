@@ -256,6 +256,10 @@ test("importações: a configuração CENTRAL (automática + regras) e a fila ú
   assert.deepEqual(lerConfigImportacoes(null), IMPORTACOES_PADRAO);
   assert.deepEqual(lerConfigImportacoes("x"), IMPORTACOES_PADRAO);
   assert.equal(lerConfigImportacoes({ ativa: "sim" }).ativa, false);
+  // O ritmo leve no expediente vem LIGADO (o padrão protege as telas); desligado só pelo ADM.
+  assert.equal(lerConfigImportacoes({}).expedienteLeve, true);
+  assert.equal(lerConfigImportacoes({ expedienteLeve: false }).expedienteLeve, false);
+  assert.equal(lerConfigImportacoes({ expedienteLeve: "não" }).expedienteLeve, true);
   const c = lerConfigImportacoes({ ativa: true, frequenciaMin: 7, quedaSoma: 33, removidos: "apagar", diasUteis: false });
   assert.equal(c.ativa, true);
   assert.equal(c.frequenciaMin, IMPORTACOES_PADRAO.frequenciaMin);

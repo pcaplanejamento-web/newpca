@@ -254,6 +254,9 @@ export type ConfigImportacoes = {
   /** O INTERVALO MÍNIMO entre duas atualizações do mesmo card (min; 0 = sem intervalo): antes disso nenhuma importação NOVA
    * começa — a manual, o "Importar tudo", o "Importar agora" da Execução e a automática (continuar a aberta pode). */
   intervaloMin: number;
+  /** RITMO LEVE no horário de expediente (dias úteis, 07h–19h de Brasília): a rodada do cron faz no máximo 2 chamadas por
+   * disparo (fora dele, 8) — as telas não disputam o banco com a importação. */
+  expedienteLeve: boolean;
 };
 
 /** As opções do intervalo mínimo entre atualizações. */
@@ -310,6 +313,7 @@ export const IMPORTACOES_PADRAO: ConfigImportacoes = {
   removidos: "marcar",
   automaticas: null,
   intervaloMin: 0,
+  expedienteLeve: true,
 };
 
 /** A escolha gravada → id → anos válidos, sem repetir (inválido = sai; nada válido e não-objeto = `null`, o legado). */
@@ -439,6 +443,7 @@ export function lerConfigImportacoes(v: unknown): ConfigImportacoes {
     removidos: lerRegraRemovidos(o.removidos),
     automaticas: lerAutomaticas(o.automaticas),
     intervaloMin: OPCOES_INTERVALO.some((q) => q.valor === o.intervaloMin) ? (o.intervaloMin as number) : IMPORTACOES_PADRAO.intervaloMin,
+    expedienteLeve: typeof o.expedienteLeve === "boolean" ? o.expedienteLeve : IMPORTACOES_PADRAO.expedienteLeve,
   };
   if (c.horaInicio >= c.horaFim) return { ...c, horaInicio: IMPORTACOES_PADRAO.horaInicio, horaFim: IMPORTACOES_PADRAO.horaFim };
   return c;

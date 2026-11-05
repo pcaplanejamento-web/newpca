@@ -191,8 +191,8 @@ export default {
             console.error(`[${rotulo}] cron (vez ${vez}):`, resp.status, await resp.text());
             return { ok: false, trabalhou: false };
           }
-          const corpo = (await resp.json().catch(() => null)) as { trabalhou?: boolean; depois?: number } | null;
-          return { ok: true, trabalhou: corpo?.trabalhou === true, depois: corpo?.depois };
+          const corpo = (await resp.json().catch(() => null)) as { trabalhou?: boolean; depois?: number; limite?: number } | null;
+          return { ok: true, trabalhou: corpo?.trabalhou === true, depois: corpo?.depois, limite: corpo?.limite };
         } catch (e) {
           console.error(`[${rotulo}] cron falhou (vez ${vez}):`, e);
           return { ok: false, trabalhou: false };

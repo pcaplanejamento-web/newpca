@@ -8,7 +8,20 @@ export const MAX_CHAMADAS_RODADA = 8;
 export const MAX_MS_RODADA = 25_000;
 
 /** A resposta de uma chamada: `depois` = o card que acabou de ser servido (a próxima chamada começa DEPOIS dele). */
-export type RespostaVez = { ok: boolean; trabalhou: boolean; depois?: number };
+export type RespostaVez = { ok: boolean; trabalhou: boolean; depois?: number; limite?: number };
+
+/** O RITMO LEVE: chamadas por disparo no expediente (dias úteis, 07h–19h de Brasília). */
+export const CHAMADAS_EXPEDIENTE = 2;
+
+/** Quantas chamadas a rodada pode fazer agora: no expediente com o ritmo leve ligado, `CHAMADAS_EXPEDIENTE`; senão o teto. */
+export function chamadasDaRodada(expedienteLeve: boolean, agora: Date): number {
+  if (!expedienteLeve) return MAX_CHAMADAS_RODADA;
+  // Brasília = UTC−3 o ano inteiro (sem horário de verão desde 2019).
+  const b = new Date(agora.getTime() - 3 * 3_600_000);
+  const dia = b.getUTCDay();
+  const hora = b.getUTCHours();
+  return dia >= 1 && dia <= 5 && hora >= 7 && hora < 19 ? CHAMADAS_EXPEDIENTE : MAX_CHAMADAS_RODADA;
+}
 
 /**
  * Faz as chamadas da rodada até uma não trabalhar (nada a fazer, só espera), falhar, não caber no tempo ou chegar ao teto.
@@ -25,11 +38,14 @@ export async function rodadaDoCron(
   let vez = 0;
   let maior = 0;
   let depois: number | null = null;
-  while (vez < limites.chamadas) {
+  let teto = limites.chamadas;
+  while (vez < teto) {
     if (vez > 0 && agora() - ini + maior > limites.ms) break;
     const t0 = agora();
     const r = await chamar(vez++, depois);
     maior = Math.max(maior, agora() - t0);
+    // A 1ª chamada diz o ritmo de agora (o ritmo leve no expediente): a rodada nunca passa dele.
+    if (r.limite && r.limite > 0) teto = Math.min(teto, r.limite);
     if (!r.ok || !r.trabalhou) break;
     tarefas++;
     depois = r.depois ?? null;

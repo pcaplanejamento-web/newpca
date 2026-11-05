@@ -927,6 +927,7 @@ export const TIPOS_NOTIFICACAO = [
   "comunicado",
   "versao",
   "seguranca",
+  "sistema",
 ] as const;
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
 

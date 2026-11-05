@@ -2,6 +2,7 @@ import { cronAutorizado } from "@/lib/cron";
 import { passoAutomaticoFrota } from "@/lib/frota";
 import { ok } from "@/lib/http";
 import { registrarCron } from "@/lib/importacoes-cron";
+import { avisarFalhaSistema } from "@/lib/notificacoes";
 import { situacaoComErro } from "@/lib/importacoes-cron-sql";
 import { frotaTrabalhou, registraNaVez, vezDaRodada } from "@/lib/rodada-cron-core";
 
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
     const msg = (e as Error)?.message ?? String(e);
     console.error("[frota] cron:", msg);
     await registrarCron([{ chave: "frota:geral", situacao: `Erro na execução: ${msg}`, erro: true }]);
+    await avisarFalhaSistema("frota", `A atualização automática da frota falhou: ${msg}`, "/painel/configuracoes?aba=importacoes");
     return ok({ feito: "falhou", trabalhou: false });
   }
 }

@@ -2,6 +2,7 @@ import { diaUtil, feriadosNoIntervalo } from "./calendario-core";
 import { getDb } from "./db";
 import { anosAutomaticos, type CardEmpenho, type ConfigImportacoes, cardPorOrgao, cardsDaAutomatica, lotesForaDaEscolha, proximaDoCard } from "./empenho-cards-core";
 import { cardsAtivos, orgaosDoLote } from "./empenho-cards";
+import { motivoParaCeder } from "./importacoes-cron";
 import { and, eq } from "drizzle-orm";
 import { centiLeituras, centiLotePassos, centiLotes } from "@/db/schema";
 import { criarLote, encerrarParados, type getLote, loteEmAndamento, passosDaRetomada, rodizioDosAnos } from "./empenhos";
@@ -50,7 +51,7 @@ export async function atualizarEmpenhosAuto(
   vez = 0,
   /** O card servido pela chamada anterior da RODADA: a fila começa depois dele (rodízio justo). */
   depois: number | null = null,
-): Promise<{ situacoes: { card: number; situacao: string }[]; trabalhou: boolean; servido?: number }> {
+): Promise<{ situacoes: { card: number; situacao: string }[]; trabalhou: boolean; servido?: number; limite?: number }> {
   const nada = (situacoes: { card: number; situacao: string }[]) => ({ situacoes, trabalhou: false });
   // Os lotes PARADOS há mais de 30 min (a aba fechou, o Worker foi cortado) são encerrados em TODOS os cards — ligada ou
   // não a automática: nada fica "lendo" para sempre na Execução e no painel do canto.
@@ -59,6 +60,10 @@ export async function atualizarEmpenhosAuto(
   const cfg = await getConfigImportacoes();
   // `card` 0 = a automática inteira (a tela mostra se ela está desligada, sem nada escolhido ou rodando).
   if (!cfg.ativa) return nada([{ card: 0, situacao: "Atualização automática desligada" }, ...(await encerrarLotesAuto())]);
+  // As TELAS em primeiro lugar: com o banco sobrecarregado há pouco (ou a Execução montando o pacote), a automática cede a
+  // vez — nada de disputar o D1 com quem está usando o sistema.
+  const ceder = await motivoParaCeder(agora);
+  if (ceder) return nada([{ card: 0, situacao: ceder }]);
   const hoje = hojeIso(agora);
   const anoAtual = Number(hoje.slice(0, 4));
   // SÓ as importações (card × ano) ESCOLHIDAS em Configurações → Importações; o lote da automática num card/ano que saiu

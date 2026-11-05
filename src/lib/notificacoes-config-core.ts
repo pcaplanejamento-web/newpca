@@ -52,6 +52,7 @@ export const CATALOGO_AVISOS: readonly ItemCatalogoAviso[] = [
   { chave: "comunicado", rotulo: "Comunicado", descricao: "Um aviso enviado pelo administrador a todos ou a um grupo.", grupo: "Administração", padrao: c(true, false, true) },
   { chave: "versao", rotulo: "Nova versão do sistema", descricao: "A cada pessoa: o que mudou nas telas que o grupo dela abre (o administrador recebe tudo), com o caminho até onde mudou.", grupo: "Administração", padrao: c(true, false) },
   { chave: "seguranca", rotulo: "Login suspeito", descricao: "Aos administradores (e à pessoa): login de um aparelho novo ou conta bloqueada por senhas erradas.", grupo: "Administração", padrao: c(true, true, false) },
+  { chave: "sistema", rotulo: "Falha no sistema", descricao: "Aos administradores: o banco sobrecarregado, uma tela que falhou no servidor ou a importação automática que parou — um aviso por tipo a cada hora.", grupo: "Administração", padrao: c(true, true, false) },
   { chave: "cadastro", rotulo: "Cadastro aguardando aprovação", descricao: "Aos administradores: uma pessoa pediu acesso.", grupo: "Administração", padrao: c(true, true, false) },
   { chave: "acesso", rotulo: "Acesso liberado", descricao: "À pessoa: o administrador aprovou o cadastro.", grupo: "Administração", padrao: c(false, true, false), soEmail: true },
 ];
@@ -161,7 +162,7 @@ export function emailAposPara(prefs: PrefsEmail, agora: number, obrigatorio = fa
 
 export const CHAVE_PREF_PESSOA = "notificacoes:pessoa";
 /** Os avisos que nem o silenciar nem a pessoa tiram do sino (falam DIRETO com ela). */
-export const AVISOS_DIRETOS: readonly ChaveAviso[] = ["atribuida", "mencionada", "convite", "protocolo", "cadastro", "comunicado", "seguranca"];
+export const AVISOS_DIRETOS: readonly ChaveAviso[] = ["atribuida", "mencionada", "convite", "protocolo", "cadastro", "comunicado", "seguranca", "sistema"];
 /**
  * O que a pessoa escolheu para o SINO: os tipos que ela não quer (só os não diretos), as TAREFAS e os QUADROS silenciados
  * (nada além dos diretos chega deles) e os alertas do APARELHO — som e a notificação do sistema.
@@ -235,3 +236,9 @@ export function querEmail(cfg: ConfigResolvida, prefs: PrefsEmail, chave: string
 export function emailsDaPessoa(cfg: ConfigResolvida, prefs: PrefsEmail): { item: ItemCatalogoAviso; ligado: boolean; fixo: boolean }[] {
   return CATALOGO_AVISOS.filter((i) => cfg[i.chave].email).map((item) => ({ item, fixo: !cfg[item.chave].desligavel, ligado: querEmail(cfg, prefs, item.chave) }));
 }
+
+/** Os TIPOS de falha avisados aos ADMs (o aviso `sistema`). */
+export type TipoFalhaSistema = "execucao" | "banco" | "tela" | "importacao" | "frota";
+
+/** A chave do aviso de falha: UM por tipo a cada hora (UTC) — a repetição na mesma hora é ignorada pelo índice único. */
+export const chaveFalhaSistema = (tipo: TipoFalhaSistema, agora: Date) => `sistema:${tipo}:${agora.toISOString().slice(0, 13)}`;

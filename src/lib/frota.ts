@@ -13,6 +13,7 @@ import { lerBlobConfiguracoes } from "./integracoes";
 import { decifrarSegredo } from "./integracoes-segredos";
 import { criarMemoVersao } from "./memo-versao-core";
 import { clienteVolus, ErroVolus } from "./volus-api";
+import { motivoParaCeder } from "./importacoes-cron";
 import { diasEntre, linhasDoExtrato, MAX_BYTES_DIA_FROTA, MAX_BYTES_EXTRATO, MSG_DIA_GRANDE, partesPara, type ProdutoContrato, type TipoTransacao, tiposDoProduto, transacoesDaResposta } from "./volus-core";
 
 /**
@@ -167,6 +168,8 @@ export async function passoAutomaticoFrota(agora = new Date()): Promise<string> 
   const cfg = await getConfigFrota();
   const fora = motivoForaDaHora(cfg, agora);
   if (fora) return fora;
+  const ceder = await motivoParaCeder(agora);
+  if (ceder) return ceder;
   const cursores = await garantirCursores();
   const t = proximoTrabalho(
     cursores.map((k) => ({ ...k, travaAte: k.travaAte })),

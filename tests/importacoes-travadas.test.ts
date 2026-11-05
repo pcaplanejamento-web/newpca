@@ -5,7 +5,7 @@ import * as schema from "../src/db/schema.ts";
 import { MSG_INTERROMPIDA, passoEfetivo, proximoTrabalho } from "../src/lib/frota-config-core.ts";
 import { comandoTravarCursor } from "../src/lib/frota-sql.ts";
 import { BYTES_CAPTURA, capturaDaTentativa, JANELA, janelaDaTentativa, processarJanela } from "../src/lib/fragmentos-centi-core.ts";
-import { comandosRegistrarCron, situacaoComErro, situacoesDaCenti } from "../src/lib/importacoes-cron-sql.ts";
+import { CHAVE_BANCO_OCUPADO, bancoOcupado, comandoBancoOcupado, comandosRegistrarCron, situacaoComErro, situacoesDaCenti } from "../src/lib/importacoes-cron-sql.ts";
 import { bancoMigrado } from "./fixtures/banco-migrado.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -100,4 +100,18 @@ test("leitura fragmentada: a janela REDUZIDA é a que se lê do banco (o substr 
   const { readFileSync } = await import("node:fs");
   const fonte = readFileSync(new URL("../src/lib/empenhos-fragmentos.ts", import.meta.url), "utf8");
   assert.match(fonte, /substr\(\$\{centiBrutos\.texto\}, [^`]*\$\{janela\}\)/);
+});
+
+test("importações CEDEM ao uso: o sinal do banco ocupado vale 2 min desde a ÚLTIMA sobrecarga", async () => {
+  const raw = bancoMigrado();
+  const db = drizzle(d1Sobre(raw) as never, { schema });
+  const t0 = Date.parse("2026-11-05T13:00:00Z");
+  await db.batch([comandoBancoOcupado(db, new Date(t0).toISOString())]);
+  await db.batch([comandoBancoOcupado(db, new Date(t0 + 90_000).toISOString())]); // renova o `em`
+  const em = (raw.prepare("SELECT em FROM importacoes_cron WHERE chave = ?").get(CHAVE_BANCO_OCUPADO) as { em: string }).em;
+  assert.equal(em, "2026-11-05 13:01:30");
+  assert.equal(bancoOcupado(em, t0 + 100_000), true);
+  assert.equal(bancoOcupado(em, t0 + 90_000 + 120_000), false);
+  assert.equal(bancoOcupado(null, t0), false);
+  assert.equal(bancoOcupado("lixo", t0), false);
 });

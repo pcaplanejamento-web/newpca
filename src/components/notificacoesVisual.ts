@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { TipoNotificacao } from "@/lib/tarefas-core";
 import {
+  IconAlert,
   IconAtribuir,
   IconAutomacao,
   IconCadastro,
@@ -42,6 +43,7 @@ export const VISUAL_AVISO: Record<TipoNotificacao | "acesso", { Icone: Component
   comunicado: { Icone: IconMegafone, cor: "var(--accent)", rotulo: "Comunicados" },
   versao: { Icone: IconNovidades, cor: "var(--accent)", rotulo: "Versões" },
   seguranca: { Icone: IconLock, cor: "var(--danger)", rotulo: "Segurança" },
+  sistema: { Icone: IconAlert, cor: "var(--danger)", rotulo: "Falhas no sistema" },
   cadastro: { Icone: IconCadastro, cor: "var(--accent)", rotulo: "Cadastros" },
   acesso: { Icone: IconCadastro, cor: "var(--ok)", rotulo: "Acesso liberado" },
 };

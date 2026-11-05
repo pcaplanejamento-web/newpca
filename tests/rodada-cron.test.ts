@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_CHAMADAS_RODADA, depoisDaRodada, frotaTrabalhou, inicioDaFila, registraNaVez, rodadaDoCron, textoTarefas, vezDaRodada } from "../src/lib/rodada-cron-core.ts";
+import { CHAMADAS_EXPEDIENTE, MAX_CHAMADAS_RODADA, chamadasDaRodada, depoisDaRodada, frotaTrabalhou, inicioDaFila, registraNaVez, rodadaDoCron, textoTarefas, vezDaRodada } from "../src/lib/rodada-cron-core.ts";
 
 test("rodada: segue enquanto trabalha e para no ocioso", async () => {
   const vezes: number[] = [];
@@ -57,4 +57,16 @@ test("vez da rodada, registro e textos", () => {
   assert.equal(frotaTrabalhou("Lido 000617 combustivel 2026-10-01..2026-10-07: 3 registros (0 novos, 0 alterados)."), true);
   assert.equal(frotaTrabalhou("Período grande demais (x y); o passo diminui."), true);
   assert.equal(frotaTrabalhou("Nada a atualizar agora."), false);
+});
+
+test("rodada: o RITMO LEVE no expediente — 2 chamadas de segunda a sexta, 7h–19h de Brasília; fora disso, o teto", async () => {
+  assert.equal(chamadasDaRodada(true, new Date("2026-11-05T13:00:00Z")), CHAMADAS_EXPEDIENTE); // quinta, 10h
+  assert.equal(chamadasDaRodada(true, new Date("2026-11-05T22:30:00Z")), MAX_CHAMADAS_RODADA); // quinta, 19h30
+  assert.equal(chamadasDaRodada(true, new Date("2026-11-05T09:59:00Z")), MAX_CHAMADAS_RODADA); // quinta, 6h59
+  assert.equal(chamadasDaRodada(true, new Date("2026-11-07T13:00:00Z")), MAX_CHAMADAS_RODADA); // sábado
+  assert.equal(chamadasDaRodada(false, new Date("2026-11-05T13:00:00Z")), MAX_CHAMADAS_RODADA);
+  // A 1ª chamada diz o limite: a rodada para nele mesmo com trabalho.
+  let n = 0;
+  const r = await rodadaDoCron(async () => ({ ok: true, trabalhou: true, limite: n++ === 0 ? 2 : undefined }));
+  assert.deepEqual(r, { vezes: 2, tarefas: 2 });
 });

@@ -1,9 +1,10 @@
-import { type SQL, sql } from "drizzle-orm";
+import { type SQL, and, asc, eq, inArray, isNotNull, lt, gte, or, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { type EscopoEmpenhos, escopoVazio } from "./empenhos-tela-core.ts";
 import { doEscopo, loteMudou } from "./empenhos-tela-sql.ts";
 import { DIMS_DICIONARIO, type DimDicionario, ESCALA, type MetaExec } from "./execucao-dash-core.ts";
 import { limiteParado } from "./empenhos-core.ts";
+import { execucaoPacotes } from "../db/schema.ts";
 
 /**
  * As CONSULTAS do Dashboard da EXECUÇÃO (testadas no D1 real sobre `node:sqlite` — `tests/execucao-sql.test.ts`). O
@@ -203,7 +204,7 @@ export async function consultaAnosExecucao(db: Db, escopo: EscopoEmpenhos): Prom
  * p = pagamentos; `k` = o pedaço). Antes, a cabeça e cada pedaço eram consultas separadas que refaziam tudo — o D1
  * respondia "overloaded" (recursos demais em 10 s). Uma consulta = os dados de uma versão só.
  */
-function sqlPacote(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, tam: TamanhoPedacos): SQL {
+export function sqlPacote(anos: readonly number[], escopo: EscopoEmpenhos, f: FontesSql, tam: TamanhoPedacos): SQL {
   const dic = DIMS_DICIONARIO.map((d, k) => `'${d}', (SELECT json_group_array(json_array(i, v)) FROM d${k})`).join(", ");
   const orgaosDe = ["SELECT orgao_id FROM emp", ...(f.liquidacoes ? ["SELECT o FROM lg"] : []), ...(f.pagamentos ? ["SELECT o FROM pg"] : [])].join(" UNION ");
   const tuplaEmp = ["e.id", "e.numero", "e.r", "e.orgao_id", DIA("e.data"), ...DIMS_DICIONARIO.map((_, k) => `d${k}.i`), "e.vb", "e.va", "e.vl", "e.vp", "e.vs"].join(", ");
@@ -273,3 +274,192 @@ export function motivoDoErro(e: unknown): string {
 export const erroDeTamanho = (e: unknown): boolean => /too ?big|toobig|memory/i.test(motivoDoErro(e));
 /** O D1 SOBRECARREGADO (recursos demais na janela, tempo esgotado, objeto reiniciado) — repetir na hora só piora. */
 export const erroDeSobrecarga = (e: unknown): boolean => /overloaded|timeout|timed out|exceeded|reset/i.test(motivoDoErro(e));
+
+// ── O PACOTE PRONTO (migração `0179`) ────────────────────────────────────────────────────────────────────────────────
+/** Caracteres por parte guardada: 2 bytes por caractere no pior caso = 1,4 MB, abaixo dos 2 MB por linha do D1. */
+export const MAX_CHARS_PARTE = 700_000;
+
+/** O texto em partes de até `max` caracteres, sem partir um par substituto (emoji, símbolo fora do plano básico). */
+export function partesDoTexto(texto: string, max = MAX_CHARS_PARTE): string[] {
+  const r: string[] = [];
+  let i = 0;
+  while (i < texto.length) {
+    let fim = Math.min(texto.length, i + max);
+    const c = texto.charCodeAt(fim - 1);
+    if (fim < texto.length && c >= 0xd800 && c <= 0xdbff) fim--;
+    r.push(texto.slice(i, fim));
+    i = fim;
+  }
+  return r.length ? r : [""];
+}
+
+/** O pacote guardado de uma chave: `texto` só quando TODAS as partes da mesma versão estão lá (senão `null`). */
+export type PacoteGuardado = { versao: string; texto: string | null; usadoEm: string | null; montandoAte: string | null };
+
+export async function consultaPacoteGuardado(db: Db, chave: string): Promise<PacoteGuardado | null> {
+  const linhas = await db
+    .select({
+      parte: execucaoPacotes.parte,
+      versao: execucaoPacotes.versao,
+      partes: execucaoPacotes.partes,
+      texto: execucaoPacotes.texto,
+      usadoEm: execucaoPacotes.usadoEm,
+      montandoAte: execucaoPacotes.montandoAte,
+    })
+    .from(execucaoPacotes)
+    .where(eq(execucaoPacotes.chave, chave))
+    .orderBy(asc(execucaoPacotes.parte));
+  const p0 = linhas[0];
+  if (p0?.parte !== 0) return null;
+  const completo = p0.partes > 0 && linhas.length === p0.partes && linhas.every((l, i) => l.parte === i && l.versao === p0.versao);
+  return { versao: p0.versao, texto: completo ? linhas.map((l) => l.texto).join("") : null, usadoEm: p0.usadoEm, montandoAte: p0.montandoAte };
+}
+
+/** A TRAVA da montagem (compare-and-set na parte 0): devolve a linha só quando ESTA execução a conseguiu — livre ou vencida. */
+export function comandoTravarMontagem(db: Db, chave: string, pedido: string, agoraIso: string, ateIso: string) {
+  return db
+    .insert(execucaoPacotes)
+    .values({ chave, parte: 0, versao: "", partes: 0, texto: "", pedido, em: agoraIso, usadoEm: agoraIso, montandoAte: ateIso })
+    .onConflictDoUpdate({
+      target: [execucaoPacotes.chave, execucaoPacotes.parte],
+      set: { montandoAte: sql`excluded.montando_ate`, pedido: sql`excluded.pedido` },
+      setWhere: or(isNull(execucaoPacotes.montandoAte), lt(execucaoPacotes.montandoAte, agoraIso)),
+    })
+    .returning({ chave: execucaoPacotes.chave });
+}
+
+/** Solta a trava (a montagem falhou): o pacote anterior segue guardado. */
+export const comandoSoltarMontagem = (db: Db, chave: string) =>
+  db
+    .update(execucaoPacotes)
+    .set({ montandoAte: null })
+    .where(and(eq(execucaoPacotes.chave, chave), eq(execucaoPacotes.parte, 0)));
+
+/** GUARDA o pacote montado (num lote — transação): as partes antigas saem, as novas entram, a trava fica livre. */
+export function comandosGuardarPacote(db: Db, chave: string, versao: string, texto: string, pedido: string, agoraIso: string) {
+  const partes = partesDoTexto(texto);
+  return [
+    db.delete(execucaoPacotes).where(eq(execucaoPacotes.chave, chave)),
+    // Uma linha por comando: cada parte tem até ~1,4 MB.
+    ...partes.map((t, parte) =>
+      db.insert(execucaoPacotes).values({
+        chave,
+        parte,
+        versao,
+        partes: partes.length,
+        texto: t,
+        pedido: parte === 0 ? pedido : null,
+        em: agoraIso,
+        usadoEm: parte === 0 ? agoraIso : null,
+        montandoAte: null,
+      }),
+    ),
+  ];
+}
+
+/** Renova o ÚLTIMO USO (a pré-montagem só remonta o que alguém abriu nas últimas 24 h) — no máximo a cada `antesIso`. */
+export const comandoUsoPacote = (db: Db, chave: string, agoraIso: string, antesIso: string) =>
+  db
+    .update(execucaoPacotes)
+    .set({ usadoEm: agoraIso })
+    .where(and(eq(execucaoPacotes.chave, chave), eq(execucaoPacotes.parte, 0), or(isNull(execucaoPacotes.usadoEm), lt(execucaoPacotes.usadoEm, antesIso))));
+
+/** As chaves abertas desde `desdeIso` (com o pedido que as remonta). */
+export const consultaPacotesEmUso = (db: Db, desdeIso: string) =>
+  db
+    .select({ chave: execucaoPacotes.chave, versao: execucaoPacotes.versao, pedido: execucaoPacotes.pedido })
+    .from(execucaoPacotes)
+    .where(and(eq(execucaoPacotes.parte, 0), isNotNull(execucaoPacotes.pedido), gte(execucaoPacotes.usadoEm, desdeIso)))
+    .orderBy(sql`${execucaoPacotes.usadoEm} DESC`);
+
+/** Uma montagem está em andamento agora (a importação automática cede a vez). */
+export const consultaMontagemEmCurso = (db: Db, agoraIso: string) =>
+  db
+    .select({ chave: execucaoPacotes.chave })
+    .from(execucaoPacotes)
+    .where(and(eq(execucaoPacotes.parte, 0), gte(execucaoPacotes.montandoAte, agoraIso)))
+    .limit(1);
+
+/** Os pacotes sem uso desde `antesIso` saem (todas as partes; nunca o que está sendo montado). */
+export const comandoLimparPacotes = (db: Db, antesIso: string, agoraIso: string) =>
+  db.delete(execucaoPacotes).where(
+    inArray(
+      execucaoPacotes.chave,
+      db
+        .select({ c: execucaoPacotes.chave })
+        .from(execucaoPacotes)
+        .where(
+          and(
+            eq(execucaoPacotes.parte, 0),
+            or(isNull(execucaoPacotes.usadoEm), lt(execucaoPacotes.usadoEm, antesIso)),
+            or(isNull(execucaoPacotes.montandoAte), lt(execucaoPacotes.montandoAte, agoraIso)),
+          ),
+        ),
+    ),
+  );
+
+/** O que remonta um pacote sem a pessoa (guardado na parte 0): os anos, as etapas e o escopo. */
+export type PedidoPacote = { anos: number[]; fontes: FontesSql; escopo: EscopoEmpenhos };
+
+/** O pedido guardado → válido, ou `null` (outro formato: a chave só volta a ser montada quando alguém abrir). */
+export function lerPedidoPacote(texto: string | null): PedidoPacote | null {
+  try {
+    const o = JSON.parse(texto ?? "") as Partial<PedidoPacote>;
+    const ints = (l: unknown) => Array.isArray(l) && l.every((x) => Number.isInteger(x));
+    if (!ints(o.anos) || !o.fontes || typeof o.fontes.liquidacoes !== "boolean" || typeof o.fontes.pagamentos !== "boolean") return null;
+    const e = o.escopo;
+    if (e !== null && !(e && ints(e.unidades) && ints(e.orgaos))) return null;
+    return { anos: o.anos as number[], fontes: { liquidacoes: o.fontes.liquidacoes, pagamentos: o.fontes.pagamentos }, escopo: e ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/** Outra execução está montando a versão nova: serve o pacote ANTERIOR guardado (nunca dois montando juntos). */
+export class PacoteEmMontagem extends Error {
+  readonly anterior: string;
+  constructor(anterior: string) {
+    super("O pacote da Execução está sendo montado por outra execução.");
+    this.anterior = anterior;
+  }
+}
+
+/** Quanto tempo a trava da montagem vale (uma montagem leva poucos segundos; a vencida é retomada por outra execução). */
+export const TRAVA_MONTAGEM_MS = 60_000;
+/** O último uso é regravado no máximo a cada 10 min (poucas escritas). */
+const USO_RENOVAR_MS = 10 * 60_000;
+
+/**
+ * O PACOTE PRONTO da chave na versão: o GUARDADO (uma leitura barata, sem a CTE) quando é desta versão; senão a montagem
+ * com TRAVA (uma execução por chave — monta, guarda e solta). Travado por outra: o guardado anterior (`PacoteEmMontagem`)
+ * ou, sem nenhum, monta sem guardar. A sobrecarga do D1 na montagem, com o anterior guardado, também o serve.
+ */
+export async function pacotePronto(db: Db, chave: string, versao: string, pedido: PedidoPacote, extra: string, agora = new Date()): Promise<string> {
+  const g = await consultaPacoteGuardado(db, chave);
+  const agoraIso = agora.toISOString();
+  if (g?.texto != null && g.versao === versao) {
+    const antes = new Date(agora.getTime() - USO_RENOVAR_MS).toISOString();
+    if (!g.usadoEm || g.usadoEm < antes) await db.batch([comandoUsoPacote(db, chave, agoraIso, antes)]).catch(() => undefined);
+    return g.texto;
+  }
+  const pedidoJson = JSON.stringify(pedido);
+  const travou = await comandoTravarMontagem(db, chave, pedidoJson, agoraIso, new Date(agora.getTime() + TRAVA_MONTAGEM_MS).toISOString());
+  if (!travou.length) {
+    if (g?.texto) throw new PacoteEmMontagem(g.texto);
+    return textoPacoteExecucao(db, pedido.anos, pedido.escopo, pedido.fontes, extra);
+  }
+  let texto: string;
+  try {
+    texto = await textoPacoteExecucao(db, pedido.anos, pedido.escopo, pedido.fontes, extra);
+  } catch (e) {
+    await db.batch([comandoSoltarMontagem(db, chave)]).catch(() => undefined);
+    if (g?.texto && erroDeSobrecarga(e)) throw Object.assign(new PacoteEmMontagem(g.texto), { cause: e });
+    throw e;
+  }
+  // Guardar nunca derruba a resposta: falhou, a trava sai e a próxima execução tenta de novo.
+  await db.batch(comandosGuardarPacote(db, chave, versao, texto, pedidoJson, agoraIso) as never).catch(async (e) => {
+    console.error(`[execucao] não foi possível guardar o pacote: ${motivoDoErro(e)}`);
+    await db.batch([comandoSoltarMontagem(db, chave)]).catch(() => undefined);
+  });
+  return texto;
+}

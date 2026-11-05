@@ -28,6 +28,8 @@ export const configImportacoesSchema = z.strictObject({
   removidos: z.enum(["marcar", "apagar"]),
   /** O intervalo mínimo entre atualizações (min); ausente = mantém o gravado. */
   intervaloMin: z.number().int().optional(),
+  /** O ritmo leve no expediente; ausente = mantém o gravado. */
+  expedienteLeve: z.boolean().optional(),
   /** Quais importações atualizam sozinhas (id do card → anos); ausente = mantém a gravada; null = todas (o legado). */
   automaticas: z.record(z.string().regex(/^[1-9]\d{0,9}$/), z.array(z.number().int()).max(10)).nullable().optional(),
 });

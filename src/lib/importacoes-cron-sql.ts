@@ -52,3 +52,24 @@ export function situacoesDaCenti(r: readonly { card: number; situacao: string }[
 
 /** Uma situação gravada (o que a tela recebe). */
 export type LinhaCron = { chave: string; situacao: string; erro: number; em: string; desde: string };
+
+/** O SINAL "banco ocupado pelas telas" (a Execução viu o D1 sobrecarregado): a automática CEDE a vez por `CEDER_MS`. */
+export const CHAVE_BANCO_OCUPADO = "banco:ocupado";
+export const CEDER_MS = 2 * 60_000;
+
+/** Registra o sinal agora (o `em` sempre renova — a pausa conta da última sobrecarga). */
+export function comandoBancoOcupado(db: Db, agoraIso: string) {
+  const em = agoraIso.slice(0, 19).replace("T", " ");
+  const situacao = "Sobrecarga vista pelas telas — a automática cede a vez por 2 min";
+  return db
+    .insert(importacoesCron)
+    .values({ chave: CHAVE_BANCO_OCUPADO, situacao, erro: 0, em, desde: em })
+    .onConflictDoUpdate({ target: importacoesCron.chave, set: { em: sql`excluded.em`, situacao: sql`excluded.situacao` } });
+}
+
+/** O sinal ainda vale? (`em` = "AAAA-MM-DD HH:MM:SS" em UTC.) */
+export function bancoOcupado(em: string | null | undefined, agoraMs: number): boolean {
+  if (!em) return false;
+  const t = Date.parse(`${em.replace(" ", "T")}Z`);
+  return Number.isFinite(t) && agoraMs - t < CEDER_MS && agoraMs >= t - 60_000;
+}

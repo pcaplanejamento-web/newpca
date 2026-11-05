@@ -4,7 +4,7 @@ import { type GrupoAcesso, gruposComAbas } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
 import { getDb } from "./db";
-import { enviarPendentesDepois } from "./email";
+import { enviarPendentesDepois, idsDosAdmins } from "./email";
 import { dataIsoBrasilia } from "./format";
 import { podeNaTela, telasAbertas } from "./papeis-core";
 import { nomeExibicao, urlFoto } from "./pessoa";
@@ -14,7 +14,7 @@ import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorr
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
 import { agendarAoVivo, avisarAoVivo } from "./notificacoes-ao-vivo";
 import { getConfigNotificacoes } from "./notificacoes-config";
-import { CHAVE_PREF_PESSOA, emailAposPara, sqlUtc, lerPrefsEmail, lerPrefsPessoa, noSino, type PrefsEmail, type PrefsPessoa, querEmail, silenciado } from "./notificacoes-config-core";
+import { CHAVE_PREF_PESSOA, chaveFalhaSistema, emailAposPara, type TipoFalhaSistema, sqlUtc, lerPrefsEmail, lerPrefsPessoa, noSino, type PrefsEmail, type PrefsPessoa, querEmail, silenciado } from "./notificacoes-config-core";
 import { CHAVE_PREF_EMAIL } from "./email-core";
 import { type AlvoLeitura, type AlvoLimpeza, comandoMarcarLidas, comandosExcluirNotificacoes, consultaDispensadas } from "./notificacoes-sql";
 
@@ -115,6 +115,26 @@ export async function notificar(linhas: NovaNotificacao[], atorId?: number | nul
     return true;
   });
   await gravarAvisos(validas);
+}
+
+/** A última hora (por tipo) em que ESTE isolate já avisou — nada de ler os ADMs e gravar a cada pedido que falha. */
+const falhasAvisadas = new Map<TipoFalhaSistema, string>();
+
+/**
+ * FALHA NO SISTEMA → o sino (e o e-mail) dos ADMs ANTES de alguém reclamar: um aviso por tipo a cada hora (a chave única
+ * e a memória do isolate seguram a rajada). O texto traz o motivo — nunca o SQL. BEST-EFFORT: nunca lança.
+ */
+export async function avisarFalhaSistema(tipo: TipoFalhaSistema, texto: string, link = "/painel/armazenamento"): Promise<void> {
+  const agora = new Date();
+  const chave = chaveFalhaSistema(tipo, agora);
+  if (falhasAvisadas.get(tipo) === chave) return;
+  falhasAvisadas.set(tipo, chave);
+  try {
+    const admins = await idsDosAdmins();
+    await notificar(admins.map((usuarioId) => ({ usuarioId, tipo: "sistema" as const, titulo: "Falha no sistema", texto: texto.slice(0, 500), link, chave })));
+  } catch (e) {
+    console.error("[notificacoes] falha no sistema:", e);
+  }
 }
 
 /** O autor (snapshot) de uma notificação de evento. */

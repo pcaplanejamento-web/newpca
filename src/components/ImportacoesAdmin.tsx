@@ -600,12 +600,13 @@ function SituacaoAutomatica({ cron, cards }: { cron: LinhaCron[]; cards: ResumoC
   const geral = cron.find((c) => c.chave === "centi:geral");
   const nome = (chave: string) => {
     if (chave === "frota:geral") return "Frotas (Vólus)";
+    if (chave === "banco:ocupado") return "Banco de dados";
     const id = Number(chave.slice(6));
     return cards?.find((c) => c.id === id)?.nome ?? `Card ${id}`;
   };
   // "Parada" = a MESMA situação de TRABALHO há mais de 30 min (as de espera normal — fora da hora, intervalo, nada a fazer —
   // ficam iguais por horas sem nada errado).
-  const espera = /fora da hora|intervalo mínimo|nada a atualizar|nenhum ano|nenhuma importação|desligada|conduzida por uma aba|importação manual/i;
+  const espera = /pausada|cede a vez|fora da hora|intervalo mínimo|nada a atualizar|nenhum ano|nenhuma importação|desligada|conduzida por uma aba|importação manual/i;
   const parada = (c: LinhaCron) => !c.erro && !espera.test(c.situacao) && agora - Date.parse(`${c.desde.replace(" ", "T")}Z`) > 30 * 60_000;
   const linhas = cron.filter((c) => c.chave !== "centi:geral").sort((a, b) => b.erro - a.erro || nome(a.chave).localeCompare(nome(b.chave), "pt-BR"));
   return (
@@ -685,6 +686,7 @@ function PainelAutomatica({ config, cards, cron, onSalvo }: { config: ConfigImpo
           <span className="text-muted">
             Queda: soma {queda(config.quedaSoma)} · registros {queda(config.quedaRegistros)} · {config.removidos === "apagar" ? "apaga" : "marca"} o que a Centi não traz mais
             {config.intervaloMin > 0 && ` · intervalo mínimo de ${(OPCOES_INTERVALO.find((o) => o.valor === config.intervaloMin)?.rotulo ?? "").toLowerCase()}`}
+            {config.expedienteLeve && " · ritmo leve no expediente"}
           </span>
         </p>
         <SituacaoAutomatica cron={cron} cards={cards} />
@@ -735,6 +737,13 @@ function PainelAutomatica({ config, cards, cron, onSalvo }: { config: ConfigImpo
                 <Switch checked={v.diasUteis} onChange={(x) => muda("diasUteis", x)} label="Só em dias úteis" />
                 <Ajuda titulo="Dias úteis" compacta>
                   Ligado: não lê aos sábados, domingos e feriados.
+                </Ajuda>
+              </div>
+              <div className="flex items-center gap-1">
+                <Switch checked={v.expedienteLeve} onChange={(x) => muda("expedienteLeve", x)} label="Ritmo leve no horário de expediente" />
+                <Ajuda titulo="Ritmo leve no expediente" compacta>
+                  Ligado: de segunda a sexta, das 7h às 19h, cada disparo faz no máximo 2 tarefas (fora desse horário, 8) — as pessoas usando o sistema não
+                  disputam o banco com a importação. A automática também CEDE a vez sozinha quando as telas veem o banco sobrecarregado.
                 </Ajuda>
               </div>
             </SecaoBanner>

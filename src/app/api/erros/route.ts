@@ -1,6 +1,8 @@
 import { exigirUsuarioLivre } from "@/lib/api-auth";
 import { falhaTelaSchema } from "@/lib/erro-tela-validation";
 import { ok, parseCorpo } from "@/lib/http";
+import { avisarFalhaSistema } from "@/lib/notificacoes";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +26,12 @@ export async function POST(req: Request) {
       navegador: (req.headers.get("user-agent") ?? "").slice(0, 200),
     }),
   );
+  // A tela que falhou NO SERVIDOR (ou cortada no meio) avisa os ADMs — um aviso por hora; a falha só do navegador, não.
+  const f = corpo.data;
+  if (f.tipo === "servidor" || f.tipo === "conexao")
+    depoisDaResposta(
+      avisarFalhaSistema("tela", `${f.tipo === "servidor" ? "Uma tela falhou no servidor" : "Uma tela foi cortada no meio (conexão encerrada)"} em ${f.caminho || "—"}${f.digest ? ` (ref: ${f.digest})` : ""}${f.mensagem ? ` — ${f.mensagem}` : ""}.`),
+      "notificacao",
+    );
   return ok();
 }
