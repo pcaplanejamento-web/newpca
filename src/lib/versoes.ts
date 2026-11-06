@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.279.1",
+    data: "2026-11-06",
+    titulo: "Pesquisa mais organizada",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Cada resultado em duas linhas — o nome em cima e, embaixo, onde o termo foi encontrado (Seq., Código, Protocolo…); na prévia, todos os dados em grade com o termo em destaque.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "melhoria",
+        area: "Página pública",
+        texto: "Ao escolher um item, DFD ou protocolo na pesquisa, abre o banner padrão dele na própria página.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.279.0",
     data: "2026-11-06",
     titulo: "Pesquisa no cabeçalho da página pública",

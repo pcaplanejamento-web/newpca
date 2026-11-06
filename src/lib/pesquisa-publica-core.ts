@@ -86,67 +86,75 @@ export function hrefPublico(pcaId: number, vista: VistaPublica, extra: Record<st
   return `/?${q.toString()}`;
 }
 
-const texto = (...v: (string | number | null | undefined)[]) => v.filter((x): x is string | number => x != null && x !== "").map(String);
+/** Um campo do resultado: o rótulo e o valor como a página mostra (a prévia do banner e o "onde casou" da linha). */
+export type CampoPublico = [rotulo: string, valor: string];
+/** A linha do índice público: além do que a pesquisa do sistema usa, os CAMPOS (`info`) que a prévia mostra. */
+export type LinhaPublica = LinhaIndice & { info: CampoPublico[] };
+
+const semAcento = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 /** O nº sem o ano ("144756/2026" → "144756"), para o termo numérico casar com o número inteiro. */
 const semAno = (n: string | null | undefined) => (n ? n.replace(/\/\d{4}$/, "") : null);
-const semAcento = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-/** A linha com UM texto de busca já normalizado (`campos[0]`) — rótulo, detalhe e todas as colunas. */
-const linha = (id: number, rotulo: string, detalhe: string, href: string, campos: string[], numeros: string[]): LinhaIndice => ({
-  id,
-  rotulo,
-  detalhe,
-  href,
-  campos: [semAcento([rotulo, detalhe, ...campos].join("\n"))],
-  numeros,
-});
+const numeros = (...v: (string | number | null | undefined)[]) => v.filter((x): x is string | number => x != null && x !== "").map(String);
+/** Só os campos com valor. */
+const campos = (...c: [string, string | number | null | undefined | false][]): CampoPublico[] =>
+  c.filter((x): x is [string, string | number] => x[1] != null && x[1] !== "" && x[1] !== false).map(([r, v]) => [r, String(v)]);
+/** O detalhe da linha: os primeiros campos, `r valor` (o rótulo some quando o valor já diz o que é). */
+const detalheDe = (info: CampoPublico[]) => info.slice(0, 3).map(([r, v]) => (r ? `${r} ${v}` : v)).join(" · ");
+
+/** A linha com UM texto de busca já normalizado (`campos[0]`): o rótulo e todos os campos. */
+function linha(id: number, rotulo: string, href: string, info: CampoPublico[], nums: string[] = []): LinhaPublica {
+  return { id, rotulo, detalhe: detalheDe(info), href, info, campos: [semAcento([rotulo, ...info.map((c) => c[1])].join("\n"))], numeros: nums };
+}
 
 /** Todo termo tem de aparecer (sem acento/caixa); o número casa nos campos de número ou no texto. */
 export function casaPublico(q: string): (l: Pick<LinhaIndice, "campos" | "numeros">) => boolean {
   const termos = termosPesquisa(q).map(semAcento);
   return (l) => termos.every((t) => l.campos[0].includes(t) || (/^[\d./-]+$/.test(t) && l.numeros.some((n) => n.includes(t))));
 }
-const juntar = (...p: (string | null | undefined | false)[]) => p.filter(Boolean).join(" · ");
+
+/** O detalhe para o termo: primeiro os campos ONDE ele aparece (o porquê do resultado), depois os demais — até 3. */
+export function detalheDoTermo(info: CampoPublico[], q: string): string {
+  const termos = termosPesquisa(q).map(semAcento);
+  const casa = (v: string) => termos.some((t) => semAcento(v).includes(t));
+  return detalheDe([...info.filter((c) => casa(c[1])), ...info.filter((c) => !casa(c[1]))]);
+}
 
 /** Todas as linhas pesquisáveis, por tipo (só os tipos com dados; as abas e os PCAs sempre). */
-export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaIndice[]> {
+export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPublica[]> {
   const pca = d.pca.id;
   const tem = (v: VistaPublica) => d.vistas.includes(v);
-  const m = new Map<TipoPublico, LinhaIndice[]>();
+  const m = new Map<TipoPublico, LinhaPublica[]>();
   m.set(
     "aba",
-    d.vistas.map((v, i) => linha(i, ROTULO_VISTA_PUBLICA[v], d.pca.nome, hrefPublico(pca, v), [ROTULO_VISTA_PUBLICA[v], v], [])),
+    d.vistas.map((v, i) => linha(i, ROTULO_VISTA_PUBLICA[v], hrefPublico(pca, v), campos(["", d.pca.nome]))),
   );
   if (d.itens.length && tem("consulta"))
     m.set(
       "item",
-      d.itens.map((r) => {
-        const previsao = r.periodo ?? (r.mes && r.ano ? `${String(r.mes).padStart(2, "0")}/${r.ano}` : null);
-        return linha(
+      d.itens.map((r) =>
+        linha(
           r.id,
           r.nomeProduto || `Item ${r.idProduto ?? r.id}`,
-          juntar(r.sequencial != null && `Seq. ${r.sequencial}`, r.idProduto && `Código ${r.idProduto}`, r.dfdNumero && `DFD ${r.dfdNumero}`, r.codigo, brl(r.valorTotal ?? 0)),
           hrefPublico(pca, "consulta", { abrir: `item:${r.id}` }),
-          texto(
-            r.nomeProduto,
-            r.idProduto,
-            r.unidadeMedida,
-            r.classificacao,
-            r.tipoDfd,
-            r.dominio,
-            r.prioridade,
-            r.codigo,
-            r.municipio,
-            r.protocoloNumero,
-            r.dfdNumero,
-            previsao,
-            r.dataDesejada && dataBR(r.dataDesejada),
-            r.quantidade != null ? num(r.quantidade) : null,
-            r.valorReferencia != null ? brl(r.valorReferencia) : null,
-            r.valorTotal != null ? brl(r.valorTotal) : null,
+          campos(
+            ["Seq.", r.sequencial],
+            ["Código", r.idProduto],
+            ["Unidade", r.codigo && (r.municipio && r.municipio !== r.codigo ? `${r.codigo} — ${r.municipio}` : r.codigo)],
+            ["Valor total", r.valorTotal != null && brl(r.valorTotal)],
+            ["Quantidade", r.quantidade != null && num(r.quantidade)],
+            ["Medida", r.unidadeMedida],
+            ["Valor unitário", r.valorReferencia != null && brl(r.valorReferencia)],
+            ["Protocolo", r.protocoloNumero],
+            ["DFD", r.dfdNumero],
+            ["Tipo", r.tipoDfd],
+            ["Classificação", r.classificacao],
+            ["Domínio", r.dominio],
+            ["Prioridade", r.prioridade],
+            ["Previsão", r.periodo ?? (r.mes && r.ano ? `${String(r.mes).padStart(2, "0")}/${r.ano}` : r.dataDesejada && dataBR(r.dataDesejada))],
           ),
-          texto(r.idProduto, r.sequencial, r.dfdNumero, r.protocoloNumero, semAno(r.protocoloNumero), r.itemNumero, r.quantidade),
-        );
-      }),
+          numeros(r.idProduto, r.sequencial, r.dfdNumero, r.protocoloNumero, semAno(r.protocoloNumero), r.itemNumero, r.quantidade),
+        ),
+      ),
     );
   if (d.dfds.length && tem("consulta"))
     m.set(
@@ -154,11 +162,20 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaIn
       d.dfds.map((x) =>
         linha(
           x.id,
-          `DFD ${x.numero}${x.planejamento ? ` (Planej. ${x.planejamento})` : ""}`,
-          juntar(x.objeto, x.sigla, x.protocoloNumero && `Protocolo ${x.protocoloNumero}`, brl(x.valor)),
+          `DFD ${x.numero}`,
           hrefPublico(pca, "consulta", { abrir: `dfd:${x.id}` }),
-          texto(x.numero, x.planejamento, x.tipo, x.sigla, x.protocoloNumero, x.objeto, x.setor, x.orgao, brl(x.valor)),
-          texto(x.numero, x.planejamento, x.protocoloNumero, semAno(x.protocoloNumero)),
+          campos(
+            ["Planejamento", x.planejamento],
+            ["Unidade", x.sigla],
+            ["Valor", brl(x.valor)],
+            ["Objeto", x.objeto],
+            ["Protocolo", x.protocoloNumero],
+            ["Tipo", x.tipo],
+            ["Itens", num(x.itens)],
+            ["Setor", x.setor],
+            ["Órgão/Entidade", x.orgao],
+          ),
+          numeros(x.numero, x.planejamento, x.protocoloNumero, semAno(x.protocoloNumero)),
         ),
       ),
     );
@@ -169,17 +186,25 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaIn
         linha(
           p.id,
           `Protocolo ${p.numero}`,
-          juntar(p.assunto, p.sigla, `${num(p.dfds)} DFDs`, brl(p.valor)),
           hrefPublico(pca, "consulta", { abrir: `protocolo:${p.id}` }),
-          texto(p.numero, p.assunto, p.sigla, p.idExterno, p.interessado, p.observacao, brl(p.valor)),
-          texto(p.numero, semAno(p.numero), p.idExterno),
+          campos(
+            ["Assunto", p.assunto],
+            ["Unidade", p.sigla],
+            ["Valor", brl(p.valor)],
+            ["Id", p.idExterno],
+            ["DFDs", num(p.dfds)],
+            ["Itens", num(p.itens)],
+            ["Interessado", p.interessado],
+            ["Observação", p.observacao],
+          ),
+          numeros(p.numero, semAno(p.numero), p.idExterno),
         ),
       ),
     );
   if (d.documentos.length && tem("documentos"))
     m.set(
       "documento",
-      d.documentos.map((x) => linha(x.id, x.nome, `${num(x.paginas)} página${x.paginas === 1 ? "" : "s"}`, hrefPublico(pca, "documentos", { abrir: `documento:${x.id}` }), texto(x.nome), [])),
+      d.documentos.map((x) => linha(x.id, x.nome, hrefPublico(pca, "documentos", { abrir: `documento:${x.id}` }), campos(["Páginas", num(x.paginas)]))),
     );
   if (d.orcamento.length && tem("orcamento"))
     m.set(
@@ -187,30 +212,28 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaIn
       d.orcamento.map((o, i) =>
         linha(
           i,
-          o.nome && o.nome !== o.sigla ? `${o.sigla} — ${o.nome}` : o.sigla,
-          juntar(o.orgaoSigla, `Orçamento ${brl(o.orcamento)}`, `Planejado ${brl(o.planejado)}`),
+          o.sigla,
           hrefPublico(pca, "orcamento", { abrir: `orcamento:${o.chave}` }),
-          texto(o.sigla, o.nome, o.orgaoSigla),
-          [],
+          campos(["", o.nome !== o.sigla && o.nome], ["Órgão", o.orgaoSigla], ["Orçamento", brl(o.orcamento)], ["Planejado", brl(o.planejado)]),
         ),
       ),
     );
   if (d.unidades.length > 1)
     m.set(
       "unidade",
-      d.unidades.map((u) => linha(u.id, u.codigo, u.municipio, hrefPublico(pca, "dashboard", { unidade: u.id }), texto(u.codigo, u.municipio), [])),
+      d.unidades.map((u) => linha(u.id, u.codigo, hrefPublico(pca, "dashboard", { unidade: u.id }), campos(["", u.municipio !== u.codigo && u.municipio]))),
     );
   m.set(
     "pca",
-    d.pcas.map((p) => linha(p.id, p.nome, p.id === pca ? "o aberto agora" : p.ano != null ? `PCA ${p.ano}` : "PCA", `/?pca=${p.id}`, texto(p.nome, p.ano), texto(p.ano))),
+    d.pcas.map((p) => linha(p.id, p.nome, `/?pca=${p.id}`, campos(["", p.id === pca ? "o aberto agora" : null], ["Ano", p.ano]), numeros(p.ano))),
   );
   return m;
 }
 
-export type GrupoPublico = { tipo: TipoPublico; total: number; linhas: LinhaIndice[] };
+export type GrupoPublico = { tipo: TipoPublico; total: number; linhas: LinhaPublica[] };
 
 /** Procura o termo (2+ caracteres): por tipo, o total e as `limite` melhores (palavra exata › começa › contém). */
-export function pesquisarPublico(indice: Map<TipoPublico, LinhaIndice[]>, termo: string, tipo: TipoPublico | null, limite: number): GrupoPublico[] {
+export function pesquisarPublico(indice: Map<TipoPublico, LinhaPublica[]>, termo: string, tipo: TipoPublico | null, limite: number): GrupoPublico[] {
   if (termo.trim().length < 2) return [];
   const casa = casaPublico(termo);
   const out: GrupoPublico[] = [];
@@ -220,10 +243,10 @@ export function pesquisarPublico(indice: Map<TipoPublico, LinhaIndice[]>, termo:
     if (!achados.length) continue;
     const linhas = achados
       // O rótulo pesa mais que o detalhe; no empate, o rótulo mais curto (o mais próximo do termo) vem antes.
-      .map((l, i) => ({ l, i, p: pontuar(l.rotulo, termo) * 2 + pontuar(l.detalhe, termo) }))
+      .map((l, i) => ({ l, i, p: pontuar(l.rotulo, termo) * 2 + pontuar(l.info.map((c) => c[1]).join(" "), termo) }))
       .sort((a, b) => b.p - a.p || a.l.rotulo.length - b.l.rotulo.length || a.i - b.i)
       .slice(0, limite)
-      .map(({ l }) => l);
+      .map(({ l }) => ({ ...l, detalhe: detalheDoTermo(l.info, termo) }));
     out.push({ tipo: t, total: achados.length, linhas });
   }
   return out;

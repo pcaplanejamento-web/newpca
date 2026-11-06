@@ -7,7 +7,18 @@ import { IconArrowRight, IconClock, IconClose, IconEstrela, IconLayers, IconSear
 
 export type IconePesquisa = ComponentType<SVGProps<SVGSVGElement>>;
 /** Um resultado: o rótulo, o contexto (à direita do travessão), para onde leva — ou a AÇÃO que executa. */
-export type ResultadoPesquisaTela = { chave: string; rotulo: string; caminho?: string[]; detalhe?: string; href?: string; tipo: string; acao?: () => void; palavras?: string };
+export type ResultadoPesquisaTela = {
+  chave: string;
+  rotulo: string;
+  caminho?: string[];
+  detalhe?: string;
+  /** Os campos do resultado (rótulo, valor) — a prévia os mostra em grade; sem eles, o detalhe. */
+  info?: [string, string][];
+  href?: string;
+  tipo: string;
+  acao?: () => void;
+  palavras?: string;
+};
 export type GrupoPesquisa = { tipo: string; titulo: string; itens: ResultadoPesquisaTela[]; total?: number; carregando?: boolean };
 /** Uma DICA de prefixo: "dfd:" (ou o atalho "d:") restringe a pesquisa ao tipo. */
 export type DicaPesquisa = { prefixo: string; curto: string; tipo: string; texto: string };
@@ -237,26 +248,22 @@ export function BannerPesquisa({
           className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2 text-left ${ativo ? "bg-surface-2" : ""} ${grupo === "recentes" ? (fav ? "pr-20" : "pr-11") : fav ? "pr-11" : ""}`}
         >
           <Ic className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-          <span className={`min-w-0 max-w-[62%] shrink-0 truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
-            {r.caminho?.map((c) => (
-              <span key={c} className="text-muted">
-                {c}
-                <span aria-hidden="true" className="mx-1.5 text-faint">
-                  ›
+          {/* Duas linhas: o rótulo (com o caminho) em cima e o detalhe embaixo — nada disputa a largura. */}
+          <span className="min-w-0 flex-1">
+            <span className={`block truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
+              {r.caminho?.map((c) => (
+                <span key={c} className="text-muted">
+                  {c}
+                  <span aria-hidden="true" className="mx-1.5 text-faint">
+                    ›
+                  </span>
                 </span>
-              </span>
-            ))}
-            {grupo === "dica" ? r.rotulo : <Destaque texto={r.rotulo} termo={termo} />}
-          </span>
-          {r.detalhe && (
-            <span className="min-w-0 truncate text-[13px] text-muted">
-              <span aria-hidden="true" className="mr-2 text-faint">
-                —
-              </span>
-              {grupo === "dica" ? r.detalhe : <Destaque texto={r.detalhe} termo={termo} />}
+              ))}
+              {grupo === "dica" ? r.rotulo : <Destaque texto={r.rotulo} termo={termo} />}
             </span>
-          )}
-          {ativo && grupo !== "recentes" && !fav && <IconArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted" aria-hidden="true" />}
+            {r.detalhe && <span className="mt-0.5 block truncate text-[12.5px] text-muted">{grupo === "dica" ? r.detalhe : <Destaque texto={r.detalhe} termo={termo} />}</span>}
+          </span>
+          {ativo && grupo !== "recentes" && !fav && <IconArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />}
         </button>
         {fav && favorito && (
           <button
@@ -457,10 +464,30 @@ export function BannerPesquisa({
                   <p className="text-[15px] leading-snug font-semibold break-words text-text">
                     <Destaque texto={[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")} termo={termo} />
                   </p>
-                  {emFoco.r.detalhe && (
-                    <p className="text-[13px] leading-snug break-words text-muted">
-                      <Destaque texto={emFoco.r.detalhe} termo={termo} />
-                    </p>
+                  {emFoco.r.info?.length ? (
+                    // Os campos em grade (rótulo · valor), o termo em destaque — o que casou salta aos olhos.
+                    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px] leading-snug">
+                      {emFoco.r.info.map(([rotulo, valor]) =>
+                        rotulo ? (
+                          <div key={rotulo} className="contents">
+                            <dt className="text-faint">{rotulo}</dt>
+                            <dd className="break-words text-text-2">
+                              <Destaque texto={valor} termo={termo} />
+                            </dd>
+                          </div>
+                        ) : (
+                          <dd key={valor} className="col-span-2 break-words text-muted">
+                            <Destaque texto={valor} termo={termo} />
+                          </dd>
+                        ),
+                      )}
+                    </dl>
+                  ) : (
+                    emFoco.r.detalhe && (
+                      <p className="text-[13px] leading-snug break-words text-muted">
+                        <Destaque texto={emFoco.r.detalhe} termo={termo} />
+                      </p>
+                    )
                   )}
                   <p className="mt-auto flex items-center gap-1.5 text-[12px] text-faint">
                     <kbd className="rounded-chip border border-border bg-surface px-1.5 font-sans">↵</kbd>

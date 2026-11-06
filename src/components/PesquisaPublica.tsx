@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { itensDoCompacto } from "@/lib/itens-dash-texto";
-import type { LinhaIndice } from "@/lib/pesquisa-core";
 import {
   type DadosPesquisaPublica,
   DICAS_PUBLICAS,
   indicePublico,
+  type LinhaPublica,
   pesquisarPublico,
   TIPOS_PUBLICOS,
   type TipoPublico,
@@ -18,7 +18,7 @@ import { EVENTO_ABRIR_PUBLICO } from "./AbrirDaUrl";
 import { BannerPesquisa, EVENTO_ABRIR_PESQUISA, type GrupoPesquisa, type IconePesquisa, lerConsulta, type ResultadoPesquisaTela } from "./BannerPesquisa";
 import { IconBox, IconBuilding, IconClipboard, IconDocumentos, IconLayers, IconWallet } from "./icons";
 
-type Indice = Map<TipoPublico, LinhaIndice[]>;
+type Indice = Map<TipoPublico, LinhaPublica[]>;
 
 // O índice de cada PCA fica só na MEMÓRIA da aba (5 min) — pedido ao abrir a pesquisa, uma vez por PCA.
 const VALIDADE = 5 * 60_000;
@@ -76,7 +76,7 @@ const ICONES: Record<TipoPublico, IconePesquisa> = {
   pca: IconBox,
 };
 const SINGULAR: Record<TipoPublico, string> = { aba: "Aba", item: "Item", dfd: "DFD", protocolo: "Protocolo", documento: "Documento", orcamento: "Orçamento", unidade: "Unidade", pca: "PCA" };
-const converter = (t: TipoPublico, l: LinhaIndice): ResultadoPesquisaTela => ({ chave: `${t}:${l.id}`, rotulo: l.rotulo, detalhe: l.detalhe || undefined, href: l.href, tipo: t });
+const converter = (t: TipoPublico, l: LinhaPublica): ResultadoPesquisaTela => ({ chave: `${t}:${l.id}`, rotulo: l.rotulo, detalhe: l.detalhe || undefined, info: l.info, href: l.href, tipo: t });
 const ehTipo = (t: string): t is TipoPublico => (TIPOS_PUBLICOS as readonly string[]).includes(t);
 
 /**

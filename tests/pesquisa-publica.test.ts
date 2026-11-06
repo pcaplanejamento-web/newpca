@@ -86,3 +86,10 @@ test("sem acento/caixa e o número também no texto", () => {
   assert.equal(pesquisarPublico(ix, "350", "item", 5)[0]?.total, 1); // o valor unitário R$ 350,00
   assert.deepEqual(pesquisarPublico(ix, "cadeira inexistente", null, 5), []);
 });
+
+test("o detalhe põe primeiro o campo onde o termo aparece; a prévia leva os campos", () => {
+  const ix = indicePublico(base());
+  const l = pesquisarPublico(ix, "mobiliario", "item", 5)[0].linhas[0];
+  assert.match(l.detalhe, /^Classificação MOBILIÁRIO/);
+  assert.ok(l.info.some(([r, v]) => r === "Valor total" && v.includes("3.500,00")));
+});
