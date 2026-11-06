@@ -2649,7 +2649,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   real) grava os itens cuja `classificado_versao` ≠ `versaoPadronizacao(cadastro)`: no cron dos e-mails (1500 por tabela) e
   `reclassificarTudo` depois de importar planilha e de mudar classificações/unidades de medida. As leituras usam o gravado
   (`COALESCE` na planilha; `itensConsolidados` com a mesma régua enquanto não gravado); a Mesa → Itens tem a coluna Domínio.
-- **EDITAR O ITEM DA PLANILHA (v1.281.0, sem migração):** na Importação (visão Itens), tocar na linha abre o
+- **EDITAR O ITEM DA PLANILHA (v1.281.0, sem migração):** na Importação (visão Itens — a 1ª e a que abre desde a v1.281.1; sem itens, abre nos Uploads), tocar na linha abre o
   `BannerItemPlanilha` com `edicao` (`BannersConsulta.tsx`) = o MESMO `ItemDetalhe` do item de protocolo (cadeado por campo:
   código, medida, descrição, quantidade, valor unitário, valor total — q × vu recalcula, o total digitado vale — e os
   `extras` previsão [`opcoesPrevisao`: os meses do ano do PCA + os períodos genéricos] e prioridade; Seq., unidade e

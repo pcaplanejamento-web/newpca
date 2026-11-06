@@ -224,7 +224,7 @@ export function PlanilhasPca({
     router.refresh();
   }
 
-  const [visao, setVisao] = useState<"cards" | "itens">("cards");
+  const [visao, setVisao] = useState<"cards" | "itens">(itens.length > 0 ? "itens" : "cards");
   const [doUpload, setDoUpload] = useState<UploadPca | null>(null);
   const linhas = useMemo(() => (doUpload ? itens.filter((i) => i.uploadId === doUpload.id) : itens), [itens, doUpload]);
   // O item aberto no banner padrão do item (pelo id — a lista nova depois de salvar segue no mesmo item).
@@ -242,8 +242,8 @@ export function PlanilhasPca({
           value={visao}
           onChange={setVisao}
           options={[
-            { value: "cards", label: `Uploads (${uploads.length})` },
             { value: "itens", label: `Itens (${num(itens.length)})` },
+            { value: "cards", label: `Uploads (${uploads.length})` },
           ]}
         />
         {visao === "itens" && doUpload && (

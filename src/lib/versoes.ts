@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.281.1",
+    data: "2026-11-06",
+    titulo: "Importação abre nos itens",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "Na aba Importação do PCA, a visão Itens vem primeiro e abre com a tabela; os Uploads ficam ao lado (sem nenhum item ainda, abre nos Uploads para importar).",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.281.0",
     data: "2026-11-06",
     titulo: "Itens da planilha editáveis no banner do item",
