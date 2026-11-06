@@ -362,3 +362,6 @@ EscopoCliente.tsx
 MaisIndicadores.tsx
 IndicadoresKpi.tsx
 FrotaEsqueleto.tsx
+
+BannerPesquisa.tsx
+PesquisaPublica.tsx

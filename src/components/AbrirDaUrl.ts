@@ -42,3 +42,25 @@ export function useAbrirLinhaDaUrl<T extends { id: number }>(linhas: T[] | null,
     if (l) abrirRef.current(l);
   }, [linhas]);
 }
+
+/** A pesquisa da tela pública pede para abrir algo NA PRÓPRIA página (mesmo PCA e aba) — sem recarregar. */
+export const EVENTO_ABRIR_PUBLICO = "pesquisa-publica:abrir";
+
+/**
+ * O `?abrir=tipo:id` da TELA PÚBLICA: o da URL (chegando de outra aba) e o da pesquisa do cabeçalho na própria página
+ * (`EVENTO_ABRIR_PUBLICO`). `ativo` = só onde a pesquisa pública existe (o mesmo componente no painel não lê nada).
+ */
+export function useAbrirPublico(aplicar: (valor: string) => void, ativo: boolean, prontos = true) {
+  const aplicarRef = useRef(aplicar);
+  aplicarRef.current = aplicar;
+  useAbrirDaUrl((v) => aplicarRef.current(v), ativo && prontos);
+  useEffect(() => {
+    if (!ativo) return;
+    const ouvir = (e: Event) => {
+      const v = (e as CustomEvent<string>).detail;
+      if (typeof v === "string") aplicarRef.current(v);
+    };
+    window.addEventListener(EVENTO_ABRIR_PUBLICO, ouvir);
+    return () => window.removeEventListener(EVENTO_ABRIR_PUBLICO, ouvir);
+  }, [ativo]);
+}

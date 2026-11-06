@@ -107,6 +107,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <Vazio texto={`A equipe ainda não publicou os dados do ${pca.nome}.`} />
       ) : (
           <PainelPca
+            key={`${vista}:${dados.unidadeId ?? ""}`}
+            pesquisaNoCabecalho
             vista={vista === "consulta" ? "consulta" : "graficos"}
             semFiltroUnidade={dados.unidades.length > 1}
             nome={pca.nome}

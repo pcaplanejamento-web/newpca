@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { DocumentoResumo } from "@/lib/documentos";
+import { lerAbrirPublico } from "@/lib/pesquisa-publica-core";
+import { useAbrirPublico } from "./AbrirDaUrl";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { DocumentoCard, VisualizadorPdf } from "./DocumentosView";
 
@@ -9,6 +11,12 @@ import { DocumentoCard, VisualizadorPdf } from "./DocumentosView";
  *  vem da rota pública do PCA, que confere de novo a aba publicada, o PCA e o vínculo do documento. */
 export function DocumentosPublicos({ pcaId, documentos }: { pcaId: number; documentos: DocumentoResumo[] }) {
   const [aberto, setAberto] = useState<DocumentoResumo | null>(null);
+  // O documento achado na pesquisa do cabeçalho.
+  useAbrirPublico((v) => {
+    const a = lerAbrirPublico(v);
+    const d = a?.tipo === "documento" ? documentos.find((x) => x.id === a.id) : null;
+    if (d) setAberto(d);
+  }, true);
   if (documentos.length === 0) return <p className="rounded-card border border-border bg-surface p-10 text-center text-sm text-muted">Nenhum documento publicado neste PCA.</p>;
   return (
     <>

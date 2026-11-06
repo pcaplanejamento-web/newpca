@@ -224,7 +224,8 @@ export function SearchField({
   return (
     <div className={`${WRAP} ${compacto ? "h-11 !px-3 lg:h-[var(--h-control-sm)]" : "h-[46px]"} border-border-2`}>
       <IconSearch className={`${compacto ? "h-4 w-4" : "h-[18px] w-[18px]"} shrink-0 text-muted`} />
-      <input value={value} placeholder={placeholder} type="search" className={`${INPUT} ${compacto ? "!text-[13px]" : ""}`} {...rest} />
+      {/* Com o nosso "limpar", o "×" nativo do campo de busca some (senão aparecem dois). */}
+      <input value={value} placeholder={placeholder} type="search" className={`${INPUT} ${compacto ? "!text-[13px]" : ""} ${onClear ? "[&::-webkit-search-cancel-button]:hidden" : ""}`} {...rest} />
       {preenchido && onClear && (
         <button
           type="button"

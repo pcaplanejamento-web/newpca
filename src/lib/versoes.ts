@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.279.0",
+    data: "2026-11-06",
+    titulo: "Pesquisa no cabeçalho da página pública",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Página pública",
+        texto: "Pesquisa no topo da página (ou Ctrl+K), no mesmo banner da pesquisa do sistema: acha itens por qualquer coluna, DFDs, protocolos, documentos, o orçamento por unidade, unidades e abas — só o que a página pública mostra — e abre o resultado na própria página.",
+        link: "/",
+      },
+      {
+        tipo: "melhoria",
+        area: "Consulta do PCA",
+        texto: "A barra de busca de cima da tabela saiu da página pública: a pesquisa fica só no cabeçalho.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "correcao",
+        area: "Campos de busca",
+        texto: "O campo de busca mostrava dois “×” para limpar; agora mostra um só.",
+        link: "/painel/catalogo",
+      },
+    ],
+  },
+  {
     versao: "1.278.1",
     data: "2026-11-05",
     titulo: "Consulta do PCA cabe na tela",

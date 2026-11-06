@@ -25,6 +25,7 @@ export function ItemTable({
   onRowClick,
   ativo = null,
   busca,
+  semBusca = false,
   fim,
   alturaCheia,
 }: {
@@ -37,6 +38,8 @@ export function ItemTable({
   ativo?: number | null;
   /** Busca CONTROLADA por quem usa (que a desenha na barra dela) — sem ela, a tabela traz a própria barra. */
   busca?: string;
+  /** Sem busca nenhuma (a tela pública pesquisa pelo cabeçalho): a barra fica só com o `fim`. */
+  semBusca?: boolean;
   /** Na barra da própria tabela, depois da busca (ex.: o (?)). */
   fim?: ReactNode;
   /** A tabela ocupa até o fim do display (rola por dentro) — a vista Consulta de itens. */
@@ -207,9 +210,9 @@ export function ItemTable({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {busca == null && (
+      {busca == null && (!semBusca || fim) && (
         <div className="flex items-center gap-2">
-          <BuscaItens valor={q} onMudar={setQ} />
+          {!semBusca && <BuscaItens valor={q} onMudar={setQ} />}
           {fim && <div className="ml-auto flex shrink-0 items-center gap-2">{fim}</div>}
         </div>
       )}

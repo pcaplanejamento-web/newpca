@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { ROTULO_VISTA_PUBLICA, type VistaPublica } from "@/lib/publico-core";
+import { GatilhoPesquisa } from "./BannerPesquisa";
 import { Button } from "./Button";
 import { IconDashboard, IconDocumentos, IconLinhas, IconSettings, IconTelaAcesso, IconWallet } from "./icons";
 import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral, type SecaoMenu } from "./MenuLateral";
 import type { PcaCardDados } from "./PcaCard";
 import { PcaSeletor } from "./PcaSeletor";
+import { PesquisaPublica } from "./PesquisaPublica";
 import { SeletorUnidade } from "./SeletorUnidade";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -84,10 +86,12 @@ export function TelaPublica({
         <CabecalhoApp
           onMenu={() => setGaveta(true)}
           inicio={
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <div className="hidden min-w-0 sm:block lg:hidden">{marca}</div>
               {/* À esquerda: o PCA, com os cartões de cada um ao abrir (só com 2+ publicados). */}
               {pcaId != null && pcas.length > 1 && <PcaSeletor pcas={pcas} atual={pcaId} soImagem={soImagem} href={hrefPca} />}
+              {/* A PESQUISA de tudo o que a página mostra (Ctrl+K) — o mesmo banner da pesquisa do sistema. */}
+              {pcaId != null && <GatilhoPesquisa cabecalho rotulo="Pesquisar na página" />}
             </div>
           }
           direita={
@@ -114,6 +118,7 @@ export function TelaPublica({
             </>
           }
         />
+        {pcaId != null && <PesquisaPublica pcaId={pcaId} vista={vista} unidade={unidades?.atual} />}
         <main className="min-w-0 flex-1 space-y-[var(--gap-block)] pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)]">{children}</main>
       </div>
     </div>

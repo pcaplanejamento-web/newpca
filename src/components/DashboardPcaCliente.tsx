@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from "react";
 import { blocosRelatorioDashboard } from "@/lib/dashboard-relatorio";
 import { itensDoTexto } from "@/lib/itens-dash-texto";
+import { lerAbrirPublico } from "@/lib/pesquisa-publica-core";
 import { brl, brlCompact, dataIsoBrasilia, mesLabel, num } from "@/lib/format";
 import {
   agregarItensDash,
@@ -49,6 +50,7 @@ import { usePodeExportar } from "./ExportarTabelas";
 import { IconClose, IconDownload, IconFilter } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { KpiStat } from "./KpiStat";
+import { useAbrirPublico } from "./AbrirDaUrl";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
@@ -139,6 +141,7 @@ export function DashboardPcaCliente({
   nome,
   vista,
   semFiltroUnidade = false,
+  pesquisaNoCabecalho = false,
 }: {
   resumo: Resumo;
   porClassificacao: Fatia[];
@@ -158,6 +161,9 @@ export function DashboardPcaCliente({
   nome?: string;
   /** Vista FIXA escolhida fora (o menu da tela pública): sem o seletor Gráficos | Consulta — só monta a escolhida. */
   vista?: "graficos" | "consulta";
+  /** Tela pública: a busca fica no CABEÇALHO (`PesquisaPublica`) — a consulta sem a barra de busca, e os resultados da
+   *  pesquisa abrem aqui (o item, o DFD, o protocolo). */
+  pesquisaNoCabecalho?: boolean;
   /** A unidade já é filtrada no cabeçalho (tela pública): o filtro Unidade sai do topo (o gráfico fica). */
   semFiltroUnidade?: boolean;
 }) {
@@ -166,6 +172,16 @@ export function DashboardPcaCliente({
   const [origemAberta, setOrigemAberta] = useState(false);
   const [explorar, setExplorar] = useState<Grafico | null>(null);
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
+  // O item de PLANILHA achado na pesquisa (sem DFD, sem banner próprio): a origem com ele.
+  const [avulso, setAvulso] = useState<ItemRow | null>(null);
+  useAbrirPublico((v) => {
+    const a = lerAbrirPublico(v);
+    if (a?.tipo === "item") {
+      const r = itens.find((i) => i.id === a.id);
+      if (r && r.dfdId != null && consulta) setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } });
+      else if (r) setAvulso(r);
+    } else if ((a?.tipo === "dfd" || a?.tipo === "protocolo") && consulta) setAberto({ tipo: a.tipo, id: a.id });
+  }, pesquisaNoCabecalho);
   const [modoCrono, setModoCrono] = useState<ModoCronograma>("mensal");
   const [gerando, setGerando] = useState(false);
   const [abaLocal, setAba] = useState<"graficos" | "consulta">("graficos");
@@ -411,7 +427,11 @@ export function DashboardPcaCliente({
         {consulta ? "Os protocolos, DFDs e itens do PCA" : "Os itens do PCA"}
         {ativo ? `, só o que está nos filtros do Dashboard (${num(filtrados.length)} itens)` : ""}.
       </p>
-      <p>Busque pelo produto ou código (vários de uma vez com “:”), filtre e ordene pelo cabeçalho de cada coluna.</p>
+      <p>
+        {pesquisaNoCabecalho
+          ? "Pesquise qualquer dado na pesquisa do topo da página (Ctrl+K); filtre e ordene pelo cabeçalho de cada coluna."
+          : "Busque pelo produto ou código (vários de uma vez com “:”), filtre e ordene pelo cabeçalho de cada coluna."}
+      </p>
       {consulta && <p>Toque numa linha para ver o detalhe.</p>}
     </Ajuda>
   );
@@ -431,9 +451,10 @@ export function DashboardPcaCliente({
       onAbrir={setAberto}
       fim={ajudaConsulta}
       alturaCheia={soConsulta}
+      semBusca={pesquisaNoCabecalho}
     />
   ) : (
-    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={soConsulta} />
+    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={soConsulta} semBusca={pesquisaNoCabecalho} />
   );
   return (
     <>
@@ -683,6 +704,22 @@ export function DashboardPcaCliente({
       >
         <ItemTable rows={filtrados} showUnidade={showUnidade} origem={!!consulta} onRowClick={abrirItem} ativo={aberto?.tipo === "item" ? aberto.itemId : null} />
       </OrigemDados>
+
+      {pesquisaNoCabecalho && (
+        <OrigemDados
+          aberto={avulso != null}
+          onClose={() => setAvulso(null)}
+          titulo="Pesquisa"
+          recorte={avulso?.nomeProduto ?? "Item"}
+          resumo={[
+            { label: "Valor total", value: brl(avulso?.valorTotal ?? 0) },
+            { label: "Quantidade", value: num(avulso?.quantidade ?? 0) },
+          ]}
+          fonte="O item da planilha importada neste PCA, com todas as colunas da Consulta de itens."
+        >
+          <ItemTable rows={avulso ? [avulso] : []} showUnidade={showUnidade} semBusca />
+        </OrigemDados>
+      )}
 
       {consulta && <BannersConsulta pcaId={consulta.pcaId} abrir={aberto} onFechar={() => setAberto(null)} />}
     </>

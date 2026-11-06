@@ -36,6 +36,7 @@ import { type Column, DataTable } from "./DataTable";
 import { IconFile, IconLink, IconSettings } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
+import { useAbrirPublico } from "./AbrirDaUrl";
 import { OrigemDados } from "./OrigemDados";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
@@ -51,6 +52,7 @@ import { GruposOrcamento } from "./GruposOrcamento";
 import { type GrupoOrcamento, refsDosGrupos } from "@/lib/orcamento-grupos";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
 import { orcamentoNaVisao } from "@/lib/orcamento-pca-visao";
+import { lerAbrirPublico } from "@/lib/pesquisa-publica-core";
 import { SeletorVisaoPca, VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 import { GRADE_KPI } from "./EsqueletoTela";
 
@@ -449,6 +451,15 @@ export function OrcamentoPca({
   const [nivelEscolhido, setNivel] = useState<Nivel>("unidade");
   const [aberta, setAberta] = useState<LinhaTabela | null>(null);
   const porUnidade = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
+  // Tela pública: a unidade achada na pesquisa do cabeçalho abre a origem da linha dela (na visão por unidade).
+  useAbrirPublico((v) => {
+    const a = lerAbrirPublico(v);
+    const chave = (x: { unidadeId: number | null }) => (x.unidadeId == null ? "sem" : `u${x.unidadeId}`);
+    const l = a?.tipo === "orcamento" ? porUnidade.find((x) => chave(x) === a.chave) : null;
+    if (!l) return;
+    setNivel("unidade");
+    setAberta({ ...l, nivel: "unidade", chave: chave(l) });
+  }, consulta);
   // GRUPOS ORÇAMENTÁRIOS: as unidades recebem o grupo no lugar do órgão — a MESMA soma do órgão (a unidade sozinha fica só).
   const refsGrupo = useMemo(() => refsDosGrupos(dados.unidades, dados.grupos ?? []), [dados.unidades, dados.grupos]);
   const [editaGrupos, setEditaGrupos] = useState(false);

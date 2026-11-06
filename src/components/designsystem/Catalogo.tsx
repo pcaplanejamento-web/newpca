@@ -147,6 +147,7 @@ import type { DfdSobrescrito } from "@/lib/protocolo";
 import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
+import { GatilhoPesquisa } from "@/components/BannerPesquisa";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { Selecao } from "@/components/Selecao";
 import { Dropdown } from "@/components/Dropdown";
@@ -3603,6 +3604,20 @@ export function Catalogo() {
           onConferir={() => undefined}
           onEnviar={() => undefined}
         />
+      </Secao>
+      <Secao titulo="Pesquisa — o campo que abre o banner (GatilhoPesquisa · BannerPesquisa · PesquisaPublica)">
+        <p className="mb-3 text-[13px] text-muted">
+          O MESMO banner (BannerPesquisa) na pesquisa do sistema (menu lateral) e na da tela pública (cabeçalho, só os dados
+          públicos). Tocar abre o banner; Ctrl+K também.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-64">
+            <GatilhoPesquisa />
+          </div>
+          <div className="flex min-w-0 flex-1 items-center">
+            <GatilhoPesquisa cabecalho rotulo="Pesquisar na página" />
+          </div>
+        </div>
       </Secao>
       <Secao titulo="Cartão de automação (CartaoFluxo)">
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">

@@ -45,7 +45,11 @@ export function itensParaTexto(itens: readonly ItemRow[]): string {
 /** Texto compacto → itens (tolerante: o formato antigo — a lista de objetos — também é lido). Campo `null` que era
  * opcional volta ausente só no `anual` (falso) e no `periodo` (mês definido); os demais voltam `null` (o mesmo significado na tela). */
 export function itensDoTexto(texto: string): ItemRow[] {
-  const dado = JSON.parse(texto) as unknown;
+  return itensDoCompacto(JSON.parse(texto));
+}
+
+/** O compacto JÁ LIDO (`{c, l}` dentro de outra resposta JSON — a pesquisa pública) → itens. */
+export function itensDoCompacto(dado: unknown): ItemRow[] {
   if (Array.isArray(dado)) return dado as ItemRow[];
   const { c, l } = dado as { c: Campo[]; l: unknown[][] };
   return l.map((t) => {

@@ -322,6 +322,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "pca/[id]/consulta/documento/[docId]": { GET: publica("aba Documentos pública + PCA publicado + documento do PCA") },
   "pca/[id]/consulta/historico": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/consulta/protocolo/[protocoloId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
+  "pca/[id]/consulta/pesquisa": { GET: publica("PCA publicado + só as abas publicadas pelo ADM (textos mascarados)") },
   "upload": { POST: tela("pca", "importar", "as planilhas de um PCA de lista") },
 
   // ── Pessoais (qualquer pessoa logada) ───────────────────────────────────────────────────────────────────

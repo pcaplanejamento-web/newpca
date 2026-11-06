@@ -100,6 +100,7 @@ export function ConsultaPca({
   onAbrir: setAberto,
   fim,
   alturaCheia,
+  semBusca = false,
 }: {
   protocolos: ProtocoloDoPca[];
   dfds: DfdDoPca[];
@@ -112,6 +113,8 @@ export function ConsultaPca({
   fim?: ReactNode;
   /** As tabelas ocupam até o fim do display (a vista Consulta de itens). */
   alturaCheia?: boolean;
+  /** Sem a busca das abas (a tela pública pesquisa pelo cabeçalho). */
+  semBusca?: boolean;
 }) {
   const [visao, setVisao] = useState<Visao>("itens");
   // Uma busca POR ABA (trocar de aba não perde nem mistura o que foi digitado).
@@ -157,7 +160,7 @@ export function ConsultaPca({
             ...(foraDaSoma.length ? [{ value: "fora" as const, label: `Fora da soma (${foraDaSoma.length})` }] : []),
           ]}
         />
-        <BuscaItens valor={busca} onMudar={setBusca} placeholder={visao === "itens" ? undefined : BUSCA_DA_ABA[visao]} />
+        {!semBusca && <BuscaItens valor={busca} onMudar={setBusca} placeholder={visao === "itens" ? undefined : BUSCA_DA_ABA[visao]} />}
         {fim && <div className="ml-auto flex shrink-0 items-center gap-2">{fim}</div>}
       </div>
       <div key={visao} className="animate-cat-morph">

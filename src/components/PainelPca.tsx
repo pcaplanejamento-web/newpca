@@ -29,6 +29,7 @@ export function PainelPca({
   nome,
   vista,
   semFiltroUnidade,
+  pesquisaNoCabecalho,
 }: {
   dados: DadosPainelPca;
   unidadeFiltrada?: boolean;
@@ -41,6 +42,8 @@ export function PainelPca({
   vista?: "graficos" | "consulta";
   /** A unidade é filtrada no cabeçalho (tela pública). */
   semFiltroUnidade?: boolean;
+  /** Tela pública: a busca fica no cabeçalho (`PesquisaPublica`). */
+  pesquisaNoCabecalho?: boolean;
 }) {
   const { resumo, previa } = dados;
   return (
@@ -59,6 +62,7 @@ export function PainelPca({
       nomesUnidades={dados.nomesUnidades}
       vista={vista}
       semFiltroUnidade={semFiltroUnidade}
+      pesquisaNoCabecalho={pesquisaNoCabecalho}
     />
   );
 }
