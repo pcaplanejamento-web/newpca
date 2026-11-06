@@ -12,7 +12,7 @@ import { PainelPca } from "@/components/PainelPca";
 import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
-import { itensDosUploads, uploadsDoPca } from "@/lib/pca-uploads";
+import { itensDosUploadsTexto, uploadsDoPca } from "@/lib/pca-uploads";
 import { configDasUnidades } from "@/lib/subunidades";
 import { Ajuda } from "@/components/Ajuda";
 import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
@@ -86,9 +86,10 @@ export default async function PcaEspacoPage({
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
   else if (aba === "importacao")
   {
-    const itensUp = await itensDosUploads(pca.id);
-    const cfgs = await configDasUnidades(itensUp.map((i) => i.reparticaoId).filter((x): x is number => x != null));
-    conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={itensUp}
+    // Milhares de itens: UM texto compacto (memorizado pela versão) — o Worker não serializa item a item (erro 1102).
+    const [itensUp, uploads] = await Promise.all([itensDosUploadsTexto(pca.id), uploadsDoPca(pca.id)]);
+    const cfgs = await configDasUnidades(itensUp.reparticoes);
+    conteudo = <PlanilhasPca pcaId={pca.id} uploads={uploads} itensTexto={itensUp.texto} totalItens={itensUp.total}
         subunidades={Object.fromEntries(cfgs)}
         podeImportar={pode.importar}
         podeExcluir={pode.excluir}

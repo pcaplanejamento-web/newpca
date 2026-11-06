@@ -1,6 +1,8 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { itens, pcaUploads, subunidades, unidades, usuarios } from "@/db/schema";
 import { getDb } from "./db";
+import { linhasParaTexto } from "./itens-dash-texto";
+import { memoPorVersao } from "./versao-dados";
 
 /** UM upload de planilha no PCA — o componente da aba Importação (a consolidada traz várias unidades num upload só). */
 export type UploadPca = {
@@ -66,6 +68,26 @@ export type ItemUpload = {
 
 /** Os itens das planilhas do PCA (ATIVOS e CANCELADOS — a coluna Situação no PCA os distingue), do sequencial maior ao
  * menor (os recém-adicionados primeiro). */
+/** A ordem fixa dos campos no texto compacto da aba Importação. */
+export const CAMPOS_ITEM_UPLOAD = [
+  "id", "uploadId", "arquivo", "unidade", "sequencial", "codigo", "produto", "unidadeMedida", "quantidade", "valorUnitario",
+  "valorTotal", "classificacao", "dominio", "municipio", "dataDesejada", "previsaoGenerica", "prioridade", "canceladoEm",
+  "canceladoPorNome", "reparticaoId", "subunidadeId", "subunidade",
+] as const satisfies readonly (keyof ItemUpload)[];
+
+/** Os itens das planilhas do PCA como UM texto compacto + as unidades do sistema delas — MEMORIZADO pela versão dos dados
+ * (milhares de itens: o React não serializa valor a valor e a consulta roda uma vez por versão — o limite do Worker). */
+export function itensDosUploadsTexto(pcaId: number): Promise<{ texto: string; total: number; reparticoes: number[] }> {
+  return memoPorVersao(`pca-importacao:${pcaId}`, async () => {
+    const l = await itensDosUploads(pcaId);
+    return {
+      texto: linhasParaTexto(l, CAMPOS_ITEM_UPLOAD),
+      total: l.length,
+      reparticoes: [...new Set(l.map((i) => i.reparticaoId).filter((x): x is number => x != null))],
+    };
+  });
+}
+
 export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
   return getDb()
     .select({

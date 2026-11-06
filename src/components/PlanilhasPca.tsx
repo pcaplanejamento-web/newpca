@@ -6,7 +6,10 @@ import { useMemo, useRef, useState } from "react";
 import { brl, brlCompact, dataBR, num } from "@/lib/format";
 import type { ItemUpload, UploadPca } from "@/lib/pca-uploads";
 import { type ConfigSubunidades, subunidadeEmMassa } from "@/lib/subunidades-core";
+import { useGuardadoNoDesenho } from "@/lib/dados-cliente";
+import { linhasDoTexto } from "@/lib/itens-dash-texto";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { colunaSituacaoNoPca } from "./ColunasItensMesa";
@@ -167,7 +170,8 @@ function itemRowDoUpload(r: ItemUpload): ItemRow {
 export function PlanilhasPca({
   pcaId,
   uploads,
-  itens,
+  itensTexto,
+  totalItens,
   podeImportar,
   podeExcluir,
   podeEditar = false,
@@ -176,8 +180,10 @@ export function PlanilhasPca({
 }: {
   pcaId: number;
   uploads: UploadPca[];
-  /** Os itens das planilhas (a visão Itens), do sequencial maior ao menor. */
-  itens: ItemUpload[];
+  /** Os itens das planilhas (a visão Itens), do sequencial maior ao menor, num texto COMPACTO (`linhasParaTexto`) — lido só
+   * no navegador: com milhares de itens, montar a tabela no servidor passava do limite do Worker (erro 1102). */
+  itensTexto: string;
+  totalItens: number;
   /** O papel importa planilhas no PCA. */
   podeImportar: boolean;
   /** O papel exclui planilhas do PCA. */
@@ -190,6 +196,8 @@ export function PlanilhasPca({
   subunidades?: Record<number, ConfigSubunidades>;
 }) {
   const router = useRouter();
+  const noCliente = useGuardadoNoDesenho();
+  const itens = useMemo(() => (noCliente ? linhasDoTexto<ItemUpload>(itensTexto) : []), [noCliente, itensTexto]);
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; progresso: number } | null>(null);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string; titulo?: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -272,7 +280,7 @@ export function PlanilhasPca({
     router.refresh();
   }
 
-  const [visao, setVisao] = useState<"cards" | "itens">(itens.length > 0 ? "itens" : "cards");
+  const [visao, setVisao] = useState<"cards" | "itens">(totalItens > 0 ? "itens" : "cards");
   const [doUpload, setDoUpload] = useState<UploadPca | null>(null);
   const linhas = useMemo(() => (doUpload ? itens.filter((i) => i.uploadId === doUpload.id) : itens), [itens, doUpload]);
   // O item aberto no banner padrão do item (pelo id — a lista nova depois de salvar segue no mesmo item).
@@ -392,7 +400,7 @@ export function PlanilhasPca({
           value={visao}
           onChange={setVisao}
           options={[
-            { value: "itens", label: `Itens (${num(itens.length)})` },
+            { value: "itens", label: `Itens (${num(totalItens)})` },
             { value: "cards", label: `Uploads (${uploads.length})` },
           ]}
         />
@@ -461,6 +469,8 @@ export function PlanilhasPca({
               <p className="col-span-full rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhuma planilha importada ainda.</p>
             )}
           </div>
+        ) : !noCliente ? (
+          <EsqueletoTabela colunas={8} cheia />
         ) : (
           <DataTable
             columns={colunas}

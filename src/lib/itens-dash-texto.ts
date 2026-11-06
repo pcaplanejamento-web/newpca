@@ -62,3 +62,19 @@ export function itensDoCompacto(dado: unknown): ItemRow[] {
     return item as ItemRow;
   });
 }
+
+/** GENÉRICO: qualquer lista de objetos de campos fixos → texto compacto `{c, l}` (as chaves uma vez só). O `undefined` vira
+ * `null`. Usado pela aba Importação do PCA (milhares de itens de planilha). */
+export function linhasParaTexto<T extends object>(linhas: readonly T[], campos: readonly (keyof T & string)[]): string {
+  return JSON.stringify({ c: campos, l: linhas.map((r) => campos.map((c) => (r[c] === undefined ? null : r[c]))) });
+}
+
+/** Texto compacto genérico → a lista (cada campo de volta, `null` como veio). */
+export function linhasDoTexto<T>(texto: string): T[] {
+  const { c, l } = JSON.parse(texto) as { c: string[]; l: unknown[][] };
+  return l.map((t) => {
+    const o: Record<string, unknown> = {};
+    for (let k = 0; k < c.length; k++) o[c[k]] = t[k];
+    return o as T;
+  });
+}

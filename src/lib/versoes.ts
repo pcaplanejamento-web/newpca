@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.1",
+    data: "2026-11-06",
+    titulo: "Importação do PCA abre com muitos itens",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "A aba Importação de um PCA com milhares de itens de planilha dava “Error 1102” (o servidor passava do limite). Os itens agora chegam num formato compacto e a tabela é montada no navegador.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.283.0",
     data: "2026-11-06",
     titulo: "Subunidade nos itens de planilha + auditoria dos PCAs",
