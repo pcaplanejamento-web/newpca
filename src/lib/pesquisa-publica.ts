@@ -3,7 +3,7 @@ import { dfdProtocolos, dfds } from "@/db/schema";
 import { getDb } from "./db";
 import { listarDocumentos } from "./documentos";
 import { comparativoPorUnidade } from "./orcamento-comparativo";
-import { dashboardDoPca, getPcaEspaco, listarPcasPublicados, orcamentoDoAno, orcamentoDoPca } from "./pca-espaco";
+import { dashboardDoPca, getPcaEspaco, orcamentoDoAno, orcamentoDoPca } from "./pca-espaco";
 import { mascararTexto } from "./pca-publico-core";
 import type { DadosPesquisaPublica } from "./pesquisa-publica-core";
 import { getConfigPublico } from "./publico";
@@ -14,7 +14,7 @@ import { memoPorVersao } from "./versao-dados";
 const emIds = (col: typeof dfds.id | typeof dfdProtocolos.id, ids: number[]) => sql`${col} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`;
 
 /**
- * O índice da PESQUISA DA TELA PÚBLICA de um PCA — o corpo JSON pronto (os itens no texto compacto do Dashboard, sem
+ * O índice da PESQUISA DA TELA PÚBLICA do PCA selecionado (só dele) — o corpo JSON pronto (os itens no texto compacto do Dashboard, sem
  * serializar de novo). SÓ o que a página pública mostra: PCA publicado (`podeLerPublico` sem sessão — vale também para
  * quem está logado) e cada bloco só com a aba dele publicada; os textos livres passam pela máscara (`mascararTexto`). Uma
  * vez por versão dos dados (`memoPorVersao`). `null` = não pesquisável (a rota responde 404).
@@ -23,7 +23,7 @@ export async function pesquisaPublica(pcaId: number): Promise<string | null> {
   const [cfg, pca] = await Promise.all([getConfigPublico(), getPcaEspaco(pcaId)]);
   if (!pca || !podeLerPublico(pca, cfg, "dashboard", false)) return null;
   return memoPorVersao(`pesquisa-publica:${pcaId}:${cfg.abas.join(",")}`, async () => {
-    const [publicados, dash] = await Promise.all([listarPcasPublicados(), dashboardDoPca(pca)]);
+    const dash = await dashboardDoPca(pca);
     const vazio = dash.resumo.count === 0; // a página mostra "em breve": nada a pesquisar além das abas e dos PCAs
     const dfdIds = vazio ? [] : dash.dfdsLista.map((d) => d.id);
     const protoIds = vazio ? [] : dash.protocolosLista.map((p) => p.id);
@@ -48,7 +48,6 @@ export async function pesquisaPublica(pcaId: number): Promise<string | null> {
     const dados: Omit<DadosPesquisaPublica, "itens"> = {
       pca: { id: pca.id, nome: pca.nome, ano: pca.ano },
       vistas: vistasDoMenu(cfg),
-      pcas: publicados.map((p) => ({ id: p.id, nome: p.nome, ano: p.ano })),
       unidades: vazio ? [] : dash.unidades,
       dfds: (vazio ? [] : dash.dfdsLista).map((d) => {
         const t = porDfd.get(d.id);

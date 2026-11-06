@@ -26,7 +26,6 @@ const item = (o: Partial<ItemRow>): ItemRow => ({
 const base = (o: Partial<DadosPesquisaPublica> = {}): DadosPesquisaPublica => ({
   pca: { id: 2, nome: "PCA 2027", ano: 2027 },
   vistas: ["dashboard", "consulta"],
-  pcas: [{ id: 2, nome: "PCA 2027", ano: 2027 }],
   unidades: [],
   itens: [item({})],
   dfds: [{ id: 7, numero: "1234", planejamento: "1509", tipo: "DFD-O", sigla: "SME", protocoloNumero: "144756/2026", itens: 1, valor: 3500, objeto: "AQUISIÇÃO DE MOBILIÁRIO" }],
@@ -92,4 +91,20 @@ test("o detalhe põe primeiro o campo onde o termo aparece; a prévia leva os ca
   const l = pesquisarPublico(ix, "mobiliario", "item", 5)[0].linhas[0];
   assert.match(l.detalhe, /^Classificação MOBILIÁRIO/);
   assert.ok(l.info.some(([r, v]) => r === "Valor total" && v.includes("3.500,00")));
+});
+
+test("a unidade é só a sigla e vira o selo do item, DFD e protocolo", () => {
+  const ix = indicePublico(base());
+  for (const t of ["item", "dfd", "protocolo"] as const) assert.equal(ix.get(t)?.[0].selo, "SME", t);
+  assert.equal(pesquisarPublico(ix, "sme", "item", 5)[0]?.total, 1);
+});
+
+test("identificadores em destaque: Seq. do item, nº do DFD e planejamento, nº do protocolo; só o PCA selecionado", () => {
+  const ix = indicePublico(base());
+  assert.deepEqual(ix.get("item")?.[0].ids, ["Seq. 12"]);
+  assert.deepEqual(ix.get("dfd")?.[0].ids, ["DFD 1234", "Planej. 1509"]);
+  assert.deepEqual(ix.get("protocolo")?.[0].ids, ["Protocolo 144756/2026"]);
+  assert.equal(ix.has("pca" as never), false);
+  // O nome da unidade não aparece, mas acha pela busca.
+  assert.equal(pesquisarPublico(ix, "educacao", "item", 5)[0]?.total, 1);
 });

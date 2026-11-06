@@ -14,6 +14,10 @@ export type ResultadoPesquisaTela = {
   detalhe?: string;
   /** Os campos do resultado (rótulo, valor) — a prévia os mostra em grade; sem eles, o detalhe. */
   info?: [string, string][];
+  /** Os IDENTIFICADORES em destaque (Seq., nº do DFD, planejamento, nº do protocolo), antes do rótulo. */
+  ids?: string[];
+  /** Um selo à direita do rótulo (a SIGLA da unidade) — identifica o resultado de relance. */
+  selo?: string;
   href?: string;
   tipo: string;
   acao?: () => void;
@@ -76,6 +80,29 @@ function Destaque({ texto, termo }: { texto: string; termo: string }): ReactNode
   return <>{partes}</>;
 }
 
+/** Um selo do resultado (o termo em destaque quando casa): `id` = o identificador (accent); senão a SIGLA (neutro). */
+function SeloPesquisa({ texto, termo, id = false }: { texto: string; termo: string; id?: boolean }) {
+  return (
+    <span
+      className={`shrink-0 rounded-chip border px-1.5 py-px font-mono text-[11.5px] font-semibold tracking-normal whitespace-nowrap normal-case ${
+        id ? "border-accent/30 bg-accent-soft text-accent" : "border-border bg-surface-2 text-text-2"
+      }`}
+    >
+      <Destaque texto={texto} termo={termo} />
+    </span>
+  );
+}
+
+/** Os selos de um resultado: os identificadores e a sigla. */
+function Selos({ r, termo }: { r: ResultadoPesquisaTela; termo: string }) {
+  return (
+    <>
+      {r.ids?.map((t) => <SeloPesquisa key={t} texto={t} termo={termo} id />)}
+      {r.selo && <SeloPesquisa texto={r.selo} termo={termo} />}
+    </>
+  );
+}
+
 /**
  * O campo "Pesquisa rápida… Ctrl K" que abre o banner. No menu lateral (recolhido, só a lupa); no CABEÇALHO
  * (`cabecalho`): no celular só a lupa (44px), a partir de `sm` o campo com o texto.
@@ -111,6 +138,7 @@ export function GatilhoPesquisa({ rotulo = "Pesquisa rápida", cabecalho = false
 export function BannerPesquisa({
   rotulo,
   placeholder,
+  escopo,
   texto,
   onTexto,
   onFechar,
@@ -133,6 +161,8 @@ export function BannerPesquisa({
   /** O nome acessível do banner ("Pesquisa no sistema"). */
   rotulo: string;
   placeholder: string;
+  /** Onde a pesquisa procura ("PCA 2027") — um chip fixo no início do campo. */
+  escopo?: string;
   texto: string;
   onTexto: (v: string) => void;
   onFechar: () => void;
@@ -250,7 +280,8 @@ export function BannerPesquisa({
           <Ic className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
           {/* Duas linhas: o rótulo (com o caminho) em cima e o detalhe embaixo — nada disputa a largura. */}
           <span className="min-w-0 flex-1">
-            <span className={`block truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
+            <span className="flex min-w-0 items-center gap-2">
+            <span className={`min-w-0 truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
               {r.caminho?.map((c) => (
                 <span key={c} className="text-muted">
                   {c}
@@ -260,6 +291,8 @@ export function BannerPesquisa({
                 </span>
               ))}
               {grupo === "dica" ? r.rotulo : <Destaque texto={r.rotulo} termo={termo} />}
+            </span>
+            <Selos r={r} termo={termo} />
             </span>
             {r.detalhe && <span className="mt-0.5 block truncate text-[12.5px] text-muted">{grupo === "dica" ? r.detalhe : <Destaque texto={r.detalhe} termo={termo} />}</span>}
           </span>
@@ -344,6 +377,11 @@ export function BannerPesquisa({
       >
         <div className="flex items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top)]">
           <IconSearch className="h-5 w-5 shrink-0 text-muted" aria-hidden="true" />
+          {escopo && (
+            <span title={`A pesquisa procura só no ${escopo}`} className="shrink-0 rounded-control bg-text px-2 py-0.5 text-[13px] font-semibold text-surface">
+              {escopo}
+            </span>
+          )}
           {prefixo && (
             <span className="inline-flex shrink-0 animate-chip-entra items-center gap-1 rounded-control border border-accent bg-accent-soft py-0.5 pr-1 pl-2 text-[13px] font-medium text-accent">
               {filtros?.find((f) => f.value === prefixo.d.tipo)?.label ?? prefixo.d.prefixo.replace(":", "")}
@@ -460,7 +498,10 @@ export function BannerPesquisa({
                       </button>
                     )}
                   </div>
-                  <p className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">{rotuloTipo(emFoco.r)}</p>
+                  <p className="flex items-center gap-2 text-[11.5px] font-semibold tracking-wide text-faint uppercase">
+                    {rotuloTipo(emFoco.r)}
+                    <Selos r={emFoco.r} termo={termo} />
+                  </p>
                   <p className="text-[15px] leading-snug font-semibold break-words text-text">
                     <Destaque texto={[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")} termo={termo} />
                   </p>

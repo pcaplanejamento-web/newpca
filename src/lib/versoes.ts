@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.279.2",
+    data: "2026-11-06",
+    titulo: "Pesquisa pública: identificadores em destaque, só no PCA selecionado",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Selos em destaque com o Seq. do item, o nº do DFD e o planejamento, o nº do protocolo e a sigla da unidade — no resultado e na prévia.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "A pesquisa procura só no PCA selecionado, com o ano dele em destaque no campo (ex.: PCA 2027).",
+        link: "/",
+      },
+    ],
+  },
+  {
     versao: "1.279.1",
     data: "2026-11-06",
     titulo: "Pesquisa mais organizada",

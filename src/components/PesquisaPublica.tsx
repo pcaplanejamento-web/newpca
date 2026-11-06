@@ -16,18 +16,20 @@ import {
 import type { VistaPublica } from "@/lib/publico-core";
 import { EVENTO_ABRIR_PUBLICO } from "./AbrirDaUrl";
 import { BannerPesquisa, EVENTO_ABRIR_PESQUISA, type GrupoPesquisa, type IconePesquisa, lerConsulta, type ResultadoPesquisaTela } from "./BannerPesquisa";
-import { IconBox, IconBuilding, IconClipboard, IconDocumentos, IconLayers, IconWallet } from "./icons";
+import { IconBuilding, IconClipboard, IconDocumentos, IconLayers, IconWallet } from "./icons";
 
 type Indice = Map<TipoPublico, LinhaPublica[]>;
+/** O índice do PCA e o rótulo dele ("PCA 2027") — o escopo da pesquisa em destaque no banner. */
+type Carga = { indice: Indice; escopo: string };
 
 // O índice de cada PCA fica só na MEMÓRIA da aba (5 min) — pedido ao abrir a pesquisa, uma vez por PCA.
 const VALIDADE = 5 * 60_000;
-const indices = new Map<number, { em: number; indice: Indice }>();
-const pedidos = new Map<number, Promise<Indice>>();
+const indices = new Map<number, { em: number; carga: Carga }>();
+const pedidos = new Map<number, Promise<Carga>>();
 
-function carregarIndice(pcaId: number): Promise<Indice> {
+function carregarIndice(pcaId: number): Promise<Carga> {
   const c = indices.get(pcaId);
-  if (c && Date.now() - c.em < VALIDADE) return Promise.resolve(c.indice);
+  if (c && Date.now() - c.em < VALIDADE) return Promise.resolve(c.carga);
   let p = pedidos.get(pcaId);
   if (!p) {
     p = (async () => {
@@ -35,9 +37,9 @@ function carregarIndice(pcaId: number): Promise<Indice> {
         const r = await fetch(`/api/pca/${pcaId}/consulta/pesquisa`);
         const j = (await r.json()) as Omit<DadosPesquisaPublica, "itens"> & { ok?: boolean; itens?: unknown };
         if (!r.ok || !j.ok) throw new Error("indisponível");
-        const indice = indicePublico({ ...j, itens: itensDoCompacto(j.itens ?? []) });
-        indices.set(pcaId, { em: Date.now(), indice });
-        return indice;
+        const carga = { indice: indicePublico({ ...j, itens: itensDoCompacto(j.itens ?? []) }), escopo: j.pca.ano != null ? `PCA ${j.pca.ano}` : j.pca.nome };
+        indices.set(pcaId, { em: Date.now(), carga });
+        return carga;
       } finally {
         pedidos.delete(pcaId);
       }
@@ -73,10 +75,9 @@ const ICONES: Record<TipoPublico, IconePesquisa> = {
   documento: IconDocumentos,
   orcamento: IconWallet,
   unidade: IconBuilding,
-  pca: IconBox,
 };
-const SINGULAR: Record<TipoPublico, string> = { aba: "Aba", item: "Item", dfd: "DFD", protocolo: "Protocolo", documento: "Documento", orcamento: "Orçamento", unidade: "Unidade", pca: "PCA" };
-const converter = (t: TipoPublico, l: LinhaPublica): ResultadoPesquisaTela => ({ chave: `${t}:${l.id}`, rotulo: l.rotulo, detalhe: l.detalhe || undefined, info: l.info, href: l.href, tipo: t });
+const SINGULAR: Record<TipoPublico, string> = { aba: "Aba", item: "Item", dfd: "DFD", protocolo: "Protocolo", documento: "Documento", orcamento: "Orçamento", unidade: "Unidade" };
+const converter = (t: TipoPublico, l: LinhaPublica): ResultadoPesquisaTela => ({ chave: `${t}:${l.id}`, rotulo: l.rotulo, detalhe: l.detalhe || undefined, info: l.info, ...(l.ids ? { ids: l.ids } : {}), ...(l.selo ? { selo: l.selo } : {}), href: l.href, tipo: t });
 const ehTipo = (t: string): t is TipoPublico => (TIPOS_PUBLICOS as readonly string[]).includes(t);
 
 /**
@@ -89,7 +90,8 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [texto, setTexto] = useState("");
-  const [indice, setIndice] = useState<Indice | null>(() => indices.get(pcaId)?.indice ?? null);
+  const [carga, setCarga] = useState<Carga | null>(() => indices.get(pcaId)?.carga ?? null);
+  const indice = carga?.indice ?? null;
   const [falhou, setFalhou] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const [recentes, setRecentes] = useState<ResultadoPesquisaTela[]>([]);
@@ -114,12 +116,12 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
   useEffect(() => {
     if (!aberto) return;
     setTexto("");
-    setIndice(indices.get(pcaId)?.indice ?? null);
+    setCarga(indices.get(pcaId)?.carga ?? null);
     setRecentes(lerRecentes());
     setFalhou(false);
     let vivo = true;
     carregarIndice(pcaId).then(
-      (i) => vivo && setIndice(i),
+      (c) => vivo && setCarga(c),
       () => vivo && setFalhou(true),
     );
     return () => {
@@ -183,7 +185,8 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
   return (
     <BannerPesquisa
       rotulo="Pesquisa na página pública"
-      placeholder="Pesquise no PCA — itens, DFDs, protocolos, documentos, orçamento…"
+      escopo={carga?.escopo}
+      placeholder={`Pesquise ${carga ? `no ${carga.escopo}` : "no PCA"} — itens, DFDs, protocolos, documentos, orçamento…`}
       texto={texto}
       onTexto={setTexto}
       onFechar={fechar}

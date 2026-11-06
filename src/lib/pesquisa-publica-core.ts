@@ -42,7 +42,6 @@ export type OrcamentoPublicoPesquisa = { chave: string; sigla: string; nome: str
 export type DadosPesquisaPublica = {
   pca: { id: number; nome: string; ano: number | null };
   vistas: VistaPublica[];
-  pcas: { id: number; nome: string; ano: number | null }[];
   unidades: { id: number; codigo: string; municipio: string }[];
   itens: ItemRow[];
   dfds: DfdPublicoPesquisa[];
@@ -52,7 +51,7 @@ export type DadosPesquisaPublica = {
 };
 
 /** Os tipos, na ordem dos grupos do banner. */
-export const TIPOS_PUBLICOS = ["aba", "item", "dfd", "protocolo", "documento", "orcamento", "unidade", "pca"] as const;
+export const TIPOS_PUBLICOS = ["aba", "item", "dfd", "protocolo", "documento", "orcamento", "unidade"] as const;
 export type TipoPublico = (typeof TIPOS_PUBLICOS)[number];
 
 export const TITULO_PUBLICO: Record<TipoPublico, string> = {
@@ -63,7 +62,6 @@ export const TITULO_PUBLICO: Record<TipoPublico, string> = {
   documento: "Documentos",
   orcamento: "Orçamento",
   unidade: "Unidades",
-  pca: "PCAs",
 };
 
 /** Os prefixos ("item:" ou "i:") que restringem a um tipo — Tab completa. */
@@ -75,7 +73,6 @@ export const DICAS_PUBLICAS: { prefixo: string; curto: string; tipo: TipoPublico
   { prefixo: "orcamento:", curto: "o:", tipo: "orcamento", texto: "Orçamento por unidade" },
   { prefixo: "unidade:", curto: "u:", tipo: "unidade", texto: "Unidades" },
   { prefixo: "aba:", curto: "a:", tipo: "aba", texto: "Abas da página" },
-  { prefixo: "pca:", curto: "pc:", tipo: "pca", texto: "PCAs publicados" },
 ];
 
 /** O link da própria página pública: o PCA, a aba (o Dashboard sem `aba`) e o que abrir nela. */
@@ -88,22 +85,45 @@ export function hrefPublico(pcaId: number, vista: VistaPublica, extra: Record<st
 
 /** Um campo do resultado: o rótulo e o valor como a página mostra (a prévia do banner e o "onde casou" da linha). */
 export type CampoPublico = [rotulo: string, valor: string];
-/** A linha do índice público: além do que a pesquisa do sistema usa, os CAMPOS (`info`) que a prévia mostra. */
-export type LinhaPublica = LinhaIndice & { info: CampoPublico[] };
+/**
+ * A linha do índice público: além do que a pesquisa do sistema usa, os CAMPOS (`info`) da prévia, os IDENTIFICADORES em
+ * destaque (`ids`: Seq. do item, nº do DFD e planejamento, nº do protocolo) e a SIGLA da unidade (`selo`).
+ */
+export type LinhaPublica = LinhaIndice & { info: CampoPublico[]; ids?: string[]; selo?: string };
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 /** O nº sem o ano ("144756/2026" → "144756"), para o termo numérico casar com o número inteiro. */
 const semAno = (n: string | null | undefined) => (n ? n.replace(/\/\d{4}$/, "") : null);
-const numeros = (...v: (string | number | null | undefined)[]) => v.filter((x): x is string | number => x != null && x !== "").map(String);
+const lista = (...v: (string | number | null | undefined | false)[]) => v.filter((x): x is string | number => x != null && x !== "" && x !== false).map(String);
 /** Só os campos com valor. */
 const campos = (...c: [string, string | number | null | undefined | false][]): CampoPublico[] =>
   c.filter((x): x is [string, string | number] => x[1] != null && x[1] !== "" && x[1] !== false).map(([r, v]) => [r, String(v)]);
 /** O detalhe da linha: os primeiros campos, `r valor` (o rótulo some quando o valor já diz o que é). */
 const detalheDe = (info: CampoPublico[]) => info.slice(0, 3).map(([r, v]) => (r ? `${r} ${v}` : v)).join(" · ");
 
-/** A linha com UM texto de busca já normalizado (`campos[0]`): o rótulo e todos os campos. */
-function linha(id: number, rotulo: string, href: string, info: CampoPublico[], nums: string[] = []): LinhaPublica {
-  return { id, rotulo, detalhe: detalheDe(info), href, info, campos: [semAcento([rotulo, ...info.map((c) => c[1])].join("\n"))], numeros: nums };
+/**
+ * A linha com UM texto de busca já normalizado (`campos[0]`): o rótulo, os campos, os identificadores e o que só serve à
+ * busca (`busca` — ex.: o nome da unidade, que a tela não mostra mas acha pela sigla).
+ */
+function linha(
+  id: number,
+  rotulo: string,
+  href: string,
+  info: CampoPublico[],
+  o: { nums?: string[]; ids?: string[]; selo?: string | null; busca?: string[] } = {},
+): LinhaPublica {
+  const texto = [rotulo, ...info.map((c) => c[1]), ...(o.ids ?? []), o.selo ?? "", ...(o.busca ?? [])].join("\n");
+  return {
+    id,
+    rotulo,
+    detalhe: detalheDe(info),
+    href,
+    info,
+    campos: [semAcento(texto)],
+    numeros: o.nums ?? [],
+    ...(o.ids?.length ? { ids: o.ids } : {}),
+    ...(o.selo ? { selo: o.selo } : {}),
+  };
 }
 
 /** Todo termo tem de aparecer (sem acento/caixa); o número casa nos campos de número ou no texto. */
@@ -119,7 +139,7 @@ export function detalheDoTermo(info: CampoPublico[], q: string): string {
   return detalheDe([...info.filter((c) => casa(c[1])), ...info.filter((c) => !casa(c[1]))]);
 }
 
-/** Todas as linhas pesquisáveis, por tipo (só os tipos com dados; as abas e os PCAs sempre). */
+/** Todas as linhas pesquisáveis do PCA selecionado, por tipo (só os tipos com dados; as abas sempre). */
 export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPublica[]> {
   const pca = d.pca.id;
   const tem = (v: VistaPublica) => d.vistas.includes(v);
@@ -137,9 +157,7 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPu
           r.nomeProduto || `Item ${r.idProduto ?? r.id}`,
           hrefPublico(pca, "consulta", { abrir: `item:${r.id}` }),
           campos(
-            ["Seq.", r.sequencial],
             ["Código", r.idProduto],
-            ["Unidade", r.codigo && (r.municipio && r.municipio !== r.codigo ? `${r.codigo} — ${r.municipio}` : r.codigo)],
             ["Valor total", r.valorTotal != null && brl(r.valorTotal)],
             ["Quantidade", r.quantidade != null && num(r.quantidade)],
             ["Medida", r.unidadeMedida],
@@ -152,7 +170,12 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPu
             ["Prioridade", r.prioridade],
             ["Previsão", r.periodo ?? (r.mes && r.ano ? `${String(r.mes).padStart(2, "0")}/${r.ano}` : r.dataDesejada && dataBR(r.dataDesejada))],
           ),
-          numeros(r.idProduto, r.sequencial, r.dfdNumero, r.protocoloNumero, semAno(r.protocoloNumero), r.itemNumero, r.quantidade),
+          {
+            ids: lista(r.sequencial != null && `Seq. ${r.sequencial}`),
+            selo: r.codigo,
+            busca: lista(r.municipio),
+            nums: lista(r.idProduto, r.sequencial, r.dfdNumero, r.protocoloNumero, semAno(r.protocoloNumero), r.itemNumero, r.quantidade),
+          },
         ),
       ),
     );
@@ -162,20 +185,21 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPu
       d.dfds.map((x) =>
         linha(
           x.id,
-          `DFD ${x.numero}`,
+          x.objeto || `DFD ${x.numero}`,
           hrefPublico(pca, "consulta", { abrir: `dfd:${x.id}` }),
           campos(
-            ["Planejamento", x.planejamento],
-            ["Unidade", x.sigla],
             ["Valor", brl(x.valor)],
-            ["Objeto", x.objeto],
             ["Protocolo", x.protocoloNumero],
             ["Tipo", x.tipo],
             ["Itens", num(x.itens)],
             ["Setor", x.setor],
             ["Órgão/Entidade", x.orgao],
           ),
-          numeros(x.numero, x.planejamento, x.protocoloNumero, semAno(x.protocoloNumero)),
+          {
+            ids: lista(`DFD ${x.numero}`, x.planejamento && `Planej. ${x.planejamento}`),
+            selo: x.sigla,
+            nums: lista(x.numero, x.planejamento, x.protocoloNumero, semAno(x.protocoloNumero)),
+          },
         ),
       ),
     );
@@ -185,19 +209,17 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPu
       d.protocolos.map((p) =>
         linha(
           p.id,
-          `Protocolo ${p.numero}`,
+          p.assunto || `Protocolo ${p.numero}`,
           hrefPublico(pca, "consulta", { abrir: `protocolo:${p.id}` }),
           campos(
-            ["Assunto", p.assunto],
-            ["Unidade", p.sigla],
             ["Valor", brl(p.valor)],
-            ["Id", p.idExterno],
             ["DFDs", num(p.dfds)],
             ["Itens", num(p.itens)],
+            ["Id", p.idExterno],
             ["Interessado", p.interessado],
             ["Observação", p.observacao],
           ),
-          numeros(p.numero, semAno(p.numero), p.idExterno),
+          { ids: [`Protocolo ${p.numero}`], selo: p.sigla, nums: lista(p.numero, semAno(p.numero), p.idExterno) },
         ),
       ),
     );
@@ -210,23 +232,16 @@ export function indicePublico(d: DadosPesquisaPublica): Map<TipoPublico, LinhaPu
     m.set(
       "orcamento",
       d.orcamento.map((o, i) =>
-        linha(
-          i,
-          o.sigla,
-          hrefPublico(pca, "orcamento", { abrir: `orcamento:${o.chave}` }),
-          campos(["", o.nome !== o.sigla && o.nome], ["Órgão", o.orgaoSigla], ["Orçamento", brl(o.orcamento)], ["Planejado", brl(o.planejado)]),
-        ),
+        linha(i, o.sigla, hrefPublico(pca, "orcamento", { abrir: `orcamento:${o.chave}` }), campos(["Órgão", o.orgaoSigla], ["Orçamento", brl(o.orcamento)], ["Planejado", brl(o.planejado)]), {
+          busca: lista(o.nome),
+        }),
       ),
     );
   if (d.unidades.length > 1)
     m.set(
       "unidade",
-      d.unidades.map((u) => linha(u.id, u.codigo, hrefPublico(pca, "dashboard", { unidade: u.id }), campos(["", u.municipio !== u.codigo && u.municipio]))),
+      d.unidades.map((u) => linha(u.id, u.codigo, hrefPublico(pca, "dashboard", { unidade: u.id }), [], { busca: lista(u.municipio) })),
     );
-  m.set(
-    "pca",
-    d.pcas.map((p) => linha(p.id, p.nome, `/?pca=${p.id}`, campos(["", p.id === pca ? "o aberto agora" : null], ["Ano", p.ano]), numeros(p.ano))),
-  );
   return m;
 }
 
