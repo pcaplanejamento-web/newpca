@@ -98,6 +98,8 @@ export function ConsultaPca({
   showUnidade,
   aberto,
   onAbrir: setAberto,
+  onAbrirItem,
+  itemAtivo = null,
   fim,
   alturaCheia,
   semBusca = false,
@@ -109,6 +111,9 @@ export function ConsultaPca({
   showUnidade: boolean;
   aberto: AberturaMesa | null;
   onAbrir: (a: AberturaMesa) => void;
+  /** A linha da aba Itens: o banner do item (de DFD ou de planilha — quem chama decide) e a linha marcada. */
+  onAbrirItem: (r: ItemRow) => void;
+  itemAtivo?: number | null;
   /** No fim da linha das abas (ex.: o (?)). */
   fim?: ReactNode;
   /** As tabelas ocupam até o fim do display (a vista Consulta de itens). */
@@ -171,8 +176,8 @@ export function ConsultaPca({
             origem
             busca={busca}
             alturaCheia={alturaCheia}
-            onRowClick={(r) => r.dfdId != null && setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } })}
-            ativo={aberto?.tipo === "item" ? aberto.itemId : null}
+            onRowClick={onAbrirItem}
+            ativo={itemAtivo}
           />
         ) : visao === "fora" ? (
           <DataTable

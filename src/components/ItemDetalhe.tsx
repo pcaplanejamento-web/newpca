@@ -87,8 +87,9 @@ export function ItemDetalhe({
   /** DFD GRAVADO (id) — habilita a seção "Histórico do item" (carregada só ao abrir). */
   historicoDfdId?: number | null;
   /** CONSULTA (Dashboard do PCA, público): campos CONGELADOS, sem estado/faltas/catálogo; o histórico vem da
-   * rota PÚBLICA (`urlHistorico` — só protocolos incorporados, sem autor). */
-  consulta?: { urlHistorico?: string } | null;
+   * rota PÚBLICA (`urlHistorico` — só protocolos incorporados, sem autor); `campos` = os dados a mais da origem (o item
+   * de planilha: Seq., unidade, classificação, previsão…), congelados antes do código. */
+  consulta?: { urlHistorico?: string; campos?: [string, string | null][] } | null;
   /** Leva ao campo com pendência e o destaca (o painel de pendências — valor unitário, quantidade, repetidos, catálogo). */
   destaque?: AncoraAlvo | null;
   /** O DFD de origem (nº + planejamento) — título da cópia e do PDF das pendências do item. */
@@ -163,6 +164,9 @@ export function ItemDetalhe({
     return (
       <div className="space-y-[var(--gap-block)]">
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          {consulta.campos?.map(([label, valor]) => (
+            <CampoCongelado key={label} label={label} valor={valor} />
+          ))}
           <CampoCongelado label="Código" valor={item.codigo} mono />
           <CampoCongelado label="Medida" valor={item.unidade} />
           <CampoCongelado label="Domínio" valor={item.dominio || dominioPorDescricao(item.descricao)} />

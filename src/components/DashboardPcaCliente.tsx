@@ -30,7 +30,7 @@ import {
 import type { DfdDoPca, DfdForaDaSoma, ProtocoloDoPca } from "@/lib/pca-espaco";
 import type { PontoSerie } from "@/lib/ranking-grafico";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries";
-import { BannersConsulta } from "./BannersConsulta";
+import { BannerItemPlanilha, BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { Button } from "./Button";
 import { Ajuda } from "./Ajuda";
@@ -172,14 +172,17 @@ export function DashboardPcaCliente({
   const [origemAberta, setOrigemAberta] = useState(false);
   const [explorar, setExplorar] = useState<Grafico | null>(null);
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
-  // O item de PLANILHA achado na pesquisa (sem DFD, sem banner próprio): a origem com ele.
+  // O item de PLANILHA (sem DFD): o banner padrão do item com os dados da linha (`BannerItemPlanilha`).
   const [avulso, setAvulso] = useState<ItemRow | null>(null);
+  /** Abre o item no banner padrão: o de DFD na pilha da consulta; o de planilha no banner do item da planilha. */
+  const abrirItem = (r: ItemRow) =>
+    r.dfdId != null && consulta ? setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } }) : setAvulso(r);
+  const itemAberto = aberto?.tipo === "item" ? aberto.itemId : (avulso?.id ?? null);
   useAbrirPublico((v) => {
     const a = lerAbrirPublico(v);
     if (a?.tipo === "item") {
       const r = itens.find((i) => i.id === a.id);
-      if (r && r.dfdId != null && consulta) setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } });
-      else if (r) setAvulso(r);
+      if (r) abrirItem(r);
     } else if ((a?.tipo === "dfd" || a?.tipo === "protocolo") && consulta) setAberto({ tipo: a.tipo, id: a.id });
   }, pesquisaNoCabecalho);
   const [modoCrono, setModoCrono] = useState<ModoCronograma>("mensal");
@@ -318,9 +321,6 @@ export function DashboardPcaCliente({
     return { ...consulta, dfds, protocolos: consulta.protocolos.filter((p) => protos.has(p.id)) };
   }, [consulta, ativo, filtrados]);
 
-  const abrirItem = consulta
-    ? (r: ItemRow) => r.dfdId != null && setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } })
-    : undefined;
   const chips = Object.entries(filtros).filter(([, f]) => f) as [DimDash, NonNullable<FiltrosDash[DimDash]>][];
   const textoFiltros = chips.map(([dim, f]) => `${TITULO_CHIP[dim]}: ${f.rotulo}`).join(" · ");
   const valorFiltrado = filtrados.reduce((s, i) => s + (i.valorTotal ?? 0), 0);
@@ -449,12 +449,14 @@ export function DashboardPcaCliente({
       showUnidade={showUnidade}
       aberto={aberto}
       onAbrir={setAberto}
+      onAbrirItem={abrirItem}
+      itemAtivo={itemAberto}
       fim={ajudaConsulta}
       alturaCheia={soConsulta}
       semBusca={pesquisaNoCabecalho}
     />
   ) : (
-    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={soConsulta} semBusca={pesquisaNoCabecalho} />
+    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={soConsulta} semBusca={pesquisaNoCabecalho} onRowClick={abrirItem} ativo={itemAberto} />
   );
   return (
     <>
@@ -518,12 +520,12 @@ export function DashboardPcaCliente({
           onClick={
             maior
               ? () =>
-                  abrirItem && maior.dfdId != null
+                  consulta && maior.dfdId != null
                     ? abrirItem(maior)
                     : filtrar({ dim: "item", id: maior.id }, maior.nomeProduto ?? `Item ${maior.id}`)
               : undefined
           }
-          acao={abrirItem ? "abrir o item" : "filtrar pelo item"}
+          acao={consulta ? "abrir o item" : "filtrar pelo item"}
         />
       </div>
 
@@ -702,24 +704,10 @@ export function DashboardPcaCliente({
             : "Os itens das planilhas importadas neste PCA que passam em TODOS os filtros — a mesma lista da Consulta de Itens."
         }
       >
-        <ItemTable rows={filtrados} showUnidade={showUnidade} origem={!!consulta} onRowClick={abrirItem} ativo={aberto?.tipo === "item" ? aberto.itemId : null} />
+        <ItemTable rows={filtrados} showUnidade={showUnidade} origem={!!consulta} onRowClick={abrirItem} ativo={itemAberto} />
       </OrigemDados>
 
-      {pesquisaNoCabecalho && (
-        <OrigemDados
-          aberto={avulso != null}
-          onClose={() => setAvulso(null)}
-          titulo="Pesquisa"
-          recorte={avulso?.nomeProduto ?? "Item"}
-          resumo={[
-            { label: "Valor total", value: brl(avulso?.valorTotal ?? 0) },
-            { label: "Quantidade", value: num(avulso?.quantidade ?? 0) },
-          ]}
-          fonte="O item da planilha importada neste PCA, com todas as colunas da Consulta de itens."
-        >
-          <ItemTable rows={avulso ? [avulso] : []} showUnidade={showUnidade} semBusca />
-        </OrigemDados>
-      )}
+      <BannerItemPlanilha item={avulso} onFechar={() => setAvulso(null)} />
 
       {consulta && <BannersConsulta pcaId={consulta.pcaId} abrir={aberto} onFechar={() => setAberto(null)} />}
     </>

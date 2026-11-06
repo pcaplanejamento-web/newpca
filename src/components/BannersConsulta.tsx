@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
+import { dataBR } from "@/lib/format";
 import type { DfdConsulta } from "@/lib/pca-publico-core";
+import type { ItemRow } from "@/lib/queries";
 import type { ProtocoloConsulta } from "@/lib/pca-espaco";
 import { type AberturaMesa, LARGURA } from "./BannersMesa";
 import { BotaoAcao } from "./BotaoAcao";
@@ -305,6 +307,56 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
       rodape={principal.rodape}
     >
       {principal.children}
+    </Modal>
+  );
+}
+
+/**
+ * O BANNER do ITEM DE PLANILHA (sem DFD — PCA de lista pronta): o MESMO `ItemDetalhe` da consulta, com os dados da
+ * linha da planilha congelados (unidade — a sigla —, classificação, previsão, prioridade). Abre pela pesquisa e pela tabela.
+ */
+export function BannerItemPlanilha({ item, onFechar }: { item: ItemRow | null; onFechar: () => void }) {
+  if (!item) return null;
+  const previsao = item.anual ? (item.periodo ?? "Anual") : item.dataDesejada ? dataBR(item.dataDesejada) : null;
+  return (
+    <Modal
+      open
+      onClose={onFechar}
+      larguraPrincipal={LARGURA.item}
+      titulo={item.nomeProduto ?? "Item"}
+      cabecalho={
+        <div className="min-w-0 space-y-0.5">
+          <span className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
+            Item da planilha
+            {item.sequencial != null && <span className="rounded-chip border border-accent/30 bg-accent-soft px-1.5 font-mono normal-case text-accent">Seq. {item.sequencial}</span>}
+          </span>
+          <span className="block truncate text-base font-bold text-text" title={item.nomeProduto ?? undefined}>
+            {item.nomeProduto ?? "Item"}
+          </span>
+        </div>
+      }
+    >
+      <ItemDetalhe
+        key={item.id}
+        item={{
+          item: null,
+          codigo: item.idProduto,
+          descricao: item.nomeProduto,
+          unidade: item.unidadeMedida,
+          quantidade: item.quantidade,
+          valorUnitario: item.valorReferencia,
+          valorTotal: item.valorTotal,
+          dominio: item.dominio ?? null,
+        }}
+        consulta={{
+          campos: [
+            ["Unidade", item.codigo ?? item.municipio],
+            ["Classificação", item.classificacao],
+            ["Previsão", previsao],
+            ...(item.prioridade ? [["Prioridade", item.prioridade] as [string, string]] : []),
+          ],
+        }}
+      />
     </Modal>
   );
 }

@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.279.3",
+    data: "2026-11-06",
+    titulo: "Item de planilha abre no banner do item",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Consulta pública",
+        texto: "O item de planilha (sem DFD) abre direto no banner padrão do item — pela pesquisa e ao tocar na linha da tabela —, com o Seq. em destaque, a sigla da unidade, a classificação e a previsão.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.279.2",
     data: "2026-11-06",
     titulo: "Pesquisa pública: identificadores em destaque, só no PCA selecionado",
