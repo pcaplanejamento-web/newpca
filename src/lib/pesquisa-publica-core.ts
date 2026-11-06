@@ -46,7 +46,7 @@ export type DadosPesquisaPublica = {
   itens: ItemRow[];
   dfds: DfdPublicoPesquisa[];
   protocolos: ProtocoloPublicoPesquisa[];
-  documentos: { id: number; nome: string; paginas: number }[];
+  documentos: { id: number; nome: string; nomeArquivo: string; paginas: number }[];
   orcamento: OrcamentoPublicoPesquisa[];
 };
 

@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.279.4",
+    data: "2026-11-06",
+    titulo: "Pesquisa pública abre na própria tela",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "O item, o DFD, o protocolo e o documento achados na pesquisa abrem no componente padrão na tela em que você está (Dashboard, Consulta, Documentos…), sem trocar de aba.",
+        link: "/",
+      },
+    ],
+  },
+  {
     versao: "1.279.3",
     data: "2026-11-06",
     titulo: "Item de planilha abre no banner do item",

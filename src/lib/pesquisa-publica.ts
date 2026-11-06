@@ -57,7 +57,7 @@ export async function pesquisaPublica(pcaId: number): Promise<string | null> {
         const t = porProto.get(p.id);
         return { ...p, idExterno: t?.idExterno ?? null, interessado: mascararTexto(t?.interessado ?? null), observacao: mascararTexto(t?.observacao ?? null) };
       }),
-      documentos: documentos.map((d) => ({ id: d.id, nome: d.nome, paginas: d.paginas })),
+      documentos: documentos.map((d) => ({ id: d.id, nome: d.nome, nomeArquivo: d.nomeArquivo, paginas: d.paginas })),
       orcamento: orcamento
         ? comparativoPorUnidade(orcamento.planejado, orcamento.linhas, orcamento.unidades).map((l) => ({
             chave: l.unidadeId == null ? "sem" : `u${l.unidadeId}`,

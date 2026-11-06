@@ -7,6 +7,7 @@ import {
   type DadosPesquisaPublica,
   DICAS_PUBLICAS,
   indicePublico,
+  lerAbrirPublico,
   type LinhaPublica,
   pesquisarPublico,
   TIPOS_PUBLICOS,
@@ -14,13 +15,21 @@ import {
   TITULO_PUBLICO,
 } from "@/lib/pesquisa-publica-core";
 import type { VistaPublica } from "@/lib/publico-core";
+import type { ItemRow } from "@/lib/queries";
 import { EVENTO_ABRIR_PUBLICO } from "./AbrirDaUrl";
+import type { AberturaMesa } from "./BannersMesa";
+import { BannerItemPlanilha, BannersConsulta } from "./BannersConsulta";
+import { VisualizadorPdf } from "./DocumentosView";
 import { BannerPesquisa, EVENTO_ABRIR_PESQUISA, type GrupoPesquisa, type IconePesquisa, lerConsulta, type ResultadoPesquisaTela } from "./BannerPesquisa";
 import { IconBuilding, IconClipboard, IconDocumentos, IconLayers, IconWallet } from "./icons";
 
 type Indice = Map<TipoPublico, LinhaPublica[]>;
-/** O índice do PCA e o rótulo dele ("PCA 2027") — o escopo da pesquisa em destaque no banner. */
-type Carga = { indice: Indice; escopo: string };
+type DocPublico = DadosPesquisaPublica["documentos"][number];
+/** O índice do PCA, o rótulo dele ("PCA 2027" — o escopo em destaque no banner) e os dados já carregados que abrem os
+ *  banners na própria tela (o item de planilha, o documento). */
+type Carga = { indice: Indice; escopo: string; itens: Map<number, ItemRow>; documentos: Map<number, DocPublico> };
+/** O que o resultado abriu NA TELA — o componente padrão de cada um. */
+type Aberto = { tipo: "consulta"; abrir: AberturaMesa } | { tipo: "planilha"; item: ItemRow } | { tipo: "documento"; doc: DocPublico };
 
 // O índice de cada PCA fica só na MEMÓRIA da aba (5 min) — pedido ao abrir a pesquisa, uma vez por PCA.
 const VALIDADE = 5 * 60_000;
@@ -37,7 +46,13 @@ function carregarIndice(pcaId: number): Promise<Carga> {
         const r = await fetch(`/api/pca/${pcaId}/consulta/pesquisa`);
         const j = (await r.json()) as Omit<DadosPesquisaPublica, "itens"> & { ok?: boolean; itens?: unknown };
         if (!r.ok || !j.ok) throw new Error("indisponível");
-        const carga = { indice: indicePublico({ ...j, itens: itensDoCompacto(j.itens ?? []) }), escopo: j.pca.ano != null ? `PCA ${j.pca.ano}` : j.pca.nome };
+        const itens = itensDoCompacto(j.itens ?? []);
+        const carga: Carga = {
+          indice: indicePublico({ ...j, itens }),
+          escopo: j.pca.ano != null ? `PCA ${j.pca.ano}` : j.pca.nome,
+          itens: new Map(itens.map((i) => [i.id, i])),
+          documentos: new Map(j.documentos.map((d) => [d.id, d])),
+        };
         indices.set(pcaId, { em: Date.now(), carga });
         return carga;
       } finally {
@@ -83,8 +98,10 @@ const ehTipo = (t: string): t is TipoPublico => (TIPOS_PUBLICOS as readonly stri
 /**
  * A PESQUISA DA TELA PÚBLICA (o campo do cabeçalho e Ctrl+K/⌘K): o MESMO banner da pesquisa do sistema (`BannerPesquisa`),
  * só com o que a página pública mostra — o índice da rota pública (`GET /api/pca/[id]/consulta/pesquisa`: PCA publicado,
- * abas publicadas, textos mascarados), procurado no navegador (`pesquisarPublico`). O resultado abre NA PÁGINA: o item, o
- * DFD e o protocolo nos banners da consulta, o documento no visualizador, a unidade do orçamento na origem dela.
+ * abas publicadas, textos mascarados), procurado no navegador (`pesquisarPublico`). O resultado abre o COMPONENTE PADRÃO
+ * na tela em que se está (qualquer aba, sem navegar): o item, o DFD e o protocolo nos banners da consulta
+ * (`BannersConsulta`), o item de planilha no `BannerItemPlanilha`, o documento no `VisualizadorPdf`. Só a unidade do
+ * orçamento (a origem precisa do orçamento da aba), a unidade e as abas navegam.
  */
 export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vista: VistaPublica; unidade?: number }) {
   const router = useRouter();
@@ -95,6 +112,7 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
   const [falhou, setFalhou] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const [recentes, setRecentes] = useState<ResultadoPesquisaTela[]>([]);
+  const [visto, setVisto] = useState<Aberto | null>(null);
 
   useEffect(() => {
     const abrir = () => setAberto(true);
@@ -166,10 +184,27 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
 
   const fechar = useCallback(() => setAberto(false), []);
 
-  /** Abre o resultado: na PRÓPRIA página (mesmo PCA e aba, sem unidade filtrada) sem recarregar; senão navega. */
-  function ir(href: string) {
+  /** Abre o resultado: o item, o DFD, o protocolo e o documento no componente padrão, AQUI (os dados do índice); o resto na
+   *  própria página (mesmo PCA e aba, sem unidade filtrada) sem recarregar, senão navega. */
+  async function ir(href: string) {
     const u = new URL(href, window.location.origin);
     const abrir = u.searchParams.get("abrir");
+    const a = abrir ? lerAbrirPublico(abrir) : null;
+    if (a?.tipo === "dfd" || a?.tipo === "protocolo") return setVisto({ tipo: "consulta", abrir: { tipo: a.tipo, id: a.id } });
+    if (a?.tipo === "item" || a?.tipo === "documento") {
+      const c = await carregarIndice(pcaId).catch(() => null);
+      if (a.tipo === "documento") {
+        const doc = c?.documentos.get(a.id);
+        return doc && setVisto({ tipo: "documento", doc });
+      }
+      const r = c?.itens.get(a.id);
+      if (!r) return;
+      return setVisto(
+        r.dfdId != null
+          ? { tipo: "consulta", abrir: { tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } } }
+          : { tipo: "planilha", item: r },
+      );
+    }
     const mesma = abrir && Number(u.searchParams.get("pca")) === pcaId && (u.searchParams.get("aba") ?? "dashboard") === vista && unidade == null;
     if (mesma) window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_PUBLICO, { detail: abrir }));
     else router.push(href);
@@ -178,11 +213,16 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
   function escolher(r: ResultadoPesquisaTela) {
     gravarRecentes([r, ...lerRecentes().filter((x) => x.chave !== r.chave)]);
     setAberto(false);
-    if (r.href) ir(r.href);
+    if (r.href) void ir(r.href);
   }
 
-  if (!aberto) return null;
+  const fecharVisto = () => setVisto(null);
   return (
+    <>
+      {visto?.tipo === "consulta" && <BannersConsulta pcaId={pcaId} abrir={visto.abrir} onFechar={fecharVisto} />}
+      {visto?.tipo === "planilha" && <BannerItemPlanilha item={visto.item} onFechar={fecharVisto} />}
+      {visto?.tipo === "documento" && <VisualizadorPdf doc={visto.doc} url={`/api/pca/${pcaId}/consulta/documento/${visto.doc.id}`} onFechar={fecharVisto} />}
+      {aberto && (
     <BannerPesquisa
       rotulo="Pesquisa na página pública"
       escopo={carga?.escopo}
@@ -211,5 +251,7 @@ export function PesquisaPublica({ pcaId, vista, unidade }: { pcaId: number; vist
         gravarRecentes([]);
       }}
     />
+      )}
+    </>
   );
 }

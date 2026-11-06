@@ -30,7 +30,7 @@ const base = (o: Partial<DadosPesquisaPublica> = {}): DadosPesquisaPublica => ({
   itens: [item({})],
   dfds: [{ id: 7, numero: "1234", planejamento: "1509", tipo: "DFD-O", sigla: "SME", protocoloNumero: "144756/2026", itens: 1, valor: 3500, objeto: "AQUISIÇÃO DE MOBILIÁRIO" }],
   protocolos: [{ id: 9, numero: "144756/2026", assunto: "INCLUSÃO PCA 2027", sigla: "SME", dfds: 1, itens: 1, valor: 3500, idExterno: "2289654", interessado: "SECRETARIA" }],
-  documentos: [{ id: 4, nome: "Portaria de nomeação", paginas: 2 }],
+  documentos: [{ id: 4, nome: "Portaria de nomeação", nomeArquivo: "portaria.pdf", paginas: 2 }],
   orcamento: [{ chave: "u5", sigla: "SME", nome: "Educação", orgaoSigla: "PMRV", orcamento: 1000, planejado: 500 }],
   ...o,
 });

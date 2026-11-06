@@ -3,7 +3,6 @@
 import { type CSSProperties, useMemo, useState } from "react";
 import { blocosRelatorioDashboard } from "@/lib/dashboard-relatorio";
 import { itensDoTexto } from "@/lib/itens-dash-texto";
-import { lerAbrirPublico } from "@/lib/pesquisa-publica-core";
 import { brl, brlCompact, dataIsoBrasilia, mesLabel, num } from "@/lib/format";
 import {
   agregarItensDash,
@@ -50,7 +49,6 @@ import { usePodeExportar } from "./ExportarTabelas";
 import { IconClose, IconDownload, IconFilter } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { KpiStat } from "./KpiStat";
-import { useAbrirPublico } from "./AbrirDaUrl";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
@@ -161,8 +159,7 @@ export function DashboardPcaCliente({
   nome?: string;
   /** Vista FIXA escolhida fora (o menu da tela pública): sem o seletor Gráficos | Consulta — só monta a escolhida. */
   vista?: "graficos" | "consulta";
-  /** Tela pública: a busca fica no CABEÇALHO (`PesquisaPublica`) — a consulta sem a barra de busca, e os resultados da
-   *  pesquisa abrem aqui (o item, o DFD, o protocolo). */
+  /** Tela pública: a busca fica no CABEÇALHO (`PesquisaPublica`, que abre os resultados) — a consulta sem a barra de busca. */
   pesquisaNoCabecalho?: boolean;
   /** A unidade já é filtrada no cabeçalho (tela pública): o filtro Unidade sai do topo (o gráfico fica). */
   semFiltroUnidade?: boolean;
@@ -178,13 +175,6 @@ export function DashboardPcaCliente({
   const abrirItem = (r: ItemRow) =>
     r.dfdId != null && consulta ? setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } }) : setAvulso(r);
   const itemAberto = aberto?.tipo === "item" ? aberto.itemId : (avulso?.id ?? null);
-  useAbrirPublico((v) => {
-    const a = lerAbrirPublico(v);
-    if (a?.tipo === "item") {
-      const r = itens.find((i) => i.id === a.id);
-      if (r) abrirItem(r);
-    } else if ((a?.tipo === "dfd" || a?.tipo === "protocolo") && consulta) setAberto({ tipo: a.tipo, id: a.id });
-  }, pesquisaNoCabecalho);
   const [modoCrono, setModoCrono] = useState<ModoCronograma>("mensal");
   const [gerando, setGerando] = useState(false);
   const [abaLocal, setAba] = useState<"graficos" | "consulta">("graficos");
@@ -432,7 +422,7 @@ export function DashboardPcaCliente({
           ? "Pesquise qualquer dado na pesquisa do topo da página (Ctrl+K); filtre e ordene pelo cabeçalho de cada coluna."
           : "Busque pelo produto ou código (vários de uma vez com “:”), filtre e ordene pelo cabeçalho de cada coluna."}
       </p>
-      {consulta && <p>Toque numa linha para ver o detalhe.</p>}
+      <p>Toque numa linha para ver o detalhe.</p>
     </Ajuda>
   );
 
