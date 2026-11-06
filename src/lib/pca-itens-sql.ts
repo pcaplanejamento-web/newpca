@@ -249,3 +249,38 @@ export function reativarVigentes(db: Db, pcaId: number, dfdIds: number[], motivo
       ),
     );
 }
+
+/** REATIVA os nºs CANCELADOS à mão (motivo "retirado", não baixados) entre os itens dados — `comandoVoltarACancelados` desfaz
+ * o que a vigência devolver inativo. */
+export function comandoReativarCancelados(db: Db, pcaId: number, dfdItemIds: readonly number[], motivoCancelado: string) {
+  return db
+    .update(pcaItens)
+    .set({ ativo: true, inativadoEm: null, inativadoPor: null, motivo: null })
+    .where(
+      and(
+        eq(pcaItens.pcaId, pcaId),
+        eq(pcaItens.ativo, false),
+        eq(pcaItens.motivo, motivoCancelado),
+        isNull(pcaItens.baixadoEm),
+        inArray(pcaItens.dfdItemId, [...dfdItemIds]),
+      ),
+    );
+}
+
+/** Os reativados que a VIGÊNCIA devolveu inativos (DFD substituído/excluído) voltam a CANCELADOS — senão voltariam ativos
+ * sozinhos quando o DFD voltasse a valer. Devolve quais. */
+export function comandoVoltarACancelados(db: Db, pcaId: number, dfdItemIds: readonly number[], motivoNaoVigente: string, motivoCancelado: string, ator: number | null) {
+  return db
+    .update(pcaItens)
+    .set({ motivo: motivoCancelado, inativadoPor: ator })
+    .where(
+      and(
+        eq(pcaItens.pcaId, pcaId),
+        eq(pcaItens.ativo, false),
+        eq(pcaItens.motivo, motivoNaoVigente),
+        isNull(pcaItens.baixadoEm),
+        inArray(pcaItens.dfdItemId, [...dfdItemIds]),
+      ),
+    )
+    .returning({ id: pcaItens.dfdItemId });
+}

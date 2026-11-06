@@ -16,6 +16,7 @@ import {
 } from "../src/lib/item-planilha-core.ts";
 import { comandoCancelarItens, comandosLimparVazias, comandoTotaisUnidades, consultaMaximoSequencial, consultaSequenciaisCancelados } from "../src/lib/pca-upload-sql.ts";
 import { MOTIVO_NUMERO, situacaoDoNumero } from "../src/lib/pca-numeracao-core.ts";
+import { comandoReativarCancelados, comandoVoltarACancelados } from "../src/lib/pca-itens-sql.ts";
 import { editarItemPlanilhaSchema, situacaoItensPlanilhaSchema } from "../src/lib/validation.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
@@ -170,5 +171,41 @@ describe("cancelar item no PCA (planilha e protocolo)", () => {
     assert.ok(situacaoItensPlanilhaSchema.safeParse({ acao: "cancelar", ids: [1] }).success);
     assert.ok(!situacaoItensPlanilhaSchema.safeParse({ acao: "excluir", ids: [1] }).success);
     assert.ok(!situacaoItensPlanilhaSchema.safeParse({ acao: "reativar", ids: [] }).success);
+  });
+});
+
+describe("reativar item de protocolo cancelado (D1 real)", () => {
+  let db: DatabaseSync;
+  let orm: ReturnType<typeof drizzle<typeof schema>>;
+  before(() => {
+    db = new DatabaseSync(":memory:");
+    const dir = join(process.cwd(), "drizzle");
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".sql")).sort()) db.exec(readFileSync(join(dir, f), "utf8"));
+    db.exec("PRAGMA foreign_keys = ON");
+    orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec(`INSERT INTO pcas (id, nome, ano, fonte) VALUES (1, 'PCA', 2027, 'protocolo');
+      INSERT INTO dfds (id, numero) VALUES (100, 'D100');
+      INSERT INTO dfd_itens (id, dfd_id, sequencial) VALUES (1, 100, 1), (2, 100, 2), (3, 100, 3);
+      INSERT INTO pca_itens (pca_id, sequencial, dfd_item_id, dfd_id, ativo, motivo, baixado_em) VALUES
+        (1, 1, 1, 100, 0, '${MOTIVO_NUMERO.retirado}', NULL),
+        (1, 2, 2, 100, 0, '${MOTIVO_NUMERO.naoVigente}', NULL),
+        (1, 3, 3, 100, 0, '${MOTIVO_NUMERO.retirado}', CURRENT_TIMESTAMP);`);
+  });
+  const estado = (id: number) => ({ ...(db.prepare("SELECT ativo a, motivo m FROM pca_itens WHERE dfd_item_id = ?").get(id) as Record<string, unknown>) });
+
+  it("reativa SÓ o cancelado (não o inativo pela vigência nem o baixado)", async () => {
+    await comandoReativarCancelados(orm, 1, [1, 2, 3], MOTIVO_NUMERO.retirado);
+    assert.deepEqual(estado(1), { a: 1, m: null });
+    assert.deepEqual(estado(2), { a: 0, m: MOTIVO_NUMERO.naoVigente });
+    assert.deepEqual(estado(3), { a: 0, m: MOTIVO_NUMERO.retirado });
+  });
+  it("o reativado que a vigência devolveu inativo volta a CANCELADO (nunca reativa sozinho depois)", async () => {
+    // A vigência (DFD substituído) marca o reativado como não vigente…
+    db.exec(`UPDATE pca_itens SET ativo = 0, motivo = '${MOTIVO_NUMERO.naoVigente}' WHERE dfd_item_id = 1`);
+    const r = await comandoVoltarACancelados(orm, 1, [1], MOTIVO_NUMERO.naoVigente, MOTIVO_NUMERO.retirado, null);
+    assert.deepEqual(r.map((x) => x.id), [1]);
+    assert.deepEqual(estado(1), { a: 0, m: MOTIVO_NUMERO.retirado });
+    // …e só os pedidos: o item 2 (inativo pela vigência, não pedido) não muda.
+    assert.deepEqual(estado(2), { a: 0, m: MOTIVO_NUMERO.naoVigente });
   });
 });

@@ -54,7 +54,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string; i
   if (plano.erro) return erro(plano.erro, 422);
   if (Object.keys(plano.set).length === 0) return ok({ alterado: false });
 
-  await db.batch([db.update(itens).set(plano.set).where(and(eq(itens.id, itemId), eq(itens.pcaId, pcaId), isNull(itens.canceladoEm))), comandoTotaisUnidades(db, pcaId)]);
+  const [gravados] = await db.batch([
+    db.update(itens).set(plano.set).where(and(eq(itens.id, itemId), eq(itens.pcaId, pcaId), isNull(itens.canceladoEm))).returning({ id: itens.id }),
+    comandoTotaisUnidades(db, pcaId),
+  ]);
+  // Cancelado entre a leitura e a gravação: nada foi gravado (nem vai ao histórico).
+  if (gravados.length === 0) return erro("Item cancelado no PCA — reative-o antes de editar.", 409);
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",

@@ -2658,7 +2658,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`consultaSequenciaisCancelados`); a edição do cancelado = 409. **Protocolo:** o antigo "Retirar do PCA" virou "Cancelar no
   PCA" (`pca_itens.motivo` = `MOTIVO_NUMERO.retirado`, valor gravado inalterado) + `acao:"reativar"` em `POST
   /api/pca/[id]/itens` (`reativarItensDoPca`: só o retirado não baixado, depois `sincronizarAtivosPca` — o DFD não vigente
-  volta inativo pela vigência). Coluna **Situação no PCA** = `colunaSituacaoNoPca` (`ColunasItensMesa.tsx`; `situacaoDoNumero`
+  volta a CANCELADO — `comandoReativarCancelados` + `comandoVoltarACancelados`, `pca-itens-sql.ts`, v1.282.1: nunca fica "não vigente", senão voltaria ativo sozinho). Coluna **Situação no PCA** = `colunaSituacaoNoPca` (`ColunasItensMesa.tsx`; `situacaoDoNumero`
   em `pca-numeracao-core.ts`: Ativo · Cancelado · Inativo) na Importação (com seleção + `BarraSelecao` e o Cancelar/Reativar
   no rodapé do `BannerItemPlanilha` — `situacao`) e na Mesa do PCA → Itens (`ItemDfdRow.pcaMotivo`). Excluir o UPLOAD apaga
   também os cancelados dele. Testes: `tests/item-planilha.test.ts`.

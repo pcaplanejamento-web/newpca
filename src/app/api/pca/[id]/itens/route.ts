@@ -47,8 +47,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   if (alvo.length) {
     const ids2 = alvo.map((n) => n.dfdItemId);
-    if (reativar) await reativarItensDoPca(pca.id, ids2, a.u.id);
-    else await retirarItensDoPca(pca.id, ids2, a.u.id);
+    if (reativar) {
+      // Reativar o item de um DFD que não está mais VIGENTE no PCA (substituído/excluído): ele segue CANCELADO — diz isso.
+      const ficaram = new Set(await reativarItensDoPca(pca.id, ids2, a.u.id));
+      for (let i = alvo.length - 1; i >= 0; i--)
+        if (ficaram.has(alvo[i].dfdItemId)) {
+          falhas.push({ id: alvo[i].dfdItemId, motivo: `Nº ${alvo[i].sequencial}: o DFD não está vigente no PCA (substituído/excluído) — segue cancelado` });
+          alvo.splice(i, 1);
+        }
+    } else await retirarItensDoPca(pca.id, ids2, a.u.id);
+  }
+  if (alvo.length) {
     const seqs = alvo.map((n) => n.sequencial).sort((x, y) => x - y);
     await registrarAuditoria({
       usuario: a.u,

@@ -89,6 +89,8 @@ export async function getResumo(unidadeId?: number, pcaId?: PcaDosItens): Promis
       and(
         pcaId ? eq(unidades.pcaId, typeof pcaId === "number" ? pcaId : pcaId.pcaId) : undefined,
         typeof pcaId === "object" ? condUnidade(unidades.reparticaoId, pcaId.reparticaoId) : undefined,
+        // Só as planilhas com algum item ATIVO (a de itens todos cancelados não compõe o PCA).
+        sql`EXISTS (SELECT 1 FROM ${itens} WHERE ${itens.unidadeId} = ${unidades.id} AND ${itens.canceladoEm} IS NULL)`,
       ),
     );
 

@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.282.1",
+    data: "2026-11-06",
+    titulo: "Cancelamento no PCA: ajustes da auditoria",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "Reativar o item de um DFD que não vale mais no PCA (substituído ou excluído por outro protocolo) mantém o item CANCELADO e diz o motivo — antes ele podia voltar ativo sozinho mais tarde.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "A planilha com todos os itens cancelados não conta mais nas unidades do Dashboard, e a edição de um item cancelado ao mesmo tempo por outra pessoa não é gravada nem registrada.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.282.0",
     data: "2026-11-06",
     titulo: "Cancelar item no PCA",

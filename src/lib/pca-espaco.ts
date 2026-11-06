@@ -58,6 +58,8 @@ import { filtroAnoPcaDfd } from "./dfd-sql";
 import { consultaDfdsEmOutroPca } from "./pca-dfds-sql";
 import {
   baixarNumeros,
+  comandoReativarCancelados,
+  comandoVoltarACancelados,
   desvincularProtocoloDoPca,
   gravarSequencialNosItens,
   numerarItensDoProtocolo,
@@ -504,23 +506,18 @@ export type NumeradoDoPca = {
   dfdNumero: string | null;
 };
 
-/** REATIVA itens CANCELADOS no PCA (motivo "retirado", não baixados) e refaz a vigência — o nº de um DFD que deixou de ser
- * vigente volta inativo pela vigência (nunca conta um DFD substituído/excluído). */
-export async function reativarItensDoPca(pcaId: number, dfdItemIds: number[], usuarioId: number | null): Promise<void> {
-  for (const lote of lotesDeIds(dfdItemIds))
-    await getDb()
-      .update(pcaItens)
-      .set({ ativo: true, inativadoEm: null, inativadoPor: null, motivo: null })
-      .where(
-        and(
-          eq(pcaItens.pcaId, pcaId),
-          eq(pcaItens.ativo, false),
-          eq(pcaItens.motivo, MOTIVO_NUMERO.retirado),
-          isNull(pcaItens.baixadoEm),
-          inArray(pcaItens.dfdItemId, lote),
-        ),
-      );
+/** REATIVA itens CANCELADOS no PCA (motivo "retirado", não baixados) e refaz a vigência. O de um DFD que NÃO está mais
+ * vigente (substituído/excluído por outro protocolo) segue CANCELADO — nunca vira "não vigente", senão voltaria ativo
+ * sozinho quando o DFD voltasse a valer. Devolve os `dfdItemId` que ficaram cancelados por isso. */
+export async function reativarItensDoPca(pcaId: number, dfdItemIds: number[], usuarioId: number | null): Promise<number[]> {
+  const db = getDb();
+  for (const lote of lotesDeIds(dfdItemIds)) await comandoReativarCancelados(db, pcaId, lote, MOTIVO_NUMERO.retirado);
   await sincronizarAtivosPca(pcaId, usuarioId);
+  // Os que a vigência devolveu inativos: voltam a CANCELADOS (o estado de antes, como se nada tivesse mudado).
+  const ficaram: number[] = [];
+  for (const lote of lotesDeIds(dfdItemIds))
+    for (const x of await comandoVoltarACancelados(db, pcaId, lote, MOTIVO_NUMERO.naoVigente, MOTIVO_NUMERO.retirado, usuarioId)) if (x.id != null) ficaram.push(x.id);
+  return ficaram;
 }
 
 /** RETIRA itens do PCA: o número fica INATIVO (nunca reaproveitado) e o item sai do Dashboard/Orçamento. */
