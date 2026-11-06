@@ -84,7 +84,12 @@ export default async function PcaEspacoPage({
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
   else if (aba === "importacao")
-    conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={await itensDosUploads(pca.id)} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
+    conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={await itensDosUploads(pca.id)}
+        podeImportar={pode.importar}
+        podeExcluir={pode.excluir}
+        podeEditar={pode.importar}
+        anoPca={pca.ano}
+      />;
   else if (aba === "documentos") {
     const { permitidos, pcas, podeTodosPcas } = await pcasDosDocumentos(acesso);
     const todos = await listarDocumentos(permitidos);

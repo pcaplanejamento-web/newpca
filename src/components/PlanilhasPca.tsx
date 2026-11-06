@@ -13,7 +13,9 @@ import { FilterChip } from "./FilterChip";
 import { CartaoEspaco } from "./QuadroCard";
 import { Segmented } from "./Segmented";
 import { type LeituraPlanilhas, type PlanilhaParseada, parsePlanilhas } from "@/lib/parse-xlsx";
+import type { ItemRow } from "@/lib/queries";
 import { AvisoFlutuante } from "./AvisoFlutuante";
+import { BannerItemPlanilha } from "./BannersConsulta";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropzone } from "./Dropzone";
@@ -90,6 +92,28 @@ const COLUNAS_ITENS: Column<ItemUpload>[] = [
   { key: "arquivo", header: "Upload", minWidth: 180, value: (r) => r.arquivo ?? "", render: (r) => <CelulaTexto texto={r.arquivo ?? "—"} /> },
 ];
 
+/** A linha da Importação no formato do banner do item de planilha (o mesmo do Dashboard). */
+function itemRowDoUpload(r: ItemUpload): ItemRow {
+  return {
+    id: r.id,
+    idProduto: r.codigo,
+    sequencial: r.sequencial,
+    nomeProduto: r.produto,
+    unidadeMedida: r.unidadeMedida,
+    quantidade: r.quantidade,
+    valorReferencia: r.valorUnitario,
+    valorTotal: r.valorTotal,
+    classificacao: r.classificacao,
+    dominio: r.dominio,
+    dataDesejada: r.dataDesejada,
+    codigo: r.unidade,
+    municipio: r.municipio,
+    anual: r.previsaoGenerica != null,
+    periodo: r.previsaoGenerica,
+    prioridade: r.prioridade,
+  };
+}
+
 /**
  * Aba IMPORTAÇÃO do PCA: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — por unidade ou a CONSOLIDADA com a coluna LOCAL)
  * com a PRÉVIA COMPLETA antes de gravar + UM card por UPLOAD (arquivo · unidades · itens · Σ). O SEQUENCIAL é sagrado: o
@@ -101,6 +125,8 @@ export function PlanilhasPca({
   itens,
   podeImportar,
   podeExcluir,
+  podeEditar = false,
+  anoPca = null,
 }: {
   pcaId: number;
   uploads: UploadPca[];
@@ -110,6 +136,10 @@ export function PlanilhasPca({
   podeImportar: boolean;
   /** O papel exclui planilhas do PCA. */
   podeExcluir: boolean;
+  /** O papel edita os itens das planilhas (tocar na linha abre o banner do item com os cadeados). */
+  podeEditar?: boolean;
+  /** O ano do PCA (as opções da previsão do item). */
+  anoPca?: number | null;
 }) {
   const router = useRouter();
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; progresso: number } | null>(null);
@@ -197,6 +227,12 @@ export function PlanilhasPca({
   const [visao, setVisao] = useState<"cards" | "itens">("cards");
   const [doUpload, setDoUpload] = useState<UploadPca | null>(null);
   const linhas = useMemo(() => (doUpload ? itens.filter((i) => i.uploadId === doUpload.id) : itens), [itens, doUpload]);
+  // O item aberto no banner padrão do item (pelo id — a lista nova depois de salvar segue no mesmo item).
+  const [abertoId, setAbertoId] = useState<number | null>(null);
+  const aberto = useMemo(() => {
+    const r = abertoId != null ? itens.find((i) => i.id === abertoId) : undefined;
+    return r ? itemRowDoUpload(r) : null;
+  }, [itens, abertoId]);
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -283,12 +319,19 @@ export function PlanilhasPca({
             density="compact"
             scrollInterno
             ordemInicial={{ key: "seq", dir: "desc" }}
+            onRowClick={(r) => setAbertoId(r.id)}
+            activeKey={abertoId ?? undefined}
             exportar={{ nome: doUpload?.nomeArquivo ?? "Itens importados" }}
             vazio="Nenhum item importado."
             resumo={(l) => `${num(l.length)} itens · ${brl(l.reduce((t, r) => t + (r.valorTotal ?? 0), 0))}`}
           />
         )}
       </div>
+      <BannerItemPlanilha
+        item={aberto}
+        onFechar={() => setAbertoId(null)}
+        edicao={podeEditar ? { pcaId, anoPca, onSalvo: () => router.refresh() } : null}
+      />
       {confirmacao}
       {previa && <PreviaPlanilha nomeArquivo={previa.nome} leitura={previa.leitura} onCancelar={() => decidir(false)} onImportar={() => decidir(true)} />}
     </div>

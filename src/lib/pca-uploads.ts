@@ -49,6 +49,12 @@ export type ItemUpload = {
   valorTotal: number | null;
   classificacao: string | null;
   dominio: string | null;
+  /** O nome da unidade da planilha (o LOCAL). */
+  municipio: string | null;
+  /** A previsão: a data desejada (ISO) ou o período genérico (ANUAL…). */
+  dataDesejada: string | null;
+  previsaoGenerica: string | null;
+  prioridade: string | null;
 };
 
 /** Os itens das planilhas do PCA, do sequencial maior ao menor (os recém-adicionados primeiro). */
@@ -68,6 +74,10 @@ export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
       valorTotal: itens.valorTotal,
       classificacao: sql<string | null>`COALESCE(${itens.classificacaoCat}, ${itens.classificacao})`,
       dominio: sql<string | null>`COALESCE(${itens.dominioCat}, ${itens.dominio})`,
+      municipio: unidades.municipio,
+      dataDesejada: itens.dataDesejada,
+      previsaoGenerica: itens.previsaoGenerica,
+      prioridade: itens.prioridade,
     })
     .from(itens)
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))

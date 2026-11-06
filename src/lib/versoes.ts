@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.281.0",
+    data: "2026-11-06",
+    titulo: "Itens da planilha editáveis no banner do item",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Na aba Importação do PCA, tocar num item que veio por planilha abre o MESMO banner do item de protocolo: cada campo com o cadeado (código, medida, descrição, quantidade, valores, previsão e prioridade) e \"Salvar alterações\" grava só o que mudou. O Seq., a unidade e a classificação ficam congelados; o total da planilha, o Dashboard e o Orçamento acompanham.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.280.0",
     data: "2026-11-06",
     titulo: "Pesquisa do sistema abre na própria tela",

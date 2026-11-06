@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
 import { dataBR } from "@/lib/format";
+import { opcoesPrevisao, previsaoDoItem } from "@/lib/item-planilha-core";
+import { totalDoItem } from "@/lib/parse-dfd-comum";
 import type { DfdConsulta } from "@/lib/pca-publico-core";
 import type { ItemRow } from "@/lib/queries";
 import type { ProtocoloConsulta } from "@/lib/pca-espaco";
@@ -10,14 +12,16 @@ import { type AberturaMesa, LARGURA } from "./BannersMesa";
 import { BotaoAcao } from "./BotaoAcao";
 import { CampoCongelado } from "./CampoCadeado";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { RodapePainelItem } from "./DfdPainelDireito";
-import { DfdCabecalho, DfdView, ItemCabecalho } from "./DfdView";
+import { DfdCabecalho, DfdView, type DfdVisualItem, ItemCabecalho } from "./DfdView";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock } from "./icons";
+import { IconAlert, IconClock, IconSave } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { duracaoMotionMs, Modal, type ModalPainel } from "./Modal";
 import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { SkeletonLinhas } from "./Skeleton";
+import { toast } from "./Toast";
 
 /** Conciliação neutra — a consulta não aponta divergência da capa. */
 const SEM_CONCILIACAO: ConciliacaoCapa = { ativa: false, divergente: false, zerada: false, bloqueia: false, somatorio: 0, motivo: null };
@@ -311,52 +315,163 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
   );
 }
 
+/** A edição do item de planilha (aba Importação do PCA): o PCA, o ano (as opções da previsão) e o que fazer ao gravar. */
+export type EdicaoItemPlanilha = { pcaId: number; anoPca: number | null; onSalvo: () => void };
+
+/** O rascunho editável do item de planilha (os campos do `ItemDetalhe` + previsão e prioridade). */
+type RascunhoPlanilha = DfdVisualItem & { previsao: string | null; prioridade: string | null };
+
+const PRIORIDADES_PLANILHA = ["ALTA", "MÉDIA", "BAIXA"];
+
+function rascunhoDaLinha(item: ItemRow): RascunhoPlanilha {
+  return {
+    item: null,
+    codigo: item.idProduto,
+    descricao: item.nomeProduto,
+    unidade: item.unidadeMedida,
+    quantidade: item.quantidade,
+    valorUnitario: item.valorReferencia,
+    valorTotal: item.valorTotal,
+    dominio: item.dominio ?? null,
+    previsao: previsaoDoItem({ dataDesejada: item.dataDesejada, previsaoGenerica: item.anual ? (item.periodo ?? "ANUAL") : null }),
+    prioridade: item.prioridade ?? null,
+  };
+}
+
+/** O que mudou no rascunho, no formato da rota (`editarItemPlanilhaSchema`). */
+function pedidoDoRascunho(orig: RascunhoPlanilha, r: RascunhoPlanilha): Record<string, string | number | null> {
+  const p: Record<string, string | number | null> = {};
+  const par = [
+    ["idProduto", orig.codigo, r.codigo],
+    ["nomeProduto", orig.descricao, r.descricao],
+    ["unidadeMedida", orig.unidade, r.unidade],
+    ["quantidade", orig.quantidade, r.quantidade],
+    ["valorReferencia", orig.valorUnitario, r.valorUnitario],
+    ["valorTotal", orig.valorTotal, r.valorTotal],
+    ["previsao", orig.previsao, r.previsao],
+    ["prioridade", orig.prioridade, r.prioridade],
+  ] as const;
+  for (const [k, de, para] of par) if ((de ?? null) !== (para ?? null)) p[k] = para ?? null;
+  return p;
+}
+
 /**
- * O BANNER do ITEM DE PLANILHA (sem DFD — PCA de lista pronta): o MESMO `ItemDetalhe` da consulta, com os dados da
- * linha da planilha congelados (unidade — a sigla —, classificação, previsão, prioridade). Abre pela pesquisa e pela tabela.
+ * O BANNER do ITEM DE PLANILHA (sem DFD — PCA de lista pronta): o MESMO `ItemDetalhe` do item de protocolo. Na consulta
+ * (pesquisa, Dashboard), os dados da linha congelados (unidade — a sigla —, classificação, previsão, prioridade). Com
+ * `edicao` (aba Importação), cada campo com o cadeado e "Salvar alterações" (só o que mudou); o Seq., a unidade e a
+ * classificação/domínio do Catálogo ficam congelados.
  */
-export function BannerItemPlanilha({ item, onFechar }: { item: ItemRow | null; onFechar: () => void }) {
+export function BannerItemPlanilha({ item, onFechar, edicao }: { item: ItemRow | null; onFechar: () => void; edicao?: EdicaoItemPlanilha | null }) {
   if (!item) return null;
-  const previsao = item.anual ? (item.periodo ?? "Anual") : item.dataDesejada ? dataBR(item.dataDesejada) : null;
+  return <BannerItemPlanilhaAberto key={item.id} item={item} onFechar={onFechar} edicao={edicao ?? null} />;
+}
+
+function BannerItemPlanilhaAberto({ item, onFechar, edicao }: { item: ItemRow; onFechar: () => void; edicao: EdicaoItemPlanilha | null }) {
+  const orig = useMemo(() => rascunhoDaLinha(item), [item]);
+  const [r, setR] = useState<RascunhoPlanilha>(orig);
+  const [salvando, setSalvando] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
+  const pedido = useMemo(() => pedidoDoRascunho(orig, r), [orig, r]);
+  const sujo = Object.keys(pedido).length > 0;
+  useEffect(() => {
+    if (!sujo) return;
+    const h = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [sujo]);
+
+  async function fechar() {
+    if (salvando) return;
+    if (sujo && !(await confirmar({ titulo: "Descartar as alterações?", texto: "O item tem alterações não salvas.", confirmar: "Descartar", perigo: true }))) return;
+    onFechar();
+  }
+  async function salvar() {
+    if (!edicao || !sujo || salvando) return;
+    setSalvando(true);
+    try {
+      const res = await fetch(`/api/pca/${edicao.pcaId}/planilhas/itens/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pedido),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar o item.");
+      toast.success(`Item Seq. ${item.sequencial ?? ""} salvo.`);
+      edicao.onSalvo();
+      onFechar();
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Sem conexão com o servidor — o item não foi salvo.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  const unidade = item.codigo ?? item.municipio;
+  const seq = item.sequencial != null ? String(item.sequencial) : null;
+  const previsaoTexto = item.anual ? (item.periodo ?? "Anual") : item.dataDesejada ? dataBR(item.dataDesejada) : null;
+  const atualizar = (patch: Partial<RascunhoPlanilha>) =>
+    setR((x) => {
+      const novo = { ...x, ...patch };
+      // Trocar quantidade/valor unitário recalcula o total (q × vu); o total digitado à mão vale.
+      const recalcula = ("quantidade" in patch || "valorUnitario" in patch) && !("valorTotal" in patch);
+      return recalcula ? { ...novo, valorTotal: totalDoItem(novo.quantidade, novo.valorUnitario, novo.valorTotal) } : novo;
+    });
+
   return (
     <Modal
       open
-      onClose={onFechar}
+      onClose={fechar}
+      bloqueado={salvando}
       larguraPrincipal={LARGURA.item}
       titulo={item.nomeProduto ?? "Item"}
       cabecalho={
         <div className="min-w-0 space-y-0.5">
           <span className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
             Item da planilha
-            {item.sequencial != null && <span className="rounded-chip border border-accent/30 bg-accent-soft px-1.5 font-mono normal-case text-accent">Seq. {item.sequencial}</span>}
+            {seq && <span className="rounded-chip border border-accent/30 bg-accent-soft px-1.5 font-mono normal-case text-accent">Seq. {seq}</span>}
           </span>
-          <span className="block truncate text-base font-bold text-text" title={item.nomeProduto ?? undefined}>
-            {item.nomeProduto ?? "Item"}
+          <span className="block truncate text-base font-bold text-text" title={r.descricao ?? undefined}>
+            {r.descricao ?? "Item"}
           </span>
         </div>
       }
+      rodape={
+        edicao ? (
+          <RodapePainelItem
+            principal={
+              <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo} />
+            }
+          />
+        ) : undefined
+      }
     >
-      <ItemDetalhe
-        key={item.id}
-        item={{
-          item: null,
-          codigo: item.idProduto,
-          descricao: item.nomeProduto,
-          unidade: item.unidadeMedida,
-          quantidade: item.quantidade,
-          valorUnitario: item.valorReferencia,
-          valorTotal: item.valorTotal,
-          dominio: item.dominio ?? null,
-        }}
-        consulta={{
-          campos: [
-            ["Unidade", item.codigo ?? item.municipio],
-            ["Classificação", item.classificacao],
-            ["Previsão", previsao],
-            ...(item.prioridade ? [["Prioridade", item.prioridade] as [string, string]] : []),
-          ],
-        }}
-      />
+      {edicao ? (
+        <ItemDetalhe
+          item={r}
+          rotulo={seq ? `Seq. ${seq}` : "Item"}
+          editavel={!salvando}
+          onChange={atualizar}
+          extras={[
+            { chave: "unidadeP", label: "Unidade", valor: unidade },
+            { chave: "classificacao", label: "Classificação", valor: item.classificacao },
+            { chave: "previsao", label: "Previsão", valor: r.previsao, opcoes: opcoesPrevisao(edicao.anoPca, orig.previsao), onChange: (v) => atualizar({ previsao: v || null }) },
+            { chave: "prioridade", label: "Prioridade", valor: r.prioridade, opcoes: PRIORIDADES_PLANILHA, onChange: (v) => atualizar({ prioridade: v || null }) },
+          ]}
+        />
+      ) : (
+        <ItemDetalhe
+          item={orig}
+          consulta={{
+            campos: [
+              ["Unidade", unidade],
+              ["Classificação", item.classificacao],
+              ["Previsão", previsaoTexto],
+              ...(item.prioridade ? [["Prioridade", item.prioridade] as [string, string]] : []),
+            ],
+          }}
+        />
+      )}
+      {confirmacao}
     </Modal>
   );
 }

@@ -62,7 +62,7 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
     acoes: {
       visualizar: "Abrir os PCAs: Dashboard, Orçamento, a Mesa do PCA e a consulta do Preview.",
       manipular: "Trabalhar na Mesa do PCA: incorporar, devolver, enviar a este PCA e editar o que foi enviado.",
-      importar: "Importar planilhas (PCA de lista).",
+      importar: "Importar planilhas e editar os itens delas (PCA de lista).",
       exportar: "Baixar o comparativo em .xlsx.",
       excluir: "Excluir PCA e planilha e retirar itens do PCA.",
       configurar: "Criar PCA, alterar a Configuração (nome, ano, fonte, publicar, capa, visão, marcados) e publicar edições das tabelas.",

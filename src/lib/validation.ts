@@ -53,3 +53,18 @@ export const uploadFimSchema = z.object({ mode: z.literal("fim"), uploadId: z.nu
 export const uploadSchema = z.discriminatedUnion("mode", [uploadStartSchema, uploadAppendSchema, uploadFimSchema]);
 
 export type UploadPayload = z.infer<typeof uploadSchema>;
+
+/** EDIÇÃO de UM item da planilha (aba Importação do PCA): só o que mudou; a régua fica em `item-planilha-core.ts`. */
+const numeroItem = z.number().finite().min(0, "Use um número maior ou igual a zero.").max(1e15).nullable().optional();
+export const editarItemPlanilhaSchema = z
+  .strictObject({
+    idProduto: z.string().max(200).nullable().optional(),
+    nomeProduto: z.string().max(20_000).nullable().optional(),
+    unidadeMedida: z.string().max(200).nullable().optional(),
+    quantidade: numeroItem,
+    valorReferencia: numeroItem,
+    valorTotal: numeroItem,
+    previsao: z.string().max(40).nullable().optional(),
+    prioridade: z.string().max(40).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, "Nada a alterar.");

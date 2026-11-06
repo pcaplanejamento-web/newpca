@@ -317,6 +317,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   },
   "pca/[id]/itens": { POST: naMesa(tela("pca", "excluir", "retirar itens do PCA")) },
   "pca/[id]/planilhas/[uploadId]": { DELETE: tela("pca", "excluir") },
+  "pca/[id]/planilhas/itens/[itemId]": { PATCH: tela("pca", "importar", "editar um item importado por planilha") },
   "pca/[id]/protocolos": { POST: naMesa(tela("pca", "manipular", "enviar também exige Manipular na Mesa (recusa)")) },
   "pca/[id]/consulta/dfd/[dfdId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/consulta/documento/[docId]": { GET: publica("aba Documentos pública + PCA publicado + documento do PCA") },

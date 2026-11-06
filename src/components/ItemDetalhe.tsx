@@ -19,7 +19,7 @@ import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { pendenciasDoItemSolo } from "@/lib/pendencias-core";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { CampoCongelado, CampoNumero, CampoTexto } from "./CampoCadeado";
+import { CampoCongelado, CampoNumero, CampoSelecao, CampoTexto } from "./CampoCadeado";
 import { type AncoraAlvo, useDestaqueAncora } from "./DestaqueAncora";
 import type { DfdVisualItem } from "./DfdView";
 import { HistoricoDoItem } from "./Historico";
@@ -33,6 +33,10 @@ import { toast } from "./Toast";
 type CampoK = "codigo" | "unidade" | "descricao" | "quantidade" | "valorUnitario" | "valorTotal";
 /** Iguais listados no bloco "Item repetido" (o resto é contado — a lista não cresce com o grupo). */
 const MAX_REPETIDOS_LISTA = 20;
+
+/** Um campo A MAIS do item (o item de planilha: Seq., Unidade, Previsão, Prioridade…) — com `onChange` ganha o cadeado
+ * (`opcoes` = seleção; sem elas, texto); sem `onChange`, congelado. Vem antes do Código. */
+export type CampoExtraItem = { chave: string; label: string; valor: string | null; opcoes?: string[]; onChange?: (v: string) => void };
 
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
@@ -63,6 +67,8 @@ export function ItemDetalhe({
   destaque = null,
   dfdRef = null,
   idx = 0,
+  rotulo,
+  extras = [],
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -96,6 +102,10 @@ export function ItemDetalhe({
   dfdRef?: { numero: string; planejamento: string | null } | null;
   /** Índice do item no DFD (a chave do alvo das pendências). */
   idx?: number;
+  /** O título do cabeçalho (padrão "Item N"; o item de planilha usa "Seq. N"). */
+  rotulo?: string;
+  /** Campos a mais na edição (o item de planilha) — ver `CampoExtraItem`. */
+  extras?: CampoExtraItem[];
 }) {
   const raizRef = useRef<HTMLDivElement>(null);
   useDestaqueAncora(raizRef, destaque);
@@ -132,7 +142,7 @@ export function ItemDetalhe({
   };
 
   // Cadeado por campo. Um campo IGUAL ao catálogo não pode ser alterado (bloqueado).
-  const [abertos, setAbertos] = useState<Set<CampoK>>(new Set());
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const catalogado = !!conf?.sugestao && conf.sugestao.score >= 1;
   const bloqueado = (campo: CampoK): boolean => {
     if (!catalogado) return false; // sem item casado no catálogo → nada bloqueado
@@ -141,8 +151,8 @@ export function ItemDetalhe({
     if (campo === "unidade") return !conf?.divergUnidade;
     return false; // quantidade/valores não têm equivalente no catálogo
   };
-  const alternarCadeado = (campo: CampoK) => {
-    if (bloqueado(campo)) {
+  const alternarCadeado = (campo: string) => {
+    if (bloqueado(campo as CampoK)) {
       toast.error("Campo igual ao catálogo — não pode ser alterado.");
       return;
     }
@@ -183,7 +193,7 @@ export function ItemDetalhe({
     <div ref={raizRef} className="space-y-[var(--gap-block)]">
       {/* Cabeçalho: nº do item + o indicador ÚNICO de pendências (o mesmo do DFD e do protocolo) */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-base font-bold text-text">Item {item.item ?? "—"}</span>
+        <span className="text-base font-bold text-text">{rotulo ?? `Item ${item.item ?? "—"}`}</span>
         <IndicadorPendencias
           erros={contPend.erros}
           atencoes={contPend.atencoes}
@@ -205,6 +215,15 @@ export function ItemDetalhe({
 
       {/* Campos do item — cada um com cadeado próprio quando editável */}
       <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        {extras.map((x) => {
+          if (!x.onChange) return <CampoCongelado key={x.chave} label={x.label} valor={x.valor} />;
+          const cad = { editavel: editavelUI, aberto: abertos.has(x.chave), bloqueado: false, onLock: () => alternarCadeado(x.chave) };
+          return x.opcoes ? (
+            <CampoSelecao key={x.chave} label={x.label} valor={x.valor ?? ""} opcoes={x.opcoes} onChange={x.onChange} {...cad} />
+          ) : (
+            <CampoTexto key={x.chave} label={x.label} valor={x.valor ?? ""} onChange={x.onChange} {...cad} />
+          );
+        })}
         <CampoTexto label="Código" valor={item.codigo ?? ""} mono {...props("codigo")} onChange={(v) => onChange?.({ codigo: v || null })} />
         <CampoTexto label="Medida" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
         <CampoCongelado label="Domínio" valor={item.dominio || dominioPorDescricao(item.descricao)} />

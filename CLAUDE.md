@@ -2649,6 +2649,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   real) grava os itens cuja `classificado_versao` ≠ `versaoPadronizacao(cadastro)`: no cron dos e-mails (1500 por tabela) e
   `reclassificarTudo` depois de importar planilha e de mudar classificações/unidades de medida. As leituras usam o gravado
   (`COALESCE` na planilha; `itensConsolidados` com a mesma régua enquanto não gravado); a Mesa → Itens tem a coluna Domínio.
+- **EDITAR O ITEM DA PLANILHA (v1.281.0, sem migração):** na Importação (visão Itens), tocar na linha abre o
+  `BannerItemPlanilha` com `edicao` (`BannersConsulta.tsx`) = o MESMO `ItemDetalhe` do item de protocolo (cadeado por campo:
+  código, medida, descrição, quantidade, valor unitário, valor total — q × vu recalcula, o total digitado vale — e os
+  `extras` previsão [`opcoesPrevisao`: os meses do ano do PCA + os períodos genéricos] e prioridade; Seq., unidade e
+  classificação congelados) e "Salvar alterações" (só o que mudou; fechar com alteração confirma). Rota `PATCH
+  /api/pca/[id]/planilhas/itens/[itemId]` (Importar no PCA + `recusaPca`): núcleo puro `item-planilha-core.ts`
+  (`planoEdicaoItemPlanilha` — a régua da importação; código/descrição/medida mudando = `classificado_versao` NULL e
+  `reclassificarTudo` depois da resposta), item + `comandoTotaisUnidades` num lote, auditoria `planilha`. Testes:
+  `tests/item-planilha.test.ts`.
 - **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
   cada ARQUIVO = UM cartão na Importação (`CartaoEspaco` + a importação como um card do MESMO tamanho, grade `COLUNAS_ESPACOS`;
