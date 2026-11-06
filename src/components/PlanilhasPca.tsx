@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { brl, brlCompact, dataBR, num } from "@/lib/format";
 import type { ItemUpload, UploadPca } from "@/lib/pca-uploads";
+import { type ConfigSubunidades, subunidadeEmMassa } from "@/lib/subunidades-core";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { colunaSituacaoNoPca } from "./ColunasItensMesa";
+import { CelulaSubunidade, SUB_EM_BRANCO, SUB_NAO_DEFINIDA } from "./EstadoCelula";
+import { SelectField } from "./Field";
+import { SUBUNIDADE_NO_TOPO } from "./PlanilhaDfds";
 import { BarraSelecao, ResumoSelecao } from "./BarraSelecao";
 import { type Column, DataTable } from "./DataTable";
 import { FilterChip } from "./FilterChip";
@@ -104,6 +108,25 @@ const COLUNAS_ITENS: Column<ItemUpload>[] = [
   { key: "arquivo", header: "Upload", minWidth: 180, value: (r) => r.arquivo ?? "", render: (r) => <CelulaTexto texto={r.arquivo ?? "—"} /> },
 ];
 
+/** A coluna SUBUNIDADE (`0181`) — o padrão da Mesa: o nome; "Não definida" = a unidade tem subunidades e o item nenhuma;
+ * "Em branco" = a unidade da planilha não tem subunidades. */
+function colunaSubunidadePlanilha(temSubs: (r: ItemUpload) => boolean): Column<ItemUpload> {
+  return {
+    key: "subunidade",
+    header: "Subunidade",
+    nowrap: true,
+    noTopo: SUBUNIDADE_NO_TOPO,
+    value: (r) => r.subunidade ?? (temSubs(r) ? SUB_NAO_DEFINIDA : SUB_EM_BRANCO),
+    render: (r) => (
+      <CelulaSubunidade
+        nome={r.subunidade}
+        falta={temSubs(r)}
+        dica={r.subunidade ? undefined : temSubs(r) ? "A unidade da planilha tem subunidades — escolha a do item" : "A unidade da planilha não tem subunidades"}
+      />
+    ),
+  };
+}
+
 /** Quem e quando cancelou ("Cancelado em 06/11/2026 por Jhone"). */
 const textoCancelamento = (r: ItemUpload) => `Cancelado${r.canceladoEm ? ` em ${dataBR(r.canceladoEm)}` : ""}${r.canceladoPorNome ? ` por ${r.canceladoPorNome}` : ""}`;
 
@@ -149,6 +172,7 @@ export function PlanilhasPca({
   podeExcluir,
   podeEditar = false,
   anoPca = null,
+  subunidades = {},
 }: {
   pcaId: number;
   uploads: UploadPca[];
@@ -162,6 +186,8 @@ export function PlanilhasPca({
   podeEditar?: boolean;
   /** O ano do PCA (as opções da previsão do item). */
   anoPca?: number | null;
+  /** O cadastro de subunidades de cada UNIDADE do sistema das planilhas (`reparticaoId` → config) — a subunidade do item. */
+  subunidades?: Record<number, ConfigSubunidades>;
 }) {
   const router = useRouter();
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; progresso: number } | null>(null);
@@ -258,7 +284,8 @@ export function PlanilhasPca({
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [reservaSel, setReservaSel] = useState(0);
   const [gravandoSit, setGravandoSit] = useState(false);
-  const selecionados = useMemo(() => itens.filter((i) => sel.has(i.id)), [itens, sel]);
+  // Só os À VISTA: o que foi marcado antes de filtrar por upload (ou de ir aos cards) não recebe a ação escondido.
+  const selecionados = useMemo(() => (visao === "itens" ? linhas.filter((i) => sel.has(i.id)) : []), [linhas, sel, visao]);
   async function alterarSituacao(alvo: ItemUpload[], cancelar: boolean): Promise<boolean> {
     const lista = alvo.filter((r) => (cancelar ? !r.canceladoEm : !!r.canceladoEm));
     if (!lista.length || gravandoSit) return false;
@@ -278,17 +305,23 @@ export function PlanilhasPca({
     setGravandoSit(true);
     try {
       let feitos = 0;
+      let pulados = 0;
       for (let i = 0; i < lista.length; i += 100) {
         const r = await fetch(`/api/pca/${pcaId}/planilhas/itens`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ acao: cancelar ? "cancelar" : "reativar", ids: lista.slice(i, i + 100).map((x) => x.id) }),
         });
-        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number };
-        if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir.");
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number; falhas?: number };
+        if (!r.ok || !j.ok) throw new Error(`${feitos ? `${num(feitos)} item(ns) já ${cancelar ? "cancelado(s)" : "reativado(s)"}; o resto não: ` : ""}${j.error ?? "Não foi possível concluir."}`);
         feitos += j.alterados ?? 0;
+        pulados += j.falhas ?? 0;
       }
-      setAviso({ kind: "ok", titulo: cancelar ? "Itens cancelados" : "Itens reativados", texto: `${num(feitos)} item(ns) ${cancelar ? "cancelado(s)" : "reativado(s)"} no PCA.` });
+      setAviso({
+        kind: "ok",
+        titulo: cancelar ? "Itens cancelados" : "Itens reativados",
+        texto: `${num(feitos)} item(ns) ${cancelar ? "cancelado(s)" : "reativado(s)"} no PCA.${pulados ? ` ${num(pulados)} já estava(m) assim ou mudou(aram) no meio.` : ""}`,
+      });
       setSel(new Set());
       router.refresh();
       return true;
@@ -298,6 +331,54 @@ export function PlanilhasPca({
       return false;
     } finally {
       setGravandoSit(false);
+    }
+  }
+  // SUBUNIDADE (`0181`): a planilha não traz centro de custo — a subunidade é ESCOLHIDA entre as da unidade, nos dois modos.
+  const cfgDe = (id: number) => subunidades[id];
+  const temSubs = (r: ItemUpload) => r.reparticaoId != null && (subunidades[r.reparticaoId]?.subunidades.length ?? 0) > 0;
+  const comSubunidade = itens.some(temSubs) || itens.some((r) => r.subunidade);
+  const colunas = useMemo(() => {
+    if (!comSubunidade) return COLUNAS_ITENS;
+    const c = [...COLUNAS_ITENS];
+    c.splice(c.findIndex((x) => x.key === "unidade") + 1, 0, colunaSubunidadePlanilha(temSubs));
+    return c;
+    // biome-ignore lint/correctness/useExhaustiveDependencies: `temSubs` só depende de `subunidades`.
+  }, [comSubunidade, subunidades]);
+  const siglaDe = (id: number) => itens.find((i) => i.reparticaoId === id)?.unidade ?? null;
+  const subMassa = subunidadeEmMassa(
+    selecionados.map((r) => ({ id: r.id, reparticaoId: r.reparticaoId, sigla: r.unidade, bloqueio: r.canceladoEm ? "item cancelado no PCA" : null })),
+    cfgDe,
+    siglaDe,
+    { livre: true },
+  );
+  const [subEscolhida, setSubEscolhida] = useState("");
+  async function aplicarSubunidade() {
+    if (!subEscolhida || subMassa.sub.motivo || gravandoSit) return;
+    const subunidadeId = subEscolhida === "-" ? null : Number(subEscolhida);
+    const nome = subMassa.sub.opcoes.find((o) => o.id === subunidadeId)?.nome;
+    const n = selecionados.length;
+    if (!(await confirmar({ titulo: `${nome ? `Subunidade “${nome}”` : "Tirar a subunidade"} em ${n} item(ns)?`, texto: "Vale para os itens selecionados da planilha.", confirmar: "Aplicar" }))) return;
+    setGravandoSit(true);
+    try {
+      let feitos = 0;
+      for (let i = 0; i < n; i += 100) {
+        const r = await fetch(`/api/pca/${pcaId}/planilhas/itens/subunidade`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: selecionados.slice(i, i + 100).map((x) => x.id), subunidadeId }),
+        });
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number };
+        if (!r.ok || !j.ok) throw new Error(`${feitos ? `${num(feitos)} item(ns) já gravado(s); o resto não: ` : ""}${j.error ?? "Não foi possível definir a subunidade."}`);
+        feitos += j.alterados ?? 0;
+      }
+      setAviso({ kind: "ok", titulo: "Subunidade definida", texto: `${num(feitos)} item(ns) ${nome ? `com a subunidade “${nome}”` : "sem subunidade"}.` });
+      setSubEscolhida("");
+      setSel(new Set());
+    } catch (e) {
+      setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Sem conexão com o servidor — nada foi alterado." });
+    } finally {
+      setGravandoSit(false);
+      router.refresh();
     }
   }
   const nAtivosSel = selecionados.filter((r) => !r.canceladoEm).length;
@@ -382,7 +463,7 @@ export function PlanilhasPca({
           </div>
         ) : (
           <DataTable
-            columns={COLUNAS_ITENS}
+            columns={colunas}
             rows={linhas}
             getKey={(r) => r.id}
             density="compact"
@@ -390,7 +471,7 @@ export function PlanilhasPca({
             ordemInicial={{ key: "seq", dir: "desc" }}
             onRowClick={(r) => setAbertoId(r.id)}
             activeKey={abertoId ?? undefined}
-            selectable={podeExcluir}
+            selectable={podeExcluir || (podeEditar && comSubunidade)}
             selected={sel}
             onSelected={setSel}
             reservaInferior={reservaSel}
@@ -405,18 +486,40 @@ export function PlanilhasPca({
           fixa
           onAltura={setReservaSel}
           bloqueada={gravandoSit}
-          registros={selecionados.map((r) => ({ key: r.id, rotulo: `Seq. ${r.sequencial ?? "—"}`, tom: r.canceladoEm ? "danger" : undefined, dica: r.canceladoEm ? textoCancelamento(r) : undefined }))}
+          registros={selecionados.map((r) => {
+            const m = subEscolhida ? subMassa.motivos.get(r.id) : undefined;
+            return { key: r.id, rotulo: `Seq. ${r.sequencial ?? "—"}`, tom: r.canceladoEm ? "danger" : m?.tom, dica: r.canceladoEm ? textoCancelamento(r) : m?.dica };
+          })}
           onRemover={(k) => setSel((s0) => new Set([...s0].filter((x) => x !== k)))}
           onLimpar={() => setSel(new Set())}
           resumo={<ResumoSelecao qtd={selecionados.length} singular="item" plural="itens" soma={selecionados.reduce((t, r) => t + (r.valorTotal ?? 0), 0)} />}
           acoes={
-            <div className="flex flex-wrap gap-2">
-              {nAtivosSel > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {podeEditar && comSubunidade && (
+                <span className="inline-flex items-center gap-1.5">
+                  <SelectField
+                    compacto
+                    label="Subunidade"
+                    value={subEscolhida}
+                    onChange={(e) => setSubEscolhida(e.target.value)}
+                    disabled={gravandoSit}
+                    title={subMassa.sub.motivo ?? undefined}
+                  >
+                    <option value="">Escolher…</option>
+                    {!subMassa.sub.motivo && subMassa.sub.opcoes.map((o) => <option key={o.id} value={String(o.id)}>{o.nome}</option>)}
+                    {!subMassa.sub.motivo && <option value="-">— Sem subunidade —</option>}
+                  </SelectField>
+                  <Button size="sm" variant="secondary" disabled={!subEscolhida || !!subMassa.sub.motivo} loading={gravandoSit} onClick={() => void aplicarSubunidade()} title={subMassa.sub.motivo ?? undefined}>
+                    Aplicar
+                  </Button>
+                </span>
+              )}
+              {podeExcluir && nAtivosSel > 0 && (
                 <Button variant="danger" size="sm" icon={<IconNenhum className="h-4 w-4" />} loading={gravandoSit} onClick={() => void alterarSituacao(selecionados, true)}>
                   Cancelar no PCA ({nAtivosSel})
                 </Button>
               )}
-              {nCanceladosSel > 0 && (
+              {podeExcluir && nCanceladosSel > 0 && (
                 <Button variant="secondary" size="sm" icon={<IconUndo className="h-4 w-4" />} loading={gravandoSit} onClick={() => void alterarSituacao(selecionados, false)}>
                   Reativar ({nCanceladosSel})
                 </Button>
@@ -429,7 +532,20 @@ export function PlanilhasPca({
         item={aberto}
         onFechar={() => setAbertoId(null)}
         // O CANCELADO não se edita (reative-o antes); a situação vai no cabeçalho e o Cancelar/Reativar no rodapé.
-        edicao={podeEditar && abertoUp && !abertoUp.canceladoEm ? { pcaId, anoPca, onSalvo: () => router.refresh() } : null}
+        edicao={
+          podeEditar && abertoUp && !abertoUp.canceladoEm
+            ? {
+                pcaId,
+                anoPca,
+                onSalvo: () => router.refresh(),
+                subunidade:
+                  abertoUp.reparticaoId != null && subunidades[abertoUp.reparticaoId]?.subunidades.length
+                    ? { opcoes: subunidades[abertoUp.reparticaoId].subunidades.map(({ id, nome }) => ({ id, nome })), atual: abertoUp.subunidadeId }
+                    : null,
+              }
+            : null
+        }
+        subunidade={abertoUp?.subunidade ?? null}
         situacao={
           abertoUp
             ? {

@@ -33,7 +33,7 @@ import { type FiltroId, passaFiltroId } from "./escopo-unidades-core";
 import { dataIsoBrasilia } from "./format";
 import { erro } from "./http";
 import type { AcaoPapel } from "./papeis-core";
-import { getPcaEspaco, itensConsolidados, type PcaEspaco } from "./pca-espaco";
+import { getPcaEspaco, incorporadosDoPca, itensConsolidados, type PcaEspaco } from "./pca-espaco";
 import { unirPlanilhaEProtocolos } from "./pca-uniao";
 import { getItensTodos } from "./queries";
 import { codigoDeBytes } from "./termo-uso-core";
@@ -68,8 +68,7 @@ export async function itensDeclaraveis(pca: PcaEspaco, rep: FiltroId): Promise<I
   });
   if (pca.fonte === "lista") {
     const planilha = await getItensTodos(undefined, undefined, rep ? { pcaId: pca.id, reparticaoId: rep } : pca.id);
-    const incorporados = new Set<string | null>();
-    for (const [dfdId, m] of c.meta) if (!c.previaIds.has(dfdId)) incorporados.add(m.protocoloIdExterno);
+    const incorporados = await incorporadosDoPca(pca.id, c);
     for (const i of unirPlanilhaEProtocolos(planilha, [], (p) => p.protocoloIdExterno, incorporados).planilha)
       if (i.sequencial != null)
         lista.push({

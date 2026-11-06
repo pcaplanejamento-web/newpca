@@ -13,6 +13,7 @@ import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { itensDosUploads, uploadsDoPca } from "@/lib/pca-uploads";
+import { configDasUnidades } from "@/lib/subunidades";
 import { Ajuda } from "@/components/Ajuda";
 import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
 import { DeclaracoesPca } from "@/components/DeclaracoesPca";
@@ -84,12 +85,17 @@ export default async function PcaEspacoPage({
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
   else if (aba === "importacao")
-    conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={await itensDosUploads(pca.id)}
+  {
+    const itensUp = await itensDosUploads(pca.id);
+    const cfgs = await configDasUnidades(itensUp.map((i) => i.reparticaoId).filter((x): x is number => x != null));
+    conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={itensUp}
+        subunidades={Object.fromEntries(cfgs)}
         podeImportar={pode.importar}
         podeExcluir={pode.excluir}
         podeEditar={pode.importar}
         anoPca={pca.ano}
       />;
+  }
   else if (aba === "documentos") {
     const { permitidos, pcas, podeTodosPcas } = await pcasDosDocumentos(acesso);
     const todos = await listarDocumentos(permitidos);

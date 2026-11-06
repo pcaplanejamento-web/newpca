@@ -225,6 +225,8 @@ export async function getTopItens(
 
 export type ItemRow = {
   id: number;
+  /** A PLANILHA do item (`itens.unidade_id`) — só nos itens de planilha (as somas por planilha do Orçamento). */
+  unidadeId?: number | null;
   idProduto: string | null;
   sequencial: number | null;
   nomeProduto: string | null;
@@ -284,6 +286,7 @@ export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?:
       dominio: sql<string | null>`COALESCE(${itens.dominioCat}, ${itens.dominio})`,
       periodo: itens.previsaoGenerica,
       protocoloIdExterno: itens.protocoloIdExterno,
+      unidadeId: itens.unidadeId,
     })
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))

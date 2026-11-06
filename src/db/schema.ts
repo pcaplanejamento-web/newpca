@@ -98,8 +98,11 @@ export const itens = sqliteTable(
     canceladoEm: text("cancelado_em"),
     canceladoPor: integer("cancelado_por").references((): AnySQLiteColumn => usuarios.id, { onDelete: "set null" }),
     canceladoPorNome: text("cancelado_por_nome"),
+    // Migração `0181`: a SUBUNIDADE escolhida (a planilha não traz centro de custo) — só vale se for da unidade da planilha.
+    subunidadeId: integer("subunidade_id").references((): AnySQLiteColumn => subunidades.id, { onDelete: "set null" }),
   },
   (t) => [
+    index("itens_subunidade_idx").on(t.subunidadeId),
     index("itens_unidade_idx").on(t.unidadeId),
     index("itens_pca_seq_idx").on(t.pcaId, t.sequencial),
     index("itens_protocolo_externo_idx").on(t.protocoloIdExterno),

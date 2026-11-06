@@ -119,6 +119,9 @@ export function subunidadeDoDfd(
 export const subunidadeEscolhivel = (cfg: ConfigSubunidades | null | undefined, id: number) =>
   !!cfg && cfg.modo === "unico" && cfg.subunidades.some((s) => s.id === id);
 
+/** A subunidade do ITEM DE PLANILHA: escolhida entre TODAS as da unidade, nos dois modos (a planilha não traz centro). */
+export const subunidadeDaPlanilha = (cfg: ConfigSubunidades | null | undefined, id: number) => !!cfg && cfg.subunidades.some((s) => s.id === id);
+
 /** O texto da pendência da subunidade (mensagem do DFD e despacho). */
 export function textoFaltaSubunidade(f: FaltaSubunidade, centro?: string | null): string {
   if (f === "naoEscolhida") return "Subunidade não escolhida — escolha a subunidade do DFD (a unidade tem um centro de custo para todas).";
@@ -244,7 +247,10 @@ export function subunidadeEmMassa(
   alvos: AlvoSubunidadeMassa[],
   cfgDe: (reparticaoId: number) => ConfigSubunidades | null | undefined,
   siglaDe: (reparticaoId: number) => string | null | undefined,
+  /** `livre` = o ITEM DE PLANILHA: sem centro de custo, a subunidade é escolhida também no modo "por subunidade". */
+  opcoes: { livre?: boolean } = {},
 ): { motivos: Map<number, MotivoSubunidadeMassa>; sub: { opcoes: Subunidade[]; motivo: string | null } } {
+  const alvo = opcoes.livre ? "Item" : "DFD";
   const motivos = new Map<number, MotivoSubunidadeMassa>();
   const porUnidade = new Map<number, number[]>();
   for (const a of alvos) {
@@ -253,10 +259,12 @@ export function subunidadeEmMassa(
     const motivo = a.bloqueio
       ? a.bloqueio
       : a.reparticaoId == null
-        ? "DFD sem unidade"
+        ? `${alvo} sem unidade`
         : !cfg
-          ? `${sigla} não tem centro de custo cadastrado`
-          : cfg.modo === "subunidades"
+          ? opcoes.livre
+            ? `${sigla} não tem subunidades`
+            : `${sigla} não tem centro de custo cadastrado`
+          : cfg.modo === "subunidades" && !opcoes.livre
             ? `em ${sigla} a subunidade vem do centro de custo (um por subunidade)`
             : !cfg.subunidades.length
               ? `${sigla} não tem subunidades`
@@ -267,12 +275,12 @@ export function subunidadeEmMassa(
   const [unica] = [...porUnidade.entries()].sort((x, y) => y[1].length - x[1].length)[0] ?? [];
   const sig = (id: number) => siglaDe(id) || "outra unidade";
   for (const [u, ids] of porUnidade)
-    if (u !== unica) for (const id of ids) motivos.set(id, { tom: "warn", dica: `De ${sig(u)} — a subunidade em massa vale para os DFDs de UMA unidade (${sig(unica as number)}).` });
+    if (u !== unica) for (const id of ids) motivos.set(id, { tom: "warn", dica: `De ${sig(u)} — a subunidade em massa vale para os ${opcoes.livre ? "itens" : "DFDs"} de UMA unidade (${sig(unica as number)}).` });
   const cfg = unica != null ? cfgDe(unica) : null;
   const nao = [...motivos.values()].filter((m) => m.tom === "danger").length;
   const outras = motivos.size - nao;
   const motivo = motivos.size
-    ? [nao ? `${nao} DFD(s) não permitem subunidade (em vermelho)` : "", outras ? `${outras} de outra unidade (em âmbar)` : ""].filter(Boolean).join(" · ") +
+    ? [nao ? `${nao} ${opcoes.livre ? "item(ns)" : "DFD(s)"} não permitem subunidade (em vermelho)` : "", outras ? `${outras} de outra unidade (em âmbar)` : ""].filter(Boolean).join(" · ") +
       " — tire-os da seleção para definir a subunidade."
     : null;
   return { motivos, sub: { opcoes: cfg?.subunidades ?? [], motivo } };

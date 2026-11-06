@@ -66,6 +66,7 @@ export const editarItemPlanilhaSchema = z
     valorTotal: numeroItem,
     previsao: z.string().max(40).nullable().optional(),
     prioridade: z.string().max(40).nullable().optional(),
+    subunidadeId: z.number().int().positive().nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "Nada a alterar.");
 
@@ -73,4 +74,10 @@ export const editarItemPlanilhaSchema = z
 export const situacaoItensPlanilhaSchema = z.strictObject({
   acao: z.enum(["cancelar", "reativar"]),
   ids: z.array(z.number().int().positive()).min(1, "Escolha ao menos um item.").max(100),
+});
+
+/** SUBUNIDADE em massa nos itens da PLANILHA (≤ 100, de UMA unidade; null = tira). */
+export const subunidadeItensPlanilhaSchema = z.strictObject({
+  ids: z.array(z.number().int().positive()).min(1, "Escolha ao menos um item.").max(100),
+  subunidadeId: z.number().int().positive().nullable(),
 });

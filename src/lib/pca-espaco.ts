@@ -800,11 +800,27 @@ export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep: nu
 /** O que do PCA muda as cargas dele (a chave do `memoPorVersao`). */
 const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}:${p.declaracoes}`;
 
+/**
+ * Os "Id:" da capa dos protocolos INCORPORADOS ao PCA — a régua da UNIÃO planilha × protocolo. Vem dos PROTOCOLOS (não dos
+ * itens consolidados): um incorporado com todos os itens cancelados (ou DFDs não vigentes) continua tirando da planilha as
+ * linhas do mesmo processo. Somados os da consolidação (menos a prévia).
+ */
+export async function incorporadosDoPca(pcaId: number, c: { meta: Map<number, { protocoloIdExterno: string | null }>; previaIds: Set<number> }): Promise<Set<string | null>> {
+  const linhas = await getDb()
+    .select({ id: dfdProtocolos.idExterno })
+    .from(dfdProtocolos)
+    .where(and(eq(dfdProtocolos.pcaId, pcaId), isNotNull(dfdProtocolos.pcaIncorporadoEm)));
+  const s = new Set<string | null>(linhas.map((l) => l.id).filter((x): x is string => !!x));
+  for (const [dfdId, m] of c.meta) if (!c.previaIds.has(dfdId)) s.add(m.protocoloIdExterno);
+  return s;
+}
+
 async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep?: number | readonly number[]): Promise<DashboardPca> {
   if (pca.fonte === "lista") {
     // O PCA de lista também recebe protocolos: com algum incorporado (ou na prévia), soma as DUAS bases.
     const c0 = await itensConsolidados(pca);
-    if (c0.itens.length > 0) return dashboardUnido(pca, c0, unidadeIdPedida, rep);
+    const inc = await incorporadosDoPca(pca.id, c0);
+    if (c0.itens.length > 0 || [...inc].some(Boolean)) return dashboardUnido(pca, c0, unidadeIdPedida, rep, inc);
     const us = await getUnidades(rep, pca.id);
     if (us.length === 0) return vazioDash();
     const unidadeId = unidadeIdPedida && us.some((u) => u.id === unidadeIdPedida) ? unidadeIdPedida : undefined;
@@ -888,13 +904,17 @@ function listasDaConsulta(lista: Consolidados["itens"], c: Consolidados): { dfds
  * Dashboard do PCA de LISTA que também recebeu protocolos: as planilhas + os itens consolidados dos protocolos incorporados,
  * sem contar o mesmo processo duas vezes (`unirPlanilhaEProtocolos` — o protocolo vence). Só leitura.
  */
-async function dashboardUnido(pca: PcaEspaco, c0: Consolidados, unidadeIdPedida: number | undefined, rep: number | readonly number[] | undefined): Promise<DashboardPca> {
+async function dashboardUnido(
+  pca: PcaEspaco,
+  c0: Consolidados,
+  unidadeIdPedida: number | undefined,
+  rep: number | readonly number[] | undefined,
+  incorporados: Set<string | null>,
+): Promise<DashboardPca> {
   const c = rep ? { ...c0, itens: c0.itens.filter((i) => passaFiltroId(rep, i.reparticaoId)) } : c0;
   const escopo = rep ? { pcaId: pca.id, reparticaoId: rep } : pca.id;
   const [us, planilha] = await Promise.all([getUnidades(rep, pca.id), getItensTodos(undefined, undefined, escopo)]);
-  // Os Ids dos protocolos INCORPORADOS (a prévia não tira nada da planilha).
-  const incorporados = new Set<string | null>();
-  for (const [dfdId, m] of c0.meta) if (!c0.previaIds.has(dfdId)) incorporados.add(m.protocoloIdExterno);
+  // Os Ids dos protocolos INCORPORADOS (a prévia não tira nada da planilha) — `incorporadosDoPca`.
   const uniao = unirPlanilhaEProtocolos(planilha, c.itens, (i) => i.protocoloIdExterno, incorporados);
   // A unidade pedida pela SIGLA (as planilhas são por sigla; o protocolo, pela unidade requisitante).
   const siglas = new Map<number, string>();
@@ -1285,7 +1305,8 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
   let planejado: PlanejadoOrcamentoPca[];
   let previa: OrcamentoDoPca["previa"] = null;
   const c = pca.fonte === "lista" ? await itensConsolidados(pca) : null;
-  if (pca.fonte === "lista" && c && c.itens.length === 0) {
+  const inc = c ? await incorporadosDoPca(pca.id, c) : new Set<string | null>();
+  if (pca.fonte === "lista" && c && c.itens.length === 0 && ![...inc].some(Boolean)) {
     const porSigla = new Map(reps.map((r) => [r.sigla.trim().toUpperCase(), r.id]));
     planejado = (await getUnidades(undefined, pca.id)).map((u) => ({
       unidadeId: u.reparticaoId ?? porSigla.get(u.codigo.trim().toUpperCase()) ?? null,
@@ -1297,11 +1318,11 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     // Lista que também recebeu protocolos: as planilhas (sem as linhas dos protocolos incorporados) + os itens dos protocolos.
     const porSigla = new Map(reps.map((r) => [r.sigla.trim().toUpperCase(), r.id]));
     const [us, linhas] = await Promise.all([getUnidades(undefined, pca.id), getItensTodos(undefined, undefined, pca.id)]);
-    const incorporados = [...c.meta].filter(([id]) => !c.previaIds.has(id)).map(([, m]) => m.protocoloIdExterno);
-    const uniao = unirPlanilhaEProtocolos(linhas, c.itens, (i) => i.protocoloIdExterno, incorporados);
-    const somas = new Map<string, { itens: number; valor: number }>();
+    const uniao = unirPlanilhaEProtocolos(linhas, c.itens, (i) => i.protocoloIdExterno, inc);
+    // Somas pela PLANILHA (o id da unidade — duas planilhas de mesma sigla em uploads diferentes não se somam).
+    const somas = new Map<number, { itens: number; valor: number }>();
     for (const i of uniao.planilha) {
-      const k = i.codigo ?? "";
+      const k = i.unidadeId ?? -1;
       const t = somas.get(k) ?? { itens: 0, valor: 0 };
       t.itens += 1;
       t.valor += Number(i.valorTotal ?? 0);
@@ -1310,8 +1331,8 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     planejado = [
       ...us.map((u) => ({
         unidadeId: u.reparticaoId ?? porSigla.get(u.codigo.trim().toUpperCase()) ?? null,
-        itens: somas.get(u.codigo)?.itens ?? 0,
-        valor: somas.get(u.codigo)?.valor ?? 0,
+        itens: somas.get(u.id)?.itens ?? 0,
+        valor: somas.get(u.id)?.valor ?? 0,
         planilha: { id: u.id, codigo: u.codigo, nome: u.municipio ?? u.nomeArquivo },
       })),
       ...uniao.protocolo.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) })),

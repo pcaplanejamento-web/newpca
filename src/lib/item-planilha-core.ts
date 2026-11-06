@@ -24,6 +24,8 @@ export type ItemPlanilhaGravado = {
   dataDesejada: string | null;
   previsaoGenerica: string | null;
   prioridade: string | null;
+  /** A subunidade gravada (`0181`) — opcional para os chamadores que não a leem. */
+  subunidadeId?: number | null;
 };
 
 /** O que a tela manda (só o que mudou). `previsao` = "MM/AAAA" | período genérico | null. */
@@ -36,6 +38,8 @@ export type PedidoItemPlanilha = {
   valorTotal?: number | null;
   previsao?: string | null;
   prioridade?: string | null;
+  /** A subunidade escolhida (null = tira). */
+  subunidadeId?: number | null;
 };
 
 /** A previsão como a tela a mostra: o período genérico, senão "MM/AAAA" da data desejada. */
@@ -60,7 +64,7 @@ const numero = (v: number | null | undefined): number | null => (v != null && Nu
 
 /** Os campos gravados que uma edição pode mudar. */
 export type SetItemPlanilha = Partial<
-  ItemPlanilhaGravado & { unidadeMedidaNorm: string | null; mesDesejado: number | null; anoDesejado: number | null; classificadoVersao: null }
+  Omit<ItemPlanilhaGravado, "subunidadeId"> & { subunidadeId: number | null; unidadeMedidaNorm: string | null; mesDesejado: number | null; anoDesejado: number | null; classificadoVersao: null }
 >;
 
 export type PlanoItemPlanilha = {
@@ -84,11 +88,17 @@ const ROTULOS: Record<string, string> = {
   valorTotal: "valor total",
   previsao: "previsão",
   prioridade: "prioridade",
+  subunidade: "subunidade",
 };
 export const rotuloCampoPlanilha = (c: string) => ROTULOS[c] ?? c;
 
 /** O PLANO da edição: normaliza cada campo pedido pela régua da importação e devolve só o que mudou. */
-export function planoEdicaoItemPlanilha(atual: ItemPlanilhaGravado, pedido: PedidoItemPlanilha): PlanoItemPlanilha {
+export function planoEdicaoItemPlanilha(
+  atual: ItemPlanilhaGravado,
+  pedido: PedidoItemPlanilha,
+  /** As subunidades da unidade da planilha (a escolha tem de ser uma delas). */
+  subunidades: readonly { id: number; nome: string }[] = [],
+): PlanoItemPlanilha {
   const set: SetItemPlanilha = {};
   const antes: Record<string, unknown> = {};
   const depois: Record<string, unknown> = {};
@@ -170,6 +180,15 @@ export function planoEdicaoItemPlanilha(atual: ItemPlanilhaGravado, pedido: Pedi
     if (v !== atual.prioridade) {
       set.prioridade = v;
       mudou("prioridade", atual.prioridade, v);
+    }
+  }
+  if ("subunidadeId" in pedido) {
+    const v = pedido.subunidadeId ?? null;
+    const nome = (id: number | null | undefined) => (id == null ? null : (subunidades.find((x) => x.id === id)?.nome ?? `#${id}`));
+    if (v != null && !subunidades.some((x) => x.id === v)) return { ...vazio, erro: "Subunidade inválida: escolha uma das subunidades da unidade da planilha." };
+    if (v !== (atual.subunidadeId ?? null)) {
+      set.subunidadeId = v;
+      mudou("subunidade", nome(atual.subunidadeId), nome(v));
     }
   }
   const reclassificar = "idProduto" in set || "nomeProduto" in set || "unidadeMedida" in set;

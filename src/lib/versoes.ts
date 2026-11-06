@@ -35,6 +35,43 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.0",
+    data: "2026-11-06",
+    titulo: "Subunidade nos itens de planilha + auditoria dos PCAs",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Itens de planilha com SUBUNIDADE: na Importação → Itens, a coluna Subunidade, o campo no banner do item e a definição em massa na seleção. A subunidade é escolhida entre as da unidade da planilha, nos dois modos — a planilha não traz centro de custo.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "Reenviar uma planilha que regrava o mesmo Seq. mantém a subunidade do item, quando a unidade é a mesma.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "No PCA de lista, um protocolo incorporado com todos os itens cancelados (ou DFDs que não valem) não devolve mais as linhas da planilha do mesmo processo ao Dashboard, ao Orçamento e aos cartões — a mesma régua das Declarações.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "Orçamento do PCA de lista com protocolos: duas planilhas da mesma sigla, em uploads diferentes, não somam mais os itens uma da outra.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "Importação → Itens: as ações da seleção valem só para os itens à vista (o filtro por upload não leva itens escondidos) e o aviso diz quantos já estavam assim. Um upload nunca apaga um item cancelado, nem no meio de um cancelamento.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.282.1",
     data: "2026-11-06",
     titulo: "Cancelamento no PCA: ajustes da auditoria",

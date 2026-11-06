@@ -317,14 +317,20 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
 }
 
 /** A edição do item de planilha (aba Importação do PCA): o PCA, o ano (as opções da previsão) e o que fazer ao gravar. */
-export type EdicaoItemPlanilha = { pcaId: number; anoPca: number | null; onSalvo: () => void };
+export type EdicaoItemPlanilha = {
+  pcaId: number;
+  anoPca: number | null;
+  onSalvo: () => void;
+  /** As subunidades da unidade da planilha (a escolha) e a gravada — sem subunidades, o campo não aparece. */
+  subunidade?: { opcoes: { id: number; nome: string }[]; atual: number | null } | null;
+};
 
 /** O rascunho editável do item de planilha (os campos do `ItemDetalhe` + previsão e prioridade). */
-type RascunhoPlanilha = DfdVisualItem & { previsao: string | null; prioridade: string | null };
+type RascunhoPlanilha = DfdVisualItem & { previsao: string | null; prioridade: string | null; subunidadeId: number | null };
 
 const PRIORIDADES_PLANILHA = ["ALTA", "MÉDIA", "BAIXA"];
 
-function rascunhoDaLinha(item: ItemRow): RascunhoPlanilha {
+function rascunhoDaLinha(item: ItemRow, subunidadeId: number | null): RascunhoPlanilha {
   return {
     item: null,
     codigo: item.idProduto,
@@ -336,6 +342,7 @@ function rascunhoDaLinha(item: ItemRow): RascunhoPlanilha {
     dominio: item.dominio ?? null,
     previsao: previsaoDoItem({ dataDesejada: item.dataDesejada, previsaoGenerica: item.anual ? (item.periodo ?? "ANUAL") : null }),
     prioridade: item.prioridade ?? null,
+    subunidadeId,
   };
 }
 
@@ -351,6 +358,7 @@ function pedidoDoRascunho(orig: RascunhoPlanilha, r: RascunhoPlanilha): Record<s
     ["valorTotal", orig.valorTotal, r.valorTotal],
     ["previsao", orig.previsao, r.previsao],
     ["prioridade", orig.prioridade, r.prioridade],
+    ["subunidadeId", orig.subunidadeId, r.subunidadeId],
   ] as const;
   for (const [k, de, para] of par) if ((de ?? null) !== (para ?? null)) p[k] = para ?? null;
   return p;
@@ -367,14 +375,17 @@ export function BannerItemPlanilha({
   onFechar,
   edicao,
   situacao,
+  subunidade,
 }: {
   item: ItemRow | null;
   onFechar: () => void;
   edicao?: EdicaoItemPlanilha | null;
   situacao?: SituacaoItemPlanilha | null;
+  /** O nome da subunidade gravada (a consulta mostra; null = sem). */
+  subunidade?: string | null;
 }) {
   if (!item) return null;
-  return <BannerItemPlanilhaAberto key={item.id} item={item} onFechar={onFechar} edicao={edicao ?? null} situacao={situacao ?? null} />;
+  return <BannerItemPlanilhaAberto key={item.id} item={item} onFechar={onFechar} edicao={edicao ?? null} situacao={situacao ?? null} subunidade={subunidade ?? null} />;
 }
 
 /** A SITUAÇÃO do item no PCA (Importação): cancelado (não excluído — fora dos números) e o Cancelar/Reativar do papel. */
@@ -385,13 +396,16 @@ function BannerItemPlanilhaAberto({
   onFechar,
   edicao,
   situacao,
+  subunidade,
 }: {
   item: ItemRow;
   onFechar: () => void;
   edicao: EdicaoItemPlanilha | null;
   situacao: SituacaoItemPlanilha | null;
+  subunidade: string | null;
 }) {
-  const orig = useMemo(() => rascunhoDaLinha(item), [item]);
+  const subAtual = edicao?.subunidade?.atual ?? null;
+  const orig = useMemo(() => rascunhoDaLinha(item, subAtual), [item, subAtual]);
   const [r, setR] = useState<RascunhoPlanilha>(orig);
   const [salvando, setSalvando] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -513,6 +527,17 @@ function BannerItemPlanilhaAberto({
             { chave: "classificacao", label: "Classificação", valor: item.classificacao },
             { chave: "previsao", label: "Previsão", valor: r.previsao, opcoes: opcoesPrevisao(edicao.anoPca, orig.previsao), onChange: (v) => atualizar({ previsao: v || null }) },
             { chave: "prioridade", label: "Prioridade", valor: r.prioridade, opcoes: PRIORIDADES_PLANILHA, onChange: (v) => atualizar({ prioridade: v || null }) },
+            ...(edicao.subunidade?.opcoes.length
+              ? [
+                  {
+                    chave: "subunidade",
+                    label: "Subunidade",
+                    valor: edicao.subunidade.opcoes.find((o) => o.id === r.subunidadeId)?.nome ?? null,
+                    opcoes: edicao.subunidade.opcoes.map((o) => o.nome),
+                    onChange: (v: string) => atualizar({ subunidadeId: edicao.subunidade?.opcoes.find((o) => o.nome === v)?.id ?? null }),
+                  },
+                ]
+              : []),
           ]}
         />
       ) : (
@@ -524,6 +549,7 @@ function BannerItemPlanilhaAberto({
               ["Classificação", item.classificacao],
               ["Previsão", previsaoTexto],
               ...(item.prioridade ? [["Prioridade", item.prioridade] as [string, string]] : []),
+              ...(subunidade ? [["Subunidade", subunidade] as [string, string]] : []),
             ],
           }}
         />

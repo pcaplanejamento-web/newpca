@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { itens, pcaUploads, reparticoes, unidades } from "@/db/schema";
 import { avisarAdmsPca } from "@/lib/avisos-mesa";
 import { brl, num } from "@/lib/format";
-import { comandoSobrescrever, comandosLimparVazias, comandoTotaisUnidades, consultaMaximoSequencial, consultaSequenciaisCancelados, consultaSequenciaisDeProtocolo } from "@/lib/pca-upload-sql";
+import { comandoRestaurarSubunidades, comandoSobrescrever, comandosLimparVazias, comandoTotaisUnidades, consultaMaximoSequencial, consultaSequenciaisCancelados, consultaSequenciaisDeProtocolo, consultaSubunidadesDosSeqs } from "@/lib/pca-upload-sql";
 import { atribuirSequenciais, repetidos, textoNumeros } from "@/lib/sequencial-pca-core";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { unidadesDaSessao } from "@/lib/grupos";
@@ -44,12 +44,16 @@ async function gravarLote(db: ReturnType<typeof getDb>, pcaId: number, unidadeId
     if (cancelados.length)
       return `O sequencial ${textoNumeros(cancelados.map((x) => x.sequencial ?? 0))} é de um item CANCELADO neste PCA — reative-o na Importação antes ou use outro nº.`;
   }
+  // A subunidade dos Seq. sobrescritos volta ao item novo (mesma unidade do sistema) — o upload não apaga o tratado.
+  const subs = dados.length ? await consultaSubunidadesDosSeqs(db, pcaId, unidadeId, dados) : [];
   const [m] = await consultaMaximoSequencial(db, pcaId);
   const seqs = atribuirSequenciais(informados, m?.max ?? 0);
   const linhas = normed.map((r, i) => ({ unidadeId, pcaId, ...r, sequencial: seqs[i] }));
   const stmts: Comando[] = [];
   if (dados.length) stmts.push(comandoSobrescrever(db, pcaId, dados));
   for (let i = 0; i < linhas.length; i += ROWS_PER_STMT) stmts.push(db.insert(itens).values(linhas.slice(i, i + ROWS_PER_STMT)));
+  const pares = subs.filter((x) => x.sequencial != null && x.subunidadeId != null).map((x) => [x.sequencial as number, x.subunidadeId as number] as [number, number]);
+  if (pares.length) stmts.push(comandoRestaurarSubunidades(db, pcaId, unidadeId, pares));
   stmts.push(comandoTotaisUnidades(db, pcaId), ...comandosLimparVazias(db, pcaId));
   await db.batch(stmts as [Comando, ...Comando[]]);
   return null;

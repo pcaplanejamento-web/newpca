@@ -1,5 +1,5 @@
-import { desc, eq, sql } from "drizzle-orm";
-import { itens, pcaUploads, unidades, usuarios } from "@/db/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { itens, pcaUploads, subunidades, unidades, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 
 /** UM upload de planilha no PCA — o componente da aba Importação (a consolidada traz várias unidades num upload só). */
@@ -58,6 +58,10 @@ export type ItemUpload = {
   /** CANCELADO no PCA (`0180`): quando e por quem — `null` = ativo. */
   canceladoEm: string | null;
   canceladoPorNome: string | null;
+  /** A UNIDADE do sistema da planilha (`unidades.reparticao_id`) e a SUBUNIDADE escolhida (`0181`) — só a dessa unidade. */
+  reparticaoId: number | null;
+  subunidadeId: number | null;
+  subunidade: string | null;
 };
 
 /** Os itens das planilhas do PCA (ATIVOS e CANCELADOS — a coluna Situação no PCA os distingue), do sequencial maior ao
@@ -84,9 +88,14 @@ export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
       prioridade: itens.prioridade,
       canceladoEm: itens.canceladoEm,
       canceladoPorNome: itens.canceladoPorNome,
+      reparticaoId: unidades.reparticaoId,
+      subunidadeId: subunidades.id,
+      subunidade: subunidades.nome,
     })
     .from(itens)
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
+    // A subunidade só vale se for da unidade da planilha (a planilha pode ter mudado de unidade).
+    .leftJoin(subunidades, and(eq(subunidades.id, itens.subunidadeId), eq(subunidades.reparticaoId, unidades.reparticaoId)))
     .leftJoin(pcaUploads, eq(pcaUploads.id, unidades.uploadId))
     .where(eq(unidades.pcaId, pcaId))
     .orderBy(desc(itens.sequencial));
