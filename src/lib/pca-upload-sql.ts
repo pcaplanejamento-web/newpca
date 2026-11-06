@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { itens, pcaItens, pcas, pcaUploads, unidades } from "../db/schema.ts";
@@ -30,18 +30,40 @@ export function consultaSequenciaisDeProtocolo(db: Db, pcaId: number, seqs: read
     .where(and(eq(pcaItens.pcaId, pcaId), inArray(pcaItens.sequencial, lista(seqs))));
 }
 
+/** Os nºs CANCELADOS da planilha entre os informados — o cancelado nunca é sobrescrito por um upload (reative-o antes). */
+export function consultaSequenciaisCancelados(db: Db, pcaId: number, seqs: readonly number[]) {
+  return db
+    .select({ sequencial: itens.sequencial })
+    .from(itens)
+    .where(and(eq(itens.pcaId, pcaId), isNotNull(itens.canceladoEm), inArray(itens.sequencial, lista(seqs))));
+}
+
+/** CANCELA (`cancelar`) ou REATIVA itens da planilha do PCA — só os que mudam de estado; os totais vêm no mesmo lote. */
+export function comandoCancelarItens(db: Db, pcaId: number, ids: readonly number[], cancelar: boolean, ator: { id: number; nome: string } | null) {
+  return db
+    .update(itens)
+    .set(
+      cancelar
+        ? { canceladoEm: sql`(CURRENT_TIMESTAMP)`, canceladoPor: ator?.id ?? null, canceladoPorNome: ator?.nome ?? null }
+        : { canceladoEm: null, canceladoPor: null, canceladoPorNome: null },
+    )
+    .where(and(eq(itens.pcaId, pcaId), inArray(itens.id, lista(ids)), cancelar ? isNull(itens.canceladoEm) : isNotNull(itens.canceladoEm)))
+    .returning({ id: itens.id, sequencial: itens.sequencial });
+}
+
 /** Tira os itens da planilha que já têm esses nºs — o novo os sobrescreve. */
 export function comandoSobrescrever(db: Db, pcaId: number, seqs: readonly number[]) {
   return db.delete(itens).where(and(eq(itens.pcaId, pcaId), inArray(itens.sequencial, lista(seqs))));
 }
 
-/** Recalcula itens e valor de cada planilha do PCA (a sobrescrita tira itens de outras). */
+/** Recalcula itens e valor de cada planilha do PCA (a sobrescrita tira itens de outras) — SÓ os ATIVOS: o item cancelado
+ * (`0180`) não conta (os cards, o Orçamento e os uploads leem estes totais). */
 export function comandoTotaisUnidades(db: Db, pcaId: number) {
   return db
     .update(unidades)
     .set({
-      totalItens: sql`(SELECT COUNT(*) FROM ${itens} WHERE ${itens.unidadeId} = ${unidades.id})`,
-      valorTotal: sql`(SELECT COALESCE(SUM(${itens.valorTotal}), 0) FROM ${itens} WHERE ${itens.unidadeId} = ${unidades.id})`,
+      totalItens: sql`(SELECT COUNT(*) FROM ${itens} WHERE ${itens.unidadeId} = ${unidades.id} AND ${itens.canceladoEm} IS NULL)`,
+      valorTotal: sql`(SELECT COALESCE(SUM(${itens.valorTotal}), 0) FROM ${itens} WHERE ${itens.unidadeId} = ${unidades.id} AND ${itens.canceladoEm} IS NULL)`,
     })
     .where(eq(unidades.pcaId, pcaId));
 }

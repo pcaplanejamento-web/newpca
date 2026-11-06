@@ -2649,6 +2649,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   real) grava os itens cuja `classificado_versao` ≠ `versaoPadronizacao(cadastro)`: no cron dos e-mails (1500 por tabela) e
   `reclassificarTudo` depois de importar planilha e de mudar classificações/unidades de medida. As leituras usam o gravado
   (`COALESCE` na planilha; `itensConsolidados` com a mesma régua enquanto não gravado); a Mesa → Itens tem a coluna Domínio.
+- **CANCELAR ITEM NO PCA (v1.282.0, migração `0180` — `itens.cancelado_em`/`cancelado_por`/`cancelado_por_nome`):** cancelar
+  NÃO exclui. **Planilha:** `POST /api/pca/[id]/planilhas/itens` `{acao: cancelar|reativar, ids ≤ 100}` (Excluir no PCA;
+  `comandoCancelarItens` + `comandoTotaisUnidades` num lote, `pca-upload-sql.ts`); o cancelado sai de TODO número pelo
+  `filtroUnidade` de `queries.ts` (Dashboard, consulta, união com protocolos, Orçamento por item, declarações) e pelos totais
+  das planilhas (`comandoTotaisUnidades` só soma os ativos — cards, uploads, Orçamento por planilha); o nº segue na sequência
+  (`MAX`) e nos gatilhos do sequencial sagrado; o upload que informa um nº cancelado é recusado
+  (`consultaSequenciaisCancelados`); a edição do cancelado = 409. **Protocolo:** o antigo "Retirar do PCA" virou "Cancelar no
+  PCA" (`pca_itens.motivo` = `MOTIVO_NUMERO.retirado`, valor gravado inalterado) + `acao:"reativar"` em `POST
+  /api/pca/[id]/itens` (`reativarItensDoPca`: só o retirado não baixado, depois `sincronizarAtivosPca` — o DFD não vigente
+  volta inativo pela vigência). Coluna **Situação no PCA** = `colunaSituacaoNoPca` (`ColunasItensMesa.tsx`; `situacaoDoNumero`
+  em `pca-numeracao-core.ts`: Ativo · Cancelado · Inativo) na Importação (com seleção + `BarraSelecao` e o Cancelar/Reativar
+  no rodapé do `BannerItemPlanilha` — `situacao`) e na Mesa do PCA → Itens (`ItemDfdRow.pcaMotivo`). Excluir o UPLOAD apaga
+  também os cancelados dele. Testes: `tests/item-planilha.test.ts`.
 - **EDITAR O ITEM DA PLANILHA (v1.281.0, sem migração):** na Importação (visão Itens — a 1ª e a que abre desde a v1.281.1; sem itens, abre nos Uploads), tocar na linha abre o
   `BannerItemPlanilha` com `edicao` (`BannersConsulta.tsx`) = o MESMO `ItemDetalhe` do item de protocolo (cadeado por campo:
   código, medida, descrição, quantidade, valor unitário, valor total — q × vu recalcula, o total digitado vale — e os

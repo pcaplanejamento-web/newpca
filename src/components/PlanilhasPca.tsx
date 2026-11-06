@@ -8,6 +8,8 @@ import type { ItemUpload, UploadPca } from "@/lib/pca-uploads";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
+import { colunaSituacaoNoPca } from "./ColunasItensMesa";
+import { BarraSelecao, ResumoSelecao } from "./BarraSelecao";
 import { type Column, DataTable } from "./DataTable";
 import { FilterChip } from "./FilterChip";
 import { CartaoEspaco } from "./QuadroCard";
@@ -19,7 +21,7 @@ import { BannerItemPlanilha } from "./BannersConsulta";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropzone } from "./Dropzone";
-import { IconFile, IconTrash, IconUpload } from "./icons";
+import { IconFile, IconNenhum, IconTrash, IconUndo, IconUpload } from "./icons";
 import { Progress } from "./Progress";
 
 /** A prévia completa só é baixada quando um arquivo é lido. */
@@ -79,7 +81,17 @@ function CapaUpload({ upload }: { upload: UploadPca }) {
 
 /** As colunas da visão ITENS (o sequencial é sagrado — único no PCA). */
 const COLUNAS_ITENS: Column<ItemUpload>[] = [
-  { key: "seq", header: "Seq.", nowrap: true, numero: (r) => r.sequencial, value: (r) => String(r.sequencial ?? ""), render: (r) => r.sequencial ?? "—", total: false },
+  {
+    key: "seq",
+    header: "Seq.",
+    nowrap: true,
+    numero: (r) => r.sequencial,
+    value: (r) => String(r.sequencial ?? ""),
+    // O CANCELADO: o nº fica inativo (riscado), como o nº cancelado do item de protocolo na Mesa do PCA.
+    render: (r) => (r.canceladoEm ? <span className="tabular-nums text-faint line-through">{r.sequencial ?? "—"}</span> : (r.sequencial ?? "—")),
+    total: false,
+  },
+  colunaSituacaoNoPca<ItemUpload>((r) => ({ situacao: r.canceladoEm ? "Cancelado" : "Ativo", dica: r.canceladoEm ? textoCancelamento(r) : null })),
   { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade, render: (r) => r.unidade },
   { key: "codigo", header: "Código", nowrap: true, value: (r) => r.codigo ?? "", render: (r) => (r.codigo ? <CelulaCopiavel copiar={r.codigo} rotulo="código">{r.codigo}</CelulaCopiavel> : "—") },
   { key: "produto", header: "Produto", minWidth: 260, value: (r) => r.produto ?? "", render: (r) => <CelulaTexto texto={r.produto ?? "—"} /> },
@@ -91,6 +103,16 @@ const COLUNAS_ITENS: Column<ItemUpload>[] = [
   { key: "dominio", header: "Domínio", nowrap: true, value: (r) => r.dominio ?? "", render: (r) => r.dominio ?? "—" },
   { key: "arquivo", header: "Upload", minWidth: 180, value: (r) => r.arquivo ?? "", render: (r) => <CelulaTexto texto={r.arquivo ?? "—"} /> },
 ];
+
+/** Quem e quando cancelou ("Cancelado em 06/11/2026 por Jhone"). */
+const textoCancelamento = (r: ItemUpload) => `Cancelado${r.canceladoEm ? ` em ${dataBR(r.canceladoEm)}` : ""}${r.canceladoPorNome ? ` por ${r.canceladoPorNome}` : ""}`;
+
+/** O resumo da tabela: os itens e o Σ dos ATIVOS (o cancelado não compõe o PCA). */
+function resumoItens(l: ItemUpload[]): string {
+  const ativos = l.filter((r) => !r.canceladoEm);
+  const c = l.length - ativos.length;
+  return `${num(l.length)} itens${c ? ` (${num(c)} cancelado${c === 1 ? "" : "s"})` : ""} · ${brl(ativos.reduce((t, r) => t + (r.valorTotal ?? 0), 0))}`;
+}
 
 /** A linha da Importação no formato do banner do item de planilha (o mesmo do Dashboard). */
 function itemRowDoUpload(r: ItemUpload): ItemRow {
@@ -143,7 +165,7 @@ export function PlanilhasPca({
 }) {
   const router = useRouter();
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; progresso: number } | null>(null);
-  const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
+  const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string; titulo?: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const [previa, setPrevia] = useState<{ nome: string; leitura: LeituraPlanilhas } | null>(null);
   const respostaPrevia = useRef<((sim: boolean) => void) | null>(null);
@@ -229,10 +251,57 @@ export function PlanilhasPca({
   const linhas = useMemo(() => (doUpload ? itens.filter((i) => i.uploadId === doUpload.id) : itens), [itens, doUpload]);
   // O item aberto no banner padrão do item (pelo id — a lista nova depois de salvar segue no mesmo item).
   const [abertoId, setAbertoId] = useState<number | null>(null);
-  const aberto = useMemo(() => {
-    const r = abertoId != null ? itens.find((i) => i.id === abertoId) : undefined;
-    return r ? itemRowDoUpload(r) : null;
-  }, [itens, abertoId]);
+  const abertoUp = useMemo(() => (abertoId != null ? (itens.find((i) => i.id === abertoId) ?? null) : null), [itens, abertoId]);
+  const aberto = useMemo(() => (abertoUp ? itemRowDoUpload(abertoUp) : null), [abertoUp]);
+
+  // CANCELAR/REATIVAR (Excluir no PCA): o item não é excluído — sai dos números do PCA e o nº fica inativo.
+  const [sel, setSel] = useState<Set<string | number>>(new Set());
+  const [reservaSel, setReservaSel] = useState(0);
+  const [gravandoSit, setGravandoSit] = useState(false);
+  const selecionados = useMemo(() => itens.filter((i) => sel.has(i.id)), [itens, sel]);
+  async function alterarSituacao(alvo: ItemUpload[], cancelar: boolean): Promise<boolean> {
+    const lista = alvo.filter((r) => (cancelar ? !r.canceladoEm : !!r.canceladoEm));
+    if (!lista.length || gravandoSit) return false;
+    const n = lista.length;
+    const sim = await confirmar(
+      cancelar
+        ? {
+            titulo: `Cancelar ${n} item(ns) no PCA?`,
+            texto: "O item NÃO é excluído: fica CANCELADO, o sequencial fica inativo (nenhum upload o sobrescreve) e o item sai do Dashboard, do Orçamento, dos totais e das declarações do PCA. Dá para reativar depois.",
+            confirmar: "Cancelar no PCA",
+            cancelar: "Voltar",
+            perigo: true,
+          }
+        : { titulo: `Reativar ${n} item(ns) no PCA?`, texto: "O item volta a compor o Dashboard, o Orçamento e os totais do PCA.", confirmar: "Reativar" },
+    );
+    if (!sim) return false;
+    setGravandoSit(true);
+    try {
+      let feitos = 0;
+      for (let i = 0; i < lista.length; i += 100) {
+        const r = await fetch(`/api/pca/${pcaId}/planilhas/itens`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ acao: cancelar ? "cancelar" : "reativar", ids: lista.slice(i, i + 100).map((x) => x.id) }),
+        });
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number };
+        if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir.");
+        feitos += j.alterados ?? 0;
+      }
+      setAviso({ kind: "ok", titulo: cancelar ? "Itens cancelados" : "Itens reativados", texto: `${num(feitos)} item(ns) ${cancelar ? "cancelado(s)" : "reativado(s)"} no PCA.` });
+      setSel(new Set());
+      router.refresh();
+      return true;
+    } catch (e) {
+      setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Sem conexão com o servidor — nada foi alterado." });
+      router.refresh();
+      return false;
+    } finally {
+      setGravandoSit(false);
+    }
+  }
+  const nAtivosSel = selecionados.filter((r) => !r.canceladoEm).length;
+  const nCanceladosSel = selecionados.length - nAtivosSel;
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -252,7 +321,7 @@ export function PlanilhasPca({
       </div>
 
       {aviso && (
-        <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Importação concluída" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 6000 : undefined}>
+        <AvisoFlutuante kind={aviso.kind} titulo={aviso.titulo ?? (aviso.kind === "ok" ? "Importação concluída" : "Atenção")} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 6000 : undefined}>
           {aviso.texto}
         </AvisoFlutuante>
       )}
@@ -321,16 +390,55 @@ export function PlanilhasPca({
             ordemInicial={{ key: "seq", dir: "desc" }}
             onRowClick={(r) => setAbertoId(r.id)}
             activeKey={abertoId ?? undefined}
+            selectable={podeExcluir}
+            selected={sel}
+            onSelected={setSel}
+            reservaInferior={reservaSel}
             exportar={{ nome: doUpload?.nomeArquivo ?? "Itens importados" }}
             vazio="Nenhum item importado."
-            resumo={(l) => `${num(l.length)} itens · ${brl(l.reduce((t, r) => t + (r.valorTotal ?? 0), 0))}`}
+            resumo={resumoItens}
           />
         )}
       </div>
+      {visao === "itens" && selecionados.length > 0 && (
+        <BarraSelecao
+          fixa
+          onAltura={setReservaSel}
+          bloqueada={gravandoSit}
+          registros={selecionados.map((r) => ({ key: r.id, rotulo: `Seq. ${r.sequencial ?? "—"}`, tom: r.canceladoEm ? "danger" : undefined, dica: r.canceladoEm ? textoCancelamento(r) : undefined }))}
+          onRemover={(k) => setSel((s0) => new Set([...s0].filter((x) => x !== k)))}
+          onLimpar={() => setSel(new Set())}
+          resumo={<ResumoSelecao qtd={selecionados.length} singular="item" plural="itens" soma={selecionados.reduce((t, r) => t + (r.valorTotal ?? 0), 0)} />}
+          acoes={
+            <div className="flex flex-wrap gap-2">
+              {nAtivosSel > 0 && (
+                <Button variant="danger" size="sm" icon={<IconNenhum className="h-4 w-4" />} loading={gravandoSit} onClick={() => void alterarSituacao(selecionados, true)}>
+                  Cancelar no PCA ({nAtivosSel})
+                </Button>
+              )}
+              {nCanceladosSel > 0 && (
+                <Button variant="secondary" size="sm" icon={<IconUndo className="h-4 w-4" />} loading={gravandoSit} onClick={() => void alterarSituacao(selecionados, false)}>
+                  Reativar ({nCanceladosSel})
+                </Button>
+              )}
+            </div>
+          }
+        />
+      )}
       <BannerItemPlanilha
         item={aberto}
         onFechar={() => setAbertoId(null)}
-        edicao={podeEditar ? { pcaId, anoPca, onSalvo: () => router.refresh() } : null}
+        // O CANCELADO não se edita (reative-o antes); a situação vai no cabeçalho e o Cancelar/Reativar no rodapé.
+        edicao={podeEditar && abertoUp && !abertoUp.canceladoEm ? { pcaId, anoPca, onSalvo: () => router.refresh() } : null}
+        situacao={
+          abertoUp
+            ? {
+                cancelado: !!abertoUp.canceladoEm,
+                dica: abertoUp.canceladoEm ? textoCancelamento(abertoUp) : null,
+                alternar: podeExcluir ? () => alterarSituacao([abertoUp], !abertoUp.canceladoEm) : undefined,
+              }
+            : null
+        }
       />
       {confirmacao}
       {previa && <PreviaPlanilha nomeArquivo={previa.nome} leitura={previa.leitura} onCancelar={() => decidir(false)} onImportar={() => decidir(true)} />}

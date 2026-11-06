@@ -22,6 +22,15 @@ export const MOTIVO_NUMERO = {
   protocoloExcluido: "Protocolo excluído",
 } as const;
 
+/** A SITUAÇÃO do item no PCA (a coluna "Situação no PCA" — protocolo e planilha): ATIVO compõe os números; CANCELADO foi
+ * cancelado à mão (não excluído — reativável); INATIVO saiu sozinho (DFD substituído/excluído, item removido, protocolo
+ * devolvido…) e o motivo vai na dica. Puro. */
+export type SituacaoNoPca = "Ativo" | "Cancelado" | "Inativo";
+export function situacaoDoNumero(n: { ativo: boolean | null; motivo?: string | null }): SituacaoNoPca {
+  if (n.ativo) return "Ativo";
+  return n.motivo === MOTIVO_NUMERO.retirado ? "Cancelado" : "Inativo";
+}
+
 /** A identidade de um item — a linha que vai ser gravada ou o RETRATO guardado no nº. */
 export type IdentidadeItem = {
   item?: number | null;

@@ -5,6 +5,8 @@ import { brl, num, numeroSemAno } from "@/lib/format";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import type { Column } from "./DataTable";
+import { EstadoPonto } from "./EstadoCelula";
+import type { SituacaoNoPca } from "@/lib/pca-numeracao-core";
 import { colunaPlanejamento, colunaTipoDfd } from "./PlanilhaDfds";
 
 /** As linhas que essas colunas mostram: o item da Mesa (`ItemDfdRow`) ou o que o tem (a seleção das automações). */
@@ -85,5 +87,31 @@ export function colunasItemMesa<R extends LinhaItemMesa>(valores: Valores<R> = {
     qtd: { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") } as Column<R>,
     vunit: { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, total: false, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") } as Column<R>,
     vtotal: { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") } as Column<R>,
+  };
+}
+
+const COR_SITUACAO: Record<SituacaoNoPca, string> = { Ativo: "var(--ok)", Cancelado: "var(--danger)", Inativo: "var(--muted)" };
+
+/**
+ * A coluna **Situação no PCA** (Ativo · Cancelado · Inativo) — a MESMA no item de protocolo (Mesa do PCA → Itens) e no de
+ * planilha (Importação → Itens). Filtrável: o filtro "Cancelado" é a base dos cancelados. `de` devolve `null` quando o item
+ * não está no PCA (ainda sem nº).
+ */
+export function colunaSituacaoNoPca<R>(de: (r: R) => { situacao: SituacaoNoPca; dica?: string | null } | null): Column<R> {
+  return {
+    key: "situacaoPca",
+    header: "Situação no PCA",
+    nowrap: true,
+    value: (r) => de(r)?.situacao ?? "—",
+    corPdf: (r) => {
+      const s = de(r)?.situacao;
+      return s ? COR_SITUACAO[s] : undefined;
+    },
+    render: (r) => {
+      const s = de(r);
+      if (!s) return <span className="text-faint">—</span>;
+      const dica = s.situacao === "Cancelado" ? `Cancelado no PCA${s.dica && s.dica !== "Retirado do PCA" ? ` — ${s.dica}` : ""}: fora dos números do PCA` : (s.dica ?? undefined);
+      return <EstadoPonto cor={COR_SITUACAO[s.situacao]} rotulo={s.situacao} title={dica} />;
+    },
   };
 }

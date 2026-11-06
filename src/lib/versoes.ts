@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.282.0",
+    data: "2026-11-06",
+    titulo: "Cancelar item no PCA",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Um item já consolidado no PCA pode ser CANCELADO — da planilha (Importação → Itens: seleção ou banner do item) ou de protocolo (Mesa do PCA → Itens). O item não é excluído: fica cancelado, o sequencial fica inativo (nunca reaproveitado nem sobrescrito por um upload) e ele sai do Dashboard, do Orçamento, dos totais, dos cards e das declarações. \"Reativar\" devolve.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Coluna \"Situação no PCA\" (Ativo · Cancelado · Inativo) nas tabelas de itens da Importação e da Mesa do PCA — o filtro \"Cancelado\" é a base dos cancelados, exportável em XLSX/PDF. O item cancelado não se edita (reative antes).",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.281.1",
     data: "2026-11-06",
     titulo: "Importação abre nos itens",

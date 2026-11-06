@@ -55,9 +55,13 @@ export type ItemUpload = {
   dataDesejada: string | null;
   previsaoGenerica: string | null;
   prioridade: string | null;
+  /** CANCELADO no PCA (`0180`): quando e por quem — `null` = ativo. */
+  canceladoEm: string | null;
+  canceladoPorNome: string | null;
 };
 
-/** Os itens das planilhas do PCA, do sequencial maior ao menor (os recém-adicionados primeiro). */
+/** Os itens das planilhas do PCA (ATIVOS e CANCELADOS — a coluna Situação no PCA os distingue), do sequencial maior ao
+ * menor (os recém-adicionados primeiro). */
 export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
   return getDb()
     .select({
@@ -78,6 +82,8 @@ export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
       dataDesejada: itens.dataDesejada,
       previsaoGenerica: itens.previsaoGenerica,
       prioridade: itens.prioridade,
+      canceladoEm: itens.canceladoEm,
+      canceladoPorNome: itens.canceladoPorNome,
     })
     .from(itens)
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))

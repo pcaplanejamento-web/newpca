@@ -94,6 +94,10 @@ export const itens = sqliteTable(
     classificacaoCat: text("classificacao_cat"),
     dominioCat: text("dominio_cat"),
     classificadoVersao: text("classificado_versao"),
+    // Migração `0180`: o item CANCELADO no PCA (não excluído — o sequencial fica inativo e o item sai dos números).
+    canceladoEm: text("cancelado_em"),
+    canceladoPor: integer("cancelado_por").references((): AnySQLiteColumn => usuarios.id, { onDelete: "set null" }),
+    canceladoPorNome: text("cancelado_por_nome"),
   },
   (t) => [
     index("itens_unidade_idx").on(t.unidadeId),

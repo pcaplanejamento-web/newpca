@@ -14,8 +14,9 @@ import {
   previsaoDoItem,
   resumoEdicaoItemPlanilha,
 } from "../src/lib/item-planilha-core.ts";
-import { comandoTotaisUnidades } from "../src/lib/pca-upload-sql.ts";
-import { editarItemPlanilhaSchema } from "../src/lib/validation.ts";
+import { comandoCancelarItens, comandosLimparVazias, comandoTotaisUnidades, consultaMaximoSequencial, consultaSequenciaisCancelados } from "../src/lib/pca-upload-sql.ts";
+import { MOTIVO_NUMERO, situacaoDoNumero } from "../src/lib/pca-numeracao-core.ts";
+import { editarItemPlanilhaSchema, situacaoItensPlanilhaSchema } from "../src/lib/validation.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 const ATUAL: ItemPlanilhaGravado = {
@@ -113,5 +114,61 @@ describe("edição do item de planilha (D1 real: item + totais da planilha num l
     assert.deepEqual({ ...it10 }, { q: 5, t: 500, n: "OUTRO SERVIÇO", v: null, s: 1 });
     const u = db.prepare("SELECT total_itens n, valor_total v FROM unidades WHERE id = 1").get() as Record<string, unknown>;
     assert.deepEqual({ ...u }, { n: 2, v: 600 });
+  });
+});
+
+describe("cancelar item no PCA (planilha e protocolo)", () => {
+  let db: DatabaseSync;
+  let orm: ReturnType<typeof drizzle<typeof schema>>;
+  before(() => {
+    db = new DatabaseSync(":memory:");
+    const dir = join(process.cwd(), "drizzle");
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".sql")).sort()) db.exec(readFileSync(join(dir, f), "utf8"));
+    db.exec("PRAGMA foreign_keys = ON");
+    orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec(`INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (7, 'Jhone', 'j@x.gov.br', 'x');
+      INSERT INTO pcas (id, nome, ano, fonte) VALUES (1, 'PCA 2027', 2027, 'lista');
+      INSERT INTO pca_uploads (id, pca_id, nome_arquivo) VALUES (1, 1, 'a.xlsx');
+      INSERT INTO unidades (id, codigo, municipio, pca_id, upload_id) VALUES (1, 'SME', 'RV', 1, 1);
+      INSERT INTO itens (id, unidade_id, pca_id, sequencial, valor_total) VALUES (20, 1, 1, 1, 100), (21, 1, 1, 2, 50), (22, 1, 1, 3, 25);`);
+  });
+  const totais = () => ({ ...(db.prepare("SELECT total_itens n, valor_total v FROM unidades WHERE id = 1").get() as Record<string, unknown>) });
+
+  it("cancelar marca só os ativos pedidos, tira dos totais e guarda quem", async () => {
+    const [alt] = await orm.batch([comandoCancelarItens(orm, 1, [21, 22, 999], true, { id: 7, nome: "Jhone" }), comandoTotaisUnidades(orm, 1)]);
+    assert.deepEqual(alt.map((r) => r.sequencial).sort(), [2, 3]);
+    assert.deepEqual(totais(), { n: 1, v: 100 });
+    const c = db.prepare("SELECT cancelado_por p, cancelado_por_nome n, cancelado_em IS NOT NULL e FROM itens WHERE id = 21").get() as Record<string, unknown>;
+    assert.deepEqual({ ...c }, { p: 7, n: "Jhone", e: 1 });
+    // De novo: nada muda (já cancelados).
+    const [alt2] = await orm.batch([comandoCancelarItens(orm, 1, [21], true, null), comandoTotaisUnidades(orm, 1)]);
+    assert.equal(alt2.length, 0);
+  });
+  it("o cancelado NÃO é excluído: a planilha fica e o nº não volta à sequência nem é sobrescrito", async () => {
+    await orm.batch([...comandosLimparVazias(orm, 1)]);
+    assert.equal((db.prepare("SELECT COUNT(*) n FROM itens WHERE pca_id = 1").get() as { n: number }).n, 3);
+    const canc = await consultaSequenciaisCancelados(orm, 1, [1, 2, 3, 4]);
+    assert.deepEqual(canc.map((r) => r.sequencial).sort(), [2, 3]);
+    const [m] = await consultaMaximoSequencial(orm, 1);
+    assert.equal(m?.max, 3);
+    // O gatilho do sequencial sagrado segue valendo para o cancelado.
+    assert.throws(() => db.exec("INSERT INTO itens (unidade_id, pca_id, sequencial) VALUES (1, 1, 2)"), /sequencial_duplicado/);
+  });
+  it("reativar devolve só os cancelados e os totais voltam", async () => {
+    const [alt] = await orm.batch([comandoCancelarItens(orm, 1, [20, 21], false, null), comandoTotaisUnidades(orm, 1)]);
+    assert.deepEqual(alt.map((r) => r.sequencial), [2]);
+    assert.deepEqual(totais(), { n: 2, v: 150 });
+    assert.equal((db.prepare("SELECT cancelado_por_nome n FROM itens WHERE id = 21").get() as { n: unknown }).n, null);
+  });
+  it("situação do nº do protocolo: ativo, cancelado (retirado) e inativo pela vigência", () => {
+    assert.equal(situacaoDoNumero({ ativo: true, motivo: null }), "Ativo");
+    assert.equal(situacaoDoNumero({ ativo: false, motivo: MOTIVO_NUMERO.retirado }), "Cancelado");
+    assert.equal(situacaoDoNumero({ ativo: false, motivo: MOTIVO_NUMERO.naoVigente }), "Inativo");
+    assert.equal(situacaoDoNumero({ ativo: false, motivo: MOTIVO_NUMERO.itemRemovido }), "Inativo");
+  });
+  it("o Zod do cancelamento", () => {
+    assert.ok(situacaoItensPlanilhaSchema.safeParse({ acao: "cancelar", ids: [1] }).success);
+    assert.ok(!situacaoItensPlanilhaSchema.safeParse({ acao: "excluir", ids: [1] }).success);
+    assert.ok(!situacaoItensPlanilhaSchema.safeParse({ acao: "reativar", ids: [] }).success);
   });
 });

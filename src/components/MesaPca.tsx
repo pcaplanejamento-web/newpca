@@ -15,14 +15,15 @@ import {
 } from "@/lib/pca-core";
 import type { ItemDfdRow } from "@/lib/dfd";
 import type { ProtocoloNaMesa } from "@/lib/mesa-redacao";
-import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
+import { impactoSaidaPca, situacaoDoNumero } from "@/lib/pca-numeracao-core";
+import { colunaSituacaoNoPca } from "./ColunasItensMesa";
 import { EstadoPonto } from "./EstadoCelula";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
 import { DfdsView } from "./DfdsView";
 import { acaoProtocolosPca, EnviarAoPca, type ResultadoAcaoPca } from "./EnviarAoPca";
 import { selectCls } from "./formStyles";
-import { IconCheck, IconTrash, IconUndo } from "./icons";
+import { IconCheck, IconNenhum, IconUndo } from "./icons";
 import { useListasMesa } from "./MesaSistema";
 import { Modal } from "./Modal";
 import { useComponente } from "./ComponentesPapel";
@@ -56,7 +57,7 @@ const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: 
  * Situação na célula, banners). Escopo **Todos | Enviados | Incorporados**; a seleção de protocolos só tem
  * **Incorporar** (os DFDs e os itens passam a compor o PCA com a ação por protocolo e cada item ganha o SEQUENCIAL
  * único do PCA — o incorporado segue EDITÁVEL: o PCA acompanha) e **Devolver à Mesa** (o enviado e também o incorporado:
- * desincorpora, os nºs dos itens ficam baixados). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA**.
+ * desincorpora, os nºs dos itens ficam baixados). Na visão Itens, a coluna **Seq. PCA** e as ações **Cancelar no PCA** e **Reativar** + a coluna **Situação no PCA**.
  * Com a visão dos **MARCADOS** (Configuração do PCA), a lista traz também os protocolos marcados com o ano do PCA ainda na
  * Mesa do SISTEMA — só uma visão: seguem na Mesa principal, editáveis, e a seleção os envia ("Enviar a este PCA"). A coluna
  * **Local** diz onde cada um está (`localDoProtocolo`).
@@ -175,17 +176,23 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     if (okk) setIncorporar(null);
   }
 
-  async function retirarItens(sel: ItemDfdRow[], limpar: () => void) {
-    const alvo = sel.filter((it) => it.pcaSequencial != null && it.pcaAtivo);
+  /** CANCELAR (o nº fica inativo, o item sai dos números do PCA — não é excluído) ou REATIVAR o cancelado. */
+  async function situacaoItens(sel: ItemDfdRow[], limpar: () => void, reativar: boolean) {
+    const alvo = sel.filter((it) => it.pcaSequencial != null && (reativar ? situacaoDoNumero({ ativo: it.pcaAtivo, motivo: it.pcaMotivo }) === "Cancelado" : it.pcaAtivo));
     if (
       !alvo.length ||
       gravando ||
-      !(await confirmar({
-        titulo: `Retirar ${alvo.length} item(ns) do ${pca.nome}?`,
-        texto: "O nº sequencial fica INATIVO (nunca é reaproveitado) e o item sai do Dashboard.",
-        confirmar: "Retirar",
-        perigo: true,
-      }))
+      !(await confirmar(
+        reativar
+          ? { titulo: `Reativar ${alvo.length} item(ns) no ${pca.nome}?`, texto: "O nº volta a ficar ativo e o item volta a compor o Dashboard, o Orçamento e os totais do PCA.", confirmar: "Reativar" }
+          : {
+              titulo: `Cancelar ${alvo.length} item(ns) no ${pca.nome}?`,
+              texto: "O item NÃO é excluído: fica CANCELADO, o nº sequencial fica inativo (nunca reaproveitado) e o item sai do Dashboard, do Orçamento e dos totais do PCA. Dá para reativar depois.",
+              confirmar: "Cancelar no PCA",
+              cancelar: "Voltar",
+              perigo: true,
+            },
+      ))
     )
       return;
     setGravando(true);
@@ -193,17 +200,17 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
       const r = await fetch(`/api/pca/${pca.id}/itens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acao: "retirar", ids: alvo.map((it) => it.id) }),
+        body: JSON.stringify({ acao: reativar ? "reativar" : "retirar", ids: alvo.map((it) => it.id) }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; alterados?: number; falhas?: { motivo: string }[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível retirar.");
-      const msg = `${num(j.alterados ?? 0)} item(ns) retirado(s) do PCA.`;
-      if (j.falhas?.length) toast.error(`${msg} Não retirados: ${j.falhas.map((f) => f.motivo).join(" · ")}`);
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir.");
+      const msg = `${num(j.alterados ?? 0)} item(ns) ${reativar ? "reativado(s)" : "cancelado(s)"} no PCA.`;
+      if (j.falhas?.length) toast.error(`${msg} Não alterados: ${j.falhas.map((f) => f.motivo).join(" · ")}`);
       else toast.success(msg);
       limpar();
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível retirar.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível concluir.");
     } finally {
       setGravando(false);
     }
@@ -221,11 +228,14 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
       ) : it.pcaAtivo ? (
         <span className="font-semibold tabular-nums text-text">{it.pcaSequencial}</span>
       ) : (
-        <span className="tabular-nums text-faint line-through" title="Nº inativo — item retirado do PCA">
+        <span className="tabular-nums text-faint line-through" title={`Nº inativo — ${situacaoDoNumero({ ativo: it.pcaAtivo, motivo: it.pcaMotivo }) === "Cancelado" ? "item cancelado no PCA" : (it.pcaMotivo ?? "fora do PCA")}`}>
           {it.pcaSequencial}
         </span>
       ),
   };
+  const colunaSituacao: Column<ItemDfdRow> = colunaSituacaoNoPca((it) =>
+    it.pcaSequencial == null ? null : { situacao: situacaoDoNumero({ ativo: it.pcaAtivo, motivo: it.pcaMotivo }), dica: it.pcaAtivo ? null : it.pcaMotivo },
+  );
 
   async function devolver(sel: ProtocoloNaMesa[], limpar: () => void) {
     const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
@@ -291,16 +301,27 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                 );
               }
             : undefined,
-          colunasItens: [colunaSeq],
-          // Retirar itens do PCA = Excluir no PCA.
+          colunasItens: [colunaSeq, colunaSituacao],
+          // Cancelar/reativar itens no PCA = Excluir no PCA.
           acoesItens: mesa.pode.pca.excluir
             ? (sel, limpar) => {
                 const n = sel.filter((it) => it.pcaSequencial != null && it.pcaAtivo).length;
-                return n > 0 ? (
-                  <Button variant="danger" icon={<IconTrash className="h-4 w-4" />} onClick={() => void retirarItens(sel, limpar)} loading={gravando}>
-                    Retirar do PCA ({n})
-                  </Button>
-                ) : null;
+                const c = sel.filter((it) => it.pcaSequencial != null && situacaoDoNumero({ ativo: it.pcaAtivo, motivo: it.pcaMotivo }) === "Cancelado").length;
+                if (n === 0 && c === 0) return null;
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {n > 0 && (
+                      <Button variant="danger" icon={<IconNenhum className="h-4 w-4" />} onClick={() => void situacaoItens(sel, limpar, false)} loading={gravando}>
+                        Cancelar no PCA ({n})
+                      </Button>
+                    )}
+                    {c > 0 && (
+                      <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => void situacaoItens(sel, limpar, true)} loading={gravando}>
+                        Reativar ({c})
+                      </Button>
+                    )}
+                  </div>
+                );
               }
             : undefined,
         }}

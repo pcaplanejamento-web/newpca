@@ -68,3 +68,9 @@ export const editarItemPlanilhaSchema = z
     prioridade: z.string().max(40).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "Nada a alterar.");
+
+/** CANCELAR/REATIVAR itens da planilha no PCA (≤ 100 por pedido). */
+export const situacaoItensPlanilhaSchema = z.strictObject({
+  acao: z.enum(["cancelar", "reativar"]),
+  ids: z.array(z.number().int().positive()).min(1, "Escolha ao menos um item.").max(100),
+});

@@ -9,6 +9,7 @@ import type { DfdConsulta } from "@/lib/pca-publico-core";
 import type { ItemRow } from "@/lib/queries";
 import type { ProtocoloConsulta } from "@/lib/pca-espaco";
 import { type AberturaMesa, LARGURA } from "./BannersMesa";
+import { Badge } from "./Badge";
 import { BotaoAcao } from "./BotaoAcao";
 import { CampoCongelado } from "./CampoCadeado";
 import { Callout } from "./Callout";
@@ -16,7 +17,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { RodapePainelItem } from "./DfdPainelDireito";
 import { DfdCabecalho, DfdView, type DfdVisualItem, ItemCabecalho } from "./DfdView";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconSave } from "./icons";
+import { IconAlert, IconClock, IconNenhum, IconSave, IconUndo } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { duracaoMotionMs, Modal, type ModalPainel } from "./Modal";
 import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
@@ -361,12 +362,35 @@ function pedidoDoRascunho(orig: RascunhoPlanilha, r: RascunhoPlanilha): Record<s
  * `edicao` (aba Importação), cada campo com o cadeado e "Salvar alterações" (só o que mudou); o Seq., a unidade e a
  * classificação/domínio do Catálogo ficam congelados.
  */
-export function BannerItemPlanilha({ item, onFechar, edicao }: { item: ItemRow | null; onFechar: () => void; edicao?: EdicaoItemPlanilha | null }) {
+export function BannerItemPlanilha({
+  item,
+  onFechar,
+  edicao,
+  situacao,
+}: {
+  item: ItemRow | null;
+  onFechar: () => void;
+  edicao?: EdicaoItemPlanilha | null;
+  situacao?: SituacaoItemPlanilha | null;
+}) {
   if (!item) return null;
-  return <BannerItemPlanilhaAberto key={item.id} item={item} onFechar={onFechar} edicao={edicao ?? null} />;
+  return <BannerItemPlanilhaAberto key={item.id} item={item} onFechar={onFechar} edicao={edicao ?? null} situacao={situacao ?? null} />;
 }
 
-function BannerItemPlanilhaAberto({ item, onFechar, edicao }: { item: ItemRow; onFechar: () => void; edicao: EdicaoItemPlanilha | null }) {
+/** A SITUAÇÃO do item no PCA (Importação): cancelado (não excluído — fora dos números) e o Cancelar/Reativar do papel. */
+export type SituacaoItemPlanilha = { cancelado: boolean; dica?: string | null; alternar?: () => Promise<boolean> };
+
+function BannerItemPlanilhaAberto({
+  item,
+  onFechar,
+  edicao,
+  situacao,
+}: {
+  item: ItemRow;
+  onFechar: () => void;
+  edicao: EdicaoItemPlanilha | null;
+  situacao: SituacaoItemPlanilha | null;
+}) {
   const orig = useMemo(() => rascunhoDaLinha(item), [item]);
   const [r, setR] = useState<RascunhoPlanilha>(orig);
   const [salvando, setSalvando] = useState(false);
@@ -406,6 +430,17 @@ function BannerItemPlanilhaAberto({ item, onFechar, edicao }: { item: ItemRow; o
     }
   }
 
+  const [alternando, setAlternando] = useState(false);
+  async function alternarSituacao() {
+    if (!situacao?.alternar || alternando) return;
+    setAlternando(true);
+    try {
+      await situacao.alternar();
+    } finally {
+      setAlternando(false);
+    }
+  }
+
   const unidade = item.codigo ?? item.municipio;
   const seq = item.sequencial != null ? String(item.sequencial) : null;
   const previsaoTexto = item.anual ? (item.periodo ?? "Anual") : item.dataDesejada ? dataBR(item.dataDesejada) : null;
@@ -428,7 +463,16 @@ function BannerItemPlanilhaAberto({ item, onFechar, edicao }: { item: ItemRow; o
         <div className="min-w-0 space-y-0.5">
           <span className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
             Item da planilha
-            {seq && <span className="rounded-chip border border-accent/30 bg-accent-soft px-1.5 font-mono normal-case text-accent">Seq. {seq}</span>}
+            {seq && (
+              <span className={`rounded-chip border border-accent/30 bg-accent-soft px-1.5 font-mono normal-case text-accent ${situacao?.cancelado ? "line-through" : ""}`}>
+                Seq. {seq}
+              </span>
+            )}
+            {situacao?.cancelado && (
+              <Badge tone="red" title={situacao.dica ?? undefined}>
+                Cancelado no PCA
+              </Badge>
+            )}
           </span>
           <span className="block truncate text-base font-bold text-text" title={r.descricao ?? undefined}>
             {r.descricao ?? "Item"}
@@ -436,12 +480,25 @@ function BannerItemPlanilhaAberto({ item, onFechar, edicao }: { item: ItemRow; o
         </div>
       }
       rodape={
-        edicao ? (
-          <RodapePainelItem
-            principal={
-              <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo} />
-            }
-          />
+        edicao || situacao?.alternar ? (
+          <div className="flex flex-nowrap items-center gap-1.5">
+            {situacao?.alternar && (
+              <BotaoAcao
+                texto
+                rotulo={situacao.cancelado ? "Reativar no PCA" : "Cancelar no PCA"}
+                icon={situacao.cancelado ? <IconUndo className="h-4 w-4" /> : <IconNenhum className="h-4 w-4" />}
+                onClick={() => void alternarSituacao()}
+                loading={alternando}
+                // Rascunho aberto: salve ou descarte antes (cancelar trocaria o banner para a consulta e perderia a edição).
+                disabled={salvando || sujo}
+              />
+            )}
+            {edicao && (
+              <div className="ml-auto flex items-center">
+                <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo || alternando} />
+              </div>
+            )}
+          </div>
         ) : undefined
       }
     >

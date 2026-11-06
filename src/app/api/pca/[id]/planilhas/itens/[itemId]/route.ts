@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { itens } from "@/db/schema";
 import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -41,17 +41,20 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string; i
       dataDesejada: itens.dataDesejada,
       previsaoGenerica: itens.previsaoGenerica,
       prioridade: itens.prioridade,
+      canceladoEm: itens.canceladoEm,
     })
     .from(itens)
     .where(and(eq(itens.id, itemId), eq(itens.pcaId, pcaId)))
     .limit(1);
   if (!atual) return erro("Item não encontrado nas planilhas deste PCA.", 404);
+  // O CANCELADO não se edita: reative-o antes (a edição voltaria a mexer em números que ele não compõe).
+  if (atual.canceladoEm) return erro("Item cancelado no PCA — reative-o antes de editar.", 409);
 
   const plano = planoEdicaoItemPlanilha(atual, corpo.data);
   if (plano.erro) return erro(plano.erro, 422);
   if (Object.keys(plano.set).length === 0) return ok({ alterado: false });
 
-  await db.batch([db.update(itens).set(plano.set).where(and(eq(itens.id, itemId), eq(itens.pcaId, pcaId))), comandoTotaisUnidades(db, pcaId)]);
+  await db.batch([db.update(itens).set(plano.set).where(and(eq(itens.id, itemId), eq(itens.pcaId, pcaId), isNull(itens.canceladoEm))), comandoTotaisUnidades(db, pcaId)]);
   await registrarAuditoria({
     usuario: a.u,
     acao: "editar",

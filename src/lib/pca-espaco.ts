@@ -470,17 +470,57 @@ export async function incorporarProtocolo(
 export async function itensNumeradosDoPca(
   pcaId: number,
   dfdItemIds: number[],
-): Promise<{ dfdItemId: number; dfdId: number | null; sequencial: number; ativo: boolean; reparticaoId: number | null; dfdNumero: string | null }[]> {
-  const out: { dfdItemId: number; dfdId: number | null; sequencial: number; ativo: boolean; reparticaoId: number | null; dfdNumero: string | null }[] = [];
+): Promise<NumeradoDoPca[]> {
+  const out: NumeradoDoPca[] = [];
   for (const lote of lotesDeIds(dfdItemIds)) {
     const rows = await getDb()
-      .select({ dfdItemId: pcaItens.dfdItemId, dfdId: pcaItens.dfdId, sequencial: pcaItens.sequencial, ativo: pcaItens.ativo, reparticaoId: dfds.reparticaoId, dfdNumero: dfds.numero })
+      .select({
+        dfdItemId: pcaItens.dfdItemId,
+        dfdId: pcaItens.dfdId,
+        sequencial: pcaItens.sequencial,
+        ativo: pcaItens.ativo,
+        motivo: pcaItens.motivo,
+        baixado: sql<number>`${pcaItens.baixadoEm} IS NOT NULL`,
+        reparticaoId: dfds.reparticaoId,
+        dfdNumero: dfds.numero,
+      })
       .from(pcaItens)
       .leftJoin(dfds, eq(pcaItens.dfdId, dfds.id))
       .where(and(eq(pcaItens.pcaId, pcaId), inArray(pcaItens.dfdItemId, lote)));
-    for (const r of rows) if (r.dfdItemId != null) out.push({ ...r, dfdItemId: r.dfdItemId });
+    for (const r of rows) if (r.dfdItemId != null) out.push({ ...r, dfdItemId: r.dfdItemId, baixado: Boolean(r.baixado) });
   }
   return out;
+}
+
+/** Um item numerado do PCA (o nº, o estado e o motivo — o CANCELADO é o `retirado`). */
+export type NumeradoDoPca = {
+  dfdItemId: number;
+  dfdId: number | null;
+  sequencial: number;
+  ativo: boolean;
+  motivo: string | null;
+  baixado: boolean;
+  reparticaoId: number | null;
+  dfdNumero: string | null;
+};
+
+/** REATIVA itens CANCELADOS no PCA (motivo "retirado", não baixados) e refaz a vigência — o nº de um DFD que deixou de ser
+ * vigente volta inativo pela vigência (nunca conta um DFD substituído/excluído). */
+export async function reativarItensDoPca(pcaId: number, dfdItemIds: number[], usuarioId: number | null): Promise<void> {
+  for (const lote of lotesDeIds(dfdItemIds))
+    await getDb()
+      .update(pcaItens)
+      .set({ ativo: true, inativadoEm: null, inativadoPor: null, motivo: null })
+      .where(
+        and(
+          eq(pcaItens.pcaId, pcaId),
+          eq(pcaItens.ativo, false),
+          eq(pcaItens.motivo, MOTIVO_NUMERO.retirado),
+          isNull(pcaItens.baixadoEm),
+          inArray(pcaItens.dfdItemId, lote),
+        ),
+      );
+  await sincronizarAtivosPca(pcaId, usuarioId);
 }
 
 /** RETIRA itens do PCA: o número fica INATIVO (nunca reaproveitado) e o item sai do Dashboard/Orçamento. */

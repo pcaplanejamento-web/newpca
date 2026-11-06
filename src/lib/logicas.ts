@@ -575,7 +575,7 @@ export const LOGICAS: LogicaRef[] = [
       "O protocolo INCORPORADO a um PCA se edita como qualquer outro — capa, DFDs, itens, assinaturas, massa, reenvio, sobrescrita, mover DFD, excluir DFD e protocolo e Devolver à Mesa (desincorpora) — e o PCA acompanha na hora (Dashboard, Orçamento, consulta pública).",
     detalhes: [
       "O item editado MANTÉM o nº no PCA: antes de regravar, o nº guarda o retrato do item e a linha nova o reencontra (código + descrição + unidade + nº do item, depois chaves mais fracas).",
-      "O item novo ganha o próximo nº do PCA; o removido fica com o nº baixado — inativo para sempre, nunca reaproveitado; o retirado do PCA segue retirado.",
+      "O item novo ganha o próximo nº do PCA; o removido fica com o nº baixado — inativo para sempre, nunca reaproveitado; o cancelado no PCA segue cancelado (reativável).",
       "O DFD está no PCA do protocolo incorporado em que está: entra (com a ação do protocolo) quando chega a ele, sai (nºs baixados) quando o deixa ou é excluído; o substituído volta a valer quando quem o substituía sai.",
       "Única recusa: a re-importação por Id que fundiria um protocolo em um PCA em outro já existente no nº novo — devolva-o antes.",
     ],

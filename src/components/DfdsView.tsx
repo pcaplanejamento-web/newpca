@@ -151,7 +151,7 @@ type Sel = Set<string | number>;
 /**
  * A Mesa DENTRO do PCA (aba Mesa do espaço do PCA): sem os lançadores de importação, com uma
  * ferramenta à direita das visões (ex.: Todos | Enviados | Incorporados), colunas extras nas tabelas de
- * protocolos/itens e as ações da seleção (protocolos: Incorporar / Devolver; itens: Retirar do PCA). As listas
+ * protocolos/itens e as ações da seleção (protocolos: Incorporar / Devolver; itens: Cancelar no PCA / Reativar). As listas
  * já chegam restritas aos protocolos ENVIADOS ao PCA; os itens vêm do escopo do PCA (`?pca=`).
  */
 export type ModoPcaMesa = {
@@ -163,7 +163,7 @@ export type ModoPcaMesa = {
   rodapeProtocolos?: (linhas: ProtocoloNaMesa[]) => string;
   /** Colunas extras da visão Itens (ex.: o sequencial do item no PCA). */
   colunasItens?: Column<ItemDfdRow>[];
-  /** Ações da seleção de itens (ex.: "Retirar do PCA"); o editor de massa só aparece com itens NÃO incorporados. */
+  /** Ações da seleção de itens (ex.: "Cancelar no PCA"); o editor de massa só aparece com itens NÃO incorporados. */
   acoesItens?: (selecionados: ItemDfdRow[], limpar: () => void) => ReactNode;
 };
 /** Linha consolidada ainda sem as informações calculadas (nunca acontece com a lista montada — só por segurança). */
@@ -2362,7 +2362,7 @@ export function DfdsView({
       getKey={(r) => r.id}
       filtrosRodape={filtrosRodape}
       conexao={{ base: itensF ?? [], filtros: estadoVisoes.itens?.filtros, ordem: ordemMesa, onMudar: conexaoDe.itens }}
-      // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Retirar do PCA" (Excluir).
+      // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Cancelar no PCA" / "Reativar" (Excluir).
       selectable={podeAqui.manipular || (!!modoPca && podeAqui.excluir)}
       selected={selItens}
       onSelected={setSelItens}

@@ -155,6 +155,8 @@ export type ItemDfdRow = {
   /** Nº do item no PCA (só na Mesa do PCA, item INCORPORADO) e se o nº está ativo (retirado = inativo). */
   pcaSequencial: number | null;
   pcaAtivo: boolean | null;
+  /** Por que o nº está inativo (o CANCELADO à mão = `MOTIVO_NUMERO.retirado`). */
+  pcaMotivo?: string | null;
   /** Conformidade com o CATÁLOGO (veredito compacto; `null` = sem veredito) — preenchida pela rota da visão Itens. */
   catalogo?: ConferenciaCompacta | null;
 };
@@ -345,6 +347,7 @@ function consultarItensDfds(reparticaoId?: number | readonly number[], pcaId?: n
       valorTotal: dfdItens.valorTotal,
       pcaSequencial: pcaItens.sequencial,
       pcaAtivo: pcaItens.ativo,
+      pcaMotivo: pcaItens.motivo,
     })
     .from(dfdItens)
     .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))

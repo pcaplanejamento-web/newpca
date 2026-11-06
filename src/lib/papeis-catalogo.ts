@@ -64,7 +64,7 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       manipular: "Trabalhar na Mesa do PCA: incorporar, devolver, enviar a este PCA e editar o que foi enviado.",
       importar: "Importar planilhas e editar os itens delas (PCA de lista).",
       exportar: "Baixar o comparativo em .xlsx.",
-      excluir: "Excluir PCA e planilha e retirar itens do PCA.",
+      excluir: "Excluir PCA e planilha e cancelar ou reativar itens no PCA (protocolo e planilha).",
       configurar: "Criar PCA, alterar a Configuração (nome, ano, fonte, publicar, capa, visão, marcados) e publicar edições das tabelas.",
     },
   },

@@ -1,6 +1,6 @@
 import { condUnidade } from "./filtro-unidade-sql.ts";
 import { dominioCanonico, dominioPorDescricao } from "./padronizacao-core";
-import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { itens, unidades } from "@/db/schema";
 
@@ -37,11 +37,13 @@ export async function getUnidades(reparticaoId?: number | readonly number[], pca
 /** O PCA dos itens: o id, ou o id + a UNIDADE do cabeçalho (só as planilhas dela). */
 export type PcaDosItens = number | { pcaId: number; reparticaoId: number | readonly number[] };
 
-/** Escopo dos itens: uma planilha (`unidadeId`) e/ou as planilhas de um PCA (`pcaId`, opcionalmente só as da unidade). */
+/** Escopo dos itens (só os ATIVOS — o cancelado fica fora): uma planilha (`unidadeId`) e/ou as planilhas de um PCA (`pcaId`, opcionalmente só as da unidade). */
 const filtroUnidade = (unidadeId?: number, pca?: PcaDosItens) => {
   const pcaId = typeof pca === "number" ? pca : pca?.pcaId;
   const rep = typeof pca === "object" ? pca.reparticaoId : undefined;
   return and(
+    // O item CANCELADO no PCA (`0180`) não entra em nenhum número nem na consulta do Dashboard.
+    isNull(itens.canceladoEm),
     unidadeId ? eq(itens.unidadeId, unidadeId) : undefined,
     pcaId ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${unidades.pcaId} = ${pcaId})` : undefined,
     rep ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${condUnidade(unidades.reparticaoId, rep)})` : undefined,

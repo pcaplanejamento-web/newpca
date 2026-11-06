@@ -52,7 +52,8 @@ export const filtroPcaSchema = z.object({ pcaId: z.number().int().positive().nul
 
 /** Ações sobre ITENS numerados do PCA: RETIRAR (o número fica inativo — nunca reaproveitado). */
 export const acaoItensPcaSchema = z.object({
-  acao: z.literal("retirar"),
+  /** `retirar` = CANCELAR no PCA (o nº fica inativo); `reativar` = devolve o cancelado. */
+  acao: z.enum(["retirar", "reativar"]),
   ids: z.array(z.number().int().positive()).min(1, "Escolha ao menos um item.").max(100),
 });
 

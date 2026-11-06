@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { itens, pcaUploads, reparticoes, unidades } from "@/db/schema";
 import { avisarAdmsPca } from "@/lib/avisos-mesa";
 import { brl, num } from "@/lib/format";
-import { comandoSobrescrever, comandosLimparVazias, comandoTotaisUnidades, consultaMaximoSequencial, consultaSequenciaisDeProtocolo } from "@/lib/pca-upload-sql";
+import { comandoSobrescrever, comandosLimparVazias, comandoTotaisUnidades, consultaMaximoSequencial, consultaSequenciaisCancelados, consultaSequenciaisDeProtocolo } from "@/lib/pca-upload-sql";
 import { atribuirSequenciais, repetidos, textoNumeros } from "@/lib/sequencial-pca-core";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { unidadesDaSessao } from "@/lib/grupos";
@@ -38,8 +38,11 @@ async function gravarLote(db: ReturnType<typeof getDb>, pcaId: number, unidadeId
   if (rep.length) return `Sequencial repetido no lote: ${textoNumeros(rep)}.`;
   const dados = informados.filter((n): n is number => n != null);
   if (dados.length) {
-    const deProtocolo = await consultaSequenciaisDeProtocolo(db, pcaId, dados);
+    const [deProtocolo, cancelados] = await Promise.all([consultaSequenciaisDeProtocolo(db, pcaId, dados), consultaSequenciaisCancelados(db, pcaId, dados)]);
     if (deProtocolo.length) return `O sequencial ${textoNumeros(deProtocolo.map((x) => x.sequencial))} já é de um item de protocolo deste PCA — o sequencial é único.`;
+    // O CANCELADO nunca é sobrescrito: o nº fica inativo (reative o item na Importação antes, ou use outro nº).
+    if (cancelados.length)
+      return `O sequencial ${textoNumeros(cancelados.map((x) => x.sequencial ?? 0))} é de um item CANCELADO neste PCA — reative-o na Importação antes ou use outro nº.`;
   }
   const [m] = await consultaMaximoSequencial(db, pcaId);
   const seqs = atribuirSequenciais(informados, m?.max ?? 0);
