@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { casaLocal, ehTermoNumero, ehTipoPesquisa, padroesLike, pontuar, type PortaoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, tipoPermitido, tituloPesquisa } from "../src/lib/pesquisa-core.ts";
+import { casaLocal, ehTermoNumero, ehTipoPesquisa, infoDosCampos, padroesLike, pontuar, type PortaoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, textoDoResultado, tipoPermitido, tituloPesquisa } from "../src/lib/pesquisa-core.ts";
 import { DatabaseSync } from "node:sqlite";
 
 test("pesquisa: tipos únicos, prefixos e atalhos sem repetir", () => {
@@ -100,4 +100,12 @@ test("casaLocal: o índice do navegador casa EXATAMENTE como o LIKE do SQL", () 
     if (q === "SAÚDE secretaria") continue; // o LIKE do SQLite não ignora a caixa de letra acentuada; o local ignora (melhor)
     assert.deepEqual(locais, sqlNums, q);
   }
+});
+
+test("pesquisa: a prévia da Mesa sai dos campos do índice, sem os vazios nem o que está no título e nos selos", () => {
+  // O que já está no título e nos selos (nº, Id, planejamento, sigla) não se repete.
+  assert.deepEqual(infoDosCampos("protocolo", ["144756/2026", "", "INCLUSÃO PCA", "Fulano", "SME"]), [["Interessado", "Fulano"]]);
+  assert.deepEqual(infoDosCampos("dfd", ["1234", "1509", "OBJETO", "144756/2026", "", "SME"]), [["Protocolo", "144756/2026"]]);
+  assert.deepEqual(infoDosCampos("outro", ["x"]), []);
+  assert.equal(textoDoResultado({ rotulo: "Cadeira", detalhe: "Código 5", ids: ["Item 3", "DFD 1234"], selo: "SME" }), "Cadeira Código 5 Item 3 DFD 1234 SME");
 });

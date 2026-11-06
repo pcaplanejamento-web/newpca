@@ -1,4 +1,5 @@
 AbasEspaco.tsx
+AbrirNoLugar.tsx
 AceiteTermo.tsx
 AcessoDaPessoa.tsx
 AcessoRestrito.tsx

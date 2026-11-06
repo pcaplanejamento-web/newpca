@@ -5,7 +5,7 @@ import { EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { casaLocal, type LinhaIndice, linhasDaExecucao, pedeIndiceExecucao, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoExecucaoPesquisa, type TipoPesquisa, type TuplaExecucao } from "@/lib/pesquisa-core";
+import { casaLocal, infoDosCampos, type LinhaIndice, linhasDaExecucao, pedeIndiceExecucao, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, textoDoResultado, tituloPesquisa, type TipoExecucaoPesquisa, type TipoPesquisa, type TuplaExecucao } from "@/lib/pesquisa-core";
 import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
@@ -32,6 +32,7 @@ import {
   IconUser,
   IconUsers,
   IconWallet, IconVeiculo } from "./icons";
+import { AbrirNoLugar, type AlvoNoLugar, alvoNoLugar } from "./AbrirNoLugar";
 import { BannerPesquisa, type DicaPesquisa, EVENTO_ABRIR_PESQUISA, type GrupoPesquisa, lerConsulta, numeroExato, type ResultadoPesquisaTela } from "./BannerPesquisa";
 import { useComponente } from "./ComponentesPapel";
 import { toast } from "./Toast";
@@ -47,7 +48,8 @@ type Grupo = GrupoPesquisa;
 const RECENTES = "pesquisa:recentes";
 /** A 1ª fase da pesquisa sem prefixo (os tipos mais usados). */
 
-type GrupoServidor = { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] };
+type OpcaoServidor = { id: number; rotulo: string; detalhe: string; href?: string; ids?: string[]; selo?: string; info?: [string, string][] };
+type GrupoServidor = { tipo: string; total: number; opcoes: OpcaoServidor[] };
 type EspacoIndice = { tipo: "orcamento" | "quadro" | "pca"; id: number; nome: string; abas: [string, string][] };
 type Indice = { versao: string; completa: string; conferido: number; grupos: Map<string, LinhaIndice[]>; espacos: EspacoIndice[] };
 
@@ -273,10 +275,13 @@ function gravarRecentes(lista: Resultado[]) {
  *   restringe a um tipo.
  * - ↑/↓, Enter, Esc; prévia do item em foco à direita (desktop); tela cheia no celular; combobox acessível.
  */
-export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: TelaPesquisa[]; pcas: PcaPesquisa[]; pcaFiltroId?: number | null }) {
+export function PesquisaSistema({ telas, pcas, pcaFiltroId = null, usuarioId }: { telas: TelaPesquisa[]; pcas: PcaPesquisa[]; pcaFiltroId?: number | null; usuarioId: number }) {
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const [aberto, setAberto] = useState(false);
+  // O registro achado aberto AQUI, por cima da tela atual (protocolo, DFD, item, tarefa, documento).
+  const [noLugar, setNoLugar] = useState<AlvoNoLugar | null>(null);
+  const fecharNoLugar = useCallback(() => setNoLugar(null), []);
   const [texto, setTexto] = useState("");
   const [recentes, setRecentes] = useState<Resultado[]>([]);
   const [remotos, setRemotos] = useState<Grupo[]>([]);
@@ -379,17 +384,20 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           detalhe: o.detalhe || undefined,
           href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo as TipoVinculo, id: o.id })),
           tipo: g.tipo,
+          ...(o.ids?.length ? { ids: o.ids } : {}),
+          ...(o.selo ? { selo: o.selo } : {}),
+          ...(o.info?.length ? { info: o.info } : {}),
         }))
-        .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),
+        .sort((a, b) => Number(numeroExato([b.rotulo, ...(b.ids ?? [])].join(" "), termo)) - Number(numeroExato([a.rotulo, ...(a.ids ?? [])].join(" "), termo))),
     });
     const casa = casaLocal(termo);
     const gruposLocais: GrupoServidor[] = locais.map((t) => {
       const achados = (indiceLocal?.grupos.get(t) ?? []).filter(casa);
       const opcoes = achados
-        .map((o, i) => ({ o, i, p: pontuar(`${o.rotulo} ${o.detalhe}`, termo) }))
+        .map((o, i) => ({ o, i, p: pontuar(textoDoResultado(o), termo) }))
         .sort((x, y) => y.p - x.p || x.i - y.i)
         .slice(0, limite)
-        .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href }));
+        .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href, ids: o.ids, selo: o.selo, info: infoDosCampos(t, o.campos) }));
       return { tipo: t, total: achados.length, opcoes };
     });
     // Empenhos, liquidações e pagamentos pelo TEXTO no índice local; o servidor segue achando o nº exato (todos os anos) —
@@ -665,17 +673,26 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     salvarFavoritos(lista);
   }
 
+  /** Abre o resultado: protocolo, DFD, item, tarefa e documento no componente padrão AQUI (sem sair da tela); o resto
+   *  (telas, abas, cadastros…) na tela dele. A chave é "tipo:id" — também nos recentes e favoritos. */
+  function ir(r: { chave: string; tipo: string; rotulo: string; href?: string }) {
+    const i = r.chave.indexOf(":");
+    const alvo = i > 0 ? alvoNoLugar(r.chave.slice(0, i), Number(r.chave.slice(i + 1)), r.rotulo) : null;
+    if (alvo) setNoLugar(alvo);
+    else if (r.href) router.push(r.href);
+  }
+
   function abrirFavorito(f: FavoritoPesquisa) {
     gravarRecentes([f, ...lerRecentes().filter((x) => x.chave !== f.chave)]);
     setAberto(false);
-    router.push(f.href);
+    ir(f);
   }
 
   function escolher(r: Resultado) {
     if (r.tipo !== "acao" || r.href) gravarRecentes([r, ...lerRecentes().filter((x) => x.chave !== r.chave)]);
     setAberto(false);
     if (r.acao) r.acao();
-    else if (r.href) router.push(r.href);
+    else ir(r);
   }
 
   function esquecer(chave: string) {
@@ -684,7 +701,8 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     gravarRecentes(novos);
   }
 
-  if (!aberto) return null;
+  const lugar = <AbrirNoLugar alvo={noLugar} usuarioId={usuarioId} onFechar={fecharNoLugar} onTrocar={setNoLugar} />;
+  if (!aberto) return lugar;
   // Sem pesquisa: todos os filtros da pessoa. Com pesquisa: só os que têm resultado (e o escolhido), com a contagem.
   const contas = relevantes?.termo === termo ? relevantes.contas : null;
   const filtros =
@@ -693,6 +711,8 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       : [{ value: "", label: "Tudo" }, ...(contas ? todosFiltros.filter((f) => contas.has(f.value) || f.value === tipo).map((f) => ({ ...f, conta: contas.get(f.value) })) : todosFiltros)];
 
   return (
+    <>
+    {lugar}
     <BannerPesquisa
       rotulo="Pesquisa no sistema"
       placeholder="Pesquise em todo o sistema — telas, Mesa, orçamento, catálogo, tarefas…"
@@ -758,5 +778,6 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         </div>
       }
     />
+    </>
   );
 }

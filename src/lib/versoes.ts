@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.280.0",
+    data: "2026-11-06",
+    titulo: "Pesquisa do sistema abre na própria tela",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Pesquisa",
+        texto: "O protocolo, o DFD, o item, a tarefa e o documento achados na pesquisa abrem no componente padrão por cima da tela em que você está — a pilha de banners da Mesa (com edição e permissões de sempre), o detalhe da tarefa e o visualizador do PDF —, sem levar à Mesa ou a outra tela.",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Resultados no padrão da pesquisa pública: o nome do protocolo (assunto), do DFD (objeto) e do item (descrição) em destaque, com os números em selos (nº do protocolo e Id, nº do DFD e planejamento, item) e a sigla da unidade; a prévia mostra os demais dados sem repetir.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.279.4",
     data: "2026-11-06",
     titulo: "Pesquisa pública abre na própria tela",

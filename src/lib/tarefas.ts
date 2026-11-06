@@ -28,7 +28,7 @@ import {
   dfdItens,
   reparticoes,
 } from "@/db/schema";
-import { type LinhaIndice, MAX_INDICE, padroesLike } from "./pesquisa-core";
+import { infoDosCampos, type LinhaIndice, MAX_INDICE, padroesLike } from "./pesquisa-core";
 import { casaTermos } from "./pesquisa-sql";
 import { type Acesso, componenteLibera, getAcesso, orcamentosDoAcesso, pcasDoAcesso, podeNoQuadro, podeOrcamento, podePca, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
@@ -2615,8 +2615,9 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
   const corte = (t: string | null | undefined, n = 160) => (t ?? "").slice(0, n);
   if (tipo === "protocolo") {
     const ls = await db
-      .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto, interessado: dfdProtocolos.interessado, pcaId: dfdProtocolos.pcaId })
+      .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto, interessado: dfdProtocolos.interessado, pcaId: dfdProtocolos.pcaId, sigla: reparticoes.codigo })
       .from(dfdProtocolos)
+      .leftJoin(reparticoes, eq(reparticoes.id, dfdProtocolos.reparticaoId))
       .where(
         and(
           casaTermos([dfdProtocolos.numero, dfdProtocolos.idExterno, dfdProtocolos.assunto, dfdProtocolos.interessado], padroes, [dfdProtocolos.numero, dfdProtocolos.idExterno]),
@@ -2627,22 +2628,25 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
       )
       .orderBy(desc(dfdProtocolos.id))
       .limit(LIM);
-    return ls.map((l) => ({
-      id: l.id,
-      rotulo: `Protocolo ${l.numero}`,
-      detalhe: [l.idExterno ? `Id ${l.idExterno}` : "", l.assunto ?? ""].filter(Boolean).join(" · "),
-      href: link(l.pcaId, `protocolo:${l.id}`),
-      ...(indice && {
-        campos: [l.numero, l.idExterno ?? "", corte(l.assunto), corte(l.interessado)],
-        numeros: [l.numero, l.idExterno ?? ""],
-      }),
-    }));
+    return ls.map((l) => {
+      const campos = [l.numero, l.idExterno ?? "", corte(l.assunto), corte(l.interessado), l.sigla ?? ""];
+      return {
+        id: l.id,
+        rotulo: l.assunto?.trim() || `Protocolo ${l.numero}`,
+        detalhe: corte(l.interessado, 120),
+        href: link(l.pcaId, `protocolo:${l.id}`),
+        ids: [`Protocolo ${l.numero}`, ...(l.idExterno ? [`Id ${l.idExterno}`] : [])],
+        ...(l.sigla ? { selo: l.sigla } : {}),
+        ...(indice ? { campos, numeros: [l.numero, l.idExterno ?? ""] } : { info: infoDosCampos("protocolo", campos) }),
+      };
+    });
   }
   if (tipo === "dfd") {
     const ls = await db
-      .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, protocolo: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, pcaId: dfdProtocolos.pcaId })
+      .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, protocolo: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, pcaId: dfdProtocolos.pcaId, sigla: reparticoes.codigo })
       .from(dfds)
       .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
+      .leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId))
       .where(
         and(
           casaTermos([dfds.numero, dfds.planejamento, dfds.objeto, dfdProtocolos.numero, dfdProtocolos.idExterno], padroes, [dfds.numero, dfds.planejamento]),
@@ -2653,16 +2657,18 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
       )
       .orderBy(desc(dfds.id))
       .limit(LIM);
-    return ls.map((l) => ({
-      id: l.id,
-      rotulo: `DFD ${l.numero}${l.planejamento ? ` · Planej. ${l.planejamento}` : ""}`,
-      detalhe: [l.protocolo ? `Protocolo ${l.protocolo}` : "", indice ? corte(l.objeto, 120) : (l.objeto ?? "")].filter(Boolean).join(" · "),
-      href: link(l.pcaId, `dfd:${l.id}`),
-      ...(indice && {
-        campos: [l.numero, l.planejamento ?? "", corte(l.objeto), l.protocolo ?? "", l.idExterno ?? ""],
-        numeros: [l.numero, l.planejamento ?? ""],
-      }),
-    }));
+    return ls.map((l) => {
+      const campos = [l.numero, l.planejamento ?? "", corte(l.objeto), l.protocolo ?? "", l.idExterno ?? "", l.sigla ?? ""];
+      return {
+        id: l.id,
+        rotulo: corte(l.objeto, 120).trim() || `DFD ${l.numero}`,
+        detalhe: l.protocolo ? `Protocolo ${l.protocolo}` : "",
+        href: link(l.pcaId, `dfd:${l.id}`),
+        ids: [`DFD ${l.numero}`, ...(l.planejamento ? [`Planej. ${l.planejamento}`] : [])],
+        ...(l.sigla ? { selo: l.sigla } : {}),
+        ...(indice ? { campos, numeros: [l.numero, l.planejamento ?? ""] } : { info: infoDosCampos("dfd", campos) }),
+      };
+    });
   }
   const ls = await db
     .select({
@@ -2674,10 +2680,12 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
       codigo: dfdItens.codigo,
       descricao: dfdItens.descricao,
       pcaId: dfdProtocolos.pcaId,
+      sigla: reparticoes.codigo,
     })
     .from(dfdItens)
     .innerJoin(dfds, eq(dfds.id, dfdItens.dfdId))
     .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
+    .leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId))
     .where(
       and(
         casaTermos([dfdItens.descricao, dfdItens.codigo], padroes, [dfdItens.codigo]),
@@ -2692,9 +2700,12 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
     const n = l.item ?? l.sequencial ?? 0;
     return {
       id: idVinculoItem(l.dfdId, n),
-      rotulo: `${l.codigo ? `${l.codigo} · ` : ""}${(l.descricao ?? "").slice(0, 90)}`,
-      detalhe: `Item ${n} · DFD ${l.numero}${l.planejamento ? ` · Planej. ${l.planejamento}` : ""}`,
+      rotulo: corte(l.descricao, 120).trim() || `Item ${n}`,
+      detalhe: l.codigo ? `Código ${l.codigo}` : "",
       href: link(l.pcaId, `dfd:${l.dfdId}`),
+      ids: [`Item ${n}`, `DFD ${l.numero}`, ...(l.planejamento ? [`Planej. ${l.planejamento}`] : [])],
+      ...(l.sigla ? { selo: l.sigla } : {}),
+      info: infoDosCampos("item", [l.codigo ?? "", corte(l.descricao), String(n), l.numero, l.planejamento ?? "", l.sigla ?? ""]),
     };
   });
 }

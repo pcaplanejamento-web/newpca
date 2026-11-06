@@ -41,8 +41,29 @@ export const tituloPesquisa = (t: string) => TIPOS_PESQUISA.find((x) => x.tipo =
 /** Os tipos que a pesquisa SEM prefixo consulta (os de administração só aparecem ao ADM — a rota confere). */
 export const TIPOS_PADRAO: TipoPesquisa[] = TIPOS_PESQUISA.map((t) => t.tipo);
 
-/** Um resultado do servidor: o link já é o da tela/aba em que a pessoa pode abri-lo. */
-export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; href: string };
+/** Um resultado do servidor: o link já é o da tela/aba em que a pessoa pode abri-lo. `ids` = os números em destaque (nº do
+ *  protocolo, do DFD, planejamento, item) e `selo` = a sigla da unidade; `info` = os campos da prévia. */
+export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; href: string; ids?: string[]; selo?: string; info?: [string, string][] };
+
+/** O texto em que a ordem procura o termo: o rótulo, o detalhe e os números em destaque. */
+export const textoDoResultado = (o: { rotulo: string; detalhe: string; ids?: string[]; selo?: string }) => [o.rotulo, o.detalhe, ...(o.ids ?? []), o.selo ?? ""].join(" ");
+
+/** Os rótulos dos `campos` de cada linha do ÍNDICE (a MESMA ordem de `pesquisarNaMesa`) — a prévia sem mandar o texto duas
+ *  vezes. `null` = o campo já está no título ou nos selos (nº, Id, planejamento, sigla) e não se repete na prévia. */
+const ROTULOS_CAMPOS: Record<string, (string | null)[]> = {
+  protocolo: [null, null, null, "Interessado", null],
+  dfd: [null, null, null, "Protocolo", "Id do protocolo", null],
+  item: ["Código", null, null, null, null, null],
+};
+
+/** Os campos da PRÉVIA de uma linha da Mesa (rótulo · valor), sem os vazios. */
+export function infoDosCampos(tipo: string, campos: string[]): [string, string][] {
+  const rotulos = ROTULOS_CAMPOS[tipo] ?? [];
+  return campos.flatMap((v, i): [string, string][] => {
+    const r = rotulos[i];
+    return v && r ? [[r, v]] : [];
+  });
+}
 
 /** Uma linha do ÍNDICE LOCAL da pesquisa (protocolos e DFDs que a pessoa vê): o resultado + os campos em que se procura. */
 export type LinhaIndice = ResultadoPesquisa & { campos: string[]; numeros: string[] };

@@ -3,7 +3,7 @@ import type { AbaKey } from "@/lib/abas";
 import { exigirSessao } from "@/lib/api-auth";
 import { ok } from "@/lib/http";
 import { pesquisarOutros } from "@/lib/pesquisa";
-import { ehTipoPesquisa, type PortaoPesquisa, pontuar, TIPOS_PADRAO, type TipoPesquisa, tipoPermitido } from "@/lib/pesquisa-core";
+import { ehTipoPesquisa, type PortaoPesquisa, pontuar, textoDoResultado, TIPOS_PADRAO, type TipoPesquisa, tipoPermitido } from "@/lib/pesquisa-core";
 import { buscarVinculos, pesquisarMesa } from "@/lib/tarefas";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +29,9 @@ export async function GET(req: Request) {
     libera: (c) => componenteLibera(a.acesso, c),
   };
   // A ordem: exato › começa › contém (estável) — o melhor de cada grupo vem primeiro.
-  const ordenar = <T extends { rotulo: string; detalhe: string }>(l: T[]) =>
+  const ordenar = <T extends { rotulo: string; detalhe: string; ids?: string[]; selo?: string }>(l: T[]) =>
     l
-      .map((o, i) => ({ o, i, p: pontuar(`${o.rotulo} ${o.detalhe}`, q) }))
+      .map((o, i) => ({ o, i, p: pontuar(textoDoResultado(o), q) }))
       .sort((x, y) => y.p - x.p || x.i - y.i)
       .map((x) => x.o);
   const grupos = await Promise.all(

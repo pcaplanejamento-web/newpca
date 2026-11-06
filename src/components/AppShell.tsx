@@ -411,6 +411,7 @@ export function AppShell({
         telas={secoesVisiveis(usuario.admin, modulos).flatMap((sc) => sc.itens.map((i) => ({ ...i, secao: sc.titulo })))}
         pcas={pcas}
         pcaFiltroId={pcaFiltroId}
+        usuarioId={usuario.id}
       />
       {/* Navegação inferior (mobile) */}
       <BottomNav telas={modulos.flatMap((m) => m.telas)} />
