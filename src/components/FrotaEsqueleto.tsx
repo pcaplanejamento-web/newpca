@@ -10,10 +10,14 @@ import { Skeleton } from "./Skeleton";
  */
 export function EsqueletoFrota({ tipo }: { tipo: "painel" | "tabela" | "veiculos" }) {
   return (
-    <div aria-busy className="space-y-[var(--gap-block)]">
+    // As telas de TABELA cabem no display (como o `AteOFim` real) — a tabela vai até o fim, sem rolar a página.
+    <div
+      aria-busy
+      className={`flex flex-col gap-[var(--gap-block)] ${tipo === "painel" ? "" : "lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*2))]"}`}
+    >
       <EsqueletoIndicadores />
       {tipo !== "veiculos" && <EsqueletoCartaoFiltros campos={10} />}
-      {tipo === "painel" ? <Skeleton className="h-[372px] rounded-card" /> : <EsqueletoTabela linhas={12} colunas={8} />}
+      {tipo === "painel" ? <Skeleton className="h-[372px] rounded-card" /> : <EsqueletoTabela cheia linhas={12} colunas={8} />}
     </div>
   );
 }

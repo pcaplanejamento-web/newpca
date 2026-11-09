@@ -9,7 +9,7 @@ export default function Carregando() {
         <Skeleton className="h-10 w-full rounded-control" />
         <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-full w-[17.5rem] shrink-0 rounded-xl" />
+            <Skeleton key={i} className="h-[60dvh] w-[85%] shrink-0 rounded-xl sm:w-[17.5rem] lg:h-full" />
           ))}
         </div>
       </div>

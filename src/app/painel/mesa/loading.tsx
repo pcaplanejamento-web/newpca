@@ -7,14 +7,14 @@ import { EsqueletoControle } from "@/components/Skeleton";
 export default function Carregando() {
   return (
     <EsqueletoTela cheia>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <EsqueletoControle className="w-40" />
         <EsqueletoSegmented itens={4} />
-        <EsqueletoControle quadrado />
-        <EsqueletoControle quadrado />
-        <EsqueletoControle quadrado className="ml-auto" />
-        <EsqueletoControle quadrado />
-        <EsqueletoControle quadrado />
+        <div className="ml-auto flex items-center gap-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <EsqueletoControle key={i} quadrado />
+          ))}
+        </div>
       </div>
       <EsqueletoTabela cheia linhas={14} colunas={8} />
     </EsqueletoTela>
