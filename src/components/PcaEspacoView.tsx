@@ -6,6 +6,11 @@ import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { IconCalendar, IconCheck } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
+import { EsqueletoAbaPca } from "./PcaEspacoEsqueleto";
+
+const ESQUELETOS = Object.fromEntries(
+  (["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "configuracao"] as const).map((a) => [a, <EsqueletoAbaPca key={a} aba={a} />]),
+) as Record<AbaPca, ReactNode>;
 
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "declaracoes" | "configuracao";
 
@@ -34,6 +39,7 @@ export function PcaEspacoView({
       <AbasEspaco<AbaPca>
         aba={aba}
         voltar={{ href: "/painel/pca", rotulo: "PCA" }}
+        esqueletos={ESQUELETOS}
         fim={
           <>
             {pca.ano != null && (

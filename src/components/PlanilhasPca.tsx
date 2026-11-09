@@ -470,7 +470,7 @@ export function PlanilhasPca({
             )}
           </div>
         ) : !noCliente ? (
-          <EsqueletoTabela colunas={8} cheia />
+          <EsqueletoTabela cheia linhas={14} colunas={8} />
         ) : (
           <DataTable
             columns={colunas}

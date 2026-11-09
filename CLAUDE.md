@@ -96,7 +96,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `<Componente>Esqueleto.tsx` leve ao lado — `EsqueletoTabela` (`DataTableEsqueleto`), `EsqueletoCartaoEspaco`/
     `EsqueletoGradeEspacos`/`COLUNAS_ESPACOS` (`CartaoEspacoEsqueleto` — a grade dos quadros, catálogos e automações vem
     daqui), `EsqueletoTabsLaterais` (`TabsEsqueleto`), `EsqueletoCalendario` (`CalendarioEsqueleto`), `EsqueletoSegmented`
-    (`SegmentedEsqueleto`), como o `DashboardMesaEsqueleto`) e usa as MESMAS classes/medidas/grade do componente: mudou o
+    (`SegmentedEsqueleto`), `EsqueletoAbaPca` (`PcaEspacoEsqueleto` — um por aba do espaço do PCA, v1.283.3; o `AbasEspaco` recebe `esqueletos` = o da aba PEDIDA cobre a troca de aba, sem ele o genérico), `EsqueletoChartCard` (em `ChartCard.tsx`), como o `DashboardMesaEsqueleto`) e usa as MESMAS classes/medidas/grade do componente: mudou o
     componente, muda o esqueleto. O `loading.tsx` de cada tela só COMPÕE esses esqueletos dentro do **`EsqueletoTela`** (a
     moldura: atraso + `aria-busy`; `cheia` = até o fim do display) + `EsqueletoTitulo`; o teste exige que ele importe só de
     arquivos sem "use client" (o esqueleto vem no HTML na hora, sem baixar o código da tela). Esqueleto de componente novo

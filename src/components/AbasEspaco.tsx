@@ -53,19 +53,22 @@ export function useTrocaAba<T extends string>(abaServidor: T) {
  * O CONTEÚDO da aba (com o morph); `slot` = onde vão as `FerramentasAba`; `className` = o arranjo dos blocos da aba (o
  * `AbasEspaco` põe o espaço padrão `--gap-block` entre eles). Enquanto a aba pedida não chega, a aba ANTERIOR fica
  * montada e o esqueleto só cobre o conteúdo se a espera passar do tempo do `.esqueleto-tela` — a aba que volta do
- * cache (ou chega rápido) troca direto, sem piscar.
+ * cache (ou chega rápido) troca direto, sem piscar. `esqueleto` = o desenho da aba PEDIDA (o esqueleto dos componentes
+ * dela); sem ele, o genérico.
  */
 export function ConteudoAba({
   aba,
   abaServidor,
   slot,
   className = "",
+  esqueleto,
   children,
 }: {
   aba: string;
   abaServidor: string;
   slot: HTMLElement | null;
   className?: string;
+  esqueleto?: ReactNode;
   children: ReactNode;
 }) {
   const esperando = aba !== abaServidor;
@@ -76,9 +79,13 @@ export function ConteudoAba({
           {children}
         </div>
         {esperando ? (
-          <div className="esqueleto-tela absolute inset-0 z-10 space-y-[var(--gap-block)] overflow-hidden bg-surface-2">
-            <Skeleton className="h-24 w-full" />
-            <SkeletonLinhas linhas={8} />
+          <div className="esqueleto-tela absolute inset-x-0 top-0 z-10 min-h-full space-y-[var(--gap-block)] bg-surface-2">
+            {esqueleto ?? (
+              <>
+                <Skeleton className="h-24 w-full" />
+                <SkeletonLinhas linhas={8} />
+              </>
+            )}
           </div>
         ) : null}
       </div>
@@ -98,10 +105,13 @@ export function AbasEspaco<T extends string>({
   opcoes,
   voltar,
   fim,
+  esqueletos,
   children,
 }: {
   /** A aba que o servidor montou (`children`). */
   aba: T;
+  /** O esqueleto de cada aba (o da aba PEDIDA cobre a troca); a aba sem esqueleto usa o genérico. */
+  esqueletos?: Partial<Record<T, ReactNode>>;
   /** `curto` = o rótulo nos telefones quando todas as abas não cabem; `soIcone` + `icone` = a aba só com o ícone. */
   opcoes: ComponentProps<typeof Segmented<T>>["options"];
   /** O VOLTAR do espaço — à esquerda das abas. O espaço não tem título: o nome está no caminho do cabeçalho. */
@@ -130,7 +140,7 @@ export function AbasEspaco<T extends string>({
           </div>
         )}
       </div>
-      <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot} className="space-y-[var(--gap-block)]">
+      <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot} className="space-y-[var(--gap-block)]" esqueleto={esqueletos?.[aba]}>
         {children}
       </ConteudoAba>
     </>

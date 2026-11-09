@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { EsqueletoSegmented } from "./SegmentedEsqueleto";
 import { EsqueletoControle, Skeleton } from "./Skeleton";
 
 /**
@@ -55,18 +56,21 @@ export function EsqueletoIndicadores() {
 }
 
 /**
- * Esqueleto da LINHA DAS TELAS INTERNAS (espaço do PCA, orçamento, pasta, órgão): o voltar à esquerda e, com `abas`, as
- * abas logo depois — sem título (o nome está no caminho do cabeçalho).
+ * Esqueleto da LINHA DAS TELAS INTERNAS (espaço do PCA, orçamento, pasta, órgão): o voltar à esquerda e, com `abas`, o
+ * trilho das abas logo depois (o `EsqueletoSegmented`) — sem título (o nome está no caminho do cabeçalho). À direita, `fim`
+ * selos (ex.: o ano e o status do PCA) e, com `config`, a engrenagem da Configuração — o mesmo arranjo do `AbasEspaco`.
  */
-export function EsqueletoEspaco({ abas = 0 }: { abas?: number }) {
+export function EsqueletoEspaco({ abas = 0, fim = 0, config = false }: { abas?: number; fim?: number; config?: boolean }) {
   return (
     <div className="linha-topico flex flex-wrap items-center gap-2">
       <EsqueletoControle quadrado />
-      {abas > 0 && (
-        <div className="flex gap-1">
-          {Array.from({ length: abas }, (_, i) => (
-            <EsqueletoControle key={i} className="w-24" />
+      {abas > 0 && <EsqueletoSegmented itens={abas} />}
+      {(fim > 0 || config) && (
+        <div className="ml-auto flex items-center gap-2">
+          {Array.from({ length: fim }, (_, i) => (
+            <EsqueletoControle key={i} className={i === 0 ? "w-16" : "w-24"} />
           ))}
+          {config && <EsqueletoControle quadrado />}
         </div>
       )}
     </div>

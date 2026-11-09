@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { IconAmpliar } from "./icons";
+import { Skeleton } from "./Skeleton";
 
 type Props = {
   /** Sem título (nem ação/expandir), o cartão não tem cabeçalho — o conteúdo traz a própria linha. */
@@ -46,6 +47,25 @@ export function ChartCard({ title, subtitle, children, className, action, onExpa
       {/* Esticado até a altura da linha (cartões lado a lado), o conteúdo fica no TOPO, logo abaixo do título — centrado,
           ele "flutuava" no meio de um vão (ex.: a Saúde dos prazos ao lado de uma Carga por pessoa longa). */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Esqueleto do `ChartCard` — a MESMA moldura (`rounded-card`, a borda, o `--pad-card`, a sombra), o cabeçalho (título e
+ * subtítulo + o expandir) e o corpo na altura do gráfico (`corpo` = a classe da altura; padrão = a rosca do Dashboard do PCA, `h-56`).
+ */
+export function EsqueletoChartCard({ corpo = "h-56", className = "" }: { corpo?: string; className?: string }) {
+  return (
+    <div className={`flex flex-col rounded-card border border-border/60 bg-surface p-[var(--pad-card)] shadow-soft ${className}`}>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Skeleton className="h-4 w-1/2 rounded-sm" />
+          <Skeleton className="h-3 w-2/3 rounded-sm" />
+        </div>
+        <Skeleton className="h-8 w-8 rounded-control pointer-coarse:h-11 pointer-coarse:w-11" />
+      </div>
+      <Skeleton className={`w-full rounded-lg ${corpo}`} />
     </div>
   );
 }

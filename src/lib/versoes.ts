@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.3",
+    data: "2026-11-09",
+    titulo: "Carregamento das abas do PCA no padrão do sistema",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto:
+          "Cada aba do PCA (Dashboard, Orçamento, Mesa, Importação, Documentos, Declarações e Configuração) mostra, enquanto carrega, o desenho da própria aba — os indicadores, os filtros, os gráficos, a tabela ou os cartões no lugar em que vão aparecer — e a linha do espaço com o ano, o status e a engrenagem.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.283.2",
     data: "2026-11-09",
     titulo: "Coluna Unidade padronizada",

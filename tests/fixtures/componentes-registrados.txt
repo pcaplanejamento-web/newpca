@@ -366,3 +366,4 @@ FrotaEsqueleto.tsx
 
 BannerPesquisa.tsx
 PesquisaPublica.tsx
+PcaEspacoEsqueleto.tsx

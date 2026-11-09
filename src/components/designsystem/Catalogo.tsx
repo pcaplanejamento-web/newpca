@@ -60,7 +60,7 @@ import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
 import { avisoIncorporado } from "@/lib/pca-numeracao-core";
-import { ChartCard } from "@/components/ChartCard";
+import { ChartCard, EsqueletoChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { ExploradorGrafico } from "@/components/ExploradorGrafico";
 import { MensalChart } from "@/components/charts/MensalChart";
@@ -74,6 +74,7 @@ import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
 import { DashboardMesa } from "@/components/DashboardMesa";
 import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
+import { EsqueletoAbaPca } from "@/components/PcaEspacoEsqueleto";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import { SerieTemporal } from "@/components/charts/SerieTemporal";
 import { GraficoTemporal } from "@/components/charts/GraficoTemporal";
@@ -3991,6 +3992,21 @@ export function Catalogo() {
 
       <Secao titulo="DashboardExecucaoEsqueleto (enquanto o Dashboard da Execução carrega — a MESMA grade)">
         <DashboardExecucaoEsqueleto />
+      </Secao>
+
+      <Secao titulo="EsqueletoChartCard (o ChartCard enquanto o gráfico carrega — a mesma moldura e o corpo na altura do gráfico)">
+        <EsqueletoChartCard />
+      </Secao>
+
+      <Secao titulo="EsqueletoAbaPca (o esqueleto de cada aba do espaço do PCA — Dashboard, Orçamento, Mesa, Importação, Documentos, Declarações e Configuração)">
+        <div className="space-y-6">
+          {(["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "configuracao"] as const).map((a) => (
+            <div key={a} className="space-y-[var(--gap-block)]">
+              <p className="text-xs font-medium text-muted">{a}</p>
+              <EsqueletoAbaPca aba={a} />
+            </div>
+          ))}
+        </div>
       </Secao>
 
       <Secao titulo="FiltrosDashboard (menus suspensos por dimensão — opções conectadas com a contagem)">
