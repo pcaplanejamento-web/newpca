@@ -49,7 +49,10 @@ export function Tabs({
   const base = useId();
   const [idx, setIdx] = useState(() => Math.max(0, inicial ? tabs.findIndex((t) => t.key === inicial) : 0));
   const [visitadas, setVisitadas] = useState<Set<string>>(() => new Set([tabs[Math.max(0, inicial ? tabs.findIndex((t) => t.key === inicial) : 0)]?.key ?? ""]));
-  const [dir, setDir] = useState<1 | -1>(1);
+  // 0 = ainda nenhuma troca: a aba da abertura entra SEM deslizar (só a troca feita pela pessoa anima).
+  const [dir, setDir] = useState<0 | 1 | -1>(0);
+  // O indicador só passa a deslizar depois da 1ª medida (na abertura ele aparece no lugar, sem vir da borda).
+  const [pronto, setPronto] = useState(false);
   const [ind, setInd] = useState({ a: 0, b: 0, x: 0, w: 0, vertical: false });
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const lista = useRef<HTMLDivElement>(null);
@@ -85,6 +88,11 @@ export function Tabs({
     medir();
     btnRefs.current[idx]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [idx, tabs.length, medir]);
+  useEffect(() => {
+    if (pronto || ind.b === 0) return;
+    const q = requestAnimationFrame(() => setPronto(true));
+    return () => cancelAnimationFrame(q);
+  }, [pronto, ind.b]);
   useEffect(() => {
     window.addEventListener("resize", medir);
     return () => window.removeEventListener("resize", medir);
@@ -168,7 +176,7 @@ export function Tabs({
             tabIndex={i === idx ? 0 : -1}
             title={t.dica ?? t.label}
             onClick={() => ir(i)}
-            className={`relative z-10 inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3 text-[14px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 lg:min-h-[var(--h-control-sm)] ${
+            className={`relative z-10 inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3 text-[14px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 desktop:min-h-[var(--h-control-sm)] ${
               lateral ? "lg:w-full lg:justify-start lg:text-[13.5px]" : ""
             } ${i === idx ? "text-accent" : "text-muted hover:bg-surface-2 hover:text-text-2"}`}
           >
@@ -179,7 +187,7 @@ export function Tabs({
         {/* O indicador: o sublinhado (horizontal) ou o fundo que desliza (lateral, no desktop). */}
         <span
           aria-hidden
-          className={`pointer-events-none absolute transition-[left,width,top,height] duration-[var(--motion-duration)] ease-[var(--motion-ease)] ${
+          className={`pointer-events-none absolute ${pronto ? "transition-[left,width,top,height] duration-[var(--motion-duration)] ease-[var(--motion-ease)]" : ""} ${
             ind.vertical ? "z-0 rounded-control bg-accent-soft" : "bottom-0 h-[2px] rounded-full bg-accent"
           }`}
           style={ind.vertical ? { top: ind.a, height: ind.b, left: ind.x, width: ind.w } : { left: ind.a, width: ind.b }}
@@ -233,12 +241,17 @@ export function Tabs({
               : ""
         }`}
         onTouchStart={(e) => {
-          toque.current = podeArrastar(e.target) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+          // Dois dedos = pinça (zoom), nunca troca de aba.
+          toque.current = e.touches.length === 1 && podeArrastar(e.target) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+        }}
+        onTouchCancel={() => {
+          toque.current = null;
         }}
         onTouchEnd={(e) => {
           const t0 = toque.current;
           toque.current = null;
-          if (!t0) return;
+          // Ainda há dedo na tela (a pinça acabou de soltar um): não é um deslize.
+          if (!t0 || e.touches.length > 0) return;
           const dx = e.changedTouches[0].clientX - t0.x;
           const dy = e.changedTouches[0].clientY - t0.y;
           if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
@@ -256,7 +269,7 @@ export function Tabs({
               role="tabpanel"
               aria-labelledby={`${base}-t-${t.key}`}
               hidden={t.key !== ativa.key}
-              className={`${cartoes ? "" : lateral ? "pt-4 lg:pt-0" : "pt-4"} ${t.key === ativa.key ? (dir > 0 ? "animate-aba-direita" : "animate-aba-esquerda") : ""}`}
+              className={`${cartoes ? "" : lateral ? "pt-4 lg:pt-0" : "pt-4"} ${t.key === ativa.key && dir !== 0 ? (dir > 0 ? "animate-aba-direita" : "animate-aba-esquerda") : ""}`}
             >
               {t.content}
             </div>

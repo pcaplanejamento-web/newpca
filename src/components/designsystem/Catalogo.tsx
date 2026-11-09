@@ -732,7 +732,7 @@ function PcaEspacoDemo() {
         </Badge>
       </div>
       <div className="linha-topico flex flex-wrap items-center gap-2">
-        <span className="grid h-11 w-11 place-items-center rounded-control text-muted lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
+        <span className="grid h-11 w-11 place-items-center rounded-control text-muted desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]">
           <Icons.IconChevronLeft className="h-4 w-4" />
         </span>
         <span className="text-[26px] font-bold leading-[44px] tracking-tight lg:text-2xl text-text lg:leading-[var(--h-control-sm)]">PCA 2027 (linha de título)</span>

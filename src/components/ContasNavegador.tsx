@@ -51,8 +51,8 @@ export function useContaEmOutraAba(id: number) {
   }, [id]);
 }
 
-const ITEM = "flex min-h-11 w-full items-center gap-2.5 rounded-control px-2 text-left text-sm text-text transition-colors hover:bg-surface-2 disabled:opacity-60 lg:min-h-9";
-const SAIR = "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-[13px] font-medium text-[var(--danger)] transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] disabled:opacity-60 lg:min-h-9";
+const ITEM = "flex min-h-11 w-full items-center gap-2.5 rounded-control px-2 text-left text-sm text-text transition-colors hover:bg-surface-2 disabled:opacity-60 desktop:min-h-9";
+const SAIR = "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-[13px] font-medium text-[var(--danger)] transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] disabled:opacity-60 desktop:min-h-9";
 
 /**
  * O cartão do usuário no rodapé do menu: tocar abre o DROPUP das contas DESTE navegador — trocar (um toque), adicionar

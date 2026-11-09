@@ -230,7 +230,9 @@ export function BolhasChat({
   const pegar = useCallback(
     (e: React.PointerEvent, chave: string) => {
       const l = lugares[chave];
-      if (!t || !l || e.button > 0) return;
+      if (!t || !l || e.button > 0 || !e.isPrimary) return;
+      // Só o dedo que pegou a bolha a move (um segundo dedo não a sequestra).
+      const id = e.pointerId;
       // Segura JÁ na pressão (antes do limiar): o navegador não começa a selecionar texto nem a arrastar a foto.
       if (e.pointerType === "mouse") e.preventDefault();
       const x0 = e.clientX;
@@ -279,6 +281,7 @@ export function BolhasChat({
         setArrasto(ultimo);
       };
       const mover = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
         if (!ativo) {
           if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < LIMIAR) return;
           ativo = true;
@@ -309,7 +312,7 @@ export function BolhasChat({
         quadro = 0;
         window.removeEventListener("pointermove", mover);
         window.removeEventListener("pointerup", fim);
-        window.removeEventListener("pointercancel", fim);
+        window.removeEventListener("pointercancel", interrompido);
         if (cancelarRef.current === cancelar) cancelarRef.current = null;
         soltar?.();
       };
@@ -317,7 +320,12 @@ export function BolhasChat({
         encerrar();
         setArrasto(null);
       };
-      const fim = () => {
+      // O sistema tomou o gesto (aviso, borda da tela): a bolha VOLTA — nunca é excluída nem arremessada.
+      const interrompido = (ev: PointerEvent) => {
+        if (ev.pointerId === id) cancelar();
+      };
+      const fim = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
         // O último movimento ainda não desenhado conta.
         if (quadro) desenhar();
         encerrar();
@@ -352,7 +360,7 @@ export function BolhasChat({
       cancelarRef.current = cancelar;
       window.addEventListener("pointermove", mover, { passive: false });
       window.addEventListener("pointerup", fim);
-      window.addEventListener("pointercancel", fim);
+      window.addEventListener("pointercancel", interrompido);
     },
     [t, lugares, posicoes, chaves, lixeira.x, lixeira.y, onExcluir, onMinimizar, aplicar, pontosDe],
   );

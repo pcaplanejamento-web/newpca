@@ -92,8 +92,8 @@ export function FiltrosTarefas({
         ariaLabel={n ? `Filtrar — ${n} filtro(s) ligado(s)` : "Filtrar"}
         triggerClassName={
           buscaNoPainel
-            ? `h-11 min-w-11 justify-center gap-1 rounded-control px-2 transition-colors lg:h-9 lg:min-w-9 ${n ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)]"}`
-            : `h-11 gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors lg:h-[var(--h-control-sm)] ${
+            ? `h-11 min-w-11 justify-center gap-1 rounded-control px-2 transition-colors desktop:h-9 desktop:min-w-9 ${n ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)]"}`
+            : `h-11 gap-1.5 rounded-control border px-3 text-[13px] font-semibold transition-colors desktop:h-[var(--h-control-sm)] ${
                 n ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-text-2 hover:bg-surface-2"
               }`
         }
@@ -122,7 +122,7 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 
 function Opcao({ marcado, onAlternar, children }: { marcado: boolean; onAlternar: () => void; children: ReactNode }) {
   return (
-    <div className="flex min-h-11 items-center lg:min-h-9">
+    <div className="flex min-h-11 items-center desktop:min-h-9">
       <Checkbox checked={marcado} onChange={onAlternar} label={<span className="flex min-w-0 items-center gap-2 text-[13px] text-text">{children}</span>} />
     </div>
   );
@@ -354,7 +354,7 @@ export function ChipsFiltrosTarefas({
           type="button"
           onClick={() => onChange({ ...filtro, ...c.limpar })}
           aria-label={`Remover o filtro ${c.rotulo}`}
-          className="inline-flex h-11 max-w-full items-center gap-1.5 rounded-full bg-accent-soft px-3 text-[12.5px] font-semibold text-accent transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
+          className="inline-flex h-11 max-w-full items-center gap-1.5 rounded-full bg-accent-soft px-3 text-[12.5px] font-semibold text-accent transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)]"
         >
           <span className="truncate">{c.rotulo}</span>
           <IconClose className="h-3.5 w-3.5 shrink-0" />

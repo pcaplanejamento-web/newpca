@@ -57,7 +57,7 @@ function BotaoRecolher({ aberto, rotulo, onClick, controla }: { aberto: boolean;
       aria-label={`${aberto ? "Recolher" : "Expandir"} ${rotulo}`}
       title={aberto ? "Recolher" : "Expandir"}
       onClick={onClick}
-      className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-7 lg:w-7"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-7 desktop:w-7"
     >
       <IconChevronDown className={`h-4 w-4 transition-transform duration-[var(--motion-duration)] ${aberto ? "" : "-rotate-90"}`} />
     </button>
@@ -77,13 +77,13 @@ export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: N
   return (
     <div className="rounded-card border border-border bg-surface p-2">
       <div className="mb-1 flex items-center justify-between">
-        <button type="button" aria-label="Mês anterior" onClick={() => setM(somarMes(m.ano, m.mes, -1))} className="grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-8">
+        <button type="button" aria-label="Mês anterior" onClick={() => setM(somarMes(m.ano, m.mes, -1))} className="grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 desktop:h-8 desktop:w-8">
           <IconChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-[12.5px] font-semibold text-text">
           {NOMES_MES[m.mes - 1]} {m.ano}
         </span>
-        <button type="button" aria-label="Próximo mês" onClick={() => setM(somarMes(m.ano, m.mes, 1))} className="grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-8">
+        <button type="button" aria-label="Próximo mês" onClick={() => setM(somarMes(m.ano, m.mes, 1))} className="grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 desktop:h-8 desktop:w-8">
           <IconChevronRight className="h-4 w-4" />
         </button>
       </div>
@@ -101,7 +101,7 @@ export function MiniMes({ nav, hoje, diasComEvento, inicioSemana = 0 }: { nav: N
               onClick={() => nav.irPara(d)}
               aria-label={`Ir para ${dataBR(d)}`}
               aria-current={d === nav.foco ? "date" : undefined}
-              className={`relative mx-auto grid h-11 w-full place-items-center text-[12px] tabular-nums transition-colors lg:h-8 ${aVista.has(d) && d !== hoje ? "bg-accent-soft font-semibold text-accent" : ""} ${
+              className={`relative mx-auto grid h-11 w-full place-items-center text-[12px] tabular-nums transition-colors desktop:h-8 ${aVista.has(d) && d !== hoje ? "bg-accent-soft font-semibold text-accent" : ""} ${
                 d === hoje ? "rounded-full bg-accent font-bold text-white" : aVista.has(d) ? "" : d.startsWith(prefixo) ? "rounded-full text-text-2 hover:bg-surface-2" : "rounded-full text-faint hover:bg-surface-2"
               }`}
             >
@@ -168,7 +168,7 @@ export function BarraCalendario({
       <section className="rounded-card border border-border bg-surface p-2" aria-label="Tipos de evento">
         <p className="px-1 pb-1 text-[12px] font-semibold text-text-2">Tipos</p>
         {TIPOS_COM_CONTROLE.map((t) => (
-          <div key={t} className="flex min-h-11 items-center justify-between gap-2 px-1 lg:min-h-8">
+          <div key={t} className="flex min-h-11 items-center justify-between gap-2 px-1 desktop:min-h-8">
             <Checkbox
               checked={!ocultos.tipos.includes(t)}
               onChange={() => onOcultos({ ...ocultos, tipos: ocultos.tipos.includes(t) ? ocultos.tipos.filter((x) => x !== t) : [...ocultos.tipos, t] })}
@@ -177,7 +177,7 @@ export function BarraCalendario({
             <span className="text-[11px] tabular-nums text-faint">{num(porTipo[t])}</span>
           </div>
         ))}
-        <div className="flex min-h-11 items-center justify-between gap-2 px-1 lg:min-h-8">
+        <div className="flex min-h-11 items-center justify-between gap-2 px-1 desktop:min-h-8">
           <Checkbox checked={!ocultos.feriados} onChange={() => onOcultos({ ...ocultos, feriados: !ocultos.feriados })} label="Feriados" />
           <span className="text-[11px] tabular-nums text-faint">{num(feriadosNoPeriodo)}</span>
         </div>
@@ -189,7 +189,7 @@ export function BarraCalendario({
           <button
             type="button"
             onClick={() => onOcultos(algumOculto ? OCULTOS_VAZIO : { ...ocultos, tarefas: todasIds, pcas: pcas.map((p) => p.id) })}
-            className="min-h-11 rounded-control px-1.5 text-[11.5px] font-semibold text-accent hover:bg-surface-2 lg:min-h-7"
+            className="min-h-11 rounded-control px-1.5 text-[11.5px] font-semibold text-accent hover:bg-surface-2 desktop:min-h-7"
           >
             {algumOculto ? "Mostrar todos" : "Ocultar todos"}
           </button>
@@ -203,8 +203,8 @@ export function BarraCalendario({
             const aberto = !recolhido(`q${g.quadro.id}`);
             return (
               <div key={g.quadro.id}>
-                <div className="flex min-h-11 items-center gap-1.5 px-1 lg:min-h-8">
-                  <Checkbox checked={!quadroOculto} onChange={() => alternar("quadros", g.quadro.id)} label="" aria-label={`Mostrar o quadro ${g.quadro.nome}`} />
+                <div className="flex min-h-11 items-center gap-1.5 px-1 desktop:min-h-8">
+                  <Checkbox checked={!quadroOculto} onChange={() => alternar("quadros", g.quadro.id)} label="" alvo aria-label={`Mostrar o quadro ${g.quadro.nome}`} />
                   <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: g.quadro.cor }} />
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text" title={g.quadro.nome}>
                     {g.quadro.nome}
@@ -214,12 +214,12 @@ export function BarraCalendario({
                 </div>
                 <ul id={`conjuntos-q${g.quadro.id}`} hidden={!aberto} className={`ml-4 border-l border-border pl-1.5 ${quadroOculto ? "opacity-50" : ""}`}>
                   {g.tarefas.map((t) => (
-                    <li key={t.id} className="flex min-h-11 items-center gap-1.5 lg:min-h-8">
+                    <li key={t.id} className="flex min-h-11 items-center gap-1.5 desktop:min-h-8">
                       <Checkbox
                         checked={!ocultos.tarefas.includes(t.id)}
                         disabled={quadroOculto}
                         onChange={() => alternar("tarefas", t.id)}
-                        label=""
+                        label="" alvo
                         aria-label={`Mostrar ${rotuloTicket(t.ticket)} ${t.titulo}`}
                       />
                       <span className="shrink-0 font-mono text-[10.5px] text-faint">{rotuloTicket(t.ticket)}</span>
@@ -235,11 +235,11 @@ export function BarraCalendario({
           })}
           {pcasVisiveis.length > 0 && (
             <div>
-              <div className="flex min-h-11 items-center gap-1.5 px-1 lg:min-h-8">
+              <div className="flex min-h-11 items-center gap-1.5 px-1 desktop:min-h-8">
                 <Checkbox
                   checked={!pcasOcultos}
                   onChange={() => onOcultos({ ...ocultos, pcas: pcasOcultos ? [] : pcas.map((p) => p.id) })}
-                  label=""
+                  label="" alvo
                   aria-label="Mostrar o cronograma do PCA"
                 />
                 <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-[var(--info)]" />
@@ -249,8 +249,8 @@ export function BarraCalendario({
               </div>
               <ul id="conjuntos-pca" hidden={recolhido("pca")} className={`ml-4 border-l border-border pl-1.5 ${pcasOcultos ? "opacity-50" : ""}`}>
                 {pcasVisiveis.map((p) => (
-                  <li key={p.id} className="flex min-h-11 items-center gap-1.5 lg:min-h-8">
-                    <Checkbox checked={!ocultos.pcas.includes(p.id)} onChange={() => alternar("pcas", p.id)} label="" aria-label={`Mostrar a previsão do ${p.nome}`} />
+                  <li key={p.id} className="flex min-h-11 items-center gap-1.5 desktop:min-h-8">
+                    <Checkbox checked={!ocultos.pcas.includes(p.id)} onChange={() => alternar("pcas", p.id)} label="" alvo aria-label={`Mostrar a previsão do ${p.nome}`} />
                     <span className="min-w-0 flex-1 truncate text-[12px] text-text-2" title={p.nome}>
                       {p.nome}
                     </span>
@@ -266,7 +266,7 @@ export function BarraCalendario({
         <section className="rounded-card border border-border bg-surface p-2" aria-label="Outras agendas">
           <div className="flex items-center justify-between gap-2 px-1 pb-1">
             <p className="text-[12px] font-semibold text-text-2">Outras agendas</p>
-            <button type="button" onClick={onGerirExternos} className="min-h-11 rounded-control px-1.5 text-[11.5px] font-semibold text-accent hover:bg-surface-2 lg:min-h-7">
+            <button type="button" onClick={onGerirExternos} className="min-h-11 rounded-control px-1.5 text-[11.5px] font-semibold text-accent hover:bg-surface-2 desktop:min-h-7">
               {externos.length ? "Gerenciar" : "Adicionar"}
             </button>
           </div>
@@ -275,8 +275,8 @@ export function BarraCalendario({
           ) : (
             <ul>
               {externos.map((x) => (
-                <li key={x.id} className="flex min-h-11 items-center gap-1.5 px-1 lg:min-h-8">
-                  <Checkbox checked={!ocultos.externos.includes(x.id)} onChange={() => alternar("externos", x.id)} label="" aria-label={`Mostrar a agenda ${x.nome}`} />
+                <li key={x.id} className="flex min-h-11 items-center gap-1.5 px-1 desktop:min-h-8">
+                  <Checkbox checked={!ocultos.externos.includes(x.id)} onChange={() => alternar("externos", x.id)} label="" alvo aria-label={`Mostrar a agenda ${x.nome}`} />
                   <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: x.cor ?? "var(--muted)" }} />
                   <span className="min-w-0 flex-1 truncate text-[12px] text-text-2" title={x.erro ? `${x.nome} — ${x.erro}` : x.nome}>
                     {x.nome}

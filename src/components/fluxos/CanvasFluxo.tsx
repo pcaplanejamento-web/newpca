@@ -118,6 +118,8 @@ export function CanvasFluxo({
 
   // Uma função por render (o grafo mais recente); os ouvintes chamam a atual pelo `fimRef`.
   const fim = (e: PointerEvent) => {
+      // O sistema tomou o gesto (pointercancel): encerra SEM efeito — não liga porta nem marca nó.
+      if (e.type === "pointercancel") return abortar();
       const a = arrasto.current;
       arrasto.current = null;
       soltarSel.current?.();
@@ -261,14 +263,24 @@ export function CanvasFluxo({
     pinca.current = { d0: m.d, mx0: m.mx, my0: m.my, v0: vistaRef.current };
   };
 
-  const roda = (e: React.WheelEvent) => {
-    const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
-    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, vista.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
-    const mx = e.clientX - r.left;
-    const my = e.clientY - r.top;
-    onVista({ z, x: mx - ((mx - vista.x) / vista.z) * z, y: my - ((my - vista.y) / vista.z) * z });
-  };
+  // A roda dá zoom SEM rolar a página nem ampliar o navegador (pinça do trackpad = roda com Ctrl): ouvinte nativo NÃO
+  // passivo — o `onWheel` do React é passivo e não pode impedir.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const roda = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const v = vistaRef.current;
+      const fator = e.ctrlKey ? Math.exp(-e.deltaY * 0.01) : e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v.z * fator));
+      const mx = e.clientX - r.left;
+      const my = e.clientY - r.top;
+      onVistaRef.current({ z, x: mx - ((mx - v.x) / v.z) * z, y: my - ((my - v.y) / v.z) * z });
+    };
+    el.addEventListener("wheel", roda, { passive: false });
+    return () => el.removeEventListener("wheel", roda);
+  }, []);
 
   const soltar = (e: DragEvent) => {
     const tipo = e.dataTransfer.getData("application/x-fluxo-no");
@@ -300,7 +312,6 @@ export function CanvasFluxo({
           toque: e.pointerType === "touch" ? { el: areaQueRola(ref.current), dy: 0 } : undefined,
         })
       }
-      onWheel={roda}
       onDragOver={(e) => onSoltarTipo && e.preventDefault()}
       onDrop={soltar}
     >
@@ -337,7 +348,7 @@ export function CanvasFluxo({
                     if (c.x != null) onMudar({ ...grafo, conexoes: grafo.conexoes.map((x, j) => (j === i ? { de: x.de, saida: x.saida, para: x.para, entrada: x.entrada } : x)) });
                   }}
                 >
-                  <title>{dobra ? "Arraste para ajustar a linha · duplo clique volta ao automático · Delete remove" : "Toque para marcar · Delete remove"}</title>
+                  <title>{dobra ? "Arraste para ajustar a linha · duplo clique (ou o botão no alto) volta ao automático · Delete remove" : "Toque para marcar · Delete remove"}</title>
                 </path>
                 <path
                   d={d}
@@ -433,7 +444,21 @@ export function CanvasFluxo({
       </div>
       {/* A ligação MARCADA se remove também por um botão (no toque não há a tecla Delete). */}
       {conSel != null && !somenteLeitura && (
-        <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2">
+        <div className="absolute left-1/2 top-2 z-20 flex -translate-x-1/2 gap-2">
+          {grafo.conexoes[conSel]?.x != null && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                onMudar({
+                  ...grafo,
+                  conexoes: grafo.conexoes.map((x, j) => (j === conSel ? { de: x.de, saida: x.saida, para: x.para, entrada: x.entrada } : x)),
+                })
+              }
+            >
+              Voltar ao automático
+            </Button>
+          )}
           <Button
             size="sm"
             variant="secondary"

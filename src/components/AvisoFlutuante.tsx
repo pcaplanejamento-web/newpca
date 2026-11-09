@@ -43,6 +43,7 @@ export function AvisoFlutuante({
   duracao,
   carregando = false,
   acoes,
+  saindo = false,
 }: {
   kind?: Feedback;
   titulo?: string;
@@ -55,6 +56,8 @@ export function AvisoFlutuante({
   carregando?: boolean;
   /** Botões do aviso (ex.: a CONFIRMAÇÃO — `useConfirmacao`), abaixo do texto. */
   acoes?: ReactNode;
+  /** Na SAÍDA animada (o dono o mantém montado por um instante — `useSaida`): desce e esmaece, sem cliques. */
+  saindo?: boolean;
 }) {
   const [alvo, setAlvo] = useState<HTMLElement | null>(null);
   useEffect(() => setAlvo(regiao()), []);
@@ -72,7 +75,8 @@ export function AvisoFlutuante({
   return createPortal(
     <div
       role={kind === "danger" || kind === "warn" ? "alert" : "status"}
-      className="animate-fade-in-up pointer-events-auto flex items-start gap-2 rounded-card border bg-surface py-2 pl-2.5 pr-1 text-[12.5px] leading-snug shadow-soft"
+      data-saindo={saindo ? "" : undefined}
+      className="aviso-flutuante animate-fade-in-up pointer-events-auto flex items-start gap-2 rounded-card border bg-surface py-2 pl-2.5 pr-1 text-[12.5px] leading-snug shadow-soft"
       style={{ borderColor: `color-mix(in srgb, ${cor} 38%, var(--border))`, boxShadow: `inset 3px 0 0 ${cor}` }}
     >
       <span className="mt-px shrink-0" style={{ color: cor }}>

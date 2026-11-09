@@ -23,7 +23,7 @@ export function BotaoDadosCompletos({ ligado, onChange }: { ligado: boolean; onC
       aria-label="Dados completos nas tabelas"
       title={ligado ? "Dados completos: ligado (toque para voltar ao resumo em uma linha)" : "Dados completos: mostrar o texto inteiro e todos os valores nas células"}
       onClick={() => onChange(!ligado)}
-      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
+      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)] ${
         ligado ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
       }`}
     >

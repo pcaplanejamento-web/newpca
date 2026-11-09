@@ -517,7 +517,7 @@ function MeuStatusEditor() {
         <button
           type="button"
           onClick={() => setRascunho({ status: vigente.status, recado: vigente.recado, ate: vigente.status === c.meuStatus.status ? c.meuStatus.ate : null })}
-          className="flex min-h-11 w-full items-center gap-2 rounded-control text-left text-[12.5px] lg:min-h-8"
+          className="flex min-h-11 w-full items-center gap-2 rounded-control text-left text-[12.5px] desktop:min-h-8"
           title="Definir o seu status"
         >
           <span className="text-muted">Seu status:</span>

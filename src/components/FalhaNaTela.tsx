@@ -98,7 +98,7 @@ export function FalhaNaTela({
         )}
         {!recuperando && detalhes && (
           <details className="group mt-4 text-left">
-            <summary className="flex min-h-11 cursor-pointer select-none items-center justify-center text-xs font-semibold text-muted hover:text-text lg:min-h-8">
+            <summary className="flex min-h-11 cursor-pointer select-none items-center justify-center text-xs font-semibold text-muted hover:text-text desktop:min-h-8">
               Detalhes técnicos
             </summary>
             <pre className="mt-2 whitespace-pre-wrap break-words rounded-control bg-surface-2 p-3 font-mono text-[11.5px] leading-relaxed text-text-2">

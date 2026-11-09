@@ -45,7 +45,7 @@ export function Segmented<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
-      className={`relative inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment bg-surface-2 p-[3px] shadow-[inset_0_0_0_1px_var(--border)] ${className}`}
+      className={`relative inline-flex max-w-full snap-x snap-proximity gap-0.5 overflow-x-auto overscroll-x-contain rounded-segment [&>*]:snap-start bg-surface-2 p-[3px] shadow-[inset_0_0_0_1px_var(--border)] ${className}`}
     >
       {options.map((o) => {
         const active = o.value === value;
@@ -59,8 +59,8 @@ export function Segmented<T extends string>({
             title={o.dica ?? (o.soIcone ? o.label : undefined)}
             disabled={disabled}
             onClick={() => onChange(o.value)}
-            className={`relative inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-[calc(var(--h-control-sm)-6px)] ${
-              o.soIcone ? "w-11 lg:w-[calc(var(--h-control-sm)-6px)]" : "px-3"
+            className={`relative inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 desktop:h-[calc(var(--h-control-sm)-6px)] ${
+              o.soIcone ? "w-11 desktop:w-[calc(var(--h-control-sm)-6px)]" : "px-3"
             } ${active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text-2"}`}
           >
             {o.icone}

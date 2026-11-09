@@ -90,7 +90,7 @@ export function TextoNoLugar({
           }
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        className={`${recuo} min-h-11 ${ajustar ? "w-[min(32rem,70vw)] max-w-full" : "w-full"} min-w-0 rounded-control border-2 border-accent bg-surface px-1.5 outline-none lg:min-h-8 ${className}`}
+        className={`${recuo} min-h-11 ${ajustar ? "w-[min(32rem,70vw)] max-w-full" : "w-full"} min-w-0 rounded-control border-2 border-accent bg-surface px-1.5 outline-none desktop:min-h-8 ${className}`}
       />
     );
   return (
@@ -102,7 +102,7 @@ export function TextoNoLugar({
         feito.current = false;
         setEditando(true);
       }}
-      className={`${recuo} block min-h-11 w-full min-w-0 truncate rounded-control px-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 lg:min-h-8 ${className}`}
+      className={`${recuo} block min-h-11 w-full min-w-0 truncate rounded-control px-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 desktop:min-h-8 ${className}`}
     >
       {valor}
     </button>

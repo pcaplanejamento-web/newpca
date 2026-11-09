@@ -158,7 +158,7 @@ function EditorRepeticao({ valor, onChange, data, disabled }: { valor: Recorrenc
                     aria-pressed={on}
                     aria-label={d}
                     onClick={() => onChange({ ...valor, dias: on ? valor.dias.filter((x) => x !== i) : [...valor.dias, i].sort() })}
-                    className={`grid h-11 w-11 place-items-center rounded-full text-[12px] font-semibold uppercase lg:h-8 lg:w-8 ${on ? "bg-accent text-white" : "bg-surface-2 text-text-2 hover:bg-border"}`}
+                    className={`grid h-11 w-11 place-items-center rounded-full text-[12px] font-semibold uppercase desktop:h-8 desktop:w-8 ${on ? "bg-accent text-white" : "bg-surface-2 text-text-2 hover:bg-border"}`}
                   >
                     {d.slice(0, 1)}
                   </button>

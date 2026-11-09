@@ -43,7 +43,7 @@ export function SeletorPessoas({
             disabled={disabled || (!ativa && !doGrupo)}
             title={`${p.nome}${doGrupo ? "" : " — fora do grupo"}`}
             onClick={() => alternar(p.id)}
-            className={`inline-flex h-11 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-[var(--h-control-sm)] ${
+            className={`inline-flex h-11 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 desktop:h-[var(--h-control-sm)] ${
               ativa ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
             } ${doGrupo ? "" : "opacity-60"}`}
           >

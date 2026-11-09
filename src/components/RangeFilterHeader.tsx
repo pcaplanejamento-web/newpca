@@ -44,7 +44,7 @@ export function RangeFilterHeader({
     <Dropdown
       align={align}
       ariaLabel={`Filtrar ${label}`}
-      triggerClassName="w-full gap-1.5 px-1 py-2 max-lg:min-h-11"
+      triggerClassName="w-full gap-1.5 px-1 py-2 min-h-11 desktop:min-h-0"
       panelClassName="p-0"
       width={312}
       trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={marcado} />}

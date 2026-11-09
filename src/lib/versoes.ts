@@ -35,6 +35,49 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.288.0",
+    data: "2026-11-09",
+    titulo: "Toque, gestos e animações revisados",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Geral",
+        texto: "No tablet com toque (iPad deitado) os botões, campos e filtros mantêm o tamanho de toque; só encolhem em tela grande com mouse. Pressionar um botão dá retorno visual e o toque não pinta mais o retângulo do navegador.",
+        link: "/painel",
+      },
+      {
+        tipo: "melhoria",
+        area: "Geral",
+        texto: "Banners, menus, avisos e a gaveta do menu no celular saem com animação (antes sumiam de uma vez); ao abrir a tela, as abas não deslizam mais sozinhas; o aviso de progresso atualiza no lugar.",
+        link: "/painel",
+      },
+      {
+        tipo: "correcao",
+        area: "Geral",
+        texto: "“Reduzir movimento” (do sistema ou da Aparência) agora para TODAS as animações, inclusive as de entrada, dos gráficos e dos carregamentos.",
+        link: "/painel/aparencia",
+      },
+      {
+        tipo: "correcao",
+        area: "Chat",
+        texto: "Um gesto interrompido pelo sistema (aviso, borda da tela) com a bolha sobre a lixeira não exclui mais a conversa, e um segundo dedo não arrasta a bolha.",
+        link: "/painel",
+      },
+      {
+        tipo: "melhoria",
+        area: "Configurações",
+        texto: "Capa do PCA: pinça para o zoom. Fundo do quadro: no toque, segure e arraste para enquadrar (deslizar rola a página). Filtro das colunas, cores e favoritos da pesquisa com alvos de toque de 44px.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "No diagrama, a roda do mouse e a pinça do trackpad dão zoom sem rolar a página, e a ligação ajustada volta ao automático por um botão (também no toque).",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.287.0",
     data: "2026-11-09",
     titulo: "Celular: o que faltava da revisão",

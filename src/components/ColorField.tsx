@@ -109,7 +109,7 @@ export function ColorField({
   return (
     <Dropdown
       ariaLabel={label}
-      triggerClassName="gap-2 rounded-control border border-border-2 bg-surface px-2 py-1.5"
+      triggerClassName="min-h-11 gap-2 rounded-control border border-border-2 bg-surface px-2 py-1.5 desktop:min-h-0"
       trigger={
         <>
           <span
@@ -129,7 +129,7 @@ export function ColorField({
               type="button"
               aria-label="Concluir"
               onClick={close}
-              className="rounded-md p-1 text-text-2 hover:bg-surface-2"
+              className="grid place-items-center rounded-md p-1 text-text-2 hover:bg-surface-2 active:bg-surface-2 pointer-coarse:h-11 pointer-coarse:w-11"
             >
               <IconCheck className="h-4 w-4" />
             </button>
@@ -153,6 +153,9 @@ export function ColorField({
             onPointerUp={() => {
               dragging.current = false;
             }}
+            onPointerCancel={() => {
+              dragging.current = false;
+            }}
           >
             <span
               className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
@@ -168,7 +171,7 @@ export function ColorField({
             max={360}
             value={Math.round(h)}
             onChange={(e) => emitir(Number(e.target.value), s, v)}
-            className="mt-3 h-3 w-full cursor-pointer appearance-none rounded-full"
+            className="mt-3 h-3 w-full cursor-pointer appearance-none rounded-full pointer-coarse:h-6"
             style={{
               background:
                 "linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)",
@@ -181,14 +184,14 @@ export function ColorField({
               value={hex}
               onChange={(e) => aplicarHex(e.target.value)}
               spellCheck={false}
-              className="h-[var(--h-control-sm)] min-w-0 flex-1 rounded-control border border-border-2 bg-surface px-2 font-mono text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="h-11 min-w-0 flex-1 rounded-control border border-border-2 bg-surface px-2 font-mono desktop:h-[var(--h-control-sm)] text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             />
             {temED && (
               <button
                 type="button"
                 aria-label="Conta-gotas"
                 onClick={contaGotas}
-                className="grid h-[var(--h-control-sm)] w-[var(--h-control-sm)] shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 hover:bg-surface-2"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 hover:bg-surface-2 active:bg-surface-2 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
               >
                 {/* ícone conta-gotas simples */}
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -204,11 +207,11 @@ export function ColorField({
           <div className="mt-3 border-t border-border pt-2">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Cores</span>
-              <button type="button" onClick={salvarCor} className="text-[11px] font-semibold text-accent hover:underline">
+              <button type="button" onClick={salvarCor} className="text-[11px] font-semibold text-accent hover:underline pointer-coarse:min-h-11 pointer-coarse:px-2">
                 Salvar
               </button>
             </div>
-            <div className="grid grid-cols-6 gap-1.5">
+            <div className="grid grid-cols-6 gap-1.5 pointer-coarse:gap-2">
               {[...salvos, ...PRESETS].slice(0, 18).map((c, i) => (
                 <button
                   key={`${c}-${i}`}
@@ -216,7 +219,7 @@ export function ColorField({
                   aria-label={c}
                   title={c}
                   onClick={() => aplicarHex(c)}
-                  className="h-6 w-6 rounded-md border border-border-2"
+                  className="h-6 w-6 rounded-md border border-border-2 transition-transform active:scale-90 pointer-coarse:h-9 pointer-coarse:w-9"
                   style={{ background: c }}
                 />
               ))}

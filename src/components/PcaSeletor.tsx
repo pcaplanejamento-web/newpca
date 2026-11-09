@@ -62,7 +62,7 @@ export function PcaSeletor({
         setAberto(v);
       }}
       panelClassName={folha ? "animate-folha-sobe" : "animate-selecao-entra"}
-      triggerClassName={`flex h-11 min-w-0 max-w-full items-center gap-2 rounded-control border px-3 text-sm lg:h-[var(--h-control-sm)] ${
+      triggerClassName={`flex h-11 min-w-0 max-w-full items-center gap-2 rounded-control border px-3 text-sm desktop:h-[var(--h-control-sm)] ${
         todos && ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text hover:bg-surface-2"
       }`}
       trigger={

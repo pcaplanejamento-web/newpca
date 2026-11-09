@@ -22,7 +22,7 @@ export function EmpenhosView({ tipo, importacoes, children }: { tipo: TipoCard; 
       href={importacoes}
       title="Importações (Configurações)"
       aria-label={`Importações de ${nomeTipo.varios} (Configurações)`}
-      className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
     >
       <IconSettings className="h-4 w-4" />
     </Link>

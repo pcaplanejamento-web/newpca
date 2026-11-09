@@ -138,7 +138,7 @@ export function BarrasH({
                 aria-pressed={ativa === undefined ? undefined : marcada}
                 aria-label={`${l.titulo}${marcada ? " (filtro ativo — toque para limpar)" : ` — ${acao}`}`}
                 onClick={() => onEscolher(l.chave)}
-                className={`${grade} min-h-11 rounded-control px-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-9 ${
+                className={`${grade} min-h-11 rounded-control px-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:min-h-9 ${
                   marcada ? "bg-accent-soft shadow-[inset_3px_0_0_var(--accent)]" : ""
                 }`}
               >

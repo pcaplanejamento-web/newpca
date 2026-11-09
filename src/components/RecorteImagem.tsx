@@ -65,7 +65,9 @@ export function RecorteImagem({
   const [r, setR] = useState<Recorte>(RECORTE_INICIAL);
   // Callback-ref: a moldura monta com o modal (portal) — o efeito abaixo reage quando ela EXISTE.
   const [moldura, setMoldura] = useState<HTMLDivElement | null>(null);
-  const toque = useRef<{ x: number; y: number } | null>(null);
+  // Os dedos/ponteiros na moldura: um arrasta; dois = PINÇA (o zoom pela razão das distâncias).
+  const toques = useRef(new Map<number, { x: number; y: number }>());
+  const pinca = useRef<{ d: number; zoom: number } | null>(null);
   // Largura REAL da moldura (muda com a animação do modal, a rotação do celular e o redimensionamento).
   const [largura, setLargura] = useState(0);
 
@@ -169,18 +171,32 @@ export function RecorteImagem({
               className="relative mx-auto aspect-[4/5] w-full max-w-[320px] cursor-grab touch-none select-none overflow-hidden rounded-card bg-surface-2 shadow-ring active:cursor-grabbing"
               onPointerDown={(e) => {
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                toque.current = { x: e.clientX, y: e.clientY };
+                toques.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (toques.current.size === 2) {
+                  const [a, b] = [...toques.current.values()];
+                  pinca.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: r.zoom };
+                }
               }}
               onPointerMove={(e) => {
-                if (!toque.current) return;
-                mover(e.clientX - toque.current.x, e.clientY - toque.current.y);
-                toque.current = { x: e.clientX, y: e.clientY };
+                const antes = toques.current.get(e.pointerId);
+                if (!antes) return;
+                toques.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pinca.current && toques.current.size >= 2) {
+                  const [a, b] = [...toques.current.values()];
+                  const k = Math.hypot(a.x - b.x, a.y - b.y) / pinca.current.d;
+                  const zoom = pinca.current.zoom * k;
+                  setR((cur) => normalizarRecorte({ ...cur, zoom }));
+                  return;
+                }
+                if (toques.current.size === 1) mover(e.clientX - antes.x, e.clientY - antes.y);
               }}
-              onPointerUp={() => {
-                toque.current = null;
+              onPointerUp={(e) => {
+                toques.current.delete(e.pointerId);
+                if (toques.current.size < 2) pinca.current = null;
               }}
-              onPointerCancel={() => {
-                toque.current = null;
+              onPointerCancel={(e) => {
+                toques.current.delete(e.pointerId);
+                if (toques.current.size < 2) pinca.current = null;
               }}
             >
               {img && url && estilo ? (
@@ -206,7 +222,7 @@ export function RecorteImagem({
                 aria-label="Zoom da imagem"
               />
             </label>
-            <p className="text-center text-xs text-faint">Arraste para posicionar · a capa é salva em WebP 800×1000</p>
+            <p className="text-center text-xs text-faint">Arraste para posicionar · pinça ou roda para o zoom · a capa é salva em WebP 800×1000</p>
           </>
         )}
       </div>

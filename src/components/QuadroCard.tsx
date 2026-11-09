@@ -246,7 +246,7 @@ export function CamposPeriodo({ valor, onChange, disabled = false }: { valor: Pe
           if (Number.isInteger(ano) && ano >= 2000 && ano <= 2100) onChange({ ...valor, ano });
         }}
       />
-      <div className="col-span-2 flex min-h-11 items-center lg:min-h-9">
+      <div className="col-span-2 flex min-h-11 items-center desktop:min-h-9">
         <Checkbox label="Só dias úteis (sem fins de semana, feriados e pontos facultativos)" checked={valor.diasUteis} disabled={disabled} onChange={(e) => onChange({ ...valor, diasUteis: e.target.checked })} />
       </div>
     </div>

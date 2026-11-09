@@ -47,7 +47,7 @@ export function MultiSelectHeader({
     <Dropdown
       align={align}
       ariaLabel={`Filtrar ${label}`}
-      triggerClassName="w-full gap-1.5 px-1 py-2 max-lg:min-h-11"
+      triggerClassName="w-full gap-1.5 px-1 py-2 min-h-11 desktop:min-h-0"
       panelClassName="p-0"
       width={detalhe ? 340 : 280}
       trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={filtrado} />}
@@ -148,7 +148,7 @@ function Painel({
   const opcao = (o: string) => (
     <label
       key={o}
-      className="flex cursor-pointer items-start gap-2.5 px-3 py-1.5 [&>input]:mt-0.5 text-[13px] text-text-2 hover:bg-surface-2"
+      className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 py-1.5 text-[13px] text-text-2 hover:bg-surface-2 active:bg-surface-2 desktop:min-h-0 desktop:items-start desktop:[&>input]:mt-0.5"
     >
       <input
         type="checkbox"
@@ -170,7 +170,7 @@ function Painel({
     </label>
   );
 
-  const btn = "flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold";
+  const btn = "min-h-11 flex-1 rounded-control border border-border-2 px-2 py-1.5 text-[12px] font-semibold active:bg-surface-2 desktop:min-h-0";
 
   return (
     <div className="flex max-h-[min(70dvh,420px)] w-full flex-col">
@@ -196,10 +196,10 @@ function Painel({
           }}
           aria-label="Buscar valores (use : para vários)"
           placeholder="Filtrar (use : para vários)"
-          className="h-[var(--h-control-sm)] w-full rounded-control border border-border-2 bg-surface px-2.5 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="h-11 w-full rounded-control border border-border-2 bg-surface px-2.5 desktop:h-[var(--h-control-sm)] text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       </div>
-      <label className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3 py-2 text-[13px] font-semibold text-text">
+      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 border-b border-border px-3 py-2 text-[13px] font-semibold text-text desktop:min-h-0">
         <input
           type="checkbox"
           checked={todosMarcados}
@@ -208,7 +208,7 @@ function Painel({
         />
         {buscando ? `Selecionar os ${visiveis.length} encontrados` : "Selecionar todos"}
       </label>
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
         {topo.map(opcao)}
         {topo.length > 0 && resto.length > 0 && <hr className="my-1 border-border" />}
         {resto.map(opcao)}
@@ -226,7 +226,7 @@ function Painel({
           type="button"
           onClick={aplicar}
           disabled={!podeAplicar}
-          className="flex-1 rounded-control bg-accent px-2 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          className="min-h-11 flex-1 rounded-control bg-accent px-2 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 active:opacity-80 disabled:opacity-50 desktop:min-h-0"
         >
           Aplicar
         </button>
@@ -236,7 +236,7 @@ function Painel({
         <button
           type="button"
           onClick={() => onApply([])}
-          className="rounded-control px-2 py-1.5 text-[12px] font-semibold text-[color:var(--sit-cancelado)] hover:bg-surface-2"
+          className="min-h-11 rounded-control px-2 py-1.5 text-[12px] font-semibold text-[color:var(--sit-cancelado)] hover:bg-surface-2 active:bg-surface-2 desktop:min-h-0"
         >
           Remover
         </button>

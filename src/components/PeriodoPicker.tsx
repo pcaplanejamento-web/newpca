@@ -25,7 +25,7 @@ import { SetaDropdown } from "./SetaDropdown";
 /** A PEÇA padrão do painel (atalho, ano, mês, campo de data e a ordenação do filtro das tabelas): a mesma altura (44px no
  * toque, a dos controles no desktop), o raio dos controles, a borda e o foco do sistema. */
 export const PECA_PERIODO =
-  "flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-control border px-2 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]";
+  "flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-control border px-2 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)]";
 export const PECA_LIVRE = "border-border-2 bg-surface text-text-2 hover:bg-surface-2";
 const MARCADA = "border-transparent bg-accent text-white";
 /** O ano do mês escolhido: contorno accent (mostra a qual ano o mês pertence). */
@@ -244,7 +244,7 @@ export function PeriodoPicker({
       ariaLabel={`${rotulo}: ${texto}`}
       className={className}
       width={320}
-      triggerClassName="h-11 w-full gap-1.5 rounded-control border border-border-2 bg-surface-2 px-3 text-left transition-colors hover:bg-surface lg:h-[var(--h-control-sm)]"
+      triggerClassName="h-11 w-full gap-1.5 rounded-control border border-border-2 bg-surface-2 px-3 text-left transition-colors hover:bg-surface desktop:h-[var(--h-control-sm)]"
       trigger={
         <>
           <span className="shrink-0 text-[12px] text-muted">{rotulo}</span>

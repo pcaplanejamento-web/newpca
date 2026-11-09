@@ -4,6 +4,9 @@
    Trocar o tema = trocar o valor do atributo; nenhum componente usa
    @media prefers-color-scheme próprio. */
 @custom-variant dark ([data-theme="dark"] &);
+/* DESKTOP = tela larga COM mouse: os controles encolhem para a altura compacta só aí. O tablet com toque (iPad deitado,
+   1024px) mantém os 44px de toque — o `lg:` sozinho encolhia pelo tamanho da tela. */
+@custom-variant desktop (@media (min-width: 64rem) and (pointer: fine));
 
 /* ============================================================================
    DESIGN TOKENS — fonte da verdade (spec §2 cores, §3 semânticas, §5 métricas).
@@ -133,6 +136,9 @@
 
   /* Motion (§39.15) */
   --motion-duration: 0.2s;
+  /* Ritmos derivados do token (acompanham o ADM — desligado/reduzido = 0): rápido p/ menus e dicas, lento p/ cartões. */
+  --motion-fast: calc(var(--motion-duration) * 0.6);
+  --motion-slow: calc(var(--motion-duration) * 1.6);
   --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -372,8 +378,11 @@
   }
 }
 .animate-fade-in-up {
-  animation: fade-in-up 0.35s ease-out both;
+  animation: fade-in-up var(--motion-slow) ease-out both;
 }
+/* A DICA (DicaFlutuante): só esmaece, rápida — não desliza sob o ponteiro. */
+@keyframes dica-entra { from { opacity: 0; } to { opacity: 1; } }
+.animate-dica-entra { animation: dica-entra var(--motion-fast) ease-out both; }
 
 /* A LISTA da `Selecao`: abre rápida a partir do campo (como os menus do sistema); no celular, a FOLHA sobe de baixo sobre o
    fundo escuro. Sem movimento com "reduzir movimento" (sistema ou o ADM). */
@@ -415,17 +424,17 @@
   }
 }
 .animate-chip-entra {
-  animation: chip-entra 0.18s ease-out both;
+  animation: chip-entra var(--motion-duration) ease-out both;
 }
 .animate-selecao-entra {
   transform-origin: top center;
-  animation: selecao-entra 0.12s ease-out both;
+  animation: selecao-entra var(--motion-fast) ease-out both;
 }
 .animate-folha-sobe {
-  animation: folha-sobe 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: folha-sobe var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .animate-fundo-folha {
-  animation: fundo-folha 0.2s ease-out both;
+  animation: fundo-folha var(--motion-duration) ease-out both;
 }
 /* A GAVETA do menu no celular entra deslizando da esquerda (de onde fica o botão do menu). */
 @keyframes gaveta-entra {
@@ -437,7 +446,7 @@
   }
 }
 .animate-gaveta-entra {
-  animation: gaveta-entra 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: gaveta-entra var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 [data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra, .animate-gaveta-entra),
 [data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra, .animate-gaveta-entra) {
@@ -448,6 +457,43 @@
     animation: none;
   }
 }
+
+/* ── ENTRADA E SAÍDA padrão dos painéis (Modal, Dropdown, gaveta do menu, avisos). A saída (`data-saindo`, o gancho
+   `useSaida`) é mais curta que a entrada (`--motion-fast`), sem cliques; com "reduzir movimento" vale a rede de segurança
+   do fim do arquivo. ── */
+@keyframes fundo-sai { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modal-entra { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes modal-sai { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(0.985); } }
+@keyframes folha-desce { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes painel-sai-cima { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@keyframes painel-entra-baixo { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes painel-sai-baixo { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(4px) scale(0.98); } }
+@keyframes gaveta-sai { from { transform: none; } to { transform: translateX(-100%); } }
+@keyframes aviso-sai { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }
+[data-saindo] { pointer-events: none; }
+/* MODAL: o fundo esmaece; o banner sobe de baixo (folha) no celular e surge do centro no desktop. */
+.modal-raiz > .modal-fundo { animation: fundo-folha var(--motion-duration) ease-out both; }
+.modal-raiz > .modal-corpo { animation: folha-sobe var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.modal-raiz[data-saindo] > .modal-fundo { animation: fundo-sai var(--motion-fast) ease-in both; }
+.modal-raiz[data-saindo] > .modal-corpo { animation: folha-desce var(--motion-fast) cubic-bezier(0.4, 0, 1, 1) both; }
+@media (min-width: 40rem) {
+  .modal-raiz > .modal-corpo { animation: modal-entra var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .modal-raiz[data-saindo] > .modal-corpo { animation: modal-sai var(--motion-fast) cubic-bezier(0.4, 0, 1, 1) both; }
+}
+/* DROPDOWN: nasce do gatilho (abaixo dele desce, acima dele sobe) e volta para ele; a folha sobe e desce. A classe de
+   entrada própria de quem usa (`animate-…`) vale mais na entrada. */
+.dropdown-painel[data-lado="abaixo"]:not([class*="animate-"]) { transform-origin: top center; animation: selecao-entra var(--motion-fast) ease-out both; }
+.dropdown-painel[data-lado="acima"] { transform-origin: bottom center; animation: painel-entra-baixo var(--motion-fast) ease-out both; }
+.dropdown-painel[data-lado="folha"]:not([class*="animate-"]) { animation: folha-sobe var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dropdown-painel[data-lado="abaixo"][data-saindo] { animation: painel-sai-cima var(--motion-fast) ease-in both; }
+.dropdown-painel[data-lado="acima"][data-saindo] { animation: painel-sai-baixo var(--motion-fast) ease-in both; }
+.dropdown-painel[data-lado="folha"][data-saindo] { animation: folha-desce var(--motion-fast) cubic-bezier(0.4, 0, 1, 1) both; }
+.dropdown-fundo[data-saindo] { animation: fundo-sai var(--motion-fast) ease-in both; }
+/* GAVETA do menu (celular): volta deslizando para a esquerda. */
+.gaveta-raiz[data-saindo] > .gaveta-fundo { animation: fundo-sai var(--motion-fast) ease-in both; }
+.gaveta-raiz[data-saindo] > aside { animation: gaveta-sai var(--motion-fast) cubic-bezier(0.4, 0, 1, 1) both; }
+/* AVISO flutuante (toast): desce e esmaece. */
+.aviso-flutuante[data-saindo] { animation: aviso-sai var(--motion-fast) ease-in both; }
 
 /* CARREGANDO no card (CarregandoLink): um brilho que varre o card + a barra indeterminada na borda de baixo. */
 @keyframes varrer-card {
@@ -595,7 +641,7 @@
   }
 }
 .animate-sino-tocar {
-  animation: sino-tocar 0.7s ease-in-out;
+  animation: sino-tocar 0.5s ease-in-out;
   transform-origin: 50% 10%;
 }
 /* Um aviso que SAI da lista (lido no filtro "Não lidas", excluído, limpo): a altura recolhe e ele some. */
@@ -730,7 +776,7 @@
 }
 .animate-contador {
   display: inline-block;
-  animation: contador-desliza 0.3s var(--motion-ease);
+  animation: contador-desliza var(--motion-slow) var(--motion-ease);
 }
 @keyframes digitando {
   0%,
@@ -766,7 +812,7 @@
   }
 }
 .animate-balao {
-  animation: balao-entrar 0.25s var(--motion-ease) both;
+  animation: balao-entrar var(--motion-duration) var(--motion-ease) both;
 }
 /* CHAT estilo Messenger: a bolha que chega QUICA; a janela CRESCE a partir da bolha; a LIXEIRA surge e atrai a bolha;
    ao soltar, cada bolha VOA até o lugar novo com mola, em cadeia (`estiloDaBolha`, BolhasChat — some com o motion desligado). */
@@ -991,13 +1037,13 @@
 }
 .grafico-barra {
   transform-origin: left center;
-  animation: grafico-crescer-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: grafico-crescer-x 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--atraso, 0ms);
   transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .grafico-coluna {
   transform-origin: center bottom;
-  animation: grafico-crescer-y 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: grafico-crescer-y 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--atraso, 0ms);
   transition:
     height 0.5s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1005,7 +1051,7 @@
     opacity 0.2s ease;
 }
 .grafico-entrada {
-  animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--atraso, 0ms);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1035,7 +1081,7 @@
   }
 }
 .animate-cat-morph {
-  animation: cat-morph 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: cat-morph var(--motion-slow) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 /* Respeita "reduzir movimento" (acessibilidade / preferência do ADM): sem o morph — a nova
    visão aparece direto (cobre Catálogo, Orçamento e a tela DFD). */
@@ -1203,7 +1249,7 @@
   }
 }
 .animate-shimmer {
-  animation: shimmer 1.6s infinite;
+  animation: shimmer 1.6s linear infinite;
 }
 
 /* ESQUELETO DA TELA (o loading.tsx): só aparece quando a tela DEMORA — fica invisível nos primeiros 300 ms; a tela que
@@ -1343,6 +1389,8 @@ select:not([multiple]):not([size]) {
 .menu-lateral .menu-alternar { transition: transform 300ms var(--menu-curva); }
 html[data-menu-recolhido] .menu-vaga, html[data-menu-recolhido] .menu-lateral { width: 3.75rem; }
 html[data-menu-recolhido] .menu-lateral .menu-alternar { transform: rotate(180deg); }
+/* O "espiar" pelo :hover só em aparelho com mouse: no toque o :hover fica PRESO depois do toque e o menu não fechava. */
+@media (hover: hover) {
 html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible), :has([aria-expanded="true"]))) :is(.menu-esconde, [data-marca-texto]) {
   opacity: 0; transform: translateX(-6px); transition-delay: 0ms; transition-duration: 120ms, 300ms;
 }
@@ -1350,6 +1398,16 @@ html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:f
   opacity: 1; transform: none; transition-delay: 80ms, 0ms;
 }
 html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible), :has([aria-expanded="true"]))) .menu-sair { width: 0; margin-left: 0; }
+}
+@media (hover: none) {
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:has(:focus-visible), :has([aria-expanded="true"]))) :is(.menu-esconde, [data-marca-texto]) {
+  opacity: 0; transform: translateX(-6px); transition-delay: 0ms; transition-duration: 120ms, 300ms;
+}
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:has(:focus-visible), :has([aria-expanded="true"]))) .menu-linha {
+  opacity: 1; transform: none; transition-delay: 80ms, 0ms;
+}
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:has(:focus-visible), :has([aria-expanded="true"]))) .menu-sair { width: 0; margin-left: 0; }
+}
 /* No Windows a barra de rolagem é FIXA (~17px): no trilho de 60px cortava os botões e, ao abrir o menu, aparecia de uma
    vez — a seleção encolhia e depois esticava. A lista do menu rola pela roda/toque/teclado, sem a barra. */
 .menu-lateral .menu-rolagem { scrollbar-width: none; }
@@ -1361,17 +1419,28 @@ html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:f
 .barra-rolavel[data-fim] { mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent); }
 .barra-rolavel[data-inicio] { mask-image: linear-gradient(to right, transparent, #000 3rem); }
 .barra-rolavel[data-inicio][data-fim] { mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent); }
+@media (hover: hover) {
 html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible), :has([aria-expanded="true"])) {
   width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 100ms;
+}
+}
+@media (hover: none) {
+html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:has(:focus-visible), :has([aria-expanded="true"])) {
+  width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 100ms;
+}
 }
 @media (prefers-reduced-motion: reduce) {
   .menu-vaga, .menu-lateral, .menu-lateral * { transition-duration: 0ms !important; transition-delay: 0ms !important; }
 }
 [data-motion="off"] :is(.menu-vaga, .menu-lateral, .menu-lateral *),
-[data-motion="reduced"] :is(.menu-vaga, .menu-lateral, .menu-lateral *) { transition-duration: 0ms !important; }
+[data-motion="reduced"] :is(.menu-vaga, .menu-lateral, .menu-lateral *) { transition-duration: 0ms !important; transition-delay: 0ms !important; }
 
 /* IMAGENS PROTEGIDAS (logo, fotos, capas): não se arrastam, não se selecionam e o toque longo não oferece salvar/copiar.
    O dragstart/contextmenu é barrado em ProtegerImagens (layout raiz). */
+/* O toque não pinta o retângulo cinza/azul do navegador por cima dos controles arredondados: o retorno ao pressionar é o
+   `active:` de cada componente. */
+html { -webkit-tap-highlight-color: transparent; }
+
 img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 
 /* A seta "Ir ao fim do termo" (LeituraTermo): uma onda que se expande do botão e a seta que desce de leve — chama o olhar
@@ -1536,7 +1605,26 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
   select,
   textarea,
-  [contenteditable="true"] {
+  [contenteditable]:not([contenteditable="false"]) {
     font-size: max(16px, 1em) !important;
   }
+}
+
+/* ── REDE DE SEGURANÇA do "reduzir movimento" (sistema ou o ADM): TODA animação e transição — também as que não têm regra
+   própria acima (fade-in-up, shimmer, gráficos, `animate-pulse`, as do Tailwind) — termina na hora. A duração mínima (não
+   `none`) mantém o `animationend`/`transitionend` de quem espera por eles para desmontar (saídas, camadas dos gráficos). ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+[data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after,
+[data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

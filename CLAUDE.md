@@ -5716,6 +5716,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `TabelaCruzada`: o toque numa célula mostra "Ver origem" no rodapé. Ficou como estava, de propósito: o cabeçalho dos
   banners da Mesa (as ações descem para a 2ª linha — Tarefas e Atualizar perderiam a contagem e o anel num menu) e as
   barras das telas (já com os principais à esquerda e os ícones à direita).
+- **TOQUE, GESTOS E ANIMAÇÕES — REGRAS (v1.288.0, sem migração):**
+  - **`desktop:`** (variante de `globals.css` = `min-width:64rem` **e** `pointer:fine`): o controle ampliado a 44px no toque
+    encolhe com `desktop:` — NUNCA com `lg:` (o iPad deitado tem 1024px e é toque). Button, Pager, Ajuda, Dropdown,
+    SeletorMultiplo, Segmented, Field, MultiSelectHeader e as demais linhas `h-11 … lg:h-*` já usam `desktop:`. Controle novo
+    = `h-11 desktop:h-[var(--h-control-sm)]` (ou `min-h-11 desktop:min-h-*`).
+  - **Gestos:** todo arrasto por ponteiro ignora o 2º dedo (`!e.isPrimary`) e filtra o `pointerId`; `pointercancel` é
+    CANCELAR (volta, sem efeito — nunca soltar/excluir); zoom pela roda = ouvinte nativo `{passive:false}`; dois dedos =
+    pinça (mapa de ponteiros — `CanvasFluxo`, `RecorteImagem`); área grande arrastável no toque = `touch-pan-y` + segurar
+    (~250ms) antes de arrastar (`FundoQuadro`); duplo clique sempre com um caminho por toque (toque duplo ou botão).
+  - **Saída animada = `useSaida(aberto)`** (`src/components/useSaida.ts`): mantém montado por `--motion-fast` com
+    `data-saindo` (sem cliques) e desmonta. Usado no Modal (o último desenho fica na saída — `cloneElement`), Dropdown (o
+    último conteúdo; nasce/volta pelo lado do gatilho — `data-lado` abaixo|acima|folha), gaveta do menu e Toast/
+    `AvisoFlutuante saindo`. As animações moram em `globals.css` (`.modal-raiz`, `.dropdown-painel`, `.gaveta-raiz`,
+    `.aviso-flutuante`). Uma sequência `toast.carregando/progresso` atualiza o MESMO aviso.
+  - **Ritmos:** `--motion-fast` (0,6×) e `--motion-slow` (1,6×) do `--motion-duration`; duração fixa nova só com motivo.
+    `Tabs` não anima na abertura (só a troca feita pela pessoa). `SecoesQuadros` recolhe por `grid-template-rows`.
+  - **"Reduzir movimento"** (sistema ou `data-motion` off/reduced): a REDE DE SEGURANÇA no fim do `globals.css` leva TODA
+    animação/transição a 0,01ms (o `animationend`/`transitionend` ainda dispara para quem espera por ele).
+  - `html { -webkit-tap-highlight-color: transparent }`; Button com `active:scale-[0.97]`; listas e folhas com
+    `overscroll-contain`; barras que rolam de lado com `snap-x snap-proximity`.
 - **ÁREA VISÍVEL dos painéis flutuantes (v1.225.1):** `area-visivel.ts` (`areaVisivel`, `entre`, `MARGEM_TELA`=8) = a régua ÚNICA de todo painel que se posiciona sozinho — `Dropdown`, `DicaFlutuante`, `JanelaFlutuante`: a largura SEM a barra de rolagem (`clientWidth`, nunca `innerWidth`) e a altura da viewport visual (celular: barra do navegador/teclado); a altura máxima nunca passa da borda (sem o piso de 140px que estourava). Painel novo = esta régua.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

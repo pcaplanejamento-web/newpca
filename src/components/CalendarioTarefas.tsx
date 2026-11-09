@@ -319,8 +319,8 @@ function useCriarArrastando(onCriar?: (slot: SlotCriar) => void) {
   const encerrar = useRef<(() => void) | null>(null);
   useEffect(() => () => encerrar.current?.(), []);
   const iniciar = (ev0: ReactPointerEvent<HTMLElement>, dia: string) => {
-    toque.current = ev0.pointerType === "touch";
-    if (!onCriar || ev0.pointerType === "touch" || ev0.button > 0 || ev0.target !== ev0.currentTarget) return;
+    toque.current = ev0.pointerType !== "mouse";
+    if (!onCriar || ev0.pointerType !== "mouse" || ev0.button > 0 || ev0.target !== ev0.currentTarget) return;
     ev0.preventDefault();
     encerrar.current?.();
     const coluna = ev0.currentTarget;
@@ -425,7 +425,7 @@ function EventoChip({
           onClick={onConcluir}
           aria-label={e.concluida ? `Reabrir ${e.titulo}` : `Concluir ${e.titulo}`}
           title={e.concluida ? "Reabrir a tarefa" : "Concluir a tarefa"}
-          className={`grid shrink-0 place-items-center rounded-l-[6px] transition-colors hover:text-[var(--ok)] ${compacta ? "w-5 any-pointer-coarse:w-8" : "w-11 lg:w-7"}`}
+          className={`grid shrink-0 place-items-center rounded-l-[6px] transition-colors hover:text-[var(--ok)] ${compacta ? "w-5 any-pointer-coarse:w-8" : "w-11 desktop:w-7"}`}
           style={{ color: e.concluida ? "var(--ok)" : semaforo }}
         >
           {e.concluida ? <IconCirculoCheck className="h-3.5 w-3.5" /> : <IconCirculo className="h-3.5 w-3.5" />}
@@ -439,7 +439,7 @@ function EventoChip({
         onPointerDown={(ev) => ev.pointerType !== "touch" && onPegar?.(ev)}
         title={titulo}
         className={`flex min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
-          compacta ? "h-full text-[11px]" : "min-h-11 text-[12.5px] lg:min-h-8"
+          compacta ? "h-full text-[11px]" : "min-h-11 text-[12.5px] desktop:min-h-8"
         } ${onPegar ? "cursor-grab active:cursor-grabbing" : ""} ${e.concluida || recusado ? "text-muted line-through decoration-faint" : ""}`}
       >
         {e.tipo === "periodo" && !onConcluir && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: semaforo }} />}
@@ -548,7 +548,7 @@ function ItemMenu({ rotulo, tecla, ativo, onClick }: { rotulo: string; tecla?: s
       role="menuitemradio"
       aria-checked={!!ativo}
       onClick={onClick}
-      className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-2.5 text-left text-[13px] lg:min-h-9 ${ativo ? "bg-accent-soft font-semibold text-accent" : "text-text hover:bg-surface-2"}`}
+      className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-2.5 text-left text-[13px] desktop:min-h-9 ${ativo ? "bg-accent-soft font-semibold text-accent" : "text-text hover:bg-surface-2"}`}
     >
       {rotulo}
       {tecla && <kbd className="font-mono text-[11px] text-faint">{tecla}</kbd>}
@@ -563,7 +563,7 @@ function ItemMarcar({ rotulo, marcado, onClick }: { rotulo: string; marcado: boo
       role="menuitemcheckbox"
       aria-checked={marcado}
       onClick={onClick}
-      className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9"
     >
       <span className="grid h-4 w-4 place-items-center text-accent">{marcado && <IconCheck className="h-4 w-4" />}</span>
       {rotulo}
@@ -1224,7 +1224,7 @@ export function CalendarioTarefas({
           const pre = `${mes.ano}-${String(m).padStart(2, "0")}`;
           return (
             <section key={m} aria-label={`${NOMES_MES[m - 1]} de ${mes.ano}`}>
-              <button type="button" onClick={() => trocarVista("mes", `${pre}-01`)} className="mb-1 min-h-11 rounded-control px-1 text-[13px] font-semibold text-text hover:text-accent lg:min-h-9">
+              <button type="button" onClick={() => trocarVista("mes", `${pre}-01`)} className="mb-1 min-h-11 rounded-control px-1 text-[13px] font-semibold text-text hover:text-accent desktop:min-h-9">
                 {NOMES_MES[m - 1]}
               </button>
               <div className="grid grid-cols-7 text-center text-[10px] font-semibold text-faint">
@@ -1242,7 +1242,7 @@ export function CalendarioTarefas({
                         onClick={() => trocarVista("dia", d)}
                         aria-label={`${dataBR(d)}${comEvento.has(d) ? " — com eventos" : ""}`}
                         title={nomeFeriado(d)}
-                        className={`relative mx-auto grid h-11 w-full max-w-11 place-items-center rounded-full text-[12px] tabular-nums lg:h-7 lg:max-w-7 ${
+                        className={`relative mx-auto grid h-11 w-full max-w-11 place-items-center rounded-full text-[12px] tabular-nums desktop:h-7 lg:max-w-7 ${
                           d === hoje ? "bg-accent font-bold text-white" : feriadoDe(d) ? "text-[var(--warn)] hover:bg-surface-2" : "text-text-2 hover:bg-surface-2"
                         }`}
                       >
@@ -1312,7 +1312,7 @@ export function CalendarioTarefas({
       align="end"
       width={264}
       ariaLabel={`Vista do calendário: ${ROTULO_VISTA[vista]}`}
-      triggerClassName="h-11 gap-1.5 rounded-control border border-border-2 bg-surface px-3 text-[13px] font-semibold text-text hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
+      triggerClassName="h-11 gap-1.5 rounded-control border border-border-2 bg-surface px-3 text-[13px] font-semibold text-text hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
       trigger={
         <>
           {ROTULO_VISTA[vista]}
@@ -1351,7 +1351,7 @@ export function CalendarioTarefas({
               fechar();
               window.setTimeout(() => window.print(), 50);
             }}
-            className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9"
           >
             <IconImprimir className="h-4 w-4 text-muted" />
             Imprimir
@@ -1491,7 +1491,7 @@ export function CalendarioTarefas({
               type="button"
               onPointerDown={(ev) => ev.pointerType !== "touch" && dnd.iniciar(ev, pseudo(t))}
               onClick={() => !dnd.foiArrasto() && onAbrirTarefa?.(t.id)}
-              className={`min-h-11 min-w-0 flex-1 px-2.5 py-1.5 text-left lg:min-h-9 ${onMover ? "cursor-grab active:cursor-grabbing" : ""}`}
+              className={`min-h-11 min-w-0 flex-1 px-2.5 py-1.5 text-left desktop:min-h-9 ${onMover ? "cursor-grab active:cursor-grabbing" : ""}`}
               title={t.titulo}
             >
               <span className="block truncate text-[12.5px] text-text">{t.titulo}</span>

@@ -279,7 +279,7 @@ export function ExcluidosMesa({ pcaId, siglas, podeLimpar = false }: { pcaId: nu
         aria-label="Excluídos desta Mesa"
         title="Excluídos: ver os protocolos, DFDs e itens excluídos desta Mesa"
         onClick={() => setAberto(true)}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-border-2 bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-border-2 bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
       >
         <IconTrash className="h-4 w-4" />
       </button>

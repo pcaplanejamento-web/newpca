@@ -20,7 +20,7 @@ export function ChipsEscolha<T extends string>({
   rolar?: boolean;
 }) {
   return (
-    <fieldset aria-label={ariaLabel} className={`flex min-w-0 gap-1.5 ${rolar ? "flex-nowrap overflow-x-auto pb-3" : "flex-wrap"}`}>
+    <fieldset aria-label={ariaLabel} className={`flex min-w-0 gap-1.5 ${rolar ? "flex-nowrap snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-3 [&>*]:snap-start" : "flex-wrap"}`}>
       {opcoes.map((o) => {
         const ativo = o.value === valor;
         return (
@@ -29,7 +29,7 @@ export function ChipsEscolha<T extends string>({
             type="button"
             aria-pressed={valor == null ? undefined : ativo}
             onClick={() => onEscolher(o.value)}
-            className={`min-h-11 shrink-0 whitespace-nowrap ${rolar ? "animate-chip-entra" : ""} rounded-control border px-3 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${
+            className={`min-h-11 shrink-0 whitespace-nowrap ${rolar ? "animate-chip-entra" : ""} rounded-control border px-3 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:min-h-8 ${
               ativo ? "border-accent bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
             }`}
           >

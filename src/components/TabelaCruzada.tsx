@@ -42,7 +42,7 @@ const larguraVar = (w: string): CSSProperties => ({ width: w, minWidth: w, maxWi
  * (o texto do cabeçalho e o das células ficam alinhados, dentro e fora da edição). */
 /** A linha MARCADA (um toque): fundo accent OPACO — as congeladas cobrem o que rola por baixo. */
 const MARCADA = "!bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]";
-const CEL = "h-11 border-b border-border/60 pr-3 pl-5 align-middle lg:h-[var(--h-control-sm)]";
+const CEL = "h-11 border-b border-border/60 pr-3 pl-5 align-middle desktop:h-[var(--h-control-sm)]";
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
 
 /** Uma coluna da tabela — as ESTRUTURAIS (rótulo das linhas, extra, total) e as de VALORES são tratadas igual. */

@@ -118,7 +118,7 @@ export function PilulaVistas<T extends string>({ opcoes, valor, onTrocar, extra 
             aria-label={o.label}
             title={o.label}
             onClick={() => onTrocar(o.value)}
-            className={`relative flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13.5px] font-medium transition-colors lg:h-10 ${
+            className={`relative flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13.5px] font-medium transition-colors desktop:h-10 ${
               ativo ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2"
             }`}
           >

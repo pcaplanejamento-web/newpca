@@ -36,7 +36,7 @@ export function SeletorUnidade({
   if (travado)
     return (
       <span
-        className="inline-flex h-11 items-center gap-1.5 rounded-chip border border-border-2 bg-surface-2 px-3 text-[13px] font-medium text-muted lg:h-[var(--h-control-sm)]"
+        className="inline-flex h-11 items-center gap-1.5 rounded-chip border border-border-2 bg-surface-2 px-3 text-[13px] font-medium text-muted desktop:h-[var(--h-control-sm)]"
         title="Nesta tela, os dados somam todas as suas unidades (definido no grupo)."
       >
         <IconLock className="h-3.5 w-3.5 opacity-70" />
@@ -48,7 +48,7 @@ export function SeletorUnidade({
     <Dropdown
       align="start"
       ariaLabel={`Unidade: ${rotulo}`}
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
       width={340}
       trigger={
         <>
@@ -93,7 +93,7 @@ function ListaUnidades({
             }}
             aria-label="Buscar unidade por sigla ou nome"
             placeholder="Buscar sigla ou nome"
-            className="h-11 w-full rounded-control border border-border-2 bg-surface px-2.5 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
+            className="h-11 w-full rounded-control border border-border-2 bg-surface px-2.5 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)]"
           />
         </div>
       )}

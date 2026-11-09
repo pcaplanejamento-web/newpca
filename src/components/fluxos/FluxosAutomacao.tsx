@@ -1722,7 +1722,7 @@ function EditorFrequencia({ freq, onFreq }: { freq: Frequencia; onFreq: (f: Freq
       aria-label="Hora"
       value={freq.hora}
       onChange={(e) => onFreq(lerFrequencia({ ...freq, hora: e.target.value }))}
-      className="h-11 rounded-control border border-border bg-surface px-2 text-sm text-text lg:h-[var(--h-control-sm)]"
+      className="h-11 rounded-control border border-border bg-surface px-2 text-sm text-text desktop:h-[var(--h-control-sm)]"
     />
   );
   if (freq.tipo === "diario")

@@ -84,8 +84,8 @@ export function BotaoAtualizar({
       aria-disabled={(!ativo && !!aviso) || undefined}
       className={`relative inline-flex shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
         discreto
-          ? "h-7 w-7 after:absolute after:-inset-2 lg:h-6 lg:w-6 lg:after:hidden pointer-coarse:after:block"
-          : "h-11 w-11 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+          ? "h-7 w-7 after:absolute after:-inset-2 desktop:h-6 desktop:w-6 lg:after:hidden pointer-coarse:after:block"
+          : "h-11 w-11 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
       } ${
         ativo
           ? "border-accent/50 bg-accent-soft text-accent"

@@ -1,9 +1,10 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { cloneElement, type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
+import { useSaida } from "./useSaida";
 
 const TAMANHO = { md: "sm:max-w-md", lg: "sm:max-w-lg", xl: "sm:max-w-4xl", full: "sm:max-w-6xl" } as const;
 
@@ -110,7 +111,7 @@ function Painel({
           </Button>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-[var(--pad-card)]">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-[var(--pad-card)]">{children}</div>
       {rodape && (
         <div className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)] max-sm:pb-[calc(var(--pad-card)_+_env(safe-area-inset-bottom))]">{rodape}</div>
       )}
@@ -188,6 +189,14 @@ export function Modal({
   const idModal = useRef(0);
   if (idModal.current === 0) idModal.current = ++seqModal;
   useEffect(() => setMontado(true), []);
+  // A SAÍDA animada: fechado, o último desenho fica por `--motion-fast` com `data-saindo` (o fundo esmaece e o banner
+  // desce/encolhe) — sem cliques nesse instante.
+  const { saindo } = useSaida(open);
+  const ultimo = useRef<ReactElement<{ "data-saindo"?: string }> | null>(null);
+  const portal = (el: ReactElement<{ "data-saindo"?: string }>) => {
+    ultimo.current = el;
+    return createPortal(el, document.body);
+  };
   // Registra na pilha de modais abertos (o do topo é o único que atende ao Esc).
   useEffect(() => {
     if (!open) return;
@@ -289,21 +298,25 @@ export function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, bloqueado]);
 
-  if (!open || !montado) return null;
+  if (!open && saindo && montado && ultimo.current) return createPortal(cloneElement(ultimo.current, { "data-saindo": "" }), document.body);
+  if (!open || !montado) {
+    if (!open) ultimo.current = null;
+    return null;
+  }
 
   const scrim = (
     <div
       aria-hidden="true"
-      className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm"
+      className="modal-fundo absolute inset-0 bg-[var(--scrim)] lg:backdrop-blur-sm"
       onClick={fecharNoBackdrop && !bloqueado ? onClose : undefined}
     />
   );
 
   // Modo simples (1 banner) — comportamento original, inalterado.
   if (pilha.length === 0) {
-    return createPortal(
+    return portal(
       <div
-        className={`fixed inset-0 z-50 flex items-end justify-center p-0 sm:p-[var(--pad-canvas)] sm:items-center`}
+        className={`modal-raiz fixed inset-0 z-50 flex items-end justify-center p-0 sm:p-[var(--pad-canvas)] sm:items-center`}
       >
         {scrim}
         <Painel
@@ -313,12 +326,11 @@ export function Modal({
           rodape={rodape}
           bloqueado={bloqueado}
           acoesCabecalho={acoesCabecalho}
-          className={TAMANHO[size]}
+          className={`modal-corpo ${TAMANHO[size]}`}
         >
           {children}
         </Painel>
       </div>,
-      document.body,
     );
   }
 
@@ -358,11 +370,11 @@ export function Modal({
     );
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
+  return portal(
+    <div className="modal-raiz fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
       {scrim}
       <div
-        className="grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]"
+        className="modal-corpo grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]"
         style={{
           maxWidth: maxW,
           gridTemplateColumns: cols,
@@ -390,6 +402,5 @@ export function Modal({
         {direita.map(colunaPainel)}
       </div>
     </div>,
-    document.body,
   );
 }

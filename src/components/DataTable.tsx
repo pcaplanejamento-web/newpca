@@ -673,7 +673,7 @@ export function DataTable<R>({
     >
       <div
         ref={rolagemRef}
-        className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
+        className={`overflow-x-auto overscroll-x-contain ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
         {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
             "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}
@@ -710,10 +710,16 @@ export function DataTable<R>({
                 const opcoes = externo ? externo.opcoes : (facetas.opcoes[j] ?? []);
                 const pos = posicao(c.key, p);
                 const filtro = c.travado ? (
-                  <span className="inline-flex items-center gap-1" title={c.travado}>
+                  // O motivo da trava também pelo TOQUE (a dica do mouse não existe no celular).
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 py-2 text-left min-h-11 desktop:min-h-0"
+                    title={c.travado}
+                    onClick={() => toast.info(c.travado as string)}
+                  >
                     <IconLock className="h-3 w-3 shrink-0" aria-hidden />
                     {c.header}
-                  </span>
+                  </button>
                 ) : externo ? (
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
@@ -1007,7 +1013,7 @@ export function DataTable<R>({
                       localStorage.setItem(`tabela-linhas:${linhasSalvas}`, e.target.value);
                     } catch {}
                 }}
-                className="h-11 rounded-[8px] border border-border bg-surface px-2 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:h-[var(--h-control-sm)]"
+                className="h-11 rounded-[8px] border border-border bg-surface px-2 text-[12px] text-text-2 focus:border-accent focus:outline-none desktop:h-[var(--h-control-sm)]"
               >
                 {LINHAS_TABELA.map((n) => (
                   <option key={n} value={n}>
@@ -1075,7 +1081,7 @@ export function FiltrosAtivos({
       width={300}
       ariaLabel={rotulo}
       title={rotulo}
-      triggerClassName="relative h-11 w-11 shrink-0 justify-center rounded-control border border-accent/40 bg-accent-soft text-accent transition-colors hover:bg-accent/15 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      triggerClassName="relative h-11 w-11 shrink-0 justify-center rounded-control border border-accent/40 bg-accent-soft text-accent transition-colors hover:bg-accent/15 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
       trigger={
         <>
           <IconFilter className="h-4 w-4" />
@@ -1090,7 +1096,7 @@ export function FiltrosAtivos({
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{titulo}</p>
-              <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline lg:min-h-7">
+              <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline desktop:min-h-7">
                 Limpar
               </button>
             </div>
@@ -1103,7 +1109,7 @@ export function FiltrosAtivos({
                     onClick={() => onLimparColuna(c.key)}
                     title={`Limpar o filtro de ${texto(c.header)}`}
                     aria-label={`Limpar o filtro de ${texto(c.header)}`}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text lg:h-7 lg:w-7"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text desktop:h-7 desktop:w-7"
                   >
                     <IconClose className="h-3.5 w-3.5" />
                   </button>

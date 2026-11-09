@@ -930,7 +930,7 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
     </>
   );
   const classeGatilho =
-    "relative h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]";
+    "relative h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]";
 
   return (
     <>

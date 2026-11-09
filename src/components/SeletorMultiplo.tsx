@@ -145,8 +145,8 @@ export function SeletorMultiplo({
           <span
             className={
               completo
-                ? `flex min-h-11 w-max items-center gap-2 rounded-control px-2 transition-colors hover:bg-surface-2 lg:min-h-[calc(var(--h-control-sm)-6px)] ${disabled ? "opacity-60" : ""}`
-                : `flex h-11 w-full items-center gap-2 rounded-control border border-border bg-surface px-3 lg:h-[var(--h-control-sm)] ${disabled ? "opacity-60" : ""}`
+                ? `flex min-h-11 w-max items-center gap-2 rounded-control px-2 transition-colors hover:bg-surface-2 desktop:min-h-[calc(var(--h-control-sm)-6px)] ${disabled ? "opacity-60" : ""}`
+                : `flex h-11 w-full items-center gap-2 rounded-control border border-border bg-surface px-3 desktop:h-[var(--h-control-sm)] ${disabled ? "opacity-60" : ""}`
             }
           >
             {gatilho(<SetaDropdown className="h-4 w-4 shrink-0 text-muted" />)}
@@ -164,7 +164,7 @@ export function SeletorMultiplo({
         disabled={disabled}
         aria-expanded={aberto}
         onClick={() => setAberto((a) => !a)}
-        className="flex h-11 w-full items-center gap-2 px-3 text-left disabled:opacity-60 lg:h-[var(--h-control-sm)]"
+        className="flex h-11 w-full items-center gap-2 px-3 text-left disabled:opacity-60 desktop:h-[var(--h-control-sm)]"
       >
         {gatilho(<IconChevronDown className={`h-4 w-4 text-muted transition-transform ${aberto ? "rotate-180" : ""}`} />)}
       </button>
@@ -259,7 +259,7 @@ function CorpoSelecao({
       {/* `relative`: as caixas de marcar (`input.sr-only`) ficam DENTRO da lista que rola — marcar não rola outra coisa. */}
       <ul className="relative max-h-60 overflow-y-auto overscroll-contain px-1">
         {orfaos.map((v) => (
-          <li key={`o:${v}`} className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
+          <li key={`o:${v}`} className="flex min-h-11 items-center justify-between gap-2 text-sm desktop:min-h-7">
             <Checkbox checked onChange={() => alternar(v)} label={<span className="text-muted">{v}</span>} disabled={disabled} />
             <span className="text-xs text-faint">fora do filtro</span>
           </li>
@@ -271,7 +271,7 @@ function CorpoSelecao({
                 {o.grupo}
               </li>
             )}
-            <li className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
+            <li className="flex min-h-11 items-center justify-between gap-2 text-sm desktop:min-h-7">
               <Checkbox
                 checked={sel.has(o.valor)}
                 onChange={() => alternar(o.valor)}
@@ -357,7 +357,7 @@ export function BlocoInicial({
           onClick={onVoltar}
           title={`Voltar ao ${rotulo.toLowerCase()}`}
           aria-label={`Voltar ao ${rotulo.toLowerCase()}`}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-accent hover:bg-surface-2 disabled:opacity-50 lg:h-6 lg:w-6"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-accent hover:bg-surface-2 disabled:opacity-50 desktop:h-6 desktop:w-6"
         >
           <IconRestaurar className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

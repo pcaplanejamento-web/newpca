@@ -186,7 +186,7 @@ export function TarefasView({
           />
         </div>
         <div className="mt-4 space-y-3 border-t border-border pt-3">
-          <div className="flex min-h-11 items-center lg:min-h-9">
+          <div className="flex min-h-11 items-center desktop:min-h-9">
             <Checkbox label="Listas dos dias de um mês (quadro do período)" checked={periodo != null} disabled={salvando} onChange={(e) => setPeriodo(e.target.checked ? { ...mesSeguinte(hoje), diasUteis: true } : null)} />
           </div>
           {periodo && <CamposPeriodo valor={periodo} onChange={setPeriodo} disabled={salvando} />}

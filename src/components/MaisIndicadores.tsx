@@ -39,7 +39,7 @@ export function MaisIndicadores({ extras }: { extras: ReactNode }) {
         type="button"
         aria-expanded={mais}
         onClick={() => setMais((v) => !v)}
-        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)]"
+        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-card border border-border bg-surface text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text desktop:h-[var(--h-control-sm)]"
       >
         {mais ? "Menos indicadores" : "Mais indicadores"}
         <IconChevronDown className={`h-4 w-4 transition-transform ${mais ? "rotate-180" : ""}`} />

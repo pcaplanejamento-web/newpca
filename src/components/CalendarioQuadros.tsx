@@ -679,7 +679,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
             </div>
             {membros.length > 1 && (
               <details className="rounded-card border border-border bg-surface p-2" open={pessoasVer.length > 0}>
-                <summary className="flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-[12px] font-semibold text-text-2 lg:min-h-8">
+                <summary className="flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-[12px] font-semibold text-text-2 desktop:min-h-8">
                   <IconUsers className="h-3.5 w-3.5 text-muted" />
                   Pesquisar pessoas{pessoasVer.length ? ` (${pessoasVer.length})` : ""}
                 </summary>

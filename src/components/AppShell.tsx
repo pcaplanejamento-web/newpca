@@ -131,7 +131,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
     <Dropdown
       align="start"
       ariaLabel={`Grupo ativo: ${ativo.nome}`}
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60 lg:h-[var(--h-control-sm)]"
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60 desktop:h-[var(--h-control-sm)]"
       width={280}
       trigger={
         <>

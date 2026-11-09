@@ -11,7 +11,7 @@ export function EsqueletoTabsLaterais({ abas = 8, linhas = 6, conteudo = true }:
     <div className="flex min-h-0 flex-col lg:flex-1 lg:flex-row lg:gap-[var(--gap-block)]">
       <div className="flex shrink-0 gap-1 overflow-hidden border-b border-border lg:w-60 lg:flex-col lg:gap-0.5 lg:self-start lg:rounded-card lg:border lg:bg-surface lg:p-2 lg:shadow-ring">
         {Array.from({ length: abas }).map((_, i) => (
-          <div key={i} className="flex min-h-11 w-28 shrink-0 items-center gap-2 px-3 lg:min-h-[var(--h-control-sm)] lg:w-full">
+          <div key={i} className="flex min-h-11 w-28 shrink-0 items-center gap-2 px-3 desktop:min-h-[var(--h-control-sm)] lg:w-full">
             <Skeleton className="h-4 w-4 shrink-0 rounded-sm" />
             <Skeleton className={`h-3 rounded-sm ${i % 2 ? "w-3/5" : "w-4/5"}`} />
           </div>

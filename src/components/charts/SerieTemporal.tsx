@@ -628,11 +628,12 @@ export function SerieTemporal({
           sem largura — um quadro com o desenho vazio, a "piscada" na cor do fundo. A seleção já é desfeita pelo efeito acima. */}
       <div
         role="none"
-        className={`relative h-full ${onEscolher ? "cursor-pointer" : ""} ${onTrecho ? "touch-pan-y" : ""}`}
+        className={`relative h-full ${onEscolher ? "cursor-pointer" : ""} ${onTrecho ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
         onPointerDown={(e) => {
           // Um gesto novo: o clique engolido era só o que vem logo depois de um arrasto (alguns navegadores não o disparam).
           engolirClique.current = false;
-          if (!onTrecho || e.button !== 0) return;
+          // Um 2º dedo (a pinça) nunca recomeça a seleção.
+          if (!onTrecho || e.button !== 0 || !e.isPrimary) return;
           const i = indiceNaPosicao(e.clientX);
           if (i == null) return;
           if (e.pointerType !== "touch") e.preventDefault();

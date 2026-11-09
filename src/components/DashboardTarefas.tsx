@@ -186,7 +186,7 @@ export function DashboardTarefas({
                       type="button"
                       onClick={() => abrir("Saúde dos prazos", ROTULO_FAIXA[f], { dim: "faixa", faixa: f })}
                       aria-label={`${ROTULO_FAIXA[f]}: ${plural(p.faixas[f], "tarefa", "tarefas")} — ver a origem dos dados`}
-                      className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_3.5rem] items-center gap-x-3 rounded-control px-1.5 text-[12.5px] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8"
+                      className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_3.5rem] items-center gap-x-3 rounded-control px-1.5 text-[12.5px] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:min-h-8"
                     >
                       <span className="inline-flex min-w-0 items-center gap-2 text-text-2">
                         <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: COR_FAIXA[f] }} />

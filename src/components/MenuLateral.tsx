@@ -8,6 +8,7 @@ import { ATRIBUTO_MENU, aplicarMenuGuardado, CHAVE_MENU, EVENTO_ALTERNAR_MENU } 
 import { IconeNavegacao } from "./CarregandoLink";
 import { travarScroll } from "./Modal";
 import { IconClose, IconMenu, IconRecolherMenu } from "./icons";
+import { useSaida } from "./useSaida";
 
 /**
  * O MENU LATERAL do sistema — UM componente para o painel (`AppShell`) e a tela pública: a VAGA (sticky, altura do display)
@@ -101,7 +102,7 @@ export function ItensMenu({ secoes, ativo, onNavigate }: { secoes: readonly Seca
                   unstable_dynamicOnHover
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] max-lg:min-h-11 transition-colors duration-[var(--motion-duration)] ${
+                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] min-h-11 desktop:min-h-0 transition-colors duration-[var(--motion-duration)] ${
                     active
                       ? "border-border-2 bg-sb-active font-semibold text-text"
                       : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
@@ -245,10 +246,12 @@ export function GavetaMenu({
     (a?.querySelector<HTMLElement>("[aria-current='page']") ?? a?.querySelector<HTMLElement>("nav a"))?.focus({ preventScroll: true });
     return soltar;
   }, [aberto]);
-  if (!aberto) return null;
+  // Fechando, a gaveta DESLIZA de volta e o fundo esmaece (a saída animada padrão).
+  const { montado, saindo } = useSaida(aberto);
+  if (!montado) return null;
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
-      <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={onFechar} />
+    <div className="gaveta-raiz fixed inset-0 z-50 lg:hidden" data-saindo={saindo ? "" : undefined}>
+      <div aria-hidden="true" className="gaveta-fundo animate-fundo-folha absolute inset-0 bg-[var(--scrim)]" onClick={onFechar} />
       <aside
         ref={asideRef}
         aria-label="Menu"

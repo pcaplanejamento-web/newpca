@@ -78,7 +78,7 @@ export function MenuLista({
       align="end"
       width={270}
       ariaLabel={`Ações da lista ${lista.nome}`}
-      triggerClassName="h-11 w-11 shrink-0 justify-center text-muted lg:h-8 lg:w-8"
+      triggerClassName="h-11 w-11 shrink-0 justify-center text-muted desktop:h-8 desktop:w-8"
       trigger={<IconMais className="h-4 w-4" />}
     >
       {(fechar) => {
@@ -92,7 +92,7 @@ export function MenuLista({
               setSecao(null);
               fn();
             }}
-            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 lg:min-h-9"
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 desktop:min-h-9"
           >
             {icone}
             <span className="truncate">{rotulo}</span>
@@ -104,7 +104,7 @@ export function MenuLista({
             aria-expanded={secao === k}
             disabled={off || disabled}
             onClick={() => setSecao((s) => (s === k ? null : k))}
-            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 lg:min-h-9"
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 desktop:min-h-9"
           >
             {icone}
             <span className="flex-1 truncate">{rotulo}</span>

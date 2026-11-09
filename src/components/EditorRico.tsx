@@ -138,7 +138,7 @@ function BotaoBarra({ rotulo, atalho, ativo = false, onClick, children, disabled
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`grid h-11 w-11 shrink-0 snap-start place-items-center rounded-control transition-colors lg:h-8 lg:w-8 disabled:opacity-40 ${ativo ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2 hover:text-text"}`}
+      className={`grid h-11 w-11 shrink-0 snap-start place-items-center rounded-control transition-colors desktop:h-8 desktop:w-8 disabled:opacity-40 ${ativo ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2 hover:text-text"}`}
     >
       {children}
     </button>
@@ -157,7 +157,7 @@ function SetaBarra({ lado, onClick }: { lado: "inicio" | "fim"; onClick: () => v
       title={fim ? "Mais ferramentas" : "Ferramentas anteriores"}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`absolute top-1/2 z-[1] grid h-11 w-9 -translate-y-1/2 place-items-center rounded-control bg-surface text-muted shadow-soft hover:text-text lg:h-8 lg:w-7 ${fim ? "right-0.5" : "left-0.5"}`}
+      className={`absolute top-1/2 z-[1] grid h-11 w-9 -translate-y-1/2 place-items-center rounded-control bg-surface text-muted shadow-soft hover:text-text desktop:h-8 desktop:w-7 ${fim ? "right-0.5" : "left-0.5"}`}
     >
       {fim ? <IconChevronRight className="h-4 w-4" /> : <IconChevronLeft className="h-4 w-4" />}
     </button>
@@ -526,7 +526,7 @@ export function EditorRico({
               papel="listbox"
               width={200}
               bloqueado={disabled}
-              triggerClassName="inline-flex h-11 min-w-[8.5rem] snap-start items-center justify-between gap-2 rounded-control px-2.5 text-[13px] font-medium text-text hover:bg-surface-2 lg:h-8"
+              triggerClassName="inline-flex h-11 min-w-[8.5rem] snap-start items-center justify-between gap-2 rounded-control px-2.5 text-[13px] font-medium text-text hover:bg-surface-2 desktop:h-8"
               trigger={
                 <>
                   <span className="truncate">{rotuloBloco}</span>
@@ -561,7 +561,7 @@ export function EditorRico({
               title="Fonte do parágrafo"
               papel="dialog"
               bloqueado={disabled}
-              triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-1 rounded-control px-2 text-[13px] text-text hover:bg-surface-2 lg:h-8"
+              triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-1 rounded-control px-2 text-[13px] text-text hover:bg-surface-2 desktop:h-8"
               trigger={
                 <>
                   <span style={{ fontFamily: CSS_FONTE[estado.fo] }} className="font-semibold">
@@ -582,7 +582,7 @@ export function EditorRico({
                         fechar();
                         aplicarFonte(fo);
                       }}
-                      className={`flex h-11 items-center gap-3 rounded-control px-3 text-left text-[14px] lg:h-9 ${estado.fo === fo ? "bg-accent-soft text-accent" : "text-text hover:bg-surface-2"}`}
+                      className={`flex h-11 items-center gap-3 rounded-control px-3 text-left text-[14px] desktop:h-9 ${estado.fo === fo ? "bg-accent-soft text-accent" : "text-text hover:bg-surface-2"}`}
                     >
                       <span style={{ fontFamily: CSS_FONTE[fo] }} className="w-6 text-[15px] font-semibold">
                         Aa
@@ -600,7 +600,7 @@ export function EditorRico({
               papel="dialog"
               width={0}
               bloqueado={disabled}
-              triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-0.5 rounded-control px-2 text-text hover:bg-surface-2 lg:h-8"
+              triggerClassName="inline-flex h-11 shrink-0 snap-start items-center gap-0.5 rounded-control px-2 text-text hover:bg-surface-2 desktop:h-8"
               trigger={
                 <>
                   {(() => {
@@ -749,7 +749,7 @@ export function EditorRico({
               title={barraAberta ? "Esconder a formatação" : "Formatação: negrito, itálico, listas, link…"}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => setBarraAberta((v) => !v)}
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-control transition-colors lg:h-9 lg:w-9 ${barraAberta ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text"}`}
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-control transition-colors desktop:h-9 desktop:w-9 ${barraAberta ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text"}`}
             >
               <IconFormatacao className="h-4 w-4" />
             </button>
@@ -776,7 +776,7 @@ export function EditorRico({
                 tabIndex={-1}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => mencionar(p)}
-                className={`flex min-h-11 w-full items-center gap-2 px-3 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9 ${i === ativa ? "bg-surface-2" : ""}`}
+                className={`flex min-h-11 w-full items-center gap-2 px-3 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9 ${i === ativa ? "bg-surface-2" : ""}`}
               >
                 <Avatar nome={p.nome} foto={p.foto} size="xs" />
                 <span className="truncate">{nomeExibicao(p)}</span>

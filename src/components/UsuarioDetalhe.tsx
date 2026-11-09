@@ -454,7 +454,7 @@ function Corpo({
                     aria-pressed={r.whatsapp}
                     aria-label="Este telefone tem WhatsApp"
                     title={r.whatsapp ? "Tem WhatsApp — tocar desmarca" : "Tocar marca que o telefone tem WhatsApp"}
-                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-control border transition-colors lg:h-9 lg:w-9 ${
+                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-control border transition-colors desktop:h-9 desktop:w-9 ${
                       r.whatsapp ? "border-[var(--ok)] text-[var(--ok)]" : "border-border-2 text-faint hover:text-text-2"
                     }`}
                   >
@@ -626,7 +626,7 @@ function Corpo({
           </label>
           <div>
             <span className="mb-1 block text-xs text-muted">Status</span>
-            <div className="flex min-h-11 flex-wrap items-center gap-2 lg:min-h-9">
+            <div className="flex min-h-11 flex-wrap items-center gap-2 desktop:min-h-9">
               <Badge tone={STATUS_TONE[u.status]}>{STATUS_LABEL[u.status]}</Badge>
               {u.status === "pendente" && (
                 <>

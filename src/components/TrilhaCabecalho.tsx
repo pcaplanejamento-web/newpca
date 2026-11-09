@@ -148,7 +148,7 @@ function ListaNivel({ opcoes, fechar }: { opcoes: Opcao[]; fechar: () => void })
   );
 }
 
-const NIVEL = "gap-1.5 rounded-control px-2 h-11 lg:h-[var(--h-control-sm)] text-[13px] hover:bg-surface-2";
+const NIVEL = "gap-1.5 rounded-control px-2 h-11 desktop:h-[var(--h-control-sm)] text-[13px] hover:bg-surface-2";
 
 function Sep({ className = "" }: { className?: string }) {
   return <IconChevronRight aria-hidden className={`h-3.5 w-3.5 shrink-0 text-faint ${className}`} />;

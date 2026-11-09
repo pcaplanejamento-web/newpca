@@ -52,7 +52,7 @@ export function CapaCatalogo({ catalogo: c, detalhe = true }: { catalogo: Pick<C
 /** Os números de um catálogo na agenda (contados no cliente — os itens compartilhados entram em cada catálogo). */
 export type NumerosAgenda = { itens: number; semTipo: number; unidades: number };
 
-const itemMenu = "flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9";
+const itemMenu = "flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9";
 
 /** O menu "…" de um card (as ações que o papel permite; sem nenhuma, não aparece). */
 export function MenuCard({ nome, acoes }: { nome: string; acoes: { rotulo: string; icone: React.ReactNode; perigo?: boolean; onClick: () => void }[] }) {
@@ -62,7 +62,7 @@ export function MenuCard({ nome, acoes }: { nome: string; acoes: { rotulo: strin
       align="end"
       width={220}
       ariaLabel={`Ações de ${nome}`}
-      triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9"
+      triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 desktop:h-9 desktop:w-9"
       trigger={<IconMais className="h-4 w-4" />}
     >
       {(fechar) => (
@@ -224,7 +224,7 @@ export function CoresPaleta({ valor, onChange, legenda = "Cor" }: { valor: strin
             aria-label={`Cor ${cor}`}
             aria-pressed={valor?.toLowerCase() === cor.toLowerCase()}
             onClick={() => onChange(cor)}
-            className="h-11 w-11 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:h-8 lg:w-8"
+            className="h-11 w-11 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent desktop:h-8 desktop:w-8"
             style={{ background: cor, boxShadow: valor?.toLowerCase() === cor.toLowerCase() ? "0 0 0 2px var(--surface), 0 0 0 4px var(--text)" : undefined }}
           />
         ))}

@@ -153,7 +153,7 @@ export function AbasEspaco<T extends string>({
  */
 export function BotaoVoltar({ href, onClick, rotulo }: { href?: string; onClick?: () => void; rotulo: string }) {
   const classe =
-    "grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]";
+    "grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]";
   const icone = <IconChevronLeft className="h-4 w-4" />;
   if (href)
     return (
@@ -180,7 +180,7 @@ export function BotaoConfiguracoes({ ativo = false, rotulo = "Configurações", 
       aria-label={rotulo}
       aria-pressed={ativo}
       title={rotulo}
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)] ${
         ativo ? "border-accent bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2 hover:text-text"
       }`}
     >

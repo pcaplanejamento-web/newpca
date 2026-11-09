@@ -180,7 +180,7 @@ export function CopiarMoverTarefa({
               <fieldset className="space-y-1">
                 <legend className="mb-1 text-[13px] font-semibold text-text">Manter</legend>
                 {OPCOES.map((o) => (
-                  <div key={o.k} className="flex min-h-11 items-center lg:min-h-9">
+                  <div key={o.k} className="flex min-h-11 items-center desktop:min-h-9">
                     <Checkbox label={o.rotulo} checked={opcoes[o.k]} onChange={(e) => setOpcoes((x) => ({ ...x, [o.k]: e.target.checked }))} />
                   </div>
                 ))}
@@ -219,7 +219,7 @@ export function SeletorTemplates({
       align="end"
       width={280}
       ariaLabel={`Criar a partir de template em ${lista}`}
-      triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
       trigger={<IconCartaoMais className="h-4 w-4" aria-hidden />}
     >
       {(fechar) => (

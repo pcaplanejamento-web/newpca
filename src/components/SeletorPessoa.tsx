@@ -19,7 +19,7 @@ export type VarianteSeletorPessoa = "filtro" | "celula" | "campo";
 const circulo = (icone: ReactNode) => <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-surface-2 text-muted">{icone}</span>;
 /** No toque a busca não abre o teclado sozinha (cobriria a lista); com mouse — ou aberto pelo teclado —, o foco já vai para ela. */
 const ponteiroFino = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches === true;
-const CELULA = "min-h-11 gap-1 rounded-control px-2 lg:min-h-[calc(var(--h-control-sm)-6px)]";
+const CELULA = "min-h-11 gap-1 rounded-control px-2 desktop:min-h-[calc(var(--h-control-sm)-6px)]";
 
 /**
  * SELETOR DE PESSOA (uma só — para VÁRIAS, o `SeletorPessoas` em chips): a lista mostra cada pessoa com a FOTO e o

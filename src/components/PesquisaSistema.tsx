@@ -755,19 +755,19 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null, usuarioId }: 
                     type="button"
                     onClick={() => abrirFavorito(f)}
                     title={[...(f.caminho ?? []), f.rotulo].join(" › ")}
-                    className="flex min-h-9 w-full items-center gap-2 rounded-control px-2 py-1.5 pr-24 text-left hover:bg-surface"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 py-1.5 pr-24 text-left hover:bg-surface active:bg-surface pointer-coarse:pr-36 desktop:min-h-9"
                   >
                     <Ic className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate text-[13px] text-text">{f.rotulo}</span>
                   </button>
-                  <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center opacity-0 transition-opacity group-hover/fav:opacity-100 focus-within:opacity-100">
-                    <button type="button" disabled={i === 0} onClick={() => salvarFavoritos(moverFavorito(favoritos, f.chave, -1))} aria-label={`Subir ${f.rotulo}`} title="Subir" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text disabled:opacity-30">
+                  <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center opacity-0 transition-opacity group-hover/fav:opacity-100 focus-within:opacity-100 any-pointer-coarse:opacity-100">
+                    <button type="button" disabled={i === 0} onClick={() => salvarFavoritos(moverFavorito(favoritos, f.chave, -1))} aria-label={`Subir ${f.rotulo}`} title="Subir" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text pointer-coarse:h-11 pointer-coarse:w-11 disabled:opacity-30">
                       ↑
                     </button>
-                    <button type="button" disabled={i === favoritos.length - 1} onClick={() => salvarFavoritos(moverFavorito(favoritos, f.chave, 1))} aria-label={`Descer ${f.rotulo}`} title="Descer" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text disabled:opacity-30">
+                    <button type="button" disabled={i === favoritos.length - 1} onClick={() => salvarFavoritos(moverFavorito(favoritos, f.chave, 1))} aria-label={`Descer ${f.rotulo}`} title="Descer" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text pointer-coarse:h-11 pointer-coarse:w-11 disabled:opacity-30">
                       ↓
                     </button>
-                    <button type="button" onClick={() => salvarFavoritos(favoritos.filter((x) => x.chave !== f.chave))} aria-label={`Tirar ${f.rotulo} dos favoritos`} title="Tirar dos favoritos" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text">
+                    <button type="button" onClick={() => salvarFavoritos(favoritos.filter((x) => x.chave !== f.chave))} aria-label={`Tirar ${f.rotulo} dos favoritos`} title="Tirar dos favoritos" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text pointer-coarse:h-11 pointer-coarse:w-11">
                       <IconClose className="h-3.5 w-3.5" />
                     </button>
                   </span>
