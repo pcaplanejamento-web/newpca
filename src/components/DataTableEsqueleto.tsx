@@ -18,8 +18,13 @@ export function EsqueletoTabela({ linhas = 12, colunas = 6, cheia = false }: { l
         ))}
       </div>
       <div className={`divide-y divide-border ${cheia ? "lg:min-h-0 lg:flex-1 lg:overflow-hidden" : ""}`}>
-        {Array.from({ length: linhas }).map((_, l) => (
-          <div key={l} className="grid h-11 items-center gap-4 px-[var(--cell-px)] lg:h-[var(--h-control-sm)]" style={grade}>
+        {/* `cheia`: mais linhas, só no desktop, para a tabela chegar ao rodapé (o corpo corta o que passa). */}
+        {Array.from({ length: cheia ? linhas + 30 : linhas }).map((_, l) => (
+          <div
+            key={l}
+            className={`${l >= linhas ? "hidden lg:grid" : "grid"} h-11 items-center gap-4 px-[var(--cell-px)] lg:h-[var(--h-control-sm)]`}
+            style={grade}
+          >
             {Array.from({ length: colunas }).map((_, c) => (
               <Skeleton key={c} className={`h-3 rounded-sm ${(l + c) % 3 === 0 ? "w-1/2" : "w-4/5"}`} />
             ))}

@@ -19,21 +19,14 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
       return (
         <>
           <EsqueletoIndicadores />
-          {/* O cartão dos filtros: os seletores numa linha e, no fim, a ajuda e o PDF. */}
-          <div className="space-y-2 rounded-card border border-border bg-surface p-[var(--pad-card)]">
-            <div className="flex flex-wrap items-center gap-2">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <EsqueletoControle key={i} className="min-w-0 flex-1 basis-44" />
-              ))}
-              <EsqueletoControle quadrado />
-              <EsqueletoControle quadrado />
-            </div>
-            {/* A linha do resumo: o ícone do filtro e, à direita, "N itens · R$" e o relatório. */}
-            <div className="flex min-h-9 items-center gap-2">
-              <Skeleton className="h-4 w-4 rounded-sm" />
-              <Skeleton className="ml-auto h-3 w-32 rounded-sm" />
-              <EsqueletoControle className="w-24" />
-            </div>
+          {/* O cartão dos filtros: os seletores numa linha (sem quebra no xl, como o `FiltrosDashboard`) e, no fim, a
+              ajuda e o PDF. A linha dos chips só existe com filtro ativo — não entra no esqueleto. */}
+          <div className="flex flex-wrap items-center gap-2 rounded-card border border-border bg-surface p-[var(--pad-card)] xl:flex-nowrap">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <EsqueletoControle key={i} className="min-w-0 flex-1 basis-44" />
+            ))}
+            <EsqueletoControle quadrado />
+            <EsqueletoControle quadrado />
           </div>
           <EsqueletoSegmented itens={2} />
           <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
@@ -52,10 +45,8 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
             <EsqueletoSegmented itens={2} />
             <EsqueletoSegmented itens={3} />
             <EsqueletoSegmented itens={3} />
-            <EsqueletoControle className="w-full flex-1 sm:max-w-sm" />
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado className="ml-auto" />
-            <EsqueletoControle quadrado />
+            <EsqueletoControle className="w-full min-w-[12rem] sm:w-auto sm:max-w-sm sm:flex-1" />
+            <Icones n={3} />
           </div>
           <EsqueletoTabela cheia linhas={12} colunas={8} />
         </ColunaCheia>
@@ -66,11 +57,7 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
           <div className="flex flex-wrap items-center gap-2">
             <EsqueletoSegmented itens={3} />
             <EsqueletoSegmented itens={3} />
-            <EsqueletoControle quadrado className="ml-auto" />
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado />
+            <Icones n={5} />
           </div>
           <EsqueletoTabela cheia linhas={14} colunas={11} />
         </ColunaCheia>
@@ -114,6 +101,17 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
         </div>
       );
   }
+}
+
+/** Os botões só-ícone da barra, JUNTOS à direita (no celular quebram como um bloco, como na barra real). */
+function Icones({ n }: { n: number }) {
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      {Array.from({ length: n }).map((_, i) => (
+        <EsqueletoControle key={i} quadrado />
+      ))}
+    </div>
+  );
 }
 
 /** As abas de TABELA: a coluna até o fim do display no desktop (a altura do conteúdo abaixo da linha do espaço). */

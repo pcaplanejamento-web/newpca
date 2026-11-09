@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.5",
+    data: "2026-11-09",
+    titulo: "Carregamento das abas do PCA conferido na tela",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto:
+          "Conferidos no navegador (computador e celular, claro e escuro): o cartão dos filtros do Dashboard numa linha só, como o real; as tabelas da Mesa, Importação e Declarações preenchem a tela até o rodapé; no celular, o seletor de visão do Orçamento não encolhe mais e os botões da barra ficam juntos.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.283.4",
     data: "2026-11-09",
     titulo: "Carregamento das abas do PCA sem saltos",
