@@ -35,6 +35,37 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.286.0",
+    data: "2026-11-09",
+    titulo: "Celular: Execução, Frotas, Automação, Administração e telas públicas",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Execução",
+        texto: "No celular os botões sobre o gráfico ficam com o tamanho do toque, as datas do zoom ganham linha própria e o gráfico é mais alto; os filtros ficam atrás do botão “Filtros” (o gráfico aparece antes).",
+        link: "/painel/execucao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "No celular a tela avisa que executar precisa do Chrome do computador com a extensão; no diagrama, a ligação marcada se remove pelo botão “Remover ligação”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Configurações",
+        texto: "Papéis no celular: o cartão “Em todas as telas” marca uma ação em todas as telas de uma vez; as descrições das notificações aparecem em duas linhas.",
+        link: "/painel/configuracoes?aba=papeis",
+      },
+      {
+        tipo: "melhoria",
+        area: "Página pública",
+        texto: "O botão “Entrar” fica à vista no cabeçalho do celular; a verificação de declaração mostra um cartão por item no celular e ganhou a página para digitar o código.",
+        link: "/declaracao/verificar",
+      },
+    ],
+  },
+  {
     versao: "1.285.0",
     data: "2026-11-09",
     titulo: "Celular: Mesa, PCA, Orçamento, Catálogo, Tarefas e Calendário",

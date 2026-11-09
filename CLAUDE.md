@@ -5698,6 +5698,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   horas se arrasta só pela ALÇA (o dedo que desliza rola), "sem prazo" tem o seletor de data e o título é o "Ir para uma
   data". Tarefas: `MenuLista.onLado` (mover a lista sem arrastar) e "Subir/Descer uma posição" no cartão. `EdicaoColunas`:
   ◀ ▶ no toque. Interação só de arrasto ou teclado = sempre um caminho por toque.
+- **CELULAR — EXECUÇÃO, AUTOMAÇÃO, ADM E PÚBLICAS (v1.286.0, sem migração):** os controles sobre o `GraficoTemporal` só
+  encolhem (`zoom`) com ponteiro FINO (`pointer-fine:` em `ESCALA_CONTROLES`/`ESCALA_PILHA`) — no toque ficam com 44px e o
+  desenho tem 380px; as datas do zoom descem (`max-md:order-last`). Execução: filtros recolhidos atrás de "Filtros (n)"
+  abaixo do `md`. Automação: aviso no toque sem a extensão; `CanvasFluxo` com "Remover ligação" para a ligação marcada.
+  `MatrizCapacidades` (celular) com o cartão "Em todas as telas". `TelaPublica`: "Entrar" no cabeçalho abaixo do `lg`.
+  `/declaracao/verificar` (sem código) existe, como a do termo.
 - **ÁREA VISÍVEL dos painéis flutuantes (v1.225.1):** `area-visivel.ts` (`areaVisivel`, `entre`, `MARGEM_TELA`=8) = a régua ÚNICA de todo painel que se posiciona sozinho — `Dropdown`, `DicaFlutuante`, `JanelaFlutuante`: a largura SEM a barra de rolagem (`clientWidth`, nunca `innerWidth`) e a altura da viewport visual (celular: barra do navegador/teclado); a altura máxima nunca passa da borda (sem o piso de 140px que estourava). Painel novo = esta régua.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

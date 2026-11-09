@@ -73,7 +73,37 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
                 <dd className="font-mono text-text">{d.codigo}</dd>
               </dl>
               <p className="text-[14px] leading-relaxed text-text-2">{textoDeclaracao(c)}</p>
-              <div className="overflow-x-auto rounded-card border border-border">
+              {/* No celular, um CARTÃO por item (a tabela de 9 colunas rolava de lado). */}
+              <ul className="space-y-2 sm:hidden">
+                {c.linhas.map((l) => (
+                  <li key={l.sequencial} className="rounded-card border border-border p-3 text-[13px]">
+                    <p className="font-semibold text-text">
+                      Item {l.sequencial} · DFD {l.dfdNumero ?? "—"} · Planej. {l.planejamento ?? "—"}
+                    </p>
+                    <p className="mt-0.5 text-text-2">{l.descricao ?? "—"}</p>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
+                      <dt className="text-muted">No PCA</dt>
+                      <dd className="text-right">{num(l.quantidadePca)}</dd>
+                      <dt className="text-muted">Declarada</dt>
+                      <dd className="text-right">
+                        {num(l.quantidade)}
+                        {l.parcial ? " (parcial)" : ""}
+                      </dd>
+                      <dt className="text-muted">Saldo</dt>
+                      <dd className="text-right">{remanescente(l) == null ? "—" : num(remanescente(l))}</dd>
+                      <dt className="text-muted">Valor unitário</dt>
+                      <dd className="text-right">{brl(l.valorUnitario)}</dd>
+                      <dt className="text-muted">Valor</dt>
+                      <dd className="text-right font-semibold">{brl(l.valorTotal)}</dd>
+                    </dl>
+                  </li>
+                ))}
+                <li className="flex justify-between rounded-card bg-surface-2 p-3 text-[13px] font-semibold">
+                  <span>Total</span>
+                  <span className="tabular-nums">{brl(c.valorTotal)}</span>
+                </li>
+              </ul>
+              <div className="overflow-x-auto rounded-card border border-border max-sm:hidden">
                 <table className="w-full min-w-[760px] text-[13px]">
                   <thead className="bg-surface-2 text-muted">
                     <tr>

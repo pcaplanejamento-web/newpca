@@ -1611,7 +1611,7 @@ function EditorFluxo({
               <Ajuda botao titulo="Como montar">
                 <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
                   <li>Toque num bloco à esquerda: ele entra ligado ao nó marcado (ou arraste até o quadro).</li>
-                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e Delete para desligar. As setas mostram a direção; cada ligação de um nó tem uma cor.</li>
+                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e “Remover ligação” (ou Delete) para desligar. As setas mostram a direção; cada ligação de um nó tem uma cor.</li>
                   <li>Arraste o trecho vertical de uma linha para ajustá-la; duplo clique volta ao automático.</li>
                   <li>“Organizar” põe os componentes em colunas na ordem do fluxo, com as ligações retas.</li>
                   <li>Laço: ligue o fim do corpo à entrada “Volta” — repete até acabar.</li>

@@ -72,7 +72,7 @@ export function TelaPublica({
   const ativo = (item: { href: string }) => item.href === href(vista);
   const marca = <MarcaLink href={painel?.href ?? "/"} dica={painel?.dica} identidade={identidade} />;
   const entrar = (
-    <Button href="/login" variant="primary" icon={<IconTelaAcesso className="h-4 w-4" />} className="w-full rounded-full opacity-60 hover:opacity-100 focus-visible:opacity-100 motion-safe:active:scale-[0.96]">
+    <Button href="/login" variant="primary" icon={<IconTelaAcesso className="h-4 w-4" />} className="w-full rounded-full opacity-60 hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 motion-safe:active:scale-[0.96]">
       Entrar
     </Button>
   );
@@ -109,6 +109,12 @@ export function TelaPublica({
                 />
               )}
               <ThemeToggle />
+              {/* Sem sessão, no celular/tablet o "Entrar" fica à vista no cabeçalho (o do menu só aparece abrindo a gaveta). */}
+              {!painel && (
+                <Button href="/login" variant="primary" size="sm" aria-label="Entrar" title="Entrar" className="lg:hidden" icon={<IconTelaAcesso className="h-4 w-4" />}>
+                  <span className="hidden sm:inline">Entrar</span>
+                </Button>
+              )}
               {/* O último item: volta ao sistema (no celular, só o ícone). */}
               {painel && (
                 <Button href={painel.href} variant="secondary" size="sm" aria-label={painel.dica} title={painel.dica} icon={<IconSettings className="h-4 w-4" />}>

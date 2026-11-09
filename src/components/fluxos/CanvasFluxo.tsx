@@ -6,6 +6,8 @@ import { corCategoria } from "@/lib/fluxo-nos";
 import { alturaNo, caminhoSvg, coresDasLigacoes, dobraDaRota, GRADE, LARGURA_NO, PASSO_PORTA, type Ponto, posPorta, rotaOrtogonal, rotasDoGrafo, setasDaRota, snap, TOPO_PORTAS } from "@/lib/fluxo-layout";
 
 export { alturaNo, LARGURA_NO };
+import { Button } from "../Button";
+import { IconTrash } from "../icons";
 import { segurar } from "../segurar";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
@@ -349,6 +351,22 @@ export function CanvasFluxo({
           );
         })}
       </div>
+      {/* A ligação MARCADA se remove também por um botão (no toque não há a tecla Delete). */}
+      {conSel != null && !somenteLeitura && (
+        <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<IconTrash className="h-4 w-4" />}
+            onClick={() => {
+              onMudar({ ...grafo, conexoes: grafo.conexoes.filter((_, i) => i !== conSel) });
+              setConSel(null);
+            }}
+          >
+            Remover ligação
+          </Button>
+        </div>
+      )}
       {extra}
     </div>
   );
