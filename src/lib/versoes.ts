@@ -35,6 +35,43 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.285.0",
+    data: "2026-11-09",
+    titulo: "Celular: Mesa, PCA, Orçamento, Catálogo, Tarefas e Calendário",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Calendário",
+        texto: "Rolar a grade de horas com o dedo sobre um evento não o move mais de horário — no toque o evento se arrasta só pela alça do canto. Tarefas sem prazo ganham o seletor de data no celular, o título vira “Ir para uma data” e o dia aparece curto.",
+        link: "/painel/calendario",
+      },
+      {
+        tipo: "melhoria",
+        area: "Tarefas",
+        texto: "Sem arrastar: “Mover para a esquerda/direita” no menu da lista e “Subir/Descer uma posição” no menu do cartão. No toque, a faixa das etiquetas abre o cartão.",
+        link: "/painel/tarefas",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "No celular e no tablet os banners abrem um de cada vez (antes três espremidos lado a lado); as ações do cabeçalho descem para uma linha própria e as alterações não salvas aparecem num ponto.",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "A Consulta de itens do Dashboard rola por dentro com o rodapé à vista; no Comparativo do orçamento o rodapé fica fixo, Medida e Visão dividem uma linha e, editando colunas no toque, há botões para mover a coluna.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "melhoria",
+        area: "Catálogo",
+        texto: "A Lista de Itens rola por dentro com o rodapé à vista; o visualizador de documentos ganhou zoom.",
+        link: "/painel/catalogo",
+      },
+    ],
+  },
+  {
     versao: "1.284.0",
     data: "2026-11-09",
     titulo: "Celular: revisão das peças usadas em todas as telas",

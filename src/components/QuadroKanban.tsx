@@ -166,6 +166,9 @@ export function QuadroKanban({
             {onDuplicar && item("Duplicar", <IconCopy className="h-4 w-4 text-muted" />, () => onDuplicar(t.id))}
             {item("Para o topo da lista", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, 0), pos === 0)}
             {item("Para o fim da lista", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, Number.MAX_SAFE_INTEGER), pos === total - 1)}
+            {/* Um passo (o Alt+↑/↓ do desktop) — no toque, sem arrastar. */}
+            {item("Subir uma posição", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, pos - 1), pos <= 0)}
+            {item("Descer uma posição", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, pos + 1), pos >= total - 1)}
             {!t.template && item(t.concluidaEm ? "Reabrir" : "Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onConcluir(t.id))}
             {listas
               .filter((x) => x.id !== l.id)

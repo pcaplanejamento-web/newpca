@@ -425,7 +425,8 @@ export function TabelaCruzada({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border px-3 py-1.5 text-[12.5px] text-muted">
+      {/* No celular o rodapé (resumo, ações, linhas, paginação) GRUDA acima da navegação inferior, como o da DataTable. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface px-3 py-1.5 text-[12.5px] text-muted max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10">
         <span>{resumo}</span>
         <div className="flex flex-wrap items-center gap-2">
           {acoesRodape}

@@ -703,6 +703,14 @@ export function QuadroTarefas({
                   onExcluirLista={() => setExcluindoLista(l.id)}
                   onLimite={() => setLimiteLista(l.id)}
                   onPessoa={() => setPessoaLista(l.id)}
+                  onLado={(() => {
+                    // A posição entre as ATIVAS sem a própria (a régua do `moverLista`).
+                    const i = ativas.findIndex((x) => x.id === l.id);
+                    return {
+                      esquerda: i > 0 ? () => moverLista(l.id, i - 1) : undefined,
+                      direita: i >= 0 && i < ativas.length - 1 ? () => moverLista(l.id, i + 1) : undefined,
+                    };
+                  })()}
                   onConcluidas={() => alternarConcluidas(l)}
                 />
                     )

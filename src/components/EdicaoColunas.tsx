@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { LARGURA_MAX, LARGURA_MIN, soltarColuna } from "@/lib/colunas-layout";
-import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip, IconSort } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconChevronRight, IconEyeOff, IconFixar, IconGrip, IconSort } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { segurar } from "./segurar";
 
@@ -99,7 +99,7 @@ function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotu
       title={rotulo}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-9 w-7 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 lg:h-7 lg:w-7 ${
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 lg:h-7 lg:w-7 ${
         ligada ? "bg-accent/10 text-accent" : "text-faint hover:bg-surface hover:text-text-2"
       }`}
     >
@@ -160,7 +160,12 @@ export function CabecalhoEdicao({
       >
         <IconGrip className="h-3.5 w-3.5" />
       </button>
-      <div className="mb-1 flex items-center justify-center gap-0.5">
+      <div className="mb-1 flex flex-wrap items-center justify-center gap-0.5">
+        {/* No TOQUE, mover sem arrastar (o arrasto pela alça de 20px é difícil com o dedo). */}
+        <span className="hidden any-pointer-coarse:contents">
+          <AcaoColuna rotulo={`Mover ${rotulo} para a esquerda`} ligada={false} icone={<IconChevronLeft className="h-4 w-4" />} onClick={() => onMover(-1)} />
+          <AcaoColuna rotulo={`Mover ${rotulo} para a direita`} ligada={false} icone={<IconChevronRight className="h-4 w-4" />} onClick={() => onMover(1)} />
+        </span>
         <AcaoColuna
           rotulo={congelada ? `Descongelar ${rotulo}` : `Congelar ${rotulo}`}
           ligada={congelada}

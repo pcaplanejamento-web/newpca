@@ -93,22 +93,22 @@ function Painel({
       aria-label={titulo}
       className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border p-[var(--pad-card)]">
+      {/* No celular as AÇÕES do cabeçalho (Histórico, Tarefas, Atualizar…) descem para uma 2ª linha: o título (nº, tipo,
+          planejamento) fica inteiro e o X segue no canto. */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-1 gap-y-1.5 border-b border-border p-[var(--pad-card)]">
         {cabecalho ? (
-          <div className="min-w-0 flex-1">{cabecalho}</div>
+          <div className="mr-2 min-w-0 flex-1">{cabecalho}</div>
         ) : (
-          <h3 className="line-clamp-2 min-w-0 text-base font-bold text-text sm:line-clamp-1" title={titulo}>
+          <h3 className="mr-2 line-clamp-2 min-w-0 flex-1 text-base font-bold text-text sm:line-clamp-1" title={titulo}>
             {titulo}
           </h3>
         )}
-        <div className="flex shrink-0 items-center gap-1">
-          {acoesCabecalho}
-          {onClose && !bloqueado && (
-            <Button variant="icon" aria-label="Fechar" onClick={onClose}>
-              <IconClose className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
+        {acoesCabecalho && <div className="flex items-center gap-1 max-sm:order-3 max-sm:w-full max-sm:flex-wrap max-sm:justify-end sm:shrink-0">{acoesCabecalho}</div>}
+        {onClose && !bloqueado && (
+          <Button variant="icon" aria-label="Fechar" onClick={onClose} className="shrink-0 max-sm:order-2">
+            <IconClose className="h-5 w-5" />
+          </Button>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-[var(--pad-card)]">{children}</div>
       {rodape && (
@@ -184,6 +184,7 @@ export function Modal({
 }) {
   const [montado, setMontado] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [largo, setLargo] = useState(false);
   const idModal = useRef(0);
   if (idModal.current === 0) idModal.current = ++seqModal;
   useEffect(() => setMontado(true), []);
@@ -199,10 +200,20 @@ export function Modal({
   }, [open]);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 640px)");
-    const on = () => setIsDesktop(mq.matches);
+    // Vários banners lado a lado só a partir do `lg`: no tablet (768) três painéis ficavam com ~250px cada e os
+    // formulários deles (que quebram pela largura da TELA) espremidos.
+    const lg = window.matchMedia("(min-width: 64rem)");
+    const on = () => {
+      setIsDesktop(mq.matches);
+      setLargo(lg.matches);
+    };
     on();
     mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    lg.addEventListener("change", on);
+    return () => {
+      mq.removeEventListener("change", on);
+      lg.removeEventListener("change", on);
+    };
   }, []);
 
   // Trava o scroll da página enquanto o modal está aberto (nada interage por trás) — contagem compartilhada.
@@ -316,7 +327,7 @@ export function Modal({
   const PRINCIPAL = "__principal";
   const colunas = [...aEsquerda, { id: PRINCIPAL, aberto: true, largura: larguraPrincipal }, ...direita];
   const porAbertura = principalNoTopo ? [...ordemRef.current, PRINCIPAL] : [PRINCIPAL, ...ordemRef.current];
-  const visiveis = new Set(porAbertura.slice(-(isDesktop ? MAX_VISIVEIS : 1)));
+  const visiveis = new Set(porAbertura.slice(-(largo ? MAX_VISIVEIS : 1)));
   const largura = (c: { id: string; largura?: number }) =>
     c.largura ?? (c.id === PRINCIPAL ? (visiveis.size > 1 ? 44 : 64) : 40);
   // Mesma ESTRUTURA de trilha aberta/fechada (minmax(0, Nfr)) — o navegador interpola a largura.

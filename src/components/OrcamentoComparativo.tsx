@@ -377,7 +377,8 @@ export function OrcamentoComparativo({
             </SelectField>
           </div>
         </div>
-        <div className="w-full sm:w-52">
+        {/* No celular, Medida e Visão dividem UMA linha (eram duas linhas inteiras antes da tabela). */}
+        <div className="min-w-0 flex-1 basis-[10rem] sm:w-52 sm:flex-none">
           <SelectField compacto label="Medida" value={medida} onChange={(e) => setMedida(e.target.value as MedidaOrcamento)}>
             {MEDIDAS_ORCAMENTO.map((x) => (
               <option key={x.key} value={x.key}>
@@ -387,7 +388,7 @@ export function OrcamentoComparativo({
           </SelectField>
         </div>
         {visoes.length > 0 && (
-          <div className="w-full sm:w-52">
+          <div className="min-w-0 flex-1 basis-[10rem] sm:w-52 sm:flex-none">
             <SelectField
               compacto
               label="Visão"

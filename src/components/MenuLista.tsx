@@ -11,7 +11,7 @@ import { Dropdown } from "./Dropdown";
 import { SelectField, TextField } from "./Field";
 import { Callout } from "./Callout";
 import { Segmented } from "./Segmented";
-import { IconArquivar, IconArrowRight, IconCheck, IconCopy, IconMais, IconPlus, IconSort, IconTrash, IconUser } from "./icons";
+import { IconArquivar, IconArrowRight, IconCheck, IconChevronLeft, IconChevronRight, IconCopy, IconMais, IconPlus, IconSort, IconTrash, IconUser } from "./icons";
 import type { Pessoa } from "@/lib/pessoa";
 import { SeletorPessoa } from "./SeletorPessoa";
 import { CamposPeriodo, type PeriodoQuadro } from "./QuadroCard";
@@ -45,6 +45,7 @@ export function MenuLista({
   onLimite,
   onConcluidas,
   onPessoa,
+  onLado,
 }: {
   lista: ListaTarefas;
   /** As OUTRAS listas ativas do quadro (destino de "mover todos os cartões"). */
@@ -68,6 +69,8 @@ export function MenuLista({
   onConcluidas?: () => void;
   /** Abre a atribuição da lista a uma pessoa (`PessoaLista`). */
   onPessoa?: () => void;
+  /** Mover a lista UMA posição (o arrasto do cabeçalho, sem arrastar — no toque); ausente = já está na ponta. */
+  onLado?: { esquerda?: () => void; direita?: () => void };
 }) {
   const [secao, setSecao] = useState<null | "ordenar" | "mover">(null);
   return (
@@ -126,6 +129,8 @@ export function MenuLista({
             {(pode.configurar || pode.excluir) && (
               <>
                 {pode.manipular && <div className="my-1 border-t border-border" />}
+                {pode.configurar && onLado && item("Mover para a esquerda", <IconChevronLeft className="h-4 w-4 text-muted" />, () => onLado.esquerda?.(), !onLado.esquerda)}
+                {pode.configurar && onLado && item("Mover para a direita", <IconChevronRight className="h-4 w-4 text-muted" />, () => onLado.direita?.(), !onLado.direita)}
                 {pode.configurar && onPessoa && item(lista.responsavelId != null ? "Pessoa atribuída…" : "Atribuir a uma pessoa…", <IconUser className="h-4 w-4 text-muted" />, onPessoa)}
                 {pode.configurar && onLimite && item(lista.limiteWip != null ? `Limite de cartões (${lista.limiteWip})…` : "Limite de cartões…", <IconSort className="h-4 w-4 text-muted" />, onLimite)}
                 {pode.configurar &&

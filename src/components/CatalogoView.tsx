@@ -936,13 +936,15 @@ export function CatalogoView({
               {cardsNovos}
             </div>
           ) : (
-            <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+            // A tabela É o cartão (como a Mesa): rolagem interna até o fim do display e rodapé fixo no celular.
+            <div className="space-y-[var(--gap-block)]">
               {barraTipoBusca}
               <DataTable
                 columns={colLista}
                 rows={itensListaFiltrados}
                 getKey={(r) => r.id}
-                pageSize={20}
+                scrollInterno
+                density="compact"
                 minWidth={1040}
                 onRowClick={(r) => setPainelItem(r)}
                 activeKey={abertoId == null ? (painelItem?.id ?? null) : null}
