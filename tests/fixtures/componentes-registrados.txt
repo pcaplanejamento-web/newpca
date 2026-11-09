@@ -374,3 +374,5 @@ QuadroEsqueleto.tsx
 PerfilEsqueleto.tsx
 PadronizacaoEsqueleto.tsx
 DropzoneEsqueleto.tsx
+MesaEsqueleto.tsx
+CatalogoEsqueleto.tsx

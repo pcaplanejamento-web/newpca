@@ -1,17 +1,14 @@
-import { EsqueletoGradeEspacos } from "@/components/CartaoEspacoEsqueleto";
+import { EsqueletoBarraCatalogo } from "@/components/CatalogoEsqueleto";
 import { EsqueletoTela } from "@/components/EsqueletoTela";
-import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
-import { EsqueletoControle } from "@/components/Skeleton";
 
-/** O Catálogo: as visões à esquerda e "Exportar modelo" à direita; a grade dos cards dos catálogos e das pastas. */
+/**
+ * O Catálogo: só a barra (vale para qualquer visão). A visão vem no Suspense da página, com o esqueleto da visão pedida
+ * (`?vista=`), que este arquivo não consegue ler.
+ */
 export default function Carregando() {
   return (
     <EsqueletoTela>
-      <div className="flex flex-wrap items-center gap-2">
-        <EsqueletoSegmented itens={4} />
-        <EsqueletoControle className="ml-auto w-36" />
-      </div>
-      <EsqueletoGradeEspacos espaco="gap-3" />
+      <EsqueletoBarraCatalogo />
     </EsqueletoTela>
   );
 }

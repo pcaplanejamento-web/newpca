@@ -58,10 +58,11 @@ export function EsqueletoAbaQuadro({ aba }: { aba: AbaQuadro }) {
 }
 
 /**
- * ESQUELETO DO QUADRO inteiro (o `loading.tsx`): a `MolduraQuadro` até o fim do display, a faixa do topo (voltar, nome e
- * as ferramentas), as listas e a pílula das vistas no rodapé.
+ * ESQUELETO DO QUADRO inteiro: a `MolduraQuadro` até o fim do display, a faixa do topo (voltar, nome e as ferramentas), o
+ * conteúdo da aba e a pílula das vistas no rodapé. `aba={null}` = a moldura sem conteúdo (o `loading.tsx`, que não lê o
+ * `?aba=`); com a aba, a espera da página.
  */
-export function EsqueletoQuadro() {
+export function EsqueletoQuadro({ aba = "quadro" }: { aba?: AbaQuadro | null }) {
   return (
     <div className="relative flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl shadow-ring">
       <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border px-2 sm:px-3">
@@ -73,7 +74,7 @@ export function EsqueletoQuadro() {
           ))}
         </div>
       </div>
-      <EsqueletoAbaQuadro aba="quadro" />
+      {aba ? <EsqueletoAbaQuadro aba={aba} /> : <div className="min-h-0 flex-1" />}
       <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
         <Skeleton className="h-12 w-full max-w-sm rounded-xl lg:h-12" />
       </div>

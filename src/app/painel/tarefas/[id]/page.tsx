@@ -1,5 +1,8 @@
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound, redirect } from "next/navigation";
+import { type ReactNode, Suspense } from "react";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoQuadro } from "@/components/QuadroEsqueleto";
 import { type AbaQuadro, QuadroTarefas } from "@/components/QuadroTarefas";
 import { componenteLibera, getAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
@@ -31,11 +34,39 @@ export default async function QuadroTarefasPage({
   if (!quadro) notFound();
   const r = await acessoPagina("tarefas", quadro.grupoId);
   if (r.bloqueio) return r.bloqueio;
-  const dados = await carregarQuadro(r.acesso, id);
-  if (!dados) notFound();
   const sp = await searchParams;
   const permitidas = ABAS.filter((a) => a === "quadro" || componenteLibera(acesso as NonNullable<typeof acesso>, `tarefas.${a}`));
   const aba: AbaQuadro = permitidas.includes(sp.aba as AbaQuadro) ? (sp.aba as AbaQuadro) : "quadro";
+  // Os dados no Suspense com o esqueleto DA ABA PEDIDA (o `loading.tsx` só desenha a moldura vazia: não lê o `?aba=`).
+  return (
+    <Suspense
+      fallback={
+        <EsqueletoTela cheia>
+          <EsqueletoQuadro aba={aba} />
+        </EsqueletoTela>
+      }
+    >
+      <ConteudoQuadro id={id} aba={aba} permitidas={permitidas} sp={sp} r={r} />
+    </Suspense>
+  );
+}
+
+async function ConteudoQuadro({
+  id,
+  aba,
+  permitidas,
+  sp,
+  r,
+}: {
+  id: number;
+  aba: AbaQuadro;
+  permitidas: AbaQuadro[];
+  sp: { nova?: string; tarefa?: string; prazo?: string; lista?: string };
+  r: Exclude<Awaited<ReturnType<typeof acessoPagina>>, { bloqueio: ReactNode }>;
+}) {
+  const u = r.acesso.u;
+  const dados = await carregarQuadro(r.acesso, id);
+  if (!dados) notFound();
   // Criar tarefa (`?nova=`/`?prazo=`) só com Manipular — sem ela, a chegada só abre o quadro.
   const nova = dados.pode.manipular ? lerVinculo(sp.nova) : null;
   const novaInicial = nova ? { ...nova, rotulo: null, ...(await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) } : null;

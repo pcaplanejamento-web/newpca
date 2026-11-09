@@ -20,7 +20,7 @@ import { Modal } from "./Modal";
 import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 import { ResumoPapel } from "./ResumoPapel";
 import { Segmented } from "./Segmented";
-import { SkeletonLinhas } from "./Skeleton";
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
@@ -168,7 +168,7 @@ export function PapeisAdmin() {
     await carregar();
   }
 
-  if (lista === null) return <SkeletonLinhas linhas={4} />;
+  if (lista === null) return <EsqueletoTabela linhas={6} colunas={4} />;
 
   const cols: Column<PapelCadastro>[] = [
     {

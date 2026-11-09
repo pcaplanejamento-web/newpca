@@ -3,9 +3,10 @@ import { Skeleton, SkeletonLinhas } from "./Skeleton";
 /**
  * Esqueleto das `Tabs` LATERAIS SEPARADAS (Configurações, Perfil) — a MESMA disposição: no desktop a lista num cartão de
  * 15rem (`lg:w-60`, `p-2`, itens na altura dos controles) e o conteúdo noutro cartão ao lado; no celular a faixa horizontal
- * das abas sobre o conteúdo. Arquivo leve (as `Tabs` moram num arquivo "use client").
+ * das abas sobre o conteúdo. Arquivo leve (as `Tabs` moram num arquivo "use client"). `conteudo={false}` = só a lista: no
+ * `loading.tsx` de uma tela com abas, a aba aberta (pelo `?aba=`) traz o desenho dela — nunca linhas genéricas trocadas.
  */
-export function EsqueletoTabsLaterais({ abas = 8, linhas = 6 }: { abas?: number; linhas?: number }) {
+export function EsqueletoTabsLaterais({ abas = 8, linhas = 6, conteudo = true }: { abas?: number; linhas?: number; conteudo?: boolean }) {
   return (
     <div className="flex min-h-0 flex-col lg:flex-1 lg:flex-row lg:gap-[var(--gap-block)]">
       <div className="flex shrink-0 gap-1 overflow-hidden border-b border-border lg:w-60 lg:flex-col lg:gap-0.5 lg:self-start lg:rounded-card lg:border lg:bg-surface lg:p-2 lg:shadow-ring">
@@ -16,9 +17,11 @@ export function EsqueletoTabsLaterais({ abas = 8, linhas = 6 }: { abas?: number;
           </div>
         ))}
       </div>
+      {conteudo && (
       <div className="mt-[var(--gap-block)] min-w-0 flex-1 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring lg:mt-0 lg:self-start">
         <SkeletonLinhas linhas={linhas} />
       </div>
+      )}
     </div>
   );
 }

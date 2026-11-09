@@ -11,7 +11,7 @@ import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { TextField } from "./Field";
 import { IconBriefcase, IconPlus, IconSave } from "./icons";
-import { SkeletonLinhas } from "./Skeleton";
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { toast } from "./Toast";
 
 /**
@@ -117,7 +117,7 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
     }
   }
 
-  if (lista === null) return <SkeletonLinhas linhas={4} />;
+  if (lista === null) return <EsqueletoTabela linhas={6} colunas={4} />;
   const pos = new Map(lista.map((c, i) => [c.id, i]));
   const cols: Column<CargoComUso>[] = [
     { key: "nome", header: "Cargo ou função", filter: "none", align: "left", minWidth: 110, render: (c) => <span className="font-medium text-text">{c.nome}</span> },

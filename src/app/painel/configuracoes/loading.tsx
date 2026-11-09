@@ -5,7 +5,7 @@ import { EsqueletoTabsLaterais } from "@/components/TabsEsqueleto";
 export default function Carregando() {
   return (
     <EsqueletoTela cheia>
-      <EsqueletoTabsLaterais />
+      <EsqueletoTabsLaterais conteudo={false} />
     </EsqueletoTela>
   );
 }

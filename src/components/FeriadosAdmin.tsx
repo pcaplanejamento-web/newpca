@@ -13,7 +13,7 @@ import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextField } from "./Field";
 import { IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
-import { SkeletonLinhas } from "./Skeleton";
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
@@ -81,7 +81,7 @@ export function FeriadosAdmin() {
     }
   };
 
-  if (lista === null) return <SkeletonLinhas linhas={4} />;
+  if (lista === null) return <EsqueletoTabela linhas={6} colunas={4} />;
   const valido = r != null && /^\d{4}-\d{2}-\d{2}$/.test(r.data) && r.nome.trim().length > 0;
   const cols: Column<FeriadoCadastro>[] = [
     { key: "data", header: "Data", nowrap: true, value: (f) => f.data, render: (f) => <span className="tabular-nums">{f.anual ? `${dataBR(f.data).slice(0, 5)} (todo ano)` : dataBR(f.data)}</span> },

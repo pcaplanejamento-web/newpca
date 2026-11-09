@@ -88,3 +88,18 @@ export function EsqueletoColunaEspaco({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+/**
+ * A ESPERA DO CONTEÚDO DE UMA ABA (o `fallback` do Suspense das páginas dos espaços): o esqueleto da aba PEDIDA, com o
+ * MESMO atraso de 450 ms da tela (a aba que chega antes entra direto, sem piscar).
+ */
+export function EsperaAba({ children }: { children: ReactNode }) {
+  return (
+    <div className="esqueleto-tela space-y-[var(--gap-block)]" aria-busy="true">
+      <span className="sr-only" role="status">
+        Carregando a aba…
+      </span>
+      {children}
+    </div>
+  );
+}

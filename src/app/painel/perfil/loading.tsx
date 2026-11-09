@@ -7,7 +7,7 @@ export default function Carregando() {
   return (
     <EsqueletoTela cheia>
       <EsqueletoCabecalhoPerfil />
-      <EsqueletoTabsLaterais />
+      <EsqueletoTabsLaterais conteudo={false} />
     </EsqueletoTela>
   );
 }

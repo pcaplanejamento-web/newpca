@@ -82,6 +82,8 @@ import { EsqueletoFiltrosDashboard } from "@/components/FiltrosDashboardEsquelet
 import { EsqueletoCabecalhoPerfil } from "@/components/PerfilEsqueleto";
 import { EsqueletoPadronizacao } from "@/components/PadronizacaoEsqueleto";
 import { EsqueletoDropzone } from "@/components/DropzoneEsqueleto";
+import { EsqueletoBarraMesa, EsqueletoVistaMesa } from "@/components/MesaEsqueleto";
+import { EsqueletoBarraCatalogo, EsqueletoVistaCatalogo } from "@/components/CatalogoEsqueleto";
 import { EsqueletoStatMini } from "@/components/StatMini";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import { SerieTemporal } from "@/components/charts/SerieTemporal";
@@ -4054,6 +4056,15 @@ export function Catalogo() {
           <EsqueletoPadronizacao />
           <EsqueletoCabecalhoPerfil />
           <EsqueletoDropzone />
+        </div>
+      </Secao>
+
+      <Secao titulo="EsqueletoBarraMesa · EsqueletoVistaMesa · EsqueletoBarraCatalogo · EsqueletoVistaCatalogo (a barra no loading.tsx; a visão pedida pelo ?vista= no Suspense da página)">
+        <div className="space-y-[var(--gap-block)]">
+          <EsqueletoBarraMesa />
+          <EsqueletoVistaMesa vista="itens" />
+          <EsqueletoBarraCatalogo />
+          <EsqueletoVistaCatalogo vista="catalogo" />
         </div>
       </Secao>
 

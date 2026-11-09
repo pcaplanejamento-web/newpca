@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
+import { type ReactNode, Suspense } from "react";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoBarraMesa, EsqueletoVistaMesa } from "@/components/MesaEsqueleto";
 import { MesaSistema } from "@/components/MesaSistema";
 import { SeletorMesa } from "@/components/SeletorMesa";
 import { pcasDoAcesso } from "@/lib/acesso";
@@ -21,7 +24,7 @@ export const dynamic = "force-dynamic";
 const opcoesMesa = (pcas: PcaResumo[], permitidos: Set<number> | null) =>
   pcas.filter((p) => (!permitidos || permitidos.has(p.id))).map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
 
-export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string; responsavel?: string }> }) {
+export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string; responsavel?: string; vista?: string }> }) {
   const sp = await searchParams;
   // `?pca=<id>` = a MESA DAQUELE PCA (a mesma da aba do espaço), escolhida no seletor da barra; PCA inexistente ou de
   // lista = a Mesa do sistema. Cada uma com o seu portão: a Mesa do PCA exige VISUALIZAR o PCA; a do sistema, a Mesa.
@@ -40,6 +43,30 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   }
   const r = await acessoPagina("dfd");
   if (r.bloqueio) return r.bloqueio;
+  // Os dados no Suspense com o esqueleto DA VISÃO PEDIDA (o `loading.tsx` só desenha a barra: não lê o `?vista=`).
+  return (
+    <Suspense
+      fallback={
+        <EsqueletoTela cheia>
+          <EsqueletoBarraMesa />
+          <EsqueletoVistaMesa vista={sp.vista} />
+        </EsqueletoTela>
+      }
+    >
+      <ConteudoMesa r={r} sp={sp} abrirInicial={abrirInicial} />
+    </Suspense>
+  );
+}
+
+async function ConteudoMesa({
+  r,
+  sp,
+  abrirInicial,
+}: {
+  r: Exclude<Awaited<ReturnType<typeof acessoPagina>>, { bloqueio: ReactNode }>;
+  sp: { responsavel?: string };
+  abrirInicial: { tipo: "protocolo" | "dfd"; id: number } | null;
+}) {
   const m = await carregarMesa(r.acesso.u);
   // `?responsavel=<id>` (o "Ver na Mesa" da presença): abre filtrada pela pessoa — só para quem vê o Responsável.
   const resp = Number(sp.responsavel);

@@ -13,7 +13,7 @@ import { EstadoPonto } from "./EstadoCelula";
 import { TextField } from "./Field";
 import { IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
-import { SkeletonLinhas } from "./Skeleton";
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { toast } from "./Toast";
 
 const COR_PADRAO = "#2563eb";
@@ -122,11 +122,7 @@ export function SituacoesAdmin() {
   }
 
   if (lista === null) {
-    return (
-      <div className="rounded-card border border-border p-[var(--pad-card)]">
-        <SkeletonLinhas linhas={3} />
-      </div>
-    );
+    return <EsqueletoTabela linhas={6} colunas={4} />;
   }
   const pos = new Map(lista.map((s, i) => [s.id, i]));
   const cols: Column<SituacaoComUso>[] = [

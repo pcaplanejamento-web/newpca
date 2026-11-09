@@ -1,12 +1,14 @@
-import { EsqueletoEspaco, EsqueletoTela } from "@/components/EsqueletoTela";
-import { EsqueletoAbaOrcamento } from "@/components/OrcamentoEspacoEsqueleto";
+import { EsqueletoEspaco, EsqueletoIndicadores, EsqueletoTela } from "@/components/EsqueletoTela";
 
-/** O espaço do orçamento: o voltar, as abas e o excluir; abaixo, a aba padrão (Lançamentos: os indicadores e a tabela). */
+/**
+ * O espaço do orçamento: a linha (o voltar, as abas e o excluir) e os indicadores — valem para QUALQUER aba. O conteúdo
+ * da aba vem no Suspense da página, com o esqueleto da aba pedida (`?aba=`), que este arquivo não consegue ler.
+ */
 export default function Carregando() {
   return (
-    <EsqueletoTela cheia>
+    <EsqueletoTela>
       <EsqueletoEspaco abas={4} config />
-      <EsqueletoAbaOrcamento aba="lancamentos" />
+      <EsqueletoIndicadores />
     </EsqueletoTela>
   );
 }

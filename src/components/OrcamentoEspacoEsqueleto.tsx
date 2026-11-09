@@ -9,10 +9,9 @@ import { EsqueletoControle } from "./Skeleton";
  * esqueletos dos componentes dela, até o fim do display. Usado pelo `loading.tsx` da rota (Lançamentos, a aba padrão) e
  * pelo `AbasEspaco` na troca de aba (`esqueletos`). Arquivo leve, sem "use client".
  */
-export function EsqueletoAbaOrcamento({ aba }: { aba: AbaOrcamento }) {
-  return (
-    <EsqueletoColunaEspaco>
-      <EsqueletoIndicadores />
+export function EsqueletoAbaOrcamento({ aba, semIndicadores = false }: { aba: AbaOrcamento; semIndicadores?: boolean }) {
+  const conteudo = (
+    <>
       {aba === "comparativo" && (
         // A linha dos controles da tabela cruzada: Linhas, Colunas, Medida, Visão e R$ | %.
         <div className="flex flex-wrap items-center gap-2">
@@ -24,6 +23,20 @@ export function EsqueletoAbaOrcamento({ aba }: { aba: AbaOrcamento }) {
       )}
       {aba === "vinculos" && <EsqueletoSegmented itens={2} className="self-start" />}
       <EsqueletoTabela cheia linhas={12} colunas={aba === "visoes" ? 5 : 8} />
+    </>
+  );
+  // `semIndicadores`: só o conteúdo da aba (a espera do Suspense da página — os indicadores já estão à vista), na altura
+  // que sobra abaixo deles.
+  if (semIndicadores)
+    return (
+      <div className="flex flex-col gap-[var(--gap-block)] lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*3-var(--h-control-sm)-132px-var(--gap-block)))]">
+        {conteudo}
+      </div>
+    );
+  return (
+    <EsqueletoColunaEspaco>
+      <EsqueletoIndicadores />
+      {conteudo}
     </EsqueletoColunaEspaco>
   );
 }

@@ -3,7 +3,7 @@
 import { EsqueletoPadronizacao } from "./PadronizacaoEsqueleto";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
 import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
@@ -94,7 +94,10 @@ export function CatalogoView({
   pode,
   pastas,
   pasta = null,
+  vistaInicial,
 }: {
+  /** A visão pedida no endereço (`?vista=` — a pesquisa do sistema), lida pela página: a tela já abre nela. */
+  vistaInicial?: string;
   catalogos: CatalogoResumo[];
   itens: CatalogoItemRow[];
   /** O que o papel permite no Catálogo (o grupo já liberou a tela). */
@@ -153,7 +156,9 @@ export function CatalogoView({
   const nAgenda = catalogos.filter((c) => c.tipo === "agenda").length;
   const nHistorico = catalogos.length - nAgenda;
 
-  const [vistaPedida, setVista] = useState<Vista>("catalogo");
+  const [vistaPedida, setVista] = useState<Vista>(
+    vistaInicial === "lista" || vistaInicial === "unidades" || vistaInicial === "classificacoes" ? vistaInicial : "catalogo",
+  );
   const libera = useComponente();
   const CHAVE_VISTA: Record<Vista, string> = { catalogo: "catalogo.catalogos", lista: "catalogo.lista", unidades: "catalogo.unidades", classificacoes: "catalogo.classificacoes" };
   const vista = vistaPermitida<Vista>(vistaPedida, ["catalogo", "lista", "unidades", "classificacoes"], (v) => libera(CHAVE_VISTA[v]));
@@ -222,13 +227,6 @@ export function CatalogoView({
   const [criandoItem, setCriandoItem] = useState(false); // lateral em modo "criar item"
   const [salvandoItem, setSalvandoItem] = useState(false);
   const [erroItem, setErroItem] = useState<string | null>(null);
-
-  // A visão pedida no endereço (`?vista=` — a PESQUISA DO SISTEMA): Catálogo · Lista de Itens · Medida · Classificações.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: só na chegada.
-  useEffect(() => {
-    const v = new URL(window.location.href).searchParams.get("vista");
-    if (v === "lista" || v === "unidades" || v === "classificacoes") setVista(v);
-  }, []);
 
   function trocarVista(v: Vista) {
     setVista(v);

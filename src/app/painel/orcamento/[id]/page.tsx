@@ -1,6 +1,8 @@
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
+import { EsperaAba } from "@/components/EsqueletoTela";
+import { EsqueletoAbaOrcamento } from "@/components/OrcamentoEspacoEsqueleto";
 import { type AbaOrcamento, OrcamentoEspacoView } from "@/components/OrcamentoEspacoView";
 import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
@@ -52,6 +54,36 @@ export default async function OrcamentoEspacoPage({
   const orcamento = repOrc ? resumoDosLancamentos(orcBanco, (await doEscopo()).itens) : orcBanco;
   const permitidas = ABAS.filter((a) => componenteLibera(acesso, `orcamento.${a}`));
   const aba: AbaOrcamento = permitidas.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : (permitidas[0] ?? "lancamentos");
+  // A carga da aba num Suspense com o esqueleto DA ABA PEDIDA (o `loading.tsx` não lê o `?aba=`): os indicadores
+  // ficam à vista e só o conteúdo da aba espera.
+  return (
+    <OrcamentoEspacoView orcamento={orcamento} aba={aba} permitidas={permitidas} podeExcluir={pode.excluir}>
+      <PermissaoExportar permitido={pode.exportar}>
+        <Suspense fallback={<EsperaAba><EsqueletoAbaOrcamento aba={aba} semIndicadores /></EsperaAba>}>
+          <ConteudoOrcamento aba={aba} id={id} orcamento={orcamento} r={r} doEscopo={doEscopo} repOrc={repOrc} />
+        </Suspense>
+      </PermissaoExportar>
+    </OrcamentoEspacoView>
+  );
+}
+
+/** O conteúdo da aba ativa — SÓ ela é carregada. */
+async function ConteudoOrcamento({
+  aba,
+  id,
+  orcamento,
+  r,
+  doEscopo,
+  repOrc,
+}: {
+  aba: AbaOrcamento;
+  id: number;
+  orcamento: Awaited<ReturnType<typeof getOrcamento>> & {};
+  r: Exclude<Awaited<ReturnType<typeof acessoPagina>>, { bloqueio: ReactNode }>;
+  doEscopo: () => Promise<{ itens: Awaited<ReturnType<typeof getOrcamentoItens>>; vinculos: Awaited<ReturnType<typeof listarVinculosOrcamento>> }>;
+  repOrc: Parameters<typeof lancamentosDaUnidade>[2];
+}) {
+  const { pode, acesso } = r;
   let conteudo: ReactNode;
   if (aba === "visoes") {
     const [{ itens: brutos, vinculos }, visoes, alvos] = await Promise.all([doEscopo(), listarVisoesOrcamento(), alvosVinculoOrcamento()]);
@@ -96,9 +128,5 @@ export default async function OrcamentoEspacoPage({
     );
   }
 
-  return (
-    <OrcamentoEspacoView orcamento={orcamento} aba={aba} permitidas={permitidas} podeExcluir={pode.excluir}>
-      <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
-    </OrcamentoEspacoView>
-  );
+  return conteudo;
 }

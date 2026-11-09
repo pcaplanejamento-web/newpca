@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.7",
+    data: "2026-11-09",
+    titulo: "Aba aberta por link carrega com o desenho certo",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto:
+          "Abrir uma aba por link ou recarregar a página (Mesa, Orçamento, Documentos… do PCA; as abas do orçamento e do quadro de Tarefas; as visões da Mesa e do Catálogo) mostra já o desenho daquela aba — antes aparecia o de outra e depois trocava.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "correcao",
+        area: "Configurações",
+        texto: "As abas de Configurações e do Perfil carregam com o desenho da própria aba; Cargos, Feriados, Papéis e Situações esperam com o desenho da tabela.",
+        link: "/painel/configuracoes",
+      },
+    ],
+  },
+  {
     versao: "1.283.6",
     data: "2026-11-09",
     titulo: "Carregamento de todas as telas revisado",

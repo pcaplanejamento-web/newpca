@@ -4,7 +4,9 @@ import { linkDaMesa, mesaDoAlvo } from "@/lib/pesquisa";
 import { redirect } from "next/navigation";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
+import { EsperaAba } from "@/components/EsqueletoTela";
+import { EsqueletoAbaPca } from "@/components/PcaEspacoEsqueleto";
 import { MesaPca } from "@/components/MesaPca";
 import { FerramentasAba } from "@/components/AbasEspaco";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
@@ -79,7 +81,38 @@ export default async function PcaEspacoPage({
   );
   const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
 
-  // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
+  // A carga da aba vai num Suspense com o esqueleto DA ABA PEDIDA: o `loading.tsx` não lê o `?aba=` (só desenha a linha
+  // do espaço) — abrir uma aba por link ou F5 nunca mostra o desenho de outra aba antes.
+  return (
+    <PcaEspacoView
+      pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status }}
+      aba={aba}
+      permitidas={permitidas}
+    >
+      <PermissaoExportar permitido={pode.exportar}>
+        <Suspense fallback={<EsperaAba><EsqueletoAbaPca aba={aba} /></EsperaAba>}>
+          <ConteudoPca pca={pca} aba={aba} r={r} abrir={sp.abrir} />
+        </Suspense>
+      </PermissaoExportar>
+    </PcaEspacoView>
+  );
+}
+
+/** O conteúdo da aba ativa — SÓ ela é carregada (cada aba tem a sua carga; trocar de aba navega). */
+async function ConteudoPca({
+  pca,
+  aba,
+  r,
+  abrir,
+}: {
+  pca: PcaEspaco;
+  aba: AbaPca;
+  r: Exclude<Awaited<ReturnType<typeof acessoPagina>>, { bloqueio: ReactNode }>;
+  abrir?: string;
+}) {
+  const { pode, acesso } = r;
+  const u = acesso.u;
+  const sp = { abrir };
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca);
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
@@ -125,15 +158,7 @@ export default async function PcaEspacoPage({
     );
   }
 
-  return (
-    <PcaEspacoView
-      pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status }}
-      aba={aba}
-      permitidas={permitidas}
-    >
-      <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
-    </PcaEspacoView>
-  );
+  return conteudo;
 }
 
 /**
