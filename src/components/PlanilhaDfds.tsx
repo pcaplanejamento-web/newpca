@@ -293,7 +293,7 @@ export function propsPlanilhaDfds({
     },
     {
       key: "sigla",
-      header: "Sigla",
+      header: "Unidade",
       nowrap: true,
       value: (r) => r.sigla,
       // A cor AZUL (accent) já denota unidade detectada automaticamente — sem o rótulo "auto".
@@ -577,7 +577,7 @@ export function TabelaSobrescritos({
         </CelulaCopiavel>
       ),
     },
-    { key: "sigla", header: "Sigla", nowrap: true, value: (s) => s.sigla ?? "—", render: (s) => <span className="font-mono text-[12px]">{s.sigla ?? "—"}</span> },
+    { key: "sigla", header: "Unidade", nowrap: true, value: (s) => s.sigla ?? "—", render: (s) => <span className="font-mono text-[12px]">{s.sigla ?? "—"}</span> },
     colunaTipoDfd((s: DfdSobrescrito) => s.tipo),
     {
       key: "destino",

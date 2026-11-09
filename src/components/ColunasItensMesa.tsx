@@ -53,7 +53,7 @@ export function colunasItemMesa<R extends LinhaItemMesa>(valores: Valores<R> = {
     } as Column<R>,
     sigla: {
       key: "sigla",
-      header: "Sigla",
+      header: "Unidade",
       nowrap: true,
       value: valores.sigla ?? ((r) => r.sigla ?? "—"),
       render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),

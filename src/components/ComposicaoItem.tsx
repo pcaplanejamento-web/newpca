@@ -153,7 +153,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
         </CelulaCopiavel>
       ),
     },
-    { key: "sigla", header: "Sigla", nowrap: true, value: (it) => it.sigla ?? "—", render: (it) => <CelulaLista valores={it.sigla ? [it.sigla] : []} mono destaque /> },
+    { key: "sigla", header: "Unidade", nowrap: true, value: (it) => it.sigla ?? "—", render: (it) => <CelulaLista valores={it.sigla ? [it.sigla] : []} mono destaque /> },
     colunaTipoDfd((it: T) => it.dfdTipo),
     { key: "item", header: "Item", align: "center", nowrap: true, value: (it) => String(it.item ?? ""), render: (it) => it.item ?? "—" },
     { key: "unidade", header: "Medida", nowrap: true, value: (it) => it.unidade ?? "", render: (it) => it.unidade ?? "—" },

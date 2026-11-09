@@ -262,7 +262,7 @@ export function OrcamentoComparativo({
   const [exportando, setExportando] = useState<FormatoExportacao | null>(null);
   const exportar = async (formato: FormatoExportacao) => {
     if (!cruz || !coluna || exportando) return;
-    const extra = comSigla && siglaDe ? { rotulo: "Sigla", de: siglaDe } : undefined;
+    const extra = comSigla && siglaDe ? { rotulo: "Unidade (cadastro)", de: siglaDe } : undefined;
     const nome = `${titulo} - ${rotuloDim(linha)} x ${rotuloDim(coluna)}`;
     const matriz = matrizCruzamento(cruz, linhasDe(cruz), rotuloDim(linha), extra);
     setExportando(formato);
@@ -440,7 +440,7 @@ export function OrcamentoComparativo({
 
       <TabelaCruzada
         rotuloLinhas={rotuloDim(linha)}
-        rotuloExtra={siglaDe ? "Sigla" : undefined}
+        rotuloExtra={siglaDe ? "Unidade (cadastro)" : undefined}
         linhas={linhas}
         colunas={cruzBase?.colunas ?? []}
         total={cruzBase?.total ?? 0}

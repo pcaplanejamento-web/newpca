@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.2",
+    data: "2026-11-09",
+    titulo: "Coluna Unidade padronizada",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "As colunas com a unidade nas tabelas de DFDs, Itens, Consolidada, Excluídos e Automação passam a se chamar \u201cUnidade\u201d (antes \u201cSigla\u201d), como nas demais tabelas — também no relatório de variação em PDF e no histórico.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "correcao",
+        area: "Orçamento",
+        texto: "No Comparativo, a coluna com a unidade do cadastro ao lado da unidade do orçamento passa a se chamar \u201cUnidade (cadastro)\u201d.",
+        link: "/painel/orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.283.1",
     data: "2026-11-06",
     titulo: "Importação do PCA abre com muitos itens",

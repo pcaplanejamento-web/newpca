@@ -110,8 +110,8 @@ describe("orcamento-cruzamento", () => {
     assert.equal(percentual(25, 100), 25);
     assert.equal(percentual(5, 0), null);
     const c = cruzar(L, "unidade", "nomeElemento", "inicial");
-    const m = matrizCruzamento(c, c.linhas, "Unidade", { rotulo: "Sigla", de: (k) => (k.includes("SEMUS") ? "SMS" : "") });
-    assert.deepEqual(m[0], ["Unidade", "Sigla", "Total", "AUXÍLIOS", "DIÁRIAS", "OBRAS"]);
+    const m = matrizCruzamento(c, c.linhas, "Unidade", { rotulo: "Unidade (cadastro)", de: (k) => (k.includes("SEMUS") ? "SMS" : "") });
+    assert.deepEqual(m[0], ["Unidade", "Unidade (cadastro)", "Total", "AUXÍLIOS", "DIÁRIAS", "OBRAS"]);
     assert.deepEqual(m.at(-1), ["TOTAL", "", 187, 50, 137, 0]);
   });
 

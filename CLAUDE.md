@@ -811,6 +811,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 
 ## Grupos, Órgãos e Unidades (RBAC por grupo)
 > **Medida (v1.154.0):** na interface a unidade de medida do item chama-se **"Medida"** (colunas, filtros, Dashboard, Catálogo → Medida, "Medida cadastrada"); o código segue `unidade`/`unidadeMedida`.
+> **Coluna de unidade (v1.283.2):** toda coluna cujo dado é a unidade requisitante chama-se **"Unidade"** (nunca "Sigla" — a `key` segue `sigla`); "Sigla" só no cadastro de Órgãos/Unidades, na unidade de medida e no contrato da Vólus.
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
 > **Órgão** (entidade nova, acima). NÃO confundir com a **Planilha (PCA)** (tabela `unidades`, arquivo

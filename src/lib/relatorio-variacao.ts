@@ -264,7 +264,7 @@ export function blocosRelatorioVariacao(rel: RelatorioVariacao, opcoes: OpcoesBl
       { titulo: "Descrição", peso: 3 },
       { titulo: "DFD", peso: 1.3 },
       { titulo: "Protocolo", peso: 1 },
-      { titulo: "Sigla", peso: 0.8 },
+      { titulo: "Unidade", peso: 0.8 },
       { titulo: "Medida", peso: 0.8 },
       { titulo: "Qtd.", peso: 0.8, alinhar: "right" },
       { titulo: "Vlr. unit.", peso: 1.1, alinhar: "right" },

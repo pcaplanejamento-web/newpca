@@ -241,7 +241,7 @@ export function ExcluidosMesa({ pcaId, siglas, podeLimpar = false }: { pcaId: nu
     if (tipo !== "protocolo") base.push({ key: "planejamento", header: "Nº Plan.", nowrap: true, value: (l) => l.planejamento ?? "—", render: (l) => l.planejamento ?? "—" });
     if (tipo !== "protocolo") base.push({ key: "protocolo", header: "Protocolo", nowrap: true, value: (l) => l.protocoloNumero ?? "—", render: (l) => l.protocoloNumero ?? "—" });
     base.push(
-      { key: "sigla", header: "Sigla", nowrap: true, value: sigla, render: sigla },
+      { key: "sigla", header: "Unidade", nowrap: true, value: sigla, render: sigla },
       { key: "valor", header: "Valor", align: "right", nowrap: true, filter: "range", numero: (l) => l.valor, value: (l) => String(l.valor ?? ""), render: (l) => brl(l.valor) },
       { key: "em", header: "Excluído em", nowrap: true, filter: "date", value: (l) => l.excluidoEm ?? "", render: (l) => dataHoraBR(l.excluidoEm), total: false },
       { key: "por", header: "Por", nowrap: true, value: (l) => l.excluidoNome ?? "—", render: (l) => l.excluidoNome ?? "—" },
@@ -569,7 +569,7 @@ function DetalheExcluido({
             ["DFD", r.dfdNumero ? `${r.dfdNumero}${r.dfdPlanejamento ? ` (Planej. ${r.dfdPlanejamento})` : ""}` : null],
             ["Objeto do DFD", r.dfdObjeto],
             ["Protocolo", r.protocoloNumero ?? e.protocoloNumero],
-            ["Sigla", detalhe.sigla ?? r.dfdSigla],
+            ["Unidade", detalhe.sigla ?? r.dfdSigla],
             ["Ano do PCA", r.dfdAnoPca != null ? String(r.dfdAnoPca) : null],
             ["Classificação", it.classificacao],
             ["Seq. no PCA", it.pcaSequencial != null ? String(it.pcaSequencial) : null],

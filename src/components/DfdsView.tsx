@@ -2173,7 +2173,7 @@ export function DfdsView({
     },
     {
       key: "sigla",
-      header: "Sigla",
+      header: "Unidade",
       nowrap: true,
       value: (l) => infoDe(l).siglas.join(" · ") || "—",
       filtroExterno: filtroExterno("sigla"),

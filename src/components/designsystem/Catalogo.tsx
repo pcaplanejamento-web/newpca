@@ -1490,7 +1490,7 @@ function TabelaCruzadaDemo() {
       <div className="h-80 [&>div]:!h-full">
         <TabelaCruzada
           rotuloLinhas="Unidade"
-          rotuloExtra="Sigla"
+          rotuloExtra="Unidade (cadastro)"
           linhas={linhas}
           colunas={colunas}
           total={tot}
@@ -4252,7 +4252,7 @@ export function Catalogo() {
         <div className="mt-3 flex flex-wrap items-center gap-4">
           {/* Gatilho comum dos 3 filtros: coluna FILTRADA = tópico MARCADO (accent + funil). */}
           <div className="w-40">
-            <GatilhoFiltro label="Sigla" />
+            <GatilhoFiltro label="Unidade" />
           </div>
           <div className="w-40">
             <GatilhoFiltro label="Estado" sortDir="asc" marcado />

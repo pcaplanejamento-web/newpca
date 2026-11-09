@@ -322,7 +322,7 @@ export const ROTULO_CAMPO: Record<string, string> = {
   totalItens: "Itens",
   numero: "Número",
   nome: "Nome",
-  sigla: "Sigla",
+  sigla: "Unidade",
   cor: "Cor",
 };
 const MOEDA = new Set(["valorCapa", "valorUnitario", "valorTotal"]);
