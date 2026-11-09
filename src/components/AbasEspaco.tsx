@@ -79,7 +79,7 @@ export function ConteudoAba({
           {children}
         </div>
         {esperando ? (
-          <div className="esqueleto-tela absolute inset-x-0 top-0 z-10 min-h-full space-y-[var(--gap-block)] bg-surface-2">
+          <div className="esqueleto-tela absolute inset-0 z-10 space-y-[var(--gap-block)] overflow-hidden bg-bg">
             {esqueleto ?? (
               <>
                 <Skeleton className="h-24 w-full" />

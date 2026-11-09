@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.4",
+    data: "2026-11-09",
+    titulo: "Carregamento das abas do PCA sem saltos",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto:
+          "O desenho de espera do Dashboard inclui a linha do resumo dos filtros, o da Mesa mostra o escopo e os botões no lugar real, a troca de aba não faz mais a página rolar enquanto carrega e o fundo cinza que cobria a aba durante a espera saiu (fica o fundo da própria tela).",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.283.3",
     data: "2026-11-09",
     titulo: "Carregamento das abas do PCA no padrão do sistema",

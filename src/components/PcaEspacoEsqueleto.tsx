@@ -20,12 +20,20 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
         <>
           <EsqueletoIndicadores />
           {/* O cartão dos filtros: os seletores numa linha e, no fim, a ajuda e o PDF. */}
-          <div className="flex flex-wrap items-center gap-2 rounded-card border border-border bg-surface p-[var(--pad-card)]">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <EsqueletoControle key={i} className="min-w-0 flex-1 basis-44" />
-            ))}
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado />
+          <div className="space-y-2 rounded-card border border-border bg-surface p-[var(--pad-card)]">
+            <div className="flex flex-wrap items-center gap-2">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <EsqueletoControle key={i} className="min-w-0 flex-1 basis-44" />
+              ))}
+              <EsqueletoControle quadrado />
+              <EsqueletoControle quadrado />
+            </div>
+            {/* A linha do resumo: o ícone do filtro e, à direita, "N itens · R$" e o relatório. */}
+            <div className="flex min-h-9 items-center gap-2">
+              <Skeleton className="h-4 w-4 rounded-sm" />
+              <Skeleton className="ml-auto h-3 w-32 rounded-sm" />
+              <EsqueletoControle className="w-24" />
+            </div>
           </div>
           <EsqueletoSegmented itens={2} />
           <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
@@ -57,10 +65,10 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
         <ColunaCheia>
           <div className="flex flex-wrap items-center gap-2">
             <EsqueletoSegmented itens={3} />
-            <EsqueletoSegmented itens={4} />
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado />
+            <EsqueletoSegmented itens={3} />
             <EsqueletoControle quadrado className="ml-auto" />
+            <EsqueletoControle quadrado />
+            <EsqueletoControle quadrado />
             <EsqueletoControle quadrado />
             <EsqueletoControle quadrado />
           </div>
