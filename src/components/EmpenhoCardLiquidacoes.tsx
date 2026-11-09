@@ -15,7 +15,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
-import { EsqueletoTabela } from "./DataTableEsqueleto";
+import { EsqueletoTabela, TABELA_EXECUCAO } from "./DataTableEsqueleto";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
 import type { LiquidacaoCompleta } from "@/lib/liquidacoes-tela";
@@ -269,7 +269,7 @@ export function EmpenhoCardLiquidacoes({
 
   return (
     <>
-      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {linhas == null && !erro && !(anos && !anos.length) && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
           cartoes={[
@@ -315,7 +315,7 @@ export function EmpenhoCardLiquidacoes({
           {"Nenhuma liquidação importada ainda. Abra “Importações” para criar um card e importar."}
         </Callout>
       ) : !recorte || linhas == null ? (
-        !erro && <EsqueletoTabela cheia />
+        !erro && <EsqueletoTabela cheia {...TABELA_EXECUCAO} />
       ) : (
         <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}

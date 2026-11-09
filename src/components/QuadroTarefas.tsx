@@ -40,6 +40,7 @@ import { Button } from "./Button";
 import { CHAVE_OPCOES_CALENDARIO, eventoArrastado, eventoComFim, intervaloCalendario, type FeriadoCadastro, feriadosNoIntervalo, OPCOES_CALENDARIO_PADRAO, type OpcoesCalendario } from "@/lib/calendario-core";
 import { CalendarioTarefas } from "./CalendarioTarefas";
 import { ConfiguracaoQuadro } from "./ConfiguracaoQuadro";
+import { EsqueletoAbaQuadro } from "./QuadroEsqueleto";
 import { FaixaQuadro, MembrosQuadro, MenuQuadro, MolduraQuadro, PainelMoldura, PilulaVistas, RESERVA_PILULA } from "./MolduraQuadro";
 import { IndicadorTrello } from "./SincronizacaoTrello";
 import { ItensArquivados } from "./ItensArquivados";
@@ -620,7 +621,7 @@ export function QuadroTarefas({
           />
         }
       >
-        <ConteudoAba aba={abaAtual} abaServidor={aba} slot={slot}>
+        <ConteudoAba aba={abaAtual} abaServidor={aba} slot={slot} esqueleto={<EsqueletoAbaQuadro aba={abaAtual as AbaQuadro} />}>
           {aba === "lista" && (
             <FerramentasAba>
               <SeletorFiltro

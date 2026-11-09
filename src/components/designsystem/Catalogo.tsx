@@ -75,6 +75,14 @@ import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
 import { DashboardMesa } from "@/components/DashboardMesa";
 import { DashboardExecucaoEsqueleto } from "@/components/DashboardExecucaoEsqueleto";
 import { EsqueletoAbaPca } from "@/components/PcaEspacoEsqueleto";
+import { EsqueletoAbaOrcamento } from "@/components/OrcamentoEspacoEsqueleto";
+import { EsqueletoAbaQuadro, EsqueletoQuadro } from "@/components/QuadroEsqueleto";
+import { EsqueletoGraficoTemporal } from "@/components/GraficoTemporalEsqueleto";
+import { EsqueletoFiltrosDashboard } from "@/components/FiltrosDashboardEsqueleto";
+import { EsqueletoCabecalhoPerfil } from "@/components/PerfilEsqueleto";
+import { EsqueletoPadronizacao } from "@/components/PadronizacaoEsqueleto";
+import { EsqueletoDropzone } from "@/components/DropzoneEsqueleto";
+import { EsqueletoStatMini } from "@/components/StatMini";
 import { DashboardMesaEsqueleto } from "@/components/DashboardMesaEsqueleto";
 import { SerieTemporal } from "@/components/charts/SerieTemporal";
 import { GraficoTemporal } from "@/components/charts/GraficoTemporal";
@@ -4006,6 +4014,46 @@ export function Catalogo() {
               <EsqueletoAbaPca aba={a} />
             </div>
           ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="EsqueletoAbaOrcamento (cada aba do espaço do Orçamento)">
+        <div className="space-y-6">
+          {(["lancamentos", "comparativo", "vinculos", "visoes"] as const).map((a) => (
+            <div key={a} className="space-y-[var(--gap-block)]">
+              <p className="text-xs font-medium text-muted">{a}</p>
+              <EsqueletoAbaOrcamento aba={a} />
+            </div>
+          ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="EsqueletoQuadro + EsqueletoAbaQuadro (o quadro de Tarefas e cada aba dentro da moldura)">
+        <div className="space-y-6">
+          <div className="flex h-[520px] flex-col">
+            <EsqueletoQuadro />
+          </div>
+          {(["lista", "calendario", "dashboard", "configuracao"] as const).map((a) => (
+            <div key={a} className="space-y-2 rounded-2xl shadow-ring">
+              <p className="px-3 pt-3 text-xs font-medium text-muted">{a}</p>
+              <EsqueletoAbaQuadro aba={a} />
+            </div>
+          ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="EsqueletoGraficoTemporal · EsqueletoFiltrosDashboard · EsqueletoStatMini · EsqueletoPadronizacao · EsqueletoCabecalhoPerfil · EsqueletoDropzone">
+        <div className="space-y-[var(--gap-block)]">
+          <EsqueletoFiltrosDashboard campos={5} fim={2} />
+          <EsqueletoFiltrosDashboard grade campos={15} />
+          <EsqueletoGraficoTemporal cartao />
+          <div className="grid max-w-md grid-cols-2 gap-[var(--gap-block)]">
+            <EsqueletoStatMini />
+            <EsqueletoStatMini />
+          </div>
+          <EsqueletoPadronizacao />
+          <EsqueletoCabecalhoPerfil />
+          <EsqueletoDropzone />
         </div>
       </Secao>
 

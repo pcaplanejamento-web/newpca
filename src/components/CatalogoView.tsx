@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoPadronizacao } from "./PadronizacaoEsqueleto";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -39,7 +40,6 @@ import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { useComponente } from "./ComponentesPapel";
 import { Segmented } from "./Segmented";
-import { SkeletonCartao } from "./Skeleton";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 
 type Vista = "catalogo" | "lista" | "unidades" | "classificacoes";
@@ -48,11 +48,11 @@ type Vista = "catalogo" | "lista" | "unidades" | "classificacoes";
 // moldura de cartão enquanto o código chega).
 const UnidadesMedidaView = dynamic(() => import("./UnidadesMedidaView").then((m) => m.UnidadesMedidaView), {
   ssr: false,
-  loading: () => <SkeletonCartao />,
+  loading: () => <EsqueletoPadronizacao />,
 });
 const ClassificacoesView = dynamic(() => import("./ClassificacoesView").then((m) => m.ClassificacoesView), {
   ssr: false,
-  loading: () => <SkeletonCartao />,
+  loading: () => <EsqueletoPadronizacao />,
 });
 /** Decisão de um conflito divergente (mesmo código, dados diferentes). */
 type Resolucao = "manter" | "substituir" | "compartilhar";

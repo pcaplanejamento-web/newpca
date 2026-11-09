@@ -30,7 +30,7 @@ import { Callout } from "./Callout";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
-import { EsqueletoTabela } from "./DataTableEsqueleto";
+import { EsqueletoTabela, TABELA_EXECUCAO } from "./DataTableEsqueleto";
 import { EmpenhoBanner } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { EstadoPonto } from "./EstadoCelula";
@@ -267,7 +267,7 @@ export function EmpenhosTabela({
 
   return (
     <>
-      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {recorte && linhas == null && !erro && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
           cartoes={[
@@ -316,7 +316,7 @@ export function EmpenhosTabela({
           {erro && !linhas && <ErroCarga msg={erro} kind="danger" onTentar={() => void carregar(recorte, true)} />}
 
           {linhas == null ? (
-            !erro && <EsqueletoTabela cheia />
+            !erro && <EsqueletoTabela cheia {...TABELA_EXECUCAO} />
           ) : (
             <DataTable
               visao={chaveRecorte(recorte)}

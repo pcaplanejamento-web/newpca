@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoPadronizacao } from "./PadronizacaoEsqueleto";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { dicaLista, num, pct } from "@/lib/format";
 import {
@@ -30,7 +31,6 @@ import { CampoLista, SelectField, TextField } from "./Field";
 import { selectCls } from "./formStyles";
 import { IconCheck, IconPlus } from "./icons";
 import { Modal } from "./Modal";
-import { SkeletonCartao } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { useGravacaoCadastro } from "./useGravacaoCadastro";
 import { Selecao } from "./Selecao";
@@ -162,7 +162,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
   }
 
   if (!dados || !comparacao) {
-    return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregar(true)} /> : <SkeletonCartao />;
+    return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregar(true)} /> : <EsqueletoPadronizacao />;
   }
 
   const { linhas, semUnidade } = comparacao;

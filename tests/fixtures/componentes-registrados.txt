@@ -367,3 +367,10 @@ FrotaEsqueleto.tsx
 BannerPesquisa.tsx
 PesquisaPublica.tsx
 PcaEspacoEsqueleto.tsx
+GraficoTemporalEsqueleto.tsx
+FiltrosDashboardEsqueleto.tsx
+OrcamentoEspacoEsqueleto.tsx
+QuadroEsqueleto.tsx
+PerfilEsqueleto.tsx
+PadronizacaoEsqueleto.tsx
+DropzoneEsqueleto.tsx

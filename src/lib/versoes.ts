@@ -35,6 +35,38 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.283.6",
+    data: "2026-11-09",
+    titulo: "Carregamento de todas as telas revisado",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Sistema",
+        texto:
+          "Todas as telas e abas conferidas no navegador: cada espera mostra um só desenho, igual à tela que vai aparecer — sem trocar de um esqueleto para outro, sem sombra cortada nem fundo cinza na troca de aba, sem a página rolar enquanto carrega.",
+        link: "/painel",
+      },
+      {
+        tipo: "correcao",
+        area: "Execução",
+        texto: "O gráfico da Execução e o da Frota carregam no tamanho certo (antes o lugar mudava duas vezes) e o demonstrativo aparece no lugar dele.",
+        link: "/painel/execucao",
+      },
+      {
+        tipo: "correcao",
+        area: "Orçamento",
+        texto: "Cada aba do orçamento (Lançamentos, Comparativo, Vínculos, Visões) e do quadro de Tarefas mostra o próprio desenho enquanto carrega.",
+        link: "/painel/orcamento",
+      },
+      {
+        tipo: "correcao",
+        area: "Tarefas",
+        texto: "O link de uma tarefa (aviso do sino, \u201cCopiar link\u201d) não mostra mais a lista de quadros antes de abrir o quadro.",
+        link: "/painel/tarefas",
+      },
+    ],
+  },
+  {
     versao: "1.283.5",
     data: "2026-11-09",
     titulo: "Carregamento das abas do PCA conferido na tela",

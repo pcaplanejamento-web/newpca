@@ -12,8 +12,14 @@ import { useConfirmacao } from "./Confirmacao";
 import { IconTrash } from "./icons";
 import { type CartaoKpi, IndicadoresKpi } from "./IndicadoresKpi";
 import { useOndeDetalhe } from "./CanalGrupo";
+import { EsqueletoAbaOrcamento } from "./OrcamentoEspacoEsqueleto";
 
 export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes";
+
+/** O esqueleto de cada aba (o da aba PEDIDA cobre a troca de aba). */
+const ESQUELETOS = Object.fromEntries(
+  (["lancamentos", "comparativo", "vinculos", "visoes"] as const).map((a) => [a, <EsqueletoAbaOrcamento key={a} aba={a} />]),
+) as Record<AbaOrcamento, ReactNode>;
 
 /**
  * TELA DO ORÇAMENTO (`/painel/orcamento/[id]`) — aberta pelo card. Enxuta, usando a largura toda: UMA linha de
@@ -74,6 +80,7 @@ export function OrcamentoEspacoView({
     <div className="space-y-[var(--gap-block)]">
       <AbasEspaco<AbaOrcamento>
         aba={aba}
+        esqueletos={ESQUELETOS}
         voltar={{ href: "/painel/orcamento", rotulo: "Orçamento" }}
         fim={
           podeExcluir ? (

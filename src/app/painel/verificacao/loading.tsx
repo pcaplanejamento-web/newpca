@@ -1,12 +1,17 @@
-import { EsqueletoTela, EsqueletoBarra } from "@/components/EsqueletoTela";
-import { SkeletonCartao } from "@/components/Skeleton";
+import { EsqueletoDropzone } from "@/components/DropzoneEsqueleto";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
+import { EsqueletoControle } from "@/components/Skeleton";
 
-/** o cartão da seção. */
+/** A Verificação: Protocolo | DFD (e a ajuda à direita) e a área para soltar o arquivo. */
 export default function Carregando() {
   return (
     <EsqueletoTela>
-      <EsqueletoBarra controles={1} icones={1} />
-      <SkeletonCartao linhas={5} />
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        <EsqueletoSegmented itens={2} />
+        <EsqueletoControle quadrado className="ml-auto" />
+      </div>
+      <EsqueletoDropzone />
     </EsqueletoTela>
   );
 }

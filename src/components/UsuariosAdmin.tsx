@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { useCallback, useEffect, useState } from "react";
 import { haQuanto } from "@/lib/acessos-core";
 import { formatarTelefone } from "@/lib/cadastro-core";
@@ -22,7 +23,6 @@ import { labelCls } from "./formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
 import { IconAlert, IconArquivar, IconBriefcase, IconCheck, IconSenhaNova, IconShieldCheck } from "./icons";
 import { Modal } from "./Modal";
-import { SkeletonLinhas } from "./Skeleton";
 import { BotaoWhatsapp } from "./Telefone";
 import { toast } from "./Toast";
 import {
@@ -210,9 +210,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-[var(--pad-card)]">
-        <SkeletonLinhas linhas={6} />
-      </div>
+      <EsqueletoTabela linhas={12} colunas={8} />
     );
   }
 

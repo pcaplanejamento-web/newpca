@@ -48,7 +48,7 @@ import { SelectField, TextField } from "./Field";
 import { IconCheck, IconDownload, IconEmpenho, IconPencil, IconLiquidacao, IconPagamento, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
-import { CartaoFinanceiro, GRADE_ORCAMENTOS } from "./OrcamentoCard";
+import { CartaoFinanceiro, GRADE_ORCAMENTOS, EsqueletoOrcamentoCard } from "./OrcamentoCard";
 import { QuadroNovoCard } from "./QuadroCard";
 import { FrotaAdmin } from "./frota/FrotaAdmin";
 import { useOndeDetalhe } from "./CanalGrupo";
@@ -226,8 +226,9 @@ export function ImportacoesAdmin() {
       {erro && <ErroCarga msg={erro} kind={cards ? "warn" : "danger"} onTentar={carregar} />}
       {cards == null && !erro ? (
         <div className={GRADE_ORCAMENTOS}>
-          <SkeletonCartao />
-          <SkeletonCartao />
+          {[0, 1, 2].map((i) => (
+            <EsqueletoOrcamentoCard key={i} />
+          ))}
         </div>
       ) : cards ? (
         <ListaCards tipo={tipo} cards={doTipo} todos={cards} config={config} onAbrir={(id, sub) => abrir(id, sub)} />

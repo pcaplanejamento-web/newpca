@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoPadronizacao } from "./PadronizacaoEsqueleto";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { brl, num, pct } from "@/lib/format";
 import {
@@ -32,7 +33,7 @@ import { CelulaClassificacao, EstadoPonto } from "./EstadoCelula";
 import { CampoLista, TextField } from "./Field";
 import { IconPlus } from "./icons";
 import { Modal } from "./Modal";
-import { SkeletonCartao, SkeletonLinhas } from "./Skeleton";
+import { SkeletonLinhas } from "./Skeleton";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { useGravacaoCadastro } from "./useGravacaoCadastro";
@@ -148,7 +149,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
     }, false);
   }
 
-  if (!cad) return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregarCadastro()} /> : <SkeletonCartao />;
+  if (!cad) return erroCarga ? <ErroCarga msg={erroCarga} onTentar={() => void carregarCadastro()} /> : <EsqueletoPadronizacao />;
 
   const pos = new Map(cad.classificacoes.map((c, i) => [c.id, i]));
   const itensTotal = totais ? totais.total.dfd + totais.total.catalogo : 0;

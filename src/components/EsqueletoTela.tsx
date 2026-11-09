@@ -13,7 +13,7 @@ import { EsqueletoControle, Skeleton } from "./Skeleton";
 export function EsqueletoTela({ cheia = false, children }: { cheia?: boolean; children: ReactNode }) {
   return (
     <div
-      className={`esqueleto-tela ${cheia ? "flex flex-col gap-[var(--gap-block)] lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*2))]" : "space-y-[var(--gap-block)]"}`}
+      className={`esqueleto-tela ${cheia ? "flex flex-col space-y-[var(--gap-block)] lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*2))]" : "space-y-[var(--gap-block)]"}`}
       aria-busy="true"
     >
       <span className="sr-only" role="status">
@@ -73,6 +73,18 @@ export function EsqueletoEspaco({ abas = 0, fim = 0, config = false }: { abas?: 
           {config && <EsqueletoControle quadrado />}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A COLUNA de uma aba de TABELA num espaço (PCA, Orçamento): até o fim do display no desktop — a altura abaixo da linha
+ * do espaço (o voltar e as abas) —, para a `EsqueletoTabela cheia` chegar ao rodapé como a `scrollInterno`.
+ */
+export function EsqueletoColunaEspaco({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-[var(--gap-block)] lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*3-var(--h-control-sm)))]">
+      {children}
     </div>
   );
 }

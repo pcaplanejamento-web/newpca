@@ -5,7 +5,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { dataBR, num } from "@/lib/format";
 import { Button } from "../Button";
 import { IconChevronLeft, IconChevronRight, IconLayers, IconRestaurar, IconZoom, IconZoomOut } from "../icons";
-import { Skeleton } from "../Skeleton";
+import { ALTURA_GRAFICO_TEMPORAL, EsqueletoGraficoTemporal } from "../GraficoTemporalEsqueleto";
 import type { LinhaDica, PontoTemporal, SerieTemporalDef } from "./SerieTemporal";
 import { TOPO_DAS_DATAS } from "./serie-medidas";
 import { corSerie } from "./shared";
@@ -13,7 +13,7 @@ import { corSerie } from "./shared";
 // O gráfico (Recharts) só chega com a tela: a mesma altura enquanto o código é baixado.
 const SerieTemporal = dynamic(() => import("./SerieTemporal").then((m) => m.SerieTemporal), {
   ssr: false,
-  loading: () => <Skeleton className="h-[360px] w-full rounded-card" />,
+  loading: () => <EsqueletoGraficoTemporal />,
 });
 
 /** O cartão do gráfico. O corte arredondado é feito pelo `clip-path` (e o `isolate`), não só pelo `overflow-hidden`: as camadas
@@ -174,7 +174,7 @@ export function GraficoTemporal({
       <SerieTemporal
         pontos={pontos}
         preencher
-        altura={420}
+        altura={ALTURA_GRAFICO_TEMPORAL}
         ajustarY={ajustarY}
         series={series}
         ocultas={ocultas}

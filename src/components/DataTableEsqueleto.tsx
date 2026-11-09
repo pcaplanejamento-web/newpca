@@ -6,6 +6,9 @@ import { Skeleton } from "./Skeleton";
  * rodapé com o resumo e a paginação. `cheia` = ocupa até o fim do display no desktop, como a `scrollInterno`. Arquivo leve
  * (sem "use client"): o `loading.tsx` das telas usa sem baixar a tabela.
  */
+/** As tabelas de Empenhos, Liquidações e Pagamentos: a MESMA tabela no `loading.tsx` e enquanto a tela busca os dados. */
+export const TABELA_EXECUCAO = { linhas: 12, colunas: 8 } as const;
+
 export function EsqueletoTabela({ linhas = 12, colunas = 6, cheia = false }: { linhas?: number; colunas?: number; cheia?: boolean }) {
   const grade = { gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` };
   return (

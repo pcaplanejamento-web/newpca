@@ -1,7 +1,9 @@
+import type { CSSProperties } from "react";
+
 // Skeleton com shimmer, reutilizável (apresentação — sem estado).
-export function Skeleton({ className = "" }: { className?: string }) {
+export function Skeleton({ className = "", style }: { className?: string; style?: CSSProperties }) {
   return (
-    <div className={`relative overflow-hidden rounded-md bg-border ${className}`}>
+    <div className={`relative overflow-hidden rounded-md bg-border ${className}`} style={style}>
       <div className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10" />
     </div>
   );

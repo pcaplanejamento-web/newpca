@@ -1013,7 +1013,7 @@ function ListaFluxos({
       <div ref={rolo} className="-m-1 min-w-0 flex-1 overflow-y-auto overscroll-contain p-1" style={{ height: alturaRolo ?? undefined }}>
         {!fluxos || !col ? (
           <div aria-busy="true">
-            <EsqueletoGradeEspacos quantos={3} />
+            <EsqueletoGradeEspacos quantos={6} />
           </div>
         ) : (
           <div ref={grade} className="grid auto-rows-fr" style={estiloGrade}>

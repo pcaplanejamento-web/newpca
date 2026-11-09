@@ -75,11 +75,11 @@ export function ConteudoAba({
   return (
     <SlotFerramentas.Provider value={slot}>
       <div className="relative" aria-busy={esperando || undefined}>
-        <div key={abaServidor} className={`animate-cat-morph ${className}`} inert={esperando || undefined}>
+        <div key={abaServidor} className={`animate-cat-morph ${esperando ? "aba-saindo" : ""} ${className}`} inert={esperando || undefined}>
           {children}
         </div>
         {esperando ? (
-          <div className="esqueleto-tela absolute inset-0 z-10 space-y-[var(--gap-block)] overflow-hidden bg-bg">
+          <div className="esqueleto-tela absolute inset-0 z-10 space-y-[var(--gap-block)] overflow-clip [overflow-clip-margin:var(--pad-canvas)]">
             {esqueleto ?? (
               <>
                 <Skeleton className="h-24 w-full" />

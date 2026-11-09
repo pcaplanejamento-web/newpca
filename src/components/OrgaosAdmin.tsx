@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -18,7 +19,6 @@ import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, Ico
 import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
-import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
 import { Selecao } from "./Selecao";
@@ -156,9 +156,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-[var(--pad-card)]">
-        <SkeletonLinhas linhas={6} />
-      </div>
+      <EsqueletoTabela linhas={12} colunas={8} />
     );
   }
 
@@ -391,9 +389,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
         ) : ctx.planilha ? (
           <PlanilhaResponsaveis ctx={ctx} exonerados={exonerados} />
         ) : (
-          <div className="rounded-card border border-border p-[var(--pad-card)]">
-            <SkeletonLinhas linhas={6} />
-          </div>
+          <EsqueletoTabela linhas={12} colunas={8} />
         )}
       </div>
 

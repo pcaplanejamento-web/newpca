@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { Skeleton } from "./Skeleton";
 
 /**
  * Mini banner de estatística para o HEAD de um documento (DFD/Protocolo) — um por
@@ -41,6 +42,17 @@ export function StatMini({
         {value}
       </div>
       {hint && <div className="mt-0.5 truncate text-[11px] text-faint">{hint}</div>}
+    </div>
+  );
+}
+
+/** ESQUELETO do `StatMini` — a MESMA moldura: o rótulo, o número e a dica. */
+export function EsqueletoStatMini() {
+  return (
+    <div className="min-w-0 space-y-1.5 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <Skeleton className="h-3 w-2/3 rounded-sm" />
+      <Skeleton className="h-5 w-1/2 rounded-sm" />
+      <Skeleton className="h-2.5 w-3/4 rounded-sm" />
     </div>
   );
 }

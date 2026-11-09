@@ -1203,6 +1203,16 @@
 .esqueleto-tela {
   animation: esqueleto-surge 0.18s ease-out 0.45s both;
 }
+/* Na TROCA DE ABA (`ConteudoAba`): a aba anterior fica à vista até o esqueleto da pedida surgir (os mesmos 450 ms) e então
+   some, mantendo o lugar — o esqueleto não precisa de fundo para cobri-la (vale sobre a foto do quadro de Tarefas). */
+@keyframes aba-some {
+  to {
+    visibility: hidden;
+  }
+}
+.aba-saindo {
+  animation: aba-some 1ms linear 0.45s forwards;
+}
 [data-motion="off"] .esqueleto-tela,
 [data-motion="reduced"] .esqueleto-tela {
   animation-duration: 1ms;

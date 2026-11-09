@@ -18,7 +18,7 @@ import { avisoDeFalha, avisoSemEmpenho, colunaAno, colunaCard, colunaTipoExecuca
 import { Avisos } from "./Avisos";
 import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
-import { EsqueletoTabela } from "./DataTableEsqueleto";
+import { EsqueletoTabela, TABELA_EXECUCAO } from "./DataTableEsqueleto";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField } from "./Field";
 import { Modal } from "./Modal";
@@ -303,7 +303,7 @@ export function EmpenhoCardPagamentos({
 
   return (
     <>
-      {recorte && linhas == null && <EsqueletoIndicadores />}
+      {linhas == null && !erro && !(anos && !anos.length) && <EsqueletoIndicadores />}
       {recorte && linhas != null && (
         <IndicadoresKpi
           cartoes={[
@@ -353,7 +353,7 @@ export function EmpenhoCardPagamentos({
           {"Nenhum pagamento importado ainda. Abra “Importações” para criar um card e importar."}
         </Callout>
       ) : !recorte || linhas == null ? (
-        !erro && <EsqueletoTabela cheia />
+        !erro && <EsqueletoTabela cheia {...TABELA_EXECUCAO} />
       ) : (
         <DataTable
             visao={`${recorte.ano}:${recorte.removidos ? 1 : 0}`}

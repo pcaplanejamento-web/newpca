@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoTabela } from "./DataTableEsqueleto";
 import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -213,9 +214,7 @@ export function ReparticoesAdmin({
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-[var(--pad-card)]">
-        <SkeletonLinhas linhas={6} />
-      </div>
+      <EsqueletoTabela linhas={12} colunas={8} />
     );
   }
 
@@ -435,9 +434,7 @@ export function ReparticoesAdmin({
         ) : ctx.planilha ? (
           <PlanilhaResponsaveis ctx={ctx} orgaoId={orgaoId} exonerados={exonerados} />
         ) : (
-          <div className="rounded-card border border-border p-[var(--pad-card)]">
-            <SkeletonLinhas linhas={6} />
-          </div>
+          <EsqueletoTabela linhas={12} colunas={8} />
         )}
       </div>
 

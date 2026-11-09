@@ -1,18 +1,11 @@
 import { EsqueletoTela } from "@/components/EsqueletoTela";
-import { Skeleton } from "@/components/Skeleton";
+import { EsqueletoQuadro } from "@/components/QuadroEsqueleto";
 
-/** O quadro: a moldura até o fim do display com as listas lado a lado (a faixa do quadro no topo). */
+/** O quadro: a moldura até o fim do display (a faixa do topo, as listas lado a lado e a pílula das vistas). */
 export default function Carregando() {
   return (
     <EsqueletoTela cheia>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-2xl border border-border p-3">
-        <Skeleton className="h-10 w-full rounded-control" />
-        <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[60dvh] w-[85%] shrink-0 rounded-xl sm:w-[17.5rem] lg:h-full" />
-          ))}
-        </div>
-      </div>
+      <EsqueletoQuadro />
     </EsqueletoTela>
   );
 }

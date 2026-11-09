@@ -78,4 +78,12 @@ test("loading.tsx: compõe os esqueletos dos componentes (arquivos leves), nunca
     assert.ok(!achados.includes(join(raiz, r, "loading.tsx")), r);
   }
   assert.ok(!achados.includes(join(raiz, "loading.tsx")));
+  // O Next aplica o loading.tsx do segmento de CIMA às rotas filhas: as que só redirecionam (e a compilação legada do PCA)
+  // não podem ficar abaixo de um — a lista e o loading dela moram no grupo `(lista)`.
+  for (const r of ["tarefas/abrir/[id]", "empenhos/[id]", "liquidacoes/[id]", "pagamentos/[id]", "pca/edicao/[id]"]) {
+    const partes = r.split("/");
+    for (let i = 0; i <= partes.length; i++) {
+      assert.ok(!achados.includes(join(raiz, ...partes.slice(0, i), "loading.tsx")), `${r} herda ${partes.slice(0, i).join("/")}/loading.tsx`);
+    }
+  }
 });

@@ -1,9 +1,9 @@
-import type { ReactNode } from "react";
 import type { AbaPca } from "./PcaEspacoView";
 import { EsqueletoChartCard } from "./ChartCard";
 import { EsqueletoGradeEspacos } from "./CartaoEspacoEsqueleto";
 import { EsqueletoTabela } from "./DataTableEsqueleto";
-import { EsqueletoBarra, EsqueletoIndicadores } from "./EsqueletoTela";
+import { EsqueletoBarra, EsqueletoColunaEspaco, EsqueletoIndicadores } from "./EsqueletoTela";
+import { EsqueletoFiltrosDashboard } from "./FiltrosDashboardEsqueleto";
 import { EsqueletoSegmented } from "./SegmentedEsqueleto";
 import { EsqueletoControle, Skeleton, SkeletonCartao } from "./Skeleton";
 
@@ -19,15 +19,8 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
       return (
         <>
           <EsqueletoIndicadores />
-          {/* O cartão dos filtros: os seletores numa linha (sem quebra no xl, como o `FiltrosDashboard`) e, no fim, a
-              ajuda e o PDF. A linha dos chips só existe com filtro ativo — não entra no esqueleto. */}
-          <div className="flex flex-wrap items-center gap-2 rounded-card border border-border bg-surface p-[var(--pad-card)] xl:flex-nowrap">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <EsqueletoControle key={i} className="min-w-0 flex-1 basis-44" />
-            ))}
-            <EsqueletoControle quadrado />
-            <EsqueletoControle quadrado />
-          </div>
+          {/* O cartão dos filtros (a linha única do `FiltrosDashboard`, com a ajuda e o PDF no fim). */}
+          <EsqueletoFiltrosDashboard campos={5} fim={2} />
           <EsqueletoSegmented itens={2} />
           <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
             {[0, 1, 2, 3].map((i) => (
@@ -39,7 +32,7 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
       );
     case "orcamento":
       return (
-        <ColunaCheia>
+        <EsqueletoColunaEspaco>
           <EsqueletoIndicadores />
           <div className="flex flex-wrap items-center gap-2">
             <EsqueletoSegmented itens={2} />
@@ -49,25 +42,25 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
             <Icones n={3} />
           </div>
           <EsqueletoTabela cheia linhas={12} colunas={8} />
-        </ColunaCheia>
+        </EsqueletoColunaEspaco>
       );
     case "mesa":
       return (
-        <ColunaCheia>
+        <EsqueletoColunaEspaco>
           <div className="flex flex-wrap items-center gap-2">
             <EsqueletoSegmented itens={3} />
             <EsqueletoSegmented itens={3} />
             <Icones n={5} />
           </div>
           <EsqueletoTabela cheia linhas={14} colunas={11} />
-        </ColunaCheia>
+        </EsqueletoColunaEspaco>
       );
     case "importacao":
       return (
-        <ColunaCheia>
+        <EsqueletoColunaEspaco>
           <EsqueletoSegmented itens={2} className="self-start" />
           <EsqueletoTabela cheia linhas={14} colunas={8} />
-        </ColunaCheia>
+        </EsqueletoColunaEspaco>
       );
     case "documentos":
       return (
@@ -78,9 +71,9 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
       );
     case "declaracoes":
       return (
-        <ColunaCheia>
+        <EsqueletoColunaEspaco>
           <EsqueletoTabela cheia linhas={14} colunas={10} />
-        </ColunaCheia>
+        </EsqueletoColunaEspaco>
       );
     case "configuracao":
       return (
@@ -110,15 +103,6 @@ function Icones({ n }: { n: number }) {
       {Array.from({ length: n }).map((_, i) => (
         <EsqueletoControle key={i} quadrado />
       ))}
-    </div>
-  );
-}
-
-/** As abas de TABELA: a coluna até o fim do display no desktop (a altura do conteúdo abaixo da linha do espaço). */
-function ColunaCheia({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-[var(--gap-block)] lg:h-[max(240px,calc(100dvh-var(--h-header)-var(--pad-canvas-y)*3-var(--h-control-sm)))]">
-      {children}
     </div>
   );
 }

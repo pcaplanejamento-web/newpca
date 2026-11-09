@@ -1,5 +1,6 @@
 "use client";
 
+import { EsqueletoGradeEspacos } from "./CartaoEspacoEsqueleto";
 import { lerJsonGuardado } from "@/lib/dados-cliente";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AbaKey } from "@/lib/abas";
@@ -21,7 +22,6 @@ import { Modal } from "./Modal";
 import { NAV_MODULOS } from "./navModulos";
 import { CartaoEspaco } from "./QuadroCard";
 import { Segmented } from "./Segmented";
-import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { Switch } from "./Switch";
 
@@ -216,9 +216,7 @@ export function GruposAdmin() {
 
   if (grupos === null) {
     return (
-      <div className="rounded-card border border-border p-[var(--pad-card)]">
-        <SkeletonLinhas linhas={4} />
-      </div>
+      <EsqueletoGradeEspacos />
     );
   }
 

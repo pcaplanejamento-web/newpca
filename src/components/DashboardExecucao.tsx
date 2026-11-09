@@ -84,9 +84,10 @@ import { Skeleton } from "./Skeleton";
 import { useContagem } from "./useContagem";
 
 // O gráfico (Recharts) só chega com a tela: a mesma altura enquanto o código é baixado.
+const ALTURA_EVOLUCAO = 280;
 const SerieTemporal = dynamic(() => import("./charts/SerieTemporal").then((m) => m.SerieTemporal), {
   ssr: false,
-  loading: () => <Skeleton className="h-[360px] w-full rounded-card" />,
+  loading: () => <Skeleton className="w-full rounded-card" style={{ height: ALTURA_EVOLUCAO }} />,
 });
 
 /** As séries (as cores `--serie-*`: as mesmas dos indicadores e do demonstrativo). */
@@ -987,7 +988,7 @@ function OrigemExecucao({
                 pontos={evolucao}
                 preencher
                 series={SERIES.filter((x) => (x.chave === "liquidado" ? temLiq : x.chave === "pago" ? temPag : true))}
-                altura={280}
+                altura={ALTURA_EVOLUCAO}
                 ajustarY={origem.acumulado.ajustarY}
                 ariaLabel="Evolução acumulada do empenhado, liquidado e pago até o ponto"
                 extraDica={(p) => {
