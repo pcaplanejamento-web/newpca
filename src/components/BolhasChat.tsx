@@ -450,6 +450,7 @@ export function BolhasChat({
           return (
             <li
               key={b.conversa}
+              data-flutuante-app
               className={`fixed ${presa ? "z-[61]" : "z-[60]"} ${b.nova && !presa ? "animate-cabeca-entra" : ""}`}
               style={{ ...estilo(b.conversa), touchAction: "none" }}
             >
@@ -477,7 +478,7 @@ export function BolhasChat({
           );
         })}
         {extras > 0 && (
-          <li className={`fixed ${arrasto?.chave === "+" ? "z-[61]" : "z-[60]"}`} style={{ ...estilo("+"), touchAction: "none" }}>
+          <li data-flutuante-app className={`fixed ${arrasto?.chave === "+" ? "z-[61]" : "z-[60]"}`} style={{ ...estilo("+"), touchAction: "none" }}>
             <button
               type="button"
               draggable={false}

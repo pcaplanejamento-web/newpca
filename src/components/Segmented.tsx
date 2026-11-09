@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 
 // Controle segmentado (abas) — spec §6.5. Trilho --surface-2, item ativo em
 // --surface com sombra leve. Rola horizontalmente se faltar espaço (mobile).
@@ -27,12 +27,25 @@ export function Segmented<T extends string>({
   /** Nome acessível do grupo (ex.: a escolha de QUAL dado — "Escolha: Objeto"). */
   ariaLabel?: string;
 }) {
+  // Faixa que rola de lado (celular): a opção ESCOLHIDA fica sempre à vista (só a faixa rola — nunca a página).
+  const trilho = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const t = trilho.current;
+    if (!t || t.scrollWidth <= t.clientWidth + 1) return;
+    const b = t.querySelector<HTMLElement>("[aria-selected='true']");
+    if (!b) return;
+    const ini = b.offsetLeft - 8;
+    const fim = b.offsetLeft + b.offsetWidth + 8 - t.clientWidth;
+    if (t.scrollLeft > ini) t.scrollLeft = Math.max(0, ini);
+    else if (t.scrollLeft < fim) t.scrollLeft = fim;
+  }, [value]);
   return (
     <div
+      ref={trilho}
       role="tablist"
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
-      className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment bg-surface-2 p-[3px] shadow-[inset_0_0_0_1px_var(--border)] ${className}`}
+      className={`relative inline-flex max-w-full gap-0.5 overflow-x-auto rounded-segment bg-surface-2 p-[3px] shadow-[inset_0_0_0_1px_var(--border)] ${className}`}
     >
       {options.map((o) => {
         const active = o.value === value;

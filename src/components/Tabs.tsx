@@ -2,6 +2,8 @@
 
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useAlturaTela } from "./AlturaCheia";
+import { Dropdown } from "./Dropdown";
+import { IconList } from "./icons";
 
 /**
  * ABAS do design system. `horizontal` = a faixa de abas com o sublinhado que desliza (rola de lado quando não cabe, a
@@ -117,6 +119,9 @@ export function Tabs({
 
   /** O dedo NÃO troca de aba quando começa num campo, numa tabela ou em algo que rola de lado. */
   const podeArrastar = (alvo: EventTarget | null) => {
+    // O toque dentro de um PORTAL (modal, folha, janela aberta a partir da aba) também chega aqui pelo React — mas não é
+    // um arrasto sobre as abas: só vale o que está DENTRO da caixa no DOM.
+    if (!(alvo instanceof Node) || !caixa.current?.contains(alvo)) return false;
     let el = alvo as HTMLElement | null;
     while (el && el !== caixa.current) {
       if (/^(INPUT|TEXTAREA|SELECT|TABLE)$/.test(el.tagName) || el.isContentEditable) return false;
@@ -127,18 +132,21 @@ export function Tabs({
   };
 
   const ativa = tabs[idx];
+  const muitas = tabs.length > 5;
   return (
     <div
       ref={caixa}
       className={`flex min-h-0 flex-col ${lateral ? "lg:flex-row lg:gap-[var(--gap-block)]" : ""} ${className}`}
       style={alturaTela && altura ? ({ "--h-abas": `${altura}px` } as React.CSSProperties) : undefined}
     >
+      {/* Muitas abas no celular: a faixa mostra ~3 — o botão ao lado abre TODAS numa lista, com a descrição de cada uma. */}
+      <div className={muitas ? "flex min-w-0 items-stretch lg:contents" : "contents"}>
       <div
         ref={lista}
         role="tablist"
         aria-orientation={lateral ? "vertical" : "horizontal"}
         onKeyDown={teclado}
-        className={`relative flex shrink-0 gap-1 overflow-x-auto border-b border-border [mask-image:linear-gradient(to_right,transparent,#000_12px,#000_calc(100%-12px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+        className={`relative flex shrink-0 gap-1 overflow-x-auto border-b border-border ${muitas ? "max-lg:min-w-0 max-lg:flex-1 max-lg:shrink" : ""} [mask-image:linear-gradient(to_right,transparent,#000_12px,#000_calc(100%-12px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
           cartoes
             ? "lg:w-60 lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-x-visible lg:overflow-y-auto lg:rounded-card lg:border lg:bg-surface lg:p-2 lg:shadow-ring lg:[mask-image:none]"
             : lateral
@@ -177,6 +185,44 @@ export function Tabs({
           style={ind.vertical ? { top: ind.a, height: ind.b, left: ind.x, width: ind.w } : { left: ind.a, width: ind.b }}
         />
       </div>
+      {muitas && (
+        <div className="flex shrink-0 items-center border-b border-border pl-1 lg:hidden">
+          <Dropdown
+            align="end"
+            folha
+            width={340}
+            ariaLabel={`Todas as abas (${tabs.length})`}
+            title={`Todas as abas (${tabs.length})`}
+            triggerClassName="h-11 w-11 justify-center rounded-control text-muted hover:bg-surface-2"
+            trigger={<IconList className="h-5 w-5" />}
+          >
+            {(fechar) => (
+              <ul className="max-h-[70dvh] overflow-y-auto p-1">
+                {tabs.map((t, i) => (
+                  <li key={t.key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fechar();
+                        ir(i);
+                      }}
+                      aria-current={i === idx ? "page" : undefined}
+                      className={`flex min-h-11 w-full items-start gap-2.5 rounded-control px-3 py-2 text-left ${i === idx ? "bg-accent-soft text-accent" : "text-text hover:bg-surface-2"}`}
+                    >
+                      {t.icon && <span className="mt-0.5 shrink-0 [&>svg]:h-4 [&>svg]:w-4">{t.icon}</span>}
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-medium">{t.label}</span>
+                        {t.dica && <span className="block text-[12.5px] leading-snug text-muted">{t.dica}</span>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Dropdown>
+        </div>
+      )}
+      </div>
 
       <div
         className={`relative min-h-0 min-w-0 flex-1 ${alturaTela ? "lg:max-h-[var(--h-abas)] lg:overflow-y-auto lg:overscroll-contain" : ""} ${
@@ -195,7 +241,11 @@ export function Tabs({
           if (!t0) return;
           const dx = e.changedTouches[0].clientX - t0.x;
           const dy = e.changedTouches[0].clientY - t0.y;
-          if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) ir(idx + (dx < 0 ? 1 : -1));
+          if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
+            ir(idx + (dx < 0 ? 1 : -1));
+            // Abas DENTRO de abas: o arrasto já tratado não troca também a aba de fora.
+            e.stopPropagation();
+          }
         }}
       >
         {tabs.map((t) =>

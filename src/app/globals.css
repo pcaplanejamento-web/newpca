@@ -423,12 +423,24 @@
 .animate-fundo-folha {
   animation: fundo-folha 0.2s ease-out both;
 }
-[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra),
-[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra) {
+/* A GAVETA do menu no celular entra deslizando da esquerda (de onde fica o botão do menu). */
+@keyframes gaveta-entra {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-gaveta-entra {
+  animation: gaveta-entra 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra, .animate-gaveta-entra),
+[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra, .animate-gaveta-entra) {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra) {
+  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra, .animate-gaveta-entra) {
     animation: none;
   }
 }
@@ -1503,4 +1515,24 @@ img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -we
 }
 .barra-ferramentas > :nth-child(1 of :not(.sr-only, :has(select, input:not([type="checkbox"]):not([type="hidden"]), [role="combobox"]), select, input)) {
   margin-left: auto;
+}
+
+/* ── Abaixo do `lg`, as bolhas do chat e a pílula do segundo plano (z acima do modal) somem enquanto um modal, folha ou
+   a gaveta do menu está aberto (`data-modal-aberto`, posto pela trava de rolagem do Modal) — cobriam os botões do rodapé
+   da folha. No desktop seguem à vista (os banners da Mesa ficam abertos o tempo todo). ── */
+@media (max-width: 63.999rem) {
+  html[data-modal-aberto] [data-flutuante-app] {
+    visibility: hidden;
+  }
+}
+
+/* ── Zoom do iOS: o Safari amplia a página ao focar um campo com fonte menor que 16px. No toque, todo campo de TEXTO tem
+   no mínimo 16px (as caixas de marcar, opções e faixas não têm texto). ── */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea,
+  [contenteditable="true"] {
+    font-size: max(16px, 1em) !important;
+  }
 }

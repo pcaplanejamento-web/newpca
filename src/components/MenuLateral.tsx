@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ATRIBUTO_MENU, aplicarMenuGuardado, CHAVE_MENU, EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { IconeNavegacao } from "./CarregandoLink";
+import { travarScroll } from "./Modal";
 import { IconClose, IconMenu, IconRecolherMenu } from "./icons";
 
 /**
@@ -100,7 +101,7 @@ export function ItensMenu({ secoes, ativo, onNavigate }: { secoes: readonly Seca
                   unstable_dynamicOnHover
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
+                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] max-lg:min-h-11 transition-colors duration-[var(--motion-duration)] ${
                     active
                       ? "border-border-2 bg-sb-active font-semibold text-text"
                       : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
@@ -234,11 +235,25 @@ export function GavetaMenu({
     document.addEventListener("keydown", tecla);
     return () => document.removeEventListener("keydown", tecla);
   }, [aberto, onFechar]);
+  // Aberta: a página por trás não rola (a MESMA trava dos modais — também esconde as bolhas que ficam por cima) e o foco
+  // vai ao item da tela atual (ou ao 1º), para o leitor de tela e o teclado.
+  const asideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!aberto) return;
+    const soltar = travarScroll();
+    const a = asideRef.current;
+    (a?.querySelector<HTMLElement>("[aria-current='page']") ?? a?.querySelector<HTMLElement>("nav a"))?.focus({ preventScroll: true });
+    return soltar;
+  }, [aberto]);
   if (!aberto) return null;
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
       <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={onFechar} />
-      <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface shadow-soft">
+      <aside
+        ref={asideRef}
+        aria-label="Menu"
+        className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-gaveta-entra flex-col bg-surface shadow-soft"
+      >
         <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
           {topo}
           <button
@@ -251,7 +266,7 @@ export function GavetaMenu({
           </button>
         </div>
         {acima}
-        <div className="flex-1 overflow-y-auto px-2 py-4">{conteudo}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-4">{conteudo}</div>
         {rodape ? <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">{rodape}</div> : null}
       </aside>
     </div>

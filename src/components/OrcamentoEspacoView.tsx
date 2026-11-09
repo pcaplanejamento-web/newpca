@@ -96,9 +96,9 @@ export function OrcamentoEspacoView({
           ) : undefined
         }
         opcoes={([
-          { value: "lancamentos", label: "Lançamentos" },
-          { value: "comparativo", label: "Comparativo" },
-          { value: "vinculos", label: "Vínculos" },
+          { value: "lancamentos", label: "Lançamentos", curto: "Lanç." },
+          { value: "comparativo", label: "Comparativo", curto: "Comp." },
+          { value: "vinculos", label: "Vínculos", curto: "Vínc." },
           { value: "visoes", label: "Visões" },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >

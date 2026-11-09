@@ -563,6 +563,8 @@ export function DataTable<R>({
     }
   }
   const rolagemRef = useRef<HTMLDivElement>(null);
+  // O último ponteiro que tocou numa linha foi o DEDO? (no toque a linha abre no 1º toque).
+  const toqueRef = useRef(false);
   const tabelaRef = useRef<HTMLTableElement>(null);
   // Linhas VAZIAS: completam só até o LIMITE DA VISÃO da tabela (a área que rola, ou até o fim do display) — nunca além
   // das linhas por página; o conteúdo que já passa da visão não ganha nenhuma.
@@ -675,7 +677,9 @@ export function DataTable<R>({
           <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-30" : ""}`}>
             <tr>
               {selectable && (
-                <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
+                <th className={`relative w-10 px-3 max-lg:w-11 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
+                  {/* A CÉLULA inteira marca (o toque não precisa acertar a caixa de 16px). */}
+                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center">
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -687,6 +691,7 @@ export function DataTable<R>({
                     onChange={alternarTodos}
                     className="caixa-marcar"
                   />
+                  </label>
                 </th>
               )}
               {exibidas.map((j, p) => {
@@ -814,9 +819,15 @@ export function DataTable<R>({
                   key={k}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
-                    // 1º clique MARCA; o 2º, na linha já marcada, ABRE.
-                    if (ativa && onRowClick) onRowClick(r);
+                    // 1º clique MARCA; o 2º, na linha já marcada, ABRE. No TOQUE abre no 1º (não há o "passar o mouse").
+                    if (onRowClick && (ativa || toqueRef.current)) {
+                      setMarcadaK(k);
+                      onRowClick(r);
+                    }
                     else setMarcadaK(k);
+                  }}
+                  onPointerDown={(e) => {
+                    toqueRef.current = e.pointerType === "touch";
                   }}
                   onKeyDown={
                     onRowClick
@@ -841,14 +852,16 @@ export function DataTable<R>({
                   }`}
                 >
                   {selectable && (
-                    <td className={`w-10 px-3 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
-                      <input
-                        type="checkbox"
-                        aria-label="Selecionar linha"
-                        checked={marcada}
-                        onChange={() => alternar(k)}
-                        className="caixa-marcar"
-                      />
+                    <td className={`relative w-10 px-3 max-lg:w-11 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
+                      <label className="absolute inset-0 flex cursor-pointer items-center justify-center">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar linha"
+                          checked={marcada}
+                          onChange={() => alternar(k)}
+                          className="caixa-marcar"
+                        />
+                      </label>
                     </td>
                   )}
                   {exibidas.map((j, p) => {

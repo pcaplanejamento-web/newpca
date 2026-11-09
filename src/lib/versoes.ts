@@ -35,6 +35,43 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.284.0",
+    data: "2026-11-09",
+    titulo: "Celular: revisão das peças usadas em todas as telas",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Tabelas",
+        texto: "No celular, um toque na linha já abre o registro (antes eram dois) e a caixa de seleção vale pela célula inteira — não é preciso acertar o quadradinho. Os filtros do cabeçalho das colunas ficaram com 44 px.",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "correcao",
+        area: "Sistema",
+        texto: "O iPhone não amplia mais a tela ao tocar num campo (todos os campos com 16 px no toque). As bolhas do chat e o andamento em segundo plano não cobrem mais os botões das janelas que sobem de baixo.",
+        link: "/painel/perfil",
+      },
+      {
+        tipo: "melhoria",
+        area: "Menu",
+        texto: "O menu do celular entra deslizando da esquerda, trava a página por trás e tem itens maiores; a unidade, o grupo e o atalho do site ficam nele até o tablet. Dentro de um PCA, orçamento, quadro ou órgão o cabeçalho mostra o nome dele.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "melhoria",
+        area: "Configurações",
+        texto: "Telas com muitas abas (Configurações, Perfil) ganharam no celular o botão “Todas as abas”, com a descrição de cada uma; o deslizar do dedo dentro de uma janela não troca mais a aba de trás.",
+        link: "/painel/configuracoes",
+      },
+      {
+        tipo: "melhoria",
+        area: "Sistema",
+        texto: "Valores longos dos indicadores encolhem em vez de serem cortados com “…”; abas dos espaços do PCA e do orçamento com nomes curtos no celular; a opção escolhida fica sempre à vista; botões pequenos (senha, chat, “Tentar de novo”, cores da capa) com 44 px; no chat do celular o Enter quebra a linha e o envio é pelo botão.",
+        link: "/painel/orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.283.7",
     data: "2026-11-09",
     titulo: "Aba aberta por link carrega com o desenho certo",

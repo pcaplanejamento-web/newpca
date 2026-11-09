@@ -346,7 +346,7 @@ export function CadastroForm({
             label={
               <span>
                 Li e aceito o{" "}
-                <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => setTermoAberto(true)}>
+                <button type="button" className="inline-flex min-h-11 items-center font-semibold text-accent underline-offset-2 hover:underline lg:min-h-0" onClick={() => setTermoAberto(true)}>
                   Termo de Uso
                 </button>
               </span>

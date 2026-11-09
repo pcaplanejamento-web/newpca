@@ -1108,7 +1108,7 @@ function ConversaChat({
             lista.current?.scrollTo({ top: lista.current.scrollHeight, behavior: "smooth" });
             setNovas(false);
           }}
-          className="animate-selo-pop absolute bottom-24 left-1/2 inline-flex min-h-9 -translate-x-1/2 items-center gap-1 rounded-full bg-accent px-3 text-[12px] font-semibold text-white shadow-soft"
+          className="animate-selo-pop absolute bottom-24 left-1/2 inline-flex min-h-9 pointer-coarse:min-h-11 -translate-x-1/2 items-center gap-1 rounded-full bg-accent px-3 text-[12px] font-semibold text-white shadow-soft"
         >
           <IconArrowDown className="h-3.5 w-3.5" /> Novas mensagens
         </button>
@@ -1121,7 +1121,7 @@ function ConversaChat({
               <span className="font-semibold text-text">{chat.nomeDe(resp.de)}</span>
               <span className="block truncate text-muted">{resp.trecho}</span>
             </span>
-            <button type="button" onClick={() => setResp(null)} aria-label="Cancelar a resposta" className="inline-flex h-8 w-8 items-center justify-center rounded-control text-muted hover:bg-surface">
+            <button type="button" onClick={() => setResp(null)} aria-label="Cancelar a resposta" className="inline-flex h-8 w-8 shrink-0 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control text-muted hover:bg-surface">
               <IconClose className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -1142,8 +1142,10 @@ function ConversaChat({
                 maxLength={MAX_TEXTO_CHAT}
                 menciona={menciona}
                 onTecla={(e) => {
-                  // Enter envia; Shift+Enter quebra a linha (a sugestão de @menção aberta usa o Enter antes).
+                  // Enter envia; Shift+Enter quebra a linha (a sugestão de @menção aberta usa o Enter antes). No TOQUE o teclado
+                  // do celular não tem Shift+Enter: o Enter quebra a linha e o envio é pelo botão.
                   if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
+                  if (window.matchMedia("(pointer: coarse)").matches) return false;
                   enviar();
                   return true;
                 }}
@@ -1213,7 +1215,7 @@ export function Balao({
         {!m.minha && grupo && !seguida && <span className="mb-0.5 px-1 text-[11.5px] font-semibold text-text-2">{nome}</span>}
         <div className="flex items-center gap-1">
           {m.minha && (
-            <button type="button" onClick={onResponder} aria-label="Responder" title="Responder" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-faint opacity-0 hover:bg-surface-2 hover:text-text group-hover/balao:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
+            <button type="button" onClick={onResponder} aria-label="Responder" title="Responder" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-faint opacity-0 hover:bg-surface-2 hover:text-text group-hover/balao:opacity-100 focus-visible:opacity-100 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:opacity-100">
               <IconResponder className="h-3.5 w-3.5" />
             </button>
           )}
@@ -1234,7 +1236,7 @@ export function Balao({
             ))}
           </div>
           {!m.minha && (
-            <button type="button" onClick={onResponder} aria-label="Responder" title="Responder" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-faint opacity-0 hover:bg-surface-2 hover:text-text group-hover/balao:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100">
+            <button type="button" onClick={onResponder} aria-label="Responder" title="Responder" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-faint opacity-0 hover:bg-surface-2 hover:text-text group-hover/balao:opacity-100 focus-visible:opacity-100 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:opacity-100">
               <IconResponder className="h-3.5 w-3.5" />
             </button>
           )}

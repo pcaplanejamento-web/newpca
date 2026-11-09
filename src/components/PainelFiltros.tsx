@@ -193,7 +193,7 @@ export function PainelFiltros({
                       onClick={() => tirar(CHAVE_VISAO, onTirarVisao)}
                       aria-label={`Tirar a visão ${visao.nome}`}
                       title="Tirar a visão (voltar ao estado inicial)"
-                      className="inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-chip hover:bg-white/15 lg:h-[var(--h-control-sm)] lg:w-7"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-chip hover:bg-white/15 lg:h-[var(--h-control-sm)] lg:w-7"
                     >
                       <IconClose className="h-3.5 w-3.5" />
                     </button>
@@ -222,7 +222,7 @@ export function PainelFiltros({
                       }}
                       aria-label={`Tirar o filtro ${c.rotulo}`}
                       title={`Tirar o filtro ${c.rotulo}`}
-                      className="inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-chip hover:bg-accent/15 lg:h-[var(--h-control-sm)] lg:w-7"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-chip hover:bg-accent/15 lg:h-[var(--h-control-sm)] lg:w-7"
                     >
                       <IconClose className="h-3.5 w-3.5" />
                     </button>

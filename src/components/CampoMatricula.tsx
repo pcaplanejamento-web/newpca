@@ -44,7 +44,7 @@ export function CampoMatricula({
       aria-label={label ? undefined : "Matrícula"}
       icon={<IconIdCard className="h-5 w-5" />}
       fundo={
-        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex items-center font-mono text-[15px]">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex items-center font-mono text-[15px] pointer-coarse:text-[16px]">
           {POSICOES.map((i) => (
             <span
               key={i}

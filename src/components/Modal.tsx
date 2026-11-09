@@ -41,13 +41,19 @@ let seqModal = 0;
  * modal que fecha fora de ordem (o de baixo antes do de cima) nunca destrava a página sob outro nem a deixa travada. */
 let travasScroll = 0;
 let overflowAntes = "";
-function travarScroll(): () => void {
+/** Também marca `data-modal-aberto` no `<html>`: as bolhas do chat e a pílula do segundo plano (acima do z do modal)
+ * somem enquanto houver um modal/folha/gaveta aberto — senão cobrem os botões do rodapé da folha no celular. */
+export function travarScroll(): () => void {
   if (travasScroll++ === 0) {
     overflowAntes = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.dataset.modalAberto = "";
   }
   return () => {
-    if (travasScroll > 0 && --travasScroll === 0) document.body.style.overflow = overflowAntes;
+    if (travasScroll > 0 && --travasScroll === 0) {
+      document.body.style.overflow = overflowAntes;
+      delete document.documentElement.dataset.modalAberto;
+    }
   };
 }
 
@@ -91,7 +97,9 @@ function Painel({
         {cabecalho ? (
           <div className="min-w-0 flex-1">{cabecalho}</div>
         ) : (
-          <h3 className="min-w-0 truncate text-base font-bold text-text">{titulo}</h3>
+          <h3 className="line-clamp-2 min-w-0 text-base font-bold text-text sm:line-clamp-1" title={titulo}>
+            {titulo}
+          </h3>
         )}
         <div className="flex shrink-0 items-center gap-1">
           {acoesCabecalho}
@@ -103,7 +111,9 @@ function Painel({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-[var(--pad-card)]">{children}</div>
-      {rodape && <div className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)]">{rodape}</div>}
+      {rodape && (
+        <div className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)] max-sm:pb-[calc(var(--pad-card)_+_env(safe-area-inset-bottom))]">{rodape}</div>
+      )}
     </div>
   );
 }

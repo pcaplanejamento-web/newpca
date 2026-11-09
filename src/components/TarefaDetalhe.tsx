@@ -850,7 +850,7 @@ export function TarefaDetalhe({
                         fecharMenu();
                         definirCapa(t.id, c);
                       }}
-                      className="h-8 rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                      className="h-11 rounded-[4px] focus-visible:outline-none lg:h-8 focus-visible:ring-2 focus-visible:ring-accent/50"
                       style={{ background: c, boxShadow: t.capa === c ? "0 0 0 2px var(--surface), 0 0 0 4px var(--text)" : undefined }}
                     />
                   ))}

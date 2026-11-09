@@ -40,7 +40,8 @@ export function JanelaFlutuante({
   const fechar = useRef(onFechar);
   fechar.current = onFechar;
 
-  useEffect(() => {
+  // Antes da pintura: no celular a janela de desktop (440px) nunca chega a aparecer por um quadro antes da folha.
+  useLayoutEffect(() => {
     if (aberta) setDesk(ehDesktop());
   }, [aberta]);
 

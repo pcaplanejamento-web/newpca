@@ -197,7 +197,7 @@ export function PasswordField({ label = "Senha", ...rest }: Omit<CampoProps, "ic
           type="button"
           onClick={() => setShow((s) => !s)}
           aria-label={show ? "Ocultar senha" : "Mostrar senha"}
-          className="-mr-1 shrink-0 rounded-chip p-1.5 text-muted transition-colors hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="-mr-1 grid shrink-0 place-items-center rounded-chip p-1.5 text-muted max-lg:-mr-3 max-lg:h-11 max-lg:w-11 max-lg:p-0 transition-colors hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           {show ? <IconEyeOff className="h-5 w-5" /> : <IconEye className="h-5 w-5" />}
         </button>

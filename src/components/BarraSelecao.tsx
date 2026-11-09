@@ -7,7 +7,7 @@ import { brl, num } from "@/lib/format";
 import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { definirVarRaiz, tokenPx } from "./espacamento";
-import { IconChevronDown, IconClose } from "./icons";
+import { IconChevronDown, IconClose, IconLimpar } from "./icons";
 
 /** Um registro selecionado (vira um chip removível). */
 /** `tom` = o registro NÃO serve para a edição escolhida (danger = não permitido; warn = de outra unidade) — `dica`, o motivo. */
@@ -157,8 +157,12 @@ export function BarraSelecao({
             ))}
             {extras > 0 && <li className="shrink-0 px-1 text-[12px] font-semibold text-muted">+{extras}</li>}
           </ul>
-          <Button variant="ghost" onClick={onLimpar} disabled={bloqueada} className="shrink-0">
+          {/* No celular, só o ícone (os chips da seleção ganham a largura). */}
+          <Button variant="ghost" onClick={onLimpar} disabled={bloqueada} className="shrink-0 max-sm:hidden">
             Limpar seleção
+          </Button>
+          <Button variant="icon" onClick={onLimpar} disabled={bloqueada} aria-label="Limpar seleção" title="Limpar seleção" className="shrink-0 sm:hidden">
+            <IconLimpar className="h-4 w-4" />
           </Button>
           {fixa && children && (
             <Button

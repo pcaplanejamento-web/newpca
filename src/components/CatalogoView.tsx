@@ -1132,14 +1132,14 @@ export function CatalogoView({
                   <div className="flex gap-1.5">
                     <button
                       type="button"
-                      className="rounded-control border border-border-2 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent-soft"
+                      className="min-h-11 rounded-control border border-border-2 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent-soft lg:min-h-0"
                       onClick={() => setResolucoes((m) => { const n = new Map(m); for (const i of identicos) n.set(i.existente.id, "compartilhar"); return n; })}
                     >
                       Compartilhar todos
                     </button>
                     <button
                       type="button"
-                      className="rounded-control border border-border-2 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface"
+                      className="min-h-11 rounded-control border border-border-2 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface lg:min-h-0"
                       onClick={() => setResolucoes((m) => { const n = new Map(m); for (const i of identicos) n.set(i.existente.id, "manter"); return n; })}
                     >
                       Manter todos
