@@ -35,6 +35,55 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.287.0",
+    data: "2026-11-09",
+    titulo: "Celular: o que faltava da revisão",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "No diagrama, dois dedos aproximam e movem o quadro (pinça) e um dedo no fundo rola a página; as portas de ligação ficaram maiores no toque. No celular os blocos abrem em “+ Bloco” e as ações secundárias do fluxo ficam no menu “⋯”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Frotas",
+        texto: "No celular, as barras mostram as 10 maiores com “Ver todas” (sem rolagem dentro da página) e a divisão combustível/manutenção de cada barra fica escrita embaixo dela.",
+        link: "/painel/frotas",
+      },
+      {
+        tipo: "melhoria",
+        area: "Orçamento",
+        texto: "Comparativo no celular: Linhas, Colunas, Medida e Visão ficam atrás de “Ajustes” e o 1º toque numa célula mostra “Ver origem” no rodapé (o toque duplo segue valendo).",
+        link: "/painel/orcamento",
+      },
+      {
+        tipo: "melhoria",
+        area: "Catálogo",
+        texto: "Histórico de compra no celular: os indicadores numa faixa que rola de lado e as abas com nomes curtos.",
+        link: "/painel/catalogo",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "No celular a barra da seleção começa recolhida (só o resumo); “Editar” abre a edição em massa.",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "melhoria",
+        area: "Configurações",
+        texto: "Nas tabelas de Papéis, Situações, Cargos, Feriados, Termo de uso e Armazenamento, o rodapé com a paginação fica preso acima da navegação no celular.",
+        link: "/painel/configuracoes",
+      },
+      {
+        tipo: "melhoria",
+        area: "Geral",
+        texto: "No iPhone deitado, o conteúdo respeita o recorte da câmera e os cantos da tela; a espera da Execução já mostra os filtros recolhidos como a tela.",
+        link: "/painel/execucao",
+      },
+    ],
+  },
+  {
     versao: "1.286.0",
     data: "2026-11-09",
     titulo: "Celular: Execução, Frotas, Automação, Administração e telas públicas",

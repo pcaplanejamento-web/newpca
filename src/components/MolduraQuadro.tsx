@@ -7,7 +7,7 @@ import { alternarValor, type FiltroTarefas } from "@/lib/tarefas-core";
 import { AvatarPessoa } from "./PessoaTag";
 import { PilhaFotos } from "./PilhaFotos";
 import { useAlturaTela } from "./AlturaCheia";
-import { Dropdown } from "./Dropdown";
+import { MenuMais } from "./Dropdown";
 import { useImagemCarrega } from "./FundoQuadro";
 import { IconArquivar, IconAutomacao, IconCalendar, IconImage, IconLink, IconMais, IconSettings } from "./icons";
 import { toast } from "./Toast";
@@ -154,47 +154,29 @@ export function MenuQuadro({
   onListasDoMes: () => void;
   podeEditar: boolean;
 }) {
+  const ic = "h-4 w-4 text-muted";
   return (
-    <Dropdown
-      align="end"
-      width={260}
+    <MenuMais
       ariaLabel="Menu do quadro"
-      triggerClassName="h-11 w-11 justify-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-9 lg:w-9"
-      trigger={<IconMais className="h-4 w-4" />}
-    >
-      {(fechar) => {
-        const item = (rotulo: string, icone: ReactNode, fn: () => void) => (
-          <button
-            key={rotulo}
-            type="button"
-            onClick={() => {
-              fechar();
-              fn();
-            }}
-            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
-          >
-            {icone}
-            <span className="truncate">{rotulo}</span>
-          </button>
-        );
-        return (
-          <div className="space-y-0.5">
-            <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">Menu do quadro</p>
-            {item("Itens arquivados", <IconArquivar className="h-4 w-4 text-muted" />, onArquivados)}
-            {podeEditar && item("Fundo do quadro", <IconImage className="h-4 w-4 text-muted" />, onFundo)}
-            {podeEditar && item("Listas do mês", <IconCalendar className="h-4 w-4 text-muted" />, onListasDoMes)}
-            {podeEditar && item("Automações", <IconAutomacao className="h-4 w-4 text-muted" />, () => onConfiguracao("automacoes"))}
-            {item("Configurações", <IconSettings className="h-4 w-4 text-muted" />, () => onConfiguracao())}
-            {item("Copiar link do quadro", <IconLink className="h-4 w-4 text-muted" />, () =>
-              navigator.clipboard?.writeText(window.location.href.split("?")[0]).then(
-                () => toast.success("Link do quadro copiado."),
-                () => toast.error("Não foi possível copiar o link."),
-              ),
-            )}
-          </div>
-        );
-      }}
-    </Dropdown>
+      titulo="Menu do quadro"
+      icone={<IconMais className="h-4 w-4" />}
+      acoes={[
+        { rotulo: "Itens arquivados", icone: <IconArquivar className={ic} />, onClick: onArquivados },
+        podeEditar && { rotulo: "Fundo do quadro", icone: <IconImage className={ic} />, onClick: onFundo },
+        podeEditar && { rotulo: "Listas do mês", icone: <IconCalendar className={ic} />, onClick: onListasDoMes },
+        podeEditar && { rotulo: "Automações", icone: <IconAutomacao className={ic} />, onClick: () => onConfiguracao("automacoes") },
+        { rotulo: "Configurações", icone: <IconSettings className={ic} />, onClick: () => onConfiguracao() },
+        {
+          rotulo: "Copiar link do quadro",
+          icone: <IconLink className={ic} />,
+          onClick: () =>
+            navigator.clipboard?.writeText(window.location.href.split("?")[0]).then(
+              () => toast.success("Link do quadro copiado."),
+              () => toast.error("Não foi possível copiar o link."),
+            ),
+        },
+      ]}
+    />
   );
 }
 

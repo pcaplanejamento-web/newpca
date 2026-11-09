@@ -194,6 +194,7 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
         </p>
       ) : (
         <DataTable
+          rodapeGrudado
           columns={cols}
           rows={lista}
           getKey={(c) => c.id}

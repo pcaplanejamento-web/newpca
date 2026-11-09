@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
@@ -13,6 +13,10 @@ import { SCRIPT_TEMA } from "@/lib/tema-pessoal-core";
 // Dinâmico: lê a aparência do ADM (cacheada, fail-safe) para injetar os tokens
 // no HTML inicial, sem flash.
 export const dynamic = "force-dynamic";
+
+// A página ocupa a tela INTEIRA do celular (também sob o recorte da câmera do iPhone deitado); as laterais e o rodapé
+// respeitam a área segura (`env(safe-area-inset-*)` no `body`, na navegação inferior e nos rodapés das folhas).
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 // Fontes do design system (self-hosted, sem requisição externa): Geist (texto)
 // e Geist Mono (nº de protocolo, datas, contadores, ⌘K). Expõem

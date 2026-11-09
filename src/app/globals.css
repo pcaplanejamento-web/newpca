@@ -348,6 +348,10 @@
     background: var(--surface-2);
     color: var(--text);
     font-family: var(--font-sans);
+    /* A tela vai até as bordas do aparelho (`viewportFit: "cover"`): no iPhone deitado, o recorte da câmera e os
+       cantos arredondados ficam fora do conteúdo pela área segura das laterais (0 nos demais aparelhos). */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }
 

@@ -158,6 +158,7 @@ export function DataTable<R>({
   activeKey = null,
   fillHeight = false,
   scrollInterno = false,
+  rodapeGrudado = false,
   linhasSalvas,
   density,
   reservaInferior = 0,
@@ -207,6 +208,9 @@ export function DataTable<R>({
    * mobile rola normal (paginado). Opt-in (não afeta as demais tabelas). Exclui o `fillHeight`.
    */
   scrollInterno?: boolean;
+  /** Só no CELULAR: o rodapé (resumo, ações, paginação) GRUDA acima da navegação inferior, como no `scrollInterno`, sem a
+   *  rolagem interna do desktop (tabelas dentro de um painel que já rola — ex.: as abas das Configurações). */
+  rodapeGrudado?: boolean;
   /** As LINHAS POR PÁGINA escolhidas no rodapé ficam salvas NESTE aparelho com esta chave (vale também sem `scrollInterno`). */
   linhasSalvas?: string;
   /**
@@ -662,7 +666,7 @@ export function DataTable<R>({
       ref={wrapRef}
       // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
       // pode grudar na tela no celular (abaixo).
-      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
+      className={`${scrollInterno ? "flex flex-col overflow-clip" : rodapeGrudado ? "max-lg:overflow-clip lg:overflow-hidden" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
       style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
       // A altura do HTML do servidor é posta pelo trecho abaixo ANTES da hidratação (ela não é do React ainda).
       suppressHydrationWarning={scrollInterno}
@@ -908,7 +912,7 @@ export function DataTable<R>({
         className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted ${
           // Rolagem interna no CELULAR (a página rola): o rodapé — resumo, ações (ex.: "Importar"), linhas e paginação —
           // GRUDA acima da navegação inferior (e da barra de seleção fixa, `--reserva-rodape`) enquanto a tabela está na tela.
-          scrollInterno ? "max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
+          scrollInterno || rodapeGrudado ? "max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
         }`}
       >
         <span>

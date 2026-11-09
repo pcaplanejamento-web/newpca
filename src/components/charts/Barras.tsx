@@ -87,8 +87,11 @@ export function BarrasH({
   ativa,
   onEscolher,
   acao = "ver a origem dos dados",
+  detalheSegmentos,
 }: {
   linhas: LinhaBarra[];
+  /** No TOQUE (sem a dica do mouse), o valor de cada segmento numa linha pequena embaixo da barra, na cor dele. */
+  detalheSegmentos?: (s: Segmento) => string;
   ariaLabel: string;
   max?: number;
   /** A linha marcada de um FILTRO (`null` = nenhuma); sem ela, o botão só age (não é de alternar). */
@@ -112,6 +115,18 @@ export function BarrasH({
               <span className={`font-semibold ${l.apagada ? "text-muted" : "text-text"}`}>{l.valor}</span>
               {l.detalhe != null && <span className="ml-1.5 text-[11.5px] text-muted">{l.detalhe}</span>}
             </span>
+            {detalheSegmentos && l.segmentos.filter((s) => s.valor > 0).length > 1 && (
+              <span className="col-span-2 col-start-2 hidden flex-wrap gap-x-3 pb-1 text-left text-[11px] text-muted pointer-coarse:flex">
+                {l.segmentos
+                  .filter((s) => s.valor > 0)
+                  .map((s) => (
+                    <span key={s.chave} className="flex items-center gap-1">
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: s.cor }} />
+                      {detalheSegmentos(s)}
+                    </span>
+                  ))}
+              </span>
+            )}
           </>
         );
         const marcada = ativa != null && l.chave === ativa;

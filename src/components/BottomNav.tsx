@@ -21,7 +21,7 @@ export function BottomNav({ telas }: { telas: readonly string[] }) {
     if (pathname) ativo.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [pathname]);
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] lg:hidden print:hidden">
       <div className="mx-auto flex max-w-md items-stretch md:max-w-3xl [justify-content:safe_space-around] overflow-x-auto overscroll-x-contain">
         {itens.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);

@@ -5704,6 +5704,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   abaixo do `md`. Automação: aviso no toque sem a extensão; `CanvasFluxo` com "Remover ligação" para a ligação marcada.
   `MatrizCapacidades` (celular) com o cartão "Em todas as telas". `TelaPublica`: "Entrar" no cabeçalho abaixo do `lg`.
   `/declaracao/verificar` (sem código) existe, como a do termo.
+- **CELULAR — O QUE FALTAVA (v1.287.0, sem migração):** `viewport` com `viewportFit:"cover"` (layout raiz) + `body` com a
+  área segura das laterais (a `BottomNav` também). `CanvasFluxo`: no toque, dois dedos = pinça (zoom pela razão das
+  distâncias, centrado entre os dedos) e um dedo no fundo ROLA a página (`areaQueRola`); as portas com 44px
+  (`any-pointer-coarse`). Editor do fluxo: a paleta vira "+ Bloco" (folha) abaixo do `lg` e Configurações/Atualizar/Excluir
+  vão ao **`MenuMais`** abaixo do `sm`. **`MenuMais`** (`Dropdown.tsx`) = o menu "⋯" genérico do sistema (ações com
+  ícone, 44px no toque; o `MenuQuadro` o usa). `BarrasH.detalheSegmentos` = os segmentos escritos embaixo da barra no
+  toque (Frotas); Frotas no celular mostra 10 barras + "Ver todas". `DataTable.rodapeGrudado` = só o rodapé preso acima da
+  navegação no celular (tabelas das Configurações e do Armazenamento). `BarraSelecao fixa` começa RECOLHIDA no celular
+  ("Editar" abre). Comparativo (`OrcamentoComparativo`): "Ajustes" recolhe Linhas/Colunas/Medida/Visão abaixo do `sm`;
+  `TabelaCruzada`: o toque numa célula mostra "Ver origem" no rodapé. Ficou como estava, de propósito: o cabeçalho dos
+  banners da Mesa (as ações descem para a 2ª linha — Tarefas e Atualizar perderiam a contagem e o anel num menu) e as
+  barras das telas (já com os principais à esquerda e os ícones à direita).
 - **ÁREA VISÍVEL dos painéis flutuantes (v1.225.1):** `area-visivel.ts` (`areaVisivel`, `entre`, `MARGEM_TELA`=8) = a régua ÚNICA de todo painel que se posiciona sozinho — `Dropdown`, `DicaFlutuante`, `JanelaFlutuante`: a largura SEM a barra de rolagem (`clientWidth`, nunca `innerWidth`) e a altura da viewport visual (celular: barra do navegador/teclado); a altura máxima nunca passa da borda (sem o piso de 140px que estourava). Painel novo = esta régua.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

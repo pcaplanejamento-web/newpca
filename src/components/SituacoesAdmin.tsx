@@ -171,7 +171,7 @@ export function SituacoesAdmin() {
           Nenhuma situação cadastrada — a coluna Situação da Mesa fica vazia até você cadastrar a primeira.
         </p>
       ) : (
-        <DataTable columns={cols} rows={lista} getKey={(s) => s.id} pageSize={20} minWidth={520} resumo={(l) => `${l.length} situaç${l.length === 1 ? "ão" : "ões"}`} />
+        <DataTable rodapeGrudado columns={cols} rows={lista} getKey={(s) => s.id} pageSize={20} minWidth={520} resumo={(l) => `${l.length} situaç${l.length === 1 ? "ão" : "ões"}`} />
       )}
 
       <Modal

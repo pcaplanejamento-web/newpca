@@ -618,7 +618,7 @@ export function TermoUsoAdmin() {
 
       <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
         <p className="mb-3 text-[15px] font-semibold text-text">Versões</p>
-        <DataTable columns={COLUNAS} rows={d.versoes} getKey={(v) => v.id} density="compact" pageSize={10} onRowClick={abrirVersao} exportar={{ nome: "Versões do Termo de Uso" }} vazio="Nenhuma versão ainda — escreva o texto e publique." />
+        <DataTable rodapeGrudado columns={COLUNAS} rows={d.versoes} getKey={(v) => v.id} density="compact" pageSize={10} onRowClick={abrirVersao} exportar={{ nome: "Versões do Termo de Uso" }} vazio="Nenhuma versão ainda — escreva o texto e publique." />
       </div>
 
       <Modal open={previa != null} onClose={() => setPrevia(null)} titulo="Prévia do Termo de Uso" size="xl">

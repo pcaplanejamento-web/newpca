@@ -302,6 +302,7 @@ export function ArmazenamentoAdmin() {
       <section className="space-y-2">
         <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Tabelas</h2>
         <DataTable
+          rodapeGrudado
           columns={cols}
           rows={dados.tabelas}
           getKey={(t) => t.nome}

@@ -6,7 +6,7 @@ import { textoPlanejamentos } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
-import { definirVarRaiz, tokenPx } from "./espacamento";
+import { definirVarRaiz, ehDesktop, tokenPx } from "./espacamento";
 import { IconChevronDown, IconClose, IconLimpar } from "./icons";
 
 /** Um registro selecionado (vira um chip removível). */
@@ -58,6 +58,11 @@ export function BarraSelecao({
   const ref = useRef<HTMLElement>(null);
   const lugarRef = useRef<HTMLDivElement>(null);
   const [recolhida, setRecolhida] = useState(false);
+  // No CELULAR a barra começa RECOLHIDA (só o resumo — a tabela segue à vista); "Editar" abre a edição.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só na montagem (depois, quem manda é o toque)
+  useLayoutEffect(() => {
+    if (fixa && !ehDesktop()) setRecolhida(true);
+  }, []);
   // Fixa: lugar reservado no fluxo (px) e a faixa horizontal da coluna de conteúdo (viewport).
   const [lugar, setLugar] = useState(0);
   const [faixa, setFaixa] = useState<{ left: number; width: number } | null>(null);
@@ -166,12 +171,14 @@ export function BarraSelecao({
           </Button>
           {fixa && children && (
             <Button
-              variant="icon"
+              variant={recolhida ? "secondary" : "icon"}
+              size={recolhida ? "sm" : undefined}
               aria-label={recolhida ? "Mostrar a edição" : "Recolher a edição"}
               aria-expanded={!recolhida}
               onClick={() => setRecolhida((v) => !v)}
-              className="lg:hidden"
+              className="shrink-0 lg:hidden"
             >
+              {recolhida && <span aria-hidden="true">Editar</span>}
               <IconChevronDown className={`h-4 w-4 transition-transform duration-[var(--motion-duration)] ${recolhida ? "rotate-180" : ""}`} />
             </Button>
           )}

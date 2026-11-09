@@ -233,3 +233,61 @@ export function Dropdown({
     </div>
   );
 }
+
+/** Uma ação do menu "⋯" (`MenuMais`). */
+export type AcaoMenu = { rotulo: string; icone?: ReactNode; onClick: () => void; disabled?: boolean; dica?: string; perigo?: boolean };
+
+/**
+ * O MENU "⋯" do sistema (o MESMO do menu do quadro de Tarefas): um botão só-ícone que abre a lista de ações, cada uma com
+ * ícone e 44px no toque. Uso típico: as ações SECUNDÁRIAS de um cabeçalho que não cabem no celular (`className` com
+ * `sm:hidden` deixa o menu só abaixo de 640px, com os botões normais à vista a partir dali).
+ */
+export function MenuMais({
+  acoes,
+  titulo,
+  ariaLabel = "Mais ações",
+  className = "inline-block",
+  triggerClassName = "h-11 w-11 justify-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-9 lg:w-9",
+  icone,
+  width = 260,
+}: {
+  acoes: (AcaoMenu | false | null | undefined)[];
+  /** O título acima das ações (ex.: "Menu do quadro"). */
+  titulo?: string;
+  ariaLabel?: string;
+  className?: string;
+  triggerClassName?: string;
+  /** O ícone do gatilho (o "⋯" do sistema por padrão). */
+  icone: ReactNode;
+  width?: number;
+}) {
+  const lista = acoes.filter((a): a is AcaoMenu => !!a);
+  if (!lista.length) return null;
+  return (
+    <Dropdown align="end" width={width} ariaLabel={ariaLabel} title={ariaLabel} className={className} triggerClassName={triggerClassName} trigger={icone}>
+      {(fechar) => (
+        <div className="space-y-0.5">
+          {titulo && <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">{titulo}</p>}
+          {lista.map((a) => (
+            <button
+              key={a.rotulo}
+              type="button"
+              disabled={a.disabled}
+              title={a.dica}
+              onClick={() => {
+                fechar();
+                a.onClick();
+              }}
+              className={`flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-9 ${
+                a.perigo ? "text-[var(--danger)]" : "text-text"
+              }`}
+            >
+              {a.icone}
+              <span className="truncate">{a.rotulo}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
