@@ -106,7 +106,10 @@ export function KpiStat({
           mudar a janela muda só a largura dos cartões, nunca a altura. */}
       <div className={`mt-1 flex min-w-0 items-center ${completo ? "h-[calc(1.9rem*1.05)]" : "h-[calc(2.05rem*1.05)]"}`}>
         <div
-          className={`min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[clamp(1.1rem,17cqw,2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
+          className={`min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[length:clamp(0.8rem,var(--kpi-cqw,17cqw),2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
+          // Valor LONGO (R$ 12.345.678,90) encolhe pela quantidade de caracteres em vez de ser cortado com "…" — no
+          // celular o cartão tem ~150px e o `title` não aparece no toque.
+          style={!completo && typeof value === "string" && value.length > 7 ? ({ "--kpi-cqw": `${Math.min(17, 132 / value.length).toFixed(2)}cqw` } as CSSProperties) : undefined}
           title={typeof value === "string" ? value : undefined}
         >
           {value}

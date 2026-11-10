@@ -190,7 +190,7 @@ function ListaEscolha({
         </span>
       </div>
       {itens.map((i) => (
-        <div key={i.valor} className="flex min-h-11 items-center gap-2 lg:min-h-9">
+        <div key={i.valor} className="flex min-h-11 items-center gap-2 desktop:min-h-9">
           {i.cor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: i.cor }} />}
           <Checkbox
             label={`${i.rotulo}${i.detalhe ? ` — ${i.detalhe}` : ""}`}

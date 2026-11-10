@@ -22,9 +22,10 @@ export const CARTAO_GRAFICO = "relative isolate overflow-hidden rounded-card bg-
 /** O "vidro" dos controles SOBRE o desenho do gráfico: a superfície translúcida, desfocada, com o anel. */
 export const VIDRO = "vidro-controles rounded-[calc(var(--radius-control)+4px)] bg-surface/55 p-1 shadow-ring backdrop-blur-md";
 /** A escala dos controles sobre o desenho em telas menores (`zoom` reduz também o espaço que ocupam). */
-export const ESCALA_CONTROLES = "max-lg:[zoom:0.9] max-sm:[zoom:0.8]";
+export const ESCALA_CONTROLES = "pointer-fine:max-lg:[zoom:0.9] pointer-fine:max-sm:[zoom:0.8]";
 /** A pilha lateral (lupa, restaurar, tabela) encolhe mais: no celular cobriria boa parte da altura do desenho. */
-const ESCALA_PILHA = "max-lg:[zoom:0.85] max-sm:[zoom:0.7]";
+// No TOQUE não encolhem: os botões ficariam com 31–35px (abaixo dos 44px do toque) — o gráfico é mais alto no celular.
+const ESCALA_PILHA = "pointer-fine:max-lg:[zoom:0.85] pointer-fine:max-sm:[zoom:0.7]";
 
 const plural = (n: number, um: string, varios: string) => `${num(n)} ${n === 1 ? um : varios}`;
 
@@ -111,7 +112,7 @@ export function GraficoTemporal({
   return (
     <div className={CARTAO_GRAFICO}>
       {/* Os controles sobre o desenho, em vidro; em telas menores, numa escala menor (cabem sem cobrir o gráfico). */}
-      <div data-reserva-dica="topo" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start gap-2 max-md:flex-nowrap md:flex-wrap ${ESCALA_CONTROLES}`}>
+      <div data-reserva-dica="topo" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 ${ESCALA_CONTROLES}`}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {controles.map((c, i) => (
             <div key={i} className={`pointer-events-auto ${VIDRO}`}>
@@ -120,7 +121,8 @@ export function GraficoTemporal({
           ))}
         </div>
         {janela && (
-          <div className={`pointer-events-auto flex items-center gap-1 pr-3 text-[13px] font-medium text-text ${VIDRO}`}>
+          // No celular as datas do zoom ficam numa linha própria (não empurram nem cobrem o tipo e o agrupamento).
+          <div className={`pointer-events-auto flex items-center gap-1 pr-3 text-[13px] font-medium text-text max-md:order-last ${VIDRO}`}>
             <Button size="sm" variant="icon" aria-label="Voltar no tempo" title="Voltar no tempo" disabled={!janela.podeVoltar} onClick={janela.onVoltar}>
               <IconChevronLeft className="h-4 w-4" />
             </Button>
@@ -129,7 +131,7 @@ export function GraficoTemporal({
             </Button>
             <span className="whitespace-nowrap tabular-nums" aria-live="polite" title={`${plural(janela.dias, "dia", "dias")} à vista, por ${gran}`}>
               {dataBR(janela.de)} a {dataBR(janela.ate)}
-              <span className="ml-1.5 text-muted">· {plural(janela.dias, "dia", "dias")}</span>
+              <span className="ml-1.5 text-muted max-sm:hidden">· {plural(janela.dias, "dia", "dias")}</span>
             </span>
           </div>
         )}

@@ -295,7 +295,7 @@ function FiltrosConsulta({ itens, filtros }: { itens: LinhaVisaoOrcamento[]; fil
         return (
           <li key={d.key}>
             <details className="group">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-[var(--pad-card)] py-2 hover:bg-surface-2 lg:min-h-[var(--h-control-sm)]">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-[var(--pad-card)] py-2 hover:bg-surface-2 desktop:min-h-[var(--h-control-sm)]">
                 <span className="text-[13.5px] font-semibold text-text">{d.rotulo}</span>
                 <span className="flex items-center gap-2 text-[13px]">
                   <span className={escolhidos.length ? "font-semibold text-accent" : "text-muted"}>{resumo}</span>

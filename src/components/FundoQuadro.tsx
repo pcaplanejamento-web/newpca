@@ -99,7 +99,18 @@ export function FundoQuadro({
   useEffect(() => setAjuste(lerAjusteFundo(fundoAjuste)), [fundoAjuste, fundoUrl]);
   const mudou = ajuste.x !== gravado.x || ajuste.y !== gravado.y || ajuste.zoom !== gravado.zoom;
   const caixa = useRef<HTMLDivElement>(null);
-  const toque = useRef<{ x: number; y: number } | null>(null);
+  // O ponteiro que enquadra. No TOQUE o enquadrar só começa depois de SEGURAR (o deslize rápido rola a página).
+  const toque = useRef<{ id: number; x: number; y: number; ativo: boolean; espera: number } | null>(null);
+  useEffect(() => {
+    const el = caixa.current;
+    if (!el) return;
+    // Enquadrando pelo toque, o dedo não rola a página (o ouvinte nativo NÃO passivo pode impedir).
+    const travar = (e: TouchEvent) => {
+      if (toque.current?.ativo) e.preventDefault();
+    };
+    el.addEventListener("touchmove", travar, { passive: false });
+    return () => el.removeEventListener("touchmove", travar);
+  }, [fundoUrl]);
 
   const patch = async (chave: string, corpo: Record<string, unknown>, sucesso: string) => {
     if (gravando) return;
@@ -121,6 +132,12 @@ export function FundoQuadro({
     if (!el || !tamanho) return;
     setAjuste((a) => arrastarFundo(a, dx, dy, { w: el.clientWidth, h: el.clientHeight }, tamanho));
   };
+  const [segurando, setSegurando] = useState(false);
+  const soltarToque = () => {
+    if (toque.current) window.clearTimeout(toque.current.espera);
+    toque.current = null;
+    setSegurando(false);
+  };
   const avisos = tamanho ? avaliarImagemFundo(tamanho.w, tamanho.h) : [];
   const editar = podeEditar && !!fundoUrl && carrega === true;
 
@@ -133,17 +150,38 @@ export function FundoQuadro({
           aria-label={editar ? "Enquadrar a imagem: arraste para escolher o que fica à vista (setas também)" : "Prévia da imagem de fundo"}
           tabIndex={editar ? 0 : undefined}
           onPointerDown={(e) => {
-            if (!editar) return;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            toque.current = { x: e.clientX, y: e.clientY };
+            if (!editar || !e.isPrimary) return;
+            const id = e.pointerId;
+            const segurar = e.pointerType === "touch";
+            const t = { id, x: e.clientX, y: e.clientY, ativo: !segurar, espera: 0 };
+            if (segurar) {
+              t.espera = window.setTimeout(() => {
+                if (toque.current !== t) return;
+                t.ativo = true;
+                navigator.vibrate?.(8);
+                setSegurando(true);
+              }, 250);
+            } else e.currentTarget.setPointerCapture(id);
+            toque.current = t;
           }}
           onPointerMove={(e) => {
-            if (!toque.current) return;
-            arrastar(e.clientX - toque.current.x, e.clientY - toque.current.y);
-            toque.current = { x: e.clientX, y: e.clientY };
+            const t = toque.current;
+            if (!t || t.id !== e.pointerId) return;
+            if (!t.ativo) {
+              // Mexeu antes de segurar: é rolagem da página.
+              if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > 8) soltarToque();
+              return;
+            }
+            arrastar(e.clientX - t.x, e.clientY - t.y);
+            t.x = e.clientX;
+            t.y = e.clientY;
           }}
-          onPointerUp={() => (toque.current = null)}
-          onPointerCancel={() => (toque.current = null)}
+          onPointerUp={(e) => {
+            if (toque.current?.id === e.pointerId) soltarToque();
+          }}
+          onPointerCancel={(e) => {
+            if (toque.current?.id === e.pointerId) soltarToque();
+          }}
           onKeyDown={(e) => {
             const d = ({ ArrowLeft: [10, 0], ArrowRight: [-10, 0], ArrowUp: [0, 10], ArrowDown: [0, -10] } as Record<string, [number, number]>)[e.key];
             if (!d || !editar) return;
@@ -151,7 +189,7 @@ export function FundoQuadro({
             arrastar(d[0], d[1]);
           }}
           className={`relative aspect-video w-full max-w-xl overflow-hidden rounded-card border border-border bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-            editar ? "cursor-grab touch-none active:cursor-grabbing" : ""
+            editar ? `cursor-grab touch-pan-y select-none [-webkit-touch-callout:none] active:cursor-grabbing pointer-fine:touch-none ${segurando ? "ring-2 ring-accent" : ""}` : ""
           }`}
         >
           {carrega && (
@@ -161,7 +199,7 @@ export function FundoQuadro({
           {carrega === null && <div className="absolute inset-0 grid place-items-center text-[12.5px] text-muted">Carregando a imagem…</div>}
           {editar && (
             <span className="pointer-events-none absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-[var(--scrim)] px-2 py-1 text-[11.5px] font-medium text-white">
-              <IconMove className="h-3.5 w-3.5" /> Arraste para enquadrar
+              <IconMove className="h-3.5 w-3.5" /> <span className="pointer-coarse:hidden">Arraste para enquadrar</span><span className="hidden pointer-coarse:inline">Segure e arraste para enquadrar</span>
             </span>
           )}
         </div>

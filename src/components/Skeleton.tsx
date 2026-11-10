@@ -34,5 +34,5 @@ export function SkeletonCartao({ linhas = 6 }: { linhas?: number }) {
  * toque. `quadrado` = o botão só com ícone; senão a largura vem em `className`.
  */
 export function EsqueletoControle({ quadrado = false, className = "" }: { quadrado?: boolean; className?: string }) {
-  return <Skeleton className={`h-11 rounded-control lg:h-[var(--h-control-sm)] ${quadrado ? "aspect-square shrink-0" : ""} ${className}`} />;
+  return <Skeleton className={`h-11 rounded-control desktop:h-[var(--h-control-sm)] ${quadrado ? "aspect-square shrink-0" : ""} ${className}`} />;
 }

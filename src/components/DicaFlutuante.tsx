@@ -71,7 +71,7 @@ export function DicaFlutuante({ conteudo, children, largura = 340 }: { conteudo:
             ref={painel}
             id={id}
             role="tooltip"
-            className="pointer-events-none fixed z-[90] rounded-card border border-border bg-surface p-3 text-left text-[12.5px] text-text shadow-soft animate-fade-in-up"
+            className="pointer-events-none fixed z-[90] rounded-card border border-border bg-surface p-3 text-left text-[12.5px] text-text shadow-soft animate-dica-entra"
             style={{ left: pos.left, top: pos.top, width: Math.min(largura, areaVisivel(MARGEM).largura), maxHeight: areaVisivel(MARGEM).altura, overflow: "auto" }}
           >
             {conteudo}

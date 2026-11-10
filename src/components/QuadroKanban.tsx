@@ -166,6 +166,9 @@ export function QuadroKanban({
             {onDuplicar && item("Duplicar", <IconCopy className="h-4 w-4 text-muted" />, () => onDuplicar(t.id))}
             {item("Para o topo da lista", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, 0), pos === 0)}
             {item("Para o fim da lista", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, Number.MAX_SAFE_INTEGER), pos === total - 1)}
+            {/* Um passo (o Alt+↑/↓ do desktop) — no toque, sem arrastar. */}
+            {item("Subir uma posição", <IconArrowUp className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, pos - 1), pos <= 0)}
+            {item("Descer uma posição", <IconArrowDown className="h-4 w-4 text-muted" />, () => onMover(t.id, l.id, pos + 1), pos >= total - 1)}
             {!t.template && item(t.concluidaEm ? "Reabrir" : "Concluir", <IconCheck className="h-4 w-4" style={{ color: "var(--ok)" }} />, () => onConcluir(t.id))}
             {listas
               .filter((x) => x.id !== l.id)
@@ -389,7 +392,7 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
                 criar();
               } else if (e.key === "Escape") fechar();
             }}
-            className="h-11 w-full rounded-control border border-accent bg-surface px-3 text-[13px] text-text outline-none ring-4 ring-accent/20 placeholder:text-faint lg:h-[var(--h-control-sm)]"
+            className="h-11 w-full rounded-control border border-accent bg-surface px-3 text-[13px] text-text outline-none ring-4 ring-accent/20 placeholder:text-faint desktop:h-[var(--h-control-sm)]"
           />
           <div className="flex items-center gap-1">
             <Button size="sm" variant="accent" loading={gravando} disabled={!nome.trim()} onClick={criar}>
@@ -515,7 +518,7 @@ export function ColunaTarefas({
             onClick={onRecolher}
             title="Recolher a lista"
             aria-label={`Recolher a lista ${l.nome}`}
-            className="grid h-11 w-9 shrink-0 place-items-center rounded-control text-text-2 opacity-0 transition-opacity hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] group-hover/lista:opacity-100 focus-visible:opacity-100 any-pointer-coarse:opacity-100 lg:h-8 lg:w-8"
+            className="grid h-11 w-9 shrink-0 place-items-center rounded-control text-text-2 opacity-0 transition-opacity hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] group-hover/lista:opacity-100 focus-visible:opacity-100 any-pointer-coarse:opacity-100 desktop:h-8 desktop:w-8"
           >
             <IconRecolher className="h-4 w-4" />
           </button>

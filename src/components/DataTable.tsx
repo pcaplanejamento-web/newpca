@@ -158,6 +158,7 @@ export function DataTable<R>({
   activeKey = null,
   fillHeight = false,
   scrollInterno = false,
+  rodapeGrudado = false,
   linhasSalvas,
   density,
   reservaInferior = 0,
@@ -207,6 +208,9 @@ export function DataTable<R>({
    * mobile rola normal (paginado). Opt-in (não afeta as demais tabelas). Exclui o `fillHeight`.
    */
   scrollInterno?: boolean;
+  /** Só no CELULAR: o rodapé (resumo, ações, paginação) GRUDA acima da navegação inferior, como no `scrollInterno`, sem a
+   *  rolagem interna do desktop (tabelas dentro de um painel que já rola — ex.: as abas das Configurações). */
+  rodapeGrudado?: boolean;
   /** As LINHAS POR PÁGINA escolhidas no rodapé ficam salvas NESTE aparelho com esta chave (vale também sem `scrollInterno`). */
   linhasSalvas?: string;
   /**
@@ -563,6 +567,8 @@ export function DataTable<R>({
     }
   }
   const rolagemRef = useRef<HTMLDivElement>(null);
+  // O último ponteiro que tocou numa linha foi o DEDO? (no toque a linha abre no 1º toque).
+  const toqueRef = useRef(false);
   const tabelaRef = useRef<HTMLTableElement>(null);
   // Linhas VAZIAS: completam só até o LIMITE DA VISÃO da tabela (a área que rola, ou até o fim do display) — nunca além
   // das linhas por página; o conteúdo que já passa da visão não ganha nenhuma.
@@ -660,14 +666,14 @@ export function DataTable<R>({
       ref={wrapRef}
       // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
       // pode grudar na tela no celular (abaixo).
-      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
+      className={`${scrollInterno ? "flex flex-col overflow-clip" : rodapeGrudado ? "max-lg:overflow-clip lg:overflow-hidden" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
       style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
       // A altura do HTML do servidor é posta pelo trecho abaixo ANTES da hidratação (ela não é do React ainda).
       suppressHydrationWarning={scrollInterno}
     >
       <div
         ref={rolagemRef}
-        className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
+        className={`overflow-x-auto overscroll-x-contain ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
         {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
             "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}
@@ -675,7 +681,9 @@ export function DataTable<R>({
           <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-30" : ""}`}>
             <tr>
               {selectable && (
-                <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
+                <th className={`relative w-10 px-3 max-lg:w-11 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
+                  {/* A CÉLULA inteira marca (o toque não precisa acertar a caixa de 16px). */}
+                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center">
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -687,6 +695,7 @@ export function DataTable<R>({
                     onChange={alternarTodos}
                     className="caixa-marcar"
                   />
+                  </label>
                 </th>
               )}
               {exibidas.map((j, p) => {
@@ -701,10 +710,16 @@ export function DataTable<R>({
                 const opcoes = externo ? externo.opcoes : (facetas.opcoes[j] ?? []);
                 const pos = posicao(c.key, p);
                 const filtro = c.travado ? (
-                  <span className="inline-flex items-center gap-1" title={c.travado}>
+                  // O motivo da trava também pelo TOQUE (a dica do mouse não existe no celular).
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 py-2 text-left min-h-11 desktop:min-h-0"
+                    title={c.travado}
+                    onClick={() => toast.info(c.travado as string)}
+                  >
                     <IconLock className="h-3 w-3 shrink-0" aria-hidden />
                     {c.header}
-                  </span>
+                  </button>
                 ) : externo ? (
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
@@ -814,9 +829,15 @@ export function DataTable<R>({
                   key={k}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
-                    // 1º clique MARCA; o 2º, na linha já marcada, ABRE.
-                    if (ativa && onRowClick) onRowClick(r);
+                    // 1º clique MARCA; o 2º, na linha já marcada, ABRE. No TOQUE abre no 1º (não há o "passar o mouse").
+                    if (onRowClick && (ativa || toqueRef.current)) {
+                      setMarcadaK(k);
+                      onRowClick(r);
+                    }
                     else setMarcadaK(k);
+                  }}
+                  onPointerDown={(e) => {
+                    toqueRef.current = e.pointerType === "touch";
                   }}
                   onKeyDown={
                     onRowClick
@@ -841,14 +862,16 @@ export function DataTable<R>({
                   }`}
                 >
                   {selectable && (
-                    <td className={`w-10 px-3 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
-                      <input
-                        type="checkbox"
-                        aria-label="Selecionar linha"
-                        checked={marcada}
-                        onChange={() => alternar(k)}
-                        className="caixa-marcar"
-                      />
+                    <td className={`relative w-10 px-3 max-lg:w-11 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
+                      <label className="absolute inset-0 flex cursor-pointer items-center justify-center">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar linha"
+                          checked={marcada}
+                          onChange={() => alternar(k)}
+                          className="caixa-marcar"
+                        />
+                      </label>
                     </td>
                   )}
                   {exibidas.map((j, p) => {
@@ -895,7 +918,7 @@ export function DataTable<R>({
         className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted ${
           // Rolagem interna no CELULAR (a página rola): o rodapé — resumo, ações (ex.: "Importar"), linhas e paginação —
           // GRUDA acima da navegação inferior (e da barra de seleção fixa, `--reserva-rodape`) enquanto a tabela está na tela.
-          scrollInterno ? "max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
+          scrollInterno || rodapeGrudado ? "max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
         }`}
       >
         <span>
@@ -990,7 +1013,7 @@ export function DataTable<R>({
                       localStorage.setItem(`tabela-linhas:${linhasSalvas}`, e.target.value);
                     } catch {}
                 }}
-                className="h-11 rounded-[8px] border border-border bg-surface px-2 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:h-[var(--h-control-sm)]"
+                className="h-11 rounded-[8px] border border-border bg-surface px-2 text-[12px] text-text-2 focus:border-accent focus:outline-none desktop:h-[var(--h-control-sm)]"
               >
                 {LINHAS_TABELA.map((n) => (
                   <option key={n} value={n}>
@@ -1058,7 +1081,7 @@ export function FiltrosAtivos({
       width={300}
       ariaLabel={rotulo}
       title={rotulo}
-      triggerClassName="relative h-11 w-11 shrink-0 justify-center rounded-control border border-accent/40 bg-accent-soft text-accent transition-colors hover:bg-accent/15 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      triggerClassName="relative h-11 w-11 shrink-0 justify-center rounded-control border border-accent/40 bg-accent-soft text-accent transition-colors hover:bg-accent/15 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
       trigger={
         <>
           <IconFilter className="h-4 w-4" />
@@ -1073,7 +1096,7 @@ export function FiltrosAtivos({
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{titulo}</p>
-              <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline lg:min-h-7">
+              <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline desktop:min-h-7">
                 Limpar
               </button>
             </div>
@@ -1086,7 +1109,7 @@ export function FiltrosAtivos({
                     onClick={() => onLimparColuna(c.key)}
                     title={`Limpar o filtro de ${texto(c.header)}`}
                     aria-label={`Limpar o filtro de ${texto(c.header)}`}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text lg:h-7 lg:w-7"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text desktop:h-7 desktop:w-7"
                   >
                     <IconClose className="h-3.5 w-3.5" />
                   </button>

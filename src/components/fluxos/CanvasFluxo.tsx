@@ -6,6 +6,8 @@ import { corCategoria } from "@/lib/fluxo-nos";
 import { alturaNo, caminhoSvg, coresDasLigacoes, dobraDaRota, GRADE, LARGURA_NO, PASSO_PORTA, type Ponto, posPorta, rotaOrtogonal, rotasDoGrafo, setasDaRota, snap, TOPO_PORTAS } from "@/lib/fluxo-layout";
 
 export { alturaNo, LARGURA_NO };
+import { Button } from "../Button";
+import { IconTrash } from "../icons";
 import { segurar } from "../segurar";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
@@ -26,7 +28,7 @@ const COR_ESTADO: Record<PassoExec["estado"], string> = {
 
 export type Vista = { x: number; y: number; z: number };
 type Arrasto =
-  | { tipo: "pan"; x0: number; y0: number; vx: number; vy: number }
+  | { tipo: "pan"; x0: number; y0: number; vx: number; vy: number; toque?: { el: Element; dy: number } }
   | { tipo: "no"; id: string; x0: number; y0: number; nx: number; ny: number; moveu: boolean }
   | { tipo: "ligar"; de: string; saida: string; ax: number; ay: number; px: number; py: number }
   | { tipo: "dobra"; i: number; x0: number; dx0: number };
@@ -116,6 +118,8 @@ export function CanvasFluxo({
 
   // Uma função por render (o grafo mais recente); os ouvintes chamam a atual pelo `fimRef`.
   const fim = (e: PointerEvent) => {
+      // O sistema tomou o gesto (pointercancel): encerra SEM efeito — não liga porta nem marca nó.
+      if (e.type === "pointercancel") return abortar();
       const a = arrasto.current;
       arrasto.current = null;
       soltarSel.current?.();
@@ -162,7 +166,14 @@ export function CanvasFluxo({
       const x = snap(a.dx0 + (e.clientX - a.x0) / z);
       if (g.conexoes[a.i]?.x === x) return;
       onMudar({ ...g, conexoes: g.conexoes.map((c, i) => (i === a.i ? { ...c, x } : c)) });
-    } else if (a.tipo === "pan") onVista({ ...vistaRef.current, x: a.vx + e.clientX - a.x0, y: a.vy + e.clientY - a.y0 });
+    } else if (a.tipo === "pan") {
+      // No TOQUE, um dedo no fundo ROLA A PÁGINA (o quadro se move com dois dedos — `usePinca`).
+      if (a.toque) {
+        const dy = e.clientY - a.y0;
+        a.toque.el.scrollBy(0, a.toque.dy - dy);
+        a.toque.dy = dy;
+      } else onVista({ ...vistaRef.current, x: a.vx + e.clientX - a.x0, y: a.vy + e.clientY - a.y0 });
+    }
     else if (a.tipo === "no") {
       const dx = (e.clientX - a.x0) / z;
       const dy = (e.clientY - a.y0) / z;
@@ -189,14 +200,87 @@ export function CanvasFluxo({
     window.addEventListener("pointercancel", f);
   };
 
-  const roda = (e: React.WheelEvent) => {
-    const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
-    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, vista.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
-    const mx = e.clientX - r.left;
-    const my = e.clientY - r.top;
-    onVista({ z, x: mx - ((mx - vista.x) / vista.z) * z, y: my - ((my - vista.y) / vista.z) * z });
+  /** Encerra o arrasto em curso SEM efeito (o 2º dedo virou uma pinça). */
+  const abortar = () => {
+    if (!arrasto.current) return;
+    if (arrasto.current.tipo === "ligar") setTemp(null);
+    arrasto.current = null;
+    soltarSel.current?.();
+    soltarSel.current = null;
+    window.removeEventListener("pointermove", mover);
+    if (pararRef.current) {
+      window.removeEventListener("pointerup", pararRef.current);
+      window.removeEventListener("pointercancel", pararRef.current);
+      pararRef.current = null;
+    }
   };
+
+  // PINÇA (dois dedos): o zoom pela razão das distâncias, centrado entre os dedos, e o quadro acompanha o ponto médio.
+  const toques = useRef(new Map<number, { x: number; y: number }>());
+  const pinca = useRef<{ d0: number; mx0: number; my0: number; v0: Vista } | null>(null);
+  const onVistaRef = useRef(onVista);
+  onVistaRef.current = onVista;
+  const medioDosToques = () => {
+    const [a, b] = [...toques.current.values()];
+    const r = ref.current?.getBoundingClientRect();
+    return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2 - (r?.left ?? 0), my: (a.y + b.y) / 2 - (r?.top ?? 0) };
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: estável — lê tudo por refs
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      if (!toques.current.has(e.pointerId)) return;
+      toques.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const p = pinca.current;
+      if (!p || toques.current.size < 2) return;
+      const m = medioDosToques();
+      const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, p.v0.z * (m.d / p.d0)));
+      // O ponto do quadro que estava entre os dedos no início fica entre eles agora.
+      const cx = (p.mx0 - p.v0.x) / p.v0.z;
+      const cy = (p.my0 - p.v0.y) / p.v0.z;
+      onVistaRef.current({ z, x: m.mx - cx * z, y: m.my - cy * z });
+    };
+    const sai = (e: PointerEvent) => {
+      if (!toques.current.delete(e.pointerId)) return;
+      if (toques.current.size < 2) pinca.current = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", sai);
+    window.addEventListener("pointercancel", sai);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", sai);
+      window.removeEventListener("pointercancel", sai);
+    };
+  }, []);
+  const toqueNoQuadro = (e: RPointerEvent) => {
+    if (e.pointerType !== "touch") return;
+    toques.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (toques.current.size !== 2) return;
+    // O 2º dedo: o que o 1º fazia (mover um nó, ligar, rolar) é desfeito e começa a pinça; o toque não chega ao nó.
+    e.stopPropagation();
+    abortar();
+    const m = medioDosToques();
+    pinca.current = { d0: m.d, mx0: m.mx, my0: m.my, v0: vistaRef.current };
+  };
+
+  // A roda dá zoom SEM rolar a página nem ampliar o navegador (pinça do trackpad = roda com Ctrl): ouvinte nativo NÃO
+  // passivo — o `onWheel` do React é passivo e não pode impedir.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const roda = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const v = vistaRef.current;
+      const fator = e.ctrlKey ? Math.exp(-e.deltaY * 0.01) : e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v.z * fator));
+      const mx = e.clientX - r.left;
+      const my = e.clientY - r.top;
+      onVistaRef.current({ z, x: mx - ((mx - v.x) / v.z) * z, y: my - ((my - v.y) / v.z) * z });
+    };
+    el.addEventListener("wheel", roda, { passive: false });
+    return () => el.removeEventListener("wheel", roda);
+  }, []);
 
   const soltar = (e: DragEvent) => {
     const tipo = e.dataTransfer.getData("application/x-fluxo-no");
@@ -217,8 +301,17 @@ export function CanvasFluxo({
         backgroundSize: `${GRADE * vista.z}px ${GRADE * vista.z}px`,
         backgroundPosition: `${vista.x}px ${vista.y}px`,
       }}
-      onPointerDown={(e) => comecar(e, { tipo: "pan", x0: e.clientX, y0: e.clientY, vx: vista.x, vy: vista.y })}
-      onWheel={roda}
+      onPointerDownCapture={toqueNoQuadro}
+      onPointerDown={(e) =>
+        comecar(e, {
+          tipo: "pan",
+          x0: e.clientX,
+          y0: e.clientY,
+          vx: vista.x,
+          vy: vista.y,
+          toque: e.pointerType === "touch" ? { el: areaQueRola(ref.current), dy: 0 } : undefined,
+        })
+      }
       onDragOver={(e) => onSoltarTipo && e.preventDefault()}
       onDrop={soltar}
     >
@@ -255,7 +348,7 @@ export function CanvasFluxo({
                     if (c.x != null) onMudar({ ...grafo, conexoes: grafo.conexoes.map((x, j) => (j === i ? { de: x.de, saida: x.saida, para: x.para, entrada: x.entrada } : x)) });
                   }}
                 >
-                  <title>{dobra ? "Arraste para ajustar a linha · duplo clique volta ao automático · Delete remove" : "Toque para marcar · Delete remove"}</title>
+                  <title>{dobra ? "Arraste para ajustar a linha · duplo clique (ou o botão no alto) volta ao automático · Delete remove" : "Toque para marcar · Delete remove"}</title>
                 </path>
                 <path
                   d={d}
@@ -349,9 +442,48 @@ export function CanvasFluxo({
           );
         })}
       </div>
+      {/* A ligação MARCADA se remove também por um botão (no toque não há a tecla Delete). */}
+      {conSel != null && !somenteLeitura && (
+        <div className="absolute left-1/2 top-2 z-20 flex -translate-x-1/2 gap-2">
+          {grafo.conexoes[conSel]?.x != null && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                onMudar({
+                  ...grafo,
+                  conexoes: grafo.conexoes.map((x, j) => (j === conSel ? { de: x.de, saida: x.saida, para: x.para, entrada: x.entrada } : x)),
+                })
+              }
+            >
+              Voltar ao automático
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<IconTrash className="h-4 w-4" />}
+            onClick={() => {
+              onMudar({ ...grafo, conexoes: grafo.conexoes.filter((_, i) => i !== conSel) });
+              setConSel(null);
+            }}
+          >
+            Remover ligação
+          </Button>
+        </div>
+      )}
       {extra}
     </div>
   );
+}
+
+/** A área que rola em volta do quadro (um painel com rolagem própria ou a página). */
+function areaQueRola(el: HTMLElement | null): Element {
+  for (let a = el?.parentElement; a; a = a.parentElement) {
+    const o = getComputedStyle(a).overflowY;
+    if ((o === "auto" || o === "scroll") && a.scrollHeight > a.clientHeight) return a;
+  }
+  return document.scrollingElement ?? document.documentElement;
 }
 
 const textoPasso = (p: PassoExec) =>
@@ -396,7 +528,7 @@ function Porta({
         role="none"
         onPointerDown={onPointerDown}
         style={cor ? { background: cor, borderColor: cor } : undefined}
-        className={`absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full border-2 bg-surface transition-colors duration-[var(--motion-duration)] ${lado === "entrada" ? "-left-[8px]" : "-right-[8px] cursor-crosshair"} ${erro ? "border-[var(--danger)]" : "border-[var(--muted)] hover:border-accent"} before:absolute before:-inset-2.5 before:content-['']`}
+        className={`absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full border-2 bg-surface transition-colors duration-[var(--motion-duration)] ${lado === "entrada" ? "-left-[8px]" : "-right-[8px] cursor-crosshair"} ${erro ? "border-[var(--danger)]" : "border-[var(--muted)] hover:border-accent"} before:absolute before:-inset-2.5 before:content-[''] any-pointer-coarse:before:-inset-[15px]`}
       />
       {rotulo && <span className={`text-[10px] font-medium ${erro ? "text-[var(--danger)]" : "text-muted"}`}>{rotulo}</span>}
       {contagem != null && contagem > 0 && <span className="rounded bg-[var(--accent-soft)] px-1 text-[10px] tabular-nums text-accent">{contagem}</span>}

@@ -429,6 +429,8 @@ export function DashboardPcaCliente({
   // A vista FIXA da consulta (menu da tela pública) é só a consulta: os indicadores e os filtros do topo repetiriam os
   // filtros da própria tabela.
   const soConsulta = vista === "consulta";
+  // A tabela da consulta ocupa até o fim do display (rolagem interna + rodapé fixo no celular) também na aba do painel.
+  const consultaCheia = soConsulta || aba === "consulta";
   // Na vista fixa a tabela É o cartão (cartão em volta somava o padding abaixo dela e a página rolava).
   const tabelaConsulta = consultaVista ? (
     <ConsultaPca
@@ -442,11 +444,11 @@ export function DashboardPcaCliente({
       onAbrirItem={abrirItem}
       itemAtivo={itemAberto}
       fim={ajudaConsulta}
-      alturaCheia={soConsulta}
+      alturaCheia={consultaCheia}
       semBusca={pesquisaNoCabecalho}
     />
   ) : (
-    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={soConsulta} semBusca={pesquisaNoCabecalho} onRowClick={abrirItem} ativo={itemAberto} />
+    <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} alturaCheia={consultaCheia} semBusca={pesquisaNoCabecalho} onRowClick={abrirItem} ativo={itemAberto} />
   );
   return (
     <>
@@ -659,10 +661,10 @@ export function DashboardPcaCliente({
                 </div>
               ))}
           </div>
-        ) : soConsulta ? (
-          tabelaConsulta
         ) : (
-          <ChartCard>{tabelaConsulta}</ChartCard>
+          // A tabela É o cartão (com rolagem interna até o fim do display; um cartão em volta somava o respiro dele e a
+          // página rolava).
+          tabelaConsulta
         )}
       </div>
 

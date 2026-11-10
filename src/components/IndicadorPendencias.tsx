@@ -38,7 +38,7 @@ export function IndicadorPendencias({
       aria-label={descricao}
       title={descricao}
       aria-pressed={onClick ? !!aberto : undefined}
-      className={`inline-flex h-11 min-w-11 shrink items-center justify-center gap-2 rounded-control border border-border-2 bg-surface px-2.5 text-[12.5px] font-semibold text-text transition-[background-color,box-shadow] duration-[var(--motion-duration)] hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:hover:bg-surface lg:h-[var(--h-control-sm)] ${aberto ? "ring-2 ring-accent/40" : ""}`}
+      className={`inline-flex h-11 min-w-11 shrink items-center justify-center gap-2 rounded-control border border-border-2 bg-surface px-2.5 text-[12.5px] font-semibold text-text transition-[background-color,box-shadow] duration-[var(--motion-duration)] hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:hover:bg-surface desktop:h-[var(--h-control-sm)] ${aberto ? "ring-2 ring-accent/40" : ""}`}
     >
       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cor ?? severidade }} />
       <span className="hidden truncate sm:inline" style={{ color: cor ?? severidade }}>

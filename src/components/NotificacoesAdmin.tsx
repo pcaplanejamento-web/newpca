@@ -35,7 +35,7 @@ function LinhaAviso({ item, canais, onChange }: { item: ItemCatalogoAviso; canai
             </Badge>
           )}
         </p>
-        <p className="line-clamp-1 text-[12px] leading-snug text-muted" title={item.descricao}>
+        <p className="line-clamp-2 text-[12px] sm:line-clamp-1 leading-snug text-muted" title={item.descricao}>
           {item.descricao}
         </p>
       </div>

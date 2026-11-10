@@ -18,6 +18,7 @@ import { categoriaDoProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
 import { listaCurta } from "@/lib/sobrescrita-dfd";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import {
+  administrativaDe,
   bloqueiaAssinatura,
   carimbarValidacao,
   MSG_SO_ADM_VALIDA,
@@ -190,6 +191,7 @@ export async function POST(req: Request) {
   // (sobrescrita/reenvio do DFD) mantém o carimbo original.
   const assinaturas = carimbarValidacao(pedidas, gravadasAss, a.u.nome, new Date().toISOString());
   const validadaEquipe = assinaturas.some((x) => x.validacao?.por === "equipe");
+  const validadaAdm = mudouValidacaoAdm(assinaturas, gravadasAss) && !!administrativaDe(assinaturas);
   // Histórico: o DFD que JÁ existia (sobrescrita por protocolação/reenvio/arquivo novo) é comparado com o
   // novo — a MESMA régua da comparação do reenvio (cabeçalho, seções, assinaturas e itens).
   const antigo = existente ? await getDfd(existente.id) : null;
@@ -263,7 +265,7 @@ export async function POST(req: Request) {
     acao: "importar",
     entidade: "dfd",
     entidadeId: r.id,
-    resumo: `${resumo}${validadaEquipe ? " · assinatura validada pela equipe" : ""}`,
+    resumo: `${resumo}${validadaEquipe ? " · assinatura validada pela equipe" : ""}${validadaAdm ? " · documento validado administrativamente (ADM)" : ""}`,
     depois: antigo ? null : { numero: r.numero, tipo: d.tipo, reparticaoId: d.reparticaoId, valorTotal: d.valorTotal, totalItens: d.totalItens },
     protocoloId: protocoloHist,
     origem,

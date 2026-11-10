@@ -30,7 +30,7 @@ export const FILTRO_LISTA_VAZIO: FiltroDaLista = { responsaveis: [], siglas: [],
 export const contarFiltroLista = (f: FiltroDaLista) => f.responsaveis.length + f.siglas.length + f.mesa.length;
 
 const botaoPe =
-  "relative grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]";
+  "relative grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]";
 
 function Chip({ ativo, onClick, children, titulo }: { ativo: boolean; onClick: () => void; children: React.ReactNode; titulo: string }) {
   return (
@@ -76,7 +76,7 @@ export function FiltroLista({
       className="inline-flex shrink-0"
       ariaLabel={`Filtrar a lista ${nome}`}
       title={n ? `Filtro da lista: ${n} ativo(s)` : "Filtrar a lista"}
-      triggerClassName={`relative h-11 w-11 shrink-0 justify-center !rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${n ? "!text-accent" : ""}`}
+      triggerClassName={`relative h-11 w-11 shrink-0 justify-center !rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)] ${n ? "!text-accent" : ""}`}
       trigger={
         <>
           <IconFilter className="h-4 w-4" aria-hidden />
@@ -88,7 +88,7 @@ export function FiltroLista({
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-semibold text-text">Filtrar a lista</p>
           {n > 0 && (
-            <button type="button" onClick={() => onChange(FILTRO_LISTA_VAZIO)} className="min-h-8 rounded-control px-2 text-[12px] font-semibold text-accent hover:bg-surface-2">
+            <button type="button" onClick={() => onChange(FILTRO_LISTA_VAZIO)} className="min-h-8 rounded-control px-2 text-[12px] font-semibold text-accent hover:bg-surface-2 any-pointer-coarse:min-h-11">
               Limpar
             </button>
           )}

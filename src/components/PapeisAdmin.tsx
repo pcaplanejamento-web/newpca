@@ -293,7 +293,7 @@ export function PapeisAdmin() {
         </div>
       </div>
       {erro && <ErroCarga msg={erro} onTentar={() => void carregar()} kind={lista.length ? "warn" : "danger"} />}
-      <DataTable columns={cols} rows={lista} getKey={(p) => p.id} density="compact" onRowClick={editar} vazio="Nenhum papel cadastrado." />
+      <DataTable rodapeGrudado columns={cols} rows={lista} getKey={(p) => p.id} density="compact" onRowClick={editar} vazio="Nenhum papel cadastrado." />
 
       {rascunho && (
         <Modal

@@ -28,7 +28,7 @@ export function Avisos({ avisos, titulo = "Avisos" }: { avisos: readonly Aviso[]
       width={360}
       ariaLabel={rotulo}
       title={rotulo}
-      triggerClassName={`h-11 min-w-11 shrink-0 justify-center gap-1 !rounded-control border border-border-2 bg-surface transition-colors hover:bg-surface-2 lg:h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)] ${alerta > 0 ? "px-2" : ""}`}
+      triggerClassName={`h-11 min-w-11 shrink-0 justify-center gap-1 !rounded-control border border-border-2 bg-surface transition-colors hover:bg-surface-2 desktop:h-[var(--h-control-sm)] desktop:min-w-[var(--h-control-sm)] ${alerta > 0 ? "px-2" : ""}`}
       trigger={
         <>
           <IconAvisos className="h-4 w-4 shrink-0" style={{ color: pior === "info" ? "var(--text-2)" : COR[pior] }} />

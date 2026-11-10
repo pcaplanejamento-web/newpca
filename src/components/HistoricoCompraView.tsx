@@ -299,7 +299,8 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         {!dados && !erro && <SkeletonLinhas linhas={8} />}
         {dados && resumo && (
           <>
-            <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-6">
+            {/* No celular, os números numa FAIXA que rola de lado (as tabelas ficam logo abaixo, sem 3 linhas de cartões). */}
+            <div className="-mx-[var(--pad-card)] flex snap-x gap-[var(--gap-block)] overflow-x-auto px-[var(--pad-card)] pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-6 max-sm:[&>*]:w-[9.5rem] max-sm:[&>*]:shrink-0 max-sm:[&>*]:snap-start">
               <StatMini label="Valor contratado" value={brlCompact(resumo.valorContratado)} hint={brl(resumo.valorContratado)} tone="accent" />
               <StatMini label="Valor empenhado" value={brlCompact(resumo.valorEmpenhado)} hint={resumo.valorContratado > 0 ? `${Math.round((resumo.valorEmpenhado / resumo.valorContratado) * 100)}% do contratado` : undefined} />
               <StatMini label="Contratos" value={num(resumo.contratos)} />
@@ -315,10 +316,10 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
               }}
               ariaLabel="Visões do histórico"
               options={[
-                { value: "produtos", label: `Produtos (${num(produtos.length)})` },
-                { value: "porContrato", label: `Por contrato (${num(porContrato.length)})` },
+                { value: "produtos", label: `Produtos (${num(produtos.length)})`, curto: `Produtos (${num(produtos.length)})` },
+                { value: "porContrato", label: `Por contrato (${num(porContrato.length)})`, curto: `Por contr. (${num(porContrato.length)})` },
                 { value: "itens", label: `Itens (${num(dados.itens.length)})` },
-                { value: "contratos", label: `Contratos (${num(dados.contratos.length)})` },
+                { value: "contratos", label: `Contratos (${num(dados.contratos.length)})`, curto: `Contr. (${num(dados.contratos.length)})` },
               ]}
             />
             <div key={vista} className="animate-cat-morph">

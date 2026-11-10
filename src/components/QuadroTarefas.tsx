@@ -557,7 +557,7 @@ export function QuadroTarefas({
                 </h1>
                 <EstrelaFavorito ativo={favs.favoritos.includes(quadro.id)} nome={quadro.nome} onAlternar={() => favs.alternar(quadro.id)} />
                 {quadro.privado && (
-                  <span className="grid h-11 w-9 shrink-0 place-items-center text-text-2 lg:h-[var(--h-control-sm)]" title="Quadro privado — só você o vê">
+                  <span className="grid h-11 w-9 shrink-0 place-items-center text-text-2 desktop:h-[var(--h-control-sm)]" title="Quadro privado — só você o vê">
                     <IconLock className="h-4 w-4" aria-label="Quadro privado" />
                   </span>
                 )}
@@ -609,7 +609,7 @@ export function QuadroTarefas({
                 aba={aba}
                 favoritos={favs.favoritos}
                 onFavorito={favs.alternar}
-                triggerClassName="h-11 shrink-0 gap-1.5 rounded-lg px-3 text-[13.5px] font-medium text-text-2 hover:bg-surface-2 lg:h-10"
+                triggerClassName="h-11 shrink-0 gap-1.5 rounded-lg px-3 text-[13.5px] font-medium text-text-2 hover:bg-surface-2 desktop:h-10"
                 gatilho={
                   <>
                     <IconTrocar className="h-4 w-4" />
@@ -703,6 +703,14 @@ export function QuadroTarefas({
                   onExcluirLista={() => setExcluindoLista(l.id)}
                   onLimite={() => setLimiteLista(l.id)}
                   onPessoa={() => setPessoaLista(l.id)}
+                  onLado={(() => {
+                    // A posição entre as ATIVAS sem a própria (a régua do `moverLista`).
+                    const i = ativas.findIndex((x) => x.id === l.id);
+                    return {
+                      esquerda: i > 0 ? () => moverLista(l.id, i - 1) : undefined,
+                      direita: i >= 0 && i < ativas.length - 1 ? () => moverLista(l.id, i + 1) : undefined,
+                    };
+                  })()}
                   onConcluidas={() => alternarConcluidas(l)}
                 />
                     )

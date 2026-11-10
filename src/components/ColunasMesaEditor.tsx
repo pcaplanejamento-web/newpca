@@ -76,12 +76,12 @@ export function ColunasMesaEditor({ valor, original, onChange }: { valor: Detalh
                 </p>
               </div>
               {c.classe === "fixa" ? (
-                <span className="inline-flex min-h-11 items-center gap-1.5 text-[12.5px] text-faint lg:min-h-9">
+                <span className="inline-flex min-h-11 items-center gap-1.5 text-[12.5px] text-faint desktop:min-h-9">
                   <IconLock className="h-3.5 w-3.5" aria-hidden />
                   Sempre visível
                 </span>
               ) : c.controle ? (
-                <span className="inline-flex min-h-11 items-center text-[12.5px] text-muted lg:min-h-9">{estadoControle(v, c)}</span>
+                <span className="inline-flex min-h-11 items-center text-[12.5px] text-muted desktop:min-h-9">{estadoControle(v, c)}</span>
               ) : (
                 <Switch
                   checked={!oculta}

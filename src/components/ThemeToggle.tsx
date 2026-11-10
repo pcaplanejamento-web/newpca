@@ -22,7 +22,7 @@ export function ThemeToggle() {
         gravarTemaPessoal({ ...lerTemaPessoal(), modo: isDark ? "claro" : "escuro" });
         setTheme(isDark ? "light" : "dark");
       }}
-      className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
     >
       {isDark ? <IconSun className="h-[18px] w-[18px]" /> : <IconMoon className="h-[18px] w-[18px]" />}
     </button>

@@ -200,7 +200,7 @@ export function CampoTextoFormatado({
         <button
           type="button"
           onClick={() => setEditando(false)}
-          className="inline-flex h-11 items-center rounded-control bg-accent px-3 text-[13px] font-semibold text-white hover:brightness-95 lg:h-[var(--h-control-sm)]"
+          className="inline-flex h-11 items-center rounded-control bg-accent px-3 text-[13px] font-semibold text-white hover:brightness-95 desktop:h-[var(--h-control-sm)]"
         >
           Pronto
         </button>
@@ -234,7 +234,7 @@ export function CampoTextoFormatado({
           type="button"
           aria-label={`Editar ${rotulo.toLowerCase()}`}
           onClick={() => setEditando(true)}
-          className="absolute top-1 right-1 grid h-11 w-11 place-items-center rounded-control text-muted opacity-0 transition-opacity hover:bg-surface focus-visible:opacity-100 group-hover/campo:opacity-100 any-pointer-coarse:opacity-100 lg:h-8 lg:w-8"
+          className="absolute top-1 right-1 grid h-11 w-11 place-items-center rounded-control text-muted opacity-0 transition-opacity hover:bg-surface focus-visible:opacity-100 group-hover/campo:opacity-100 any-pointer-coarse:opacity-100 desktop:h-8 desktop:w-8"
         >
           <IconPencil className="h-4 w-4" />
         </button>

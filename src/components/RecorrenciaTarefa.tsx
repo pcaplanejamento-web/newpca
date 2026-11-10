@@ -72,7 +72,7 @@ export function RecorrenciaTarefa({
                       const dias = ativo ? (r.dias ?? []).filter((x) => x !== i) : [...(r.dias ?? []), i].sort((a, b) => a - b);
                       set({ dias: dias.length ? dias : undefined });
                     }}
-                    className={`inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-[12.5px] font-semibold capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)] ${
+                    className={`inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-[12.5px] font-semibold capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)] desktop:min-w-[var(--h-control-sm)] ${
                       ativo ? "bg-accent text-white" : "bg-surface-2 text-text-2 hover:bg-border"
                     }`}
                   >

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Feedback } from "@/lib/semantic";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useSaida } from "./useSaida";
 
 // Toast — API imperativa (`toast.success("Salvo")`) sobre o AVISO FLUTUANTE padrão (canto inferior,
 // pequeno, sem deformar o layout). Monte <Toaster/> uma vez (no RootLayout).
@@ -45,28 +46,40 @@ export function Toaster() {
   const [item, setItem] = useState<ToastItem | null>(null);
 
   useEffect(() => {
-    const l = (t: ToastItem) => setItem(t);
+    // Uma SEQUÊNCIA de carregando/progresso atualiza o MESMO aviso (a mesma chave): ele não reaparece a cada passo e a
+    // barra anima de um valor ao outro.
+    const l = (t: ToastItem) => setItem((ant) => (ant?.carregando && t.carregando ? { ...t, id: ant.id } : t));
     listeners.push(l);
     return () => {
       listeners = listeners.filter((x) => x !== l);
     };
   }, []);
 
-  if (!item) return null;
+  // Fechado, o último aviso fica por um instante DESCENDO (a saída animada) — nunca some de uma vez.
+  const { saindo } = useSaida(item != null);
+  const ultimo = useRef<ToastItem | null>(null);
+  if (item) ultimo.current = item;
+  const mostrar = item ?? (saindo ? ultimo.current : null);
+  if (!mostrar) return null;
+  return <AvisoDoToast item={mostrar} saindo={!item} fechar={(id) => setItem((cur) => (cur?.id === id ? null : cur))} limpar={() => setItem(null)} />;
+}
+
+function AvisoDoToast({ item, saindo, fechar, limpar }: { item: ToastItem; saindo: boolean; fechar: (id: number) => void; limpar: () => void }) {
   return (
     <AvisoFlutuante
       key={item.id}
+      saindo={saindo}
       kind={KIND[item.variant]}
       carregando={item.carregando}
       duracao={item.duration > 0 ? item.duration : undefined}
-      onClose={() => setItem((cur) => (cur?.id === item.id ? null : cur))}
+      onClose={() => fechar(item.id)}
       acoes={
         item.acao ? (
           <Button
             size="sm"
             variant="secondary"
             onClick={() => {
-              setItem(null);
+              limpar();
               item.acao?.onClick();
             }}
           >
@@ -90,7 +103,7 @@ export function Toaster() {
             aria-valuenow={item.progresso}
             aria-label={item.msg}
           >
-            <span className="block h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${item.progresso}%` }} />
+            <span className="block h-full rounded-full bg-accent transition-[width] duration-[var(--motion-slow)] ease-out" style={{ width: `${item.progresso}%` }} />
           </span>
         </span>
       )}

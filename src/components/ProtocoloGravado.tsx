@@ -737,6 +737,13 @@ export function useProtocoloGravado({
                 onClick={temRelatorio ? () => setPendAbertas((v) => !v) : undefined}
               />
               {sujo && <span className="hidden min-w-0 truncate text-[12px] text-accent md:inline">Alterações não salvas</span>}
+              {/* No celular, só o ponto (o texto não cabe ao lado das ações). */}
+              {sujo && (
+                <span className="inline-flex shrink-0 items-center md:hidden" title="Alterações não salvas">
+                  <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-accent" />
+                  <span className="sr-only">Alterações não salvas</span>
+                </span>
+              )}
             </>
           )}
           <div className="ml-auto flex flex-nowrap items-center gap-1.5">

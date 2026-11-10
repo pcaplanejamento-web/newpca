@@ -632,7 +632,7 @@ export function TarefaDetalhe({
       aria-expanded={metaEditando === t}
       aria-label={rotulo}
       onClick={() => alternarEditor(t)}
-      className={`inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-control px-2 text-[13px] font-semibold text-text-2 transition-colors hover:bg-surface-2 lg:min-h-[var(--h-control-sm)] ${metaEditando === t ? "bg-surface-2 ring-2 ring-accent/30" : "bg-surface-2/60"}`}
+      className={`inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-control px-2 text-[13px] font-semibold text-text-2 transition-colors hover:bg-surface-2 desktop:min-h-[var(--h-control-sm)] ${metaEditando === t ? "bg-surface-2 ring-2 ring-accent/30" : "bg-surface-2/60"}`}
     >
       {conteudo}
     </button>
@@ -801,7 +801,7 @@ export function TarefaDetalhe({
 
   /** O menu "…" do cabeçalho (como o do Trello): duplicar, copiar, mover para outro quadro, criar template, copiar o link e a CAPA. */
   const menuTarefa = (t: TarefaResumo) => (
-    <Dropdown align="end" width={250} ariaLabel="Mais ações da tarefa" triggerClassName="h-11 w-11 justify-center text-muted lg:h-9 lg:w-9" trigger={<IconMais className="h-4 w-4" />}>
+    <Dropdown align="end" width={250} ariaLabel="Mais ações da tarefa" triggerClassName="h-11 w-11 justify-center text-muted desktop:h-9 desktop:w-9" trigger={<IconMais className="h-4 w-4" />}>
       {(fecharMenu) => {
         const item = (rotulo: string, icone: ReactNode, fn: () => void, off = false) => (
           <button
@@ -850,7 +850,7 @@ export function TarefaDetalhe({
                         fecharMenu();
                         definirCapa(t.id, c);
                       }}
-                      className="h-8 rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                      className="h-11 rounded-[4px] focus-visible:outline-none desktop:h-8 focus-visible:ring-2 focus-visible:ring-accent/50"
                       style={{ background: c, boxShadow: t.capa === c ? "0 0 0 2px var(--surface), 0 0 0 4px var(--text)" : undefined }}
                     />
                   ))}
@@ -1141,7 +1141,7 @@ export function ChipsAlternar({
             aria-pressed={ativa}
             aria-label={`${rotulo}: ${e.nome}`}
             onClick={() => onChange(ativa ? marcados.filter((x) => x !== e.id) : [...marcados, e.id])}
-            className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-[box-shadow,opacity] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
+            className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-[box-shadow,opacity] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)]"
             style={{
               color: e.cor,
               background: `color-mix(in srgb, ${e.cor} ${ativa ? 18 : 6}%, var(--surface))`,
@@ -1183,7 +1183,7 @@ function TituloNoLugar({ valor, focar, cursorNoFim, onChange }: { valor: string;
       }}
       onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
       onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
-      className="block min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-[calc((44px-1.375em)/2)] text-[15px] font-semibold leading-[1.375] lg:min-h-[var(--h-control-sm)] lg:py-[calc((var(--h-control-sm)-1.375em)/2-1px)] text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
+      className="block min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-[calc((44px-1.375em)/2)] text-[15px] font-semibold leading-[1.375] desktop:min-h-[var(--h-control-sm)] lg:py-[calc((var(--h-control-sm)-1.375em)/2-1px)] text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
     />
   );
 }

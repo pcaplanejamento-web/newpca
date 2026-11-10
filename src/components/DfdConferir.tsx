@@ -501,7 +501,7 @@ export function DfdConferir({
               {!roFund && !fundOk && (
                 <button
                   type="button"
-                  className="rounded-control border border-border-2 px-3 py-2 text-[13px] font-medium text-accent hover:bg-accent-soft"
+                  className="min-h-11 rounded-control border border-border-2 px-3 py-2 text-[13px] font-medium text-accent hover:bg-accent-soft lg:min-h-0"
                   onClick={() => setSecao(fCfg, "Lei 14.133/2021")}
                 >
                   Preencher padrão

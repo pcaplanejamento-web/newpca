@@ -55,7 +55,7 @@ export function IndicadorTrello({ ligacao, onAbrir }: { ligacao: EstadoTrello; o
       onClick={onAbrir}
       title={`Trello: ${rotulo}`}
       aria-label={`Trello: ${rotulo}`}
-      className="relative grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-9 lg:w-9"
+      className="relative grid h-11 w-11 shrink-0 place-items-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] desktop:h-9 desktop:w-9"
     >
       <IconTrello className="h-4 w-4" />
       <span aria-hidden className="absolute top-2 right-2 h-2 w-2 rounded-full ring-2 ring-surface lg:top-1.5 lg:right-1.5" style={{ background: COR_TOM[tom] ?? "var(--muted)" }} />

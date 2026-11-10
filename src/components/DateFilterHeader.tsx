@@ -50,7 +50,7 @@ export function DateFilterHeader({
       align={align}
       ariaLabel={`Filtrar ${label}`}
       papel="dialog"
-      triggerClassName="w-full gap-1.5 px-1 py-2"
+      triggerClassName="w-full gap-1.5 px-1 py-2 min-h-11 desktop:min-h-0"
       width={320}
       trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={ativo} />}
     >

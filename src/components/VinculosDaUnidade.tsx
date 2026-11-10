@@ -98,7 +98,7 @@ function ItemAcordeao({
 /** Cabeçalho de uma seção do banner: título + contagem + ação opcional à direita. */
 function TituloSecao({ titulo, contagem, acao }: { titulo: string; contagem: string; acao?: ReactNode }) {
   return (
-    <div className="flex min-h-11 items-center justify-between gap-2 lg:min-h-[var(--h-control-sm)]">
+    <div className="flex min-h-11 items-center justify-between gap-2 desktop:min-h-[var(--h-control-sm)]">
       <h3 className="text-[13px] font-semibold text-text">
         {titulo} <span className="font-normal text-muted">({contagem})</span>
       </h3>

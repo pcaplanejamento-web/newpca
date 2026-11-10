@@ -33,7 +33,7 @@ export function GruposDaPessoa({
       {grupos.map((g) => {
         const telas = telasDoGrupo(g);
         return (
-          <li key={g.id} className="flex min-h-11 items-center px-3 lg:min-h-[var(--h-control-sm)]">
+          <li key={g.id} className="flex min-h-11 items-center px-3 desktop:min-h-[var(--h-control-sm)]">
             <Checkbox
               checked={marcados.has(g.id)}
               disabled={disabled}

@@ -33,11 +33,11 @@ export function Ajuda({
       triggerClassName={
         botao
           ? `h-11 w-11 shrink-0 justify-center !rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 ${
-              botao === "sm" ? "lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]" : "lg:h-[calc(var(--h-control-sm)-6px)] lg:w-[calc(var(--h-control-sm)-6px)]"
+              botao === "sm" ? "desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]" : "desktop:h-[calc(var(--h-control-sm)-6px)] desktop:w-[calc(var(--h-control-sm)-6px)]"
             }`
           : compacta
           ? "relative h-5 w-5 justify-center rounded-full text-muted transition-colors after:absolute after:-inset-3 after:content-[''] hover:text-accent"
-          : "h-11 w-11 shrink-0 justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+          : "h-11 w-11 shrink-0 justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text desktop:h-[var(--h-control-sm)] desktop:w-[var(--h-control-sm)]"
       }
       trigger={<IconAjuda className={compacta || botao ? "h-4 w-4" : "h-[18px] w-[18px]"} />}
     >

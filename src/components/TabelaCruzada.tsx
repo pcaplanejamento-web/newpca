@@ -25,6 +25,7 @@ import { useLinhasTabela } from "./ConfigTabelas";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { IconArrowDown, IconArrowUp } from "./icons";
 import { Pager } from "./Pager";
+import { Button } from "./Button";
 import { Selecao } from "./Selecao";
 
 export type EixoTabelaCruzada = { chave: string; rotulo: string; total: number };
@@ -41,7 +42,7 @@ const larguraVar = (w: string): CSSProperties => ({ width: w, minWidth: w, maxWi
  * (o texto do cabeçalho e o das células ficam alinhados, dentro e fora da edição). */
 /** A linha MARCADA (um toque): fundo accent OPACO — as congeladas cobrem o que rola por baixo. */
 const MARCADA = "!bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]";
-const CEL = "h-11 border-b border-border/60 pr-3 pl-5 align-middle lg:h-[var(--h-control-sm)]";
+const CEL = "h-11 border-b border-border/60 pr-3 pl-5 align-middle desktop:h-[var(--h-control-sm)]";
 const DIVISA = "shadow-[inset_-1px_0_0_var(--border)]";
 
 /** Uma coluna da tabela — as ESTRUTURAIS (rótulo das linhas, extra, total) e as de VALORES são tratadas igual. */
@@ -220,6 +221,10 @@ export function TabelaCruzada({
   // do número. Delegado — milhares de células sem um manipulador cada. Enter/Espaço marcam e abrem direto.
   const [marcada, setMarcada] = useState<string | null>(null);
   const ultimo = useRef<{ alvo: string; t: number } | null>(null);
+  // No TOQUE o duplo toque é difícil de achar: o 1º toque numa célula também guarda a célula e o rodapé mostra
+  // "Ver origem" (o toque duplo segue valendo). No mouse, nada muda.
+  const toque = useRef(false);
+  const [tocada, setTocada] = useState<{ l: string | null; c: string | null } | null>(null);
   const abrirCelula = (td: HTMLElement) => onAbrir?.(td.dataset.l || null, td.dataset.c || null);
   const alvoCelula = (e: MouseEvent) => {
     const el = e.target as HTMLElement;
@@ -228,6 +233,7 @@ export function TabelaCruzada({
     const td = el.closest<HTMLElement>("[data-l],[data-c]");
     if (!td || !onAbrir) return;
     const alvo = `${td.dataset.l ?? ""}|${td.dataset.c ?? ""}`;
+    if (toque.current) setTocada({ l: td.dataset.l || null, c: td.dataset.c || null });
     const agora = e.timeStamp;
     if (ultimo.current && ultimo.current.alvo === alvo && agora - ultimo.current.t < 400) {
       ultimo.current = null;
@@ -411,23 +417,41 @@ export function TabelaCruzada({
                 })}
               </tr>
             </thead>
-            <tbody onClick={alvoCelula} onKeyDown={teclado}>
+            <tbody
+              onPointerDown={(e) => {
+                toque.current = e.pointerType === "touch";
+              }}
+              onClick={alvoCelula}
+              onKeyDown={teclado}
+            >
               {visiveis.map((l) => (
                 <tr key={l.chave} data-linha={l.chave} className="group/linha">
                   {exibidas.map((c, p) => celula(c, p, l))}
                 </tr>
               ))}
             </tbody>
-            <tfoot onClick={alvoCelula} onKeyDown={teclado}>
+            <tfoot
+              onPointerDown={(e) => {
+                toque.current = e.pointerType === "touch";
+              }}
+              onClick={alvoCelula}
+              onKeyDown={teclado}
+            >
               <tr className="font-semibold text-text">{exibidas.map((c, p) => celulaTotal(c, p))}</tr>
             </tfoot>
           </table>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border px-3 py-1.5 text-[12.5px] text-muted">
+      {/* No celular o rodapé (resumo, ações, linhas, paginação) GRUDA acima da navegação inferior, como o da DataTable. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface px-3 py-1.5 text-[12.5px] text-muted max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10">
         <span>{resumo}</span>
         <div className="flex flex-wrap items-center gap-2">
+          {tocada && onAbrir && !editando && (
+            <Button size="sm" variant="secondary" onClick={() => onAbrir(tocada.l, tocada.c)}>
+              Ver origem
+            </Button>
+          )}
           {acoesRodape}
           <label className="flex items-center gap-1.5">
             <span className="hidden sm:inline">Linhas</span>

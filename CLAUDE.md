@@ -1277,6 +1277,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (trocar de unidade desfaz o efeito). **Quem/quando** são carimbados pelo SERVIDOR (`carimbarValidacao`, sessão — nunca o
     cliente) no `POST /api/dfd` e no `PATCH /api/dfd/[id]` (`assinaturas`), com auditoria. Selos "Validada (auto)/(equipe)"
     nos cards do `DfdView` e "(auto)/(equipe)" na coluna Assinatura da lista do protocolo; grupo "Equipe" p/ a `manual`.
+  - **VALIDAÇÃO ADMINISTRATIVA (v1.289.0, sem migração — JSON `dfds.assinaturas`):** quando nada confere (PDF sem
+    assinatura, unidade sem responsável, assinante fora do cadastro/período), o ADM valida o DOCUMENTO por ato
+    administrativo: entrada `fonte:"administrativa"` + `validacao:{por:"adm", motivo}` (`MOTIVO_ADM` 10–500; o Zod exige
+    os dois juntos). `validarAssinatura`: auto › equipe › **`adm`** (status próprio — nunca bloqueia; sem solicitante) ›
+    dropsigner/ocr › erro; a entrada adm nunca casa como "auto". Núcleo puro em `reparticao-responsaveis.ts`
+    (`administrativaDe`, `validarAssinaturaAdm`, `desfazerValidacaoAdm` — o desfazer da EQUIPE não a toca —,
+    `mudouValidacaoAdm`, `manterValidacaoAdm`, `chaveValidacao`, `MSG_SO_ADM_VALIDA`); `carimbarValidacao` grava nome,
+    data (Brasília) e quem/quando — a MESMA (mesmo motivo) mantém o carimbo. Servidor (`POST /api/dfd` start-dfd e `PATCH
+    /api/dfd/[id]`): só o ADM (`u.admin`) cria/troca/desfaz (403); de quem não é ADM a gravada é MANTIDA
+    (`manterValidacaoAdm`). Herdada no reenvio/sobrescrita (`herdarTratamentos`), preservada na mescla do OCR
+    (`mesclarAssinaturasOcr`; `precisaOcr` a ignora), grupo **"ADM"** nas listas (`gruposAssinaturaSql` `'administrativa'
+    → 'adm'`), selo "(ADM)" na coluna Assinatura (`OrigemValidacao`), mensagem de ACERTO, card próprio no `DfdView` e,
+    no `DfdConferir`, a linha "Validação administrativa (ADM)" (motivo + `useConfirmacao`; `useAdminTabelas`) e "Desfazer
+    validação administrativa". Testes: `tests/validacao-adm.test.ts`.
   O código pode ter caractere
   não-ASCII e o rótulo `e-Assinatura:` pode quebrar em 2 linhas ("IP: e-" + "Assinatura: …") — as regex toleram. As
   assinaturas A/B de um DFD podem vir em **VÁRIAS páginas contíguas** (um formato por página), sempre **logo depois** do
@@ -5681,6 +5695,61 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **TRILHA DO CABEÇALHO (v1.98.0):** `TrilhaCabecalho` (`AppShell`, desktop) = Seção › Tela ⌃⌄ (as telas da mesma seção do menu — `secoesVisiveis`) e, em `/painel/pca/[id]`, › PCA ⌃⌄ (troca de espaço); ícone `IconAlternarNivel` (ChevronsUpDown). O `PcaSelect` mudou para a DIREITA do cabeçalho e só oferece “Todos os PCAs” com mais de um PCA (com um só, o gatilho mostra ele).
 - **MENU LATERAL RECOLHÍVEL (v1.97.0, sem migração):** o botão `IconRecolherMenu` no rodapé do menu (ao lado da versão) alterna o atributo `data-menu-recolhido` no `<html>` (`localStorage` `menu:recolhido`; `SCRIPT_MENU` em `menu-lateral.ts` o aplica antes da 1ª pintura). A `.menu-vaga` (sticky) troca a largura 16rem ↔ 3,75rem DE UMA VEZ e a coluna do conteúdo DESLIZA por transform (FLIP em `alternarMenu` — `Element.animate`, 300 ms; v1.97.2: nada reflui a cada quadro; a raiz tem `lg:overflow-x-clip`); no trilho o cartão do usuário mostra só a foto (`min-w-[38px]` + `overflow-hidden`); o `.menu-lateral` é absoluto dentro dela com conteúdo de largura FIXA (nada reflui, só é cortado); recolhido, com o mouse, o foco do teclado ou um dropdown do menu aberto (`:has([aria-expanded="true"])` — o painel por portal tirava o :hover e o menu piscava, v1.159.2), abre POR CIMA (sombra, 120 ms de espera) e `data-sem-peek` evita reabrir logo após recolher. Rótulos com `.menu-esconde` / `[data-marca-texto]` acompanham a largura com reticências e entram deslizando (curva `--menu-curva`, 300 ms); recolhido, o título de cada módulo vira a `.menu-linha` (separador curto centrado no trilho, v1.97.1); os ícones ficam parados (centrados no trilho). Regras em `globals.css`.
 - **TEMA DA PESSOA (v1.95.0, sem migração):** Perfil → **Aparência** (`AparenciaPessoal`, DS): modo `site`·`claro`·`escuro`·`sistema`·`horario` (18h–06h)·`personalizado` (início/fim) + tonalidade do escuro `carvao`·`azul`·`preto` (`data-escuro` no `<html>`; CSS `[data-theme="dark"][data-escuro=…]` vence as cores escuras do ADM). Neste NAVEGADOR (`localStorage` `aparencia:pessoa`); núcleo puro **`tema-pessoal-core.ts`** (`temaDoModo`, `noIntervaloEscuro`, `minutosAteTroca`) + **`SCRIPT_TEMA`** no layout ANTES do next-themes (grava a chave `theme` e o tom — sem piscar; o teste roda o script contra a mesma regra); **`TemaPessoal`** (no `ThemeProvider`) aplica e troca no minuto certo; o `ThemeToggle` grava o modo claro/escuro fixo.
+- **CELULAR — REGRAS DA REVISÃO (v1.284.0, sem migração):** (1) todo campo de TEXTO no toque tem ≥ 16px (regra global
+  `@media (pointer:coarse)` no `globals.css` — o Safari amplia a página abaixo disso; desenho por cima de um campo, como o
+  fundo do `CampoMatricula`, acompanha com `pointer-coarse:text-[16px]`); (2) `DataTable`: a caixa de seleção é um `<label>`
+  que cobre a CÉLULA (44px no celular) e no TOQUE a linha abre no 1º toque (`toqueRef` pelo `pointerType`; no mouse segue
+  marcar → abrir); (3) a trava de rolagem do `Modal` (`travarScroll`, exportada — a gaveta do menu também usa) marca
+  `data-modal-aberto` no `<html>` e, abaixo do `lg`, tudo com `data-flutuante-app` (bolhas do chat, pílula do segundo
+  plano) some; (4) `Tabs`: o arrasto só vale com o toque DENTRO da caixa (portais não trocam a aba de trás), para no
+  primeiro `Tabs` que o trata e, com mais de 5 abas, o botão "Todas as abas" (lista com a `dica`) abaixo do `lg`;
+  (5) `Segmented` leva a opção escolhida à vista; espaços com muitas abas usam `curto`; (6) cabeçalho: unidade, grupo e
+  "Site" só a partir do `lg` (abaixo, na gaveta) e, numa tela interna, o NOME dela no lugar da trilha
+  (`TrilhaCabecalho` `nomeCurto`); (7) `KpiStat`: valor longo encolhe (`--kpi-cqw` pela quantidade de caracteres), sem
+  "…". Botão novo em texto/ícone pequeno = `min-h-11 lg:min-h-0` (ou `Button size="sm"`).
+- **CELULAR — MÓDULOS (v1.285.0, sem migração):** `Modal` mostra VÁRIOS painéis lado a lado só a partir do `lg` (`largo`);
+  no celular as `acoesCabecalho` descem para a 2ª linha (o X fica no canto). Calendário: no toque o evento da grade de
+  horas se arrasta só pela ALÇA (o dedo que desliza rola), "sem prazo" tem o seletor de data e o título é o "Ir para uma
+  data". Tarefas: `MenuLista.onLado` (mover a lista sem arrastar) e "Subir/Descer uma posição" no cartão. `EdicaoColunas`:
+  ◀ ▶ no toque. Interação só de arrasto ou teclado = sempre um caminho por toque.
+- **CELULAR — EXECUÇÃO, AUTOMAÇÃO, ADM E PÚBLICAS (v1.286.0, sem migração):** os controles sobre o `GraficoTemporal` só
+  encolhem (`zoom`) com ponteiro FINO (`pointer-fine:` em `ESCALA_CONTROLES`/`ESCALA_PILHA`) — no toque ficam com 44px e o
+  desenho tem 380px; as datas do zoom descem (`max-md:order-last`). Execução: filtros recolhidos atrás de "Filtros (n)"
+  abaixo do `md`. Automação: aviso no toque sem a extensão; `CanvasFluxo` com "Remover ligação" para a ligação marcada.
+  `MatrizCapacidades` (celular) com o cartão "Em todas as telas". `TelaPublica`: "Entrar" no cabeçalho abaixo do `lg`.
+  `/declaracao/verificar` (sem código) existe, como a do termo.
+- **CELULAR — O QUE FALTAVA (v1.287.0, sem migração):** `viewport` com `viewportFit:"cover"` (layout raiz) + `body` com a
+  área segura das laterais (a `BottomNav` também). `CanvasFluxo`: no toque, dois dedos = pinça (zoom pela razão das
+  distâncias, centrado entre os dedos) e um dedo no fundo ROLA a página (`areaQueRola`); as portas com 44px
+  (`any-pointer-coarse`). Editor do fluxo: a paleta vira "+ Bloco" (folha) abaixo do `lg` e Configurações/Atualizar/Excluir
+  vão ao **`MenuMais`** abaixo do `sm`. **`MenuMais`** (`Dropdown.tsx`) = o menu "⋯" genérico do sistema (ações com
+  ícone, 44px no toque; o `MenuQuadro` o usa). `BarrasH.detalheSegmentos` = os segmentos escritos embaixo da barra no
+  toque (Frotas); Frotas no celular mostra 10 barras + "Ver todas". `DataTable.rodapeGrudado` = só o rodapé preso acima da
+  navegação no celular (tabelas das Configurações e do Armazenamento). `BarraSelecao fixa` começa RECOLHIDA no celular
+  ("Editar" abre). Comparativo (`OrcamentoComparativo`): "Ajustes" recolhe Linhas/Colunas/Medida/Visão abaixo do `sm`;
+  `TabelaCruzada`: o toque numa célula mostra "Ver origem" no rodapé. Ficou como estava, de propósito: o cabeçalho dos
+  banners da Mesa (as ações descem para a 2ª linha — Tarefas e Atualizar perderiam a contagem e o anel num menu) e as
+  barras das telas (já com os principais à esquerda e os ícones à direita).
+- **TOQUE, GESTOS E ANIMAÇÕES — REGRAS (v1.288.0, sem migração):**
+  - **`desktop:`** (variante de `globals.css` = `min-width:64rem` **e** `pointer:fine`): o controle ampliado a 44px no toque
+    encolhe com `desktop:` — NUNCA com `lg:` (o iPad deitado tem 1024px e é toque). Button, Pager, Ajuda, Dropdown,
+    SeletorMultiplo, Segmented, Field, MultiSelectHeader e as demais linhas `h-11 … lg:h-*` já usam `desktop:`. Controle novo
+    = `h-11 desktop:h-[var(--h-control-sm)]` (ou `min-h-11 desktop:min-h-*`).
+  - **Gestos:** todo arrasto por ponteiro ignora o 2º dedo (`!e.isPrimary`) e filtra o `pointerId`; `pointercancel` é
+    CANCELAR (volta, sem efeito — nunca soltar/excluir); zoom pela roda = ouvinte nativo `{passive:false}`; dois dedos =
+    pinça (mapa de ponteiros — `CanvasFluxo`, `RecorteImagem`); área grande arrastável no toque = `touch-pan-y` + segurar
+    (~250ms) antes de arrastar (`FundoQuadro`); duplo clique sempre com um caminho por toque (toque duplo ou botão).
+  - **Saída animada = `useSaida(aberto)`** (`src/components/useSaida.ts`): mantém montado por `--motion-fast` com
+    `data-saindo` (sem cliques) e desmonta. Usado no Modal (o último desenho fica na saída — `cloneElement`), Dropdown (o
+    último conteúdo; nasce/volta pelo lado do gatilho — `data-lado` abaixo|acima|folha), gaveta do menu e Toast/
+    `AvisoFlutuante saindo`. As animações moram em `globals.css` (`.modal-raiz`, `.dropdown-painel`, `.gaveta-raiz`,
+    `.aviso-flutuante`). Uma sequência `toast.carregando/progresso` atualiza o MESMO aviso.
+  - **Ritmos:** `--motion-fast` (0,6×) e `--motion-slow` (1,6×) do `--motion-duration`; duração fixa nova só com motivo.
+    `Tabs` não anima na abertura (só a troca feita pela pessoa). `SecoesQuadros` recolhe por `grid-template-rows`.
+  - **"Reduzir movimento"** (sistema ou `data-motion` off/reduced): a REDE DE SEGURANÇA no fim do `globals.css` leva TODA
+    animação/transição a 0,01ms (o `animationend`/`transitionend` ainda dispara para quem espera por ele).
+  - `html { -webkit-tap-highlight-color: transparent }`; Button com `active:scale-[0.97]`; listas e folhas com
+    `overscroll-contain`; barras que rolam de lado com `snap-x snap-proximity`.
 - **ÁREA VISÍVEL dos painéis flutuantes (v1.225.1):** `area-visivel.ts` (`areaVisivel`, `entre`, `MARGEM_TELA`=8) = a régua ÚNICA de todo painel que se posiciona sozinho — `Dropdown`, `DicaFlutuante`, `JanelaFlutuante`: a largura SEM a barra de rolagem (`clientWidth`, nunca `innerWidth`) e a altura da viewport visual (celular: barra do navegador/teclado); a altura máxima nunca passa da borda (sem o piso de 140px que estourava). Painel novo = esta régua.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

@@ -47,7 +47,7 @@ export function EstrelaFavorito({ ativo, nome, onAlternar, className = "" }: { a
         e.stopPropagation();
         onAlternar();
       }}
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-control transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 lg:h-8 lg:w-8 ${
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-control transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 desktop:h-8 desktop:w-8 ${
         ativo ? "" : "text-faint hover:text-text-2"
       } ${className}`}
       style={ativo ? { color: "var(--warn)" } : undefined}

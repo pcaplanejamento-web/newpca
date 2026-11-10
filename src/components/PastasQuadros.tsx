@@ -540,7 +540,7 @@ function PainelPasta({ pasta, aberto, onFechado, onFechar, children }: { pasta: 
               type="button"
               onClick={onFechar}
               aria-label={`Fechar a pasta ${pasta.nome}`}
-              className="mb-1 grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-8 lg:w-8"
+              className="mb-1 grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-8 desktop:w-8"
             >
               <IconClose className="h-4 w-4" />
             </button>

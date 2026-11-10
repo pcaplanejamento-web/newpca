@@ -18,7 +18,7 @@ import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, SearchField, TextField } from "./Field";
 import { SeletorFiltro } from "./SeletorFiltro";
-import { IconBox, IconDocumentos, IconFilter, IconDownload, IconEye, IconPencil, IconTrash, IconDesvincular } from "./icons";
+import { IconBox, IconDocumentos, IconFilter, IconDownload, IconEye, IconMenos, IconPencil, IconPlus, IconTrash, IconDesvincular } from "./icons";
 import { ListaEscolhaIds } from "./ListaEscolhaIds";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
@@ -115,6 +115,8 @@ export function VisualizadorPdf({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [estado, setEstado] = useState<"carregando" | "pronto" | "erro">("carregando");
+  // ZOOM (no celular a página inteira cabe na largura e o texto fica pequeno): a página cresce e a área rola de lado.
+  const [zoom, setZoom] = useState(1);
   useEffect(() => {
     let vivo = true;
     (async () => {
@@ -152,11 +154,22 @@ export function VisualizadorPdf({
       onClose={onFechar}
       titulo={doc.nome}
       size="full"
-      acoesCabecalho={onBaixar && <Button variant="icon" size="sm" aria-label={rotuloBaixar} title={rotuloBaixar} icon={<IconDownload className="h-4 w-4" />} onClick={onBaixar} />}
+      acoesCabecalho={
+        <>
+          <Button variant="icon" size="sm" aria-label="Diminuir o zoom" title="Diminuir o zoom" icon={<IconMenos className="h-4 w-4" />} disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z - 0.5))} />
+          <span className="min-w-[3ch] text-center text-[12px] tabular-nums text-muted" aria-live="polite">
+            {Math.round(zoom * 100)}%
+          </span>
+          <Button variant="icon" size="sm" aria-label="Aumentar o zoom" title="Aumentar o zoom" icon={<IconPlus className="h-4 w-4" />} disabled={zoom >= 3} onClick={() => setZoom((z) => Math.min(3, z + 0.5))} />
+          {onBaixar && <Button variant="icon" size="sm" aria-label={rotuloBaixar} title={rotuloBaixar} icon={<IconDownload className="h-4 w-4" />} onClick={onBaixar} />}
+        </>
+      }
     >
       {estado === "carregando" && <Skeleton className="mx-auto aspect-[1/1.41] w-full max-w-[900px] rounded-lg" />}
       {estado === "erro" && <p className="p-10 text-center text-sm text-muted">Não consegui abrir este documento.</p>}
-      <div ref={ref} className="space-y-[var(--gap-block)]" />
+      <div className="overflow-x-auto">
+        <div ref={ref} className={`space-y-[var(--gap-block)] ${zoom > 1 ? "[&>canvas]:!max-w-none" : ""}`} style={{ width: `${zoom * 100}%` }} />
+      </div>
     </Modal>
   );
 }

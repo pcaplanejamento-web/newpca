@@ -486,7 +486,7 @@ function DetalheDeclaracao({
       {falha ? (
         <Callout kind="danger">
           {falha}{" "}
-          <button type="button" className="font-medium underline" onClick={carregar}>
+          <button type="button" className="inline-flex min-h-11 items-center font-medium underline lg:min-h-0" onClick={carregar}>
             Tentar de novo
           </button>
         </Callout>

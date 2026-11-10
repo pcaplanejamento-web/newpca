@@ -62,12 +62,12 @@ export function PcaEspacoView({
           </>
         }
         opcoes={([
-          { value: "dashboard", label: "Dashboard" },
-          { value: "orcamento", label: "Orçamento" },
+          { value: "dashboard", label: "Dashboard", curto: "Painel" },
+          { value: "orcamento", label: "Orçamento", curto: "Orç." },
           { value: "mesa", label: "Mesa" },
-          ...(pca.fonte === "lista" ? [{ value: "importacao", label: "Importação" } as const] : []),
-          { value: "documentos", label: "Documentos" },
-          { value: "declaracoes", label: "Declarações" },
+          ...(pca.fonte === "lista" ? [{ value: "importacao", label: "Importação", curto: "Import." } as const] : []),
+          { value: "documentos", label: "Documentos", curto: "Docs" },
+          { value: "declaracoes", label: "Declarações", curto: "Decl." },
           { value: "configuracao", label: "Configuração" },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >

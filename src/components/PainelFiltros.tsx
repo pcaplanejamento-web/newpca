@@ -121,7 +121,7 @@ export function PainelFiltros({
       }}
       ariaLabel={rotulo}
       title={rotulo}
-      triggerClassName={`relative h-11 min-w-11 shrink-0 justify-center gap-1.5 rounded-control border px-2.5 transition-colors ${visao && total ? "pr-5" : ""} lg:h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)] ${
+      triggerClassName={`relative h-11 min-w-11 shrink-0 justify-center gap-1.5 rounded-control border px-2.5 transition-colors ${visao && total ? "pr-5" : ""} desktop:h-[var(--h-control-sm)] desktop:min-w-[var(--h-control-sm)] ${
         total ? "border-accent/40 bg-accent-soft text-accent hover:bg-accent/15" : "border-transparent text-muted hover:bg-surface-2 hover:text-text"
       }`}
       trigger={
@@ -178,7 +178,7 @@ export function PainelFiltros({
               {visao && (
                 <li className={`flex max-w-full ${saiCls} ${saindo.has(CHAVE_VISAO) ? "scale-90 opacity-0" : "animate-chip-entra"}`}>
                   <span
-                    className="inline-flex h-11 max-w-full items-center gap-1.5 rounded-chip bg-accent pl-2.5 text-[13px] font-medium text-white lg:h-[var(--h-control-sm)]"
+                    className="inline-flex h-11 max-w-full items-center gap-1.5 rounded-chip bg-accent pl-2.5 text-[13px] font-medium text-white desktop:h-[var(--h-control-sm)]"
                     title={`Visão aplicada: ${visao.nome}${visao.alterada ? " (alterada)" : ""}`}
                   >
                     <IconVisao className="h-3.5 w-3.5 shrink-0" />
@@ -193,7 +193,7 @@ export function PainelFiltros({
                       onClick={() => tirar(CHAVE_VISAO, onTirarVisao)}
                       aria-label={`Tirar a visão ${visao.nome}`}
                       title="Tirar a visão (voltar ao estado inicial)"
-                      className="inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-chip hover:bg-white/15 lg:h-[var(--h-control-sm)] lg:w-7"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-chip hover:bg-white/15 desktop:h-[var(--h-control-sm)] desktop:w-7"
                     >
                       <IconClose className="h-3.5 w-3.5" />
                     </button>
@@ -203,7 +203,7 @@ export function PainelFiltros({
               {chips.map((c) => (
                 <li key={c.chave} className={`flex max-w-full ${saiCls} ${saindo.has(c.chave) ? "scale-90 opacity-0" : "animate-chip-entra"}`}>
                   <span
-                    className="inline-flex h-11 max-w-full items-center gap-1 rounded-chip border border-accent/40 bg-accent-soft pl-2.5 text-[13px] text-accent lg:h-[var(--h-control-sm)]"
+                    className="inline-flex h-11 max-w-full items-center gap-1 rounded-chip border border-accent/40 bg-accent-soft pl-2.5 text-[13px] text-accent desktop:h-[var(--h-control-sm)]"
                     title={dicaChip(c)}
                   >
                     <span className="shrink-0 opacity-70">{c.rotulo}</span>
@@ -222,7 +222,7 @@ export function PainelFiltros({
                       }}
                       aria-label={`Tirar o filtro ${c.rotulo}`}
                       title={`Tirar o filtro ${c.rotulo}`}
-                      className="inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-chip hover:bg-accent/15 lg:h-[var(--h-control-sm)] lg:w-7"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-chip hover:bg-accent/15 desktop:h-[var(--h-control-sm)] desktop:w-7"
                     >
                       <IconClose className="h-3.5 w-3.5" />
                     </button>
@@ -340,7 +340,7 @@ function ListaVisoes({
           aria-pressed={ativa}
           disabled={gravando}
           title={ativa ? `Visão aplicada: ${e.nome} (tocar desfaz o que mudou depois)` : `Aplicar a visão ${e.nome}`}
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-left text-[13px] lg:min-h-8"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-left text-[13px] desktop:min-h-8"
         >
           <IconVisao className={`h-3.5 w-3.5 shrink-0 ${ativa ? "fill-current text-accent" : "text-muted"}`} />
           <span className={`min-w-0 flex-1 truncate ${ativa ? "font-semibold text-accent" : "text-text"}`}>{e.nome}</span>

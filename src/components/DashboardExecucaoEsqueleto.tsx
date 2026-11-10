@@ -20,7 +20,13 @@ export function DashboardExecucaoEsqueleto() {
         ))}
       </div>
       <EsqueletoControle className="w-full" />
-      <EsqueletoFiltrosDashboard grade campos={CAMPOS_EXECUCAO} />
+      {/* No celular os filtros ficam recolhidos atrás de "Filtros" (o cartão com uma linha só); a partir de `md`, a grade. */}
+      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] md:hidden">
+        <Skeleton className="h-11 w-full rounded-control" />
+      </div>
+      <div className="max-md:hidden">
+        <EsqueletoFiltrosDashboard grade campos={CAMPOS_EXECUCAO} />
+      </div>
       <EsqueletoGraficoTemporal cartao />
       {/* O demonstrativo: "Demonstrativo por" + o seletor, e a tabela. */}
       <div className="rounded-card border border-border/60 bg-surface p-[var(--pad-card)] shadow-soft">

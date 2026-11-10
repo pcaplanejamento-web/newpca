@@ -63,7 +63,7 @@ export function SeletorEtiquetas({
       <Dropdown
         width={300}
         ariaLabel="Escolher etiquetas"
-        triggerClassName={`h-11 w-11 justify-center rounded-control bg-surface-2 text-muted hover:text-text lg:h-8 lg:w-8 ${disabled ? "pointer-events-none opacity-50" : ""}`}
+        triggerClassName={`h-11 w-11 justify-center rounded-control bg-surface-2 text-muted hover:text-text desktop:h-8 desktop:w-8 ${disabled ? "pointer-events-none opacity-50" : ""}`}
         trigger={<IconPlus className="h-4 w-4" />}
       >
         <PainelEtiquetas etiquetas={etiquetas} marcados={marcados} onChange={onChange} quadroId={quadroId} podeEditar={podeEditar} onMudouEtiquetas={onMudouEtiquetas} />
@@ -197,7 +197,7 @@ function PainelEtiquetas({
       {!etiquetas.length && <p className="text-[12.5px] text-muted">O quadro ainda não tem etiquetas{podeEditar ? " — crie a primeira." : "."}</p>}
       <ul className="space-y-0.5">
         {visiveis.map((e) => (
-          <li key={e.id} className="flex min-h-11 items-center gap-1 lg:min-h-9">
+          <li key={e.id} className="flex min-h-11 items-center gap-1 desktop:min-h-9">
             <Checkbox
               checked={marcados.includes(e.id)}
               onChange={() => onChange(alternarValor(marcados, e.id))}

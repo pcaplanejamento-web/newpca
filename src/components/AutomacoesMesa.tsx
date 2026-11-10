@@ -46,7 +46,7 @@ export function AutomacoesMesa({
         triggerClassName={
           variante === "barra"
             ? classeQuadradoFiltro(false)
-            : "h-11 gap-1.5 rounded-control border border-border bg-surface-2 px-3 text-[13px] font-semibold text-text-2 hover:bg-surface lg:h-[var(--h-control-sm)]"
+            : "h-11 gap-1.5 rounded-control border border-border bg-surface-2 px-3 text-[13px] font-semibold text-text-2 hover:bg-surface desktop:h-[var(--h-control-sm)]"
         }
         trigger={
           variante === "barra" ? (
@@ -68,7 +68,7 @@ export function AutomacoesMesa({
                 key={a.id}
                 type="button"
                 role="menuitem"
-                className="flex min-h-11 w-full items-center gap-2 rounded-control px-3 text-left text-sm text-text hover:bg-surface-2 focus-visible:bg-surface-2 lg:min-h-9"
+                className="flex min-h-11 w-full items-center gap-2 rounded-control px-3 text-left text-sm text-text hover:bg-surface-2 focus-visible:bg-surface-2 desktop:min-h-9"
                 onClick={() => {
                   fechar();
                   void escolher(a);

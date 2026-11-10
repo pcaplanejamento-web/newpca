@@ -44,9 +44,10 @@ import { Callout } from "../Callout";
 import { createPortal } from "react-dom";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
+import { IconClose, IconMais, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
 import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
+import { MenuMais } from "../Dropdown";
 import { useNaTela, useTrabalhoSegundoPlano } from "../SegundoPlano";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
@@ -1298,6 +1299,7 @@ function EditorFluxo({
   const [sel, setSel] = useState<string | null>(null);
   const [vista, setVista] = useState<Vista>({ x: 40, y: 20, z: 0.9 });
   const [busca, setBusca] = useState("");
+  const [paletaAberta, setPaletaAberta] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [relatorio, setRelatorio] = useState(false);
   /** O nó cuja configuração está aberta (janela flutuante sobre o diagrama) e onde ele está na tela. */
@@ -1413,6 +1415,39 @@ function EditorFluxo({
     nos: c.nos.filter((n) => !busca.trim() || `${n.rotulo} ${n.descricao}`.toLowerCase().includes(busca.trim().toLowerCase())),
   })).filter((c) => c.nos.length);
 
+  // Os blocos da paleta (a coluna do desktop e a folha do celular mostram a MESMA lista).
+  const listaBlocos = (naFolha: boolean) =>
+            filtradas.map((c) => (
+              <div key={c.valor}>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{c.rotulo}</p>
+                <div className="space-y-1">
+                  {c.nos.map((n) => (
+                    <div key={n.tipo} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/x-fluxo-no", n.tipo);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      onClick={() => {
+                        adicionar(n.tipo);
+                        if (naFolha) setPaletaAberta(false);
+                      }}
+                      title={`${n.descricao} — toque para acrescentar (ligado ao nó marcado) ou arraste para o quadro`}
+                      className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1.5 text-left hover:bg-[var(--accent-soft)] lg:min-h-0"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-md text-white" style={{ background: c.cor }}>
+                        <IconeNo nome={n.icone} className="size-3.5" />
+                      </span>
+                      <span className="min-w-0 truncate text-[13px] text-text">{n.rotulo}</span>
+                    </button>
+                    <AjudaNo def={n} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -1466,6 +1501,22 @@ function EditorFluxo({
             <IconPlay className="size-4" />
           </Button>
         )}
+        {/* No celular, as ações secundárias no "⋯" (Atualizar pelo modelo, Excluir, Configurações). */}
+        <MenuMais
+          className="inline-block sm:hidden"
+          ariaLabel="Mais ações do fluxo"
+          icone={<IconMais className="size-4" />}
+          acoes={[
+            { rotulo: "Configurações da automação", icone: <IconSettings className="size-4 text-muted" />, onClick: () => setConfigAberta(true) },
+            onAtualizarModelo && {
+              rotulo: desatualizado ? "Atualizar pelo modelo (há versão nova)" : "Atualizar pelo modelo",
+              icone: <IconRefresh className="size-4 text-muted" />,
+              onClick: onAtualizarModelo,
+              disabled: rodando,
+            },
+            { rotulo: "Excluir o fluxo", icone: <IconTrash className="size-4" />, onClick: onExcluir, disabled: rodando, perigo: true },
+          ]}
+        />
         {onAtualizarModelo && (
           <Button
             size="sm"
@@ -1474,17 +1525,17 @@ function EditorFluxo({
             title={desatualizado ? "O modelo desta automação mudou — toque para usar o diagrama de hoje" : "Atualizar pelo modelo (volta ao diagrama do modelo de hoje)"}
             disabled={rodando}
             onClick={onAtualizarModelo}
-            className="relative"
+            className="relative max-sm:hidden"
           >
             <IconRefresh className="size-4" />
             {desatualizado && <span aria-hidden="true" className="absolute top-1 right-1 size-2 rounded-full bg-[var(--warn)]" />}
           </Button>
         )}
-        <Button size="sm" variant="icon" aria-label="Excluir o fluxo" title="Excluir o fluxo" disabled={rodando} onClick={onExcluir}>
+        <Button size="sm" variant="icon" className="max-sm:hidden" aria-label="Excluir o fluxo" title="Excluir o fluxo" disabled={rodando} onClick={onExcluir}>
           <IconTrash className="size-4" />
         </Button>
         <AjudaDoFluxo titulo={nome.trim() || fluxo.nome} ajuda={ajuda} />
-        <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
+        <Button size="sm" variant="icon" className="max-sm:hidden" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
           <IconSettings className="size-4" />
         </Button>
         <ConfigFluxo
@@ -1532,39 +1583,28 @@ function EditorFluxo({
         <PainelFluxo grafo={grafo} onGrafo={setGrafo} passos={passos} resultado={resultado} rodando={rodando} ultima={{ em: fluxo.ultimaEm, resumo: fluxo.ultimaExecucao }} />
       )}
       <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:h-[var(--h)] lg:grid-cols-[14rem_minmax(0,1fr)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
-        <aside className={`${CARTAO} flex max-h-80 min-h-0 flex-col gap-2 overflow-hidden lg:max-h-none`}>
+        {/* A PALETA: coluna à esquerda no desktop; no celular/tablet, o botão "+ Bloco" abre a MESMA lista numa folha. */}
+        <aside className={`${CARTAO} hidden min-h-0 flex-col gap-2 overflow-hidden lg:flex`}>
           <SearchField compacto placeholder="Buscar bloco" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar bloco" />
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-            {filtradas.map((c) => (
-              <div key={c.valor}>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{c.rotulo}</p>
-                <div className="space-y-1">
-                  {c.nos.map((n) => (
-                    <div key={n.tipo} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("application/x-fluxo-no", n.tipo);
-                        e.dataTransfer.effectAllowed = "copy";
-                      }}
-                      onClick={() => adicionar(n.tipo)}
-                      title={`${n.descricao} — toque para acrescentar (ligado ao nó marcado) ou arraste para o quadro`}
-                      className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1.5 text-left hover:bg-[var(--accent-soft)] lg:min-h-0"
-                    >
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-md text-white" style={{ background: c.cor }}>
-                        <IconeNo nome={n.icone} className="size-3.5" />
-                      </span>
-                      <span className="min-w-0 truncate text-[13px] text-text">{n.rotulo}</span>
-                    </button>
-                    <AjudaNo def={n} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+            {listaBlocos(false)}
           </div>
         </aside>
+        {!rodando && (
+          <div className="lg:hidden">
+            <Button size="sm" icon={<IconPlus className="size-4" />} onClick={() => setPaletaAberta(true)}>
+              Bloco
+            </Button>
+          </div>
+        )}
+        <Modal open={paletaAberta} onClose={() => setPaletaAberta(false)} titulo="Acrescentar bloco" size="md">
+          <div className="space-y-2">
+            <SearchField compacto placeholder="Buscar bloco" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar bloco" />
+            <div className="space-y-3">
+            {listaBlocos(true)}
+          </div>
+          </div>
+        </Modal>
         <CanvasFluxo
           grafo={grafo}
           registro={REGISTRO_NOS}
@@ -1610,9 +1650,10 @@ function EditorFluxo({
               )}
               <Ajuda botao titulo="Como montar">
                 <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
-                  <li>Toque num bloco à esquerda: ele entra ligado ao nó marcado (ou arraste até o quadro).</li>
-                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e Delete para desligar. As setas mostram a direção; cada ligação de um nó tem uma cor.</li>
+                  <li>Toque num bloco à esquerda (no celular, em “+ Bloco”): ele entra ligado ao nó marcado (ou arraste até o quadro).</li>
+                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e “Remover ligação” (ou Delete) para desligar. As setas mostram a direção; cada ligação de um nó tem uma cor.</li>
                   <li>Arraste o trecho vertical de uma linha para ajustá-la; duplo clique volta ao automático.</li>
+                  <li>No celular: dois dedos movem e aproximam o quadro (pinça); um dedo no fundo rola a página.</li>
                   <li>“Organizar” põe os componentes em colunas na ordem do fluxo, com as ligações retas.</li>
                   <li>Laço: ligue o fim do corpo à entrada “Volta” — repete até acabar.</li>
                   <li>Toda caixa tem a saída vermelha “erro”: ligue-a a “Apontar erros” para seguir mesmo com falha.</li>
@@ -1681,7 +1722,7 @@ function EditorFrequencia({ freq, onFreq }: { freq: Frequencia; onFreq: (f: Freq
       aria-label="Hora"
       value={freq.hora}
       onChange={(e) => onFreq(lerFrequencia({ ...freq, hora: e.target.value }))}
-      className="h-11 rounded-control border border-border bg-surface px-2 text-sm text-text lg:h-[var(--h-control-sm)]"
+      className="h-11 rounded-control border border-border bg-surface px-2 text-sm text-text desktop:h-[var(--h-control-sm)]"
     />
   );
   if (freq.tipo === "diario")

@@ -148,7 +148,7 @@ function ListaNivel({ opcoes, fechar }: { opcoes: Opcao[]; fechar: () => void })
   );
 }
 
-const NIVEL = "gap-1.5 rounded-control px-2 h-11 lg:h-[var(--h-control-sm)] text-[13px] hover:bg-surface-2";
+const NIVEL = "gap-1.5 rounded-control px-2 h-11 desktop:h-[var(--h-control-sm)] text-[13px] hover:bg-surface-2";
 
 function Sep({ className = "" }: { className?: string }) {
   return <IconChevronRight aria-hidden className={`h-3.5 w-3.5 shrink-0 text-faint ${className}`} />;
@@ -227,6 +227,7 @@ export function TrilhaCabecalho({
   const detalhe = !pca ? tela.detalhe : null;
   const filtro = FILTRADAS.test(pathname) ? pcas.find((p) => p.id === pcaFiltroId) : undefined;
   const fundo = tela.abertos.length > 0 || !!abaAtual;
+  const nomeCurto = detalhe ?? (pca ? `${pca.ano} · ${pca.nome}` : null);
   const secaoAtual = secao;
   // A PÁGINA ATUAL = o último nível do caminho, em evidência; os de antes ficam discretos. Abaixo do lg só a Tela aparece.
   const ultimo = tela.abertos.length ? "aberto" : espaco && abaAtual ? "aba" : detalhe ? "detalhe" : pca ? "pca" : "tela";
@@ -234,7 +235,14 @@ export function TrilhaCabecalho({
 
   return (
     <>
-      <nav aria-label="Onde você está" className="hidden min-w-0 items-center gap-0.5 sm:flex">
+      <nav aria-label="Onde você está" className={`${nomeCurto ? "flex" : "hidden sm:flex"} min-w-0 items-center gap-0.5`}>
+        {/* Abaixo do lg, numa tela interna (um PCA, orçamento, quadro, órgão), o NOME dela no lugar da trilha — o celular
+            sabe onde está; trocar de tela fica no menu e na navegação inferior. */}
+        {nomeCurto && (
+          <span className={`min-w-0 truncate px-1 text-[13.5px] lg:hidden ${ATUAL}`} title={nomeCurto}>
+            {nomeCurto}
+          </span>
+        )}
         {/* Seção ⌃⌄ — some primeiro quando a trilha é longa. */}
         <Nivel
           className={`hidden ${fundo ? "2xl:flex" : "lg:flex"}`}
@@ -249,7 +257,7 @@ export function TrilhaCabecalho({
           }))}
         />
         <Sep className={`hidden ${fundo ? "2xl:block" : "lg:block"}`} />
-        <Nivel forte={ultimo === "tela" ? true : tomLg("tela")} rotulo={item.label} icone={item.Icon} aria={`Tela: ${item.label} — trocar de tela`} opcoes={opcoesTela(secao)} className="shrink-0" />
+        <Nivel forte={ultimo === "tela" ? true : tomLg("tela")} rotulo={item.label} icone={item.Icon} aria={`Tela: ${item.label} — trocar de tela`} opcoes={opcoesTela(secao)} className={nomeCurto ? "hidden lg:flex lg:shrink-0" : "shrink-0"} />
         {pca && (
           <>
             <Sep className="hidden lg:block" />

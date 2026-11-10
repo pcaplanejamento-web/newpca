@@ -117,7 +117,7 @@ export function FeriadosAdmin() {
       {lista.length === 0 ? (
         <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhum feriado cadastrado — o calendário usa só os nacionais.</p>
       ) : (
-        <DataTable columns={cols} rows={lista} getKey={(f) => f.id} pageSize={20} density="compact" resumo={(l) => `${l.length} feriado${l.length === 1 ? "" : "s"}`} />
+        <DataTable rodapeGrudado columns={cols} rows={lista} getKey={(f) => f.id} pageSize={20} density="compact" resumo={(l) => `${l.length} feriado${l.length === 1 ? "" : "s"}`} />
       )}
       <details className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
         <summary className="min-h-11 cursor-pointer content-center text-[13px] font-semibold text-text-2 lg:min-h-0">Nacionais de {ano} (calculados)</summary>

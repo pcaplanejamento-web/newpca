@@ -34,7 +34,7 @@ export function RecorteMesa({
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Recorte da Mesa</p>
-        <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline lg:min-h-7">
+        <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline desktop:min-h-7">
           Limpar recorte
         </button>
       </div>
@@ -47,7 +47,7 @@ export function RecorteMesa({
               onClick={() => onRemover(v)}
               title={`Tirar os filtros de ${ROTULO_VISAO_RECORTE[v]}`}
               aria-label={`Tirar os filtros de ${ROTULO_VISAO_RECORTE[v]}`}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text lg:h-7 lg:w-7"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text desktop:h-7 desktop:w-7"
             >
               <IconClose className="h-3.5 w-3.5" />
             </button>

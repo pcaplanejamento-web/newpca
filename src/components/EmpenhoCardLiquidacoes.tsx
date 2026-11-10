@@ -379,7 +379,7 @@ export function avisoDeFalha(erro: string | null, temLinhas: boolean, tentar: ()
           <p>{erro}</p>
           <p className="mt-1">
             A tabela mostra os dados anteriores.{" "}
-            <button type="button" className="font-semibold text-accent underline underline-offset-2" onClick={tentar}>
+            <button type="button" className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2 lg:min-h-0" onClick={tentar}>
               Tentar de novo
             </button>
           </p>

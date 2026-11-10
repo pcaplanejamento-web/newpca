@@ -49,7 +49,7 @@ const destinoDe = (g: Pick<GrupoVinculo, "orgaoId" | "reparticaoId">) => (g.repa
 const TODAS = "__todas__";
 /** A caixa da escolha DENTRO da célula (o texto inteiro, sem abreviar — a coluna cresce com ele). */
 const CELULA =
-  "min-h-11 w-max max-w-none rounded-control px-2 text-[12px] font-medium whitespace-nowrap text-text-2 transition-colors hover:bg-surface-2 lg:min-h-[calc(var(--h-control-sm)-6px)]";
+  "min-h-11 w-max max-w-none rounded-control px-2 text-[12px] font-medium whitespace-nowrap text-text-2 transition-colors hover:bg-surface-2 desktop:min-h-[calc(var(--h-control-sm)-6px)]";
 const ordenar = (l: Iterable<string>) => [...l].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
 /** O que a célula põe à vista sem edição: o texto INTEIRO numa linha. */
 const Inteiro = ({ texto, apagado }: { texto: string; apagado?: boolean }) => <span className={`whitespace-nowrap ${apagado ? "text-muted" : "text-text-2"}`}>{texto}</span>;

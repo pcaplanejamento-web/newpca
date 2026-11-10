@@ -33,8 +33,8 @@ export function ChipsIcone<T extends string>({
             title={fixo ? `${label} — obrigatório` : label}
             disabled={fixo}
             onClick={() => onAlternar(value, !ativo)}
-            className={`inline-flex min-h-11 items-center gap-1.5 rounded-control border text-[12px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default lg:min-h-8 ${
-              compacto ? "min-w-11 justify-center lg:min-w-8" : "px-2.5"
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-control border text-[12px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default desktop:min-h-8 ${
+              compacto ? "min-w-11 justify-center desktop:min-w-8" : "px-2.5"
             } ${ativo ? "border-transparent text-text" : "border-border-2 bg-surface text-faint hover:bg-surface-2 hover:text-muted"}`}
             style={ativo ? { background: `color-mix(in srgb, ${cor} 14%, var(--surface))`, color: cor } : undefined}
           >

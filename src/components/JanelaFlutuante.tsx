@@ -40,7 +40,8 @@ export function JanelaFlutuante({
   const fechar = useRef(onFechar);
   fechar.current = onFechar;
 
-  useEffect(() => {
+  // Antes da pintura: no celular a janela de desktop (440px) nunca chega a aparecer por um quadro antes da folha.
+  useLayoutEffect(() => {
     if (aberta) setDesk(ehDesktop());
   }, [aberta]);
 
@@ -97,18 +98,21 @@ export function JanelaFlutuante({
   }, [aberta, desk]);
 
   const arrastar = (ev0: ReactPointerEvent<HTMLElement>) => {
-    if (!pos || ev0.button > 0) return;
+    if (!pos || ev0.button > 0 || !ev0.isPrimary) return;
     ev0.preventDefault();
+    const id = ev0.pointerId;
     const x0 = ev0.clientX - pos.x;
     const y0 = ev0.clientY - pos.y;
     const soltar = segurar("grabbing");
     const mover = (e: PointerEvent) => {
+      if (e.pointerId !== id) return;
       const w = ref.current?.offsetWidth ?? largura;
       const h = ref.current?.offsetHeight ?? 300;
       const t = areaVisivel();
       setPos({ x: entre(e.clientX - x0, t.esquerda, t.direita - w), y: entre(e.clientY - y0, t.topo, t.base - h) });
     };
-    const fim = () => {
+    const fim = (e: PointerEvent) => {
+      if (e.pointerId !== id) return;
       window.removeEventListener("pointermove", mover);
       window.removeEventListener("pointerup", fim);
       window.removeEventListener("pointercancel", fim);
@@ -143,13 +147,13 @@ export function JanelaFlutuante({
           onPointerDown={arrastar}
           aria-label="Arrastar a janela"
           title="Arrastar"
-          className="grid h-8 w-10 cursor-grab touch-none place-items-center rounded-control text-faint hover:bg-surface-2 active:cursor-grabbing"
+          className="grid h-8 w-10 cursor-grab touch-none pointer-coarse:h-11 pointer-coarse:w-12 place-items-center rounded-control text-faint hover:bg-surface-2 active:cursor-grabbing"
         >
           <IconGrip className="h-4 w-4 rotate-90" />
         </button>
         <Button variant="ghost" size="sm" aria-label="Fechar" icon={<IconClose className="h-4 w-4" />} onClick={onFechar} />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-[var(--pad-card)] pb-[var(--pad-card)]">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[var(--pad-card)] pb-[var(--pad-card)]">{children}</div>
       {rodape && <div className="border-t border-border p-[var(--pad-card)]">{rodape}</div>}
     </section>,
     document.body,

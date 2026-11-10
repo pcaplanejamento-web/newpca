@@ -131,7 +131,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
     <Dropdown
       align="start"
       ariaLabel={`Grupo ativo: ${ativo.nome}`}
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60 lg:h-[var(--h-control-sm)]"
+      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60 desktop:h-[var(--h-control-sm)]"
       width={280}
       trigger={
         <>
@@ -318,7 +318,7 @@ export function AppShell({
     >
     {/* As Novidades mostram só as mudanças das telas que o grupo abre (o ADM vê tudo). */}
     <AcessoNovidades telas={abas} admin={usuario.admin}>
-    <div className="min-h-dvh bg-bg text-text lg:flex lg:overflow-x-clip">
+    <div className="min-h-dvh overflow-x-clip bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versoes={versaoDados} />}
       <PreCarregarTelas telas={secoesVisiveis(usuario.admin, modulos).flatMap((sc) => sc.itens.map((i) => i.href))} versoes={versaoDados} />
       <MenuLateral
@@ -336,7 +336,7 @@ export function AppShell({
         topo={<MarcaLink href="/" dica={DICA_SITE} identidade={identidade} />}
         acima={
           (reparticoes.length > 0 || grupos.length > 0) && (
-            <div className="flex flex-wrap gap-2 px-4 pt-3 sm:hidden">
+            <div className="flex flex-wrap gap-2 px-4 pt-3 lg:hidden">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
@@ -377,7 +377,7 @@ export function AppShell({
                 <PcaSelect pcas={cartoesPca} ativoId={pcaFiltroId} />
               </div>
             )}
-            <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
+            <div className="hidden min-w-0 items-center gap-1.5 lg:flex">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} travado={travado} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
@@ -391,7 +391,7 @@ export function AppShell({
             <ThemeToggle />
             {/* No celular o cabeçalho fica só com o essencial (menu, PCA, conversas, avisos e o tema): a logo e a foto ficam SÓ
                 no menu e a página pública na marca do menu. O último item: o atalho para a página pública. */}
-            <div className="hidden sm:flex">
+            <div className="hidden lg:flex">
               <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
                 Site
               </Button>

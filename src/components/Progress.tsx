@@ -18,7 +18,7 @@ export function Progress({ value, label, continuo = false }: { value: number; la
       >
         <div
           // `continuo` = o valor muda a cada quadro (um relógio): sem transição e sem arredondar — anda liso.
-          className={`h-full rounded-full bg-accent ${continuo ? "" : "transition-all duration-300"}`}
+          className={`h-full rounded-full bg-accent ${continuo ? "" : "transition-[width] duration-[var(--motion-slow)] ease-out"}`}
           style={{ width: `${continuo ? exato : pct}%` }}
         />
       </div>

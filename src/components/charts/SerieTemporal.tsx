@@ -285,6 +285,9 @@ export function SerieTemporal({
   // O id do degradê só com letras e números (o do React traz símbolos que o `url(#…)` do SVG não aceita).
   const id = `serie${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [estreita, setEstreita] = useState(false);
+  // O verbo da instrução pelo aparelho (lido depois da montagem — o catálogo do design-system desenha no servidor).
+  const [toque, setToque] = useState(false);
+  useEffect(() => setToque(window.matchMedia("(pointer: coarse)").matches), []);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
     const ver = () => setEstreita(mq.matches);
@@ -454,10 +457,11 @@ export function SerieTemporal({
       </div>
     </div>
   );
+  const verbo = toque ? "Toque" : "Clique";
   const instrucao = onEscolher
     ? onTrecho
-      ? "Clique para marcar · clique e arraste para selecionar um trecho"
-      : "Clique para marcar · de novo para os dados completos"
+      ? `${verbo} para marcar · arraste de lado para selecionar um trecho`
+      : `${verbo} para marcar · de novo para os dados completos`
     : null;
 
   if (!total) return <ChartEmpty label="Nada no período escolhido" />;
@@ -611,7 +615,7 @@ export function SerieTemporal({
       ref={figRef}
       aria-label={ariaLabel}
       className={`grafico-esticado relative m-0 [&_*:focus]:outline-none [&_svg]:outline-none ${arrasto ? "select-none" : ""}`}
-      style={{ height: estreita ? Math.min(altura, preencher ? 320 : 240) : altura }}
+      style={{ height: estreita ? Math.min(altura, preencher ? 380 : 240) : altura }}
     >
       {/* O recorte do TRECHO (o `clipPath` do SVG) nas cópias das áreas — a regra só existe com um trecho. */}
       {faixa && <style>{`.${id}-trecho{clip-path:url(#${id}-recorte);pointer-events:none}`}</style>}
@@ -624,11 +628,12 @@ export function SerieTemporal({
           sem largura — um quadro com o desenho vazio, a "piscada" na cor do fundo. A seleção já é desfeita pelo efeito acima. */}
       <div
         role="none"
-        className={`relative h-full ${onEscolher ? "cursor-pointer" : ""} ${onTrecho ? "touch-pan-y" : ""}`}
+        className={`relative h-full ${onEscolher ? "cursor-pointer" : ""} ${onTrecho ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
         onPointerDown={(e) => {
           // Um gesto novo: o clique engolido era só o que vem logo depois de um arrasto (alguns navegadores não o disparam).
           engolirClique.current = false;
-          if (!onTrecho || e.button !== 0) return;
+          // Um 2º dedo (a pinça) nunca recomeça a seleção.
+          if (!onTrecho || e.button !== 0 || !e.isPrimary) return;
           const i = indiceNaPosicao(e.clientX);
           if (i == null) return;
           if (e.pointerType !== "touch") e.preventDefault();

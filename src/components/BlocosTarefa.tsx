@@ -194,7 +194,7 @@ export function MenuAdicionarCartao({
       disabled={disabled}
       onClick={fn}
       title={`Adicionar ${rotulo.toLowerCase()} à tarefa`}
-      className="flex h-11 shrink-0 items-center gap-1.5 rounded-control border border-border bg-surface-2 px-2.5 text-[12.5px] font-semibold whitespace-nowrap text-text-2 transition-colors hover:bg-surface disabled:opacity-50 lg:h-[var(--h-control-sm)]"
+      className="flex h-11 shrink-0 items-center gap-1.5 rounded-control border border-border bg-surface-2 px-2.5 text-[12.5px] font-semibold whitespace-nowrap text-text-2 transition-colors hover:bg-surface disabled:opacity-50 desktop:h-[var(--h-control-sm)]"
     >
       <IconPlus className="h-3.5 w-3.5 text-muted" />
       <Icone className="h-4 w-4 text-muted" />
@@ -253,7 +253,7 @@ export function MolduraBloco({
             role="presentation"
             title="Arrastar para reordenar"
             onPointerDown={onPegar}
-            className="flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center text-faint hover:text-text-2 active:cursor-grabbing lg:h-[var(--h-control-sm)] lg:w-9"
+            className="flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center text-faint hover:text-text-2 active:cursor-grabbing desktop:h-[var(--h-control-sm)] desktop:w-9"
           >
             <IconGrip className="h-4 w-4" />
           </span>

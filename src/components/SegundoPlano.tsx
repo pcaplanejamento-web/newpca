@@ -611,6 +611,7 @@ export function PainelSegundoPlano({
     <div
       ref={caixa}
       style={estilo}
+      data-flutuante-app
       className={`painel-pilula fixed ${arrasto ? "z-[61]" : "z-[58]"} ${bolha ? "w-11" : "w-[min(13.5rem,calc(100vw-1.5rem))]"}`}
     >
       {aberto && (

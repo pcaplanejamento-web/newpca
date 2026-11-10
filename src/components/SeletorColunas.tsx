@@ -141,7 +141,7 @@ export function SeletorColunas({
                         if (linha) setAlturaLinha(linha.offsetHeight);
                         iniciar(e, { id: k }, nome);
                       }}
-                      className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-7"
+                      className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-control text-muted hover:bg-surface-2 desktop:h-8 desktop:w-7"
                     >
                       <IconGrip className="h-4 w-4" />
                     </button>

@@ -66,7 +66,7 @@ export function VendoAgora({ tipo, id, editando = false, rotulo = "" }: { tipo: 
           onClick={conversar}
           aria-label={`Conversar sobre ${NOME[tipo]} no chat do grupo`}
           title={`Conversar sobre ${NOME[tipo]} no chat do grupo`}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-accent lg:h-8 lg:w-8"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-accent desktop:h-8 desktop:w-8"
         >
           <IconChat className="h-4 w-4" />
         </button>

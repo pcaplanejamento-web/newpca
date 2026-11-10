@@ -285,7 +285,7 @@ export function EditorVinculoOrcamento({
       )}
       {unidade && (
         <section aria-label="Ações deste vínculo">
-          <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border lg:min-h-[var(--h-control-sm)]">
+          <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border desktop:min-h-[var(--h-control-sm)]">
             <Checkbox
               checked={disponiveis.length > 0 && leva.length === disponiveis.length}
               indeterminado={leva.length > 0}
@@ -401,7 +401,7 @@ function CampoFixo({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <div className="min-w-0">
       <span className="mb-1.5 block text-[13px] font-medium text-text-2">{rotulo}</span>
-      <p className="flex min-h-11 items-center rounded-card bg-surface-2 px-3 py-2 text-[13.5px] font-semibold text-text lg:min-h-[var(--h-control)]">
+      <p className="flex min-h-11 items-center rounded-card bg-surface-2 px-3 py-2 text-[13.5px] font-semibold text-text desktop:min-h-[var(--h-control)]">
         <span className="line-clamp-2">{valor}</span>
       </p>
     </div>

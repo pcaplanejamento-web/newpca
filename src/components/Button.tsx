@@ -20,7 +20,8 @@ const VARIANT: Record<Variant, string> = {
 
 type Props = {
   variant?: Variant;
-  /** `md` = padrão: `--h-control` no desktop, 44px no celular (alvo de toque). `sm` = compacto (rodapés de tabela):
+  /** `md` = padrão: `--h-control` no desktop (tela larga COM mouse — a variante `desktop:`), 44px no celular e no tablet
+   * com toque (alvo de toque). `sm` = compacto (rodapés de tabela):
    * `--h-control-sm` no desktop, 44px no celular. `xs` = AÇÃO DE LINHA (dentro da célula de uma tabela compacta):
    * `--h-control-sm` − 6px no desktop (cabe na linha), 44px no celular. Só com ícone (sem texto) = quadrado. */
   size?: "md" | "sm" | "xs";
@@ -47,13 +48,13 @@ export function Button({
   const quadrado = isIcon || children == null;
   const tamanho =
     size === "xs"
-      ? `h-11 text-[12px] lg:h-[calc(var(--h-control-sm)-6px)] ${
-          quadrado ? "w-11 lg:w-[calc(var(--h-control-sm)-6px)]" : "px-2.5"
+      ? `h-11 text-[12px] desktop:h-[calc(var(--h-control-sm)-6px)] ${
+          quadrado ? "w-11 desktop:w-[calc(var(--h-control-sm)-6px)]" : "px-2.5"
         }`
       : size === "sm"
-        ? `h-11 text-[12.5px] lg:h-[var(--h-control-sm)] ${quadrado ? "w-11 lg:w-[var(--h-control-sm)]" : "px-3"}`
-        : `h-11 text-[13.5px] lg:h-[var(--h-control)] ${quadrado ? "w-11 lg:w-[var(--h-control)]" : "px-4"}`;
-  const cls = `inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold transition-[background-color,opacity,box-shadow,transform] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-60 ${tamanho} ${VARIANT[variant]} ${className}`;
+        ? `h-11 text-[12.5px] desktop:h-[var(--h-control-sm)] ${quadrado ? "w-11 desktop:w-[var(--h-control-sm)]" : "px-3"}`
+        : `h-11 text-[13.5px] desktop:h-[var(--h-control)] ${quadrado ? "w-11 desktop:w-[var(--h-control)]" : "px-4"}`;
+  const cls = `inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold transition-[background-color,opacity,box-shadow,transform] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-60 ${tamanho} ${VARIANT[variant]} ${className}`;
   const inner = loading ? (
     <IconSpinner className="h-[18px] w-[18px]" />
   ) : (

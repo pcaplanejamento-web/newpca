@@ -251,7 +251,7 @@ export function SecaoQuadros({
           aria-expanded={!recolhida}
           title={recolhida ? `Mostrar ${titulo}` : `Minimizar ${titulo}`}
           onClick={onAlternar}
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-control px-1 text-left text-[15px] font-semibold text-text hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-9"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-control px-1 text-left text-[15px] font-semibold text-text hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:min-h-9"
         >
           <IconChevronRight className={`h-4 w-4 shrink-0 text-muted transition-transform duration-[var(--motion-duration)] ${recolhida ? "" : "rotate-90"}`} />
           {icone}
@@ -260,7 +260,15 @@ export function SecaoQuadros({
         </button>
         {acoes}
       </div>
-      {!recolhida && <div className="animate-fade-in-up">{children}</div>}
+      {/* Recolher/expandir ANIMADO (a altura 0fr ↔ 1fr, como a pasta aberta): as seções de baixo deslizam junto. */}
+      <div
+        className="grid transition-[grid-template-rows,opacity] duration-[var(--motion-duration)] ease-[var(--motion-ease)]"
+        style={{ gridTemplateRows: recolhida ? "0fr" : "1fr", opacity: recolhida ? 0 : 1 }}
+        inert={recolhida}
+      >
+        {/* A folga (-m-3 p-3) deixa a sombra e o "levantar" dos cartões fora do corte. */}
+        <div className="-m-3 min-h-0 overflow-hidden p-3">{children}</div>
+      </div>
     </section>
   );
 }
@@ -508,7 +516,7 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
   const { confirmar, confirmacao } = useConfirmacao();
   return (
     <>
-      <Dropdown align="end" width={220} ariaLabel={`Ações da pasta ${conjunto.nome}`} triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9" trigger={<IconMais className="h-4 w-4" />}>
+      <Dropdown align="end" width={220} ariaLabel={`Ações da pasta ${conjunto.nome}`} triggerClassName="h-11 w-11 shrink-0 justify-center rounded-control text-muted hover:bg-surface-2 desktop:h-9 desktop:w-9" trigger={<IconMais className="h-4 w-4" />}>
         {(fechar) => (
           <div className="space-y-0.5">
             <button
@@ -517,7 +525,7 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
                 fechar();
                 onEditar();
               }}
-              className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
+              className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9"
             >
               <IconPencil className="h-4 w-4 text-muted" /> Editar pasta
             </button>
@@ -535,7 +543,7 @@ export function MenuConjunto({ conjunto, onEditar, onExcluir }: { conjunto: Conj
                 )
                   onExcluir();
               }}
-              className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] hover:bg-surface-2 lg:min-h-9"
+              className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] hover:bg-surface-2 desktop:min-h-9"
               style={{ color: "var(--danger)" }}
             >
               <IconTrash className="h-4 w-4" /> Excluir pasta
@@ -650,7 +658,7 @@ function FormConjunto({
               aria-label={`Cor ${cor}`}
               aria-pressed={c.cor === cor}
               onClick={() => setC({ ...c, cor })}
-              className="h-11 w-11 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:h-8 lg:w-8"
+              className="h-11 w-11 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent desktop:h-8 desktop:w-8"
               style={{ background: cor, boxShadow: c.cor === cor ? "0 0 0 2px var(--surface), 0 0 0 4px var(--text)" : undefined }}
             />
           ))}
@@ -667,7 +675,7 @@ function FormConjunto({
               const dentro = c.quadros.includes(q.id);
               const aviso = outra.has(q.id) ? (dentro ? `sai da pasta ${outra.get(q.id)?.nome}` : `na pasta ${outra.get(q.id)?.nome}`) : c.privado && !q.privado && dentro && !inicial.quadros.includes(q.id) ? "vira privado" : null;
               return (
-                <div key={q.id} className="flex min-h-11 items-center rounded-control px-2 hover:bg-surface-2 lg:min-h-9">
+                <div key={q.id} className="flex min-h-11 items-center rounded-control px-2 hover:bg-surface-2 desktop:min-h-9">
                   <Checkbox
                     checked={dentro}
                     onChange={() => marcar(q.id)}

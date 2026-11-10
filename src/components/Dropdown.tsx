@@ -4,6 +4,7 @@ import { areaVisivel, entre, MARGEM_TELA } from "./area-visivel";
 import { type ButtonHTMLAttributes, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EstadoDropdown } from "./SetaDropdown";
+import { useSaida } from "./useSaida";
 
 // Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período/SeletorPessoa).
 // O painel é renderizado em PORTAL (position: fixed no body) para NUNCA ser
@@ -169,16 +170,24 @@ export function Dropdown({
   const painel = folha
     ? {
         ref: panelRef,
-        className: `fixed inset-x-0 bottom-0 z-[200] max-h-[80dvh] overflow-auto rounded-t-card border-t border-border bg-surface px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-soft ${panelClassName}`,
+        className: `dropdown-painel fixed inset-x-0 bottom-0 z-[200] max-h-[80dvh] overflow-auto overscroll-contain rounded-t-card border-t border-border bg-surface px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-soft ${panelClassName}`,
         style: undefined,
       }
     : {
         ref: panelRef,
-        className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
+        className: `dropdown-painel fixed z-[200] overflow-auto overscroll-contain rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
         style: { top: pos.top, left: pos.left, width: width === 0 ? "max-content" : pos.w, maxWidth: pos.mw || `calc(100vw - ${2 * MARGEM_TELA}px)`, maxHeight: pos.maxH },
       };
-  // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora).
-  const conteudo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;
+  // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora). Fechando, o último conteúdo fica à vista
+  // durante a SAÍDA animada (`useSaida`).
+  const { saindo } = useSaida(open);
+  const ultimoConteudo = useRef<ReactNode>(null);
+  const vivo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;
+  if (open) ultimoConteudo.current = vivo;
+  else if (!saindo) ultimoConteudo.current = null;
+  const conteudo = open ? vivo : saindo ? ultimoConteudo.current : null;
+  // O lado de onde o painel nasce (a entrada e a saída animam a partir do gatilho; a folha, de baixo).
+  const marcas = { "data-lado": folha ? "folha" : acima ? "acima" : "abaixo", "data-saindo": saindo ? "" : undefined };
 
   return (
     <div className={className}>
@@ -205,31 +214,89 @@ export function Dropdown({
       >
         <EstadoDropdown.Provider value={{ aberto: open, acima: acima && !folha }}>{trigger}</EstadoDropdown.Provider>
       </button>
-      {open &&
+      {(open || saindo) &&
         createPortal(
           // O diálogo tem nome (o do gatilho); o menu, como sempre.
           papel === "dialog" ? (
             <>
-              {folha && <div aria-hidden="true" className="animate-fundo-folha fixed inset-0 z-[199] bg-[var(--scrim)]" />}
-              <div role="dialog" aria-label={ariaLabel} {...painel}>
+              {folha && <div aria-hidden="true" data-saindo={marcas["data-saindo"]} className="dropdown-fundo animate-fundo-folha fixed inset-0 z-[199] bg-[var(--scrim)]" />}
+              <div role="dialog" aria-label={ariaLabel} {...painel} {...marcas}>
                 {conteudo}
               </div>
             </>
           ) : papel === "listbox" ? (
             <>
               {/* A FOLHA tem o fundo escuro (tocar nele fecha — é "fora" do painel). */}
-              {folha && <div aria-hidden="true" className="animate-fundo-folha fixed inset-0 z-[199] bg-[var(--scrim)]" />}
-              <div role="none" {...painel}>
+              {folha && <div aria-hidden="true" data-saindo={marcas["data-saindo"]} className="dropdown-fundo animate-fundo-folha fixed inset-0 z-[199] bg-[var(--scrim)]" />}
+              <div role="none" {...painel} {...marcas}>
                 {conteudo}
               </div>
             </>
           ) : (
-            <div role="menu" {...painel}>
+            <div role="menu" {...painel} {...marcas}>
               {conteudo}
             </div>
           ),
           document.body,
         )}
     </div>
+  );
+}
+
+/** Uma ação do menu "⋯" (`MenuMais`). */
+export type AcaoMenu = { rotulo: string; icone?: ReactNode; onClick: () => void; disabled?: boolean; dica?: string; perigo?: boolean };
+
+/**
+ * O MENU "⋯" do sistema (o MESMO do menu do quadro de Tarefas): um botão só-ícone que abre a lista de ações, cada uma com
+ * ícone e 44px no toque. Uso típico: as ações SECUNDÁRIAS de um cabeçalho que não cabem no celular (`className` com
+ * `sm:hidden` deixa o menu só abaixo de 640px, com os botões normais à vista a partir dali).
+ */
+export function MenuMais({
+  acoes,
+  titulo,
+  ariaLabel = "Mais ações",
+  className = "inline-block",
+  triggerClassName = "h-11 w-11 justify-center rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] desktop:h-9 desktop:w-9",
+  icone,
+  width = 260,
+}: {
+  acoes: (AcaoMenu | false | null | undefined)[];
+  /** O título acima das ações (ex.: "Menu do quadro"). */
+  titulo?: string;
+  ariaLabel?: string;
+  className?: string;
+  triggerClassName?: string;
+  /** O ícone do gatilho (o "⋯" do sistema por padrão). */
+  icone: ReactNode;
+  width?: number;
+}) {
+  const lista = acoes.filter((a): a is AcaoMenu => !!a);
+  if (!lista.length) return null;
+  return (
+    <Dropdown align="end" width={width} ariaLabel={ariaLabel} title={ariaLabel} className={className} triggerClassName={triggerClassName} trigger={icone}>
+      {(fechar) => (
+        <div className="space-y-0.5">
+          {titulo && <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">{titulo}</p>}
+          {lista.map((a) => (
+            <button
+              key={a.rotulo}
+              type="button"
+              disabled={a.disabled}
+              title={a.dica}
+              onClick={() => {
+                fechar();
+                a.onClick();
+              }}
+              className={`flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 desktop:min-h-9 ${
+                a.perigo ? "text-[var(--danger)]" : "text-text"
+              }`}
+            >
+              {a.icone}
+              <span className="truncate">{a.rotulo}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </Dropdown>
   );
 }

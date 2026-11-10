@@ -139,6 +139,25 @@ export function MatrizCapacidades({
 
       {/* Celular: um cartão por tela com as chaves. */}
       <div className="space-y-[var(--gap-block)] md:hidden">
+        {/* A caixa de cada COLUNA do desktop ("esta ação em todas as telas") — no celular, num cartão próprio no topo. */}
+        {!leitura && (
+          <section className="rounded-card border border-border bg-surface p-[var(--pad-card)]" aria-label="Em todas as telas">
+            <h4 className="text-[14px] font-bold text-text">Em todas as telas</h4>
+            <ul className="mt-1 divide-y divide-border">
+              {ACOES_PAPEL.map((a) => (
+                <li key={a} className="flex items-center justify-between gap-3">
+                  <span className="py-1.5 text-[13.5px] font-medium text-text">{ROTULO_ACAO[a]}</span>
+                  <Checkbox
+                    alvo
+                    aria-label={`${ROTULO_ACAO[a]} em todas as telas`}
+                    {...grupo(estadoColuna(valor, a))}
+                    onChange={(e) => onChange?.(alternarColuna(valor, a, e.target.checked))}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {telas.map((t) => (
           <section key={t} className="rounded-card border border-border bg-surface p-[var(--pad-card)]" aria-label={rotuloTela(t)}>
             <div className="flex items-center justify-between gap-2">

@@ -13,7 +13,7 @@ const TONS: { id: TomEscuro; rotulo: string; fundo: string; superficie: string; 
 ];
 
 const campoHora =
-  "h-11 w-full rounded-control border border-border-2 bg-surface px-3 text-[14px] tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]";
+  "h-11 w-full rounded-control border border-border-2 bg-surface px-3 text-[14px] tabular-nums text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:h-[var(--h-control-sm)]";
 
 /** Aparência da PESSOA neste navegador: o modo claro/escuro (6 opções) e a tonalidade do escuro. Grava na hora; vale antes
  * da 1ª pintura nas próximas visitas. */

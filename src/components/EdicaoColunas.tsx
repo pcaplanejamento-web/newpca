@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { LARGURA_MAX, LARGURA_MIN, soltarColuna } from "@/lib/colunas-layout";
-import { IconArrowDown, IconArrowUp, IconEyeOff, IconFixar, IconGrip, IconSort } from "./icons";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconChevronRight, IconEyeOff, IconFixar, IconGrip, IconSort } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { segurar } from "./segurar";
 
@@ -32,9 +32,13 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
   useLayoutEffect(() => {
     if (alca.current) setAtual(Math.round(largura(alca.current)));
   }, [definida]);
+  // O TOQUE DUPLO (o `dblclick` não vem no iOS): dois toques sem arrastar em até 350ms = a largura padrão.
+  const ultimoToque = useRef(0);
   const iniciar = (e: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!e.isPrimary) return;
     const el = e.currentTarget;
     const x0 = e.clientX;
+    let moveu = false;
     const w0 = largura(el);
     e.preventDefault();
     e.stopPropagation();
@@ -43,11 +47,19 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
     const soltar = segurar("col-resize");
     let quadro = 0;
     const mover = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - x0) > 4) moveu = true;
       cancelAnimationFrame(quadro);
       quadro = requestAnimationFrame(() => onLargura(w0 + ev.clientX - x0));
     };
-    const fim = () => {
+    const fim = (ev: PointerEvent) => {
       cancelAnimationFrame(quadro);
+      if (ev.type === "pointerup" && e.pointerType === "touch" && !moveu) {
+        const agora = performance.now();
+        if (agora - ultimoToque.current < 350) {
+          ultimoToque.current = 0;
+          onLargura(null);
+        } else ultimoToque.current = agora;
+      }
       soltar();
       setAtiva(false);
       el.removeEventListener("pointermove", mover);
@@ -67,7 +79,7 @@ function AlcaLargura({ rotulo, largura: definida, onLargura }: { rotulo: string;
       aria-valuenow={atual}
       aria-valuemin={LARGURA_MIN}
       aria-valuemax={LARGURA_MAX}
-      aria-label={`Largura de ${rotulo} (setas ajustam, duplo clique volta ao padrão)`}
+      aria-label={`Largura de ${rotulo} (setas ajustam, duplo clique ou toque duplo volta ao padrão)`}
       tabIndex={0}
       onPointerDown={iniciar}
       onClick={(e) => e.stopPropagation()}
@@ -99,7 +111,7 @@ function AcaoColuna({ rotulo, ligada, icone, onClick, disabled = false }: { rotu
       title={rotulo}
       disabled={disabled}
       onClick={onClick}
-      className={`grid h-9 w-7 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 lg:h-7 lg:w-7 ${
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30 desktop:h-7 desktop:w-7 ${
         ligada ? "bg-accent/10 text-accent" : "text-faint hover:bg-surface hover:text-text-2"
       }`}
     >
@@ -160,7 +172,12 @@ export function CabecalhoEdicao({
       >
         <IconGrip className="h-3.5 w-3.5" />
       </button>
-      <div className="mb-1 flex items-center justify-center gap-0.5">
+      <div className="mb-1 flex flex-wrap items-center justify-center gap-0.5">
+        {/* No TOQUE, mover sem arrastar (o arrasto pela alça de 20px é difícil com o dedo). */}
+        <span className="hidden any-pointer-coarse:contents">
+          <AcaoColuna rotulo={`Mover ${rotulo} para a esquerda`} ligada={false} icone={<IconChevronLeft className="h-4 w-4" />} onClick={() => onMover(-1)} />
+          <AcaoColuna rotulo={`Mover ${rotulo} para a direita`} ligada={false} icone={<IconChevronRight className="h-4 w-4" />} onClick={() => onMover(1)} />
+        </span>
         <AcaoColuna
           rotulo={congelada ? `Descongelar ${rotulo}` : `Congelar ${rotulo}`}
           ligada={congelada}

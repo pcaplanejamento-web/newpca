@@ -148,7 +148,7 @@ export function SelectField({
   const caixa = useRef<HTMLDivElement>(null);
   if (compacto)
     return (
-      <div ref={caixa} className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 lg:h-[var(--h-control-sm)]`}>
+      <div ref={caixa} className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 desktop:h-[var(--h-control-sm)]`}>
         {label && (
           <label htmlFor={fid} className="shrink-0 text-[12px] text-muted">
             {label}
@@ -197,7 +197,7 @@ export function PasswordField({ label = "Senha", ...rest }: Omit<CampoProps, "ic
           type="button"
           onClick={() => setShow((s) => !s)}
           aria-label={show ? "Ocultar senha" : "Mostrar senha"}
-          className="-mr-1 shrink-0 rounded-chip p-1.5 text-muted transition-colors hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="-mr-1 grid shrink-0 place-items-center rounded-chip p-1.5 text-muted max-lg:-mr-3 max-lg:h-11 max-lg:w-11 max-lg:p-0 transition-colors hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           {show ? <IconEyeOff className="h-5 w-5" /> : <IconEye className="h-5 w-5" />}
         </button>
@@ -222,7 +222,7 @@ export function SearchField({
 }) {
   const preenchido = typeof value === "string" && value.length > 0;
   return (
-    <div className={`${WRAP} ${compacto ? "h-11 !px-3 lg:h-[var(--h-control-sm)]" : "h-[46px]"} border-border-2`}>
+    <div className={`${WRAP} ${compacto ? "h-11 !px-3 desktop:h-[var(--h-control-sm)]" : "h-[46px]"} border-border-2`}>
       <IconSearch className={`${compacto ? "h-4 w-4" : "h-[18px] w-[18px]"} shrink-0 text-muted`} />
       {/* Com o nosso "limpar", o "×" nativo do campo de busca some (senão aparecem dois). */}
       <input value={value} placeholder={placeholder} type="search" className={`${INPUT} ${compacto ? "!text-[13px]" : ""} ${onClear ? "[&::-webkit-search-cancel-button]:hidden" : ""}`} {...rest} />
@@ -266,7 +266,7 @@ export function Checkbox({
   return (
     <label
       htmlFor={cid}
-      className={`relative inline-flex select-none items-center gap-2.5 ${rest.disabled ? "cursor-default opacity-60" : "cursor-pointer"} ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center lg:min-h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)]" : ""}`}
+      className={`relative inline-flex select-none items-center gap-2.5 ${rest.disabled ? "cursor-default opacity-60" : "cursor-pointer"} ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center desktop:min-h-[var(--h-control-sm)] desktop:min-w-[var(--h-control-sm)]" : ""}`}
     >
       <input ref={ref} id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
       <span

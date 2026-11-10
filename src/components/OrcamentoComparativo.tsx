@@ -45,7 +45,7 @@ import { useAdminTabelas, useQuemExporta } from "./ConfigTabelas";
 import { useEditorEdicoes } from "./EdicoesTabela";
 import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { Checkbox, SearchField, SelectField } from "./Field";
-import { IconDownload, IconPencil, IconSave, IconTrocar } from "./icons";
+import { IconChevronDown, IconDownload, IconPencil, IconSave, IconTrocar } from "./icons";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { TabelaCruzada } from "./TabelaCruzada";
@@ -122,6 +122,7 @@ export function OrcamentoComparativo({
   }
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const [busca, setBusca] = useState("");
+  const [ajustesAbertos, setAjustesAbertos] = useState(false);
   const [aberto, setAberto] = useState<{ linha: string | null; coluna: string | null } | null>(null);
   const [ordemVista, setOrdemVista] = useState<OrdemCruzamento | null>(null); // ordenação só da vista (fora da edição)
 
@@ -355,6 +356,24 @@ export function OrcamentoComparativo({
 
       <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2">
         {inicio}
+        {/* No celular, Linhas × Colunas, Medida e Visão ficam atrás de "Ajustes" (eram três linhas antes da tabela). */}
+        <button
+          type="button"
+          aria-expanded={ajustesAbertos}
+          onClick={() => setAjustesAbertos((v) => !v)}
+          className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-control border border-border bg-surface px-3 text-left text-[13px] sm:hidden"
+        >
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-text">Ajustes</span>
+            <span className="text-muted">
+              {" "}
+              · {rotuloDim(linha)}
+              {coluna ? ` × ${rotuloDim(coluna)}` : ""} · {MEDIDAS_ORCAMENTO.find((x) => x.key === medida)?.rotulo ?? ""}
+            </span>
+          </span>
+          <IconChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-muted transition-transform duration-[var(--motion-duration)] ${ajustesAbertos ? "rotate-180" : ""}`} />
+        </button>
+        <div className={ajustesAbertos ? "contents" : "hidden sm:contents"}>
         <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
           <div className="min-w-0 sm:w-52">
             <SelectField compacto label="Linhas" value={linha} disabled={editando} onChange={(e) => escolherLinha(e.target.value as DimensaoOrcamento)}>
@@ -377,7 +396,8 @@ export function OrcamentoComparativo({
             </SelectField>
           </div>
         </div>
-        <div className="w-full sm:w-52">
+        {/* No celular, Medida e Visão dividem UMA linha (eram duas linhas inteiras antes da tabela). */}
+        <div className="min-w-0 flex-1 basis-[10rem] sm:w-52 sm:flex-none">
           <SelectField compacto label="Medida" value={medida} onChange={(e) => setMedida(e.target.value as MedidaOrcamento)}>
             {MEDIDAS_ORCAMENTO.map((x) => (
               <option key={x.key} value={x.key}>
@@ -387,7 +407,7 @@ export function OrcamentoComparativo({
           </SelectField>
         </div>
         {visoes.length > 0 && (
-          <div className="w-full sm:w-52">
+          <div className="min-w-0 flex-1 basis-[10rem] sm:w-52 sm:flex-none">
             <SelectField
               compacto
               label="Visão"
@@ -414,6 +434,7 @@ export function OrcamentoComparativo({
             </SelectField>
           </div>
         )}
+        </div>
         <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 lg:ml-auto">
           <Segmented<ModoCruzamento> ariaLabel="Ler as células como" value={modo} onChange={setModo} options={MODOS} />
           <Ajuda titulo="Comparativo">

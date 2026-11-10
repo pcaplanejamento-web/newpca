@@ -14,6 +14,7 @@ import {
 import { dataHoraBR, } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
+import { Callout } from "./Callout";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -532,6 +533,9 @@ export function AutomacaoAdmin({
     () => ({ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }) as unknown as ContextoImportacao,
     [banners],
   );
+  // Celular/tablet (toque e sem a extensão): a execução precisa do Chrome do computador.
+  const [semExtensaoNoAparelho, setSemExtensaoNoAparelho] = useState(false);
+  useEffect(() => setSemExtensaoNoAparelho(!ext && window.matchMedia("(pointer: coarse)").matches), [ext]);
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="linha-topico barra-ferramentas flex flex-wrap items-center gap-2">
@@ -669,6 +673,13 @@ export function AutomacaoAdmin({
           </Dropdown>
         </div>
       </div>
+      {/* No celular/tablet não há extensões no navegador: ver e editar os fluxos vale; executar, só no computador. */}
+      {semExtensaoNoAparelho && (
+        <Callout kind="info">
+          Para executar as automações use o Chrome do computador, com a extensão da Centi instalada. Neste aparelho dá para
+          ver e editar os fluxos.
+        </Callout>
+      )}
 
       <FluxosAutomacao
         pedir={pedir}

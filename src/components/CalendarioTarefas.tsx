@@ -319,8 +319,8 @@ function useCriarArrastando(onCriar?: (slot: SlotCriar) => void) {
   const encerrar = useRef<(() => void) | null>(null);
   useEffect(() => () => encerrar.current?.(), []);
   const iniciar = (ev0: ReactPointerEvent<HTMLElement>, dia: string) => {
-    toque.current = ev0.pointerType === "touch";
-    if (!onCriar || ev0.pointerType === "touch" || ev0.button > 0 || ev0.target !== ev0.currentTarget) return;
+    toque.current = ev0.pointerType !== "mouse";
+    if (!onCriar || ev0.pointerType !== "mouse" || ev0.button > 0 || ev0.target !== ev0.currentTarget) return;
     ev0.preventDefault();
     encerrar.current?.();
     const coluna = ev0.currentTarget;
@@ -425,7 +425,7 @@ function EventoChip({
           onClick={onConcluir}
           aria-label={e.concluida ? `Reabrir ${e.titulo}` : `Concluir ${e.titulo}`}
           title={e.concluida ? "Reabrir a tarefa" : "Concluir a tarefa"}
-          className={`grid shrink-0 place-items-center rounded-l-[6px] transition-colors hover:text-[var(--ok)] ${compacta ? "w-5 any-pointer-coarse:w-8" : "w-11 lg:w-7"}`}
+          className={`grid shrink-0 place-items-center rounded-l-[6px] transition-colors hover:text-[var(--ok)] ${compacta ? "w-5 any-pointer-coarse:w-8" : "w-11 desktop:w-7"}`}
           style={{ color: e.concluida ? "var(--ok)" : semaforo }}
         >
           {e.concluida ? <IconCirculoCheck className="h-3.5 w-3.5" /> : <IconCirculo className="h-3.5 w-3.5" />}
@@ -439,7 +439,7 @@ function EventoChip({
         onPointerDown={(ev) => ev.pointerType !== "touch" && onPegar?.(ev)}
         title={titulo}
         className={`flex min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
-          compacta ? "h-full text-[11px]" : "min-h-11 text-[12.5px] lg:min-h-8"
+          compacta ? "h-full text-[11px]" : "min-h-11 text-[12.5px] desktop:min-h-8"
         } ${onPegar ? "cursor-grab active:cursor-grabbing" : ""} ${e.concluida || recusado ? "text-muted line-through decoration-faint" : ""}`}
       >
         {e.tipo === "periodo" && !onConcluir && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: semaforo }} />}
@@ -490,9 +490,11 @@ function EventoCaixa({
       <button
         type="button"
         onClick={onAbrir}
-        onPointerDown={(ev) => onPegar?.(ev)}
+        // No TOQUE o dedo que desliza sobre o evento ROLA a grade (antes movia o evento de horário): o arrasto por toque é
+        // só pela alça do canto, como nos chips do mês.
+        onPointerDown={(ev) => ev.pointerType !== "touch" && onPegar?.(ev)}
         title={`${e.titulo} — ${horario} · ${origemCurta(e)}${e.local ? ` · ${e.local}` : ""}`}
-        className={`flex h-full w-full flex-col overflow-hidden rounded-[6px] px-1.5 py-0.5 text-left text-[11px] leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${onPegar ? "cursor-grab touch-none active:cursor-grabbing" : ""} ${e.concluida || recusado ? "text-muted line-through" : ""} ${recusado ? "opacity-60" : ""}`}
+        className={`flex h-full w-full flex-col overflow-hidden rounded-[6px] px-1.5 py-0.5 text-left text-[11px] leading-tight text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${onPegar ? "cursor-grab active:cursor-grabbing any-pointer-coarse:pr-8" : ""} ${e.concluida || recusado ? "text-muted line-through" : ""} ${recusado ? "opacity-60" : ""}`}
         style={{
           background: livre ? "var(--surface)" : `color-mix(in srgb, ${faixa} 22%, var(--surface))`,
           boxShadow: livre ? `inset 3px 0 0 ${faixa}, inset 0 0 0 1px ${faixa}` : `inset 3px 0 0 ${faixa}`,
@@ -504,12 +506,22 @@ function EventoCaixa({
           {e.local ? ` · ${e.local}` : ""}
         </span>
       </button>
+      {onPegar && (
+        <span
+          role="presentation"
+          title="Arrastar para outro horário"
+          onPointerDown={(ev) => ev.pointerType === "touch" && onPegar(ev)}
+          className="absolute right-0 top-0 hidden h-full max-h-11 w-8 touch-none items-center justify-center text-faint any-pointer-coarse:flex"
+        >
+          <IconGrip className="h-3.5 w-3.5" />
+        </span>
+      )}
       {onRedimensionar && (
         <span
           role="presentation"
           title="Arrastar para mudar a duração"
           onPointerDown={onRedimensionar}
-          className="absolute inset-x-1 bottom-0 flex h-2 cursor-ns-resize touch-none items-end justify-center any-pointer-coarse:h-6"
+          className="absolute inset-x-1 bottom-0 flex h-2 cursor-ns-resize touch-none items-end justify-center any-pointer-coarse:h-6 any-pointer-coarse:right-8"
         >
           <span aria-hidden className="mb-0.5 h-1 w-6 rounded-full bg-[color-mix(in_srgb,var(--text)_30%,transparent)]" />
         </span>
@@ -536,7 +548,7 @@ function ItemMenu({ rotulo, tecla, ativo, onClick }: { rotulo: string; tecla?: s
       role="menuitemradio"
       aria-checked={!!ativo}
       onClick={onClick}
-      className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-2.5 text-left text-[13px] lg:min-h-9 ${ativo ? "bg-accent-soft font-semibold text-accent" : "text-text hover:bg-surface-2"}`}
+      className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-2.5 text-left text-[13px] desktop:min-h-9 ${ativo ? "bg-accent-soft font-semibold text-accent" : "text-text hover:bg-surface-2"}`}
     >
       {rotulo}
       {tecla && <kbd className="font-mono text-[11px] text-faint">{tecla}</kbd>}
@@ -551,7 +563,7 @@ function ItemMarcar({ rotulo, marcado, onClick }: { rotulo: string; marcado: boo
       role="menuitemcheckbox"
       aria-checked={marcado}
       onClick={onClick}
-      className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9"
     >
       <span className="grid h-4 w-4 place-items-center text-accent">{marcado && <IconCheck className="h-4 w-4" />}</span>
       {rotulo}
@@ -781,6 +793,7 @@ export function CalendarioTarefas({
   const mesCurto = (d: string) => MESES_CURTOS[Number(d.slice(5, 7)) - 1];
   const tituloIntervalo = (a: string, b: string) =>
     a.slice(0, 7) === b.slice(0, 7) ? `${NOMES_MES[Number(a.slice(5, 7)) - 1]} de ${a.slice(0, 4)}` : `${mesCurto(a)} – ${mesCurto(b)} de ${b.slice(0, 4)}`;
+  const tituloCurtoDia = `${nomeDia(foco)}, ${Number(foco.slice(8))} ${MESES_CURTOS[Number(foco.slice(5, 7)) - 1]}.`;
   const titulo =
     vista === "dia"
       ? `${nomeDia(foco)}, ${Number(foco.slice(8))} de ${NOMES_MES[Number(foco.slice(5, 7)) - 1].toLowerCase()} de ${foco.slice(0, 4)}`
@@ -1211,7 +1224,7 @@ export function CalendarioTarefas({
           const pre = `${mes.ano}-${String(m).padStart(2, "0")}`;
           return (
             <section key={m} aria-label={`${NOMES_MES[m - 1]} de ${mes.ano}`}>
-              <button type="button" onClick={() => trocarVista("mes", `${pre}-01`)} className="mb-1 min-h-11 rounded-control px-1 text-[13px] font-semibold text-text hover:text-accent lg:min-h-9">
+              <button type="button" onClick={() => trocarVista("mes", `${pre}-01`)} className="mb-1 min-h-11 rounded-control px-1 text-[13px] font-semibold text-text hover:text-accent desktop:min-h-9">
                 {NOMES_MES[m - 1]}
               </button>
               <div className="grid grid-cols-7 text-center text-[10px] font-semibold text-faint">
@@ -1229,7 +1242,7 @@ export function CalendarioTarefas({
                         onClick={() => trocarVista("dia", d)}
                         aria-label={`${dataBR(d)}${comEvento.has(d) ? " — com eventos" : ""}`}
                         title={nomeFeriado(d)}
-                        className={`relative mx-auto grid h-11 w-full max-w-11 place-items-center rounded-full text-[12px] tabular-nums lg:h-7 lg:max-w-7 ${
+                        className={`relative mx-auto grid h-11 w-full max-w-11 place-items-center rounded-full text-[12px] tabular-nums desktop:h-7 lg:max-w-7 ${
                           d === hoje ? "bg-accent font-bold text-white" : feriadoDe(d) ? "text-[var(--warn)] hover:bg-surface-2" : "text-text-2 hover:bg-surface-2"
                         }`}
                       >
@@ -1299,7 +1312,7 @@ export function CalendarioTarefas({
       align="end"
       width={264}
       ariaLabel={`Vista do calendário: ${ROTULO_VISTA[vista]}`}
-      triggerClassName="h-11 gap-1.5 rounded-control border border-border-2 bg-surface px-3 text-[13px] font-semibold text-text hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
+      triggerClassName="h-11 gap-1.5 rounded-control border border-border-2 bg-surface px-3 text-[13px] font-semibold text-text hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
       trigger={
         <>
           {ROTULO_VISTA[vista]}
@@ -1338,7 +1351,7 @@ export function CalendarioTarefas({
               fechar();
               window.setTimeout(() => window.print(), 50);
             }}
-            className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 text-left text-[13px] text-text hover:bg-surface-2 desktop:min-h-9"
           >
             <IconImprimir className="h-4 w-4 text-muted" />
             Imprimir
@@ -1358,8 +1371,24 @@ export function CalendarioTarefas({
         <Button variant="ghost" size="sm" aria-label={`${passo} anterior`} icon={<IconChevronLeft className="h-4 w-4" />} onClick={() => andar(-1)} />
         <Button variant="ghost" size="sm" aria-label={`${passo} seguinte`} icon={<IconChevronRight className="h-4 w-4" />} onClick={() => andar(1)} />
       </div>
-      <h2 className="min-w-0 flex-1 truncate text-[17px] font-semibold text-text lg:text-[19px]" aria-live="polite">
-        {titulo}
+      {/* O título é também o "Ir para uma data" (a tecla G no desktop) — no toque não há teclado nem, na aba do quadro, o
+          mini-calendário. No celular, o dia sai curto ("seg., 9 nov.") para a barra não quebrar em 3 linhas. */}
+      <h2 className="min-w-0 flex-1 text-[17px] font-semibold text-text lg:text-[19px]" aria-live="polite">
+        <button
+          type="button"
+          onClick={() => setIrData("")}
+          title="Ir para uma data (G)"
+          className="block min-h-11 max-w-full truncate rounded-control px-1 text-left hover:bg-surface-2 lg:min-h-0"
+        >
+          {vista === "dia" ? (
+            <>
+              <span className="sm:hidden">{tituloCurtoDia}</span>
+              <span className="max-sm:hidden">{titulo}</span>
+            </>
+          ) : (
+            titulo
+          )}
+        </button>
       </h2>
       <div className="flex items-center gap-1">
         {menuVista}
@@ -1450,7 +1479,10 @@ export function CalendarioTarefas({
         <p className="text-[13px] font-semibold text-text">
           Tarefas sem prazo <span className="font-normal tabular-nums text-muted">({num(semPrazo?.length ?? 0)})</span>
         </p>
-        <p className="text-[11.5px] text-muted">Arraste até um dia para definir o prazo.</p>
+        <p className="text-[11.5px] text-muted">
+          <span className="any-pointer-coarse:hidden">Arraste até um dia para definir o prazo.</span>
+          <span className="hidden any-pointer-coarse:inline">Toque no calendário da tarefa para definir o prazo.</span>
+        </p>
       </div>
       <ul className="relative min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
         {listaSemPrazo.map((t) => (
@@ -1459,7 +1491,7 @@ export function CalendarioTarefas({
               type="button"
               onPointerDown={(ev) => ev.pointerType !== "touch" && dnd.iniciar(ev, pseudo(t))}
               onClick={() => !dnd.foiArrasto() && onAbrirTarefa?.(t.id)}
-              className={`min-h-11 min-w-0 flex-1 px-2.5 py-1.5 text-left lg:min-h-9 ${onMover ? "cursor-grab active:cursor-grabbing" : ""}`}
+              className={`min-h-11 min-w-0 flex-1 px-2.5 py-1.5 text-left desktop:min-h-9 ${onMover ? "cursor-grab active:cursor-grabbing" : ""}`}
               title={t.titulo}
             >
               <span className="block truncate text-[12.5px] text-text">{t.titulo}</span>
@@ -1469,13 +1501,19 @@ export function CalendarioTarefas({
               </span>
             </button>
             {onMover && (
-              <span
-                role="presentation"
-                onPointerDown={(ev) => ev.pointerType === "touch" && dnd.iniciar(ev, pseudo(t))}
-                className="hidden w-11 shrink-0 touch-none items-center justify-center text-faint any-pointer-coarse:flex"
-              >
-                <IconGrip className="h-4 w-4" />
-              </span>
+              // No TOQUE não há para onde arrastar (a lista cobre o calendário): o prazo é escolhido no seletor de data.
+              <label className="relative hidden w-11 shrink-0 cursor-pointer items-center justify-center text-accent any-pointer-coarse:flex" title="Definir prazo">
+                <IconCalendar className="h-4 w-4" aria-hidden="true" />
+                <input
+                  type="date"
+                  aria-label={`Definir prazo de ${t.titulo}`}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  onChange={(ev) => {
+                    const d = ev.target.value;
+                    if (d) onMover(pseudo(t), d, null);
+                  }}
+                />
+              </label>
             )}
           </li>
         ))}

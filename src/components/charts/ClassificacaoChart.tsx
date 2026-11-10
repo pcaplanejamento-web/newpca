@@ -69,7 +69,7 @@ export function ClassificacaoChart({
               minAngle={3}
               cornerRadius={4}
               stroke="none"
-              animationDuration={700}
+              animationDuration={450}
               animationEasing="ease-out"
               activeShape={(p: PieSectorDataItem) => (
                 <Sector {...p} outerRadius={(p.outerRadius ?? 86) + 7} innerRadius={(p.innerRadius ?? 58) - 2} />

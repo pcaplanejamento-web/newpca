@@ -40,6 +40,7 @@ import { CelulaTexto } from "../CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "../DadosCompletos";
 import { useSemUnidade } from "../UnidadeUnica";
 import { ChartCard } from "../ChartCard";
+import { Button } from "../Button";
 import { BarrasH } from "../charts/Barras";
 import { GraficoTemporal } from "../charts/GraficoTemporal";
 import type { LinhaDica, PontoTemporal } from "../charts/SerieTemporal";
@@ -521,7 +522,10 @@ export function IndicadoresFrota({ cartoes, importacao, todos = false }: { carto
 }
 
 /** O corpo dos gráficos de barras lado a lado: a MESMA altura fixa (proporcional à tela), a rolagem por dentro. */
-const CORPO_FIXO = "h-[18rem] overflow-y-auto pr-1 sm:h-[22rem]";
+// No desktop, lado a lado com a MESMA altura (rolagem por dentro); no celular, a lista cresce com as 10 primeiras e
+// "Ver todas" mostra o resto (uma rolagem dentro de outra é ruim no toque).
+const CORPO_FIXO = "lg:h-[22rem] lg:overflow-y-auto lg:pr-1";
+const SO_DEZ = "max-lg:[&_li:nth-child(n+11)]:hidden";
 
 
 const DIMS_GRAFICO: DimFrota[] = ["orgao", "unidadeSistema", "classificacao", "contrato", "unidade", "tipoVeiculo", "produto", "tipoManutencao", "estabelecimento", "cidade", "motorista", "marca"];
@@ -599,6 +603,15 @@ function Painel({
     { key: "pl", header: "Veículos", filter: "range", numero: (g) => g.placas, value: (g) => num(g.placas), render: (g) => num(g.placas), formatarFaixa: num, total: false },
   ];
   const [aba, setAba] = useState<"alertas" | "demonstrativo">("demonstrativo");
+  const [todas, setTodas] = useState({ veiculos: false, dim: false });
+  const verTodas = (qual: "veiculos" | "dim", total: number) =>
+    total > 10 ? (
+      <div className="mt-2 lg:hidden">
+        <Button size="sm" variant="secondary" onClick={() => setTodas((t) => ({ ...t, [qual]: !t[qual] }))}>
+          {todas[qual] ? "Mostrar só as 10 maiores" : `Ver todas (${num(total)})`}
+        </Button>
+      </div>
+    ) : null;
   const seletorDim = (valor: DimFrota, set: (d: DimFrota) => void, opcoes: DimFrota[]) => (
     <SelectField compacto label="Por" value={valor} onChange={(e) => set(e.target.value as DimFrota)}>
       {opcoes.map((d) => (
@@ -617,20 +630,23 @@ function Painel({
       {/* Lado a lado, com a MESMA altura fixa (mais dados = rolagem por dentro, nunca um cartão maior). */}
       <div className="grid gap-[var(--gap-block)] lg:grid-cols-2">
         <ChartCard className="min-w-0" title="Maiores gastos por veículo" action={legenda}>
-          <div className={CORPO_FIXO}>
-            <BarrasH ariaLabel="Maiores gastos por veículo" linhas={linhasBarra(porPlaca, 50)} onEscolher={(k) => onFicha(String(k))} acao="abrir a ficha do veículo" />
+          <div className={`${CORPO_FIXO} ${todas.veiculos ? "" : SO_DEZ}`}>
+            <BarrasH ariaLabel="Maiores gastos por veículo" linhas={linhasBarra(porPlaca, 50)} onEscolher={(k) => onFicha(String(k))} acao="abrir a ficha do veículo" detalheSegmentos={(s) => `${s.rotulo} ${brlCompact(s.valor)}`} />
           </div>
+          {verTodas("veiculos", Math.min(porPlaca.length, 50))}
         </ChartCard>
         <ChartCard className="min-w-0" title={`Gasto por ${ROTULO_DIM[dimGrafico].toLocaleLowerCase("pt-BR")}`} action={seletorDim(dimGrafico, setDimGrafico, dimsGrafico)}>
-          <div className={CORPO_FIXO}>
+          <div className={`${CORPO_FIXO} ${todas.dim ? "" : SO_DEZ}`}>
             <BarrasH
               ariaLabel={`Gasto por ${ROTULO_DIM[dimGrafico]}`}
               linhas={linhasBarra(porDim, 50)}
               ativa={(dims[dimGrafico] ?? []).length === 1 ? (dims[dimGrafico] ?? [])[0] : null}
               onEscolher={(k) => onAlternar(dimGrafico, String(k))}
               acao="filtrar a tela"
+              detalheSegmentos={(s) => `${s.rotulo} ${brlCompact(s.valor)}`}
             />
           </div>
+          {verTodas("dim", Math.min(porDim.length, 50))}
         </ChartCard>
       </div>
       {/* DEMONSTRATIVO | ALERTAS em abas (só a aberta é montada). */}

@@ -67,7 +67,7 @@ import { usePaineisEmpenho } from "./EmpenhoDetalhe";
 import { ErroCarga } from "./ErroCarga";
 import { useNomesUnidades } from "./ConfigTabelas";
 import { FiltrosDashboard } from "./FiltrosDashboard";
-import { IconClose, IconDatabase, IconInfo, IconLayers, IconVisao, IconZoom } from "./icons";
+import { IconChevronDown, IconClose, IconDatabase, IconInfo, IconLayers, IconVisao, IconZoom } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { AtualizadoHa, ImportarAgora } from "./AtualizacaoKpi";
 import { toast } from "./Toast";
@@ -173,6 +173,8 @@ export function DashboardExecucao({
   const filtrado = difs.length > 0 || vis.atual != null;
   const setPeriodo = (p: Periodo) => setEstado((e) => ({ ...e, periodo: p }));
   const [modo, setModo] = useState<"diario" | "acumulado">("acumulado");
+  // No celular os filtros (Visão, Período e as dimensões — várias linhas) ficam atrás de um botão: o gráfico vem antes.
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [gran, setGran] = useState<Granularidade>("dia");
   const [origem, setOrigem] = useState<Origem | null>(null);
 
@@ -527,6 +529,19 @@ export function DashboardExecucao({
         aria-label="Filtros da execução"
         className={`rounded-card border p-[var(--pad-card)] transition-colors ${filtrado ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
       >
+        <button
+          type="button"
+          aria-expanded={filtrosAbertos}
+          onClick={() => setFiltrosAbertos((v) => !v)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 text-left text-[14px] font-semibold text-text md:hidden"
+        >
+          <span>
+            Filtros
+            {difs.length > 0 && <span className="ml-1.5 rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white tabular-nums">{difs.length}</span>}
+          </span>
+          <IconChevronDown aria-hidden="true" className={`h-4 w-4 text-muted transition-transform duration-[var(--motion-duration)] ${filtrosAbertos ? "rotate-180" : ""}`} />
+        </button>
+        <div className={filtrosAbertos ? "max-md:mt-2" : "max-md:hidden"}>
         <FiltrosDashboard
           campos={campos}
           onMudar={mudarFiltro}
@@ -569,6 +584,7 @@ export function DashboardExecucao({
             <PeriodoPicker key="periodo" value={periodo} anos={base.disponiveis} meses={meses} onChange={setPeriodo} inicial={inicialPeriodo} className="w-full min-w-0" />,
           ]}
         />
+        </div>
       </section>
       {erro && <ErroCarga msg={erro} onTentar={onTentar} kind="warn" />}
 

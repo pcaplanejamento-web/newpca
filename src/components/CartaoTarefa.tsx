@@ -171,7 +171,8 @@ export function CartaoTarefa({
       {marcas.length > 0 && (
         <button
           type="button"
-          onClick={alternarNomes}
+          // No TOQUE a faixa (fininha) abre o cartão como o resto dele — alternar nomes ali surpreendia; no mouse alterna.
+          onClick={() => (window.matchMedia("(pointer: coarse)").matches ? onAbrir?.() : alternarNomes())}
           aria-label={nomes ? "Esconder os nomes das etiquetas" : "Mostrar os nomes das etiquetas"}
           title={marcas.map((e) => e.nome).join(", ")}
           className={`relative z-10 mb-1.5 flex max-w-full flex-wrap gap-1 rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${toque}`}

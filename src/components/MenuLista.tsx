@@ -11,7 +11,7 @@ import { Dropdown } from "./Dropdown";
 import { SelectField, TextField } from "./Field";
 import { Callout } from "./Callout";
 import { Segmented } from "./Segmented";
-import { IconArquivar, IconArrowRight, IconCheck, IconCopy, IconMais, IconPlus, IconSort, IconTrash, IconUser } from "./icons";
+import { IconArquivar, IconArrowRight, IconCheck, IconChevronLeft, IconChevronRight, IconCopy, IconMais, IconPlus, IconSort, IconTrash, IconUser } from "./icons";
 import type { Pessoa } from "@/lib/pessoa";
 import { SeletorPessoa } from "./SeletorPessoa";
 import { CamposPeriodo, type PeriodoQuadro } from "./QuadroCard";
@@ -45,6 +45,7 @@ export function MenuLista({
   onLimite,
   onConcluidas,
   onPessoa,
+  onLado,
 }: {
   lista: ListaTarefas;
   /** As OUTRAS listas ativas do quadro (destino de "mover todos os cartões"). */
@@ -68,6 +69,8 @@ export function MenuLista({
   onConcluidas?: () => void;
   /** Abre a atribuição da lista a uma pessoa (`PessoaLista`). */
   onPessoa?: () => void;
+  /** Mover a lista UMA posição (o arrasto do cabeçalho, sem arrastar — no toque); ausente = já está na ponta. */
+  onLado?: { esquerda?: () => void; direita?: () => void };
 }) {
   const [secao, setSecao] = useState<null | "ordenar" | "mover">(null);
   return (
@@ -75,7 +78,7 @@ export function MenuLista({
       align="end"
       width={270}
       ariaLabel={`Ações da lista ${lista.nome}`}
-      triggerClassName="h-11 w-11 shrink-0 justify-center text-muted lg:h-8 lg:w-8"
+      triggerClassName="h-11 w-11 shrink-0 justify-center text-muted desktop:h-8 desktop:w-8"
       trigger={<IconMais className="h-4 w-4" />}
     >
       {(fechar) => {
@@ -89,7 +92,7 @@ export function MenuLista({
               setSecao(null);
               fn();
             }}
-            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 lg:min-h-9"
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 desktop:min-h-9"
           >
             {icone}
             <span className="truncate">{rotulo}</span>
@@ -101,7 +104,7 @@ export function MenuLista({
             aria-expanded={secao === k}
             disabled={off || disabled}
             onClick={() => setSecao((s) => (s === k ? null : k))}
-            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 lg:min-h-9"
+            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 disabled:opacity-40 desktop:min-h-9"
           >
             {icone}
             <span className="flex-1 truncate">{rotulo}</span>
@@ -126,6 +129,8 @@ export function MenuLista({
             {(pode.configurar || pode.excluir) && (
               <>
                 {pode.manipular && <div className="my-1 border-t border-border" />}
+                {pode.configurar && onLado && item("Mover para a esquerda", <IconChevronLeft className="h-4 w-4 text-muted" />, () => onLado.esquerda?.(), !onLado.esquerda)}
+                {pode.configurar && onLado && item("Mover para a direita", <IconChevronRight className="h-4 w-4 text-muted" />, () => onLado.direita?.(), !onLado.direita)}
                 {pode.configurar && onPessoa && item(lista.responsavelId != null ? "Pessoa atribuída…" : "Atribuir a uma pessoa…", <IconUser className="h-4 w-4 text-muted" />, onPessoa)}
                 {pode.configurar && onLimite && item(lista.limiteWip != null ? `Limite de cartões (${lista.limiteWip})…` : "Limite de cartões…", <IconSort className="h-4 w-4 text-muted" />, onLimite)}
                 {pode.configurar &&

@@ -75,7 +75,7 @@ function Circulo({ rotulo, ativo, onClick, style, children, disabled }: { rotulo
       disabled={disabled}
       onClick={onClick}
       style={style}
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-2 shadow-ring transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 lg:h-9 lg:w-9 ${
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-2 shadow-ring transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 desktop:h-9 desktop:w-9 ${
         ativo ? "outline-2 outline-offset-2 outline-[var(--text)]" : ""
       }`}
     >
@@ -102,7 +102,7 @@ function EditorGradiente({ inicial, onAplicar, onCancelar }: { inicial: Gradient
                 aria-pressed={g.angulo === a}
                 aria-label={`Ângulo ${a} graus`}
                 onClick={() => setG((x) => ({ ...x, angulo: a }))}
-                className={`grid h-11 w-11 place-items-center rounded-control text-[15px] lg:h-8 lg:w-8 ${g.angulo === a ? "bg-accent text-white" : "bg-surface-2 text-text-2 hover:bg-border"}`}
+                className={`grid h-11 w-11 place-items-center rounded-control text-[15px] desktop:h-8 desktop:w-8 ${g.angulo === a ? "bg-accent text-white" : "bg-surface-2 text-text-2 hover:bg-border"}`}
               >
                 <span aria-hidden style={{ transform: `rotate(${a - 90}deg)` }}>
                   →

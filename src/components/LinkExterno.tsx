@@ -38,7 +38,7 @@ export function LinkExterno({
         {children}
       </a>
     );
-  const tamanho = size === "xs" ? "h-11 px-2.5 text-[12px] lg:h-[calc(var(--h-control-sm)-6px)]" : "h-11 px-4 text-[13.5px] lg:h-[var(--h-control)]";
+  const tamanho = size === "xs" ? "h-11 px-2.5 text-[12px] desktop:h-[calc(var(--h-control-sm)-6px)]" : "h-11 px-4 text-[13.5px] desktop:h-[var(--h-control)]";
   return (
     <a
       href={href}

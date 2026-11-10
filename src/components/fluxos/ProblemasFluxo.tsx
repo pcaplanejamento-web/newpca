@@ -31,7 +31,7 @@ export function ProblemasFluxo({
       width={360}
       ariaLabel={erro ? "Problemas do fluxo" : "Atenções do fluxo"}
       title={`${rotulo} — toque para ver`}
-      triggerClassName="inline-flex h-11 items-center gap-1.5 rounded-chip border px-2.5 text-xs font-semibold lg:h-[var(--h-control-sm)]"
+      triggerClassName="inline-flex h-11 items-center gap-1.5 rounded-chip border px-2.5 text-xs font-semibold desktop:h-[var(--h-control-sm)]"
       gatilho={{ style: { color: cor, borderColor: `color-mix(in oklab, ${cor} 40%, transparent)`, background: `color-mix(in oklab, ${cor} 10%, transparent)` } }}
       trigger={
         <>
