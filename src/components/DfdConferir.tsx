@@ -635,7 +635,7 @@ export function DfdConferir({
                       label="Validação administrativa (ADM)"
                       value={motivoAdm}
                       maxLength={MOTIVO_ADM.max}
-                      placeholder="Motivo — ex.: documento conferido no processo físico"
+                      placeholder="Motivo da validação"
                       onChange={(e) => setMotivoAdm(e.target.value)}
                     />
                   </div>

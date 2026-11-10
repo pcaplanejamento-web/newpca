@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.2",
+    data: "2026-11-10",
+    titulo: "Validação administrativa: texto do motivo no celular",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "O campo do motivo da validação administrativa não corta mais o texto de exemplo no celular.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.289.1",
     data: "2026-11-10",
     titulo: "Validação administrativa: data e acabamento",
