@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.1",
+    data: "2026-11-10",
+    titulo: "Validação administrativa: data e acabamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto:
+          "O cartão da validação administrativa mostra a data de Brasília — validar à noite não aparece mais com o dia seguinte.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto:
+          "A validação administrativa tem a mesma cor (violeta) no bloco de validação, no cartão e na lista, e o campo do motivo diz quantos caracteres faltam.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.289.0",
     data: "2026-11-10",
     titulo: "Validação administrativa da assinatura do DFD",

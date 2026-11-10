@@ -19,11 +19,11 @@ import {
   situacaoSecao,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
-import { brl, dataBR, num } from "@/lib/format";
+import { brl, dataBR, dataIsoBrasilia, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { type Assinatura, buracosSequencia, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
-import { Badge } from "./Badge";
+import { Badge, toneVar } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaExecucao } from "./CelulaExecucao";
 import { AutoTextarea, CadeadoBotao, CampoCongelado } from "./CampoCadeado";
@@ -613,17 +613,17 @@ export function DfdView({
                   <div
                     key={`adm-${i}`}
                     className="rounded-card border p-[var(--pad-card)]"
-                    style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 7%, var(--surface))" }}
+                    style={{ borderColor: toneVar("violet"), background: `color-mix(in srgb, ${toneVar("violet")} 7%, var(--surface))` }}
                   >
                     <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
-                      <span className="text-accent">Validação administrativa do documento</span>
+                      <span style={{ color: toneVar("violet") }}>Validação administrativa do documento</span>
                       <Badge tone="violet" solid>
                         ADM
                       </Badge>
                     </div>
                     <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                       <Campo label="Validado por" valor={a.nome || "—"} />
-                      <Campo label="Data da validação" valor={a.validacao?.em ? dataBR(a.validacao.em) : a.data || "—"} />
+                      <Campo label="Data da validação" valor={a.data.trim() || (a.validacao?.por === "adm" && a.validacao.em ? dataBR(dataIsoBrasilia(a.validacao.em)) : "—")} />
                       <Campo label="Motivo" valor={a.validacao?.por === "adm" ? a.validacao.motivo : "—"} span />
                     </dl>
                     <p className="mt-3 text-xs text-muted">

@@ -34,6 +34,7 @@ import {
 import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
+import { toneVar } from "./Badge";
 import { useAdminTabelas } from "./ConfigTabelas";
 import { useConfirmacao } from "./Confirmacao";
 import { DfdView, type DfdVisual } from "./DfdView";
@@ -521,10 +522,11 @@ export function DfdConferir({
           </h3>
           {resAss.status === "adm" ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-start gap-1.5 text-[13px] text-accent">
+              <span className="inline-flex items-start gap-1.5 text-[13px]" style={{ color: toneVar("violet") }}>
                 <IconCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  Validado administrativamente (ADM){resAss.assinatura.nome ? ` — ${resAss.assinatura.nome}` : " — ao salvar"}
+                  Validado administrativamente (ADM)
+                  {resAss.assinatura.nome ? ` — ${resAss.assinatura.nome}` : " — será registrado com o seu nome ao salvar"}
                   {resAss.assinatura.validacao?.por === "adm" && (
                     <span className="block text-text-2">Motivo: {resAss.assinatura.validacao.motivo}</span>
                   )}
@@ -637,9 +639,14 @@ export function DfdConferir({
                       onChange={(e) => setMotivoAdm(e.target.value)}
                     />
                   </div>
-                  <Button disabled={!motivoOk} title={motivoOk ? undefined : `Informe o motivo (mínimo ${MOTIVO_ADM.min} caracteres).`} onClick={validarAdm}>
+                  <Button disabled={!motivoOk} onClick={validarAdm}>
                     Validar administrativamente
                   </Button>
+                  {!motivoOk && (
+                    <p className="w-full text-xs text-muted">
+                      Informe o motivo: mínimo {MOTIVO_ADM.min} caracteres ({motivoAdm.trim().length}/{MOTIVO_ADM.min}).
+                    </p>
+                  )}
                 </div>
               )}
             </div>
