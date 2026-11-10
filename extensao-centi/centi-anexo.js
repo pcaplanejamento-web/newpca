@@ -572,20 +572,26 @@
     return chaves.sort((a, b) => texto(b) - texto(a) || descr(a) - descr(b) || a.length - b.length)[0] ?? null;
   }
   /** A coluna do CENTRO DE CUSTO pelo VALOR (o nome do campo na API não é o da tela): a de texto em que ≥ 60% dos valores
-   * têm vírgula e o MESMO 1º trecho (a entidade — "PM RV, SECRETARIA…") se repete em ≥ 60%. Vence a com mais linhas
-   * assim; empate = nenhuma (nunca chuta). */
-  function colunaCentroCustoPeloValor(linhas) {
-    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => !/\$type$/i.test(k) && !/finalidade|descri|observ|objeto|justific/i.test(k.split(".")[0]));
+   * têm ≥ 2 palavras com letras e a MESMA chave se repete em ≥ 60% — a chave é o 1º trecho antes da vírgula (a entidade:
+   * "PM RV, SECRETARIA…") ou, SEM vírgula (as entidades dos FUNDOS: "FUNDO MUNICIPAL DE TURISMO"), o valor inteiro. Nunca
+   * as colunas de Id/Situação/Finalidade/usuário (`excluir` + os nomes). Vence a com mais linhas assim; empate = nenhuma. */
+  const NAO_CENTRO = /situa|status|usuar|login|user|finalidade|descri|observ|objeto|justific/i;
+  function colunaCentroCustoPeloValor(linhas, excluir = []) {
+    const fora = new Set(excluir.filter(Boolean));
+    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter(
+      (k) => !/\$type$/i.test(k) && !fora.has(k) && !NAO_CENTRO.test(k.split(".")[0]),
+    );
     let melhor = null;
     let nMelhor = 0;
     let empate = false;
     for (const k of chaves) {
       const vals = linhas.map((l) => String(l[k] ?? "").trim()).filter((v) => v && /\p{L}/u.test(v));
       if (vals.length < Math.max(1, Math.ceil(linhas.length * 0.3))) continue;
-      const com = vals.filter((v) => v.includes(","));
-      if (com.length < vals.length * 0.6) continue;
+      // Duas palavras com letras ("PM RV, X" ou "FUNDO MUNICIPAL…") — nunca "Executado" nem "nubia.cristina".
+      const nomes = vals.filter((v) => (v.match(/\p{L}{2,}/gu) ?? []).length >= 2 && !/^[\w.-]+@?[\w.-]*$/u.test(v));
+      if (nomes.length < vals.length * 0.6) continue;
       const conta = new Map();
-      for (const v of com) {
+      for (const v of nomes) {
         const p = v.split(",")[0].trim().toUpperCase();
         conta.set(p, (conta.get(p) ?? 0) + 1);
       }
@@ -597,11 +603,11 @@
     return empate ? null : melhor;
   }
   /** A coluna do centro de custo: pelo NOME e, sem ele, pelo VALOR. */
-  function colunaCentroCusto(linhas) {
+  function colunaCentroCusto(linhas, excluir = []) {
     const k = campoTexto(linhas, RE_CENTRO_CUSTO);
     // O de nome certo só vale com TEXTO (o `IdCentroCusto` numérico sozinho não é o centro de custo).
     if (k && linhas.some((l) => /\p{L}/u.test(String(l[k] ?? "")))) return k;
-    return colunaCentroCustoPeloValor(linhas) ?? k;
+    return colunaCentroCustoPeloValor(linhas, excluir) ?? k;
   }
   const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
   // ——— As COLUNAS DA TELA (a grade Wijmo da CM002: o TÍTULO que a pessoa vê → o CAMPO da API): a base para capturar
@@ -664,7 +670,7 @@
     const tela = Array.isArray(colunasTela) ? colunasTela : [];
     const cTela = tela.find((c) => /CENTRO.*CUSTO/.test(semAcento(c.titulo)));
     const ccTela = cTela && amostra.some((x) => /\p{L}/u.test(valorDaColuna(x, cTela.campo))) ? cTela.campo : null;
-    const kCc = ccTela ? null : colunaCentroCusto(amostra);
+    const kCc = ccTela ? null : colunaCentroCusto(amostra, [kId, kSit, kFin]);
     // Na consulta já aprendida basta Id + Situação (finalidade/centro de custo podem vir vazios).
     if (!kId || !kSit || (!conhecida && !kFin && !kCc)) return null;
     return linhas

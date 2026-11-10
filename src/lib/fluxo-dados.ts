@@ -206,19 +206,40 @@ export function filtrarMarcados(itens: Item[], marcados: unknown, chave: (it: It
 /** O nome da coluna do centro de custo ("CentroCusto", "CentroDeCusto", "Centro de Custo", "C. Custo"). */
 const RE_CENTRO_CUSTO = /centro.?(de)?.?custo|(^|[^a-z])c\.?\s?custo/i;
 
-/** As fontes do centro de custo de um item, na ordem: a linha da CM002 (`encontrado`), as colunas cruas dela e o load. */
-function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; cru: Item | null; centro: string } {
+/** As colunas que nunca são o centro de custo (Id, Situação, Finalidade, usuário, textos livres). */
+const NAO_CENTRO = /situa|status|usuar|login|user|finalidade|descri|observ|objeto|justific/i;
+
+/** O valor tem cara de NOME (2+ palavras com letras — "PM RV, X" ou "FUNDO MUNICIPAL DE TURISMO"), nunca um login. */
+const pareceNome = (v: string) => (v.match(/\p{L}{2,}/gu) ?? []).length >= 2 && !/^[\w.-]+@?[\w.-]*$/u.test(v);
+
+/**
+ * As fontes do centro de custo de um item, na ordem: a linha da CM002 (`encontrado`), as colunas cruas dela e o load.
+ * Nas colunas cruas: pelo NOME da coluna; sem ele, pelo VALOR — com as `unidades`, o valor que casa uma unidade
+ * cadastrada (com ou sem vírgula: as entidades dos FUNDOS não têm a "PM RV," na frente); sem elas, a entidade curta e a
+ * vírgula ("PM RV, SECRETARIA…").
+ */
+function fontesCentroCusto(it: Item, unidades?: ReparticaoMatch[]): { lista: Item | null; load: Item | null; cru: Item | null; centro: string } {
   const obj = (x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? (x as Item) : null);
   const lista = obj(it.encontrado);
   const load = obj(it.centi);
   const cru = lista ? obj(lista.centi) : null;
+  const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
+  const casa = (v: string) => {
+    if (!unidades?.length || !pareceNome(v)) return false;
+    if (casarPorCentroCusto(v, unidades, orgaoId)?.tipo === "ok") return true;
+    const { nome, truncado } = unidadeDoCentroCusto(v);
+    return !!nome && casarUnidadePorNome(nome, truncado, unidades, orgaoId).tipo === "ok";
+  };
   const doCru = (o: Item | null) => {
-    // Pelo nome da coluna; sem ele, pelo VALOR — a entidade curta e a vírgula ("PM RV, SECRETARIA…").
-    const k = o
-      ? (Object.keys(o).find((x) => RE_CENTRO_CUSTO.test(x) && !/\$type$/i.test(x) && /\p{L}/u.test(String(o[x] ?? ""))) ??
-        Object.keys(o).find((x) => !/\$type$/i.test(x) && !/finalidade|descri|observ|objeto|justific/i.test(x.split(".")[0]) && /^[^,\d]{2,15},\s*\p{L}/u.test(String(o[x] ?? "").trim())))
-      : undefined;
-    return o && k ? String(o[k]).trim() : "";
+    if (!o) return "";
+    const chaves = Object.keys(o).filter((x) => !/\$type$/i.test(x));
+    const valor = (x: string) => String(o[x] ?? "").trim();
+    const livres = chaves.filter((x) => !NAO_CENTRO.test(x.split(".")[0]));
+    const k =
+      chaves.find((x) => RE_CENTRO_CUSTO.test(x) && /\p{L}/u.test(valor(x))) ??
+      livres.find((x) => /^[^,\d]{2,15},\s*\p{L}/u.test(valor(x))) ??
+      livres.find((x) => casa(valor(x)));
+    return k ? valor(k) : "";
   };
   const opcoes: [Item | null, string][] = [
     [lista, String(lista?.centroCusto ?? "").trim()],
@@ -229,7 +250,7 @@ function fontesCentroCusto(it: Item): { lista: Item | null; load: Item | null; c
 }
 
 /** O centro de custo (texto) que alguma fonte do item já traz; "" = é preciso ler o planejamento pelo ID. */
-export const centroCustoDoItem = (it: Item): string => fontesCentroCusto(it).centro;
+export const centroCustoDoItem = (it: Item, unidades?: ReparticaoMatch[]): string => fontesCentroCusto(it, unidades).centro;
 
 /**
  * A unidade de cada DFD × a do Centro de Custo da CM002 (a linha achada pelo "Procurar" — `encontrado`). A unidade da
@@ -255,7 +276,7 @@ export function conferirUnidades(
   for (const it of itens) {
     // As fontes da Centi, na ordem: a linha da lista da CM002 (`encontrado`, com as colunas cruas em `centi`) e o
     // registro do planejamento lido pelo ID (`it.centi`). Vale a 1ª que TEM centro de custo.
-    const { lista, load, cru, centro } = fontesCentroCusto(it);
+    const { lista, load, cru, centro } = fontesCentroCusto(it, unidades);
     const finalidadeDe = String(lista?.finalidade ?? "").trim() || String(load?.finalidade ?? "").trim();
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
     if (!lista && !load && !("centi" in it)) {
@@ -290,7 +311,14 @@ export function conferirUnidades(
       continue;
     }
     // A unidade é SEMPRE o último nome; só a entidade ("PM RV") = o planejamento não tem unidade na Centi.
-    const { nome, truncado } = unidadeDoCentroCusto(centro);
+    const lido = unidadeDoCentroCusto(centro);
+    let { nome } = lido;
+    const { truncado } = lido;
+    // Curto e SEM vírgula: em geral só a entidade ("PM RV"); mas um centro/sigla CADASTRADO (o Fundo "FMS") é a unidade.
+    if (!nome && !centro.includes(",")) {
+      const curto = casarPorCentroCusto(centro, unidades, orgaoId) ?? casarUnidadePorNome(centro, false, unidades, orgaoId);
+      if (curto.tipo === "ok") nome = centro.trim();
+    }
     if (!nome) {
       enviar("desconhecidas", { ...base, mensagem: `${ref}: o centro de custo na Centi não tem unidade (só “${centro}”)` }, centro);
       continue;

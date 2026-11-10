@@ -42,7 +42,7 @@ import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marc
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
-import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
+import { chaveColuna, colunaReservada, ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
 /** "17 a 56" — a faixa dos IDs (numéricos) de um conjunto, para a mensagem. */
 function faixaIds(ids: Set<string>): string {
@@ -166,6 +166,18 @@ const passa = (it: Item, c: Record<string, unknown>) =>
   comparar(resolverCaminho(it, str(c.campo)), str(c.operador, "igual"), interpolar(str(c.valor), it));
 
 /** O próximo lote do "Órgão na Centi" (um por vez): troca o órgão em análise na Centi; no fim, volta ao da tela. */
+/** Grava o CENTRO DE CUSTO de cada DFD (id → texto; null limpa) — o "Gravar o Centro de Custo" e o diagrama antigo que
+ * ainda grava a coluna "Centro de Custo" pelo "Gravar na coluna da Mesa". */
+async function gravarCentrosDfds(porDfd: Map<number, string | null>, ctx: ContextoNo): Promise<void> {
+  const itens = [...porDfd].map(([dfdId, centro]) => ({ dfdId, centro }));
+  for (let i = 0; i < itens.length; i += 2000) {
+    if (ctx.cancelado()) throw new Error("Interrompido.");
+    ctx.aviso(`Gravando o Centro de Custo (${Math.min(i + 2000, itens.length)} de ${itens.length})…`);
+    const r = await ctx.api("/api/admin/automacao/centro-custo-dfds", { method: "POST", body: { itens: itens.slice(i, i + 2000) } });
+    if (!r.ok) throw new Error(r.error || "Não consegui gravar o Centro de Custo dos DFDs.");
+  }
+}
+
 async function proximoOrgao(est: Record<string, unknown>, ctx: ContextoNo): Promise<Portas> {
   const fila = (est.fila ?? []) as Item[][];
   const lote = fila.shift();
@@ -1189,7 +1201,7 @@ const NOS: DefNo[] = [
       const itens = so(e);
       // Só os que TÊM a linha da CM002 (`encontrado`): os de fora da CM002 / sem órgão vão direto para as colunas.
       const temLinha = (it: Item) => !!it.encontrado && typeof it.encontrado === "object";
-      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => temLinha(it) && !("centi" in it) && !centroCustoDoItem(it)) : [];
+      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => temLinha(it) && !("centi" in it) && !centroCustoDoItem(it, (ctx.host.unidades ?? []) as ReparticaoMatch[])) : [];
       if (!faltam.length) return conferirUnidades(itens, (ctx.host.unidades ?? []) as ReparticaoMatch[]);
       const lidos = await lerPlanejamentosPeloId(faltam, ctx, { pdf: false, paralelo: 3, rotulo: "Lendo o planejamento pelo ID — " });
       const porItem = new Map(faltam.map((it, i) => [it, lidos[i]]));
@@ -1696,13 +1708,7 @@ const NOS: DefNo[] = [
           saida.push(it);
         }
       }
-      const itens = [...porDfd].map(([dfdId, centro]) => ({ dfdId, centro }));
-      for (let i = 0; i < itens.length; i += 2000) {
-        if (ctx.cancelado()) throw new Error("Interrompido.");
-        ctx.aviso(`Gravando o Centro de Custo (${Math.min(i + 2000, itens.length)} de ${itens.length})…`);
-        const r = await ctx.api("/api/admin/automacao/centro-custo-dfds", { method: "POST", body: { itens: itens.slice(i, i + 2000) } });
-        if (!r.ok) throw new Error(r.error || "Não consegui gravar o Centro de Custo dos DFDs.");
-      }
+      await gravarCentrosDfds(porDfd, ctx);
       if (ignorados.length) ctx.aviso(`${ignorados.length} item(ns) sem o id do DFD — não gravados.`);
       return { saida, ignorados };
     },
@@ -1758,6 +1764,15 @@ const NOS: DefNo[] = [
       }
       const gravar = [...porAlvo].map(([alvoId, valor]) => ({ alvoId, valor }));
       if (!gravar.length) return { saida, ignorados };
+      // O diagrama ANTIGO grava "Centro de Custo" nos DFDs por aqui: hoje é um dado do DFD (coluna do sistema) — grava
+      // pelo mesmo caminho do "Gravar o Centro de Custo", em vez de parar a automação.
+      if (entidade === "dfd" && chaveColuna(nome) === chaveColuna("Centro de Custo")) {
+        await gravarCentrosDfds(porAlvo, ctx);
+        ctx.aviso("“Centro de Custo” é um dado do DFD: gravado pelo componente “Gravar o Centro de Custo” — use “Atualizar pelo modelo” nesta automação.");
+        return { saida, ignorados };
+      }
+      if (colunaReservada(entidade, nome))
+        throw new Error(`“${nome}” é uma coluna do sistema nas tabelas de DFDs e Itens — não é gravada pelo “Gravar na coluna da Mesa” (use “Atualizar pelo modelo” na automação).`);
       const r = await ctx.api("/api/admin/automacao/colunas", { method: "POST", body: entidade === "dfd" && typeof c.nosItens === "boolean" ? { entidade, nome, nosItens: c.nosItens } : { entidade, nome } });
       const id = (r.coluna as { id?: number } | undefined)?.id;
       if (!r.ok || !id) throw new Error(r.error || "Não consegui criar/achar a coluna.");

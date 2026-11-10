@@ -233,3 +233,73 @@ test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO d
   assert.ok(!nasPortas.includes(6) && !nasPortas.includes(7));
   assert.ok(nasPortas.includes(5) && nasPortas.includes(11), "a falha segue apontada");
 });
+
+// ——— Os FUNDOS: o Centro Custo da CM002 vem SEM a entidade "PM RV," e SEM vírgula ("FUNDO MUNICIPAL DE TURISMO").
+import { readFileSync as lerFundo } from "node:fs";
+import vmFundo from "node:vm";
+import type { DefNo } from "../src/lib/fluxo-core.ts";
+import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
+
+function cm002() {
+  const c: Record<string, unknown> = { URL };
+  vmFundo.runInNewContext(lerFundo("extensao-centi/centi-anexo.js", "utf8"), c);
+  const p = Number(/const PROTOCOLO = (\d+)/.exec(lerFundo("extensao-centi/centi-main.js", "utf8"))?.[1]);
+  return (c[`__pcaCentiAnexo_p${p}`] as { planejamentosCm002: (j: unknown, c: boolean) => { id: string; centroCusto: string }[] | null }).planejamentosCm002;
+}
+
+test("Fundo: a extensão acha o centro de custo SEM vírgula (campo de nome desconhecido) e nunca Situação/Usuário/Finalidade", () => {
+  const fields = (o: Record<string, unknown>) => ({ Fields: Object.entries(o).map(([Key, Value]) => ({ Key, Value })) });
+  const fins = ["CONTRATAÇÃO DE SOLUÇÃO ESPECIALIZADA", "REALIZAÇÃO DO SEMINÁRIO DE TURISMO", "AQUISIÇÃO DE BARRACAS EXPOSITORAS"];
+  const itens = fins.map((f, i) =>
+    fields({ Id: 2001 + i, Codigo: 67, Situacao: "Não Executado", Finalidade: f, Usuario: "nubia.cristina", Lotacao: { $type: "Centi.Model.Lotacao, Centi", Id: 9, Descricao: "FUNDO MUNICIPAL DE TURISMO" } }),
+  );
+  const r = cm002()({ Data: { Items: itens } }, true);
+  assert.deepEqual(r?.map((x) => x.centroCusto), ["FUNDO MUNICIPAL DE TURISMO", "FUNDO MUNICIPAL DE TURISMO", "FUNDO MUNICIPAL DE TURISMO"]);
+  // Sem nenhuma coluna de nome: o centro de custo fica vazio (nunca a Situação de 2 palavras nem o usuário).
+  const sem = cm002()({ Data: { Items: [fields({ Id: 1, Situacao: "Não Executado", Finalidade: "X Y", Usuario: "nubia.cristina" })] } }, true);
+  assert.equal(sem?.[0]?.centroCusto, "");
+  // O da Prefeitura segue igual.
+  const pm = cm002()({ Data: { Items: [fields({ Id: 1, Situacao: "Executado", Lotacao: { Id: 1, Descricao: "PM RV, SUBPREFEITURA DE OUROANA" } })] } }, true);
+  assert.equal(pm?.[0]?.centroCusto, "PM RV, SUBPREFEITURA DE OUROANA");
+});
+
+test("Fundo: o sistema confere o centro de custo sem vírgula (colunas cruas e sigla curta cadastrada)", () => {
+  const CAD = [
+    { id: 1, codigo: "FUNTUR", nome: "Fundo Municipal de Turismo", orgaoId: 5 },
+    { id: 2, codigo: "FMS", nome: "Fundo Municipal de Saúde", orgaoId: 6 },
+    { id: 3, codigo: "SMTUR", nome: "Secretaria Municipal de Turismo", orgaoId: 1 },
+  ];
+  const doCru = conferirUnidades(
+    [{ id: 1, numero: "1", planejamento: "2001", reparticaoId: 1, orgaoId: 5, encontrado: { centroCusto: "", centi: { Id: "2001", Situacao: "Executado", Usuario: "nubia.cristina", "Lotacao.Descricao": "FUNDO MUNICIPAL DE TURISMO" } } }],
+    CAD,
+  );
+  assert.equal(doCru.conformes.length, 1, JSON.stringify(doCru.desconhecidas[0]?.mensagem));
+  assert.equal(doCru.todos[0]?.centroCustoCenti, "FUNDO MUNICIPAL DE TURISMO");
+  const direto = conferirUnidades([{ id: 2, numero: "2", planejamento: "3", reparticaoId: 3, orgaoId: 5, encontrado: { centroCusto: "FUNDO MUNICIPAL DE TURISMO" } }], CAD);
+  assert.deepEqual(direto.divergentes.map((x) => x.unidadeCentiSigla), ["FUNTUR"]);
+  const sigla = conferirUnidades([{ id: 3, numero: "3", planejamento: "4", reparticaoId: 2, orgaoId: 6, encontrado: { centroCusto: "FMS" } }], CAD);
+  assert.equal(sigla.conformes.length, 1, "o centro curto cadastrado (sigla) é a unidade");
+  const entidade = conferirUnidades([{ id: 4, numero: "4", planejamento: "5", reparticaoId: 2, orgaoId: 6, encontrado: { centroCusto: "PM RV" } }], CAD);
+  assert.match(String(entidade.desconhecidas[0]?.mensagem), /não tem unidade/);
+});
+
+test("Diagrama antigo: “Gravar na coluna da Mesa” com “Centro de Custo” grava o centro do DFD e não para a automação", async () => {
+  const def = REGISTRO_NOS.get("saida.gravarColuna") as DefNo;
+  const chamadas: [string, unknown][] = [];
+  const avisos: string[] = [];
+  const c = {
+    centi: async () => ({ ok: false }),
+    api: async (url: string, i?: { body?: unknown }) => {
+      chamadas.push([url, i?.body]);
+      return { ok: true };
+    },
+    cancelado: () => false,
+    host: {},
+    aviso: (t: string) => avisos.push(t),
+  } as never;
+  const r = await def.executar({ entrada: [{ id: 7, centroCustoCenti: "FUNDO MUNICIPAL DE TURISMO" }, { id: 8, centroCustoCenti: "" }] }, { entidade: "dfd", coluna: "Centro de Custo", campoValor: "centroCustoCenti", apagar: true }, c, {});
+  assert.equal(r.saida?.length, 2);
+  assert.deepEqual(chamadas, [["/api/admin/automacao/centro-custo-dfds", { itens: [{ dfdId: 7, centro: "FUNDO MUNICIPAL DE TURISMO" }, { dfdId: 8, centro: null }] }]]);
+  assert.match(avisos.join(" "), /Atualizar pelo modelo/);
+  await assert.rejects(() => def.executar({ entrada: [{ id: 7, valor: "x" }] }, { entidade: "dfd", coluna: "Subunidade" }, c, {}), /coluna do sistema/);
+});

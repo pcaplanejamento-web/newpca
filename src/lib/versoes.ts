@@ -35,6 +35,33 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.288.1",
+    data: "2026-11-10",
+    titulo: "Centro de Custo dos Fundos na automação",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "O Centro de Custo da CM002 sem vírgula (as entidades dos Fundos, como “FUNDO MUNICIPAL DE TURISMO”) passa a ser reconhecido — antes só o formato “PM RV, …” era achado e a coluna ficava vazia. Atualize a extensão para a 1.33.0.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Um centro de custo curto sem vírgula que seja um centro ou sigla cadastrado (ex.: “FMS”) casa com a unidade, em vez de ser lido como “só a entidade”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A automação salva antes da coluna do sistema não para mais com “Centro de Custo é uma coluna do sistema”: o componente antigo grava o Centro de Custo do DFD pelo caminho novo e avisa para usar “Atualizar pelo modelo”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.288.0",
     data: "2026-11-09",
     titulo: "Toque, gestos e animações revisados",
