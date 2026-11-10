@@ -228,7 +228,7 @@ describe("herdarTratamentos — o que o PDF não traz e o gravado já tratou", (
     assert.equal(dfd.secoes.find((x) => x.numero === 6)?.texto, "ALTA");
     assert.equal(dfd.secoes.find((x) => x.titulo.includes("FUNDAMENTA"))?.texto, "Lei 14.133/2021");
     assert.equal(dfd.numeroContrato, "12/2025");
-    assert.equal(dfd.assinaturas[0].validacao?.responsavel, "ANA");
+    assert.deepEqual(dfd.assinaturas[0].validacao, { por: "equipe", responsavel: "ANA" });
     assert.deepEqual(herdados, ["Tipo", "Prioridade", "Fundamentação legal", "Referências de renovação", "Validação da assinatura (equipe)"]);
   });
   it("PDF completo ⇒ nada herdado (mesmo objeto)", () => {
@@ -248,7 +248,7 @@ describe("herdarTratamentos — o que o PDF não traz e o gravado já tratou", (
     assert.ok(!antes.herdados.includes("Validação da assinatura (equipe)"));
     // Depois do OCR (mesmo assinante/data/formato): a validação da equipe é herdada.
     const depois = herdarTratamentos({ ...antes.dfd, assinaturas: [ass({ nome: "JOAO", fonte: "dropsigner", ocr: true })] }, g, 2027, { tratamentos: false });
-    assert.equal(depois.dfd.assinaturas[0].validacao?.responsavel, "JOAO");
+    assert.deepEqual(depois.dfd.assinaturas[0].validacao, { por: "equipe", responsavel: "JOAO" });
     assert.deepEqual(depois.herdados, ["Validação da assinatura (equipe)"]);
   });
   it("assinatura manual (equipe) segue quando o PDF continua sem assinatura nomeada", () => {

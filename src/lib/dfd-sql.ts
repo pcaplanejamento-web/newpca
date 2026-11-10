@@ -22,7 +22,7 @@ export const prioridadeTextoSql = sql<string | null>`(SELECT CAST(json_extract(C
  * que `json_type`/`json_extract` só rodam sobre JSON válido e sobre elementos objeto/array (o `AND` do SQLite não promete
  * a ordem). Builder sem getDb (testado pelo driver D1 real). Puro.
  */
-export const gruposAssinaturaSql = sql<string | null>`(SELECT json_group_array(DISTINCT CASE WHEN a.type IN ('object', 'array') THEN CASE json_extract(a.value, '$.fonte') WHEN 'dropsigner' THEN 'dropsigner' WHEN 'adobe' THEN 'adobe' WHEN 'foxit' THEN 'foxit' WHEN 'manual' THEN 'manual' ELSE 'centi' END END) FROM json_each(CASE WHEN json_valid(${dfds.assinaturas}) THEN CASE WHEN json_type(${dfds.assinaturas}) = 'array' THEN ${dfds.assinaturas} ELSE '[]' END ELSE '[]' END) AS a WHERE a.type IN ('object', 'array'))`;
+export const gruposAssinaturaSql = sql<string | null>`(SELECT json_group_array(DISTINCT CASE WHEN a.type IN ('object', 'array') THEN CASE json_extract(a.value, '$.fonte') WHEN 'dropsigner' THEN 'dropsigner' WHEN 'adobe' THEN 'adobe' WHEN 'foxit' THEN 'foxit' WHEN 'manual' THEN 'manual' WHEN 'administrativa' THEN 'adm' ELSE 'centi' END END) FROM json_each(CASE WHEN json_valid(${dfds.assinaturas}) THEN CASE WHEN json_type(${dfds.assinaturas}) = 'array' THEN ${dfds.assinaturas} ELSE '[]' END ELSE '[]' END) AS a WHERE a.type IN ('object', 'array'))`;
 
 /**
  * O PCA (ano) de um DFD na Mesa: o do PROTOCOLO de origem — "no protocolo, todos seguem o do protocolo" — e, sem

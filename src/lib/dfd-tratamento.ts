@@ -809,7 +809,8 @@ export type EntradaMensagensDfd = EntradaAvaliacaoDfd & {
   anoPca?: number | null;
   /** Resultado já conferido da assinatura (o chamador roda `validarAssinatura`). */
   assinatura?: {
-    status: "ok" | "dropsigner" | "ocr" | "erro" | "sem-assinatura";
+    status: "ok" | "dropsigner" | "ocr" | "adm" | "erro" | "sem-assinatura";
+    /** Em `erro`: o motivo da conferência; em `adm`: o motivo da validação administrativa. */
     motivo?: string | null;
     /** Só em `ok`: "auto" (o sistema conferiu) ou "equipe" (validada à mão) + o responsável. */
     origem?: "auto" | "equipe";
@@ -968,6 +969,14 @@ export function mensagensDfd(
         chave: "dfd.assinatura",
         status: "acerto",
         texto: d.assinatura.origem === "equipe" ? `Assinatura validada pela equipe${resp}.` : `Assinatura validada automaticamente (auto)${resp}.`,
+        ancora: "assinatura",
+      });
+    // VALIDAÇÃO ADMINISTRATIVA: o ADM validou o documento — acerto (não é pendência), com quem e o motivo.
+    else if (d.assinatura.status === "adm")
+      out.push({
+        chave: "dfd.assinatura",
+        status: "acerto",
+        texto: `Documento validado administrativamente${d.assinatura.responsavel ? ` por ${d.assinatura.responsavel}` : ""}${d.assinatura.motivo ? ` — ${d.assinatura.motivo}` : ""}.`,
         ancora: "assinatura",
       });
     // Reconhecida (carimbo Dropsigner sem nome / lida por OCR) mas NÃO conferida com o responsável:
@@ -1137,7 +1146,7 @@ export function mensagensItem(
 }
 
 // ---- Tipo da assinatura (coluna "Assinatura") ----
-export type GrupoAssinatura = "centi" | "dropsigner" | "adobe" | "foxit" | "manual";
+export type GrupoAssinatura = "centi" | "dropsigner" | "adobe" | "foxit" | "manual" | "adm";
 
 /** Grupo do tipo de assinatura pela `fonte`. Certificado/sistema = **Centi** (sistema oficial da
  * Prefeitura); dropsigner = **Dropsigner**; adobe = **Adobe**; foxit = **Foxit** (ICP-Brasil lida por
@@ -1147,6 +1156,7 @@ export function grupoAssinatura(fonte: string): GrupoAssinatura {
   if (fonte === "adobe") return "adobe";
   if (fonte === "foxit") return "foxit";
   if (fonte === "manual") return "manual"; // atestada pela equipe (a leitura não achou a assinatura)
+  if (fonte === "administrativa") return "adm"; // validação administrativa do documento (o ADM)
   return "centi";
 }
 
@@ -1156,10 +1166,11 @@ export const ASSINATURA_ROTULO: Record<GrupoAssinatura, string> = {
   adobe: "Adobe",
   foxit: "Foxit",
   manual: "Equipe",
+  adm: "ADM",
 };
 
 /** A ordem fixa dos grupos nas listas (coluna "Assinatura"). */
-const ORDEM_GRUPOS_ASSINATURA: readonly GrupoAssinatura[] = ["centi", "dropsigner", "adobe", "foxit", "manual"];
+const ORDEM_GRUPOS_ASSINATURA: readonly GrupoAssinatura[] = ["centi", "dropsigner", "adobe", "foxit", "manual", "adm"];
 
 /** Grupos DISTINTOS de assinatura presentes (ordem fixa centi→dropsigner→adobe). Vazio ⇒ sem
  * assinatura reconhecida. */

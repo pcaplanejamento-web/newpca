@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.288.1",
+    versao: "1.289.3",
     data: "2026-11-10",
     titulo: "Centro de Custo dos Fundos na automação",
     mudancas: [
@@ -58,6 +58,60 @@ export const VERSOES: readonly Versao[] = [
         texto:
           "A automação salva antes da coluna do sistema não para mais com “Centro de Custo é uma coluna do sistema”: o componente antigo grava o Centro de Custo do DFD pelo caminho novo e avisa para usar “Atualizar pelo modelo”.",
         link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.289.2",
+    data: "2026-11-10",
+    titulo: "Validação administrativa: texto do motivo no celular",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "O campo do motivo da validação administrativa não corta mais o texto de exemplo no celular.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
+    versao: "1.289.1",
+    data: "2026-11-10",
+    titulo: "Validação administrativa: data e acabamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto:
+          "O cartão da validação administrativa mostra a data de Brasília — validar à noite não aparece mais com o dia seguinte.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto:
+          "A validação administrativa tem a mesma cor (violeta) no bloco de validação, no cartão e na lista, e o campo do motivo diz quantos caracteres faltam.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
+    versao: "1.289.0",
+    data: "2026-11-10",
+    titulo: "Validação administrativa da assinatura do DFD",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Mesa",
+        texto:
+          "O Administrador pode validar o documento por ato administrativo, com o motivo, quando nenhuma assinatura confere com o responsável da unidade — fica registrado com o nome, a data e o selo ADM.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "Trocar ou desfazer só a validação da assinatura passa a ser conferido ao salvar o DFD.",
+        link: "/painel/mesa?vista=dfds",
       },
     ],
   },

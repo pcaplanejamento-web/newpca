@@ -57,6 +57,7 @@ const CASOS: (string | null)[] = [
   '[{"nome":"FULANO","fonte":"dropsigner","validacao":{"por":"equipe","responsavel":"X"},"ocr":true}]',
   '[{"fonte":"foxit","ocr":true},{"fonte":"certificado"},{"fonte":"desconhecida"}]',
   "  [ {\"fonte\" : \"adobe\"} ]  ",
+  '[{"fonte":"certificado"},{"fonte":"administrativa","validacao":{"por":"adm","motivo":"Documento conferido"}}]',
 ];
 
 describe("grupos de assinatura no banco (lista da Mesa)", () => {
@@ -83,7 +84,7 @@ describe("grupos de assinatura no banco (lista da Mesa)", () => {
   it("os casos cobrem todos os grupos (o teste não passa vazio)", async () => {
     const r = await orm.select({ g: gruposAssinaturaSql }).from(dfds);
     const todos = new Set(r.flatMap((l) => gruposDoTexto(l.g)));
-    assert.deepEqual([...todos].sort(), ["adobe", "centi", "dropsigner", "foxit", "manual"]);
+    assert.deepEqual([...todos].sort(), ["adm", "adobe", "centi", "dropsigner", "foxit", "manual"]);
   });
 
   it("gruposDoTexto: tolerante e na ordem fixa", () => {

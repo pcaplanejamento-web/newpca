@@ -2956,6 +2956,8 @@ const PROTO_LINHAS_DEMO = [
     resumo: resumoEstado([{ status: "atencao", chave: "dfd.assinaturaValidar", texto: "Assinatura Dropsigner reconhecida só pelo código — confira e valide." }]),
     assinaturas: ["dropsigner" as const],
   },
+  // Validação ADMINISTRATIVA: o ADM validou o documento (sem assinatura que confira) — selo "ADM".
+  { key: 3, numero: "1733", planejamento: "1810", sigla: "SMIR", tipo: "DFD-S", itens: 3, valor: 51200, estado: "regular" as const, assinaturas: ["adm" as const], validacao: "adm" as const },
 ];
 
 // RASTRO: DFDs deste processo SOBRESCRITOS por outro protocolo (cinza, com o protocolo ATUAL de cada um).

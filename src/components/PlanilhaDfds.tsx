@@ -4,6 +4,7 @@ import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
 import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
+import type { OrigemValidacao } from "@/lib/conferencia-dfd";
 import {
   ASSINATURA_ROTULO,
   type EstadoDfd,
@@ -24,7 +25,11 @@ import { IconArrowRight } from "./icons";
 import { PresencaNoItem } from "./PresencaNoItem";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
-const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue" };
+/** Quem validou a assinatura — o selo ao lado dos formatos (auto · equipe · ADM). */
+const ROTULO_VALIDACAO: Record<OrigemValidacao, string> = { auto: "auto", equipe: "equipe", adm: "ADM" };
+const COR_VALIDACAO: Record<OrigemValidacao, string> = { auto: "var(--ok)", equipe: "var(--info)", adm: "var(--accent)" };
+
+const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue", adm: "violet" };
 
 /** O que o sistema está fazendo com a linha AGORA (feedback real, com spinner na célula "Estado"). */
 export type ProcessandoDfd = "texto" | "ocr" | "fila" | "conferindo";
@@ -58,7 +63,7 @@ export type LinhaDfd = {
   /** Tipos de assinatura presentes no DFD (Centi/Dropsigner/Adobe) — coluna "Assinatura". */
   assinaturas?: GrupoAssinatura[];
   /** Quem validou a assinatura: "auto" (o sistema conferiu) / "equipe" (validada à mão). */
-  validacao?: "auto" | "equipe" | null;
+  validacao?: OrigemValidacao | null;
   /** Em processamento (lendo o DFD / a assinatura por OCR / na fila / conferindo) — spinner na célula. */
   processando?: ProcessandoDfd | null;
   situacao?: string | null; // Novo/Substitui/Move (só na importação)
@@ -368,7 +373,7 @@ export function propsPlanilhaDfds({
       header: "Assinatura",
       nowrap: true,
       value: (r) =>
-        `${(r.assinaturas ?? []).map((g) => ASSINATURA_ROTULO[g]).join(" ") || "—"}${r.validacao ? ` (${r.validacao})` : ""}`,
+        `${(r.assinaturas ?? []).map((g) => ASSINATURA_ROTULO[g]).join(" ") || "—"}${r.validacao ? ` (${ROTULO_VALIDACAO[r.validacao]})` : ""}`,
       render: (r) => {
         const gs = r.assinaturas ?? [];
         if (gs.length === 0) return <span className="text-faint">—</span>;
@@ -380,8 +385,8 @@ export function propsPlanilhaDfds({
               </Badge>
             ))}
             {r.validacao && (
-              <span className="text-[11px] font-semibold" style={{ color: r.validacao === "auto" ? "var(--ok)" : "var(--info)" }}>
-                ({r.validacao})
+              <span className="text-[11px] font-semibold" style={{ color: COR_VALIDACAO[r.validacao] }}>
+                ({ROTULO_VALIDACAO[r.validacao]})
               </span>
             )}
           </span>
