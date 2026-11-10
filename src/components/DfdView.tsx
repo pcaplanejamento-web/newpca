@@ -607,6 +607,31 @@ export function DfdView({
 
           <div className="space-y-3">
             {dfd.assinaturas.lista.map((a, i) => {
+              // VALIDAÇÃO ADMINISTRATIVA: o ato do ADM sobre o DOCUMENTO (não é uma assinatura lida) — quem, quando e por quê.
+              if (a.fonte === "administrativa")
+                return (
+                  <div
+                    key={`adm-${i}`}
+                    className="rounded-card border p-[var(--pad-card)]"
+                    style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 7%, var(--surface))" }}
+                  >
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
+                      <span className="text-accent">Validação administrativa do documento</span>
+                      <Badge tone="violet" solid>
+                        ADM
+                      </Badge>
+                    </div>
+                    <dl className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
+                      <Campo label="Validado por" valor={a.nome || "—"} />
+                      <Campo label="Data da validação" valor={a.validacao?.em ? dataBR(a.validacao.em) : a.data || "—"} />
+                      <Campo label="Motivo" valor={a.validacao?.por === "adm" ? a.validacao.motivo : "—"} span />
+                    </dl>
+                    <p className="mt-3 text-xs text-muted">
+                      O Administrador validou o documento por ato administrativo — vale mesmo sem uma assinatura que confira
+                      com o responsável da unidade.
+                    </p>
+                  </div>
+                );
               // Certificado/sistema → VERDE (--ok); Dropsigner → AZUL (--info); Adobe → VERMELHO;
               // Foxit (ICP-Brasil lido por OCR) → ÂMBAR (--warn: reconhecida, mas conferir no original).
               const drop = a.fonte === "dropsigner";

@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.0",
+    data: "2026-11-10",
+    titulo: "Validação administrativa da assinatura do DFD",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Mesa",
+        texto:
+          "O Administrador pode validar o documento por ato administrativo, com o motivo, quando nenhuma assinatura confere com o responsável da unidade — fica registrado com o nome, a data e o selo ADM.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "Trocar ou desfazer só a validação da assinatura passa a ser conferido ao salvar o DFD.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.283.7",
     data: "2026-11-09",
     titulo: "Aba aberta por link carrega com o desenho certo",

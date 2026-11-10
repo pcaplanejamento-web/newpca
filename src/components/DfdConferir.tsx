@@ -16,21 +16,26 @@ import {
 } from "@/lib/dfd-tratamento";
 import { dataIsoBrasilia } from "@/lib/format";
 import { MESES, normPrevisao, normPrioridade, type Prioridade } from "@/lib/normalize";
-import { type DfdParseado, juntarRefs, listaRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type DfdParseado, juntarRefs, listaRefs, MOTIVO_ADM, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { type ConfigSubunidades, subunidadeDoDfd, textoFaltaSubunidade } from "@/lib/subunidades-core";
 import {
+  administrativaDe,
   dataAssinaturaDeIso,
   dataAssinaturaISO,
   definirDataAssinaturaEquipe,
+  desfazerValidacaoAdm,
   desfazerValidacaoEquipe,
   type Responsaveis,
   solicitanteDeResultado,
+  validarAssinaturaAdm,
   validarAssinaturaPelaEquipe,
 } from "@/lib/reparticao-responsaveis";
 import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
+import { useAdminTabelas } from "./ConfigTabelas";
+import { useConfirmacao } from "./Confirmacao";
 import { DfdView, type DfdVisual } from "./DfdView";
 import { CampoLista, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
@@ -239,6 +244,22 @@ export function DfdConferir({
   const dataBr = dataSel ? dataAssinaturaDeIso(dataSel, hojeIso) : null;
   const dataInvalida = !!dataSel && !dataBr;
   const validadaEquipe = dfd.assinaturas.find((a) => a.validacao?.por === "equipe");
+  // VALIDAÇÃO ADMINISTRATIVA (só o ADM — o servidor confere): valida o DOCUMENTO mesmo sem assinatura que confira.
+  const souAdm = useAdminTabelas();
+  const admEntrada = administrativaDe(dfd.assinaturas);
+  const [motivoAdm, setMotivoAdm] = useState("");
+  const { confirmar, confirmacao } = useConfirmacao();
+  const motivoOk = motivoAdm.trim().length >= MOTIVO_ADM.min;
+  const validarAdm = async () => {
+    const ok = await confirmar({
+      titulo: "Validar o documento administrativamente?",
+      texto: "A assinatura passa a valer mesmo sem conferir com o responsável da unidade. Fica registrado com o seu nome, a data e o motivo.",
+      confirmar: "Validar (ADM)",
+    });
+    if (!ok) return;
+    onAssinaturasChange?.(validarAssinaturaAdm(dfd.assinaturas, motivoAdm));
+    setMotivoAdm("");
+  };
   const tipoSel = tipoCurtoDfd(dfd.tipo) ?? "";
 
   // Cadeado POR CAMPO do cabeçalho (conteúdo editável); os identificadores nunca mudam.
@@ -498,7 +519,24 @@ export function DfdConferir({
           <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-text">
             <IconShield className="h-4 w-4 text-accent" /> Validação da assinatura
           </h3>
-          {resAss.status === "ok" ? (
+          {resAss.status === "adm" ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="inline-flex items-start gap-1.5 text-[13px] text-accent">
+                <IconCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Validado administrativamente (ADM){resAss.assinatura.nome ? ` — ${resAss.assinatura.nome}` : " — ao salvar"}
+                  {resAss.assinatura.validacao?.por === "adm" && (
+                    <span className="block text-text-2">Motivo: {resAss.assinatura.validacao.motivo}</span>
+                  )}
+                </span>
+              </span>
+              {souAdm && podeValidar && (
+                <Button variant="ghost" onClick={() => onAssinaturasChange?.(desfazerValidacaoAdm(dfd.assinaturas))}>
+                  Desfazer validação administrativa
+                </Button>
+              )}
+            </div>
+          ) : resAss.status === "ok" ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: resAss.origem === "auto" ? "var(--ok)" : "var(--info)" }}>
                 <IconCheck className="h-4 w-4" />
@@ -587,8 +625,37 @@ export function DfdConferir({
                     )}
                   </>
                 ))}
+              {/* ADM: valida o DOCUMENTO por ato administrativo quando nenhuma assinatura confere (motivo obrigatório). */}
+              {souAdm && podeValidar && (
+                <div className="flex flex-wrap items-end gap-2 border-t border-border pt-2">
+                  <div className="min-w-0 flex-[1_1_260px]">
+                    <TextField
+                      label="Validação administrativa (ADM)"
+                      value={motivoAdm}
+                      maxLength={MOTIVO_ADM.max}
+                      placeholder="Motivo — ex.: documento conferido no processo físico"
+                      onChange={(e) => setMotivoAdm(e.target.value)}
+                    />
+                  </div>
+                  <Button disabled={!motivoOk} title={motivoOk ? undefined : `Informe o motivo (mínimo ${MOTIVO_ADM.min} caracteres).`} onClick={validarAdm}>
+                    Validar administrativamente
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+          {/* A assinatura já confere, mas há uma validação administrativa gravada: o ADM pode desfazê-la. */}
+          {resAss.status === "ok" && admEntrada && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-[12.5px] text-text-2">
+              <span>Há também uma validação administrativa (ADM) registrada.</span>
+              {souAdm && podeValidar && (
+                <Button variant="ghost" onClick={() => onAssinaturasChange?.(desfazerValidacaoAdm(dfd.assinaturas))}>
+                  Desfazer validação administrativa
+                </Button>
+              )}
+            </div>
+          )}
+          {confirmacao}
         </section>
       )}
 

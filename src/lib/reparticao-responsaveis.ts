@@ -9,6 +9,7 @@
  */
 
 import type { Comportamento } from "./avaliacao-core.ts";
+import { dataIsoBrasilia } from "./format.ts";
 import { type Assinatura, norm } from "./parse-dfd-comum.ts";
 
 export type TipoAto = "portaria" | "decreto" | "lei";
@@ -136,6 +137,8 @@ export type ResultadoAssinatura =
   | { status: "dropsigner"; assinatura: Assinatura }
   // Formato E — Foxit/ICP-Brasil lida por OCR, reconhecida SEM match (não bloqueia; ver abaixo).
   | { status: "ocr"; assinatura: Assinatura }
+  // VALIDAÇÃO ADMINISTRATIVA: o Administrador validou o DOCUMENTO (com o motivo) — vale sem assinatura conferida.
+  | { status: "adm"; assinatura: Assinatura }
   | { status: "sem-assinatura" }
   | { status: "erro"; motivo: string };
 
@@ -153,6 +156,8 @@ export type ResultadoAssinatura =
  *   OCR é imperfeito, então uma assinatura lida por OCR (`ocr:true`, ou `foxit`) que não casou um
  *   responsável **não bloqueia** → `ocr` (reconhecida; confira no PDF original). Exceto se houver uma
  *   assinatura de leitura LIMPA (texto) com nome que também falhou — essa bloqueia como sempre.
+ * - **validação ADMINISTRATIVA** (`administrativaDe`): sem auto nem equipe, o ato do ADM vale → `adm` (nunca
+ *   bloqueia — também sem responsável cadastrado, fora do período ou com o PDF sem outra assinatura).
  */
 export function validarAssinatura(
   assinaturas: Assinatura[],
@@ -172,7 +177,7 @@ export function validarAssinatura(
   if (temResponsavel) {
     // Conferência AUTOMÁTICA (o sistema casa o assinante LIDO). A assinatura ADICIONADA pela equipe
     // (`manual`) leva o nome do responsável atestado — não é leitura: vale só como validação da equipe.
-    const lidas = assinaturas.filter((a) => a.fonte !== "manual");
+    const lidas = assinaturas.filter((a) => a.fonte !== "manual" && a.fonte !== "administrativa");
     for (const a of lidas) {
       const iso = dataAssinaturaISO(a.data);
       const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome) && padraoCobre(p, iso));
@@ -198,6 +203,9 @@ export function validarAssinatura(
       if (temp) return { status: "ok", origem: "equipe", tipo: "temporario", assinatura: a, responsavel: temp };
     }
   }
+  // Validação ADMINISTRATIVA (o ato do ADM, com o motivo): vale quando nada acima conferiu.
+  const adm = administrativaDe(assinaturas);
+  if (adm) return { status: "adm", assinatura: adm };
   // Exceção estreita: Dropsigner "só carimbo" (sem bloco visível, nome vazio) → reconhecida.
   const carimbo = assinaturas.find((a) => a.fonte === "dropsigner" && !a.nome.trim());
   if (carimbo) return { status: "dropsigner", assinatura: carimbo };
@@ -250,6 +258,12 @@ export function dataAssinaturaDeIso(iso: string, hojeIso: string): string | null
   return dataAssinaturaValida(br, hojeIso) ? br : null;
 }
 
+/** Instante ISO → "dd/mm/aaaa" (dia de Brasília) — a data da validação administrativa. Puro. */
+function dataBrDoIso(iso: string): string {
+  const d = dataIsoBrasilia(iso);
+  return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "";
+}
+
 /** Aplica a DATA informada pela equipe numa assinatura: mantém a lida quando é o MESMO dia (não perde a
  * hora/fuso do certificado); senão grava a nova "dd/mm/aaaa". Puro. */
 const comData = (a: Assinatura, data: string | undefined): Assinatura => (data && !a.data.trim().startsWith(data) ? { ...a, data } : a);
@@ -264,9 +278,11 @@ export function validarAssinaturaPelaEquipe(assinaturas: Assinatura[], responsav
   const limpas = desfazerValidacaoEquipe(assinaturas);
   const validacao = { por: "equipe" as const, responsavel: responsavel.trim() };
   const d = data?.trim() || undefined;
-  if (limpas.length === 0)
-    return [{ nome: responsavel.trim(), eCpf: "", usuario: "", local: "", data: d ?? "", ip: "", codigo: "", url: "", fonte: "manual", validacao }];
-  const i = Math.max(0, limpas.findIndex((a) => a.nome.trim()));
+  // A entrada administrativa não é uma assinatura lida: nunca recebe a validação da equipe.
+  const lidas = limpas.map((a, j) => ({ a, j })).filter(({ a }) => a.fonte !== "administrativa");
+  if (lidas.length === 0)
+    return [...limpas, { nome: responsavel.trim(), eCpf: "", usuario: "", local: "", data: d ?? "", ip: "", codigo: "", url: "", fonte: "manual", validacao }];
+  const i = (lidas.find(({ a }) => a.nome.trim()) ?? lidas[0]).j;
   return limpas.map((a, j) => (j === i ? { ...comData(a, d), validacao } : a));
 }
 
@@ -278,15 +294,65 @@ export function definirDataAssinaturaEquipe(assinaturas: Assinatura[], data: str
   return assinaturas.map((a) => (a.validacao?.por === "equipe" ? comData(a, d) : a));
 }
 
-/** Desfaz a validação pela equipe (remove a marca e a assinatura `manual` criada por ela). Puro. */
+/** Desfaz a validação pela equipe (remove a marca e a assinatura `manual` criada por ela). A validação
+ * ADMINISTRATIVA fica (é outro ato — `desfazerValidacaoAdm`). Puro. */
 export function desfazerValidacaoEquipe(assinaturas: Assinatura[]): Assinatura[] {
   return assinaturas
     .filter((a) => a.fonte !== "manual")
     .map((a) => {
-      if (!a.validacao) return a;
+      if (a.validacao?.por !== "equipe") return a;
       const { validacao: _v, ...resto } = a;
       return resto;
     });
+}
+
+// ---- VALIDAÇÃO ADMINISTRATIVA (só o Administrador — conferido no servidor) ----
+
+/** A recusa a quem não é ADM (as rotas de gravação do DFD). */
+export const MSG_SO_ADM_VALIDA = "Só o Administrador valida o documento administrativamente.";
+
+/** O que importa da validação para comparar duas listas (por + responsável/motivo). Puro. */
+export function chaveValidacao(v: Assinatura["validacao"]): string {
+  if (!v) return "";
+  return v.por === "adm" ? `adm:${v.motivo.trim()}` : `equipe:${v.responsavel.trim()}`;
+}
+
+/** A entrada da validação administrativa VÁLIDA (fonte "administrativa" + `por:"adm"` com motivo), ou null. Puro. */
+export function administrativaDe(assinaturas: readonly Assinatura[]): Assinatura | null {
+  return assinaturas.find((a) => a.fonte === "administrativa" && a.validacao?.por === "adm" && !!a.validacao.motivo.trim()) ?? null;
+}
+
+/** Valida o DOCUMENTO administrativamente (substitui a anterior — uma só vale). Nome e data são do servidor
+ * (`carimbarValidacao`); na tela vão vazios até gravar. Puro. */
+export function validarAssinaturaAdm(assinaturas: Assinatura[], motivo: string): Assinatura[] {
+  const validacao = { por: "adm" as const, motivo: motivo.trim() };
+  return [
+    ...desfazerValidacaoAdm(assinaturas),
+    { nome: "", eCpf: "", usuario: "", local: "", data: "", ip: "", codigo: "", url: "", fonte: "administrativa", validacao },
+  ];
+}
+
+/** Desfaz a validação administrativa (tira a entrada). Puro. */
+export function desfazerValidacaoAdm(assinaturas: Assinatura[]): Assinatura[] {
+  return assinaturas.filter((a) => a.fonte !== "administrativa");
+}
+
+/** A chave do que IMPORTA na validação administrativa (o motivo; vazio = nenhuma). */
+const chaveAdm = (l: readonly Assinatura[]) => {
+  const a = administrativaDe(l);
+  return a?.validacao?.por === "adm" ? a.validacao.motivo.trim() : "";
+};
+
+/** A validação administrativa MUDOU entre o gravado e o pedido (criada, trocada ou desfeita)? Só o ADM pode. Puro. */
+export function mudouValidacaoAdm(novas: readonly Assinatura[], gravadas: readonly Assinatura[]): boolean {
+  return chaveAdm(novas) !== chaveAdm(gravadas);
+}
+
+/** Quem NÃO é ADM nunca tira a validação administrativa gravada (sobrescrita/reenvio de um terceiro): ela
+ * volta para a lista que vai ao banco. Puro. */
+export function manterValidacaoAdm(novas: Assinatura[], gravadas: readonly Assinatura[]): Assinatura[] {
+  const gravada = administrativaDe(gravadas);
+  return gravada && !administrativaDe(novas) ? [...desfazerValidacaoAdm(novas), gravada] : novas;
 }
 
 /**
@@ -294,8 +360,17 @@ export function desfazerValidacaoEquipe(assinaturas: Assinatura[]): Assinatura[]
  * carimbo de uma validação JÁ gravada idêntica (mesmo responsável); a nova recebe `usuario`/`em`. Puro.
  */
 export function carimbarValidacao(novas: Assinatura[], gravadas: Assinatura[], usuario: string, em: string): Assinatura[] {
-  const anterior = gravadas.find((a) => a.validacao?.por === "equipe")?.validacao;
+  const v = gravadas.find((a) => a.validacao?.por === "equipe")?.validacao;
+  const anterior = v?.por === "equipe" ? v : undefined;
+  const admGravada = administrativaDe(gravadas);
   return novas.map((a) => {
+    // ADMINISTRATIVA: a MESMA (mesmo motivo) mantém o carimbo gravado; a nova recebe quem/quando — e o nome e a
+    // data da entrada são os do ato (nunca os do cliente).
+    if (a.fonte === "administrativa" && a.validacao?.por === "adm") {
+      const motivo = a.validacao.motivo.trim();
+      if (admGravada?.validacao?.por === "adm" && admGravada.validacao.motivo.trim() === motivo) return admGravada;
+      return { ...a, nome: usuario, data: dataBrDoIso(em), validacao: { por: "adm", motivo, usuario, em } };
+    }
     if (a.validacao?.por !== "equipe") return a;
     const mesma = anterior && mesmoNome(anterior.responsavel, a.validacao.responsavel);
     return {

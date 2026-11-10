@@ -1,6 +1,7 @@
 import { SECOES_OBRIGATORIAS, setTextoSecao, situacaoSecao, textoSecao } from "./dfd-tratamento.ts";
 import { brl, num } from "./format.ts";
 import { type Assinatura, type DfdSecao, listaRefs, norm, refDfd, SECOES_PADRAO, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
+import { administrativaDe } from "./reparticao-responsaveis.ts";
 
 /**
  * REENVIO de um protocolo (sobrescrever com o MESMO PDF, corrigido) — núcleo PURO/testável da
@@ -109,7 +110,7 @@ export type AssinaturaComparavel = {
   data?: string | null;
   fonte?: string;
   codigo?: string;
-  validacao?: { por?: string; responsavel?: string } | null;
+  validacao?: { por?: string; responsavel?: string; motivo?: string } | null;
 };
 
 export type DiffItemDfd = {
@@ -232,6 +233,7 @@ const ROTULO_FONTE: Record<string, string> = {
   adobe: "Adobe",
   foxit: "Foxit",
   manual: "equipe",
+  administrativa: "validação administrativa",
 };
 /** Lista legível dos assinantes (ordenada — a ordem de leitura não é diferença): assinante (data), formato,
  * código verificador e a validação pela EQUIPE — validar/desfazer ou um carimbo re-assinado É diferença. */
@@ -242,6 +244,7 @@ export const assinantes = (l: AssinaturaComparavel[]) =>
       if (a.fonte) s += ` · ${ROTULO_FONTE[a.fonte] ?? a.fonte}`;
       if (txt(a.codigo)) s += ` · cód. ${txt(a.codigo)}`;
       if (a.validacao?.por === "equipe") s += ` · validada pela equipe${a.validacao.responsavel ? ` (${txt(a.validacao.responsavel)})` : ""}`;
+      if (a.validacao?.por === "adm" && txt(a.validacao.motivo)) s += ` · motivo: ${txt(a.validacao.motivo)}`;
       return s;
     })
     .sort((x, y) => x.localeCompare(y, "pt-BR"))
@@ -484,9 +487,14 @@ function herdarValidacaoAssinaturas<T extends DfdTratavel>(novo: T, gravado: Dfd
     assinaturas = [...assinaturas, manual];
     mudouAss = true;
   }
-  if (mudouAss) {
-    dfd = { ...dfd, assinaturas };
-    herdados.push("Validação da assinatura (equipe)");
+  if (mudouAss) herdados.push("Validação da assinatura (equipe)");
+  // A VALIDAÇÃO ADMINISTRATIVA do gravado é um ato sobre o DOCUMENTO: o arquivo novo nunca a traz — ela fica.
+  const adm = administrativaDe(gravado.assinaturas);
+  if (adm && !administrativaDe(assinaturas)) {
+    assinaturas = [...assinaturas, adm];
+    mudouAss = true;
+    herdados.push("Validação administrativa (ADM)");
   }
+  if (mudouAss) dfd = { ...dfd, assinaturas };
   return { dfd, herdados };
 }

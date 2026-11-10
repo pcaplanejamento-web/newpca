@@ -16,7 +16,16 @@ import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { gravacaoParcial } from "@/lib/pca-core";
 import { categoriaDoProtocolo, getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
-import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import {
+  bloqueiaAssinatura,
+  carimbarValidacao,
+  chaveValidacao,
+  MSG_SO_ADM_VALIDA,
+  manterValidacaoAdm,
+  mudouValidacaoAdm,
+  pdfExigeAssinatura,
+  validarAssinatura,
+} from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
 import { lerConfigSubunidades } from "@/lib/subunidades";
 import { subunidadeEscolhivel } from "@/lib/subunidades-core";
@@ -231,18 +240,20 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     // Assinaturas (validação pela EQUIPE / desfazer): quem/quando vêm da SESSÃO — uma validação já
     // gravada idêntica mantém o carimbo original.
     const gravadas = await getDfdAssinaturas(id);
-    const assinaturas =
-      p.data.assinaturas !== undefined
-        ? carimbarValidacao(p.data.assinaturas, gravadas?.assinaturas ?? [], a.u.nome, new Date().toISOString())
-        : undefined;
+    // VALIDAÇÃO ADMINISTRATIVA: só o ADM cria, troca ou desfaz; a gravada nunca some pela gravação de outra pessoa.
+    const gravadasAss = gravadas?.assinaturas ?? [];
+    const pedidas =
+      p.data.assinaturas === undefined ? undefined : a.u.admin ? p.data.assinaturas : manterValidacaoAdm(p.data.assinaturas, gravadasAss);
+    if (pedidas && !a.u.admin && mudouValidacaoAdm(pedidas, gravadasAss)) return erro(MSG_SO_ADM_VALIDA, 403);
+    const assinaturas = pedidas !== undefined ? carimbarValidacao(pedidas, gravadasAss, a.u.nome, new Date().toISOString()) : undefined;
     // Reconfere a assinatura contra o responsável da unidade SÓ quando a unidade OU as assinaturas
     // MUDAM de fato (regra 6: não salvar com assinatura não permitida). Salvar outra correção (seções,
     // cabeçalho…) de um DFD cuja assinatura já não confere não fica travado por isso.
     const repAlvo = p.data.reparticaoId !== undefined ? p.data.reparticaoId : dfd.reparticaoId;
     const mudouUnidade = p.data.reparticaoId !== undefined && p.data.reparticaoId !== dfd.reparticaoId;
     // Comparação CANÔNICA (só o que muda a conferência) — ordem de chaves/campos default não conta.
-    const chaveAss = (l: { nome: string; eCpf: string; data: string; codigo: string; fonte: string; ocr?: boolean; validacao?: { responsavel: string } }[]) =>
-      JSON.stringify(l.map((x) => [x.nome, x.eCpf, x.data, x.codigo, x.fonte, !!x.ocr, x.validacao?.responsavel ?? ""]));
+    const chaveAss = (l: Assinatura[]) =>
+      JSON.stringify(l.map((x) => [x.nome, x.eCpf, x.data, x.codigo, x.fonte, !!x.ocr, chaveValidacao(x.validacao)]));
     const mudouAssinaturas = assinaturas !== undefined && chaveAss(assinaturas) !== chaveAss(gravadas?.assinaturas ?? []);
     if (repAlvo != null && (mudouUnidade || mudouAssinaturas)) {
       const ass = gravadas;

@@ -305,7 +305,8 @@ export function assinaturasDeOcr(e: { blocos: string[]; pagina: string; marcaDag
 /** O DFD precisa de OCR quando não há NENHUMA assinatura NOMEADA vinda do texto (vazio ou só o "carimbo"
  * Dropsigner — marca d'água em texto com o bloco do signatário achatado). Puro. */
 export function precisaOcr(assinaturas: Assinatura[]): boolean {
-  return !assinaturas.some((a) => a.nome.trim());
+  // A validação ADMINISTRATIVA não é uma assinatura lida — não dispensa a leitura do PDF.
+  return !assinaturas.some((a) => a.fonte !== "administrativa" && a.nome.trim());
 }
 
 /**
@@ -315,10 +316,12 @@ export function precisaOcr(assinaturas: Assinatura[]): boolean {
  */
 export function mesclarAssinaturasOcr(texto: Assinatura[], ocr: Assinatura[]): Assinatura[] {
   const nomeadas = ocr.filter((a) => a.nome.trim());
-  if (nomeadas.length === 0) return texto.length ? texto : ocr;
+  // A validação ADMINISTRATIVA (ato do ADM, sem nome até gravar) nunca se perde na mescla.
+  const adm = texto.filter((a) => a.fonte === "administrativa");
+  if (nomeadas.length === 0) return texto.some((a) => a.fonte !== "administrativa") ? texto : [...ocr, ...adm];
   const carimbo = texto.find((a) => a.fonte === "dropsigner" && !a.nome.trim() && a.codigo);
   const herdadas = nomeadas.map((a) => (a.fonte === "dropsigner" && carimbo ? { ...a, codigo: carimbo.codigo, url: carimbo.url } : a));
-  return [...texto.filter((a) => a.nome.trim()), ...herdadas];
+  return [...texto.filter((a) => a.fonte !== "administrativa" && a.nome.trim()), ...herdadas, ...adm];
 }
 
 // ------------------------------------------------------------------ localização (geometria, puro)

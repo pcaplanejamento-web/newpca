@@ -138,9 +138,9 @@ function mensagensComAssinatura(
       anoPca: anoPca !== undefined ? anoPca : d.anoPca,
       assinatura: {
         status: res.status,
-        motivo: res.status === "erro" ? res.motivo : null,
+        motivo: res.status === "erro" ? res.motivo : res.status === "adm" ? motivoAdm(res.assinatura) : null,
         origem: res.status === "ok" ? res.origem : undefined,
-        responsavel: res.status === "ok" ? res.responsavel.nome : null,
+        responsavel: res.status === "ok" ? res.responsavel.nome : res.status === "adm" ? res.assinatura.nome || null : null,
       },
     },
     regras,
@@ -168,12 +168,20 @@ export function mensagensDoDfd(
   return mensagensComAssinatura(d, rep, conferirAssinaturaDfd(d, rep), anoPca, regras, categoria, orgaos, conformidade);
 }
 
+/** Quem validou a assinatura: o sistema ("auto"), a equipe ou o Administrador (validação administrativa). */
+export type OrigemValidacao = "auto" | "equipe" | "adm";
+
+/** O motivo da validação administrativa (vazio se não houver). Puro. */
+export function motivoAdm(a: Assinatura): string {
+  return a.validacao?.por === "adm" ? a.validacao.motivo : "";
+}
+
 /** Resultado da conferência de UMA LINHA de DFD (tabelas): estado + resumo da célula + quem validou a
  * assinatura + as mensagens de erro/atenção (relatório). */
 export type LinhaAvaliada = {
   estado: EstadoDfd;
   resumo?: ResumoEstado;
-  validacao: "auto" | "equipe" | null;
+  validacao: OrigemValidacao | null;
   mensagens: MensagemDfd[];
 };
 
@@ -230,7 +238,7 @@ export function avaliarLinhaDfd(
   return {
     estado: estadoDeMensagens(problemas, opts),
     resumo: problemas.length > 0 ? resumoEstado(problemas) : undefined,
-    validacao: res.status === "ok" ? res.origem : null,
+    validacao: res.status === "ok" ? res.origem : res.status === "adm" ? "adm" : null,
     mensagens: problemas,
   };
 }

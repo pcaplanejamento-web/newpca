@@ -194,32 +194,45 @@ export type Assinatura = {
   ip: string;
   codigo: string;
   url: string;
-  fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit" | "manual";
+  fonte: "certificado" | "sistema" | "dropsigner" | "adobe" | "foxit" | "manual" | "administrativa";
   /** `true` quando a assinatura foi LIDA POR OCR (carimbo achatado, sem camada de texto) — imperfeita,
    * então não bloqueia quando o nome não casa (`validarAssinatura`) e o card avisa. Ausente = texto. */
   ocr?: boolean;
   /** Validação MANUAL pela EQUIPE: o usuário conferiu o PDF e atestou que o `responsavel` (da unidade)
    * assinou. `usuario`/`em` são carimbados pelo SERVIDOR (quem validou e quando). A validação
-   * automática (o sistema casou o assinante) não é gravada — é recalculada ("auto"). */
-  validacao?: ValidacaoEquipe;
+   * automática (o sistema casou o assinante) não é gravada — é recalculada ("auto").
+   * A VALIDAÇÃO ADMINISTRATIVA (`por:"adm"`, só na entrada `fonte:"administrativa"`) é o ato do Administrador que
+   * valida o DOCUMENTO mesmo sem assinatura que confira — com o MOTIVO; nome/data/usuario/em vêm do servidor. */
+  validacao?: ValidacaoAssinatura;
 };
 
 export type ValidacaoEquipe = { por: "equipe"; responsavel: string; usuario?: string; em?: string };
+export type ValidacaoAdm = { por: "adm"; motivo: string; usuario?: string; em?: string };
+export type ValidacaoAssinatura = ValidacaoEquipe | ValidacaoAdm;
 
-/** Coage a validação crua (JSON do banco) — só `por:"equipe"` com responsável. */
-export function coerceValidacao(v: unknown): ValidacaoEquipe | undefined {
+/** Limites do MOTIVO da validação administrativa (a MESMA régua na tela e no Zod). */
+export const MOTIVO_ADM = { min: 10, max: 500 } as const;
+
+/** Coage a validação crua (JSON do banco) — `por:"equipe"` com responsável ou `por:"adm"` com motivo. */
+export function coerceValidacao(v: unknown): ValidacaoAssinatura | undefined {
   if (!v || typeof v !== "object") return undefined;
   const o = v as Record<string, unknown>;
+  const carimbo = (out: ValidacaoAssinatura) => {
+    if (typeof o.usuario === "string" && o.usuario) out.usuario = o.usuario;
+    if (typeof o.em === "string" && o.em) out.em = o.em;
+    return out;
+  };
+  if (o.por === "adm") {
+    const motivo = typeof o.motivo === "string" ? o.motivo.trim() : "";
+    return motivo ? carimbo({ por: "adm", motivo }) : undefined;
+  }
   const responsavel = typeof o.responsavel === "string" ? o.responsavel.trim() : "";
   if (o.por !== "equipe" || !responsavel) return undefined;
-  const out: ValidacaoEquipe = { por: "equipe", responsavel };
-  if (typeof o.usuario === "string" && o.usuario) out.usuario = o.usuario;
-  if (typeof o.em === "string" && o.em) out.em = o.em;
-  return out;
+  return carimbo({ por: "equipe", responsavel });
 }
 
 /** As `fonte`s de assinatura válidas (fonte única — reusada pela coerção ao LER o JSON do banco). */
-export const FONTES_ASSINATURA = ["certificado", "sistema", "dropsigner", "adobe", "foxit", "manual"] as const;
+export const FONTES_ASSINATURA = ["certificado", "sistema", "dropsigner", "adobe", "foxit", "manual", "administrativa"] as const;
 
 /** Coage um valor CRU (JSON do banco, não confiável) para uma `fonte` válida — whitelist das 5 fontes,
  * com fallback seguro em "certificado". Fonte ÚNICA da normalização (evita esquecer um caso ao ler do

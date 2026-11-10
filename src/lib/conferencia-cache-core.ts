@@ -7,7 +7,7 @@
 import type { EstadoDfd, EstadoProtocolo, ResumoEstado } from "./dfd-tratamento";
 
 /** O Estado de UM DFD da lista (a resposta de `POST /api/dfd/conferencia`). */
-export type ConfLinha = { id: number; estado: EstadoDfd; resumo: ResumoEstado | null; validacao: "auto" | "equipe" | null };
+export type ConfLinha = { id: number; estado: EstadoDfd; resumo: ResumoEstado | null; validacao: "auto" | "equipe" | "adm" | null };
 /** O Estado AGREGADO de UM protocolo (a resposta de `POST /api/protocolo/conferencia`). */
 export type ConfProto = { id: number; estado: EstadoProtocolo; resumo: ResumoEstado | null; dfdsComErro?: number; dfdsEmAtencao?: number };
 /** Os Estados guardados que a Mesa já recebe ao abrir (só os que conferem com a assinatura atual). */

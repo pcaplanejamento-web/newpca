@@ -531,6 +531,14 @@ export const LOGICAS: LogicaRef[] = [
     fonte: "validarAssinaturaPelaEquipe (reparticao-responsaveis) / DfdConferir",
   },
   {
+    id: "ass-validacao-adm",
+    dominio: "assinatura",
+    titulo: "Validação administrativa do documento (ADM)",
+    descricao:
+      "Quando nenhuma assinatura confere (PDF sem assinatura, unidade sem responsável cadastrado, assinante fora do cadastro ou do período), o Administrador pode VALIDAR O DOCUMENTO por ato administrativo, com o motivo (mínimo 10 caracteres). Vale como assinatura conferida (não bloqueia), fica registrada com o nome do ADM, a data e o motivo (selo ADM), é herdada no reenvio/sobrescrita e só o Administrador cria, troca ou desfaz — o servidor recusa (403) qualquer outra pessoa e nunca a tira na gravação de um terceiro. A conferência automática e a da equipe continuam valendo primeiro.",
+    fonte: "validarAssinaturaAdm / validarAssinatura (reparticao-responsaveis) / DfdConferir",
+  },
+  {
     id: "ass-responsaveis",
     dominio: "assinatura",
     titulo: "Responsáveis por DFDs: planilha única, padrões e temporários",

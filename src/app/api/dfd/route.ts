@@ -17,7 +17,15 @@ import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { categoriaDoProtocolo, getProtocoloReparticao } from "@/lib/protocolo";
 import { listaCurta } from "@/lib/sobrescrita-dfd";
 import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
-import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
+import {
+  bloqueiaAssinatura,
+  carimbarValidacao,
+  MSG_SO_ADM_VALIDA,
+  manterValidacaoAdm,
+  mudouValidacaoAdm,
+  pdfExigeAssinatura,
+  validarAssinatura,
+} from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -168,7 +176,11 @@ export async function POST(req: Request) {
     return erro("A importação de DFD avulso está desabilitada nas Configurações.", 422);
   // Conferência da ASSINATURA (garantia no servidor), respeitando o nível `dfd.assinatura`:
   // PDF sem assinatura, sem responsável cadastrado, ou assinante não autorizado → não grava.
-  const res = validarAssinatura(d.assinaturas, await carregarResponsaveis(d.reparticaoId), {
+  // VALIDAÇÃO ADMINISTRATIVA: só o ADM cria, troca ou desfaz; a gravada nunca some pela gravação de outra pessoa.
+  const gravadasAss = existente?.assinaturas ?? [];
+  const pedidas = a.u.admin ? d.assinaturas : manterValidacaoAdm(d.assinaturas, gravadasAss);
+  if (!a.u.admin && mudouValidacaoAdm(pedidas, gravadasAss)) return erro(MSG_SO_ADM_VALIDA, 403);
+  const res = validarAssinatura(pedidas, await carregarResponsaveis(d.reparticaoId), {
     exigeAssinatura: pdfExigeAssinatura(d.nomeArquivo),
   });
   if (res.status === "erro" && bloqueiaAssinatura(res, comportamentoNo(regras, "dfd.assinatura", ctxAv)))
@@ -176,7 +188,7 @@ export async function POST(req: Request) {
 
   // Validação pela EQUIPE: quem/quando vêm da SESSÃO (nunca do cliente) — a MESMA validação já gravada
   // (sobrescrita/reenvio do DFD) mantém o carimbo original.
-  const assinaturas = carimbarValidacao(d.assinaturas, existente?.assinaturas ?? [], a.u.nome, new Date().toISOString());
+  const assinaturas = carimbarValidacao(pedidas, gravadasAss, a.u.nome, new Date().toISOString());
   const validadaEquipe = assinaturas.some((x) => x.validacao?.por === "equipe");
   // Histórico: o DFD que JÁ existia (sobrescrita por protocolação/reenvio/arquivo novo) é comparado com o
   // novo — a MESMA régua da comparação do reenvio (cabeçalho, seções, assinaturas e itens).

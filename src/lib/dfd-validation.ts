@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { RegrasAvaliacao } from "./avaliacao-core.ts";
 import { avaliarDfd, type CtxConformidade } from "./dfd-tratamento.ts";
 import { dataAssinaturaValida } from "./reparticao-responsaveis.ts";
+import { FONTES_ASSINATURA, MOTIVO_ADM } from "./parse-dfd-comum.ts";
 
 // Schemas de entrada do módulo DFD/PCA. Módulo SÓ-schema (sem getDb) → testável
 // isoladamente no Node, como `validation.ts`.
@@ -79,23 +80,41 @@ const assinaturaSchema = z.object({
   ip: z.string().trim().max(60).default(""),
   codigo: z.string().trim().max(120).default(""),
   url: z.string().trim().max(500).default(""),
-  fonte: z.enum(["certificado", "sistema", "dropsigner", "adobe", "foxit", "manual"]).default("certificado"),
+  fonte: z.enum(FONTES_ASSINATURA).default("certificado"),
   /** Lida por OCR da aparência ACHATADA (sem camada de texto) — conferência não bloqueante. */
   ocr: z.boolean().optional(),
-  /** Validação manual pela EQUIPE (quem/quando são carimbados pelo servidor). */
+  /** Validação manual pela EQUIPE ou ADMINISTRATIVA (quem/quando — e, na adm, nome/data — são carimbados pelo servidor). */
   validacao: z
-    .object({
-      por: z.literal("equipe"),
-      responsavel: z.string().trim().min(1).max(300),
-      usuario: z.string().trim().max(200).optional(),
-      em: z.string().trim().max(40).optional(),
-    })
+    .discriminatedUnion("por", [
+      z.object({
+        por: z.literal("equipe"),
+        responsavel: z.string().trim().min(1).max(300),
+        usuario: z.string().trim().max(200).optional(),
+        em: z.string().trim().max(40).optional(),
+      }),
+      z.object({
+        por: z.literal("adm"),
+        motivo: z
+          .string()
+          .trim()
+          .min(MOTIVO_ADM.min, `Informe o motivo da validação administrativa (mínimo ${MOTIVO_ADM.min} caracteres).`)
+          .max(MOTIVO_ADM.max),
+        usuario: z.string().trim().max(200).optional(),
+        em: z.string().trim().max(40).optional(),
+      }),
+    ])
     .optional(),
-}).refine(
-  // A assinatura ADICIONADA pela equipe só aceita uma data real "dd/mm/aaaa", não futura (ou nenhuma).
-  (a) => a.fonte !== "manual" || !a.data || dataAssinaturaValida(a.data, new Date().toISOString().slice(0, 10)),
-  { message: "Data da assinatura inválida (use dd/mm/aaaa, não futura).", path: ["data"] },
-);
+})
+  .refine(
+    // A assinatura ADICIONADA pela equipe só aceita uma data real "dd/mm/aaaa", não futura (ou nenhuma).
+    (a) => a.fonte !== "manual" || !a.data || dataAssinaturaValida(a.data, new Date().toISOString().slice(0, 10)),
+    { message: "Data da assinatura inválida (use dd/mm/aaaa, não futura).", path: ["data"] },
+  )
+  .refine(
+    // A validação ADMINISTRATIVA mora só na entrada "administrativa" — e essa entrada só existe com ela.
+    (a) => (a.fonte === "administrativa") === (a.validacao?.por === "adm"),
+    { message: "Validação administrativa inválida.", path: ["validacao"] },
+  );
 
 /**
  * Cabeçalho do DFD (SEM os itens — que vão em lotes `start-dfd`/`append-dfd-itens`
