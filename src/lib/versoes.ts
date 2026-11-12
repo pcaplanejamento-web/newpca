@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.9",
+    data: "2026-11-12",
+    titulo: "Conferir DFDs × Centi: os outros órgãos e o Refazer tudo",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Quando a Centi não abre o planejamento no órgão do DFD, a busca tenta nos outros órgãos com o ID da Centi. Achado em outro, o DFD fica em atenção (“achado no órgão X, cadastrado no órgão Y”); em nenhum, a falha diz os órgãos tentados.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Na Análise, “Refazer tudo” esquece a retomada e roda o fluxo de novo com todos os itens, inclusive os já feitos antes.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.289.8",
     data: "2026-11-12",
     titulo: "Conferir DFDs × Centi: um DFD por vez na Centi",

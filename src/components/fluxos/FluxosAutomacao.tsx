@@ -681,6 +681,19 @@ export function FluxosAutomacao({
       recomecar,
       previas,
       carregarPrevia: (g, no, incluir) => void carregarPrevia(g, no, incluir),
+      refazerTudo: (g, no, pulados) => {
+        const f = fluxos?.find((x) => x.id === aberto);
+        if (!f || aberto == null) return;
+        void confirmar({
+          titulo: "Refazer tudo do zero?",
+          texto: `A retomada é esquecida e o fluxo roda de novo com TODOS os itens — inclusive os ${pulados.toLocaleString("pt-BR")} já feitos antes.`,
+          confirmar: "Refazer tudo",
+        }).then(async (sim) => {
+          if (!sim) return;
+          await progressoDe(aberto).limpar(no).catch(() => undefined);
+          void executar(f, g);
+        });
+      },
       executarCom: (g, itens) => {
         const f = fluxos?.find((x) => x.id === aberto);
         if (f) void executar(f, g, false, itens);

@@ -565,6 +565,45 @@ test("Conferir DFDs × Centi: a Centi é chamada UM DFD por vez (mesmo em parale
   assert.equal(r.apontados.filter((a) => /102/.test(String(a.mensagem))).length, 1, "a falha sai uma vez só nos apontamentos");
 });
 
+test("Conferir DFDs × Centi: o planejamento que não abre no órgão do DFD é tentado nos outros órgãos", async () => {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const { entidadesParaTentar } = await import("../src/lib/fluxo-nos.ts");
+  assert.deepEqual(entidadesParaTentar({ a: "02", b: "3", c: "2", d: "" }, "2"), ["3"]);
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const dfds = [
+    { id: 1, numero: "10", planejamento: "100", valor: 5, totalItens: 1, orgaoId: 1 }, // abre no órgão 3
+    { id: 2, numero: "11", planejamento: "101", valor: 5, totalItens: 1, orgaoId: 1 }, // não abre em nenhum
+  ];
+  const pedidos: string[] = [];
+  let marcados: { dfdId: number; status: string; motivo?: string }[] = [];
+  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+    centi: async () => ({ ok: false }),
+    api: async (url: string, corpo?: unknown) => {
+      if (url.endsWith("execucao-dfds")) return { ok: true, dfds };
+      if (url.endsWith("conferencia-dfds")) marcados = [...marcados, ...((corpo as { itens?: typeof marcados })?.itens ?? [])];
+      return { ok: true };
+    },
+    cancelado: () => false,
+    host: {
+      chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
+      mapaEntidades: { "o:1": "2", "o:2": "3" },
+      esperaCentiMs: 0,
+      carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+      lerDfdCenti: async (plan: string, ent?: string) => {
+        pedidos.push(`${plan}@${ent}`);
+        if (plan === "100" && ent === "3") return { numero: "10", planejamento: plan, valor: 5, totalItens: 1 };
+        throw new Error(`Não consegui abrir o planejamento ${plan} na Centi: A Centi recusou a consulta (500).`);
+      },
+    },
+  } as never);
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(pedidos.sort(), ["100@2", "100@3", "101@2", "101@3"]);
+  const txt = r.apontados.map((a) => String(a.mensagem)).join("\n");
+  assert.match(txt, /achado na Centi no órgão 3, mas o DFD está cadastrado no órgão 2/);
+  assert.match(txt, /não abre em nenhum dos 2 órgãos da Centi \(tentados: 2, 3\)/);
+});
+
 test("lerAjudaFluxo: qualquer JSON vira os 3 textos", () => {
   assert.deepEqual(lerAjudaFluxo(null), { funciona: "", executa: "", resultado: "" });
   assert.deepEqual(lerAjudaFluxo({ funciona: " a ", executa: 3, resultado: "x".repeat(3000) }).funciona, "a");

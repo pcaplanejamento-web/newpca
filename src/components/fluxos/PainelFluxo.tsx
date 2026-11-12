@@ -8,6 +8,7 @@ import { dataHoraBR } from "@/lib/format";
 import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { useAlturaTela } from "../AlturaCheia";
 import { Badge, type Tone } from "../Badge";
+import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
@@ -322,6 +323,14 @@ function AnaliseAoVivo({
           <StatMini label="Ok" value={conta(["emerald"]).toLocaleString("pt-BR")} tone="ok" />
           <StatMini label="Atenção" value={conta(["amber"]).toLocaleString("pt-BR")} tone={conta(["amber"]) ? "warn" : "default"} />
           <StatMini label="Falhas" value={conta(["red"]).toLocaleString("pt-BR")} tone={conta(["red"]) ? "danger" : "default"} hint={resultado && apontados.length ? `${apontados.length.toLocaleString("pt-BR")} apontamento(s)` : undefined} />
+        </div>
+      )}
+      {jaAntes > 0 && fonte && host && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span className="min-w-0 flex-1">A retomada pulou os {jaAntes.toLocaleString("pt-BR")} já concluídos; enquanto houver falha, só as falhas são refeitas.</span>
+          <Button size="sm" variant="secondary" onClick={() => host.refazerTudo(grafo, fonte.id, jaAntes)}>
+            Refazer tudo
+          </Button>
         </div>
       )}
       {resultado && apontados.length > 0 && (

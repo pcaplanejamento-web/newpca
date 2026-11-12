@@ -113,7 +113,37 @@ async function lerPlanejamentosPeloId(
       }
       try {
         r = { ...it, centi: await lerNaCenti(() => ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true), ctx) };
-      } catch (x) {
+      } catch (x0) {
+        let x: unknown = x0;
+        let achou: Item | null = null;
+        // O planejamento NÃO ABRIU no órgão do DFD: tenta nos outros órgãos com o ID da Centi (um por vez, pela fila).
+        const msg0 = x instanceof Error ? x.message : String(x);
+        if (str(it.entidade) && naoAbriu(msg0) && !ctx.cancelado()) {
+          const outras = entidadesParaTentar(mapa, str(it.entidade));
+          for (const e of outras) {
+            if (ctx.cancelado()) break;
+            ctx.aviso(`${op.rotulo ?? ""}DFD ${str(it.numero)} · planejamento ${str(it.planejamento)}: tentando o órgão ${e} na Centi…`);
+            try {
+              const achado = await lerNaCenti(() => ler(str(it.planejamento), e, op.pdf, op.completo === true), ctx);
+              x = null;
+              achou = { ...it, centi: achado, entidadeAchada: e };
+              break;
+            } catch (y) {
+              const m = y instanceof Error ? y.message : String(y);
+              if (/interrompido|recusou o Emitir DFD/i.test(m)) throw y;
+              if (!naoAbriu(m) && !m.startsWith("NAO_ENCONTRADO: ")) {
+                x = y;
+                break;
+              }
+            }
+          }
+          if (x === x0 && outras.length) x = new Error(`${msg0.replace(/\.$/, "")} — não abre em nenhum dos ${outras.length + 1} órgãos da Centi (tentados: ${[str(it.entidade), ...outras].join(", ")}).`);
+        }
+        if (achou) {
+          feitos++;
+          ctx.parcial?.([achou]);
+          return achou;
+        }
         const msg = x instanceof Error ? x.message : String(x);
         // O lote acabou ou a Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
         if (/interrompido|recusou o Emitir DFD/i.test(msg)) throw x;
@@ -129,6 +159,14 @@ async function lerPlanejamentosPeloId(
     ctx.cancelado,
   );
   return lidos; // cancelado = os não começados ficam `undefined`
+}
+/** O load do planejamento falhou na Centi (não abriu nesse órgão). */
+const naoAbriu = (msg: string) => /n[aã]o consegui abrir o planejamento/i.test(msg);
+/** As OUTRAS entidades da Centi a tentar (os IDs cadastrados nos órgãos), sem repetir e sem a já tentada. */
+export function entidadesParaTentar(mapa: Record<string, string>, ja: string): string[] {
+  const n = (v: string) => String(v ?? "").trim().replace(/^0+(?=\d)/, "");
+  const jaN = n(ja);
+  return [...new Set(Object.values(mapa).map(n).filter((e) => e && e !== jaN))];
 }
 /**
  * A Centi trabalha numa SESSÃO só: o load do planejamento e o Emitir DFD valem para o registro aberto por último. Dois
@@ -1273,7 +1311,7 @@ const NOS: DefNo[] = [
         padrao: "porItem",
       },
       { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "selecao", entrada: true, padrao: 3, opcoes: opcoesNum([1, 2, 3, 4, 5, 6]), ajuda: "Quantos itens o fluxo escolhido processa juntos. A Centi é sempre chamada um DFD por vez (a sessão dela é uma só) — o paralelo acelera a parte do sistema.", quando: { campo: "modo", valores: ["porItem"] } },
-      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Se a execução parar no meio, a próxima pula os itens já concluídos e continua de onde parou.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Ligado: a próxima execução pula os itens já concluídos e refaz só os que faltam ou falharam — até uma execução terminar sem falha, quando tudo recomeça do zero. Para refazer todos antes disso, use “Refazer tudo” na Análise (ou desligue esta opção).", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "chave", rotulo: "Campo que identifica o item", ajuda: "O dado que identifica cada item na retomada (ex.: planejamento).", tipo: "caminho", padrao: "id", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "limite", rotulo: "Máximo de itens", tipo: "selecao", padrao: 20000, opcoes: opcoesNum([10, 100, 1000, 5000, 20000]), ajuda: "Um teto de segurança: quantos itens, no máximo, rodam o fluxo escolhido.", quando: { campo: "modo", valores: ["porItem"] } },
     ],
@@ -2067,6 +2105,8 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     }
     if (!x) msgs.push(`${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`);
     else {
+      if (str(d.entidadeAchada) && str(d.entidadeAchada) !== str(d.entidade))
+        msgs.push(`${ref}: achado na Centi no órgão ${str(d.entidadeAchada)}, mas o DFD está cadastrado no órgão ${str(d.entidade) || "sem ID"}`);
       if (/CANCEL/.test(normTexto(x.situacao))) msgs.push(`${ref}: situação ${str(x.situacao)} na Centi`);
       if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) msgs.push(`${ref}: na Centi é o DFD ${str(x.numero)}`);
       if (str(d.tipo) && str(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) msgs.push(`${ref}: tipo ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
