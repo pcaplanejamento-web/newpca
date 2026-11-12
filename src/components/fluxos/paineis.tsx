@@ -801,7 +801,8 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
     if (it.naoMarcar === true) return { rotulo: "Não conferido", tom: "amber", texto: s(it.mensagem) };
-    if (s(it.mensagem)) return { rotulo: "Divergente", tom: "red", texto: s(it.mensagem) };
+    // Divergente é um RESULTADO da conferência (conta em Atenção), não uma falha da execução (só "Falhou" conta em Falhas).
+    if (s(it.mensagem)) return { rotulo: "Divergente", tom: "amber", texto: s(it.mensagem) };
     return { rotulo: "Convergente", tom: "emerald", texto: "" };
   }
   return null;

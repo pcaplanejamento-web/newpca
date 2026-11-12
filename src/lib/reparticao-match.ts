@@ -168,6 +168,15 @@ export function casarOrgao(
 }
 
 /**
+ * O ÓRGÃO DA CENTI de um DFD (em que entidade o planejamento existe): o do DOCUMENTO — o "Órgão/Entidade" impresso no
+ * DFD, casado com o cadastro (`casarOrgao`) —; sem casar, o da unidade. A unidade pode ter mudado de órgão depois (ex.: os
+ * Fundos reorganizados) e o planejamento continua na entidade em que foi feito.
+ */
+export function orgaoDaCenti(orgaoEntidade: string | null | undefined, orgaoDaUnidade: number | null, orgaos: OrgaoMatch[]): number | null {
+  return casarOrgao(orgaoEntidade, orgaos) ?? orgaoDaUnidade;
+}
+
+/**
  * Divergência (item 6.3): o órgão apontado pelo campo "Órgão/Entidade" difere do órgão DONO
  * da unidade (`orgaoIdDaUnidade`). Só acusa quando AMBOS resolvem e diferem.
  */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
+import { orgaoDaCenti,
   casarOrgao,
   casarPorInteressado,
   preverUnidade,
@@ -123,5 +123,21 @@ describe("casarOrgao (Órgão/Entidade do DFD → órgão)", () => {
 
   it("desconhecido → null", () => {
     assert.equal(casarOrgao("TRIBUNAL DE CONTAS", orgaos), null);
+  });
+});
+
+describe("orgaoDaCenti — o órgão da Centi do DFD é o do DOCUMENTO", () => {
+  const orgaos = [
+    { id: 2, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde", orgaoEntidade: "PREFEITURA MUNICIPAL DE RIO VERDE" },
+    { id: 6, sigla: "FME", nome: "Fundo Municipal de Educação" },
+  ];
+  it("o “Órgão/Entidade” impresso vale mais que o órgão atual da unidade (a unidade que mudou de órgão)", () => {
+    assert.equal(orgaoDaCenti("PREFEITURA MUNICIPAL DE RIO VERDE", 6, orgaos), 2);
+    assert.equal(orgaoDaCenti("Fundo Municipal de Educação", 2, orgaos), 6);
+  });
+  it("sem casar (vazio ou desconhecido), fica o órgão da unidade", () => {
+    assert.equal(orgaoDaCenti(null, 6, orgaos), 6);
+    assert.equal(orgaoDaCenti("SECRETARIA QUALQUER", 6, orgaos), 6);
+    assert.equal(orgaoDaCenti("", null, orgaos), null);
   });
 });

@@ -6,6 +6,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { classeExecucao, limparSituacao, planoExecucao, situacoesDaGrade } from "@/lib/execucao-centi";
 import { ok, parseCorpo } from "@/lib/http";
+import { orgaoDaCenti } from "@/lib/reparticao-match";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +24,9 @@ const lerDfds = () =>
       totalItens: dfds.totalItens,
       execucaoCenti: dfds.execucaoCenti,
       execucaoCentiEm: dfds.execucaoCentiEm,
-      // O órgão ATUAL da unidade (a unidade que muda de órgão não regrava `dfds.orgao_id`): o ID da Centi em que o DFD é
-      // procurado na CM002 sai dele; sem unidade, o gravado no DFD.
-      orgaoId: sql<number | null>`COALESCE(${reparticoes.orgaoId}, ${dfds.orgaoId})`,
+      // O órgão da UNIDADE (sem unidade, o gravado no DFD) — a reserva quando o "Órgão/Entidade" do documento não casa.
+      orgaoUnidade: sql<number | null>`COALESCE(${reparticoes.orgaoId}, ${dfds.orgaoId})`,
       orgaoEntidade: dfds.orgaoEntidade,
-      orgaoNome: orgaos.nome,
       // As colunas da planilha de DFDs da Mesa (a tabela das automações): a unidade, o protocolo e a conferência.
       sigla: reparticoes.codigo,
       reparticaoId: dfds.reparticaoId,
@@ -39,15 +38,28 @@ const lerDfds = () =>
     })
     .from(dfds)
     .leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId))
-    .leftJoin(orgaos, sql`${orgaos.id} = COALESCE(${reparticoes.orgaoId}, ${dfds.orgaoId})`)
     .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
     .where(isNotNull(dfds.planejamento));
+
+/** Os DFDs com o ÓRGÃO DA CENTI de cada um (`orgaoId` — o do documento; sem casar, o da unidade) e o nome dele. */
+async function lerDfdsComOrgao() {
+  const [lista, cad] = await Promise.all([
+    lerDfds(),
+    getDb().select({ id: orgaos.id, nome: orgaos.nome, sigla: orgaos.sigla, orgaoEntidade: orgaos.orgaoEntidade, oculto: orgaos.oculto }).from(orgaos),
+  ]);
+  const nomes = new Map(cad.map((o) => [o.id, o.nome]));
+  const match = cad.map((o) => ({ ...o, oculto: !!o.oculto }));
+  return lista.map(({ orgaoUnidade, ...d }) => {
+    const orgaoId = orgaoDaCenti(d.orgaoEntidade, orgaoUnidade, match);
+    return { ...d, orgaoId, orgaoNome: orgaoId != null ? (nomes.get(orgaoId) ?? null) : null };
+  });
+}
 
 /** Os DFDs com nº de planejamento e a situação da Centi já gravada (a tela da Automação). */
 export async function GET() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
-  return ok({ dfds: await lerDfds() });
+  return ok({ dfds: await lerDfdsComOrgao() });
 }
 
 const corpoSchema = z.strictObject({

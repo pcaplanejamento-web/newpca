@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.7",
+    data: "2026-11-12",
+    titulo: "Automações da Centi: o órgão é o do documento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Cada DFD é procurado na Centi no órgão impresso no próprio documento (o “Órgão/Entidade”, casado com o cadastro de órgãos) — o planejamento fica na entidade em que foi feito, mesmo que a unidade tenha mudado de órgão depois; sem casar, vale o órgão da unidade. Corrige as falhas da “Conferir DFDs × Centi” e da “Execução dos DFDs na CM002” nos DFDs de unidades reorganizadas.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Na Análise, “Divergente” conta em Atenção — Falhas são só as conferências que não terminaram.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.289.6",
     data: "2026-11-12",
     titulo: "Conferir DFDs × Centi: sem falso divergente e sem histórico repetido",
