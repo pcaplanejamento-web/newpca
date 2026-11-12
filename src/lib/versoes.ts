@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.10",
+    data: "2026-11-12",
+    titulo: "Conferir DFDs × Centi: tipo em branco não é mais divergência",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "O DFD da Centi com o “Tipo DFD:” em branco era lido com o tipo “:” e apontado como divergente. Agora o tipo em branco fica vazio e só se compara o tipo quando os dois lados o informam (S, R, O ou E).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "Na importação, o rótulo “Tipo DFD:” sem valor deixa o tipo em branco (antes gravava “:”).",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.289.9",
     data: "2026-11-12",
     titulo: "Conferir DFDs × Centi: os outros órgãos e o Refazer tudo",

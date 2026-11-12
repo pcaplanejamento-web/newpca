@@ -17,7 +17,7 @@ import {
   temCicloSemLaco,
   validarGrafo,
 } from "../src/lib/fluxo-core.ts";
-import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
+import { compararDfdCenti, REGISTRO_NOS, tipoCurto } from "../src/lib/fluxo-nos.ts";
 
 const ctx = (host: Record<string, unknown> = {}, centi: (a: string, d: unknown) => Record<string, unknown> = () => ({ ok: false })) => ({
   centi: async (a: string, d: unknown) => centi(a, d),
@@ -671,4 +671,14 @@ test("subgrafoAte com incluir: o próprio nó entra no trecho (a prévia do Ler 
   assert.deepEqual(sub.nos.map((n) => n.id), ["i", "l"]);
   assert.equal(sub.conexoes.length, 1);
   assert.equal(subgrafoSoLeitura(sub, REGISTRO_NOS), true);
+});
+
+test("conferir × Centi: tipo vazio (':') não acusa diferença; R × S acusa", () => {
+  const base = { numero: "143", planejamento: "1" };
+  const o = { tolerancia: 0.01, objeto: false };
+  const r1 = compararDfdCenti([{ ...base, tipo: "DFD-R", centi: { ...base, tipo: ":" } }], o);
+  assert.equal(r1.divergentes.length, 0);
+  const r2 = compararDfdCenti([{ ...base, tipo: "DFD-R", centi: { ...base, tipo: "DFD-S" } }], o);
+  assert.match(String(r2.divergentes[0]?.mensagem), /tipo DFD-R no sistema × DFD-S na Centi/);
+  assert.equal(tipoCurto(":"), null);
 });

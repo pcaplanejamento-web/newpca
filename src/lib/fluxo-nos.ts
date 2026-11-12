@@ -2089,7 +2089,11 @@ export function separarCadastrados(itens: Item[], sistema: Item[]): { novos: Ite
 }
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const tipoCurto = (t: unknown) => (/DFD-?\s*([SROE])\b/i.exec(str(t))?.[1] ?? normTexto(t).slice(0, 1)).toUpperCase();
+/** O código do tipo (S/R/O/E) ou null — sem tipo válido (ex.: o ":" de um "Tipo DFD:" vazio) não se compara. */
+export const tipoCurto = (t: unknown): string | null => {
+  const c = (/DFD-?\s*([SROE])\b/i.exec(str(t))?.[1] ?? normTexto(t).slice(0, 1)).toUpperCase();
+  return /^[SROE]$/.test(c) ? c : null;
+};
 
 /** O DFD do sistema × o lido na Centi (`centi`): um item DIVERGENTE por diferença (com a `mensagem`). Pura. */
 export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto: boolean }): { divergentes: Item[]; conformes: Item[] } {
@@ -2109,7 +2113,7 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
         msgs.push(`${ref}: achado na Centi no órgão ${str(d.entidadeAchada)}, mas o DFD está cadastrado no órgão ${str(d.entidade) || "sem ID"}`);
       if (/CANCEL/.test(normTexto(x.situacao))) msgs.push(`${ref}: situação ${str(x.situacao)} na Centi`);
       if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) msgs.push(`${ref}: na Centi é o DFD ${str(x.numero)}`);
-      if (str(d.tipo) && str(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) msgs.push(`${ref}: tipo ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
+      if (tipoCurto(d.tipo) && tipoCurto(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) msgs.push(`${ref}: tipo ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
       const vs = numeroDe(d.valor);
       const vc = numeroDe(x.valor);
       if (vs != null && vc != null && Math.abs(vs - vc) > o.tolerancia) msgs.push(`${ref}: valor R$ ${brl(vs)} no sistema × R$ ${brl(vc)} na Centi`);

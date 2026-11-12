@@ -158,3 +158,10 @@ describe("parse-dfd-comum (nº de planejamento e referência do DFD)", () => {
     assert.equal(refDfd("1209", "  "), "1209");
   });
 });
+
+describe("tipo do DFD vazio", () => {
+  it('"Tipo DFD:" sem valor dá null (nunca ":")', () => {
+    assert.equal(extrairCabecalho(["Tipo DFD:"]).tipo, null);
+    assert.equal(extrairCabecalho(["Tipo DFD: DFD-R - Renovação"]).tipo, "DFD-R - Renovação");
+  });
+});
