@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { dfds } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
@@ -26,6 +26,19 @@ export async function POST(req: Request) {
   const em = new Date().toISOString();
   const db = getDb();
   const unicos = [...new Map(p.data.itens.map((x) => [x.dfdId, x])).values()];
+  // O que MUDA de fato (status ou motivo): só isso vai à auditoria. A "Conferir DFDs × Centi" marca UM DFD por pedido —
+  // registrar todos geraria uma linha de histórico por DFD a cada execução (e recarregaria as telas de todos à toa).
+  const antes = new Map<number, { s: string | null; m: string | null }>();
+  // UMA consulta (os ids num parâmetro JSON — o limite de consultas por requisição do Worker).
+  for (const r of await db
+    .select({ id: dfds.id, s: dfds.conferenciaCenti, m: dfds.conferenciaCentiMotivo })
+    .from(dfds)
+    .where(sql`${dfds.id} IN (SELECT value FROM json_each(${JSON.stringify(unicos.map((x) => x.dfdId))}))`))
+    antes.set(r.id, { s: r.s, m: r.m });
+  const mudou = unicos.filter((x) => {
+    const a = antes.get(x.dfdId);
+    return a && (a.s !== x.status || (a.m ?? null) !== (x.status === "divergente" ? (x.motivo ?? null) : null));
+  });
   for (let i = 0; i < unicos.length; i += LOTE) {
     const fatia = unicos.slice(i, i + LOTE).map((x) =>
       db
@@ -36,12 +49,15 @@ export async function POST(req: Request) {
     await db.batch(fatia as [(typeof fatia)[number], ...typeof fatia]);
   }
   const div = unicos.filter((x) => x.status === "divergente").length;
-  await registrarAuditoria({
-    usuario: g.u,
-    acao: "importar",
-    entidade: "automacao",
-    origem: "centi",
-    resumo: `Conferência dos DFDs com a CM002: ${unicos.length - div} convergente(s) · ${div} divergente(s)`,
-  });
-  return ok({ marcados: unicos.length, convergentes: unicos.length - div, divergentes: div, em });
+  if (mudou.length) {
+    const divM = mudou.filter((x) => x.status === "divergente").length;
+    await registrarAuditoria({
+      usuario: g.u,
+      acao: "importar",
+      entidade: "automacao",
+      origem: "centi",
+      resumo: `Conferência dos DFDs × Centi: ${mudou.length} DFD(s) mudaram — ${mudou.length - divM} convergente(s) · ${divM} divergente(s)`,
+    });
+  }
+  return ok({ marcados: unicos.length, alterados: mudou.length, convergentes: unicos.length - div, divergentes: div, em });
 }

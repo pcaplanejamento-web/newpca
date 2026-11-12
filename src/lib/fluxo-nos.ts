@@ -82,7 +82,7 @@ const str = (v: unknown, padrao = "") => (typeof v === "string" ? v : v == null 
 async function lerPlanejamentosPeloId(
   itens: Item[],
   ctx: ContextoNo,
-  op: { pdf: boolean; completo?: boolean; falhaErro?: boolean; paralelo?: number; rotulo?: string },
+  op: { pdf: boolean; completo?: boolean; falhaErro?: boolean; exigirOrgao?: boolean; paralelo?: number; rotulo?: string },
 ): Promise<(Item | undefined)[]> {
   const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean) => Promise<Item>) | undefined;
   if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
@@ -102,6 +102,14 @@ async function lerPlanejamentosPeloId(
       const it: Item = { ...it0, entidade: entidadeDe(it0) };
       ctx.aviso(`${op.rotulo ?? ""}DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${feitos + 1} de ${itens.length})…`);
       let r: Item;
+      // Sem o órgão (o ID da Centi), a busca cairia no órgão ABERTO na Centi — outro órgão pode ter o MESMO nº de
+      // planejamento e a conferência marcaria um falso Divergente. Com `exigirOrgao`, o DFD fica NÃO conferido (não marca).
+      if (op.exigirOrgao && !str(it.entidade)) {
+        feitos++;
+        r = { ...it, centi: null, centiFalha: true, centiErro: "o órgão do DFD não tem o ID da Centi cadastrado (Órgãos e Unidades)" };
+        ctx.parcial?.([r]);
+        return r;
+      }
       try {
         r = { ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true) };
       } catch (x) {
@@ -749,10 +757,17 @@ const NOS: DefNo[] = [
         padrao: false,
         ajuda: "Ligado (o fluxo de UM DFD): a falha vira erro — o fluxo pai a registra e a retomada tenta o DFD de novo. Desligado: só aponta “não conferido”.",
       },
+      {
+        chave: "exigirOrgao",
+        rotulo: "Só no órgão do DFD",
+        tipo: "booleano",
+        padrao: false,
+        ajuda: "Ligado: o DFD sem o ID da Centi no órgão NÃO é buscado (fica “não conferido”) — sem ele, a busca iria ao órgão aberto na Centi, que pode ter o mesmo nº de planejamento. Desligado: usa o órgão aberto.",
+      },
     ],
     executar: async (e, c, ctx) => {
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
-      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true, falhaErro: c.falhaErro === true })).filter((x): x is Item => x !== undefined);
+      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true })).filter((x): x is Item => x !== undefined);
       return { saida: out };
     },
   },

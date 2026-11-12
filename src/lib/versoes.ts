@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.6",
+    data: "2026-11-12",
+    titulo: "Conferir DFDs × Centi: sem falso divergente e sem histórico repetido",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "O DFD cujo órgão não tem o ID da Centi cadastrado não é mais procurado no órgão aberto na Centi (que pode ter o mesmo nº de planejamento e gerava um falso “Divergente”): fica “não conferido”, sem mudar a coluna Centi, e o motivo vai aos apontamentos.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A conferência grava no histórico só os DFDs cuja marcação MUDOU — antes era uma linha por DFD a cada execução, e as telas abertas recarregavam a cada DFD conferido.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.289.5",
     data: "2026-11-12",
     titulo: "Automação: cabeçalho em uma linha e órgão dos DFDs acertado",

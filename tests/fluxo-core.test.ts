@@ -312,9 +312,11 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
         return {
           ok: true,
           dfds: [
-            { id: 1, numero: "10", planejamento: "100", tipo: "DFD-S", objeto: "CADEIRAS", valor: 50, totalItens: 2 },
-            { id: 2, numero: "11", planejamento: "101", tipo: "DFD-S", objeto: "Mesas", valor: 80, totalItens: 1 },
-            { id: 3, numero: "12", planejamento: "999", valor: 1, totalItens: 1 },
+            { id: 1, numero: "10", planejamento: "100", tipo: "DFD-S", objeto: "CADEIRAS", valor: 50, totalItens: 2, orgaoId: 1 },
+            { id: 2, numero: "11", planejamento: "101", tipo: "DFD-S", objeto: "Mesas", valor: 80, totalItens: 1, orgaoId: 1 },
+            { id: 3, numero: "12", planejamento: "999", valor: 1, totalItens: 1, orgaoId: 1 },
+            // Órgão SEM o ID da Centi: não é buscado no órgão aberto (falso divergente) — fica não conferido, sem marcar.
+            { id: 4, numero: "13", planejamento: "100", valor: 9, totalItens: 1, orgaoId: 7 },
           ],
         };
       marcados.push(...((o?.body as { itens: { dfdId: number }[] } | undefined)?.itens ?? []));
@@ -322,6 +324,8 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
     },
     cancelado: () => false,
     host: {
+      chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
+      mapaEntidades: { "o:1": "2" },
       carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
       progresso: {
         ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
@@ -350,7 +354,8 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
       { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
     ],
   );
-  assert.equal(r.apontados.filter((a) => a.subfluxo === "Conferir 1 DFD × Centi").length, 2);
+  assert.equal(r.apontados.filter((a) => a.subfluxo === "Conferir 1 DFD × Centi").length, 3);
+  assert.ok(r.apontados.some((a) => /DFD 13 .*não conferido — o órgão do DFD não tem o ID da Centi/.test(String(a.mensagem))));
   assert.equal(progresso.size, 0, "tudo concluído: o progresso é esquecido");
 });
 
@@ -487,12 +492,14 @@ test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha
       centi: async () => ({ ok: false }),
       api: async (url: string, o?: { body?: unknown }) => {
         if (url.endsWith("execucao-dfds"))
-          return { ok: true, dfds: [{ id: 1, numero: "10", planejamento: "100", valor: 5, totalItens: 1 }, { id: 2, numero: "11", planejamento: "101", valor: 7, totalItens: 1 }] };
+          return { ok: true, dfds: [{ id: 1, numero: "10", planejamento: "100", valor: 5, totalItens: 1, orgaoId: 1 }, { id: 2, numero: "11", planejamento: "101", valor: 7, totalItens: 1, orgaoId: 1 }] };
         marcados.push(...((o?.body as { itens: { dfdId: number }[] } | undefined)?.itens ?? []));
         return { ok: true };
       },
       cancelado: () => false,
       host: {
+        chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
+        mapaEntidades: { "o:1": "2" },
         carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
         progresso: {
           ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
