@@ -618,3 +618,50 @@ test("Nó CM002: as colunas escolhidas viram campos do item (e o item fica leve 
   assert.equal(it?.codigo, "03.52.000");
   assert.equal("centi" in (it ?? {}), false);
 });
+
+test("Modelo cm002: o MESMO nº de planejamento em dois órgãos grava a situação de cada um (um pedido por órgão)", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "cm002");
+  assert.ok(m);
+  const dfds = [
+    { id: 10, numero: "1028", planejamento: "1082", entidade: "6" },
+    { id: 11, numero: "77", planejamento: "1082", entidade: "2" },
+  ];
+  const centi = async (_a: string, d: unknown) => {
+    const ent = (d as { entidade: string }).entidade;
+    return { ok: true, linhas: [{ id: "1082", situacao: ent === "6" ? "Executado" : "Não Executado" }] };
+  };
+  const grav: { dfdIds: number[]; linhas: { valores: string[] }[] }[] = [];
+  const api = async (c: string, init?: unknown) => {
+    if (!c.includes("execucao-dfds")) return { ok: true, total: 1, cortadas: 0 };
+    const b = (init as { body: { dfdIds: number[]; linhas: { valores: string[] }[] } }).body;
+    grav.push(b);
+    return { ok: true, lidos: 1, atualizados: 1, linhas: b.dfdIds.map((id, i) => ({ id, antes: null, situacao: b.linhas[i].valores[1] })) };
+  };
+  const passos: Record<string, number> = {};
+  const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
+    centi,
+    api,
+    cancelado: () => false,
+    host: { protocolos: [], __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
+  }, (p) => {
+    passos[p.no] = p.itens;
+  });
+  assert.equal(r.estado, "concluido", r.erro);
+  const porDfd = new Map(grav.flatMap((b) => b.dfdIds.map((id, i) => [id, b.linhas[i].valores[1]] as const)));
+  assert.equal(grav.length, 2, "um pedido por órgão");
+  assert.equal(porDfd.get(10), "Executado");
+  assert.equal(porDfd.get(11), "Não Executado");
+  for (const b of grav) assert.equal(new Set(b.dfdIds.map((id) => dfds.find((d) => d.id === id)?.entidade)).size, 1);
+  // As etapas contam os DFDs, sem o marcador do "fim"; o "Gravar execução" conta os DFDs gravados.
+  assert.equal(passos.dfds1, 2);
+  assert.equal(passos.org1, 2);
+  assert.equal(passos.grav1, 2);
+});
+
+test("ehMarcadorFim: o marcador sozinho da porta fim não conta como item", async () => {
+  const { ehMarcadorFim } = await import("../src/lib/fluxo-core.ts");
+  const { marcarExecutado } = await import("../src/lib/fluxo-ler-sistema.ts");
+  assert.equal(ehMarcadorFim(marcarExecutado([], 1246)[0]), true);
+  assert.equal(ehMarcadorFim(marcarExecutado([{ id: 1 }], 1)[0]), false);
+});

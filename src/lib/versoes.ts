@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.4",
+    data: "2026-11-12",
+    titulo: "Execução dos DFDs na CM002: órgão certo e contagens corretas",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Cada DFD é procurado na CM002 do órgão ATUAL da unidade dele — a unidade que mudou de órgão (ex.: os Fundos) levava o DFD a ser procurado no órgão antigo e ficar “Não encontrado na CM002”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A situação é gravada órgão a órgão: dois DFDs de órgãos diferentes com o mesmo nº de planejamento recebiam a situação do primeiro.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "As etapas contam só os itens de verdade (1246, não 1247), o “Gravar execução” conta e lista os DFDs gravados com a situação, e a Análise mostra Atenção e Erros pelos apontamentos.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.289.3",
     data: "2026-11-10",
     titulo: "Centro de Custo dos Fundos na automação",

@@ -37,6 +37,9 @@ export async function esperar(ms: number, cancelado: () => boolean): Promise<boo
   return !cancelado();
 }
 /** O estado guardado de um nó (`host.__vars[nome]`). */
+/** O marcador SOZINHO da porta "fim" (`marcarExecutado([], n)` — sem item de verdade dentro): não conta na etapa. */
+export const ehMarcadorFim = (it: Item): boolean => Object.keys(it).every((k) => k === "executado" || k === "totalLido");
+
 export type EstadoGuardado = { executado: boolean; itens: number; vezes: number; valor: Item[]; erro?: string };
 /** As variáveis da execução (compartilhadas com os subfluxos pelo host). */
 export function variaveis(host: Record<string, unknown>): Record<string, unknown> {
@@ -739,7 +742,8 @@ export async function executarFluxo(
       }
       return fim({ estado: "falhou", erro: `${d.rotulo}: ${msg}`, noErro: id });
     }
-    const total = d.saidas.reduce((s, p) => s + (saidas[p]?.length ?? 0), 0);
+    // O marcador sozinho da porta "fim" (`marcarExecutado([], n)`) não é item: "Ler do sistema" com 1246 DFDs conta 1246.
+    const total = d.saidas.reduce((s, p) => s + (saidas[p] ?? []).filter((it) => p !== "fim" || !ehMarcadorFim(it)).length, 0);
     marcar(id, { estado: "ok", itens: total, ms: (anterior?.ms ?? 0) + Date.now() - t0, amostra: amostrar(saidas), erro: undefined });
     // O iterador só fica "executado" quando entrega o fim (o laço terminou).
     guardar({ executado: d.iterador ? "fim" in saidas : true, itens: total, valor: (d.iterador ? (saidas.fim ?? []) : (d.saidas.map((p) => saidas[p] ?? []).find((l) => l.length) ?? [])).slice(0, 200) });

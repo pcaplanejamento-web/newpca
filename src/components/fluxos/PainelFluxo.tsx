@@ -217,16 +217,20 @@ function AnaliseAoVivo({
   // O Baixar/anexar DFDs não entrega parciais: o andamento dele são as linhas dos DFDs (`host.dfds`, ao vivo e no fim).
   const noDfds = etapas.find((n) => n.tipo === "saida.dfdsCenti") ?? null;
   const anexarDfds = !!noDfds && String(noDfds.config?.destino ?? "pasta") !== "pasta";
+  // Sem componente item a item, os DFDs GRAVADOS pelo "Gravar execução" (todos os nós dele juntos) são o resultado.
+  const gravacoes = etapas.filter((n) => n.tipo === "saida.gravarExecucao" && host?.saidas[n.id]?.length);
   const fonte = useMemo(() => {
     const comItens = etapas.filter((n) => host?.parciais[n.id]?.length);
     if (atual && host?.parciais[atual.id]?.length) return atual;
     if (noDfds && host?.dfds?.length && (atual?.id === noDfds.id || !comItens.length)) return noDfds;
-    return comItens[comItens.length - 1] ?? null;
-  }, [etapas, atual, host, noDfds]);
+    return comItens[comItens.length - 1] ?? gravacoes[gravacoes.length - 1] ?? null;
+  }, [etapas, atual, host, noDfds, gravacoes]);
   const itensFonte: Item[] = fonte
     ? fonte === noDfds && host?.dfds?.length
       ? (host.dfds as unknown as Item[])
-      : (host?.saidas[fonte.id] ?? host?.parciais[fonte.id] ?? [])
+      : fonte.tipo === "saida.gravarExecucao" && !host?.parciais[fonte.id]?.length
+        ? gravacoes.flatMap((n) => host?.saidas[n.id] ?? [])
+        : (host?.saidas[fonte.id] ?? host?.parciais[fonte.id] ?? [])
     : [];
   const processados = useMemo<Processado[]>(
     () =>
@@ -266,6 +270,9 @@ function AnaliseAoVivo({
     { key: "estadoEtapa", header: "Estado", nowrap: true, value: (it) => estadoDe(it).rotulo, render: (it) => <Badge tone={estadoDe(it).tom} dot>{estadoDe(it).rotulo}</Badge> },
     { key: "detalhe", header: "Detalhe", align: "left", minWidth: 240, value: (it) => estadoDe(it).texto, render: (it) => <span className="whitespace-normal text-muted">{estadoDe(it).texto || "—"}</span> },
   ];
+  const apAtencao = apontados.filter((a) => a.nivel === "Atenção").length;
+  // Os itens que entraram: a 1ª etapa de dados depois do Início (ex.: os DFDs do "Ler do sistema").
+  const lidosNoInicio = passos[etapas.find((n) => !n.tipo.startsWith("gatilho."))?.id ?? ""]?.itens ?? 0;
   const colunasAp: Column<Apontado>[] = [
     { key: "nivel", header: "Nível", nowrap: true, value: (a) => a.nivel, render: (a) => <Badge tone={a.nivel === "Erro" ? "red" : "amber"} dot>{a.nivel}</Badge> },
     { key: "item", header: "Item", nowrap: true, align: "left", value: (a) => a.item || "—", render: (a) => a.item || "—" },
@@ -297,7 +304,16 @@ function AnaliseAoVivo({
         </span>
       </div>
       {fonte && rodando && total > 0 && <Progress value={(itensFonte.length / total) * 100} label={`${itensFonte.length} de ${total}`} />}
-      {(processados.length > 0 || resultado) && (
+      {!fonte && resultado && (
+        // Sem itens processados um a um: os números saem dos APONTAMENTOS (nunca "Atenção 0" ao lado de 190 de atenção).
+        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+          <StatMini label="Itens lidos" value={lidosNoInicio.toLocaleString("pt-BR")} />
+          <StatMini label="Atenção" value={apAtencao.toLocaleString("pt-BR")} tone={apAtencao ? "warn" : "default"} />
+          <StatMini label="Erros" value={(apontados.length - apAtencao).toLocaleString("pt-BR")} tone={apontados.length - apAtencao ? "danger" : "default"} />
+          <StatMini label="Apontamentos" value={apontados.length.toLocaleString("pt-BR")} tone={apontados.length ? "danger" : "default"} />
+        </div>
+      )}
+      {fonte && (processados.length > 0 || resultado) && (
         <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
           <StatMini label="Processados" value={processados.length.toLocaleString("pt-BR")} hint={total ? `de ${total.toLocaleString("pt-BR")}` : undefined} />
           <StatMini label="Ok" value={conta(["emerald"]).toLocaleString("pt-BR")} tone="ok" />

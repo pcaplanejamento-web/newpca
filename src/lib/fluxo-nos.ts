@@ -1458,21 +1458,41 @@ const NOS: DefNo[] = [
       const situacao = (it: Item) => fixa || str(resolverCaminho(it, campo)).trim();
       const lidos = so(e).filter((it) => situacao(it) && Number(it.id) > 0);
       if (lidos.length) {
-        const out: Item[] = [];
-        for (let i = 0; i < lidos.length; i += 5000) {
-          const f = lidos.slice(i, i + 5000);
-          const g = await ctx.api("/api/admin/automacao/execucao-dfds", {
-            method: "POST",
-            body: {
-              colunas: ["ID", "SITUACAO"],
-              linhas: f.map((p) => ({ valores: [str(p.planejamento), situacao(p)] })),
-              dfdIds: f.map((p) => Number(p.id)),
-            },
-          });
-          if (!g.ok) throw new Error(g.error || "Falhou ao gravar a execução.");
-          out.push({ lidos: g.lidos, atualizados: g.atualizados });
-          ctx.aviso(`Gravados ${Math.min(i + 5000, lidos.length)} de ${lidos.length}…`);
+        // UM pedido por ÓRGÃO: o ID da CM002 (nº de planejamento) só é único dentro do órgão — num pedido só, dois DFDs de
+        // órgãos diferentes com o mesmo nº receberiam a situação do primeiro.
+        const porOrgao = new Map<string, Item[]>();
+        for (const it of lidos) {
+          const k = str(it.entidade).replace(/^0+(?=\d)/, "");
+          porOrgao.set(k, [...(porOrgao.get(k) ?? []), it]);
         }
+        const out: Item[] = [];
+        let feitos = 0;
+        let atualizados = 0;
+        for (const grupo of porOrgao.values())
+          for (let i = 0; i < grupo.length; i += 5000) {
+            const f = grupo.slice(i, i + 5000);
+            const g = await ctx.api("/api/admin/automacao/execucao-dfds", {
+              method: "POST",
+              body: {
+                colunas: ["ID", "SITUACAO"],
+                linhas: f.map((p) => ({ valores: [str(p.planejamento), situacao(p)] })),
+                dfdIds: f.map((p) => Number(p.id)),
+              },
+            });
+            if (!g.ok) throw new Error(g.error || "Falhou ao gravar a execução.");
+            atualizados += Number(g.atualizados) || 0;
+            // Entrega os PRÓPRIOS DFDs gravados (a contagem da etapa = DFDs), com a situação e se ela mudou.
+            // A rota devolve, por DFD, a situação de antes e a lida: mudou = foi regravada agora.
+            const mudou = new Set<number>(
+              (Array.isArray(g.linhas) ? g.linhas : [])
+                .map(obj)
+                .filter((l) => l.situacao != null && l.situacao !== l.antes)
+                .map((l) => Number(l.id)),
+            );
+            for (const p of f) out.push({ ...p, situacaoGravada: situacao(p), atualizado: mudou.has(Number(p.id)) });
+            feitos += f.length;
+            ctx.aviso(`Gravados ${feitos} de ${lidos.length} · ${atualizados} atualizado(s)…`);
+          }
         return { saida: out };
       }
       const r = await ctx.api("/api/admin/automacao/execucao-dfds");

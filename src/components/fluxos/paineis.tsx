@@ -790,6 +790,13 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     const v = visualEstadoDfd((s(it.estado) || "fila") as EstadoDfd, it.anexar === true);
     return { rotulo: v.rotulo, tom: v.tom, texto: s(it.erro) };
   }
+  if (tipo === "saida.gravarExecucao") {
+    // O DFD gravado: a situação que ficou na coluna Execução e se ela mudou agora.
+    const sit = s(it.situacaoGravada);
+    // A régua do modelo (SE ≠ "Executado"): só o "Executado" exato é ok; parcial, a maior, não executado = atenção.
+    const ok = sit.trim().toLowerCase() === "executado";
+    return { rotulo: sit || "Gravado", tom: ok ? "emerald" : "amber", texto: it.atualizado === true ? "Atualizado agora" : "Sem mudança" };
+  }
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
