@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.5",
+    data: "2026-11-12",
+    titulo: "Automação: cabeçalho em uma linha e órgão dos DFDs acertado",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Órgãos e Unidades",
+        texto:
+          "O órgão de cada DFD passa a acompanhar a unidade: os DFDs gravados com o órgão antigo foram acertados e, daqui em diante, a unidade que muda de órgão leva junto os DFDs dela — as automações da Centi procuram no órgão certo.",
+        link: "/painel/orgaos",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Com uma automação aberta, o cabeçalho é UMA linha: as ações dela e, separados no fim, o estado da Centi e o menu “Extensão e Centi” (o plugue) — sem a ajuda solta no meio nem engrenagens, atualizar e ajuda repetidos.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Verificar e baixar a extensão ficam à vista só quando há problema (sem extensão, desatualizada ou sem login); com tudo certo, dentro do menu do plugue. “Atualizar pelo modelo” ganhou o ícone de modelo e, no celular, o nome da automação ocupa a linha inteira.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.289.4",
     data: "2026-11-12",
     titulo: "Execução dos DFDs na CM002: órgão certo e contagens corretas",

@@ -44,7 +44,7 @@ import { Callout } from "../Callout";
 import { createPortal } from "react-dom";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconClose, IconMais, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
+import { IconClose, IconMais, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconModelo, IconPlay, IconPlus, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
 import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
 import { MenuMais } from "../Dropdown";
@@ -111,6 +111,7 @@ export function FluxosAutomacao({
   onRodando,
   novo: pedidoNovo,
   onEditor,
+  extensao,
 }: {
   pedir: Pedir;
   lote: MutableRefObject<string | null>;
@@ -131,6 +132,8 @@ export function FluxosAutomacao({
   novo: number;
   /** Avisa quando um fluxo está aberto (o cabeçalho esconde o "Novo fluxo"). */
   onEditor: (aberto: boolean) => void;
+  /** O estado da extensão/Centi + o menu "Extensão e Centi" — com um fluxo aberto, no FIM da linha do editor (uma linha só). */
+  extensao?: ReactNode;
 }) {
   const [fluxos, setFluxos] = useState<FluxoAutomacao[] | null>(null);
   // Os PÚBLICOS de outras pessoas (o painel lateral "Novo fluxo").
@@ -707,6 +710,7 @@ export function FluxosAutomacao({
         <EditorFluxo
           key={`${fluxo.id}:${versaoEditor}`}
           fluxo={fluxo}
+          extensao={extensao}
           onAtualizarModelo={modeloDoAberto ? () => void atualizarPeloModelo(fluxo, modeloDoAberto) : undefined}
           desatualizado={modeloDoAberto ? desatualizadoDoModelo(lerGrafo(fluxo.grafo), modeloDoAberto) : false}
           rodando={rodando === fluxo.id}
@@ -1264,8 +1268,11 @@ function EditorFluxo({
   onNaMesa,
   onAtualizarModelo,
   desatualizado,
+  extensao,
 }: {
   fluxo: FluxoAutomacao;
+  /** O estado da extensão/Centi + o menu dela (vem da tela da Automação) — no fim da MESMA linha. */
+  extensao?: ReactNode;
   /** Há um modelo de mesmo nome: regrava o fluxo com o modelo de hoje. */
   onAtualizarModelo?: () => void;
   /** O diagrama salvo ficou para trás do modelo de hoje (o botão Atualizar ganha o ponto âmbar). */
@@ -1457,7 +1464,7 @@ function EditorFluxo({
           value={nome}
           maxLength={80}
           onChange={(e) => setNome(e.target.value)}
-          className="min-w-0 flex-1 rounded-control bg-transparent px-2 py-1 text-base font-semibold text-text outline-none hover:bg-[var(--accent-soft)] focus:bg-surface focus:shadow-ring"
+          className="min-w-[12rem] flex-1 rounded-control bg-transparent max-sm:basis-[calc(100%-3.25rem)] px-2 py-1 text-base font-semibold text-text outline-none hover:bg-[var(--accent-soft)] focus:bg-surface focus:shadow-ring"
         />
         {/* Os PROBLEMAS (impedem executar) e as ATENÇÕES: tocar abre a lista e leva ao componente. */}
         <ProblemasFluxo itens={erros} nivel="erro" nomeDo={nomeDoComponente} onIr={irAoComponente} />
@@ -1510,7 +1517,7 @@ function EditorFluxo({
             { rotulo: "Configurações da automação", icone: <IconSettings className="size-4 text-muted" />, onClick: () => setConfigAberta(true) },
             onAtualizarModelo && {
               rotulo: desatualizado ? "Atualizar pelo modelo (há versão nova)" : "Atualizar pelo modelo",
-              icone: <IconRefresh className="size-4 text-muted" />,
+              icone: <IconModelo className="size-4 text-muted" />,
               onClick: onAtualizarModelo,
               disabled: rodando,
             },
@@ -1527,7 +1534,7 @@ function EditorFluxo({
             onClick={onAtualizarModelo}
             className="relative max-sm:hidden"
           >
-            <IconRefresh className="size-4" />
+            <IconModelo className="size-4" />
             {desatualizado && <span aria-hidden="true" className="absolute top-1 right-1 size-2 rounded-full bg-[var(--warn)]" />}
           </Button>
         )}
@@ -1538,6 +1545,13 @@ function EditorFluxo({
         <Button size="sm" variant="icon" className="max-sm:hidden" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
           <IconSettings className="size-4" />
         </Button>
+        {extensao && (
+          <>
+            {/* Separa as ações DESTA automação do estado da extensão/Centi (que vale para todas). */}
+            <span aria-hidden="true" className="mx-1 h-6 w-px bg-border max-sm:hidden" />
+            {extensao}
+          </>
+        )}
         <ConfigFluxo
           open={configAberta}
           onClose={() => setConfigAberta(false)}

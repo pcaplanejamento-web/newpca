@@ -1067,6 +1067,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     vinculado NÃO pode ser excluído** (`DELETE` → 409 via `orgaoTemVinculo`/`unidadeTemVinculo`); o ADM **oculta**
     (`OrgaosAdmin`/`ReparticoesAdmin`: ação ocultar/reexibir + badge). Ocultos **somem do uso futuro** (matchers e
     seletores de documento novo filtram), mas o **histórico é preservado**.
+- **ÓRGÃO DO DFD = O DA UNIDADE (v1.289.5, migração `0182`):** a `0182` acertou `dfds.orgao_id` pelo órgão atual da unidade e o gatilho `dfd_reparticao_orgao` (AFTER UPDATE OF `orgao_id` ON `reparticoes`) leva os DFDs junto quando a unidade muda de órgão (tela, promover, rebaixar). A leitura das automações (`GET /api/admin/automacao/execucao-dfds`) usa `COALESCE(reparticoes.orgao_id, dfds.orgao_id)`. **Automação — cabeçalho:** com um fluxo aberto, UMA linha (as ações do fluxo + o estado da Centi e o menu "Extensão e Centi" — `IconPlug`, que leva Verificar e Baixar a extensão quando tudo está certo; com problema, os dois à vista) — `FluxosAutomacao.extensao`; o cabeçalho da tela só aparece na lista.
 - **Promover / rebaixar / órgão que TAMBÉM é unidade (migração `0029`):** a identidade transita entre as tabelas
   `reparticoes`⇄`orgaos`. **Sem vínculo** = create+delete de UMA linha. **Com vínculo (DFD/protocolo/itens) também é
   permitido:** a UNIDADE que carrega os vínculos é **PRESERVADA** (mesmo `reparticoes.id` ⇒ DFDs, itens, protocolos e

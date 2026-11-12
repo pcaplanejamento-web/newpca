@@ -22,7 +22,7 @@ import { Dropdown } from "./Dropdown";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { IconDownload, IconKey, IconPlus, IconSettings } from "./icons";
+import { IconDownload, IconKey, IconPlug, IconPlus } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
@@ -252,6 +252,7 @@ function Ajustes({
     <div className="space-y-3 p-1">
       <LoginNoSistema onConfigurar={onConfigurarLogin} />
       <Grupo titulo="Gravação na Centi">
+        <div className="flex flex-wrap items-center justify-between gap-2">
         <Switch
           checked={gravacao !== false}
           disabled={gravacao === null}
@@ -261,6 +262,7 @@ function Ajustes({
         <Button size="sm" variant="secondary" onClick={onHistorico}>
           Histórico das execuções
         </Button>
+        </div>
       </Grupo>
       <Grupo titulo="Gravador de receitas">
         <p className="text-xs text-muted">
@@ -536,82 +538,50 @@ export function AutomacaoAdmin({
   // Celular/tablet (toque e sem a extensão): a execução precisa do Chrome do computador.
   const [semExtensaoNoAparelho, setSemExtensaoNoAparelho] = useState(false);
   useEffect(() => setSemExtensaoNoAparelho(!ext && window.matchMedia("(pointer: coarse)").matches), [ext]);
-  return (
-    <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico barra-ferramentas flex flex-wrap items-center gap-2">
-        <h1 className="sr-only">Automação</h1>
-        <Ajuda titulo="Automação — fluxos com a Centi">
-          <p>
-            Cada automação é um <strong>fluxo</strong> montado com componentes (buscar na Centi, dados do sistema, selecionar,
-            ler, comparar, baixar/anexar, apontar erros…). Toda conversa com a Centi é por API, pela extensão do Chrome com o
-            login já feito — as telas da Centi nunca são operadas.
-          </p>
-          <p>
-            <strong>Painel do fluxo:</strong> os dados de entrada (os campos dos próprios componentes), as etapas ao vivo e as
-            abas de cada componente — a seleção dos protocolos, os DFDs baixados/anexados, os protocolos lidos — e a Análise,
-            que acompanha cada item processado em tempo real. O diagrama só aparece em “Diagrama”, para montar o fluxo.
-          </p>
-          <p>
-            <strong>Modelos prontos:</strong> Baixar/anexar DFDs (por protocolo ou por nºs de planejamento), Ler a Tela
-            Protocolo, Execução dos DFDs na CM002, Conferir DFDs × Centi e Inclusão PCA — “Usar este modelo”.
-          </p>
-          <p>
-            <strong>Baixar/anexar DFDs:</strong> cada DFD é emitido na entidade da Centi do órgão dele e conferido (o PDF tem de
-            trazer o planejamento e o DFD pedidos). Destino: pasta (Downloads, a escolhida ou um .zip com as pastas), o
-            protocolo da Centi indicado (Id + nº) ou o protocolo de cada DFD — o anexo leva a autorização de uso único do
-            sistema e a sua confirmação na janela da extensão; o já anexado não é emitido de novo.
-          </p>
-          <p>
-            <strong>Segurança:</strong> em Ajustes → Gravação na Centi, o <strong>freio</strong> pausa toda gravação na hora (para
-            todos); o <strong>Histórico das execuções</strong> mostra cada lote. A extensão trabalha numa aba PRÓPRIA da Centi
-            (grupo azul “Automação PCA”); o ícone dela mostra o andamento e permite <strong>Interromper</strong>. Sair desta tela
-            no meio de um fluxo o para.
-          </p>
-          <p>
-            <strong>Extensão:</strong> “Extensão” → descompacte (na atualização, na MESMA pasta) → chrome://extensions → Modo do
-            desenvolvedor → Carregar sem compactação (ou ↻) → F5 nesta tela. O login fica salvo nela (e, opcional, cifrado no
-            sistema — Ajustes → Login da Centi). <strong>Órgão:</strong> cada DFD vai no órgão da Centi dele (o
-            ID cadastrado no órgão; sem ele, o mapa de Ajustes, a aberta e — com “Descobrir sozinho” — as outras).
-          </p>
-        </Ajuda>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {gravacao === false && (
-            <Badge tone="red" dot>
-              Gravação pausada
-            </Badge>
-          )}
-          {ext && ext.copias > 1 && (
-            <Badge tone="amber" dot>
-              {ext.copias} cópias da extensão — remova a antiga
-            </Badge>
-          )}
-          {/* O MESMO selo de estado do PCA (Preview/Publicado — `tamanho="linha"`): o ponto que pulsa = situação ao vivo. */}
-          {!ext ? (
-            <Badge tone="amber" dot vivo tamanho="linha" className="shrink-0" title="A extensão da Centi não respondeu: instale-a (botão ao lado), abra a Centi no Chrome e entre — conferido a cada 20 s">
-              Sem extensão
-            </Badge>
-          ) : !atualizada ? (
-            <Badge tone="amber" dot tamanho="linha" className="shrink-0">
-              Extensão v{ext.versao} desatualizada
-            </Badge>
-          ) : logado?.ok && logado.logado ? (
-            <Badge
-              tone="emerald"
-              dot
-              vivo
-              tamanho="linha"
-              className="shrink-0"
-              title={`Ao vivo: a extensão está conectada e a Centi está logada${logado.entidade ? ` na entidade ${logado.entidade}` : ""}. Conferido ao abrir, ao voltar à janela e a cada 20 s.`}
-            >
-              Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
-            </Badge>
-          ) : logado?.tela === "login" ? (
-            <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={() => void pedir("abrirOpcoes", null, 8000)} />
-          ) : (
-            <Badge tone="amber" dot tamanho="linha" className="shrink-0">
-              {logado?.erro ?? "Centi sem login"}
-            </Badge>
-          )}
+  // O ESTADO da extensão e da Centi + o menu "Extensão e Centi" — UMA vez por tela: no cabeçalho da lista e, com um fluxo
+  // aberto, no fim da linha do editor (nunca duas linhas com engrenagens/atualizar/ajuda repetidos).
+  const estadoExtensao = (
+    <div className="flex flex-wrap items-center gap-2">
+      {gravacao === false && (
+        <Badge tone="red" dot>
+          Gravação pausada
+        </Badge>
+      )}
+      {ext && ext.copias > 1 && (
+        <Badge tone="amber" dot>
+          {ext.copias} cópias da extensão — remova a antiga
+        </Badge>
+      )}
+      {/* O MESMO selo de estado do PCA (Preview/Publicado — `tamanho="linha"`): o ponto que pulsa = situação ao vivo. */}
+      {!ext ? (
+        <Badge tone="amber" dot vivo tamanho="linha" className="shrink-0" title="A extensão da Centi não respondeu: instale-a (botão ao lado), abra a Centi no Chrome e entre — conferido a cada 20 s">
+          Sem extensão
+        </Badge>
+      ) : !atualizada ? (
+        <Badge tone="amber" dot tamanho="linha" className="shrink-0">
+          Extensão v{ext.versao} desatualizada
+        </Badge>
+      ) : logado?.ok && logado.logado ? (
+        <Badge
+          tone="emerald"
+          dot
+          vivo
+          tamanho="linha"
+          className="shrink-0"
+          title={`Ao vivo: a extensão está conectada e a Centi está logada${logado.entidade ? ` na entidade ${logado.entidade}` : ""}. Conferido ao abrir, ao voltar à janela e a cada 20 s.`}
+        >
+          Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
+        </Badge>
+      ) : logado?.tela === "login" ? (
+        <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={() => void pedir("abrirOpcoes", null, 8000)} />
+      ) : (
+        <Badge tone="amber" dot tamanho="linha" className="shrink-0">
+          {logado?.erro ?? "Centi sem login"}
+        </Badge>
+      )}
+      {/* Sem a extensão em dia ou sem a Centi logada: verificar e baixar à vista (com tudo certo, só no menu). */}
+      {!pronto && (
+        <>
           <BotaoAtualizar
             ativo={giroVerificar.girando}
             rotulo="Verificar"
@@ -627,52 +597,106 @@ export function AutomacaoAdmin({
             aria-label={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}
           >
             <IconDownload className="h-4 w-4 shrink-0" />
-            {/* Tudo certo (extensão em dia e Centi logada) = o número ENCOLHE e fica só o ícone. */}
-            <span
-              className={`overflow-hidden whitespace-nowrap tabular-nums transition-[max-width,opacity,margin] duration-[var(--motion-duration)] ease-[var(--motion-ease)] ${
-                pronto ? "-ml-2 max-w-0 opacity-0" : "ml-0 max-w-24 opacity-100"
-              }`}
-            >
-              {VERSAO_EXTENSAO_CENTI}
-            </span>
+            <span className="tabular-nums">{VERSAO_EXTENSAO_CENTI}</span>
           </Button>
-          {!noEditor && (
+        </>
+      )}
+      <Dropdown
+        papel="dialog"
+        ariaLabel="Extensão e Centi"
+        align="end"
+        width={360}
+        trigger={
+          <span
+            title="Extensão e Centi: verificar, baixar a extensão e os ajustes"
+            className="inline-flex size-11 items-center justify-center rounded-control border border-border-2 bg-surface text-text lg:size-[var(--h-control-sm)]"
+          >
+            <IconPlug className="h-4 w-4" aria-hidden="true" />
+          </span>
+        }
+      >
+        <div className="space-y-3">
+          {/* Com tudo certo, verificar e baixar ficam SÓ aqui; com problema, estão à vista na linha (nunca nos dois). */}
+          {pronto && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-1 pb-3">
+              <BotaoAtualizar
+                ativo={giroVerificar.girando}
+                rotulo="Verificar"
+                dica="Verificar a extensão e a Centi"
+                detalhe="Verificando a extensão e a Centi…"
+                onClick={() => void giroVerificar.girar(async () => void (await verificar(true)))}
+              />
+              <Button size="sm" variant="secondary" onClick={baixarExtensao}>
+                <IconDownload className="h-4 w-4 shrink-0" /> Baixar a extensão {VERSAO_EXTENSAO_CENTI}
+              </Button>
+            </div>
+          )}
+          <Ajustes
+            cfg={cfg}
+            onCfg={mudar}
+            orgaos={orgaos}
+            mapa={mapa}
+            fixas={cadastradas}
+            onEntidade={definirEntidade}
+            aberta={logado?.entidade ?? null}
+            gravacao={gravacao}
+            onGravacao={(v) => void mudarGravacao(v)}
+            onHistorico={() => setHistorico(true)}
+            gravando={pronto ? gravando : null}
+            onGravador={(a) => void usarGravador(a)}
+            onConfigurarLogin={() => void pedir("abrirOpcoes", null, 8000)}
+          />
+        </div>
+      </Dropdown>
+    </div>
+  );
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      {!noEditor && (
+        <div className="linha-topico flex flex-wrap items-center gap-2">
+          <h1 className="sr-only">Automação</h1>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {estadoExtensao}
             <Button size="sm" variant="primary" onClick={() => setNovoFluxo((n) => n + 1)} title="Novo fluxo" aria-label="Novo fluxo">
               <IconPlus className="h-4 w-4" />
             </Button>
-          )}
-          <Dropdown
-            papel="dialog"
-            ariaLabel="Ajustes"
-            align="end"
-            width={360}
-            trigger={
-              <span
-                title="Ajustes"
-                className="inline-flex size-11 items-center justify-center rounded-control border border-border-2 bg-surface text-text lg:size-[var(--h-control-sm)]"
-              >
-                <IconSettings className="h-4 w-4" aria-hidden="true" />
-              </span>
-            }
-          >
-            <Ajustes
-              cfg={cfg}
-              onCfg={mudar}
-              orgaos={orgaos}
-              mapa={mapa}
-              fixas={cadastradas}
-              onEntidade={definirEntidade}
-              aberta={logado?.entidade ?? null}
-              gravacao={gravacao}
-              onGravacao={(v) => void mudarGravacao(v)}
-              onHistorico={() => setHistorico(true)}
-              gravando={pronto ? gravando : null}
-              onGravador={(a) => void usarGravador(a)}
-              onConfigurarLogin={() => void pedir("abrirOpcoes", null, 8000)}
-            />
-          </Dropdown>
+            <Ajuda titulo="Automação — fluxos com a Centi">
+              <p>
+                Cada automação é um <strong>fluxo</strong> montado com componentes (buscar na Centi, dados do sistema, selecionar,
+                ler, comparar, baixar/anexar, apontar erros…). Toda conversa com a Centi é por API, pela extensão do Chrome com o
+                login já feito — as telas da Centi nunca são operadas.
+              </p>
+              <p>
+                <strong>Painel do fluxo:</strong> os dados de entrada (os campos dos próprios componentes), as etapas ao vivo e as
+                abas de cada componente — a seleção dos protocolos, os DFDs baixados/anexados, os protocolos lidos — e a Análise,
+                que acompanha cada item processado em tempo real. O diagrama só aparece em “Diagrama”, para montar o fluxo.
+              </p>
+              <p>
+                <strong>Modelos prontos:</strong> Baixar/anexar DFDs (por protocolo ou por nºs de planejamento), Ler a Tela
+                Protocolo, Execução dos DFDs na CM002, Conferir DFDs × Centi e Inclusão PCA — “Usar este modelo”.
+              </p>
+              <p>
+                <strong>Baixar/anexar DFDs:</strong> cada DFD é emitido na entidade da Centi do órgão dele e conferido (o PDF tem de
+                trazer o planejamento e o DFD pedidos). Destino: pasta (Downloads, a escolhida ou um .zip com as pastas), o
+                protocolo da Centi indicado (Id + nº) ou o protocolo de cada DFD — o anexo leva a autorização de uso único do
+                sistema e a sua confirmação na janela da extensão; o já anexado não é emitido de novo.
+              </p>
+              <p>
+                <strong>Segurança:</strong> em Extensão e Centi (o plugue) → Gravação na Centi, o <strong>freio</strong> pausa toda gravação na hora (para
+                todos); o <strong>Histórico das execuções</strong> mostra cada lote. A extensão trabalha numa aba PRÓPRIA da Centi
+                (grupo azul “Automação PCA”); o ícone dela mostra o andamento e permite <strong>Interromper</strong>. Sair desta tela
+                no meio de um fluxo o para.
+              </p>
+              <p>
+                <strong>Extensão:</strong> “Extensão” → descompacte (na atualização, na MESMA pasta) → chrome://extensions → Modo do
+                desenvolvedor → Carregar sem compactação (ou ↻) → F5 nesta tela. O login fica salvo nela (e, opcional, cifrado no
+                sistema — Extensão e Centi → Login da Centi). <strong>Órgão:</strong> cada DFD vai no órgão da Centi dele (o
+                ID cadastrado no órgão; sem ele, o mapa de Extensão e Centi, a aberta e — com “Descobrir sozinho” — as outras).
+              </p>
+            </Ajuda>
+          </div>
         </div>
-      </div>
+      )}
       {/* No celular/tablet não há extensões no navegador: ver e editar os fluxos vale; executar, só no computador. */}
       {semExtensaoNoAparelho && (
         <Callout kind="info">
@@ -695,6 +719,7 @@ export function AutomacaoAdmin({
         onRodando={setRodando}
         novo={novoFluxo}
         onEditor={setNoEditor}
+        extensao={estadoExtensao}
       />
 
       <BannersMesa

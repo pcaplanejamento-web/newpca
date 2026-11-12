@@ -1277,3 +1277,23 @@ describe("0161: a configuração CENTRAL das importações vem do card", () => {
     assert.equal(ler().importacoes.frequenciaMin, 240);
   });
 });
+
+describe("0182: o órgão do DFD acompanha a unidade", () => {
+  it("acerta os gravados e a unidade que muda de órgão leva os DFDs dela", () => {
+    const db = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0182")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (901, 'Prefeitura', 'PMRV'), (902, 'Fundo de Educação', 'FME')`);
+    db.exec(`INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (901, 'FMEU', 'Unidade FME', 902), (902, 'SMS', 'Saúde', 901)`);
+    // O DFD da unidade do FME ficou com o órgão antigo (a Prefeitura); o outro já está certo; o sem unidade fica.
+    db.exec(`INSERT INTO dfds (id, numero, reparticao_id, orgao_id) VALUES (901, 'A1', 901, 901), (902, 'A2', 902, 901), (903, 'A3', NULL, 901)`);
+    db.exec(readFileSync(join(DIR, arquivos.find((f) => f.startsWith("0182")) as string), "utf8"));
+    const org = (id: number) => (db.prepare("SELECT orgao_id AS o FROM dfds WHERE id = ?").get(id) as { o: number | null }).o;
+    assert.equal(org(901), 902);
+    assert.equal(org(902), 901);
+    assert.equal(org(903), 901);
+    db.exec(`UPDATE reparticoes SET orgao_id = 902 WHERE id = 902`);
+    assert.equal(org(902), 902, "a unidade que muda de órgão leva os DFDs");
+    db.exec(`UPDATE reparticoes SET orgao_id = NULL WHERE id = 902`);
+    assert.equal(org(902), 902, "unidade sem órgão não apaga o órgão do DFD");
+  });
+});
