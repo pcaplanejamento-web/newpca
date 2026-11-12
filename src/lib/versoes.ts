@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.8",
+    data: "2026-11-12",
+    titulo: "Conferir DFDs × Centi: um DFD por vez na Centi",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A Centi é chamada UM DFD por vez (a sessão dela é uma só): com 3 execuções ao mesmo tempo, o “abrir o planejamento” de um DFD se misturava com o “Emitir DFD” de outro — “A Centi respondeu 500” ou um PDF que não era o DFD. O paralelo segue acelerando a parte do sistema; a falha passageira tenta uma vez de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Na Análise, o cartão “Já feitos antes” (os pulados pela retomada) e “Falhas” com o número de apontamentos; a falha de cada DFD aparece uma vez só nos apontamentos.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.289.7",
     data: "2026-11-12",
     titulo: "Automações da Centi: o órgão é o do documento",

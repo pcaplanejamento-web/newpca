@@ -376,10 +376,11 @@ test("Modelo “Unidades × Centro de Custo”: a CM002 SEM a coluna — cada DF
       return { ok: true, alterados: 0, falhas: [] };
     },
     cancelado: () => false,
-    host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
+    host: { protocolos: [], unidades, lerDfdCenti, esperaCentiMs: 0, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
   });
   assert.equal(r.estado, "concluido", r.erro);
-  assert.deepEqual(lidos.sort(), ["100@2:false", "200@2:false", "300@2:false"], "só o load (sem PDF), na entidade do órgão");
+  // O 300 falha sem resposta: a falha passageira tenta UMA vez de novo.
+  assert.deepEqual(lidos.sort(), ["100@2:false", "200@2:false", "300@2:false", "300@2:false"], "só o load (sem PDF), na entidade do órgão");
   const msgs = r.apontados.map((a) => String(a.mensagem));
   assert.ok(msgs.some((t) => t.startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")), msgs.join("\n"));
   assert.ok(!msgs.some((t) => t.startsWith("DFD 20")), "a unidade igual não é apontada");

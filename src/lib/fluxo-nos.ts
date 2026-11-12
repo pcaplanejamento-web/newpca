@@ -38,6 +38,7 @@ import {
   TIPO_LACO,
 } from "./fluxo-core.ts";
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
+import { filaSerial } from "./ocr-assinatura-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
@@ -111,7 +112,7 @@ async function lerPlanejamentosPeloId(
         return r;
       }
       try {
-        r = { ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true) };
+        r = { ...it, centi: await lerNaCenti(() => ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true), ctx) };
       } catch (x) {
         const msg = x instanceof Error ? x.message : String(x);
         // O lote acabou ou a Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
@@ -129,6 +130,28 @@ async function lerPlanejamentosPeloId(
   );
   return lidos; // cancelado = os não começados ficam `undefined`
 }
+/**
+ * A Centi trabalha numa SESSÃO só: o load do planejamento e o Emitir DFD valem para o registro aberto por último. Dois
+ * pedidos intercalados (as execuções em paralelo de um subfluxo) fazem um emitir o contexto do outro — "A Centi
+ * respondeu 500" ou um PDF que não é o DFD. Por isso TODA leitura de DFD na Centi passa por esta fila (uma por vez, em
+ * toda a aba), como o "Baixar DFDs"; o paralelo do subfluxo acelera só a parte do sistema.
+ */
+const filaCenti = filaSerial();
+/** A falha que costuma passar sozinha (o servidor da Centi, um PDF trocado): vale UMA nova tentativa. */
+export const falhaCentiPassageira = (msg: string): boolean => /respondeu 5\d\d|n[aã]o reconheci um DFD|outro planejamento|sem resposta|n[aã]o respondeu/i.test(msg);
+/** Uma leitura na Centi pela fila, com uma nova tentativa depois de `host.esperaCentiMs` (padrão 2 s) na falha passageira. */
+export async function lerNaCenti<T>(ler: () => Promise<T>, ctx: Pick<ContextoNo, "host" | "cancelado">): Promise<T> {
+  try {
+    return await filaCenti(ler);
+  } catch (x) {
+    const msg = x instanceof Error ? x.message : String(x);
+    if (!falhaCentiPassageira(msg) || ctx.cancelado()) throw x;
+    const ms = typeof ctx.host.esperaCentiMs === "number" ? ctx.host.esperaCentiMs : 2000;
+    if (!(await esperar(ms, ctx.cancelado))) throw x;
+    return filaCenti(ler);
+  }
+}
+
 /** Opções numéricas de um campo de seleção (o valor gravado é o número em texto — `numeroDe` lê). */
 const opcoesNum = (ns: number[], rot: (n: number) => string = (n) => n.toLocaleString("pt-BR")) => ns.map((n) => ({ valor: String(n), rotulo: rot(n) }));
 const rotSeg = (n: number) => (n < 60 ? `${n} segundo${n === 1 ? "" : "s"}` : `${n / 60} minuto${n === 60 ? "" : "s"}`);
@@ -1249,7 +1272,7 @@ const NOS: DefNo[] = [
         ],
         padrao: "porItem",
       },
-      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "selecao", entrada: true, padrao: 3, opcoes: opcoesNum([1, 2, 3, 4, 5, 6]), ajuda: "Quantos itens o fluxo escolhido processa juntos. Mais = mais rápido, porém mais pedidos à Centi ao mesmo tempo.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "selecao", entrada: true, padrao: 3, opcoes: opcoesNum([1, 2, 3, 4, 5, 6]), ajuda: "Quantos itens o fluxo escolhido processa juntos. A Centi é sempre chamada um DFD por vez (a sessão dela é uma só) — o paralelo acelera a parte do sistema.", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Se a execução parar no meio, a próxima pula os itens já concluídos e continua de onde parou.", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "chave", rotulo: "Campo que identifica o item", ajuda: "O dado que identifica cada item na retomada (ex.: planejamento).", tipo: "caminho", padrao: "id", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "limite", rotulo: "Máximo de itens", tipo: "selecao", padrao: 20000, opcoes: opcoesNum([10, 100, 1000, 5000, 20000]), ajuda: "Um teto de segurança: quantos itens, no máximo, rodam o fluxo escolhido.", quando: { campo: "modo", valores: ["porItem"] } },
@@ -1303,7 +1326,7 @@ const NOS: DefNo[] = [
               if (erroTxt) {
                 const f = { ...it, subfluxo: { estado: "falhou", erro: erroTxt } };
                 falhas.push(f);
-                apontados.push({ mensagem: `${filho.nome}${k ? ` (${k})` : ""}: ${erroTxt}`, nivel: "erro", item: it });
+                apontados.push({ mensagem: `${filho.nome}${k ? ` (${k})` : ""}: ${erroTxt}`, nivel: "erro", item: it, __dePorta: "falhas" });
                 if (k) gravar.push({ chave: k, estado: "falha" });
                 ctx.parcial?.([f]);
               } else {

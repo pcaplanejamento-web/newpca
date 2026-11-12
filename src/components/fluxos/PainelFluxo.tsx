@@ -250,6 +250,7 @@ function AnaliseAoVivo({
   const exec = useExecutarSelecionados(grafo, rodando ? [] : itensFonte, (it) => itensFonte.indexOf(it));
   // Quantos itens entram no componente (o que os anteriores entregaram) — o andamento "n de N".
   const total = fonte ? Math.max(itensFonte.length, ...etapas.filter((n) => n.x < fonte.x).map((n) => passos[n.id]?.itens ?? 0)) : 0;
+  const jaAntes = fonte?.tipo === "fluxo.executar" && !rodando && resultado?.estado === "concluido" ? Math.max(0, total - processados.length) : 0;
   const conta = (tons: Tone[]) => processados.filter((p) => tons.includes(p.estado.tom)).length;
   const apontados = useMemo<Apontado[]>(
     () =>
@@ -314,15 +315,13 @@ function AnaliseAoVivo({
         </div>
       )}
       {fonte && (processados.length > 0 || resultado) && (
-        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-4">
+        // Terminada, o que a fonte não processou e os anteriores entregaram = os já feitos antes (a retomada pulou).
+        <div className={`grid grid-cols-2 gap-[var(--gap-block)] ${jaAntes ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
           <StatMini label="Processados" value={processados.length.toLocaleString("pt-BR")} hint={total ? `de ${total.toLocaleString("pt-BR")}` : undefined} />
+          {jaAntes > 0 && <StatMini label="Já feitos antes" value={jaAntes.toLocaleString("pt-BR")} hint="pulados pela retomada" />}
           <StatMini label="Ok" value={conta(["emerald"]).toLocaleString("pt-BR")} tone="ok" />
           <StatMini label="Atenção" value={conta(["amber"]).toLocaleString("pt-BR")} tone={conta(["amber"]) ? "warn" : "default"} />
-          <StatMini
-            label={resultado ? "Apontamentos" : "Falhas"}
-            value={(resultado ? apontados.length : conta(["red"])).toLocaleString("pt-BR")}
-            tone={(resultado ? apontados.length : conta(["red"])) ? "danger" : "default"}
-          />
+          <StatMini label="Falhas" value={conta(["red"]).toLocaleString("pt-BR")} tone={conta(["red"]) ? "danger" : "default"} hint={resultado && apontados.length ? `${apontados.length.toLocaleString("pt-BR")} apontamento(s)` : undefined} />
         </div>
       )}
       {resultado && apontados.length > 0 && (

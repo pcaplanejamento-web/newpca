@@ -345,7 +345,7 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
     },
   } as never);
   assert.equal(r.estado, "concluido", r.erro);
-  assert.ok(maxSimultaneo > 1, "as conferências correm em paralelo");
+  assert.equal(maxSimultaneo, 1, "a Centi é chamada um DFD por vez (a sessão dela é uma só), mesmo com o subfluxo em paralelo");
   assert.deepEqual(
     [...marcados].sort((x, y) => x.dfdId - y.dfdId),
     [
@@ -500,6 +500,7 @@ test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha
       host: {
         chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
         mapaEntidades: { "o:1": "2" },
+        esperaCentiMs: 0,
         carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
         progresso: {
           ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
@@ -524,6 +525,44 @@ test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha
   await rodar();
   assert.deepEqual(lidos, ["101"], "a retomada pula o já conferido e tenta de novo só o que falhou");
   assert.deepEqual(marcados.map((x) => x.dfdId).sort(), [1, 2]);
+});
+
+test("Conferir DFDs × Centi: a Centi é chamada UM DFD por vez (mesmo em paralelo), a falha passageira tenta de novo e a falha não é apontada em dobro", async () => {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const dfds = Array.from({ length: 10 }, (_, i) => ({ id: i + 1, numero: String(10 + i), planejamento: String(100 + i), valor: 5, totalItens: 1, orgaoId: 1 }));
+  let emCurso = 0;
+  let maximo = 0;
+  const tentativas = new Map<string, number>();
+  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+    centi: async () => ({ ok: false }),
+    api: async (url: string) => (url.endsWith("execucao-dfds") ? { ok: true, dfds } : { ok: true }),
+    cancelado: () => false,
+    host: {
+      chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
+      mapaEntidades: { "o:1": "2" },
+      esperaCentiMs: 0,
+      carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+      lerDfdCenti: async (plan: string) => {
+        emCurso++;
+        maximo = Math.max(maximo, emCurso);
+        await new Promise((ok) => setTimeout(ok, 2));
+        emCurso--;
+        const n = (tentativas.get(plan) ?? 0) + 1;
+        tentativas.set(plan, n);
+        if (plan === "101" && n === 1) throw new Error("A Centi respondeu 500.");
+        if (plan === "102") throw new Error("A Centi respondeu 500.");
+        const i = Number(plan) - 100;
+        return { numero: String(10 + i), planejamento: plan, valor: 5, totalItens: 1 };
+      },
+    },
+  } as never);
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.equal(maximo, 1, "nunca dois pedidos à Centi ao mesmo tempo");
+  assert.equal(tentativas.get("101"), 2, "a falha passageira tenta UMA vez de novo e passa");
+  assert.equal(tentativas.get("102"), 2, "persistindo, desiste depois da 2ª");
+  assert.equal(r.apontados.filter((a) => /102/.test(String(a.mensagem))).length, 1, "a falha sai uma vez só nos apontamentos");
 });
 
 test("lerAjudaFluxo: qualquer JSON vira os 3 textos", () => {
