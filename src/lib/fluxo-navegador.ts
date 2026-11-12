@@ -101,6 +101,8 @@ export async function lerDfdCentiPorCodigo(
   comPdf = true,
   /** Devolve também o DFD lido INTEIRO (`dfd`) — a base da substituição. */
   completo = false,
+  /** Lê a assinatura achatada por OCR (a sobrescrita); a conferência lê só o texto. */
+  ocr = completo,
 ): Promise<Item> {
   const plan = s(planejamento).replace(/\D/g, "");
   if (!plan) throw new Error("O DFD não tem nº de planejamento.");
@@ -124,7 +126,7 @@ export async function lerDfdCentiPorCodigo(
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
   const e = await emitirUm(c, plan, entidade || undefined, false, true);
   if (!e.pdf) throw new Error(e.recusada ? `A Centi recusou o Emitir DFD — ${e.erro}` : (e.erro ?? "Falha ao emitir."));
-  const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr: completo }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
+  const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
   const resumo = { numero: d.numero, planejamento: d.planejamento, tipo: d.tipo, objeto: d.objeto, valor: d.valorTotal ?? 0, totalItens: d.itens.length, situacao, ...extra };
@@ -134,11 +136,15 @@ export async function lerDfdCentiPorCodigo(
 /** SUBSTITUI os dados do DFD gravado (`dfdId`) pelos do DFD lido na Centi — a MESMA sobrescrita do "Sobrescrever DFD":
  * o mesmo nº de planejamento é exigido; a unidade, o protocolo e o PCA ficam os do gravado; o que a Centi não traz e o
  * gravado já tratou é HERDADO (`herdarTratamentos`) e, sem assinatura lida (PDF sem OCR), ficam as do gravado. */
-export async function substituirDfdPelaCenti(dfdId: number, novo: DfdParseado): Promise<{ numero: string; itens: number }> {
+export async function dfdDoSistema(dfdId: number): Promise<DfdDetalhe> {
   const r = await fetch(`/api/dfd/${dfdId}`);
   const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; dfd?: DfdDetalhe } | null;
   if (!r.ok || !j?.ok || !j.dfd) throw new Error(j?.error ?? "Não foi possível carregar o DFD gravado.");
-  const g = j.dfd;
+  return j.dfd;
+}
+
+export async function substituirDfdPelaCenti(dfdId: number, novo: DfdParseado): Promise<{ numero: string; itens: number }> {
+  const g = await dfdDoSistema(dfdId);
   const so = (v: unknown) => s(v).replace(/\D/g, "").replace(/^0+/, "");
   if (!so(g.planejamento) || so(g.planejamento) !== so(novo.planejamento))
     throw new Error(`O DFD da Centi é de outro planejamento (${s(novo.planejamento) || "sem nº"} × ${s(g.planejamento) || "sem nº"}).`);

@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.11",
+    data: "2026-11-12",
+    titulo: "Conferir DFDs × Centi: o Divergente diz o que diverge",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "A conferência compara TODAS as informações do DFD com a Centi — cabeçalho (objeto, órgão, setor, responsável, contatos, referências), tipo, valor, seções e cada item (código, descrição, medida, quantidade e valores) — e o motivo do Divergente lista cada diferença (sistema × Centi). Use “Atualizar pelo modelo” no “Conferir 1 DFD × Centi”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "Na coluna Centi, a dica do Divergente mostra a lista das diferenças.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.289.10",
     data: "2026-11-12",
     titulo: "Conferir DFDs × Centi: tipo em branco não é mais divergência",

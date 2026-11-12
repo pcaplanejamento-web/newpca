@@ -148,18 +148,18 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "conferir-1-dfd",
     nome: "Conferir 1 DFD × Centi",
     descricao:
-      "UM DFD: buscado na Centi pelo nº de planejamento e comparado (nº, tipo, objeto, valor e itens) → marca Divergente ou Convergente. Usado pelo “Conferir DFDs × Centi”; sozinho, informe o planejamento.",
+      "UM DFD: buscado na Centi pelo nº de planejamento e comparado em TODAS as informações (cabeçalho, seções e itens) → marca Divergente (com cada diferença) ou Convergente. Usado pelo “Conferir DFDs × Centi”; sozinho, informe o planejamento.",
     ajuda: {
-      funciona: "Busca UM DFD na Centi pelo nº de planejamento e compara nº, tipo, objeto, valor e itens com o gravado no sistema.",
+      funciona: "Busca UM DFD na Centi pelo nº de planejamento e compara TODAS as informações com o gravado no sistema: cabeçalho (objeto, órgão, setor, responsável, contatos, referências), tipo, valor, seções (justificativa, previsão, prioridade, fundamentação…) e cada item (código, descrição, medida, quantidade, valores).",
       executa: "É usado pelo “Conferir DFDs × Centi”, um DFD por vez. Sozinho, informe o nº de planejamento e execute.",
-      resultado: "O DFD marcado Convergente ou Divergente (com o motivo) — coluna “Centi” da Mesa.",
+      resultado: "O DFD marcado Convergente ou Divergente — o motivo lista cada diferença (sistema × Centi); coluna “Centi” da Mesa.",
     },
     grafo: {
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("dfd1", "sistema.completarDfd", 280, 160, {}),
-        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1, falhaErro: true, exigirOrgao: true }),
+        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1, falhaErro: true, exigirOrgao: true, dfdInteiro: true }),
         n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }),
         n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }),
         n("marcar1", "saida.marcarConferencia", 1184, 224),

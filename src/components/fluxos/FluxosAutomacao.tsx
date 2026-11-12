@@ -30,7 +30,7 @@ import {
   subgrafoSoLeitura,
   variaveisDoGrafo,
 } from "@/lib/fluxo-core";
-import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
+import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { alternarAutomacaoMesa, EVENTO_DISPARO_MESA, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
@@ -342,9 +342,10 @@ export function FluxosAutomacao({
         if (!lido) return { importado: false, motivo: "O protocolo não foi lido nesta execução (ligue o nó “Ler protocolo” antes)." };
         return importarProtocolo(lido, apontamentos, importacao);
       },
-      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean, completo?: boolean) =>
+      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean, completo?: boolean, ocr?: boolean) =>
         // A entidade no MESMO formato da aberta na Centi — como o "Baixar DFDs" (6 → "06" quando a aberta é "02").
-        lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true),
+        lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true, ocr ?? completo === true),
+      dfdDoSistema: (id: number) => dfdDoSistema(id) as unknown as Promise<Item>,
       substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {

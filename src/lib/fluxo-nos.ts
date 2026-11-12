@@ -43,6 +43,8 @@ import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marc
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
+import { type DfdSistemaComparavel, diferencasDfdCenti, motivoDivergencias } from "./conferencia-dfd-centi.ts";
+import type { DfdParseado } from "./parse-dfd-comum.ts";
 import { chaveColuna, colunaReservada, ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
 /** "17 a 56" — a faixa dos IDs (numéricos) de um conjunto, para a mensagem. */
@@ -83,9 +85,9 @@ const str = (v: unknown, padrao = "") => (typeof v === "string" ? v : v == null 
 async function lerPlanejamentosPeloId(
   itens: Item[],
   ctx: ContextoNo,
-  op: { pdf: boolean; completo?: boolean; falhaErro?: boolean; exigirOrgao?: boolean; paralelo?: number; rotulo?: string },
+  op: { pdf: boolean; completo?: boolean; ocr?: boolean; falhaErro?: boolean; exigirOrgao?: boolean; paralelo?: number; rotulo?: string },
 ): Promise<(Item | undefined)[]> {
-  const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean) => Promise<Item>) | undefined;
+  const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean, ocr?: boolean) => Promise<Item>) | undefined;
   if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
   const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
   const chave = ctx.host.chaveOrgao as ((id: number | null, ent: string | null) => string | null) | undefined;
@@ -112,7 +114,7 @@ async function lerPlanejamentosPeloId(
         return r;
       }
       try {
-        r = { ...it, centi: await lerNaCenti(() => ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true), ctx) };
+        r = { ...it, centi: await lerNaCenti(() => ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true, op.ocr ?? op.completo === true), ctx) };
       } catch (x0) {
         let x: unknown = x0;
         let achou: Item | null = null;
@@ -124,7 +126,7 @@ async function lerPlanejamentosPeloId(
             if (ctx.cancelado()) break;
             ctx.aviso(`${op.rotulo ?? ""}DFD ${str(it.numero)} · planejamento ${str(it.planejamento)}: tentando o órgão ${e} na Centi…`);
             try {
-              const achado = await lerNaCenti(() => ler(str(it.planejamento), e, op.pdf, op.completo === true), ctx);
+              const achado = await lerNaCenti(() => ler(str(it.planejamento), e, op.pdf, op.completo === true, op.ocr ?? op.completo === true), ctx);
               x = null;
               achou = { ...it, centi: achado, entidadeAchada: e };
               break;
@@ -810,7 +812,8 @@ const NOS: DefNo[] = [
     campos: [
       { chave: "limite", rotulo: "Máximo de DFDs", tipo: "selecao", padrao: 5000, opcoes: opcoesNum([100, 500, 1000, 5000, 10000, 20000]), ajuda: "Um teto de segurança: o nó busca no máximo esta quantidade de DFDs na Centi por execução." },
       { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
-      { chave: "completo", rotulo: "Guardar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo vai em “centi.dfd” — a base do “Substituir DFD pela Centi”." },
+      { chave: "completo", rotulo: "Guardar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo (com a assinatura por OCR) vai em “centi.dfd” — a base do “Substituir DFD pela Centi”." },
+      { chave: "dfdInteiro", rotulo: "Comparar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo (sem OCR — mais rápido) vai em “centi.dfd” para o “Comparar DFD × Centi” conferir TODAS as informações (cabeçalho, seções e itens)." },
       {
         chave: "falhaErro",
         rotulo: "Falha de comunicação para o fluxo",
@@ -828,7 +831,7 @@ const NOS: DefNo[] = [
     ],
     executar: async (e, c, ctx) => {
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
-      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true })).filter((x): x is Item => x !== undefined);
+      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true || c.dfdInteiro === true, ocr: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true })).filter((x): x is Item => x !== undefined);
       return { saida: out };
     },
   },
@@ -1248,7 +1251,7 @@ const NOS: DefNo[] = [
     tipo: "dados.compararDfdCenti",
     categoria: "dados",
     rotulo: "Comparar DFD × Centi",
-    descricao: "O DFD do sistema × o lido na Centi (nó “Buscar DFD na Centi”): nº do DFD, tipo, objeto, valor total e nº de itens.",
+    descricao: "O DFD do sistema × o lido na Centi (nó “Buscar DFD na Centi”): com o DFD inteiro, TODAS as informações — cabeçalho, seções e itens (cada diferença no motivo); sem ele, nº, tipo, objeto, valor total e nº de itens.",
     icone: "compare",
     entradas: ["entrada"],
     saidas: ["divergentes", "conformes"],
@@ -1257,7 +1260,31 @@ const NOS: DefNo[] = [
       { chave: "tolerancia", rotulo: "Tolerância do valor", tipo: "selecao", entrada: true, padrao: 0.01, opcoes: [{ valor: "0", rotulo: "Nenhuma (exato)" }, ...opcoesNum([0.01, 0.1, 1, 10, 100], (n) => `Até R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)], ajuda: "A diferença de valor aceita entre o sistema e a Centi sem apontar divergência (centavos de arredondamento)." },
       { chave: "objeto", rotulo: "Comparar o objeto", ajuda: "Ligado: o objeto (descrição) do DFD também precisa ser igual ao da Centi.", tipo: "booleano", entrada: true, padrao: true },
     ],
-    executar: async (e, c) => compararDfdCenti(so(e), { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false }),
+    executar: async (e, c, ctx) => {
+      const itens = so(e);
+      // Com o DFD da Centi INTEIRO, o do sistema também (GET /api/dfd/[id]) — a comparação de TODAS as informações.
+      const ler = ctx.host.dfdDoSistema as ((id: number) => Promise<Item>) | undefined;
+      const prontos = ler
+        ? (
+            await executarEmPool(
+              itens,
+              3,
+              async (it) => {
+            const dfd = (it.centi as Item | null | undefined)?.dfd;
+            const id = Number(it.dfdId ?? it.id);
+            if (!dfd || !Number.isInteger(id) || id <= 0) return it;
+            try {
+              return { ...it, dfdSistema: await ler(id) };
+            } catch {
+              return it; // sem o do sistema, fica o resumo (nada quebra)
+            }
+              },
+              ctx.cancelado,
+            )
+          ).map((r, i) => r ?? itens[i])
+        : itens;
+      return compararDfdCenti(prontos, { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false });
+    },
   },
 
   {
@@ -2095,36 +2122,49 @@ export const tipoCurto = (t: unknown): string | null => {
   return /^[SROE]$/.test(c) ? c : null;
 };
 
-/** O DFD do sistema × o lido na Centi (`centi`): um item DIVERGENTE por diferença (com a `mensagem`). Pura. */
+/** O DFD do sistema × o lido na Centi (`centi`): um item DIVERGENTE por DFD com a `mensagem` = TODAS as diferenças.
+ * Com o DFD INTEIRO dos dois lados (`centi.dfd` + `dfdSistema`), compara cabeçalho, seções e itens
+ * (`diferencasDfdCenti`); sem eles, o resumo (tipo, valor, nº de itens, objeto). Pura. */
 export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto: boolean }): { divergentes: Item[]; conformes: Item[] } {
   const out = { divergentes: [] as Item[], conformes: [] as Item[] };
-  for (const d of itens) {
+  for (const d0 of itens) {
+    const { dfdSistema, ...d } = d0;
     const ref = `DFD ${str(d.numero)} (Planej. ${str(d.planejamento)})`;
-    const x = d.centi && typeof d.centi === "object" ? (d.centi as Item) : null;
-    const msgs: string[] = [];
+    const x0 = d.centi && typeof d.centi === "object" ? (d.centi as Item) : null;
+    const dfdCenti = x0?.dfd && typeof x0.dfd === "object" ? (x0.dfd as unknown as DfdParseado) : null;
+    // O DFD inteiro só serve à comparação: não segue adiante (o retorno e a análise ficam leves).
+    const x = x0 && dfdCenti ? (({ dfd: _dfd, ...r }) => r)(x0) : x0;
+    if (x !== x0) d.centi = x;
     if (!x && d.centiFalha) {
       // Falha de comunicação: aponta, mas NÃO marca o DFD (não foi conferido).
       out.divergentes.push({ ...d, naoMarcar: true, mensagem: `${ref}: não conferido — ${str(d.centiErro)}` });
       continue;
     }
-    if (!x) msgs.push(`${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`);
-    else {
-      if (str(d.entidadeAchada) && str(d.entidadeAchada) !== str(d.entidade))
-        msgs.push(`${ref}: achado na Centi no órgão ${str(d.entidadeAchada)}, mas o DFD está cadastrado no órgão ${str(d.entidade) || "sem ID"}`);
-      if (/CANCEL/.test(normTexto(x.situacao))) msgs.push(`${ref}: situação ${str(x.situacao)} na Centi`);
-      if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) msgs.push(`${ref}: na Centi é o DFD ${str(x.numero)}`);
-      if (tipoCurto(d.tipo) && tipoCurto(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) msgs.push(`${ref}: tipo ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
+    if (!x) {
+      out.divergentes.push({ ...d, mensagem: `${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}` });
+      continue;
+    }
+    const difs: string[] = [];
+    if (str(d.entidadeAchada) && str(d.entidadeAchada) !== str(d.entidade))
+      difs.push(`achado na Centi no órgão ${str(d.entidadeAchada)}, mas o DFD está cadastrado no órgão ${str(d.entidade) || "sem ID"}`);
+    if (/CANCEL/.test(normTexto(x.situacao))) difs.push(`situação ${str(x.situacao)} na Centi`);
+    if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) difs.push(`na Centi é o DFD ${str(x.numero)}`);
+    if (tipoCurto(d.tipo) && tipoCurto(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) difs.push(`Tipo: ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
+    if (dfdCenti && dfdSistema && typeof dfdSistema === "object") {
+      for (const f of diferencasDfdCenti(dfdSistema as unknown as DfdSistemaComparavel, dfdCenti, o.tolerancia))
+        if (o.objeto || !f.startsWith("Objeto:")) difs.push(f);
+    } else {
       const vs = numeroDe(d.valor);
       const vc = numeroDe(x.valor);
-      if (vs != null && vc != null && Math.abs(vs - vc) > o.tolerancia) msgs.push(`${ref}: valor R$ ${brl(vs)} no sistema × R$ ${brl(vc)} na Centi`);
+      if (vs != null && vc != null && Math.abs(vs - vc) > o.tolerancia) difs.push(`Valor total: R$ ${brl(vs)} no sistema × R$ ${brl(vc)} na Centi`);
       const is = numeroDe(d.totalItens ?? d.itens);
       const ic = numeroDe(x.totalItens);
-      if (is != null && ic != null && is !== ic) msgs.push(`${ref}: ${is} item(ns) no sistema × ${ic} na Centi`);
+      if (is != null && ic != null && is !== ic) difs.push(`Nº de itens: ${is} no sistema × ${ic} na Centi`);
       if (o.objeto && str(d.objeto) && str(x.objeto) && normTexto(d.objeto).replace(/[^A-Z0-9]/g, "") !== normTexto(x.objeto).replace(/[^A-Z0-9]/g, ""))
-        msgs.push(`${ref}: objeto diferente da Centi`);
+        difs.push("objeto diferente da Centi");
     }
-    // UM item por DFD (as mensagens juntas): a análise ao vivo e o apontamento não repetem o DFD.
-    if (msgs.length) out.divergentes.push({ ...d, mensagem: msgs.join("; ") });
+    // UM item por DFD (todas as diferenças juntas): a análise ao vivo e o apontamento não repetem o DFD.
+    if (difs.length) out.divergentes.push({ ...d, mensagem: motivoDivergencias(ref, difs) });
     else out.conformes.push(d);
   }
   return out;

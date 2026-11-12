@@ -224,7 +224,7 @@ test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontam
   assert.equal(r.estado, "concluido", r.erro);
   assert.equal(importados.length, 1, "só o de inclusão da repartição");
   assert.equal(importados[0].protocolo, "1");
-  assert.deepEqual(importados[0].ap.sort(), ["DFD 11 (Planej. 101): situação CANCELADO na Centi", "DFD 12 (Planej. 999): não encontrado na Centi — Planejamento não encontrado na Centi"]);
+  assert.deepEqual(importados[0].ap.sort(), ["DFD 11 (Planej. 101): 1 diferença — situação CANCELADO na Centi", "DFD 12 (Planej. 999): não encontrado na Centi — Planejamento não encontrado na Centi"]);
 });
 
 test("desdobrar leva o protocolo do pai; apontamentos agrupados por protocolo", async () => {
@@ -350,7 +350,7 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
     [...marcados].sort((x, y) => x.dfdId - y.dfdId),
     [
       { dfdId: 1, status: "convergente" },
-      { dfdId: 2, status: "divergente", motivo: "DFD 11 (Planej. 101): valor R$ 80,00 no sistema × R$ 70,00 na Centi" },
+      { dfdId: 2, status: "divergente", motivo: "DFD 11 (Planej. 101): 1 diferença — Valor total: R$ 80,00 no sistema × R$ 70,00 na Centi" },
       { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
     ],
   );
@@ -679,6 +679,6 @@ test("conferir × Centi: tipo vazio (':') não acusa diferença; R × S acusa", 
   const r1 = compararDfdCenti([{ ...base, tipo: "DFD-R", centi: { ...base, tipo: ":" } }], o);
   assert.equal(r1.divergentes.length, 0);
   const r2 = compararDfdCenti([{ ...base, tipo: "DFD-R", centi: { ...base, tipo: "DFD-S" } }], o);
-  assert.match(String(r2.divergentes[0]?.mensagem), /tipo DFD-R no sistema × DFD-S na Centi/);
+  assert.match(String(r2.divergentes[0]?.mensagem), /Tipo: DFD-R no sistema × DFD-S na Centi/);
   assert.equal(tipoCurto(":"), null);
 });
