@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  combinarBusca,
+  listaDeNumeros,
   aplicarFiltros,
   type ColunaDados,
   contarNaFaixa,
@@ -191,5 +193,23 @@ describe("coluna de SEQUENCIAL em lista (consulta do PCA)", () => {
     assert.deepEqual(opcoesDaBusca(opcoes, "7968:10"), ["10", "7968"]);
     const f = aplicarFiltros(seqs.length, [{ tipo: "values", vals: seqs.map((s) => [s]) }], [["10", "7968"]]);
     assert.deepEqual(f.passam, [0, 1]);
+  });
+});
+
+describe("vários números no mesmo filtro (espaço, ';', ', ') e a busca que SOMA", () => {
+  const nums = ["1168", "168", "170", "1700", "174", "2"];
+  it("lista de números por espaço, ';' ou ', ' vale como ':'; a vírgula decimal fica", () => {
+    assert.equal(listaDeNumeros("168 170"), "168:170");
+    assert.equal(listaDeNumeros("168; 170"), "168:170");
+    assert.equal(listaDeNumeros("168, 170"), "168:170");
+    assert.equal(listaDeNumeros("1,5"), "1,5");
+    assert.equal(listaDeNumeros("144756/2026 144800/2026"), "144756/2026:144800/2026");
+    assert.equal(listaDeNumeros("sec 12"), "sec 12");
+    assert.deepEqual(opcoesDaBusca(nums, "168 170"), ["168", "170"]);
+  });
+  it("procurar 170 com 168 já escolhido soma os dois; desmarcar dentro da busca tira só ali", () => {
+    assert.deepEqual(combinarBusca(["168"], ["170"], new Set(["170"])), ["168", "170"]);
+    assert.deepEqual(combinarBusca(["168", "170"], ["170", "1700"], new Set(["1700"])), ["168", "1700"]);
+    assert.deepEqual(combinarBusca([], ["170"], new Set(["170"])), ["170"]);
   });
 });

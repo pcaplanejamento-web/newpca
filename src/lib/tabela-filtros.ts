@@ -165,13 +165,31 @@ function chaveBusca(s: string): string {
   return k;
 }
 
+/** Uma LISTA DE NÚMEROS separada por espaço, ";" ou ", " ("168 170", "168; 170", "168, 170") vale como "168:170" — a
+ * vírgula colada aos dígitos ("1,5") segue sendo decimal. Os números podem ter "/", "." e "-" ("144756/2026", "1.000"). */
+const LISTA_NUMEROS = /^[\d./-]+(?:(?:\s*[;:]\s*|,\s+|\s+)[\d./-]+)+$/;
+export function listaDeNumeros(k: string): string {
+  return LISTA_NUMEROS.test(k) ? k.split(/\s*[;:]\s*|,\s+|\s+/).join(":") : k;
+}
+
+/**
+ * A seleção de um filtro MÚLTIPLO ao procurar: o que já estava escolhido FORA dos resultados da busca fica, e dentro
+ * deles vale o que está marcado — assim dá para procurar um número, marcar, procurar outro e somar. `base` vazia (sem
+ * filtro, tudo marcado) = só os marcados da busca.
+ */
+export function combinarBusca(base: Iterable<string>, resultados: string[], marcadas: ReadonlySet<string>): string[] {
+  const achados = new Set(resultados);
+  const fora = [...base].filter((o) => !achados.has(o));
+  return [...fora, ...resultados.filter((o) => marcadas.has(o))];
+}
+
 /**
  * Predicado da BUSCA de LINHAS (o campo de busca acima de uma tabela/lista): sem acento/caixa, a linha casa se algum
  * campo CONTÉM o texto — ou, com ":" (vários de uma vez, ex.: "5241947270:5241937263"), QUALQUER um dos termos (o
  * texto inteiro também vale: "10:30"). Busca vazia ⇒ `null` (sem filtro).
  */
 export function predicadoBusca(busca: string): ((campos: (string | null | undefined)[]) => boolean) | null {
-  const inteiro = chaveBusca(busca);
+  const inteiro = listaDeNumeros(chaveBusca(busca));
   if (!inteiro) return null;
   const termos = inteiro.includes(":") ? [inteiro, ...new Set(inteiro.split(":").map((t) => t.trim()).filter(Boolean))] : [inteiro];
   return (campos) =>
@@ -188,7 +206,7 @@ export function predicadoBusca(busca: string): ((campos: (string | null | undefi
  * opção (ex.: a hora "10:30") vale como um termo só; ":" sobrando (ex.: "168:") é ignorado. Busca vazia = todas.
  */
 export function opcoesDaBusca(opcoes: string[], busca: string): string[] {
-  const inteiro = chaveBusca(busca);
+  const inteiro = listaDeNumeros(chaveBusca(busca));
   if (!inteiro) return opcoes;
   const chaves = opcoes.map(chaveBusca);
   if (!inteiro.includes(":") || chaves.some((c) => c.includes(inteiro))) return opcoes.filter((_, i) => chaves[i].includes(inteiro));

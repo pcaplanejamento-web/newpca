@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.12",
+    data: "2026-11-12",
+    titulo: "Filtros das colunas: vários números na mesma filtragem",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "No filtro do título das colunas, procurar um número novo não apaga mais o que já estava escolhido: procure 168, toque em \"Adicionar\", procure 170 e Aplicar leva os dois. Com o filtro já aplicado, a busca também soma. \"Substituir\" fica só com os resultados da busca.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Sistema", texto: "Vários números de uma vez na busca do filtro também com espaço, \";\" ou \", \" (ex.: 168 170 174), além do \":\". Vale em todas as tabelas e nos filtros de escolha múltipla.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.289.11",
     data: "2026-11-12",
     titulo: "Conferir DFDs × Centi: o Divergente diz o que diverge",

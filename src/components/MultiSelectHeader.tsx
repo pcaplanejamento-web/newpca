@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { opcoesDaBusca } from "@/lib/tabela-filtros";
+import { combinarBusca, opcoesDaBusca } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { GatilhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
@@ -9,8 +9,10 @@ import { IconArrowDown, IconArrowUp } from "./icons";
 // Filtro de cabeçalho de tabela (spec do usuário): ordenar (crescente/decrescente)
 // + busca + "Selecionar todos" + checkboxes + Aplicar/Cancelar/Remover. "Remover" (ou nada/tudo
 // marcado) = sem filtro. Na tabela as OPÇÕES já vêm facetadas pelos demais filtros (conectados).
-// BUSCA como no Excel: vários valores de uma vez com ":" ("168:170:174" — `opcoesDaBusca`); os resultados
-// começam TODOS marcados e "Aplicar" (ou Enter) aplica SÓ os resultados marcados.
+// BUSCA como no Excel: vários valores de uma vez com ":" (ou espaço/";"/", " entre números — "168 170"; `opcoesDaBusca`);
+// os resultados começam TODOS marcados. A busca SOMA ao que já estava escolhido (`combinarBusca`): procurar 168, marcar,
+// "Adicionar" (ou procurar direto com o filtro já aplicado) e procurar 170 — o Aplicar leva os dois. "Substituir" ignora
+// o que já estava escolhido (só os resultados marcados).
 type Dir = "asc" | "desc" | null;
 /** Quantas opções a lista DESENHA de uma vez (ex.: o Seq. com 20 mil itens) — marcar todos e Aplicar valem para todas as encontradas. */
 const MAX_OPCOES_VISIVEIS = 300;
@@ -124,7 +126,10 @@ function Painel({
     [buscando, sel, selBusca, q, visiveis],
   );
   const todosMarcados = visiveis.length > 0 && visiveis.every((o) => marcadas.has(o));
-  const aplicaveis = buscando ? visiveis.filter((o) => marcadas.has(o)) : null;
+  // O que já estava escolhido (fora da busca): sem filtro (tudo marcado) não há o que somar.
+  const [substituir, setSubstituir] = useState(false);
+  const base = useMemo(() => (substituir || sel.size >= options.length ? [] : [...sel]), [substituir, sel, options.length]);
+  const aplicaveis = buscando ? combinarBusca(base, visiveis, marcadas) : null;
   const podeAplicar = aplicaveis == null || aplicaveis.length > 0;
 
   function alternar(o: string) {
@@ -143,6 +148,14 @@ function Painel({
   }
   function aplicar() {
     if (podeAplicar) onApply(aplicaveis ?? [...sel]);
+  }
+  /** Leva os marcados da busca para a seleção e limpa a busca (o painel segue aberto para procurar outro valor). */
+  function adicionar() {
+    if (!aplicaveis?.length) return;
+    setSel(new Set(aplicaveis));
+    setSelBusca(null);
+    setSubstituir(false);
+    setQ("");
   }
 
   const opcao = (o: string) => (
@@ -184,7 +197,7 @@ function Painel({
           </button>
         </div>
       )}
-      <div className="px-2 pb-1 pt-1">
+      <div className="flex gap-2 px-2 pb-1 pt-1">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -194,11 +207,32 @@ function Painel({
               aplicar();
             }
           }}
-          aria-label="Buscar valores (use : para vários)"
-          placeholder="Filtrar (use : para vários)"
-          className="h-11 w-full rounded-control border border-border-2 bg-surface px-2.5 desktop:h-[var(--h-control-sm)] text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          aria-label="Buscar valores (vários com : ou espaço)"
+          placeholder="Filtrar (vários: 168 170)"
+          className="h-11 min-w-0 flex-1 rounded-control border border-border-2 bg-surface px-2.5 desktop:h-[var(--h-control-sm)] text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
+        {buscando && (
+          <button
+            type="button"
+            onClick={adicionar}
+            disabled={!aplicaveis?.length}
+            title="Somar os marcados à seleção e procurar outro valor"
+            className="h-11 shrink-0 rounded-control border border-border-2 px-2.5 text-[12px] font-semibold text-text-2 hover:bg-surface-2 disabled:opacity-50 desktop:h-[var(--h-control-sm)]"
+          >
+            Adicionar
+          </button>
+        )}
       </div>
+      {buscando && (base.length > 0 || substituir) && (
+        <div className="flex items-center gap-2 px-3 pb-1 text-[11.5px] text-muted">
+          <span className="min-w-0 flex-1 truncate" title={base.join(", ")}>
+            {substituir ? "Substituindo a seleção pelos resultados" : `Somando a ${base.length} já escolhido${base.length === 1 ? "" : "s"}: ${base.slice(0, 4).join(", ")}${base.length > 4 ? "…" : ""}`}
+          </span>
+          <button type="button" onClick={() => setSubstituir((v) => !v)} className="shrink-0 font-semibold text-accent hover:underline">
+            {substituir ? "Somar" : "Substituir"}
+          </button>
+        </div>
+      )}
       <label className="flex min-h-11 cursor-pointer items-center gap-2.5 border-b border-border px-3 py-2 text-[13px] font-semibold text-text desktop:min-h-0">
         <input
           type="checkbox"
