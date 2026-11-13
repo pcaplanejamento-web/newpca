@@ -2,7 +2,7 @@
 
 import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
-import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia } from "./CelulaExecucao";
+import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia, valoresConferencia } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import type { OrigemValidacao } from "@/lib/conferencia-dfd";
 import {
@@ -364,6 +364,7 @@ export function propsPlanilhaDfds({
             align: "center" as const,
             nowrap: true,
             value: (r: LinhaDfd) => rotuloConferencia(r.conferencia?.status),
+            valores: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo),
             render: (r: LinhaDfd) => <CelulaConferenciaCenti status={r.conferencia?.status} motivo={r.conferencia?.motivo} />,
           },
         ]

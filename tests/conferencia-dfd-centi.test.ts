@@ -106,3 +106,30 @@ test("compararDfdCenti: com o DFD inteiro dos dois lados, o motivo lista tudo; o
   const igual = compararDfdCenti([{ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(), centi: { numero: "123", dfd: base() } }], { tolerancia: 0.01, objeto: true });
   assert.equal(igual.conformes.length, 1);
 });
+
+test("tipos de divergência: cada texto gravado ganha o(s) tipo(s) para o filtro", async () => {
+  const { tiposDivergencia, tiposDoMotivo, motivoDivergencias } = await import("../src/lib/conferencia-dfd-centi.ts");
+  const casos: [string, string[]][] = [
+    ["e mais 3", []],
+    ["DFD 1 (Planej. 2) não está na CM002", ["Não encontrado na Centi"]],
+    ["achado na Centi no órgão 3, mas o DFD está cadastrado no órgão 2", ["Órgão"]],
+    ["DFD 1: situação X na CM002 (esperada Y)", ["Situação"]],
+    ["na Centi é o DFD 5", ["Nº do DFD"]],
+    ["Tipo: DFD-S no sistema × DFD-R na Centi", ["Tipo"]],
+    ["Valor total: R$ 1,00 no sistema × R$ 2,00 na Centi", ["Valor total"]],
+    ["DFD 1: valor 1,00 no DFD × 2,00 na CM002", ["Valor total"]],
+    ["Nº de itens: 3 no sistema × 4 na Centi", ["Nº de itens"]],
+    ["objeto diferente da Centi", ["Objeto"]],
+    ["Seção 3 - JUSTIFICATIVA diferente (só na Centi)", ["Seção JUSTIFICATIVA"]],
+    ["Item 4 (cód. 12) só na Centi", ["Item só na Centi"]],
+    ["Item 4 só no sistema", ["Item só no sistema"]],
+    ["Item 4 (cód. 12): quantidade 1 × 2, valor unitário R$ 1 × R$ 2 (sistema × Centi)", ["Item: quantidade", "Item: valor unitário"]],
+    ["Item 4: descrição “a, situação b na Centi” × “c”, medida UN × CX (sistema × Centi)", ["Item: descrição", "Item: medida"]],
+    ["Setor Requisitante: “a” no sistema × “b” na Centi", ["Setor Requisitante"]],
+    ["algo estranho", ["Outras"]],
+  ];
+  for (const [t, esperado] of casos) assert.deepEqual(tiposDivergencia(t), esperado, t);
+  const m = motivoDivergencias("DFD 1 (Planej. 2)", ["Valor total: R$ 1,00 no sistema × R$ 2,00 na Centi", "Item 1: quantidade 1 × 2 (sistema × Centi)", "Item 2: quantidade 3 × 4 (sistema × Centi)"]);
+  assert.deepEqual(tiposDoMotivo(m), ["Valor total", "Item: quantidade"]);
+  assert.deepEqual(tiposDoMotivo(null), []);
+});

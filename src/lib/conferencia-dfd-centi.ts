@@ -158,3 +158,59 @@ export function contarDivergencias(grupos: GrupoDivergencias[]): number {
     }
   return n;
 }
+
+const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const CAMPOS_ITEM: [RegExp, string][] = [
+  [/(^|, )quantidade /, "Item: quantidade"],
+  [/(^|, )valor unitario /, "Item: valor unitário"],
+  [/(^|, )valor total /, "Item: valor total"],
+  [/(^|, )descricao /, "Item: descrição"],
+  [/(^|, )codigo /, "Item: código"],
+  [/(^|, )medida /, "Item: medida"],
+  [/(^|, )n[ºo°] /, "Item: nº"],
+];
+
+/**
+ * O(s) TIPO(s) de UMA divergência (o texto gravado), para FILTRAR: "Valor total", "Seção JUSTIFICATIVA", "Item só na Centi",
+ * "Item: quantidade"… O item com vários campos dá um tipo por campo. "e mais N" não tem tipo. Desconhecido = "Outras".
+ */
+export function tiposDivergencia(texto: string): string[] {
+  const t0 = String(texto ?? "").trim();
+  if (!t0 || /^e mais \d+$/.test(t0)) return [];
+  const n = semAcento(t0);
+  const sec = /^Seção (.+?) diferente(?: \(só (?:na Centi|no sistema)\))?$/.exec(t0);
+  if (sec) return [`Seção ${sec[1].replace(/^\d+\s*[-.–]\s*/, "")}`];
+  if (/^item .+ so na centi$/.test(n)) return ["Item só na Centi"];
+  if (/^item .+ so no sistema$/.test(n)) return ["Item só no sistema"];
+  const item = /^item [^:]+: (.+) \(sistema × centi\)$/.exec(n);
+  if (item) {
+    const r = CAMPOS_ITEM.filter(([re]) => re.test(item[1])).map(([, t]) => t);
+    return r.length ? r : ["Item: outros"];
+  }
+  if (/nao encontrado na centi|nao esta na cm002/.test(n)) return ["Não encontrado na Centi"];
+  if (/^achado na centi no orgao|^[^:]*: na cm002 esta na entidade/.test(n)) return ["Órgão"];
+  if (/situacao .+ na (centi|cm002)/.test(n)) return ["Situação"];
+  if (/^na centi e o dfd /.test(n)) return ["Nº do DFD"];
+  if (/^tipo: /.test(n)) return ["Tipo"];
+  if (/^valor total: |: valor .+ no dfd × .+ na cm002/.test(n)) return ["Valor total"];
+  if (/^n[ºo°] de itens: /.test(n)) return ["Nº de itens"];
+  if (/^objeto: |^objeto diferente/.test(n)) return ["Objeto"];
+  const rot = /^([^:]{1,40}): .+ no sistema × .+ na centi$/i.exec(t0.replace(/\s+/g, " "));
+  if (rot) return [rot[1].trim()];
+  return ["Outras"];
+}
+
+/** Os tipos de TODAS as divergências de um motivo gravado (sem repetir, na ordem em que aparecem). */
+export function tiposDoMotivo(motivo: string | null | undefined): string[] {
+  const chave = String(motivo ?? "");
+  const memo = MEMO_TIPOS.get(chave);
+  if (memo) return memo;
+  const s = new Set<string>();
+  for (const g of divergenciasDoMotivo(chave)) for (const i of g.itens) for (const t of tiposDivergencia(i)) s.add(t);
+  const r = [...s];
+  if (MEMO_TIPOS.size >= 2000) MEMO_TIPOS.clear();
+  MEMO_TIPOS.set(chave, r);
+  return r;
+}
+// Os filtros da tabela relêem os valores de cada linha a cada mudança: o motivo (até 19 mil caracteres) é classificado uma vez.
+const MEMO_TIPOS = new Map<string, string[]>();

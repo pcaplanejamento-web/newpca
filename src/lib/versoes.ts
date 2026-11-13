@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.290.2",
+    data: "2026-11-13",
+    titulo: "Divergências com a Centi: filtrar pelo tipo",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "O filtro da coluna Centi lista cada TIPO de divergência (\"Divergente · Valor total\", \"Divergente · Item: quantidade\", \"Divergente · Seção JUSTIFICATIVA\"…): mostre só os DFDs com aquela diferença.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "melhoria", area: "Mesa", texto: "No painel das divergências, os tipos viram chips com a contagem: tocar mostra (e copia) só as daquele tipo.", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.290.1",
     data: "2026-11-13",
     titulo: "Divergências com a Centi: a lista completa",
