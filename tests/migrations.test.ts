@@ -1297,3 +1297,19 @@ describe("0182: o órgão do DFD acompanha a unidade", () => {
     assert.equal(org(902), 902, "unidade sem órgão não apaga o órgão do DFD");
   });
 });
+
+describe("0183: histórico da conferência com a Centi", () => {
+  it("a conferência gravada vira a 1ª linha; excluir o DFD leva o histórico", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f < "0183")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO dfds (id, numero, conferencia_centi, conferencia_centi_motivo, conferencia_centi_em) VALUES
+      (931, 'C1', 'divergente', 'DFD C1: 1 diferença — Tipo: a no sistema × b na Centi', '2026-11-01T10:00:00.000Z'),
+      (932, 'C2', 'convergente', NULL, '2026-11-02T10:00:00.000Z'), (933, 'C3', NULL, NULL, NULL)`);
+    db.exec(readFileSync(join(DIR, arquivos.find((f) => f.startsWith("0183")) as string), "utf8"));
+    const linhas = db.prepare("SELECT dfd_id AS d, status AS s FROM conferencias_centi ORDER BY dfd_id").all() as { d: number; s: string }[];
+    assert.deepEqual(linhas.map((l) => [l.d, l.s]), [[931, "divergente"], [932, "convergente"]]);
+    db.exec("DELETE FROM dfds WHERE id = 931");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi").get() as { n: number }).n, 1);
+  });
+});

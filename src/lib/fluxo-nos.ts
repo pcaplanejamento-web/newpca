@@ -679,12 +679,18 @@ const NOS: DefNo[] = [
       if (e.entrada) {
         const { objeto, busca: pedida } = buscaDoNo(c);
         const valores = valoresProcurados(str(c.valor), e.entrada);
+        // Da MESA com {{campo}} que nenhum item escolhido preenche (ex.: DFDs sem nº de planejamento): NADA é lido — o
+        // "todos" da execução avulsa levaria a automação a TODOS os registros do sistema.
+        if (ctx.host.__daMesa && /\{\{/.test(str(c.valor)) && !valores.length) {
+          ctx.aviso("Os itens escolhidos na Mesa não têm o valor procurado — nada foi lido.");
+          return { saida: [], fim: marcarExecutado([], 0) };
+        }
         const busca = buscaEfetiva(pedida, str(c.valor), valores);
         if (!busca) throw new Error("Informe o valor procurado (ou {{campo}} do item que chega).");
         // Itens de FORA (a Mesa, "Executar com os selecionados") sem valor procurado: só eles seguem. As linhas MARCADAS na
         // aba "Do sistema" (nenhuma = todas) decidem o que passa — menos com itens de fora: a seleção de lá vale.
         const lido = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
-        const deFora = !str(c.valor) && Array.isArray(ctx.host.__entrada) ? restringirPelaEntrada(lido, ctx.host.__entrada, objeto) : lido;
+        const deFora = !str(c.valor) && Array.isArray(ctx.host.__entrada) ? restringirPelaEntrada(lido, ctx.host.__entrada, objeto, !!ctx.host.__daMesa) : lido;
         const lidos = ctx.host.__daMesa ? deFora : filtrarMarcados(deFora, c.marcados, (it) => chaveSelecao(it, "id"));
         if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
         est.fila = [...lidos];
@@ -1355,7 +1361,8 @@ const NOS: DefNo[] = [
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 20000));
       const lista = itens.slice(0, max);
       const campo = str(c.chave, "id") || "id";
-      const prog = c.retomar !== false ? (ctx.host.progresso as ProgressoHost | undefined) : undefined;
+      // Vindo da MESA (`__daMesa`), os itens foram ESCOLHIDOS agora (ex.: "Reconferir"): nenhum é pulado pela retomada.
+      const prog = c.retomar !== false && !ctx.host.__daMesa ? (ctx.host.progresso as ProgressoHost | undefined) : undefined;
       const noProg = [...pilhaDe(ctx), str(ctx.no)].join("/");
       const feitos = prog ? new Set(await prog.ler(noProg)) : new Set<string>();
       const fila = lista.filter((it) => !feitos.has(chaveDoItem(it, campo)));

@@ -4,6 +4,7 @@
  */
 import { type ComparacaoDfd, compararDfd, type DfdComparavel } from "./comparar-protocolo.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
+import type { BlocoDoc } from "./documento-pdf-core.ts";
 import { brl, num } from "./format.ts";
 import { type DfdParseado, normComparacao } from "./parse-dfd-comum.ts";
 
@@ -83,9 +84,15 @@ export function diferencasDfdCenti(sistema: DfdSistemaComparavel, centi: DfdPars
       const x = a.itens[gi];
       const y = b.itens[pj];
       if (!x || !y) continue;
+      // A TOLERÂNCIA vale também nos valores do item (centavos de arredondamento não são divergência).
+      const dentro = (u: number | null | undefined, v: number | null | undefined) => u != null && v != null && Math.abs(u - v) <= tolerancia;
+      const campos = it.campos.filter(
+        (f) => !((f.campo === "valorUnitario" && dentro(x.valorUnitario, y.valorUnitario)) || (f.campo === "valorTotal" && dentro(x.valorTotal, y.valorTotal))),
+      );
+      if (!campos.length) continue;
       // O total do item = quantidade × valor unitário: só aparece quando nenhum dos dois mudou.
-      const qv = it.campos.some((f) => f.campo === "quantidade" || f.campo === "valorUnitario");
-      const partes = it.campos.filter((f) => !(qv && f.campo === "valorTotal")).map((f) => {
+      const qv = campos.some((f) => f.campo === "quantidade" || f.campo === "valorUnitario");
+      const partes = campos.filter((f) => !(qv && f.campo === "valorTotal")).map((f) => {
         if (f.campo === "quantidade") return `quantidade ${qtd(x.quantidade)} × ${qtd(y.quantidade)}`;
         if (f.campo === "valorUnitario") return `valor unitário ${moeda(x.valorUnitario)} × ${moeda(y.valorUnitario)}`;
         if (f.campo === "valorTotal") return `valor total ${moeda(x.valorTotal)} × ${moeda(y.valorTotal)}`;
@@ -128,7 +135,10 @@ const CABECALHO = /^(.+?): (\d+) diferenças? — ([\s\S]*)$/;
 export function divergenciasDoMotivo(motivo: string | null | undefined): GrupoDivergencias[] {
   const t = String(motivo ?? "").trim();
   if (!t) return [];
-  const partes = (t.includes(SEPARADOR_DIVERGENCIAS) ? t.split(SEPARADOR_DIVERGENCIAS) : t.split(/;\s+/)).map((x) => x.trim()).filter(Boolean);
+  // Sem o separador atual: o formato antigo ("; " numa linha) — menos o motivo de UMA diferença, que nunca se parte
+  // (um "; " dentro da descrição do item não é uma divergência nova).
+  const uma = /^.+?: 1 diferença — /.test(t);
+  const partes = (t.includes(SEPARADOR_DIVERGENCIAS) ? t.split(SEPARADOR_DIVERGENCIAS) : uma ? [t] : t.split(/;\s+/)).map((x) => x.trim()).filter(Boolean);
   const grupos: GrupoDivergencias[] = [];
   let atual: GrupoDivergencias | null = null;
   for (const p of partes) {
@@ -214,3 +224,143 @@ export function tiposDoMotivo(motivo: string | null | undefined): string[] {
 }
 // Os filtros da tabela relêem os valores de cada linha a cada mudança: o motivo (até 19 mil caracteres) é classificado uma vez.
 const MEMO_TIPOS = new Map<string, string[]>();
+
+// ---------------------------------------------------------------------------
+// Leituras do motivo gravado (a Mesa): Δ do valor, divergências de UM item, desatualizada, histórico e relatório.
+// ---------------------------------------------------------------------------
+
+const numeroBR = (t: string): number | null => {
+  const s = t.replace(/[^\d,.-]/g, "");
+  if (!s) return null;
+  const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Δ do VALOR TOTAL = sistema − Centi, lido do motivo ("Valor total: R$ a no sistema × R$ b na Centi" ou o da CM002
+ * "valor a no DFD × b na CM002"); null = sem diferença de valor apontada. */
+export function deltaValorDoMotivo(motivo: string | null | undefined): number | null {
+  for (const g of divergenciasDoMotivo(motivo))
+    for (const i of g.itens) {
+      const m = /^Valor total: (.+?) no sistema × (.+?) na Centi$/.exec(i) ?? /: valor (.+?) no DFD × (.+?) na CM002$/.exec(i);
+      if (!m) continue;
+      const a = numeroBR(m[1]);
+      const b = numeroBR(m[2]);
+      if (a != null && b != null) return Math.round((a - b) * 100) / 100;
+    }
+  return null;
+}
+
+/** As divergências de UM item do DFD (pelo nº do item: "Item 4 (cód. 12): …", "Item 4 só no sistema"). */
+export function divergenciasDoItem(motivo: string | null | undefined, item: number | null | undefined): string[] {
+  if (item == null || !Number.isFinite(item)) return [];
+  const re = new RegExp(`^Item ${item}(?=[\\s:(]|$)`);
+  // "Item N só na Centi" leva o nº do item DA CENTI (não há item no sistema): não pertence a nenhum item do sistema.
+  return divergenciasDoMotivo(motivo).flatMap((g) => g.itens.filter((i) => re.test(i) && !/ só na Centi$/.test(i)));
+}
+
+/** Um instante do banco ("AAAA-MM-DD HH:MM:SS" em UTC, do CURRENT_TIMESTAMP) ou ISO → ms; null se não der. */
+function instante(v: string | null | undefined): number | null {
+  const t = String(v ?? "").trim();
+  if (!t) return null;
+  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(t) ? `${t.replace(" ", "T")}Z` : t;
+  const n = Date.parse(iso);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** A conferência ficou VELHA: o DFD foi gravado DEPOIS dela (o resultado pode não valer mais — "Reconferir"). */
+export function conferenciaDesatualizada(conferidoEm: string | null | undefined, atualizadoEm: string | null | undefined): boolean {
+  const c = instante(conferidoEm);
+  const a = instante(atualizadoEm);
+  return c != null && a != null && a > c + 1000;
+}
+
+/** Duas conferências do MESMO DFD comparadas pelos textos das divergências: o que foi resolvido, o que é novo. */
+export function comparacaoConferencias(antes: string | null | undefined, depois: string | null | undefined): { resolvidas: string[]; novas: string[]; mantidas: number } {
+  const lista = (m: string | null | undefined) => divergenciasDoMotivo(m).flatMap((g) => g.itens).filter((i) => !/^e mais \d+$/.test(i));
+  const a = new Set(lista(antes));
+  const d = new Set(lista(depois));
+  return { resolvidas: [...a].filter((x) => !d.has(x)), novas: [...d].filter((x) => !a.has(x)), mantidas: [...d].filter((x) => a.has(x)).length };
+}
+
+/** Um DFD no RELATÓRIO da conferência. */
+export type DfdRelatorioCenti = { numero: string; planejamento: string | null; sigla: string | null; protocolo?: string | null; motivo: string | null };
+export type FormatoRelatorioCenti = "despacho" | "whatsapp" | "lista";
+
+const refRel = (d: DfdRelatorioCenti) => `DFD ${d.numero}${d.planejamento ? ` (Planej. ${d.planejamento})` : ""}${d.sigla ? ` — ${d.sigla}` : ""}`;
+const itensDe = (d: DfdRelatorioCenti) => divergenciasDoMotivo(d.motivo).flatMap((g) => g.itens);
+
+/** Os tipos com os DFDs que os têm (o tipo mais frequente primeiro). */
+export function relatorioPorTipo(dfds: readonly DfdRelatorioCenti[]): { tipo: string; dfds: DfdRelatorioCenti[] }[] {
+  const m = new Map<string, DfdRelatorioCenti[]>();
+  for (const d of dfds) for (const t of tiposDoMotivo(d.motivo)) m.set(t, [...(m.get(t) ?? []), d]);
+  return [...m].map(([tipo, ds]) => ({ tipo, dfds: ds })).sort((a, b) => b.dfds.length - a.dfds.length || a.tipo.localeCompare(b.tipo, "pt-BR"));
+}
+
+/** O TEXTO do relatório (despacho de devolução, WhatsApp ou lista simples): o resumo por tipo e, por DFD, cada divergência. */
+export function textoRelatorioCenti(dfds: readonly DfdRelatorioCenti[], formato: FormatoRelatorioCenti): string {
+  const tipos = relatorioPorTipo(dfds);
+  const negrito = (t: string) => (formato === "whatsapp" ? `*${t}*` : t);
+  const linhas: string[] = [];
+  if (formato === "despacho") {
+    linhas.push("Senhor(a) responsável,", "");
+    linhas.push(`Na conferência com o sistema Centi, ${dfds.length === 1 ? "o DFD abaixo apresentou divergências" : `os ${dfds.length} DFDs abaixo apresentaram divergências`} entre os dados cadastrados na Plataforma PCA e os registrados na Centi. Solicitamos a verificação e a correção, conforme o caso:`, "");
+  } else linhas.push(negrito(`Divergências com a Centi — ${dfds.length} DFD${dfds.length === 1 ? "" : "s"}`), "");
+  linhas.push(negrito("Resumo por tipo:"));
+  for (const t of tipos) linhas.push(`- ${t.tipo}: ${t.dfds.length} DFD${t.dfds.length === 1 ? "" : "s"}`);
+  linhas.push("");
+  for (const d of dfds) {
+    linhas.push(negrito(`${refRel(d)}${d.protocolo ? ` · Protocolo ${d.protocolo}` : ""}`));
+    for (const i of itensDe(d)) linhas.push(`- ${i}`);
+    linhas.push("");
+  }
+  if (formato === "despacho") linhas.push("Respeitosamente");
+  return linhas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Os BLOCOS do PDF do relatório (o gerador de documento A4): resumo, a tabela por tipo e, por DFD, as divergências. */
+export function blocosRelatorioCenti(dfds: readonly DfdRelatorioCenti[], geradoEm: string): { titulo: string; blocos: BlocoDoc[] } {
+  const tipos = relatorioPorTipo(dfds);
+  const total = dfds.reduce((s, d) => s + contarDivergencias(divergenciasDoMotivo(d.motivo)), 0);
+  const blocos: BlocoDoc[] = [
+    { tipo: "titulo", texto: "Divergências com a Centi" },
+    { tipo: "paragrafo", texto: `Conferência dos DFDs da Plataforma PCA com o sistema Centi — gerado em ${geradoEm}.`, cor: "muted" },
+    {
+      tipo: "destaques",
+      itens: [
+        { rotulo: "DFDs divergentes", valor: String(dfds.length) },
+        { rotulo: "Divergências", valor: String(total) },
+        { rotulo: "Tipos", valor: String(tipos.length) },
+      ],
+    },
+    { tipo: "secao", texto: "Resumo por tipo de divergência" },
+    {
+      tipo: "tabela",
+      colunas: [
+        { titulo: "Tipo", peso: 3 },
+        { titulo: "DFDs", peso: 1, alinhar: "center" },
+      ],
+      linhas: tipos.map((t) => ({ celulas: [t.tipo, String(t.dfds.length)] })),
+      vazio: "Nenhuma divergência.",
+    },
+    { tipo: "secao", texto: "Divergências por DFD" },
+  ];
+  for (const d of dfds) {
+    blocos.push({ tipo: "subsecao", texto: refRel(d), detalhe: d.protocolo ? `Protocolo ${d.protocolo}` : undefined });
+    blocos.push({ tipo: "lista", itens: itensDe(d) });
+  }
+  return { titulo: "Divergências com a Centi", blocos };
+}
+
+/** O que FAZER com cada tipo de divergência (o painel do selo, abaixo da lista). Só os tipos presentes, sem repetir. */
+export function orientacoesDivergencias(tipos: readonly string[]): string[] {
+  const s = new Set(tipos);
+  const out: string[] = [];
+  const algum = (...ts: string[]) => ts.some((t) => s.has(t));
+  if (algum("Situação")) out.push("Situação na Centi (ex.: cancelado): confira o planejamento na Centi; se não vale mais, exclua o DFD da Mesa.");
+  if (algum("Órgão")) out.push("Órgão: confira o “ID na Centi” do órgão em Órgãos e Unidades.");
+  if (algum("Não encontrado na Centi", "Nº do DFD")) out.push("Não encontrado ou outro DFD na Centi: confira o nº de planejamento do DFD.");
+  const dados = [...s].some((t) => t.startsWith("Item") || t.startsWith("Seção") || ["Valor total", "Nº de itens", "Objeto", "Tipo"].includes(t));
+  if (dados || [...s].some((t) => !/^(Situação|Órgão|Não encontrado na Centi|Nº do DFD|Outras)$/.test(t) && !t.startsWith("Item") && !t.startsWith("Seção")))
+    out.push("Dados diferentes: se a Centi está certa, use “Usar os dados da Centi” (o DFD é regravado com os dados de lá); se o sistema está certo, corrija na Centi e reconfira.");
+  return out;
+}

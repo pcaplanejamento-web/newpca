@@ -644,6 +644,22 @@ export const dfdPassagens = sqliteTable(
   (t) => [uniqueIndex("dfd_passagens_uq").on(t.protocoloId, t.dfdNumero), index("dfd_passagens_numero_idx").on(t.dfdNumero)],
 );
 
+/** HISTÓRICO da conferência DFD × Centi (migração `0183`): uma linha a cada mudança do resultado; até 20 por DFD. */
+export const conferenciasCenti = sqliteTable(
+  "conferencias_centi",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    dfdId: integer("dfd_id")
+      .notNull()
+      .references(() => dfds.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    motivo: text("motivo"),
+    em: text("em").notNull(),
+    porNome: text("por_nome"),
+  },
+  (t) => [index("conferencias_centi_dfd_idx").on(t.dfdId, t.id)],
+);
+
 /** Itens da Seção 4 do DFD (só quantidade — sem valor/classificação por item). */
 export const dfdItens = sqliteTable(
   "dfd_itens",

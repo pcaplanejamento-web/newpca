@@ -37,6 +37,7 @@ const gravado = (): DfdDetalhe => ({
   execucaoCenti: null,
   conferenciaCenti: null,
   conferenciaCentiMotivo: null,
+  conferenciaCentiEm: null,
   subunidadeId: null,
   centroCusto: null,
   nomeArquivo: "p.pdf",

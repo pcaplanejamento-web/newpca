@@ -35,6 +35,21 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.291.0",
+    data: "2026-11-13",
+    titulo: "Conferência com a Centi: tratar, priorizar e acompanhar",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "No painel do selo da coluna Centi: “Reconferir” e “Usar os dados da Centi” (rodam em segundo plano, com confirmação), “O que fazer” por tipo de divergência e o Histórico das conferências (o que foi resolvido e o que é novo).", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Selo âmbar “Reconferir” quando o DFD foi alterado depois da conferência (também no filtro da coluna).", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Colunas Divergências, Δ Valor (Centi) e Conferido em (no seletor de colunas) para ordenar pelos piores e pelo impacto.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Relatório da Centi no rodapé da tabela de DFDs e na seleção: despacho de devolução, WhatsApp, lista simples ou PDF; “Reconferir na Centi” em massa.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Coluna Centi na visão Itens: as divergências do próprio item.", link: "/painel/mesa?vista=itens" },
+      { tipo: "novo", area: "Mesa", texto: "Dashboard: Dado “Divergência com a Centi” — quantos DFDs, itens e quanto valor em cada tipo de divergência.", link: "/painel/mesa?vista=dashboard" },
+      { tipo: "melhoria", area: "Automação", texto: "A tolerância de valor da conferência vale também para o valor unitário e o total de cada item (centavos de arredondamento não são divergência).", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Automação disparada pela Mesa com um DFD sem nº de planejamento não lê mais todos os DFDs do sistema; e os DFDs escolhidos na Mesa não são pulados pela retomada.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.290.2",
     data: "2026-11-13",
     titulo: "Divergências com a Centi: filtrar pelo tipo",

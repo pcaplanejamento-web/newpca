@@ -87,7 +87,7 @@ import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import { CelulaHistoricoCompra } from "./ProdutoHistorico";
 import { CelulaCatalogo, CelulaCentroCusto, CelulaClassificacao, CelulaSubunidade, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
-import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
+import { IconAlert, IconDashboard, IconFilter, IconLayers, IconRefresh, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
 import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, propsPlanilhaDfds, rotuloSubunidade, SEM_CENTRO_CUSTO, SUBUNIDADE_NO_TOPO } from "./PlanilhaDfds";
@@ -101,6 +101,10 @@ import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
 import { AutomacoesMesa, useRodarAutomacao } from "./AutomacoesMesa";
 import { dfdsDoAlvo } from "@/lib/automacao-mesa";
+import type { AutomacoesCenti } from "@/lib/automacao-centi-mesa";
+import { conferenciaDesatualizada, type DfdRelatorioCenti, divergenciasDoItem, motivoDivergencias } from "@/lib/conferencia-dfd-centi";
+import { type AcoesCenti, CelulaConferenciaCenti, ProvedorAcoesCenti, RelatorioCenti, rotuloConferencia, valoresConferencia } from "./CelulaExecucao";
+import { useConfirmacao } from "./Confirmacao";
 import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
@@ -136,11 +140,15 @@ type ModoItens = "normal" | "consolidada";
 const OCULTAS_NO_PCA = ["execucao", "conferenciaCenti"] as const;
 /** Os campos EXTRAS (todo dado do protocolo e do DFD) abrem ocultos em toda tabela — o seletor de colunas os liga. */
 const OCULTAS_PROTOCOLOS = colunasPadraoOcultas("protocolos");
-const OCULTAS_DFDS = colunasPadraoOcultas("dfds");
+/** Os números da conferência com a Centi abrem ocultos (o seletor de colunas os liga). */
+const OCULTAS_CENTI = ["divergenciasCenti", "deltaCenti", "conferidoCenti"] as const;
+const OCULTAS_DFDS = [...colunasPadraoOcultas("dfds"), ...OCULTAS_CENTI];
 const OCULTAS_DFDS_PCA = [...OCULTAS_NO_PCA, ...OCULTAS_DFDS];
 const OCULTAS_ITENS = colunasPadraoOcultas("itens");
 
 const FATIA_CONFERENCIA = 150;
+/** As divergências de UM item no formato do motivo (a célula as lê como as do DFD). */
+const motivoDoItem = (item: number | null, difs: string[]) => motivoDivergencias(`Item ${item ?? "?"}`, difs);
 /** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
 const FATIA_MASSA = 20;
 /** Itens por requisição da edição em massa: ≤ 100 itens de ≤ 5 DFDs (cada DFD grava num lote atômico). */
@@ -285,6 +293,7 @@ export function DfdsView({
   seletorMesa,
   colunasAuto,
   automacoes = [],
+  automacoesCenti,
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
@@ -332,6 +341,8 @@ export function DfdsView({
   colunasAuto?: ColunasMesa;
   /** As AUTOMAÇÕES que a pessoa pôs na Mesa (só na Mesa do SISTEMA — a do PCA não recebe). */
   automacoes?: { id: number; nome: string }[];
+  /** As automações de RECONFERIR e de SUBSTITUIR pela Centi (o painel das divergências; só a Mesa do sistema, ADM). */
+  automacoesCenti?: AutomacoesCenti;
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -713,6 +724,32 @@ export function DfdsView({
     return { lista, rotulo: `${num(lista.length)} DFD(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"}` };
   };
   const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => rodar(fluxoId, alvoAutomacao(soSelecionados).lista);
+  // TRATAR as divergências com a Centi (o painel do selo e a barra de seleção): roda a automação de reconferir ou de
+  // substituir em segundo plano, com os DFDs escolhidos — sempre CONFIRMADO antes (substituir regrava o DFD).
+  const { confirmar: confirmarCenti, confirmacao: confirmacaoCenti } = useConfirmacao();
+  const acoesCenti = useMemo<AcoesCenti>(() => {
+    if (modoPca || !automacoesCenti) return {};
+    const montar = (a: { id: number; nome: string } | null, titulo: (n: number) => string, texto: string, botao: string) =>
+      a
+        ? async (ids: number[]) => {
+            // Só os DFDs COM nº de planejamento (a Centi é lida por ele) — e a lista que a automação recebe precisa ser
+            // reconhecida como DFDs, senão o "Ler do sistema" não a usaria como recorte e leria TODOS os DFDs.
+            const lista = dfdsDoAlvo(dfds, "id", new Set(ids)).filter((d) => String(d.planejamento ?? "").trim());
+            if (!lista.length) return void toast.warning("Nenhum DFD com nº de planejamento — a Centi é consultada por ele.");
+            if (await confirmarCenti({ titulo: titulo(lista.length), texto: `${texto} Automação “${a.nome}”, em segundo plano — acompanhe no canto inferior.`, confirmar: botao }))
+              rodar(a.id, lista);
+          }
+        : undefined;
+    return {
+      reconferir: montar(automacoesCenti.conferir, (n) => (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`), "Busca o DFD na Centi e compara de novo; a coluna Centi é atualizada.", "Reconferir"),
+      substituir: montar(
+        automacoesCenti.substituir,
+        (n) => (n === 1 ? "Usar os dados da Centi neste DFD?" : `Usar os dados da Centi em ${n} DFDs?`),
+        "Os dados gravados do DFD (cabeçalho, seções e itens) são TROCADOS pelos da Centi — a unidade, o protocolo e o PCA ficam; o histórico registra a sobrescrita.",
+        "Usar os dados da Centi",
+      ),
+    };
+  }, [modoPca, automacoesCenti, dfds, confirmarCenti, rodar]);
   const automacaoSel = (rotulo: string) =>
     !modoPca && automacoes.length ? (
       <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />
@@ -1219,6 +1256,17 @@ export function DfdsView({
     (id) => reparticoes.find((r) => r.id === id)?.subunidade,
     (id) => reparticoes.find((r) => r.id === id)?.codigo,
   );
+  const relatorioDoDfd = (d: DfdNaMesa): DfdRelatorioCenti => ({
+    numero: d.numero,
+    planejamento: d.planejamento,
+    sigla: d.reparticaoCodigo,
+    protocolo: d.protocoloNumero,
+    motivo: d.conferenciaCenti === "divergente" ? d.conferenciaCentiMotivo : null,
+  });
+  const relatorioDaLinha = (l: LinhaDfd): DfdRelatorioCenti => {
+    const d = dfdPorId.get(l.key);
+    return d ? relatorioDoDfd(d) : { numero: l.numero, planejamento: l.planejamento, sigla: null, motivo: null };
+  };
   const linhasDfdTab: LinhaDfd[] = dfdsF.map((d): LinhaDfd => {
     const c = confDe(d);
     return {
@@ -1237,7 +1285,12 @@ export function DfdsView({
       protocolo: d.protocoloNumero,
       prioridade: d.prioridade,
       execucao: d.execucaoCenti,
-      conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo },
+      conferencia: {
+        status: d.conferenciaCenti,
+        motivo: d.conferenciaCentiMotivo,
+        em: d.conferenciaCentiEm ?? null,
+        desatualizada: conferenciaDesatualizada(d.conferenciaCentiEm, d.atualizadoEm),
+      },
       ...gravadosDe(d.id),
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
@@ -1347,6 +1400,7 @@ export function DfdsView({
       itens: d.totalItens,
       protocoloId: d.protocoloId,
       tipo: d.tipo,
+      conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo },
     });
     const universoD = dfdsU.map(paraPainel);
     const idsMesa = focado ? new Set(protocolosF.map((p) => p.id)) : null;
@@ -1807,6 +1861,18 @@ export function DfdsView({
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
+  const temConfCenti = !modoPca && dfds.some((d) => d.conferenciaCenti);
+  /** A conferência do ITEM: a do DFD, com só as divergências dele ("convergente" se o DFD não diverge nele). */
+  const confCentiDoItem = (r: ItemDfdRow) => {
+    const d = dfdPorId.get(r.dfdId);
+    const status = d?.conferenciaCenti ?? null;
+    const desatualizada = conferenciaDesatualizada(d?.conferenciaCentiEm, d?.atualizadoEm);
+    if (status !== "divergente") return { status, motivo: null, em: d?.conferenciaCentiEm ?? null, desatualizada };
+    const difs = divergenciasDoItem(d?.conferenciaCentiMotivo, r.item);
+    return difs.length
+      ? { status, motivo: motivoDoItem(r.item, difs), em: d?.conferenciaCentiEm ?? null, desatualizada }
+      : { status: "convergente", motivo: null, em: d?.conferenciaCentiEm ?? null, desatualizada };
+  };
   const ci = colunasItemMesa<ItemDfdRow>({
     protocolo: atributoItem.protocolo.valor,
     dfd: atributoItem.dfd.valor,
@@ -1886,6 +1952,27 @@ export function DfdsView({
       value: atributoItem.catalogo.valor,
       render: (r) => <CelulaCatalogo conf={r.catalogo} regras={regras} dfdTipo={tipoCurtoDfd(r.dfdTipo)} />,
     },
+    // A CONFERÊNCIA COM A CENTI no item: as divergências DESTE item (pelo nº dele) no DFD conferido — "Convergente" quando
+    // o DFD diverge em outras coisas mas não nele. Só com algum DFD conferido.
+    ...(temConfCenti
+      ? [
+          {
+            key: "centiItem",
+            header: "Centi",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: ItemDfdRow) => rotuloConferencia(confCentiDoItem(r).status),
+            valores: (r: ItemDfdRow) => {
+              const c = confCentiDoItem(r);
+              return valoresConferencia(c.status, c.motivo, c.desatualizada);
+            },
+            render: (r: ItemDfdRow) => {
+              const c = confCentiDoItem(r);
+              return <CelulaConferenciaCenti status={c.status} motivo={c.motivo} dfdId={r.dfdId} conferidoEm={c.em} desatualizada={c.desatualizada} rotulo={`Item ${r.item ?? "?"}`} />;
+            },
+          },
+        ]
+      : []),
     // Classificação AUTOMÁTICA (Catálogo → Classificações): pela palavra-chave da descrição ou pela unidade — o motivo na dica.
     ...(classeDoItem
       ? [
@@ -2338,7 +2425,13 @@ export function DfdsView({
         ativa: aberto?.tipo === "dfd" ? aberto.id : null,
         acoes: acoesDfd,
         regras: regras,
-        acoesRodape: botaoImportar,
+        // O RELATÓRIO da Centi = os DFDs DIVERGENTES à vista (os filtros da tabela valem).
+        acoesRodape: (ls: LinhaDfd[]) => (
+          <>
+            {botaoImportar}
+            {!modoPca && <RelatorioCenti dfds={ls.map(relatorioDaLinha)} />}
+          </>
+        ),
         colunasExtras: [
           ...colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key),
           ...colunasCamposMesa<LinhaDfd>("dfds", (r, e) => (e === "dfd" ? r.key : protoDoDfd.get(r.key)), valorCampo, semCamposDe("dfds")),
@@ -2450,7 +2543,17 @@ export function DfdsView({
         }))}
         onRemover={tirar(setSelDfds)}
         onLimpar={() => setSelDfds(new Set())}
-        acoes={automacaoSel(alvoAutomacao(true).rotulo)}
+        acoes={
+          <>
+            {automacaoSel(alvoAutomacao(true).rotulo)}
+            {acoesCenti.reconferir && sel.some((d) => d.planejamento) && (
+              <Button size="sm" variant="secondary" icon={<IconRefresh className="h-4 w-4" />} onClick={() => acoesCenti.reconferir?.(sel.map((d) => d.id))}>
+                Reconferir na Centi
+              </Button>
+            )}
+            {!modoPca && <RelatorioCenti dfds={sel.map((d) => relatorioDoDfd(d))} rotulo="Relatório Centi" />}
+          </>
+        }
       >
         {progressoMassa}
         <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} subunidade={subMassa.sub} onCampo={setCampoMassa} />
@@ -2529,7 +2632,9 @@ export function DfdsView({
 
   return (
     <PermissaoExportar permitido={podeAqui.exportar}>
+    <ProvedorAcoesCenti value={acoesCenti}>
     <div className="space-y-[var(--gap-block)]">
+      {confirmacaoCenti}
       {/* Falha de uma ação da Mesa (excluir, edição em massa…) — AVISO FLUTUANTE: não empurra as tabelas. */}
       {erro && (
         <AvisoFlutuante kind="danger" titulo="Não foi possível concluir" onClose={() => setErro(null)}>
@@ -2631,7 +2736,7 @@ export function DfdsView({
               situacoes={situacoes}
               regras={regras}
               responsavel={filtro.responsavel}
-              permitido={semDadoUnidade(metricasPermitidas(pode.vis), semUnidade)}
+              permitido={semDadoCenti(semDadoUnidade(metricasPermitidas(pode.vis), semUnidade), !dfds.some((d) => d.conferenciaCenti))}
               onAbrir={setAberto}
               metricas={{
                 filtro: filtroMetricas,
@@ -2731,11 +2836,17 @@ export function DfdsView({
         </div>
       </Modal>
     </div>
+    </ProvedorAcoesCenti>
     </PermissaoExportar>
   );
 }
 
 /** Com a Mesa de UMA unidade, o Dashboard não oferece "Dado = Unidade" (seria uma barra só). */
+/** Sem nenhum DFD conferido com a Centi, o Dashboard não oferece "Dado = Divergência com a Centi". */
+function semDadoCenti<T extends { dados: readonly string[] }>(p: T, sem: boolean): T {
+  return sem ? { ...p, dados: p.dados.filter((d) => d !== "centi") } : p;
+}
+
 function semDadoUnidade<T extends { dados: readonly string[] }>(p: T, sem: boolean): T {
   return sem ? { ...p, dados: p.dados.filter((d) => d !== "unidade") } : p;
 }

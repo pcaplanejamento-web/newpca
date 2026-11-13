@@ -378,7 +378,11 @@ export function DashboardMesa({
   };
   const notas = [
     grafico.fora > 0 ? `Fora do gráfico (sem data de protocolação): ${porExtenso(filtro.medida, grafico.fora)}.` : null,
-    grafico.repete ? `Um protocolo com DFDs de ${filtro.dado === "tipo" ? "tipos" : "unidades"} diferentes conta em cada barra; o total conta uma vez.` : null,
+    grafico.repete
+      ? filtro.dado === "centi"
+        ? "Um DFD com vários tipos de divergência conta em cada barra; o total conta cada um uma vez."
+        : `Um protocolo com DFDs de ${filtro.dado === "tipo" ? "tipos" : "unidades"} diferentes conta em cada barra; o total conta uma vez.`
+      : null,
   ].filter((n): n is string => n != null);
 
   // ---- Desempenho por pessoa ----

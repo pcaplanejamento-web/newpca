@@ -133,3 +133,52 @@ test("tipos de divergência: cada texto gravado ganha o(s) tipo(s) para o filtro
   assert.deepEqual(tiposDoMotivo(m), ["Valor total", "Item: quantidade"]);
   assert.deepEqual(tiposDoMotivo(null), []);
 });
+
+test("tolerância também nos valores do item; o motivo de UMA diferença nunca se parte no “; ”", async () => {
+  const c = base();
+  c.itens = [{ ...item(1), valorUnitario: 5.004, valorTotal: 50.04 }, item(2)];
+  c.valorTotal = 100.04;
+  assert.deepEqual(diferencasDfdCenti(sistema(), c, 0.05), [], "R$ 0,004 no unitário fica dentro da tolerância");
+  assert.equal(diferencasDfdCenti(sistema(), c, 0.001).length > 0, true);
+  const m = motivoDivergencias("DFD 1", ["Item 2: descrição “a; b” × “c” (sistema × Centi)"]);
+  assert.deepEqual(divergenciasDoMotivo(m)[0].itens, ["Item 2: descrição “a; b” × “c” (sistema × Centi)"]);
+});
+
+test("leituras do motivo: Δ do valor, divergências de um item, desatualizada, histórico, relatório e orientações", async () => {
+  const lib = await import("../src/lib/conferencia-dfd-centi.ts");
+  const m = motivoDivergencias("DFD 7 (Planej. 8)", [
+    "Valor total: R$ 1.500,00 no sistema × R$ 2.000,50 na Centi",
+    "Item 4 (cód. 12): quantidade 1 × 2 (sistema × Centi)",
+    "Item 40 só no sistema",
+    "Item 4 só na Centi",
+    "Seção JUSTIFICATIVA diferente",
+  ]);
+  assert.equal(lib.deltaValorDoMotivo(m), -500.5);
+  assert.equal(lib.deltaValorDoMotivo("DFD 1: valor 10,00 no DFD × 7,50 na CM002"), 2.5);
+  assert.equal(lib.deltaValorDoMotivo(null), null);
+  assert.deepEqual(lib.divergenciasDoItem(m, 4), ["Item 4 (cód. 12): quantidade 1 × 2 (sistema × Centi)"], "nem o 40 nem o só na Centi");
+  assert.deepEqual(lib.divergenciasDoItem(m, 40), ["Item 40 só no sistema"]);
+  assert.deepEqual(lib.divergenciasDoItem(m, null), []);
+  assert.equal(lib.conferenciaDesatualizada("2026-11-01T10:00:00.000Z", "2026-11-01 10:05:00"), true);
+  assert.equal(lib.conferenciaDesatualizada("2026-11-01T10:00:00.000Z", "2026-11-01 09:59:00"), false);
+  assert.equal(lib.conferenciaDesatualizada(null, "2026-11-01 10:05:00"), false);
+  const antes = motivoDivergencias("DFD 7", ["Tipo: a no sistema × b na Centi", "Objeto: “x” no sistema × “y” na Centi"]);
+  const depois = motivoDivergencias("DFD 7", ["Objeto: “x” no sistema × “y” na Centi", "Nº de itens: 1 no sistema × 2 na Centi"]);
+  assert.deepEqual(lib.comparacaoConferencias(antes, depois), {
+    resolvidas: ["Tipo: a no sistema × b na Centi"],
+    novas: ["Nº de itens: 1 no sistema × 2 na Centi"],
+    mantidas: 1,
+  });
+  const dfds = [{ numero: "7", planejamento: "8", sigla: "SMS", protocolo: "100/2026", motivo: m }, { numero: "9", planejamento: "10", sigla: null, motivo: antes }];
+  const desp = lib.textoRelatorioCenti(dfds, "despacho");
+  assert.match(desp, /os 2 DFDs abaixo/);
+  assert.match(desp, /DFD 7 \(Planej\. 8\) — SMS · Protocolo 100\/2026/);
+  assert.match(desp, /Respeitosamente$/);
+  assert.match(lib.textoRelatorioCenti(dfds, "whatsapp"), /^\*Divergências com a Centi — 2 DFDs\*/);
+  const pdf = lib.blocosRelatorioCenti(dfds, "13/11/2026");
+  assert.equal(pdf.blocos.filter((b) => b.tipo === "subsecao").length, 2);
+  assert.deepEqual(lib.relatorioPorTipo(dfds)[0].dfds.length >= 1, true);
+  assert.equal(lib.orientacoesDivergencias(["Situação"]).length, 1);
+  assert.equal(lib.orientacoesDivergencias(["Valor total", "Órgão"]).length, 2);
+  assert.deepEqual(lib.orientacoesDivergencias([]), []);
+});

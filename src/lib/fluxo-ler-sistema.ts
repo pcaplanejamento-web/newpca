@@ -94,9 +94,12 @@ export function buscaDoNo(c: Record<string, unknown>): { objeto: ObjetoLeitura; 
  * Os itens que chegam DE FORA (a Mesa, ou "Executar com os selecionados") restringem a leitura sem valor procurado: se
  * são do MESMO tipo que o nó lê, só eles seguem (pelo id). De outro tipo, ou sem itens de fora, nada muda.
  */
-export function restringirPelaEntrada(lidos: Item[], entrada: unknown, objeto: ObjetoLeitura): Item[] {
+export function restringirPelaEntrada(lidos: Item[], entrada: unknown, objeto: ObjetoLeitura, daMesa = false): Item[] {
   const itens = Array.isArray(entrada) ? (entrada as Item[]) : [];
-  if (!itens.length || tipoDosItens(itens) !== TIPO_DO_OBJETO[objeto]) return lidos;
+  // A MESA sempre manda DFDs (pelo id): o recorte vale mesmo com um DFD sem nº de planejamento (que não seria
+  // reconhecido como DFD) — senão a automação leria TODOS os DFDs do sistema.
+  const mesaDfds = daMesa && objeto === "dfds" && itens.length > 0;
+  if (!itens.length || (!mesaDfds && tipoDosItens(itens) !== TIPO_DO_OBJETO[objeto])) return lidos;
   const ids = new Set(itens.map((it) => String(it.id)));
   return lidos.filter((it) => ids.has(String(it.id)));
 }

@@ -563,3 +563,30 @@ describe("foco numa pessoa = a linha da pessoa na visão da equipe", () => {
     assert.equal(resumoMetricas(rd).acoes, 5);
   });
 });
+
+describe("Dado “Divergência com a Centi”", () => {
+  it("um DFD conta em cada tipo dele; o total conta cada DFD uma vez; a origem soma a barra", () => {
+    const m2 = "DFD 1 (Planej. 2): 2 diferenças — Valor total: R$ 1,00 no sistema × R$ 2,00 na Centi;\nItem 1: quantidade 1 × 2 (sistema × Centi)";
+    const ds: DfdPainel[] = [
+      { ...D(a.id, "DFD-S", 2, 10, 1), conferencia: { status: "divergente", motivo: m2 } },
+      { ...D(b.id, "DFD-R", 3, 20, 1), conferencia: { status: "convergente", motivo: null } },
+      D(b.id, "DFD-S", 1, 5, 2),
+    ];
+    for (const medida of ["protocolos", "dfds", "valor"] as const) {
+      const r = recDe([a, b], ds, null, { dado: "centi", medida });
+      const gr = graficoMetricas(r, "centi", medida, SIT);
+      const v = valores(gr);
+      if (medida === "dfds") {
+        assert.equal(v["centi:div:Valor total"], 1);
+        assert.equal(v["centi:div:Item: quantidade"], 1);
+        assert.equal(v["centi:convergente"], 1);
+        assert.equal(v["centi:nao-conferido"], 1);
+        assert.equal(gr.total, 3, "cada DFD uma vez");
+        assert.equal(gr.repete, true);
+      }
+      if (medida === "valor") assert.equal(gr.total, 35);
+      for (const l of gr.linhas) assert.equal(somaOrigem(gr, [l.chave]), l.valor, `${medida} ${l.chave}`);
+      assert.equal(gr.linhas[0].chave.startsWith("centi:div:"), true, "as divergências primeiro");
+    }
+  });
+});

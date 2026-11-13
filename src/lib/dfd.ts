@@ -93,6 +93,8 @@ export type DfdResumo = {
   /** Conferência com a CM002 (Automação → Fluxos): convergente | divergente + o motivo; null = não conferido. */
   conferenciaCenti: string | null;
   conferenciaCentiMotivo: string | null;
+  /** Quando foi conferido (ISO) — com o `atualizadoEm` depois dele, a conferência está DESATUALIZADA ("Reconferir"). */
+  conferenciaCentiEm: string | null;
   /** SUBUNIDADE escolhida no DFD (modo "um centro para toda a unidade" — `subunidades-core.ts`; no outro modo, ignorada). */
   subunidadeId: number | null;
   /** CENTRO DE CUSTO da Centi (CM002), gravado pela Automação "Unidades × Centro de Custo"; vazio = ERRO no Estado. */
@@ -237,6 +239,7 @@ const colunasDfd = {
   execucaoCenti: dfds.execucaoCenti,
   conferenciaCenti: dfds.conferenciaCenti,
   conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
+  conferenciaCentiEm: dfds.conferenciaCentiEm,
   subunidadeId: dfds.subunidadeId,
   centroCusto: dfds.centroCusto,
   protocoloResponsavelId: dfdProtocolos.responsavelId,

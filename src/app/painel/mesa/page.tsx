@@ -96,6 +96,7 @@ async function ConteudoMesa({
       dadosCompletos={m.dadosCompletos}
       colunasAuto={m.colunasAuto}
       automacoes={m.automacoes}
+      automacoesCenti={m.automacoesCenti}
     />
   );
 }

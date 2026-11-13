@@ -135,7 +135,7 @@ import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { ExcluidosMesa } from "@/components/ExcluidosMesa";
 import { RecorteMesa } from "@/components/RecorteMesa";
-import { CelulaExecucao } from "@/components/CelulaExecucao";
+import { CelulaConferenciaCenti, CelulaExecucao, RelatorioCenti } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
 import { ProblemasFluxo } from "@/components/fluxos/ProblemasFluxo";
@@ -2186,6 +2186,17 @@ function ConsolidadosDemo() {
         <CelulaExecucao situacao="Cancelado" />
         <CelulaExecucao situacao="Em andamento" />
         <CelulaExecucao situacao={null} />
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaConferenciaCenti status="convergente" conferidoEm="2026-11-10T13:00:00.000Z" />
+        <CelulaConferenciaCenti
+          status="divergente"
+          conferidoEm="2026-11-10T13:00:00.000Z"
+          motivo={"DFD 1 (Planej. 2): 3 diferenças — Valor total: R$ 1.000,00 no sistema × R$ 1.200,00 na Centi;\nItem 2 (cód. 123): quantidade 10 × 12 (sistema × Centi);\nSeção JUSTIFICATIVA diferente"}
+        />
+        <CelulaConferenciaCenti status="divergente" desatualizada conferidoEm="2026-11-10T13:00:00.000Z" motivo={"DFD 1 (Planej. 2): 1 diferença — Tipo: DFD-S no sistema × DFD-R na Centi"} />
+        <CelulaConferenciaCenti status={null} />
+        <RelatorioCenti dfds={[{ numero: "1", planejamento: "2", sigla: "SMS", motivo: "DFD 1 (Planej. 2): 1 diferença — Tipo: DFD-S no sistema × DFD-R na Centi" }]} />
       </div>
       <div className="flex flex-wrap gap-2">
         {linhas.map((l) => (

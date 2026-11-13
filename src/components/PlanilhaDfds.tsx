@@ -3,6 +3,8 @@
 import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
 import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia, valoresConferencia } from "./CelulaExecucao";
+import { contarDivergencias, deltaValorDoMotivo, divergenciasDoMotivo } from "@/lib/conferencia-dfd-centi";
+import { dataIsoBrasilia } from "@/lib/format";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import type { OrigemValidacao } from "@/lib/conferencia-dfd";
 import {
@@ -75,7 +77,7 @@ export type LinhaDfd = {
   /** Situação do planejamento na Centi (CM002); undefined = a tela não traz a coluna. */
   execucao?: string | null;
   /** Conferência com a CM002: convergente | divergente (+ o motivo); undefined = a tela não traz a coluna. */
-  conferencia?: { status: string | null; motivo: string | null };
+  conferencia?: { status: string | null; motivo: string | null; em?: string | null; desatualizada?: boolean };
   /** A SUBUNIDADE efetiva (`subunidadeDoDfd`) e o CENTRO DE CUSTO da Centi — só o DFD GRAVADO (undefined = sem as
    * colunas); `cor` = a da importância do ADM para a falta. */
   subunidade?: { nome: string | null; falta: boolean; cor?: string; dica?: string };
@@ -167,7 +169,7 @@ export type PropsPlanilhaDfds = {
   /** Só DADOS (ex.: Dashboard do PCA): sem a coluna Estado — nenhum erro/atenção apontado; tabela única. */
   semEstado?: boolean;
   /** Ações no rodapé da tabela PRINCIPAL, à esquerda do seletor de linhas (ex.: "Importar DFD" da Mesa). */
-  acoesRodape?: ReactNode;
+  acoesRodape?: ReactNode | ((linhas: LinhaDfd[]) => ReactNode);
   /** Mensagem do corpo da tabela principal sem nenhuma linha (repassada ao `DataTable`). */
   vazio?: ReactNode;
   /** Ação ao lado do título da tabela dos DFDs FORA do envio (ex.: "Restaurar excluídos" da análise). */
@@ -364,8 +366,59 @@ export function propsPlanilhaDfds({
             align: "center" as const,
             nowrap: true,
             value: (r: LinhaDfd) => rotuloConferencia(r.conferencia?.status),
-            valores: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo),
-            render: (r: LinhaDfd) => <CelulaConferenciaCenti status={r.conferencia?.status} motivo={r.conferencia?.motivo} />,
+            valores: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.desatualizada),
+            render: (r: LinhaDfd) => (
+              <CelulaConferenciaCenti
+                status={r.conferencia?.status}
+                motivo={r.conferencia?.motivo}
+                dfdId={r.conferencia?.em !== undefined ? r.key : undefined}
+                conferidoEm={r.conferencia?.em}
+                desatualizada={r.conferencia?.desatualizada}
+              />
+            ),
+          },
+          // Os números da conferência (ocultos por padrão — o seletor de colunas os liga): ordenar pelos piores e pelo impacto.
+          {
+            key: "divergenciasCenti",
+            header: "Divergências",
+            align: "center" as const,
+            nowrap: true,
+            grupo: "Conferência com a Centi",
+            filter: "range" as const,
+            formatarFaixa: (v: number) => num(v),
+            numero: (r: LinhaDfd) => (r.conferencia?.status === "divergente" ? contarDivergencias(divergenciasDoMotivo(r.conferencia.motivo)) : r.conferencia?.status ? 0 : null),
+            render: (r: LinhaDfd) =>
+              r.conferencia?.status === "divergente" ? num(contarDivergencias(divergenciasDoMotivo(r.conferencia.motivo))) : r.conferencia?.status ? "0" : <span className="text-faint">—</span>,
+          },
+          {
+            key: "deltaCenti",
+            header: "Δ Valor (Centi)",
+            align: "right" as const,
+            nowrap: true,
+            grupo: "Conferência com a Centi",
+            filter: "range" as const,
+            numero: (r: LinhaDfd) => deltaValorDoMotivo(r.conferencia?.motivo),
+            render: (r: LinhaDfd) => {
+              const d = deltaValorDoMotivo(r.conferencia?.motivo);
+              return d == null ? <span className="text-faint">—</span> : <span className={d < 0 ? "text-[var(--danger)]" : ""} title="Sistema − Centi">{brl(d)}</span>;
+            },
+          },
+          {
+            key: "conferidoCenti",
+            header: "Conferido em",
+            align: "center" as const,
+            nowrap: true,
+            grupo: "Conferência com a Centi",
+            filter: "date" as const,
+            value: (r: LinhaDfd) => (r.conferencia?.em ? dataIsoBrasilia(r.conferencia.em) : ""),
+            render: (r: LinhaDfd) =>
+              r.conferencia?.em ? (
+                <span className={r.conferencia.desatualizada ? "text-[var(--warn)]" : ""} title={r.conferencia.desatualizada ? "O DFD mudou depois da conferência" : undefined}>
+                  {dataHoraBR(r.conferencia.em)}
+                </span>
+              ) : (
+                <span className="text-faint">—</span>
+              ),
           },
         ]
       : []),

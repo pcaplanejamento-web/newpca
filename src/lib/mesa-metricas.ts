@@ -1,6 +1,7 @@
 import { CATEGORIAS, classificarAssunto } from "./avaliacao-core.ts";
 import { dataBR, dataIsoBrasilia, mesLabel } from "./format.ts";
 import { DIAS_ALERTA, type DfdPainel, ESTADOS_PAINEL, FAIXAS_IDADE, type ProtocoloPainel, ROTULO_ESTADO_PAINEL } from "./mesa-dashboard.ts";
+import { tiposDoMotivo } from "./conferencia-dfd-centi.ts";
 import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
 import { noIntervalo, PERIODO_TODO, type Periodo, textoIntervalo } from "./periodo.ts";
 import type { IntervaloData } from "./tabela-filtros.ts";
@@ -25,7 +26,7 @@ import type { IntervaloData } from "./tabela-filtros.ts";
 // O que a barra escolhe.
 // ---------------------------------------------------------------------------
 
-export type DadoMetricas = "responsavel" | "distribuicao" | "natureza" | "tipo" | "situacao" | "estado" | "unidade" | "tempo" | "data";
+export type DadoMetricas = "responsavel" | "distribuicao" | "natureza" | "tipo" | "situacao" | "estado" | "unidade" | "centi" | "tempo" | "data";
 export const DADOS_METRICAS: readonly { value: DadoMetricas; label: string }[] = [
   { value: "responsavel", label: "Responsável" },
   { value: "distribuicao", label: "Quem protocolou" },
@@ -34,6 +35,7 @@ export const DADOS_METRICAS: readonly { value: DadoMetricas; label: string }[] =
   { value: "situacao", label: "Situação" },
   { value: "estado", label: "Estado" },
   { value: "unidade", label: "Unidade" },
+  { value: "centi", label: "Divergência com a Centi" },
   { value: "tempo", label: "Tempo na Mesa" },
   { value: "data", label: "Data" },
 ];
@@ -141,12 +143,24 @@ const tipoDoDfd = (tipo: string | null | undefined): TipoDfd => (tipoCurtoDfd(ti
 
 export type Totais = { dfds: number; itens: number; valor: number };
 type TotaisUnidade = Totais & { sigla: string; nome: string | null };
-type IndiceProtocolo = { total: Totais; porTipo: Map<TipoDfd, Totais>; porUnidade: Map<string, TotaisUnidade> };
+type IndiceProtocolo = { total: Totais; porTipo: Map<TipoDfd, Totais>; porUnidade: Map<string, TotaisUnidade>; porCenti: Map<string, Totais> };
 const SEM_TOTAIS: Readonly<Totais> = Object.freeze({ dfds: 0, itens: 0, valor: 0 });
 const numero = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 /** Chaves das linhas "sem" (o grupo não existe no protocolo). */
 const CHAVE_SEM_DFDS = "sem-dfds";
 const CHAVE_SEM_UNIDADE = "sem-unidade";
+/** Dado "Divergência com a Centi": o DFD em dia com a Centi e o ainda não conferido (os tipos de divergência são o resto). */
+const CHAVE_CONVERGENTE = "centi:convergente";
+const CHAVE_NAO_CONFERIDO = "centi:nao-conferido";
+const PREFIXO_DIVERGENCIA = "centi:div:";
+/** As barras do DFD no Dado "Divergência com a Centi": convergente, não conferido ou CADA tipo de divergência dele. */
+function chavesCenti(d: DfdPainel): string[] {
+  const c = d.conferencia;
+  if (c?.status === "convergente") return [CHAVE_CONVERGENTE];
+  if (c?.status !== "divergente") return [CHAVE_NAO_CONFERIDO];
+  const tipos = tiposDoMotivo(c.motivo);
+  return tipos.length ? tipos.map((t) => PREFIXO_DIVERGENCIA + t) : [`${PREFIXO_DIVERGENCIA}Outras`];
+}
 /** A linha que junta a cauda (as pessoas/unidades além das `MAX_LINHAS_GRAFICO` maiores). */
 export const CHAVE_OUTRAS = "outras";
 /** Barras listadas nos Dados ordenados pelo valor (pessoas e unidades); o resto vira "Outras N". */
@@ -157,7 +171,7 @@ function indicePorProtocolo(dfds: readonly DfdPainel[]): Map<number, IndiceProto
   const m = new Map<number, IndiceProtocolo>();
   for (const d of dfds) {
     if (d.protocoloId == null) continue;
-    const idx = m.get(d.protocoloId) ?? { total: { dfds: 0, itens: 0, valor: 0 }, porTipo: new Map(), porUnidade: new Map() };
+    const idx = m.get(d.protocoloId) ?? { total: { dfds: 0, itens: 0, valor: 0 }, porTipo: new Map(), porUnidade: new Map(), porCenti: new Map() };
     const tipo = tipoDoDfd(d.tipo);
     const t = idx.porTipo.get(tipo) ?? { dfds: 0, itens: 0, valor: 0 };
     const chaveU = d.unidadeId != null ? String(d.unidadeId) : CHAVE_SEM_UNIDADE;
@@ -170,6 +184,13 @@ function indicePorProtocolo(dfds: readonly DfdPainel[]): Map<number, IndiceProto
     }
     idx.porTipo.set(tipo, t);
     idx.porUnidade.set(chaveU, u);
+    for (const k of chavesCenti(d)) {
+      const c = idx.porCenti.get(k) ?? { dfds: 0, itens: 0, valor: 0 };
+      c.dfds++;
+      c.itens += numero(d.itens);
+      c.valor += numero(d.valor);
+      idx.porCenti.set(k, c);
+    }
     m.set(d.protocoloId, idx);
   }
   return m;
@@ -421,7 +442,7 @@ type Lancamento<P> = { chave: string; id: number; valor: number; protocolo: P; e
 
 const CHAVE_SEM_DATA = "sem-data";
 /** As barras "sem" (sem pessoa, situação, tipo, unidade, DFDs ou data) ficam esmaecidas, como a "Outras N". */
-const CHAVES_APAGADAS = new Set(["sem", CHAVE_SEM_DFDS, CHAVE_SEM_UNIDADE, CHAVE_SEM_DATA]);
+const CHAVES_APAGADAS = new Set(["sem", CHAVE_SEM_DFDS, CHAVE_SEM_UNIDADE, CHAVE_SEM_DATA, CHAVE_NAO_CONFERIDO]);
 const grupoSemDfds = (totais: Readonly<Totais>): Grupo => ({ chave: CHAVE_SEM_DFDS, rotulo: "Sem DFDs", titulo: "Protocolos sem DFDs", ordem: 2, totais });
 function grupoPessoa(id: number | null, sem: string, totais: Readonly<Totais>): Grupo {
   return id == null
@@ -451,6 +472,13 @@ function gruposDoProtocolo(rec: RecorteMetricas<ProtocoloPainel>, p: ProtocoloPa
       return [...idx.porUnidade].map(([k, u]) => {
         const rotulo = k === CHAVE_SEM_UNIDADE ? "Sem unidade" : u.sigla || u.nome || `Unidade #${k}`;
         return { chave: k, rotulo, titulo: u.nome && u.nome !== rotulo ? `${rotulo} — ${u.nome}` : rotulo, ordem: k === CHAVE_SEM_UNIDADE ? 1 : 0, totais: u };
+      });
+    case "centi":
+      if (!idx || idx.total.dfds === 0) return [grupoSemDfds(total)];
+      return [...idx.porCenti].map(([k, tot]) => {
+        const rotulo = k === CHAVE_CONVERGENTE ? "Convergente" : k === CHAVE_NAO_CONFERIDO ? "Não conferido" : k.slice(PREFIXO_DIVERGENCIA.length);
+        const titulo = k.startsWith(PREFIXO_DIVERGENCIA) ? `Divergente · ${rotulo}` : rotulo;
+        return { chave: k, rotulo, titulo, ordem: k === CHAVE_CONVERGENTE ? 1 : k === CHAVE_NAO_CONFERIDO ? 2 : 0, totais: tot };
       });
     case "situacao": {
       const nome = p.situacaoId != null ? situacoes.get(p.situacaoId) : undefined;
@@ -595,6 +623,13 @@ export function graficoMetricas<P extends ProtocoloPainel>(
     const chavesFixas = new Set(fixas.map((g) => g.chave));
     const extras = [...grupos.values()].filter((g) => !chavesFixas.has(g.chave)).sort((a, b) => a.ordem - b.ordem);
     linhas = [...fixas.map(linhaDe), ...extras.map(linhaDe).filter((l) => l.valor !== 0)];
+  } else if (dado === "centi") {
+    // Os tipos de divergência pelo valor (os maiores primeiro); depois Convergente, Não conferido e Sem DFDs.
+    linhas = [...grupos.values()]
+      .map((g) => ({ g, l: linhaDe(g) }))
+      .filter((x) => x.l.valor !== 0)
+      .sort((a, b) => a.g.ordem - b.g.ordem || b.l.valor - a.l.valor || a.g.rotulo.localeCompare(b.g.rotulo, "pt-BR"))
+      .map((x) => x.l);
   } else if (porValor(dado)) {
     const todas = [...grupos.values()].map((g) => ({ g, l: linhaDe(g) })).filter((x) => x.l.valor !== 0);
     const comuns = todas.filter((x) => x.g.ordem === 0).sort((a, b) => b.l.valor - a.l.valor || a.g.chave.localeCompare(b.g.chave, "pt-BR", { numeric: true }));
@@ -612,12 +647,16 @@ export function graficoMetricas<P extends ProtocoloPainel>(
       .filter((l) => l.valor !== 0);
   }
 
-  const total = somar([...porChave.values()].flat());
+  // "Divergência com a Centi": um DFD conta em CADA tipo dele — o total é o do protocolo (cada DFD uma vez).
+  const total =
+    dado === "centi" && particiona
+      ? [...new Map([...porChave.values()].flat().map((l) => [l.id, l.protocolo])).values()].reduce((s, p) => s + medidaDosTotais(totaisDoProtocolo(rec, p.id), medida), 0)
+      : somar([...porChave.values()].flat());
   return {
     linhas,
     total,
     fora: somar(fora),
-    repete: !particiona && (dado === "tipo" || dado === "unidade") && linhas.reduce((s, l) => s + l.valor, 0) > total,
+    repete: (dado === "centi" || (!particiona && (dado === "tipo" || dado === "unidade"))) && linhas.reduce((s, l) => s + l.valor, 0) > total + 1e-9,
     granularidade: data?.granularidade ?? null,
     origem: (chaves) => {
       const alvo = new Set(chaves.flatMap((k) => (k === CHAVE_OUTRAS ? cauda : [k])));
@@ -649,6 +688,7 @@ const POR_DADO: Record<DadoMetricas, string> = {
   situacao: "situação",
   estado: "estado",
   unidade: "unidade",
+  centi: "divergência com a Centi",
   tempo: "tempo na Mesa",
   data: "data",
 };

@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "./automacao-mesa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { type AjudaFluxo, cicloDeSubfluxos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
+import { type AutomacoesCenti, automacoesCentiDaMesa } from "./automacao-centi-mesa";
 import { comandoLimparProgresso, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
 
 export type FluxoAutomacao = {
@@ -93,6 +94,12 @@ export async function automacoesDaMesa(usuarioId: number): Promise<{ id: number;
     .where(inArray(automacaoFluxos.id, ids.slice(0, 50)));
   const por = new Map(rows.filter((r) => fluxoVisivel(r, usuarioId)).map((r) => [r.id, { id: r.id, nome: r.nome }]));
   return ids.flatMap((id) => por.get(id) ?? []);
+}
+
+/** As automações de RECONFERIR e de SUBSTITUIR pela Centi que a pessoa vê (as dela, as sem dono e as públicas). */
+export async function automacoesCentiDe(usuarioId: number): Promise<AutomacoesCenti> {
+  const [meus, publicos] = await Promise.all([listarFluxosDe(usuarioId), listarPublicos(usuarioId)]);
+  return automacoesCentiDaMesa([...meus, ...publicos]);
 }
 
 export async function getFluxo(id: number): Promise<FluxoAutomacao | null> {

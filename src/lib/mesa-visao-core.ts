@@ -164,7 +164,7 @@ export type MetricasPermitidas = {
   kpiValor: boolean;
 };
 
-const TODOS_DADOS: readonly DadoMetricas[] = ["responsavel", "distribuicao", "natureza", "tipo", "situacao", "estado", "unidade", "tempo", "data"];
+const TODOS_DADOS: readonly DadoMetricas[] = ["responsavel", "distribuicao", "natureza", "tipo", "situacao", "estado", "unidade", "centi", "tempo", "data"];
 const TODAS_MEDIDAS: readonly MedidaMetricas[] = ["protocolos", "dfds", "itens", "valor", "correcoes", "acoes"];
 
 /** Tudo permitido (o padrão do Dashboard — o Administrador, as demonstrações). */

@@ -130,7 +130,7 @@ describe("Responsável em 3 níveis", () => {
 describe("métricas permitidas no Dashboard", () => {
   it("padrão: tudo", () => {
     const m = metricasPermitidas(visao({}));
-    assert.equal(m.dados.length, 9);
+    assert.equal(m.dados.length, 10);
     assert.equal(m.medidas.length, 6);
     assert.ok(m.responsavel && m.desempenho && m.periodo && m.kpiTempo && m.kpiConformidade && m.kpiValor);
   });

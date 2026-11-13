@@ -26,6 +26,10 @@ test("restringirPelaEntrada: só os itens de fora do MESMO tipo", () => {
   assert.deepEqual(restringirPelaEntrada(lidos, [dfd(2, "20")], "dfds").map((i) => i.id), [2]);
   assert.equal(restringirPelaEntrada(lidos, [{ id: 5, numero: "1/2026", idExterno: "9" }], "dfds"), lidos);
   assert.equal(restringirPelaEntrada(lidos, undefined, "dfds"), lidos);
+  // Da MESA: um DFD sem nº de planejamento ainda recorta pelo id — nunca leva a automação a TODOS os DFDs.
+  const semPlan = [{ id: 3, numero: "1003", planejamento: "" }, dfd(2, "20")];
+  assert.equal(restringirPelaEntrada(lidos, semPlan, "dfds"), lidos, "fora da Mesa, a lista misturada não recorta");
+  assert.deepEqual(restringirPelaEntrada(lidos, semPlan, "dfds", true).map((i) => i.id), [2, 3]);
 });
 
 test("opcoesDaBusca: os valores do sistema sem repetir", () => {
