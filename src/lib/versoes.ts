@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.13",
+    data: "2026-11-13",
+    titulo: "Filtros das colunas: busca com hífen ou barra entre números",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "No filtro das colunas, uma busca como \"10 - 20\" ou \"2024 / 2025\" volta a procurar o texto inteiro, em vez de procurar só o \"-\" ou a \"/\" (que achava quase tudo).", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.289.12",
     data: "2026-11-12",
     titulo: "Filtros das colunas: vários números na mesma filtragem",

@@ -167,7 +167,9 @@ function chaveBusca(s: string): string {
 
 /** Uma LISTA DE NÚMEROS separada por espaço, ";" ou ", " ("168 170", "168; 170", "168, 170") vale como "168:170" — a
  * vírgula colada aos dígitos ("1,5") segue sendo decimal. Os números podem ter "/", "." e "-" ("144756/2026", "1.000"). */
-const LISTA_NUMEROS = /^[\d./-]+(?:(?:\s*[;:]\s*|,\s+|\s+)[\d./-]+)+$/;
+// Cada termo tem de ter um dígito: "10 - 20" ou "2024 / 2025" não viram uma busca por "-" ou "/" (casaria quase tudo).
+const NUM = "[\\d./-]*\\d[\\d./-]*";
+const LISTA_NUMEROS = new RegExp(`^${NUM}(?:(?:\\s*[;:]\\s*|,\\s+|\\s+)${NUM})+$`);
 export function listaDeNumeros(k: string): string {
   return LISTA_NUMEROS.test(k) ? k.split(/\s*[;:]\s*|,\s+|\s+/).join(":") : k;
 }

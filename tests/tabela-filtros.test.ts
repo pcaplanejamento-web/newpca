@@ -199,6 +199,8 @@ describe("coluna de SEQUENCIAL em lista (consulta do PCA)", () => {
 describe("vários números no mesmo filtro (espaço, ';', ', ') e a busca que SOMA", () => {
   const nums = ["1168", "168", "170", "1700", "174", "2"];
   it("lista de números por espaço, ';' ou ', ' vale como ':'; a vírgula decimal fica", () => {
+    assert.equal(listaDeNumeros("10 - 20"), "10 - 20");
+    assert.equal(listaDeNumeros("2024 / 2025"), "2024 / 2025");
     assert.equal(listaDeNumeros("168 170"), "168:170");
     assert.equal(listaDeNumeros("168; 170"), "168:170");
     assert.equal(listaDeNumeros("168, 170"), "168:170");
