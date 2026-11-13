@@ -63,6 +63,8 @@ import { nomeExibicao, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos, type CampoBarra } from "./BarraEdicaoMassa";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
+import { useAdminTabelas } from "./ConfigTabelas";
+import { CorrecaoCentiMassa } from "./CorrecaoCentiMassa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { colunasItemMesa } from "./ColunasItensMesa";
@@ -103,7 +105,7 @@ import { AutomacoesMesa, useRodarAutomacao } from "./AutomacoesMesa";
 import { dfdsDoAlvo } from "@/lib/automacao-mesa";
 import type { AutomacoesCenti } from "@/lib/automacao-centi-mesa";
 import { conferenciaDesatualizada, type DfdRelatorioCenti, divergenciasDoItem, motivoDivergencias } from "@/lib/conferencia-dfd-centi";
-import { type AcoesCenti, CelulaConferenciaCenti, ProvedorAcoesCenti, RelatorioCenti, rotuloConferencia, valoresConferencia } from "./CelulaExecucao";
+import { type AcoesCenti, CelulaConferenciaCenti, comRessalva, ProvedorAcoesCenti, RelatorioCenti, valoresConferencia } from "./CelulaExecucao";
 import { useConfirmacao } from "./Confirmacao";
 import { PresencaNoItem } from "./PresencaNoItem";
 
@@ -727,8 +729,52 @@ export function DfdsView({
   // TRATAR as divergências com a Centi (o painel do selo e a barra de seleção): roda a automação de reconferir ou de
   // substituir em segundo plano, com os DFDs escolhidos — sempre CONFIRMADO antes (substituir regrava o DFD).
   const { confirmar: confirmarCenti, confirmacao: confirmacaoCenti } = useConfirmacao();
+  const adminMesa = useAdminTabelas();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: excluirDfd/saidaPca/router são do render e só leem estado estável.
   const acoesCenti = useMemo<AcoesCenti>(() => {
-    if (modoPca || !automacoesCenti) return {};
+    const dfdDe = (id: number) => dfds.find((d) => d.id === id);
+    const podeEm = (id: number) => podeNoRecurso(pode, dfdDe(id)?.protocoloPcaId);
+    // As ações gravadas na conferência (recalcular, aceitar, desfazer, nº de planejamento) — Manipular na Mesa do DFD.
+    const servidor = async (id: number, corpo: Record<string, unknown>) => {
+      if (!podeEm(id).manipular) {
+        toast.error("Seu papel não altera DFDs nesta Mesa.");
+        return false;
+      }
+      try {
+        const r = await fetch(`/api/dfd/${id}/conferencia-centi`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) });
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string };
+        if (!r.ok || !j.ok) {
+          toast.error(j.error ?? "Não foi possível gravar.");
+          return false;
+        }
+        const msg: Record<string, string> = {
+          recalcular: j.status === "convergente" ? "Recalculado: agora confere com a Centi." : "Recalculado com os dados guardados da Centi.",
+          aceitar: "Divergência aceita — o DFD fica “convergente com ressalva”.",
+          desfazerAceite: "Aceite desfeito.",
+          planejamento: "Nº de planejamento corrigido — reconfira na Centi.",
+        };
+        toast.success(msg[String(corpo.acao)] ?? "Gravado.");
+        router.refresh();
+        return true;
+      } catch {
+        toast.error("Sem conexão com o sistema — tente de novo.");
+        return false;
+      }
+    };
+    const base: AcoesCenti = {
+      servidor,
+      admin: adminMesa,
+      corrigir: (id) => {
+        if (!podeEm(id).importar) return void toast.error("Corrigir regrava o DFD — seu papel precisa importar nesta Mesa.");
+        setAberto({ tipo: "dfd", id, corrigirCenti: true });
+      },
+      excluir: (id) => {
+        const d = dfdDe(id);
+        if (!d || !podeEm(id).excluir) return void toast.error("Seu papel não exclui DFDs nesta Mesa.");
+        void excluirDfd(id, d.numero, saidaPca(d.protocoloPcaId, d.protocoloPcaIncorporadoEm, d.totalItens ?? 0));
+      },
+    };
+    if (modoPca || !automacoesCenti) return base;
     const montar = (a: { id: number; nome: string } | null, titulo: (n: number) => string, texto: string, botao: string) =>
       a
         ? async (ids: number[]) => {
@@ -741,6 +787,7 @@ export function DfdsView({
           }
         : undefined;
     return {
+      ...base,
       reconferir: montar(automacoesCenti.conferir, (n) => (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`), "Busca o DFD na Centi e compara de novo; a coluna Centi é atualizada.", "Reconferir"),
       substituir: montar(
         automacoesCenti.substituir,
@@ -749,7 +796,7 @@ export function DfdsView({
         "Usar os dados da Centi",
       ),
     };
-  }, [modoPca, automacoesCenti, dfds, confirmarCenti, rodar]);
+  }, [modoPca, automacoesCenti, dfds, confirmarCenti, rodar, pode, adminMesa]);
   const automacaoSel = (rotulo: string) =>
     !modoPca && automacoes.length ? (
       <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />
@@ -1290,6 +1337,7 @@ export function DfdsView({
         motivo: d.conferenciaCentiMotivo,
         em: d.conferenciaCentiEm ?? null,
         desatualizada: conferenciaDesatualizada(d.conferenciaCentiEm, d.atualizadoEm),
+        aceite: d.conferenciaCentiAceite,
       },
       ...gravadosDe(d.id),
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
@@ -1400,7 +1448,7 @@ export function DfdsView({
       itens: d.totalItens,
       protocoloId: d.protocoloId,
       tipo: d.tipo,
-      conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo },
+      conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo, aceite: d.conferenciaCentiAceite },
     });
     const universoD = dfdsU.map(paraPainel);
     const idsMesa = focado ? new Set(protocolosF.map((p) => p.id)) : null;
@@ -1867,11 +1915,13 @@ export function DfdsView({
     const d = dfdPorId.get(r.dfdId);
     const status = d?.conferenciaCenti ?? null;
     const desatualizada = conferenciaDesatualizada(d?.conferenciaCentiEm, d?.atualizadoEm);
-    if (status !== "divergente") return { status, motivo: null, em: d?.conferenciaCentiEm ?? null, desatualizada };
+    const aceite = d?.conferenciaCentiAceite ?? null;
+    const ressalva = comRessalva(status, d?.conferenciaCentiMotivo, aceite);
+    if (status !== "divergente") return { status, motivo: null, em: d?.conferenciaCentiEm ?? null, desatualizada, aceite, ressalva };
     const difs = divergenciasDoItem(d?.conferenciaCentiMotivo, r.item);
     return difs.length
-      ? { status, motivo: motivoDoItem(r.item, difs), em: d?.conferenciaCentiEm ?? null, desatualizada }
-      : { status: "convergente", motivo: null, em: d?.conferenciaCentiEm ?? null, desatualizada };
+      ? { status, motivo: motivoDoItem(r.item, difs), em: d?.conferenciaCentiEm ?? null, desatualizada, aceite, ressalva }
+      : { status: "convergente", motivo: null, em: d?.conferenciaCentiEm ?? null, desatualizada, aceite, ressalva: false };
   };
   const ci = colunasItemMesa<ItemDfdRow>({
     protocolo: atributoItem.protocolo.valor,
@@ -1961,14 +2011,28 @@ export function DfdsView({
             header: "Centi",
             align: "center" as const,
             nowrap: true,
-            value: (r: ItemDfdRow) => rotuloConferencia(confCentiDoItem(r).status),
+            value: (r: ItemDfdRow) => {
+              const c = confCentiDoItem(r);
+              return valoresConferencia(c.status, c.motivo, false, c.ressalva)[0];
+            },
             valores: (r: ItemDfdRow) => {
               const c = confCentiDoItem(r);
-              return valoresConferencia(c.status, c.motivo, c.desatualizada);
+              return valoresConferencia(c.status, c.motivo, c.desatualizada, c.ressalva);
             },
             render: (r: ItemDfdRow) => {
               const c = confCentiDoItem(r);
-              return <CelulaConferenciaCenti status={c.status} motivo={c.motivo} dfdId={r.dfdId} conferidoEm={c.em} desatualizada={c.desatualizada} rotulo={`Item ${r.item ?? "?"}`} />;
+              return (
+                <CelulaConferenciaCenti
+                  status={c.status}
+                  motivo={c.motivo}
+                  dfdId={r.dfdId}
+                  conferidoEm={c.em}
+                  desatualizada={c.desatualizada}
+                  aceite={c.aceite}
+                  ressalvaDoDfd={c.ressalva}
+                  rotulo={`Item ${r.item ?? "?"}`}
+                />
+              );
             },
           },
         ]
@@ -2552,6 +2616,17 @@ export function DfdsView({
               </Button>
             )}
             {!modoPca && <RelatorioCenti dfds={sel.map((d) => relatorioDoDfd(d))} rotulo="Relatório Centi" />}
+            <CorrecaoCentiMassa
+              dfds={sel.map((d) => ({
+                id: d.id,
+                numero: d.numero,
+                planejamento: d.planejamento,
+                status: d.conferenciaCenti,
+                motivo: d.conferenciaCentiMotivo,
+                aceite: d.conferenciaCentiAceite,
+              }))}
+              onConcluido={() => router.refresh()}
+            />
           </>
         }
       >

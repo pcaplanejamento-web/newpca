@@ -139,6 +139,12 @@ export function marcarItensNovos(d: DfdParseado): DfdParseado {
   return { ...d, itens: d.itens.map((it, j) => ({ ...it, ref: refN(j) })) };
 }
 
+/** O DFD GRAVADO como ponto de partida do trabalho: cada item marca a sua origem (`g:<i>`) — a correção pela Centi parte
+ * do gravado e troca só o que diverge. */
+export function marcarItensGravados(d: DfdParseado): DfdParseado {
+  return { ...d, itens: d.itens.map((it, i) => ({ ...it, ref: refG(i) })) };
+}
+
 /** Estado de UMA escolha no DFD de trabalho. */
 export function estadoEscolha(e: EntradaEscolha, trabalho: DfdParseado, gravado: DfdParseado, novo: DfdParseado): EstadoEscolha {
   if (e.tipo === "campo") {

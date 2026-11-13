@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao, regrasPadrao, tipoPermitido } from "@/lib/avaliacao-core";
 import { herdarTratamentos } from "@/lib/comparar-protocolo";
+import type { RetratoCenti } from "@/lib/conferencia-dfd-centi";
+import { aplicarCentiPorTipos, planoCorrecao } from "@/lib/correcao-centi-core";
 import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado } from "@/lib/dfd-edicao";
@@ -70,6 +72,7 @@ export function DfdUploadForm({
   sobrescrever = null,
   verificacao = false,
   arquivoHost = null,
+  centi = null,
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
@@ -88,6 +91,10 @@ export function DfdUploadForm({
   verificacao?: boolean;
   /** Um arquivo que já chegou do host: cada `n` NOVO abre a MESMA leitura, sem o lançador. */
   arquivoHost?: { file: File; n: number } | null;
+  /** CORRIGIR PELA CENTI (com `sobrescrever`): o DFD da Centi guardado na conferência faz o papel do arquivo novo — as
+   * escolhas viram "Manter sistema | Usar Centi" e vêm marcadas "Usar Centi" só nos dados que DIVERGEM. Cada `n` NOVO
+   * abre; `onGravado` roda depois de gravar (a conferência é refeita com o retrato). */
+  centi?: { retrato: RetratoCenti; n: number; onGravado?: () => Promise<void> } | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -115,6 +122,8 @@ export function DfdUploadForm({
   const [base, setBase] = useState<DfdDetalhe | null>(null);
   const [arquivo, setArquivo] = useState<DfdParseado | null>(null);
   const [herdados, setHerdados] = useState<string[]>([]);
+  // A correção pela Centi em andamento (as escolhas dizem "sistema × Centi").
+  const [modoCenti, setModoCenti] = useState(false);
 
   // Enquanto grava (lotes), avisa antes de fechar/atualizar a aba.
   useEffect(() => {
@@ -148,6 +157,34 @@ export function DfdUploadForm({
     arquivoVisto.current = arquivoHost.n;
     void handleFile(arquivoHost.file);
   }, [arquivoHost]);
+  // CORRIGIR PELA CENTI: o retrato da conferência é o "arquivo novo" — sem lançador e sem leitura.
+  const centiVisto = useRef(centi?.n ?? 0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só a um pedido NOVO do host.
+  useEffect(() => {
+    if (!centi || !sobrescrever || centi.n === centiVisto.current || status === "sending") return;
+    centiVisto.current = centi.n;
+    ++leituraRef.current; // uma leitura de arquivo em curso deixa de valer
+    const gravado = sobrescrever.gravado;
+    const g = detalheParaParseado(gravado);
+    const anoRef = gravado.anoPca ?? gravado.protocoloAnoPca ?? null;
+    const plano = planoCorrecao(g, centi.retrato, anoRef);
+    setErro(null);
+    setResultado(null);
+    setAncoraAlvo(null);
+    setLauncher(false);
+    setAutoCampos([]);
+    setAnoPcaDetectado(anoRef);
+    setBase(gravado);
+    setArquivo(plano.centi);
+    setHerdados([]);
+    setPreview(aplicarCentiPorTipos(g, plano));
+    setRepId(gravado.reparticaoId);
+    setAutoMatch(false);
+    setAnoPca(anoRef);
+    setModoCenti(true);
+    setPainel({ tipo: "diferencas" });
+    setStatus("ready");
+  }, [centi]);
   // Sobrescrita em ANDAMENTO (do lançador até gravar/cancelar) → o banner do DFD fica só-leitura.
   const ocupado = launcher || status === "parsing" || status === "ready" || status === "sending";
   const onOcupado = sobrescrever?.onOcupado;
@@ -172,6 +209,7 @@ export function DfdUploadForm({
     bloqueado: status === "sending",
     unidade: base ? { gravado: base.reparticaoId, trabalho: repId, rotulo: rotuloUnidade } : undefined,
     anoPca: base ? { gravado: base.anoPca ?? base.protocoloAnoPca, trabalho: anoPca } : undefined,
+    nomes: modoCenti ? { gravado: "sistema", novo: "Centi" } : undefined,
   });
 
   async function handleFile(file: File) {
@@ -181,6 +219,7 @@ export function DfdUploadForm({
     setResultado(null);
     setPainel(null); // nada do DFD anterior (ex.: "Diferenças") sobra no painel da direita
     setAncoraAlvo(null);
+    setModoCenti(false);
     const ehPdf = /\.pdf$/i.test(file.name);
     if (!ehPdf && !/\.xlsx?$/i.test(file.name)) {
       setStatus("error");
@@ -262,6 +301,17 @@ export function DfdUploadForm({
     const resumo = sob?.resumo ?? null;
     if (
       base &&
+      modoCenti &&
+      !confirm(
+        `Corrigir o DFD ${base.numero} pela Centi?\n\n` +
+          (resumo ? `${resumo.novos} dado(s) da Centi · ${resumo.mantidos.length} mantido(s) do sistema · ${resumo.editados.length} editado(s).\n` : "") +
+          "O histórico registra a correção e a conferência é refeita com os dados guardados da Centi.",
+      )
+    )
+      return;
+    if (
+      base &&
+      !modoCenti &&
       !confirm(
         `Sobrescrever o DFD ${base.numero}${base.protocoloNumero ? ` (protocolo ${base.protocoloNumero})` : ""}?\n\n` +
           (resumo
@@ -319,6 +369,7 @@ export function DfdUploadForm({
       setPainel(null);
       setAncoraAlvo(null);
       setStatus("done");
+      if (modoCenti && centi?.onGravado) await centi.onGravado().catch(() => undefined);
       if (sobrescrever) sobrescrever.onConcluido();
       router.refresh();
     } catch (e) {
@@ -336,6 +387,7 @@ export function DfdUploadForm({
 
   function reset() {
     setStatus("idle");
+    setModoCenti(false);
     setPreview(null);
     setErro(null);
     setRepId(null);
@@ -406,7 +458,7 @@ export function DfdUploadForm({
       {status === "done" && resultado && (
         <AvisoFlutuante
           kind={resultado.foraDoHead ? "warn" : "ok"}
-          titulo={`DFD ${resultado.numero} ${resultado.sobrescrito ? "sobrescrito" : "importado"}!`}
+          titulo={`DFD ${resultado.numero} ${modoCenti ? "corrigido pela Centi" : resultado.sobrescrito ? "sobrescrito" : "importado"}!`}
           onClose={reset}
           duracao={resultado.foraDoHead ? undefined : 8000}
         >
@@ -426,7 +478,7 @@ export function DfdUploadForm({
       <Modal
         open={modalAberto}
         onClose={fecharConferencia}
-        titulo={verificacao ? `Verificação — DFD ${preview?.numero ?? ""}` : base ? `Sobrescrever — DFD ${preview?.numero ?? ""}` : `Conferir e importar — DFD ${preview?.numero ?? ""}`}
+        titulo={verificacao ? `Verificação — DFD ${preview?.numero ?? ""}` : modoCenti ? `Corrigir pela Centi — DFD ${preview?.numero ?? ""}` : base ? `Sobrescrever — DFD ${preview?.numero ?? ""}` : `Conferir e importar — DFD ${preview?.numero ?? ""}`}
         cabecalho={
           preview ? (
             <DfdCabecalho numero={preview.numero} tipo={preview.tipo} planejamento={preview.planejamento} sobrescrita={!!base} />
@@ -491,7 +543,7 @@ export function DfdUploadForm({
                 /* SOBRESCRITA: as diferenças com a ESCOLHA por dado (manter o gravado × usar o novo). */
                 base ? (
                   <BotaoAcao
-                    rotulo="Diferenças do gravado"
+                    rotulo={modoCenti ? "Diferenças com a Centi" : "Diferenças do gravado"}
                     icon={<IconMerge className="h-4 w-4" />}
                     contagem={totalDif}
                     pressionado={painel?.tipo === "diferencas"}
@@ -501,7 +553,14 @@ export function DfdUploadForm({
               }
               principal={
                 verificacao ? undefined : base ? (
-                  <BotaoAcao texto variant="primary" rotulo="Sobrescrever DFD" icon={<IconRefresh className="h-4 w-4" />} onClick={enviar} disabled={bloqueado} />
+                  <BotaoAcao
+                    texto
+                    variant="primary"
+                    rotulo={modoCenti ? "Gravar a correção" : "Sobrescrever DFD"}
+                    icon={<IconRefresh className="h-4 w-4" />}
+                    onClick={enviar}
+                    disabled={bloqueado}
+                  />
                 ) : (
                   <BotaoAcao texto variant="primary" rotulo="Importar DFD" icon={<IconUpload className="h-4 w-4" />} onClick={enviar} disabled={bloqueado} />
                 )

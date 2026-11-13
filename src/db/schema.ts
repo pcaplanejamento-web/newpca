@@ -598,6 +598,8 @@ export const dfds = sqliteTable(
     conferenciaCenti: text("conferencia_centi"),
     conferenciaCentiMotivo: text("conferencia_centi_motivo"),
     conferenciaCentiEm: text("conferencia_centi_em"),
+    /** ACEITE da divergência (migração `0184`): JSON {chave do motivo, justificativa, por, em} — `aceiteVale`. */
+    conferenciaCentiAceite: text("conferencia_centi_aceite"),
     // A SUBUNIDADE escolhida no DFD (modo único da unidade) e o CENTRO DE CUSTO da Centi (CM002), gravado pela Automação
     // "Unidades × Centro de Custo" (migração 0176). Sem centro (ou fora do cadastro da unidade) = erro no DFD gravado.
     subunidadeId: integer("subunidade_id").references((): AnySQLiteColumn => subunidades.id, { onDelete: "set null" }),
@@ -659,6 +661,15 @@ export const conferenciasCenti = sqliteTable(
   },
   (t) => [index("conferencias_centi_dfd_idx").on(t.dfdId, t.id)],
 );
+
+/** O RETRATO do DFD lido na Centi na última conferência (migração `0184`) — `RetratoCenti` em JSON. */
+export const conferenciasCentiRetrato = sqliteTable("conferencias_centi_retrato", {
+  dfdId: integer("dfd_id")
+    .primaryKey()
+    .references(() => dfds.id, { onDelete: "cascade" }),
+  retrato: text("retrato").notNull(),
+  em: text("em").notNull(),
+});
 
 /** Itens da Seção 4 do DFD (só quantidade — sem valor/classificação por item). */
 export const dfdItens = sqliteTable(

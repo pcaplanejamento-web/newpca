@@ -2,7 +2,7 @@
 
 import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
-import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia, valoresConferencia } from "./CelulaExecucao";
+import { CelulaConferenciaCenti, CelulaExecucao, comRessalva, valoresConferencia } from "./CelulaExecucao";
 import { contarDivergencias, deltaValorDoMotivo, divergenciasDoMotivo } from "@/lib/conferencia-dfd-centi";
 import { dataIsoBrasilia } from "@/lib/format";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
@@ -77,7 +77,7 @@ export type LinhaDfd = {
   /** Situação do planejamento na Centi (CM002); undefined = a tela não traz a coluna. */
   execucao?: string | null;
   /** Conferência com a CM002: convergente | divergente (+ o motivo); undefined = a tela não traz a coluna. */
-  conferencia?: { status: string | null; motivo: string | null; em?: string | null; desatualizada?: boolean };
+  conferencia?: { status: string | null; motivo: string | null; em?: string | null; desatualizada?: boolean; aceite?: string | null };
   /** A SUBUNIDADE efetiva (`subunidadeDoDfd`) e o CENTRO DE CUSTO da Centi — só o DFD GRAVADO (undefined = sem as
    * colunas); `cor` = a da importância do ADM para a falta. */
   subunidade?: { nome: string | null; falta: boolean; cor?: string; dica?: string };
@@ -365,8 +365,8 @@ export function propsPlanilhaDfds({
             header: "Centi",
             align: "center" as const,
             nowrap: true,
-            value: (r: LinhaDfd) => rotuloConferencia(r.conferencia?.status),
-            valores: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.desatualizada),
+            value: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo, false, comRessalva(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.aceite))[0],
+            valores: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.desatualizada, comRessalva(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.aceite)),
             render: (r: LinhaDfd) => (
               <CelulaConferenciaCenti
                 status={r.conferencia?.status}
@@ -374,6 +374,7 @@ export function propsPlanilhaDfds({
                 dfdId={r.conferencia?.em !== undefined ? r.key : undefined}
                 conferidoEm={r.conferencia?.em}
                 desatualizada={r.conferencia?.desatualizada}
+                aceite={r.conferencia?.aceite}
               />
             ),
           },

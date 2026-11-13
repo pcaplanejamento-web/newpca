@@ -52,7 +52,7 @@ export type DfdPainel = {
   protocoloId?: number | null;
   tipo?: string | null;
   /** A conferência com a Centi (o Dado "Divergência com a Centi" das métricas). */
-  conferencia?: { status: string | null; motivo: string | null } | null;
+  conferencia?: { status: string | null; motivo: string | null; aceite?: string | null } | null;
 };
 
 /** Semanas da linha do KPI de protocolos (a atual incluída — parcial). */

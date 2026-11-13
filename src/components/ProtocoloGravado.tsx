@@ -41,7 +41,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconSave, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconMerge, IconSave, IconSpinner, IconUpload } from "./icons";
 import { IndicadorPendencias } from "./IndicadorPendencias";
 import type { ConteudoBanner } from "./DfdGravado";
 import { Modal, type ModalPainel } from "./Modal";
@@ -55,6 +55,7 @@ import { TarefasDoVinculo } from "./TarefasDoVinculo";
 import { VendoAgora } from "./VendoAgora";
 import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
+import { useCorrecaoCenti } from "./useCorrecaoCenti";
 import { ehDesktop } from "./espacamento";
 
 type Rep = {
@@ -373,6 +374,9 @@ export function useProtocoloGravado({
   // Sobrescrever o DFD aberto com o arquivo novo (Importar) — de unidade acessível.
   const sobrescreveAberto = podeImportar && abertoId != null && acessivel(orig.get(abertoId)?.reparticaoId ?? null);
   const conformidade = useConformidade(dfdAberto?.itens, dfdAberto?.tipo ?? null);
+  // CORRIGIR PELA CENTI o DFD aberto (conferência divergente): o retrato guardado vira o "arquivo novo" da sobrescrita.
+  const corrigeCentiAberto = sobrescreveAberto && abertoId != null && orig.get(abertoId)?.conferenciaCenti === "divergente";
+  const correcaoCenti = useCorrecaoCenti({ dfdId: corrigeCentiAberto ? abertoId : null, pronto: !!dfdAberto && !sujo && !travado, onErro: setErro });
   const anoAberto = dfdAberto ? (dfdAberto.anoPca ?? proto?.anoPca ?? null) : null;
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagensAberto = dfdAberto
@@ -840,7 +844,22 @@ export function useProtocoloGravado({
         onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
         acoes={
           sobrescreveAberto ? (
-            /* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */
+            <>
+            {corrigeCentiAberto && (
+              <BotaoAcao
+                rotulo="Corrigir pela Centi"
+                icon={correcaoCenti.buscando ? <IconSpinner className="h-4 w-4" /> : <IconMerge className="h-4 w-4" />}
+                onClick={() => void correcaoCenti.corrigir()}
+                disabled={sujo || travado || correcaoCenti.buscando}
+                dica={
+                  motivoTrava ??
+                  (sujo
+                    ? "Salve ou descarte as alterações antes de corrigir"
+                    : "Corrigir pela Centi: compare com os dados da Centi e escolha, dado a dado, o que vale (Manter sistema | Usar Centi)")
+                }
+              />
+            )}
+            {/* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */}
             <BotaoAcao
               variant="primary"
               rotulo="Sobrescrever DFD"
@@ -849,6 +868,7 @@ export function useProtocoloGravado({
               disabled={sujo || travado}
               dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever")}
             />
+            </>
           ) : undefined
         }
       />
@@ -973,6 +993,7 @@ export function useProtocoloGravado({
             },
             onOcupado: setSobrescrevendoDfd,
           }}
+          centi={correcaoCenti.centi}
           reparticoes={reparticoes}
           reparticaoAtivaId={reparticaoAtivaId}
           pcas={pcas}

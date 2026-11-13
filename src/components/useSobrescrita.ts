@@ -31,6 +31,7 @@ export function useSobrescrita({
   bloqueado = false,
   unidade,
   anoPca,
+  nomes,
 }: {
   /** O DFD GRAVADO (mesmo número) — na forma editável. */
   gravado: DfdParseado | null;
@@ -44,6 +45,8 @@ export function useSobrescrita({
   unidade?: { gravado: number | null; trabalho: number | null; rotulo: (id: number | null) => string };
   /** Ano do PCA gravado × o de trabalho (o do processo). */
   anoPca?: { gravado: number | null; trabalho: number | null };
+  /** Os nomes dos dois lados (padrão: gravado × novo). */
+  nomes?: EscolhaSobrescritaProps["nomes"];
 }): {
   /** As diferenças ESCOLHÍVEIS (gravado × novo). */
   comparacao: ComparacaoDfd;
@@ -82,6 +85,7 @@ export function useSobrescrita({
     onTodos: (lado, bloco) => onTrabalho((d) => aplicarTodas(bloco ? entradas.filter((e) => blocoDe(e) === bloco) : entradas, lado, d, gravado, novo)),
     bloqueado,
     outras,
+    nomes,
   };
   return { comparacao, final, entradas, escolha, resumo };
 }

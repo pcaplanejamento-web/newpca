@@ -3,8 +3,8 @@ import { z } from "zod";
 import { dfds } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { comandosHistoricoCenti } from "@/lib/conferencia-centi-sql";
-import { conferenciaDesatualizada } from "@/lib/conferencia-dfd-centi";
+import { comandoApagarRetratos, comandoGuardarRetrato, comandosHistoricoCenti } from "@/lib/conferencia-centi-sql";
+import { conferenciaDesatualizada, lerRetrato, MAX_RETRATO } from "@/lib/conferencia-dfd-centi";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
 
@@ -14,7 +14,15 @@ const LOTE = 50;
 
 const corpoSchema = z.strictObject({
   itens: z
-    .array(z.strictObject({ dfdId: z.number().int().positive(), status: z.enum(["convergente", "divergente"]), motivo: z.string().max(20_000).optional() }))
+    .array(
+      z.strictObject({
+        dfdId: z.number().int().positive(),
+        status: z.enum(["convergente", "divergente"]),
+        motivo: z.string().max(20_000).optional(),
+        // O RETRATO do DFD lido na Centi (o divergente lido inteiro) — a correção campo a campo na Mesa.
+        retrato: z.string().max(MAX_RETRATO).optional(),
+      }),
+    )
     .min(1)
     .max(5000),
 });
@@ -56,6 +64,16 @@ export async function POST(req: Request) {
     );
     await db.batch(fatia as [(typeof fatia)[number], ...typeof fatia]);
   }
+  // Os RETRATOS: guardados um por comando (cada um pode ter ~1,5 MB); quem não traz (convergente ou conferido sem o DFD
+  // inteiro) perde o antigo — ele não representa mais a Centi. Retrato que não se lê é tratado como ausente.
+  const comRetrato = unicos.filter((x) => x.retrato && lerRetrato(x.retrato));
+  const semRetrato = unicos.filter((x) => !comRetrato.includes(x)).map((x) => x.dfdId);
+  for (let i = 0; i < comRetrato.length; i += 5) {
+    const cmds = comRetrato.slice(i, i + 5).map((x) => comandoGuardarRetrato(db, x.dfdId, x.retrato as string, em));
+    await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
+  }
+  // Os ids num parâmetro JSON só: UM comando (o limite de consultas por requisição do Worker).
+  if (semRetrato.length) await db.batch([comandoApagarRetratos(db, semRetrato)]);
   // O HISTÓRICO: uma linha por DFD cujo resultado MUDOU; ficam as 20 mais recentes de cada um.
   if (mudou.length) {
     const cmds = comandosHistoricoCenti(

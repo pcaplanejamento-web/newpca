@@ -173,7 +173,14 @@ export type EscolhaSobrescritaProps = {
   onTodos: (lado: Lado, bloco?: BlocoEscolha) => void;
   bloqueado?: boolean;
   outras?: { campos: DiffCampo[]; itens: DiffItemDfd[] } | null;
+  /** Os nomes dos dois lados (padrão: gravado × novo; a correção pela Centi: sistema × Centi). */
+  nomes?: NomesEscolha;
 };
+
+/** Os nomes dos dois lados da escolha. */
+export type NomesEscolha = { gravado: string; novo: string };
+const NOMES_PADRAO: NomesEscolha = { gravado: "gravado", novo: "novo" };
+const maiuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** Seletor da escolha de UM dado: Manter gravado | Usar novo (+ "Editado" quando mudado à mão). */
 function SeletorLado({
@@ -181,12 +188,14 @@ function SeletorLado({
   onEscolher,
   bloqueado,
   rotulo,
+  nomes = NOMES_PADRAO,
 }: {
   estado: EstadoEscolha;
   onEscolher: (l: Lado) => void;
   bloqueado?: boolean;
   /** O dado escolhido (nome acessível do seletor). */
   rotulo: string;
+  nomes?: NomesEscolha;
 }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -197,8 +206,8 @@ function SeletorLado({
         disabled={bloqueado}
         onChange={(v) => v !== "editado" && onEscolher(v)}
         options={[
-          { value: "gravado", label: "Manter gravado" },
-          { value: "novo", label: "Usar novo" },
+          { value: "gravado", label: `Manter ${nomes.gravado}` },
+          { value: "novo", label: `Usar ${nomes.novo}` },
         ]}
       />
     </span>
@@ -206,14 +215,24 @@ function SeletorLado({
 }
 
 /** "Todos novos / todos gravados" de um bloco (ou de tudo). */
-function AcoesTodos({ onTodos, bloco, bloqueado }: { onTodos: EscolhaSobrescritaProps["onTodos"]; bloco?: BlocoEscolha; bloqueado?: boolean }) {
+function AcoesTodos({
+  onTodos,
+  bloco,
+  bloqueado,
+  nomes,
+}: {
+  onTodos: EscolhaSobrescritaProps["onTodos"];
+  bloco?: BlocoEscolha;
+  bloqueado?: boolean;
+  nomes?: NomesEscolha;
+}) {
   return (
     <span className="inline-flex flex-wrap gap-1">
       <Button variant="ghost" onClick={() => onTodos("gravado", bloco)} disabled={bloqueado}>
-        {bloco ? "Manter gravados" : "Manter todos os gravados"}
+        {nomes ? `${bloco ? "Manter" : "Manter tudo:"} ${nomes.gravado}` : bloco ? "Manter gravados" : "Manter todos os gravados"}
       </Button>
       <Button variant="ghost" onClick={() => onTodos("novo", bloco)} disabled={bloqueado}>
-        {bloco ? "Usar novos" : "Usar todos os novos"}
+        {nomes ? `${bloco ? "Usar" : "Usar tudo:"} ${nomes.novo}` : bloco ? "Usar novos" : "Usar todos os novos"}
       </Button>
     </span>
   );
@@ -268,17 +287,29 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
     );
   const c = comparacao;
   // Com ESCOLHA: o seletor de cada diferença + "todos" por bloco; sem ela, a leitura (vale o novo).
+  const nomes = escolha?.nomes;
+  const lados = nomes ? ([maiuscula(nomes.gravado), maiuscula(nomes.novo)] as const) : undefined;
   const lado = (chave: string | undefined) => (escolha && chave ? escolha.estado(chave) : null);
   const acao = (chave: string | undefined, rotulo: string) => {
     const e = lado(chave);
     return escolha && chave && e ? (
-      <SeletorLado estado={e} onEscolher={(l) => escolha.onEscolher(chave, l)} bloqueado={escolha.bloqueado} rotulo={rotulo} />
+      <SeletorLado estado={e} onEscolher={(l) => escolha.onEscolher(chave, l)} bloqueado={escolha.bloqueado} rotulo={rotulo} nomes={nomes} />
     ) : undefined;
   };
-  const todos = (bloco: BlocoEscolha) => (escolha ? <AcoesTodos onTodos={escolha.onTodos} bloco={bloco} bloqueado={escolha.bloqueado} /> : undefined);
+  const todos = (bloco: BlocoEscolha) =>
+    escolha ? <AcoesTodos onTodos={escolha.onTodos} bloco={bloco} bloqueado={escolha.bloqueado} nomes={nomes} /> : undefined;
   return (
     <div className="space-y-[var(--gap-block)]">
-      {escolha ? (
+      {escolha && nomes ? (
+        <div className="space-y-2">
+          <p className="text-[12.5px] text-muted">
+            {num(c.total)} diferença(s) entre o {nomes.gravado} e a {nomes.novo}. Em cada uma, escolha o que vale:{" "}
+            <strong className="text-text">Manter {nomes.gravado}</strong> ou <strong className="text-text">Usar {nomes.novo}</strong>. Vêm
+            escolhidos os dados que divergem; o DFD ao lado já mostra o resultado (e pode ser editado).
+          </p>
+          {c.total > 0 && <AcoesTodos onTodos={escolha.onTodos} bloqueado={escolha.bloqueado} nomes={nomes} />}
+        </div>
+      ) : escolha ? (
         <div className="space-y-2">
           <p className="text-[12.5px] text-muted">
             {num(c.total)} diferença(s) entre o DFD gravado e o NOVO. Em cada uma, escolha o que vale ao sobrescrever:{" "}
@@ -296,20 +327,20 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
       {c.campos.length > 0 && (
         <BlocoDiff titulo="Cabeçalho" qtd={c.campos.length} acoes={c.campos.some((d) => lado(d.campo)) ? todos("cabecalho") : undefined}>
           {c.campos.map((d) => (
-            <DiffLinha key={d.campo} d={d} acao={acao(d.campo, d.rotulo)} escolhido={lado(d.campo)} />
+            <DiffLinha key={d.campo} d={d} rotulos={lados} acao={acao(d.campo, d.rotulo)} escolhido={lado(d.campo)} />
           ))}
         </BlocoDiff>
       )}
       {c.secoes.length > 0 && (
         <BlocoDiff titulo="Seções" qtd={c.secoes.length} acoes={todos("secoes")}>
           {c.secoes.map((d) => (
-            <DiffLinha key={d.campo} d={d} compacto={!!escolha} acao={acao(d.campo, d.rotulo)} escolhido={lado(d.campo)} />
+            <DiffLinha key={d.campo} d={d} rotulos={lados} compacto={!!escolha} acao={acao(d.campo, d.rotulo)} escolhido={lado(d.campo)} />
           ))}
         </BlocoDiff>
       )}
       {c.assinaturas && (
         <BlocoDiff titulo="Assinaturas" qtd={1}>
-          <DiffLinha d={c.assinaturas} acao={acao("assinaturas", "Assinaturas")} escolhido={lado("assinaturas")} />
+          <DiffLinha d={c.assinaturas} rotulos={lados} acao={acao("assinaturas", "Assinaturas")} escolhido={lado("assinaturas")} />
         </BlocoDiff>
       )}
       {c.itens.length > 0 && (
@@ -318,6 +349,7 @@ function Diferencas({ comparacao, escolha }: { comparacao: ComparacaoDfd | null;
             <DiffItem
               key={it.chave ?? `${it.tipo}:${it.item}:${it.codigo}:${k}`}
               it={it}
+              rotulos={lados}
               acao={acao(it.chave, `Item ${it.item ?? "—"}${it.codigo ? ` (${it.codigo})` : ""}`)}
               escolhido={lado(it.chave)}
             />

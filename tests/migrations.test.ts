@@ -1313,3 +1313,15 @@ describe("0183: histórico da conferência com a Centi", () => {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi").get() as { n: number }).n, 1);
   });
 });
+
+describe("0184: retrato da Centi e aceite da divergência", () => {
+  it("cria a tabela do retrato (cascade com o DFD) e a coluna do aceite", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0184_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO dfds (id, numero, conferencia_centi_aceite) VALUES (941, 'R1', '{"chave":"x"}')`);
+    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (941, '{}', '2026-11-13')`);
+    db.exec("DELETE FROM dfds WHERE id = 941");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
+  });
+});

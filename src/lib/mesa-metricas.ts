@@ -1,7 +1,7 @@
 import { CATEGORIAS, classificarAssunto } from "./avaliacao-core.ts";
 import { dataBR, dataIsoBrasilia, mesLabel } from "./format.ts";
 import { DIAS_ALERTA, type DfdPainel, ESTADOS_PAINEL, FAIXAS_IDADE, type ProtocoloPainel, ROTULO_ESTADO_PAINEL } from "./mesa-dashboard.ts";
-import { tiposDoMotivo } from "./conferencia-dfd-centi.ts";
+import { aceiteVale, lerAceite, tiposDoMotivo } from "./conferencia-dfd-centi.ts";
 import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
 import { noIntervalo, PERIODO_TODO, type Periodo, textoIntervalo } from "./periodo.ts";
 import type { IntervaloData } from "./tabela-filtros.ts";
@@ -152,12 +152,15 @@ const CHAVE_SEM_UNIDADE = "sem-unidade";
 /** Dado "Divergência com a Centi": o DFD em dia com a Centi e o ainda não conferido (os tipos de divergência são o resto). */
 const CHAVE_CONVERGENTE = "centi:convergente";
 const CHAVE_NAO_CONFERIDO = "centi:nao-conferido";
+/** A divergência ACEITA (a Centi é que está errada — o mesmo motivo do aceite). */
+const CHAVE_RESSALVA = "centi:ressalva";
 const PREFIXO_DIVERGENCIA = "centi:div:";
 /** As barras do DFD no Dado "Divergência com a Centi": convergente, não conferido ou CADA tipo de divergência dele. */
 function chavesCenti(d: DfdPainel): string[] {
   const c = d.conferencia;
   if (c?.status === "convergente") return [CHAVE_CONVERGENTE];
   if (c?.status !== "divergente") return [CHAVE_NAO_CONFERIDO];
+  if (aceiteVale(c.status, c.motivo, lerAceite(c.aceite))) return [CHAVE_RESSALVA];
   const tipos = tiposDoMotivo(c.motivo);
   return tipos.length ? tipos.map((t) => PREFIXO_DIVERGENCIA + t) : [`${PREFIXO_DIVERGENCIA}Outras`];
 }
@@ -476,9 +479,11 @@ function gruposDoProtocolo(rec: RecorteMetricas<ProtocoloPainel>, p: ProtocoloPa
     case "centi":
       if (!idx || idx.total.dfds === 0) return [grupoSemDfds(total)];
       return [...idx.porCenti].map(([k, tot]) => {
-        const rotulo = k === CHAVE_CONVERGENTE ? "Convergente" : k === CHAVE_NAO_CONFERIDO ? "Não conferido" : k.slice(PREFIXO_DIVERGENCIA.length);
-        const titulo = k.startsWith(PREFIXO_DIVERGENCIA) ? `Divergente · ${rotulo}` : rotulo;
-        return { chave: k, rotulo, titulo, ordem: k === CHAVE_CONVERGENTE ? 1 : k === CHAVE_NAO_CONFERIDO ? 2 : 0, totais: tot };
+        const rotulo =
+          k === CHAVE_CONVERGENTE ? "Convergente" : k === CHAVE_NAO_CONFERIDO ? "Não conferido" : k === CHAVE_RESSALVA ? "Com ressalva" : k.slice(PREFIXO_DIVERGENCIA.length);
+        const titulo = k.startsWith(PREFIXO_DIVERGENCIA) ? `Divergente · ${rotulo}` : k === CHAVE_RESSALVA ? "Convergente com ressalva (divergência aceita)" : rotulo;
+        const ordem = k === CHAVE_CONVERGENTE || k === CHAVE_RESSALVA ? 1 : k === CHAVE_NAO_CONFERIDO ? 2 : 0;
+        return { chave: k, rotulo, titulo, ordem, totais: tot };
       });
     case "situacao": {
       const nome = p.situacaoId != null ? situacoes.get(p.situacaoId) : undefined;

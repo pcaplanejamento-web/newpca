@@ -136,6 +136,7 @@ import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos
 import { ExcluidosMesa } from "@/components/ExcluidosMesa";
 import { RecorteMesa } from "@/components/RecorteMesa";
 import { CelulaConferenciaCenti, CelulaExecucao, RelatorioCenti } from "@/components/CelulaExecucao";
+import { CorrecaoCentiMassa } from "@/components/CorrecaoCentiMassa";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
 import { ProblemasFluxo } from "@/components/fluxos/ProblemasFluxo";
@@ -2196,7 +2197,18 @@ function ConsolidadosDemo() {
         />
         <CelulaConferenciaCenti status="divergente" desatualizada conferidoEm="2026-11-10T13:00:00.000Z" motivo={"DFD 1 (Planej. 2): 1 diferença — Tipo: DFD-S no sistema × DFD-R na Centi"} />
         <CelulaConferenciaCenti status={null} />
+        <CelulaConferenciaCenti
+          status="divergente"
+          conferidoEm="2026-11-10T13:00:00.000Z"
+          motivo={"DFD 3 (Planej. 4): 1 diferença — Objeto: “A” no sistema × “B” na Centi"}
+          aceite={JSON.stringify({ chave: "x", justificativa: "A Centi está com o objeto antigo.", por: "Ana", em: "2026-11-10T13:00:00.000Z" })}
+          ressalvaDoDfd
+        />
         <RelatorioCenti dfds={[{ numero: "1", planejamento: "2", sigla: "SMS", motivo: "DFD 1 (Planej. 2): 1 diferença — Tipo: DFD-S no sistema × DFD-R na Centi" }]} />
+        <CorrecaoCentiMassa
+          dfds={[{ id: 1, numero: "1", planejamento: "2", status: "divergente", aceite: null, motivo: "DFD 1 (Planej. 2): 1 diferença — Objeto: “A” no sistema × “B” na Centi" }]}
+          onConcluido={() => undefined}
+        />
       </div>
       <div className="flex flex-wrap gap-2">
         {linhas.map((l) => (

@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
+  aceiteVale,
   blocosRelatorioCenti,
   comparacaoConferencias,
   contarDivergencias,
@@ -9,6 +11,9 @@ import {
   divergenciasDoMotivo,
   type FormatoRelatorioCenti,
   type GrupoDivergencias,
+  lerAceite,
+  MAX_JUSTIFICATIVA,
+  MIN_JUSTIFICATIVA,
   orientacoesDivergencias,
   textoRelatorioCenti,
   tiposDivergencia,
@@ -22,7 +27,8 @@ import { Button } from "./Button";
 import { ChipsEscolha } from "./ChipsEscolha";
 import { Dropdown } from "./Dropdown";
 import { usePodeExportar } from "./ExportarTabelas";
-import { IconClock, IconCopy, IconDownload, IconRefresh } from "./icons";
+import { TextArea, TextField } from "./Field";
+import { IconBuilding, IconCheck, IconClock, IconCopy, IconDownload, IconMerge, IconPencil, IconRefresh, IconTrash, IconUndo } from "./icons";
 import { toast } from "./Toast";
 
 const TOM: Record<"executado" | "cancelado" | "outro", Tone> = { executado: "emerald", cancelado: "red", outro: "amber" };
@@ -34,10 +40,17 @@ export const rotuloConferencia = (s: string | null | undefined) => (s === "conve
 /** O rótulo do FILTRO da conferência DESATUALIZADA (o DFD mudou depois dela). */
 export const ROTULO_RECONFERIR = "Reconferir";
 
+/** O rótulo da divergência ACEITA (a Centi é que está errada — vale enquanto o motivo for o mesmo). */
+export const ROTULO_RESSALVA = "Convergente com ressalva";
+
+/** A divergência foi ACEITA (o aceite gravado é deste MESMO motivo). */
+export const comRessalva = (s: string | null | undefined, motivo: string | null | undefined, aceite: string | null | undefined) =>
+  aceiteVale(s, motivo ?? null, lerAceite(aceite));
+
 /** Os valores do FILTRO da coluna Centi: o status, "Reconferir" quando desatualizada e, no divergente, cada TIPO de
- * divergência ("Divergente · Valor total"). */
-export const valoresConferencia = (s: string | null | undefined, motivo?: string | null, desatualizada = false): string[] => [
-  rotuloConferencia(s),
+ * divergência ("Divergente · Valor total") — ou, ACEITA, "Convergente com ressalva" (os tipos seguem filtráveis). */
+export const valoresConferencia = (s: string | null | undefined, motivo?: string | null, desatualizada = false, ressalva = false): string[] => [
+  ressalva && s === "divergente" ? ROTULO_RESSALVA : rotuloConferencia(s),
   ...(desatualizada && (s === "convergente" || s === "divergente") ? [ROTULO_RECONFERIR] : []),
   ...(s === "divergente" ? tiposDoMotivo(motivo).map((t) => `Divergente · ${t}`) : []),
 ];
@@ -47,7 +60,19 @@ export const valoresConferencia = (s: string | null | undefined, motivo?: string
  * Centi — rodam a automação em segundo plano (quem fornece confirma antes). Sem o provedor (ou sem a automação), as ações
  * não aparecem. O histórico precisa só do id do DFD.
  */
-export type AcoesCenti = { reconferir?: (dfdIds: number[]) => void; substituir?: (dfdIds: number[]) => void };
+export type AcoesCenti = {
+  reconferir?: (dfdIds: number[]) => void;
+  substituir?: (dfdIds: number[]) => void;
+  /** Abre o banner do DFD na correção pela Centi (Manter sistema | Usar Centi, dado a dado). */
+  corrigir?: (dfdId: number) => void;
+  /** Exclui o DFD (a situação é "cancelado" na Centi) — quem fornece confirma. */
+  excluir?: (dfdId: number) => void;
+  /** As ações gravadas na conferência (`POST /api/dfd/[id]/conferencia-centi`): recalcular, aceitar, desfazer o aceite e
+   * corrigir o nº de planejamento. Devolve se deu certo (o erro já foi avisado). */
+  servidor?: (dfdId: number, corpo: Record<string, unknown>) => Promise<boolean>;
+  /** O Administrador: corrige o nº de planejamento (identificador). */
+  admin?: boolean;
+};
 const AcoesCentiCtx = createContext<AcoesCenti>({});
 export const ProvedorAcoesCenti = AcoesCentiCtx.Provider;
 
@@ -60,9 +85,15 @@ export function CelulaConferenciaCenti({
   conferidoEm,
   desatualizada = false,
   rotulo,
+  aceite = null,
+  ressalvaDoDfd = false,
 }: {
   status: string | null | undefined;
   motivo?: string | null;
+  /** O aceite da divergência (JSON gravado) — vale só para o MESMO motivo. */
+  aceite?: string | null;
+  /** (item) A ressalva do DFD vale para as divergências dele — o motivo do item é um recorte do aceito. */
+  ressalvaDoDfd?: boolean;
   /** O DFD gravado: as ações e o histórico (sem ele, só a lista). */
   dfdId?: number;
   conferidoEm?: string | null;
@@ -73,9 +104,15 @@ export function CelulaConferenciaCenti({
 }) {
   if (status !== "convergente" && status !== "divergente") return <span className="text-faint" title="Ainda não conferido com a Centi">—</span>;
   const quando = conferidoEm ? ` em ${dataHoraBR(conferidoEm)}` : "";
+  const ac = lerAceite(aceite);
+  const ressalva = ac && status === "divergente" && (ressalvaDoDfd || aceiteVale(status, motivo ?? null, ac)) ? ac : null;
   const selo = desatualizada ? (
     <Badge tone="amber" dot>
       {ROTULO_RECONFERIR}
+    </Badge>
+  ) : ressalva ? (
+    <Badge tone="blue" dot>
+      Com ressalva
     </Badge>
   ) : (
     <Badge tone={status === "convergente" ? "emerald" : "red"} dot>
@@ -92,7 +129,9 @@ export function CelulaConferenciaCenti({
     ? `O DFD mudou depois da conferência (${rotuloConferencia(status).toLowerCase()}${quando}) — reconfira`
     : status === "convergente"
       ? `Confere com a Centi${quando}`
-      : "Ver todas as divergências";
+      : ressalva
+        ? `Divergência aceita — ${ressalva.justificativa}`
+        : "Ver todas as divergências";
   return (
     <Dropdown
       papel="dialog"
@@ -111,6 +150,7 @@ export function CelulaConferenciaCenti({
           conferidoEm={conferidoEm}
           desatualizada={desatualizada}
           rotulo={rotulo}
+          ressalva={ressalva}
           fechar={fechar}
         />
       )}
@@ -132,8 +172,10 @@ function PainelDivergencias({
   conferidoEm,
   desatualizada,
   rotulo,
+  ressalva,
   fechar,
 }: {
+  ressalva: ReturnType<typeof lerAceite>;
   grupos: GrupoDivergencias[];
   total: number;
   status: "convergente" | "divergente";
@@ -146,6 +188,11 @@ function PainelDivergencias({
   const acoes = useContext(AcoesCentiCtx);
   const [tipo, setTipo] = useState<string>(TODOS);
   const [verHistorico, setVerHistorico] = useState(false);
+  // O formulário aberto no painel: aceitar a divergência (justificativa) ou corrigir o nº de planejamento (ADM).
+  const [form, setForm] = useState<"aceitar" | "planejamento" | null>(null);
+  const [justificativa, setJustificativa] = useState("");
+  const [planej, setPlanej] = useState("");
+  const [gravando, setGravando] = useState(false);
   const conta = new Map<string, number>();
   for (const g of grupos) for (const i of g.itens) for (const t of tiposDivergencia(i)) conta.set(t, (conta.get(t) ?? 0) + 1);
   const ativo = tipo !== TODOS && conta.has(tipo) ? tipo : TODOS;
@@ -163,6 +210,30 @@ function PainelDivergencias({
       : undefined;
   const reconferir = rodar(acoes.reconferir);
   const substituir = status === "divergente" ? rodar(acoes.substituir) : undefined;
+  const corrigir =
+    status === "divergente" && acoes.corrigir && dfdId != null
+      ? () => {
+          fechar();
+          acoes.corrigir?.(dfdId);
+        }
+      : undefined;
+  const excluir =
+    status === "divergente" && conta.has("Situação") && acoes.excluir && dfdId != null
+      ? () => {
+          fechar();
+          acoes.excluir?.(dfdId);
+        }
+      : undefined;
+  const servidor = acoes.servidor && dfdId != null ? acoes.servidor : undefined;
+  const planejavel = status === "divergente" && !!acoes.admin && !!servidor && (conta.has("Nº do DFD") || conta.has("Não encontrado na Centi"));
+  const enviar = async (corpo: Record<string, unknown>, fecharDepois = true) => {
+    if (!servidor || dfdId == null || gravando) return;
+    setGravando(true);
+    const certo = await servidor(dfdId, corpo);
+    setGravando(false);
+    if (certo && fecharDepois) fechar();
+  };
+  const justOk = justificativa.trim().length >= MIN_JUSTIFICATIVA;
   return (
     /* O painel PARA o clique: numa célula, o toque atravessaria o portal e abriria a linha. */
     <div role="none" className="-m-2 space-y-2 p-2" onClick={(e) => e.stopPropagation()}>
@@ -205,6 +276,15 @@ function PainelDivergencias({
           ))}
         </div>
       )}
+      {ressalva && (
+        <div className="space-y-1 rounded-control border border-[color-mix(in_srgb,var(--info)_40%,transparent)] bg-[color-mix(in_srgb,var(--info)_8%,transparent)] px-2 py-1.5 text-[12.5px]">
+          <p className="font-medium text-text">Divergência aceita (convergente com ressalva)</p>
+          <p className="break-words text-text-2">{ressalva.justificativa}</p>
+          <p className="text-[12px] text-muted">
+            {ressalva.por} · {dataHoraBR(ressalva.em)} — vale enquanto as divergências forem as mesmas.
+          </p>
+        </div>
+      )}
       {orientacoes.length > 0 && (
         <details className="rounded-control border border-border px-2 py-1.5 text-[12px] text-text-2">
           <summary className="flex min-h-11 cursor-pointer items-center font-medium text-text desktop:min-h-0">O que fazer</summary>
@@ -215,8 +295,110 @@ function PainelDivergencias({
           </ul>
         </details>
       )}
+      {form === "aceitar" && (
+        <div className="space-y-2 border-t border-border pt-2">
+          <TextArea
+            label="Por que aceitar a divergência?"
+            hint={`A Centi é que está errada? Diga o motivo (${MIN_JUSTIFICATIVA} a ${MAX_JUSTIFICATIVA} caracteres). Uma divergência nova derruba o aceite.`}
+            rows={3}
+            maxLength={MAX_JUSTIFICATIVA}
+            value={justificativa}
+            onChange={(e) => setJustificativa(e.target.value)}
+          />
+          <div className="flex justify-end gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => setForm(null)} disabled={gravando}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              icon={<IconCheck className="h-4 w-4" />}
+              disabled={!justOk}
+              loading={gravando}
+              onClick={() => void enviar({ acao: "aceitar", justificativa: justificativa.trim() })}
+            >
+              Aceitar divergência
+            </Button>
+          </div>
+        </div>
+      )}
+      {form === "planejamento" && (
+        <div className="space-y-2 border-t border-border pt-2">
+          <TextField label="Nº de planejamento correto" inputMode="numeric" value={planej} onChange={(e) => setPlanej(e.target.value.replace(/\D/g, "").slice(0, 12))} />
+          <TextArea
+            label="Justificativa"
+            hint="O nº de planejamento é identificador: a troca fica no histórico e a conferência volta a “não conferido” até a próxima leitura da Centi."
+            rows={2}
+            maxLength={MAX_JUSTIFICATIVA}
+            value={justificativa}
+            onChange={(e) => setJustificativa(e.target.value)}
+          />
+          <div className="flex justify-end gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => setForm(null)} disabled={gravando}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              icon={<IconCheck className="h-4 w-4" />}
+              disabled={!planej || !justOk}
+              loading={gravando}
+              onClick={() => void enviar({ acao: "planejamento", planejamento: planej, justificativa: justificativa.trim() })}
+            >
+              Gravar o nº
+            </Button>
+          </div>
+        </div>
+      )}
+      {status === "divergente" && form == null && (corrigir || excluir || servidor || conta.has("Órgão")) && (
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+          {corrigir && (
+            <Button size="sm" icon={<IconMerge className="h-4 w-4" />} onClick={corrigir}>
+              Corrigir pela Centi
+            </Button>
+          )}
+          {servidor && !ressalva && (
+            <Button size="sm" variant="secondary" icon={<IconCheck className="h-4 w-4" />} onClick={() => setForm("aceitar")}>
+              Aceitar divergência
+            </Button>
+          )}
+          {servidor && ressalva && (
+            <Button size="sm" variant="secondary" icon={<IconUndo className="h-4 w-4" />} loading={gravando} onClick={() => void enviar({ acao: "desfazerAceite" }, false)}>
+              Desfazer o aceite
+            </Button>
+          )}
+          {excluir && (
+            <Button size="sm" variant="danger" icon={<IconTrash className="h-4 w-4" />} onClick={excluir}>
+              Excluir o DFD
+            </Button>
+          )}
+          {conta.has("Órgão") && (
+            <Link
+              href="/painel/orgaos"
+              className="inline-flex h-11 items-center gap-1.5 rounded-control px-2.5 text-[13px] font-medium text-accent hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
+            >
+              <IconBuilding className="h-4 w-4" /> Conferir o ID na Centi do órgão
+            </Link>
+          )}
+          {planejavel && (
+            <Button size="sm" variant="ghost" icon={<IconPencil className="h-4 w-4" />} onClick={() => setForm("planejamento")}>
+              Corrigir o nº de planejamento
+            </Button>
+          )}
+        </div>
+      )}
       {(reconferir || substituir || dfdId != null) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+          {servidor && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconRefresh className="h-4 w-4" />}
+              loading={gravando && form == null}
+              title="Compara de novo com os dados da Centi guardados na última conferência — sem a extensão"
+              onClick={() => void enviar({ acao: "recalcular" }, false)}
+            >
+              Recalcular
+            </Button>
+          )}
           {reconferir && (
             <Button size="sm" variant="secondary" icon={<IconRefresh className="h-4 w-4" />} onClick={reconferir}>
               Reconferir

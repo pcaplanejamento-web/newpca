@@ -95,6 +95,8 @@ export type DfdResumo = {
   conferenciaCentiMotivo: string | null;
   /** Quando foi conferido (ISO) — com o `atualizadoEm` depois dele, a conferência está DESATUALIZADA ("Reconferir"). */
   conferenciaCentiEm: string | null;
+  /** O ACEITE da divergência (JSON `AceiteCenti` — a Centi é que está errada): vale só para o MESMO motivo (`aceiteVale`). */
+  conferenciaCentiAceite: string | null;
   /** SUBUNIDADE escolhida no DFD (modo "um centro para toda a unidade" — `subunidades-core.ts`; no outro modo, ignorada). */
   subunidadeId: number | null;
   /** CENTRO DE CUSTO da Centi (CM002), gravado pela Automação "Unidades × Centro de Custo"; vazio = ERRO no Estado. */
@@ -240,6 +242,7 @@ const colunasDfd = {
   conferenciaCenti: dfds.conferenciaCenti,
   conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
   conferenciaCentiEm: dfds.conferenciaCentiEm,
+  conferenciaCentiAceite: dfds.conferenciaCentiAceite,
   subunidadeId: dfds.subunidadeId,
   centroCusto: dfds.centroCusto,
   protocoloResponsavelId: dfdProtocolos.responsavelId,

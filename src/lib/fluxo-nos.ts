@@ -43,7 +43,17 @@ import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marc
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
-import { type DfdSistemaComparavel, diferencasDfdCenti, MAX_MOTIVO_CENTI, motivoDivergencias, SEPARADOR_DIVERGENCIAS } from "./conferencia-dfd-centi.ts";
+import {
+  type DfdSistemaComparavel,
+  diferencasDfdCenti,
+  difsIdentidadeCenti,
+  MAX_MOTIVO_CENTI,
+  montarRetrato,
+  motivoDivergencias,
+  SEPARADOR_DIVERGENCIAS,
+  textoRetrato,
+  tipoCurto,
+} from "./conferencia-dfd-centi.ts";
 import type { DfdParseado } from "./parse-dfd-comum.ts";
 import { chaveColuna, colunaReservada, ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
@@ -1289,7 +1299,20 @@ const NOS: DefNo[] = [
             )
           ).map((r, i) => r ?? itens[i])
         : itens;
-      return compararDfdCenti(prontos, { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false });
+      const opcoes = { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false };
+      // O RETRATO do DFD da Centi (lido inteiro) fica no host para o "Marcar DFDs × Centi" gravar com a conferência — a
+      // correção campo a campo e a reconferência na Mesa usam ele, sem a extensão. Fora dos itens (a análise fica leve).
+      if (!(ctx.host.__retratosCenti instanceof Map)) ctx.host.__retratosCenti = new Map<number, string>();
+      const retratos = ctx.host.__retratosCenti as Map<number, string>;
+      for (const it of prontos) {
+        const x = it.centi as Item | null | undefined;
+        const dfd = x?.dfd as unknown as DfdParseado | undefined;
+        const id = Number(it.dfdId ?? it.id);
+        if (!x || !dfd || !Array.isArray(dfd.itens) || !Number.isInteger(id) || id <= 0) continue;
+        const t = textoRetrato(montarRetrato(it, x, dfd, opcoes));
+        if (t) retratos.set(id, t);
+      }
+      return compararDfdCenti(prontos, opcoes);
     },
   },
 
@@ -1745,15 +1768,28 @@ const NOS: DefNo[] = [
     campos: [],
     rodaSemItens: true,
     executar: async (e, _c, ctx) => {
-      const itens = marcacoesConferencia(so(e, "divergentes"), so(e, "conformes"));
+      // O divergente leva o RETRATO da Centi (guardado pelo "Comparar DFD × Centi" desta execução) — sem ele, o servidor
+      // apaga um retrato antigo (não vale mais).
+      const retratos = ctx.host.__retratosCenti as Map<number, string> | undefined;
+      const itens = marcacoesConferencia(so(e, "divergentes"), so(e, "conformes")).map((m) => {
+        const r = m.status === "divergente" ? retratos?.get(m.dfdId) : undefined;
+        retratos?.delete(m.dfdId);
+        return r ? { ...m, retrato: r } : m;
+      });
       if (!itens.length) return { saida: [] };
       const out: Item[] = [];
-      for (let i = 0; i < itens.length; i += 2000) {
+      // Pedidos de até 2000 DFDs e ~4 MB (os retratos pesam).
+      let i = 0;
+      while (i < itens.length) {
         if (ctx.cancelado()) break;
-        ctx.aviso(`Marcando os DFDs (${Math.min(i + 2000, itens.length)} de ${itens.length})…`);
-        const r = await ctx.api("/api/admin/automacao/conferencia-dfds", { method: "POST", body: { itens: itens.slice(i, i + 2000) } });
+        let j = i;
+        let tam = 0;
+        while (j < itens.length && j - i < 2000 && (j === i || tam + (itens[j].retrato?.length ?? 0) < 4_000_000)) tam += itens[j++].retrato?.length ?? 0;
+        ctx.aviso(`Marcando os DFDs (${j} de ${itens.length})…`);
+        const r = await ctx.api("/api/admin/automacao/conferencia-dfds", { method: "POST", body: { itens: itens.slice(i, j) } });
         if (!r.ok) throw new Error(r.error || "Não consegui marcar os DFDs.");
         out.push({ marcados: r.marcados, convergentes: r.convergentes, divergentes: r.divergentes });
+        i = j;
       }
       return { saida: out };
     },
@@ -2124,10 +2160,7 @@ export function separarCadastrados(itens: Item[], sistema: Item[]): { novos: Ite
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** O código do tipo (S/R/O/E) ou null — sem tipo válido (ex.: o ":" de um "Tipo DFD:" vazio) não se compara. */
-export const tipoCurto = (t: unknown): string | null => {
-  const c = (/DFD-?\s*([SROE])\b/i.exec(str(t))?.[1] ?? normTexto(t).slice(0, 1)).toUpperCase();
-  return /^[SROE]$/.test(c) ? c : null;
-};
+export { tipoCurto } from "./conferencia-dfd-centi.ts";
 
 /** O DFD do sistema × o lido na Centi (`centi`): um item DIVERGENTE por DFD com a `mensagem` = TODAS as diferenças.
  * Com o DFD INTEIRO dos dois lados (`centi.dfd` + `dfdSistema`), compara cabeçalho, seções e itens
@@ -2151,12 +2184,8 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
       out.divergentes.push({ ...d, mensagem: `${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}` });
       continue;
     }
-    const difs: string[] = [];
-    if (str(d.entidadeAchada) && str(d.entidadeAchada) !== str(d.entidade))
-      difs.push(`achado na Centi no órgão ${str(d.entidadeAchada)}, mas o DFD está cadastrado no órgão ${str(d.entidade) || "sem ID"}`);
-    if (/CANCEL/.test(normTexto(x.situacao))) difs.push(`situação ${str(x.situacao)} na Centi`);
-    if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) difs.push(`na Centi é o DFD ${str(x.numero)}`);
-    if (tipoCurto(d.tipo) && tipoCurto(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) difs.push(`Tipo: ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
+    // A identidade (órgão, situação, nº, tipo) pela MESMA régua da reconferência pelo retrato.
+    const difs: string[] = difsIdentidadeCenti(d, x);
     if (dfdCenti && dfdSistema && typeof dfdSistema === "object") {
       for (const f of diferencasDfdCenti(dfdSistema as unknown as DfdSistemaComparavel, dfdCenti, o.tolerancia))
         if (o.objeto || !f.startsWith("Objeto:")) difs.push(f);
@@ -2178,7 +2207,7 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
 }
 
 /** Um status por DFD (pelo id do sistema): divergente vence; o motivo = as mensagens únicas, unidas por ";⏎". */
-export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { dfdId: number; status: "convergente" | "divergente"; motivo?: string }[] {
+export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { dfdId: number; status: "convergente" | "divergente"; motivo?: string; retrato?: string }[] {
   const m = new Map<number, { dfdId: number; status: "convergente" | "divergente"; msgs: string[] }>();
   const idDe = (it: Item) => {
     const n = Number(it.dfdId ?? it.id);

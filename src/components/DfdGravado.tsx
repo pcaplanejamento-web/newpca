@@ -23,7 +23,7 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho, ItemCabecalho } from "./DfdView";
-import { IconAlert, IconClock, IconLayers, IconSave, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconMerge, IconSave, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -31,6 +31,7 @@ import { TarefasDoVinculo } from "./TarefasDoVinculo";
 import { idVinculoItem } from "@/lib/tarefas-core";
 import { VendoAgora } from "./VendoAgora";
 import { toast } from "./Toast";
+import { useCorrecaoCenti } from "./useCorrecaoCenti";
 import { useConformidade } from "./useConformidade";
 
 type Rep = {
@@ -94,6 +95,8 @@ export function useDfdGravado({
   onAlterado,
   sinal = 0,
   pcas = [],
+  corrigirCenti = null,
+  onCorrigirCentiAtendido,
 }: {
   /** DFD a abrir (`null` = fechado). */
   dfdId: number | null;
@@ -115,6 +118,9 @@ export function useDfdGravado({
   sinal?: number;
   /** PCAs cadastrados — a SOBRESCRITA de um DFD sem protocolo escolhe o PCA (a de um DFD de protocolo segue o dele). */
   pcas?: PcaOpcao[];
+  /** "Corrigir pela Centi" pedido de FORA (o painel da coluna Centi) para este DFD (id): abre assim que carregar. */
+  corrigirCenti?: number | null;
+  onCorrigirCentiAtendido?: () => void;
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [orig, setOrig] = useState<DfdDetalhe | null>(null);
@@ -199,6 +205,15 @@ export function useDfdGravado({
 
   const sujo = editado || itensEditados;
   /** Modo item: o item EXIBIDO (nº + código) — a recarga reencontra ELE (a posição pode ter mudado). */
+  // CORRIGIR PELA CENTI: o retrato guardado na conferência vira o "arquivo novo" da sobrescrita (Manter sistema | Usar Centi).
+  const podeCorrigirCenti = !!orig && orig.conferenciaCenti === "divergente";
+  const correcao = useCorrecaoCenti({
+    dfdId: orig?.id ?? null,
+    pronto: !!dfd && !sujo && !travado,
+    pedido: corrigirCenti != null && corrigirCenti === orig?.id,
+    onAtendido: onCorrigirCentiAtendido,
+    onErro: setErro,
+  });
   const alvoAtual = (): ItemRef | null =>
     modoItem && dfd && itemIdx != null ? { item: dfd.itens[itemIdx]?.item ?? null, codigo: dfd.itens[itemIdx]?.codigo ?? null } : null;
   // Recarga externa (outro banner da pilha gravou) — só sem rascunho (nunca perde edição).
@@ -394,6 +409,22 @@ export function useDfdGravado({
         dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever")}
       />
     ) : null;
+  /** "Corrigir pela Centi": só com a conferência DIVERGENTE (os dados da Centi guardados) e quem pode sobrescrever. */
+  const botaoCorrigirCenti =
+    podeSobrescrever && podeCorrigirCenti ? (
+      <BotaoAcao
+        rotulo="Corrigir pela Centi"
+        icon={correcao.buscando ? <IconSpinner className="h-4 w-4" /> : <IconMerge className="h-4 w-4" />}
+        onClick={() => void correcao.corrigir()}
+        disabled={sujo || travado || correcao.buscando}
+        dica={
+          motivoTrava ??
+          (sujo
+            ? "Salve ou descarte as alterações antes de corrigir"
+            : "Corrigir pela Centi: compare com os dados da Centi e escolha, dado a dado, o que vale (Manter sistema | Usar Centi)")
+        }
+      />
+    ) : null;
   /** Cabeçalho do DFD: Histórico (painel da direita) + Tarefas ligadas + Atualizar — o rodapé fica só com as ações. */
   const acoesDfd = orig ? (
       <>
@@ -428,6 +459,7 @@ export function useDfdGravado({
           acoes={
             <>
               {temProtocolo && <BotaoAcao rotulo="Ver protocolo" icon={<IconLayers className="h-4 w-4" />} onClick={verProtocolo} />}
+              {botaoCorrigirCenti}
               {botaoSobrescrever}
             </>
           }
@@ -610,6 +642,7 @@ export function useDfdGravado({
           },
           onOcupado: setSobrescrevendo,
         }}
+        centi={correcao.centi}
         reparticoes={reparticoes}
         reparticaoAtivaId={reparticaoAtivaId}
         pcas={pcas}

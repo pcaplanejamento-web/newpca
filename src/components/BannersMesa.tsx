@@ -23,7 +23,10 @@ type Rep = {
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
 
 /** O que abrir na Mesa (a RAIZ da pilha de banners): um protocolo, um DFD ou um item (linha da visão Itens). */
-export type AberturaMesa = { tipo: "protocolo"; id: number } | { tipo: "dfd"; id: number } | { tipo: "item"; dfdId: number; itemId: number; item: ItemRef };
+export type AberturaMesa =
+  | { tipo: "protocolo"; id: number }
+  | { tipo: "dfd"; id: number; /** Abre já na correção pela Centi (o painel da coluna Centi). */ corrigirCenti?: boolean }
+  | { tipo: "item"; dfdId: number; itemId: number; item: ItemRef };
 
 /** Larguras preferidas (rem) de cada banner na pilha (também o peso quando dividem a tela). */
 export const LARGURA = { item: 34, dfd: 52, protocolo: 50 } as const;
@@ -76,6 +79,9 @@ export function BannersMesa({
   const [protoId, setProtoId] = useState<number | null>(null);
   const [sinalDfd, setSinalDfd] = useState(0);
   const [sinalProto, setSinalProto] = useState(0);
+  // "Corrigir pela Centi" pedido pelo painel da coluna Centi: o DFD (id) abre já na correção.
+  const [pedidoCenti, setPedidoCenti] = useState<number | null>(null);
+  const atendidoCenti = useCallback(() => setPedidoCenti(null), []);
   // Entrada SEQUENCIAL (item → DFD → protocolo): o protocolo espera o DFD terminar de entrar.
   const timer = useRef<number | null>(null);
   const limparTimer = useCallback(() => {
@@ -91,6 +97,7 @@ export function BannersMesa({
     setProtoId(abrir?.tipo === "protocolo" ? abrir.id : null);
     setDfdId(abrir?.tipo === "dfd" ? abrir.id : abrir?.tipo === "item" ? abrir.dfdId : null);
     setItemRef(abrir?.tipo === "item" ? abrir.item : null);
+    setPedidoCenti(abrir?.tipo === "dfd" && abrir.corrigirCenti ? abrir.id : null);
   }, [abrir, limparTimer]);
   useEffect(() => limparTimer, [limparTimer]);
 
@@ -164,6 +171,8 @@ export function BannersMesa({
       setSinalProto((n) => n + 1);
     },
     sinal: sinalDfd,
+    corrigirCenti: pedidoCenti,
+    onCorrigirCentiAtendido: atendidoCenti,
     pcas,
   });
   const proto = useProtocoloGravado({

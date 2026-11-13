@@ -253,7 +253,10 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     DELETE: naMesa(recurso(MESA, "excluir", "recusa(", "desfazer = Importar (só a gravação parcial própria); reenvio = Importar + Excluir")),
   },
   "dfd/[id]/historico": { GET: naMesa(tela(MESA, "visualizar")) },
-  "dfd/[id]/conferencia-centi": { GET: naMesa(tela(MESA, "visualizar")) },
+  "dfd/[id]/conferencia-centi": {
+    GET: naMesa(tela(MESA, "visualizar")),
+    POST: naMesa(recurso(MESA, "manipular", "recusa(", "a Mesa em que o DFD está; o nº de planejamento só o Administrador")),
+  },
   "dfd/conferencia": { POST: naMesa(tela(MESA, "visualizar")) },
   "dfd/existentes": { POST: naMesa(tela(MESA, "importar")) },
   "dfd/itens": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema")) },

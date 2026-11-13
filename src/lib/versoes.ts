@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.292.0",
+    data: "2026-11-13",
+    titulo: "Corrigir os DFDs pela Centi",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "“Corrigir pela Centi” no banner do DFD divergente: cada diferença com “Manter sistema | Usar Centi” (já vêm marcadas as que divergem), o DFD ao lado mostra o resultado e, ao gravar, a conferência é refeita.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Correção em massa na seleção de DFDs: “Usar a Centi em…” escolhe os tipos de divergência (valor, itens, seções, objeto…) e corrige DFD a DFD, com o andamento e o que não deu.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "Aceitar a divergência com justificativa: o DFD fica “Com ressalva” (filtro, Dashboard e itens) enquanto as divergências forem as mesmas; “Desfazer o aceite”.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "novo", area: "Mesa", texto: "No painel da coluna Centi: Recalcular (com os dados guardados, sem a extensão), Excluir o DFD cancelado na Centi, ir ao ID na Centi do órgão e, para o Administrador, corrigir o nº de planejamento com justificativa.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "melhoria", area: "Automação", texto: "A conferência DFDs × Centi passa a guardar os dados lidos da Centi de cada DFD divergente — a base da correção e do recálculo.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.291.0",
     data: "2026-11-13",
     titulo: "Conferência com a Centi: tratar, priorizar e acompanhar",

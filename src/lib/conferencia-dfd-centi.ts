@@ -5,6 +5,7 @@
 import { type ComparacaoDfd, compararDfd, type DfdComparavel } from "./comparar-protocolo.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
 import type { BlocoDoc } from "./documento-pdf-core.ts";
+import { normTexto } from "./fluxo-core.ts";
 import { brl, num } from "./format.ts";
 import { type DfdParseado, normComparacao } from "./parse-dfd-comum.ts";
 
@@ -364,3 +365,132 @@ export function orientacoesDivergencias(tipos: readonly string[]): string[] {
     out.push("Dados diferentes: se a Centi está certa, use “Usar os dados da Centi” (o DFD é regravado com os dados de lá); se o sistema está certo, corrija na Centi e reconfira.");
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// O RETRATO da Centi: o DFD lido na conferência, GUARDADO (a correção campo a campo e a reconferência sem a extensão).
+// ---------------------------------------------------------------------------
+
+const str = (v: unknown) => (v == null ? "" : typeof v === "object" ? "" : String(v).trim());
+
+/** O tipo do DFD em uma letra (S/R/O/E) — "DFD-S", "DFD - S", "Serviço"…; desconhecido = null. */
+export const tipoCurto = (t: unknown): string | null => {
+  const c = (/DFD-?\s*([SROE])\b/i.exec(str(t))?.[1] ?? normTexto(t).slice(0, 1)).toUpperCase();
+  return /^[SROE]$/.test(c) ? c : null;
+};
+
+/** O DFD conferido (o lado do sistema): nº, tipo e o órgão (o cadastrado e o em que foi achado na Centi). */
+export type DfdConferido = { numero?: unknown; tipo?: unknown; entidade?: unknown; entidadeAchada?: unknown };
+/** O que a Centi diz do planejamento: a situação, o nº do DFD e o tipo. */
+export type ResumoCenti = { situacao?: unknown; numero?: unknown; tipo?: unknown };
+
+/** As divergências de IDENTIDADE (órgão, situação, nº do DFD, tipo) — as MESMAS na automação e na reconferência. */
+export function difsIdentidadeCenti(d: DfdConferido, x: ResumoCenti): string[] {
+  const difs: string[] = [];
+  if (str(d.entidadeAchada) && str(d.entidadeAchada) !== str(d.entidade))
+    difs.push(`achado na Centi no órgão ${str(d.entidadeAchada)}, mas o DFD está cadastrado no órgão ${str(d.entidade) || "sem ID"}`);
+  if (/CANCEL/.test(normTexto(x.situacao))) difs.push(`situação ${str(x.situacao)} na Centi`);
+  if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) difs.push(`na Centi é o DFD ${str(x.numero)}`);
+  if (tipoCurto(d.tipo) && tipoCurto(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) difs.push(`Tipo: ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
+  return difs;
+}
+
+/** O retrato guardado: o DFD da Centi COMO LIDO (sem as assinaturas — a do sistema é a validada) + o que a conferência
+ * usou (situação, órgãos, opções) — refazer a conferência com ele dá o MESMO resultado da automação. */
+export type RetratoCenti = {
+  v: 1;
+  dfd: DfdParseado;
+  situacao: string;
+  entidade: string;
+  entidadeAchada: string;
+  objeto: boolean;
+  tolerancia: number;
+};
+/** Teto do retrato guardado (uma linha do D1 tem até 2 MB): DFDs gigantes ficam sem retrato (corrigir pelo PDF). */
+export const MAX_RETRATO = 1_500_000;
+
+export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdParseado, o: { objeto: boolean; tolerancia: number }): RetratoCenti {
+  const { assinaturas: _a, ...resto } = dfdCenti;
+  return {
+    v: 1,
+    dfd: { ...resto, assinaturas: [] },
+    situacao: str(x.situacao),
+    entidade: str(d.entidade),
+    entidadeAchada: str(d.entidadeAchada),
+    objeto: o.objeto,
+    tolerancia: Number.isFinite(o.tolerancia) && o.tolerancia >= 0 ? o.tolerancia : 0.01,
+  };
+}
+
+/** O retrato em texto para gravar; `null` acima do teto. */
+export function textoRetrato(r: RetratoCenti): string | null {
+  const t = JSON.stringify(r);
+  return t.length > MAX_RETRATO ? null : t;
+}
+
+/** Qualquer texto gravado → o retrato (ou `null` se não for um). */
+export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
+  if (!t) return null;
+  try {
+    const r = JSON.parse(t) as Partial<RetratoCenti>;
+    const d = r?.dfd as DfdParseado | undefined;
+    if (r?.v !== 1 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
+    return {
+      v: 1,
+      dfd: { ...d, assinaturas: [] },
+      situacao: str(r.situacao),
+      entidade: str(r.entidade),
+      entidadeAchada: str(r.entidadeAchada),
+      objeto: r.objeto !== false,
+      tolerancia: typeof r.tolerancia === "number" && r.tolerancia >= 0 ? r.tolerancia : 0.01,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A conferência REFEITA com o retrato (o DFD do sistema como está agora): as MESMAS divergências da automação. */
+export function difsDoRetrato(sistema: DfdSistemaComparavel & { numero: string; tipo: string | null }, r: RetratoCenti): string[] {
+  const id = difsIdentidadeCenti({ numero: sistema.numero, tipo: sistema.tipo, entidade: r.entidade, entidadeAchada: r.entidadeAchada }, { situacao: r.situacao, numero: r.dfd.numero, tipo: r.dfd.tipo });
+  const resto = diferencasDfdCenti(sistema, r.dfd, r.tolerancia).filter((f) => r.objeto || !f.startsWith("Objeto:"));
+  return [...id, ...resto];
+}
+
+/** A conferência como a Mesa guarda: status + motivo (o MESMO formato da automação). */
+export function conferenciaDoRetrato(sistema: DfdSistemaComparavel & { numero: string; planejamento: string | null; tipo: string | null }, r: RetratoCenti): { status: "convergente" | "divergente"; motivo: string | null } {
+  const difs = difsDoRetrato(sistema, r);
+  if (!difs.length) return { status: "convergente", motivo: null };
+  return { status: "divergente", motivo: motivoDivergencias(`DFD ${sistema.numero} (Planej. ${sistema.planejamento ?? ""})`, difs) };
+}
+
+// ---------------------------------------------------------------------------
+// ACEITAR a divergência (a Centi é que está errada): a ressalva vale para AQUELE motivo — outra divergência a derruba.
+// ---------------------------------------------------------------------------
+
+/** Assinatura curta do motivo (FNV-1a 32 bits) — a mesma no servidor e na tela. */
+export function chaveMotivo(motivo: string | null | undefined): string {
+  let h = 0x811c9dc5;
+  const t = String(motivo ?? "");
+  for (let i = 0; i < t.length; i++) {
+    h ^= t.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+export type AceiteCenti = { chave: string; justificativa: string; por: string; em: string };
+export const MIN_JUSTIFICATIVA = 10;
+export const MAX_JUSTIFICATIVA = 500;
+
+export function lerAceite(t: string | null | undefined): AceiteCenti | null {
+  if (!t) return null;
+  try {
+    const a = JSON.parse(t) as Partial<AceiteCenti>;
+    return a && typeof a.chave === "string" && typeof a.justificativa === "string" ? { chave: a.chave, justificativa: a.justificativa, por: str(a.por), em: str(a.em) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** O aceite vale: a divergência é a MESMA que foi aceita (uma nova conferência com outra divergência o derruba). */
+export const aceiteVale = (status: string | null | undefined, motivo: string | null | undefined, aceite: AceiteCenti | null) =>
+  status === "divergente" && !!aceite && aceite.chave === chaveMotivo(motivo);

@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { comandosHistoricoCenti, consultaHistoricoCenti, MAX_HISTORICO_CENTI } from "../src/lib/conferencia-centi-sql.ts";
+import { comandoApagarRetratos, comandoGuardarRetrato, comandosHistoricoCenti, consultaHistoricoCenti, consultaRetrato, MAX_HISTORICO_CENTI } from "../src/lib/conferencia-centi-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // O HISTÓRICO da conferência × Centi pelos builders, no driver drizzle-orm/d1 REAL e dentro de db.batch.
@@ -34,5 +34,21 @@ describe("histórico da conferência com a Centi (builders no db.batch)", () => 
     db.exec(`INSERT INTO dfds (id, numero) VALUES ${muitos.map((i) => `(${i}, 'N${i}')`).join(",")}`);
     await orm.batch(comandosHistoricoCenti(orm as never, muitos.map((d) => linha(d, 1))) as never);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi WHERE dfd_id >= 10").get() as { n: number }).n, 30);
+  });
+});
+
+describe("retrato da Centi (builders no db.batch)", () => {
+  it("guarda (substitui), lê, apaga por lista e sai junto com o DFD", async () => {
+    const { db, orm } = banco();
+    await orm.batch([comandoGuardarRetrato(orm as never, 1, "r1", "2026-11-01"), comandoGuardarRetrato(orm as never, 2, "r2", "2026-11-01")] as never);
+    await orm.batch([comandoGuardarRetrato(orm as never, 1, "r1b", "2026-11-02")] as never);
+    const [r] = await consultaRetrato(orm as never, 1);
+    assert.equal(r?.retrato, "r1b");
+    assert.equal(r?.em, "2026-11-02");
+    await orm.batch([comandoApagarRetratos(orm as never, [1, 99])] as never);
+    assert.equal((await consultaRetrato(orm as never, 1)).length, 0);
+    assert.equal((await consultaRetrato(orm as never, 2))[0]?.retrato, "r2", "o outro DFD fica");
+    db.exec("DELETE FROM dfds WHERE id = 2");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
   });
 });

@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { conferenciasCenti } from "../db/schema.ts";
+import { conferenciasCenti, conferenciasCentiRetrato } from "../db/schema.ts";
 
 type Db = DrizzleD1Database<Record<string, unknown>>;
 
@@ -35,4 +35,21 @@ export function consultaHistoricoCenti(db: Db, dfdId: number) {
     .where(eq(conferenciasCenti.dfdId, dfdId))
     .orderBy(desc(conferenciasCenti.id))
     .limit(MAX_HISTORICO_CENTI);
+}
+
+/** Guarda (ou troca) o retrato da Centi de um DFD — o BUILDER vai no `db.batch`. */
+export function comandoGuardarRetrato(db: Db, dfdId: number, retrato: string, em: string) {
+  return db
+    .insert(conferenciasCentiRetrato)
+    .values({ dfdId, retrato, em })
+    .onConflictDoUpdate({ target: conferenciasCentiRetrato.dfdId, set: { retrato, em } });
+}
+
+/** Apaga os retratos dos DFDs (o convergente e o conferido sem o DFD inteiro: o retrato antigo não vale mais). */
+export function comandoApagarRetratos(db: Db, dfdIds: readonly number[]) {
+  return db.delete(conferenciasCentiRetrato).where(sql`conferencias_centi_retrato.dfd_id IN (SELECT value FROM json_each(${JSON.stringify([...dfdIds])}))`);
+}
+
+export function consultaRetrato(db: Db, dfdId: number) {
+  return db.select({ retrato: conferenciasCentiRetrato.retrato, em: conferenciasCentiRetrato.em }).from(conferenciasCentiRetrato).where(eq(conferenciasCentiRetrato.dfdId, dfdId)).limit(1);
 }
