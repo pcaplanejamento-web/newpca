@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { diferencasDfdCenti, MAX_MOTIVO_CENTI, motivoDivergencias } from "../src/lib/conferencia-dfd-centi.ts";
+import { contarDivergencias, diferencasDfdCenti, divergenciasDoMotivo, MAX_MOTIVO_CENTI, motivoDivergencias } from "../src/lib/conferencia-dfd-centi.ts";
 import { compararDfdCenti } from "../src/lib/fluxo-nos.ts";
 import type { DfdParseado } from "../src/lib/parse-dfd-comum.ts";
 
@@ -64,11 +64,32 @@ test("conferência × Centi: valor dentro da tolerância não é diferença", ()
 });
 
 test("motivo: teto com “e mais N”", () => {
-  const difs = Array.from({ length: 200 }, (_, i) => `Diferença número ${i} com algum texto para ocupar espaço`);
+  const difs = Array.from({ length: 2000 }, (_, i) => `Diferença número ${i} com algum texto para ocupar espaço`);
   const m = motivoDivergencias("DFD 1 (Planej. 2)", difs);
   assert.ok(m.length <= MAX_MOTIVO_CENTI);
-  assert.match(m, /^DFD 1 \(Planej\. 2\): 200 diferenças — /);
-  assert.match(m, /; e mais \d+$/);
+  assert.match(m, /^DFD 1 \(Planej\. 2\): 2000 diferenças — /);
+  assert.match(m, /;\ne mais \d+$/);
+  assert.equal(contarDivergencias(divergenciasDoMotivo(m)), 2000);
+});
+
+test("motivo: 200 divergências cabem INTEIRAS e a lista as devolve todas", () => {
+  const difs = Array.from({ length: 200 }, (_, i) => `Item ${i}: quantidade 1; com ponto e vírgula × 2 (sistema × Centi)`);
+  const g = divergenciasDoMotivo(motivoDivergencias("DFD 1 (Planej. 2)", difs));
+  assert.equal(g.length, 1);
+  assert.equal(g[0].titulo, "DFD 1 (Planej. 2): 200 diferenças");
+  assert.deepEqual(g[0].itens, difs);
+});
+
+test("divergenciasDoMotivo: formato antigo, várias origens e vazio", () => {
+  assert.deepEqual(divergenciasDoMotivo("DFD 1 (Planej. 2): 2 diferenças — Objeto diferente; Valor total diferente"), [
+    { titulo: "DFD 1 (Planej. 2): 2 diferenças", itens: ["Objeto diferente", "Valor total diferente"] },
+  ]);
+  assert.deepEqual(divergenciasDoMotivo("Fora da CM002;\nDFD 3: 1 diferença — Tipo diferente"), [
+    { titulo: null, itens: ["Fora da CM002"] },
+    { titulo: "DFD 3: 1 diferença", itens: ["Tipo diferente"] },
+  ]);
+  assert.deepEqual(divergenciasDoMotivo(null), []);
+  assert.equal(contarDivergencias(divergenciasDoMotivo("a; b; e mais 5")), 7);
 });
 
 test("compararDfdCenti: com o DFD inteiro dos dois lados, o motivo lista tudo; o DFD inteiro não segue adiante", () => {

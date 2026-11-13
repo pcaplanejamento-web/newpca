@@ -43,7 +43,7 @@ import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marc
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
-import { type DfdSistemaComparavel, diferencasDfdCenti, motivoDivergencias } from "./conferencia-dfd-centi.ts";
+import { type DfdSistemaComparavel, diferencasDfdCenti, MAX_MOTIVO_CENTI, motivoDivergencias, SEPARADOR_DIVERGENCIAS } from "./conferencia-dfd-centi.ts";
 import type { DfdParseado } from "./parse-dfd-comum.ts";
 import { chaveColuna, colunaReservada, ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
@@ -2170,7 +2170,7 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
   return out;
 }
 
-/** Um status por DFD (pelo id do sistema): divergente vence; o motivo = as mensagens únicas, unidas por "; ". */
+/** Um status por DFD (pelo id do sistema): divergente vence; o motivo = as mensagens únicas, unidas por ";⏎". */
 export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { dfdId: number; status: "convergente" | "divergente"; motivo?: string }[] {
   const m = new Map<number, { dfdId: number; status: "convergente" | "divergente"; msgs: string[] }>();
   const idDe = (it: Item) => {
@@ -2191,7 +2191,7 @@ export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { 
     const id = idDe(it);
     if (id != null && !m.has(id)) m.set(id, { dfdId: id, status: "convergente", msgs: [] });
   }
-  return [...m.values()].map((x) => (x.status === "divergente" ? { dfdId: x.dfdId, status: x.status, motivo: x.msgs.join("; ").slice(0, 2000) } : { dfdId: x.dfdId, status: x.status }));
+  return [...m.values()].map((x) => (x.status === "divergente" ? { dfdId: x.dfdId, status: x.status, motivo: x.msgs.join(SEPARADOR_DIVERGENCIAS).slice(0, MAX_MOTIVO_CENTI) } : { dfdId: x.dfdId, status: x.status }));
 }
 
 export type OpcoesCm002 = { proibidas: string[]; esperada: string[]; campoValor: string; tolerancia: number; entidade: ((d: Item) => string) | null };

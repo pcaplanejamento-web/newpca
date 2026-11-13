@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.290.1",
+    data: "2026-11-13",
+    titulo: "Divergências com a Centi: a lista completa",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Tocar no selo \"Divergente\" da coluna Centi abre TODAS as divergências encontradas, uma por linha, com \"Copiar\".", link: "/painel/mesa?vista=dfds" },
+      { tipo: "correcao", area: "Automação", texto: "A conferência dos DFDs × Centi passa a guardar a lista inteira das divergências (antes cortava em ~1.900 caracteres com \"e mais N\").", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.290.0",
     data: "2026-11-13",
     titulo: "Filtros: colar uma coluna, número exato e os não encontrados",

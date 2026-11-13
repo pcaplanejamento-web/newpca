@@ -12,7 +12,7 @@ const LOTE = 50;
 
 const corpoSchema = z.strictObject({
   itens: z
-    .array(z.strictObject({ dfdId: z.number().int().positive(), status: z.enum(["convergente", "divergente"]), motivo: z.string().max(2000).optional() }))
+    .array(z.strictObject({ dfdId: z.number().int().positive(), status: z.enum(["convergente", "divergente"]), motivo: z.string().max(20_000).optional() }))
     .min(1)
     .max(5000),
 });
