@@ -94,7 +94,7 @@ export function DfdUploadForm({
   /** CORRIGIR PELA CENTI (com `sobrescrever`): o DFD da Centi guardado na conferência faz o papel do arquivo novo — as
    * escolhas viram "Manter sistema | Usar Centi" e vêm marcadas "Usar Centi" só nos dados que DIVERGEM. Cada `n` NOVO
    * abre; `onGravado` roda depois de gravar (a conferência é refeita com o retrato). */
-  centi?: { retrato: RetratoCenti; n: number; onGravado?: () => Promise<void> } | null;
+  centi?: { dfdId: number; retrato: RetratoCenti; n: number; onGravado?: () => Promise<void> } | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -159,9 +159,11 @@ export function DfdUploadForm({
   }, [arquivoHost]);
   // CORRIGIR PELA CENTI: o retrato da conferência é o "arquivo novo" — sem lançador e sem leitura.
   const centiVisto = useRef(centi?.n ?? 0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só a um pedido NOVO do host.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage a um pedido NOVO do host (e o retoma quando a gravação em curso acaba).
   useEffect(() => {
     if (!centi || !sobrescrever || centi.n === centiVisto.current || status === "sending") return;
+    // Os dados da Centi são de OUTRO DFD (o banner trocou no meio): nunca aplica.
+    if (centi.dfdId !== sobrescrever.gravado.id) return;
     centiVisto.current = centi.n;
     ++leituraRef.current; // uma leitura de arquivo em curso deixa de valer
     const gravado = sobrescrever.gravado;
@@ -184,7 +186,7 @@ export function DfdUploadForm({
     setModoCenti(true);
     setPainel({ tipo: "diferencas" });
     setStatus("ready");
-  }, [centi]);
+  }, [centi, status]);
   // Sobrescrita em ANDAMENTO (do lançador até gravar/cancelar) → o banner do DFD fica só-leitura.
   const ocupado = launcher || status === "parsing" || status === "ready" || status === "sending";
   const onOcupado = sobrescrever?.onOcupado;

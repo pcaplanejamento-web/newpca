@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.292.1",
+    data: "2026-11-13",
+    titulo: "Corrigir pela Centi: ajustes da auditoria",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "“Usar a Centi em…” troca só os campos dos tipos escolhidos em cada item (escolher “descrição” não muda mais a quantidade), e “Valor total” não acrescenta nem tira itens.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "correcao", area: "Mesa", texto: "Recalcular e corrigir usam o Tipo e o nº do DFD como a Centi os informa (os mesmos da conferência automática).", link: "/painel/mesa?vista=dfds" },
+      { tipo: "correcao", area: "Mesa", texto: "Trocar de DFD enquanto os dados da Centi carregam não aplica mais os dados de um DFD em outro; corrigir o nº de planejamento atualiza o Estado na hora.", link: "/painel/mesa?vista=dfds" },
+      { tipo: "correcao", area: "Automação", texto: "Marcar a conferência de muitos DFDs divergentes não estoura mais o limite de pedidos ao banco.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.292.0",
     data: "2026-11-13",
     titulo: "Corrigir os DFDs pela Centi",

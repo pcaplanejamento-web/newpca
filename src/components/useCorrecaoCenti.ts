@@ -27,9 +27,12 @@ export function useCorrecaoCenti({
   onAtendido?: () => void;
   onErro: (msg: string) => void;
 }) {
-  const [centi, setCenti] = useState<{ retrato: RetratoCenti; n: number; onGravado: () => Promise<void> } | null>(null);
+  const [centi, setCenti] = useState<{ dfdId: number; retrato: RetratoCenti; n: number; onGravado: () => Promise<void> } | null>(null);
   const [buscando, setBuscando] = useState(false);
   const n = useRef(0);
+  // O DFD ATUAL: a resposta que chega depois de trocar de DFD é descartada (nunca aplica os dados de um DFD em outro).
+  const atual = useRef(dfdId);
+  atual.current = dfdId;
 
   const corrigir = useCallback(async () => {
     if (dfdId == null) return;
@@ -38,10 +41,12 @@ export function useCorrecaoCenti({
       const r = await fetch(`/api/dfd/${dfdId}/conferencia-centi?retrato=1`);
       const j = (await r.json().catch(() => ({}))) as Retorno;
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível ler os dados guardados da Centi.");
+      if (atual.current !== dfdId) return;
       if (!j.retrato)
         throw new Error("Os dados da Centi deste DFD não estão guardados — reconfira na Centi (a conferência passa a guardá-los) e tente de novo.");
       const id = dfdId;
       setCenti({
+        dfdId: id,
         retrato: j.retrato,
         n: ++n.current,
         onGravado: async () => {
@@ -53,6 +58,7 @@ export function useCorrecaoCenti({
         },
       });
     } catch (e) {
+      if (atual.current !== dfdId) return;
       onErro(e instanceof Error ? e.message : "Não foi possível ler os dados guardados da Centi.");
     } finally {
       setBuscando(false);

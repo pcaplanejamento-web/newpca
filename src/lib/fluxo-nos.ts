@@ -1778,13 +1778,17 @@ const NOS: DefNo[] = [
       });
       if (!itens.length) return { saida: [] };
       const out: Item[] = [];
-      // Pedidos de até 2000 DFDs e ~4 MB (os retratos pesam).
+      // Pedidos de até 2000 DFDs, ~4 MB e 50 retratos (cada retrato é um comando no D1 — o limite de consultas do Worker).
       let i = 0;
       while (i < itens.length) {
         if (ctx.cancelado()) break;
         let j = i;
         let tam = 0;
-        while (j < itens.length && j - i < 2000 && (j === i || tam + (itens[j].retrato?.length ?? 0) < 4_000_000)) tam += itens[j++].retrato?.length ?? 0;
+        let nr = 0;
+        while (j < itens.length && j - i < 2000 && (j === i || (tam + (itens[j].retrato?.length ?? 0) < 4_000_000 && (!itens[j].retrato || nr < 50)))) {
+          tam += itens[j].retrato?.length ?? 0;
+          if (itens[j++].retrato) nr++;
+        }
         ctx.aviso(`Marcando os DFDs (${j} de ${itens.length})…`);
         const r = await ctx.api("/api/admin/automacao/conferencia-dfds", { method: "POST", body: { itens: itens.slice(i, j) } });
         if (!r.ok) throw new Error(r.error || "Não consegui marcar os DFDs.");

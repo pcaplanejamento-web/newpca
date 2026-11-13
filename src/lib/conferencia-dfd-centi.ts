@@ -404,6 +404,9 @@ export type RetratoCenti = {
   entidadeAchada: string;
   objeto: boolean;
   tolerancia: number;
+  /** O tipo e o nº do DFD como o LOAD da Centi os deu (a automação compara a identidade por eles, não pelo PDF). */
+  tipoCenti?: string | null;
+  numeroCenti?: string | null;
 };
 /** Teto do retrato guardado (uma linha do D1 tem até 2 MB): DFDs gigantes ficam sem retrato (corrigir pelo PDF). */
 export const MAX_RETRATO = 1_500_000;
@@ -418,6 +421,8 @@ export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdPars
     entidadeAchada: str(d.entidadeAchada),
     objeto: o.objeto,
     tolerancia: Number.isFinite(o.tolerancia) && o.tolerancia >= 0 ? o.tolerancia : 0.01,
+    tipoCenti: str(x.tipo) || null,
+    numeroCenti: str(x.numero) || null,
   };
 }
 
@@ -442,6 +447,9 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
       entidadeAchada: str(r.entidadeAchada),
       objeto: r.objeto !== false,
       tolerancia: typeof r.tolerancia === "number" && r.tolerancia >= 0 ? r.tolerancia : 0.01,
+      // Retrato antigo (sem a identidade do load): a do PDF.
+      tipoCenti: "tipoCenti" in r ? str(r.tipoCenti) || null : d.tipo,
+      numeroCenti: "numeroCenti" in r ? str(r.numeroCenti) || null : d.numero,
     };
   } catch {
     return null;
@@ -450,7 +458,7 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
 
 /** A conferência REFEITA com o retrato (o DFD do sistema como está agora): as MESMAS divergências da automação. */
 export function difsDoRetrato(sistema: DfdSistemaComparavel & { numero: string; tipo: string | null }, r: RetratoCenti): string[] {
-  const id = difsIdentidadeCenti({ numero: sistema.numero, tipo: sistema.tipo, entidade: r.entidade, entidadeAchada: r.entidadeAchada }, { situacao: r.situacao, numero: r.dfd.numero, tipo: r.dfd.tipo });
+  const id = difsIdentidadeCenti({ numero: sistema.numero, tipo: sistema.tipo, entidade: r.entidade, entidadeAchada: r.entidadeAchada }, { situacao: r.situacao, numero: r.numeroCenti, tipo: r.tipoCenti });
   const resto = diferencasDfdCenti(sistema, r.dfd, r.tolerancia).filter((f) => r.objeto || !f.startsWith("Objeto:"));
   return [...id, ...resto];
 }

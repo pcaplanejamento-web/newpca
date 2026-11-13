@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { dfds } from "@/db/schema";
 import { dfdLegivelNaMesa, escopoMesa, MSG_SEM_ACESSO_DFD } from "@/lib/acesso-mesa";
@@ -140,7 +140,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await db.batch([
     db
       .update(dfds)
-      .set({ planejamento: novo, conferenciaCenti: null, conferenciaCentiMotivo: null, conferenciaCentiEm: null, conferenciaCentiAceite: null })
+      .set({
+        planejamento: novo,
+        conferenciaCenti: null,
+        conferenciaCentiMotivo: null,
+        conferenciaCentiEm: null,
+        conferenciaCentiAceite: null,
+        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+      })
       .where(eq(dfds.id, id)),
     comandoApagarRetratos(db, [id]),
   ]);

@@ -68,9 +68,14 @@ export async function POST(req: Request) {
   // inteiro) perde o antigo — ele não representa mais a Centi. Retrato que não se lê é tratado como ausente.
   const comRetrato = unicos.filter((x) => x.retrato && lerRetrato(x.retrato));
   const semRetrato = unicos.filter((x) => !comRetrato.includes(x)).map((x) => x.dfdId);
-  for (let i = 0; i < comRetrato.length; i += 5) {
-    const cmds = comRetrato.slice(i, i + 5).map((x) => comandoGuardarRetrato(db, x.dfdId, x.retrato as string, em));
+  // Lotes por TAMANHO (~1 MB ou 25 comandos): poucos pedidos ao D1 (o cliente manda até 50 retratos por pedido).
+  for (let i = 0; i < comRetrato.length; ) {
+    let j = i;
+    let tam = 0;
+    while (j < comRetrato.length && j - i < 25 && (j === i || tam + (comRetrato[j].retrato?.length ?? 0) < 1_000_000)) tam += comRetrato[j++].retrato?.length ?? 0;
+    const cmds = comRetrato.slice(i, j).map((x) => comandoGuardarRetrato(db, x.dfdId, x.retrato as string, em));
     await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
+    i = j;
   }
   // Os ids num parâmetro JSON só: UM comando (o limite de consultas por requisição do Worker).
   if (semRetrato.length) await db.batch([comandoApagarRetratos(db, semRetrato)]);

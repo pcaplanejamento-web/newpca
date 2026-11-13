@@ -6,7 +6,7 @@
  */
 import { tipoCurto, type RetratoCenti } from "./conferencia-dfd-centi.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
-import { type DfdParseado, normComparacao } from "./parse-dfd-comum.ts";
+import { arredondarValor, type DfdParseado, normComparacao, valorDosItens } from "./parse-dfd-comum.ts";
 import { chaveSecao } from "./comparar-protocolo.ts";
 import { aplicarTodas, comparacaoEscolha, type EntradaEscolha, entradasEscolha, marcarItensGravados, marcarItensNovos } from "./sobrescrita-dfd.ts";
 
@@ -20,7 +20,8 @@ export function novoDaCenti(sistema: DfdParseado, r: RetratoCenti, anoPca: numbe
     planejamento: sistema.planejamento,
     nomeArquivo: sistema.nomeArquivo,
     assinaturas: sistema.assinaturas,
-    tipo: tipoCurto(c.tipo) ? c.tipo : sistema.tipo,
+    // O tipo da IDENTIDADE é o do load da Centi (a conferência compara por ele); sem ele, o do PDF; sem nenhum, o do sistema.
+    tipo: tipoCurto(r.tipoCenti) ? (r.tipoCenti ?? null) : tipoCurto(c.tipo) ? c.tipo : sistema.tipo,
     anoPca: sistema.anoPca,
   };
 }
@@ -86,8 +87,8 @@ export function tiposDaEntrada(e: EntradaEscolha, sistema: DfdParseado, centi: D
     return [`Seção ${String(e.rotulo ?? "").replace(/\s+/g, " ").trim().replace(/^\d+\s*[-.–]\s*/, "") || "sem título"}`];
   }
   const { g, c } = indices(e.chave);
-  if (g == null) return ["Item só na Centi", "Nº de itens", "Valor total"];
-  if (c == null) return ["Item só no sistema", "Nº de itens", "Valor total"];
+  if (g == null) return ["Item só na Centi", "Nº de itens"];
+  if (c == null) return ["Item só no sistema", "Nº de itens"];
   const x = sistema.itens[g];
   const y = centi.itens[c];
   if (!x || !y) return [];
@@ -101,6 +102,8 @@ export function tiposDaEntrada(e: EntradaEscolha, sistema: DfdParseado, centi: D
 }
 
 export type PlanoCorrecao = {
+  /** A tolerância da conferência (valores do item). */
+  tolerancia: number;
   /** O DFD da Centi pronto (o "novo" das escolhas). */
   centi: DfdParseado;
   entradas: EntradaEscolha[];
@@ -112,18 +115,47 @@ export function planoCorrecao(sistema: DfdParseado, r: RetratoCenti, anoPca: num
   const centi = marcarItensNovos(novoDaCenti(sistema, r, anoPca));
   const entradas = entradasEscolha(comparacaoEscolha(sistema, centi));
   const divergentes = entradas.map((entrada) => ({ entrada, tipos: tiposDaEntrada(entrada, sistema, centi, r) })).filter((d) => d.tipos.length);
-  return { centi, entradas, divergentes };
+  return { centi, entradas, divergentes, tolerancia: r.tolerancia };
 }
 
 /** Os tipos que o plano consegue corrigir (sem repetir, na ordem em que aparecem). */
 export const tiposCorrigiveis = (p: PlanoCorrecao): string[] => [...new Set(p.divergentes.flatMap((d) => d.tipos))];
 
-/** Aplica a Centi nas divergências — todas, ou só as dos `tipos` escolhidos (o mesmo rótulo do filtro). O resultado traz
- * as marcas de origem dos itens (a tela das escolhas as usa); antes de gravar, `semMarcas`. */
+const VALORES_ITEM = new Set(["quantidade", "valorUnitario", "valorTotal"]);
+
+/** Aplica a Centi nas divergências — todas (o banner: cada escolha inteira), ou só as dos `tipos` escolhidos (a massa):
+ * no ITEM que existe dos dois lados, só os CAMPOS daqueles tipos ("Valor total" = quantidade, valor unitário e total).
+ * O resultado traz as marcas de origem dos itens (a tela das escolhas as usa); antes de gravar, `semMarcas`. */
 export function aplicarCentiPorTipos(sistema: DfdParseado, p: PlanoCorrecao, tipos?: readonly string[] | null): DfdParseado {
-  const quer = tipos ? new Set(tipos) : null;
-  const escolhidas = p.divergentes.filter((d) => !quer || d.tipos.some((t) => quer.has(t))).map((d) => d.entrada);
   const base = marcarItensGravados(sistema);
-  if (!escolhidas.length) return base;
-  return aplicarTodas(escolhidas, "novo", base, base, p.centi);
+  if (!tipos) return p.divergentes.length ? aplicarTodas(p.divergentes.map((d) => d.entrada), "novo", base, base, p.centi) : base;
+  const quer = new Set(tipos);
+  const escolhidas = p.divergentes.filter((d) => d.tipos.some((t) => quer.has(t)));
+  // Cabeçalho, seções e itens que só existem de um lado: a escolha inteira.
+  const inteiras = escolhidas.filter((d) => !(d.entrada.tipo === "item" && d.entrada.chave.startsWith("a:"))).map((d) => d.entrada);
+  let w = inteiras.length ? aplicarTodas(inteiras, "novo", base, base, p.centi) : base;
+  // Item dos dois lados: só os campos escolhidos, no item do sistema.
+  const patches = new Map<string, Partial<DfdParseado["itens"][number]>>();
+  for (const d of escolhidas) {
+    if (d.entrada.tipo !== "item" || !d.entrada.chave.startsWith("a:")) continue;
+    const { g, c } = indices(d.entrada.chave);
+    const x = sistema.itens[g as number];
+    const y = p.centi.itens[c as number];
+    if (!x || !y) continue;
+    const campos = camposItemDivergentes(x, y, p.tolerancia).filter((f) => quer.has(ROTULO_CAMPO_ITEM[f]) || (VALORES_ITEM.has(f) && quer.has("Valor total")));
+    if (!campos.length) continue;
+    const novo: Record<string, unknown> = {};
+    for (const f of campos) novo[f] = y[f as keyof typeof y];
+    if ((campos.includes("quantidade") || campos.includes("valorUnitario")) && !campos.includes("valorTotal")) {
+      const q = (novo.quantidade ?? x.quantidade) as number | null;
+      const vu = (novo.valorUnitario ?? x.valorUnitario) as number | null;
+      novo.valorTotal = q != null && vu != null ? arredondarValor(q * vu) : x.valorTotal;
+    }
+    patches.set(`g:${g}`, novo);
+  }
+  if (patches.size) {
+    const itens = w.itens.map((it) => (it.ref && patches.has(it.ref) ? { ...it, ...patches.get(it.ref) } : it));
+    w = { ...w, itens, valorTotal: valorDosItens(itens) };
+  }
+  return w;
 }
