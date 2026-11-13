@@ -128,7 +128,19 @@ function Painel({
   const todosMarcados = visiveis.length > 0 && visiveis.every((o) => marcadas.has(o));
   // O que já estava escolhido (fora da busca): sem filtro (tudo marcado) não há o que somar.
   const [substituir, setSubstituir] = useState(false);
-  const base = useMemo(() => (substituir || sel.size >= options.length ? [] : [...sel]), [substituir, sel, options.length]);
+  // Escolhidos que AGORA não estão entre as opções (outro filtro os escondeu): continuam no filtro ao somar — não somem
+  // só porque a lista desta coluna encolheu. "Substituir" e desmarcar tudo os tiram.
+  const [descartados, setDescartados] = useState(false);
+  const guardados = useMemo(() => {
+    if (descartados) return [];
+    const ofertadas = new Set(options);
+    return [...new Set(value)].filter((v) => !ofertadas.has(v));
+  }, [value, options, descartados]);
+  const comGuardados = (lista: string[]) => (lista.length && !substituir ? [...lista, ...guardados.filter((g) => !lista.includes(g))] : lista);
+  const base = useMemo(
+    () => (substituir || sel.size >= options.length ? [] : [...sel, ...guardados]),
+    [substituir, sel, options.length, guardados],
+  );
   const aplicaveis = buscando ? combinarBusca(base, visiveis, marcadas) : null;
   const podeAplicar = aplicaveis == null || aplicaveis.length > 0;
 
@@ -147,12 +159,16 @@ function Painel({
     else setSel(n);
   }
   function aplicar() {
-    if (podeAplicar) onApply(aplicaveis ?? [...sel]);
+    if (!podeAplicar) return;
+    if (aplicaveis) onApply(aplicaveis);
+    else onApply(sel.size === 0 || sel.size >= options.length ? [...sel] : comGuardados([...sel]));
   }
   /** Leva os marcados da busca para a seleção e limpa a busca (o painel segue aberto para procurar outro valor). */
   function adicionar() {
     if (!aplicaveis?.length) return;
-    setSel(new Set(aplicaveis));
+    const ofertadas = new Set(options);
+    setSel(new Set(aplicaveis.filter((o) => ofertadas.has(o))));
+    if (substituir) setDescartados(true);
     setSelBusca(null);
     setSubstituir(false);
     setQ("");
@@ -230,6 +246,16 @@ function Painel({
           </span>
           <button type="button" onClick={() => setSubstituir((v) => !v)} className="shrink-0 font-semibold text-accent hover:underline">
             {substituir ? "Somar" : "Substituir"}
+          </button>
+        </div>
+      )}
+      {!buscando && guardados.length > 0 && sel.size > 0 && sel.size < options.length && (
+        <div className="flex items-center gap-2 px-3 pb-1 text-[11.5px] text-muted">
+          <span className="min-w-0 flex-1 truncate" title={guardados.join(", ")}>
+            {`+ ${guardados.length} escolhido${guardados.length === 1 ? "" : "s"} escondido${guardados.length === 1 ? "" : "s"} por outro filtro: ${guardados.slice(0, 4).join(", ")}${guardados.length > 4 ? "…" : ""}`}
+          </span>
+          <button type="button" onClick={() => setDescartados(true)} className="shrink-0 font-semibold text-accent hover:underline">
+            Tirar
           </button>
         </div>
       )}

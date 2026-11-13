@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.289.14",
+    data: "2026-11-13",
+    titulo: "Filtros das colunas: o escolhido escondido por outro filtro fica",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "No filtro das colunas, um número já escolhido que outro filtro escondeu da lista não cai mais ao somar outro valor: ele continua no filtro e volta a aparecer quando o outro filtro sai. O filtro avisa quais estão escondidos e \"Tirar\" os remove.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.289.13",
     data: "2026-11-13",
     titulo: "Filtros das colunas: busca com hífen ou barra entre números",

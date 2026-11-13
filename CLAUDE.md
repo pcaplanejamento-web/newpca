@@ -4149,7 +4149,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do grupo, itens do painel — QUALQUER termo; sem acento/caixa, com cache); no `MultiSelectHeader` a busca SOMA (v1.289.12):
   os resultados começam marcados e "Aplicar"/Enter leva o que já estava escolhido FORA da busca + os marcados dela
   (`combinarBusca`; sem filtro = só os marcados); "Adicionar" soma e limpa a busca (procurar outro número na MESMA
-  filtragem); "Substituir" ignora o já escolhido. Lista de números por espaço/";"/", " = ":" (`listaDeNumeros` — "168
+  filtragem); "Substituir" ignora o já escolhido. O escolhido que OUTRO filtro escondeu da lista (fora das opções) continua no filtro ao somar (nota "escondido por outro filtro" + "Tirar"; "Substituir" também o tira). Lista de números por espaço/";"/", " = ":" (`listaDeNumeros` — "168
   170"; a vírgula decimal "1,5" fica); no `SeletorMultiplo` (`suspenso` = a lista num painel flutuante `Dropdown`; `textoVazio` = o rótulo sem nada marcado), Enter
   marca os encontrados); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
   Estado); **`filter:"range"` + `Column.numero`** = colunas R$ com o **`RangeFilterHeader`**; coluna filtrada fica
