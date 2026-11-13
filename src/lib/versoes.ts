@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.290.0",
+    data: "2026-11-13",
+    titulo: "Filtros: colar uma coluna, número exato e os não encontrados",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "Ao procurar UM número no filtro das colunas, só o número igual vem marcado: procurar 168 não leva mais 1168 ou 1680 sem você ver (eles aparecem desmarcados).", link: "/painel/mesa" },
+      { tipo: "novo", area: "Sistema", texto: "Colar uma coluna do Excel no campo de busca dos filtros vira a lista de valores (antes os números se juntavam num só).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Sistema", texto: "Os valores de uma lista que não existem na coluna aparecem em \"Não encontrados\", e os já escolhidos ficam no topo do filtro.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Sistema", texto: "Quando todos os escolhidos estão escondidos por outro filtro, o filtro avisa e o Aplicar os mantém (antes tirava o filtro sem avisar).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Execução", texto: "Os filtros dos painéis seguem as mesmas regras: Enter marca o número exato, colar uma coluna e os não encontrados.", link: "/painel/execucao" },
+    ],
+  },
+  {
     versao: "1.289.14",
     data: "2026-11-13",
     titulo: "Filtros das colunas: o escolhido escondido por outro filtro fica",

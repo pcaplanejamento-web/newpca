@@ -174,6 +174,49 @@ export function listaDeNumeros(k: string): string {
   return LISTA_NUMEROS.test(k) ? k.split(/\s*[;:]\s*|,\s+|\s+/).join(":") : k;
 }
 
+const UM_NUMERO = new RegExp(`^${NUM}$`);
+
+/**
+ * Quais dos ENCONTRADOS por uma busca começam MARCADOS: com UM número só e uma opção IGUAL a ele, só as iguais — procurar
+ * 168 não leva 1168/1680 sem a pessoa ver (eles aparecem, desmarcados); senão, todos os encontrados.
+ */
+export function marcadasDaBusca(encontradas: string[], busca: string): string[] {
+  const k = listaDeNumeros(chaveBusca(busca));
+  if (!UM_NUMERO.test(k)) return encontradas;
+  const iguais = encontradas.filter((o) => chaveBusca(o) === k);
+  return iguais.length ? iguais : encontradas;
+}
+
+/** Os termos de uma busca com VÁRIOS valores (":", espaço entre números…) que não casam NENHUM dos textos. */
+export function termosSemResultado(textos: string[], busca: string): string[] {
+  const inteiro = listaDeNumeros(chaveBusca(busca));
+  if (!inteiro.includes(":")) return [];
+  const chaves = textos.map(chaveBusca);
+  if (chaves.some((c) => c.includes(inteiro))) return [];
+  const termos = [...new Set(inteiro.split(":").map((t) => t.trim()).filter(Boolean))];
+  return termos.filter((t) => !chaves.some((c) => c.includes(t)));
+}
+
+/**
+ * O texto COLADO num campo de busca de uma linha: com várias linhas (uma coluna do Excel), cada linha vira um termo
+ * com ":" — o campo juntaria tudo ("168170174"). `null` = uma linha só (cola normal).
+ */
+export function textoColado(s: string): string | null {
+  if (!/[\r\n]/.test(s)) return null;
+  return s
+    .split(/\r\n|\r|\n/)
+    .map((l) => l.replace(/\t/g, " ").trim())
+    .filter(Boolean)
+    .join(":");
+}
+
+/** O campo de busca depois de colar `colado` (já de `textoColado`) entre `inicio` e `fim`: unido ao resto por ":". */
+export function colarNaBusca(atual: string, inicio: number, fim: number, colado: string): string {
+  const antes = atual.slice(0, inicio).trimEnd().replace(/[:;,]$/, "");
+  const depois = atual.slice(fim).trimStart().replace(/^[:;,]/, "");
+  return [antes, colado, depois].filter(Boolean).join(":");
+}
+
 /**
  * A seleção de um filtro MÚLTIPLO ao procurar: o que já estava escolhido FORA dos resultados da busca fica, e dentro
  * deles vale o que está marcado — assim dá para procurar um número, marcar, procurar outro e somar. `base` vazia (sem

@@ -3,7 +3,7 @@
 import { Fragment, type ReactNode, useId, useMemo, useState } from "react";
 import { mesmaLista } from "@/lib/filtros-visao-core";
 import { num } from "@/lib/format";
-import { opcoesDaBusca } from "@/lib/tabela-filtros";
+import { colarNaBusca, marcadasDaBusca, opcoesDaBusca, termosSemResultado, textoColado } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, classeCaixaCampo, Rotulo, SearchField } from "./Field";
 import { IconBandeira, IconCheck, IconChevronDown, IconRestaurar } from "./icons";
@@ -207,6 +207,15 @@ function CorpoSelecao({
     return doInicial.size && !l.some((o) => o.grupo) ? [...l.filter((o) => doInicial.has(o.valor)), ...l.filter((o) => !doInicial.has(o.valor))] : l;
   }, [opcoes, busca, doInicial]);
   const marcarFiltradas = () => onChange([...new Set([...selecionados, ...filtradas.map((o) => o.valor)])]);
+  // Enter: a MESMA régua do filtro das colunas — um número só com opção IGUAL marca só ela (168 não leva 1168).
+  const marcarEncontrados = () => {
+    const ok = new Set(marcadasDaBusca(filtradas.map((o) => o.rotulo ?? o.valor), busca));
+    onChange([...new Set([...selecionados, ...filtradas.filter((o) => ok.has(o.rotulo ?? o.valor)).map((o) => o.valor)])]);
+  };
+  const semResultado = useMemo(
+    () => (busca.trim() ? termosSemResultado([...opcoes.map((o) => o.rotulo ?? o.valor), ...opcoes.map((o) => o.detalhe ?? "").filter(Boolean)], busca) : []),
+    [opcoes, busca],
+  );
   // Selecionados que sumiram das opções (facetas) continuam valendo — listados no topo.
   const orfaos = selecionados.filter((v) => !opcoes.some((o) => o.valor === v));
   const n = selecionados.length;
@@ -235,12 +244,24 @@ function CorpoSelecao({
         onKeyDown={(e) => {
           if (e.key === "Enter" && busca.trim() && !disabled) {
             e.preventDefault();
-            marcarFiltradas();
+            marcarEncontrados();
           }
+        }}
+        onPaste={(e) => {
+          const colado = textoColado(e.clipboardData.getData("text"));
+          if (colado == null) return;
+          e.preventDefault();
+          const el = e.currentTarget;
+          setBusca(colarNaBusca(busca, el.selectionStart ?? busca.length, el.selectionEnd ?? busca.length, colado));
         }}
         aria-label={`Buscar ${rotulo.toLowerCase()} (use : para vários)`}
         placeholder={`Buscar ${rotulo.toLowerCase()} (use : para vários)…`}
       />
+      {semResultado.length > 0 && (
+        <p className="animate-fade-in-up truncate px-1 text-xs text-[color:var(--warn)]" title={semResultado.join(", ")}>
+          {`Não encontrado${semResultado.length === 1 ? "" : "s"}: ${semResultado.slice(0, 6).join(", ")}${semResultado.length > 6 ? ` e mais ${semResultado.length - 6}` : ""}`}
+        </p>
+      )}
       <div className="flex flex-wrap gap-x-3 px-1 text-xs">
         <button
           type="button"

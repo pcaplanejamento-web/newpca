@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 import {
+  colarNaBusca,
   combinarBusca,
+  marcadasDaBusca,
+  termosSemResultado,
+  textoColado,
   listaDeNumeros,
   aplicarFiltros,
   type ColunaDados,
@@ -214,4 +218,32 @@ describe("vários números no mesmo filtro (espaço, ';', ', ') e a busca que SO
     assert.deepEqual(combinarBusca(["168", "170"], ["170", "1700"], new Set(["1700"])), ["168", "1700"]);
     assert.deepEqual(combinarBusca([], ["170"], new Set(["170"])), ["170"]);
   });
+});
+
+test("marcadasDaBusca: um número com opção IGUAL marca só ela; senão todos os encontrados", () => {
+  const achados = ["168", "1168", "1680"];
+  assert.deepEqual(marcadasDaBusca(achados, "168"), ["168"]);
+  assert.deepEqual(marcadasDaBusca(achados, " 168 "), ["168"]);
+  assert.deepEqual(marcadasDaBusca(["1168", "1680"], "168"), ["1168", "1680"]);
+  assert.deepEqual(marcadasDaBusca(["SEC SAÚDE", "SAÚDE"], "saude"), ["SEC SAÚDE", "SAÚDE"]);
+  assert.deepEqual(marcadasDaBusca(["168", "170"], "168 170"), ["168", "170"]);
+});
+
+test("termosSemResultado: só numa lista, os termos que nada contém", () => {
+  const ops = ["168", "170", "SEC SAÚDE"];
+  assert.deepEqual(termosSemResultado(ops, "168 170 999"), ["999"]);
+  assert.deepEqual(termosSemResultado(ops, "168:saude:xyz"), ["xyz"]);
+  assert.deepEqual(termosSemResultado(ops, "999"), []);
+  assert.deepEqual(termosSemResultado(["10:30"], "10:30"), []);
+});
+
+test("textoColado + colarNaBusca: a coluna do Excel vira a lista", () => {
+  assert.equal(textoColado("168"), null);
+  assert.equal(textoColado("168\r\n170\n\n174\n"), "168:170:174");
+  assert.equal(textoColado("SEC SAÚDE\tx\nFMS"), "SEC SAÚDE x:FMS");
+  assert.equal(colarNaBusca("", 0, 0, "168:170"), "168:170");
+  assert.equal(colarNaBusca("150 ", 4, 4, "168:170"), "150:168:170");
+  assert.equal(colarNaBusca("150:", 4, 4, "168"), "150:168");
+  assert.equal(colarNaBusca("150 999", 4, 7, "168"), "150:168");
+  assert.deepEqual(opcoesDaBusca(["150", "168", "170", "1168"], colarNaBusca("150 ", 4, 4, textoColado("168\n170") ?? "")), ["150", "168", "170"]);
 });

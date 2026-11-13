@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { combinarBusca, opcoesDaBusca } from "@/lib/tabela-filtros";
+import { colarNaBusca, combinarBusca, marcadasDaBusca, opcoesDaBusca, termosSemResultado, textoColado } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { GatilhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
@@ -12,7 +12,9 @@ import { IconArrowDown, IconArrowUp } from "./icons";
 // BUSCA como no Excel: vários valores de uma vez com ":" (ou espaço/";"/", " entre números — "168 170"; `opcoesDaBusca`);
 // os resultados começam TODOS marcados. A busca SOMA ao que já estava escolhido (`combinarBusca`): procurar 168, marcar,
 // "Adicionar" (ou procurar direto com o filtro já aplicado) e procurar 170 — o Aplicar leva os dois. "Substituir" ignora
-// o que já estava escolhido (só os resultados marcados).
+// o que já estava escolhido (só os resultados marcados). Um número só com opção IGUAL marca só ela (`marcadasDaBusca`);
+// colar uma coluna do Excel vira a lista (`textoColado`); os termos sem resultado aparecem ("Não encontrados"); os
+// escolhidos ao abrir ficam no topo; os escondidos por outro filtro continuam no filtro (e são avisados).
 type Dir = "asc" | "desc" | null;
 /** Quantas opções a lista DESENHA de uma vez (ex.: o Seq. com 20 mil itens) — marcar todos e Aplicar valem para todas as encontradas. */
 const MAX_OPCOES_VISIVEIS = 300;
@@ -98,6 +100,8 @@ function Painel({
     return new Set(value.filter((v) => ofertadas.has(v)));
   });
   const [q, setQ] = useState("");
+  // Os escolhidos AO ABRIR (fixos enquanto o painel está aberto — a lista não pula a cada marcação): vão para o topo.
+  const [escolhidosAoAbrir] = useState(() => (value.length ? new Set(value) : null));
   // As duas linhas de cada opção, calculadas UMA vez por lista (sigla + nome).
   const partes = useMemo(() => new Map(options.map((o) => [o, partesOpcao(o, detalhe)] as const)), [options, detalhe]);
   const visiveis = useMemo(() => {
@@ -109,20 +113,36 @@ function Painel({
     const ja = new Set(achados);
     return options.filter((o, i) => ja.has(o) || (segundas[i] !== "" && peloNome.has(segundas[i])));
   }, [q, options, detalhe, partes]);
-  // As fixas no topo (na ordem dada) e as demais, na ordem de sempre — a seleção e o Aplicar valem para as duas.
-  const [topo, resto] = useMemo(() => {
-    if (!noTopo?.length) return [[] as string[], visiveis.slice(0, MAX_OPCOES_VISIVEIS)];
-    const ha = new Set(visiveis);
-    const fixas = new Set(noTopo);
-    const t = noTopo.filter((o) => ha.has(o));
-    return [t, visiveis.filter((o) => !fixas.has(o)).slice(0, Math.max(0, MAX_OPCOES_VISIVEIS - t.length))];
-  }, [visiveis, noTopo]);
-  const ocultas = visiveis.length - topo.length - resto.length;
   const buscando = q.trim() !== "";
+  // A lista em GRUPOS: as fixas (`noTopo`, na ordem dada), os escolhidos ao abrir (sem busca) e as demais, na ordem de
+  // sempre — a seleção e o Aplicar valem para todas. Até MAX_OPCOES_VISIVEIS desenhadas.
+  const grupos = useMemo(() => {
+    const fixas = new Set(noTopo ?? []);
+    const ha = new Set(visiveis);
+    const t = (noTopo ?? []).filter((o) => ha.has(o));
+    const comEscolhidos = !buscando && escolhidosAoAbrir && escolhidosAoAbrir.size < options.length;
+    const e = comEscolhidos ? visiveis.filter((o) => !fixas.has(o) && escolhidosAoAbrir.has(o)) : [];
+    const ja = new Set([...t, ...e]);
+    let resta = MAX_OPCOES_VISIVEIS;
+    const corta = (l: string[]) => {
+      const r = l.slice(0, Math.max(0, resta));
+      resta -= r.length;
+      return r;
+    };
+    return { topo: corta(t), escolhidos: corta(e), resto: corta(visiveis.filter((o) => !ja.has(o))) };
+  }, [visiveis, noTopo, buscando, escolhidosAoAbrir, options.length]);
+  const desenhadas = grupos.topo.length + grupos.escolhidos.length + grupos.resto.length;
+  const ocultas = visiveis.length - desenhadas;
+  // Termos de uma lista que não acharam nada (também pela 2ª linha): "Não encontrados: 999".
+  const semResultado = useMemo(() => {
+    if (!buscando) return [];
+    const textos = detalhe ? [...options, ...options.map((o) => partes.get(o)?.[1] ?? "").filter(Boolean)] : options;
+    return termosSemResultado(textos, q);
+  }, [buscando, q, options, detalhe, partes]);
   // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
   const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
   const marcadas = useMemo(
-    () => (!buscando ? sel : selBusca && selBusca.q === q ? selBusca.set : new Set(visiveis)),
+    () => (!buscando ? sel : selBusca && selBusca.q === q ? selBusca.set : new Set(marcadasDaBusca(visiveis, q))),
     [buscando, sel, selBusca, q, visiveis],
   );
   const todosMarcados = visiveis.length > 0 && visiveis.every((o) => marcadas.has(o));
@@ -161,7 +181,10 @@ function Painel({
   function aplicar() {
     if (!podeAplicar) return;
     if (aplicaveis) onApply(aplicaveis);
-    else onApply(sel.size === 0 || sel.size >= options.length ? [...sel] : comGuardados([...sel]));
+    else if (sel.size >= options.length) onApply([...sel]);
+    // Nada visível marcado: os escondidos por outro filtro seguem no filtro (sem eles = remover, como antes).
+    else if (sel.size === 0) onApply(guardados);
+    else onApply(comGuardados([...sel]));
   }
   /** Leva os marcados da busca para a seleção e limpa a busca (o painel segue aberto para procurar outro valor). */
   function adicionar() {
@@ -217,6 +240,13 @@ function Painel({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          onPaste={(e) => {
+            const colado = textoColado(e.clipboardData.getData("text"));
+            if (colado == null) return;
+            e.preventDefault();
+            const el = e.currentTarget;
+            setQ(colarNaBusca(q, el.selectionStart ?? q.length, el.selectionEnd ?? q.length, colado));
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -240,7 +270,7 @@ function Painel({
         )}
       </div>
       {buscando && (base.length > 0 || substituir) && (
-        <div className="flex items-center gap-2 px-3 pb-1 text-[11.5px] text-muted">
+        <div className="flex animate-fade-in-up items-center gap-2 px-3 pb-1 text-[11.5px] text-muted">
           <span className="min-w-0 flex-1 truncate" title={base.join(", ")}>
             {substituir ? "Substituindo a seleção pelos resultados" : `Somando a ${base.length} já escolhido${base.length === 1 ? "" : "s"}: ${base.slice(0, 4).join(", ")}${base.length > 4 ? "…" : ""}`}
           </span>
@@ -249,10 +279,17 @@ function Painel({
           </button>
         </div>
       )}
-      {!buscando && guardados.length > 0 && sel.size > 0 && sel.size < options.length && (
-        <div className="flex items-center gap-2 px-3 pb-1 text-[11.5px] text-muted">
-          <span className="min-w-0 flex-1 truncate" title={guardados.join(", ")}>
-            {`+ ${guardados.length} escolhido${guardados.length === 1 ? "" : "s"} escondido${guardados.length === 1 ? "" : "s"} por outro filtro: ${guardados.slice(0, 4).join(", ")}${guardados.length > 4 ? "…" : ""}`}
+      {semResultado.length > 0 && (
+        <div className="flex animate-fade-in-up items-center gap-2 px-3 pb-1 text-[11.5px] text-[color:var(--warn)]">
+          <span className="line-clamp-2 min-w-0 flex-1" title={semResultado.join(", ")}>
+            {`Não encontrado${semResultado.length === 1 ? "" : "s"}: ${semResultado.slice(0, 6).join(", ")}${semResultado.length > 6 ? ` e mais ${semResultado.length - 6}` : ""}`}
+          </span>
+        </div>
+      )}
+      {!buscando && guardados.length > 0 && sel.size < options.length && (
+        <div className="flex animate-fade-in-up items-center gap-2 px-3 pb-1 text-[11.5px] text-muted">
+          <span className="line-clamp-2 min-w-0 flex-1" title={guardados.join(", ")}>
+            {`${sel.size > 0 ? "+ " : "Seguem no filtro: "}${guardados.length} escondido${guardados.length === 1 ? "" : "s"} por outro filtro — ${guardados.slice(0, 4).join(", ")}${guardados.length > 4 ? "…" : ""}`}
           </span>
           <button type="button" onClick={() => setDescartados(true)} className="shrink-0 font-semibold text-accent hover:underline">
             Tirar
@@ -266,15 +303,20 @@ function Painel({
           onChange={alternarTodos}
           className="caixa-marcar"
         />
-        {buscando ? `Selecionar os ${visiveis.length} encontrados` : "Selecionar todos"}
+        {buscando ? (visiveis.length === 1 ? "Selecionar o encontrado" : `Selecionar os ${visiveis.length} encontrados`) : "Selecionar todos"}
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
-        {topo.map(opcao)}
-        {topo.length > 0 && resto.length > 0 && <hr className="my-1 border-border" />}
-        {resto.map(opcao)}
+        {grupos.topo.map(opcao)}
+        {grupos.topo.length > 0 && grupos.escolhidos.length + grupos.resto.length > 0 && <hr className="my-1 border-border" />}
+        {grupos.escolhidos.length > 0 && (
+          <div className="px-3 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Escolhidos ({grupos.escolhidos.length})</div>
+        )}
+        {grupos.escolhidos.map(opcao)}
+        {grupos.escolhidos.length > 0 && grupos.resto.length > 0 && <hr className="my-1 border-border" />}
+        {grupos.resto.map(opcao)}
         {ocultas > 0 && (
           <div className="px-3 py-2 text-center text-[11px] text-faint">
-            Mostrando {topo.length + resto.length} de {visiveis.length} — refine a busca
+            Mostrando {desenhadas} de {visiveis.length} — refine a busca
           </div>
         )}
         {visiveis.length === 0 && (
