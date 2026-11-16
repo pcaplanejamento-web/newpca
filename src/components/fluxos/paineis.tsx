@@ -6,7 +6,7 @@ import { jaAnexados } from "@/lib/automacao-cliente";
 import { conferenciaAnexos, type DocCenti, type EstadoDfd, type LinhaConferencia, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
-import { caminhosDosItens, type Grafo, type Item, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
+import { caminhosDosItens, type Grafo, type Item, marcadosDuplicados, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
 import { buscaDoNo, type FontesSistema, opcoesDaBusca } from "@/lib/fluxo-ler-sistema";
 import { lerCaptura } from "@/lib/fluxo-dados";
@@ -432,6 +432,8 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
   const itens = host?.previas[no.id]?.itens ?? [];
   const { previa, podePrevia, recarregar } = usePreviaDoNo(grafoLista, no.id, true, true, !!host?.previas[no.id]?.itens);
   const { marcados, definir } = useMarcadosDoNo(no, grafo, onGrafo);
+  // Com uma "Seleção" depois deste nó, ela é quem escolhe: aqui não se marca (as marcas antigas não valem).
+  const temSelecao = useMemo(() => marcadosDuplicados(grafo).has(no.id), [grafo, no.id]);
   const genericas = useMemo(() => colunasGenericas(itens), [itens]);
   if (!host) return null;
   return (
@@ -441,8 +443,8 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
       genericas={genericas}
       gestao={host.gestao}
       onAbrir={host.abrir}
-      selected={marcados}
-      onSelected={host.rodando ? undefined : definir}
+      selected={temSelecao ? undefined : marcados}
+      onSelected={temSelecao || host.rodando ? undefined : definir}
       vazio={
         previa?.carregando
           ? "Carregando do sistema…"
@@ -453,7 +455,11 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
               : "Execute o fluxo para ler do sistema."
       }
       acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar do sistema" onClick={recarregar} disabled={host.rodando} /> : undefined}
-      resumo={(ls) => `${ls.length} item(ns) · ${marcados.size ? `${marcados.size} marcado(s) — só eles passam` : "nenhum marcado — todos passam"}`}
+      resumo={(ls) =>
+        temSelecao
+          ? `${ls.length} item(ns) · a escolha é feita na aba Seleção${marcados.size ? " (marcação antiga desta aba ignorada)" : ""}`
+          : `${ls.length} item(ns) · ${marcados.size ? `${marcados.size} marcado(s) — só eles passam` : "nenhum marcado — todos passam"}`
+      }
     />
   );
 }

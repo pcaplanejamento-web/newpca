@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.1",
+    data: "2026-11-16",
+    titulo: "Correção pela Centi: uma seleção só",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Nas automações com a aba “Seleção”, a aba “Do sistema” não marca mais linhas (as marcas dela filtravam a leitura e a Seleção ficava vazia): quem escolhe o que segue é a Seleção — no “Corrigir DFDs divergentes pela Centi”, ela lista todos os divergentes.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Executar sem marcar nada na “Seleção” não termina mais em silêncio: a Análise mostra a atenção “nenhum item marcado — nada seguiu”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.0",
     data: "2026-11-16",
     titulo: "Declarações mais claras",

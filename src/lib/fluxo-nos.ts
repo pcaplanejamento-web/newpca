@@ -331,7 +331,18 @@ const NOS: DefNo[] = [
       },
     ],
     // Vindo da MESA (`__daMesa`), a seleção já foi feita lá: seguem todos os que chegam.
-    executar: async (e, c, ctx) => ({ saida: ctx.host.__daMesa ? so(e) : selecionados(so(e), c) }),
+    executar: async (e, c, ctx): Promise<Portas> => {
+      if (ctx.host.__daMesa) return { saida: so(e) };
+      const itens = so(e);
+      const saida = selecionados(itens, c);
+      // Nada marcado com "Não segue nenhum": nunca um "Concluído" mudo — a Análise diz o que fazer.
+      if (!saida.length && itens.length && c.semMarcar !== "todos") {
+        const mensagem = `Nenhum dos ${itens.length} item(ns) foi marcado na aba “Seleção” — nada seguiu. Marque os que devem seguir e execute de novo.`;
+        ctx.aviso(mensagem);
+        return { saida, [PORTA_APONTADOS]: [{ mensagem, nivel: "atencao" }] };
+      }
+      return { saida };
+    },
   },
   {
     tipo: "entrada.ids",

@@ -447,7 +447,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       funciona:
         "1) Lê os DFDs do sistema marcados Divergente na coluna “Centi”. 2) Você marca na tabela quais corrigir. 3) Cada marcado passa pelo “Conferir 1 DFD × Centi” (lido inteiro na Centi agora; o resultado e os dados da Centi ficam gravados). 4) Se continuar divergente, só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema. 5) A conferência é refeita. Divergência aceita, só de situação/órgão/nº, ou DFD não reconferido agora NÃO é alterado.",
       executa:
-        "Com a extensão da Centi pronta: execute, marque os DFDs na tabela de seleção e execute de novo. Na Mesa do sistema, selecione os DFDs e toque em Automações → esta automação (marque “Disponível na Mesa” nas configurações dela).",
+        "Com a extensão da Centi pronta: abra a aba “Seleção” (lista os DFDs divergentes), marque os que devem ser corrigidos e execute. A aba “Do sistema” só mostra o que foi lido — não se marca nela. Executar sem marcar nada não corrige nenhum (a Análise avisa). Na Mesa do sistema, selecione os DFDs e toque em Automações → esta automação (marque “Disponível na Mesa” nas configurações dela).",
       resultado:
         "Os DFDs corrigidos (o histórico registra a edição e a conferência refeita — coluna “Centi” Convergente) e, na Análise, os que ficaram sem correção ou não foram corrigidos, com o motivo.",
     },

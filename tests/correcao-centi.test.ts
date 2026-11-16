@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chaveMotivo, conferenciaDoRetrato, montarRetrato, tiposDoMotivo } from "../src/lib/conferencia-dfd-centi.ts";
+import { executarFluxo, type Grafo, lerGrafo, marcadosDuplicados } from "../src/lib/fluxo-core.ts";
+import { grafoDoModelo, MODELOS_FLUXO } from "../src/lib/fluxo-modelos.ts";
 import { corrigirDfdPelaCenti } from "../src/lib/correcao-centi-cliente.ts";
 import { aplicarCentiPorTipos, NAO_CORRIGIVEIS, planoCorrecao, tiposCorrigiveis, tiposCorrigiveisDoMotivo } from "../src/lib/correcao-centi-core.ts";
 import type { DfdDetalhe } from "../src/lib/dfd.ts";
@@ -315,4 +317,58 @@ test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marc
   assert.equal(r.estado, "concluido", r.erro);
   assert.ok(marcados.length, "a reconferência marca os DFDs antes de corrigir");
   assert.deepEqual(corrigidos, [1], "só o divergente reconferido e lido na Centi agora; o convergente nem entra");
+});
+
+test("Modelo 'Corrigir divergentes': as marcas da aba Do sistema não valem — a Seleção decide; sem marcar, a Análise avisa", async () => {
+  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  assert.ok(m && filho);
+  const base = lerGrafo(grafoDoModelo(m, new Map([["conferir-1-dfd", 77]])));
+  const dfds = [
+    { id: 1, numero: "1", planejamento: "11", entidade: "2", conferenciaCenti: "divergente" },
+    { id: 2, numero: "2", planejamento: "22", entidade: "2", conferenciaCenti: "divergente" },
+    { id: 3, numero: "3", planejamento: "33", entidade: "2", conferenciaCenti: "convergente" },
+  ];
+  // O caso do print: o DFD 3 marcado na aba "Do sistema" (filtrava tudo) e nada na Seleção.
+  const comMarcas = (sel: string[] | undefined) => ({
+    ...base,
+    nos: base.nos.map((n) =>
+      n.tipo === "sistema.ler" ? { ...n, config: { ...n.config, marcados: ["3"] } } : n.tipo === "entrada.selecionar" ? { ...n, config: { ...n.config, marcados: sel } } : n,
+    ),
+  });
+  assert.ok(marcadosDuplicados(base).has("dfds1"));
+  const rodar = async (g: Grafo) => {
+    const corrigidos: number[] = [];
+    const passos: Record<string, number> = {};
+    const host = {
+      protocolos: [],
+      __cache: new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]),
+      esperaCentiMs: 0,
+      mapaEntidades: { "2": "2" },
+      carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
+      lerDfdCenti: async (plan: string) => ({ planejamento: plan, numero: "1", tipo: "DFD-S", objeto: "Outro objeto", valor: 10, totalItens: 1, situacao: "Aprovado" }),
+      corrigirPelaCenti: async (id: number) => {
+        corrigidos.push(id);
+        return { resultado: "corrigido", status: "convergente", motivo: null };
+      },
+    };
+    const api = async (c: string) => (c.includes("conferencia-dfds") ? { ok: true, marcados: 1 } : { ok: true });
+    const r = await executarFluxo(g, REGISTRO_NOS, { centi: async () => ({ ok: true }), api, cancelado: () => false, host }, (p) => {
+      passos[p.no] = p.itens;
+    });
+    return { r, corrigidos, passos };
+  };
+  const vazio = await rodar(comMarcas(undefined));
+  assert.equal(vazio.r.estado, "concluido", vazio.r.erro);
+  assert.equal(vazio.passos.dfds1, 3, "o Ler do sistema lê TODOS — a marca antiga da aba Do sistema não vale");
+  assert.equal(vazio.passos.div1, 2, "os dois divergentes chegam à Seleção");
+  assert.deepEqual(vazio.corrigidos, []);
+  assert.ok(vazio.r.apontados.some((a) => a.nivel === "atencao" && /nada seguiu/.test(String(a.mensagem))), "sem marcar: a Análise avisa");
+  const um = await rodar(comMarcas(["2"]));
+  assert.deepEqual(um.corrigidos, [2], "só o marcado na Seleção é corrigido");
+  assert.ok(!um.r.apontados.some((a) => /nada seguiu/.test(String(a.mensagem))));
+  // O salvo não muda; sem Seleção depois, a marca do Ler do sistema segue valendo.
+  assert.deepEqual(comMarcas(undefined).nos.find((n) => n.id === "dfds1")?.config.marcados, ["3"]);
+  const semSel: Grafo = { v: 1, nos: [base.nos[0], base.nos[1]], conexoes: [{ de: "inicio1", saida: "saida", para: "dfds1", entrada: "entrada" }] };
+  assert.equal(marcadosDuplicados(semSel).size, 0);
 });

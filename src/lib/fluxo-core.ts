@@ -611,6 +611,42 @@ export type ResultadoExec = {
   fim: string;
 };
 
+/**
+ * UMA SELEÇÃO POR FLUXO: os nós "Ler do sistema" que têm uma "Seleção" (`entrada.selecionar`) depois deles, seguindo as
+ * conexões. A marcação da aba "Do sistema" desses nós NÃO vale — quem decide o que segue é a Seleção (senão duas tabelas
+ * de marcar filtram uma em cima da outra e a escolha na primeira esconde tudo da segunda).
+ */
+export function marcadosDuplicados(g: Grafo): Set<string> {
+  const tipo = new Map(g.nos.map((n) => [n.id, n.tipo]));
+  const out = new Set<string>();
+  for (const n of g.nos) {
+    if (n.tipo !== "sistema.ler") continue;
+    const vistos = new Set<string>([n.id]);
+    const fila = [n.id];
+    while (fila.length) {
+      const id = fila.shift() as string;
+      for (const c of g.conexoes) {
+        if (c.de !== id || vistos.has(c.para)) continue;
+        if (tipo.get(c.para) === "entrada.selecionar") {
+          out.add(n.id);
+          fila.length = 0;
+          break;
+        }
+        vistos.add(c.para);
+        fila.push(c.para);
+      }
+    }
+  }
+  return out;
+}
+
+/** O grafo SEM as marcações que não valem (`marcadosDuplicados`) — uma cópia; o salvo não muda. */
+export function semMarcadosDuplicados(g: Grafo): Grafo {
+  const dup = marcadosDuplicados(g);
+  if (!dup.size || !g.nos.some((n) => dup.has(n.id) && n.config.marcados !== undefined)) return g;
+  return { ...g, nos: g.nos.map((n) => (dup.has(n.id) && n.config.marcados !== undefined ? { ...n, config: { ...n.config, marcados: undefined } } : n)) };
+}
+
 /** Portas reservadas (não são entregues a outros nós): os erros apontados e o retorno ao fluxo pai. */
 export const PORTA_APONTADOS = "__apontados";
 export const PORTA_RETORNO = "__retorno";
@@ -623,12 +659,14 @@ const amostrar = (p: Portas): Portas => Object.fromEntries(Object.entries(p).map
  * `inicio` = o id do nó de partida (padrão: todos os gatilhos).
  */
 export async function executarFluxo(
-  g: Grafo,
+  grafo: Grafo,
   reg: Registro,
   ctx: Omit<ContextoNo, "aviso">,
   onPasso?: (p: PassoExec) => void,
   agora: () => Date = () => new Date(),
 ): Promise<ResultadoExec> {
+  // Uma seleção só por fluxo: as marcas do "Ler do sistema" com uma "Seleção" depois não valem (decide a Seleção).
+  const g = semMarcadosDuplicados(grafo);
   const inicio = agora().toISOString();
   const passos: Record<string, PassoExec> = {};
   const apontados: Item[] = [];

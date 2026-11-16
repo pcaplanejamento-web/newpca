@@ -28,6 +28,7 @@ import {
   rotuloFrequencia,
   subfluxosDoGrafo,
   validarGrafo,
+  semMarcadosDuplicados,
   subgrafoAte,
   subgrafoSoLeitura,
   TRAVA_AGENDADOR,
@@ -645,7 +646,8 @@ export function FluxosAutomacao({
   /** Roda SÓ o trecho de leitura antes de uma seleção e põe o que ele produziu nas saídas — a tabela já lista os itens. */
   const carregarPrevia = useCallback(
     async (grafo: Grafo, no: string, incluir = false) => {
-      const sub = subgrafoAte(grafo, no, incluir);
+      // As marcas do "Ler do sistema" com uma Seleção depois não valem — tiradas ANTES de cortar (o trecho não traz a Seleção).
+      const sub = subgrafoAte(semMarcadosDuplicados(grafo), no, incluir);
       if (!subgrafoSoLeitura(sub, REGISTRO_NOS) || rodandoRef.current != null) return;
       setPrevias((m) => ({ ...m, [no]: { carregando: true, itens: m[no]?.itens } }));
       let doAlvo: Item[] | undefined;
