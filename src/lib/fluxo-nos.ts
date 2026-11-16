@@ -2422,8 +2422,10 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
         difs.push("objeto diferente da Centi");
     }
     // UM item por DFD (todas as diferenças juntas): a análise ao vivo e o apontamento não repetem o DFD.
-    if (difs.length) out.divergentes.push({ ...d, mensagem: motivoDivergencias(ref, difs) });
-    else out.conformes.push(d);
+    // As seções 8–10 não conferidas (o registro do próprio planejamento não foi achado) ficam no motivo/aviso.
+    const ressalva = dfdCenti?.assinaturaIncerta ? "seções 8 a 10 (equipe, secretário demandante, autorização) não conferidas" : "";
+    if (difs.length) out.divergentes.push({ ...d, mensagem: motivoDivergencias(ref, ressalva ? [...difs, ressalva] : difs) });
+    else out.conformes.push(ressalva ? { ...d, aviso: `${ref}: ${ressalva}` } : d);
   }
   return out;
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { assinaturaDoLoad, assinaturasDoLoad, coerceFonteAssinatura, escolherAssinatura, MSG_SEM_FONTE, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
+import { assinaturaDoLoad, assinaturasDoLoad, comSecoesDaAssinaturaDoSistema, coerceFonteAssinatura, escolherAssinatura, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
 import { assinaturaDoPlanejamento } from "../src/lib/automacao-dfds-motor.ts";
 import { lerConfigCenti } from "../src/lib/automacao-centi-core.ts";
 
@@ -87,10 +87,12 @@ test("emissão: sem a fonte aprendida PARA tudo; com ela, usa o load já feito o
     pedidos.push([acao, dados]);
     return { ok: true, j: { Data: [{ Id: 555 }] } };
   };
-  const sem = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti(null) }, "131", "1", { j: { Entity: { Fields: [{ Key: "Itens", Value: [{ Id: 1 }] }] } } })) as { erro: string; ambiente?: boolean };
-  assert.equal(sem.ambiente, true);
-  assert.ok(sem.erro.includes(MSG_SEM_FONTE) && /listas lidas: Entity\.Itens/.test(sem.erro), sem.erro);
-  assert.ok(PARA_TUDO.test(sem.erro), "sem a lista no load nem a fonte, para a execução inteira");
+  // Sem a lista no load nem a fonte: segue com a RESERVA e marca incerta (o DFD é analisado; as seções 8–10 não valem).
+  const sem = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaDfd: "163" }) }, "131", "1", { j: { Entity: { Fields: [{ Key: "Itens", Value: [{ Id: 1 }] }] } } })) as { id: string; incerta?: true; motivo?: string };
+  assert.equal(sem.id, "163");
+  assert.equal(sem.incerta, true);
+  assert.match(sem.motivo ?? "", /listas lidas: Entity\.Itens/);
+  assert.ok(!PARA_TUDO.test(sem.motivo ?? ""), "a falta do registro não para a execução");
   // Sem fonte, mas com a lista no load do PRÓPRIO planejamento: lê dali.
   assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti(null) }, "131", "1", { j: loadPlan(131, [{ id: 77 }]) }), { id: "77" });
   const peloLoad = lerConfigCenti({ fonteAssinatura: { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", lista: ["Entity", "@AssinaturasDFD"], chave: "@Id" } });
@@ -108,6 +110,8 @@ test("a extensão guarda as respostas da TELA e aprende a fonte no Processar; o 
   assert.match(main, /operacao: operacaoComFonte\(\)/);
   // O id em si nunca vai ao sistema: só a fonte (o "estado" tira assinatura e planejamento).
   assert.match(main, /const \{ assinatura: _a, planejamento: _p, \.\.\.op \} = operacaoTela;/);
+  // Só a RESERVA (o id da última emissão pela tela) vai junto — o sistema marca as seções 8–10 como não conferidas.
+  assert.match(main, /reserva: operacaoTela\.assinatura \?\? reserva/);
 });
 
 test("seções 8–10 pelo load do PRÓPRIO planejamento: uma = ela; várias = a marcada; nunca chuta", () => {
@@ -126,8 +130,9 @@ test("seções 8–10 pelo load do PRÓPRIO planejamento: uma = ela; várias = a
 test("com a fonte aprendida, o id lido tem de estar na lista do load do planejamento", async () => {
   const pedir = async () => ({ ok: true, j: { Data: [{ Id: 555 }] } });
   const cfg = lerConfigCenti({ fonteAssinatura: { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: "{id:n}" } }, lista: ["Data"], chave: "Id" } });
-  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { erro: string };
-  assert.match(r.erro, /não é do planejamento 131/);
+  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { incerta?: true; motivo?: string };
+  assert.equal(r.incerta, true);
+  assert.match(r.motivo ?? "", /não é do planejamento 131/);
 });
 
 test("extensão: chaves de id mais amplas e o diagnóstico sem valores", () => {
@@ -148,4 +153,20 @@ test("extensão: chaves de id mais amplas e o diagnóstico sem valores", () => {
   assert.deepEqual(Array.from(d.lista[0].onde), ["Entity.@Registros.*.IdAssinatura"]);
   assert.equal(d.lista[1].aceito, false);
   assert.ok(!JSON.stringify(d).includes("\"X\""), "nenhum valor da Centi no diagnóstico");
+});
+
+test("seções 8–10 não confirmadas: valem as do sistema na comparação, na correção e na substituição", async () => {
+  const sec = (t: string, x: string) => ({ titulo: t, texto: x });
+  const sistema = { secoes: [sec("3 - JUSTIFICATIVA", "J"), sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "SOLANGE"), sec("10 - AUTORIZAÇÃO", "VANIA")] };
+  const centi = { secoes: [sec("3 - JUSTIFICATIVA", "J2"), sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("9 - SECRETÁRIO DEMANDANTE", "X"), sec("10 - AUTORIZAÇÃO", "Y")] };
+  assert.deepEqual(comSecoesDaAssinaturaDoSistema(centi, sistema), centi, "sem a marca, nada muda");
+  const r = comSecoesDaAssinaturaDoSistema({ ...centi, assinaturaIncerta: true }, sistema);
+  assert.deepEqual(r.secoes.map((s) => s.texto), ["J2", "SOLANGE", "VANIA"]);
+  const { diferencasDfdCenti } = await import("../src/lib/conferencia-dfd-centi.ts");
+  const base = { numero: "92", planejamento: "131", tipo: null, objeto: "O", orgaoEntidade: null, setorRequisitante: null, siglaSetor: null, responsavel: null, matricula: null, email: null, telefone: null, anoPca: 2027, numeroContrato: null, numeroAta: null, numeroLicitacao: null, valorTotal: 0, nomeArquivo: "a.pdf", itens: [], assinaturas: [] };
+  const sis = { ...base, secoes: sistema.secoes } as never;
+  const difs = diferencasDfdCenti(sis, { ...base, secoes: [sistema.secoes[0], sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("10 - AUTORIZAÇÃO", "Y")], assinaturaIncerta: true } as never);
+  assert.deepEqual(difs, [], "as seções 8–10 incertas não são acusadas");
+  const difs2 = diferencasDfdCenti(sis, { ...base, secoes: [sistema.secoes[0], sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("10 - AUTORIZAÇÃO", "Y")] } as never);
+  assert.ok(difs2.length > 0, "confirmadas, as diferenças aparecem");
 });

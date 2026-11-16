@@ -3,6 +3,7 @@
  * do reenvio/sobrescrita (`compararDfd`). Puro: devolve as diferenças em frases curtas "sistema × Centi".
  */
 import { type ComparacaoDfd, compararDfd, type DfdComparavel, type DfdTratavel, herdarTratamentos } from "./comparar-protocolo.ts";
+import { comSecoesDaAssinaturaDoSistema } from "./assinatura-dfd-centi.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
 import type { BlocoDoc } from "./documento-pdf-core.ts";
 import { normTexto } from "./fluxo-core.ts";
@@ -57,7 +58,8 @@ export function diferencasDfdCenti(sistema: DfdSistemaComparavel, centi: DfdPars
   const anoPca = sistema.anoPca ?? sistema.protocoloAnoPca ?? null;
   // O que a Centi não traz (ou traz fora do padrão) e a equipe tratou no sistema não é divergência — a correção nunca o
   // apaga (a MESMA régua em `novoDaCenti`).
-  const c = herdarTratamentos(normalizarSecoesDfd(centi, undefined, anoPca).dfd, sistema as unknown as DfdTratavel, anoPca, { assinaturas: false }).dfd;
+  // Seções 8–10 sem o registro do próprio planejamento confirmado: valem as do sistema (não são acusadas).
+  const c = herdarTratamentos(normalizarSecoesDfd(comSecoesDaAssinaturaDoSistema(centi, sistema), undefined, anoPca).dfd, sistema as unknown as DfdTratavel, anoPca, { assinaturas: false }).dfd;
   const base = { anoPca: null, reparticaoId: null, assinaturas: [] };
   const a: DfdComparavel = { ...sistema, ...base, tipo: null, planejamento: null, valorTotal: 0 };
   const b: DfdComparavel = { ...c, ...base, tipo: null, planejamento: null, valorTotal: 0 };

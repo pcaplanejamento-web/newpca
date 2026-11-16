@@ -11,6 +11,9 @@ export type ConfigCenti = {
   /** De ONDE ler a assinatura do DFD (IdPlanejamentoAssinaturaDFD) de CADA planejamento — aprendida da tela da Centi pela
    * extensão. Nunca um valor fixo: o id de um planejamento na emissão de outro troca as seções 8–10 do DFD. */
   fonteAssinatura: FonteAssinatura | null;
+  /** O registro das seções 8–10 da ÚLTIMA emissão feita pela tela (a RESERVA): só para a Centi aceitar a emissão quando o
+   * do próprio planejamento não é achado — então as seções 8–10 desse PDF NÃO valem (`assinaturaIncerta`). */
+  assinaturaReserva: string;
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;
   guid: string;
@@ -26,6 +29,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   valorReferencia: true,
   emitirData: false,
   fonteAssinatura: null,
+  assinaturaReserva: "163",
   moduleKey: 120465,
   guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef",
   descobrirEntidade: true,
@@ -36,7 +40,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.35.0";
+export const VERSAO_EXTENSAO_CENTI = "1.36.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -52,7 +56,7 @@ export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A operação "Emitir DFD" que a extensão PEGOU da própria tela da Centi (o Processar). */
-export type OperacaoCenti = { moduleKey: number; guid: string; fonte?: FonteAssinatura | null; em?: string };
+export type OperacaoCenti = { moduleKey: number; guid: string; fonte?: FonteAssinatura | null; reserva?: string; em?: string };
 
 /** O ajuste da configuração pela operação da tela: só o que MUDOU (ModuleKey, Guid, modelo de assinatura); nada a mudar
  * ou operação inválida → null. A tela da Centi é a referência — quando ela muda a operação, o sistema acompanha. */
@@ -67,6 +71,8 @@ export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigC
   if (guid !== cfg.guid) p.guid = guid;
   // A fonte só entra quando veio (uma operação sem ela nunca apaga a aprendida).
   if (fonte && JSON.stringify(fonte) !== JSON.stringify(cfg.fonteAssinatura)) p.fonteAssinatura = fonte;
+  const reserva = typeof o.reserva === "string" || typeof o.reserva === "number" ? String(o.reserva).trim() : "";
+  if (/^\d{1,12}$/.test(reserva) && reserva !== cfg.assinaturaReserva) p.assinaturaReserva = reserva;
   return Object.keys(p).length ? p : null;
 }
 
@@ -136,6 +142,8 @@ export function lerConfigCenti(v: unknown): ConfigCenti {
     valorReferencia: typeof o.valorReferencia === "boolean" ? o.valorReferencia : p.valorReferencia,
     emitirData: typeof o.emitirData === "boolean" ? o.emitirData : p.emitirData,
     fonteAssinatura: coerceFonteAssinatura(o.fonteAssinatura),
+    // A reserva guardada (ou o antigo "modelo de assinatura" fixo do aparelho).
+    assinaturaReserva: [o.assinaturaReserva, (o as Record<string, unknown>).assinaturaDfd].map((x) => String(x ?? "").trim()).find((x) => /^\d{1,12}$/.test(x)) ?? p.assinaturaReserva,
     moduleKey: Number.isInteger(mk) && mk > 0 ? mk : p.moduleKey,
     guid: !antiga && typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
     descobrirEntidade: typeof o.descobrirEntidade === "boolean" ? o.descobrirEntidade : p.descobrirEntidade,

@@ -323,7 +323,7 @@ function Ajustes({
         <p className="text-xs text-muted">
           {cfg.fonteAssinatura
             ? "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): lidas da Centi para cada planejamento."
-            : "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): lidas do próprio planejamento aberto na Centi. Se a automação disser que não achou, emita UM DFD pela tela da Centi e copie o diagnóstico abaixo."}
+            : "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): quando o do próprio planejamento não é achado, o DFD é analisado sem elas (não são comparadas nem corrigidas) e o PDF não é baixado nem anexado. Emita UM DFD pela tela da Centi e copie o diagnóstico abaixo para resolver."}
         </p>
         {diagAssinatura != null && (
           <div className="flex flex-wrap items-center gap-2">
@@ -401,6 +401,8 @@ export function AutomacaoAdmin({
     const a = ajusteDaOperacao(cfgRef.current, op);
     if (!a) return false;
     mudar(a);
+    // Só a reserva das seções 8–10 mudou: nada a avisar.
+    if (a.moduleKey === undefined && a.guid === undefined && !a.fonteAssinatura) return true;
     if (!doServidor)
       toast.success(
         a.fonteAssinatura && a.moduleKey === undefined && a.guid === undefined

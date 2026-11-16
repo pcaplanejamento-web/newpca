@@ -264,6 +264,9 @@ export type DfdParseado = {
   assinaturas: Assinatura[];
   /** A SUBUNIDADE escolhida (só o DFD GRAVADO — modo "um centro para toda a unidade"; o arquivo lido nunca traz). */
   subunidadeId?: number | null;
+  /** Lido na Centi SEM a confirmação do registro das seções 8–10 do PRÓPRIO planejamento: essas seções (equipe,
+   * secretário demandante, autorização) podem ser de outro DFD — não se comparam, não corrigem, não substituem. */
+  assinaturaIncerta?: boolean;
 };
 
 /** Adivinha o ano do PCA e as referências de renovação (DFD-R) do texto do DFD (objeto +

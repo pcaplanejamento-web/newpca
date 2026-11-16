@@ -109,6 +109,8 @@
   // A FONTE da assinatura do DFD aprendida (o modelo do pedido + onde ler — nunca o valor): vale em todas as abas.
   const FONTE_ASSINATURA = "__pcaFonteAssinatura_v1";
   const FONTE_DIAG = "__pcaFonteDiag_v1";
+  // O registro das seções 8–10 da última emissão pela tela: só a RESERVA (o sistema marca essas seções como não conferidas).
+  const RESERVA = "__pcaAssinaturaReserva_v1";
   function fonteGuardada() {
     try {
       const g = JSON.parse(localStorage.getItem(FONTE_ASSINATURA) || "null");
@@ -120,9 +122,13 @@
   // A operação com a fonte da assinatura (a desta aba, senão a guardada) — o que o sistema recebe no "estado".
   function operacaoComFonte() {
     const g = fonteGuardada();
-    if (!operacaoTela) return g ? { moduleKey: g.moduleKey, guid: g.guid, fonte: g.fonte, em: g.em } : null;
+    let reserva = null;
+    try {
+      reserva = localStorage.getItem(RESERVA) || null;
+    } catch {}
+    if (!operacaoTela) return g ? { moduleKey: g.moduleKey, guid: g.guid, fonte: g.fonte, reserva, em: g.em } : reserva ? { reserva } : null;
     const { assinatura: _a, planejamento: _p, ...op } = operacaoTela;
-    return { ...op, fonte: operacaoTela.fonte ?? g?.fonte ?? null };
+    return { ...op, fonte: operacaoTela.fonte ?? g?.fonte ?? null, reserva: operacaoTela.assinatura ?? reserva };
   }
   // A tela da Centi mandou um "Emitir DFD" (o operation do Processar): guarda a operação dela e APRENDE de onde veio a
   // assinatura escolhida (das respostas que a tela recebeu para aquele planejamento).
@@ -135,6 +141,7 @@
       const em = new Date().toISOString();
       const fonte = op.planejamento && op.assinatura ? pecas.fonteDaAssinatura(respostasTela, op.planejamento, op.assinatura) : null;
       operacaoTela = { ...op, fonte, em };
+      if (op.assinatura) localStorage.setItem(RESERVA, String(op.assinatura));
       if (fonte) localStorage.setItem(FONTE_ASSINATURA, JSON.stringify({ moduleKey: op.moduleKey, guid: op.guid, fonte, em }));
       // Diagnóstico: o que a tela recebeu antes deste Processar (só caminhos e chaves) — o ADM copia na Automação.
       if (op.planejamento && op.assinatura)

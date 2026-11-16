@@ -35,6 +35,32 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.13",
+    data: "2026-11-16",
+    titulo: "A conferência com a Centi não para mais",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A conferência e a correção pela Centi voltam a encontrar e analisar o DFD mesmo quando não se acha, na Centi, o registro das seções 8 a 10 do próprio planejamento (equipe, secretário demandante e autorização). Nesse caso essas três seções ficam fora da comparação e da correção — valem as do sistema — e o aviso diz isso. O resto do DFD (cabeçalho, seções 2 a 7 e itens) é conferido e corrigido normalmente.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Baixar/anexar DFDs não entrega um PDF com as seções 8 a 10 de outro planejamento: sem o registro do próprio, aquele DFD não é baixado nem anexado e o relatório diz por quê.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Extensão 1.36.0: informa ao sistema o registro das seções 8 a 10 da última emissão feita pela tela da Centi. Baixe e instale a versão nova.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.12",
     data: "2026-11-16",
     titulo: "Seções 8 a 10 do DFD lidas do próprio planejamento",
