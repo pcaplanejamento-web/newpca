@@ -279,14 +279,14 @@ test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marc
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const { executarFluxo, lerGrafo } = await import("../src/lib/fluxo-core.ts");
   const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
-  const g = lerGrafo(grafoDoModelo(m, new Map([["conferir-1-dfd", 77]])));
+  const g = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
   const conf = g.nos.find((n) => n.tipo === "fluxo.executar");
   assert.equal(conf?.config.fluxoId, "77");
   // 1 e 2 divergentes; 3 convergente (fica fora); 2 a Centi não encontra agora.
   const dfds = [
-    { id: 1, numero: "1", planejamento: "11", entidade: "2", conferenciaCenti: "divergente" },
+    { id: 1, numero: "1", planejamento: "11", entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "divergente" },
     { id: 2, numero: "2", planejamento: "22", entidade: "2", conferenciaCenti: "divergente" },
     { id: 3, numero: "3", planejamento: "33", entidade: "2", conferenciaCenti: "convergente" },
   ];
@@ -324,9 +324,9 @@ test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marc
 
 test("Modelo 'Corrigir divergentes': as marcas da aba Do sistema não valem — a Seleção decide; sem marcar, a Análise avisa", async () => {
   const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
-  const base = lerGrafo(grafoDoModelo(m, new Map([["conferir-1-dfd", 77]])));
+  const base = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
   const dfds = [
     { id: 1, numero: "1", planejamento: "11", entidade: "2", conferenciaCenti: "divergente" },
     { id: 2, numero: "2", planejamento: "22", entidade: "2", conferenciaCenti: "divergente" },
@@ -557,4 +557,93 @@ test("execução: gravou mas a reconferência falhou — “pendente”, nunca �
   assert.equal(s.erros[0].erro, MOTIVO_SEM_CORRECAO.pendente);
   assert.match(String(s.erros[1].erro), /Corrigido em parte — ainda diverge: Situação/);
   assert.deepEqual(s.convergentes.map((x) => x.id), [3]);
+});
+
+test("DFD a DFD: cada um é corrigido logo depois da SUA reconferência; o que falha é refeito e o já feito não", async () => {
+  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
+  assert.ok(m && filho);
+  assert.deepEqual(m.dependencias, ["conferir-corrigir-1-dfd"]);
+  const base = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
+  const g = (paralelo: number): Grafo => ({
+    ...base,
+    nos: base.nos.map((n) =>
+      n.tipo === "entrada.selecionar" ? { ...n, config: { ...n.config, marcados: ["1", "2", "3"] } } : n.tipo === "fluxo.executar" ? { ...n, config: { ...n.config, paralelo } } : n,
+    ),
+  });
+  const dfds = [1, 2, 3].map((i) => ({ id: i, numero: String(i), planejamento: `${i}${i}`, entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "divergente" }));
+  const progresso = new Map<string, Map<string, string>>();
+  const prog = {
+    ler: async (no: string) => [...(progresso.get(no) ?? new Map()).entries()].filter(([, e]) => e === "ok").map(([k]) => k),
+    gravar: async (no: string, l: { chave: string; estado: string }[]) => {
+      const p = progresso.get(no) ?? new Map<string, string>();
+      for (const x of l) p.set(x.chave, x.estado);
+      progresso.set(no, p);
+    },
+    limpar: async (no: string) => void progresso.delete(no),
+  };
+  const rodar = async (o: { falhaNo?: number; pararEm?: string; paralelo?: number }) => {
+    let parar = false;
+    const ordem: string[] = [];
+    const host = {
+      protocolos: [],
+      __cache: new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]),
+      esperaCentiMs: 0,
+      mapaEntidades: { "2": "2" },
+      progresso: prog,
+      carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
+      lerDfdCenti: async (plan: string) => {
+        ordem.push(`ler:${plan}`);
+        if (plan === o.pararEm) parar = true;
+        return { planejamento: plan, numero: plan[0], tipo: "DFD-S", objeto: "Outro objeto", valor: 10, totalItens: 1, situacao: "Aprovado" };
+      },
+      corrigirPelaCenti: async (id: number) => {
+        ordem.push(`corrigir:${id}`);
+        return id === o.falhaNo ? { resultado: "parcial", status: "divergente", motivo: "x", restam: ["Objeto"] } : { resultado: "corrigido", status: "convergente", motivo: null };
+      },
+    };
+    const api = async (c: string) => {
+      if (c.includes("conferencia-dfds")) ordem.push("marcar");
+      return c.includes("conferencia-dfds") ? { ok: true, marcados: 1 } : { ok: true };
+    };
+    const r = await executarFluxo(g(o.paralelo ?? 1), REGISTRO_NOS, { centi: async () => ({ ok: true }), api, cancelado: () => parar, host });
+    return { r, ordem, corrigidos: ordem.filter((x) => x.startsWith("corrigir:")).map((x) => Number(x.slice(9))) };
+  };
+  // Um por vez: ler → marcar → corrigir de CADA DFD antes do próximo.
+  const um = await rodar({ falhaNo: 2 });
+  assert.equal(um.r.estado, "concluido", um.r.erro);
+  assert.deepEqual(um.ordem.slice(0, 3), ["ler:11", "marcar", "corrigir:1"], "a correção espera a conferência gravada do MESMO DFD");
+  assert.deepEqual(um.corrigidos, [1, 2, 3]);
+  assert.ok(um.r.apontados.some((a) => /DFD 2 .*não corrigido: .*ainda diverge/.test(String(a.mensagem))), "o parcial vira falha com o motivo");
+  // A próxima execução refaz SÓ o que falhou.
+  const dois = await rodar({});
+  assert.equal(dois.r.estado, "concluido", dois.r.erro);
+  assert.deepEqual(dois.corrigidos, [2]);
+  assert.equal(progresso.size, 0, "tudo feito: a retomada recomeça do zero");
+  // Interrompido no meio: o já corrigido fica; a próxima execução continua dos que faltam.
+  const tres = await rodar({ pararEm: "22" });
+  assert.deepEqual(tres.corrigidos, [1]);
+  const quatro = await rodar({});
+  assert.deepEqual(quatro.corrigidos.sort(), [2, 3]);
+  // Em paralelo, cada DFD continua com a ordem ler → corrigir.
+  const p = await rodar({ paralelo: 3 });
+  assert.deepEqual(p.corrigidos.sort(), [1, 2, 3]);
+});
+
+test("nó Corrigir com “Não corrigido para o fluxo”: o não corrigido faz o fluxo de UM DFD falhar", async () => {
+  const def = REGISTRO_NOS.get("saida.corrigirPelaCenti");
+  assert.ok(def);
+  const it = { id: 5, numero: "5", centi: { numero: "5" }, mensagem: "x" };
+  const ctx = (resultado: string) =>
+    ({
+      host: { corrigirPelaCenti: async () => ({ resultado, status: null, motivo: null, restam: ["Objeto"] }) },
+      cancelado: () => false,
+      aviso: () => undefined,
+    }) as unknown as Parameters<typeof def.executar>[2];
+  await assert.rejects(def.executar({ entrada: [it] }, { falhar: true }, ctx("parcial"), {}), /ainda diverge/);
+  await assert.rejects(def.executar({ entrada: [it] }, { falhar: true }, ctx("pendente"), {}), /reconferência falhou/);
+  const ok = await def.executar({ entrada: [it] }, { falhar: true }, ctx("corrigido"), {});
+  assert.equal((ok as Record<string, unknown[]>).corrigidos.length, 1);
+  const sem = await def.executar({ entrada: [it] }, {}, ctx("parcial"), {});
+  assert.equal((sem as Record<string, unknown[]>).erros.length, 1, "desligado: vai à porta Não corrigidos");
 });

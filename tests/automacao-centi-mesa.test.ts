@@ -31,5 +31,6 @@ test("Reconferir da Mesa nunca escolhe uma automação que ALTERA o DFD (corrigi
   const um = fluxo("conferir-1-dfd");
   const corrigir = fluxo("corrigir-divergentes-centi");
   assert.equal(automacoesCentiDaMesa([um, corrigir]).conferir, null);
+  assert.equal(automacoesCentiDaMesa([fluxo("conferir-corrigir-1-dfd"), corrigir]).conferir, null, "o subfluxo que corrige também grava");
   assert.equal(automacoesCentiDaMesa([corrigir, um, fluxo("conferir-dfds-cm002")]).conferir?.id, ids.get("conferir-dfds-cm002"));
 });

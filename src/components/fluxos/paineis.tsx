@@ -820,6 +820,8 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
+    // O subfluxo de conferir E corrigir: o resultado da correção vale mais que o da conferência.
+    if (s(it.correcao)) return estadoDoItem("saida.corrigirPelaCenti", it);
     if (it.naoMarcar === true) return { rotulo: "Não conferido", tom: "amber", texto: s(it.mensagem) };
     // Divergente é um RESULTADO da conferência (conta em Atenção), não uma falha da execução (só "Falhou" conta em Falhas).
     if (s(it.mensagem)) return { rotulo: "Divergente", tom: "amber", texto: s(it.mensagem) };

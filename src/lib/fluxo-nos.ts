@@ -1592,18 +1592,27 @@ const NOS: DefNo[] = [
     descricao:
       "Corrige cada DFD (id) DIVERGENTE com os dados da Centi guardados na conferência — a MESMA correção do “Usar a Centi em…” da Mesa: só o que diverge; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema; refaz a conferência.",
     icone: "save",
-    entradas: ["entrada"],
+    // "depois" (opcional): só espera — ex.: o "Marcar conferência" gravar o retrato antes da correção; os itens dela são ignorados.
+    entradas: ["entrada", "depois"],
     saidas: ["corrigidos", "convergentes", "semMudanca", "erros"],
-    rotulosPortas: { corrigidos: "Corrigidos", convergentes: "Já convergentes", semMudanca: "Sem correção", erros: "Não corrigidos" },
-    campos: [],
-    executar: async (e, _c, ctx) => {
+    rotulosPortas: { entrada: "DFDs", depois: "Depois de", corrigidos: "Corrigidos", convergentes: "Já convergentes", semMudanca: "Sem correção", erros: "Não corrigidos" },
+    campos: [
+      {
+        chave: "falhar",
+        rotulo: "Não corrigido para o fluxo",
+        tipo: "booleano",
+        padrao: false,
+        ajuda: "Ligado (o fluxo de UM DFD): o DFD que não foi corrigido (em parte, sem reconferir ou com erro) faz o fluxo falhar — o fluxo pai a registra e a retomada tenta o DFD de novo. Desligado: vai à saída “Não corrigidos”.",
+      },
+    ],
+    executar: async (e, c, ctx) => {
       const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>) | undefined;
       if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
       const corrigidos: Item[] = [];
       const convergentes: Item[] = [];
       const sem: Item[] = [];
       const erros: Item[] = [];
-      const itens = so(e);
+      const itens = so(e, "entrada");
       const vistos = new Set<number>();
       for (const [i, it] of itens.entries()) {
         if (ctx.cancelado()) break;
@@ -1662,6 +1671,8 @@ const NOS: DefNo[] = [
         }
         ctx.parcial?.([feito]);
       }
+      // No fluxo de UM DFD (`falhar`): o não corrigido falha o fluxo — o pai o registra e a retomada o refaz.
+      if (c.falhar === true && erros.length) throw new Error(erros.map((x) => str(x.erro) || "Não corrigido.").join(" · "));
       return { corrigidos, convergentes, semMudanca: sem, erros };
     },
   },

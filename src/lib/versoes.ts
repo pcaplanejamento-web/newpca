@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.6",
+    data: "2026-11-16",
+    titulo: "Correção pela Centi DFD a DFD",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "“Corrigir DFDs divergentes pela Centi”: cada DFD é corrigido logo depois da sua reconferência (novo subfluxo “Conferir e corrigir 1 DFD × Centi”). Se a execução parar, o que já foi corrigido fica e a próxima continua dos que faltam, refazendo só os que falharam. Abra a automação e use “Atualizar pelo modelo”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.5",
     data: "2026-11-16",
     titulo: "Correção pela Centi: resultado fiel em cada DFD",
