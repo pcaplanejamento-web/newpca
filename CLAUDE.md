@@ -1961,6 +1961,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`descartarDfd` → `descartados`; `protocolar` já pula descartados) → o **já cadastrado prevalece** (não é
   sobrescrito); sem descartar, o **novo prevalece** (sobrescreve por `numero` + reatribui `protocoloId`), com a
   **escolha POR DADO** ao abrir o DFD (ver "Sobrescrita de DFD" abaixo).
+  **v1.292.2 — "Gravado × novo" em massa resolve o duplicado:** `copiasQueFicam` (`dfd-tratamento.ts`, puro/testado) — por grupo de cópias de MESMO nº com algum selecionado, fica a cópia selecionada (várias selecionadas: "novo" = a única que difere do gravado, "gravado" = a única igual) e as outras são descartadas; sem decisão única, fica pendente (aviso).
   **DFDs DUPLICADOS no PRÓPRIO PDF (`protocolo.dfdDuplicado`, padrão bloqueia) — COMPARAR e ESCOLHER:** mesmo nº de DFD
   **ou** de planejamento, em relação DIRETA (`duplicadosDfds`: cada DFD conhece os que conflitam com ELE — "manter este"
   descarta SÓ esses; A~B pelo nº e B~C pelo planejamento: manter A tira B e C continua — a antiga união transitiva
