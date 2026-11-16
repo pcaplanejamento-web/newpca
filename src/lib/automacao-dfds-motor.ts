@@ -58,7 +58,7 @@ import { ZipArmazenar } from "./zip-armazenar.ts";
 export { andamentoDfds, contagemDfds, type EstadoDfd, type LinhaDfd };
 /** A fase em curso de UM DFD (a linha mostra o passo real). */
 type Fase = (e: Extract<EstadoDfd, "emitindo" | "conferindo" | "aguardando" | "anexando">) => void;
-export type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean; entidade?: string; recusada?: boolean; assinaturaIncerta?: string };
+export type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean; entidade?: string; recusada?: boolean };
 /** A resposta da extensão (o que o motor lê). */
 export type RespostaExt = {
   ok?: boolean;
@@ -142,9 +142,8 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
 
 /**
  * O registro das seções 8–10 do DFD (IdPlanejamentoAssinaturaDFD — a Centi o chama de "assinatura") DO PLANEJAMENTO:
- * pela fonte aprendida da tela (conferida contra a lista do load) ou pela lista do próprio load. Sem nenhum dos dois (ou
- * com dúvida), a emissão segue com a RESERVA e `incerta` — o DFD é encontrado e analisado, mas as seções 8–10 desse PDF
- * não valem (não se comparam nem corrigem). Só a interrupção para.
+ * pela fonte aprendida da tela (conferida contra a lista do load) ou pela lista/campo do próprio load. Sem nenhum dos
+ * dois, a emissão segue com a RESERVA (`incerta`) — o PDF é analisado inteiro, como sempre. Só a interrupção para.
  */
 export async function assinaturaDoPlanejamento(
   c: Pick<ContextoEmissor, "pedir" | "cfg">,
@@ -191,7 +190,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     if ("erro" in l) return l;
     load = l;
   }
-  // O registro das seções 8–10 DESTE planejamento, lido na Centi agora (sem ele, a reserva — e as seções 8–10 não valem).
+  // O registro das seções 8–10 DESTE planejamento, lido na Centi agora (sem ele, a reserva).
   const ass = await assinaturaDoPlanejamento(c, id, entidade, load);
   if ("erro" in ass) return ass;
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), ass.id), entidade }, 150_000);
@@ -211,7 +210,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     return { erro: `A Centi negou a emissão do DFD do planejamento ${id}${onde}: “Usuário sem permissão!”.`, amostra: a.amostra, recusada: true };
   }
   const r2 = await pdfDoAchado(a, baixarPelaExtensao(c.pedir as unknown as PedirExtensao, entidade));
-  if ("pdf" in r2) return { pdf: r2.pdf, ...("incerta" in ass && ass.incerta ? { assinaturaIncerta: ass.motivo ?? "não confirmado" } : {}) };
+  if ("pdf" in r2) return { pdf: r2.pdf };
   return { erro: r2.erro, amostra: r2.amostra, ambiente: a.tipo === "nada" && /sessão/i.test(a.erro) };
 }
 
@@ -219,9 +218,6 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
 async function emitirConferido(c: ContextoEmissor, t: TarefaCenti, conferir: boolean, entidade?: string, fase?: Fase): Promise<Emissao> {
   fase?.("emitindo");
   const r = await emitirUm(c, t.id, entidade);
-  // O PDF É o documento entregue: sem o registro das seções 8–10 do próprio planejamento, ele sairia com as de outro DFD.
-  if (r.pdf && r.assinaturaIncerta)
-    return { erro: `Não emitido: o PDF sairia com as seções 8 a 10 (equipe, secretário demandante, autorização) de outro planejamento — ${r.assinaturaIncerta}` };
   if (!r.pdf || !conferir) return r;
   fase?.("conferindo");
   const erro = conferirConteudoDfd(await textoDoPdf(r.pdf).catch(() => ""), t);

@@ -1,5 +1,3 @@
-import { chaveSecao } from "./comparar-protocolo.ts";
-
 // A ASSINATURA DO DFD na Centi (núcleo PURO, testado): as seções 8–10 do DFD (equipe, secretário demandante, autorização)
 // vêm do registro de assinatura escolhido na janela "Emitir DFD" (IdPlanejamentoAssinaturaDFD) — e cada planejamento tem
 // as SUAS. Mandar o id de um planejamento na emissão de outro devolve o DFD do outro com as seções 8–10 do primeiro (o
@@ -201,17 +199,4 @@ export function assinaturaDoLoad(j: unknown, plan: string): { id: string } | { e
     };
   if (a.id) return { id: a.id };
   return { erro: `O planejamento ${plan} tem ${a.ids.length} registros das seções 8 a 10 do DFD na Centi e nenhum marcado como o escolhido — a automação não escolhe sozinha; deixe só o certo no planejamento.` };
-}
-
-/** As seções do DFD que vêm do registro da "assinatura" (8 a 10). */
-export const SECOES_DA_ASSINATURA = new Set(["equipe", "demandante", "autorizacao"]);
-type ComSecoes = { secoes: { titulo: string; texto: string }[]; assinaturaIncerta?: boolean };
-/**
- * O DFD lido na Centi com as seções 8–10 do SISTEMA quando o registro dele não foi confirmado (`assinaturaIncerta`):
- * a comparação não as acusa e a correção/substituição nunca as troca. Sem a marca, devolve o mesmo DFD. Pura.
- */
-export function comSecoesDaAssinaturaDoSistema<T extends ComSecoes>(centi: T, sistema: ComSecoes): T {
-  if (!centi.assinaturaIncerta) return centi;
-  const da = (s: { titulo: string }) => SECOES_DA_ASSINATURA.has(chaveSecao(s.titulo));
-  return { ...centi, secoes: [...centi.secoes.filter((s) => !da(s)), ...sistema.secoes.filter(da)] };
 }

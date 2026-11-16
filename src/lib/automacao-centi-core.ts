@@ -11,8 +11,8 @@ export type ConfigCenti = {
   /** De ONDE ler a assinatura do DFD (IdPlanejamentoAssinaturaDFD) de CADA planejamento — aprendida da tela da Centi pela
    * extensão. Nunca um valor fixo: o id de um planejamento na emissão de outro troca as seções 8–10 do DFD. */
   fonteAssinatura: FonteAssinatura | null;
-  /** O registro das seções 8–10 da ÚLTIMA emissão feita pela tela (a RESERVA): só para a Centi aceitar a emissão quando o
-   * do próprio planejamento não é achado — então as seções 8–10 desse PDF NÃO valem (`assinaturaIncerta`). */
+  /** O registro das seções 8–10 da ÚLTIMA emissão feita pela tela (a RESERVA): o que vai na emissão quando o do próprio
+   * planejamento não é achado — o PDF é analisado INTEIRO, como sempre foi. */
   assinaturaReserva: string;
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { assinaturaDoLoad, assinaturasDoLoad, comSecoesDaAssinaturaDoSistema, coerceFonteAssinatura, escolherAssinatura, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
+import { assinaturaDoLoad, assinaturasDoLoad, coerceFonteAssinatura, escolherAssinatura, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
 import { assinaturaDoPlanejamento } from "../src/lib/automacao-dfds-motor.ts";
 import { lerConfigCenti } from "../src/lib/automacao-centi-core.ts";
 
@@ -155,22 +155,6 @@ test("extensão: chaves de id mais amplas e o diagnóstico sem valores", () => {
   assert.ok(!JSON.stringify(d).includes("\"X\""), "nenhum valor da Centi no diagnóstico");
 });
 
-test("seções 8–10 não confirmadas: valem as do sistema na comparação, na correção e na substituição", async () => {
-  const sec = (t: string, x: string) => ({ titulo: t, texto: x });
-  const sistema = { secoes: [sec("3 - JUSTIFICATIVA", "J"), sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "SOLANGE"), sec("10 - AUTORIZAÇÃO", "VANIA")] };
-  const centi = { secoes: [sec("3 - JUSTIFICATIVA", "J2"), sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("9 - SECRETÁRIO DEMANDANTE", "X"), sec("10 - AUTORIZAÇÃO", "Y")] };
-  assert.deepEqual(comSecoesDaAssinaturaDoSistema(centi, sistema), centi, "sem a marca, nada muda");
-  const r = comSecoesDaAssinaturaDoSistema({ ...centi, assinaturaIncerta: true }, sistema);
-  assert.deepEqual(r.secoes.map((s) => s.texto), ["J2", "SOLANGE", "VANIA"]);
-  const { diferencasDfdCenti } = await import("../src/lib/conferencia-dfd-centi.ts");
-  const base = { numero: "92", planejamento: "131", tipo: null, objeto: "O", orgaoEntidade: null, setorRequisitante: null, siglaSetor: null, responsavel: null, matricula: null, email: null, telefone: null, anoPca: 2027, numeroContrato: null, numeroAta: null, numeroLicitacao: null, valorTotal: 0, nomeArquivo: "a.pdf", itens: [], assinaturas: [] };
-  const sis = { ...base, secoes: sistema.secoes } as never;
-  const difs = diferencasDfdCenti(sis, { ...base, secoes: [sistema.secoes[0], sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("10 - AUTORIZAÇÃO", "Y")], assinaturaIncerta: true } as never);
-  assert.deepEqual(difs, [], "as seções 8–10 incertas não são acusadas");
-  const difs2 = diferencasDfdCenti(sis, { ...base, secoes: [sistema.secoes[0], sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("10 - AUTORIZAÇÃO", "Y")] } as never);
-  assert.ok(difs2.length > 0, "confirmadas, as diferenças aparecem");
-});
-
 test("o registro das seções 8–10 num CAMPO do planejamento (não a assinatura digital)", () => {
   const load = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "IdAssinaturaDigital", Value: 9 }, { Key: "IdPlanejamentoAssinaturaDFD", Value: 480 }] } };
   assert.deepEqual(assinaturaDoLoad(load, "131"), { id: "480" });
@@ -180,4 +164,19 @@ test("o registro das seções 8–10 num CAMPO do planejamento (não a assinatur
   const e = (assinaturaDoLoad(so, "131") as { erro: string }).erro;
   assert.match(e, /campos: .*IdAssinaturaDigital.*EquipePlanejamento/);
   assert.ok(!e.includes("“x”") && !/\b9\b/.test(e), "só nomes, nunca valores");
+});
+
+test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgãos traz OS DOIS DFDs (nunca o último por cima)", async () => {
+  const { REGISTRO_NOS } = await import("../src/lib/fluxo-nos.ts");
+  const def = REGISTRO_NOS.get("sistema.completarDfd") as { executar: (e: unknown, c: unknown, ctx: unknown) => Promise<{ saida: { id: number }[]; naoEncontrados: unknown[] }> };
+  const dfds = [
+    { id: 92, numero: "92", planejamento: "131", entidade: "2" },
+    { id: 500, numero: "500", planejamento: "131", entidade: "3" },
+    { id: 7, numero: "7", planejamento: "8", entidade: "2" },
+  ];
+  const cache = new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]);
+  const ctx = { host: { __cache: cache }, aviso: () => {}, cancelado: () => false };
+  const r = await def.executar({ entrada: [{}] }, { planejamento: "131" }, ctx);
+  assert.deepEqual(r.saida.map((x) => x.id).sort((a, b) => a - b), [92, 500]);
+  assert.equal(r.naoEncontrados.length, 0);
 });

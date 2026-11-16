@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.15",
+    data: "2026-11-16",
+    titulo: "Seções 8 a 10 analisadas pelo PDF de novo",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A conferência e a correção pela Centi voltam a analisar o PDF do DFD INTEIRO, inclusive as seções 8 a 10 (equipe, secretário demandante e autorização), como as demais. O Baixar/anexar DFDs volta a entregar o PDF.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "“Completar com o DFD do sistema”: quando o mesmo nº de planejamento existe em dois órgãos, os DOIS DFDs são conferidos, cada um no seu órgão — antes um só ficava (o último), e a conferência e a correção podiam usar o DFD de outro órgão.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.14",
     data: "2026-11-16",
     titulo: "Registro das seções 8 a 10 também num campo do planejamento",

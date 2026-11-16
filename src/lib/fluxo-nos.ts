@@ -783,18 +783,23 @@ const NOS: DefNo[] = [
         dfds = (async () => (await (REGISTRO_NOS.get("sistema.dfds") as DefNo).executar({ entrada: [{}] }, {}, ctx, {})).saida ?? [])();
         cache?.set("dfds", dfds);
       }
-      const porPlan = new Map<string, Item>();
+      // O MESMO nº de planejamento pode existir em órgãos diferentes (a numeração da Centi é por entidade): TODOS os DFDs
+      // dele seguem, cada um com o seu órgão — nunca um só escolhido (o último sobrescrevia os outros: dados de outro DFD).
+      const porPlan = new Map<string, Item[]>();
       for (const d of await dfds.catch((x) => {
         cache?.delete("dfds");
         throw x;
       }))
-        if (str(d.planejamento)) porPlan.set(str(d.planejamento).replace(/^0+(?=\d)/, ""), d);
+        if (str(d.planejamento)) {
+          const k = str(d.planejamento).replace(/^0+(?=\d)/, "");
+          porPlan.set(k, [...(porPlan.get(k) ?? []), d]);
+        }
       const saida = [...prontos];
       const naoEncontrados: Item[] = [];
       for (const it of faltam) {
-        const d = porPlan.get(str(it.planejamento).replace(/^0+(?=\d)/, ""));
-        if (d) saida.push({ ...d, ...Object.fromEntries(Object.entries(it).filter(([k]) => !(k in d))) });
-        else naoEncontrados.push(it);
+        const ds = porPlan.get(str(it.planejamento).replace(/^0+(?=\d)/, "")) ?? [];
+        for (const d of ds) saida.push({ ...d, ...Object.fromEntries(Object.entries(it).filter(([k]) => !(k in d))) });
+        if (!ds.length) naoEncontrados.push(it);
       }
       return { saida, naoEncontrados };
     },
@@ -2422,10 +2427,8 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
         difs.push("objeto diferente da Centi");
     }
     // UM item por DFD (todas as diferenças juntas): a análise ao vivo e o apontamento não repetem o DFD.
-    // As seções 8–10 não conferidas (o registro do próprio planejamento não foi achado) ficam no motivo/aviso.
-    const ressalva = dfdCenti?.assinaturaIncerta ? "seções 8 a 10 (equipe, secretário demandante, autorização) não conferidas" : "";
-    if (difs.length) out.divergentes.push({ ...d, mensagem: motivoDivergencias(ref, ressalva ? [...difs, ressalva] : difs) });
-    else out.conformes.push(ressalva ? { ...d, aviso: `${ref}: ${ressalva}` } : d);
+    if (difs.length) out.divergentes.push({ ...d, mensagem: motivoDivergencias(ref, difs) });
+    else out.conformes.push(d);
   }
   return out;
 }

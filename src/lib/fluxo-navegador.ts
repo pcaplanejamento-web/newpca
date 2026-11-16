@@ -3,7 +3,6 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { comSecoesDaAssinaturaDoSistema } from "./assinatura-dfd-centi";
 import { analisarRespostaCenti, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
 import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
@@ -145,8 +144,6 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
-  // Sem o registro das seções 8–10 do próprio planejamento: o DFD é analisado, mas essas seções não valem.
-  if (e.assinaturaIncerta) d.assinaturaIncerta = true;
   const resumo = {
     numero: d.numero,
     planejamento: d.planejamento,
@@ -156,7 +153,6 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     totalItens: d.itens.length,
     situacao,
     ...extra,
-    ...(e.assinaturaIncerta ? { secoesAssinaturaNaoConferidas: e.assinaturaIncerta } : {}),
   };
   return completo ? { ...resumo, dfd: d as unknown as Item } : resumo;
 }
@@ -177,9 +173,7 @@ export async function substituirDfdPelaCenti(dfdId: number, novo: DfdParseado): 
   if (!so(g.planejamento) || so(g.planejamento) !== so(novo.planejamento))
     throw new Error(`O DFD da Centi é de outro planejamento (${s(novo.planejamento) || "sem nº"} × ${s(g.planejamento) || "sem nº"}).`);
   const anoPca = g.anoPca ?? g.protocoloAnoPca ?? novo.anoPca ?? null;
-  // Seções 8–10 sem o registro do próprio planejamento confirmado: ficam as do gravado.
-  const base: DfdParseado = { ...comSecoesDaAssinaturaDoSistema(novo, g), numero: g.numero, assinaturas: novo.assinaturas.length ? novo.assinaturas : g.assinaturas };
-  delete base.assinaturaIncerta;
+  const base: DfdParseado = { ...novo, numero: g.numero, assinaturas: novo.assinaturas.length ? novo.assinaturas : g.assinaturas };
   const { dfd } = herdarTratamentos(normalizarSecoesDfd(base, undefined, anoPca).dfd, g, anoPca);
   await enviarDfdEmLotes(metaDoDfd(dfd, { anoPca, reparticaoId: g.reparticaoId, origem: "sobrescrita" }), dfd.itens, undefined, { existia: true });
   return { numero: g.numero, itens: dfd.itens.length };
