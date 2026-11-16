@@ -787,6 +787,15 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     if (it.substituido === true) return { rotulo: "Substituído", tom: "emerald", texto: `${s(it.itensGravados) || "0"} item(ns) gravado(s) com os dados da Centi` };
     return null;
   }
+  if (tipo === "saida.corrigirPelaCenti") {
+    if (s(it.erro)) return { rotulo: "Não corrigido", tom: "red", texto: s(it.erro) };
+    if (it.correcao === "corrigido")
+      return it.conferenciaDepois === "convergente"
+        ? { rotulo: "Corrigido", tom: "emerald", texto: "Gravado com os dados da Centi — convergente" }
+        : { rotulo: "Corrigido em parte", tom: "amber", texto: s(it.motivoDepois) || "Ainda há divergência que a Centi não corrige" };
+    if (s(it.correcao)) return { rotulo: "Sem correção", tom: "slate", texto: s(it.motivo) };
+    return null;
+  }
   if (tipo === "saida.dfdsCenti") {
     // O passo REAL da linha (a mesma régua da Análise): emitindo, conferindo, anexando, aguardando, anexado, já estava…
     const v = visualEstadoDfd((s(it.estado) || "fila") as EstadoDfd, it.anexar === true);

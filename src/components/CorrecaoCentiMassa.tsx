@@ -1,12 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { aceiteVale, lerAceite, type RetratoCenti, tiposDoMotivo } from "@/lib/conferencia-dfd-centi";
-import { aplicarCentiPorTipos, planoCorrecao } from "@/lib/correcao-centi-core";
-import type { DfdDetalhe } from "@/lib/dfd";
-import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
+import { aceiteVale, lerAceite, tiposDoMotivo } from "@/lib/conferencia-dfd-centi";
+import { corrigirDfdPelaCenti } from "@/lib/correcao-centi-cliente";
+import { tiposCorrigiveisDoMotivo } from "@/lib/correcao-centi-core";
 import { num } from "@/lib/format";
-import { semMarcas } from "@/lib/sobrescrita-dfd";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { Checkbox } from "./Field";
@@ -14,9 +12,6 @@ import { IconAlert, IconCheck, IconMerge } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { toast } from "./Toast";
-
-/** Os tipos que a Centi NÃO corrige no DFD (identidade, situação, órgão): tratados um a um no painel da coluna Centi. */
-const NAO_CORRIGIVEIS = new Set(["Situação", "Órgão", "Nº do DFD", "Não encontrado na Centi", "Outras"]);
 
 export type DfdCorrecaoMassa = { id: number; numero: string; planejamento: string | null; status: string | null; motivo: string | null; aceite: string | null };
 
@@ -37,7 +32,7 @@ export function CorrecaoCentiMassa({ dfds, onConcluido }: { dfds: DfdCorrecaoMas
     () =>
       dfds
         .filter((d) => d.status === "divergente" && !aceiteVale(d.status, d.motivo, lerAceite(d.aceite)))
-        .map((d) => ({ ...d, tipos: tiposDoMotivo(d.motivo).filter((t) => !NAO_CORRIGIVEIS.has(t)) }))
+        .map((d) => ({ ...d, tipos: tiposCorrigiveisDoMotivo(tiposDoMotivo(d.motivo)) }))
         .filter((d) => d.tipos.length),
     [dfds],
   );
@@ -56,34 +51,12 @@ export function CorrecaoCentiMassa({ dfds, onConcluido }: { dfds: DfdCorrecaoMas
   }
 
   async function corrigirUm(d: DfdCorrecaoMassa, tipos: string[]): Promise<"ok" | "sem" | string> {
-    const r1 = await fetch(`/api/dfd/${d.id}`);
-    const j1 = (await r1.json().catch(() => ({}))) as { ok?: boolean; error?: string; dfd?: DfdDetalhe };
-    if (!r1.ok || !j1.ok || !j1.dfd) return j1.error ?? "não foi possível ler o DFD";
-    const r2 = await fetch(`/api/dfd/${d.id}/conferencia-centi?retrato=1`);
-    const j2 = (await r2.json().catch(() => ({}))) as { ok?: boolean; error?: string; retrato?: RetratoCenti | null };
-    if (!r2.ok || !j2.ok) return j2.error ?? "não foi possível ler os dados da Centi";
-    if (!j2.retrato) return "sem os dados da Centi guardados — reconfira na Centi";
-    const o = j1.dfd;
-    const g = detalheParaParseado(o);
-    const plano = planoCorrecao(g, j2.retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
-    const corrigido = semMarcas(aplicarCentiPorTipos(g, plano, tipos));
-    const itensMudaram = JSON.stringify(corrigido.itens) !== JSON.stringify(g.itens);
-    const body = diffDfdGravado(o, corrigido, o.reparticaoId, itensMudaram);
-    if (!Object.keys(body).length) return "sem";
-    if (itensMudaram && corrigido.itens.length === 0) return "a Centi não tem itens — corrija no banner do DFD";
-    const r3 = await fetch(`/api/dfd/${d.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...body, atualizadoEmLido: o.atualizadoEm ?? undefined }),
-    });
-    const j3 = (await r3.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!r3.ok || !j3.ok) return j3.error ?? `não foi possível gravar (HTTP ${r3.status})`;
-    await fetch(`/api/dfd/${d.id}/conferencia-centi`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ acao: "recalcular" }),
-    }).catch(() => undefined);
-    return "ok";
+    try {
+      const r = await corrigirDfdPelaCenti(d.id, tipos);
+      return r.resultado === "corrigido" ? "ok" : "sem";
+    } catch (x) {
+      return x instanceof Error ? x.message : String(x);
+    }
   }
 
   async function corrigir() {

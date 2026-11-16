@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chaveMotivo, conferenciaDoRetrato, montarRetrato, tiposDoMotivo } from "../src/lib/conferencia-dfd-centi.ts";
-import { aplicarCentiPorTipos, planoCorrecao, tiposCorrigiveis } from "../src/lib/correcao-centi-core.ts";
-import { compararDfdCenti } from "../src/lib/fluxo-nos.ts";
+import { corrigirDfdPelaCenti } from "../src/lib/correcao-centi-cliente.ts";
+import { aplicarCentiPorTipos, NAO_CORRIGIVEIS, planoCorrecao, tiposCorrigiveis, tiposCorrigiveisDoMotivo } from "../src/lib/correcao-centi-core.ts";
+import type { DfdDetalhe } from "../src/lib/dfd.ts";
+import { compararDfdCenti, MOTIVO_SEM_CORRECAO, REGISTRO_NOS, reconferido } from "../src/lib/fluxo-nos.ts";
 import { valorDosItens, type DfdParseado } from "../src/lib/parse-dfd-comum.ts";
 import { estadoEscolha, semMarcas } from "../src/lib/sobrescrita-dfd.ts";
 
@@ -153,4 +155,164 @@ test("retrato: o Tipo e o nº comparados são os do LOAD da Centi (como a automa
   const corrigido = semMarcas(aplicarCentiPorTipos(s, planoCorrecao(s, r, 2027)));
   assert.equal(corrigido.tipo, "DFD-R");
   assert.equal(conferenciaDoRetrato(comparavel(corrigido), r).status, "convergente");
+});
+
+// ——— A correção pelo navegador (a Mesa e a automação usam a MESMA função)
+
+test("tipos corrigíveis do motivo: tira situação, órgão, nº do DFD, não encontrado e outras", () => {
+  assert.deepEqual(tiposCorrigiveisDoMotivo(["Objeto", "Situação", "Órgão", "Objeto", "Valor total", "Nº do DFD", "Não encontrado na Centi", "Outras"]), ["Objeto", "Valor total"]);
+  assert.ok(NAO_CORRIGIVEIS.has("Situação"));
+});
+
+type Chamada = { url: string; metodo: string; corpo: Record<string, unknown> | null };
+function servidor(o: { status: string | null; motivo?: string | null; aceite?: string | null; retrato?: unknown; patch?: number; centi?: DfdParseado }) {
+  const s = base();
+  const centi = o.centi ?? centiDivergente();
+  const r = o.retrato === undefined ? retrato(centi) : o.retrato;
+  const motivo = o.motivo !== undefined ? o.motivo : conferenciaDoRetrato(comparavel(s), retrato(centi)).motivo;
+  const dfd = { ...s, id: 9, reparticaoId: 1, subunidadeId: null, atualizadoEm: "2026-11-01T10:00:00.000Z", conferenciaCenti: o.status, conferenciaCentiMotivo: motivo, conferenciaCentiAceite: o.aceite ?? null } as unknown as DfdDetalhe;
+  const chamadas: Chamada[] = [];
+  const resp = (st: number, j: unknown) => new Response(JSON.stringify(j), { status: st, headers: { "content-type": "application/json" } });
+  const busca = async (url: string, init?: RequestInit) => {
+    const metodo = init?.method ?? "GET";
+    chamadas.push({ url, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : null });
+    if (metodo === "GET" && url === "/api/dfd/9") return resp(200, { ok: true, dfd });
+    if (metodo === "GET" && url.endsWith("?retrato=1")) return resp(200, { ok: true, retrato: r });
+    if (metodo === "PATCH") return o.patch && o.patch !== 200 ? resp(o.patch, { ok: false, error: "Alterado por outra pessoa." }) : resp(200, { ok: true });
+    if (metodo === "POST") return resp(200, { ok: true, status: "convergente", motivo: null });
+    return resp(404, { ok: false });
+  };
+  return { busca, chamadas };
+}
+
+test("corrigir DFD pela Centi: divergente — grava só o que diverge com a trava e refaz a conferência", async () => {
+  const sv = servidor({ status: "divergente" });
+  const r = await corrigirDfdPelaCenti(9, null, sv.busca);
+  assert.deepEqual(r, { resultado: "corrigido", status: "convergente", motivo: null });
+  const patch = sv.chamadas.find((c) => c.metodo === "PATCH");
+  assert.ok(patch);
+  assert.equal(patch.corpo?.atualizadoEmLido, "2026-11-01T10:00:00.000Z");
+  // Identificadores e assinaturas nunca vão no corpo.
+  for (const k of ["numero", "planejamento", "assinaturas", "reparticaoId", "subunidadeId"]) assert.equal(k in (patch.corpo ?? {}), false, k);
+  assert.equal(patch.corpo?.objeto, "Aquisição de materiais de limpeza");
+  assert.equal((patch.corpo?.itens as unknown[] | undefined)?.length, 3);
+  assert.equal(sv.chamadas.at(-1)?.corpo?.acao, "recalcular");
+});
+
+test("corrigir DFD pela Centi: convergente, aceito ou só tipos não corrigíveis — nada é gravado", async () => {
+  for (const [o, esperado] of [
+    [{ status: "convergente" }, "convergente"],
+    [{ status: null }, "convergente"],
+    [{ status: "divergente", motivo: "DFD 123: Situação: Aprovado" }, "naoCorrigivel"],
+  ] as const) {
+    const sv = servidor(o);
+    assert.equal((await corrigirDfdPelaCenti(9, null, sv.busca)).resultado, esperado);
+    assert.equal(sv.chamadas.filter((c) => c.metodo !== "GET").length, 0);
+  }
+  const s = servidor({ status: "divergente" });
+  const motivo = conferenciaDoRetrato(comparavel(base()), retrato(centiDivergente())).motivo;
+  const aceite = JSON.stringify({ chave: chaveMotivo(motivo), justificativa: "A Centi está errada.", por: "ADM", em: "2026-11-01" });
+  const sa = servidor({ status: "divergente", aceite });
+  assert.equal((await corrigirDfdPelaCenti(9, null, sa.busca)).resultado, "aceito");
+  assert.equal(sa.chamadas.filter((c) => c.metodo !== "GET").length, 0);
+  // Tipos escolhidos fora do motivo: nada a gravar.
+  assert.equal((await corrigirDfdPelaCenti(9, ["Tipo"], s.busca)).resultado, "sem");
+  assert.equal(s.chamadas.filter((c) => c.metodo !== "GET").length, 0);
+});
+
+test("corrigir DFD pela Centi: sem retrato, Centi sem itens ou PATCH recusado — lança e não refaz a conferência", async () => {
+  await assert.rejects(corrigirDfdPelaCenti(9, null, servidor({ status: "divergente", retrato: null }).busca), /sem os dados da Centi guardados/);
+  const vazio = { ...centiDivergente(), itens: [] };
+  const sv = servidor({ status: "divergente", centi: vazio });
+  await assert.rejects(corrigirDfdPelaCenti(9, null, sv.busca), /a Centi não tem itens/);
+  assert.equal(sv.chamadas.filter((c) => c.metodo !== "GET").length, 0);
+  const s409 = servidor({ status: "divergente", patch: 409 });
+  await assert.rejects(corrigirDfdPelaCenti(9, null, s409.busca), /Alterado por outra pessoa/);
+  assert.equal(s409.chamadas.some((c) => c.metodo === "POST"), false);
+});
+
+test("nó Corrigir DFD pela Centi: só o reconferido agora; aceito vai a 'sem correção'; erro fica no DFD; interrompido para tudo", async () => {
+  const no = REGISTRO_NOS.get("saida.corrigirPelaCenti");
+  assert.ok(no);
+  const feitos: number[] = [];
+  const ctx = (falha?: string) => ({
+    centi: async () => ({ ok: true }),
+    api: async () => ({ ok: true }),
+    aviso: () => undefined,
+    cancelado: () => false,
+    host: {
+      corrigirPelaCenti: async (id: number) => {
+        feitos.push(id);
+        if (falha && id === 3) throw new Error(falha);
+        return id === 2 ? { resultado: "aceito", status: "divergente", motivo: "x" } : { resultado: "corrigido", status: "convergente", motivo: null };
+      },
+    },
+  });
+  const itens = [
+    { id: 1, numero: "1", centi: { situacao: "A" } },
+    { id: 2, numero: "2", centi: { situacao: "A" } },
+    { id: 3, numero: "3", centi: { situacao: "A" } },
+    { id: 4, numero: "4" }, // devolvido pelo subfluxo sem a leitura da Centi
+    { id: 5, numero: "5", centi: null, centiFalha: true, naoMarcar: true },
+    { id: 6, numero: "6", centi: null, centiErro: "não existe" }, // conferido: não encontrado
+    { id: 1, numero: "1", centi: { situacao: "A" } }, // repetido
+  ];
+  const r = (await no.executar({ entrada: itens }, {}, ctx("HTTP 500") as never, {} as never)) as Record<string, Record<string, unknown>[]>;
+  assert.deepEqual(feitos, [1, 2, 3]);
+  assert.deepEqual(r.corrigidos.map((x) => x.id), [1]);
+  assert.deepEqual(r.semMudanca.map((x) => x.id), [2, 6]);
+  assert.equal(r.semMudanca[0].motivo, MOTIVO_SEM_CORRECAO.aceito);
+  assert.deepEqual(r.erros.map((x) => x.id), [3, 4, 5]);
+  assert.match(String(r.erros[1].erro), /Não reconferido/);
+  assert.equal(reconferido({ centi: { a: 1 } }), true);
+  assert.equal(reconferido({ centi: { a: 1 }, naoMarcar: true }), false);
+  feitos.length = 0;
+  await assert.rejects(no.executar({ entrada: itens.slice(0, 3) }, {}, ctx("interrompido") as never, {} as never), /interrompido/);
+});
+
+test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marcados, reconferidos agora, são corrigidos", async () => {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const { executarFluxo, lerGrafo } = await import("../src/lib/fluxo-core.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  assert.ok(m && filho);
+  const g = lerGrafo(grafoDoModelo(m, new Map([["conferir-1-dfd", 77]])));
+  const conf = g.nos.find((n) => n.tipo === "fluxo.executar");
+  assert.equal(conf?.config.fluxoId, "77");
+  // 1 e 2 divergentes; 3 convergente (fica fora); 2 a Centi não encontra agora.
+  const dfds = [
+    { id: 1, numero: "1", planejamento: "11", entidade: "2", conferenciaCenti: "divergente" },
+    { id: 2, numero: "2", planejamento: "22", entidade: "2", conferenciaCenti: "divergente" },
+    { id: 3, numero: "3", planejamento: "33", entidade: "2", conferenciaCenti: "convergente" },
+  ];
+  const corrigidos: number[] = [];
+  const marcados: unknown[] = [];
+  const host = {
+    protocolos: [],
+    __cache: new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]),
+    __daMesa: true,
+    __entrada: dfds,
+    esperaCentiMs: 0,
+    mapaEntidades: { "2": "2" },
+    carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
+    lerDfdCenti: async (plan: string) => {
+      if (plan === "22") throw new Error("NAO_ENCONTRADO: o planejamento 22 não existe nesta entidade da Centi.");
+      return { planejamento: plan, numero: "1", tipo: "DFD-S", objeto: "Outro objeto", valor: 10, totalItens: 1, situacao: "Aprovado" };
+    },
+    corrigirPelaCenti: async (id: number) => {
+      corrigidos.push(id);
+      return { resultado: "corrigido", status: "convergente", motivo: null };
+    },
+  };
+  const api = async (c: string, init?: unknown) => {
+    if (c.includes("conferencia-dfds")) {
+      marcados.push((init as { body: unknown }).body);
+      return { ok: true, marcados: 1, convergentes: 0, divergentes: 1 };
+    }
+    return { ok: true };
+  };
+  const r = await executarFluxo(g, REGISTRO_NOS, { centi: async () => ({ ok: true }), api, cancelado: () => false, host });
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.ok(marcados.length, "a reconferência marca os DFDs antes de corrigir");
+  assert.deepEqual(corrigidos, [1], "só o divergente reconferido e lido na Centi agora; o convergente nem entra");
 });

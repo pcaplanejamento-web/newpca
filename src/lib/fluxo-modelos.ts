@@ -437,6 +437,45 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       conexoes: [c("inicio1", "dfds1"), c("dfds1", "sel1"), c("sel1", "org1"), c("org1", "ler1"), c("org1", "err1", "semOrgao"), c("ler1", "sub1"), c("sub1", "err2", "erros")],
     },
   },
+  {
+    id: "corrigir-divergentes-centi",
+    nome: "Corrigir DFDs divergentes pela Centi",
+    descricao:
+      "Os DFDs DIVERGENTES da Centi numa tabela de seleção (nenhum vem marcado; vindo da Mesa, vale a seleção de lá): cada marcado é RECONFERIDO na Centi agora e, se continuar divergente, só o que diverge é trocado pelos dados da Centi — a mesma correção do “Usar a Centi em…” da Mesa.",
+    dependencias: ["conferir-1-dfd"],
+    ajuda: {
+      funciona:
+        "1) Lê os DFDs do sistema marcados Divergente na coluna “Centi”. 2) Você marca na tabela quais corrigir. 3) Cada marcado passa pelo “Conferir 1 DFD × Centi” (lido inteiro na Centi agora; o resultado e os dados da Centi ficam gravados). 4) Se continuar divergente, só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema. 5) A conferência é refeita. Divergência aceita, só de situação/órgão/nº, ou DFD não reconferido agora NÃO é alterado.",
+      executa:
+        "Com a extensão da Centi pronta: execute, marque os DFDs na tabela de seleção e execute de novo. Na Mesa do sistema, selecione os DFDs e toque em Automações → esta automação (marque “Disponível na Mesa” nas configurações dela).",
+      resultado:
+        "Os DFDs corrigidos (o histórico registra a edição e a conferência refeita — coluna “Centi” Convergente) e, na Análise, os que ficaram sem correção ou não foram corrigidos, com o motivo.",
+    },
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("div1", "dados.filtrar", 576, 160, { campo: "conferenciaCenti", operador: "igual", valor: "divergente" }),
+        n("sel1", "entrada.selecionar", 872, 160, { chave: "id", semMarcar: "nenhum" }),
+        n("conf1", "fluxo.executar", 1168, 160, { fluxoModelo: "conferir-1-dfd", modo: "porItem", paralelo: 3, retomar: false, chave: "id", limite: 20000 }),
+        n("corr1", "saida.corrigirPelaCenti", 1464, 160),
+        n("err1", "erros.apontar", 1464, 384, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não reconferido: {{subfluxo.erro}}", nivel: "erro" }),
+        n("err2", "erros.apontar", 1768, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não corrigido: {{erro}}", nivel: "erro" }),
+        n("err3", "erros.apontar", 1768, 32, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) sem correção: {{motivo}}", nivel: "atencao" }),
+      ],
+      conexoes: [
+        c("inicio1", "dfds1"),
+        c("dfds1", "div1"),
+        c("div1", "sel1"),
+        c("sel1", "conf1"),
+        c("conf1", "corr1"),
+        c("conf1", "err1", "falhas"),
+        c("corr1", "err2", "erros"),
+        c("corr1", "err3", "semMudanca"),
+      ],
+    },
+  },
 ];
 
 /** O grafo do modelo com os subfluxos (`fluxoModelo`) trocados pelos ids dos fluxos já criados (`criados`: modelo → id). */
