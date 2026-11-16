@@ -5,7 +5,7 @@ import { MarcaLink } from "@/components/MarcaSistema";
 import { FormCodigoTermo } from "@/components/VerificarArquivoTermo";
 import { getAparencia } from "@/lib/aparencia";
 import { declaracaoPorCodigo, seloConfereDeclaracao } from "@/lib/declaracoes";
-import { remanescente, textoDeclaracao } from "@/lib/declaracoes-core";
+import { linhasEmOrdem, remanescente, textoDeclaracao } from "@/lib/declaracoes-core";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { contarTentativa } from "@/lib/seguranca-acesso";
 import { codigoNormal } from "@/lib/termo-uso-core";
@@ -65,6 +65,12 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
                     <dd className="text-text">{c.protocoloCenti}</dd>
                   </>
                 )}
+                {c.processo && (
+                  <>
+                    <dt className="text-muted">Processo ou empenho</dt>
+                    <dd className="text-text">{c.processo}</dd>
+                  </>
+                )}
                 <dt className="text-muted">Emitida em</dt>
                 <dd className="text-text">
                   {dataHoraBR(d.emitidoEm)} (Brasília) · {c.emitente.nome}
@@ -75,10 +81,10 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
               <p className="text-[14px] leading-relaxed text-text-2">{textoDeclaracao(c)}</p>
               {/* No celular, um CARTÃO por item (a tabela de 9 colunas rolava de lado). */}
               <ul className="space-y-2 sm:hidden">
-                {c.linhas.map((l) => (
+                {linhasEmOrdem(c.linhas).map((l) => (
                   <li key={l.sequencial} className="rounded-card border border-border p-3 text-[13px]">
                     <p className="font-semibold text-text">
-                      Item {l.sequencial} · DFD {l.dfdNumero ?? "—"} · Planej. {l.planejamento ?? "—"}
+                      Sequencial {l.sequencial} · DFD {l.dfdNumero ?? "—"} · Planej. {l.planejamento ?? "—"}
                     </p>
                     <p className="mt-0.5 text-text-2">{l.descricao ?? "—"}</p>
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
@@ -107,7 +113,7 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
                 <table className="w-full min-w-[760px] text-[13px]">
                   <thead className="bg-surface-2 text-muted">
                     <tr>
-                      <th className="px-3 py-2 text-center font-medium">Item</th>
+                      <th className="px-3 py-2 text-center font-medium">Sequencial</th>
                       <th className="px-3 py-2 text-center font-medium">DFD</th>
                       <th className="px-3 py-2 text-center font-medium">Planejamento</th>
                       <th className="px-3 py-2 text-left font-medium">Descrição</th>
@@ -119,7 +125,7 @@ export default async function VerificarDeclaracaoPage({ params }: { params: Prom
                     </tr>
                   </thead>
                   <tbody>
-                    {c.linhas.map((l) => (
+                    {linhasEmOrdem(c.linhas).map((l) => (
                       <tr key={l.sequencial} className="border-t border-border">
                         <td className="px-3 py-2 text-center tabular-nums">{l.sequencial}</td>
                         <td className="px-3 py-2 text-center tabular-nums">{l.dfdNumero ?? "—"}</td>

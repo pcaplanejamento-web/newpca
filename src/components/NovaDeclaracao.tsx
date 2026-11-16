@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { type ConteudoDeclaracao, conferirPedido, FINALIDADES, type Finalidade, type ItemDeclaravel, itensParaEdicao, LIMITES_DECLARACAO, lerProtocoloCenti, saldoDe } from "@/lib/declaracoes-core";
 import { brl, num } from "@/lib/format";
 import { parseNumberBR } from "@/lib/normalize";
+import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { fmtNumEdit } from "./CampoCadeado";
@@ -70,7 +71,7 @@ export function NovaDeclaracao({
 }) {
   const c = edicao?.conteudo;
   const base = useMemo(() => (c ? itensParaEdicao(itens, c.linhas) : itens), [itens, c]);
-  const disponiveis = useMemo(() => base.filter((i) => saldoDe(i) > 0), [base]);
+  const disponiveis = useMemo(() => base.filter((i) => saldoDe(i) > 0).sort((a, b) => a.sequencial - b.sequencial), [base]);
   const porSeq = useMemo(() => new Map(disponiveis.map((i) => [i.sequencial, i])), [disponiveis]);
   const [finalidade, setFinalidade] = useState<Finalidade>(c?.finalidade ?? "inicio");
   const [finalidadeTexto, setFinalidadeTexto] = useState(c?.finalidadeTexto ?? "");
@@ -111,7 +112,7 @@ export function NovaDeclaracao({
   const mudarQtd = useCallback((seq: number, v: number | null) => setQtd((ant) => (ant.has(seq) ? new Map(ant).set(seq, v) : ant)), []);
 
   const colunas = useMemo<Column<ItemDeclaravel>[]>(() => {
-    // A escolha mostra o que decide (o item, a medida, o saldo e o campo) à vista; a origem vai ao fim.
+    // A escolha mostra o que decide (o sequencial, a medida, o saldo e o campo) à vista; a origem (DFD com o planejamento) vai ao fim.
     const id = new Map(colunasItemDeclaracao<ItemDeclaravel>().map((col) => [col.key, col]));
     const pega = (...ks: string[]) => ks.map((k) => id.get(k)).filter((col): col is Column<ItemDeclaravel> => !!col);
     return [
@@ -137,7 +138,7 @@ export function NovaDeclaracao({
           );
         },
       },
-      ...pega("vu", "sigla", "plan"),
+      ...pega("vu", "dfd", "prot", "sigla"),
     ];
   }, [qtd, mudarQtd]);
 
@@ -174,6 +175,7 @@ export function NovaDeclaracao({
       bloqueado={gravando}
       size="full"
       titulo={edicao ? `Editar declaração nº ${edicao.rotulo}` : "Nova declaração"}
+      acoesCabecalho={<AjudaNovaDeclaracao edicao={!!edicao} />}
       rodape={
         <div className="flex w-full flex-wrap items-center justify-between gap-[var(--gap-block)]">
           <div className="min-w-0 text-[13px]">
@@ -183,9 +185,20 @@ export function NovaDeclaracao({
             </span>
             {motivo && pedido.length > 0 && <span className="ml-2 text-danger">{motivo}</span>}
           </div>
+          <div className="flex items-center gap-1.5">
+          <Ajuda compacta titulo={edicao ? "Salvar alterações" : "Emitir declaração"}>
+            <p>
+              {edicao
+                ? "Grava a declaração com o conteúdo novo; o número, o código e a data de emissão continuam os mesmos."
+                : "Grava a declaração com o próximo número do ano e o código de verificação."}{" "}
+              Antes, a confirmação mostra quantos itens e o valor. Ela segue editável até o PDF ser exportado.
+            </p>
+            <p>O botão fica desabilitado enquanto falta algo: itens marcados, o protocolo da Centi ou a descrição da finalidade.</p>
+          </Ajuda>
           <Button size="sm" loading={gravando} disabled={!!motivo} title={motivo ?? undefined} onClick={gravar}>
             {edicao ? "Salvar alterações" : "Emitir declaração"}
           </Button>
+          </div>
         </div>
       }
     >
@@ -196,7 +209,15 @@ export function NovaDeclaracao({
           </Callout>
         )}
         <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-3">
-          <SelectField label="Finalidade" value={finalidade} onChange={(e) => setFinalidade(e.target.value as Finalidade)}>
+          <SelectField
+            label="Finalidade"
+            rotuloExtra={
+              <Ajuda compacta titulo="Finalidade">
+                <p>Para que a declaração é emitida: início da contratação, empenho complementar, aditivo, adesão a ata ou outra (descreva).</p>
+                <p>Sai na identificação do PDF.</p>
+              </Ajuda>
+            }
+            value={finalidade} onChange={(e) => setFinalidade(e.target.value as Finalidade)}>
             {FINALIDADES.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.rotulo}
@@ -205,6 +226,12 @@ export function NovaDeclaracao({
           </SelectField>
           <TextField
             label="Protocolo na Centi"
+            rotuloExtra={
+              <Ajuda compacta titulo="Protocolo na Centi">
+                <p>Obrigatório: o protocolo da Centi a que a declaração é vinculada.</p>
+                <p>Só números, com o ano opcional — ex.: 156844 ou 156844/2026.</p>
+              </Ajuda>
+            }
             value={protocoloCenti}
             maxLength={LIMITES_DECLARACAO.protocoloCenti}
             inputMode="numeric"
@@ -213,16 +240,43 @@ export function NovaDeclaracao({
             onChange={(e) => setProtocoloCenti(e.target.value)}
             placeholder="Ex.: 156844/2026"
           />
-          <TextField label="Processo ou empenho de referência" value={processo} maxLength={LIMITES_DECLARACAO.processo} onChange={(e) => setProcesso(e.target.value)} placeholder="Opcional" />
+          <TextField
+            label="Processo ou empenho de referência"
+            rotuloExtra={
+              <Ajuda compacta titulo="Processo ou empenho de referência">
+                <p>Opcional: o número do processo ou do empenho a que a declaração se refere. Sai na identificação do PDF.</p>
+              </Ajuda>
+            }
+            value={processo} maxLength={LIMITES_DECLARACAO.processo} onChange={(e) => setProcesso(e.target.value)} placeholder="Opcional" />
           {finalidade === "outra" && (
             <div className="sm:col-span-2 lg:col-span-3">
-              <TextField label="Qual finalidade" value={finalidadeTexto} maxLength={LIMITES_DECLARACAO.finalidadeTexto} onChange={(e) => setFinalidadeTexto(e.target.value)} placeholder="Ex.: renovação de contrato" />
+              <TextField
+                label="Qual finalidade"
+                rotuloExtra={
+                  <Ajuda compacta titulo="Qual finalidade">
+                    <p>Obrigatório com “Outra finalidade”: descreva em poucas palavras para que a declaração é emitida.</p>
+                  </Ajuda>
+                }
+                value={finalidadeTexto} maxLength={LIMITES_DECLARACAO.finalidadeTexto} onChange={(e) => setFinalidadeTexto(e.target.value)} placeholder="Ex.: renovação de contrato" />
             </div>
           )}
         </div>
-        <EditorRico compacto label="Observação" rotulo="Observação da declaração" valor={observacao} onChange={setObservacao} maxLength={LIMITES_DECLARACAO.observacao} placeholder="Opcional — sai no PDF" />
+        <EditorRico
+          compacto
+          label="Observação"
+          rotuloExtra={
+            <Ajuda compacta titulo="Observação">
+              <p>Opcional: texto livre que sai no PDF, na seção “Observação”. Aceita negrito, itálico, listas e links.</p>
+            </Ajuda>
+          }
+          rotulo="Observação da declaração" valor={observacao} onChange={setObservacao} maxLength={LIMITES_DECLARACAO.observacao} placeholder="Opcional — sai no PDF" />
+        <div className="flex items-center gap-1.5">
+          <p className="text-[13.5px] font-bold text-text">Itens com saldo</p>
+          <AjudaItens />
+        </div>
         <DataTable
           columns={colunas}
+          ordemInicial={{ key: "seq", dir: "asc" }}
           rows={disponiveis}
           getKey={(i) => i.sequencial}
           selectable
@@ -237,5 +291,35 @@ export function NovaDeclaracao({
       </div>
       {confirmacao}
     </Modal>
+  );
+}
+
+/** O (?) do cabeçalho: o passo a passo da tela. */
+function AjudaNovaDeclaracao({ edicao }: { edicao: boolean }) {
+  return (
+    <Ajuda titulo={edicao ? "Editar declaração" : "Nova declaração"}>
+      <TopicoAjuda titulo="1. Dados da declaração">A finalidade, o protocolo da Centi (obrigatório), o processo ou empenho e a observação.</TopicoAjuda>
+      <TopicoAjuda titulo="2. Itens">
+        Marque os itens do PCA com saldo, sempre pelo sequencial. Marcar já propõe o saldo inteiro; uma quantidade menor torna o item PARCIAL.
+      </TopicoAjuda>
+      <TopicoAjuda titulo={edicao ? "3. Salvar" : "3. Emitir"}>
+        {edicao ? "Salvar alterações" : "Emitir declaração"} grava depois da confirmação. Até o PDF ser exportado, a declaração pode ser editada; exportada, fica travada.
+      </TopicoAjuda>
+      {edicao && <TopicoAjuda titulo="Saldo na edição">O saldo de cada item conta sem o que esta própria declaração já declara.</TopicoAjuda>}
+    </Ajuda>
+  );
+}
+
+/** O (?) da tabela dos itens: o que é cada coluna e como marcar. */
+function AjudaItens() {
+  return (
+    <Ajuda compacta titulo="Itens com saldo">
+      <TopicoAjuda titulo="Marcar">A caixa da linha inclui o item na declaração; a do cabeçalho marca todos os filtrados.</TopicoAjuda>
+      <TopicoAjuda titulo="Sequencial">O número do item no PCA — identifica o item na declaração e define a ordem.</TopicoAjuda>
+      <TopicoAjuda titulo="No PCA · Saldo">A quantidade prevista no PCA e o que ainda pode ser declarado (sem o já declarado em outras declarações não canceladas).</TopicoAjuda>
+      <TopicoAjuda titulo="A declarar">A quantidade desta declaração (até o saldo). Menor que a do PCA = parcial. Vale ao sair do campo ou com Enter.</TopicoAjuda>
+      <TopicoAjuda titulo="DFD (planejamento)">O DFD de origem do item, com o item dele e o nº de planejamento; ao lado, o protocolo e a unidade.</TopicoAjuda>
+      <TopicoAjuda titulo="Filtros">Cada coluna filtra e ordena pelo título.</TopicoAjuda>
+    </Ajuda>
   );
 }

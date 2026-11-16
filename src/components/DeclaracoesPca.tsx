@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { baixarNoNavegador } from "@/lib/arquivo-navegador";
 import type { DeclaracaoCompleta, DeclaracaoResumo } from "@/lib/declaracoes";
-import { type ItemDeclaravel, type LinhaDeclaracao, LIMITES_DECLARACAO, remanescente, saldoDe } from "@/lib/declaracoes-core";
+import { type ItemDeclaravel, type LinhaDeclaracao, LIMITES_DECLARACAO, linhasEmOrdem, origemDfd, remanescente, saldoDe } from "@/lib/declaracoes-core";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "@/lib/format";
 import { FerramentasAba } from "./AbasEspaco";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -29,20 +29,23 @@ import { toast } from "./Toast";
 const NovaDeclaracao = dynamic(() => import("./NovaDeclaracao").then((m) => m.NovaDeclaracao), { ssr: false });
 const VisualizadorPdf = dynamic(() => import("./DocumentosView").then((m) => m.VisualizadorPdf), { ssr: false });
 
-type CamposItem = Pick<ItemDeclaravel, "sequencial" | "codigo" | "descricao" | "unidade" | "sigla" | "dfdNumero" | "planejamento" | "protocoloNumero" | "valorUnitario">;
+type CamposItem = Pick<ItemDeclaravel, "sequencial" | "codigo" | "descricao" | "unidade" | "sigla" | "dfdNumero" | "planejamento" | "itemNumero" | "protocoloNumero" | "valorUnitario">;
 
-/** As colunas de IDENTIFICAÇÃO do item (as mesmas na escolha dos itens e no detalhe da declaração). */
+/** As colunas de IDENTIFICAÇÃO do item (as mesmas na escolha dos itens e no detalhe da declaração): o SEQUENCIAL do PCA e o DFD sempre com o nº de planejamento. */
 export function colunasItemDeclaracao<R extends CamposItem>(): Column<R>[] {
   return [
-    { key: "seq", header: "Item", nowrap: true, value: (r) => String(r.sequencial), numero: (r) => r.sequencial, formatarFaixa: num, total: false, render: (r) => <span className="tabular-nums">{r.sequencial}</span> },
+    { key: "seq", header: "Sequencial", nowrap: true, value: (r) => String(r.sequencial), numero: (r) => r.sequencial, formatarFaixa: num, total: false, render: (r) => <span className="tabular-nums">{r.sequencial}</span> },
     {
-      key: "plan",
-      header: "Planejamento",
+      key: "dfd",
+      header: "DFD (planejamento)",
       nowrap: true,
-      value: (r) => r.planejamento ?? "—",
-      render: (r) => <CelulaCopiavel copiar={r.planejamento} rotulo="nº de planejamento">{r.planejamento ?? <span className="text-faint">—</span>}</CelulaCopiavel>,
+      value: (r) => origemDfd(r),
+      render: (r) => (
+        <CelulaCopiavel copiar={r.planejamento} rotulo="nº de planejamento">
+          {r.dfdNumero || r.planejamento ? origemDfd(r) : <span className="text-faint">—</span>}
+        </CelulaCopiavel>
+      ),
     },
-    { key: "dfd", header: "DFD", nowrap: true, value: (r) => r.dfdNumero ?? "—", render: (r) => r.dfdNumero ?? <span className="text-faint">—</span> },
     { key: "prot", header: "Protocolo", nowrap: true, value: (r) => r.protocoloNumero ?? "—", render: (r) => r.protocoloNumero ?? <span className="text-faint">—</span> },
     { key: "sigla", header: "Unidade", nowrap: true, value: (r) => r.sigla ?? "—", render: (r) => r.sigla ?? <span className="text-faint">—</span> },
     {
@@ -565,7 +568,8 @@ function DetalheDeclaracao({
           </dl>
           <DataTable
             columns={colunasLinha}
-            rows={c.linhas}
+            rows={linhasEmOrdem(c.linhas)}
+            ordemInicial={{ key: "seq", dir: "asc" }}
             getKey={(l) => l.sequencial}
             density="compact"
             linhasSalvas="declaracao-itens"

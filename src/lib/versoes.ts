@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.0",
+    data: "2026-11-16",
+    titulo: "Declarações mais claras",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "O PDF da declaração sem informação repetida: o atestado curto, a identificação, os itens e uma tabela só de quantidades e valores com o total.",
+        link: "/painel/pca?aba=declaracoes",
+      },
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "Os itens da declaração sempre pelo SEQUENCIAL do PCA (coluna “Sequencial”), com o DFD acompanhado do nº de planejamento — no PDF, nas tabelas e na verificação pública.",
+        link: "/painel/pca?aba=declaracoes",
+      },
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "Nova declaração: ajuda (?) em cada campo, na tabela de itens, no botão de emitir e o passo a passo no cabeçalho.",
+        link: "/painel/pca?aba=declaracoes",
+      },
+    ],
+  },
+  {
     versao: "1.294.2",
     data: "2026-11-16",
     titulo: "Reconferir da Mesa só confere",

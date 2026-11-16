@@ -16,7 +16,9 @@ import {
   lerProtocoloCenti,
   limparObservacao,
   limparTextoDeclaracao,
+  linhasEmOrdem,
   montarConteudo,
+  origemDfd,
   remanescente,
   rotuloNumero,
   saldoDe,
@@ -105,9 +107,9 @@ describe("declarações do PCA — núcleo", () => {
     assert.equal(c.valorTotal, 52.5);
     assert.equal(c.totalItens, 1);
     const t = textoDeclaracao(c);
-    assert.match(t, /o item relacionado abaixo consta do Plano de Contratações Anual \(PCA\) 2027/);
-    assert.match(t, /emissão de empenho complementar, vinculada ao protocolo nº 156844\/2026 do sistema Centi, no âmbito do processo ou empenho nº 123\/2027\./);
-    assert.match(t, /PARCIAL para 1 item/);
+    assert.match(t, /o item relacionado abaixo, identificado pelo sequencial do PCA, consta do Plano de Contratações Anual \(PCA\) 2027/);
+    // O atestado não repete o que está na identificação (finalidade, protocolo, processo, parciais).
+    assert.doesNotMatch(t, /156844|123\/2027|empenho complementar|PARCIAL/);
     assert.equal(rotuloNumero(7, 2026), "007/2026");
     assert.equal(dataPorExtenso("2026-10-28 15:00:00"), "28 de outubro de 2026");
     assert.equal(dataPorExtenso("2026-10-29 01:30:00"), "28 de outubro de 2026"); // 22h30 em Brasília
@@ -120,20 +122,37 @@ describe("declarações do PCA — núcleo", () => {
     assert.ok(blocos.some((b) => b.tipo === "paragrafo" && b.texto === "Assinado e datado digitalmente."));
     // Títulos das colunas por EXTENSO (nada abreviado) e os dados de cada item: origem, previsto, já declarado, remanescente.
     const tabelas = blocos.filter((b) => b.tipo === "tabela");
-    assert.equal(tabelas.length, 4);
-    for (const tb of tabelas) for (const col of tb.tipo === "tabela" ? tb.colunas : []) assert.doesNotMatch(col.titulo, /\.|Qtd|Vlr|Seq/, col.titulo);
+    assert.equal(tabelas.length, 3);
+    for (const tb of tabelas) for (const col of tb.tipo === "tabela" ? tb.colunas : []) assert.doesNotMatch(col.titulo, /\.|Qtd|Vlr|Seq\b/, col.titulo);
+    const itensTb = tabelas[1].tipo === "tabela" ? tabelas[1] : null;
+    assert.equal(itensTb?.colunas[0].titulo, "Sequencial");
+    assert.equal(itensTb?.linhas[0].celulas[4], "1209 · item 1 (Planej. 1509)"); // o DFD com o nº de planejamento
     const quant = tabelas[2].tipo === "tabela" ? tabelas[2] : null;
-    assert.deepEqual(quant?.linhas[0].celulas.slice(2), ["12", "0", "6 (parcial)", "6"]);
-    const valores = tabelas[3].tipo === "tabela" ? tabelas[3] : null;
-    assert.equal(valores?.linhas[1].celulas[4], brl(52.5)); // o valor remanescente (TOTAL)
+    assert.deepEqual(quant?.linhas[0].celulas.slice(1, 5), ["12", "0", "6 (parcial)", "6"]);
+    assert.equal(quant?.linhas[1].celulas[6], brl(52.5)); // o TOTAL declarado
     const ident = tabelas[0].tipo === "tabela" ? tabelas[0] : null;
     assert.ok(ident?.linhas.some((l) => l.celulas[0] === "Protocolo vinculado (Centi)" && l.celulas[1] === "156844/2026"));
+    // Sem redundância: cada dado uma vez (o valor total só no TOTAL; a data só no local e data e no registro).
+    assert.ok(!ident?.linhas.some((l) => /Valor total|Data da emissão/.test(l.celulas[0])));
+    const textos = blocos.flatMap((b) => (b.tipo === "paragrafo" ? [b.texto] : []));
+    assert.equal(textos.filter((x) => /14\.133/.test(x)).length, 1);
     const previa = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: null, previa: true });
     assert.equal(previa[0].tipo === "nota" && /PRÉVIA/.test(previa[0].texto), true);
     const cancel = blocosDeclaracao(c, { numero: 1, ano: 2026, codigo: "ABCD", selo: "x", emitidoEm: r.emitidoEm, urlVerificacao: "u", cancelada: { em: r.emitidoEm, por: "B", motivo: "erro" }, previa: false });
     assert.equal(cancel[0].tipo, "nota");
     assert.equal(limparTextoDeclaracao("  a\u0007​  b  ", 10), "a b");
     assert.equal(limparTextoDeclaracao("   ", 10), null);
+  });
+
+  it("itens sempre pelo sequencial e o DFD com o planejamento", () => {
+    const fora = [{ sequencial: 9 }, { sequencial: 2 }, { sequencial: 5 }];
+    assert.deepEqual(linhasEmOrdem(fora).map((l) => l.sequencial), [2, 5, 9]);
+    assert.deepEqual(fora.map((l) => l.sequencial), [9, 2, 5]); // não muda o original
+    assert.equal(origemDfd({ dfdNumero: "1209", planejamento: "1509", itemNumero: null }), "1209 (Planej. 1509)");
+    assert.equal(origemDfd({ dfdNumero: null, planejamento: "1509", itemNumero: null }), "Planej. 1509");
+    assert.equal(origemDfd({ dfdNumero: null, planejamento: null, itemNumero: null }), "—");
+    const { linhas } = conferirPedido([{ sequencial: 7, quantidade: 1 }, { sequencial: 3, quantidade: 1 }], [item(3, 5), item(7, 5)]);
+    assert.deepEqual(linhas.map((l) => l.sequencial), [3, 7]);
   });
 
   it("protocolo da Centi e o remanescente (retrato antigo sem o já declarado = sem remanescente)", () => {

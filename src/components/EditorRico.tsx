@@ -192,6 +192,7 @@ export function EditorRico({
   mensagem = false,
   controle,
   label,
+  rotuloExtra,
   hint,
 }: {
   valor: string;
@@ -212,6 +213,8 @@ export function EditorRico({
   controle?: Ref<ControleEditor>;
   /** O rótulo VISÍVEL acima do campo (num formulário, como o dos outros campos); sem ele, só o `rotulo` acessível. */
   label?: string;
+  /** Ao lado do rótulo (ex.: a `Ajuda compacta`), como nos outros campos. */
+  rotuloExtra?: ReactNode;
   /** A dica abaixo do campo. */
   hint?: ReactNode;
 }) {
@@ -476,9 +479,12 @@ export function EditorRico({
   return (
     <div className="relative">
     {label && (
-      <p id={idLabel} className="mb-2 block text-[13.5px] font-bold text-text">
-        {label}
-      </p>
+      <div className="mb-2 flex items-center gap-1.5">
+        <p id={idLabel} className="text-[13.5px] font-bold text-text">
+          {label}
+        </p>
+        {rotuloExtra}
+      </div>
     )}
     <div className={`overflow-hidden rounded-card border bg-surface transition-shadow ${focado ? "border-accent shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : "border-border-2"}`}>
       {/* A BARRA: as ferramentas mais usadas primeiro (negrito, itálico, listas, link), depois o estilo do parágrafo e o
