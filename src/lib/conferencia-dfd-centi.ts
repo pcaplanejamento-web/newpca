@@ -397,7 +397,9 @@ export function difsIdentidadeCenti(d: DfdConferido, x: ResumoCenti): string[] {
 /** O retrato guardado: o DFD da Centi COMO LIDO (sem as assinaturas — a do sistema é a validada) + o que a conferência
  * usou (situação, órgãos, opções) — refazer a conferência com ele dá o MESMO resultado da automação. */
 export type RetratoCenti = {
-  v: 1;
+  /** 2 = CONFIRMADO por duas emissões independentes da Centi com o mesmo conteúdo (`assinaturaDfdCenti`). Os de antes
+   * (v 1) podem ter dados de OUTRO registro misturados (a sessão da Centi intercalada) — não valem mais. */
+  v: 2;
   dfd: DfdParseado;
   situacao: string;
   entidade: string;
@@ -414,7 +416,7 @@ export const MAX_RETRATO = 1_500_000;
 export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdParseado, o: { objeto: boolean; tolerancia: number }): RetratoCenti {
   const { assinaturas: _a, ...resto } = dfdCenti;
   return {
-    v: 1,
+    v: 2,
     dfd: { ...resto, assinaturas: [] },
     situacao: str(x.situacao),
     entidade: str(d.entidade),
@@ -424,6 +426,33 @@ export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdPars
     tipoCenti: str(x.tipo) || null,
     numeroCenti: str(x.numero) || null,
   };
+}
+
+/**
+ * O CONTEÚDO de um DFD lido na Centi (cabeçalho, seções e itens, sem assinaturas nem nome do arquivo) — duas emissões do
+ * MESMO planejamento têm de dar a mesma assinatura. Diferente = a Centi misturou outro registro (a sessão dela é uma só)
+ * e nada dessa leitura pode corrigir o sistema. Pura.
+ */
+export function assinaturaDfdCenti(d: DfdParseado): string {
+  const t = (v: unknown) => str(v).replace(/\s+/g, " ").trim();
+  return JSON.stringify([
+    t(d.numero),
+    t(d.planejamento),
+    t(d.tipo),
+    t(d.objeto),
+    t(d.orgaoEntidade),
+    t(d.setorRequisitante),
+    t(d.responsavel),
+    t(d.matricula),
+    t(d.email),
+    t(d.telefone),
+    t(d.numeroContrato),
+    t(d.numeroAta),
+    t(d.numeroLicitacao),
+    d.valorTotal ?? null,
+    (d.secoes ?? []).map((x) => [t(x.titulo), t(x.texto)]),
+    (d.itens ?? []).map((x) => [x.item ?? null, t(x.codigo), t(x.descricao), t(x.unidade), x.quantidade ?? null, x.valorUnitario ?? null, x.valorTotal ?? null]),
+  ]);
 }
 
 /** O retrato em texto para gravar; `null` acima do teto. */
@@ -438,9 +467,11 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
   try {
     const r = JSON.parse(t) as Partial<RetratoCenti>;
     const d = r?.dfd as DfdParseado | undefined;
-    if (r?.v !== 1 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
+    // Só o retrato CONFIRMADO (v 2) e lido no PRÓPRIO órgão do DFD: o de antes pode ter dados de outro registro misturados.
+    if (r?.v !== 2 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
+    if (str(r.entidadeAchada) && str(r.entidadeAchada) !== str(r.entidade)) return null;
     return {
-      v: 1,
+      v: 2,
       dfd: { ...d, assinaturas: [] },
       situacao: str(r.situacao),
       entidade: str(r.entidade),

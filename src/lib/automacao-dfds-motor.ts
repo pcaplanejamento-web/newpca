@@ -136,9 +136,24 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
   return { j: l.j };
 }
 
+/**
+ * A SESSÃO da Centi é uma só (o Emitir DFD usa o registro aberto por último): load → emissão → download de um DFD nunca
+ * podem intercalar com os de outro — nem de OUTRA aba do sistema (o vigia do agendador, outra execução), que usa a mesma
+ * aba da Centi pela extensão. A trava `navigator.locks` vale entre todas as abas do sistema no navegador; sem ela (testes,
+ * navegador antigo), só a fila da aba. Quem já está dentro da trava NUNCA chama de novo (a trava não é reentrante).
+ */
+export async function comSessaoCenti<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = (globalThis as { navigator?: { locks?: { request: (nome: string, f: () => Promise<T>) => Promise<T> } } }).navigator?.locks;
+  return locks ? locks.request("centi-sessao", fn) : fn();
+}
+
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
- * load já feito por quem chama (sem ele, o load é feito aqui). */
+ * load já feito por quem chama — DENTRO da mesma `comSessaoCenti` (sem ele, o load é feito aqui, na trava). */
 export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
+  return carregado ? emitirNaSessao(c, id, entidade, deNovo, carregado) : comSessaoCenti(() => emitirNaSessao(c, id, entidade, deNovo));
+}
+
+async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
   // Como a tela da Centi: carrega o planejamento ANTES do Emitir DFD (sem o load, "Usuário sem permissão!").
   let load = carregado;
   if (!load) {
@@ -158,7 +173,7 @@ export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string
     }
     if (!deNovo) {
       const e = await c.pedir("estado", null, 8000);
-      if (e.ok && c.aplicarOperacao(e.operacao)) return emitirUm(c, id, entidade, true, load);
+      if (e.ok && c.aplicarOperacao(e.operacao)) return emitirNaSessao(c, id, entidade, true, load);
     }
     return { erro: `A Centi negou a emissão do DFD do planejamento ${id}${onde}: “Usuário sem permissão!”.`, amostra: a.amostra, recusada: true };
   }
@@ -261,7 +276,7 @@ export async function anexarPelaPlataforma(
     const a = await autorizarEscrita(execucaoId, passo);
     if ("erro" in a) return { ok: false, erro: a.erro };
     if ("jaFeito" in a) return { ok: true, jaAnexado: true, documento: a.centiDocumento ?? undefined };
-    return d.pedir("anexar", { ...dados, ...extra, autorizacao: { token: a.token } }, 320_000);
+    return comSessaoCenti(() => d.pedir("anexar", { ...dados, ...extra, autorizacao: { token: a.token } }, 320_000));
   };
   let r = await uma({});
   if (!r.ok && r.confirmar) {
@@ -287,7 +302,7 @@ export async function testarAnexo(d: { pedir: Pedir; confirmar: (texto: string) 
   try {
     if (!alvo.numero) {
       // Só pelo Id: o nº e o ano vêm da Centi antes do anexo (que confere Id + nº).
-      const r = await d.pedir("protocolo", alvo, 60_000);
+      const r = await comSessaoCenti(() => d.pedir("protocolo", alvo, 60_000));
       if (!(r.ok && r.protocolo)) return { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
       alvo = { ...alvo, numero: r.protocolo.numero, ano: r.protocolo.ano || null };
     }
@@ -415,7 +430,7 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
     porIdFinal = porId;
     for (const [id, al] of porId) {
       if (d.interrompido()) break;
-      const r = await d.pedir("protocolo", al, 60_000);
+      const r = await comSessaoCenti(() => d.pedir("protocolo", al, 60_000));
       if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) {
         naCenti.set(id, docsPorDescricao(r.protocolo.docs));
         naCentiSuportado = true;
@@ -611,7 +626,7 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
     andamento("Conferindo na Centi o que foi anexado");
     const docsFinais = new Map<string, Map<string, DocCenti>>();
     for (const [id, al] of porIdFinal) {
-      const r = await d.pedir("protocolo", al, 60_000).catch(() => ({ ok: false }) as RespostaExt);
+      const r = await comSessaoCenti(() => d.pedir("protocolo", al, 60_000)).catch(() => ({ ok: false }) as RespostaExt);
       if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) docsFinais.set(id, docsPorDescricao(r.protocolo.docs));
     }
     let ok = 0;

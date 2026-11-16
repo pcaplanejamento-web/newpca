@@ -60,7 +60,7 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
   const j2 = await lerJson<{ retrato?: RetratoCenti | null }>(r2);
   if (!r2.ok || !j2.ok) throw new Error(j2.error ?? "não foi possível ler os dados da Centi");
-  if (!j2.retrato) throw new Error("sem os dados da Centi guardados — atualize o “Conferir 1 DFD × Centi” pelo modelo e execute de novo");
+  if (!j2.retrato || j2.retrato.v !== 2) throw new Error("sem os dados da Centi CONFIRMADOS (dupla leitura no próprio órgão) — reconfira o DFD na Centi e execute de novo");
   const g = detalheParaParseado(o);
   const plano = planoCorrecao(g, j2.retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
   // A automação (`tipos` null) corrige TODA divergência do retrato — não só as que couberam no motivo gravado.
@@ -72,7 +72,7 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   const r3 = await busca(`/api/dfd/${id}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...body, atualizadoEmLido: o.atualizadoEm ?? undefined }),
+    body: JSON.stringify({ ...body, atualizadoEmLido: o.atualizadoEm ?? undefined, origem: "centi" }),
   });
   const j3 = await lerJson<object>(r3);
   if (!r3.ok || !j3.ok) throw new Error(j3.error ?? `não foi possível gravar (HTTP ${r3.status})`);

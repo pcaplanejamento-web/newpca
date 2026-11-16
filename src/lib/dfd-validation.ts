@@ -278,6 +278,8 @@ export const editarDfdSchema = z
     telefone: textoCurtoOpc,
     // Quando o banner leu o DFD — diferente do gravado = 409 (outra pessoa salvou antes).
     atualizadoEmLido: z.string().max(40).optional(),
+    // A correção pelos dados da Centi (automação/massa): o histórico a mostra como "Automação Centi".
+    origem: z.enum(["centi"]).optional(),
   })
   .refine(
     (d) =>

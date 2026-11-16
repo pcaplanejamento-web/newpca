@@ -78,7 +78,7 @@ import { tokenPx } from "../espacamento";
 import { duracaoMotionMs } from "../Modal";
 import { SombraGrade, useArrastoGrade } from "../PastasQuadros";
 import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
-import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, previaDfds, testarAnexo } from "@/lib/automacao-dfds-motor";
+import { andamentoDfds, comSessaoCenti, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, previaDfds, testarAnexo } from "@/lib/automacao-dfds-motor";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -706,7 +706,7 @@ export function FluxosAutomacao({
       reparticoes: { ...reps, buscar: () => void buscarReparticoes() },
       colunasCm002: { ...colsCm002, buscar: () => void buscarColunasCm002() },
       conferirAlvo: async (al) => {
-        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: ProtocoloCenti };
+        const r = (await comSessaoCenti(() => pedir("protocolo", al, 60_000))) as { ok?: boolean; erro?: string; protocolo?: ProtocoloCenti };
         return r.ok && r.protocolo ? { protocolo: r.protocolo } : { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
       },
       testarAnexo: async (al, tipo) => {

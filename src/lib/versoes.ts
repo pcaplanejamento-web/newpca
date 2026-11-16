@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.7",
+    data: "2026-11-16",
+    titulo: "Correção pela Centi só com dados confirmados",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A Centi podia devolver um DFD com seções de OUTRO registro misturadas (ex.: equipe e autorização do Fundo de Saúde num DFD do Gabinete) quando outra aba carregava outro planejamento no meio da emissão — e a correção trocava dados certos por errados. Agora a sessão da Centi é travada entre todas as abas, a leitura achada em outro órgão nunca corrige e um DFD divergente só guarda os dados da Centi depois de duas emissões com o MESMO conteúdo; senão fica “não conferido” e nada é gravado. Vale também para o “Substituir DFD pela Centi”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto:
+          "Os dados da Centi guardados antes desta versão não valem mais para corrigir (“Usar os dados da Centi”, correção em massa e automação): reconfira os DFDs divergentes na Centi. A correção automática aparece no histórico como “Automação Centi”.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.295.6",
     data: "2026-11-16",
     titulo: "Correção pela Centi DFD a DFD",

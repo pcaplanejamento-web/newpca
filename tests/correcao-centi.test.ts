@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chaveMotivo, conferenciaDoRetrato, montarRetrato, tiposDoMotivo } from "../src/lib/conferencia-dfd-centi.ts";
+import { assinaturaDfdCenti, chaveMotivo, conferenciaDoRetrato, lerRetrato, montarRetrato, textoRetrato, tiposDoMotivo } from "../src/lib/conferencia-dfd-centi.ts";
 import { executarFluxo, type Grafo, lerGrafo, marcadosDuplicados } from "../src/lib/fluxo-core.ts";
 import { grafoDoModelo, MODELOS_FLUXO } from "../src/lib/fluxo-modelos.ts";
 import { corrigirDfdPelaCenti } from "../src/lib/correcao-centi-cliente.ts";
@@ -225,7 +225,7 @@ test("corrigir DFD pela Centi: convergente, aceito ou só tipos não corrigívei
 });
 
 test("corrigir DFD pela Centi: sem retrato, Centi sem itens ou PATCH recusado — lança e não refaz a conferência", async () => {
-  await assert.rejects(corrigirDfdPelaCenti(9, null, servidor({ status: "divergente", retrato: null }).busca), /sem os dados da Centi guardados/);
+  await assert.rejects(corrigirDfdPelaCenti(9, null, servidor({ status: "divergente", retrato: null }).busca), /sem os dados da Centi CONFIRMADOS/);
   const vazio = { ...centiDivergente(), itens: [] };
   const sv = servidor({ status: "divergente", centi: vazio });
   await assert.rejects(corrigirDfdPelaCenti(9, null, sv.busca), /a Centi não tem itens/);
@@ -646,4 +646,114 @@ test("nó Corrigir com “Não corrigido para o fluxo”: o não corrigido faz o
   assert.equal((ok as Record<string, unknown[]>).corrigidos.length, 1);
   const sem = await def.executar({ entrada: [it] }, {}, ctx("parcial"), {});
   assert.equal((sem as Record<string, unknown[]>).erros.length, 1, "desligado: vai à porta Não corrigidos");
+});
+
+// ——— O caso do DFD 1023 (Planej. 1078): a Centi devolveu as seções 8 e 9 de OUTRO registro (o Fundo de Saúde) e a
+// correção trocaria SOLANGE/VANIA (corretos) por SANDRA/THIAGO. Nenhuma leitura assim pode virar base de correção.
+const comSecoes = (d: DfdParseado, equipe: string, autoriza: string): DfdParseado => ({
+  ...d,
+  secoes: [
+    ...d.secoes,
+    { numero: 8, titulo: "8 - INDICAÇÃO DO(S) INTEGRANTE(S) DA EQUIPE DE PLANEJAMENTO E RESPONSÁVEL PELA FISCALIZAÇÃO", texto: `Integrantes Equipe: Nome: ${equipe}` },
+    { numero: 9, titulo: "9 - AUTORIZAÇÃO DEMANDA", texto: `Autorizo o início da formalização da demanda. ${autoriza}` },
+  ],
+});
+const sistema1023 = () => comSecoes(base(), "SOLANGE OLIVEIRA CARVALHO DAMASIO", "VANIA MARIA DA SILVA CHEFE DE GABINETE DO PREFEITO");
+const misturado1023 = () => comSecoes(base(), "SANDRA LUCIA BRITO DE ALMEIDA LACERDA", "THIAGO DOS SANTOS SOUZA SECRETÁRIO MUNICIPAL DE SAÚDE");
+
+async function rodarUmDfd(leituras: DfdParseado[], extra: Record<string, unknown> = {}) {
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
+  assert.ok(filho);
+  const dfds = [{ id: 9, numero: "123", planejamento: "456", entidade: "1", ...extra }];
+  let n = 0;
+  const corrigidos: number[] = [];
+  const marcados: { dfdId: number; status: string; retrato?: string }[] = [];
+  const host = {
+    __cache: new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]),
+    __entrada: dfds,
+    esperaCentiMs: 0,
+    mapaEntidades: { "1": "1" },
+    dfdDoSistema: async () => ({ ...comparavel(sistema1023()), id: 9 }),
+    lerDfdCenti: async (plan: string) => {
+      const d = leituras[Math.min(n++, leituras.length - 1)];
+      return { planejamento: plan, numero: "123", tipo: "DFD-S", situacao: "Aprovado", dfd: d };
+    },
+    corrigirPelaCenti: async (id: number) => {
+      corrigidos.push(id);
+      return { resultado: "corrigido", status: "convergente", motivo: null };
+    },
+  };
+  const api = async (c: string, init?: unknown) => {
+    if (c.includes("conferencia-dfds")) marcados.push(...((init as { body: { itens: typeof marcados } }).body.itens));
+    return { ok: true, marcados: 1 };
+  };
+  const r = await executarFluxo(lerGrafo(filho.grafo), REGISTRO_NOS, { centi: async () => ({ ok: true }), api, cancelado: () => false, host });
+  return { r, corrigidos, marcados, leituras: n };
+}
+
+test("DFD 1023: a Centi misturou outro registro numa emissão — NÃO corrige, NÃO guarda os dados, o DFD fica não conferido", async () => {
+  const x = await rodarUmDfd([misturado1023(), sistema1023()]);
+  assert.equal(x.leituras, 2, "a divergência foi confirmada com uma segunda emissão");
+  assert.deepEqual(x.corrigidos, [], "nada foi gravado no DFD");
+  assert.ok(!x.marcados.some((m) => m.retrato), "nenhum retrato guardado");
+  assert.ok(!x.marcados.some((m) => m.status === "divergente"), "a conferência gravada não muda");
+  assert.equal(x.r.estado, "falhou", "o fluxo de UM DFD falha — o pai refaz na próxima execução");
+  assert.match(String(x.r.erro), /conteúdos diferentes em duas emissões/);
+});
+
+test("DFD com divergência REAL (as duas emissões iguais): guarda o retrato confirmado (v 2) e corrige", async () => {
+  const x = await rodarUmDfd([misturado1023(), misturado1023()]);
+  assert.equal(x.r.estado, "concluido", x.r.erro);
+  assert.deepEqual(x.corrigidos, [9]);
+  const m = x.marcados.find((y) => y.status === "divergente");
+  assert.ok(m?.retrato);
+  assert.equal(lerRetrato(m.retrato)?.v, 2);
+});
+
+test("lido em OUTRO órgão da Centi: nunca guarda o retrato nem corrige", async () => {
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
+  assert.ok(filho);
+  const no = REGISTRO_NOS.get("dados.compararDfdCenti");
+  const corr = REGISTRO_NOS.get("saida.corrigirPelaCenti");
+  assert.ok(no && corr);
+  const host: Record<string, unknown> = { dfdDoSistema: async () => ({ ...comparavel(sistema1023()), id: 9 }), lerDfdCenti: async () => ({ dfd: misturado1023() }) };
+  const ctx = { host, cancelado: () => false, aviso: () => undefined } as unknown as Parameters<typeof no.executar>[2];
+  const it = { id: 9, numero: "123", planejamento: "456", entidade: "1", entidadeAchada: "2", centi: { numero: "123", tipo: "DFD-S", situacao: "Aprovado", dfd: misturado1023() } };
+  const r = (await no.executar({ entrada: [it] }, {}, ctx, {})) as { divergentes: Record<string, unknown>[] };
+  assert.equal((host.__retratosCenti as Map<number, string>).size, 0);
+  const c = (await corr.executar({ entrada: r.divergentes }, {}, { ...ctx, host: { ...host, corrigirPelaCenti: async () => assert.fail("não pode corrigir") } } as typeof ctx, {})) as {
+    erros: Record<string, unknown>[];
+  };
+  assert.match(String(c.erros[0]?.erro), /outro órgão|órgão 2/);
+});
+
+test("retrato antigo (sem a dupla leitura) ou de outro órgão não vale; a assinatura do conteúdo pega a troca das seções", () => {
+  const t = textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "1" }, { situacao: "Aprovado" }, misturado1023(), { objeto: true, tolerancia: 0.01 }));
+  assert.ok(t && lerRetrato(t));
+  assert.equal(lerRetrato(t.replace('"v":2', '"v":1')), null);
+  const outro = textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "1", entidadeAchada: "2" }, { situacao: "Aprovado" }, misturado1023(), { objeto: true, tolerancia: 0.01 }));
+  assert.equal(lerRetrato(outro), null);
+  assert.notEqual(assinaturaDfdCenti(sistema1023()), assinaturaDfdCenti(misturado1023()));
+  assert.equal(assinaturaDfdCenti(misturado1023()), assinaturaDfdCenti({ ...misturado1023(), assinaturas: [], nomeArquivo: "outro.pdf" }));
+});
+
+test("Substituir DFD pela Centi: sem a segunda emissão igual, nada é gravado", async () => {
+  const no = REGISTRO_NOS.get("saida.substituirDfd");
+  assert.ok(no);
+  let n = 0;
+  const gravados: number[] = [];
+  const host = {
+    lerDfdCenti: async () => ({ dfd: n++ === 0 ? sistema1023() : misturado1023() }),
+    substituirDfd: async (id: number) => {
+      gravados.push(id);
+      return { numero: "123", itens: 2 };
+    },
+  };
+  const ctx = { host, cancelado: () => false, aviso: () => undefined } as unknown as Parameters<typeof no.executar>[2];
+  const it = { id: 9, numero: "123", planejamento: "456", entidade: "1", centi: { dfd: misturado1023() } };
+  const r = (await no.executar({ entrada: [it] }, {}, ctx, {})) as { erros: Record<string, unknown>[] };
+  assert.deepEqual(gravados, []);
+  assert.match(String(r.erros[0]?.erro), /conteúdos diferentes/);
+  const ok = (await no.executar({ entrada: [it] }, {}, ctx, {})) as { substituidos: unknown[] };
+  assert.equal(ok.substituidos.length, 1, "a segunda emissão igual confirma");
 });

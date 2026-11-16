@@ -42,8 +42,8 @@ export function useCorrecaoCenti({
       const j = (await r.json().catch(() => ({}))) as Retorno;
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível ler os dados guardados da Centi.");
       if (atual.current !== dfdId) return;
-      if (!j.retrato)
-        throw new Error("Os dados da Centi deste DFD não estão guardados — reconfira na Centi (a conferência passa a guardá-los) e tente de novo.");
+      if (!j.retrato || j.retrato.v !== 2)
+        throw new Error("Não há dados da Centi CONFIRMADOS para este DFD (os guardados antes da dupla leitura não valem mais, ou a leitura foi achada em outro órgão) — reconfira na Centi e tente de novo.");
       const id = dfdId;
       setCenti({
         dfdId: id,

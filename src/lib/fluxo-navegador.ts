@@ -4,7 +4,7 @@
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
 import { analisarRespostaCenti, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
-import { carregarPlanejamento, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
+import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
@@ -106,6 +106,11 @@ export async function lerDfdCentiPorCodigo(
 ): Promise<Item> {
   const plan = s(planejamento).replace(/\D/g, "");
   if (!plan) throw new Error("O DFD não tem nº de planejamento.");
+  // Load e emissão na MESMA trava da sessão da Centi (nenhuma outra aba carrega outro registro no meio).
+  return comSessaoCenti(() => lerNaSessao(c, plan, entidade, comPdf, completo, ocr));
+}
+
+async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | undefined, comPdf: boolean, completo: boolean, ocr: boolean): Promise<Item> {
   const l = await carregarPlanejamento(c, plan, entidade || undefined);
   if ("erro" in l) throw new Error(l.erro);
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);

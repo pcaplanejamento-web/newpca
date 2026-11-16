@@ -48,6 +48,7 @@ import {
   diferencasDfdCenti,
   difsIdentidadeCenti,
   MAX_MOTIVO_CENTI,
+  assinaturaDfdCenti,
   montarRetrato,
   motivoDivergencias,
   SEPARADOR_DIVERGENCIAS,
@@ -185,6 +186,22 @@ async function lerPlanejamentosPeloId(
   );
   return lidos; // cancelado = os não começados ficam `undefined`
 }
+/**
+ * CONFIRMA a leitura de um DFD na Centi antes de ela gravar qualquer coisa no sistema: lido no PRÓPRIO órgão do DFD e uma
+ * SEGUNDA emissão (na trava da sessão) com o mesmo conteúdo (`assinaturaDfdCenti`). Lança com o motivo — nada é gravado.
+ */
+export async function confirmarLeituraCenti(it: Item, dfd: DfdParseado, ctx: Pick<ContextoNo, "host" | "cancelado" | "aviso">): Promise<void> {
+  if (str(it.entidadeAchada) && str(it.entidadeAchada) !== str(it.entidade))
+    throw new Error(`Achado na Centi no órgão ${str(it.entidadeAchada)}, não no do DFD — nada foi gravado; confira o órgão do DFD.`);
+  const reler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean, ocr?: boolean) => Promise<Item>) | undefined;
+  if (!reler) throw new Error("Sem a segunda leitura na Centi — nada foi gravado.");
+  ctx.aviso(`Confirmando os dados da Centi do DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) — segunda leitura…`);
+  const y = await lerNaCenti(() => reler(str(it.planejamento), str(it.entidade) || undefined, true, true, false), ctx);
+  const d2 = (y?.dfd as unknown as DfdParseado | undefined) ?? null;
+  if (!d2 || assinaturaDfdCenti(dfd) !== assinaturaDfdCenti(d2))
+    throw new Error("A Centi devolveu conteúdos diferentes em duas emissões do mesmo planejamento (dados de outro registro misturados) — nada foi gravado; confira de novo.");
+}
+
 /** O load do planejamento falhou na Centi (não abriu nesse órgão). */
 const naoAbriu = (msg: string) => /n[aã]o consegui abrir o planejamento/i.test(msg);
 /** As OUTRAS entidades da Centi a tentar (os IDs cadastrados nos órgãos), sem repetir e sem a já tentada. */
@@ -1328,15 +1345,49 @@ const NOS: DefNo[] = [
       // correção campo a campo e a reconferência na Mesa usam ele, sem a extensão. Fora dos itens (a análise fica leve).
       if (!(ctx.host.__retratosCenti instanceof Map)) ctx.host.__retratosCenti = new Map<number, string>();
       const retratos = ctx.host.__retratosCenti as Map<number, string>;
+      const idDe = (it: Item) => Number(it.dfdId ?? it.id);
+      const dfdDe = (it: Item) => {
+        const d = (it.centi as Item | null | undefined)?.dfd as unknown as DfdParseado | undefined;
+        return d && Array.isArray(d.itens) && Array.isArray(d.secoes) ? d : null;
+      };
+      // Só o DIVERGENTE vira base de correção — e só CONFIRMADO: lido de novo na Centi (outra emissão, na trava da sessão),
+      // o conteúdo tem de ser IGUAL. Diferente = a Centi misturou outro registro (a sessão dela é uma só): o DFD fica NÃO
+      // conferido e nada desta leitura corrige o sistema. Achado em OUTRO órgão nunca é base de correção.
+      const divergentes = new Set(
+        compararDfdCenti(prontos, opcoes)
+          .divergentes.filter((x) => x.naoMarcar !== true)
+          .map(idDe),
+      );
+      const finais: Item[] = [];
       for (const it of prontos) {
-        const x = it.centi as Item | null | undefined;
-        const dfd = x?.dfd as unknown as DfdParseado | undefined;
-        const id = Number(it.dfdId ?? it.id);
-        if (!x || !dfd || !Array.isArray(dfd.itens) || !Number.isInteger(id) || id <= 0) continue;
-        const t = textoRetrato(montarRetrato(it, x, dfd, opcoes));
-        if (t) retratos.set(id, t);
+        const id = idDe(it);
+        const dfd = dfdDe(it);
+        const x = it.centi as Item;
+        if (!dfd || !Number.isInteger(id) || id <= 0 || !divergentes.has(id) || str(it.entidadeAchada)) {
+          finais.push(it);
+          continue;
+        }
+        if (ctx.cancelado()) throw new Error("Interrompido.");
+        let confere = true;
+        let motivo = "";
+        try {
+          await confirmarLeituraCenti(it, dfd, ctx);
+        } catch (e) {
+          const m = e instanceof Error ? e.message : String(e);
+          if (/^interrompido/i.test(m)) throw e;
+          confere = false;
+          motivo = m.replace(/ — nada foi gravado; confira de novo\.$/, "");
+        }
+        if (confere) {
+          const t = textoRetrato(montarRetrato(it, x, dfd, opcoes));
+          if (t) retratos.set(id, t);
+          finais.push(it);
+        } else {
+          retratos.delete(id);
+          finais.push({ ...it, centi: null, centiFalha: true, centiErro: `${motivo.replace(/\.$/, "")} — nada foi gravado; confira de novo` });
+        }
       }
-      return compararDfdCenti(prontos, opcoes);
+      return compararDfdCenti(finais, opcoes);
     },
   },
 
@@ -1566,11 +1617,13 @@ const NOS: DefNo[] = [
           erros.push({ ...it, erro: !dfd ? str(it.centiErro) || "Sem o DFD lido na Centi (ligue “Guardar o DFD inteiro”)." : "Item sem o id do DFD." });
           continue;
         }
-        ctx.aviso(`Substituindo o DFD ${str(it.numero)} (${i + 1} de ${itens.length})…`);
         // O DFD inteiro não segue adiante (pesado): fica só o resumo da Centi.
         const leve = { ...it, centi: { ...(it.centi as Item), dfd: undefined } };
         let feito: Item;
         try {
+          // Nunca grava com UMA leitura: achada em outro órgão, não; e a segunda emissão tem de trazer o MESMO conteúdo.
+          await confirmarLeituraCenti(it, dfd as unknown as DfdParseado, ctx);
+          ctx.aviso(`Substituindo o DFD ${str(it.numero)} (${i + 1} de ${itens.length})…`);
           const r = await subst(id, dfd);
           feito = { ...leve, substituido: true, itensGravados: r.itens };
           ok.push(feito);
@@ -1632,8 +1685,15 @@ const NOS: DefNo[] = [
           ctx.parcial?.([f]);
           continue;
         }
+        if (str(it.entidadeAchada) && str(it.entidadeAchada) !== str(it.entidade)) {
+          // Lido em OUTRO órgão da Centi: a emissão sai no contexto de outra entidade — nunca é base de correção.
+          const f = { ...it, centi: undefined, dfdSistema: undefined, erro: `Achado na Centi no órgão ${str(it.entidadeAchada)}, não no do DFD — nada foi gravado; confira o órgão do DFD.` };
+          erros.push(f);
+          ctx.parcial?.([f]);
+          continue;
+        }
         if (!reconferido(it)) {
-          const f = { ...it, centi: undefined, dfdSistema: undefined, erro: "Não reconferido na Centi nesta execução — nada foi gravado." };
+          const f = { ...it, centi: undefined, dfdSistema: undefined, erro: it.centiErro ? `Não reconferido na Centi: ${str(it.centiErro)}` : "Não reconferido na Centi nesta execução — nada foi gravado." };
           erros.push(f);
           ctx.parcial?.([f]);
           continue;
