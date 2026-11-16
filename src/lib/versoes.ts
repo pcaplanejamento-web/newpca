@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.8",
+    data: "2026-11-16",
+    titulo: "Centi: trava da sessão em todas as leituras",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Segunda auditoria da correção pela Centi: a emissão do protocolo, a troca do órgão na aba da Centi e as consultas da CM002 e da Tela Protocolo também passam pela trava da sessão (nenhuma outra aba mexe na Centi no meio); a conferência dupla ignora o rodapé que muda a cada emissão (código e-Assinatura, hora); e os dados da Centi guardados só valem para o DFD com o MESMO nº de planejamento.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.7",
     data: "2026-11-16",
     titulo: "Correção pela Centi só com dados confirmados",

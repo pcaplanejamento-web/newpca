@@ -11,6 +11,7 @@ import {
   conferenciaDoRetrato,
   lerAceite,
   lerRetrato,
+  retratoDoPlanejamento,
   MAX_JUSTIFICATIVA,
   MIN_JUSTIFICATIVA,
 } from "@/lib/conferencia-dfd-centi";
@@ -36,7 +37,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const db = getDb();
   if (new URL(req.url).searchParams.get("retrato") === "1") {
     const [r] = await consultaRetrato(db, id);
-    const retrato = lerRetrato(r?.retrato);
+    const retrato = retratoDoPlanejamento(lerRetrato(r?.retrato), dfd.planejamento);
     return ok({ retrato, em: r?.em ?? null });
   }
   return ok({ historico: await consultaHistoricoCenti(db, id) });
@@ -86,7 +87,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (p.data.acao === "recalcular") {
     const [r] = await consultaRetrato(db, id);
-    const retrato = lerRetrato(r?.retrato);
+    const retrato = retratoDoPlanejamento(lerRetrato(r?.retrato), dfd.planejamento);
     if (!retrato) return erro("Este DFD não tem os dados da Centi confirmados (os de antes da dupla leitura não valem mais) — reconfira na Centi (Automação).", 409);
     const sistema = await getDfd(id);
     if (!sistema) return erro("DFD não encontrado.", 404);

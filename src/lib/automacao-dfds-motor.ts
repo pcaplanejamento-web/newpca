@@ -5,6 +5,7 @@
  * autorização de uso único + a confirmação da extensão; o já anexado não é emitido de novo). É a lógica que era da tela
  * da Automação, agora usada pelo componente de fluxo "Baixar/anexar DFDs" (`saida.dfdsCenti`).
  */
+import { comSessaoCenti } from "./centi-sessao.ts";
 import {
   type AlvoCenti,
   type ArquivoSaida,
@@ -117,6 +118,8 @@ const hojeBR = () => {
 };
 
 /** O contexto do emissor: a configuração e o mapa órgão → entidade VIVOS (podem mudar no meio de um lote). */
+export { comSessaoCenti } from "./centi-sessao.ts";
+
 export type ContextoEmissor = {
   pedir: Pedir;
   cfg: () => ConfigCenti;
@@ -134,17 +137,6 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
   if (l.interrompido) return { erro: "Interrompido na extensão.", ambiente: true };
   if (!l.ok) return { erro: `Não consegui abrir o planejamento ${id} na Centi: ${l.erro ?? "sem resposta"}.`, ambiente: /encerrado|sessão|não respondeu/i.test(l.erro ?? "") };
   return { j: l.j };
-}
-
-/**
- * A SESSÃO da Centi é uma só (o Emitir DFD usa o registro aberto por último): load → emissão → download de um DFD nunca
- * podem intercalar com os de outro — nem de OUTRA aba do sistema (o vigia do agendador, outra execução), que usa a mesma
- * aba da Centi pela extensão. A trava `navigator.locks` vale entre todas as abas do sistema no navegador; sem ela (testes,
- * navegador antigo), só a fila da aba. Quem já está dentro da trava NUNCA chama de novo (a trava não é reentrante).
- */
-export async function comSessaoCenti<T>(fn: () => Promise<T>): Promise<T> {
-  const locks = (globalThis as { navigator?: { locks?: { request: (nome: string, f: () => Promise<T>) => Promise<T> } } }).navigator?.locks;
-  return locks ? locks.request("centi-sessao", fn) : fn();
 }
 
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do

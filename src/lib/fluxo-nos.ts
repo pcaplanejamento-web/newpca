@@ -38,6 +38,7 @@ import {
   TIPO_LACO,
 } from "./fluxo-core.ts";
 import { lerIdsCenti, MAX_IDS_CENTI, mensagemRecusaGeral, novasRecusas, PREFIXO_RECUSA, pararPorRecusa, type RecusasCenti, registrarRecusaCenti, registrarSucessoCenti, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
+import { comSessaoCenti } from "./centi-sessao.ts";
 import { filaSerial } from "./ocr-assinatura-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
@@ -293,11 +294,11 @@ async function proximoOrgao(est: Record<string, unknown>, ctx: ContextoNo): Prom
   const fila = (est.fila ?? []) as Item[][];
   const lote = fila.shift();
   if (!lote) {
-    await ctx.centi("trocarOrgao", { entidade: null }, 30_000).catch(() => null);
+    await comSessaoCenti(() => ctx.centi("trocarOrgao", { entidade: null }, 30_000)).catch(() => null);
     return { fim: marcarExecutado(est.acumulado as Item[], est.total as number) };
   }
   const o = str(lote[0]?.entidade);
-  const r = await ctx.centi("trocarOrgao", { entidade: o }, 30_000);
+  const r = await comSessaoCenti(() => ctx.centi("trocarOrgao", { entidade: o }, 30_000));
   if (r.interrompido) throw new Error("Interrompido na extensão.");
   if (!r.ok) throw new Error(`Não deu para trocar para o órgão ${o} na Centi: ${r.erro || "a extensão não respondeu"}.`);
   ctx.aviso(`Órgão ${o} (${(est.total as number) - fila.length} de ${est.total as number}) — ${lote.length} item(ns)`);
@@ -418,7 +419,7 @@ const NOS: DefNo[] = [
     campos: [{ chave: "filtro", rotulo: "Só as que contêm", tipo: "texto", entrada: true, ajuda: "Traz só as repartições cujo nome contém este texto (ex.: PCA). Vazio = todas. Separe vários com “;”." }],
     executar: async (_e, c, ctx) => {
       ctx.aviso("Lendo as repartições na Centi…");
-      const r = await ctx.centi("reparticoesApi", null, 30_000);
+      const r = await comSessaoCenti(() => ctx.centi("reparticoesApi", null, 30_000));
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) throw new Error(r.semConsulta ? erroSemConsulta(r) : `${r.erro || "A Centi não respondeu."}`);
       const filtros = lista(c.filtro).map(normTexto);
@@ -464,7 +465,7 @@ const NOS: DefNo[] = [
         ...(str(c.campoReparticao) ? so(e).map((it) => str(resolverCaminho(it, str(c.campoReparticao)))).filter(Boolean) : []),
       ];
       ctx.aviso("Lendo os protocolos na Centi…");
-      const r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
+      const r = await comSessaoCenti(() => ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000));
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) {
         throw new Error(r.semConsulta ? erroSemConsulta(r) : `${r.erro || "A Centi não respondeu."}`);
@@ -598,7 +599,7 @@ const NOS: DefNo[] = [
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Órgão ${ent} (${i + 1} de ${ents.length})…`);
-        const r = await ctx.centi("cm002", { entidade: ent, colunas: c.colunas === true || captura.length > 0 }, 300_000);
+        const r = await comSessaoCenti(() => ctx.centi("cm002", { entidade: ent, colunas: c.colunas === true || captura.length > 0 }, 300_000));
         if (r.interrompido) throw new Error("Interrompido na extensão.");
         if (!r.ok) {
           falhas.push(`órgão ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);

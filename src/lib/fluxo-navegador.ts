@@ -50,14 +50,17 @@ export async function lerProtocoloPorCodigo(
   if (!alvo.id) throw new Error(`Protocolo ${alvo.protocolo}: sem o Id da Centi (campo “id”).`);
   const corpo = corpoEmissaoProtocolo(emissao, { ...alvo, hoje: dataIsoBrasilia(new Date().toISOString()) });
   if (!corpo) throw new Error("Não consegui montar a emissão do protocolo.");
-  const r = (await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo }, 300_000)) as { ok?: boolean; erro?: string; b64?: string; status?: number; interrompido?: boolean };
-  if (r.interrompido) throw new Error("Interrompido na extensão.");
-  if (!r.ok || r.b64 == null) throw new Error(r.erro || "A extensão não respondeu.");
-  const bytes = deBase64(r.b64);
-  if (bytes.length < 64 * 1024 && operacaoRecusada(new TextDecoder().decode(bytes)))
-    throw new Error("A Centi recusou a emissão guardada — emita UM protocolo pela tarefa “Ler a Tela Protocolo” para reaprender.");
-  const direto = await pdfDosBytes(bytes).catch(() => null);
-  const x = direto ? { pdf: direto } : await pdfDoAchado(analisarRespostaCenti(bytes, r.status ?? 0), baixarPelaExtensao(pedir));
+  // Emissão + download na trava da sessão da Centi (nenhuma outra aba abre outro registro no meio).
+  const x = await comSessaoCenti(async () => {
+    const r = (await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo }, 300_000)) as { ok?: boolean; erro?: string; b64?: string; status?: number; interrompido?: boolean };
+    if (r.interrompido) throw new Error("Interrompido na extensão.");
+    if (!r.ok || r.b64 == null) throw new Error(r.erro || "A extensão não respondeu.");
+    const bytes = deBase64(r.b64);
+    if (bytes.length < 64 * 1024 && operacaoRecusada(new TextDecoder().decode(bytes)))
+      throw new Error("A Centi recusou a emissão guardada — emita UM protocolo pela tarefa “Ler a Tela Protocolo” para reaprender.");
+    const direto = await pdfDosBytes(bytes).catch(() => null);
+    return direto ? { pdf: direto } : await pdfDoAchado(analisarRespostaCenti(bytes, r.status ?? 0), baixarPelaExtensao(pedir));
+  });
   if (!("pdf" in x)) throw new Error(x.erro);
   const file = new File([comoBlob(x.pdf)], `Protocolo ${alvo.protocolo}-${alvo.ano}.pdf`, { type: "application/pdf" });
   const lido = await lerProtocoloCompleto(file, regras);

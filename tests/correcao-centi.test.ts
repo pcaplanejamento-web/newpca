@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assinaturaDfdCenti, chaveMotivo, conferenciaDoRetrato, lerRetrato, montarRetrato, textoRetrato, tiposDoMotivo } from "../src/lib/conferencia-dfd-centi.ts";
+import { assinaturaDfdCenti, chaveMotivo, conferenciaDoRetrato, lerRetrato, montarRetrato, retratoDoPlanejamento, textoRetrato, tiposDoMotivo } from "../src/lib/conferencia-dfd-centi.ts";
 import { executarFluxo, type Grafo, lerGrafo, marcadosDuplicados } from "../src/lib/fluxo-core.ts";
 import { grafoDoModelo, MODELOS_FLUXO } from "../src/lib/fluxo-modelos.ts";
 import { corrigirDfdPelaCenti } from "../src/lib/correcao-centi-cliente.ts";
@@ -756,4 +756,51 @@ test("Substituir DFD pela Centi: sem a segunda emissão igual, nada é gravado",
   assert.match(String(r.erros[0]?.erro), /conteúdos diferentes/);
   const ok = (await no.executar({ entrada: [it] }, {}, ctx, {})) as { substituidos: unknown[] };
   assert.equal(ok.substituidos.length, 1, "a segunda emissão igual confirma");
+});
+
+test("assinatura do conteúdo: o rodapé que muda a cada emissão (e-Assinatura, hora, página) não conta; a troca de nomes conta", () => {
+  const a = sistema1023();
+  const b = { ...sistema1023(), secoes: sistema1023().secoes.map((x, i) => (i === 0 ? { ...x, texto: `${x.texto} Centi ® e-Assinatura: 8ÇH$dg58teX Emitido em 16/11/2026 14:33 por jhone.sousa Página 1 de 4` } : x)) };
+  assert.equal(assinaturaDfdCenti(a), assinaturaDfdCenti(b));
+  assert.notEqual(assinaturaDfdCenti(a), assinaturaDfdCenti(misturado1023()));
+});
+
+test("o retrato só vale para o DFD com o MESMO nº de planejamento; a correção recusa o de outro", async () => {
+  const r = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "1" }, { situacao: "Aprovado" }, centiDivergente(), { objeto: true, tolerancia: 0.01 })));
+  assert.ok(retratoDoPlanejamento(r, "0456"));
+  assert.equal(retratoDoPlanejamento(r, "457"), null);
+  assert.equal(retratoDoPlanejamento(r, null), null);
+  const outro = { ...centiDivergente(), planejamento: "999" };
+  const sv = servidor({ status: "divergente", retrato: retrato(outro) });
+  await assert.rejects(corrigirDfdPelaCenti(9, null, sv.busca), /CONFIRMADOS/);
+  assert.equal(sv.chamadas.some((c) => c.metodo !== "GET"), false, "nada é gravado");
+});
+
+test("trava da sessão da Centi: duas abas nunca intercalam load e emissão", async () => {
+  const { comSessaoCenti } = await import("../src/lib/centi-sessao.ts");
+  const desc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  let fila: Promise<unknown> = Promise.resolve();
+  const locks = {
+    request: (_n: string, f: () => Promise<unknown>) => {
+      const r = fila.then(f);
+      fila = r.catch(() => undefined);
+      return r;
+    },
+  };
+  Object.defineProperty(globalThis, "navigator", { value: { locks }, configurable: true, writable: true });
+  try {
+    const log: string[] = [];
+    const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const aba = (nome: string) =>
+      comSessaoCenti(async () => {
+        log.push(`${nome}:load`);
+        await espera(5);
+        log.push(`${nome}:emitir`);
+      });
+    await Promise.all([aba("A"), aba("B")]);
+    assert.deepEqual(log, ["A:load", "A:emitir", "B:load", "B:emitir"]);
+  } finally {
+    if (desc) Object.defineProperty(globalThis, "navigator", desc);
+    else delete (globalThis as { navigator?: unknown }).navigator;
+  }
 });

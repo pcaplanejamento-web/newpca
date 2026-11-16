@@ -5,7 +5,7 @@
  * o que mudou (`diffDfdGravado`) com a trava `atualizadoEmLido` e refaz a conferência pelo retrato. Nº do DFD, planejamento,
  * assinaturas, unidade, protocolo e PCA nunca mudam (`novoDaCenti`). `fetch` injetável (testado).
  */
-import { aceiteVale, lerAceite, type RetratoCenti, tiposDoMotivo } from "./conferencia-dfd-centi.ts";
+import { aceiteVale, lerAceite, type RetratoCenti, retratoDoPlanejamento, tiposDoMotivo } from "./conferencia-dfd-centi.ts";
 import { aplicarCentiPorTipos, planoCorrecao, tiposCorrigiveisDoMotivo } from "./correcao-centi-core.ts";
 import type { DfdDetalhe } from "./dfd.ts";
 import { detalheParaParseado, diffDfdGravado } from "./dfd-edicao.ts";
@@ -60,9 +60,10 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
   const j2 = await lerJson<{ retrato?: RetratoCenti | null }>(r2);
   if (!r2.ok || !j2.ok) throw new Error(j2.error ?? "não foi possível ler os dados da Centi");
-  if (!j2.retrato || j2.retrato.v !== 2) throw new Error("sem os dados da Centi CONFIRMADOS (dupla leitura no próprio órgão) — reconfira o DFD na Centi e execute de novo");
+  const retrato = retratoDoPlanejamento(j2.retrato?.v === 2 ? j2.retrato : null, o.planejamento);
+  if (!retrato) throw new Error("sem os dados da Centi CONFIRMADOS (dupla leitura no próprio órgão) — reconfira o DFD na Centi e execute de novo");
   const g = detalheParaParseado(o);
-  const plano = planoCorrecao(g, j2.retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
+  const plano = planoCorrecao(g, retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
   // A automação (`tipos` null) corrige TODA divergência do retrato — não só as que couberam no motivo gravado.
   const corrigido = semMarcas(aplicarCentiPorTipos(g, plano, tipos ? usar : null));
   const itensMudaram = JSON.stringify(corrigido.itens) !== JSON.stringify(g.itens);

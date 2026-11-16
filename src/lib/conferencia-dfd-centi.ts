@@ -434,7 +434,15 @@ export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdPars
  * e nada dessa leitura pode corrigir o sistema. Pura.
  */
 export function assinaturaDfdCenti(d: DfdParseado): string {
-  const t = (v: unknown) => str(v).replace(/\s+/g, " ").trim();
+  // O que MUDA legitimamente entre duas emissões (o rodapé: código e-Assinatura, a hora de emissão, quem emitiu, a página)
+  // não conta — se escapou para algum texto, não pode fazer uma divergência real virar "não conferido".
+  const t = (v: unknown) =>
+    str(v)
+      .replace(/Centi\s*®?\s*e-?Assinatura:?\s*\S+/gi, " ")
+      .replace(/Emitido\s+em\s+\d{2}\/\d{2}\/\d{4}(\s+\d{2}:\d{2}(:\d{2})?)?(\s+por\s+\S+)?/gi, " ")
+      .replace(/P[aá]gina\s+\d+\s+de\s+\d+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   return JSON.stringify([
     t(d.numero),
     t(d.planejamento),
@@ -453,6 +461,12 @@ export function assinaturaDfdCenti(d: DfdParseado): string {
     (d.secoes ?? []).map((x) => [t(x.titulo), t(x.texto)]),
     (d.itens ?? []).map((x) => [x.item ?? null, t(x.codigo), t(x.descricao), t(x.unidade), x.quantidade ?? null, x.valorUnitario ?? null, x.valorTotal ?? null]),
   ]);
+}
+
+/** O retrato é do MESMO planejamento do DFD (só os dígitos, sem zeros à esquerda) — senão não vale para ele. Pura. */
+export function retratoDoPlanejamento(r: RetratoCenti | null, planejamento: string | null | undefined): RetratoCenti | null {
+  const so = (v: unknown) => str(v).replace(/\D/g, "").replace(/^0+/, "");
+  return r && so(planejamento) && so(r.dfd.planejamento) === so(planejamento) ? r : null;
 }
 
 /** O retrato em texto para gravar; `null` acima do teto. */
