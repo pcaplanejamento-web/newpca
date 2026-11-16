@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.293.2",
+    data: "2026-11-16",
+    titulo: "Conferir DFDs × Centi: planejamento inexistente vira Divergente",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O DFD cujo planejamento a Centi diz que não existe passa a ser marcado Divergente (“não encontrado na Centi”), em vez de ficar sem conferir e ser refeito em toda execução. Mensagem de permissão ou falha de comunicação seguem como “não conferido”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.293.1",
     data: "2026-11-16",
     titulo: "Conferir DFDs × Centi não para por um DFD recusado",
