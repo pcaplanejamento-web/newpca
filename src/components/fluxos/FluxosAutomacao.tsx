@@ -33,6 +33,7 @@ import {
   TRAVA_AGENDADOR,
   variaveisDoGrafo,
 } from "@/lib/fluxo-core";
+import { corrigirDfdPelaCenti } from "@/lib/correcao-centi-cliente";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { alternarAutomacaoMesa, EVENTO_DISPARO_MESA, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
@@ -350,6 +351,7 @@ export function FluxosAutomacao({
         lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true, ocr ?? completo === true),
       dfdDoSistema: (id: number) => dfdDoSistema(id) as unknown as Promise<Item>,
       substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
+      corrigirPelaCenti: (id: number) => corrigirDfdPelaCenti(id, null),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {
         relatorio.current.push(...l);

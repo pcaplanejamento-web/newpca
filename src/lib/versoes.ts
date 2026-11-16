@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.294.0",
+    data: "2026-11-16",
+    titulo: "Automação: corrigir os DFDs divergentes pela Centi",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Novo modelo “Corrigir DFDs divergentes pela Centi”: lista os DFDs divergentes numa tabela de seleção, reconfere na Centi cada um marcado e troca só o que diverge pelos dados da Centi. Nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema; divergência aceita, de situação/órgão/nº ou DFD não reconferido não é alterado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "O “Usar a Centi em…” da Mesa e a automação usam a MESMA correção, decidida pela conferência gravada no momento (DFD já convergente ou aceito não é tocado).",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.293.1",
     data: "2026-11-16",
     titulo: "Conferir DFDs × Centi não para por um DFD recusado",

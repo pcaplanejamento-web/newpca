@@ -1575,6 +1575,71 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.corrigirPelaCenti",
+    categoria: "saida",
+    rotulo: "Corrigir DFD pela Centi",
+    descricao:
+      "Corrige cada DFD (id) DIVERGENTE com os dados da Centi guardados na conferência — a MESMA correção do “Usar a Centi em…” da Mesa: só o que diverge; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema; refaz a conferência.",
+    icone: "save",
+    entradas: ["entrada"],
+    saidas: ["corrigidos", "semMudanca", "erros"],
+    rotulosPortas: { corrigidos: "Corrigidos", semMudanca: "Sem correção", erros: "Não corrigidos" },
+    campos: [],
+    executar: async (e, _c, ctx) => {
+      const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null }>) | undefined;
+      if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
+      const corrigidos: Item[] = [];
+      const sem: Item[] = [];
+      const erros: Item[] = [];
+      const itens = so(e);
+      const vistos = new Set<number>();
+      for (const [i, it] of itens.entries()) {
+        if (ctx.cancelado()) break;
+        const id = Number(it.dfdId ?? it.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          erros.push({ ...it, erro: "Item sem o id do DFD." });
+          continue;
+        }
+        if (vistos.has(id)) continue; // o mesmo DFD duas vezes não é corrigido duas vezes
+        vistos.add(id);
+        // Só corrige o DFD RECONFERIDO na Centi NESTA execução (o "Buscar DFD na Centi" + "Comparar"): sem a leitura da
+        // Centi no item, ou não conferido (`naoMarcar`), a conferência gravada pode ser velha — nada é gravado.
+        if ("centi" in it && it.centi === null && !it.centiFalha && it.naoMarcar !== true) {
+          // Conferido agora e NÃO encontrado na Centi: não há dado da Centi para usar.
+          const f = { ...it, dfdSistema: undefined, correcao: "naoEncontrado", motivo: `Não encontrado na Centi${it.centiErro ? ` — ${str(it.centiErro)}` : ""}: nada a corrigir.` };
+          sem.push(f);
+          ctx.parcial?.([f]);
+          continue;
+        }
+        if (!reconferido(it)) {
+          const f = { ...it, centi: undefined, dfdSistema: undefined, erro: "Não reconferido na Centi nesta execução — nada foi gravado." };
+          erros.push(f);
+          ctx.parcial?.([f]);
+          continue;
+        }
+        ctx.aviso(`Corrigindo o DFD ${str(it.numero)} pela Centi (${i + 1} de ${itens.length})…`);
+        const leve: Item = { ...it, centi: undefined, dfdSistema: undefined };
+        let feito: Item;
+        try {
+          const r = await corrigir(id);
+          feito = { ...leve, correcao: r.resultado, conferenciaDepois: r.status, motivoDepois: r.motivo };
+          if (r.resultado === "corrigido") corrigidos.push(feito);
+          else {
+            feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO[r.resultado] ?? "Nada a corrigir." };
+            sem.push(feito);
+          }
+        } catch (x) {
+          const msg = x instanceof Error ? x.message : String(x);
+          if (/interrompido/i.test(msg)) throw x;
+          feito = { ...leve, erro: msg };
+          erros.push(feito);
+        }
+        ctx.parcial?.([feito]);
+      }
+      return { corrigidos, semMudanca: sem, erros };
+    },
+  },
+  {
     tipo: "saida.gravarExecucao",
     categoria: "saida",
     rotulo: "Gravar execução nos DFDs",
@@ -2078,6 +2143,20 @@ async function rodarFilho(f: FluxoFilho, itens: Item[], ctx: Parameters<DefNo["e
   });
 }
 const comOrigem = (aps: Item[], nome: string) => aps.map((a) => ({ ...a, subfluxo: nome }));
+
+/** O item veio da comparação DESTA execução com o DFD lido na Centi (não do que está gravado). */
+export const reconferido = (it: Item): boolean => {
+  const c = it.centi;
+  return !!c && typeof c === "object" && !Array.isArray(c) && it.naoMarcar !== true && !it.centiFalha;
+};
+
+/** Por que um DFD que chegou à correção pela Centi não foi corrigido (a decisão é do servidor — o gravado AGORA). */
+export const MOTIVO_SEM_CORRECAO: Record<string, string> = {
+  convergente: "Já está convergente com a Centi.",
+  aceito: "A divergência foi aceita (convergente com ressalva).",
+  naoCorrigivel: "Só divergências que a Centi não corrige (situação, órgão, nº do DFD) — trate no painel da coluna Centi.",
+  sem: "Nada a corrigir nos dados do DFD.",
+};
 
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
 export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor && !n.legado) }));
