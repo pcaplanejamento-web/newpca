@@ -41,6 +41,7 @@ import {
   aplicarMassaDfd,
   type CampoTratavel,
   conciliacaoCapa,
+  copiasQueFicam,
   duplicadosDfds,
   editarItemDfd,
   faltasCirurgicasDfd,
@@ -1265,6 +1266,8 @@ export function ProtocoloUploadForm({
   // GRAVADO × NOVO em massa: os selecionados que sobrescrevem um DFD gravado. Espera a análise e a leitura da assinatura
   // (OCR) — a assinatura achatada é do ARQUIVO e chega depois: escolher antes misturaria as duas versões.
   const selSobrescreve = linhasSel.filter((l) => sobrescreve(l.key));
+  // Os selecionados com cópias de MESMO nº ainda no envio (a escolha em massa resolve o duplicado — `copiasQueFicam`).
+  const selDuplicados = linhasSel.filter((l) => !descartados.has(l.key) && dupDe(l.key).some((j) => !descartados.has(j) && mesmoNumero(l.key, j))).length;
   const avisoVersao = existentesPendentes
     ? "Conferindo os DFDs já cadastrados…"
     : analisando
@@ -1639,9 +1642,37 @@ export function ProtocoloUploadForm({
    * Diferenças, de uma vez. Não marca "editado" (escolher não é editar: no reenvio, o que ficou igual ao gravado não é
    * regravado); o selecionado sem gravado (novo) fica como está. A assinatura achatada é do ARQUIVO: é lida antes. */
   async function escolherLadoMassa(lado: Lado) {
-    const alvos = [...sel].map(Number).filter((i) => !descartados.has(i) && sobrescreve(i));
-    if (alvos.length === 0) return;
-    const semGravado = sel.size - alvos.length;
+    const selecionados = [...sel].map(Number).filter((i) => !descartados.has(i));
+    // DUPLICADOS NO PDF (o mesmo DFD duas vezes — a versão antiga e a corrigida): só um por nº é gravado. A cópia
+    // SELECIONADA fica (ou, com as duas marcadas, a que o lado indica) e as outras saem do envio ("Descartado" — o
+    // "Manter este" da comparação, de uma vez). Antes, a escolha não resolvia o duplicado e o erro ficava.
+    const dup = copiasQueFicam(
+      selecionados,
+      (i) => dupDe(i).filter((j) => !descartados.has(j) && mesmoNumero(i, j)),
+      (i) => {
+        const c = comparacaoDe(i);
+        return c ? c.situacao === "igual" : null;
+      },
+      lado,
+    );
+    if (dup.descartar.length > 0) {
+      const sai = new Set(dup.descartar);
+      const fica = new Set(dup.manter);
+      setDescartados((prev) => new Set([...[...prev].filter((j) => !fica.has(j)), ...sai]));
+      setFantasmas((prev) => new Set([...prev].filter((j) => !fica.has(j))));
+      setExcluidosDoProtocolo((prev) => new Set([...prev].filter((j) => !fica.has(j) && !sai.has(j))));
+    }
+    const descartadosAgora = new Set(dup.descartar);
+    const alvos = selecionados.filter((i) => !descartadosAgora.has(i) && sobrescreve(i));
+    const resumoDup =
+      (dup.manter.length > 0 ? ` · ${num(dup.manter.length)} DFD(s) duplicado(s) resolvido(s) (${num(dup.descartar.length)} cópia(s) descartada(s))` : "") +
+      (dup.pendentes.length > 0 ? ` · ${num(dup.pendentes.length)} duplicado(s) sem escolha — use "Comparar os duplicados"` : "");
+    if (alvos.length === 0) {
+      if (dup.manter.length > 0 || dup.pendentes.length > 0) toast.success(`Escolha aplicada${resumoDup}.`);
+      setSel(new Set());
+      return;
+    }
+    const semGravado = selecionados.filter((i) => !descartadosAgora.has(i)).length - alvos.length;
     setAplicandoMassa(true);
     setErro(null);
     const doc = docRef.current;
@@ -1679,9 +1710,10 @@ export function ProtocoloUploadForm({
         aplicados++;
       }
       if (aplicados > 0)
-        toast.success(
+        (dup.pendentes.length > 0 ? toast.warning : toast.success)(
           `${lado === "gravado" ? "Mantidos os gravados" : "Usados os novos"} em ${num(aplicados)} DFD(s)` +
-            `${semGravado > 0 ? ` · ${num(semGravado)} sem DFD gravado ficaram como estão` : ""}.`,
+            `${semGravado > 0 ? ` · ${num(semGravado)} sem DFD gravado ficaram como estão` : ""}${resumoDup}.`,
+          dup.pendentes.length > 0 ? 9000 : undefined,
         );
       if (falhas.length > 0)
         setErro(`Não foi possível aplicar em ${falhas.length} DFD(s) — a leitura do DFD ou do gravado falhou: ${falhas.join(", ")}.`);
@@ -2348,7 +2380,7 @@ export function ProtocoloUploadForm({
                   onAplicar={aplicarMassa}
                   versao={
                     selSobrescreve.length > 0
-                      ? { alvos: selSobrescreve.length, onAplicar: (lado) => void escolherLadoMassa(lado), aviso: avisoVersao }
+                      ? { alvos: selSobrescreve.length, onAplicar: (lado) => void escolherLadoMassa(lado), aviso: avisoVersao, duplicados: selDuplicados }
                       : null
                   }
                 />

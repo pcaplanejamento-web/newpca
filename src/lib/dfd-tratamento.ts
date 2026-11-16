@@ -419,6 +419,47 @@ export function duplicadosDfds(lista: { numero: string | null; planejamento: str
   });
 }
 
+/**
+ * DUPLICADOS na escolha "Gravado × novo" EM MASSA (reenvio/importação): o PDF traz o MESMO DFD mais de uma vez (a
+ * versão antiga e a corrigida) e só um por nº é gravado. Para cada grupo de cópias de MESMO nº com algum selecionado:
+ * UMA cópia selecionada = ela fica (a seleção diz qual — ex.: filtrar "Alterado" e marcar todos); VÁRIAS selecionadas =
+ * pelo lado — "novo" fica a ÚNICA que difere do gravado, "gravado" a ÚNICA igual a ele (`igual` null = ainda sem
+ * comparação). Sem decisão única, o grupo fica `pendente` (a escolha volta ao "Comparar os duplicados"). Puro/testado.
+ * `grupos` = para cada índice, as OUTRAS cópias de mesmo nº ainda no envio.
+ */
+export function copiasQueFicam(
+  selecionados: readonly number[],
+  copias: (i: number) => readonly number[],
+  igual: (i: number) => boolean | null,
+  lado: "gravado" | "novo",
+): { manter: number[]; descartar: number[]; pendentes: number[] } {
+  const sel = new Set(selecionados);
+  const visto = new Set<number>();
+  const manter: number[] = [];
+  const descartar: number[] = [];
+  const pendentes: number[] = [];
+  for (const i of selecionados) {
+    if (visto.has(i)) continue;
+    const outras = copias(i);
+    if (outras.length === 0) continue;
+    const grupo = [i, ...outras.filter((j) => j !== i)];
+    for (const j of grupo) visto.add(j);
+    const marcadas = grupo.filter((j) => sel.has(j));
+    let fica: number | null = marcadas.length === 1 ? marcadas[0] : null;
+    if (fica == null) {
+      const candidatas = marcadas.filter((j) => (lado === "novo" ? igual(j) === false : igual(j) === true));
+      fica = candidatas.length === 1 ? candidatas[0] : null;
+    }
+    if (fica == null) {
+      pendentes.push(i);
+      continue;
+    }
+    manter.push(fica);
+    for (const j of grupo) if (j !== fica) descartar.push(j);
+  }
+  return { manter, descartar, pendentes };
+}
+
 /** Por que dois DFDs do processo são duplicados (a comparação mostra): mesmo nº de DFD, de planejamento ou os dois. */
 export function motivoDuplicidade(
   a: { numero: string | null; planejamento: string | null },

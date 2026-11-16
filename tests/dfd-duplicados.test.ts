@@ -5,6 +5,7 @@ import { avaliacaoSchema } from "../src/lib/avaliacao-validation.ts";
 import { compararDuplicados, type DfdComparavel } from "../src/lib/comparar-protocolo.ts";
 import {
   avaliarDfd,
+  copiasQueFicam,
   duplicadosDfds,
   faltasCirurgicasDfd,
   indiceAposRemover,
@@ -337,5 +338,36 @@ describe("compararDuplicados (o DFD aberto × o duplicado)", () => {
         ["novo", 2],
       ],
     );
+  });
+});
+
+describe("copiasQueFicam (Gravado × novo em massa com DFDs duplicados no PDF)", () => {
+  // Pares de mesmo nº: 0~1, 2~3, 4~5. Cópia antiga = igual ao gravado; nova = difere.
+  const pares: Record<number, number[]> = { 0: [1], 1: [0], 2: [3], 3: [2], 4: [5], 5: [4] };
+  const copias = (i: number) => pares[i] ?? [];
+  const igual = (i: number) => i % 2 === 0; // 0, 2, 4 = iguais ao gravado (antigos); 1, 3, 5 = alterados
+
+  it("uma cópia selecionada por grupo: fica a selecionada (o filtro 'Alterado' + marcar todos)", () => {
+    const r = copiasQueFicam([1, 3, 5], copias, igual, "novo");
+    assert.deepEqual(r.manter, [1, 3, 5]);
+    assert.deepEqual(r.descartar, [0, 2, 4]);
+    assert.deepEqual(r.pendentes, []);
+    // A seleção vale também em "Manter os gravados" (escolhe a cópia; o lado escolhe os dados).
+    assert.deepEqual(copiasQueFicam([1], copias, igual, "gravado").manter, [1]);
+  });
+  it("as duas cópias selecionadas: o lado decide (novo = a alterada, gravado = a igual)", () => {
+    assert.deepEqual(copiasQueFicam([0, 1], copias, igual, "novo"), { manter: [1], descartar: [0], pendentes: [] });
+    assert.deepEqual(copiasQueFicam([0, 1], copias, igual, "gravado"), { manter: [0], descartar: [1], pendentes: [] });
+  });
+  it("sem decisão única (as duas iguais/alteradas ou sem comparação) = pendente", () => {
+    assert.deepEqual(copiasQueFicam([0, 1], copias, () => false, "novo").pendentes, [0]);
+    assert.deepEqual(copiasQueFicam([0, 1], copias, () => null, "gravado").pendentes, [0]);
+  });
+  it("sem duplicado: nada a resolver", () => {
+    assert.deepEqual(copiasQueFicam([7, 8], () => [], igual, "novo"), { manter: [], descartar: [], pendentes: [] });
+  });
+  it("grupo de 3 cópias com uma selecionada: as outras duas saem", () => {
+    const tres = (i: number) => [0, 1, 2].filter((j) => j !== i);
+    assert.deepEqual(copiasQueFicam([2], tres, igual, "novo"), { manter: [2], descartar: [0, 1], pendentes: [] });
   });
 });

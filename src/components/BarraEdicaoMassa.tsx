@@ -125,7 +125,7 @@ export function BarraEdicaoMassa({
   /** SOBRESCRITA: o campo "Gravado × novo" — nos selecionados que já têm DFD gravado (`alvos`), TODAS as diferenças vão
    * para o lado escolhido (o "todos" do painel Diferenças, de uma vez). `aviso` = por que ainda não dá (o Aplicar fica
    * desabilitado). */
-  versao?: { alvos: number; onAplicar: (lado: Lado) => void; aviso?: string | null } | null;
+  versao?: { alvos: number; onAplicar: (lado: Lado) => void; aviso?: string | null; duplicados?: number } | null;
   /** A SUBUNIDADE (Mesa: os selecionados são DFDs gravados da MESMA unidade no modo "um centro para toda a unidade") — as dela. */
   /** `motivo` = por que a seleção NÃO pode receber a subunidade (o campo fica à vista, travado, com o motivo). */
   subunidade?: { opcoes: { id: number; nome: string }[]; motivo?: string | null } | null;
@@ -214,7 +214,10 @@ export function BarraEdicaoMassa({
               />
               <Nota>
                 {versao.aviso ??
-                  `${versao.alvos === 1 ? "1 selecionado tem" : `${versao.alvos} selecionados têm`} DFD gravado — vale em todas as diferenças.`}
+                  `${versao.alvos === 1 ? "1 selecionado tem" : `${versao.alvos} selecionados têm`} DFD gravado — vale em todas as diferenças.` +
+                    (versao.duplicados
+                      ? ` ${versao.duplicados === 1 ? "1 está duplicado" : `${versao.duplicados} estão duplicados`} no PDF: fica a cópia selecionada e as outras são descartadas.`
+                      : "")}
               </Nota>
             </>
           )}

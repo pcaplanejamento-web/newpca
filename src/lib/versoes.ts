@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.292.2",
+    data: "2026-11-16",
+    titulo: "Gravado × novo resolve os DFDs duplicados",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Na análise do protocolo (reenvio ou importação), “Gravado × novo” em massa agora resolve os DFDs que vieram duplicados no PDF: fica a cópia selecionada (com as duas marcadas, a alterada em “Usar os novos” ou a igual ao gravado em “Manter os gravados”) e as outras são descartadas — antes o erro “DFD duplicado” continuava.", link: "/painel/mesa?vista=protocolos" },
+    ],
+  },
+  {
     versao: "1.292.1",
     data: "2026-11-13",
     titulo: "Corrigir pela Centi: ajustes da auditoria",
