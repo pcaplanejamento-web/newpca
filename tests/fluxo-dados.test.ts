@@ -666,3 +666,34 @@ test("ehMarcadorFim: o marcador sozinho da porta fim não conta como item", asyn
   assert.equal(ehMarcadorFim(marcarExecutado([], 1246)[0]), true);
   assert.equal(ehMarcadorFim(marcarExecutado([{ id: 1 }], 1)[0]), false);
 });
+
+test("Buscar DFD na Centi: UMA recusa do Emitir DFD fica no DFD; só 3 seguidas sem nenhum emitido param tudo", async () => {
+  const { PREFIXO_RECUSA } = await import("../src/lib/automacao-centi-core.ts");
+  const no = REGISTRO_NOS.get("leitura.dfdCenti") as DefNo;
+  const ctxDe = (recusa: (p: string) => boolean) => ({
+    centi: async () => ({ ok: true }),
+    api: async () => ({ ok: true }),
+    aviso: () => undefined,
+    cancelado: () => false,
+    host: {
+      __cache: new Map<string, unknown>(),
+      esperaCentiMs: 0,
+      lerDfdCenti: async (plan: string) => {
+        if (recusa(plan)) throw new Error(`${PREFIXO_RECUSA}A Centi negou a emissão do DFD do planejamento ${plan}: “Usuário sem permissão!”.`);
+        return { planejamento: plan, situacao: "Executado" };
+      },
+    },
+  });
+  const itens = ["1", "2", "3", "4"].map((p) => ({ numero: p, planejamento: p, entidade: "2" }));
+  // O 1º recusado e os demais emitidos: o fluxo segue, o 1º fica "não conferido" com o motivo.
+  const r = (await no.executar({ entrada: itens }, { pdf: true }, ctxDe((p) => p === "1") as never, {} as never)) as { saida: Record<string, unknown>[] };
+  assert.equal(r.saida.length, 4);
+  assert.equal(r.saida[0].centiFalha, true);
+  assert.match(String(r.saida[0].centiErro), /^A Centi negou a emissão do DFD do planejamento 1/);
+  assert.ok(r.saida.slice(1).every((x) => x.centi));
+  // Depois de um emitido, recusas seguidas não param (a operação funciona).
+  const r2 = (await no.executar({ entrada: itens }, { pdf: true }, ctxDe((p) => p !== "1") as never, {} as never)) as { saida: Record<string, unknown>[] };
+  assert.equal(r2.saida.filter((x) => x.centiFalha).length, 3);
+  // 3 seguidas sem nenhum emitido: a operação mudou — para com a mensagem geral.
+  await assert.rejects(no.executar({ entrada: itens }, { pdf: true }, ctxDe(() => true) as never, {} as never), /recusou o Emitir DFD em 3 planejamentos seguidos \(1, 2, 3\)/);
+});

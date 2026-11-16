@@ -3,7 +3,7 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { analisarRespostaCenti, operacaoRecusada } from "./automacao-centi-core";
+import { analisarRespostaCenti, operacaoRecusada, PREFIXO_RECUSA } from "./automacao-centi-core";
 import { carregarPlanejamento, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
@@ -124,8 +124,9 @@ export async function lerDfdCentiPorCodigo(
   const finalidade = s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
-  const e = await emitirUm(c, plan, entidade || undefined, false, true);
-  if (!e.pdf) throw new Error(e.recusada ? `A Centi recusou o Emitir DFD — ${e.erro}` : (e.erro ?? "Falha ao emitir."));
+  const e = await emitirUm(c, plan, entidade || undefined, false, l);
+  // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
+  if (!e.pdf) throw new Error(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);

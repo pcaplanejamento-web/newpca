@@ -18,7 +18,14 @@ import {
   formatoEntidade,
   nomeSeguro,
   type OpcoesSaida,
+  abriuNoLoad,
+  mensagemDoLoad,
+  mensagemRecusaGeral,
+  novasRecusas,
   operacaoRecusada,
+  pararPorRecusa,
+  registrarRecusaCenti,
+  registrarSucessoCenti,
   type ProtocoloAutomacao,
   paraBase64,
   pedidoEmitirDfd,
@@ -129,26 +136,31 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
   return { j: l.j };
 }
 
-/** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. */
-export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado = false): Promise<Emissao> {
+/** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
+ * load já feito por quem chama (sem ele, o load é feito aqui). */
+export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
   // Como a tela da Centi: carrega o planejamento ANTES do Emitir DFD (sem o load, "Usuário sem permissão!").
-  if (!carregado) {
+  let load = carregado;
+  if (!load) {
     const l = await carregarPlanejamento(c, id, entidade);
     if ("erro" in l) return l;
+    load = l;
   }
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date()), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
   if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {
+    const onde = entidade ? ` (órgão ${entidade})` : "";
+    // O load NÃO abriu o planejamento: a recusa é dele (outro órgão, sem acesso) — nunca a operação. Vale tentar os outros órgãos.
+    if (!abriuNoLoad(load.j)) {
+      const msg = mensagemDoLoad(load.j);
+      return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}.`, amostra: a.amostra };
+    }
     if (!deNovo) {
       const e = await c.pedir("estado", null, 8000);
-      if (e.ok && c.aplicarOperacao(e.operacao)) return emitirUm(c, id, entidade, true, true);
+      if (e.ok && c.aplicarOperacao(e.operacao)) return emitirUm(c, id, entidade, true, load);
     }
-    return {
-      erro: "A Centi recusou a operação Emitir DFD (“Usuário sem permissão!”) — ela deve ter mudado a operação. Emita UM DFD pela própria Centi com a extensão instalada: ela pega a operação nova sozinha. Depois, execute de novo.",
-      amostra: a.amostra,
-      recusada: true,
-    };
+    return { erro: `A Centi negou a emissão do DFD do planejamento ${id}${onde}: “Usuário sem permissão!”.`, amostra: a.amostra, recusada: true };
   }
   const r2 = await pdfDoAchado(a, baixarPelaExtensao(c.pedir as unknown as PedirExtensao, entidade));
   if ("pdf" in r2) return { pdf: r2.pdf };
@@ -515,6 +527,7 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
   const falhaGravar = (e: unknown, unido: boolean) =>
     anexando && e instanceof Error ? e.message : unido ? "Não consegui gravar o PDF unido." : "Não consegui gravar (o tamanho não bateu) — escolha a pasta de novo.";
   const semSaida = new Set<string>();
+  const recusas = novasRecusas();
   let parar = false;
   const pararFila = (erro: string) => marcarVarias((x) => (x.estado === "fila" ? { estado: "falha", erro } : null));
   try {
@@ -532,11 +545,14 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
         if (!r.pdf && !r.ambiente && !r.recusada && falhaPassageira(r.erro) && !d.interrompido()) r = await emitirNaEntidade(d, t, saida.conferir, semSaida, d.atual, fase);
         if (!r.pdf) {
           const erro = r.erro ?? "Falha ao emitir.";
-          // AMBIENTE (extensão/aba/sessão) ou OPERAÇÃO recusada: os demais falhariam igual — para (o que veio fica).
-          if (r.ambiente || r.recusada) {
+          // A recusa de UM planejamento fica como falha dele; só várias seguidas, sem nenhum emitido, indicam a operação mudada.
+          if (r.recusada) registrarRecusaCenti(recusas, t.id);
+          // AMBIENTE (extensão/aba/sessão) ou a OPERAÇÃO recusada de fato: os demais falhariam igual — para (o que veio fica).
+          if (r.ambiente || (r.recusada && pararPorRecusa(recusas))) {
             if (d.interrompido()) break;
+            const motivo = r.recusada ? mensagemRecusaGeral(recusas) : erro;
             marcar(t.chave, { estado: "falha", erro });
-            pararFila(`Não emitido — o lote parou: ${erro}`);
+            pararFila(`Não emitido — o lote parou: ${motivo}`);
             parar = true;
             break;
           }
@@ -544,6 +560,7 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
           andamento(`Falhou: planejamento ${t.id}`);
           continue;
         }
+        registrarSucessoCenti(recusas);
         const ent = r.entidade ? { entidade: r.entidade, entidadePrevista: false } : {};
         try {
           if (uniao) {

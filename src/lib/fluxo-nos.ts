@@ -37,7 +37,7 @@ import {
   resolverCaminho,
   TIPO_LACO,
 } from "./fluxo-core.ts";
-import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
+import { lerIdsCenti, MAX_IDS_CENTI, mensagemRecusaGeral, novasRecusas, PREFIXO_RECUSA, pararPorRecusa, type RecusasCenti, registrarRecusaCenti, registrarSucessoCenti, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { filaSerial } from "./ocr-assinatura-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
@@ -107,6 +107,10 @@ async function lerPlanejamentosPeloId(
     const k = chave?.((d.orgaoId as number | null) ?? null, str(d.orgaoEntidade ?? d.orgao) || null);
     return (k && mapa[k]?.replace(/^0+(?=\d)/, "")) || "";
   };
+  // As recusas do Emitir DFD na execução INTEIRA (o cache do host vale também nos subfluxos por item).
+  const cache = ctx.host.__cache as Map<string, unknown> | undefined;
+  const recusas = (cache?.get("centi:recusas") as RecusasCenti | undefined) ?? novasRecusas();
+  cache?.set("centi:recusas", recusas);
   let feitos = 0;
   const lidos = await executarEmPool(
     itens,
@@ -125,6 +129,7 @@ async function lerPlanejamentosPeloId(
       }
       try {
         r = { ...it, centi: await lerNaCenti(() => ler(str(it.planejamento), str(it.entidade) || undefined, op.pdf, op.completo === true, op.ocr ?? op.completo === true), ctx) };
+        if (op.pdf) registrarSucessoCenti(recusas);
       } catch (x0) {
         let x: unknown = x0;
         let achou: Item | null = null;
@@ -152,13 +157,21 @@ async function lerPlanejamentosPeloId(
           if (x === x0 && outras.length) x = new Error(`${msg0.replace(/\.$/, "")} — não abre em nenhum dos ${outras.length + 1} órgãos da Centi (tentados: ${[str(it.entidade), ...outras].join(", ")}).`);
         }
         if (achou) {
+          if (op.pdf) registrarSucessoCenti(recusas);
           feitos++;
           ctx.parcial?.([achou]);
           return achou;
         }
-        const msg = x instanceof Error ? x.message : String(x);
+        let msg = x instanceof Error ? x.message : String(x);
         // O lote acabou ou a Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
         if (/interrompido|recusou o Emitir DFD/i.test(msg)) throw x;
+        // A Centi negou o Emitir DFD DESTE planejamento: fica como falha dele; só várias seguidas sem nenhum emitido param tudo.
+        if (msg.startsWith(PREFIXO_RECUSA)) {
+          registrarRecusaCenti(recusas, str(it.planejamento));
+          if (pararPorRecusa(recusas)) throw new Error(mensagemRecusaGeral(recusas));
+          msg = msg.slice(PREFIXO_RECUSA.length);
+          x = new Error(msg);
+        }
         // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
         const nao = msg.startsWith("NAO_ENCONTRADO: ");
         if (!nao && op.falhaErro) throw new Error(`DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) não conferido: ${msg}`);

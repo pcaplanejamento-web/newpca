@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.293.1",
+    data: "2026-11-16",
+    titulo: "Conferir DFDs × Centi não para por um DFD recusado",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Um planejamento recusado pela Centi (“Usuário sem permissão!”) fica como “não conferido” com o motivo, e os demais DFDs seguem. A automação só para quando 3 planejamentos seguidos são recusados sem nenhum emitido: aí a operação da Centi mudou de fato.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Quando o planejamento não abre no órgão do DFD, o sistema procura nos outros órgãos com o ID da Centi (Conferir DFDs × Centi e Baixar/anexar DFDs). Antes, essa recusa era confundida com mudança da operação.",
+        link: "/painel/automacao",
+      },
+      { tipo: "melhoria", area: "Automação", texto: "A mensagem da recusa diz qual planejamento e qual órgão a Centi recusou.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.293.0",
     data: "2026-11-16",
     titulo: "Agendamentos das automações em qualquer tela",

@@ -71,6 +71,42 @@ export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigC
 /** A resposta da Centi recusou a OPERAÇÃO ("Usuário sem permissão!") — não é a entidade nem a sessão. */
 export const operacaoRecusada = (texto: string | undefined) => /sem permiss/i.test(texto ?? "");
 
+/** O LOAD do planejamento ABRIU o registro? `{Entity: null, Message}` = não abriu (outro órgão, sem acesso); sem a chave
+ * `Entity` (outro formato) = abriu. Sem abrir, o Emitir DFD volta "Usuário sem permissão!" — não é a operação. */
+export function abriuNoLoad(j: unknown): boolean {
+  if (!j || typeof j !== "object") return true;
+  if (!("Entity" in j)) return true;
+  const e = (j as { Entity?: unknown }).Entity;
+  return e != null && typeof e === "object";
+}
+
+/** A mensagem da Centi num load que não abriu (texto ou `{Text|Descricao}`). */
+export function mensagemDoLoad(j: unknown): string {
+  const m = j && typeof j === "object" ? (j as { Message?: unknown }).Message : null;
+  const t = typeof m === "string" ? m : m && typeof m === "object" ? ((m as { Text?: unknown; Descricao?: unknown }).Text ?? (m as { Descricao?: unknown }).Descricao) : "";
+  return typeof t === "string" ? t.trim() : "";
+}
+
+/** Quantos planejamentos SEGUIDOS recusados (sem nenhum emitido na execução) param tudo — a operação mudou de fato. */
+export const MAX_RECUSAS_SEGUIDAS = 3;
+/** O erro de UM planejamento recusado (lido pelos fluxos — nunca contém "recusou o Emitir DFD" sozinho no início). */
+export const PREFIXO_RECUSA = "RECUSA: ";
+/** O contador das recusas do Emitir DFD numa execução: UMA recusa é do planejamento (fica como falha dele); só várias
+ * seguidas, sem NENHUM DFD emitido, indicam que a operação mudou. */
+export type RecusasCenti = { seguidas: string[]; sucessos: number };
+export const novasRecusas = (): RecusasCenti => ({ seguidas: [], sucessos: 0 });
+export function registrarSucessoCenti(r: RecusasCenti): void {
+  r.sucessos++;
+  r.seguidas = [];
+}
+export function registrarRecusaCenti(r: RecusasCenti, plan: string): void {
+  if (!r.seguidas.includes(plan)) r.seguidas.push(plan);
+}
+export const pararPorRecusa = (r: RecusasCenti) => r.sucessos === 0 && r.seguidas.length >= MAX_RECUSAS_SEGUIDAS;
+/** A mensagem que PARA a execução (contém "recusou o Emitir DFD" — a regra dos fluxos para por ela). */
+export const mensagemRecusaGeral = (r: RecusasCenti) =>
+  `A Centi recusou o Emitir DFD em ${r.seguidas.length} planejamentos seguidos (${r.seguidas.slice(0, 5).join(", ")}) e nenhum foi emitido (“Usuário sem permissão!”) — a operação deve ter mudado. Emita UM DFD pela própria Centi com a extensão instalada: ela pega a operação nova sozinha. Depois, execute de novo.`;
+
 /** A operação "Emitir DFD" de ANTES da mudança da Centi (01/10/2026) — a guardada no aparelho é trocada pela nova. */
 export const OPERACAO_ANTIGA = { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", assinaturaDfd: "13" };
 

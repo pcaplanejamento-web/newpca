@@ -685,3 +685,23 @@ test("arquivo da Centi: baixado DIRETO pela chave, num pedido só (sem insistir)
     assert.match(e.amostra ?? "", /resposta: \{"File"/);
   }
 });
+
+test("Emitir DFD recusado: o load que não abriu e o contador das recusas seguidas", async () => {
+  const c = await import("../src/lib/automacao-centi-core.ts");
+  assert.equal(c.abriuNoLoad({ Entity: null, Message: "Registro não encontrado" }), false);
+  assert.equal(c.abriuNoLoad({ Entity: { Fields: [] } }), true);
+  assert.equal(c.abriuNoLoad({ Id: 1 }), true, "sem a chave Entity = outro formato, abriu");
+  assert.equal(c.mensagemDoLoad({ Entity: null, Message: { Text: "Sem acesso" } }), "Sem acesso");
+  const r = c.novasRecusas();
+  c.registrarRecusaCenti(r, "1");
+  c.registrarRecusaCenti(r, "1");
+  c.registrarRecusaCenti(r, "2");
+  assert.equal(c.pararPorRecusa(r), false, "planejamentos distintos");
+  c.registrarRecusaCenti(r, "3");
+  assert.equal(c.pararPorRecusa(r), true);
+  assert.match(c.mensagemRecusaGeral(r), /recusou o Emitir DFD em 3 planejamentos seguidos/);
+  const s = c.novasRecusas();
+  c.registrarSucessoCenti(s);
+  for (const p of ["1", "2", "3", "4"]) c.registrarRecusaCenti(s, p);
+  assert.equal(c.pararPorRecusa(s), false, "com um emitido na execução, a operação funciona");
+});
