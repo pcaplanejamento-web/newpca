@@ -122,6 +122,29 @@ export function listasDoLoad(j: unknown): ListaDoLoad[] {
   return achadas;
 }
 
+/** As pistas (nomes) de onde estão as seções 8–10 — para o motivo/diagnóstico (só nomes, nunca valores). */
+const NOME_CAMPO_DFD = /planejamento.?assinatura|assinatura.?dfd/i;
+const NOME_PISTA = /assin|equipe|integrant|demandante|autoriz|fiscal|secretari|ordenador/i;
+/** Os CAMPOS do load (fora de listas): o caminho, o nome e — quando é um id ou uma referência {Id} — o id. */
+export function camposDoLoad(j: unknown): { caminho: string; nome: string; id: string | null }[] {
+  const out: { caminho: string; nome: string; id: string | null }[] = [];
+  const ir = (v: unknown, caminho: string[], prof: number) => {
+    if (prof > 8 || out.length > 2000) return;
+    const nome = caminho[caminho.length - 1] ?? "";
+    if (Array.isArray(v)) return;
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      if (caminho.length) out.push({ caminho: caminho.join("."), nome, id: idDoItem(o) });
+      if (Array.isArray(o.Fields)) for (const f of o.Fields as Campo[]) if (f && typeof f.Key === "string") ir(f.Value, [...caminho, f.Key], prof + 1);
+      for (const [k, x] of Object.entries(o)) if (k !== "Fields") ir(x, [...caminho, k], prof + 1);
+      return;
+    }
+    if (caminho.length) out.push({ caminho: caminho.join("."), nome, id: /(^id|id$)/i.test(nome) ? idTexto(v) : null });
+  };
+  ir(j, [], 0);
+  return out;
+}
+
 const idDoItem = (x: unknown) => idTexto(valorDe(x, "Id")) ?? idTexto(valorDe(x, "@Id")) ?? idTexto(valorDe(x, "id"));
 /** O item em "chave → valor" (as próprias e as do padrão Fields "@K"). */
 function planoDoItem(x: Record<string, unknown>): Record<string, unknown> {
@@ -136,14 +159,27 @@ function planoDoItem(x: Record<string, unknown>): Record<string, unknown> {
  * lista é dele (nunca o de outro planejamento). `ids` = todos; `id` = o que vale (uma opção, ou a única marcada); null =
  * o load não traz a lista (`listas` = os nomes das listas que trouxe, para o diagnóstico).
  */
-export function assinaturasDoLoad(j: unknown): { ids: string[]; id: string | null; nome: string } | { listas: string[] } {
+export function assinaturasDoLoad(j: unknown): { ids: string[]; id: string | null; nome: string } | { listas: string[]; campos: string[] } {
   const todas = listasDoLoad(j);
   let cand = todas.filter((l) => NOME_ASSINATURA.test(l.nome) && l.itens.some((x) => idDoItem(x)));
   if (cand.length > 1) {
     const dfd = cand.filter((l) => /dfd/i.test(l.nome));
     if (dfd.length) cand = dfd;
   }
-  if (cand.length !== 1) return { listas: [...new Set(todas.map((l) => l.caminho || "(raiz)"))].slice(0, 40) };
+  if (cand.length !== 1) {
+    // Sem a lista: o registro escolhido do PRÓPRIO planejamento num CAMPO dele (ex.: IdPlanejamentoAssinaturaDFD, ou
+    // uma referência {Id, Descricao} de nome "assinatura") — do load dele, então é dele.
+    const campos = camposDoLoad(j);
+    // Só o campo do registro do DFD (o nome do parâmetro da emissão) — nunca a assinatura digital/eletrônica.
+    const doDfd = (c: { nome: string; id: string | null }) => NOME_CAMPO_DFD.test(c.nome) && !!c.id;
+    const ref = [...new Set(campos.filter(doDfd).map((c) => c.id as string))];
+    const nome = campos.find(doDfd)?.caminho ?? "";
+    if (cand.length === 0 && ref.length === 1) return { ids: ref, id: ref[0], nome };
+    return {
+      listas: [...new Set(todas.map((l) => l.caminho || "(raiz)"))].slice(0, 40),
+      campos: [...new Set(campos.map((c) => c.caminho))].filter((c) => NOME_PISTA.test(c)).slice(0, 40),
+    };
+  }
   const l = cand[0];
   const ids = [...new Set(l.itens.map(idDoItem).filter((x): x is string => !!x))];
   if (ids.length === 1) return { ids, id: ids[0], nome: l.caminho };
@@ -161,7 +197,7 @@ export function assinaturaDoLoad(j: unknown, plan: string): { id: string } | { e
   const a = assinaturasDoLoad(j);
   if ("listas" in a)
     return {
-      erro: `Não achei, no planejamento ${plan} aberto na Centi, a lista das seções 8 a 10 do DFD (equipe, secretário demandante, autorização)${a.listas.length ? ` — listas lidas: ${a.listas.join(", ")}` : ""}. Nada foi emitido.`,
+      erro: `Não achei, no planejamento ${plan} aberto na Centi, o registro das seções 8 a 10 do DFD (equipe, secretário demandante, autorização)${a.listas.length ? ` — listas lidas: ${a.listas.join(", ")}` : ""}${a.campos.length ? ` — campos: ${a.campos.join(", ")}` : ""}.`,
     };
   if (a.id) return { id: a.id };
   return { erro: `O planejamento ${plan} tem ${a.ids.length} registros das seções 8 a 10 do DFD na Centi e nenhum marcado como o escolhido — a automação não escolhe sozinha; deixe só o certo no planejamento.` };

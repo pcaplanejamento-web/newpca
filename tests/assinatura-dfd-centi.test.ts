@@ -170,3 +170,14 @@ test("seções 8–10 não confirmadas: valem as do sistema na comparação, na 
   const difs2 = diferencasDfdCenti(sis, { ...base, secoes: [sistema.secoes[0], sec("8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", "OUTRA"), sec("10 - AUTORIZAÇÃO", "Y")] } as never);
   assert.ok(difs2.length > 0, "confirmadas, as diferenças aparecem");
 });
+
+test("o registro das seções 8–10 num CAMPO do planejamento (não a assinatura digital)", () => {
+  const load = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "IdAssinaturaDigital", Value: 9 }, { Key: "IdPlanejamentoAssinaturaDFD", Value: 480 }] } };
+  assert.deepEqual(assinaturaDoLoad(load, "131"), { id: "480" });
+  const ref = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "PlanejamentoAssinatura", Value: { Id: 77, Descricao: "X" } }] } };
+  assert.deepEqual(assinaturaDoLoad(ref, "131"), { id: "77" });
+  const so = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "IdAssinaturaDigital", Value: 9 }, { Key: "EquipePlanejamento", Value: "x" }] } };
+  const e = (assinaturaDoLoad(so, "131") as { erro: string }).erro;
+  assert.match(e, /campos: .*IdAssinaturaDigital.*EquipePlanejamento/);
+  assert.ok(!e.includes("“x”") && !/\b9\b/.test(e), "só nomes, nunca valores");
+});

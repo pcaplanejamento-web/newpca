@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.14",
+    data: "2026-11-16",
+    titulo: "Registro das seções 8 a 10 também num campo do planejamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A automação também acha o registro das seções 8 a 10 do DFD quando a Centi o guarda num campo do próprio planejamento (não só numa lista). Quando não acha, o aviso traz os NOMES dos campos que o planejamento mostrou — sem dados — para fechar o caso.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.13",
     data: "2026-11-16",
     titulo: "A conferência com a Centi não para mais",
