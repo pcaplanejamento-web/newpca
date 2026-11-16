@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_AJUDA, MAX_CONEXOES, MAX_NOS } from "./fluxo-core";
+import { MAX_AJUDA, MAX_CONEXOES, MAX_NOS } from "./fluxo-core.ts";
 
 const textoAjuda = z.string().trim().max(MAX_AJUDA).optional();
 const ajudaSchema = z.strictObject({ funciona: textoAjuda, executa: textoAjuda, resultado: textoAjuda });

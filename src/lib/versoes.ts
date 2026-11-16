@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.10",
+    data: "2026-11-16",
+    titulo: "Atualizar pelo modelo sem erro",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Atualizar pelo modelo” em “Corrigir DFDs divergentes pela Centi” dava “Grande demais: esperava que o texto tivesse <= 400 caracteres” — a descrição do modelo foi encurtada e todos os modelos passam a ser conferidos contra os limites do salvar.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.9",
     data: "2026-11-16",
     titulo: "Conferir e corrigir todos os DFDs pela Centi",

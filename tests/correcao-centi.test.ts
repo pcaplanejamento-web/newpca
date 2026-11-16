@@ -876,3 +876,20 @@ test("Quais DFDs: Todos reconfere também os gravados convergentes; os outros fi
   assert.equal(m?.grafo.nos.find((x) => x.id === "div1")?.tipo, "dados.filtrarConferencia");
   assert.equal(m?.grafo.nos.find((x) => x.id === "sel1")?.config.semMarcar, "todos");
 });
+
+test("todo modelo cabe nos limites do salvar (nome e descrição — senão “Atualizar pelo modelo” falha)", () => {
+  for (const m of MODELOS_FLUXO) {
+    assert.ok(m.descricao.length <= 400, `${m.id}: descrição com ${m.descricao.length} caracteres`);
+    assert.ok(m.nome.length <= 80, `${m.id}: nome longo`);
+  }
+});
+
+test("todo modelo passa no Zod do salvar (criar e atualizar)", async () => {
+  const { criarFluxoSchema, editarFluxoSchema } = await import("../src/lib/fluxos-validation.ts");
+  for (const m of MODELOS_FLUXO) {
+    const corpo = { nome: m.nome, descricao: m.descricao, ajuda: m.ajuda, grafo: grafoDoModelo(m, new Map()) };
+    const a = criarFluxoSchema.safeParse(corpo);
+    assert.ok(a.success, `${m.id}: ${a.success ? "" : a.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+    assert.ok(editarFluxoSchema.safeParse(corpo).success, m.id);
+  }
+});

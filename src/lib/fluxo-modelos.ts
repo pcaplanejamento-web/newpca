@@ -483,7 +483,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "corrigir-divergentes-centi",
     nome: "Corrigir DFDs divergentes pela Centi",
     descricao:
-      "Confere os DFDs na Centi AGORA e corrige logo em seguida os que saírem divergentes — só o que diverge é trocado pelos dados da Centi (a mesma correção do “Usar a Centi em…” da Mesa). “Quais DFDs” escolhe todos (padrão — também os gravados como Convergente), só os divergentes ou os divergentes e não conferidos; na Seleção, sem nada marcado seguem todos (vindo da Mesa, vale a seleção de lá). Se parar, a próxima execução continua do DFD em que parou.",
+      "Confere os DFDs na Centi agora e corrige em seguida os que saírem divergentes — só o que diverge é trocado pelos dados da Centi. “Quais DFDs”: todos (padrão), só os divergentes ou os divergentes e não conferidos. Sem nada marcado na Seleção, seguem todos. Se parar, a próxima execução continua de onde parou.",
     dependencias: ["conferir-corrigir-1-dfd"],
     ajuda: {
       funciona:
