@@ -48,7 +48,7 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
   const j2 = await lerJson<{ retrato?: RetratoCenti | null }>(r2);
   if (!r2.ok || !j2.ok) throw new Error(j2.error ?? "não foi possível ler os dados da Centi");
-  if (!j2.retrato) throw new Error("sem os dados da Centi guardados — reconfira na Centi");
+  if (!j2.retrato) throw new Error("sem os dados da Centi guardados — atualize o “Conferir 1 DFD × Centi” pelo modelo e execute de novo");
   const g = detalheParaParseado(o);
   const plano = planoCorrecao(g, j2.retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
   const corrigido = semMarcas(aplicarCentiPorTipos(g, plano, usar));

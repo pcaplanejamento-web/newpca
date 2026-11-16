@@ -853,7 +853,7 @@ const NOS: DefNo[] = [
       { chave: "limite", rotulo: "Máximo de DFDs", tipo: "selecao", padrao: 5000, opcoes: opcoesNum([100, 500, 1000, 5000, 10000, 20000]), ajuda: "Um teto de segurança: o nó busca no máximo esta quantidade de DFDs na Centi por execução." },
       { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
       { chave: "completo", rotulo: "Guardar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo (com a assinatura por OCR) vai em “centi.dfd” — a base do “Substituir DFD pela Centi”." },
-      { chave: "dfdInteiro", rotulo: "Comparar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo (sem OCR — mais rápido) vai em “centi.dfd” para o “Comparar DFD × Centi” conferir TODAS as informações (cabeçalho, seções e itens)." },
+      { chave: "dfdInteiro", rotulo: "Comparar o DFD inteiro", tipo: "booleano", padrao: true, ajuda: "Ligado (o padrão): o DFD lido completo (sem OCR — mais rápido) vai em “centi.dfd” para o “Comparar DFD × Centi” conferir TODAS as informações (cabeçalho, seções e itens) e guardar os dados da Centi — a base da correção pela Centi. Desligado: só o resumo (tipo, valor, nº de itens, objeto) e nada a corrigir." },
       {
         chave: "falhaErro",
         rotulo: "Falha de comunicação para o fluxo",
@@ -871,7 +871,7 @@ const NOS: DefNo[] = [
     ],
     executar: async (e, c, ctx) => {
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
-      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true || c.dfdInteiro === true, ocr: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true })).filter((x): x is Item => x !== undefined);
+      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true || c.dfdInteiro !== false, ocr: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true })).filter((x): x is Item => x !== undefined);
       return { saida: out };
     },
   },

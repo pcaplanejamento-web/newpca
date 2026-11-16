@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.2",
+    data: "2026-11-16",
+    titulo: "Correção pela Centi: os dados da Centi guardados",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A conferência dos DFDs com a Centi passa a comparar o DFD inteiro por padrão e guarda os dados lidos — antes, o “Conferir 1 DFD × Centi” criado em versões anteriores comparava só o resumo e a correção falhava com “sem os dados da Centi guardados”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Um subfluxo salvo que ficou atrás do modelo (uma opção que o modelo liga) mostra “Atualizar pelo modelo” e é atualizado sozinho ao criar uma automação que o usa.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.1",
     data: "2026-11-16",
     titulo: "Correção pela Centi: uma seleção só",

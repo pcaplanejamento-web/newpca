@@ -493,10 +493,18 @@ export function grafoDoModelo(m: ModeloFluxo, criados: ReadonlyMap<string, numbe
 }
 
 /**
- * O fluxo salvo ficou para trás do modelo de mesmo nome: os TIPOS dos nós diferem (o modelo ganhou/perdeu etapas).
- * Só a estrutura conta — posições e configurações ajustadas pela pessoa não acusam.
+ * O fluxo salvo ficou para trás do modelo de mesmo nome: os TIPOS dos nós diferem (o modelo ganhou/perdeu etapas) ou um
+ * nó de mesmo id e tipo NÃO TEM (ausente) uma opção que o modelo LIGA (ex.: "Comparar o DFD inteiro" — sem ela, a conferência não
+ * guarda os dados da Centi e a correção não tem com o que corrigir). Posições e os demais ajustes da pessoa não acusam.
  */
 export function desatualizadoDoModelo(g: Pick<Grafo, "nos">, m: Pick<ModeloFluxo, "grafo">): boolean {
   const tipos = (nos: readonly { tipo: string }[]) => nos.map((n) => n.tipo).sort().join("|");
-  return tipos(g.nos) !== tipos(m.grafo.nos);
+  if (tipos(g.nos) !== tipos(m.grafo.nos)) return true;
+  for (const nm of m.grafo.nos) {
+    const ns = g.nos.find((x) => x.id === nm.id && x.tipo === nm.tipo);
+    if (!ns) continue;
+    // Só a opção AUSENTE (o salvo é de antes dela) — um "false" gravado é escolha da pessoa.
+    for (const [k, v] of Object.entries(nm.config)) if (v === true && ns.config[k] === undefined) return true;
+  }
+  return false;
 }

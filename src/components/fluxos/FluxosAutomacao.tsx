@@ -559,7 +559,10 @@ export function FluxosAutomacao({
       if (!md) continue;
       const existe = (fluxos ?? []).find((f) => f.nome === md.nome);
       if (existe) {
-        if (opcoes?.atualizar && !(await regravar(existe, organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), md))) return;
+        // Com `atualizar` ou DESATUALIZADO (o modelo de hoje mudou): regrava — o fluxo novo nunca usa um subfluxo antigo.
+        const velho = !opcoes?.atualizar && desatualizadoDoModelo(lerGrafo(existe.grafo), md);
+        if ((opcoes?.atualizar || velho) && !(await regravar(existe, organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), md))) return;
+        if (velho) toast.info(`“${existe.nome}” atualizado pelo modelo.`);
         criados.set(dep, existe.id);
         continue;
       }

@@ -372,3 +372,40 @@ test("Modelo 'Corrigir divergentes': as marcas da aba Do sistema não valem — 
   const semSel: Grafo = { v: 1, nos: [base.nos[0], base.nos[1]], conexoes: [{ de: "inicio1", saida: "saida", para: "dfds1", entrada: "entrada" }] };
   assert.equal(marcadosDuplicados(semSel).size, 0);
 });
+
+test("Subfluxo “Conferir 1 DFD × Centi” SALVO antes do DFD inteiro: lê o DFD inteiro (guarda os dados da Centi) e acusa desatualizado", async () => {
+  const { desatualizadoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  assert.ok(filho);
+  const atual = lerGrafo(filho.grafo);
+  // O salvo antigo: o "Buscar DFD" sem a chave dfdInteiro.
+  const antigo: Grafo = {
+    ...atual,
+    nos: atual.nos.map((n) => (n.tipo === "leitura.dfdCenti" ? { ...n, config: (({ dfdInteiro: _x, ...r }) => r)(n.config) } : n)),
+  };
+  assert.equal(desatualizadoDoModelo(antigo, filho), true, "falta a opção que o modelo liga");
+  assert.equal(desatualizadoDoModelo(atual, filho), false);
+  const no = REGISTRO_NOS.get("leitura.dfdCenti");
+  assert.ok(no);
+  const pedidos: (boolean | undefined)[] = [];
+  const ctx = (c: Record<string, unknown>) => ({
+    host: { esperaCentiMs: 0, mapaEntidades: { "2": "2" }, lerDfdCenti: async (p: string, _e?: string, _pdf?: boolean, completo?: boolean) => {
+      pedidos.push(completo);
+      return { planejamento: p, numero: "1" };
+    } },
+    config: c,
+  });
+  const item = [{ id: 1, numero: "1", planejamento: "11", entidade: "2" }];
+  const rodar = (c: Record<string, unknown>) =>
+    no.executar({ entrada: item }, c, {
+      host: ctx(c).host,
+      api: async () => ({ ok: true }),
+      centi: async () => ({ ok: true }),
+      cancelado: () => false,
+      aviso: () => {},
+      parcial: () => {},
+    } as never, {} as never);
+  await rodar({ limite: 1 });
+  await rodar({ limite: 1, dfdInteiro: false });
+  assert.deepEqual(pedidos, [true, false], "sem a chave = DFD inteiro; desligado de propósito = só o resumo");
+});

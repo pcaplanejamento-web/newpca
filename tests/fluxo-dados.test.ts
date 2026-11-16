@@ -566,12 +566,14 @@ test("Nó CM002: a extensão antiga pede atualização e o diagnóstico vai na m
   );
 });
 
-test("Fluxo salvo desatualizado: só os tipos dos nós contam", async () => {
+test("Fluxo salvo desatualizado: os tipos dos nós e as opções que o modelo liga e o salvo não tem", async () => {
   const { MODELOS_FLUXO, desatualizadoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
   assert.ok(m);
   const g = lerGrafo(m.grafo);
-  assert.equal(desatualizadoDoModelo({ nos: g.nos.map((n) => ({ ...n, x: 0, config: {} })) }, m), false);
+  // Posição e ajustes (inclusive desligar uma opção — "false" gravado) não acusam.
+  const desligado = (c: Record<string, unknown>) => Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v === true ? false : v]));
+  assert.equal(desatualizadoDoModelo({ nos: g.nos.map((n) => ({ ...n, x: 0, config: desligado(n.config) })) }, m), false);
   assert.equal(desatualizadoDoModelo({ nos: g.nos.filter((n) => n.tipo !== "logica.se") }, m), true);
 });
 
