@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.4",
+    data: "2026-11-16",
+    titulo: "Vincular DFD acha todos os protocolos",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto:
+          "Vincular um DFD a um protocolo procura também nos protocolos fora do recorte da Mesa (outro PCA do cabeçalho, outra unidade a que você tem acesso) — pelo nº, Id, assunto ou interessado. Antes só listava os da Mesa aberta e dizia “Nenhum protocolo cadastrado”.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "Mover o último DFD de um protocolo pede a confirmação do sistema (o protocolo vazio vai à lixeira).",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.295.3",
     data: "2026-11-16",
     titulo: "Correção pela Centi: toda divergência corrigida",

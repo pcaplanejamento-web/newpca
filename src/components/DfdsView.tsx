@@ -390,19 +390,63 @@ export function DfdsView({
   const [salvandoVinc, setSalvandoVinc] = useState(false);
   // Opções do vínculo (seleção com BUSCA — com muitos protocolos o <select> era inviável): nº + Id · assunto ·
   // interessado · unidade, o protocolo ATUAL do DFD marcado.
-  const opcoesVinculo = useMemo<OpcaoBusca[]>(
-    () => [
+  // A lista da Mesa vem RECORTADA (unidade e PCA do cabeçalho, Mesa aberta): o protocolo de destino que não está nela
+  // (outro ano de PCA, outra unidade acessível) vem da PESQUISA do sistema — o MESMO escopo que a rota confere ao gravar.
+  const [vincBusca, setVincBusca] = useState<{ q: string; opcoes: OpcaoBusca[]; buscando: boolean; erro: boolean }>({ q: "", opcoes: [], buscando: false, erro: false });
+  const vincBuscaSeq = useRef(0);
+  function buscarProtocolosVinculo(q: string) {
+    const termo = q.trim();
+    const seq = ++vincBuscaSeq.current;
+    if (termo.length < 2) {
+      setVincBusca({ q: termo, opcoes: [], buscando: false, erro: false });
+      return;
+    }
+    setVincBusca((b) => ({ ...b, q: termo, buscando: true, erro: false }));
+    window.setTimeout(async () => {
+      if (seq !== vincBuscaSeq.current) return;
+      try {
+        const r = await fetch(`/api/pesquisa?tipos=protocolo&limite=50&q=${encodeURIComponent(termo)}`);
+        const j = (await r.json().catch(() => null)) as {
+          ok?: boolean;
+          grupos?: { tipo: string; opcoes: { id: number; rotulo: string; detalhe?: string; ids?: string[]; selo?: string }[] }[];
+        } | null;
+        if (seq !== vincBuscaSeq.current) return;
+        if (!r.ok || !j?.ok) throw new Error();
+        const lista = (j.grupos ?? []).find((g) => g.tipo === "protocolo")?.opcoes ?? [];
+        setVincBusca({
+          q: termo,
+          buscando: false,
+          erro: false,
+          opcoes: lista.map((o) => {
+            const numero = (o.ids?.[0] ?? "").replace(/^Protocolo\s+/, "") || o.rotulo;
+            const idExt = o.ids?.find((x) => x.startsWith("Id "));
+            const assunto = o.rotulo.startsWith("Protocolo ") ? null : o.rotulo;
+            return { valor: String(o.id), rotulo: numero, detalhe: [idExt, assunto, o.detalhe, o.selo].filter(Boolean).join(" · ") };
+          }),
+        });
+      } catch {
+        if (seq === vincBuscaSeq.current) setVincBusca((b) => ({ ...b, buscando: false, erro: true }));
+      }
+    }, 300);
+  }
+  const opcoesVinculo = useMemo<OpcaoBusca[]>(() => {
+    const locais: OpcaoBusca[] = protocolos.map((p) => ({
+      valor: String(p.id),
+      rotulo: p.numero,
+      detalhe: [p.id === vincAlvo?.protocoloId ? "atual" : null, p.idExterno ? `Id ${p.idExterno}` : null, p.assunto, p.interessado, p.reparticaoCodigo]
+        .filter(Boolean)
+        .join(" · "),
+    }));
+    const ja = new Set(locais.map((o) => o.valor));
+    const doServidor = vincBusca.opcoes
+      .filter((o) => !ja.has(o.valor))
+      .map((o) => ({ ...o, detalhe: [o.valor === String(vincAlvo?.protocoloId) ? "atual" : null, o.detalhe, "fora do recorte desta Mesa"].filter(Boolean).join(" · ") }));
+    return [
       { valor: "", rotulo: "— Nenhum (desvincular) —", detalhe: vincAlvo?.protocoloId == null ? "atual" : "tira o DFD do protocolo" },
-      ...protocolos.map((p) => ({
-        valor: String(p.id),
-        rotulo: p.numero,
-        detalhe: [p.id === vincAlvo?.protocoloId ? "atual" : null, p.idExterno ? `Id ${p.idExterno}` : null, p.assunto, p.interessado, p.reparticaoCodigo]
-          .filter(Boolean)
-          .join(" · "),
-      })),
-    ],
-    [protocolos, vincAlvo?.protocoloId],
-  );
+      ...locais,
+      ...doServidor,
+    ];
+  }, [protocolos, vincAlvo?.protocoloId, vincBusca.opcoes]);
   // Seleção + edição EM MASSA nas três visões (a barra fica FIXA no rodapé do display; grava no banco).
   const [selDfds, setSelDfds] = useState<Sel>(new Set());
   const [selProtos, setSelProtos] = useState<Sel>(new Set());
@@ -1089,13 +1133,25 @@ export function DfdsView({
     setErro(null);
     setVincAlvo({ id: d.id, numero: d.numero, protocoloId: d.protocoloId });
     setVincSel(d.protocoloId);
+    vincBuscaSeq.current++;
+    setVincBusca({ q: "", opcoes: [], buscando: false, erro: false });
   }
 
   async function salvarVincular() {
     if (!vincAlvo) return;
     // O último DFD saindo do protocolo: o protocolo de origem, vazio, é excluído (vai à lixeira) — avisa antes.
     const origem = vincAlvo.protocoloId != null && vincSel !== vincAlvo.protocoloId ? protocolos.find((p) => p.id === vincAlvo.protocoloId) : undefined;
-    if (origem && origem.totalDfds <= 1 && !confirm(`O DFD ${vincAlvo.numero} é o último do protocolo ${origem.numero}: ao tirá-lo, o protocolo ${origem.numero} é excluído (vai à lixeira da Mesa). Continuar?`)) return;
+    if (
+      origem &&
+      origem.totalDfds <= 1 &&
+      !(await confirmarCenti({
+        titulo: `Mover o último DFD do protocolo ${origem.numero}?`,
+        texto: `O DFD ${vincAlvo.numero} é o último do protocolo ${origem.numero}: ao tirá-lo, o protocolo ${origem.numero} é excluído (vai à lixeira da Mesa).`,
+        confirmar: "Mover",
+        perigo: true,
+      }))
+    )
+      return;
     setSalvandoVinc(true);
     setErro(null);
     try {
@@ -2902,11 +2958,15 @@ export function DfdsView({
             valor={vincSel == null ? "" : String(vincSel)}
             onChange={(v) => setVincSel(v ? Number(v) : null)}
             disabled={salvandoVinc}
+            onBusca={buscarProtocolosVinculo}
+            vazio={vincBusca.buscando ? "Procurando nos protocolos do sistema…" : vincBusca.erro ? "Não foi possível pesquisar — tente de novo." : "Nenhum protocolo encontrado com esse termo."}
           />
           <p className="text-xs text-faint">
-            {protocolos.length === 0
-              ? "Nenhum protocolo cadastrado ainda — crie um na aba Protocolos."
-              : 'Vincule este DFD a um protocolo, ou escolha "Nenhum" para desvincular.'}
+            {vincBusca.buscando
+              ? "Procurando também nos protocolos fora desta Mesa (outro PCA, outra unidade)…"
+              : protocolos.length === 0
+                ? "Nenhum protocolo nesta Mesa com os filtros do cabeçalho — digite o nº, o Id ou o assunto para procurar em todos os protocolos a que você tem acesso."
+                : 'Vincule este DFD a um protocolo (a pesquisa procura também fora desta Mesa), ou escolha "Nenhum" para desvincular.'}
           </p>
         </div>
       </Modal>

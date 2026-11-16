@@ -2076,7 +2076,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Barra de **progresso** + **relatório final** (importados; falha de gravação = INCOMPLETA, com os DFDs não gravados);
   **defeituoso nunca é protocolado** (trava o Protocolar — nada é pulado). `casarReparticao` (`reparticao-match.ts`) casa por **sigla → nome → órgão**. Acesso em
   `protocolo.ts` (`iniciarProtocolo` = `POST /api/protocolo` `start-protocolo`; totais **ao vivo**), `GET`/`DELETE
-  /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular — na Mesa pelo `SeletorBusca`, com pesquisa). UI na **aba Protocolos** de `DfdsView`
+  /api/protocolo/[id]`, `PATCH /api/dfd/[id]` (vincular/desvincular — na Mesa pelo `SeletorBusca`: os protocolos da Mesa + a PESQUISA do sistema `GET /api/pesquisa?tipos=protocolo` com `onBusca` para os fora do recorte — outro PCA/unidade acessível, v1.295.4; o servidor confere escopo e a tela de destino). UI na **aba Protocolos** de `DfdsView`
   (`ProtocoloUploadForm` → banner: metadados + **repartição do protocolo pelo Interessado** + tabela dos DFDs (sempre
   cheia) + **seleção/edição em massa** [repartição/prioridade/previsão/fundamentação nos N selecionados] + **estado
   por DFD**. **Clicar numa linha abre o DFD (`DfdConferir`) como um banner AO LADO** — o `Modal` **mestre-detalhe**
