@@ -281,7 +281,9 @@ test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marc
   const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
-  const g = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
+  const g0 = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
+  // "Só os divergentes gravados" (o padrão do modelo é Todos — teste próprio).
+  const g = { ...g0, nos: g0.nos.map((n) => (n.tipo === "dados.filtrarConferencia" ? { ...n, config: { quais: "divergentes" } } : n)) };
   const conf = g.nos.find((n) => n.tipo === "fluxo.executar");
   assert.equal(conf?.config.fluxoId, "77");
   // 1 e 2 divergentes; 3 convergente (fica fora); 2 a Centi não encontra agora.
@@ -326,7 +328,13 @@ test("Modelo 'Corrigir divergentes': as marcas da aba Do sistema não valem — 
   const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
-  const base = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
+  const b0 = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
+  const base = {
+    ...b0,
+    nos: b0.nos.map((n) =>
+      n.tipo === "dados.filtrarConferencia" ? { ...n, config: { quais: "divergentes" } } : n.tipo === "entrada.selecionar" ? { ...n, config: { ...n.config, semMarcar: "nenhum" } } : n,
+    ),
+  };
   const dfds = [
     { id: 1, numero: "1", planejamento: "11", entidade: "2", conferenciaCenti: "divergente" },
     { id: 2, numero: "2", planejamento: "22", entidade: "2", conferenciaCenti: "divergente" },
@@ -431,7 +439,8 @@ const CASOS: [string, (c: DfdParseado) => void][] = [
   ["Tipo", (c) => { c.tipo = "DFD-O"; }],
   ["Seção JUSTIFICATIVA", (c) => { c.secoes[0] = { ...c.secoes[0], texto: "Outra justificativa." }; }],
   ["Seção FUNDAMENTAÇÃO LEGAL", (c) => { c.secoes.push({ numero: 7, titulo: "7 - FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133/2021" }); }],
-  ["Seção PRIORIDADE", (c) => { c.secoes = c.secoes.filter((x) => !/PRIORIDADE/.test(x.titulo)); }],
+  // (a PRIORIDADE que só o sistema tem é TRATAMENTO da equipe — nunca é apagada nem acusada: teste próprio)
+  ["Seção PRIORIDADE", (c) => { c.secoes = c.secoes.map((x) => (/PRIORIDADE/.test(x.titulo) ? { ...x, texto: "BAIXA" } : x)); }],
   ["Item: nº", (c) => { c.itens[1] = { ...c.itens[1], item: 7 }; }],
   ["Item: código", (c) => { c.itens[1] = { ...c.itens[1], codigo: "99999" }; }],
   ["Item: descrição", (c) => { c.itens[1] = { ...c.itens[1], descricao: "PRODUTO DOIS ALTERADO" }; }],
@@ -803,4 +812,67 @@ test("trava da sessão da Centi: duas abas nunca intercalam load e emissão", as
     if (desc) Object.defineProperty(globalThis, "navigator", desc);
     else delete (globalThis as { navigator?: unknown }).navigator;
   }
+});
+
+test("nunca apagar o que a equipe tratou e a Centi não traz: Prioridade/Previsão/Fundamentação e referências do DFD-R ficam", () => {
+  const s = base();
+  s.tipo = "DFD-R";
+  s.numeroContrato = "045/2025";
+  s.secoes = [
+    ...s.secoes,
+    { numero: 5, titulo: "5 - PREVISÃO DE ENTREGA", texto: "MARÇO/2027" },
+    { numero: 7, titulo: "7 - FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133/2021" },
+  ];
+  const c = base();
+  c.tipo = "DFD-R";
+  c.secoes = [{ ...c.secoes[0] }]; // a Centi sem Prioridade, Previsão e Fundamentação
+  const r = retrato(c);
+  // A conferência não acusa o que só o sistema tratou.
+  assert.equal(conferenciaDoRetrato(comparavel(s), r).status, "convergente");
+  const corr = simularCorrecao(s, r, 2027);
+  assert.equal(corr.status, "convergente");
+  const titulos = corr.corrigido.secoes.map((x) => x.titulo).join("|");
+  assert.match(titulos, /PRIORIDADE/);
+  assert.match(titulos, /PREVIS/);
+  assert.match(titulos, /FUNDAMENTA/);
+  assert.equal(corr.corrigido.numeroContrato, "045/2025");
+});
+
+test("o que a Centi TEM com outro conteúdo continua sendo corrigido (prioridade diferente)", () => {
+  const s = base();
+  const c = base();
+  c.secoes = [c.secoes[0], { numero: 6, titulo: "6 - PRIORIDADE", texto: "BAIXA" }];
+  const r = retrato(c);
+  assert.equal(conferenciaDoRetrato(comparavel(s), r).status, "divergente");
+  const corr = simularCorrecao(s, r, 2027);
+  assert.equal(corr.status, "convergente");
+  assert.equal(corr.corrigido.secoes.find((x) => /PRIORIDADE/.test(x.titulo))?.texto, "BAIXA");
+});
+
+test("validade do retrato para corrigir: até 24 h e nunca anterior à última gravação do DFD", async () => {
+  const { retratoValido, MSG_RETRATO_VENCIDO } = await import("../src/lib/conferencia-dfd-centi.ts");
+  const agora = Date.parse("2026-11-16T12:00:00Z");
+  assert.equal(retratoValido("2026-11-15T13:00:00Z", "2026-11-15 10:00:00", agora), true);
+  assert.equal(retratoValido("2026-11-15T11:00:00Z", "2026-11-15 10:00:00", agora), false);
+  assert.equal(retratoValido("2026-11-16T10:00:00Z", "2026-11-16 11:00:00", agora), false);
+  assert.equal(retratoValido(null, null, agora), false);
+  // O cliente recusa quando o servidor diz que venceu.
+  const dfd = { ...base(), id: 9, conferenciaCenti: "divergente", conferenciaCentiMotivo: "DFD 123 (Planej. 456): 1 diferença — Objeto: “a” no sistema × “b” na Centi", atualizadoEm: "x" } as unknown as DfdDetalhe;
+  const busca = async (url: string) =>
+    new Response(JSON.stringify(url.includes("retrato=1") ? { ok: true, retrato: null, vencido: true } : { ok: true, dfd }), { status: 200 });
+  await assert.rejects(corrigirDfdPelaCenti(9, null, busca as typeof fetch), (e: Error) => e.message === MSG_RETRATO_VENCIDO);
+});
+
+test("Quais DFDs: Todos reconfere também os gravados convergentes; os outros filtram pelo gravado", async () => {
+  const { passaConferencia } = await import("../src/lib/fluxo-dados.ts");
+  const conv = { conferenciaCenti: "convergente", conferenciaCentiEm: "2026-11-16T10:00:00Z", atualizadoEm: "2026-11-16 09:00:00" };
+  const velho = { ...conv, atualizadoEm: "2026-11-16 11:00:00" };
+  const div = { conferenciaCenti: "divergente" };
+  const nunca = { conferenciaCenti: null };
+  assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "todos")), [true, true, true, true]);
+  assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "divergentes")), [false, false, true, false]);
+  assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "pendentes")), [false, true, true, true]);
+  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  assert.equal(m?.grafo.nos.find((x) => x.id === "div1")?.tipo, "dados.filtrarConferencia");
+  assert.equal(m?.grafo.nos.find((x) => x.id === "sel1")?.config.semMarcar, "todos");
 });

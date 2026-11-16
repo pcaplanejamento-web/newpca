@@ -483,13 +483,13 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "corrigir-divergentes-centi",
     nome: "Corrigir DFDs divergentes pela Centi",
     descricao:
-      "Os DFDs DIVERGENTES da Centi numa tabela de seleção (nenhum vem marcado; vindo da Mesa, vale a seleção de lá): cada marcado é RECONFERIDO na Centi agora e, se continuar divergente, corrigido logo em seguida — só o que diverge é trocado pelos dados da Centi (a mesma correção do “Usar a Centi em…” da Mesa). Se parar, a próxima execução continua do DFD em que parou.",
+      "Confere os DFDs na Centi AGORA e corrige logo em seguida os que saírem divergentes — só o que diverge é trocado pelos dados da Centi (a mesma correção do “Usar a Centi em…” da Mesa). “Quais DFDs” escolhe todos (padrão — também os gravados como Convergente), só os divergentes ou os divergentes e não conferidos; na Seleção, sem nada marcado seguem todos (vindo da Mesa, vale a seleção de lá). Se parar, a próxima execução continua do DFD em que parou.",
     dependencias: ["conferir-corrigir-1-dfd"],
     ajuda: {
       funciona:
-        "1) Lê os DFDs do sistema marcados Divergente na coluna “Centi”. 2) Você marca na tabela quais corrigir. 3) Cada marcado passa pelo “Conferir e corrigir 1 DFD × Centi” (até 3 ao mesmo tempo): lido inteiro na Centi agora, a conferência gravada e, se continuar divergente, corrigido NA HORA — só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema. 4) A conferência é refeita. 5) Se a execução parar, o que já foi corrigido fica; a próxima continua dos que faltam e refaz os que falharam. Divergência aceita, só de situação/órgão/nº, ou DFD não reconferido agora NÃO é alterado.",
+        "1) Lê os DFDs do sistema e mantém os de “Quais DFDs”: Todos (padrão — a conferência gravada pode estar velha, então todos são conferidos de novo), Só os divergentes gravados, ou Divergentes e não conferidos. 2) Na Seleção você pode marcar só alguns; sem nada marcado, seguem todos. 3) Cada DFD passa pelo “Conferir e corrigir 1 DFD × Centi” (até 3 ao mesmo tempo): lido inteiro na Centi agora, a conferência gravada e, se continuar divergente, corrigido NA HORA — só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema. 4) A conferência é refeita. 5) Se a execução parar, o que já foi corrigido fica; a próxima continua dos que faltam e refaz os que falharam. Divergência aceita, só de situação/órgão/nº, ou DFD não reconferido agora NÃO é alterado.",
       executa:
-        "Com a extensão da Centi pronta: abra a aba “Seleção” (lista os DFDs divergentes), marque os que devem ser corrigidos e execute. A aba “Do sistema” só mostra o que foi lido — não se marca nela. Executar sem marcar nada não corrige nenhum (a Análise avisa). Na Mesa do sistema, selecione os DFDs e toque em Automações → esta automação (marque “Disponível na Mesa” nas configurações dela).",
+        "Com a extensão da Centi pronta: escolha “Quais DFDs” nos Dados de entrada e execute (todos seguem) — ou marque na aba “Seleção” só os que quer conferir e corrigir. A aba “Do sistema” só mostra o que foi lido — não se marca nela. Conferir todos leva tempo (até 3 DFDs ao mesmo tempo); se parar, a próxima execução continua de onde parou. Na Mesa do sistema, selecione os DFDs e toque em Automações → esta automação (marque “Disponível na Mesa” nas configurações dela).",
       resultado:
         "Os DFDs corrigidos (o histórico registra a edição e a conferência refeita — coluna “Centi” Convergente) e, na Análise, os que ficaram sem correção ou não foram corrigidos, com o motivo.",
     },
@@ -498,8 +498,8 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
-        n("div1", "dados.filtrar", 576, 160, { campo: "conferenciaCenti", operador: "igual", valor: "divergente" }),
-        n("sel1", "entrada.selecionar", 872, 160, { chave: "id", semMarcar: "nenhum" }),
+        n("div1", "dados.filtrarConferencia", 576, 160, { quais: "todos" }),
+        n("sel1", "entrada.selecionar", 872, 160, { chave: "id", semMarcar: "todos" }),
         n("conf1", "fluxo.executar", 1168, 160, { fluxoModelo: "conferir-corrigir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }),
         n("err1", "erros.apontar", 1464, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não corrigido: {{subfluxo.erro}}", nivel: "erro" }),
       ],

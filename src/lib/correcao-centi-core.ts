@@ -7,13 +7,15 @@
 import { conferenciaDoRetrato, paraComparar, tipoCurto, type RetratoCenti } from "./conferencia-dfd-centi.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
 import { arredondarValor, type DfdParseado, normComparacao, valorDosItens } from "./parse-dfd-comum.ts";
-import { chaveSecao, type DfdComparavel, parearItens } from "./comparar-protocolo.ts";
+import { chaveSecao, type DfdComparavel, herdarTratamentos, parearItens } from "./comparar-protocolo.ts";
 import { aplicarTodas, comparacaoEscolha, type EntradaEscolha, entradasEscolha, marcarItensGravados, marcarItensNovos, semMarcas } from "./sobrescrita-dfd.ts";
 
 /** O DFD da Centi pronto para comparar e aplicar: as seções normalizadas como na conferência; nº do DFD, planejamento,
  * arquivo e ASSINATURAS ficam os do sistema (a correção nunca troca identificador nem a assinatura validada). */
 export function novoDaCenti(sistema: DfdParseado, r: RetratoCenti, anoPca: number | null): DfdParseado {
-  const c = normalizarSecoesDfd(r.dfd, undefined, anoPca).dfd;
+  // O que a Centi NÃO traz (ou traz fora do padrão) e a equipe tratou no sistema — tipo, seções obrigatórias,
+  // referências do DFD-R — fica o do sistema: a correção nunca APAGA um tratamento (a mesma régua do reenvio).
+  const c = herdarTratamentos(normalizarSecoesDfd(r.dfd, undefined, anoPca).dfd, sistema, anoPca, { assinaturas: false }).dfd;
   return {
     ...c,
     numero: sistema.numero,

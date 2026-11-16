@@ -11,7 +11,9 @@ import {
   conferenciaDoRetrato,
   lerAceite,
   lerRetrato,
+  MSG_RETRATO_VENCIDO,
   retratoDoPlanejamento,
+  retratoValido,
   MAX_JUSTIFICATIVA,
   MIN_JUSTIFICATIVA,
 } from "@/lib/conferencia-dfd-centi";
@@ -38,7 +40,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (new URL(req.url).searchParams.get("retrato") === "1") {
     const [r] = await consultaRetrato(db, id);
     const retrato = retratoDoPlanejamento(lerRetrato(r?.retrato), dfd.planejamento);
-    return ok({ retrato, em: r?.em ?? null });
+    // Para CORRIGIR, só o retrato recente e posterior à última gravação do DFD (a Centi pode ter mudado).
+    const [d] = await db.select({ at: dfds.atualizadoEm }).from(dfds).where(eq(dfds.id, id));
+    const vencido = !!retrato && !retratoValido(r?.em, d?.at ?? null);
+    return ok({ retrato: vencido ? null : retrato, vencido, aviso: vencido ? MSG_RETRATO_VENCIDO : undefined, em: r?.em ?? null });
   }
   return ok({ historico: await consultaHistoricoCenti(db, id) });
 }

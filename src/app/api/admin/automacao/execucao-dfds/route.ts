@@ -35,6 +35,8 @@ const lerDfds = () =>
       protocoloId: dfds.protocoloId,
       conferenciaCenti: dfds.conferenciaCenti,
       conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
+      conferenciaCentiEm: dfds.conferenciaCentiEm,
+      atualizadoEm: dfds.atualizadoEm,
     })
     .from(dfds)
     .leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId))

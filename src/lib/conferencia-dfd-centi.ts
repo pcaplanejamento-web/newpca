@@ -2,7 +2,7 @@
  * Conferência DFD do sistema × DFD lido na Centi — TODAS as informações (cabeçalho, seções e itens), pela MESMA régua
  * do reenvio/sobrescrita (`compararDfd`). Puro: devolve as diferenças em frases curtas "sistema × Centi".
  */
-import { type ComparacaoDfd, compararDfd, type DfdComparavel } from "./comparar-protocolo.ts";
+import { type ComparacaoDfd, compararDfd, type DfdComparavel, type DfdTratavel, herdarTratamentos } from "./comparar-protocolo.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
 import type { BlocoDoc } from "./documento-pdf-core.ts";
 import { normTexto } from "./fluxo-core.ts";
@@ -55,7 +55,9 @@ const rotuloItem = (i: { item: number | null; codigo: string | null }) => `Item 
  */
 export function diferencasDfdCenti(sistema: DfdSistemaComparavel, centi: DfdParseado, tolerancia = 0.01): string[] {
   const anoPca = sistema.anoPca ?? sistema.protocoloAnoPca ?? null;
-  const c = normalizarSecoesDfd(centi, undefined, anoPca).dfd;
+  // O que a Centi não traz (ou traz fora do padrão) e a equipe tratou no sistema não é divergência — a correção nunca o
+  // apaga (a MESMA régua em `novoDaCenti`).
+  const c = herdarTratamentos(normalizarSecoesDfd(centi, undefined, anoPca).dfd, sistema as unknown as DfdTratavel, anoPca, { assinaturas: false }).dfd;
   const base = { anoPca: null, reparticaoId: null, assinaturas: [] };
   const a: DfdComparavel = { ...sistema, ...base, tipo: null, planejamento: null, valorTotal: 0 };
   const b: DfdComparavel = { ...c, ...base, tipo: null, planejamento: null, valorTotal: 0 };
@@ -467,6 +469,18 @@ export function assinaturaDfdCenti(d: DfdParseado): string {
 export function retratoDoPlanejamento(r: RetratoCenti | null, planejamento: string | null | undefined): RetratoCenti | null {
   const so = (v: unknown) => str(v).replace(/\D/g, "").replace(/^0+/, "");
   return r && so(planejamento) && so(r.dfd.planejamento) === so(planejamento) ? r : null;
+}
+
+/** Validade dos dados da Centi guardados para CORRIGIR: depois disso a Centi pode ter mudado — reconfira antes. */
+export const VALIDADE_RETRATO_MS = 24 * 60 * 60 * 1000;
+export const MSG_RETRATO_VENCIDO =
+  "Os dados da Centi desta conferência têm mais de 24 h (ou o DFD foi alterado depois dela) — reconfira o DFD na Centi antes de corrigir.";
+
+/** O retrato ainda serve para CORRIGIR: tem no máximo `VALIDADE_RETRATO_MS` e o DFD não foi gravado depois dele. */
+export function retratoValido(em: string | null | undefined, atualizadoEm: string | null | undefined, agora = Date.now()): boolean {
+  const c = instante(em);
+  if (c == null || agora - c > VALIDADE_RETRATO_MS) return false;
+  return !conferenciaDesatualizada(em, atualizadoEm);
 }
 
 /** O retrato em texto para gravar; `null` acima do teto. */

@@ -253,7 +253,7 @@ export function FluxosAutomacao({
   const [reps, setReps] = useState<{ lista: string[] | null; buscando: boolean }>({ lista: null, buscando: false });
   const buscarReparticoes = useCallback(async () => {
     setReps((r) => ({ ...r, buscando: true }));
-    const r = await pedir("reparticoesApi", null, 30_000);
+    const r = await comSessaoCenti(() => pedir("reparticoesApi", null, 30_000));
     const lista = Array.isArray(r.departamentos) ? r.departamentos.filter((d): d is string => typeof d === "string" && !!d.trim()) : null;
     setReps({ lista: lista ?? null, buscando: false });
     if (!r.ok) toast.error(r.erro ?? "A extensão não respondeu.");

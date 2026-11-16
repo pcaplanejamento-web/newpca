@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.9",
+    data: "2026-11-16",
+    titulo: "Conferir e corrigir todos os DFDs pela Centi",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "“Corrigir DFDs divergentes pela Centi” ganhou o dado de entrada “Quais DFDs”: Todos (padrão — confere de novo na Centi também os gravados como Convergente e corrige os que saírem divergentes), Só os divergentes gravados, ou Divergentes e não conferidos. Na Seleção, sem nada marcado seguem todos. Use “Atualizar pelo modelo” no fluxo salvo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Terceira auditoria da correção pela Centi: a correção nunca apaga o que a equipe tratou e a Centi não traz (Prioridade, Previsão, Fundamentação, Justificativa, tipo e referências do DFD-R) e a conferência deixa de acusar essa falta; a correção pela Mesa só usa dados da Centi de até 24 h e posteriores à última gravação do DFD (senão pede para reconferir); e a busca das repartições também passa pela trava da sessão.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.295.8",
     data: "2026-11-16",
     titulo: "Centi: trava da sessão em todas as leituras",

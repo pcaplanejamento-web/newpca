@@ -5,6 +5,7 @@
  */
 import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
+import { conferenciaDesatualizada } from "./conferencia-dfd-centi.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
 const chaveIgual = (v: unknown) => {
@@ -389,4 +390,14 @@ export function valorCapturado(linha: Item, campo: string): string {
     Object.keys(cru).find((x) => x.toLowerCase() === baixo) ??
     Object.keys(cru).find((x) => x.toLowerCase().startsWith(`${baixo}.`) && /\.(descricao|description|nome|text|texto|display|label|value)$/i.test(x));
   return k ? String(cru[k] ?? "") : "";
+}
+
+/** "Quais DFDs" pela conferência GRAVADA com a Centi: todos · só os divergentes · os divergentes e os não conferidos
+ * (sem conferência, ou conferência velha — o DFD foi gravado depois dela). */
+export function passaConferencia(it: Record<string, unknown>, quais: string): boolean {
+  if (quais === "todos") return true;
+  const st = it.conferenciaCenti == null ? "" : String(it.conferenciaCenti);
+  if (quais === "divergentes") return st === "divergente";
+  if (st === "divergente" || st === "") return true;
+  return conferenciaDesatualizada(it.conferenciaCentiEm as string | null, it.atualizadoEm as string | null);
 }

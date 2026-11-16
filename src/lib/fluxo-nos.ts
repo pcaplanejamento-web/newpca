@@ -42,7 +42,7 @@ import { comSessaoCenti } from "./centi-sessao.ts";
 import { filaSerial } from "./ocr-assinatura-core.ts";
 import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
+import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, passaConferencia, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
 import {
   type DfdSistemaComparavel,
@@ -1070,6 +1070,32 @@ const NOS: DefNo[] = [
     saidas: ["saida"],
     campos: CAMPO_CONDICAO,
     executar: async (e, c) => ({ saida: so(e).filter((it) => passa(it, c)) }),
+  },
+  {
+    tipo: "dados.filtrarConferencia",
+    categoria: "dados",
+    rotulo: "Filtrar pela conferência da Centi",
+    descricao: "Escolhe quais DFDs seguem pelo resultado GRAVADO da conferência com a Centi (coluna “Centi”): todos, só os divergentes ou os divergentes e os ainda não conferidos.",
+    icone: "filter",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      {
+        chave: "quais",
+        rotulo: "Quais DFDs",
+        tipo: "selecao",
+        entrada: true,
+        padrao: "todos",
+        ajuda:
+          "Todos = cada DFD é conferido de novo na Centi agora (também os gravados como Convergente — a conferência gravada pode estar velha) e só o que sair divergente é corrigido. Só os divergentes = só os gravados Divergente. Divergentes e não conferidos = os Divergente, os sem conferência e os “Reconferir”.",
+        opcoes: [
+          { valor: "todos", rotulo: "Todos — conferir e corrigir" },
+          { valor: "divergentes", rotulo: "Só os divergentes gravados" },
+          { valor: "pendentes", rotulo: "Divergentes e não conferidos" },
+        ],
+      },
+    ],
+    executar: async (e, c) => ({ saida: so(e).filter((it) => passaConferencia(it, str(c.quais) || "todos")) }),
   },
   {
     tipo: "dados.campos",

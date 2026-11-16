@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RetratoCenti } from "@/lib/conferencia-dfd-centi";
 
-type Retorno = { ok?: boolean; error?: string; retrato?: RetratoCenti | null };
+type Retorno = { ok?: boolean; error?: string; retrato?: RetratoCenti | null; vencido?: boolean; aviso?: string };
 
 /**
  * CORRIGIR O DFD PELA CENTI (banner do DFD gravado e o DFD ao lado do protocolo): busca o RETRATO guardado na conferência
@@ -42,6 +42,7 @@ export function useCorrecaoCenti({
       const j = (await r.json().catch(() => ({}))) as Retorno;
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível ler os dados guardados da Centi.");
       if (atual.current !== dfdId) return;
+      if (j.vencido) throw new Error(j.aviso ?? "Os dados da Centi desta conferência estão vencidos — reconfira o DFD na Centi antes de corrigir.");
       if (!j.retrato || j.retrato.v !== 2)
         throw new Error("Não há dados da Centi CONFIRMADOS para este DFD (os guardados antes da dupla leitura não valem mais, ou a leitura foi achada em outro órgão) — reconfira na Centi e tente de novo.");
       const id = dfdId;
