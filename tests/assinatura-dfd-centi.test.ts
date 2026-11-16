@@ -168,7 +168,7 @@ test("o registro das seções 8–10 num CAMPO do planejamento (não a assinatur
 
 test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgãos traz OS DOIS DFDs (nunca o último por cima)", async () => {
   const { REGISTRO_NOS } = await import("../src/lib/fluxo-nos.ts");
-  const def = REGISTRO_NOS.get("sistema.completarDfd") as { executar: (e: unknown, c: unknown, ctx: unknown) => Promise<{ saida: { id: number }[]; naoEncontrados: unknown[] }> };
+  const def = REGISTRO_NOS.get("sistema.completarDfd") as unknown as { executar: (e: unknown, c: unknown, ctx: unknown) => Promise<{ saida: { id: number }[]; naoEncontrados: unknown[] }> };
   const dfds = [
     { id: 92, numero: "92", planejamento: "131", entidade: "2" },
     { id: 500, numero: "500", planejamento: "131", entidade: "3" },
