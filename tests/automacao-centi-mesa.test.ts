@@ -19,3 +19,17 @@ test("automações da Mesa para a Centi: pelo que o diagrama faz, o nome do mode
   const desligado = { ...subst, grafo: g(no("a", "sistema.ler", { objeto: "dfds" }), { ...no("b", "saida.substituirDfd"), desativado: true } as never) };
   assert.equal(automacoesCentiDaMesa([desligado]).substituir, null);
 });
+
+test("Reconferir da Mesa nunca escolhe uma automação que ALTERA o DFD (corrigir/substituir pela Centi)", async () => {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const ids = new Map(MODELOS_FLUXO.map((m, i) => [m.id, i + 1]));
+  const fluxo = (id: string) => {
+    const m = MODELOS_FLUXO.find((x) => x.id === id);
+    if (!m) throw new Error(id);
+    return { id: ids.get(id) as number, nome: m.nome, grafo: grafoDoModelo(m, ids) };
+  };
+  const um = fluxo("conferir-1-dfd");
+  const corrigir = fluxo("corrigir-divergentes-centi");
+  assert.equal(automacoesCentiDaMesa([um, corrigir]).conferir, null);
+  assert.equal(automacoesCentiDaMesa([corrigir, um, fluxo("conferir-dfds-cm002")]).conferir?.id, ids.get("conferir-dfds-cm002"));
+});

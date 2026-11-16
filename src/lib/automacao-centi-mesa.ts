@@ -12,6 +12,9 @@ type FluxoLeve = { id: number; nome: string; grafo: Grafo };
 const NOME_CONFERIR = "Conferir DFDs × Centi";
 const NOME_SUBSTITUIR = "Substituir DFDs pelos dados da Centi";
 
+/** Nós que ALTERAM os dados do DFD com os da Centi. */
+const NOS_QUE_GRAVAM = ["saida.substituirDfd", "saida.corrigirPelaCenti"];
+
 const tem = (g: Grafo, tipo: string) => g.nos.some((n) => n.tipo === tipo && !n.desativado);
 /** Começa lendo os DFDs do sistema (o que a Mesa entrega restringe a leitura aos DFDs dela). */
 const leDfds = (g: Grafo) => g.nos.some((n) => n.tipo === "sistema.ler" && !n.desativado && String(n.config.objeto ?? "") === "dfds");
@@ -20,12 +23,16 @@ export function automacoesCentiDaMesa(fluxos: readonly FluxoLeve[]): AutomacoesC
   const porId = new Map(fluxos.map((f) => [f.id, f]));
   const marca = (f: FluxoLeve, d = 0): boolean =>
     tem(f.grafo, "saida.marcarConferencia") || (d < 3 && subfluxosDoGrafo(f.grafo).some((id) => { const s = porId.get(id); return !!s && marca(s, d + 1); }));
+  // O "Reconferir" só CONFERE: nunca uma automação que ALTERA os dados do DFD (substituir/corrigir pela Centi), direta ou
+  // num subfluxo — senão um "reconferir" gravaria dados.
+  const grava = (f: FluxoLeve, d = 0): boolean =>
+    NOS_QUE_GRAVAM.some((t) => tem(f.grafo, t)) || (d < 3 && subfluxosDoGrafo(f.grafo).some((id) => { const s = porId.get(id); return !!s && grava(s, d + 1); }));
   const escolher = (cands: FluxoLeve[], nome: string) => {
     const f = cands.find((x) => x.nome.trim() === nome) ?? cands[0];
     return f ? { id: f.id, nome: f.nome } : null;
   };
   return {
-    conferir: escolher(fluxos.filter((f) => leDfds(f.grafo) && marca(f)), NOME_CONFERIR),
+    conferir: escolher(fluxos.filter((f) => leDfds(f.grafo) && marca(f) && !grava(f)), NOME_CONFERIR),
     substituir: escolher(fluxos.filter((f) => leDfds(f.grafo) && tem(f.grafo, "saida.substituirDfd")), NOME_SUBSTITUIR),
   };
 }

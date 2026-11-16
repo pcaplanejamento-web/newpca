@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.294.1",
+    data: "2026-11-16",
+    titulo: "Reconferir da Mesa só confere",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto: "O “Reconferir” da coluna Centi nunca usa uma automação que altera os dados do DFD (corrigir ou substituir pela Centi) — só as que conferem.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.294.0",
     data: "2026-11-16",
     titulo: "Automação: corrigir os DFDs divergentes pela Centi",
