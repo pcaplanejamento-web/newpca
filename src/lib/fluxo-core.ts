@@ -525,8 +525,11 @@ export function lerFrequencia(v: unknown): Frequencia {
 
 const OFFSET_MS = 3 * 3600_000; // Brasília = UTC−3
 
-/** A próxima execução DEPOIS de `agora` (ISO em UTC) — null no manual. */
-export function proximaExecucao(f: Frequencia, agora: Date): string | null {
+/**
+ * A próxima execução DEPOIS de `agora` (ISO em UTC) — null no manual. `naoUtil(AAAA-MM-DD)` = os feriados e pontos
+ * facultativos (nacionais + do ADM): o "Dias úteis" pula também eles.
+ */
+export function proximaExecucao(f: Frequencia, agora: Date, naoUtil?: (dia: string) => boolean): string | null {
   if (f.tipo === "manual") return null;
   if (f.tipo === "intervalo") return new Date(agora.getTime() + f.minutos * 60_000).toISOString();
   const [hh, mm] = f.hora.split(":").map(Number);
@@ -536,12 +539,32 @@ export function proximaExecucao(f: Frequencia, agora: Date): string | null {
     const quando = c.getTime() + OFFSET_MS;
     if (quando <= agora.getTime()) continue;
     const dow = c.getUTCDay();
-    if (f.tipo === "diario" && f.diasUteis && (dow === 0 || dow === 6)) continue;
+    if (f.tipo === "diario" && f.diasUteis && (dow === 0 || dow === 6 || naoUtil?.(c.toISOString().slice(0, 10)))) continue;
     if (f.tipo === "semanal" && !f.dias.includes(dow)) continue;
     if (f.tipo === "mensal" && c.getUTCDate() !== f.dia) continue;
     return new Date(quando).toISOString();
   }
   return null;
+}
+
+/** A trava do navegador (`navigator.locks`) das execuções AGENDADAS — uma por vez em todas as abas. */
+export const TRAVA_AGENDADOR = "automacao-agendador";
+
+/** Tolerância antes de uma execução agendada contar como ATRASADA (o vigia confere a cada minuto). */
+export const TOLERANCIA_ATRASO_MS = 5 * 60_000;
+
+/** A execução agendada que já passou da hora (mais que a tolerância) — o cartão mostra "Atrasada desde…". */
+export function atrasada(f: { ativo: boolean; proximaEm: string | null }, agora: number): boolean {
+  if (!f.ativo || !f.proximaEm) return false;
+  const t = Date.parse(f.proximaEm);
+  return Number.isFinite(t) && agora - t > TOLERANCIA_ATRASO_MS;
+}
+
+/** Os fluxos ligados cuja hora chegou, do mais atrasado ao mais recente (o vigia roda um por vez, nessa ordem). */
+export function fluxosDevidos<T extends { ativo: boolean; proximaEm: string | null }>(lista: readonly T[], agora: number): T[] {
+  return lista
+    .filter((f) => f.ativo && f.proximaEm && Date.parse(f.proximaEm) <= agora)
+    .sort((a, b) => Date.parse(a.proximaEm as string) - Date.parse(b.proximaEm as string));
 }
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];

@@ -3,9 +3,24 @@ import { automacaoFluxos, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "./automacao-mesa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
-import { type AjudaFluxo, cicloDeSubfluxos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
+import { type AjudaFluxo, atrasada, cicloDeSubfluxos, fluxosDevidos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
 import { type AutomacoesCenti, automacoesCentiDaMesa } from "./automacao-centi-mesa";
-import { comandoLimparProgresso, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
+import { comandoLimparProgresso, comandoReservarFluxo, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
+import { feriadosNoIntervalo } from "./calendario-core";
+import { somarDias } from "./tarefas-core";
+import { listarFeriados } from "./feriados";
+
+/** Os dias NÃO úteis (feriados e pontos facultativos — nacionais calculados + os do ADM) dos próximos 70 dias. */
+async function diasNaoUteis(agora: Date): Promise<(dia: string) => boolean> {
+  const de = new Date(agora.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
+  const m = feriadosNoIntervalo(await listarFeriados(), de, somarDias(de, 70));
+  return (dia) => m.has(dia);
+}
+
+/** A próxima execução com os feriados do sistema. */
+async function proximaComFeriados(f: Frequencia, agora: Date): Promise<string | null> {
+  return proximaExecucao(f, agora, f.tipo === "diario" && f.diasUteis ? await diasNaoUteis(agora) : undefined);
+}
 
 export type FluxoAutomacao = {
   id: number;
@@ -122,7 +137,7 @@ export async function criarFluxo(
       grafo: JSON.stringify(lerGrafo(d.grafo ?? {})),
       frequencia: JSON.stringify(frequencia),
       ativo,
-      proximaEm: ativo ? proximaExecucao(frequencia, new Date()) : null,
+      proximaEm: ativo ? await proximaComFeriados(frequencia, new Date()) : null,
       publico: d.publico === true,
       criadoPor: usuarioId,
     })
@@ -141,6 +156,7 @@ export async function editarFluxo(
   const frequencia = d.frequencia === undefined ? atual.frequencia : lerFrequencia(d.frequencia);
   const ativo = d.ativo ?? atual.ativo;
   const mudouAgenda = d.frequencia !== undefined || d.ativo !== undefined;
+  const proxima = mudouAgenda && ativo ? await proximaComFeriados(frequencia, agora) : null;
   const [l] = await getDb()
     .update(automacaoFluxos)
     .set({
@@ -151,7 +167,7 @@ export async function editarFluxo(
       ...(d.publico === undefined ? {} : { publico: d.publico }),
       frequencia: JSON.stringify(frequencia),
       ativo,
-      ...(mudouAgenda ? { proximaEm: ativo ? proximaExecucao(frequencia, agora) : null } : {}),
+      ...(mudouAgenda ? { proximaEm: proxima } : {}),
       atualizadoEm: agora.toISOString(),
     })
     .where(eq(automacaoFluxos.id, id))
@@ -159,20 +175,46 @@ export async function editarFluxo(
   return l ? getFluxo(l.id) : null;
 }
 
-/** Fecha uma execução: grava o resumo e agenda a próxima pela frequência (do FIM — não acumula atraso). */
+/**
+ * Fecha uma execução: grava o resumo. A MANUAL agenda a próxima pela frequência (do FIM — não acumula atraso); a AGENDADA
+ * não mexe na próxima — a reserva (`reservarExecucaoFluxo`) já a gravou antes de rodar.
+ */
 export async function registrarExecucaoFluxo(id: number, resumo: Record<string, unknown>, agora = new Date()): Promise<FluxoAutomacao | null> {
   const atual = await getFluxo(id);
   if (!atual) return null;
+  const agendado = resumo.agendado === true;
+  const proxima = agendado ? undefined : atual.ativo ? await proximaComFeriados(atual.frequencia, agora) : null;
   const [l] = await getDb()
     .update(automacaoFluxos)
     .set({
       ultimaEm: agora.toISOString(),
       ultimaExecucao: JSON.stringify(resumo),
-      proximaEm: atual.ativo ? proximaExecucao(atual.frequencia, agora) : null,
+      ...(proxima === undefined ? {} : { proximaEm: proxima }),
     })
     .where(eq(automacaoFluxos.id, id))
     .returning();
   return l ? getFluxo(l.id) : null;
+}
+
+/**
+ * RESERVA a execução AGENDADA de um fluxo cuja hora chegou: a próxima vai à frequência contada de AGORA (a perdida roda
+ * uma vez, nunca acumulada). `null` = não está devido, foi desligado ou outra aba/ADM já reservou.
+ */
+export async function reservarExecucaoFluxo(id: number, agora = new Date()): Promise<{ fluxo: FluxoAutomacao; atrasadaDesde: string | null } | null> {
+  const atual = await getFluxo(id);
+  if (!atual?.ativo || !atual.proximaEm || Date.parse(atual.proximaEm) > agora.getTime()) return null;
+  const proxima = await proximaComFeriados(atual.frequencia, agora);
+  const r = await comandoReservarFluxo(getDb(), id, atual.proximaEm, agora.toISOString(), proxima);
+  if (!r.length) return null;
+  return { fluxo: { ...atual, proximaEm: proxima }, atrasadaDesde: atrasada(atual, agora.getTime()) ? atual.proximaEm : null };
+}
+
+/** A AGENDA da pessoa (o vigia do layout): a próxima hora entre os fluxos ligados do painel dela e os já devidos. */
+export async function agendaDosFluxos(usuarioId: number, agora = Date.now()): Promise<{ proxima: string | null; devidos: { id: number; nome: string; proximaEm: string }[] }> {
+  const ligados = (await listarFluxosDe(usuarioId)).filter((f) => f.ativo && f.proximaEm);
+  const devidos = fluxosDevidos(ligados, agora).map((f) => ({ id: f.id, nome: f.nome, proximaEm: f.proximaEm as string }));
+  const futuras = ligados.map((f) => f.proximaEm as string).filter((p) => Date.parse(p) > agora).sort();
+  return { proxima: devidos[0]?.proximaEm ?? futuras[0] ?? null, devidos };
 }
 
 export async function excluirFluxo(id: number): Promise<boolean> {

@@ -11,6 +11,8 @@ import {
   lerGrafo,
   numeroDe,
   proximaExecucao,
+  atrasada,
+  fluxosDevidos,
   resolverCaminho,
   subgrafoAte,
   subgrafoSoLeitura,
@@ -68,6 +70,31 @@ test("frequência: diário, dias úteis, semanal e intervalo (Brasília)", () =>
   assert.equal(proximaExecucao(lerFrequencia({ tipo: "semanal", hora: "08:00", dias: [5] }), agora), "2026-10-09T11:00:00.000Z");
   assert.equal(proximaExecucao(lerFrequencia({ tipo: "intervalo", minutos: 1 }), agora), "2026-10-06T12:05:00.000Z");
   assert.equal(proximaExecucao(lerFrequencia({ tipo: "manual" }), agora), null);
+});
+
+test("agenda: dias úteis pulam os feriados; atrasada e devidos na ordem; a perdida reagenda UMA vez", () => {
+  const sex = new Date("2026-10-09T23:00:00Z"); // sexta 20:00 em Brasília; segunda 12/10 = Nossa Senhora Aparecida
+  const f = lerFrequencia({ tipo: "diario", hora: "08:00", diasUteis: true });
+  const feriados = new Set(["2026-10-12", "2026-12-25"]);
+  assert.equal(proximaExecucao(f, sex, (d) => feriados.has(d)), "2026-10-13T11:00:00.000Z");
+  assert.equal(proximaExecucao(f, new Date("2026-12-24T12:00:00Z"), (d) => feriados.has(d)), "2026-12-28T11:00:00.000Z", "Natal na sexta → segunda");
+  // O "Todo dia" (sem dias úteis) não olha feriado.
+  assert.equal(proximaExecucao(lerFrequencia({ tipo: "diario", hora: "08:00" }), sex, (d) => feriados.has(d)), "2026-10-10T11:00:00.000Z");
+  // Perdida há 3 dias: a próxima conta de AGORA (uma só), nunca as acumuladas.
+  const agora = new Date("2026-10-06T12:00:00Z");
+  assert.equal(proximaExecucao(lerFrequencia({ tipo: "intervalo", minutos: 60 }), agora), "2026-10-06T13:00:00.000Z");
+  const t = agora.getTime();
+  assert.equal(atrasada({ ativo: true, proximaEm: "2026-10-06T11:58:00.000Z" }, t), false, "dentro da tolerância");
+  assert.equal(atrasada({ ativo: true, proximaEm: "2026-10-03T11:00:00.000Z" }, t), true);
+  assert.equal(atrasada({ ativo: false, proximaEm: "2026-10-03T11:00:00.000Z" }, t), false);
+  const lista = [
+    { id: 1, ativo: true, proximaEm: "2026-10-06T11:00:00.000Z" },
+    { id: 2, ativo: true, proximaEm: "2026-10-01T11:00:00.000Z" },
+    { id: 3, ativo: true, proximaEm: "2026-10-07T11:00:00.000Z" },
+    { id: 4, ativo: false, proximaEm: "2026-10-01T11:00:00.000Z" },
+    { id: 5, ativo: true, proximaEm: null },
+  ];
+  assert.deepEqual(fluxosDevidos(lista, t).map((x) => x.id), [2, 1], "todos os devidos, do mais atrasado — nenhum fica para trás");
 });
 
 test("motor: Comparar DFDs × CM002 e Apontar erros dos diferentes", async () => {

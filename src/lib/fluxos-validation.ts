@@ -39,6 +39,10 @@ export const execucaoFluxoSchema = z.strictObject({
   apontados: z.number().int().min(0).max(1_000_000),
   inicio: z.string().max(40),
   fim: z.string().max(40),
+  /** Execução AGENDADA (a reserva já gravou a próxima) — o fim não reagenda. */
+  agendado: z.boolean().optional(),
+  /** A agendada que rodou depois da hora (o navegador estava fechado ou a extensão sem login). */
+  atrasada: z.boolean().optional(),
   /** O resultado por protocolo do nó "Importar protocolo" (o aviso no sino). */
   relatorio: z
     .array(z.strictObject({ protocolo: z.string().max(40), status: z.enum(["importado", "nao-importado"]), motivo: z.string().max(300).optional(), apontamentos: z.number().int().min(0).max(10_000) }))

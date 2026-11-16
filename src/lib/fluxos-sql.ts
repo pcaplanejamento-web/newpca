@@ -1,6 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { automacaoProgresso } from "../db/schema.ts";
+import { automacaoFluxos, automacaoProgresso } from "../db/schema.ts";
 
 // RETOMADA dos subfluxos — só BUILDERS do Drizzle (valem dentro de `db.batch`; testados no driver D1 real em
 // `tests/fluxos-sql.test.ts`). Uma linha por item já processado por um nó "Executar fluxo".
@@ -38,4 +38,17 @@ export function comandosGravarProgresso(db: Db, fluxoId: number, no: string, ite
 /** Esquece o progresso de um nó (recomeça do zero). */
 export function comandoLimparProgresso(db: Db, fluxoId: number, no: string) {
   return db.delete(automacaoProgresso).where(and(eq(automacaoProgresso.fluxoId, fluxoId), eq(automacaoProgresso.no, no)));
+}
+
+/**
+ * RESERVA de uma execução AGENDADA (compare-and-set): passa a `proxima_em` à próxima pela frequência SÓ se ela ainda é a
+ * vista (`visto`), já chegou e o fluxo segue ligado. Quem recebe a linha de volta roda; outra aba, outro navegador ou outro
+ * ADM com o mesmo fluxo à vista recebe nada — o agendamento nunca roda duas vezes e a perdida roda UMA vez.
+ */
+export function comandoReservarFluxo(db: Db, id: number, visto: string, agoraIso: string, proxima: string | null) {
+  return db
+    .update(automacaoFluxos)
+    .set({ proximaEm: proxima })
+    .where(and(eq(automacaoFluxos.id, id), eq(automacaoFluxos.ativo, true), eq(automacaoFluxos.proximaEm, visto), lte(automacaoFluxos.proximaEm, agoraIso)))
+    .returning({ id: automacaoFluxos.id });
 }

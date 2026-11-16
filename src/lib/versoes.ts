@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.293.0",
+    data: "2026-11-16",
+    titulo: "Agendamentos das automações em qualquer tela",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "A automação agendada roda em qualquer tela do sistema (com a extensão da Centi pronta), em segundo plano, com o andamento no canto — não só com a tela Automação aberta.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Com duas abas ou dois ADMs, cada agendamento roda uma vez só: a execução é reservada no servidor antes de começar.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Uma automação que falha antes de terminar não fica mais tentando a cada minuto nem trava as outras agendadas; todas as devidas rodam, da mais atrasada à mais recente.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "A perdida (sistema fechado ou extensão sem login) roda uma vez ao voltar e o cartão mostra “Atrasada desde…”; “Dias úteis” agora pula também os feriados.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.292.1",
     data: "2026-11-13",
     titulo: "Corrigir pela Centi: ajustes da auditoria",

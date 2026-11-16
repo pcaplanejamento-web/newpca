@@ -12,6 +12,8 @@ import {
   executarFluxo,
   type Frequencia,
   GRAFO_VAZIO,
+  atrasada,
+  fluxosDevidos,
   type Grafo,
   type Item,
   lerFrequencia,
@@ -28,6 +30,7 @@ import {
   validarGrafo,
   subgrafoAte,
   subgrafoSoLeitura,
+  TRAVA_AGENDADOR,
   variaveisDoGrafo,
 } from "@/lib/fluxo-core";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
@@ -153,7 +156,7 @@ export function FluxosAutomacao({
   const [exec, setExec] = useState<{ id: number; nome: string; total: number } | null>(null);
   const [agora, setAgora] = useState("");
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
-  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[] }[]>([]);
+  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[]; agendado?: boolean; atrasadaDesde?: string | null }[]>([]);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
   /** O destino do Baixar/anexar em curso é um protocolo da Centi (o rótulo "Anexado" × "Salvo"). */
   const [dfdsAnexar, setDfdsAnexar] = useState(false);
@@ -357,10 +360,10 @@ export function FluxosAutomacao({
 
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
   const executar = useCallback(
-    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[]): Promise<ResultadoExec | null> => {
+    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[], atrasadaDesde?: string | null): Promise<ResultadoExec | null> => {
       if (rodandoRef.current != null) {
         if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) return null;
-        fila.current.push({ f, grafo, entrada });
+        fila.current.push({ f, grafo, entrada, agendado, atrasadaDesde });
         setNaFila(fila.current.length);
         if (!agendado) toast.info(`${f.nome}: na fila — roda quando o fluxo atual terminar.`);
         return null;
@@ -384,11 +387,15 @@ export function FluxosAutomacao({
       relatorio.current = [];
       cancelar.current = false;
       interrompido.current = false;
+      const inicio = new Date().toISOString();
       try {
+        let feitos = 0;
+        // Qualquer falha FORA do motor (a extensão não responde, rede) vira o desfecho "falhou" — o fim é sempre gravado
+        // (antes, uma exceção aqui deixava o agendado devido e ele tentava de novo a cada minuto, travando os outros).
+        const r = await (async () => {
         const l = await pedir("lote", { fase: "inicio", titulo: `Fluxo · ${f.nome}`, total: grafo.nos.length }, 8000);
         lote.current = typeof l.loteId === "string" ? l.loteId : null;
-        let feitos = 0;
-        const r = await executarFluxo(
+        return executarFluxo(
           grafo,
           REGISTRO_NOS,
           {
@@ -420,12 +427,17 @@ export function FluxosAutomacao({
             }
           },
         );
+        })().catch(
+          (e): ResultadoExec => ({ estado: "falhou", erro: e instanceof Error ? e.message : String(e), passos: {}, apontados: [], retorno: [], inicio, fim: new Date().toISOString() }),
+        );
         setResultado(r);
-        if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: r.estado === "concluido" ? "Fluxo concluído." : (r.erro ?? r.estado) }, 8000);
+        if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: r.estado === "concluido" ? "Fluxo concluído." : (r.erro ?? r.estado) }, 8000).catch(() => null);
         const g = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${f.id}`, {
           method: "POST",
           body: {
             ...resumoExecucao(r),
+            ...(agendado ? { agendado: true } : {}),
+            ...(atrasadaDesde ? { atrasada: true } : {}),
             relatorio: relatorio.current.length
               ? relatorio.current.slice(0, 500).map((x) => ({
                   protocolo: `${String(x.protocolo ?? "")}${x.ano ? `/${String(x.ano)}` : ""}`.slice(0, 40),
@@ -449,30 +461,47 @@ export function FluxosAutomacao({
         // O próximo da fila (no próximo tique — o estado desta execução já assentou).
         const prox = fila.current.shift();
         setNaFila(fila.current.length);
-        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, false, prox.entrada), 0);
+        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, prox.agendado === true, prox.entrada, prox.atrasadaDesde), 0);
       }
     },
     [pronto, pedir, lote, interrompido, host],
   );
 
-  // AGENDADOR: com a tela aberta e a extensão pronta, a cada minuto roda o 1º fluxo ligado cuja hora chegou.
+  // AGENDADOR (a Automação montada — na própria tela ou ESCONDIDA pelo vigia do layout, `AgendadorAutomacoes`): a cada
+  // minuto, com a extensão pronta, roda os fluxos ligados cuja hora chegou, do mais atrasado ao mais recente. UMA execução
+  // agendada por vez no navegador (a trava GLOBAL — a extensão tem uma aba de automação só) e cada uma só depois da RESERVA
+  // no servidor: outra aba, outro navegador ou outro ADM com o mesmo fluxo à vista não roda de novo, e a perdida roda UMA vez.
   const executarRef = useRef(executar);
   executarRef.current = executar;
   const fluxosRef = useRef(fluxos);
   fluxosRef.current = fluxos;
   useEffect(() => {
     if (!pronto) return;
+    let ocupado = false;
+    const rodarDevidos = async () => {
+      for (const f of fluxosDevidos(fluxosRef.current ?? [], Date.now())) {
+        if (rodandoRef.current != null) return; // o fluxo em curso termina antes; o próximo tique segue
+        const r = await api<{ fluxo?: FluxoAutomacao; atrasadaDesde?: string | null }>(`/api/admin/automacao/fluxos/${f.id}/reservar`, { method: "POST" });
+        if (!r.ok || !r.fluxo) continue; // já reservado (outra aba/ADM) ou não está mais devido
+        const reservado = r.fluxo;
+        setFluxos((fs) => fs?.map((x) => (x.id === f.id ? { ...x, proximaEm: reservado.proximaEm } : x)) ?? fs);
+        await executarRef.current(reservado, lerGrafo(reservado.grafo), true, undefined, r.atrasadaDesde ?? null);
+      }
+    };
     const tique = async () => {
-      if (document.visibilityState === "hidden" && !("locks" in navigator)) return;
-      const agora = Date.now();
-      const devido = (fluxosRef.current ?? []).find((f) => f.ativo && f.proximaEm && Date.parse(f.proximaEm) <= agora);
-      if (!devido) return;
-      const rodar = () => executarRef.current(devido, devido.grafo, true);
-      // Uma aba por fluxo (outra aba do sistema aberta não roda o mesmo junto).
-      const locks = (navigator as Navigator & { locks?: { request: (n: string, o: { ifAvailable: boolean }, cb: (l: unknown) => Promise<unknown>) => Promise<unknown> } }).locks;
-      if (locks) await locks.request(`fluxo-${devido.id}`, { ifAvailable: true }, async (l) => (l ? rodar() : null));
-      else await rodar();
-      await carregarRef.current();
+      if (ocupado) return;
+      ocupado = true;
+      try {
+        if (!fluxosDevidos(fluxosRef.current ?? [], Date.now()).length) return;
+        await carregarRef.current(); // a agenda de AGORA (outra aba/ADM pode ter rodado)
+        const locks = (navigator as Navigator & { locks?: { request: (n: string, o: { ifAvailable: boolean }, cb: (l: unknown) => Promise<unknown>) => Promise<unknown> } }).locks;
+        if (locks) await locks.request(TRAVA_AGENDADOR, { ifAvailable: true }, async (l) => (l ? rodarDevidos() : null));
+        else await rodarDevidos();
+      } catch {
+        // falha de rede: o próximo tique tenta de novo (nada foi reservado sem rodar)
+      } finally {
+        ocupado = false;
+      }
     };
     const id = window.setInterval(() => void tique(), 60_000);
     void tique();
@@ -866,8 +895,9 @@ function ajudaDoFluxo(f: Pick<FluxoAutomacao, "ajuda" | "nome">) {
 
 /** O cartão de um fluxo salvo: frequência, estado e os números (nós · última execução · erros). */
 function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
-  const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
+  const u = f.ultimaExecucao as { estado?: string; apontados?: number; atrasada?: boolean } | null;
   const ultima = !u?.estado ? "—" : u.estado === "concluido" ? "Concluída" : u.estado === "falhou" ? "Falhou" : u.estado === "cancelado" ? "Cancelada" : u.estado;
+  const atrasadaAgora = rodando !== f.id && atrasada(f, Date.now());
   return {
     titulo: f.nome,
     ajuda: ajudaDoFluxo(f),
@@ -876,6 +906,10 @@ function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
     selo:
       rodando === f.id ? (
         <Badge tone="blue">Executando</Badge>
+      ) : atrasadaAgora && f.proximaEm ? (
+        <Badge tone="amber" dot title={`Devia rodar em ${dataHoraBR(f.proximaEm)} — o sistema não estava aberto ou a extensão da Centi não estava pronta. Roda uma vez assim que a extensão estiver pronta.`}>
+          Atrasada desde {dataHoraBR(f.proximaEm)}
+        </Badge>
       ) : f.ativo ? (
         <Badge tone="emerald">Agendado</Badge>
       ) : f.publico ? (
@@ -885,7 +919,7 @@ function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
       ) : undefined,
     metricas: [
       { rotulo: "Nós", valor: String(f.grafo.nos.length) },
-      { rotulo: "Última", valor: ultima, cor: !u?.estado ? undefined : u.estado === "concluido" && !u.apontados ? "var(--ok)" : "var(--warn)" },
+      { rotulo: "Última", valor: u?.atrasada ? `${ultima} (atrasada)` : ultima, cor: !u?.estado ? undefined : u.estado === "concluido" && !u.apontados ? "var(--ok)" : "var(--warn)" },
       { rotulo: "Erros", valor: u?.estado ? String(u.apontados ?? 0) : "—", cor: u?.apontados ? "var(--danger)" : undefined },
     ],
   };
@@ -1604,7 +1638,7 @@ function EditorFluxo({
           {rotuloFrequencia(freq)} · {ativo ? `próxima: ${(() => {
             const p = proximaExecucao(freq, new Date());
             return p ? dataHoraBR(p) : "—";
-          })()}` : "agendamento desligado"} · roda com esta tela aberta e a extensão pronta.
+          })()}` : "agendamento desligado"} · roda em qualquer tela do sistema com a extensão da Centi pronta (a perdida roda uma vez ao voltar).
         </p>
       )}
       {modo === "painel" && (

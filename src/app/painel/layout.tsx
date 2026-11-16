@@ -14,6 +14,7 @@ import { getConfigEscopo } from "@/lib/escopo-cabecalho";
 import { nomesDasSiglas } from "@/lib/reparticoes";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
+import { AgendadorAutomacoes } from "@/components/AgendadorAutomacoes";
 import { ImportacoesAoVivoProvider, MonitorImportacoes } from "@/components/ImportacoesAoVivo";
 import { PREF_IMPORTACOES_AO_VIVO } from "@/lib/importacoes-ao-vivo-store";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
@@ -151,6 +152,7 @@ export default async function PainelLayout({
               <SegundoPlano>
                 {bloqueio ? null : children}
                 {usuario.admin && !bloqueio && <MonitorImportacoes />}
+                {usuario.admin && !bloqueio && <AgendadorAutomacoes />}
               </SegundoPlano>
             </ImportacoesAoVivoProvider>
           </UnidadeUnica>

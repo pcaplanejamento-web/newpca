@@ -3,6 +3,7 @@ AbrirNoLugar.tsx
 AceiteTermo.tsx
 AcessoDaPessoa.tsx
 AcessoRestrito.tsx
+AgendadorAutomacoes.tsx
 AcoesCadastro.tsx
 AgendasExternas.tsx
 Ajuda.tsx

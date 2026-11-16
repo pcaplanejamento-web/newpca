@@ -28,3 +28,20 @@ test("retomada dos subfluxos: grava em lotes (≤ 100 parâmetros), atualiza o e
   db.exec("DELETE FROM automacao_fluxos WHERE id = 1");
   assert.equal((db.prepare("SELECT count(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0, "excluir o fluxo apaga o progresso");
 });
+
+test("reserva da execução agendada: compare-and-set — só a 1ª ganha; desligado ou não devido, ninguém (driver D1 real)", async () => {
+  const db = new DatabaseSync(":memory:");
+  for (const arq of readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort()) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
+  db.exec(`INSERT INTO automacao_fluxos (id, nome, ativo, proxima_em) VALUES
+    (1, 'Devido', 1, '2026-10-06T11:00:00.000Z'), (2, 'Futuro', 1, '2026-10-07T11:00:00.000Z'), (3, 'Desligado', 0, '2026-10-01T11:00:00.000Z')`);
+  const orm = drizzle(d1Sobre(db) as never, { schema }) as never as Parameters<typeof q.comandoReservarFluxo>[0];
+  const agora = "2026-10-06T12:00:00.000Z";
+  const a = await q.comandoReservarFluxo(orm, 1, "2026-10-06T11:00:00.000Z", agora, "2026-10-07T11:00:00.000Z");
+  assert.deepEqual(a.map((x) => x.id), [1], "a 1ª aba reserva");
+  // A 2ª aba/ADM ainda com a hora antiga na memória: nada (não roda duas vezes).
+  const b = await q.comandoReservarFluxo(orm, 1, "2026-10-06T11:00:00.000Z", agora, "2026-10-07T11:00:00.000Z");
+  assert.equal(b.length, 0);
+  assert.equal((db.prepare("SELECT proxima_em AS p FROM automacao_fluxos WHERE id = 1").get() as { p: string }).p, "2026-10-07T11:00:00.000Z");
+  assert.equal((await q.comandoReservarFluxo(orm, 2, "2026-10-07T11:00:00.000Z", agora, null)).length, 0, "ainda não chegou a hora");
+  assert.equal((await q.comandoReservarFluxo(orm, 3, "2026-10-01T11:00:00.000Z", agora, null)).length, 0, "desligado");
+});
