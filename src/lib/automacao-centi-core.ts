@@ -91,6 +91,18 @@ export function mensagemDoLoad(j: unknown): string {
 export const MAX_RECUSAS_SEGUIDAS = 3;
 /** O erro de UM planejamento recusado (lido pelos fluxos — nunca contém "recusou o Emitir DFD" sozinho no início). */
 export const PREFIXO_RECUSA = "RECUSA: ";
+
+/** A Centi NÃO ABRIU o registro no load (`{Entity: null, Message}`): a mensagem dela (vazia = sem mensagem); `null` = abriu. */
+export function mensagemSemRegistro(j: unknown): string | null {
+  if (!j || typeof j !== "object" || !("Entity" in (j as object))) return null;
+  const r = j as { Entity?: unknown; Message?: unknown };
+  if (r.Entity != null && typeof r.Entity === "object") return null;
+  const m = r.Message;
+  const t = typeof m === "string" ? m : m && typeof m === "object" ? ((m as { Text?: unknown }).Text ?? (m as { Descricao?: unknown }).Descricao) : "";
+  return String(t ?? "").replace(/\s+/g, " ").trim();
+}
+/** A mensagem do load diz que o planejamento NÃO EXISTE (vazia também: a Centi não abriu nada). */
+export const planejamentoInexistente = (msg: string | null): boolean => msg !== null && (!msg || /n[aã]o (foi )?encontrad|inexist|n[aã]o existe/i.test(msg));
 /** O contador das recusas do Emitir DFD numa execução: UMA recusa é do planejamento (fica como falha dele); só várias
  * seguidas, sem NENHUM DFD emitido, indicam que a operação mudou. */
 export type RecusasCenti = { seguidas: string[]; sucessos: number };

@@ -182,3 +182,83 @@ test("leituras do motivo: Δ do valor, divergências de um item, desatualizada, 
   assert.equal(lib.orientacoesDivergencias(["Valor total", "Órgão"]).length, 2);
   assert.deepEqual(lib.orientacoesDivergencias([]), []);
 });
+
+// ——— De ponta a ponta: o modelo "Conferir 1 DFD × Centi" rodado pelo motor, a Centi e o banco simulados. Cada execução
+// tem de gravar o status certo — e mudar quando a Centi muda.
+test("Conferir 1 DFD × Centi de ponta a ponta: grava, muda e volta o status; falha e órgão sem ID não gravam", async () => {
+  const { executarFluxo } = await import("../src/lib/fluxo-core.ts");
+  const { REGISTRO_NOS } = await import("../src/lib/fluxo-nos.ts");
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  assert.ok(m);
+  const g = grafoDoModelo(m, new Map());
+  const banco = { status: null as string | null, motivo: null as string | null };
+  const rodar = async (centi: DfdParseado | "falha" | "nao", entidade = "2") => {
+    const posts: { dfdId: number; status: string; motivo?: string }[] = [];
+    const r = await executarFluxo(g, REGISTRO_NOS, {
+      centi: async () => ({ ok: true }),
+      cancelado: () => false,
+      api: async (url: string, o?: { body?: unknown }) => {
+        if (url.includes("conferencia-dfds"))
+          for (const x of (o?.body as { itens?: { dfdId: number; status: string; motivo?: string }[] } | undefined)?.itens ?? []) {
+            posts.push(x);
+            banco.status = x.status;
+            banco.motivo = x.status === "divergente" ? (x.motivo ?? null) : null;
+          }
+        return { ok: true, marcados: 1, convergentes: 0, divergentes: 0 };
+      },
+      host: {
+        __entrada: [{ id: 7, numero: "123", planejamento: "456", entidade, tipo: "DFD-S", valor: 100, totalItens: 2 }],
+        __cache: new Map(),
+        __vars: {},
+        lerDfdCenti: async (plan: string, _e?: string, _pdf?: boolean, completo?: boolean) => {
+          if (centi === "falha") throw new Error("Sem resposta da Centi");
+          if (centi === "nao") throw new Error("NAO_ENCONTRADO: a Centi não abriu o planejamento 456 — Registro não encontrado.");
+          return { numero: centi.numero, planejamento: plan, tipo: centi.tipo, objeto: centi.objeto, valor: centi.valorTotal, totalItens: centi.itens.length, situacao: "EM ELABORAÇÃO", ...(completo ? { dfd: centi } : {}) };
+        },
+        dfdDoSistema: async (id: number) => ({ id, ...sistema(), itens: base().itens.map((x, i) => ({ id: 50 + i, ...x })) }),
+      },
+    } as never);
+    return { r, posts };
+  };
+
+  let x = await rodar(base());
+  assert.deepEqual(x.posts.map((p) => p.status), ["convergente"]);
+  assert.deepEqual(banco, { status: "convergente", motivo: null });
+
+  const dif = base();
+  dif.itens = [item(1), item(2, 12)];
+  dif.valorTotal = 110;
+  x = await rodar(dif);
+  assert.equal(banco.status, "divergente");
+  assert.match(banco.motivo ?? "", /Valor total/);
+  assert.match(banco.motivo ?? "", /Item 2 .*quantidade 10 × 12/);
+
+  x = await rodar(base());
+  assert.deepEqual(banco, { status: "convergente", motivo: null }, "voltou igual: Convergente e o motivo some");
+
+  x = await rodar("falha");
+  assert.equal(x.r.estado, "falhou", "a falha de comunicação é erro do subfluxo (a retomada refaz)");
+  assert.equal(x.posts.length, 0, "não conferido = não grava");
+  assert.equal(banco.status, "convergente");
+
+  x = await rodar("nao");
+  assert.equal(banco.status, "divergente");
+  assert.match(banco.motivo ?? "", /não encontrado na Centi/);
+
+  x = await rodar(base(), "");
+  assert.equal(x.posts.length, 0, "órgão sem o ID da Centi: não busca nem grava");
+});
+
+test("load sem registro: a mensagem da Centi e quando ela diz que o planejamento não existe", async () => {
+  const { mensagemSemRegistro, planejamentoInexistente } = await import("../src/lib/automacao-centi-core.ts");
+  assert.equal(mensagemSemRegistro({ Entity: { Fields: [] } }), null);
+  assert.equal(mensagemSemRegistro({ outro: 1 }), null);
+  assert.equal(mensagemSemRegistro({ Entity: null, Message: "Registro não encontrado." }), "Registro não encontrado.");
+  assert.equal(mensagemSemRegistro({ Entity: null, Message: { Text: "Usuário sem permissão!" } }), "Usuário sem permissão!");
+  assert.equal(mensagemSemRegistro({ Entity: null }), "");
+  assert.equal(planejamentoInexistente("Registro não encontrado."), true);
+  assert.equal(planejamentoInexistente("Planejamento inexistente"), true);
+  assert.equal(planejamentoInexistente("Usuário sem permissão!"), false, "permissão nunca vira 'não existe'");
+  assert.equal(planejamentoInexistente(null), false);
+});

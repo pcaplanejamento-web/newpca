@@ -3,7 +3,7 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { analisarRespostaCenti, operacaoRecusada, PREFIXO_RECUSA } from "./automacao-centi-core";
+import { analisarRespostaCenti, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
 import { carregarPlanejamento, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
@@ -110,12 +110,13 @@ export async function lerDfdCentiPorCodigo(
   if ("erro" in l) throw new Error(l.erro);
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
   // A Centi responde `{Entity: null, Message}` quando NÃO abre o registro: o motivo é a mensagem dela, nunca "sem o campo".
-  const resp = l.j as { Entity?: unknown; Message?: unknown };
+  const semRegistro = mensagemSemRegistro(l.j);
+  const ondeOrgao = entidade ? ` (órgão ${entidade})` : "";
+  const naoEncontrado = () => new Error(`NAO_ENCONTRADO: a Centi não abriu o planejamento ${plan}${ondeOrgao}${semRegistro ? ` — ${semRegistro}` : ""}.`);
   // Só a leitura SEM o PDF depende do registro; com o PDF, a emissão segue como no "Baixar DFDs" (que não lê o load).
-  if (!comPdf && typeof l.j === "object" && "Entity" in resp && (resp.Entity == null || typeof resp.Entity !== "object")) {
-    const msg = s(typeof resp.Message === "string" ? resp.Message : (resp.Message as { Text?: unknown; Descricao?: unknown } | null)?.Text ?? (resp.Message as { Descricao?: unknown } | null)?.Descricao);
-    if (!msg || /n[aã]o (foi )?encontrad|inexist|n[aã]o existe/i.test(msg)) throw new Error(`NAO_ENCONTRADO: a Centi não abriu o planejamento ${plan}${entidade ? ` (órgão ${entidade})` : ""}${msg ? ` — ${msg}` : ""}.`);
-    throw new Error(`A Centi não abriu o planejamento ${plan}${entidade ? ` (órgão ${entidade})` : ""} — ${msg}`);
+  if (!comPdf && semRegistro !== null) {
+    if (planejamentoInexistente(semRegistro)) throw naoEncontrado();
+    throw new Error(`A Centi não abriu o planejamento ${plan}${ondeOrgao} — ${semRegistro}`);
   }
   const situacao = s(acharValor(l.j, /^situa/i));
   // O Centro de Custo e a Finalidade do PRÓPRIO registro do planejamento (o ID da CM002) — sem depender da lista.
@@ -126,7 +127,12 @@ export async function lerDfdCentiPorCodigo(
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
   const e = await emitirUm(c, plan, entidade || undefined, false, l);
   // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
-  if (!e.pdf) throw new Error(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
+  if (!e.pdf) {
+    // O load já DIZIA (a mensagem da Centi) que o planejamento NÃO EXISTE e a emissão também falhou: é "não encontrado" (marca Divergente),
+    // não falha de comunicação (que deixaria o DFD sem conferir e refeito em toda execução).
+    if (semRegistro && planejamentoInexistente(semRegistro)) throw naoEncontrado();
+    throw new Error(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
+  }
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);

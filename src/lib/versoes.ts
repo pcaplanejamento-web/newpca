@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.294.1",
+    versao: "1.294.2",
     data: "2026-11-16",
     titulo: "Reconferir da Mesa só confere",
     mudancas: [
@@ -44,6 +44,19 @@ export const VERSOES: readonly Versao[] = [
         area: "Mesa",
         texto: "O “Reconferir” da coluna Centi nunca usa uma automação que altera os dados do DFD (corrigir ou substituir pela Centi) — só as que conferem.",
         link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
+    versao: "1.294.1",
+    data: "2026-11-16",
+    titulo: "Conferir DFDs × Centi: planejamento inexistente vira Divergente",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O DFD cujo planejamento a Centi diz que não existe passa a ser marcado Divergente (“não encontrado na Centi”), em vez de ficar sem conferir e ser refeito em toda execução. Mensagem de permissão ou falha de comunicação seguem como “não conferido”.",
+        link: "/painel/automacao",
       },
     ],
   },
