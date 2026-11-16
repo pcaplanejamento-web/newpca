@@ -1593,13 +1593,14 @@ const NOS: DefNo[] = [
       "Corrige cada DFD (id) DIVERGENTE com os dados da Centi guardados na conferência — a MESMA correção do “Usar a Centi em…” da Mesa: só o que diverge; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema; refaz a conferência.",
     icone: "save",
     entradas: ["entrada"],
-    saidas: ["corrigidos", "semMudanca", "erros"],
-    rotulosPortas: { corrigidos: "Corrigidos", semMudanca: "Sem correção", erros: "Não corrigidos" },
+    saidas: ["corrigidos", "convergentes", "semMudanca", "erros"],
+    rotulosPortas: { corrigidos: "Corrigidos", convergentes: "Já convergentes", semMudanca: "Sem correção", erros: "Não corrigidos" },
     campos: [],
     executar: async (e, _c, ctx) => {
       const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>) | undefined;
       if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
       const corrigidos: Item[] = [];
+      const convergentes: Item[] = [];
       const sem: Item[] = [];
       const erros: Item[] = [];
       const itens = so(e);
@@ -1638,8 +1639,17 @@ const NOS: DefNo[] = [
           else if (r.resultado === "parcial") {
             // Gravou, mas AINDA diverge: vai a "Não corrigidos" com o que restou (nunca conta como corrigido).
             const restam = Array.isArray(r.restam) ? r.restam.join(", ") : "";
-            feito = { ...feito, motivo: `Corrigido em parte — ainda diverge${restam ? `: ${restam}` : ""}.` };
+            const m = `Corrigido em parte — ainda diverge${restam ? `: ${restam}` : ""}.`;
+            feito = { ...feito, motivo: m, erro: m };
             erros.push(feito);
+          } else if (r.resultado === "pendente") {
+            // Gravou, mas a reconferência falhou: sem confirmação, nunca conta como corrigido.
+            feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO.pendente, erro: MOTIVO_SEM_CORRECAO.pendente };
+            erros.push(feito);
+          } else if (r.resultado === "convergente" || r.resultado === "aceito") {
+            // Já convergente (ou aceito) na reconferência: nada a fazer — não é pendência.
+            feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO[r.resultado] };
+            convergentes.push(feito);
           } else {
             feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO[r.resultado] ?? "Nada a corrigir." };
             sem.push(feito);
@@ -1652,7 +1662,7 @@ const NOS: DefNo[] = [
         }
         ctx.parcial?.([feito]);
       }
-      return { corrigidos, semMudanca: sem, erros };
+      return { corrigidos, convergentes, semMudanca: sem, erros };
     },
   },
   {
@@ -2172,6 +2182,7 @@ export const MOTIVO_SEM_CORRECAO: Record<string, string> = {
   aceito: "A divergência foi aceita (convergente com ressalva).",
   naoCorrigivel: "Só divergências que a Centi não corrige (situação, órgão, nº do DFD) — trate no painel da coluna Centi.",
   sem: "Nada a corrigir nos dados do DFD.",
+  pendente: "Gravado, mas a reconferência falhou — execute de novo para confirmar.",
 };
 
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));

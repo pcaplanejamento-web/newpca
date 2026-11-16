@@ -794,8 +794,10 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     return null;
   }
   if (tipo === "saida.corrigirPelaCenti") {
-    if (s(it.erro)) return { rotulo: "Não corrigido", tom: "red", texto: s(it.erro) };
     if (it.correcao === "parcial") return { rotulo: "Corrigido em parte", tom: "amber", texto: s(it.motivo) || s(it.motivoDepois) };
+    if (it.correcao === "pendente") return { rotulo: "Gravado, sem reconferir", tom: "amber", texto: s(it.motivo) };
+    if (s(it.erro)) return { rotulo: "Não corrigido", tom: "red", texto: s(it.erro) };
+    if (it.correcao === "convergente" || it.correcao === "aceito") return { rotulo: "Já convergente", tom: "emerald", texto: s(it.motivo) };
     if (it.correcao === "corrigido")
       return it.conferenciaDepois === "convergente"
         ? { rotulo: "Corrigido", tom: "emerald", texto: "Gravado com os dados da Centi — convergente" }

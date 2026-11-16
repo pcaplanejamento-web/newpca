@@ -14,14 +14,18 @@ import { semMarcas } from "./sobrescrita-dfd.ts";
 export type ResultadoCorrecao = {
   /** corrigido = gravado com os dados da Centi · sem = nada a corrigir nos tipos · aceito = divergência aceita (com ressalva)
    * · convergente = já não diverge · naoCorrigivel = só divergências que a Centi não corrige (situação, órgão, nº)
-   * · parcial = gravou, mas a reconferência AINDA diverge (`restam` diz em quê). */
-  resultado: "corrigido" | "parcial" | "sem" | "aceito" | "convergente" | "naoCorrigivel";
+   * · parcial = gravou, mas a reconferência AINDA diverge (`restam` diz em quê)
+   * · pendente = gravou, mas a reconferência falhou (sem confirmação — execute de novo). */
+  resultado: "corrigido" | "parcial" | "pendente" | "sem" | "aceito" | "convergente" | "naoCorrigivel";
   /** O status da conferência DEPOIS (o do `recalcular` quando gravou; senão o atual). */
   status: string | null;
   motivo: string | null;
   /** Os tipos que ainda divergem depois de gravar (só no `parcial`). */
   restam?: string[];
 };
+
+/** O que a Centi NÃO corrige no DFD (identidade/situação, ou nada lido): a automação desiste só com eles. */
+const SEM_CORRECAO: ReadonlySet<string> = new Set(["Situação", "Órgão", "Nº do DFD", "Não encontrado na Centi"]);
 
 type Busca = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -48,7 +52,10 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   // O motivo tem teto ("e mais N"): cortado, os tipos que ficaram fora do texto também contam (decide o retrato).
   const cortado = /(^|\n)e mais \d+\s*$/.test(String(motivo ?? ""));
   const usar = tipos ? alcance.filter((t) => tipos.includes(t)) : alcance;
-  if (!alcance.length && !cortado) return { resultado: "naoCorrigivel", status, motivo };
+  // A automação (`tipos` null): só desiste quando o motivo tem SÓ o que a Centi não corrige de fato ("Outras" = linha não
+  // classificada — o retrato decide). A massa usa a régua de sempre.
+  const desiste = tipos ? !alcance.length : tiposDoMotivo(motivo).every((t) => SEM_CORRECAO.has(t));
+  if (desiste && !cortado) return { resultado: "naoCorrigivel", status, motivo };
   if (tipos && !usar.length) return { resultado: "sem", status, motivo };
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
   const j2 = await lerJson<{ retrato?: RetratoCenti | null }>(r2);
@@ -85,5 +92,5 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   } catch {
     /* segue: a correção foi gravada */
   }
-  return { resultado: "corrigido", status: null, motivo: null };
+  return { resultado: "pendente", status: null, motivo: null };
 }

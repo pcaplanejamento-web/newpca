@@ -168,7 +168,7 @@ test("tipos corrigíveis do motivo: tira situação, órgão, nº do DFD, não e
 });
 
 type Chamada = { url: string; metodo: string; corpo: Record<string, unknown> | null };
-function servidor(o: { status: string | null; motivo?: string | null; aceite?: string | null; retrato?: unknown; patch?: number; centi?: DfdParseado; depois?: { status: string; motivo: string | null } }) {
+function servidor(o: { status: string | null; motivo?: string | null; aceite?: string | null; retrato?: unknown; patch?: number; centi?: DfdParseado; depois?: { status: string; motivo: string | null }; recalc?: number }) {
   const s = base();
   const centi = o.centi ?? centiDivergente();
   const r = o.retrato === undefined ? retrato(centi) : o.retrato;
@@ -182,6 +182,7 @@ function servidor(o: { status: string | null; motivo?: string | null; aceite?: s
     if (metodo === "GET" && url === "/api/dfd/9") return resp(200, { ok: true, dfd });
     if (metodo === "GET" && url.endsWith("?retrato=1")) return resp(200, { ok: true, retrato: r });
     if (metodo === "PATCH") return o.patch && o.patch !== 200 ? resp(o.patch, { ok: false, error: "Alterado por outra pessoa." }) : resp(200, { ok: true });
+    if (metodo === "POST" && o.recalc) return resp(o.recalc, { ok: false, error: "Falhou." });
     if (metodo === "POST") return resp(200, { ok: true, ...(o.depois ?? { status: "convergente", motivo: null }) });
     return resp(404, { ok: false });
   };
@@ -206,7 +207,7 @@ test("corrigir DFD pela Centi: convergente, aceito ou só tipos não corrigívei
   for (const [o, esperado] of [
     [{ status: "convergente" }, "convergente"],
     [{ status: null }, "convergente"],
-    [{ status: "divergente", motivo: "DFD 123: Situação: Aprovado" }, "naoCorrigivel"],
+    [{ status: "divergente", motivo: "DFD 123 (Planej. 456): 1 diferença — situação CANCELADO na Centi" }, "naoCorrigivel"],
   ] as const) {
     const sv = servidor(o);
     assert.equal((await corrigirDfdPelaCenti(9, null, sv.busca)).resultado, esperado);
@@ -263,8 +264,9 @@ test("nó Corrigir DFD pela Centi: só o reconferido agora; aceito vai a 'sem co
   const r = (await no.executar({ entrada: itens }, {}, ctx("HTTP 500") as never, {} as never)) as Record<string, Record<string, unknown>[]>;
   assert.deepEqual(feitos, [1, 2, 3]);
   assert.deepEqual(r.corrigidos.map((x) => x.id), [1]);
-  assert.deepEqual(r.semMudanca.map((x) => x.id), [2, 6]);
-  assert.equal(r.semMudanca[0].motivo, MOTIVO_SEM_CORRECAO.aceito);
+  assert.deepEqual(r.semMudanca.map((x) => x.id), [6]);
+  assert.deepEqual(r.convergentes.map((x) => x.id), [2], "aceito = já convergente, não é pendência");
+  assert.equal(r.convergentes[0].motivo, MOTIVO_SEM_CORRECAO.aceito);
   assert.deepEqual(r.erros.map((x) => x.id), [3, 4, 5]);
   assert.match(String(r.erros[1].erro), /Não reconferido/);
   assert.equal(reconferido({ centi: { a: 1 } }), true);
@@ -519,4 +521,40 @@ test("auditoria: Situação, Órgão e Nº do DFD não se corrigem pela Centi �
   const sim = simularCorrecao(s, r, 2027, null);
   assert.equal(sim.status, "divergente");
   assert.deepEqual(tiposDoMotivo(sim.motivo).sort(), ["Nº do DFD", "Situação", "Órgão"].sort());
+});
+
+test("execução: motivo só com linha não classificada (Outras) — a automação consulta o retrato e corrige; a massa não", async () => {
+  const outras = "DFD 123 (Planej. 456): 1 diferença — algo que a classificação não reconhece";
+  assert.deepEqual(tiposDoMotivo(outras), ["Outras"]);
+  const sv = servidor({ status: "divergente", motivo: outras });
+  const r = await corrigirDfdPelaCenti(9, null, sv.busca);
+  assert.equal(r.resultado, "corrigido");
+  assert.ok(sv.chamadas.some((c) => c.metodo === "PATCH"));
+  const sm = servidor({ status: "divergente", motivo: outras });
+  assert.equal((await corrigirDfdPelaCenti(9, ["Objeto"], sm.busca)).resultado, "naoCorrigivel");
+  assert.equal(sm.chamadas.some((c) => c.metodo === "PATCH"), false);
+});
+
+test("execução: gravou mas a reconferência falhou — “pendente”, nunca “corrigido”; o nó manda a Não corrigidos", async () => {
+  const r = await corrigirDfdPelaCenti(9, null, servidor({ status: "divergente", recalc: 500 }).busca);
+  assert.equal(r.resultado, "pendente");
+  const no = REGISTRO_NOS.get("saida.corrigirPelaCenti");
+  assert.ok(no);
+  const ctx = {
+    centi: async () => ({ ok: true }),
+    api: async () => ({ ok: true }),
+    aviso: () => undefined,
+    cancelado: () => false,
+    host: {
+      corrigirPelaCenti: async (id: number) =>
+        id === 1 ? { resultado: "pendente", status: null, motivo: null } : id === 2 ? { resultado: "parcial", status: "divergente", motivo: "x", restam: ["Situação"] } : { resultado: "convergente", status: "convergente", motivo: null },
+    },
+  };
+  const itens = [1, 2, 3].map((id) => ({ id, numero: String(id), centi: { situacao: "A" } }));
+  const s = (await no.executar({ entrada: itens }, {}, ctx as never, {} as never)) as Record<string, Record<string, unknown>[]>;
+  assert.deepEqual(s.corrigidos, []);
+  assert.deepEqual(s.erros.map((x) => x.id), [1, 2]);
+  assert.equal(s.erros[0].erro, MOTIVO_SEM_CORRECAO.pendente);
+  assert.match(String(s.erros[1].erro), /Corrigido em parte — ainda diverge: Situação/);
+  assert.deepEqual(s.convergentes.map((x) => x.id), [3]);
 });

@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.4",
+    data: "2026-11-16",
+    titulo: "Correção pela Centi: resultado fiel em cada DFD",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "“Corrigir DFDs divergentes pela Centi”: divergência que a classificação não reconhece passa a ser corrigida pelos dados da Centi; o DFD gravado cuja reconferência falhou aparece como “Gravado, sem reconferir” (nunca “Corrigido”); e o que já voltou convergente sai como “Já convergente”, sem virar atenção na Análise.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.3",
     data: "2026-11-16",
     titulo: "Correção pela Centi: toda divergência corrigida",
