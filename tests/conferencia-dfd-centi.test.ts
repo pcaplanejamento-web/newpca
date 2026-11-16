@@ -200,7 +200,7 @@ test("Conferir 1 DFD × Centi de ponta a ponta: grava, muda e volta o status; fa
       cancelado: () => false,
       api: async (url: string, o?: { body?: unknown }) => {
         if (url.includes("conferencia-dfds"))
-          for (const x of (o?.body as { itens: { dfdId: number; status: string; motivo?: string }[] }).itens) {
+          for (const x of (o?.body as { itens?: { dfdId: number; status: string; motivo?: string }[] } | undefined)?.itens ?? []) {
             posts.push(x);
             banco.status = x.status;
             banco.motivo = x.status === "divergente" ? (x.motivo ?? null) : null;
