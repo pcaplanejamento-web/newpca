@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 44;
+  const PROTOCOLO = 45;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -108,6 +108,7 @@
   const respostasTela = [];
   // A FONTE da assinatura do DFD aprendida (o modelo do pedido + onde ler — nunca o valor): vale em todas as abas.
   const FONTE_ASSINATURA = "__pcaFonteAssinatura_v1";
+  const FONTE_DIAG = "__pcaFonteDiag_v1";
   function fonteGuardada() {
     try {
       const g = JSON.parse(localStorage.getItem(FONTE_ASSINATURA) || "null");
@@ -135,6 +136,9 @@
       const fonte = op.planejamento && op.assinatura ? pecas.fonteDaAssinatura(respostasTela, op.planejamento, op.assinatura) : null;
       operacaoTela = { ...op, fonte, em };
       if (fonte) localStorage.setItem(FONTE_ASSINATURA, JSON.stringify({ moduleKey: op.moduleKey, guid: op.guid, fonte, em }));
+      // Diagnóstico: o que a tela recebeu antes deste Processar (só caminhos e chaves) — o ADM copia na Automação.
+      if (op.planejamento && op.assinatura)
+        localStorage.setItem(FONTE_DIAG, JSON.stringify({ ...pecas.diagnosticoAssinatura(respostasTela, op.planejamento, op.assinatura), aprendido: !!fonte, em }));
       sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
     } catch {}
   }
@@ -261,15 +265,16 @@
         else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
       } catch {}
       const j = JSON.parse(texto);
+      // Para aprender (e diagnosticar) as seções 8–10 do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
+      // A fonte só usa as consultas aceitas (a peça confere de novo).
+      if (texto.length <= 2_000_000) {
+        respostasTela.unshift({ caminho: c.caminho, metodo: m, corpo: b, j });
+        if (respostasTela.length > 60) respostasTela.length = 60;
+      }
       if (!A.consultaPermitida(c.caminho, m, b)) {
         // Diagnóstico: uma lista que veio por um pedido que a trava não aceita como leitura.
         if (A.protocolosTela(j)) diagnosticar({ caminho: c.caminho.slice(0, 120), motivo: `não aceito como consulta (${m})`, colunas: [] });
         return;
-      }
-      // Para aprender a assinatura do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
-      if (texto.length <= 2_000_000) {
-        respostasTela.unshift({ caminho: c.caminho, metodo: m, corpo: b, j });
-        if (respostasTela.length > 60) respostasTela.length = 60;
       }
       const lp = A.loadDoProtocolo(url, m, b, j);
       if (lp) {
@@ -989,7 +994,7 @@
         return { ok: false };
       }
     };
-    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO), assinatura: ler(FONTE_ASSINATURA) };
+    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO), assinatura: ler(FONTE_ASSINATURA), assinaturaDiag: ler(FONTE_DIAG) };
   }
   async function telaApi(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };

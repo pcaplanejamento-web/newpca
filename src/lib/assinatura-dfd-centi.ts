@@ -20,9 +20,9 @@ export type FonteAssinatura = {
 };
 
 export const MSG_SEM_FONTE =
-  "A automação ainda não aprendeu de onde vem a assinatura de cada planejamento na Centi (seções 8 a 10 do DFD) — emita UM DFD pela tela da Centi (Emitir DFD → escolher a assinatura → Processar) com a extensão instalada e execute de novo. Nada foi emitido.";
+  "A automação também não aprendeu, pela tela, de onde vem esse registro (a Centi o chama de \"assinatura\" do DFD) — emita UM DFD pela tela da Centi (Emitir DFD → escolher → Processar) com a extensão instalada, copie o diagnóstico em Automação → Ajustes → Avançado e envie ao suporte. Nada foi emitido.";
 /** As falhas que PARAM a execução inteira (as demais seriam iguais). */
-export const PARA_TUDO = /interrompido|lote foi encerrado|recusou o Emitir DFD|aprendeu de onde vem a assinatura/i;
+export const PARA_TUDO = /interrompido|lote foi encerrado|recusou o Emitir DFD|aprendeu de onde vem a assinatura|de onde vem esse registro/i;
 
 const MARCA_ID = "{id}";
 const MARCA_NUM = "{id:n}";
@@ -96,4 +96,73 @@ export function escolherAssinatura(j: unknown, f: FonteAssinatura, plan: string)
     if (marcados.length === 1) return { id: marcados[0] };
   }
   return { erro: `O planejamento ${plan} tem ${ids.length} assinaturas do DFD na Centi — a automação não escolhe sozinha; deixe só a certa no planejamento.` };
+}
+
+/** Uma LISTA do load (o caminho legível, o nome e os itens). */
+type ListaDoLoad = { nome: string; caminho: string; itens: Record<string, unknown>[] };
+const ehObjeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const NOME_ASSINATURA = /assinatura/i;
+const MARCA_ESCOLHIDA = /padr|selecion|escolh|princip|default|atual|vigent/i;
+
+/** As listas de objetos do load do planejamento (pelas chaves e pelo padrão Fields), sem entrar em listas dentro de listas. */
+export function listasDoLoad(j: unknown): ListaDoLoad[] {
+  const achadas: ListaDoLoad[] = [];
+  const ir = (v: unknown, caminho: string[], prof: number) => {
+    if (prof > 8 || v == null || typeof v !== "object") return;
+    if (Array.isArray(v)) {
+      const itens = v.filter(ehObjeto);
+      if (itens.length) achadas.push({ nome: caminho[caminho.length - 1] ?? "", caminho: caminho.join("."), itens });
+      return;
+    }
+    const o = v as Record<string, unknown>;
+    if (Array.isArray(o.Fields)) for (const f of o.Fields as Campo[]) if (f && typeof f.Key === "string") ir(f.Value, [...caminho, f.Key], prof + 1);
+    for (const [k, x] of Object.entries(o)) if (k !== "Fields") ir(x, [...caminho, k], prof + 1);
+  };
+  ir(j, [], 0);
+  return achadas;
+}
+
+const idDoItem = (x: unknown) => idTexto(valorDe(x, "Id")) ?? idTexto(valorDe(x, "@Id")) ?? idTexto(valorDe(x, "id"));
+/** O item em "chave → valor" (as próprias e as do padrão Fields "@K"). */
+function planoDoItem(x: Record<string, unknown>): Record<string, unknown> {
+  const r: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(x)) if (k !== "Fields") r[k] = v;
+  if (Array.isArray(x.Fields)) for (const f of x.Fields as Campo[]) if (f && typeof f.Key === "string") r[`@${f.Key}`] = f.Value;
+  return r;
+}
+
+/**
+ * Os REGISTROS DAS SEÇÕES 8–10 ("assinaturas" do DFD) no load do PRÓPRIO planejamento — o load é dele, então qualquer id da
+ * lista é dele (nunca o de outro planejamento). `ids` = todos; `id` = o que vale (uma opção, ou a única marcada); null =
+ * o load não traz a lista (`listas` = os nomes das listas que trouxe, para o diagnóstico).
+ */
+export function assinaturasDoLoad(j: unknown): { ids: string[]; id: string | null; nome: string } | { listas: string[] } {
+  const todas = listasDoLoad(j);
+  let cand = todas.filter((l) => NOME_ASSINATURA.test(l.nome) && l.itens.some((x) => idDoItem(x)));
+  if (cand.length > 1) {
+    const dfd = cand.filter((l) => /dfd/i.test(l.nome));
+    if (dfd.length) cand = dfd;
+  }
+  if (cand.length !== 1) return { listas: [...new Set(todas.map((l) => l.caminho || "(raiz)"))].slice(0, 40) };
+  const l = cand[0];
+  const ids = [...new Set(l.itens.map(idDoItem).filter((x): x is string => !!x))];
+  if (ids.length === 1) return { ids, id: ids[0], nome: l.caminho };
+  // Várias: só a que um sim/não marca SOZINHA (e, entre várias marcas, a de nome de "padrão/selecionada").
+  const planos = l.itens.map((x) => ({ id: idDoItem(x), p: planoDoItem(x) }));
+  const chaves = [...new Set(planos.flatMap((x) => Object.keys(x.p)))];
+  let marcas = chaves.filter((k) => planos.filter((x) => x.p[k] === true).length === 1);
+  if (marcas.length > 1) marcas = marcas.filter((k) => MARCA_ESCOLHIDA.test(k));
+  const id = marcas.length === 1 ? (planos.find((x) => x.p[marcas[0]] === true)?.id ?? null) : null;
+  return { ids, id, nome: l.caminho };
+}
+
+/** O id das seções 8–10 do planejamento pelo próprio load (sem fonte aprendida); erro = o DFD não é emitido. */
+export function assinaturaDoLoad(j: unknown, plan: string): { id: string } | { erro: string } {
+  const a = assinaturasDoLoad(j);
+  if ("listas" in a)
+    return {
+      erro: `Não achei, no planejamento ${plan} aberto na Centi, a lista das seções 8 a 10 do DFD (equipe, secretário demandante, autorização)${a.listas.length ? ` — listas lidas: ${a.listas.join(", ")}` : ""}. Nada foi emitido.`,
+    };
+  if (a.id) return { id: a.id };
+  return { erro: `O planejamento ${plan} tem ${a.ids.length} registros das seções 8 a 10 do DFD na Centi e nenhum marcado como o escolhido — a automação não escolhe sozinha; deixe só o certo no planejamento.` };
 }

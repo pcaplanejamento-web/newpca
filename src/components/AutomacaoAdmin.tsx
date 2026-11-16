@@ -22,6 +22,7 @@ import { Dropdown } from "./Dropdown";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
+import { BotaoCopiar } from "./BotaoCopiar";
 import { IconDownload, IconKey, IconPlug, IconPlus } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
@@ -59,6 +60,8 @@ type Resposta = {
   /** O andamento do último lote, como a extensão o guardou (sobrevive ao F5 desta tela). */
   atividade?: { estado: string; titulo: string; passo: string; atualizado: number } | null;
   loteId?: string;
+  /** O que a extensão já aprendeu da tela (o diagnóstico das seções 8–10 do DFD, sem valores). */
+  aprendido?: { assinaturaDiag?: unknown } | null;
 };
 type Ext = { versao: string; copias: number } | null;
 /** O contexto dos BANNERS da Mesa (o protocolo aberto pela linha): o mesmo da Mesa (`contextoBanners`). */
@@ -231,7 +234,10 @@ function Ajustes({
   gravando,
   onGravador,
   onConfigurarLogin,
+  diagAssinatura,
 }: {
+  /** O último diagnóstico da extensão sobre as seções 8–10 do DFD (null = nenhuma emissão vista pela tela). */
+  diagAssinatura: unknown;
   /** Abre o login da extensão (o dropdown do ícone). */
   onConfigurarLogin: () => void;
   /** O gravador de receitas na aba da Centi (null = desconhecido). */
@@ -316,9 +322,15 @@ function Ajustes({
       <Grupo titulo="Avançado">
         <p className="text-xs text-muted">
           {cfg.fonteAssinatura
-            ? "Assinatura do DFD (seções 8 a 10): lida da Centi para cada planejamento."
-            : "Assinatura do DFD (seções 8 a 10): ainda não aprendida — emita UM DFD pela tela da Centi (escolha a assinatura e Processar) com a extensão instalada. Sem isso, nenhum DFD é emitido."}
+            ? "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): lidas da Centi para cada planejamento."
+            : "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): lidas do próprio planejamento aberto na Centi. Se a automação disser que não achou, emita UM DFD pela tela da Centi e copie o diagnóstico abaixo."}
         </p>
+        {diagAssinatura != null && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] text-muted">Diagnóstico da última emissão pela tela da Centi</span>
+            <BotaoCopiar texto={JSON.stringify(diagAssinatura, null, 1)} rotulo="Copiar diagnóstico" titulo="Só caminhos e chaves — sem dados da Centi" />
+          </div>
+        )}
         <TextField label="ModuleKey" value={String(cfg.moduleKey)} inputMode="numeric" onChange={(e) => onCfg({ moduleKey: Number(e.target.value) })} />
         <TextField label="Guid da operação" value={cfg.guid} onChange={(e) => onCfg({ guid: e.target.value })} />
       </Grupo>
@@ -650,6 +662,7 @@ export function AutomacaoAdmin({
             fixas={cadastradas}
             onEntidade={definirEntidade}
             aberta={logado?.entidade ?? null}
+            diagAssinatura={logado?.aprendido?.assinaturaDiag ?? null}
             gravacao={gravacao}
             onGravacao={(v) => void mudarGravacao(v)}
             onHistorico={() => setHistorico(true)}

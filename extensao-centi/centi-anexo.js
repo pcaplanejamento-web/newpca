@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p44";
+  const NOME = "__pcaCentiAnexo_p45";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -141,7 +141,7 @@
   // "Emitir DFD" da Centi oferece as assinaturas DAQUELE planejamento e manda a escolhida em IdPlanejamentoAssinaturaDFD.
   // Repetir o id visto num planejamento em outro emite o DFD do outro com as seções 8–10 do primeiro. Por isso a extensão
   // aprende ONDE a tela achou as opções (o load do planejamento ou a consulta da janela) — nunca o valor.
-  const CHAVE_ID = /^(id|value|key|codigo|cod)$|id$/i;
+  const CHAVE_ID = /^id|id$|^(value|key|codigo|cod)$/i;
   /** Os lugares da resposta com o valor `alvo` numa chave de id: lista (`lista` + `chave` do item) ou campo (`caminho`). */
   function lugaresDoValor(j, alvo) {
     const achados = [];
@@ -218,6 +218,44 @@
       return fonte;
     }
     return null;
+  }
+  /**
+   * Por que a fonte não foi aprendida (para o ADM mandar): de cada resposta vista, só o caminho, se é consulta aceita, se
+   * cita o planejamento e as chaves onde o id escolhido apareceu — nunca outros valores.
+   */
+  function diagnosticoAssinatura(respostas, plan, assinatura) {
+    const p = texto(plan);
+    const s = texto(assinatura);
+    const lista = (Array.isArray(respostas) ? respostas : []).slice(0, 40).map((r) => {
+      const m = String(r?.metodo || "GET").toUpperCase();
+      const aceito = !!r && consultaPermitida(r.caminho, m, r.corpo);
+      const cita = !!r && (String(r.caminho).includes(p) || JSON.stringify(r.corpo ?? "").includes(p));
+      let onde = [];
+      try {
+        onde = /^\d{1,12}$/.test(s) ? lugaresTodos(r?.j, s).slice(0, 6) : [];
+      } catch {}
+      return { caminho: String(r?.caminho ?? "").replace(/\d{4,}/g, "#").slice(0, 120), metodo: m, aceito, cita, onde };
+    });
+    return { planejamento: p, assinatura: s, respostas: lista.length, lista };
+  }
+  /** Todos os caminhos (com "*" nas listas) em que o valor aparece — qualquer chave, para o diagnóstico. */
+  function lugaresTodos(j, alvo) {
+    const r = [];
+    const ir = (v, caminho, prof) => {
+      if (r.length >= 6 || prof > 8 || v == null) return;
+      if (typeof v !== "object") {
+        if (String(v).trim() === alvo) r.push(caminho.join("."));
+        return;
+      }
+      if (Array.isArray(v)) {
+        for (const x of v.slice(0, 300)) ir(x, [...caminho, "*"], prof + 1);
+        return;
+      }
+      for (const f of campos(v)) if (f && typeof f.Key === "string") ir(f.Value, [...caminho, `@${f.Key}`], prof + 1);
+      for (const [k, x] of Object.entries(v)) if (k !== "Fields") ir(x, [...caminho, k], prof + 1);
+    };
+    ir(j, [], 0);
+    return r;
   }
   /** O valor de uma chave do item ("@K" = do padrão Fields). */
   const valorDe = (x, k) => (String(k).startsWith("@") ? valor(x, String(k).slice(1)) : x?.[k]);
@@ -1000,6 +1038,6 @@
     comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, colunasDaTela, ehGradeCm002, valorDaColuna, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
-    operacaoDoCorpo, fonteDaAssinatura,
+    operacaoDoCorpo, fonteDaAssinatura, diagnosticoAssinatura,
     renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

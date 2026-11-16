@@ -5,7 +5,7 @@
  * autorização de uso único + a confirmação da extensão; o já anexado não é emitido de novo). É a lógica que era da tela
  * da Automação, agora usada pelo componente de fluxo "Baixar/anexar DFDs" (`saida.dfdsCenti`).
  */
-import { escolherAssinatura, MSG_SEM_FONTE, pedidoDaFonte } from "./assinatura-dfd-centi.ts";
+import { assinaturaDoLoad, assinaturasDoLoad, escolherAssinatura, MSG_SEM_FONTE, pedidoDaFonte } from "./assinatura-dfd-centi.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
 import {
   type AlvoCenti,
@@ -152,7 +152,12 @@ export async function assinaturaDoPlanejamento(
   load: { j: unknown },
 ): Promise<{ id: string } | { erro: string; ambiente?: boolean }> {
   const fonte = c.cfg().fonteAssinatura;
-  if (!fonte) return { erro: MSG_SEM_FONTE, ambiente: true };
+  // Sem fonte aprendida: o registro das seções 8–10 vem do load do PRÓPRIO planejamento (a lista dele).
+  if (!fonte) {
+    const doLoad = assinaturasDoLoad(load.j);
+    if ("listas" in doLoad) return { erro: `${(assinaturaDoLoad(load.j, id) as { erro: string }).erro} ${MSG_SEM_FONTE}`, ambiente: true };
+    return assinaturaDoLoad(load.j, id);
+  }
   const pedido = pedidoDaFonte(fonte, id);
   if (!pedido) return { erro: `Planejamento inválido (${id}).` };
   let j: unknown;
@@ -163,7 +168,12 @@ export async function assinaturaDoPlanejamento(
     if (!r.ok) return { erro: `Não consegui ler as assinaturas do DFD do planejamento ${id} na Centi: ${r.erro ?? "sem resposta"}.` };
     j = r.j;
   }
-  return escolherAssinatura(j, fonte, id);
+  const escolhida = escolherAssinatura(j, fonte, id);
+  // Confere em dobro: com a lista no load do planejamento, o id escolhido tem de ser DELE.
+  const doLoad = assinaturasDoLoad(load.j);
+  if ("id" in escolhida && "ids" in doLoad && !doLoad.ids.includes(escolhida.id))
+    return { erro: `O registro das seções 8 a 10 lido (${escolhida.id}) não é do planejamento ${id} na Centi — nada foi emitido.` };
+  return escolhida;
 }
 
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do

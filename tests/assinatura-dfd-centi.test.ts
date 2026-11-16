@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { coerceFonteAssinatura, escolherAssinatura, MSG_SEM_FONTE, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
+import { assinaturaDoLoad, assinaturasDoLoad, coerceFonteAssinatura, escolherAssinatura, MSG_SEM_FONTE, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
 import { assinaturaDoPlanejamento } from "../src/lib/automacao-dfds-motor.ts";
 import { lerConfigCenti } from "../src/lib/automacao-centi-core.ts";
 
@@ -87,9 +87,12 @@ test("emissão: sem a fonte aprendida PARA tudo; com ela, usa o load já feito o
     pedidos.push([acao, dados]);
     return { ok: true, j: { Data: [{ Id: 555 }] } };
   };
-  const sem = await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti(null) }, "131", "1", { j: {} });
-  assert.deepEqual(sem, { erro: MSG_SEM_FONTE, ambiente: true });
-  assert.ok(PARA_TUDO.test(MSG_SEM_FONTE), "a falta da fonte para a execução inteira");
+  const sem = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti(null) }, "131", "1", { j: { Entity: { Fields: [{ Key: "Itens", Value: [{ Id: 1 }] }] } } })) as { erro: string; ambiente?: boolean };
+  assert.equal(sem.ambiente, true);
+  assert.ok(sem.erro.includes(MSG_SEM_FONTE) && /listas lidas: Entity\.Itens/.test(sem.erro), sem.erro);
+  assert.ok(PARA_TUDO.test(sem.erro), "sem a lista no load nem a fonte, para a execução inteira");
+  // Sem fonte, mas com a lista no load do PRÓPRIO planejamento: lê dali.
+  assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti(null) }, "131", "1", { j: loadPlan(131, [{ id: 77 }]) }), { id: "77" });
   const peloLoad = lerConfigCenti({ fonteAssinatura: { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", lista: ["Entity", "@AssinaturasDFD"], chave: "@Id" } });
   assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => peloLoad }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) }), { id: "42" });
   assert.equal(pedidos.length, 0, "o load já feito serve — nenhum pedido a mais");
@@ -105,4 +108,44 @@ test("a extensão guarda as respostas da TELA e aprende a fonte no Processar; o 
   assert.match(main, /operacao: operacaoComFonte\(\)/);
   // O id em si nunca vai ao sistema: só a fonte (o "estado" tira assinatura e planejamento).
   assert.match(main, /const \{ assinatura: _a, planejamento: _p, \.\.\.op \} = operacaoTela;/);
+});
+
+test("seções 8–10 pelo load do PRÓPRIO planejamento: uma = ela; várias = a marcada; nunca chuta", () => {
+  assert.deepEqual(assinaturaDoLoad(loadPlan(131, [{ id: 9 }]), "131"), { id: "9" });
+  assert.deepEqual(assinaturaDoLoad(loadPlan(131, [{ id: 9 }, { id: 10, padrao: true }]), "131"), { id: "10" });
+  assert.match((assinaturaDoLoad(loadPlan(131, [{ id: 9 }, { id: 10 }]), "131") as { erro: string }).erro, /2 registros/);
+  assert.match((assinaturaDoLoad({ Entity: { Fields: [{ Key: "Id", Value: 131 }] } }, "131") as { erro: string }).erro, /Não achei/);
+  // Lista em chave comum (fora do padrão Fields), id em "Id".
+  assert.deepEqual(assinaturaDoLoad({ Entity: { PlanejamentoAssinaturas: [{ Id: 5 }] } }, "131"), { id: "5" });
+  // Duas listas com "assinatura": vale a do DFD; sem ela, ambíguo.
+  const duas = { Entity: { AssinaturasDFD: [{ Id: 5 }], AssinaturasEdital: [{ Id: 6 }] } };
+  assert.deepEqual(assinaturaDoLoad(duas, "1"), { id: "5" });
+  assert.ok("listas" in assinaturasDoLoad({ Entity: { AssinaturasA: [{ Id: 5 }], AssinaturasB: [{ Id: 6 }] } }));
+});
+
+test("com a fonte aprendida, o id lido tem de estar na lista do load do planejamento", async () => {
+  const pedir = async () => ({ ok: true, j: { Data: [{ Id: 555 }] } });
+  const cfg = lerConfigCenti({ fonteAssinatura: { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: "{id:n}" } }, lista: ["Data"], chave: "Id" } });
+  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { erro: string };
+  assert.match(r.erro, /não é do planejamento 131/);
+});
+
+test("extensão: chaves de id mais amplas e o diagnóstico sem valores", () => {
+  const ctx: Record<string, unknown> = { URL };
+  vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
+  const A = ctx[`__pcaCentiAnexo_p${p}`] as {
+    fonteDaAssinatura: (r: unknown, plan: string, s: string) => unknown;
+    diagnosticoAssinatura: (r: unknown, plan: string, s: string) => { respostas: number; lista: { caminho: string; aceito: boolean; cita: boolean; onde: string[] }[] };
+  };
+  const j = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "Registros", Value: [{ IdAssinatura: 163, Nome: "X" }] }] } };
+  const f = JSON.parse(JSON.stringify(A.fonteDaAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j }], "131", "163")));
+  assert.equal(f?.chave, "IdAssinatura");
+  const d = A.diagnosticoAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j }, { caminho: "restauth/save", metodo: "POST", corpo: {}, j: {} }], "131", "163");
+  assert.equal(d.respostas, 2);
+  assert.equal(d.lista[0].aceito, true);
+  assert.equal(d.lista[0].cita, true);
+  assert.deepEqual(Array.from(d.lista[0].onde), ["Entity.@Registros.*.IdAssinatura"]);
+  assert.equal(d.lista[1].aceito, false);
+  assert.ok(!JSON.stringify(d).includes("\"X\""), "nenhum valor da Centi no diagnóstico");
 });

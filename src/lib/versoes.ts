@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.12",
+    data: "2026-11-16",
+    titulo: "Seções 8 a 10 do DFD lidas do próprio planejamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A automação parava com “ainda não aprendeu de onde vem a assinatura” mesmo depois de emitir um DFD pela tela. Agora as seções 8 a 10 (equipe, secretário demandante e autorização — o registro que a Centi chama de “assinatura”) são lidas do PRÓPRIO planejamento aberto na Centi, sem depender desse aprendizado. Com mais de um registro e nenhum marcado como o escolhido, o DFD não é emitido e o motivo vai ao relatório.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Extensão 1.35.0: guarda o diagnóstico da última emissão feita pela tela da Centi — em Automação → Ajustes → Avançado, “Copiar diagnóstico” (só caminhos, sem dados). Baixe e instale a versão nova.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.11",
     data: "2026-11-16",
     titulo: "DFD da Centi com a assinatura do próprio planejamento",
