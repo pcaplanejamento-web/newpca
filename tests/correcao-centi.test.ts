@@ -710,13 +710,13 @@ test("DFD 1023: a Centi misturou outro registro numa emissão — NÃO corrige, 
   assert.match(String(x.r.erro), /conteúdos diferentes em duas emissões/);
 });
 
-test("DFD com divergência REAL (as duas emissões iguais): guarda o retrato confirmado (v 2) e corrige", async () => {
+test("DFD com divergência REAL (as duas emissões iguais): guarda o retrato confirmado (v 3) e corrige", async () => {
   const x = await rodarUmDfd([misturado1023(), misturado1023()]);
   assert.equal(x.r.estado, "concluido", x.r.erro);
   assert.deepEqual(x.corrigidos, [9]);
   const m = x.marcados.find((y) => y.status === "divergente");
   assert.ok(m?.retrato);
-  assert.equal(lerRetrato(m.retrato)?.v, 2);
+  assert.equal(lerRetrato(m.retrato)?.v, 3);
 });
 
 test("lido em OUTRO órgão da Centi: nunca guarda o retrato nem corrige", async () => {
@@ -739,7 +739,9 @@ test("lido em OUTRO órgão da Centi: nunca guarda o retrato nem corrige", async
 test("retrato antigo (sem a dupla leitura) ou de outro órgão não vale; a assinatura do conteúdo pega a troca das seções", () => {
   const t = textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "1" }, { situacao: "Aprovado" }, misturado1023(), { objeto: true, tolerancia: 0.01 }));
   assert.ok(t && lerRetrato(t));
-  assert.equal(lerRetrato(t.replace('"v":2', '"v":1')), null);
+  assert.equal(lerRetrato(t.replace('"v":3', '"v":1')), null);
+  // O v 2 foi emitido com a assinatura de OUTRO planejamento (id fixo): não vale mais.
+  assert.equal(lerRetrato(t.replace('"v":3', '"v":2')), null);
   const outro = textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "1", entidadeAchada: "2" }, { situacao: "Aprovado" }, misturado1023(), { objeto: true, tolerancia: 0.01 }));
   assert.equal(lerRetrato(outro), null);
   assert.notEqual(assinaturaDfdCenti(sistema1023()), assinaturaDfdCenti(misturado1023()));

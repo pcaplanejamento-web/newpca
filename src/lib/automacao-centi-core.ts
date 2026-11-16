@@ -1,3 +1,4 @@
+import { coerceFonteAssinatura, type FonteAssinatura } from "./assinatura-dfd-centi.ts";
 // Automação Centi (núcleo PURO, testado): monta o pedido do "Emitir DFD" da Centi (CM002 Planejamento → Operações →
 // Emitir DFD → Processar) a partir dos Ids de planejamento. A extensão do Chrome (extensao-centi/) envia o pedido com a
 // sessão da Centi já aberta no navegador; a aba Automação só lê e salva os PDFs — nada é gravado na Centi.
@@ -7,9 +8,9 @@ export type ConfigCenti = {
   valorReferencia: boolean;
   /** "Emitir data" do diálogo. */
   emitirData: boolean;
-  /** IdPlanejamentoAssinaturaDFD — o modelo de assinatura do DFD que a Centi envia (163 no "Processar" da tela de 01/10/2026
-   * 22:48; 13 na captura anterior). */
-  assinaturaDfd: string;
+  /** De ONDE ler a assinatura do DFD (IdPlanejamentoAssinaturaDFD) de CADA planejamento — aprendida da tela da Centi pela
+   * extensão. Nunca um valor fixo: o id de um planejamento na emissão de outro troca as seções 8–10 do DFD. */
+  fonteAssinatura: FonteAssinatura | null;
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;
   guid: string;
@@ -24,7 +25,7 @@ export type ConfigCenti = {
 export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   valorReferencia: true,
   emitirData: false,
-  assinaturaDfd: "163",
+  fonteAssinatura: null,
   moduleKey: 120465,
   guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef",
   descobrirEntidade: true,
@@ -35,7 +36,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.33.0";
+export const VERSAO_EXTENSAO_CENTI = "1.34.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -51,7 +52,7 @@ export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A operação "Emitir DFD" que a extensão PEGOU da própria tela da Centi (o Processar). */
-export type OperacaoCenti = { moduleKey: number; guid: string; assinatura: string; em?: string };
+export type OperacaoCenti = { moduleKey: number; guid: string; fonte?: FonteAssinatura | null; em?: string };
 
 /** O ajuste da configuração pela operação da tela: só o que MUDOU (ModuleKey, Guid, modelo de assinatura); nada a mudar
  * ou operação inválida → null. A tela da Centi é a referência — quando ela muda a operação, o sistema acompanha. */
@@ -59,12 +60,13 @@ export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigC
   const o = (op && typeof op === "object" ? op : {}) as Partial<Record<keyof OperacaoCenti, unknown>>;
   const mk = Number(o.moduleKey);
   const guid = typeof o.guid === "string" ? o.guid.trim().toLowerCase() : "";
-  const ass = typeof o.assinatura === "string" ? o.assinatura.replace(/\D/g, "") : "";
+  const fonte = coerceFonteAssinatura(o.fonte);
   if (!Number.isInteger(mk) || mk <= 0 || !GUID.test(guid)) return null;
   const p: Partial<ConfigCenti> = {};
   if (mk !== cfg.moduleKey) p.moduleKey = mk;
   if (guid !== cfg.guid) p.guid = guid;
-  if (ass && ass !== cfg.assinaturaDfd) p.assinaturaDfd = ass;
+  // A fonte só entra quando veio (uma operação sem ela nunca apaga a aprendida).
+  if (fonte && JSON.stringify(fonte) !== JSON.stringify(cfg.fonteAssinatura)) p.fonteAssinatura = fonte;
   return Object.keys(p).length ? p : null;
 }
 
@@ -120,7 +122,7 @@ export const mensagemRecusaGeral = (r: RecusasCenti) =>
   `A Centi recusou o Emitir DFD em ${r.seguidas.length} planejamentos seguidos (${r.seguidas.slice(0, 5).join(", ")}) e nenhum foi emitido (“Usuário sem permissão!”) — a operação deve ter mudado. Emita UM DFD pela própria Centi com a extensão instalada: ela pega a operação nova sozinha. Depois, execute de novo.`;
 
 /** A operação "Emitir DFD" de ANTES da mudança da Centi (01/10/2026) — a guardada no aparelho é trocada pela nova. */
-export const OPERACAO_ANTIGA = { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", assinaturaDfd: "13" };
+export const OPERACAO_ANTIGA = { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5" };
 
 /** Normaliza a configuração guardada (qualquer JSON → válida). */
 export function lerConfigCenti(v: unknown): ConfigCenti {
@@ -129,13 +131,11 @@ export function lerConfigCenti(v: unknown): ConfigCenti {
   // A operação ANTIGA guardada no aparelho (ModuleKey 120464 + o Guid dela, assinatura 13 — os padrões de antes da mudança
   // da Centi) vira a NOVA: senão a configuração salva seguia mandando o pedido que a Centi passou a recusar.
   const antiga = Number(o.moduleKey) === OPERACAO_ANTIGA.moduleKey && String(o.guid ?? "").toLowerCase() === OPERACAO_ANTIGA.guid;
-  const assGuardada = typeof o.assinaturaDfd === "string" ? o.assinaturaDfd.replace(/\D/g, "") : "";
-  const ass = antiga && assGuardada === OPERACAO_ANTIGA.assinaturaDfd ? "" : assGuardada;
   const mk = antiga ? Number.NaN : Number(o.moduleKey);
   return {
     valorReferencia: typeof o.valorReferencia === "boolean" ? o.valorReferencia : p.valorReferencia,
     emitirData: typeof o.emitirData === "boolean" ? o.emitirData : p.emitirData,
-    assinaturaDfd: ass || p.assinaturaDfd,
+    fonteAssinatura: coerceFonteAssinatura(o.fonteAssinatura),
     moduleKey: Number.isInteger(mk) && mk > 0 ? mk : p.moduleKey,
     guid: !antiga && typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
     descobrirEntidade: typeof o.descobrirEntidade === "boolean" ? o.descobrirEntidade : p.descobrirEntidade,
@@ -167,12 +167,13 @@ export const TRAVAS_CENTI: Record<string, string> = {
 };
 
 /** O corpo do POST /restauth/operation — o MESMO do "Processar" da Centi, com o Id e as opções. */
-export function pedidoEmitirDfd(id: string, cfg: ConfigCenti, agora: Date) {
+export function pedidoEmitirDfd(id: string, cfg: ConfigCenti, agora: Date, assinatura: string) {
   const data = `${dois(agora.getDate())}/${dois(agora.getMonth() + 1)}/${agora.getFullYear()}`;
   const hora = `${dois(agora.getHours())}:${dois(agora.getMinutes())}:${dois(agora.getSeconds())}`;
   const valores: [string, string][] = [
     ["IdComprasPlanejamento", id],
-    ["IdPlanejamentoAssinaturaDFD", cfg.assinaturaDfd],
+    // A assinatura DESTE planejamento (lida da Centi a cada emissão) — nunca a de outro.
+    ["IdPlanejamentoAssinaturaDFD", assinatura],
     ["DFD", "1"],
     ["EmitirData", cfg.emitirData ? "1" : "0"],
     ["Data", data],

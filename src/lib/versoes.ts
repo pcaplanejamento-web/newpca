@@ -35,6 +35,33 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.11",
+    data: "2026-11-16",
+    titulo: "DFD da Centi com a assinatura do próprio planejamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A automação emitia TODO DFD na Centi com a assinatura (seções 8 a 10: equipe, secretário demandante e autorização) do último planejamento emitido à mão — os DFDs saíam com essas seções de outro DFD e a conferência marcava “Convergente”. Agora a assinatura de CADA planejamento é lida na Centi a cada emissão; até a extensão aprender de onde ela vem (emita UM DFD pela tela da Centi), nada é emitido, conferido, corrigido nem anexado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto:
+          "As conferências da Centi (coluna Centi) e os dados da Centi guardados foram zerados — tinham sido feitos com a assinatura errada. Reconfira os DFDs depois de a extensão aprender a assinatura.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Extensão 1.34.0: aprende de onde a tela da Centi tira as assinaturas do DFD de cada planejamento. Baixe e instale a versão nova.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.10",
     data: "2026-11-16",
     titulo: "Atualizar pelo modelo sem erro",

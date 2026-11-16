@@ -5,6 +5,7 @@
  * autorização de uso único + a confirmação da extensão; o já anexado não é emitido de novo). É a lógica que era da tela
  * da Automação, agora usada pelo componente de fluxo "Baixar/anexar DFDs" (`saida.dfdsCenti`).
  */
+import { escolherAssinatura, MSG_SEM_FONTE, pedidoDaFonte } from "./assinatura-dfd-centi.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
 import {
   type AlvoCenti,
@@ -139,6 +140,32 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
   return { j: l.j };
 }
 
+/**
+ * O id da assinatura do DFD (IdPlanejamentoAssinaturaDFD) DO PLANEJAMENTO, pela fonte aprendida da tela da Centi: o load
+ * já feito (quando a fonte é ele) ou a consulta da janela "Emitir DFD". Sem fonte = para tudo (`ambiente`); sem/várias
+ * assinaturas no planejamento = erro só dele. Nunca um id de outro planejamento.
+ */
+export async function assinaturaDoPlanejamento(
+  c: Pick<ContextoEmissor, "pedir" | "cfg">,
+  id: string,
+  entidade: string | undefined,
+  load: { j: unknown },
+): Promise<{ id: string } | { erro: string; ambiente?: boolean }> {
+  const fonte = c.cfg().fonteAssinatura;
+  if (!fonte) return { erro: MSG_SEM_FONTE, ambiente: true };
+  const pedido = pedidoDaFonte(fonte, id);
+  if (!pedido) return { erro: `Planejamento inválido (${id}).` };
+  let j: unknown;
+  if (pedido.metodo === "GET" && pedido.caminho === caminhoLoadPlanejamento(id)) j = load.j;
+  else {
+    const r = (await c.pedir("ler", { metodo: pedido.metodo, caminho: pedido.caminho, corpo: pedido.corpo, entidade }, 60_000)) as RespostaExt & { j?: unknown };
+    if (r.interrompido) return { erro: "Interrompido na extensão.", ambiente: true };
+    if (!r.ok) return { erro: `Não consegui ler as assinaturas do DFD do planejamento ${id} na Centi: ${r.erro ?? "sem resposta"}.` };
+    j = r.j;
+  }
+  return escolherAssinatura(j, fonte, id);
+}
+
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
  * load já feito por quem chama — DENTRO da mesma `comSessaoCenti` (sem ele, o load é feito aqui, na trava). */
 export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
@@ -153,7 +180,10 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     if ("erro" in l) return l;
     load = l;
   }
-  const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date()), entidade }, 150_000);
+  // A ASSINATURA DESTE planejamento (seções 8–10), lida na Centi agora — sem ela, nada é emitido.
+  const ass = await assinaturaDoPlanejamento(c, id, entidade, load);
+  if ("erro" in ass) return ass;
+  const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
   if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {

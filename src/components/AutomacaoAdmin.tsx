@@ -145,10 +145,12 @@ const baixarExtensao = () => {
   window.location.href = URL_EXTENSAO;
 };
 
-/** A operação Emitir DFD como chave comparável ("ModuleKey|Guid|assinatura"); inválida = null. */
-function chaveOp(op: unknown): string | null {
-  const a = ajusteDaOperacao({ ...CONFIG_CENTI_PADRAO, moduleKey: 0, guid: "", assinaturaDfd: "" }, op);
-  return a ? `${a.moduleKey}|${a.guid}|${a.assinaturaDfd ?? ""}` : null;
+/** A operação Emitir DFD (ModuleKey, Guid e a fonte da assinatura) como corpo + chave comparável; inválida = null. */
+function chaveOp(op: unknown): { chave: string; corpo: { moduleKey: number; guid: string; fonte?: unknown } } | null {
+  const a = ajusteDaOperacao({ ...CONFIG_CENTI_PADRAO, moduleKey: 0, guid: "" }, op);
+  if (!a?.moduleKey || !a.guid) return null;
+  const corpo = { moduleKey: a.moduleKey, guid: a.guid, ...(a.fonteAssinatura ? { fonte: a.fonteAssinatura } : {}) };
+  return { chave: JSON.stringify(corpo), corpo };
 }
 function Grupo({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
@@ -312,7 +314,11 @@ function Ajustes({
         )}
       </Grupo>
       <Grupo titulo="Avançado">
-        <TextField label="Modelo de assinatura do DFD" value={cfg.assinaturaDfd} inputMode="numeric" onChange={(e) => onCfg({ assinaturaDfd: e.target.value })} />
+        <p className="text-xs text-muted">
+          {cfg.fonteAssinatura
+            ? "Assinatura do DFD (seções 8 a 10): lida da Centi para cada planejamento."
+            : "Assinatura do DFD (seções 8 a 10): ainda não aprendida — emita UM DFD pela tela da Centi (escolha a assinatura e Processar) com a extensão instalada. Sem isso, nenhum DFD é emitido."}
+        </p>
         <TextField label="ModuleKey" value={String(cfg.moduleKey)} inputMode="numeric" onChange={(e) => onCfg({ moduleKey: Number(e.target.value) })} />
         <TextField label="Guid da operação" value={cfg.guid} onChange={(e) => onCfg({ guid: e.target.value })} />
       </Grupo>
@@ -368,13 +374,12 @@ export function AutomacaoAdmin({
   const opServidor = useRef<string | null>(null);
   const compartilharOperacao = (op: unknown) => {
     const k = chaveOp(op);
-    if (!k || k === opServidor.current) return;
-    const [moduleKey, guid, assinatura] = k.split("|");
-    opServidor.current = k;
+    if (!k || k.chave === opServidor.current) return;
+    opServidor.current = k.chave;
     void fetch("/api/admin/automacao/config", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operacao: { moduleKey: Number(moduleKey), guid, assinatura } }),
+      body: JSON.stringify({ operacao: k.corpo }),
     }).catch(() => {
       opServidor.current = null;
     });
@@ -384,7 +389,13 @@ export function AutomacaoAdmin({
     const a = ajusteDaOperacao(cfgRef.current, op);
     if (!a) return false;
     mudar(a);
-    if (!doServidor) toast.success(`A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`, 10_000);
+    if (!doServidor)
+      toast.success(
+        a.fonteAssinatura && a.moduleKey === undefined && a.guid === undefined
+          ? "Aprendido de onde vem a assinatura do DFD de cada planejamento na Centi — a emissão já usa a de cada um."
+          : `A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`,
+        10_000,
+      );
     return true;
   };
   const aplicarRef = useRef(aplicarOperacao);
@@ -490,7 +501,7 @@ export function AutomacaoAdmin({
         setGravacao(x?.ok ? x.config?.ativa !== false : null);
         // A operação que outro ADM (ou outra aba) já aprendeu da Centi vale aqui também.
         if (x?.ok && x.config?.operacao) {
-          opServidor.current = chaveOp(x.config.operacao);
+          opServidor.current = chaveOp(x.config.operacao)?.chave ?? null;
           aplicarRef.current(x.config.operacao, true);
         }
       })

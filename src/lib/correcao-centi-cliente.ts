@@ -61,7 +61,7 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   const j2 = await lerJson<{ retrato?: RetratoCenti | null; vencido?: boolean }>(r2);
   if (!r2.ok || !j2.ok) throw new Error(j2.error ?? "não foi possível ler os dados da Centi");
   if (j2.vencido) throw new Error(MSG_RETRATO_VENCIDO);
-  const retrato = retratoDoPlanejamento(j2.retrato?.v === 2 ? j2.retrato : null, o.planejamento);
+  const retrato = retratoDoPlanejamento(j2.retrato?.v === 3 ? j2.retrato : null, o.planejamento);
   if (!retrato) throw new Error("sem os dados da Centi CONFIRMADOS (dupla leitura no próprio órgão) — reconfira o DFD na Centi e execute de novo");
   const g = detalheParaParseado(o);
   const plano = planoCorrecao(g, retrato, o.anoPca ?? o.protocoloAnoPca ?? null);

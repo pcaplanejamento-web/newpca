@@ -5,6 +5,7 @@
  * Convenção dos tipos: `<categoria>.<nome>`. As saídas de LISTA são "saida"; os de decisão, "verdadeiro"/"falso"; o
  * Comparar, "iguais"/"diferentes"/"soEmA"/"soEmB"; o Laço, "lote"/"fim" (com a entrada "volta").
  */
+import { PARA_TUDO } from "./assinatura-dfd-centi.ts";
 import {
   type CampoNo,
   type CategoriaNo,
@@ -149,7 +150,7 @@ async function lerPlanejamentosPeloId(
               break;
             } catch (y) {
               const m = y instanceof Error ? y.message : String(y);
-              if (/interrompido|recusou o Emitir DFD/i.test(m)) throw y;
+              if (PARA_TUDO.test(m)) throw y;
               if (!naoAbriu(m) && !m.startsWith("NAO_ENCONTRADO: ")) {
                 x = y;
                 break;
@@ -166,7 +167,7 @@ async function lerPlanejamentosPeloId(
         }
         let msg = x instanceof Error ? x.message : String(x);
         // O lote acabou ou a Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
-        if (/interrompido|recusou o Emitir DFD/i.test(msg)) throw x;
+        if (PARA_TUDO.test(msg)) throw x;
         // A Centi negou o Emitir DFD DESTE planejamento: fica como falha dele; só várias seguidas sem nenhum emitido param tudo.
         if (msg.startsWith(PREFIXO_RECUSA)) {
           registrarRecusaCenti(recusas, str(it.planejamento));
@@ -1517,7 +1518,7 @@ const NOS: DefNo[] = [
               if (r.estado === "cancelado") return;
               const erroTxt = r.estado === "falhou" ? (r.erro ?? "falhou") : "";
               // A Centi recusou a operação / o lote foi encerrado: os demais falhariam igual — para tudo.
-              if (erroTxt && /interrompido|lote foi encerrado|recusou o Emitir DFD/i.test(erroTxt)) throw new Error(`${filho.nome}: ${erroTxt}`);
+              if (erroTxt && PARA_TUDO.test(erroTxt)) throw new Error(`${filho.nome}: ${erroTxt}`);
               apontados.push(...comOrigem(r.apontados, filho.nome));
               const k = chaveDoItem(it, campo);
               if (erroTxt) {

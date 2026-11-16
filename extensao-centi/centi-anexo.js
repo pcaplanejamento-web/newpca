@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p43";
+  const NOME = "__pcaCentiAnexo_p44";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -135,6 +135,108 @@
     if (!consultaPermitida(caminho, m)) return null;
     const corpo = modelo.corpo == null ? null : preencherCorpo(modelo.corpo, String(id));
     return { metodo: m, caminho, corpo };
+  }
+
+  // A ASSINATURA DO DFD (seções 8–10: equipe, secretário demandante, autorização) é de CADA planejamento: a janela
+  // "Emitir DFD" da Centi oferece as assinaturas DAQUELE planejamento e manda a escolhida em IdPlanejamentoAssinaturaDFD.
+  // Repetir o id visto num planejamento em outro emite o DFD do outro com as seções 8–10 do primeiro. Por isso a extensão
+  // aprende ONDE a tela achou as opções (o load do planejamento ou a consulta da janela) — nunca o valor.
+  const CHAVE_ID = /^(id|value|key|codigo|cod)$|id$/i;
+  /** Os lugares da resposta com o valor `alvo` numa chave de id: lista (`lista` + `chave` do item) ou campo (`caminho`). */
+  function lugaresDoValor(j, alvo) {
+    const achados = [];
+    const igual = (v) => (typeof v === "number" || typeof v === "string") && String(v).trim() === alvo;
+    const ir = (v, caminho, prof) => {
+      if (v == null || typeof v !== "object" || prof > 8) return;
+      if (Array.isArray(v)) {
+        for (const x of v) {
+          if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+          for (const [k, y] of Object.entries(x)) if (k !== "Fields" && CHAVE_ID.test(k) && igual(y)) achados.push({ lista: caminho, chave: k });
+          for (const f of campos(x)) if (f && typeof f.Key === "string" && CHAVE_ID.test(f.Key) && igual(f.Value)) achados.push({ lista: caminho, chave: `@${f.Key}` });
+        }
+        for (const x of v) ir(x, [...caminho, "*"], prof + 1);
+        return;
+      }
+      for (const f of campos(v)) {
+        if (!f || typeof f.Key !== "string") continue;
+        if (CHAVE_ID.test(f.Key) && igual(f.Value)) achados.push({ campo: [...caminho, `@${f.Key}`] });
+        ir(f.Value, [...caminho, `@${f.Key}`], prof + 1);
+      }
+      for (const [k, x] of Object.entries(v)) {
+        if (k === "Fields") continue;
+        if (CHAVE_ID.test(k) && igual(x)) achados.push({ campo: [...caminho, k] });
+        ir(x, [...caminho, k], prof + 1);
+      }
+    };
+    ir(j, [], 0);
+    // Uma lista DENTRO de outra lista ("*" no caminho) não serve: não se sabe qual linha de fora é a do planejamento.
+    return achados.filter((a) => !(a.lista ?? a.campo).includes("*"));
+  }
+  const nomeDo = (a) => String(a.chave ?? a.campo[a.campo.length - 1]).replace(/^@/, "");
+  /**
+   * De ONDE a tela tirou a assinatura escolhida (`assinatura`) do planejamento `plan`: a resposta mais recente da tela a um
+   * pedido que cita o planejamento e traz esse id numa lista (as opções da janela) ou num campo. Devolve o MODELO do pedido
+   * (o nº do planejamento trocado por {id}) + onde ler, ou null (não achado, ou mais de um lugar — nunca chuta).
+   * `respostas`: [{caminho, metodo, corpo, j}] da mais nova à mais antiga.
+   */
+  function fonteDaAssinatura(respostas, plan, assinatura) {
+    const p = texto(plan);
+    const s = texto(assinatura);
+    if (!/^\d{1,12}$/.test(p) || !/^\d{1,12}$/.test(s) || p === s) return null;
+    for (const r of Array.isArray(respostas) ? respostas : []) {
+      const m = String(r?.metodo || "GET").toUpperCase();
+      if (!r || !consultaPermitida(r.caminho, m, r.corpo)) continue;
+      const caminho = trocarId(r.caminho, p);
+      let corpo = null;
+      if (m === "POST" && r.corpo != null) {
+        const limpo = semSegredos(r.corpo);
+        if (limpo === undefined) continue;
+        corpo = marcarNoCorpo(limpo, p);
+      }
+      // O pedido tem de citar o planejamento — senão as opções não são dele.
+      if (!caminho.includes(MARCA_ID) && !/\{id(:n)?\}/.test(JSON.stringify(corpo ?? ""))) continue;
+      let lugares = lugaresDoValor(r.j, s);
+      if (!lugares.length) continue;
+      // Entre vários lugares, o que diz "assinatura" no nome vence; ainda vários = ambíguo.
+      const comNome = lugares.filter((a) => /assinatura/i.test(nomeDo(a)) || (a.lista ?? a.campo).some((k) => /assinatura/i.test(String(k))));
+      if (comNome.length) lugares = comNome;
+      const unicos = [...new Map(lugares.map((a) => [JSON.stringify(a), a])).values()];
+      if (unicos.length !== 1) return null;
+      const lugar = unicos[0];
+      const fonte = { metodo: m, caminho, corpo, ...(lugar.lista ? { lista: lugar.lista, chave: lugar.chave } : { campo: lugar.campo }) };
+      // Mais de uma opção na lista: o que diferencia a escolhida (um sim/não só dela — ex.: "Padrao": true).
+      if (lugar.lista) {
+        const itens = noCaminho(r.j, lugar.lista);
+        if (Array.isArray(itens) && itens.length > 1) {
+          const escolhida = itens.find((x) => texto(valorDe(x, lugar.chave)) === s);
+          const marcas = Object.entries(planoDoItem(escolhida)).filter(
+            ([k, v]) => v === true && itens.filter((x) => planoDoItem(x)[k] === true).length === 1,
+          );
+          if (marcas.length === 1) fonte.marca = marcas[0][0];
+        }
+      }
+      return fonte;
+    }
+    return null;
+  }
+  /** O valor de uma chave do item ("@K" = do padrão Fields). */
+  const valorDe = (x, k) => (String(k).startsWith("@") ? valor(x, String(k).slice(1)) : x?.[k]);
+  /** O item em "chave → valor" (as próprias e as do padrão Fields "@K"). */
+  const planoDoItem = (x) => {
+    const r = {};
+    if (!x || typeof x !== "object") return r;
+    for (const [k, v] of Object.entries(x)) if (k !== "Fields") r[k] = v;
+    for (const f of campos(x)) if (f && typeof f.Key === "string") r[`@${f.Key}`] = f.Value;
+    return r;
+  };
+  /** O valor no caminho ("@K" = o campo K do padrão Fields). */
+  function noCaminho(j, caminho) {
+    let v = j;
+    for (const k of caminho) {
+      if (v == null || typeof v !== "object") return undefined;
+      v = String(k).startsWith("@") ? valor(v, String(k).slice(1)) : v[k];
+    }
+    return v;
   }
 
   /** O resumo do protocolo (o "Conferir" da tela). */
@@ -374,7 +476,8 @@
     const p = (k) => c.Params.find((x) => x && x.Key === k);
     if (!p("IdComprasPlanejamento") || String(p("DFD")?.Value ?? "") !== "1") return null;
     const assinatura = String(p("IdPlanejamentoAssinaturaDFD")?.Value ?? "").replace(/\D/g, "");
-    return { moduleKey: c.ModuleKey, guid, assinatura };
+    const planejamento = String(p("IdComprasPlanejamento")?.Value ?? "").replace(/\D/g, "");
+    return { moduleKey: c.ModuleKey, guid, assinatura, planejamento };
   }
 
   // GRAVADOR de receitas: a ESTRUTURA de um pedido que a tela da Centi fez — método, caminho, os NOMES dos parâmetros e dos
@@ -897,6 +1000,6 @@
     comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, colunasDaTela, ehGradeCm002, valorDaColuna, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
-    operacaoDoCorpo,
+    operacaoDoCorpo, fonteDaAssinatura,
     renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

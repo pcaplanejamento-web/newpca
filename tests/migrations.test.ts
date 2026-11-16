@@ -1325,3 +1325,19 @@ describe("0184: retrato da Centi e aceite da divergência", () => {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
   });
 });
+
+describe("0185: conferências da Centi zeradas (emitidas com a assinatura de outro planejamento)", () => {
+  it("zera a marcação e o aceite de todos os DFDs e apaga os retratos; o histórico fica", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0184_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(
+      `INSERT INTO dfds (id, numero, conferencia_centi, conferencia_centi_motivo, conferencia_centi_em, conferencia_centi_aceite) VALUES (1, 'A', 'convergente', NULL, '2026-11-16', NULL), (2, 'B', 'divergente', 'x', '2026-11-16', '{"chave":"y"}'), (3, 'C', NULL, NULL, NULL, NULL)`,
+    );
+    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (2, '{}', '2026-11-16')`);
+    db.exec(readFileSync(join(DIR, "0185_conferencia_centi_zerada.sql"), "utf8"));
+    const linhas = db.prepare("SELECT conferencia_centi AS c, conferencia_centi_motivo AS m, conferencia_centi_em AS e, conferencia_centi_aceite AS a FROM dfds ORDER BY id").all();
+    for (const l of linhas) assert.deepEqual({ ...l }, { c: null, m: null, e: null, a: null });
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
+  });
+});

@@ -22,7 +22,12 @@ describe("automação — núcleo", () => {
     });
     assert.equal(c.ativa, false);
     assert.deepEqual(c.receitas, { "anexar-dfds": { ativa: false } });
-    assert.deepEqual(c.operacao, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", assinatura: "163", em: "2026-10-02" });
+    // O id fixo de assinatura de antes é descartado (nunca mais vale para todos os planejamentos).
+    assert.deepEqual(c.operacao, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", fonte: null, em: "2026-10-02" });
+    const f = coerceConfigAutomacao({
+      operacao: { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", fonte: { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", lista: ["Entity", "@Assinaturas"], chave: "@Id" } },
+    });
+    assert.deepEqual(f.operacao?.fonte, { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", corpo: null, lista: ["Entity", "@Assinaturas"], chave: "@Id" });
     assert.equal(coerceConfigAutomacao({ operacao: { moduleKey: -1, guid: "x" } }).operacao, null);
   });
 

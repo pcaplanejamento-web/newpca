@@ -1,3 +1,4 @@
+import { coerceFonteAssinatura } from "@/lib/assinatura-dfd-centi";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { coerceConfigAutomacao, RECEITAS, receitaAtiva } from "@/lib/automacao-core";
@@ -25,7 +26,10 @@ export async function PATCH(req: Request) {
     ...antes,
     ...(p.data.ativa === undefined ? {} : { ativa: p.data.ativa }),
     receitas: { ...antes.receitas, ...(p.data.receitas ?? {}) },
-    operacao: p.data.operacao ? { ...p.data.operacao, em: new Date().toISOString() } : antes.operacao,
+    // A fonte da assinatura aprendida só é trocada por outra VÁLIDA (uma operação sem ela nunca a apaga).
+    operacao: p.data.operacao
+      ? { ...p.data.operacao, fonte: coerceFonteAssinatura(p.data.operacao.fonte) ?? antes.operacao?.fonte ?? null, em: new Date().toISOString() }
+      : antes.operacao,
     telaProtocolo: p.data.telaProtocolo === undefined ? antes.telaProtocolo : p.data.telaProtocolo,
     emissaoProtocolo: p.data.emissaoProtocolo === undefined ? antes.emissaoProtocolo : p.data.emissaoProtocolo,
   });
@@ -37,7 +41,7 @@ export async function PATCH(req: Request) {
   for (const r of RECEITAS)
     if (receitaAtiva(antes, r.id) !== receitaAtiva(depois, r.id)) partes.push(`${r.nome}: ${receitaAtiva(depois, r.id) ? "ligada" : "desligada"}`);
   if (p.data.operacao && JSON.stringify(antes.operacao) !== JSON.stringify(depois.operacao))
-    partes.push(`Operação Emitir DFD: ModuleKey ${depois.operacao?.moduleKey}`);
+    partes.push(`Operação Emitir DFD: ModuleKey ${depois.operacao?.moduleKey}${JSON.stringify(antes.operacao?.fonte) !== JSON.stringify(depois.operacao?.fonte) ? " (fonte da assinatura do DFD aprendida)" : ""}`);
   if (p.data.telaProtocolo !== undefined)
     partes.push(
       depois.telaProtocolo

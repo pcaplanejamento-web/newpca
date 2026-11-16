@@ -15,7 +15,12 @@ export const configAutomacaoSchema = z
       .object({
         moduleKey: z.number().int().positive(),
         guid: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
-        assinatura: z.string().regex(/^\d{0,12}$/),
+        /** De onde ler a assinatura do DFD de cada planejamento (normalizada por `coerceFonteAssinatura`). */
+        fonte: z
+          .record(z.string(), z.unknown())
+          .nullable()
+          .optional()
+          .refine((v) => v == null || JSON.stringify(v).length <= 20000, "Fonte grande demais."),
       })
       .optional(),
     /** O modelo da Tela Protocolo (normalizado por `coerceModeloTela`); null apaga. */

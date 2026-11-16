@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 43;
+  const PROTOCOLO = 44;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -103,14 +103,38 @@
     }
   };
 
-  // A tela da Centi mandou um "Emitir DFD" (o operation do Processar): guarda a operação dela.
+  // As últimas respostas (consultas de leitura) que a TELA recebeu — de onde a extensão aprende ONDE estão as assinaturas
+  // do DFD de cada planejamento (só na memória da aba; da mais nova à mais antiga).
+  const respostasTela = [];
+  // A FONTE da assinatura do DFD aprendida (o modelo do pedido + onde ler — nunca o valor): vale em todas as abas.
+  const FONTE_ASSINATURA = "__pcaFonteAssinatura_v1";
+  function fonteGuardada() {
+    try {
+      const g = JSON.parse(localStorage.getItem(FONTE_ASSINATURA) || "null");
+      return g && typeof g === "object" && g.fonte ? g : null;
+    } catch {
+      return null;
+    }
+  }
+  // A operação com a fonte da assinatura (a desta aba, senão a guardada) — o que o sistema recebe no "estado".
+  function operacaoComFonte() {
+    const g = fonteGuardada();
+    if (!operacaoTela) return g ? { moduleKey: g.moduleKey, guid: g.guid, fonte: g.fonte, em: g.em } : null;
+    const { assinatura: _a, planejamento: _p, ...op } = operacaoTela;
+    return { ...op, fonte: operacaoTela.fonte ?? g?.fonte ?? null };
+  }
+  // A tela da Centi mandou um "Emitir DFD" (o operation do Processar): guarda a operação dela e APRENDE de onde veio a
+  // assinatura escolhida (das respostas que a tela recebeu para aquele planejamento).
   function aprenderOperacao(url, metodo, corpo) {
     try {
       if (!/^POST$/i.test(metodo || "") || !/\/restauth\/operation(\?|$)/.test(String(url))) return;
       const pecas = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
       const op = pecas?.operacaoDoCorpo(corpo);
       if (!op || proprias.has(`${op.moduleKey}|${op.guid}`)) return;
-      operacaoTela = { ...op, em: new Date().toISOString() };
+      const em = new Date().toISOString();
+      const fonte = op.planejamento && op.assinatura ? pecas.fonteDaAssinatura(respostasTela, op.planejamento, op.assinatura) : null;
+      operacaoTela = { ...op, fonte, em };
+      if (fonte) localStorage.setItem(FONTE_ASSINATURA, JSON.stringify({ moduleKey: op.moduleKey, guid: op.guid, fonte, em }));
       sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
     } catch {}
   }
@@ -241,6 +265,11 @@
         // Diagnóstico: uma lista que veio por um pedido que a trava não aceita como leitura.
         if (A.protocolosTela(j)) diagnosticar({ caminho: c.caminho.slice(0, 120), motivo: `não aceito como consulta (${m})`, colunas: [] });
         return;
+      }
+      // Para aprender a assinatura do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
+      if (texto.length <= 2_000_000) {
+        respostasTela.unshift({ caminho: c.caminho, metodo: m, corpo: b, j });
+        if (respostasTela.length > 60) respostasTela.length = 60;
       }
       const lp = A.loadDoProtocolo(url, m, b, j);
       if (lp) {
@@ -960,7 +989,7 @@
         return { ok: false };
       }
     };
-    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO) };
+    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO), assinatura: ler(FONTE_ASSINATURA) };
   }
   async function telaApi(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
@@ -1029,7 +1058,7 @@
     try {
       resposta =
         acao === "estado"
-          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual(), operacao: operacaoTela, aprendido: aprendidos() }
+          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual(), operacao: operacaoComFonte(), aprendido: aprendidos() }
           : Object.hasOwn(ACOES, acao)
             ? await ACOES[acao](dados)
             : { ok: false, erro: "Ação desconhecida." };

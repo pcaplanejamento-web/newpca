@@ -71,6 +71,7 @@ function servidorFalso(registros: { centiAlvo: string; descricao: string }[] = [
   return chamadas;
 }
 
+const FONTE = { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", lista: ["Assinaturas"], chave: "Id" };
 const PDF = Buffer.from("%PDF-1.4 teste").toString("base64");
 const tarefa = (n: number): TarefaCenti => ({ chave: `k${n}`, id: String(100 + n), dfd: String(n), orgao: "7", orgaoNome: "AMAE", grupo: "P" });
 
@@ -84,12 +85,13 @@ function montar(over: Partial<DepsExecucao> & { pedirExt?: (acao: string, dados:
       const r = over.pedirExt?.(acao, dados);
       if (r !== undefined) return r as never;
       if (acao === "protocolo") return { ok: true, protocolo: { id: "9", numero: "156844", ano: "2026", assunto: "", descricao: "", documentos: 0 } };
-      if (acao === "ler") return { ok: true, j: {} } as never;
+      // O load do planejamento traz a ÚNICA assinatura do DFD dele (a fonte aprendida da tela).
+      if (acao === "ler") return { ok: true, j: { Assinaturas: [{ Id: 900 }] } } as never;
       if (acao === "pedir") return { ok: true, b64: PDF, status: 200 };
       if (acao === "anexar") return { ok: true, sequencial: "5" };
       return { ok: true };
     },
-    cfg: () => lerConfigCenti(null),
+    cfg: () => lerConfigCenti({ fonteAssinatura: FONTE }),
     aplicarOperacao: () => false,
     mapa: () => ({}),
     cadastradas: () => ({ 7: "24" }),

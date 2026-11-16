@@ -4,6 +4,7 @@
 // Princípios: negado por padrão · escrita só ACRESCENTA · toda escrita = autorização de uso único + confirmação · ensaio
 // antes · freio · tudo auditado e idempotente · nada fixo.
 
+import { coerceFonteAssinatura, type FonteAssinatura } from "./assinatura-dfd-centi.ts";
 import { coerceEmissaoProtocolo, coerceModeloTela, type EmissaoProtocolo, type ModeloTela } from "./automacao-tela-protocolo.ts";
 
 /** As capacidades do MOTOR. As de ESCRITA são uma lista FIXA (cada uma tem o seu validador na extensão). */
@@ -90,7 +91,7 @@ export const RECEITAS: readonly Receita[] = [
 export const receitaPorId = (id: string): Receita | null => RECEITAS.find((r) => r.id === id) ?? null;
 
 /** A operação "Emitir DFD" da Centi (aprendida da tela; vale para TODOS os ADMs). */
-export type OperacaoCentiServidor = { moduleKey: number; guid: string; assinatura: string; em: string | null };
+export type OperacaoCentiServidor = { moduleKey: number; guid: string; fonte: FonteAssinatura | null; em: string | null };
 
 /** A configuração da Automação (blob `configuracoes.automacao`). */
 export type ConfigAutomacao = {
@@ -127,7 +128,7 @@ export function coerceConfigAutomacao(v: unknown): ConfigAutomacao {
       ? {
           moduleKey: mk,
           guid,
-          assinatura: typeof op.assinatura === "string" ? op.assinatura.replace(/\D/g, "").slice(0, 12) : "",
+          fonte: coerceFonteAssinatura(op.fonte),
           em: typeof op.em === "string" ? op.em.slice(0, 40) : null,
         }
       : null;

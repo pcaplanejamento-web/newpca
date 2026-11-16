@@ -399,9 +399,9 @@ export function difsIdentidadeCenti(d: DfdConferido, x: ResumoCenti): string[] {
 /** O retrato guardado: o DFD da Centi COMO LIDO (sem as assinaturas — a do sistema é a validada) + o que a conferência
  * usou (situação, órgãos, opções) — refazer a conferência com ele dá o MESMO resultado da automação. */
 export type RetratoCenti = {
-  /** 2 = CONFIRMADO por duas emissões independentes da Centi com o mesmo conteúdo (`assinaturaDfdCenti`). Os de antes
-   * (v 1) podem ter dados de OUTRO registro misturados (a sessão da Centi intercalada) — não valem mais. */
-  v: 2;
+  /** 3 = emitido com a assinatura do PRÓPRIO planejamento (seções 8–10) e confirmado por duas emissões iguais. Os de antes
+   * (v 1 e v 2) saíram com a assinatura de OUTRO planejamento (um id fixo na emissão) — não valem mais. */
+  v: 3;
   dfd: DfdParseado;
   situacao: string;
   entidade: string;
@@ -418,7 +418,7 @@ export const MAX_RETRATO = 1_500_000;
 export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdParseado, o: { objeto: boolean; tolerancia: number }): RetratoCenti {
   const { assinaturas: _a, ...resto } = dfdCenti;
   return {
-    v: 2,
+    v: 3,
     dfd: { ...resto, assinaturas: [] },
     situacao: str(x.situacao),
     entidade: str(d.entidade),
@@ -495,11 +495,11 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
   try {
     const r = JSON.parse(t) as Partial<RetratoCenti>;
     const d = r?.dfd as DfdParseado | undefined;
-    // Só o retrato CONFIRMADO (v 2) e lido no PRÓPRIO órgão do DFD: o de antes pode ter dados de outro registro misturados.
-    if (r?.v !== 2 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
+    // Só o retrato v 3 (assinatura do próprio planejamento, confirmado) e lido no PRÓPRIO órgão do DFD.
+    if (r?.v !== 3 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
     if (str(r.entidadeAchada) && str(r.entidadeAchada) !== str(r.entidade)) return null;
     return {
-      v: 2,
+      v: 3,
       dfd: { ...d, assinaturas: [] },
       situacao: str(r.situacao),
       entidade: str(r.entidade),
