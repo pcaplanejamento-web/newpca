@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.295.4",
+    versao: "1.295.5",
     data: "2026-11-16",
     titulo: "Correção pela Centi: resultado fiel em cada DFD",
     mudancas: [
@@ -45,6 +45,26 @@ export const VERSOES: readonly Versao[] = [
         texto:
           "“Corrigir DFDs divergentes pela Centi”: divergência que a classificação não reconhece passa a ser corrigida pelos dados da Centi; o DFD gravado cuja reconferência falhou aparece como “Gravado, sem reconferir” (nunca “Corrigido”); e o que já voltou convergente sai como “Já convergente”, sem virar atenção na Análise.",
         link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.295.4",
+    data: "2026-11-16",
+    titulo: "Vincular DFD acha todos os protocolos",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Mesa",
+        texto:
+          "Vincular um DFD a um protocolo procura também nos protocolos fora do recorte da Mesa (outro PCA do cabeçalho, outra unidade a que você tem acesso) — pelo nº, Id, assunto ou interessado. Antes só listava os da Mesa aberta e dizia “Nenhum protocolo cadastrado”.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "Mover o último DFD de um protocolo pede a confirmação do sistema (o protocolo vazio vai à lixeira).",
+        link: "/painel/mesa?vista=dfds",
       },
     ],
   },
