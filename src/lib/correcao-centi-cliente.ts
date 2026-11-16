@@ -13,11 +13,14 @@ import { semMarcas } from "./sobrescrita-dfd.ts";
 
 export type ResultadoCorrecao = {
   /** corrigido = gravado com os dados da Centi · sem = nada a corrigir nos tipos · aceito = divergência aceita (com ressalva)
-   * · convergente = já não diverge · naoCorrigivel = só divergências que a Centi não corrige (situação, órgão, nº). */
-  resultado: "corrigido" | "sem" | "aceito" | "convergente" | "naoCorrigivel";
+   * · convergente = já não diverge · naoCorrigivel = só divergências que a Centi não corrige (situação, órgão, nº)
+   * · parcial = gravou, mas a reconferência AINDA diverge (`restam` diz em quê). */
+  resultado: "corrigido" | "parcial" | "sem" | "aceito" | "convergente" | "naoCorrigivel";
   /** O status da conferência DEPOIS (o do `recalcular` quando gravou; senão o atual). */
   status: string | null;
   motivo: string | null;
+  /** Os tipos que ainda divergem depois de gravar (só no `parcial`). */
+  restam?: string[];
 };
 
 type Busca = (url: string, init?: RequestInit) => Promise<Response>;
@@ -42,16 +45,19 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   if (status !== "divergente") return { resultado: "convergente", status, motivo };
   if (aceiteVale(status, motivo, lerAceite(o.conferenciaCentiAceite))) return { resultado: "aceito", status, motivo };
   const alcance = tiposCorrigiveisDoMotivo(tiposDoMotivo(motivo));
+  // O motivo tem teto ("e mais N"): cortado, os tipos que ficaram fora do texto também contam (decide o retrato).
+  const cortado = /(^|\n)e mais \d+\s*$/.test(String(motivo ?? ""));
   const usar = tipos ? alcance.filter((t) => tipos.includes(t)) : alcance;
-  if (!alcance.length) return { resultado: "naoCorrigivel", status, motivo };
-  if (!usar.length) return { resultado: "sem", status, motivo };
+  if (!alcance.length && !cortado) return { resultado: "naoCorrigivel", status, motivo };
+  if (tipos && !usar.length) return { resultado: "sem", status, motivo };
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
   const j2 = await lerJson<{ retrato?: RetratoCenti | null }>(r2);
   if (!r2.ok || !j2.ok) throw new Error(j2.error ?? "não foi possível ler os dados da Centi");
   if (!j2.retrato) throw new Error("sem os dados da Centi guardados — atualize o “Conferir 1 DFD × Centi” pelo modelo e execute de novo");
   const g = detalheParaParseado(o);
   const plano = planoCorrecao(g, j2.retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
-  const corrigido = semMarcas(aplicarCentiPorTipos(g, plano, usar));
+  // A automação (`tipos` null) corrige TODA divergência do retrato — não só as que couberam no motivo gravado.
+  const corrigido = semMarcas(aplicarCentiPorTipos(g, plano, tipos ? usar : null));
   const itensMudaram = JSON.stringify(corrigido.itens) !== JSON.stringify(g.itens);
   if (itensMudaram && corrigido.itens.length === 0) throw new Error("a Centi não tem itens — corrija no banner do DFD");
   const body = diffDfdGravado(o, corrigido, o.reparticaoId, itensMudaram);
@@ -71,7 +77,11 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
       body: JSON.stringify({ acao: "recalcular" }),
     });
     const j4 = await lerJson<{ status?: string; motivo?: string | null }>(r4);
-    if (r4.ok && j4.ok) return { resultado: "corrigido", status: j4.status ?? null, motivo: j4.motivo ?? null };
+    if (r4.ok && j4.ok) {
+      const depois = j4.status ?? null;
+      if (depois === "divergente") return { resultado: "parcial", status: depois, motivo: j4.motivo ?? null, restam: tiposDoMotivo(j4.motivo) };
+      return { resultado: "corrigido", status: depois, motivo: j4.motivo ?? null };
+    }
   } catch {
     /* segue: a correção foi gravada */
   }

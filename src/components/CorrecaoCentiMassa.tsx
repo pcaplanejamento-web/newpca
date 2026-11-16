@@ -53,7 +53,13 @@ export function CorrecaoCentiMassa({ dfds, onConcluido }: { dfds: DfdCorrecaoMas
   async function corrigirUm(d: DfdCorrecaoMassa, tipos: string[]): Promise<"ok" | "sem" | string> {
     try {
       const r = await corrigirDfdPelaCenti(d.id, tipos);
-      return r.resultado === "corrigido" ? "ok" : "sem";
+      if (r.resultado === "corrigido") return "ok";
+      // Gravou, mas ainda diverge: só é falha se ainda diverge em algum dos tipos ESCOLHIDOS (os outros ficaram de propósito).
+      if (r.resultado === "parcial") {
+        const resta = (r.restam ?? []).filter((t) => tipos.includes(t));
+        return resta.length ? `corrigido em parte — ainda diverge em ${resta.join(", ")}` : "ok";
+      }
+      return "sem";
     } catch (x) {
       return x instanceof Error ? x.message : String(x);
     }

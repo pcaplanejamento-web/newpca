@@ -29,7 +29,7 @@ const moeda = (v: number | null | undefined) => (v == null ? "—" : brl(v));
 const qtd = (v: number | null | undefined) => (v == null ? "—" : num(v));
 
 /** Cópia para COMPARAR: textos sem pontuação/espaços/caixa/acento — a quebra de linha ou uma vírgula não é diferença. */
-function paraComparar(d: DfdComparavel): DfdComparavel {
+export function paraComparar(d: DfdComparavel): DfdComparavel {
   const n = (v: string | null) => (v == null ? null : normComparacao(v));
   return {
     ...d,

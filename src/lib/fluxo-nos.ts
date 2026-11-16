@@ -1597,7 +1597,7 @@ const NOS: DefNo[] = [
     rotulosPortas: { corrigidos: "Corrigidos", semMudanca: "Sem correção", erros: "Não corrigidos" },
     campos: [],
     executar: async (e, _c, ctx) => {
-      const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null }>) | undefined;
+      const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>) | undefined;
       if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
       const corrigidos: Item[] = [];
       const sem: Item[] = [];
@@ -1635,7 +1635,12 @@ const NOS: DefNo[] = [
           const r = await corrigir(id);
           feito = { ...leve, correcao: r.resultado, conferenciaDepois: r.status, motivoDepois: r.motivo };
           if (r.resultado === "corrigido") corrigidos.push(feito);
-          else {
+          else if (r.resultado === "parcial") {
+            // Gravou, mas AINDA diverge: vai a "Não corrigidos" com o que restou (nunca conta como corrigido).
+            const restam = Array.isArray(r.restam) ? r.restam.join(", ") : "";
+            feito = { ...feito, motivo: `Corrigido em parte — ainda diverge${restam ? `: ${restam}` : ""}.` };
+            erros.push(feito);
+          } else {
             feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO[r.resultado] ?? "Nada a corrigir." };
             sem.push(feito);
           }

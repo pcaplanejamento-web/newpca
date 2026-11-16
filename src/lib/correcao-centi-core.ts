@@ -4,11 +4,11 @@
  * a tolerância nos valores) — quais dados DIVERGEM. O banner usa as escolhas da sobrescrita (Manter sistema | Usar Centi)
  * com só as divergências já marcadas "Usar Centi"; a correção em massa aplica só os TIPOS escolhidos.
  */
-import { tipoCurto, type RetratoCenti } from "./conferencia-dfd-centi.ts";
+import { conferenciaDoRetrato, paraComparar, tipoCurto, type RetratoCenti } from "./conferencia-dfd-centi.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
 import { arredondarValor, type DfdParseado, normComparacao, valorDosItens } from "./parse-dfd-comum.ts";
-import { chaveSecao } from "./comparar-protocolo.ts";
-import { aplicarTodas, comparacaoEscolha, type EntradaEscolha, entradasEscolha, marcarItensGravados, marcarItensNovos } from "./sobrescrita-dfd.ts";
+import { chaveSecao, type DfdComparavel, parearItens } from "./comparar-protocolo.ts";
+import { aplicarTodas, comparacaoEscolha, type EntradaEscolha, entradasEscolha, marcarItensGravados, marcarItensNovos, semMarcas } from "./sobrescrita-dfd.ts";
 
 /** O DFD da Centi pronto para comparar e aplicar: as seções normalizadas como na conferência; nº do DFD, planejamento,
  * arquivo e ASSINATURAS ficam os do sistema (a correção nunca troca identificador nem a assinatura validada). */
@@ -27,7 +27,6 @@ export function novoDaCenti(sistema: DfdParseado, r: RetratoCenti, anoPca: numbe
 }
 
 const n = (v: unknown) => (v == null ? "" : normComparacao(String(v)));
-const tel = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const cod = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const textoSecao = (d: DfdParseado, k: string) =>
   normComparacao(
@@ -77,18 +76,18 @@ export function tiposDaEntrada(e: EntradaEscolha, sistema: DfdParseado, centi: D
     if (k === "planejamento") return [];
     if (k === "tipo") return tipoCurto(sistema.tipo) && tipoCurto(centi.tipo) && tipoCurto(sistema.tipo) !== tipoCurto(centi.tipo) ? ["Tipo"] : [];
     if (k === "objeto" && !r.objeto) return [];
-    const a = sistema[k as keyof DfdParseado];
-    const b = centi[k as keyof DfdParseado];
-    const igual = k === "telefone" ? tel(a) === tel(b) : n(a) === n(b);
-    return igual ? [] : [e.rotulo];
+    // A entrada só existe quando a régua da CONFERÊNCIA (`paraComparar` + `compararDfd`) acusa a diferença — as
+    // referências são listas (a ordem não conta), mas "045/2025" × "045-2025" é diferença, como na conferência.
+    return [e.rotulo];
   }
   if (e.tipo === "secao") {
     if (textoSecao(sistema, e.secao) === textoSecao(centi, e.secao)) return [];
     return [`Seção ${String(e.rotulo ?? "").replace(/\s+/g, " ").trim().replace(/^\d+\s*[-.–]\s*/, "") || "sem título"}`];
   }
   const { g, c } = indices(e.chave);
-  if (g == null) return ["Item só na Centi", "Nº de itens"];
-  if (c == null) return ["Item só no sistema", "Nº de itens"];
+  // O item de um lado só muda também o VALOR TOTAL do DFD (escolher "Valor total" o traz junto).
+  if (g == null) return ["Item só na Centi", "Nº de itens", "Valor total"];
+  if (c == null) return ["Item só no sistema", "Nº de itens", "Valor total"];
   const x = sistema.itens[g];
   const y = centi.itens[c];
   if (!x || !y) return [];
@@ -109,13 +108,22 @@ export type PlanoCorrecao = {
   entradas: EntradaEscolha[];
   /** As escolhas que divergem, com os tipos. */
   divergentes: { entrada: EntradaEscolha; tipos: string[] }[];
+  /** O pareamento dos itens da CONFERÊNCIA (índice no sistema → índice na Centi) — o acerto do valor total acumulado. */
+  pares: [number, number][];
 };
 
+/** A cópia NORMALIZADA da conferência (`paraComparar`) — os índices dos itens e das seções são os mesmos. */
+const comoNaConferencia = (d: DfdParseado): DfdParseado => ({ ...d, ...paraComparar(d as unknown as DfdComparavel) }) as unknown as DfdParseado;
+
+/** O plano compara pela MESMA régua da conferência (textos sem pontuação/caixa/acento, código só dígitos, o mesmo
+ * pareamento dos itens) e aplica sobre os DFDs como estão — senão uma divergência apontada nunca era corrigida. */
 export function planoCorrecao(sistema: DfdParseado, r: RetratoCenti, anoPca: number | null): PlanoCorrecao {
   const centi = marcarItensNovos(novoDaCenti(sistema, r, anoPca));
-  const entradas = entradasEscolha(comparacaoEscolha(sistema, centi));
+  const [ns, nc] = [comoNaConferencia(sistema), comoNaConferencia(centi)];
+  const entradas = entradasEscolha(comparacaoEscolha(ns, nc));
   const divergentes = entradas.map((entrada) => ({ entrada, tipos: tiposDaEntrada(entrada, sistema, centi, r) })).filter((d) => d.tipos.length);
-  return { centi, entradas, divergentes, tolerancia: r.tolerancia };
+  const { pares } = parearItens(ns.itens, nc.itens);
+  return { centi, entradas, divergentes, tolerancia: r.tolerancia, pares };
 }
 
 /** Os tipos que o plano consegue corrigir (sem repetir, na ordem em que aparecem). */
@@ -128,7 +136,7 @@ const VALORES_ITEM = new Set(["quantidade", "valorUnitario", "valorTotal"]);
  * O resultado traz as marcas de origem dos itens (a tela das escolhas as usa); antes de gravar, `semMarcas`. */
 export function aplicarCentiPorTipos(sistema: DfdParseado, p: PlanoCorrecao, tipos?: readonly string[] | null): DfdParseado {
   const base = marcarItensGravados(sistema);
-  if (!tipos) return p.divergentes.length ? aplicarTodas(p.divergentes.map((d) => d.entrada), "novo", base, base, p.centi) : base;
+  if (!tipos) return acertarTotal(p.divergentes.length ? aplicarTodas(p.divergentes.map((d) => d.entrada), "novo", base, base, p.centi) : base, p);
   const quer = new Set(tipos);
   const escolhidas = p.divergentes.filter((d) => d.tipos.some((t) => quer.has(t)));
   // Cabeçalho, seções e itens que só existem de um lado: a escolha inteira.
@@ -157,7 +165,34 @@ export function aplicarCentiPorTipos(sistema: DfdParseado, p: PlanoCorrecao, tip
     const itens = w.itens.map((it) => (it.ref && patches.has(it.ref) ? { ...it, ...patches.get(it.ref) } : it));
     w = { ...w, itens, valorTotal: valorDosItens(itens) };
   }
-  return w;
+  return quer.has("Valor total") ? acertarTotal(w, p) : w;
+}
+
+/** O VALOR TOTAL do DFD ainda fora da tolerância depois das correções (os centavos de cada item dentro dela, somados,
+ * passam): os itens pareados recebem quantidade e valores EXATOS da Centi — senão o "Valor total" nunca convergia. */
+function acertarTotal(w: DfdParseado, p: PlanoCorrecao): DfdParseado {
+  if (Math.abs((w.valorTotal ?? 0) - (p.centi.valorTotal ?? 0)) <= p.tolerancia) return w;
+  const daCenti = new Map(p.pares.map(([g, c]) => [`g:${g}`, p.centi.itens[c]]));
+  let mudou = false;
+  const itens = w.itens.map((it) => {
+    const y = it.ref ? daCenti.get(it.ref) : undefined;
+    if (!y || (it.quantidade === y.quantidade && it.valorUnitario === y.valorUnitario && it.valorTotal === y.valorTotal)) return it;
+    mudou = true;
+    return { ...it, quantidade: y.quantidade, valorUnitario: y.valorUnitario, valorTotal: y.valorTotal };
+  });
+  return mudou ? { ...w, itens, valorTotal: valorDosItens(itens) } : w;
+}
+
+/** O que RESTARIA depois da correção (o DFD corrigido reconferido pelo MESMO retrato) — o resultado honesto e os testes. */
+export function simularCorrecao(
+  sistema: DfdParseado,
+  r: RetratoCenti,
+  anoPca: number | null,
+  tipos?: readonly string[] | null,
+): { corrigido: DfdParseado; status: "convergente" | "divergente"; motivo: string | null } {
+  const corrigido = semMarcas(aplicarCentiPorTipos(sistema, planoCorrecao(sistema, r, anoPca), tipos));
+  const c = conferenciaDoRetrato({ ...corrigido, numero: sistema.numero, planejamento: sistema.planejamento, tipo: corrigido.tipo, anoPca }, r);
+  return { corrigido, ...c };
 }
 
 /** Os tipos de divergência que a Centi NÃO corrige no DFD (identidade, situação, órgão) — tratados um a um no painel da

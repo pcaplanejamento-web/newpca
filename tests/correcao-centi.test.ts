@@ -4,7 +4,7 @@ import { chaveMotivo, conferenciaDoRetrato, montarRetrato, tiposDoMotivo } from 
 import { executarFluxo, type Grafo, lerGrafo, marcadosDuplicados } from "../src/lib/fluxo-core.ts";
 import { grafoDoModelo, MODELOS_FLUXO } from "../src/lib/fluxo-modelos.ts";
 import { corrigirDfdPelaCenti } from "../src/lib/correcao-centi-cliente.ts";
-import { aplicarCentiPorTipos, NAO_CORRIGIVEIS, planoCorrecao, tiposCorrigiveis, tiposCorrigiveisDoMotivo } from "../src/lib/correcao-centi-core.ts";
+import { aplicarCentiPorTipos, NAO_CORRIGIVEIS, planoCorrecao, simularCorrecao, tiposCorrigiveis, tiposCorrigiveisDoMotivo } from "../src/lib/correcao-centi-core.ts";
 import type { DfdDetalhe } from "../src/lib/dfd.ts";
 import { compararDfdCenti, MOTIVO_SEM_CORRECAO, REGISTRO_NOS, reconferido } from "../src/lib/fluxo-nos.ts";
 import { valorDosItens, type DfdParseado } from "../src/lib/parse-dfd-comum.ts";
@@ -121,7 +121,8 @@ test("banner: só as divergências vêm “Usar Centi”; pontuação diferente 
     const est = estadoEscolha(e, trabalho, s, p.centi);
     assert.equal(est, divergentes.has(e.chave) ? "novo" : "gravado", `${e.chave}: ${est}`);
   }
-  assert.ok(p.entradas.some((e) => e.chave === "responsavel"));
+  // Só pontuação/caixa: a régua da conferência não a vê — não é correção (o banner a mostra como "Manter sistema").
+  assert.ok(!p.entradas.some((e) => e.chave === "responsavel"));
   assert.ok(!divergentes.has("responsavel"));
 });
 
@@ -138,7 +139,7 @@ test("massa: no item dos dois lados, só os campos dos tipos escolhidos", () => 
   assert.equal(v.itens[0].quantidade, 20);
   assert.equal(v.itens[0].valorTotal, 100);
   assert.equal(v.itens[0].descricao, "PRODUTO 1 DE TESTE");
-  assert.equal(v.itens.length, 2, "Valor total não acrescenta itens");
+  assert.equal(v.itens.length, 3, "Valor total traz também o item só da Centi (ele muda o total do DFD)");
   assert.equal(v.valorTotal, valorDosItens(v.itens));
 });
 
@@ -167,7 +168,7 @@ test("tipos corrigíveis do motivo: tira situação, órgão, nº do DFD, não e
 });
 
 type Chamada = { url: string; metodo: string; corpo: Record<string, unknown> | null };
-function servidor(o: { status: string | null; motivo?: string | null; aceite?: string | null; retrato?: unknown; patch?: number; centi?: DfdParseado }) {
+function servidor(o: { status: string | null; motivo?: string | null; aceite?: string | null; retrato?: unknown; patch?: number; centi?: DfdParseado; depois?: { status: string; motivo: string | null } }) {
   const s = base();
   const centi = o.centi ?? centiDivergente();
   const r = o.retrato === undefined ? retrato(centi) : o.retrato;
@@ -181,7 +182,7 @@ function servidor(o: { status: string | null; motivo?: string | null; aceite?: s
     if (metodo === "GET" && url === "/api/dfd/9") return resp(200, { ok: true, dfd });
     if (metodo === "GET" && url.endsWith("?retrato=1")) return resp(200, { ok: true, retrato: r });
     if (metodo === "PATCH") return o.patch && o.patch !== 200 ? resp(o.patch, { ok: false, error: "Alterado por outra pessoa." }) : resp(200, { ok: true });
-    if (metodo === "POST") return resp(200, { ok: true, status: "convergente", motivo: null });
+    if (metodo === "POST") return resp(200, { ok: true, ...(o.depois ?? { status: "convergente", motivo: null }) });
     return resp(404, { ok: false });
   };
   return { busca, chamadas };
@@ -408,4 +409,114 @@ test("Subfluxo “Conferir 1 DFD × Centi” SALVO antes do DFD inteiro: lê o D
   await rodar({ limite: 1 });
   await rodar({ limite: 1, dfdInteiro: false });
   assert.deepEqual(pedidos, [true, false], "sem a chave = DFD inteiro; desligado de propósito = só o resumo");
+});
+
+// ---------------------------------------------------------------------------
+// AUDITORIA: cada tipo de divergência que a conferência aponta é corrigido — reconferido, fica CONVERGENTE.
+// ---------------------------------------------------------------------------
+
+const CASOS: [string, (c: DfdParseado) => void][] = [
+  ["Objeto", (c) => { c.objeto = "Outro objeto"; }],
+  ["Órgão/Entidade", (c) => { c.orgaoEntidade = "FUNDO MUNICIPAL"; }],
+  ["Setor requisitante", (c) => { c.setorRequisitante = "SEC. SAÚDE"; }],
+  ["Responsável", (c) => { c.responsavel = "BELTRANO"; }],
+  ["Matrícula", (c) => { c.matricula = "999"; }],
+  ["E-mail", (c) => { c.email = "x@y.gov.br"; }],
+  ["Telefone", (c) => { c.telefone = "64 8888-1111"; }],
+  ["Nº do contrato", (c) => { c.numeroContrato = "045-2025"; }],
+  ["Nº da ARP", (c) => { c.numeroAta = "12/2026"; }],
+  ["Nº da licitação", (c) => { c.numeroLicitacao = "PE 7/2026"; }],
+  ["Tipo", (c) => { c.tipo = "DFD-O"; }],
+  ["Seção JUSTIFICATIVA", (c) => { c.secoes[0] = { ...c.secoes[0], texto: "Outra justificativa." }; }],
+  ["Seção FUNDAMENTAÇÃO LEGAL", (c) => { c.secoes.push({ numero: 7, titulo: "7 - FUNDAMENTAÇÃO LEGAL", texto: "Lei 14.133/2021" }); }],
+  ["Seção PRIORIDADE", (c) => { c.secoes = c.secoes.filter((x) => !/PRIORIDADE/.test(x.titulo)); }],
+  ["Item: nº", (c) => { c.itens[1] = { ...c.itens[1], item: 7 }; }],
+  ["Item: código", (c) => { c.itens[1] = { ...c.itens[1], codigo: "99999" }; }],
+  ["Item: descrição", (c) => { c.itens[1] = { ...c.itens[1], descricao: "PRODUTO DOIS ALTERADO" }; }],
+  ["Item: medida", (c) => { c.itens[1] = { ...c.itens[1], unidade: "CX" }; }],
+  ["Item: quantidade", (c) => { c.itens[1] = { ...c.itens[1], quantidade: 3, valorTotal: 15 }; }],
+  ["Item: valor unitário", (c) => { c.itens[1] = { ...c.itens[1], valorUnitario: 7, valorTotal: 70 }; }],
+  ["Item só na Centi", (c) => { c.itens.push(item(3)); }],
+  ["Item só no sistema", (c) => { c.itens.pop(); }],
+];
+
+function casoCenti(muda: (c: DfdParseado) => void): DfdParseado {
+  const c = base();
+  c.numeroContrato = null;
+  muda(c);
+  c.valorTotal = valorDosItens(c.itens);
+  return c;
+}
+
+test("auditoria: cada tipo de divergência é corrigido — tudo e só o tipo — e a reconferência fica CONVERGENTE", () => {
+  for (const [tipo, muda] of CASOS) {
+    const s = { ...base(), numeroContrato: tipo === "Nº do contrato" ? "045/2025" : null };
+    const c = casoCenti(muda);
+    const r = montarRetrato({ numero: "123", tipo: s.tipo, entidade: "1" }, { situacao: "Aprovado", numero: "123", tipo: c.tipo }, c, { objeto: true, tolerancia: 0.01 });
+    const antes = conferenciaDoRetrato(comparavel(s), r);
+    assert.equal(antes.status, "divergente", tipo);
+    const tipos = tiposCorrigiveisDoMotivo(tiposDoMotivo(antes.motivo));
+    assert.ok(tipos.includes(tipo), `${tipo}: fora de ${tipos.join(", ")}`);
+    assert.equal(simularCorrecao(s, r, 2027, null).status, "convergente", `${tipo} (todas)`);
+    assert.equal(simularCorrecao(s, r, 2027, [tipo]).status, "convergente", `${tipo} (só o tipo)`);
+  }
+});
+
+test("auditoria: o Valor total por centavos acumulados (cada item dentro da tolerância) também converge", () => {
+  const s = base();
+  s.itens = Array.from({ length: 20 }, (_, i) => item(i + 1, 1, 10));
+  s.valorTotal = valorDosItens(s.itens);
+  const c = base();
+  c.itens = Array.from({ length: 20 }, (_, i) => ({ ...item(i + 1, 1, 10.009), valorTotal: 10.009 }));
+  c.valorTotal = valorDosItens(c.itens);
+  const r = retrato(c);
+  const antes = conferenciaDoRetrato(comparavel(s), r);
+  assert.equal(antes.status, "divergente");
+  assert.deepEqual(tiposDoMotivo(antes.motivo), ["Valor total"]);
+  assert.equal(simularCorrecao(s, r, 2027, null).status, "convergente");
+  assert.equal(simularCorrecao(s, r, 2027, ["Valor total"]).status, "convergente");
+});
+
+test("auditoria: pareamento pela régua da conferência — código repetido com descrição só de pontuação diferente", () => {
+  const s = base();
+  s.itens = [{ ...item(1), codigo: "111", descricao: "CANETA, AZUL." }, { ...item(2), codigo: "111", descricao: "CANETA VERMELHA" }];
+  s.valorTotal = valorDosItens(s.itens);
+  const c = base();
+  c.itens = [{ ...item(1), codigo: "1.11", descricao: "CANETA VERMELHA", quantidade: 4, valorTotal: 20 }, { ...item(2), codigo: "111", descricao: "caneta azul" }];
+  c.valorTotal = valorDosItens(c.itens);
+  const r = retrato(c);
+  assert.equal(conferenciaDoRetrato(comparavel(s), r).status, "divergente");
+  assert.equal(simularCorrecao(s, r, 2027, null).status, "convergente");
+});
+
+test("auditoria: o motivo CORTADO (e mais N) não deixa divergência para trás — a automação corrige pelo retrato", async () => {
+  const centi = base();
+  centi.itens = Array.from({ length: 40 }, (_, i) => ({ ...item(i + 1, 3), descricao: `PRODUTO ${i + 1} MUITO DIFERENTE` }));
+  centi.valorTotal = valorDosItens(centi.itens);
+  centi.objeto = "Objeto da Centi";
+  const s = base();
+  const cortado = `DFD 123 (Planej. 456): 42 diferenças — Item 1 (cód. 123451): quantidade 10 × 3 (sistema × Centi);\ne mais 41`;
+  const sv = servidor({ status: "divergente", motivo: cortado, centi });
+  const r = await corrigirDfdPelaCenti(9, null, sv.busca);
+  assert.equal(r.resultado, "corrigido");
+  const patch = sv.chamadas.find((c) => c.metodo === "PATCH");
+  assert.equal(patch?.corpo?.objeto, "Objeto da Centi");
+  assert.equal((patch?.corpo?.itens as unknown[] | undefined)?.length, 40);
+  void s;
+});
+
+test("auditoria: gravou mas a reconferência ainda diverge — “parcial” com o que restou (nunca “corrigido”)", async () => {
+  const sv = servidor({ status: "divergente", depois: { status: "divergente", motivo: "DFD 123 (Planej. 456): 1 diferença — situação CANCELADO na Centi" } });
+  const r = await corrigirDfdPelaCenti(9, null, sv.busca);
+  assert.equal(r.resultado, "parcial");
+  assert.deepEqual(r.restam, ["Situação"]);
+});
+
+test("auditoria: Situação, Órgão e Nº do DFD não se corrigem pela Centi — ficam apontados", () => {
+  const s = base();
+  const c = base();
+  const r = montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "1", entidadeAchada: "2" }, { situacao: "CANCELADO", numero: "999", tipo: "DFD-S" }, c, { objeto: true, tolerancia: 0.01 });
+  const sim = simularCorrecao(s, r, 2027, null);
+  assert.equal(sim.status, "divergente");
+  assert.deepEqual(tiposDoMotivo(sim.motivo).sort(), ["Nº do DFD", "Situação", "Órgão"].sort());
 });

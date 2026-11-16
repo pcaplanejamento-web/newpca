@@ -35,6 +35,32 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.3",
+    data: "2026-11-16",
+    titulo: "Correção pela Centi: toda divergência corrigida",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A correção pela Centi compara pela mesma régua da conferência: referências (contrato, ARP, licitação), itens de código repetido e o valor total por centavos acumulados agora são corrigidos — e a automação corrige tudo o que diverge, mesmo quando o motivo gravado foi cortado (“e mais N”).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Quando o DFD gravado ainda diverge na reconferência, o resultado é “Corrigido em parte”, com o que restou (ex.: situação ou órgão, que a Centi não corrige) — nunca mais “Corrigido” com a Mesa divergente.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "“Usar a Centi em…” com “Valor total” traz também os itens que só existem de um lado, e avisa quando um DFD ficou divergente nos tipos escolhidos.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.295.2",
     data: "2026-11-16",
     titulo: "Correção pela Centi: os dados da Centi guardados",
