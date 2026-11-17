@@ -15,7 +15,7 @@ export const configAutomacaoSchema = z
       .object({
         moduleKey: z.number().int().positive(),
         guid: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
-        /** De onde ler a assinatura do DFD de cada planejamento (normalizada por `coerceFonteAssinatura`). */
+        /** Aceita e IGNORADA (a extensão antiga ainda a manda): o registro das seções 8–10 vem do load do planejamento. */
         fonte: z
           .record(z.string(), z.unknown())
           .nullable()

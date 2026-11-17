@@ -16,13 +16,12 @@ test("lerConfigCenti: inválido volta ao padrão", () => {
   assert.equal(c.valorReferencia, false);
   assert.equal(c.guid, CONFIG_CENTI_PADRAO.guid);
   assert.equal(c.moduleKey, CONFIG_CENTI_PADRAO.moduleKey);
-  // O id FIXO de assinatura guardado antes não existe mais: sem a fonte aprendida, nada a usar.
-  assert.equal(c.fonteAssinatura, null);
+  // O id FIXO de assinatura guardado antes não existe mais (o registro vem do load de cada planejamento).
   assert.equal("assinaturaDfd" in c, false);
   // A operação ANTIGA guardada no aparelho (antes da mudança da Centi) vira a nova; uma escolhida à mão fica.
   const velha = lerConfigCenti({ moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", valorReferencia: false });
-  assert.equal(velha.moduleKey, 120465);
-  assert.equal(velha.guid, "24e3e9d0-cb29-2473-1d0a-318c7d8507ef");
+  assert.equal(velha.moduleKey, 120477);
+  assert.equal(velha.guid, "1449d1d1-85f8-8080-7f63-df246a9e7f80");
   assert.equal(velha.valorReferencia, false);
   const mao = lerConfigCenti({ moduleKey: 999, guid: "2b414e51-4389-1c0a-f194-b11779b834f5" });
   assert.equal(mao.moduleKey, 999);
@@ -31,8 +30,8 @@ test("lerConfigCenti: inválido volta ao padrão", () => {
 test("pedidoEmitirDfd: o Id, a assinatura DO planejamento, as opções e as TRAVAS", () => {
   const p = pedidoEmitirDfd("1154", CONFIG_CENTI_PADRAO, new Date(2026, 9, 1, 11, 57, 45), "871");
   const v = Object.fromEntries(p.Params.map((x) => [x.Key, x.Value]));
-  assert.equal(p.ModuleKey, 120465);
-  assert.equal(p.Guid, "24e3e9d0-cb29-2473-1d0a-318c7d8507ef");
+  assert.equal(p.ModuleKey, 120477);
+  assert.equal(p.Guid, "1449d1d1-85f8-8080-7f63-df246a9e7f80");
   assert.equal(v.IdPlanejamentoAssinaturaDFD, "871");
   assert.equal(v.IdComprasPlanejamento, "1154");
   assert.equal(v.EmitirValorReferencia, "1");
@@ -579,12 +578,7 @@ test("operação Emitir DFD: a extensão pega a da tela e o sistema acompanha a 
   // O sistema ajusta só o que mudou; igual → nada.
   // O id da assinatura NUNCA vira configuração (era o erro: o de um planejamento ia na emissão de todos).
   assert.deepEqual(ajusteDaOperacao(CONFIG_CENTI_PADRAO, op), { moduleKey: 120466, guid: "aaaaaaaa-cb29-2473-1d0a-318c7d8507ef" });
-  assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", assinatura: "163" }), null);
-  // A FONTE aprendida entra; uma operação sem fonte não apaga a aprendida.
-  const fonte = { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", corpo: null, lista: ["Entity", "@Assinaturas"], chave: "@Id" };
-  const comFonte = ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", fonte });
-  assert.deepEqual(comFonte, { fonteAssinatura: fonte });
-  assert.equal(ajusteDaOperacao({ ...CONFIG_CENTI_PADRAO, fonteAssinatura: fonte as never }, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef" }), null);
+  assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: 120477, guid: "1449d1d1-85f8-8080-7f63-df246a9e7f80", assinatura: "163" }), null);
   assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: "x", guid: "y" }), null);
   assert.equal(operacaoRecusada('{"Success":false,"Message":["(1)","Usuário sem permissão!"]}'), true);
   assert.equal(operacaoRecusada("Sessão expirada"), false);

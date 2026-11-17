@@ -5,7 +5,7 @@
  * autorização de uso único + a confirmação da extensão; o já anexado não é emitido de novo). É a lógica que era da tela
  * da Automação, agora usada pelo componente de fluxo "Baixar/anexar DFDs" (`saida.dfdsCenti`).
  */
-import { assinaturaDoLoad, assinaturasDoLoad, escolherAssinatura, pedidoDaFonte } from "./assinatura-dfd-centi.ts";
+import { assinaturaDoLoad } from "./assinatura-dfd-centi.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
 import {
   type AlvoCenti,
@@ -58,7 +58,16 @@ import { ZipArmazenar } from "./zip-armazenar.ts";
 export { andamentoDfds, contagemDfds, type EstadoDfd, type LinhaDfd };
 /** A fase em curso de UM DFD (a linha mostra o passo real). */
 type Fase = (e: Extract<EstadoDfd, "emitindo" | "conferindo" | "aguardando" | "anexando">) => void;
-export type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean; entidade?: string; recusada?: boolean };
+export type Emissao = {
+  pdf?: Uint8Array;
+  erro?: string;
+  amostra?: string;
+  ambiente?: boolean;
+  entidade?: string;
+  recusada?: boolean;
+  /** O planejamento ABRIU, mas não pode ser emitido (sem o registro das seções 8–10): não vale tentar outros órgãos. */
+  definitivo?: boolean;
+};
 /** A resposta da extensão (o que o motor lê). */
 export type RespostaExt = {
   ok?: boolean;
@@ -140,47 +149,6 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
   return { j: l.j };
 }
 
-/**
- * O registro das seções 8–10 do DFD (IdPlanejamentoAssinaturaDFD — a Centi o chama de "assinatura") DO PLANEJAMENTO:
- * o par visto na tela, a fonte aprendida (conferida contra a lista do load) ou a lista/campo do próprio load. Sem nenhum,
- * o campo vai VAZIO (a Centi usa o do próprio planejamento) — NUNCA um valor de reserva: o mesmo id para todos trazia as
- * seções 8–10 de um só registro em todos os DFDs. Só a interrupção para.
- */
-export async function assinaturaDoPlanejamento(
-  c: Pick<ContextoEmissor, "pedir" | "cfg">,
-  id: string,
-  entidade: string | undefined,
-  load: { j: unknown },
-): Promise<{ id: string; motivo?: string } | { erro: string; ambiente?: boolean }> {
-  const plan = id.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  // 1º: o valor que a PRÓPRIA TELA da Centi mandou ao emitir este planejamento (a extensão guarda o par).
-  const par = c.cfg().paresAssinatura?.[plan];
-  if (par) return { id: par };
-  const semId = async (motivo: string) => ({ id: "", motivo });
-  const doLoad = assinaturasDoLoad(load.j);
-  const fonte = c.cfg().fonteAssinatura;
-  if (!fonte) {
-    if ("listas" in doLoad) return semId((assinaturaDoLoad(load.j, id) as { erro: string }).erro);
-    const r = assinaturaDoLoad(load.j, id);
-    return "id" in r ? r : semId(r.erro);
-  }
-  const pedido = pedidoDaFonte(fonte, id);
-  if (!pedido) return semId(`Planejamento inválido (${id}).`);
-  let j: unknown;
-  if (pedido.metodo === "GET" && pedido.caminho === caminhoLoadPlanejamento(id)) j = load.j;
-  else {
-    const r = (await c.pedir("ler", { metodo: pedido.metodo, caminho: pedido.caminho, corpo: pedido.corpo, entidade }, 60_000)) as RespostaExt & { j?: unknown };
-    if (r.interrompido) return { erro: "Interrompido na extensão.", ambiente: true };
-    if (!r.ok) return semId(`Não consegui ler o registro das seções 8 a 10 do planejamento ${id} na Centi: ${r.erro ?? "sem resposta"}.`);
-    j = r.j;
-  }
-  const escolhida = escolherAssinatura(j, fonte, id);
-  if ("erro" in escolhida) return semId(escolhida.erro);
-  // Confere em dobro: com a lista no load do planejamento, o id escolhido tem de ser DELE.
-  if ("ids" in doLoad && !doLoad.ids.includes(escolhida.id)) return semId(`O registro das seções 8 a 10 lido (${escolhida.id}) não está no planejamento ${id} na Centi.`);
-  return escolhida;
-}
-
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
  * load já feito por quem chama — DENTRO da mesma `comSessaoCenti` (sem ele, o load é feito aqui, na trava). */
 export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
@@ -195,19 +163,19 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     if ("erro" in l) return l;
     load = l;
   }
-  // O registro das seções 8–10 DESTE planejamento, lido na Centi agora (sem ele, o campo vazio).
-  const ass = await assinaturaDoPlanejamento(c, id, entidade, load);
-  if ("erro" in ass) return ass;
+  const onde = entidade ? ` (órgão ${entidade})` : "";
+  // O load NÃO abriu o planejamento (outro órgão, sem acesso): nada é emitido — vale tentar os outros órgãos.
+  if (!abriuNoLoad(load.j)) {
+    const msg = mensagemDoLoad(load.j);
+    return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}.` };
+  }
+  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi (sem ele, não emite).
+  const ass = assinaturaDoLoad(load.j, id);
+  if ("erro" in ass) return { erro: ass.erro, definitivo: true };
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
   if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {
-    const onde = entidade ? ` (órgão ${entidade})` : "";
-    // O load NÃO abriu o planejamento: a recusa é dele (outro órgão, sem acesso) — nunca a operação. Vale tentar os outros órgãos.
-    if (!abriuNoLoad(load.j)) {
-      const msg = mensagemDoLoad(load.j);
-      return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}.`, amostra: a.amostra };
-    }
     if (!deNovo) {
       const e = await c.pedir("estado", null, 8000);
       if (e.ok && c.aplicarOperacao(e.operacao)) return emitirNaSessao(c, id, entidade, true, load);
@@ -244,12 +212,12 @@ async function emitirNaEntidade(c: ContextoEmissor, t: TarefaCenti, conferir: bo
     return { ...r, entidade: mapeada ?? atual ?? undefined };
   }
   const cfg = c.cfg();
-  if (r.ambiente || r.recusada || !cfg.descobrirEntidade || (t.orgao && semSaida.has(t.orgao))) return r;
+  if (r.ambiente || r.recusada || r.definitivo || !cfg.descobrirEntidade || (t.orgao && semSaida.has(t.orgao))) return r;
   const ja = mapeada ?? atual;
   const tentar = [...new Set([...Object.values(c.mapa()), ...candidatosEntidade(cfg.entidades, atual)])].filter((e) => e !== ja);
   for (const e of tentar) {
     const x = await emitirConferido(c, t, conferir, e, fase);
-    if (x.ambiente || x.recusada) return x;
+    if (x.ambiente || x.recusada || x.definitivo) return x;
     if (x.pdf) {
       if (t.orgao) c.definirEntidade(t.orgao, e);
       return { ...x, entidade: e };

@@ -1372,3 +1372,18 @@ describe("0187: conferências feitas com o registro de reserva zeradas (seções
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_pdf").get() as { n: number }).n, 0);
   });
 });
+
+describe("0188: conferências feitas sem o registro das seções 8–10 do próprio planejamento zeradas", () => {
+  it("zera as marcações e apaga os retratos e os PDFs", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0187_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO dfds (id, numero, conferencia_centi, conferencia_centi_em) VALUES (1, 'A', 'divergente', '2026-11-17')`);
+    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (1, '{}', '2026-11-17')`);
+    db.exec(`INSERT INTO conferencias_centi_pdf (dfd_id, pdf, em) VALUES (1, 'JVBER', '2026-11-17')`);
+    db.exec(readFileSync(join(DIR, "0188_conferencia_centi_modulo_tela.sql"), "utf8"));
+    assert.deepEqual({ ...(db.prepare("SELECT conferencia_centi AS c, conferencia_centi_em AS e FROM dfds").get() as object) }, { c: null, e: null });
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_pdf").get() as { n: number }).n, 0);
+  });
+});

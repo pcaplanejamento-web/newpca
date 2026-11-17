@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.19",
+    data: "2026-11-17",
+    titulo: "Conferência com a Centi: o planejamento aberto como na tela da Centi",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A automação abre cada planejamento na Centi do mesmo jeito que a tela dela e emite o DFD com o registro das seções 8 a 10 (equipe, secretário demandante, autorização) do PRÓPRIO planejamento — o PDF vem igual ao emitido pela tela. Sem esse registro, o DFD fica não conferido, com o motivo (nunca mais um registro de outro planejamento nem as seções em branco). As conferências anteriores foram zeradas — confira de novo; os DFDs que receberam dados de outro planejamento voltam como divergentes e a correção grava os certos.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.18",
     data: "2026-11-17",
     titulo: "Conferência com a Centi: seções 8 a 10 de cada planejamento",

@@ -1,4 +1,3 @@
-import { coerceFonteAssinatura, type FonteAssinatura } from "./assinatura-dfd-centi.ts";
 // Automação Centi (núcleo PURO, testado): monta o pedido do "Emitir DFD" da Centi (CM002 Planejamento → Operações →
 // Emitir DFD → Processar) a partir dos Ids de planejamento. A extensão do Chrome (extensao-centi/) envia o pedido com a
 // sessão da Centi já aberta no navegador; a aba Automação só lê e salva os PDFs — nada é gravado na Centi.
@@ -8,15 +7,6 @@ export type ConfigCenti = {
   valorReferencia: boolean;
   /** "Emitir data" do diálogo. */
   emitirData: boolean;
-  /** De ONDE ler a assinatura do DFD (IdPlanejamentoAssinaturaDFD) de CADA planejamento — aprendida da tela da Centi pela
-   * extensão. Nunca um valor fixo: o id de um planejamento na emissão de outro troca as seções 8–10 do DFD. */
-  fonteAssinatura: FonteAssinatura | null;
-  /** O registro das seções 8–10 da ÚLTIMA emissão feita pela tela — só por compatibilidade (lido e gravado): NUNCA vai na
-   * emissão de outro planejamento (sem o do próprio, o campo vai vazio). */
-  assinaturaReserva: string;
-  /** O registro das seções 8–10 que a PRÓPRIA TELA da Centi mandou ao emitir cada planejamento ({planejamento: id}) —
-   * o valor exato da Centi; a conferência só emite com ele (ou com o lido da Centi para o planejamento). */
-  paresAssinatura: Record<string, string>;
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;
   guid: string;
@@ -26,16 +16,13 @@ export type ConfigCenti = {
   entidades: string;
 };
 
-// A CENTI MUDOU a operação "Emitir DFD" (01/10/2026, noite): o "Processar" da própria tela passou a mandar ModuleKey
-// 120465 + outro Guid + assinatura 163; o pedido antigo (120464) passou a voltar "Usuário sem permissão!".
+// A operação "Emitir DFD" que a TELA da Centi manda hoje (medida no DevTools em 17/11/2026: o "Processar" do planejamento
+// aberto pela CM002). A Centi já a trocou antes (120464 → 120465 → 120477); a extensão acompanha a tela sozinha.
 export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   valorReferencia: true,
   emitirData: false,
-  fonteAssinatura: null,
-  assinaturaReserva: "163",
-  paresAssinatura: {},
-  moduleKey: 120465,
-  guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef",
+  moduleKey: 120477,
+  guid: "1449d1d1-85f8-8080-7f63-df246a9e7f80",
   descobrirEntidade: true,
   entidades: "",
 };
@@ -60,37 +47,18 @@ export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A operação "Emitir DFD" que a extensão PEGOU da própria tela da Centi (o Processar). */
-export type OperacaoCenti = { moduleKey: number; guid: string; fonte?: FonteAssinatura | null; reserva?: string; pares?: Record<string, string>; em?: string };
+export type OperacaoCenti = { moduleKey: number; guid: string; em?: string };
 
-/** Até quantos pares planejamento → registro das seções 8–10 ficam guardados. */
-export const MAX_PARES_ASSINATURA = 3000;
-/** Qualquer JSON → os pares válidos {planejamento (dígitos): id (dígitos)}, até o teto (os últimos ficam). */
-export function lerParesAssinatura(v: unknown): Record<string, string> {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
-  const ok = Object.entries(v as Record<string, unknown>)
-    .map(([k, x]) => [String(k).replace(/^0+(?=\d)/, ""), String(x ?? "").trim()] as const)
-    .filter(([k, x]) => /^\d{1,12}$/.test(k) && /^\d{1,12}$/.test(x) && Number(x) > 0);
-  return Object.fromEntries(ok.slice(-MAX_PARES_ASSINATURA));
-}
-
-/** O ajuste da configuração pela operação da tela: só o que MUDOU (ModuleKey, Guid, modelo de assinatura); nada a mudar
- * ou operação inválida → null. A tela da Centi é a referência — quando ela muda a operação, o sistema acompanha. */
+/** O ajuste da configuração pela operação da tela: só o que MUDOU (ModuleKey, Guid); nada a mudar ou operação inválida →
+ * null. A tela da Centi é a referência — quando ela muda a operação, o sistema acompanha. */
 export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigCenti> | null {
   const o = (op && typeof op === "object" ? op : {}) as Partial<Record<keyof OperacaoCenti, unknown>>;
   const mk = Number(o.moduleKey);
   const guid = typeof o.guid === "string" ? o.guid.trim().toLowerCase() : "";
-  const fonte = coerceFonteAssinatura(o.fonte);
+  if (!Number.isInteger(mk) || mk <= 0 || !GUID.test(guid) || operacaoAntiga(mk, guid)) return null;
   const p: Partial<ConfigCenti> = {};
-  // Os pares da TELA (planejamento → registro): somados aos guardados — valem mesmo sem a operação.
-  const pares = lerParesAssinatura(o.pares);
-  if (Object.entries(pares).some(([k, x]) => cfg.paresAssinatura[k] !== x)) p.paresAssinatura = lerParesAssinatura({ ...cfg.paresAssinatura, ...pares });
-  if (!Number.isInteger(mk) || mk <= 0 || !GUID.test(guid)) return Object.keys(p).length ? p : null;
   if (mk !== cfg.moduleKey) p.moduleKey = mk;
   if (guid !== cfg.guid) p.guid = guid;
-  // A fonte só entra quando veio (uma operação sem ela nunca apaga a aprendida).
-  if (fonte && JSON.stringify(fonte) !== JSON.stringify(cfg.fonteAssinatura)) p.fonteAssinatura = fonte;
-  const reserva = typeof o.reserva === "string" || typeof o.reserva === "number" ? String(o.reserva).trim() : "";
-  if (/^\d{1,12}$/.test(reserva) && reserva !== cfg.assinaturaReserva) p.assinaturaReserva = reserva;
   return Object.keys(p).length ? p : null;
 }
 
@@ -145,24 +113,25 @@ export const pararPorRecusa = (r: RecusasCenti) => r.sucessos === 0 && r.seguida
 export const mensagemRecusaGeral = (r: RecusasCenti) =>
   `A Centi recusou o Emitir DFD em ${r.seguidas.length} planejamentos seguidos (${r.seguidas.slice(0, 5).join(", ")}) e nenhum foi emitido (“Usuário sem permissão!”) — a operação deve ter mudado. Emita UM DFD pela própria Centi com a extensão instalada: ela pega a operação nova sozinha. Depois, execute de novo.`;
 
-/** A operação "Emitir DFD" de ANTES da mudança da Centi (01/10/2026) — a guardada no aparelho é trocada pela nova. */
-export const OPERACAO_ANTIGA = { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5" };
+/** As operações "Emitir DFD" que a Centi já DESLIGOU — a guardada (no aparelho ou no servidor) vira a atual. */
+export const OPERACOES_ANTIGAS = [
+  { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5" },
+  { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef" },
+];
+export const operacaoAntiga = (moduleKey: unknown, guid: unknown) =>
+  OPERACOES_ANTIGAS.some((x) => Number(moduleKey) === x.moduleKey && String(guid ?? "").trim().toLowerCase() === x.guid);
 
 /** Normaliza a configuração guardada (qualquer JSON → válida). */
 export function lerConfigCenti(v: unknown): ConfigCenti {
   const o = (v && typeof v === "object" ? v : {}) as Partial<Record<keyof ConfigCenti, unknown>>;
   const p = CONFIG_CENTI_PADRAO;
-  // A operação ANTIGA guardada no aparelho (ModuleKey 120464 + o Guid dela, assinatura 13 — os padrões de antes da mudança
-  // da Centi) vira a NOVA: senão a configuração salva seguia mandando o pedido que a Centi passou a recusar.
-  const antiga = Number(o.moduleKey) === OPERACAO_ANTIGA.moduleKey && String(o.guid ?? "").toLowerCase() === OPERACAO_ANTIGA.guid;
+  // Uma operação ANTIGA guardada no aparelho vira a ATUAL: senão a configuração salva seguia mandando o pedido que a Centi
+  // passou a recusar.
+  const antiga = operacaoAntiga(o.moduleKey, o.guid);
   const mk = antiga ? Number.NaN : Number(o.moduleKey);
   return {
     valorReferencia: typeof o.valorReferencia === "boolean" ? o.valorReferencia : p.valorReferencia,
     emitirData: typeof o.emitirData === "boolean" ? o.emitirData : p.emitirData,
-    fonteAssinatura: coerceFonteAssinatura(o.fonteAssinatura),
-    // A reserva guardada (ou o antigo "modelo de assinatura" fixo do aparelho).
-    assinaturaReserva: [o.assinaturaReserva, (o as Record<string, unknown>).assinaturaDfd].map((x) => String(x ?? "").trim()).find((x) => /^\d{1,12}$/.test(x)) ?? p.assinaturaReserva,
-    paresAssinatura: lerParesAssinatura(o.paresAssinatura),
     moduleKey: Number.isInteger(mk) && mk > 0 ? mk : p.moduleKey,
     guid: !antiga && typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
     descobrirEntidade: typeof o.descobrirEntidade === "boolean" ? o.descobrirEntidade : p.descobrirEntidade,
@@ -701,7 +670,8 @@ export function formatoEntidade(valor: string, aberta: string | null): string {
   return aberta && /^\d{1,4}$/.test(aberta) ? n.padStart(aberta.length, "0") : v;
 }
 
-/** O módulo do PLANEJAMENTO na Centi (CM002): a tela carrega o planejamento ANTES do Emitir DFD — sem esse load a Centi
- * recusa a operação ("Usuário sem permissão!"). Gravado pelo gravador de ações (GET restauth/load?entity=101026&key=). */
-export const MODULO_PLANEJAMENTO = 101026;
+/** O módulo do PLANEJAMENTO na Centi (CM002) — o MESMO com que a tela abre o planejamento antes do Emitir DFD (medido no
+ * DevTools em 17/11/2026: GET restauth/load?entity=101045&key=<planejamento>). A resposta traz o registro das seções 8–10
+ * (`IdPlanejamentoAssinaturaDFD`) que a emissão manda; o módulo antigo (101026) não trazia. */
+export const MODULO_PLANEJAMENTO = 101045;
 export const caminhoLoadPlanejamento = (id: string) => `restauth/load?entity=${MODULO_PLANEJAMENTO}&key=${encodeURIComponent(String(id).replace(/\D/g, ""))}`;

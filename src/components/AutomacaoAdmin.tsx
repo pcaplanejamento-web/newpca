@@ -22,7 +22,6 @@ import { Dropdown } from "./Dropdown";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { BotaoCopiar } from "./BotaoCopiar";
 import { IconDownload, IconKey, IconPlug, IconPlus } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
@@ -60,8 +59,6 @@ type Resposta = {
   /** O andamento do último lote, como a extensão o guardou (sobrevive ao F5 desta tela). */
   atividade?: { estado: string; titulo: string; passo: string; atualizado: number } | null;
   loteId?: string;
-  /** O que a extensão já aprendeu da tela (o diagnóstico das seções 8–10 do DFD, sem valores). */
-  aprendido?: { assinaturaDiag?: unknown } | null;
 };
 type Ext = { versao: string; copias: number } | null;
 /** O contexto dos BANNERS da Mesa (o protocolo aberto pela linha): o mesmo da Mesa (`contextoBanners`). */
@@ -148,11 +145,11 @@ const baixarExtensao = () => {
   window.location.href = URL_EXTENSAO;
 };
 
-/** A operação Emitir DFD (ModuleKey, Guid e a fonte da assinatura) como corpo + chave comparável; inválida = null. */
-function chaveOp(op: unknown): { chave: string; corpo: { moduleKey: number; guid: string; fonte?: unknown } } | null {
+/** A operação Emitir DFD (ModuleKey e Guid) como corpo + chave comparável; inválida = null. */
+function chaveOp(op: unknown): { chave: string; corpo: { moduleKey: number; guid: string } } | null {
   const a = ajusteDaOperacao({ ...CONFIG_CENTI_PADRAO, moduleKey: 0, guid: "" }, op);
   if (!a?.moduleKey || !a.guid) return null;
-  const corpo = { moduleKey: a.moduleKey, guid: a.guid, ...(a.fonteAssinatura ? { fonte: a.fonteAssinatura } : {}) };
+  const corpo = { moduleKey: a.moduleKey, guid: a.guid };
   return { chave: JSON.stringify(corpo), corpo };
 }
 function Grupo({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -234,10 +231,7 @@ function Ajustes({
   gravando,
   onGravador,
   onConfigurarLogin,
-  diagAssinatura,
 }: {
-  /** O último diagnóstico da extensão sobre as seções 8–10 do DFD (null = nenhuma emissão vista pela tela). */
-  diagAssinatura: unknown;
   /** Abre o login da extensão (o dropdown do ícone). */
   onConfigurarLogin: () => void;
   /** O gravador de receitas na aba da Centi (null = desconhecido). */
@@ -321,16 +315,8 @@ function Ajustes({
       </Grupo>
       <Grupo titulo="Avançado">
         <p className="text-xs text-muted">
-          {cfg.fonteAssinatura
-            ? "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): lidas da Centi para cada planejamento."
-            : "Seções 8 a 10 do DFD (o registro que a Centi chama de assinatura): quando o do próprio planejamento não é achado, o DFD é analisado sem elas (não são comparadas nem corrigidas) e o PDF não é baixado nem anexado. Emita UM DFD pela tela da Centi e copie o diagnóstico abaixo para resolver."}
+          Seções 8 a 10 do DFD: o registro de cada planejamento é lido do próprio planejamento aberto na Centi, como a tela dela faz.
         </p>
-        {diagAssinatura != null && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] text-muted">Diagnóstico da última emissão pela tela da Centi</span>
-            <BotaoCopiar texto={JSON.stringify(diagAssinatura, null, 1)} rotulo="Copiar diagnóstico" titulo="Só caminhos e chaves — sem dados da Centi" />
-          </div>
-        )}
         <TextField label="ModuleKey" value={String(cfg.moduleKey)} inputMode="numeric" onChange={(e) => onCfg({ moduleKey: Number(e.target.value) })} />
         <TextField label="Guid da operação" value={cfg.guid} onChange={(e) => onCfg({ guid: e.target.value })} />
       </Grupo>
@@ -401,15 +387,7 @@ export function AutomacaoAdmin({
     const a = ajusteDaOperacao(cfgRef.current, op);
     if (!a) return false;
     mudar(a);
-    // Só a reserva ou os pares das seções 8–10 mudaram: nada a avisar.
-    if (a.moduleKey === undefined && a.guid === undefined && !a.fonteAssinatura) return true;
-    if (!doServidor)
-      toast.success(
-        a.fonteAssinatura && a.moduleKey === undefined && a.guid === undefined
-          ? "Aprendido de onde vem a assinatura do DFD de cada planejamento na Centi — a emissão já usa a de cada um."
-          : `A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`,
-        10_000,
-      );
+    if (!doServidor) toast.success(`A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`, 10_000);
     return true;
   };
   const aplicarRef = useRef(aplicarOperacao);
@@ -664,7 +642,6 @@ export function AutomacaoAdmin({
             fixas={cadastradas}
             onEntidade={definirEntidade}
             aberta={logado?.entidade ?? null}
-            diagAssinatura={logado?.aprendido?.assinaturaDiag ?? null}
             gravacao={gravacao}
             onGravacao={(v) => void mudarGravacao(v)}
             onHistorico={() => setHistorico(true)}

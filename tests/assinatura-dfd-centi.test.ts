@@ -1,168 +1,130 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import vm from "node:vm";
-import { assinaturaDoLoad, assinaturasDoLoad, coerceFonteAssinatura, escolherAssinatura, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
-import { assinaturaDoPlanejamento } from "../src/lib/automacao-dfds-motor.ts";
-import { ajusteDaOperacao, lerConfigCenti, pedidoEmitirDfd } from "../src/lib/automacao-centi-core.ts";
+import { assinaturaDoLoad, PARA_TUDO } from "../src/lib/assinatura-dfd-centi.ts";
+import { ajusteDaOperacao, CONFIG_CENTI_PADRAO, caminhoLoadPlanejamento, lerConfigCenti, pedidoEmitirDfd } from "../src/lib/automacao-centi-core.ts";
+import { emitirUm } from "../src/lib/automacao-dfds-motor.ts";
 
-// O ERRO de 16/11/2026: a automação emitia TODO DFD com o IdPlanejamentoAssinaturaDFD visto por último na tela da Centi —
-// as seções 8–10 (equipe, secretário, autorização) saíam do planejamento de outro DFD. Agora a extensão aprende ONDE a
-// tela achou a assinatura e o sistema lê a de CADA planejamento.
+// O ERRO das seções 8–10 iguais/em branco (16–17/11/2026): a automação abria o planejamento por OUTRO módulo da Centi
+// (101026), cuja resposta não traz o registro das seções 8–10, e mandava um id fixo (163) ou vazio na emissão. A TELA da
+// Centi (medida no DevTools) abre o planejamento com load?entity=101045 e manda, no "Processar", o
+// IdPlanejamentoAssinaturaDFD que vem NESSA resposta — a automação faz igual.
 
-function pecas() {
-  const ctx: Record<string, unknown> = { URL };
-  vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
-  const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
-  const A = ctx[`__pcaCentiAnexo_p${p}`] as { fonteDaAssinatura: (r: unknown, plan: string, s: string) => unknown };
-  return { fonteDaAssinatura: (r: unknown, plan: string, s: string) => JSON.parse(JSON.stringify(A.fonteDaAssinatura(r, plan, s) ?? null)) };
-}
-
-// O load do planejamento como a Centi o devolve (padrão Fields), com as assinaturas DELE numa lista.
-const loadPlan = (plan: number, assinaturas: { id: number; padrao?: boolean }[]) => ({
+// A ESTRUTURA real da resposta `restauth/load?entity=101045&key=131` (sem os dados pessoais): o campo é uma referência.
+const ref = (id: number, extra: unknown[] = []) => ({ $type: "ObjectDataJSON", Type: 0, State: 10, ModuleKey: 0, Guid: null, Fields: [{ Key: "Id", Value: id }, ...extra] });
+const loadDaTela = (plan: number, assinatura: number | null) => ({
+  $type: "ORM.ObjectsJSON.Returns.LoadReturn, ORM",
   Entity: {
-    ModuleKey: 101026,
+    Type: 0,
+    State: 3,
+    ModuleKey: 101045,
     Fields: [
-      { Key: "Id", Value: plan },
-      { Key: "Finalidade", Value: `PLANEJAMENTO ${plan}` },
-      {
-        Key: "AssinaturasDFD",
-        Value: assinaturas.map((a) => ({ Fields: [{ Key: "Id", Value: a.id }, { Key: "Padrao", Value: a.padrao === true }, { Key: "Secretario", Value: "FULANO" }] })),
-      },
+      { Key: "DataInicial", Value: "01/01/2027" },
+      { Key: "IdCentroCusto", Value: ref(75, [{ Key: "Display", Value: "PM RV, SECRETARIA" }]) },
+      { Key: "NumeroDFD", Value: "92" },
+      { Key: "IdPessoaResponsavelDemanda", Value: ref(47888) },
+      ...(assinatura == null
+        ? []
+        : [
+            {
+              Key: "IdPlanejamentoAssinaturaDFD",
+              Value: ref(assinatura, [
+                { Key: "Display", Value: "SECRETARIA" },
+                { Key: "Object", Value: { ModuleKey: 102706, Fields: [{ Key: "Modelo", Value: "SECRETARIA" }, { Key: "IdGestaoAutoridadeSecretarioDemandante", Value: ref(532) }, { Key: "Id", Value: String(assinatura) }] } },
+              ]),
+            },
+          ]),
+      { Key: "Produtos", Value: [{ Fields: [{ Key: "IdComprasPlanejamento", Value: ref(plan) }, { Key: "Id", Value: "25390" }] }] },
+      { Key: "Id", Value: String(plan) },
     ],
   },
+  Message: null,
 });
 
-test("aprende do LOAD do planejamento: a lista das assinaturas dele (o nº trocado por {id})", () => {
-  const { fonteDaAssinatura } = pecas();
-  const respostas = [
-    { caminho: "restauth/list?entity=900", metodo: "GET", corpo: null, j: { Lista: [{ Id: 163 }] } }, // não cita o planejamento
-    { caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j: loadPlan(131, [{ id: 163 }]) },
-  ];
-  const f = fonteDaAssinatura(respostas, "131", "163");
-  assert.deepEqual(f, { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", corpo: null, lista: ["Entity", "@AssinaturasDFD"], chave: "@Id" });
-  // O sistema aceita a fonte e lê, no load de OUTRO planejamento, a assinatura DELE (nunca a 163).
-  const fonte = coerceFonteAssinatura(f);
-  assert.ok(fonte);
-  assert.deepEqual(pedidoDaFonte(fonte, "92"), { metodo: "GET", caminho: "restauth/load?entity=101026&key=92", corpo: null });
-  assert.deepEqual(escolherAssinatura(loadPlan(92, [{ id: 871 }]), fonte, "92"), { id: "871" });
+test("o registro das seções 8–10 vem do campo IdPlanejamentoAssinaturaDFD do load do planejamento (como a tela)", () => {
+  assert.deepEqual(assinaturaDoLoad(loadDaTela(131, 114), "131"), { id: "114" });
+  assert.deepEqual(assinaturaDoLoad(loadDaTela(1078, 163), "1078"), { id: "163" });
+  // O número direto (sem a referência) também vale.
+  assert.deepEqual(assinaturaDoLoad({ Entity: { Fields: [{ Key: "IdPlanejamentoAssinaturaDFD", Value: "0114" }] } }, "131"), { id: "114" });
+  // Sem o campo, com o campo zerado ou sem a Entity: erro — o DFD não é emitido (nunca vazio, nunca um id de outro).
+  for (const j of [loadDaTela(131, null), loadDaTela(131, 0), { Entity: null, Message: "x" }, null]) {
+    const r = assinaturaDoLoad(j, "131") as { erro: string };
+    assert.match(r.erro, /registro das seções 8 a 10 do DFD/);
+    assert.ok(!PARA_TUDO.test(r.erro), "a falta do registro de UM planejamento não para a execução");
+  }
+  // Nunca outro campo ou lista com "assinatura" no nome (assinatura digital, listas).
+  const outros = { Entity: { Fields: [{ Key: "IdAssinaturaDigital", Value: 9 }, { Key: "AssinaturasDFD", Value: [{ Id: 5 }] }] } };
+  assert.ok("erro" in assinaturaDoLoad(outros, "131"));
 });
 
-test("aprende da CONSULTA da janela (POST com o planejamento no corpo) e preenche para cada planejamento", () => {
-  const { fonteDaAssinatura } = pecas();
-  const corpo = { Page: 1, ItensPerPage: 50, Filtro: { IdComprasPlanejamento: 131 } };
-  const respostas = [{ caminho: "restauth/postdata", metodo: "POST", corpo, j: { Data: [{ Id: 163, Descricao: "SMPG" }] } }];
-  const f = fonteDaAssinatura(respostas, "131", "163");
-  assert.deepEqual(f, { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, ItensPerPage: 50, Filtro: { IdComprasPlanejamento: "{id:n}" } }, lista: ["Data"], chave: "Id" });
-  const fonte = coerceFonteAssinatura(f);
-  assert.ok(fonte);
-  assert.deepEqual(pedidoDaFonte(fonte, "1078")?.corpo, { Page: 1, ItensPerPage: 50, Filtro: { IdComprasPlanejamento: 1078 } });
-});
-
-test("nunca chuta: resposta que não cita o planejamento, id em dois lugares ou inexistente = nada aprendido", () => {
-  const { fonteDaAssinatura } = pecas();
-  assert.equal(fonteDaAssinatura([{ caminho: "restauth/list?entity=900", metodo: "GET", corpo: null, j: { Lista: [{ Id: 163 }] } }], "131", "163"), null);
-  const dois = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "ListaA", Value: [{ Id: 163 }] }, { Key: "ListaB", Value: [{ Id: 163 }] }] } };
-  assert.equal(fonteDaAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j: dois }], "131", "163"), null);
-  assert.equal(fonteDaAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j: loadPlan(131, [{ id: 7 }]) }], "131", "163"), null);
-  // Escrita nunca é modelo (só consulta de leitura).
-  assert.equal(fonteDaAssinatura([{ caminho: "restauth/save", metodo: "POST", corpo: { Id: 131 }, j: { Lista: [{ Id: 163 }] } }], "131", "163"), null);
-});
-
-test("várias assinaturas: só com a MARCA da escolhida; senão o DFD não é emitido", () => {
-  const { fonteDaAssinatura } = pecas();
-  const f = coerceFonteAssinatura(
-    fonteDaAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j: loadPlan(131, [{ id: 163, padrao: true }, { id: 164 }]) }], "131", "163"),
-  );
-  assert.equal(f?.marca, "@Padrao");
-  assert.deepEqual(escolherAssinatura(loadPlan(92, [{ id: 5 }, { id: 6, padrao: true }]), f as never, "92"), { id: "6" });
-  const semMarca = { ...(f as object), marca: undefined } as never;
-  assert.match((escolherAssinatura(loadPlan(92, [{ id: 5 }, { id: 6 }]), semMarca, "92") as { erro: string }).erro, /2 assinaturas/);
-  assert.match((escolherAssinatura(loadPlan(92, []), f as never, "92") as { erro: string }).erro, /não tem assinatura/);
-});
-
-test("emissão: sem a fonte aprendida PARA tudo; com ela, usa o load já feito ou a consulta, no planejamento pedido", async () => {
-  const pedidos: unknown[] = [];
+/** A extensão falsa: o load (o módulo da tela) e o Emitir DFD devolvendo um PDF. */
+function centiFalsa(loads: Record<string, unknown>) {
+  const pedidos: { acao: string; dados: { caminho?: string; corpo?: { Params?: { Key: string; Value: string }[] } } }[] = [];
   const pedir = async (acao: string, dados: unknown) => {
-    pedidos.push([acao, dados]);
-    return { ok: true, j: { Data: [{ Id: 555 }] } };
+    pedidos.push({ acao, dados: dados as never });
+    const d = dados as { caminho: string };
+    if (acao === "ler") return { ok: true, j: loads[d.caminho] ?? { Entity: null, Message: null } };
+    if (acao === "pedir") return { ok: true, b64: Buffer.from("%PDF-1.4 teste").toString("base64"), status: 200 };
+    return { ok: true };
   };
-  // Sem a lista no load nem a fonte: o campo vai VAZIO (a Centi usa o do próprio planejamento) — nunca a reserva.
-  const sem = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaDfd: "163" }) }, "131", "1", { j: { Entity: { Fields: [{ Key: "Itens", Value: [{ Id: 1 }] }] } } })) as { id: string; motivo?: string };
-  assert.equal(sem.id, "");
-  assert.match(sem.motivo ?? "", /listas lidas: Entity\.Itens/);
-  assert.ok(!PARA_TUDO.test(sem.motivo ?? ""), "a falta do registro não para a execução");
-  // Sem fonte, mas com a lista no load do PRÓPRIO planejamento: lê dali.
-  assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti(null) }, "131", "1", { j: loadPlan(131, [{ id: 77 }]) }), { id: "77" });
-  const peloLoad = lerConfigCenti({ fonteAssinatura: { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", lista: ["Entity", "@AssinaturasDFD"], chave: "@Id" } });
-  assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => peloLoad }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) }), { id: "42" });
-  assert.equal(pedidos.length, 0, "o load já feito serve — nenhum pedido a mais");
-  const pelaConsulta = lerConfigCenti({ fonteAssinatura: { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: "{id:n}" } }, lista: ["Data"], chave: "Id" } });
-  assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => pelaConsulta }, "1078", "3", { j: {} }), { id: "555" });
-  assert.deepEqual(pedidos[0], ["ler", { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: 1078 } }, entidade: "3" }]);
+  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {} };
+  return { c, pedidos };
+}
+const param = (p: { Params?: { Key: string; Value: string }[] } | undefined, k: string) => p?.Params?.find((x) => x.Key === k)?.Value;
+
+test("emissão: abre o planejamento pelo módulo da tela (101045) e manda o registro DELE — cada planejamento o seu", async () => {
+  assert.equal(caminhoLoadPlanejamento("131"), "restauth/load?entity=101045&key=131");
+  const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, 114), [caminhoLoadPlanejamento("1078")]: loadDaTela(1078, 163) });
+  const a = await emitirUm(c, "131");
+  const b = await emitirUm(c, "1078");
+  assert.ok(a.pdf && b.pdf);
+  const ops = pedidos.filter((p) => p.acao === "pedir").map((p) => p.dados.corpo);
+  assert.deepEqual(
+    ops.map((o) => [param(o, "IdComprasPlanejamento"), param(o, "IdPlanejamentoAssinaturaDFD")]),
+    [
+      ["131", "114"],
+      ["1078", "163"],
+    ],
+  );
+  // A operação que a tela manda hoje.
+  assert.equal((ops[0] as unknown as { ModuleKey: number }).ModuleKey, 120477);
 });
 
-test("a extensão guarda as respostas da TELA e aprende a fonte no Processar; o estado a leva ao sistema", () => {
-  const main = readFileSync("extensao-centi/centi-main.js", "utf8");
-  assert.match(main, /respostasTela\.unshift\(\{ caminho: c\.caminho, metodo: m, corpo: b, j \}\)/);
-  assert.match(main, /pecas\.fonteDaAssinatura\(respostasTela, op\.planejamento, op\.assinatura\)/);
-  assert.match(main, /operacao: operacaoComFonte\(\)/);
-  // O id em si nunca vai ao sistema: só a fonte (o "estado" tira assinatura e planejamento).
-  assert.match(main, /const \{ assinatura: _a, planejamento: _p, \.\.\.op \} = operacaoTela;/);
-  // Só a RESERVA (o id da última emissão pela tela) vai junto — o sistema marca as seções 8–10 como não conferidas.
-  assert.match(main, /reserva: operacaoTela\.assinatura \?\? reserva/);
+test("emissão: sem o registro no planejamento, NADA é emitido (erro só dele, sem tentar outros órgãos); sem abrir, a mensagem da Centi", async () => {
+  const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, null) });
+  const r = await emitirUm(c, "131");
+  assert.equal(r.pdf, undefined);
+  assert.equal(r.definitivo, true);
+  assert.match(r.erro ?? "", /seções 8 a 10/);
+  assert.equal(pedidos.filter((p) => p.acao === "pedir").length, 0, "nenhum Emitir DFD sem o registro");
+  const n = centiFalsa({ [caminhoLoadPlanejamento("5")]: { Entity: null, Message: "Registro não encontrado" } });
+  const x = await emitirUm(n.c, "5", "3");
+  assert.match(x.erro ?? "", /Não consegui abrir o planejamento 5 na Centi \(órgão 3\) — Registro não encontrado/);
+  assert.equal(x.definitivo, undefined, "outro órgão pode abrir");
+  assert.equal(n.pedidos.filter((p) => p.acao === "pedir").length, 0);
 });
 
-test("seções 8–10 pelo load do PRÓPRIO planejamento: uma = ela; várias = a marcada; nunca chuta", () => {
-  assert.deepEqual(assinaturaDoLoad(loadPlan(131, [{ id: 9 }]), "131"), { id: "9" });
-  assert.deepEqual(assinaturaDoLoad(loadPlan(131, [{ id: 9 }, { id: 10, padrao: true }]), "131"), { id: "10" });
-  assert.match((assinaturaDoLoad(loadPlan(131, [{ id: 9 }, { id: 10 }]), "131") as { erro: string }).erro, /2 registros/);
-  assert.match((assinaturaDoLoad({ Entity: { Fields: [{ Key: "Id", Value: 131 }] } }, "131") as { erro: string }).erro, /Não achei/);
-  // Lista em chave comum (fora do padrão Fields), id em "Id".
-  assert.deepEqual(assinaturaDoLoad({ Entity: { PlanejamentoAssinaturas: [{ Id: 5 }] } }, "131"), { id: "5" });
-  // Duas listas com "assinatura": vale a do DFD; sem ela, ambíguo.
-  const duas = { Entity: { AssinaturasDFD: [{ Id: 5 }], AssinaturasEdital: [{ Id: 6 }] } };
-  assert.deepEqual(assinaturaDoLoad(duas, "1"), { id: "5" });
-  assert.ok("listas" in assinaturasDoLoad({ Entity: { AssinaturasA: [{ Id: 5 }], AssinaturasB: [{ Id: 6 }] } }));
-});
-
-test("com a fonte aprendida, o id lido tem de estar na lista do load do planejamento", async () => {
-  const pedir = async () => ({ ok: true, j: { Data: [{ Id: 555 }] } });
-  const cfg = lerConfigCenti({ fonteAssinatura: { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: "{id:n}" } }, lista: ["Data"], chave: "Id" } });
-  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { id: string; motivo?: string };
-  assert.equal(r.id, "", "o id de fora do planejamento não vai — o campo vai vazio");
-  assert.match(r.motivo ?? "", /não está no planejamento 131/);
-});
-
-test("extensão: chaves de id mais amplas e o diagnóstico sem valores", () => {
-  const ctx: Record<string, unknown> = { URL };
-  vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
-  const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
-  const A = ctx[`__pcaCentiAnexo_p${p}`] as {
-    fonteDaAssinatura: (r: unknown, plan: string, s: string) => unknown;
-    diagnosticoAssinatura: (r: unknown, plan: string, s: string) => { respostas: number; lista: { caminho: string; aceito: boolean; cita: boolean; onde: string[] }[] };
-  };
-  const j = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "Registros", Value: [{ IdAssinatura: 163, Nome: "X" }] }] } };
-  const f = JSON.parse(JSON.stringify(A.fonteDaAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j }], "131", "163")));
-  assert.equal(f?.chave, "IdAssinatura");
-  const d = A.diagnosticoAssinatura([{ caminho: "restauth/load?entity=101026&key=131", metodo: "GET", corpo: null, j }, { caminho: "restauth/save", metodo: "POST", corpo: {}, j: {} }], "131", "163");
-  assert.equal(d.respostas, 2);
-  assert.equal(d.lista[0].aceito, true);
-  assert.equal(d.lista[0].cita, true);
-  assert.deepEqual(Array.from(d.lista[0].onde), ["Entity.@Registros.*.IdAssinatura"]);
-  assert.equal(d.lista[1].aceito, false);
-  assert.ok(!JSON.stringify(d).includes("\"X\""), "nenhum valor da Centi no diagnóstico");
-});
-
-test("o registro das seções 8–10 num CAMPO do planejamento (não a assinatura digital)", () => {
-  const load = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "IdAssinaturaDigital", Value: 9 }, { Key: "IdPlanejamentoAssinaturaDFD", Value: 480 }] } };
-  assert.deepEqual(assinaturaDoLoad(load, "131"), { id: "480" });
-  const ref = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "PlanejamentoAssinatura", Value: { Id: 77, Descricao: "X" } }] } };
-  assert.deepEqual(assinaturaDoLoad(ref, "131"), { id: "77" });
-  const so = { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "IdAssinaturaDigital", Value: 9 }, { Key: "EquipePlanejamento", Value: "x" }] } };
-  const e = (assinaturaDoLoad(so, "131") as { erro: string }).erro;
-  assert.match(e, /campos: .*IdAssinaturaDigital.*EquipePlanejamento/);
-  assert.ok(!e.includes("“x”") && !/\b9\b/.test(e), "só nomes, nunca valores");
+test("operação: a atual da tela (120477); as que a Centi desligou viram a atual; a tela segue mandando", () => {
+  assert.equal(CONFIG_CENTI_PADRAO.moduleKey, 120477);
+  assert.equal(CONFIG_CENTI_PADRAO.guid, "1449d1d1-85f8-8080-7f63-df246a9e7f80");
+  for (const velha of [
+    { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5" },
+    { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef" },
+  ]) {
+    const c = lerConfigCenti({ ...velha, valorReferencia: false });
+    assert.equal(c.moduleKey, 120477);
+    assert.equal(c.guid, CONFIG_CENTI_PADRAO.guid);
+    assert.equal(c.valorReferencia, false);
+    assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, velha), null, "uma operação desligada nunca volta");
+  }
+  assert.deepEqual(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: 120480, guid: "AAAAAAAA-85f8-8080-7f63-df246a9e7f80" }), {
+    moduleKey: 120480,
+    guid: "aaaaaaaa-85f8-8080-7f63-df246a9e7f80",
+  });
+  // A configuração antiga (fonte/pares/reserva) é descartada.
+  const c = lerConfigCenti({ fonteAssinatura: { metodo: "GET" }, paresAssinatura: { 131: "1" }, assinaturaReserva: "163" }) as Record<string, unknown>;
+  assert.ok(!("fonteAssinatura" in c) && !("paresAssinatura" in c) && !("assinaturaReserva" in c));
+  const corpo = pedidoEmitirDfd("131", lerConfigCenti(null), new Date(2026, 10, 17), "114");
+  assert.equal(param(corpo, "IdPlanejamentoAssinaturaDFD"), "114");
 });
 
 test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgãos traz OS DOIS DFDs (nunca o último por cima)", async () => {
@@ -178,37 +140,4 @@ test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgã
   const r = await def.executar({ entrada: [{}] }, { planejamento: "131" }, ctx);
   assert.deepEqual(r.saida.map((x) => x.id).sort((a, b) => a - b), [92, 500]);
   assert.equal(r.naoEncontrados.length, 0);
-});
-
-test("emissão: o par visto na tela da Centi para o planejamento vale primeiro; sem ele, o campo vazio — nunca a reserva", async () => {
-  const sem = { j: { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "Itens", Value: [{ Id: 1 }] }] } } };
-  const pedir = async () => ({ ok: true });
-  const comPar = lerConfigCenti({ paresAssinatura: { "131": "480", "92": "7" } });
-  assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => comPar }, "131", "1", sem), { id: "480" });
-  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaReserva: "163" }) }, "131", "1", sem)) as { id: string };
-  assert.equal(r.id, "");
-  // O mesmo para OUTROS planejamentos: nunca um id comum a todos (o erro das seções 8–10 iguais em todos os DFDs).
-  const outro = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaReserva: "163" }) }, "92", "1", sem)) as { id: string };
-  assert.equal(outro.id, "");
-  const corpo = pedidoEmitirDfd("131", lerConfigCenti(null), new Date(2026, 10, 17), r.id);
-  assert.equal(Object.fromEntries(corpo.Params.map((x) => [x.Key, x.Value])).IdPlanejamentoAssinaturaDFD, "");
-});
-
-test("load: só a lista dos registros DO DFD do planejamento — nunca qualquer lista com “assinatura” no nome", () => {
-  assert.ok("listas" in assinaturasDoLoad({ Entity: { Assinaturas: [{ Id: 5 }] } }), "assinaturas digitais/outras não valem");
-  assert.deepEqual(assinaturaDoLoad({ Entity: { PlanejamentoAssinaturaDFD: [{ Id: 5 }] } }, "131"), { id: "5" });
-  // Várias sem a marca "padrão" da Centi: não escolhe por um sim/não qualquer.
-  const duas = { Entity: { AssinaturasDFD: [{ Id: 5, Ativo: true }, { Id: 6, Ativo: false }] } };
-  assert.match((assinaturaDoLoad(duas, "131") as { erro: string }).erro, /2 registros/);
-});
-
-test("pares da tela: ajusteDaOperacao soma os pares (também sem a operação) e lerConfigCenti os normaliza", () => {
-  const cfg = lerConfigCenti({ paresAssinatura: { "092": "7", x: "1", "5": "abc" } });
-  assert.deepEqual(cfg.paresAssinatura, { "92": "7" });
-  assert.deepEqual(ajusteDaOperacao(cfg, { pares: { "131": "480" } }), { paresAssinatura: { "92": "7", "131": "480" } });
-  assert.equal(ajusteDaOperacao(cfg, { pares: { "92": "7" } }), null, "nada novo = nada muda");
-  const main = readFileSync("extensao-centi/centi-main.js", "utf8");
-  assert.match(main, /const PARES = "__pcaParesAssinatura_v1";/);
-  assert.match(main, /pares\[k\] = String\(op\.assinatura\);/);
-  assert.match(main, /reserva: operacaoTela\.assinatura \?\? reserva, pares \}/);
 });

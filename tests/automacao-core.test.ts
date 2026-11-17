@@ -18,16 +18,14 @@ describe("automação — núcleo", () => {
     const c = coerceConfigAutomacao({
       ativa: false,
       receitas: { "anexar-dfds": { ativa: false }, inventada: { ativa: true }, "emitir-dfd": { ativa: "sim" } },
-      operacao: { moduleKey: 120465, guid: "24E3E9D0-cb29-2473-1d0a-318c7d8507ef", assinatura: "16a3", em: "2026-10-02" },
+      operacao: { moduleKey: 120477, guid: "1449D1D1-85f8-8080-7f63-df246a9e7f80", assinatura: "16a3", em: "2026-10-02" },
     });
     assert.equal(c.ativa, false);
     assert.deepEqual(c.receitas, { "anexar-dfds": { ativa: false } });
     // O id fixo de assinatura de antes é descartado (nunca mais vale para todos os planejamentos).
-    assert.deepEqual(c.operacao, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", fonte: null, em: "2026-10-02" });
-    const f = coerceConfigAutomacao({
-      operacao: { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", fonte: { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", lista: ["Entity", "@Assinaturas"], chave: "@Id" } },
-    });
-    assert.deepEqual(f.operacao?.fonte, { metodo: "GET", caminho: "restauth/load?entity=101026&key={id}", corpo: null, lista: ["Entity", "@Assinaturas"], chave: "@Id" });
+    assert.deepEqual(c.operacao, { moduleKey: 120477, guid: "1449d1d1-85f8-8080-7f63-df246a9e7f80", em: "2026-10-02" });
+    // Uma operação que a Centi já desligou (guardada no servidor) não vale: a tela segue com a atual.
+    assert.equal(coerceConfigAutomacao({ operacao: { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef" } }).operacao, null);
     assert.equal(coerceConfigAutomacao({ operacao: { moduleKey: -1, guid: "x" } }).operacao, null);
   });
 
