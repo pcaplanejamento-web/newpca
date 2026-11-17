@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.20",
+    data: "2026-11-17",
+    titulo: "Automações da Centi: retomada, resultados e centro de custo",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A retomada esquece os DFDs conferidos antes da versão 1.295.19 (com a lógica antiga) — a próxima execução os confere de novo — e o DFD “não conferido” deixa de contar como feito: a retomada o refaz.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Na Análise, um cartão por resultado (Convergente, Divergente, Não conferido, Falhou…) no lugar de “Atenção”, e as colunas Centi e Divergências mostram o resultado DESTA execução.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A leitura do planejamento pelo ID volta a trazer o Centro de Custo (o nome do registro ligado) e não usa mais a situação de outro registro (o protocolo) — vale para “Unidades × Centro de Custo”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.19",
     data: "2026-11-17",
     titulo: "Conferência com a Centi: o planejamento aberto como na tela da Centi",

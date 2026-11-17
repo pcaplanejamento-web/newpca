@@ -383,7 +383,9 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
   );
   assert.equal(r.apontados.filter((a) => a.subfluxo === "Conferir 1 DFD × Centi").length, 3);
   assert.ok(r.apontados.some((a) => /DFD 13 .*não conferido — o órgão do DFD não tem o ID da Centi/.test(String(a.mensagem))));
-  assert.equal(progresso.size, 0, "tudo concluído: o progresso é esquecido");
+  // O DFD 13 voltou "não conferido": não está feito — a retomada o guarda como falha (refeito na próxima) e não é esquecida.
+  assert.equal(progresso.get("4"), "falha");
+  assert.equal(progresso.get("1"), "ok");
 });
 
 test("modelo Baixar/anexar por protocolo: só os MARCADOS seguem; falha vira apontamento", async () => {

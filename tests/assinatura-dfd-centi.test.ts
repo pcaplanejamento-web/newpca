@@ -141,3 +141,23 @@ test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgã
   assert.deepEqual(r.saida.map((x) => x.id).sort((a, b) => a - b), [92, 500]);
   assert.equal(r.naoEncontrados.length, 0);
 });
+
+test("dadosDoPlanejamento: os campos do PRÓPRIO planejamento (formato real do 101045)", async () => {
+  const { dadosDoPlanejamento } = await import("../src/lib/automacao-centi-core.ts");
+  const ref = (id: number, display: string, obj: unknown[] = []) => ({ $type: "x", Fields: [{ Key: "Id", Value: id }, { Key: "Display", Value: display }, { Key: "Object", Value: { Fields: obj } }] });
+  const j = {
+    Entity: {
+      Fields: [
+        { Key: "IdCentroCusto", Value: ref(7, "PM RV, SECRETARIA MUNICIPAL DE TESTE") },
+        { Key: "Finalidade", Value: "Aquisição de materiais" },
+        // O protocolo ligado traz a SITUAÇÃO DELE (texto) — nunca é a do planejamento.
+        { Key: "IdProtocolo", Value: ref(3, "123/2026", [{ Key: "SituacaoDescricao", Value: "Em Andamento" }]) },
+        { Key: "Situacao", Value: 1 },
+      ],
+    },
+  };
+  assert.deepEqual(dadosDoPlanejamento(j), { situacao: "", centroCusto: "PM RV, SECRETARIA MUNICIPAL DE TESTE", finalidade: "Aquisição de materiais" });
+  assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "Situacao", Value: "Executado" }] } }), { situacao: "Executado" });
+  assert.deepEqual(dadosDoPlanejamento({ Entity: null }), {});
+  assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "IdCentroCusto", Value: 12 }] } }), { centroCusto: "" }, "o id numérico nunca é o centro de custo");
+});

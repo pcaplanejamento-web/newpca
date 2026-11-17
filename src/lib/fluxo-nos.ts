@@ -1516,6 +1516,8 @@ const NOS: DefNo[] = [
       };
       let feitosAgora = 0;
       let emCurso = 0;
+      // Os devolvidos como "não conferido": não estão feitos — a retomada não é esquecida enquanto houver algum.
+      let pendentes = 0;
       const avisar = () =>
         ctx.aviso(`${filho.nome}: ${feitosAgora} de ${fila.length}${emCurso ? ` · ${emCurso} em andamento` : ""}${pulados ? ` · ${pulados} já feitos antes` : ""}`);
       avisar();
@@ -1543,7 +1545,10 @@ const NOS: DefNo[] = [
               } else {
                 const volta = r.retorno.length ? r.retorno.map((x) => ({ ...x, subfluxo: { estado: "concluido" } })) : [{ ...it, subfluxo: { estado: "concluido" } }];
                 saida.push(...volta);
-                if (k) gravar.push({ chave: k, estado: "ok" });
+                // "Não conferido" (a leitura não foi confirmada, o órgão sem ID…) NÃO está feito: a retomada o refaz.
+                const pendente = r.retorno.some((x) => x.naoMarcar === true);
+                if (pendente) pendentes++;
+                if (k) gravar.push({ chave: k, estado: pendente ? "falha" : "ok" });
                 ctx.parcial?.(volta);
               }
               feitosAgora++;
@@ -1559,7 +1564,7 @@ const NOS: DefNo[] = [
         await descarregar();
       }
       // Tudo concluído sem falha: a próxima execução recomeça do zero.
-      if (prog && !ctx.cancelado() && !falhas.length && fila.length + pulados === lista.length) await prog.limpar(noProg).catch(() => undefined);
+      if (prog && !ctx.cancelado() && !falhas.length && !pendentes && fila.length + pulados === lista.length) await prog.limpar(noProg).catch(() => undefined);
       return { saida, falhas, [PORTA_APONTADOS]: apontados };
     },
   },
@@ -2422,7 +2427,8 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
       continue;
     }
     if (!x) {
-      out.divergentes.push({ ...d, mensagem: `${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}` });
+      const mensagem = `${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`;
+      out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem });
       continue;
     }
     // A identidade (órgão, situação, nº, tipo) pela MESMA régua da reconferência pelo retrato.
@@ -2441,8 +2447,11 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
         difs.push("objeto diferente da Centi");
     }
     // UM item por DFD (todas as diferenças juntas): a análise ao vivo e o apontamento não repetem o DFD.
-    if (difs.length) out.divergentes.push({ ...d, mensagem: motivoDivergencias(ref, difs) });
-    else out.conformes.push(d);
+    // O resultado DESTA conferência no próprio item (as colunas Centi/Divergências da Análise mostram ele, não o lido antes).
+    if (difs.length) {
+      const mensagem = motivoDivergencias(ref, difs);
+      out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem });
+    } else out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: null });
   }
   return out;
 }

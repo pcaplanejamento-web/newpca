@@ -675,3 +675,31 @@ export function formatoEntidade(valor: string, aberta: string | null): string {
  * (`IdPlanejamentoAssinaturaDFD`) que a emissão manda; o módulo antigo (101026) não trazia. */
 export const MODULO_PLANEJAMENTO = 101045;
 export const caminhoLoadPlanejamento = (id: string) => `restauth/load?entity=${MODULO_PLANEJAMENTO}&key=${encodeURIComponent(String(id).replace(/\D/g, ""))}`;
+
+/** Os dados do PRÓPRIO planejamento no load (só `Entity.Fields` do topo — nunca os de um registro ligado, como o
+ * protocolo, que traz a situação dele): o texto do campo ou, numa referência `{Fields: [Display]}`, o `Display`.
+ * Centro de custo = `IdCentroCusto`/`CentroCusto`; finalidade = `Finalidade`; situação SÓ quando é texto com letras (o
+ * 101045 manda um CÓDIGO — vira ""). `undefined` = o campo não está no topo (resposta de outro formato). */
+export function dadosDoPlanejamento(j: unknown): { situacao?: string; centroCusto?: string; finalidade?: string } {
+  const ent = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : undefined;
+  const fields = ent && typeof ent === "object" && Array.isArray((ent as { Fields?: unknown }).Fields) ? ((ent as { Fields: unknown[] }).Fields as { Key?: unknown; Value?: unknown }[]) : [];
+  const texto = (v: unknown): string | null => {
+    if (typeof v === "string") return v.trim();
+    if (typeof v === "number") return String(v);
+    if (v && typeof v === "object" && Array.isArray((v as { Fields?: unknown }).Fields)) {
+      const d = ((v as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields).find((f) => f?.Key === "Display")?.Value;
+      return typeof d === "string" ? d.trim() : null;
+    }
+    return null;
+  };
+  const campo = (re: RegExp) => fields.find((f) => typeof f?.Key === "string" && re.test(f.Key));
+  const comLetras = (t: string | null) => (t && /\p{L}/u.test(t) ? t : "");
+  const out: { situacao?: string; centroCusto?: string; finalidade?: string } = {};
+  const sit = campo(/^situacao$/i);
+  if (sit) out.situacao = comLetras(texto(sit.Value));
+  const cc = campo(/^(id)?centro.?(de)?.?custo$/i);
+  if (cc) out.centroCusto = comLetras(texto(cc.Value));
+  const fin = campo(/^(id)?finalidade$/i);
+  if (fin) out.finalidade = comLetras(texto(fin.Value));
+  return out;
+}

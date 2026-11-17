@@ -1387,3 +1387,18 @@ describe("0188: conferências feitas sem o registro das seções 8–10 do próp
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_pdf").get() as { n: number }).n, 0);
   });
 });
+
+describe("0189: a retomada gravada antes do ar da v1.295.19 é esquecida", () => {
+  it("apaga só o progresso anterior ao deploy", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0188_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec("INSERT INTO automacao_fluxos (id, nome) VALUES (1, 'Conferir')");
+    db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES
+      (1, 'sub1', '10', 'ok', '2026-11-17 12:59:00'),
+      (1, 'sub1', '11', 'ok', '2026-11-17 13:20:00')`);
+    db.exec(readFileSync(join(DIR, "0189_retomada_antes_do_modulo_tela.sql"), "utf8"));
+    const chaves = (db.prepare("SELECT chave FROM automacao_progresso").all() as { chave: string }[]).map((r) => r.chave);
+    assert.deepEqual(chaves, ["11"]);
+  });
+});

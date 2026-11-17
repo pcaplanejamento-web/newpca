@@ -3,7 +3,7 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { analisarRespostaCenti, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
+import { analisarRespostaCenti, dadosDoPlanejamento, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
 import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
@@ -139,11 +139,12 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     if (planejamentoInexistente(semRegistro)) throw naoEncontrado();
     throw new Error(`A Centi não abriu o planejamento ${plan}${ondeOrgao} — ${semRegistro}`);
   }
-  const situacao = s(acharValor(l.j, /^situa/i));
-  // O Centro de Custo e a Finalidade do PRÓPRIO registro do planejamento (o ID da CM002) — sem depender da lista.
-  // Só TEXTO: o `IdCentroCusto` numérico ao lado do nome nunca vale como unidade.
-  const centroCusto = s(acharValor(l.j, /^(id)?centro.?(de)?.?custo|^(id)?c\.?\s?custo/i, 0, ehTextoComLetras));
-  const finalidade = s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
+  // Os campos do PRÓPRIO planejamento (o topo da `Entity`; a referência dá o `Display`); sem o campo no topo (outro
+  // formato), a busca de antes. Só TEXTO: o código numérico da situação e o `IdCentroCusto` numérico nunca valem.
+  const topo = dadosDoPlanejamento(l.j);
+  const situacao = topo.situacao ?? s(acharValor(l.j, /^situa/i, 0, ehTextoComLetras));
+  const centroCusto = topo.centroCusto ?? s(acharValor(l.j, /^(id)?centro.?(de)?.?custo|^(id)?c\.?\s?custo/i, 0, ehTextoComLetras));
+  const finalidade = topo.finalidade ?? s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
   // A MESMA emissão do "Baixar DFDs"; o PDF que volta é lido inteiro e comparado.

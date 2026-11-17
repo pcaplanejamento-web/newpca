@@ -44,6 +44,9 @@ type Processado = { chave: string; item: string; orgao: string; estado: { rotulo
  * DFDs, protocolos lidos — `VISOES`) e a ANÁLISE, que acompanha cada item processado em tempo real e, ao terminar, os
  * apontamentos. No desktop ocupa o display (a página não rola — cada parte rola por dentro).
  */
+/** O tom do cartão (StatMini) pelo tom do selo do resultado. */
+const TOM_STAT: Partial<Record<Tone, "ok" | "warn" | "danger">> = { emerald: "ok", amber: "warn", red: "danger" };
+
 export function PainelFluxo({
   grafo,
   onGrafo,
@@ -253,6 +256,17 @@ function AnaliseAoVivo({
   const total = fonte ? Math.max(itensFonte.length, ...etapas.filter((n) => n.x < fonte.x).map((n) => passos[n.id]?.itens ?? 0)) : 0;
   const jaAntes = fonte?.tipo === "fluxo.executar" && !rodando && resultado?.estado === "concluido" ? Math.max(0, total - processados.length) : 0;
   const conta = (tons: Tone[]) => processados.filter((p) => tons.includes(p.estado.tom)).length;
+  // Quantos de cada resultado (pelo rótulo), na ordem verde › âmbar › vermelho › outros.
+  const porResultado = useMemo(() => {
+    const m = new Map<string, { rotulo: string; tom: Tone; n: number }>();
+    for (const p of processados) {
+      const x = m.get(p.estado.rotulo) ?? { rotulo: p.estado.rotulo, tom: p.estado.tom, n: 0 };
+      x.n++;
+      m.set(p.estado.rotulo, x);
+    }
+    const ordem = (t: Tone) => ({ emerald: 0, amber: 1, red: 2 })[t as string] ?? 3;
+    return [...m.values()].sort((a, b) => ordem(a.tom) - ordem(b.tom) || b.n - a.n);
+  }, [processados]);
   const apontados = useMemo<Apontado[]>(
     () =>
       (resultado?.apontados ?? []).map((a) => ({
@@ -317,12 +331,19 @@ function AnaliseAoVivo({
       )}
       {fonte && (processados.length > 0 || resultado) && (
         // Terminada, o que a fonte não processou e os anteriores entregaram = os já feitos antes (a retomada pulou).
-        <div className={`grid grid-cols-2 gap-[var(--gap-block)] ${jaAntes ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]">
           <StatMini label="Processados" value={processados.length.toLocaleString("pt-BR")} hint={total ? `de ${total.toLocaleString("pt-BR")}` : undefined} />
           {jaAntes > 0 && <StatMini label="Já feitos antes" value={jaAntes.toLocaleString("pt-BR")} hint="pulados pela retomada" />}
-          <StatMini label="Ok" value={conta(["emerald"]).toLocaleString("pt-BR")} tone="ok" />
-          <StatMini label="Atenção" value={conta(["amber"]).toLocaleString("pt-BR")} tone={conta(["amber"]) ? "warn" : "default"} />
-          <StatMini label="Falhas" value={conta(["red"]).toLocaleString("pt-BR")} tone={conta(["red"]) ? "danger" : "default"} hint={resultado && apontados.length ? `${apontados.length.toLocaleString("pt-BR")} apontamento(s)` : undefined} />
+          {fonte.tipo === "fluxo.executar" ? (
+            // Um cartão por RESULTADO (Convergente, Divergente, Não conferido, Corrigido, Falhou…) — nada fica junto em "Atenção".
+            porResultado.map((r) => <StatMini key={r.rotulo} label={r.rotulo} value={r.n.toLocaleString("pt-BR")} tone={TOM_STAT[r.tom] ?? "default"} />)
+          ) : (
+            <>
+              <StatMini label="Ok" value={conta(["emerald"]).toLocaleString("pt-BR")} tone="ok" />
+              <StatMini label="Atenção" value={conta(["amber"]).toLocaleString("pt-BR")} tone={conta(["amber"]) ? "warn" : "default"} />
+              <StatMini label="Falhas" value={conta(["red"]).toLocaleString("pt-BR")} tone={conta(["red"]) ? "danger" : "default"} hint={resultado && apontados.length ? `${apontados.length.toLocaleString("pt-BR")} apontamento(s)` : undefined} />
+            </>
+          )}
         </div>
       )}
       {jaAntes > 0 && fonte && host && (

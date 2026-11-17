@@ -105,6 +105,13 @@ test("compararDfdCenti: com o DFD inteiro dos dois lados, o motivo lista tudo; o
   assert.equal("dfd" in (r.divergentes[0].centi as object), false);
   const igual = compararDfdCenti([{ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(), centi: { numero: "123", dfd: base() } }], { tolerancia: 0.01, objeto: true });
   assert.equal(igual.conformes.length, 1);
+  // O RESULTADO desta conferência vai no item (as colunas da Análise o mostram — não o lido antes).
+  assert.equal(r.divergentes[0].conferenciaCenti, "divergente");
+  assert.equal(r.divergentes[0].conferenciaCentiMotivo, r.divergentes[0].mensagem);
+  assert.equal(igual.conformes[0].conferenciaCenti, "convergente");
+  const falha = compararDfdCenti([{ id: 9, numero: "1", planejamento: "2", conferenciaCenti: "divergente", centi: null, centiFalha: true, centiErro: "x" }], { tolerancia: 0.01, objeto: true });
+  assert.equal(falha.divergentes[0].naoMarcar, true);
+  assert.equal(falha.divergentes[0].conferenciaCenti, "divergente", "o não conferido mantém o gravado");
 });
 
 test("tipos de divergência: cada texto gravado ganha o(s) tipo(s) para o filtro", async () => {
