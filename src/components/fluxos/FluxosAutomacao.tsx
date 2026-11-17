@@ -35,7 +35,7 @@ import {
   variaveisDoGrafo,
 } from "@/lib/fluxo-core";
 import { corrigirDfdPelaCenti } from "@/lib/correcao-centi-cliente";
-import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
+import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, pdfLidoNaCenti, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { alternarAutomacaoMesa, EVENTO_DISPARO_MESA, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
@@ -350,6 +350,7 @@ export function FluxosAutomacao({
       lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean, completo?: boolean, ocr?: boolean) =>
         // A entidade no MESMO formato da aberta na Centi — como o "Baixar DFDs" (6 → "06" quando a aberta é "02").
         lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true, ocr ?? completo === true),
+      pdfCenti: (plan: string) => pdfLidoNaCenti(plan),
       dfdDoSistema: (id: number) => dfdDoSistema(id) as unknown as Promise<Item>,
       substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
       corrigirPelaCenti: (id: number) => corrigirDfdPelaCenti(id, null),

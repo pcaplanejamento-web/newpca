@@ -3,7 +3,7 @@ import { z } from "zod";
 import { dfds } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { comandoApagarRetratos, comandoGuardarRetrato, comandosHistoricoCenti } from "@/lib/conferencia-centi-sql";
+import { comandoApagarPdfs, comandoApagarRetratos, comandoGuardarPdf, comandoGuardarRetrato, comandosHistoricoCenti, MAX_PDF_CENTI } from "@/lib/conferencia-centi-sql";
 import { conferenciaDesatualizada, lerRetrato, MAX_RETRATO } from "@/lib/conferencia-dfd-centi";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
@@ -21,6 +21,8 @@ const corpoSchema = z.strictObject({
         motivo: z.string().max(20_000).optional(),
         // O RETRATO do DFD lido na Centi (o divergente lido inteiro) — a correção campo a campo na Mesa.
         retrato: z.string().max(MAX_RETRATO).optional(),
+        // O PDF que a Centi GEROU (base64) — guardado com o retrato para conferir a olho o que foi lido.
+        pdf: z.string().regex(/^[A-Za-z0-9+/=]+$/).max(MAX_PDF_CENTI).optional(),
       }),
     )
     .min(1)
@@ -77,8 +79,20 @@ export async function POST(req: Request) {
     await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
     i = j;
   }
+  // Os PDFs: um comando por pedido ao D1 (cada um até ~1,9 MB); o retrato sem PDF perde o PDF antigo (era de outra leitura).
+  const comPdf = comRetrato.filter((x) => x.pdf);
+  for (let i = 0; i < comPdf.length; ) {
+    let j = i;
+    let tam = 0;
+    while (j < comPdf.length && (j === i || tam + (comPdf[j].pdf?.length ?? 0) < 1_000_000)) tam += comPdf[j++].pdf?.length ?? 0;
+    const cmds = comPdf.slice(i, j).map((x) => comandoGuardarPdf(db, x.dfdId, x.pdf as string, em));
+    await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
+    i = j;
+  }
+  const semPdf = [...semRetrato, ...comRetrato.filter((x) => !x.pdf).map((x) => x.dfdId)];
   // Os ids num parâmetro JSON só: UM comando (o limite de consultas por requisição do Worker).
   if (semRetrato.length) await db.batch([comandoApagarRetratos(db, semRetrato)]);
+  if (semPdf.length) await db.batch([comandoApagarPdfs(db, semPdf)]);
   // O HISTÓRICO: uma linha por DFD cujo resultado MUDOU; ficam as 20 mais recentes de cada um.
   if (mudou.length) {
     const cmds = comandosHistoricoCenti(

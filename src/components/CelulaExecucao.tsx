@@ -378,6 +378,17 @@ function PainelDivergencias({
               <IconBuilding className="h-4 w-4" /> Conferir o ID na Centi do órgão
             </Link>
           )}
+          {dfdId != null && (
+            <a
+              href={`/api/dfd/${dfdId}/conferencia-centi?pdf=1`}
+              target="_blank"
+              rel="noopener"
+              title="O PDF que a Centi gerou na última conferência — o que a automação leu"
+              className="inline-flex h-11 items-center gap-1.5 rounded-control px-2.5 text-[13px] font-medium text-accent hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
+            >
+              <IconDownload className="h-4 w-4" /> PDF da Centi
+            </a>
+          )}
           {planejavel && (
             <Button size="sm" variant="ghost" icon={<IconPencil className="h-4 w-4" />} onClick={() => setForm("planejamento")}>
               Corrigir o nº de planejamento

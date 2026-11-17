@@ -99,7 +99,6 @@ export function escolherAssinatura(j: unknown, f: FonteAssinatura, plan: string)
 /** Uma LISTA do load (o caminho legível, o nome e os itens). */
 type ListaDoLoad = { nome: string; caminho: string; itens: Record<string, unknown>[] };
 const ehObjeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
-const NOME_ASSINATURA = /assinatura/i;
 const MARCA_ESCOLHIDA = /padr|selecion|escolh|princip|default|atual|vigent/i;
 
 /** As listas de objetos do load do planejamento (pelas chaves e pelo padrão Fields), sem entrar em listas dentro de listas. */
@@ -159,11 +158,9 @@ function planoDoItem(x: Record<string, unknown>): Record<string, unknown> {
  */
 export function assinaturasDoLoad(j: unknown): { ids: string[]; id: string | null; nome: string } | { listas: string[]; campos: string[] } {
   const todas = listasDoLoad(j);
-  let cand = todas.filter((l) => NOME_ASSINATURA.test(l.nome) && l.itens.some((x) => idDoItem(x)));
-  if (cand.length > 1) {
-    const dfd = cand.filter((l) => /dfd/i.test(l.nome));
-    if (dfd.length) cand = dfd;
-  }
+  // Só a lista dos registros DO DFD do planejamento ("PlanejamentoAssinatura…"/"Assinatura…DFD") — nunca qualquer lista com
+  // "assinatura" no nome (assinaturas digitais, de outros documentos): a emissão com o id errado traz as seções 8–10 de outro.
+  const cand = todas.filter((l) => NOME_CAMPO_DFD.test(l.nome) && l.itens.some((x) => idDoItem(x)));
   if (cand.length !== 1) {
     // Sem a lista: o registro escolhido do PRÓPRIO planejamento num CAMPO dele (ex.: IdPlanejamentoAssinaturaDFD, ou
     // uma referência {Id, Descricao} de nome "assinatura") — do load dele, então é dele.
@@ -184,8 +181,8 @@ export function assinaturasDoLoad(j: unknown): { ids: string[]; id: string | nul
   // Várias: só a que um sim/não marca SOZINHA (e, entre várias marcas, a de nome de "padrão/selecionada").
   const planos = l.itens.map((x) => ({ id: idDoItem(x), p: planoDoItem(x) }));
   const chaves = [...new Set(planos.flatMap((x) => Object.keys(x.p)))];
-  let marcas = chaves.filter((k) => planos.filter((x) => x.p[k] === true).length === 1);
-  if (marcas.length > 1) marcas = marcas.filter((k) => MARCA_ESCOLHIDA.test(k));
+  // Só uma marca da própria Centi de "padrão/selecionada" — nunca um sim/não qualquer.
+  const marcas = chaves.filter((k) => MARCA_ESCOLHIDA.test(k) && planos.filter((x) => x.p[k] === true).length === 1);
   const id = marcas.length === 1 ? (planos.find((x) => x.p[marcas[0]] === true)?.id ?? null) : null;
   return { ids, id, nome: l.caminho };
 }

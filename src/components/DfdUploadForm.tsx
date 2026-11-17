@@ -32,7 +32,7 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainel
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconMerge, IconRefresh, IconUpload } from "./icons";
+import { IconDocumentos, IconMerge, IconRefresh, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
@@ -544,13 +544,22 @@ export function DfdUploadForm({
               acoes={
                 /* SOBRESCRITA: as diferenças com a ESCOLHA por dado (manter o gravado × usar o novo). */
                 base ? (
-                  <BotaoAcao
-                    rotulo={modoCenti ? "Diferenças com a Centi" : "Diferenças do gravado"}
-                    icon={<IconMerge className="h-4 w-4" />}
-                    contagem={totalDif}
-                    pressionado={painel?.tipo === "diferencas"}
-                    onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}
-                  />
+                  <>
+                    {modoCenti && centi && (
+                      <BotaoAcao
+                        rotulo="PDF da Centi (o arquivo que a automação leu)"
+                        icon={<IconDocumentos className="h-4 w-4" />}
+                        onClick={() => window.open(`/api/dfd/${centi.dfdId}/conferencia-centi?pdf=1`, "_blank", "noopener")}
+                      />
+                    )}
+                    <BotaoAcao
+                      rotulo={modoCenti ? "Diferenças com a Centi" : "Diferenças do gravado"}
+                      icon={<IconMerge className="h-4 w-4" />}
+                      contagem={totalDif}
+                      pressionado={painel?.tipo === "diferencas"}
+                      onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}
+                    />
+                  </>
                 ) : undefined
               }
               principal={

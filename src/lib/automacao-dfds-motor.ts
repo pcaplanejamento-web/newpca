@@ -146,43 +146,61 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
  * dois, a emissão segue com a RESERVA (`incerta`) — o PDF é analisado inteiro, como sempre. Só a interrupção para.
  */
 export async function assinaturaDoPlanejamento(
-  c: Pick<ContextoEmissor, "pedir" | "cfg">,
+  c: Pick<ContextoEmissor, "pedir" | "cfg"> & Partial<Pick<ContextoEmissor, "aplicarOperacao">>,
   id: string,
   entidade: string | undefined,
   load: { j: unknown },
+  /** A CONFERÊNCIA: só o valor que a Centi informa para ESTE planejamento — nunca a reserva (o PDF voltaria com as seções
+   * 8–10 de outro registro e a correção as gravaria). */
+  estrito = false,
 ): Promise<{ id: string; incerta?: true; motivo?: string } | { erro: string; ambiente?: boolean }> {
-  const reserva = (motivo: string) => ({ id: c.cfg().assinaturaReserva, incerta: true as const, motivo });
+  const plan = id.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  // 1º: o valor que a PRÓPRIA TELA da Centi mandou ao emitir este planejamento (a extensão guarda o par).
+  const doPar = () => c.cfg().paresAssinatura?.[plan];
+  if (doPar()) return { id: doPar() as string };
+  const semId = async (motivo: string) => {
+    if (!estrito) return { id: c.cfg().assinaturaReserva, incerta: true as const, motivo };
+    // Os pares da tela podem ter chegado agora (a pessoa acabou de emitir pela Centi): relê o estado da extensão uma vez.
+    if (c.aplicarOperacao) {
+      const e = (await c.pedir("estado", null, 8000).catch(() => null)) as (RespostaExt & { operacao?: unknown }) | null;
+      if (e?.ok) c.aplicarOperacao(e.operacao);
+      if (doPar()) return { id: doPar() as string };
+    }
+    return {
+      erro: `A Centi não informou o registro das seções 8 a 10 (equipe, secretário demandante, autorização) do planejamento ${plan} — a conferência não emite o DFD com um registro adivinhado. Emita este planejamento UMA vez pela tela da Centi (com a extensão instalada) e confira de novo. (${motivo.replace(/\.$/, "")})`,
+    };
+  };
   const doLoad = assinaturasDoLoad(load.j);
   const fonte = c.cfg().fonteAssinatura;
   if (!fonte) {
-    if ("listas" in doLoad) return reserva((assinaturaDoLoad(load.j, id) as { erro: string }).erro);
+    if ("listas" in doLoad) return semId((assinaturaDoLoad(load.j, id) as { erro: string }).erro);
     const r = assinaturaDoLoad(load.j, id);
-    return "id" in r ? r : reserva(r.erro);
+    return "id" in r ? r : semId(r.erro);
   }
   const pedido = pedidoDaFonte(fonte, id);
-  if (!pedido) return reserva(`Planejamento inválido (${id}).`);
+  if (!pedido) return semId(`Planejamento inválido (${id}).`);
   let j: unknown;
   if (pedido.metodo === "GET" && pedido.caminho === caminhoLoadPlanejamento(id)) j = load.j;
   else {
     const r = (await c.pedir("ler", { metodo: pedido.metodo, caminho: pedido.caminho, corpo: pedido.corpo, entidade }, 60_000)) as RespostaExt & { j?: unknown };
     if (r.interrompido) return { erro: "Interrompido na extensão.", ambiente: true };
-    if (!r.ok) return reserva(`Não consegui ler o registro das seções 8 a 10 do planejamento ${id} na Centi: ${r.erro ?? "sem resposta"}.`);
+    if (!r.ok) return semId(`Não consegui ler o registro das seções 8 a 10 do planejamento ${id} na Centi: ${r.erro ?? "sem resposta"}.`);
     j = r.j;
   }
   const escolhida = escolherAssinatura(j, fonte, id);
-  if ("erro" in escolhida) return reserva(escolhida.erro);
+  if ("erro" in escolhida) return semId(escolhida.erro);
   // Confere em dobro: com a lista no load do planejamento, o id escolhido tem de ser DELE.
-  if ("ids" in doLoad && !doLoad.ids.includes(escolhida.id)) return reserva(`O registro das seções 8 a 10 lido (${escolhida.id}) não é do planejamento ${id} na Centi.`);
+  if ("ids" in doLoad && !doLoad.ids.includes(escolhida.id)) return semId(`O registro das seções 8 a 10 lido (${escolhida.id}) não está no planejamento ${id} na Centi.`);
   return escolhida;
 }
 
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
  * load já feito por quem chama — DENTRO da mesma `comSessaoCenti` (sem ele, o load é feito aqui, na trava). */
-export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
-  return carregado ? emitirNaSessao(c, id, entidade, deNovo, carregado) : comSessaoCenti(() => emitirNaSessao(c, id, entidade, deNovo));
+export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }, estrito = false): Promise<Emissao> {
+  return carregado ? emitirNaSessao(c, id, entidade, deNovo, carregado, estrito) : comSessaoCenti(() => emitirNaSessao(c, id, entidade, deNovo, undefined, estrito));
 }
 
-async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
+async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }, estrito = false): Promise<Emissao> {
   // Como a tela da Centi: carrega o planejamento ANTES do Emitir DFD (sem o load, "Usuário sem permissão!").
   let load = carregado;
   if (!load) {
@@ -191,7 +209,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     load = l;
   }
   // O registro das seções 8–10 DESTE planejamento, lido na Centi agora (sem ele, a reserva).
-  const ass = await assinaturaDoPlanejamento(c, id, entidade, load);
+  const ass = await assinaturaDoPlanejamento(c, id, entidade, load, estrito);
   if ("erro" in ass) return ass;
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
@@ -205,7 +223,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     }
     if (!deNovo) {
       const e = await c.pedir("estado", null, 8000);
-      if (e.ok && c.aplicarOperacao(e.operacao)) return emitirNaSessao(c, id, entidade, true, load);
+      if (e.ok && c.aplicarOperacao(e.operacao)) return emitirNaSessao(c, id, entidade, true, load, estrito);
     }
     return { erro: `A Centi negou a emissão do DFD do planejamento ${id}${onde}: “Usuário sem permissão!”.`, amostra: a.amostra, recusada: true };
   }

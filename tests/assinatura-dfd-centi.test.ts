@@ -4,7 +4,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 import { assinaturaDoLoad, assinaturasDoLoad, coerceFonteAssinatura, escolherAssinatura, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
 import { assinaturaDoPlanejamento } from "../src/lib/automacao-dfds-motor.ts";
-import { lerConfigCenti } from "../src/lib/automacao-centi-core.ts";
+import { ajusteDaOperacao, lerConfigCenti } from "../src/lib/automacao-centi-core.ts";
 
 // O ERRO de 16/11/2026: a automação emitia TODO DFD com o IdPlanejamentoAssinaturaDFD visto por último na tela da Centi —
 // as seções 8–10 (equipe, secretário, autorização) saíam do planejamento de outro DFD. Agora a extensão aprende ONDE a
@@ -132,7 +132,7 @@ test("com a fonte aprendida, o id lido tem de estar na lista do load do planejam
   const cfg = lerConfigCenti({ fonteAssinatura: { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: "{id:n}" } }, lista: ["Data"], chave: "Id" } });
   const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { incerta?: true; motivo?: string };
   assert.equal(r.incerta, true);
-  assert.match(r.motivo ?? "", /não é do planejamento 131/);
+  assert.match(r.motivo ?? "", /não está no planejamento 131/);
 });
 
 test("extensão: chaves de id mais amplas e o diagnóstico sem valores", () => {
@@ -179,4 +179,58 @@ test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgã
   const r = await def.executar({ entrada: [{}] }, { planejamento: "131" }, ctx);
   assert.deepEqual(r.saida.map((x) => x.id).sort((a, b) => a - b), [92, 500]);
   assert.equal(r.naoEncontrados.length, 0);
+});
+
+test("CONFERÊNCIA (estrito): nunca emite com valor adivinhado — só o par da tela ou o lido da Centi para o planejamento", async () => {
+  const sem = { j: { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "Itens", Value: [{ Id: 1 }] }] } } };
+  const pedir = async () => ({ ok: true });
+  // Sem nada: a reserva NUNCA vai — erro do DFD (não para a execução, não é "passageiro").
+  const e = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaReserva: "163" }) }, "131", "1", sem, true)) as { erro: string };
+  assert.match(e.erro, /não informou o registro das seções 8 a 10 .*do planejamento 131/);
+  assert.ok(!PARA_TUDO.test(e.erro));
+  assert.ok(!/outro planejamento|respondeu 5\d\d|sem resposta/i.test(e.erro), "não é falha passageira (não repete)");
+  // O par visto na TELA da Centi para ESTE planejamento vale primeiro.
+  const comPar = lerConfigCenti({ paresAssinatura: { "131": "480", "92": "7" } });
+  assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => comPar }, "131", "1", sem, true), { id: "480" });
+  // O par chega pelo estado da extensão (a pessoa acabou de emitir pela tela): relido uma vez.
+  let cfg = lerConfigCenti(null);
+  const estado = async (acao: string) => (acao === "estado" ? { ok: true, operacao: { pares: { "131": "481" } } } : { ok: false });
+  const r = await assinaturaDoPlanejamento(
+    {
+      pedir: estado as never,
+      cfg: () => cfg,
+      aplicarOperacao: (op: unknown) => {
+        const a = ajusteDaOperacao(cfg, op);
+        if (a) cfg = { ...cfg, ...a };
+        return !!a;
+      },
+    },
+    "131",
+    "1",
+    sem,
+    true,
+  );
+  assert.deepEqual(r, { id: "481" });
+  // Fora da conferência (o "Baixar DFDs"), segue como sempre.
+  const baixar = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaReserva: "163" }) }, "131", "1", sem)) as { id: string };
+  assert.equal(baixar.id, "163");
+});
+
+test("load: só a lista dos registros DO DFD do planejamento — nunca qualquer lista com “assinatura” no nome", () => {
+  assert.ok("listas" in assinaturasDoLoad({ Entity: { Assinaturas: [{ Id: 5 }] } }), "assinaturas digitais/outras não valem");
+  assert.deepEqual(assinaturaDoLoad({ Entity: { PlanejamentoAssinaturaDFD: [{ Id: 5 }] } }, "131"), { id: "5" });
+  // Várias sem a marca "padrão" da Centi: não escolhe por um sim/não qualquer.
+  const duas = { Entity: { AssinaturasDFD: [{ Id: 5, Ativo: true }, { Id: 6, Ativo: false }] } };
+  assert.match((assinaturaDoLoad(duas, "131") as { erro: string }).erro, /2 registros/);
+});
+
+test("pares da tela: ajusteDaOperacao soma os pares (também sem a operação) e lerConfigCenti os normaliza", () => {
+  const cfg = lerConfigCenti({ paresAssinatura: { "092": "7", x: "1", "5": "abc" } });
+  assert.deepEqual(cfg.paresAssinatura, { "92": "7" });
+  assert.deepEqual(ajusteDaOperacao(cfg, { pares: { "131": "480" } }), { paresAssinatura: { "92": "7", "131": "480" } });
+  assert.equal(ajusteDaOperacao(cfg, { pares: { "92": "7" } }), null, "nada novo = nada muda");
+  const main = readFileSync("extensao-centi/centi-main.js", "utf8");
+  assert.match(main, /const PARES = "__pcaParesAssinatura_v1";/);
+  assert.match(main, /pares\[k\] = String\(op\.assinatura\);/);
+  assert.match(main, /reserva: operacaoTela\.assinatura \?\? reserva, pares \}/);
 });

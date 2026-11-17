@@ -113,6 +113,19 @@ export async function lerDfdCentiPorCodigo(
   return comSessaoCenti(() => lerNaSessao(c, plan, entidade, comPdf, completo, ocr));
 }
 
+/** Os últimos PDFs que a Centi GEROU na conferência (por planejamento, na memória da aba) — vão ao servidor com o retrato
+ * para o ADM ver o arquivo como veio. */
+const pdfsLidos = new Map<string, Uint8Array>();
+const MAX_PDFS_LIDOS = 30;
+/** O PDF (base64) da última emissão do planejamento nesta aba; null = nenhum. */
+export function pdfLidoNaCenti(planejamento: string): string | null {
+  const b = pdfsLidos.get(s(planejamento).replace(/\D/g, ""));
+  if (!b) return null;
+  let t = "";
+  for (let i = 0; i < b.length; i += 0x8000) t += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(t);
+}
+
 async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | undefined, comPdf: boolean, completo: boolean, ocr: boolean): Promise<Item> {
   const l = await carregarPlanejamento(c, plan, entidade || undefined);
   if ("erro" in l) throw new Error(l.erro);
@@ -133,7 +146,8 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const finalidade = s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
-  const e = await emitirUm(c, plan, entidade || undefined, false, l);
+  // A conferência emite SÓ com o registro das seções 8–10 que a Centi informa para ESTE planejamento (estrito).
+  const e = await emitirUm(c, plan, entidade || undefined, false, l, true);
   // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
   if (!e.pdf) {
     // O load já DIZIA (a mensagem da Centi) que o planejamento NÃO EXISTE e a emissão também falhou: é "não encontrado" (marca Divergente),
@@ -141,6 +155,9 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     if (semRegistro && planejamentoInexistente(semRegistro)) throw naoEncontrado();
     throw new Error(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
   }
+  pdfsLidos.delete(plan);
+  pdfsLidos.set(plan, e.pdf);
+  while (pdfsLidos.size > MAX_PDFS_LIDOS) pdfsLidos.delete(pdfsLidos.keys().next().value as string);
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);

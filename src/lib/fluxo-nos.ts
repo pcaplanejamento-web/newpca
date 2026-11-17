@@ -1378,6 +1378,10 @@ const NOS: DefNo[] = [
       // correção campo a campo e a reconferência na Mesa usam ele, sem a extensão. Fora dos itens (a análise fica leve).
       if (!(ctx.host.__retratosCenti instanceof Map)) ctx.host.__retratosCenti = new Map<number, string>();
       const retratos = ctx.host.__retratosCenti as Map<number, string>;
+      // O PDF que a Centi GEROU (base64) vai junto do retrato — o ADM vê o arquivo como veio.
+      if (!(ctx.host.__pdfsCenti instanceof Map)) ctx.host.__pdfsCenti = new Map<number, string>();
+      const pdfs = ctx.host.__pdfsCenti as Map<number, string>;
+      const pdfDe = ctx.host.pdfCenti as ((plan: string) => string | null) | undefined;
       const idDe = (it: Item) => Number(it.dfdId ?? it.id);
       const dfdDe = (it: Item) => {
         const d = (it.centi as Item | null | undefined)?.dfd as unknown as DfdParseado | undefined;
@@ -1414,9 +1418,13 @@ const NOS: DefNo[] = [
         if (confere) {
           const t = textoRetrato(montarRetrato(it, x, dfd, opcoes));
           if (t) retratos.set(id, t);
+          const pdf = pdfDe?.(str(it.planejamento));
+          if (t && pdf) pdfs.set(id, pdf);
+          else pdfs.delete(id);
           finais.push(it);
         } else {
           retratos.delete(id);
+          pdfs.delete(id);
           finais.push({ ...it, centi: null, centiFalha: true, centiErro: `${motivo.replace(/\.$/, "")} — nada foi gravado; confira de novo` });
         }
       }
@@ -1979,22 +1987,28 @@ const NOS: DefNo[] = [
       // O divergente leva o RETRATO da Centi (guardado pelo "Comparar DFD × Centi" desta execução) — sem ele, o servidor
       // apaga um retrato antigo (não vale mais).
       const retratos = ctx.host.__retratosCenti as Map<number, string> | undefined;
-      const itens = marcacoesConferencia(so(e, "divergentes"), so(e, "conformes")).map((m) => {
+      const pdfs = ctx.host.__pdfsCenti as Map<number, string> | undefined;
+      const itens = marcacoesConferencia(so(e, "divergentes"), so(e, "conformes")).map((m): ReturnType<typeof marcacoesConferencia>[number] & { pdf?: string } => {
         const r = m.status === "divergente" ? retratos?.get(m.dfdId) : undefined;
+        const pdf = r ? pdfs?.get(m.dfdId) : undefined;
         retratos?.delete(m.dfdId);
-        return r ? { ...m, retrato: r } : m;
+        pdfs?.delete(m.dfdId);
+        return r ? { ...m, retrato: r, ...(pdf ? { pdf } : {}) } : m;
       });
       if (!itens.length) return { saida: [] };
       const out: Item[] = [];
-      // Pedidos de até 2000 DFDs, ~4 MB e 50 retratos (cada retrato é um comando no D1 — o limite de consultas do Worker).
+      // Pedidos de até 2000 DFDs, ~4 MB, 50 retratos e 10 PDFs (cada retrato é um comando no D1 — o limite de consultas do Worker).
       let i = 0;
       while (i < itens.length) {
         if (ctx.cancelado()) break;
         let j = i;
         let tam = 0;
         let nr = 0;
-        while (j < itens.length && j - i < 2000 && (j === i || (tam + (itens[j].retrato?.length ?? 0) < 4_000_000 && (!itens[j].retrato || nr < 50)))) {
-          tam += itens[j].retrato?.length ?? 0;
+        const peso = (x: (typeof itens)[number]) => (x.retrato?.length ?? 0) + (x.pdf?.length ?? 0);
+        let np = 0;
+        while (j < itens.length && j - i < 2000 && (j === i || (tam + peso(itens[j]) < 4_000_000 && (!itens[j].retrato || nr < 50) && (!itens[j].pdf || np < 10)))) {
+          tam += peso(itens[j]);
+          if (itens[j].pdf) np++;
           if (itens[j++].retrato) nr++;
         }
         ctx.aviso(`Marcando os DFDs (${j} de ${itens.length})…`);

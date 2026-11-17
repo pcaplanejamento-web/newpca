@@ -14,6 +14,9 @@ export type ConfigCenti = {
   /** O registro das seções 8–10 da ÚLTIMA emissão feita pela tela (a RESERVA): o que vai na emissão quando o do próprio
    * planejamento não é achado — o PDF é analisado INTEIRO, como sempre foi. */
   assinaturaReserva: string;
+  /** O registro das seções 8–10 que a PRÓPRIA TELA da Centi mandou ao emitir cada planejamento ({planejamento: id}) —
+   * o valor exato da Centi; a conferência só emite com ele (ou com o lido da Centi para o planejamento). */
+  paresAssinatura: Record<string, string>;
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;
   guid: string;
@@ -30,6 +33,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   emitirData: false,
   fonteAssinatura: null,
   assinaturaReserva: "163",
+  paresAssinatura: {},
   moduleKey: 120465,
   guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef",
   descobrirEntidade: true,
@@ -40,7 +44,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.36.0";
+export const VERSAO_EXTENSAO_CENTI = "1.37.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -56,7 +60,18 @@ export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A operação "Emitir DFD" que a extensão PEGOU da própria tela da Centi (o Processar). */
-export type OperacaoCenti = { moduleKey: number; guid: string; fonte?: FonteAssinatura | null; reserva?: string; em?: string };
+export type OperacaoCenti = { moduleKey: number; guid: string; fonte?: FonteAssinatura | null; reserva?: string; pares?: Record<string, string>; em?: string };
+
+/** Até quantos pares planejamento → registro das seções 8–10 ficam guardados. */
+export const MAX_PARES_ASSINATURA = 3000;
+/** Qualquer JSON → os pares válidos {planejamento (dígitos): id (dígitos)}, até o teto (os últimos ficam). */
+export function lerParesAssinatura(v: unknown): Record<string, string> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const ok = Object.entries(v as Record<string, unknown>)
+    .map(([k, x]) => [String(k).replace(/^0+(?=\d)/, ""), String(x ?? "").trim()] as const)
+    .filter(([k, x]) => /^\d{1,12}$/.test(k) && /^\d{1,12}$/.test(x) && Number(x) > 0);
+  return Object.fromEntries(ok.slice(-MAX_PARES_ASSINATURA));
+}
 
 /** O ajuste da configuração pela operação da tela: só o que MUDOU (ModuleKey, Guid, modelo de assinatura); nada a mudar
  * ou operação inválida → null. A tela da Centi é a referência — quando ela muda a operação, o sistema acompanha. */
@@ -65,8 +80,11 @@ export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigC
   const mk = Number(o.moduleKey);
   const guid = typeof o.guid === "string" ? o.guid.trim().toLowerCase() : "";
   const fonte = coerceFonteAssinatura(o.fonte);
-  if (!Number.isInteger(mk) || mk <= 0 || !GUID.test(guid)) return null;
   const p: Partial<ConfigCenti> = {};
+  // Os pares da TELA (planejamento → registro): somados aos guardados — valem mesmo sem a operação.
+  const pares = lerParesAssinatura(o.pares);
+  if (Object.entries(pares).some(([k, x]) => cfg.paresAssinatura[k] !== x)) p.paresAssinatura = lerParesAssinatura({ ...cfg.paresAssinatura, ...pares });
+  if (!Number.isInteger(mk) || mk <= 0 || !GUID.test(guid)) return Object.keys(p).length ? p : null;
   if (mk !== cfg.moduleKey) p.moduleKey = mk;
   if (guid !== cfg.guid) p.guid = guid;
   // A fonte só entra quando veio (uma operação sem ela nunca apaga a aprendida).
@@ -144,6 +162,7 @@ export function lerConfigCenti(v: unknown): ConfigCenti {
     fonteAssinatura: coerceFonteAssinatura(o.fonteAssinatura),
     // A reserva guardada (ou o antigo "modelo de assinatura" fixo do aparelho).
     assinaturaReserva: [o.assinaturaReserva, (o as Record<string, unknown>).assinaturaDfd].map((x) => String(x ?? "").trim()).find((x) => /^\d{1,12}$/.test(x)) ?? p.assinaturaReserva,
+    paresAssinatura: lerParesAssinatura(o.paresAssinatura),
     moduleKey: Number.isInteger(mk) && mk > 0 ? mk : p.moduleKey,
     guid: !antiga && typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
     descobrirEntidade: typeof o.descobrirEntidade === "boolean" ? o.descobrirEntidade : p.descobrirEntidade,

@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
-import { comandoApagarRetratos, comandoGuardarRetrato, comandosHistoricoCenti, consultaHistoricoCenti, consultaRetrato, MAX_HISTORICO_CENTI } from "../src/lib/conferencia-centi-sql.ts";
+import { comandoApagarPdfs, comandoApagarRetratos, comandoGuardarPdf, comandoGuardarRetrato, comandosHistoricoCenti, consultaHistoricoCenti, consultaPdf, consultaRetrato, MAX_HISTORICO_CENTI } from "../src/lib/conferencia-centi-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // O HISTÓRICO da conferência × Centi pelos builders, no driver drizzle-orm/d1 REAL e dentro de db.batch.
@@ -50,5 +50,18 @@ describe("retrato da Centi (builders no db.batch)", () => {
     assert.equal((await consultaRetrato(orm as never, 2))[0]?.retrato, "r2", "o outro DFD fica");
     db.exec("DELETE FROM dfds WHERE id = 2");
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
+  });
+});
+
+describe("PDF da Centi guardado na conferência (builders no db.batch)", () => {
+  it("guarda (substitui), lê, apaga por lista e sai junto com o DFD", async () => {
+    const { db, orm } = banco();
+    await orm.batch([comandoGuardarPdf(orm as never, 1, "JVBERi0x", "2026-11-17"), comandoGuardarPdf(orm as never, 2, "JVBERi0y", "2026-11-17")] as never);
+    await orm.batch([comandoGuardarPdf(orm as never, 1, "JVBERi0z", "2026-11-18")] as never);
+    assert.equal((await consultaPdf(orm as never, 1))[0]?.pdf, "JVBERi0z");
+    await orm.batch([comandoApagarPdfs(orm as never, [1])] as never);
+    assert.equal((await consultaPdf(orm as never, 1)).length, 0);
+    db.exec("DELETE FROM dfds WHERE id = 2");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_pdf").get() as { n: number }).n, 0);
   });
 });

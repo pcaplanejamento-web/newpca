@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { conferenciasCenti, conferenciasCentiRetrato } from "../db/schema.ts";
+import { conferenciasCenti, conferenciasCentiPdf, conferenciasCentiRetrato } from "../db/schema.ts";
 
 type Db = DrizzleD1Database<Record<string, unknown>>;
 
@@ -52,4 +52,21 @@ export function comandoApagarRetratos(db: Db, dfdIds: readonly number[]) {
 
 export function consultaRetrato(db: Db, dfdId: number) {
   return db.select({ retrato: conferenciasCentiRetrato.retrato, em: conferenciasCentiRetrato.em }).from(conferenciasCentiRetrato).where(eq(conferenciasCentiRetrato.dfdId, dfdId)).limit(1);
+}
+
+/** O PDF que a Centi GEROU na conferência (base64) — até `MAX_PDF_CENTI` caracteres (a linha do D1 cabe em 2 MB). */
+export const MAX_PDF_CENTI = 1_900_000;
+
+/** Guarda (ou troca) o PDF da Centi de um DFD — o BUILDER vai no `db.batch`. */
+export function comandoGuardarPdf(db: Db, dfdId: number, pdf: string, em: string) {
+  return db.insert(conferenciasCentiPdf).values({ dfdId, pdf, em }).onConflictDoUpdate({ target: conferenciasCentiPdf.dfdId, set: { pdf, em } });
+}
+
+/** Apaga os PDFs guardados dos DFDs (saem junto com o retrato). */
+export function comandoApagarPdfs(db: Db, dfdIds: readonly number[]) {
+  return db.delete(conferenciasCentiPdf).where(sql`conferencias_centi_pdf.dfd_id IN (SELECT value FROM json_each(${JSON.stringify([...dfdIds])}))`);
+}
+
+export function consultaPdf(db: Db, dfdId: number) {
+  return db.select({ pdf: conferenciasCentiPdf.pdf, em: conferenciasCentiPdf.em }).from(conferenciasCentiPdf).where(eq(conferenciasCentiPdf.dfdId, dfdId)).limit(1);
 }

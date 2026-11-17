@@ -111,6 +111,17 @@
   const FONTE_DIAG = "__pcaFonteDiag_v1";
   // O registro das seções 8–10 da última emissão pela tela: só a RESERVA (o sistema marca essas seções como não conferidas).
   const RESERVA = "__pcaAssinaturaReserva_v1";
+  // Os PARES planejamento → registro das seções 8–10 que a PRÓPRIA TELA mandou ao emitir (o valor exato da Centi): a
+  // conferência do sistema só emite com eles (ou com o lido da Centi para o planejamento). Até 3000, os últimos ficam.
+  const PARES = "__pcaParesAssinatura_v1";
+  const lerPares = () => {
+    try {
+      const p = JSON.parse(localStorage.getItem(PARES) || "{}");
+      return p && typeof p === "object" && !Array.isArray(p) ? p : {};
+    } catch {
+      return {};
+    }
+  };
   function fonteGuardada() {
     try {
       const g = JSON.parse(localStorage.getItem(FONTE_ASSINATURA) || "null");
@@ -126,9 +137,10 @@
     try {
       reserva = localStorage.getItem(RESERVA) || null;
     } catch {}
-    if (!operacaoTela) return g ? { moduleKey: g.moduleKey, guid: g.guid, fonte: g.fonte, reserva, em: g.em } : reserva ? { reserva } : null;
+    const pares = lerPares();
+    if (!operacaoTela) return g ? { moduleKey: g.moduleKey, guid: g.guid, fonte: g.fonte, reserva, pares, em: g.em } : reserva || Object.keys(pares).length ? { reserva, pares } : null;
     const { assinatura: _a, planejamento: _p, ...op } = operacaoTela;
-    return { ...op, fonte: operacaoTela.fonte ?? g?.fonte ?? null, reserva: operacaoTela.assinatura ?? reserva };
+    return { ...op, fonte: operacaoTela.fonte ?? g?.fonte ?? null, reserva: operacaoTela.assinatura ?? reserva, pares };
   }
   // A tela da Centi mandou um "Emitir DFD" (o operation do Processar): guarda a operação dela e APRENDE de onde veio a
   // assinatura escolhida (das respostas que a tela recebeu para aquele planejamento).
@@ -142,6 +154,15 @@
       const fonte = op.planejamento && op.assinatura ? pecas.fonteDaAssinatura(respostasTela, op.planejamento, op.assinatura) : null;
       operacaoTela = { ...op, fonte, em };
       if (op.assinatura) localStorage.setItem(RESERVA, String(op.assinatura));
+      if (op.planejamento && op.assinatura && /^\d{1,12}$/.test(String(op.planejamento)) && /^\d{1,12}$/.test(String(op.assinatura))) {
+        const pares = lerPares();
+        const k = String(op.planejamento).replace(/^0+(?=\d)/, "");
+        delete pares[k];
+        pares[k] = String(op.assinatura);
+        const chaves = Object.keys(pares);
+        for (const x of chaves.slice(0, Math.max(0, chaves.length - 3000))) delete pares[x];
+        localStorage.setItem(PARES, JSON.stringify(pares));
+      }
       if (fonte) localStorage.setItem(FONTE_ASSINATURA, JSON.stringify({ moduleKey: op.moduleKey, guid: op.guid, fonte, em }));
       // Diagnóstico: o que a tela recebeu antes deste Processar (só caminhos e chaves) — o ADM copia na Automação.
       if (op.planejamento && op.assinatura)

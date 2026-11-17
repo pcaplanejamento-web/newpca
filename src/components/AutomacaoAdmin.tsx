@@ -401,7 +401,7 @@ export function AutomacaoAdmin({
     const a = ajusteDaOperacao(cfgRef.current, op);
     if (!a) return false;
     mudar(a);
-    // Só a reserva das seções 8–10 mudou: nada a avisar.
+    // Só a reserva ou os pares das seções 8–10 mudaram: nada a avisar.
     if (a.moduleKey === undefined && a.guid === undefined && !a.fonteAssinatura) return true;
     if (!doServidor)
       toast.success(

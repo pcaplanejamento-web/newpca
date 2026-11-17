@@ -671,6 +671,15 @@ export const conferenciasCentiRetrato = sqliteTable("conferencias_centi_retrato"
   em: text("em").notNull(),
 });
 
+/** O PDF que a Centi gerou na última conferência (o divergente), em base64 — para conferir a olho o que foi lido. */
+export const conferenciasCentiPdf = sqliteTable("conferencias_centi_pdf", {
+  dfdId: integer("dfd_id")
+    .primaryKey()
+    .references(() => dfds.id, { onDelete: "cascade" }),
+  pdf: text("pdf").notNull(),
+  em: text("em").notNull(),
+});
+
 /** Itens da Seção 4 do DFD (só quantidade — sem valor/classificação por item). */
 export const dfdItens = sqliteTable(
   "dfd_itens",

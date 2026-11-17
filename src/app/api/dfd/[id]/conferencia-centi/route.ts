@@ -4,7 +4,7 @@ import { dfds } from "@/db/schema";
 import { dfdLegivelNaMesa, escopoMesa, MSG_SEM_ACESSO_DFD } from "@/lib/acesso-mesa";
 import { exigirAcesso, exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { comandoApagarRetratos, comandosHistoricoCenti, consultaHistoricoCenti, consultaRetrato } from "@/lib/conferencia-centi-sql";
+import { comandoApagarPdfs, comandoApagarRetratos, comandosHistoricoCenti, consultaHistoricoCenti, consultaPdf, consultaRetrato } from "@/lib/conferencia-centi-sql";
 import {
   type AceiteCenti,
   chaveMotivo,
@@ -37,7 +37,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const esc = await escopoMesa();
   if (!esc || !(await dfdLegivelNaMesa(esc, { ...dfd, id }))) return erro(MSG_SEM_ACESSO_DFD, 403);
   const db = getDb();
-  if (new URL(req.url).searchParams.get("retrato") === "1") {
+  const busca = new URL(req.url).searchParams;
+  // O PDF que a Centi GEROU na última conferência (o arquivo como veio — conferir a olho o que foi lido).
+  if (busca.get("pdf") === "1") {
+    const [r] = await consultaPdf(db, id);
+    if (!r?.pdf) return erro("Não há PDF da Centi guardado para este DFD — confira de novo na Centi.", 404);
+    const bytes = Uint8Array.from(atob(r.pdf), (c) => c.charCodeAt(0));
+    return new Response(bytes, {
+      headers: { "content-type": "application/pdf", "content-disposition": `inline; filename="Centi - Planejamento ${dfd.planejamento ?? id}.pdf"`, "cache-control": "no-store" },
+    });
+  }
+  if (busca.get("retrato") === "1") {
     const [r] = await consultaRetrato(db, id);
     const retrato = retratoDoPlanejamento(lerRetrato(r?.retrato), dfd.planejamento);
     // Para CORRIGIR, só o retrato recente e posterior à última gravação do DFD (a Centi pode ter mudado).
@@ -156,6 +166,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       })
       .where(eq(dfds.id, id)),
     comandoApagarRetratos(db, [id]),
+    comandoApagarPdfs(db, [id]),
   ]);
   // O PCA consolida pelo nº de planejamento: acompanha.
   await sincronizarDfdNoPca(id, a.u.id, "todos");

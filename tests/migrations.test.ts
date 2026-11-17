@@ -1341,3 +1341,19 @@ describe("0185: conferências da Centi zeradas (emitidas com a assinatura de out
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
   });
 });
+
+describe("0186: PDF da Centi guardado + conferências zeradas (emitidas com o registro das seções 8–10 adivinhado)", () => {
+  it("cria a tabela do PDF (sai com o DFD), zera as marcações e apaga os retratos", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0185_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO dfds (id, numero, conferencia_centi, conferencia_centi_em) VALUES (1, 'A', 'divergente', '2026-11-17')`);
+    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (1, '{}', '2026-11-17')`);
+    db.exec(readFileSync(join(DIR, "0186_conferencia_centi_pdf.sql"), "utf8"));
+    assert.deepEqual({ ...(db.prepare("SELECT conferencia_centi AS c, conferencia_centi_em AS e FROM dfds").get() as object) }, { c: null, e: null });
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_retrato").get() as { n: number }).n, 0);
+    db.exec(`INSERT INTO conferencias_centi_pdf (dfd_id, pdf, em) VALUES (1, 'JVBER', '2026-11-17')`);
+    db.exec("DELETE FROM dfds WHERE id = 1");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_pdf").get() as { n: number }).n, 0);
+  });
+});
