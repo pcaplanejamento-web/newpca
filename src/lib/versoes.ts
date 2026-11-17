@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.17",
+    data: "2026-11-17",
+    titulo: "Conferência com a Centi: emite, lê o PDF e compara",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A conferência com a Centi volta a emitir o DFD como o “Baixar DFDs” (sem travar o DFD por falta do registro das seções 8 a 10), lê o PDF devolvido e compara. O “PDF da Centi” segue mostrando o arquivo lido.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.16",
     data: "2026-11-17",
     titulo: "Conferência com a Centi só com o registro do próprio planejamento + o PDF à vista",
@@ -43,7 +57,7 @@ export const VERSOES: readonly Versao[] = [
         tipo: "correcao",
         area: "Automação",
         texto:
-          "A conferência e a correção pela Centi não emitem mais o DFD com um registro das seções 8 a 10 adivinhado (era por isso que vinham equipe, secretário e autorização de outro planejamento). Vale só o que a Centi informa para AQUELE planejamento — o registro que a própria tela da Centi usou ao emiti-lo (a extensão 1.37.0 guarda) ou o do cadastro do planejamento. Sem ele, o DFD fica não conferido e o aviso diz para emiti-lo uma vez pela tela da Centi. As conferências e os dados guardados da Centi anteriores foram zerados: confira de novo.",
+          "A emissão do DFD usa primeiro o registro das seções 8 a 10 que a própria tela da Centi usou para AQUELE planejamento (a extensão 1.37.0 guarda). As conferências e os dados guardados da Centi anteriores foram zerados: confira de novo.",
         link: "/painel/automacao",
       },
       {

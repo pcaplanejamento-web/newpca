@@ -146,8 +146,8 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const finalidade = s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
-  // A conferência emite SÓ com o registro das seções 8–10 que a Centi informa para ESTE planejamento (estrito).
-  const e = await emitirUm(c, plan, entidade || undefined, false, l, true);
+  // A MESMA emissão do "Baixar DFDs"; o PDF que volta é lido inteiro e comparado.
+  const e = await emitirUm(c, plan, entidade || undefined, false, l);
   // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
   if (!e.pdf) {
     // O load já DIZIA (a mensagem da Centi) que o planejamento NÃO EXISTE e a emissão também falhou: é "não encontrado" (marca Divergente),
