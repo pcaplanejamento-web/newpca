@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contarDivergencias, diferencasDfdCenti, divergenciasDoMotivo, MAX_MOTIVO_CENTI, motivoDivergencias } from "../src/lib/conferencia-dfd-centi.ts";
+import { contarDivergencias, diferencasDfdCenti, divergenciasDoMotivo, MAX_MOTIVO_CENTI, motivoDivergencias, semValores } from "../src/lib/conferencia-dfd-centi.ts";
+import { lerConfigCenti, pedidoEmitirDfd } from "../src/lib/automacao-centi-core.ts";
 import { compararDfdCenti } from "../src/lib/fluxo-nos.ts";
 import type { DfdParseado } from "../src/lib/parse-dfd-comum.ts";
 
@@ -268,4 +269,25 @@ test("load sem registro: a mensagem da Centi e quando ela diz que o planejamento
   assert.equal(planejamentoInexistente("Planejamento inexistente"), true);
   assert.equal(planejamentoInexistente("Usuário sem permissão!"), false, "permissão nunca vira 'não existe'");
   assert.equal(planejamentoInexistente(null), false);
+});
+
+test("PDF da Centi sem o valor de referência: itens sem valor = não conferido; com valor (inclusive 0) = conferível", () => {
+  // O leiaute real emitido com "Emitir valor referência" = Não (Planej. 131): a seção 4 sem VALOR UNITÁRIO/VALOR TOTAL.
+  const semColunas = { valorTotal: null, itens: [{ item: 1, codigo: "5241903721", quantidade: 1, valorUnitario: null, valorTotal: null }] };
+  assert.equal(semValores(semColunas), true);
+  // Com "Sim": 1 × 2.880.000,0000.
+  const comColunas = { valorTotal: 2_880_000, itens: [{ item: 1, quantidade: 1, valorUnitario: 2_880_000, valorTotal: 2_880_000 }] };
+  assert.equal(semValores(comColunas), false);
+  // "0,0000" é valor (0), não falta; um item com valor basta; DFD sem itens não é "sem valores".
+  assert.equal(semValores({ valorTotal: 0, itens: [{ valorUnitario: 0, valorTotal: 0 }] }), false);
+  assert.equal(semValores({ valorTotal: null, itens: [{ valorUnitario: null, valorTotal: null }, { valorUnitario: 5, valorTotal: null }] }), false);
+  assert.equal(semValores({ valorTotal: null, itens: [] }), false);
+});
+
+test("a emissão da conferência manda “Emitir valor referência” = Sim mesmo com a chave do aparelho desligada", () => {
+  const param = (corpo: { Params: { Key: string; Value: string }[] }, k: string) => corpo.Params.find((p) => p.Key === k)?.Value;
+  const doAparelho = lerConfigCenti({ valorReferencia: false });
+  assert.equal(param(pedidoEmitirDfd("131", doAparelho, new Date(2026, 10, 17), "114"), "EmitirValorReferencia"), "0");
+  // O que `lerNaSessao` faz: a mesma configuração com o valor de referência ligado.
+  assert.equal(param(pedidoEmitirDfd("131", { ...doAparelho, valorReferencia: true }, new Date(2026, 10, 17), "114"), "EmitirValorReferencia"), "1");
 });

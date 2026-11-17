@@ -43,7 +43,7 @@ export function useCorrecaoCenti({
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível ler os dados guardados da Centi.");
       if (atual.current !== dfdId) return;
       if (j.vencido) throw new Error(j.aviso ?? "Os dados da Centi desta conferência estão vencidos — reconfira o DFD na Centi antes de corrigir.");
-      if (!j.retrato || j.retrato.v !== 3)
+      if (!j.retrato || j.retrato.v !== 4)
         throw new Error("Não há dados da Centi CONFIRMADOS para este DFD (os guardados antes da correção da assinatura do DFD não valem mais, ou a leitura foi achada em outro órgão) — reconfira na Centi e tente de novo.");
       const id = dfdId;
       setCenti({

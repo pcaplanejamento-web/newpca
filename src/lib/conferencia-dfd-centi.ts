@@ -396,12 +396,19 @@ export function difsIdentidadeCenti(d: DfdConferido, x: ResumoCenti): string[] {
   return difs;
 }
 
+/** O PDF da Centi saiu SEM os valores dos itens (emitido com "Emitir valor referência" = Não: a seção 4 sem as colunas
+ * VALOR UNITÁRIO/VALOR TOTAL) — tem itens e nenhum valor. Um item com "0,0000" é valor (0), não falta. Pura. */
+export function semValores(d: { valorTotal?: number | null; itens: readonly { valorUnitario?: number | null; valorTotal?: number | null }[] }): boolean {
+  return d.itens.length > 0 && d.valorTotal == null && d.itens.every((i) => i.valorUnitario == null && i.valorTotal == null);
+}
+
 /** O retrato guardado: o DFD da Centi COMO LIDO (sem as assinaturas — a do sistema é a validada) + o que a conferência
  * usou (situação, órgãos, opções) — refazer a conferência com ele dá o MESMO resultado da automação. */
 export type RetratoCenti = {
-  /** 3 = emitido com a assinatura do PRÓPRIO planejamento (seções 8–10) e confirmado por duas emissões iguais. Os de antes
-   * (v 1 e v 2) saíram com a assinatura de OUTRO planejamento (um id fixo na emissão) — não valem mais. */
-  v: 3;
+  /** 4 = emitido com a assinatura do PRÓPRIO planejamento (seções 8–10), com o VALOR DE REFERÊNCIA (os valores dos itens)
+   * e confirmado por duas emissões iguais. Os v 1 e v 2 saíram com a assinatura de OUTRO planejamento; os v 3 podem ter
+   * saído sem os valores ("Emitir valor referência" = Não) — não valem mais. */
+  v: 4;
   dfd: DfdParseado;
   situacao: string;
   entidade: string;
@@ -418,7 +425,7 @@ export const MAX_RETRATO = 1_500_000;
 export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdParseado, o: { objeto: boolean; tolerancia: number }): RetratoCenti {
   const { assinaturas: _a, ...resto } = dfdCenti;
   return {
-    v: 3,
+    v: 4,
     dfd: { ...resto, assinaturas: [] },
     situacao: str(x.situacao),
     entidade: str(d.entidade),
@@ -496,10 +503,10 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
     const r = JSON.parse(t) as Partial<RetratoCenti>;
     const d = r?.dfd as DfdParseado | undefined;
     // Só o retrato v 3 (assinatura do próprio planejamento, confirmado) e lido no PRÓPRIO órgão do DFD.
-    if (r?.v !== 3 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
+    if (r?.v !== 4 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
     if (str(r.entidadeAchada) && str(r.entidadeAchada) !== str(r.entidade)) return null;
     return {
-      v: 3,
+      v: 4,
       dfd: { ...d, assinaturas: [] },
       situacao: str(r.situacao),
       entidade: str(r.entidade),

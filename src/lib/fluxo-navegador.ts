@@ -10,6 +10,7 @@ import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdDetalhe } from "./dfd";
 import { herdarTratamentos } from "./comparar-protocolo";
+import { semValores } from "./conferencia-dfd-centi";
 import { normalizarSecoesDfd } from "./dfd-tratamento";
 import { enviarDfdEmLotes, metaDoDfd } from "./importar-dfd";
 import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo, type EmissaoProtocolo } from "./automacao-tela-protocolo";
@@ -147,8 +148,10 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const finalidade = topo.finalidade ?? s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
-  // A MESMA emissão do "Baixar DFDs"; o PDF que volta é lido inteiro e comparado.
-  const e = await emitirUm(c, plan, entidade || undefined, false, l);
+  // A MESMA emissão do "Baixar DFDs", SEMPRE com o valor de referência ("Emitir valor referência" = Sim): sem ele a Centi
+  // emite a seção 4 sem as colunas de valor e a conferência compararia "R$ 0,00". A chave do aparelho vale só no Baixar/anexar.
+  const comValores: ContextoEmissor = { ...c, cfg: () => ({ ...c.cfg(), valorReferencia: true }) };
+  const e = await emitirUm(comValores, plan, entidade || undefined, false, l);
   // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
   if (!e.pdf) {
     // O load já DIZIA (a mensagem da Centi) que o planejamento NÃO EXISTE e a emissão também falhou: é "não encontrado" (marca Divergente),
@@ -162,6 +165,8 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
+  // Sem nenhum valor nos itens = o PDF saiu sem o valor de referência: NÃO confere (nunca compara nem guarda "R$ 0,00").
+  if (semValores(d)) throw new Error("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido.");
   const resumo = {
     numero: d.numero,
     planejamento: d.planejamento,

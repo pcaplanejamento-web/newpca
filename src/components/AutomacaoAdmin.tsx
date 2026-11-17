@@ -275,7 +275,7 @@ function Ajustes({
         </Button>
       </Grupo>
       <Grupo titulo="Emissão do DFD">
-        <Switch checked={cfg.valorReferencia} onChange={(v) => onCfg({ valorReferencia: v })} label="Emitir valor de referência" />
+        <Switch checked={cfg.valorReferencia} onChange={(v) => onCfg({ valorReferencia: v })} label="Emitir valor de referência" dica="Vale no Baixar/anexar DFDs. A conferência com a Centi sempre emite com o valor de referência." />
         <Switch checked={cfg.emitirData} onChange={(v) => onCfg({ emitirData: v })} label="Emitir data" />
       </Grupo>
       <Grupo titulo="Órgão na Centi (ID)">

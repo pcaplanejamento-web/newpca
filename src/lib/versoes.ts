@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.21",
+    data: "2026-11-17",
+    titulo: "Conferência com a Centi com os valores dos itens",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A conferência DFD × Centi sempre emite o DFD com “Emitir valor referência” = Sim: o PDF vem com o valor unitário e o total de cada item e deixa de apontar “R$ 0,00 na Centi”. Um PDF que ainda venha sem os valores fica “não conferido” (nunca é comparado nem usado na correção). As conferências feitas antes são refeitas na próxima execução.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.20",
     data: "2026-11-17",
     titulo: "Automações da Centi: retomada, resultados e centro de custo",

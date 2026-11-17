@@ -1402,3 +1402,20 @@ describe("0189: a retomada gravada antes do ar da v1.295.19 é esquecida", () =>
     assert.deepEqual(chaves, ["11"]);
   });
 });
+
+describe("0190: conferências emitidas sem o valor de referência zeradas", () => {
+  it("zera as marcações, os retratos, os PDFs e a retomada", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0189_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO dfds (id, numero, conferencia_centi, conferencia_centi_motivo, conferencia_centi_em) VALUES (1, 'A', 'divergente', 'Valor total: R$ 10,00 no sistema × R$ 0,00 na Centi', '2026-11-17')`);
+    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (1, '{}', '2026-11-17')`);
+    db.exec(`INSERT INTO conferencias_centi_pdf (dfd_id, pdf, em) VALUES (1, 'JVBER', '2026-11-17')`);
+    db.exec("INSERT INTO automacao_fluxos (id, nome) VALUES (1, 'Conferir')");
+    db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES (1, 'sub1', '10', 'ok', '2026-11-17 16:00:00')`);
+    db.exec(readFileSync(join(DIR, "0190_conferencia_centi_com_valores.sql"), "utf8"));
+    assert.deepEqual({ ...(db.prepare("SELECT conferencia_centi AS c, conferencia_centi_motivo AS m, conferencia_centi_em AS e FROM dfds").get() as object) }, { c: null, m: null, e: null });
+    for (const t of ["conferencias_centi_retrato", "conferencias_centi_pdf", "automacao_progresso"])
+      assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n, 0, t);
+  });
+});
