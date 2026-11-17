@@ -4,7 +4,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 import { assinaturaDoLoad, assinaturasDoLoad, coerceFonteAssinatura, escolherAssinatura, PARA_TUDO, pedidoDaFonte } from "../src/lib/assinatura-dfd-centi.ts";
 import { assinaturaDoPlanejamento } from "../src/lib/automacao-dfds-motor.ts";
-import { ajusteDaOperacao, lerConfigCenti } from "../src/lib/automacao-centi-core.ts";
+import { ajusteDaOperacao, lerConfigCenti, pedidoEmitirDfd } from "../src/lib/automacao-centi-core.ts";
 
 // O ERRO de 16/11/2026: a automação emitia TODO DFD com o IdPlanejamentoAssinaturaDFD visto por último na tela da Centi —
 // as seções 8–10 (equipe, secretário, autorização) saíam do planejamento de outro DFD. Agora a extensão aprende ONDE a
@@ -87,10 +87,9 @@ test("emissão: sem a fonte aprendida PARA tudo; com ela, usa o load já feito o
     pedidos.push([acao, dados]);
     return { ok: true, j: { Data: [{ Id: 555 }] } };
   };
-  // Sem a lista no load nem a fonte: segue com a RESERVA e marca incerta (o DFD é analisado; as seções 8–10 não valem).
-  const sem = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaDfd: "163" }) }, "131", "1", { j: { Entity: { Fields: [{ Key: "Itens", Value: [{ Id: 1 }] }] } } })) as { id: string; incerta?: true; motivo?: string };
-  assert.equal(sem.id, "163");
-  assert.equal(sem.incerta, true);
+  // Sem a lista no load nem a fonte: o campo vai VAZIO (a Centi usa o do próprio planejamento) — nunca a reserva.
+  const sem = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaDfd: "163" }) }, "131", "1", { j: { Entity: { Fields: [{ Key: "Itens", Value: [{ Id: 1 }] }] } } })) as { id: string; motivo?: string };
+  assert.equal(sem.id, "");
   assert.match(sem.motivo ?? "", /listas lidas: Entity\.Itens/);
   assert.ok(!PARA_TUDO.test(sem.motivo ?? ""), "a falta do registro não para a execução");
   // Sem fonte, mas com a lista no load do PRÓPRIO planejamento: lê dali.
@@ -130,8 +129,8 @@ test("seções 8–10 pelo load do PRÓPRIO planejamento: uma = ela; várias = a
 test("com a fonte aprendida, o id lido tem de estar na lista do load do planejamento", async () => {
   const pedir = async () => ({ ok: true, j: { Data: [{ Id: 555 }] } });
   const cfg = lerConfigCenti({ fonteAssinatura: { metodo: "POST", caminho: "restauth/postdata", corpo: { Page: 1, Filtro: { Id: "{id:n}" } }, lista: ["Data"], chave: "Id" } });
-  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { incerta?: true; motivo?: string };
-  assert.equal(r.incerta, true);
+  const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => cfg }, "131", "1", { j: loadPlan(131, [{ id: 42 }]) })) as { id: string; motivo?: string };
+  assert.equal(r.id, "", "o id de fora do planejamento não vai — o campo vai vazio");
   assert.match(r.motivo ?? "", /não está no planejamento 131/);
 });
 
@@ -181,13 +180,18 @@ test("completar com o DFD do sistema: o mesmo nº de planejamento em dois órgã
   assert.equal(r.naoEncontrados.length, 0);
 });
 
-test("emissão: o par visto na tela da Centi para o planejamento vale primeiro; sem ele, como sempre", async () => {
+test("emissão: o par visto na tela da Centi para o planejamento vale primeiro; sem ele, o campo vazio — nunca a reserva", async () => {
   const sem = { j: { Entity: { Fields: [{ Key: "Id", Value: 131 }, { Key: "Itens", Value: [{ Id: 1 }] }] } } };
   const pedir = async () => ({ ok: true });
   const comPar = lerConfigCenti({ paresAssinatura: { "131": "480", "92": "7" } });
   assert.deepEqual(await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => comPar }, "131", "1", sem), { id: "480" });
   const r = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaReserva: "163" }) }, "131", "1", sem)) as { id: string };
-  assert.equal(r.id, "163");
+  assert.equal(r.id, "");
+  // O mesmo para OUTROS planejamentos: nunca um id comum a todos (o erro das seções 8–10 iguais em todos os DFDs).
+  const outro = (await assinaturaDoPlanejamento({ pedir: pedir as never, cfg: () => lerConfigCenti({ assinaturaReserva: "163" }) }, "92", "1", sem)) as { id: string };
+  assert.equal(outro.id, "");
+  const corpo = pedidoEmitirDfd("131", lerConfigCenti(null), new Date(2026, 10, 17), r.id);
+  assert.equal(Object.fromEntries(corpo.Params.map((x) => [x.Key, x.Value])).IdPlanejamentoAssinaturaDFD, "");
 });
 
 test("load: só a lista dos registros DO DFD do planejamento — nunca qualquer lista com “assinatura” no nome", () => {

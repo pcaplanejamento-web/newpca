@@ -142,20 +142,21 @@ export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id
 
 /**
  * O registro das seções 8–10 do DFD (IdPlanejamentoAssinaturaDFD — a Centi o chama de "assinatura") DO PLANEJAMENTO:
- * pela fonte aprendida da tela (conferida contra a lista do load) ou pela lista/campo do próprio load. Sem nenhum dos
- * dois, a emissão segue com a RESERVA (`incerta`) — o PDF é analisado inteiro, como sempre. Só a interrupção para.
+ * o par visto na tela, a fonte aprendida (conferida contra a lista do load) ou a lista/campo do próprio load. Sem nenhum,
+ * o campo vai VAZIO (a Centi usa o do próprio planejamento) — NUNCA um valor de reserva: o mesmo id para todos trazia as
+ * seções 8–10 de um só registro em todos os DFDs. Só a interrupção para.
  */
 export async function assinaturaDoPlanejamento(
   c: Pick<ContextoEmissor, "pedir" | "cfg">,
   id: string,
   entidade: string | undefined,
   load: { j: unknown },
-): Promise<{ id: string; incerta?: true; motivo?: string } | { erro: string; ambiente?: boolean }> {
+): Promise<{ id: string; motivo?: string } | { erro: string; ambiente?: boolean }> {
   const plan = id.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
   // 1º: o valor que a PRÓPRIA TELA da Centi mandou ao emitir este planejamento (a extensão guarda o par).
   const par = c.cfg().paresAssinatura?.[plan];
   if (par) return { id: par };
-  const semId = async (motivo: string) => ({ id: c.cfg().assinaturaReserva, incerta: true as const, motivo });
+  const semId = async (motivo: string) => ({ id: "", motivo });
   const doLoad = assinaturasDoLoad(load.j);
   const fonte = c.cfg().fonteAssinatura;
   if (!fonte) {
@@ -194,7 +195,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     if ("erro" in l) return l;
     load = l;
   }
-  // O registro das seções 8–10 DESTE planejamento, lido na Centi agora (sem ele, a reserva).
+  // O registro das seções 8–10 DESTE planejamento, lido na Centi agora (sem ele, o campo vazio).
   const ass = await assinaturaDoPlanejamento(c, id, entidade, load);
   if ("erro" in ass) return ass;
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), ass.id), entidade }, 150_000);

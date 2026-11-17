@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.295.18",
+    data: "2026-11-17",
+    titulo: "Conferência com a Centi: seções 8 a 10 de cada planejamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A emissão do DFD na Centi não usa mais um registro de reserva igual para todos: vai o registro das seções 8 a 10 (equipe, secretário demandante, autorização) do próprio planejamento ou, sem ele, o campo vazio para a Centi usar o do planejamento. As conferências antigas foram zeradas — confira de novo.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.295.17",
     data: "2026-11-17",
     titulo: "Conferência com a Centi: emite, lê o PDF e compara",
