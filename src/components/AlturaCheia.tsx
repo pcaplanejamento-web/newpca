@@ -106,7 +106,10 @@ export function useAlturaTela(ref: RefObject<HTMLElement | null>, minimo = 460, 
       if (!el) return;
       const main = el.closest("main");
       const pb = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 16;
-      setH(Math.max(minimo, Math.floor(window.innerHeight - topoNoDocumento(el) - pb - FOLGA - reserva)));
+      // A margem de baixo do PRÓPRIO bloco também ocupa o display (ex.: o `space-y` do pai com irmãos escondidos depois —
+      // `display:none` não deixa o bloco ser o último filho e ele ganha a margem): sem descontá-la, a página rola.
+      const mb = Number.parseFloat(getComputedStyle(el).marginBottom) || 0;
+      setH(Math.max(minimo, Math.floor(window.innerHeight - topoNoDocumento(el) - pb - mb - FOLGA - reserva)));
     };
     calc();
     window.addEventListener("resize", calc);

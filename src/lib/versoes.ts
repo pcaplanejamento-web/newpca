@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.2",
+    data: "2026-11-18",
+    titulo: "Automações sem rolar a página",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "O painel de cada automação cabe no display sem rolar a página: a tabela termina dentro do cartão (com o mesmo respiro dos lados) e os Dados de entrada rolam dentro da própria coluna.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.1",
     data: "2026-11-18",
     titulo: "Conferir e corrigir DFDs × Centi: uma só, escolhida no campo",
