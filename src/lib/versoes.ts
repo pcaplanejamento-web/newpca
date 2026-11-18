@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.3",
+    data: "2026-11-18",
+    titulo: "Afastamentos padronizados nas automações",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A tabela do painel de cada automação fica com o mesmo respiro em cima e embaixo dentro do cartão, também depois de carregar os dados, e o cartão termina à mesma distância do fim da tela que tem da barra de cima.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.2",
     data: "2026-11-18",
     titulo: "Automações sem rolar a página",

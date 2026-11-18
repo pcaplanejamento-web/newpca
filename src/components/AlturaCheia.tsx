@@ -26,7 +26,20 @@ export function topoNoDocumento(el: HTMLElement): number {
 }
 
 /**
- * Altura (px) do bloco no desktop — do topo dele até o fim do display, menos a reserva; `null` no celular (fluxo
+ * O FIM disponível para o bloco no DOCUMENTO quando ele mora num contêiner marcado `data-altura-limite` (um cartão com
+ * altura própria — ex.: o painel das automações): o fundo do contêiner SEM o respiro e a borda de baixo — o bloco termina
+ * com o MESMO afastamento do contorno que os lados. Sem o contêiner, `null` (vale o fim do display).
+ */
+export function limiteDoBloco(el: HTMLElement): { fim: number; caixa: HTMLElement } | null {
+  const caixa = el.parentElement?.closest<HTMLElement>("[data-altura-limite]");
+  if (!caixa) return null;
+  const cs = getComputedStyle(caixa);
+  const fim = topoNoDocumento(caixa) + caixa.offsetHeight - (Number.parseFloat(cs.paddingBottom) || 0) - (Number.parseFloat(cs.borderBottomWidth) || 0);
+  return { fim, caixa };
+}
+
+/**
+ * Altura (px) do bloco no desktop — do topo dele até o fim do display (ou do contêiner `data-altura-limite`), menos a reserva; `null` no celular (fluxo
  * normal). Medida ANTES da pintura e refeita no resize e quando o layout acima muda.
  */
 export function useAlturaAteOFim(ref: RefObject<HTMLElement | null>, ativo: boolean, reservaInferior = 0): number | null {
@@ -44,12 +57,16 @@ export function useAlturaAteOFim(ref: RefObject<HTMLElement | null>, ativo: bool
       // Posição no DOCUMENTO (não na viewport): rolar a página não encolhe o bloco.
       const top = topoNoDocumento(el);
       if (top <= 0) return;
-      setAltura(Math.max(240, Math.floor(window.innerHeight - top - reservaAteORodape(reservaInferior))));
+      const lim = limiteDoBloco(el);
+      const fim = lim ? lim.fim - reservaInferior : window.innerHeight - reservaAteORodape(reservaInferior);
+      setAltura(Math.max(240, Math.floor(fim - top)));
     };
     calc();
     window.addEventListener("resize", calc);
     const ro = new ResizeObserver(calc);
     ro.observe(document.body);
+    const caixa = ref.current ? limiteDoBloco(ref.current)?.caixa : null;
+    if (caixa) ro.observe(caixa);
     // O que fica ACIMA do bloco muda de altura sem mudar o `body` (ex.: "Mais indicadores" abrindo e fechando numa página
     // que já cabe no display): os IRMÃOS anteriores de cada ancestral até o `<main>` também são observados — a altura
     // acompanha a transição quadro a quadro e o fim do bloco fica sempre rente ao fim do display.

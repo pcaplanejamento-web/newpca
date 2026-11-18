@@ -109,7 +109,7 @@ export function PainelFluxo({
     <div
       ref={ref}
       style={altura ? ({ "--h-painel": `${altura}px` } as React.CSSProperties) : undefined}
-      className="grid gap-[var(--gap-block)] lg:h-[var(--h-painel)] lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]"
+      className="!mb-0 grid gap-[var(--gap-block)] lg:h-[var(--h-painel)] lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]"
     >
       <aside className="flex min-h-0 flex-col gap-[var(--gap-block)] lg:overflow-y-auto">
         {entradas.length > 0 && (
@@ -191,7 +191,9 @@ export function PainelFluxo({
           </ol>
         </section>
       </aside>
-      <section className={`${CARTAO} flex min-h-[28rem] min-w-0 flex-col gap-3 lg:min-h-0`}>
+      {/* `data-altura-limite`: as tabelas `scrollInterno` aqui dentro terminam no fundo deste cartão, com o mesmo
+          afastamento do contorno nos quatro lados (`limiteDoBloco`). */}
+      <section data-altura-limite className={`${CARTAO} flex min-h-[28rem] min-w-0 flex-col gap-3 lg:min-h-0`}>
         {opcoes.length > 1 && <Segmented ariaLabel="Visões do fluxo" value={abaValida} onChange={setAba} options={opcoes} className="self-start" />}
         <div className="flex min-h-0 flex-1 flex-col">
           {Visao && noAberto ? (

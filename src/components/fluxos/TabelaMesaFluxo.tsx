@@ -8,7 +8,6 @@ import { COLUNAS_PROTOCOLOS, type GestaoAutomacao, useColunasGestao } from "../a
 import { CelulaTexto } from "../CelulaLista";
 import { colunasItemMesa, type LinhaItemMesa } from "../ColunasItensMesa";
 import { type Column, DataTable } from "../DataTable";
-import { tokenPx } from "../espacamento";
 import { type LinhaDfd, PlanilhaDfds } from "../PlanilhaDfds";
 
 type Chave = string | number;
@@ -101,10 +100,7 @@ export function TabelaMesaFluxo({
     if (a) onAbrir(a);
   } : undefined;
   const ordenadas = onOrdem ? (ls: Item[]) => onOrdem(ls.map((it) => String(chave(it))), ls.length < itens.length) : undefined;
-  // A tabela mora DENTRO do cartão do painel (que vai até o fim do display): o fim dela desconta o respiro e a borda de
-  // baixo do cartão — senão passa dele e a página inteira rola.
-  const reservaInferior = tokenPx("--pad-card", 14) + 1;
-  const comum = { selectable: !!onSelected, selected, onSelected, acoesRodape, vazio, exportar, density: "compact", scrollInterno, reservaInferior, linhasSalvas, onOrdenadas: ordenadas } as const;
+  const comum = { selectable: !!onSelected, selected, onSelected, acoesRodape, vazio, exportar, density: "compact", scrollInterno, linhasSalvas, onOrdenadas: ordenadas } as const;
 
   // DFDs: a PLANILHA DE DFDs da Mesa (a chave da linha = a posição; a seleção traduz para a chave do item).
   const dfds = useMemo(() => (tipo === "dfd" ? itens.map((it, i): LinhaDfd => ({ ...dadosDfdDoItem(it), key: i, estado: "regular" })) : []), [tipo, itens]);
@@ -116,7 +112,6 @@ export function TabelaMesaFluxo({
         linhas={dfds}
         semEstado
         scrollInterno={scrollInterno}
-        reservaInferior={reservaInferior}
         selecionavel={!!onSelected}
         selected={selected && new Set([...selected].map((k) => indice.get(String(k))).filter((i): i is number => i != null))}
         onSelected={onSelected && ((s) => onSelected(new Set([...s].map((i) => chaves[Number(i)]))))}

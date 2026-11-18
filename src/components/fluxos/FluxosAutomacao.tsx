@@ -1675,7 +1675,7 @@ function EditorFluxo({
       {modo === "painel" && (
         <PainelFluxo grafo={grafo} onGrafo={setGrafo} passos={passos} resultado={resultado} rodando={rodando} ultima={{ em: fluxo.ultimaEm, resumo: fluxo.ultimaExecucao }} />
       )}
-      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:h-[var(--h)] lg:grid-cols-[14rem_minmax(0,1fr)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
+      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} !mb-0 gap-3 lg:h-[var(--h)] lg:grid-cols-[14rem_minmax(0,1fr)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
         {/* A PALETA: coluna à esquerda no desktop; no celular/tablet, o botão "+ Bloco" abre a MESMA lista numa folha. */}
         <aside className={`${CARTAO} hidden min-h-0 flex-col gap-2 overflow-hidden lg:flex`}>
           <SearchField compacto placeholder="Buscar bloco" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar bloco" />
