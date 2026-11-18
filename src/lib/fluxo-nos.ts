@@ -1100,8 +1100,23 @@ const NOS: DefNo[] = [
           { valor: "pendentes", rotulo: "Divergentes e não conferidos" },
         ],
       },
+      {
+        chave: "corrigir",
+        rotulo: "Corrigir os divergentes",
+        tipo: "booleano",
+        entrada: true,
+        padrao: true,
+        ajuda:
+          "Ligado: o DFD que sair divergente na conferência é corrigido em seguida com os dados da Centi (só o que diverge). Desligado: só confere — a coluna “Centi” é marcada e nada do DFD é alterado.",
+      },
     ],
-    executar: async (e, c) => ({ saida: so(e).filter((it) => passaConferencia(it, str(c.quais) || "todos")) }),
+    // Cada item leva a escolha (`corrigir`) ao fluxo de UM DFD — quem grava ("Corrigir DFD pela Centi") a respeita. Vindo da
+    // MESA (`__daMesa`), os DFDs foram escolhidos lá: seguem todos; o "Reconferir" da Mesa nunca corrige (`__soConferir`).
+    executar: async (e, c, ctx) => {
+      const corrigir = c.corrigir !== false && !ctx.host.__soConferir;
+      const itens = ctx.host.__daMesa ? so(e) : so(e).filter((it) => passaConferencia(it, str(c.quais) || "todos"));
+      return { saida: itens.map((it) => ({ ...it, corrigir })) };
+    },
   },
   {
     tipo: "dados.campos",
@@ -1643,6 +1658,8 @@ const NOS: DefNo[] = [
     tipo: "saida.substituirDfd",
     categoria: "saida",
     rotulo: "Substituir DFD pela Centi",
+    // Substituído pelo "Corrigir DFD pela Centi" (as mesmas proteções, só o que diverge): fora da paleta; os salvos rodam.
+    legado: true,
     descricao:
       "Substitui os dados de cada DFD gravado (id) pelos do DFD lido na Centi (“Buscar DFD na Centi” com “Guardar o DFD inteiro”) — a mesma sobrescrita do banner, com o histórico.",
     icone: "save",
@@ -1652,6 +1669,8 @@ const NOS: DefNo[] = [
     executar: async (e, _c, ctx) => {
       const subst = ctx.host.substituirDfd as ((id: number, dfd: Item) => Promise<{ numero: string; itens: number }>) | undefined;
       if (!subst) throw new Error("A substituição do DFD só funciona na tela da Automação.");
+      // O "Reconferir" da Mesa nunca grava dados no DFD.
+      if (ctx.host.__soConferir) return { substituidos: [], erros: so(e).map((it) => ({ ...it, erro: "Só conferir: nada foi substituído." })) };
       const ok: Item[] = [];
       const erros: Item[] = [];
       const itens = so(e);
@@ -1706,7 +1725,6 @@ const NOS: DefNo[] = [
     ],
     executar: async (e, c, ctx) => {
       const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>) | undefined;
-      if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
       const corrigidos: Item[] = [];
       const convergentes: Item[] = [];
       const sem: Item[] = [];
@@ -1722,6 +1740,18 @@ const NOS: DefNo[] = [
         }
         if (vistos.has(id)) continue; // o mesmo DFD duas vezes não é corrigido duas vezes
         vistos.add(id);
+        // SÓ CONFERIR (a escolha do fluxo ou o "Reconferir" da Mesa): nada é gravado — a conferência já foi marcada (ou, não
+        // conferido, o "Executar fluxo" o guarda como falha na retomada). Nenhum resultado da conferência vira falha aqui.
+        if (ctx.host.__soConferir || it.corrigir === false) {
+          // O motivo da conferência sem o "DFD N (Planej. P): " da frente — a mensagem já diz qual é o DFD.
+          const div = (str(it.conferenciaCentiMotivo) || str(it.mensagem) || str(it.centiErro)).replace(/^DFD [^:]*\(Planej\.[^)]*\):\s*/, "");
+          const como = it.naoMarcar === true || it.centiFalha ? "não conferido" : "só conferir";
+          const motivo = !div ? como : div.toLowerCase().startsWith(como) ? div : `${como} — ${div}`;
+          const f = { ...it, centi: undefined, dfdSistema: undefined, correcao: "soConferir", motivo };
+          sem.push(f);
+          ctx.parcial?.([f]);
+          continue;
+        }
         // Só corrige o DFD RECONFERIDO na Centi NESTA execução (o "Buscar DFD na Centi" + "Comparar"): sem a leitura da
         // Centi no item, ou não conferido (`naoMarcar`), a conferência gravada pode ser velha — nada é gravado.
         if ("centi" in it && it.centi === null && !it.centiFalha && it.naoMarcar !== true) {
@@ -1744,6 +1774,7 @@ const NOS: DefNo[] = [
           ctx.parcial?.([f]);
           continue;
         }
+        if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
         ctx.aviso(`Corrigindo o DFD ${str(it.numero)} pela Centi (${i + 1} de ${itens.length})…`);
         const leve: Item = { ...it, centi: undefined, dfdSistema: undefined };
         let feito: Item;

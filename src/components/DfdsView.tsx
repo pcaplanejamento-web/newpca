@@ -770,8 +770,8 @@ export function DfdsView({
     return { lista, rotulo: `${num(lista.length)} DFD(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"}` };
   };
   const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => rodar(fluxoId, alvoAutomacao(soSelecionados).lista);
-  // TRATAR as divergências com a Centi (o painel do selo e a barra de seleção): roda a automação de reconferir ou de
-  // substituir em segundo plano, com os DFDs escolhidos — sempre CONFIRMADO antes (substituir regrava o DFD).
+  // TRATAR as divergências com a Centi (o painel do selo e a barra de seleção): roda a automação "Conferir e corrigir DFDs ×
+  // Centi" em segundo plano, com os DFDs escolhidos — só conferindo (Reconferir) ou corrigindo; sempre CONFIRMADO antes.
   const { confirmar: confirmarCenti, confirmacao: confirmacaoCenti } = useConfirmacao();
   const adminMesa = useAdminTabelas();
   // biome-ignore lint/correctness/useExhaustiveDependencies: excluirDfd/saidaPca/router são do render e só leem estado estável.
@@ -819,25 +819,28 @@ export function DfdsView({
       },
     };
     if (modoPca || !automacoesCenti) return base;
-    const montar = (a: { id: number; nome: string } | null, titulo: (n: number) => string, texto: string, botao: string) =>
+    const montar = (a: { id: number; nome: string } | null, titulo: (n: number) => string, texto: string, botao: string, soConferir: boolean) =>
       a
         ? async (ids: number[]) => {
             // Só os DFDs COM nº de planejamento (a Centi é lida por ele) — e a lista que a automação recebe precisa ser
             // reconhecida como DFDs, senão o "Ler do sistema" não a usaria como recorte e leria TODOS os DFDs.
             const lista = dfdsDoAlvo(dfds, "id", new Set(ids)).filter((d) => String(d.planejamento ?? "").trim());
             if (!lista.length) return void toast.warning("Nenhum DFD com nº de planejamento — a Centi é consultada por ele.");
+            // Corrigir regrava o DFD: o papel precisa importar na Mesa de cada um (a mesma régua do banner).
+            if (!soConferir && lista.some((d) => !podeEm(Number(d.id)).importar)) return void toast.error("Corrigir regrava o DFD — seu papel precisa importar nesta Mesa.");
             if (await confirmarCenti({ titulo: titulo(lista.length), texto: `${texto} Automação “${a.nome}”, em segundo plano — acompanhe no canto inferior.`, confirmar: botao }))
-              rodar(a.id, lista);
+              rodar(a.id, lista, { soConferir });
           }
         : undefined;
     return {
       ...base,
-      reconferir: montar(automacoesCenti.conferir, (n) => (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`), "Busca o DFD na Centi e compara de novo; a coluna Centi é atualizada.", "Reconferir"),
-      substituir: montar(
-        automacoesCenti.substituir,
-        (n) => (n === 1 ? "Usar os dados da Centi neste DFD?" : `Usar os dados da Centi em ${n} DFDs?`),
-        "Os dados gravados do DFD (cabeçalho, seções e itens) são TROCADOS pelos da Centi — a unidade, o protocolo e o PCA ficam; o histórico registra a sobrescrita.",
-        "Usar os dados da Centi",
+      reconferir: montar(automacoesCenti.conferir, (n) => (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`), "Busca o DFD na Centi e compara de novo; a coluna Centi é atualizada. Nada do DFD é alterado.", "Reconferir", true),
+      corrigirAuto: montar(
+        automacoesCenti.corrigir,
+        (n) => (n === 1 ? "Corrigir este DFD pela Centi?" : `Corrigir ${n} DFDs pela Centi?`),
+        "Cada DFD é conferido de novo na Centi e, se divergir, só os dados que divergem são trocados pelos da Centi — nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam; o histórico registra a edição.",
+        "Corrigir",
+        false,
       ),
     };
   }, [modoPca, automacoesCenti, dfds, confirmarCenti, rodar, pode, adminMesa]);

@@ -171,7 +171,7 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
  */
 /** A versão `dados` desta carga (memorizada por requisição — o layout já a leu): a lista de itens guardada na aba só vale
  * com ela. Falhou = `null` (a lista é buscada de novo). */
-const SEM_AUTOMACOES_CENTI: AutomacoesCenti = { conferir: null, substituir: null };
+const SEM_AUTOMACOES_CENTI: AutomacoesCenti = { conferir: null, corrigir: null };
 const versaoDosItens = () =>
   versaoDados()
     .then((v) => v.dados)

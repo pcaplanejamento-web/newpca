@@ -158,7 +158,7 @@ export function FluxosAutomacao({
   const [exec, setExec] = useState<{ id: number; nome: string; total: number } | null>(null);
   const [agora, setAgora] = useState("");
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
-  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[]; agendado?: boolean; atrasadaDesde?: string | null }[]>([]);
+  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[]; agendado?: boolean; atrasadaDesde?: string | null; soConferir?: boolean }[]>([]);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
   /** O destino do Baixar/anexar em curso é um protocolo da Centi (o rótulo "Anexado" × "Salvo"). */
   const [dfdsAnexar, setDfdsAnexar] = useState(false);
@@ -364,10 +364,10 @@ export function FluxosAutomacao({
 
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
   const executar = useCallback(
-    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[], atrasadaDesde?: string | null): Promise<ResultadoExec | null> => {
+    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[], atrasadaDesde?: string | null, soConferir = false): Promise<ResultadoExec | null> => {
       if (rodandoRef.current != null) {
         if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) return null;
-        fila.current.push({ f, grafo, entrada, agendado, atrasadaDesde });
+        fila.current.push({ f, grafo, entrada, agendado, atrasadaDesde, soConferir });
         setNaFila(fila.current.length);
         if (!agendado) toast.info(`${f.nome}: na fila — roda quando o fluxo atual terminar.`);
         return null;
@@ -414,6 +414,8 @@ export function FluxosAutomacao({
               carregarFluxo: carregadorDeFluxos(),
               progresso: progressoDe(f.id),
               ...(entrada ? { __entrada: entrada, __daMesa: true } : {}),
+              // O "Reconferir" da Mesa: nada do DFD é alterado (o nó que grava respeita — também nos subfluxos).
+              ...(soConferir ? { __soConferir: true } : {}),
             },
             // A saída COMPLETA de cada nó (o corpo de um laço roda várias vezes: acumula) e os itens AO VIVO.
             aoConcluir: (no, ps) => {
@@ -465,7 +467,7 @@ export function FluxosAutomacao({
         // O próximo da fila (no próximo tique — o estado desta execução já assentou).
         const prox = fila.current.shift();
         setNaFila(fila.current.length);
-        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, prox.agendado === true, prox.entrada, prox.atrasadaDesde), 0);
+        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, prox.agendado === true, prox.entrada, prox.atrasadaDesde, prox.soConferir === true), 0);
       }
     },
     [pronto, pedir, lote, interrompido, host],
@@ -536,7 +538,7 @@ export function FluxosAutomacao({
     const f = [...fluxos, ...publicos].find((x) => x.id === d.fluxoId);
     if (!f) return void toast.error("A automação escolhida na Mesa não está mais disponível.");
     if (fluxos.some((x) => x.id === f.id)) setAberto(f.id); // a pública de outra pessoa roda sem abrir o editor
-    void executarRef.current(f, f.grafo, false, d.itens);
+    void executarRef.current(f, f.grafo, false, d.itens, null, d.soConferir === true);
   }, [pronto, fluxos, publicos, disparos]);
 
   /** Regrava um fluxo salvo com o grafo e a descrição do modelo (o "Atualizar pelo modelo"). */
@@ -617,7 +619,14 @@ export function FluxosAutomacao({
     if (!(await confirmar({ titulo: devolver ? `Devolver “${f.nome}” ao painel?` : `Excluir o fluxo “${f.nome}”?`, texto, confirmar: devolver ? "Devolver" : "Excluir", perigo: true }))) return;
     const r = await api(`/api/admin/automacao/fluxos/${f.id}`, { method: "DELETE" });
     if (!r.ok) return toast.error(r.error ?? "Não consegui excluir.");
-    setFluxos((fs) => fs?.filter((x) => x.id !== f.id) ?? fs);
+    // As ETAPAS internas dele (os modelos `interno`) que nenhum outro fluxo usa saem junto — não ficam soltas na lista.
+    const resto = (fluxos ?? []).filter((x) => x.id !== f.id);
+    const usados = new Set(resto.flatMap((x) => subfluxosDoGrafo(x.grafo)));
+    const nomesInternos = new Set(MODELOS_FLUXO.filter((m) => m.interno).map((m) => m.nome));
+    const soltos = resto.filter((x) => subfluxosDoGrafo(f.grafo).includes(x.id) && !usados.has(x.id) && nomesInternos.has(x.nome));
+    const tirados = new Set([f.id]);
+    for (const x of soltos) if ((await api(`/api/admin/automacao/fluxos/${x.id}`, { method: "DELETE" })).ok) tirados.add(x.id);
+    setFluxos((fs) => fs?.filter((x) => !tirados.has(x.id)) ?? fs);
     setAberto(null);
   }
 
@@ -716,6 +725,14 @@ export function FluxosAutomacao({
       },
       fluxos: listaFluxos,
       fluxoAtual: aberto,
+      abrirFluxo: (id) => {
+        setNovo(false);
+        setAberto(id);
+        if (rodando !== id) {
+          setPassos({});
+          setResultado(null);
+        }
+      },
       recomecar,
       previas,
       carregarPrevia: (g, no, incluir) => void carregarPrevia(g, no, incluir),
@@ -970,7 +987,12 @@ function ListaFluxos({
   // No desktop o painel ocupa a ÚLTIMA coluna (com 1 coluna só, ele vira a folha do celular).
   const lateral = desktop && !!col && col.n >= 2;
   const colunas = col ? (lateral && novo ? col.n - 1 : col.n) : 0;
-  const lista = fluxos ?? [];
+  const todos = fluxos ?? [];
+  // O fluxo usado DENTRO de outro (passo "Executar fluxo") é uma etapa dele: fica fora da lista — abre-se pelo passo.
+  const internos = useMemo(() => new Set(todos.flatMap((f) => subfluxosDoGrafo(f.grafo))), [todos]);
+  const lista = useMemo(() => todos.filter((f) => !internos.has(f.id)), [todos, internos]);
+  // Reordenar mexe só nos visíveis; os internos ficam no fim da ordem gravada.
+  const ordenar = (visiveis: FluxoAutomacao[]) => onOrdem([...visiveis, ...todos.filter((f) => internos.has(f.id))]);
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoGrade({
     raiz: grade,
     // FORA da lista (o contêiner que rola): sem sombra. Um fluxo da lista pode ir à LIXEIRA ou VOLTAR ao painel (exclui);
@@ -999,7 +1021,7 @@ function ListaFluxos({
       const f = lista.find((x) => x.id === id);
       if (!f) return;
       const i = antesDe != null ? sem.findIndex((x) => x.id === antesDe) : d.depoisDe ? sem.findIndex((x) => `f:${x.id}` === d.depoisDe) + 1 : sem.length;
-      onOrdem([...sem.slice(0, Math.max(0, i)), f, ...sem.slice(Math.max(0, i))]);
+      ordenar([...sem.slice(0, Math.max(0, i)), f, ...sem.slice(Math.max(0, i))]);
     },
   });
   const fora = arrasto?.destino.fora ?? null;
@@ -1056,7 +1078,7 @@ function ListaFluxos({
 
   const escolha = (
     <EscolherNovoFluxo
-      fluxos={lista}
+      fluxos={todos}
       publicos={publicos}
       onFechar={onFecharNovo}
       onCriar={onCriar}
@@ -1234,9 +1256,10 @@ function EscolherNovoFluxo({
   const [criando, setCriando] = useState(false);
   // Só o que ainda não está no painel (pelo nome): o modelo criado e a pública já copiada somem.
   const nomes = useMemo(() => new Set(fluxos.map((f) => f.nome)), [fluxos]);
-  const modelos = useMemo(() => [EM_BRANCO, ...MODELOS_FLUXO.filter((x) => !nomes.has(x.nome))], [nomes]);
+  // Os modelos `interno` (a etapa de outro modelo) nascem junto com ele — não aparecem sozinhos.
+  const modelos = useMemo(() => [EM_BRANCO, ...MODELOS_FLUXO.filter((x) => !x.interno && !nomes.has(x.nome))], [nomes]);
   const pubs = useMemo(() => publicos.filter((x) => !nomes.has(x.nome)), [publicos, nomes]);
-  const m = MODELOS_FLUXO.find((x) => x.id === modelo && !nomes.has(x.nome)) ?? null;
+  const m = MODELOS_FLUXO.find((x) => x.id === modelo && !x.interno && !nomes.has(x.nome)) ?? null;
   const pub = pubs.find((x) => `p:${x.id}` === modelo) ?? null;
   const criar = async () => {
     setCriando(true);

@@ -191,15 +191,16 @@ test("leituras do motivo: Δ do valor, divergências de um item, desatualizada, 
   assert.deepEqual(lib.orientacoesDivergencias([]), []);
 });
 
-// ——— De ponta a ponta: o modelo "Conferir 1 DFD × Centi" rodado pelo motor, a Centi e o banco simulados. Cada execução
-// tem de gravar o status certo — e mudar quando a Centi muda.
-test("Conferir 1 DFD × Centi de ponta a ponta: grava, muda e volta o status; falha e órgão sem ID não gravam", async () => {
+// ——— De ponta a ponta: a etapa de 1 DFD da automação única, SÓ CONFERINDO (o "Reconferir" da Mesa), rodada pelo motor, a
+// Centi e o banco simulados. Cada execução tem de gravar o status certo — e mudar quando a Centi muda — sem corrigir nada.
+test("Conferir e corrigir 1 DFD × Centi, só conferindo: grava, muda e volta o status; nada corrigido; falha e órgão sem ID não gravam", async () => {
   const { executarFluxo } = await import("../src/lib/fluxo-core.ts");
   const { REGISTRO_NOS } = await import("../src/lib/fluxo-nos.ts");
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m);
   const g = grafoDoModelo(m, new Map());
+  let corrigidos = 0;
   const banco = { status: null as string | null, motivo: null as string | null };
   const rodar = async (centi: DfdParseado | "falha" | "nao", entidade = "2") => {
     const posts: { dfdId: number; status: string; motivo?: string }[] = [];
@@ -219,6 +220,11 @@ test("Conferir 1 DFD × Centi de ponta a ponta: grava, muda e volta o status; fa
         __entrada: [{ id: 7, numero: "123", planejamento: "456", entidade, tipo: "DFD-S", valor: 100, totalItens: 2 }],
         __cache: new Map(),
         __vars: {},
+        __soConferir: true,
+        corrigirPelaCenti: async () => {
+          corrigidos++;
+          return { resultado: "corrigido", status: "convergente", motivo: null };
+        },
         lerDfdCenti: async (plan: string, _e?: string, _pdf?: boolean, completo?: boolean) => {
           if (centi === "falha") throw new Error("Sem resposta da Centi");
           if (centi === "nao") throw new Error("NAO_ENCONTRADO: a Centi não abriu o planejamento 456 — Registro não encontrado.");
@@ -241,6 +247,9 @@ test("Conferir 1 DFD × Centi de ponta a ponta: grava, muda e volta o status; fa
   assert.equal(banco.status, "divergente");
   assert.match(banco.motivo ?? "", /Valor total/);
   assert.match(banco.motivo ?? "", /Item 2 .*quantidade 10 × 12/);
+  assert.equal(x.r.estado, "concluido");
+  assert.equal(corrigidos, 0, "só conferir: o divergente NÃO é corrigido");
+  assert.match(JSON.stringify(x.r.retorno), /"correcao":"soConferir"/);
 
   x = await rodar(base());
   assert.deepEqual(banco, { status: "convergente", motivo: null }, "voltou igual: Convergente e o motivo some");
@@ -256,6 +265,7 @@ test("Conferir 1 DFD × Centi de ponta a ponta: grava, muda e volta o status; fa
 
   x = await rodar(base(), "");
   assert.equal(x.posts.length, 0, "órgão sem o ID da Centi: não busca nem grava");
+  assert.equal(corrigidos, 0);
 });
 
 test("load sem registro: a mensagem da Centi e quando ela diz que o planejamento não existe", async () => {

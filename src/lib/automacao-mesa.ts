@@ -16,8 +16,11 @@ export function alternarAutomacaoMesa(ids: number[], id: number, ligado: boolean
   return ligado ? [...sem, id] : sem;
 }
 
-/** O que a Mesa manda à Automação: o fluxo e os DFDs de entrada (o Início do fluxo os entrega). */
-export type DisparoMesa = { fluxoId: number; itens: Item[] };
+/**
+ * O que a Mesa manda à Automação: o fluxo e os DFDs de entrada (o Início do fluxo os entrega). `soConferir` = o "Reconferir":
+ * a execução não altera nenhum DFD (o nó que grava respeita, também dentro dos subfluxos).
+ */
+export type DisparoMesa = { fluxoId: number; itens: Item[]; soConferir?: boolean };
 const CHAVE_DISPARO = "automacao:disparo";
 
 /** O evento que avisa a Automação já montada (em segundo plano) de um disparo novo. */
@@ -57,7 +60,7 @@ export function lerDisparoMesa(): DisparoMesa | null {
     const t = sessionStorage.getItem(CHAVE_DISPARO);
     sessionStorage.removeItem(CHAVE_DISPARO);
     const d = t ? (JSON.parse(t) as DisparoMesa) : null;
-    return d && Number(d.fluxoId) > 0 && Array.isArray(d.itens) ? { fluxoId: Number(d.fluxoId), itens: d.itens } : null;
+    return d && Number(d.fluxoId) > 0 && Array.isArray(d.itens) ? { fluxoId: Number(d.fluxoId), itens: d.itens, ...(d.soConferir === true ? { soConferir: true } : {}) } : null;
   } catch {
     return null;
   }

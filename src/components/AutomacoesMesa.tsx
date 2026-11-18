@@ -93,9 +93,9 @@ export function AutomacoesMesa({
 export function useRodarAutomacao() {
   const rodarFora = useRodarFora();
   const router = useRouter();
-  return (fluxoId: number, itens: Item[]) => {
+  return (fluxoId: number, itens: Item[], opcoes?: { soConferir?: boolean }) => {
     if (!itens.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
-    if (!gravarDisparoMesa({ fluxoId, itens })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
+    if (!gravarDisparoMesa({ fluxoId, itens, ...(opcoes?.soConferir ? { soConferir: true } : {}) })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
     if (rodarFora) {
       rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
       toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");

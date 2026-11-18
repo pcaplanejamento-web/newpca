@@ -1419,3 +1419,47 @@ describe("0190: conferências emitidas sem o valor de referência zeradas", () =
       assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n, 0, t);
   });
 });
+
+describe("0191: uma automação para conferir e corrigir DFDs × Centi", () => {
+  const preparar = () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0190_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h'), (2, 'Bia', 'bia@x', 'h')");
+    return db;
+  };
+  const nomes = (db: DatabaseSync) => (db.prepare("SELECT id, nome, criado_por AS dono FROM automacao_fluxos ORDER BY id").all() as { id: number; nome: string; dono: number | null }[]).map((r) => `${r.id}:${r.nome}:${r.dono}`);
+
+  it("renomeia a de corrigir (mesmo registro, retomada fica) e tira as antigas do mesmo dono", () => {
+    const db = preparar();
+    db.exec(`INSERT INTO automacao_fluxos (id, nome, criado_por, ajuda, grafo) VALUES
+      (1, 'Conferir 1 DFD × Centi', 1, NULL, '{}'),
+      (2, 'Conferir DFDs × Centi', 1, NULL, '{"nos":[{"id":"sub1","tipo":"fluxo.executar","config":{"fluxoId":"1"}}]}'),
+      (3, 'Conferir e corrigir 1 DFD × Centi', 1, '{"funciona":"x"}', '{}'),
+      (4, 'Corrigir DFDs divergentes pela Centi', 1, '{"funciona":"velha"}', '{"nos":[{"id":"conf1","tipo":"fluxo.executar","config":{"fluxoId":"3"}}]}'),
+      (5, 'Substituir DFDs pelos dados da Centi', 1, NULL, '{}'),
+      (6, 'DFDs de um protocolo × Centi (um por vez)', 1, NULL, '{}'),
+      (7, 'Outra automação', 1, NULL, '{}')`);
+    db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES (4, 'conf1', '10', 'ok', '2026-11-18'), (2, 'sub1', '11', 'ok', '2026-11-18')`);
+    db.exec(readFileSync(join(DIR, "0191_automacao_centi_unica.sql"), "utf8"));
+    assert.deepEqual(nomes(db), ["3:Conferir e corrigir 1 DFD × Centi:1", "4:Conferir e corrigir DFDs × Centi:1", "7:Outra automação:1"]);
+    const r = db.prepare("SELECT ajuda, descricao FROM automacao_fluxos WHERE id = 4").get() as { ajuda: string | null; descricao: string };
+    assert.equal(r.ajuda, null, "a ajuda volta a ser a do modelo");
+    assert.match(r.descricao, /corrige na hora os divergentes/);
+    assert.deepEqual((db.prepare("SELECT fluxo_id AS f FROM automacao_progresso").all() as { f: number }[]).map((x) => x.f), [4], "a retomada da única fica; a das excluídas cai");
+  });
+
+  it("não exclui sem a única do MESMO dono nem o que outro fluxo usa como etapa", () => {
+    const db = preparar();
+    db.exec(`INSERT INTO automacao_fluxos (id, nome, criado_por, grafo) VALUES
+      (1, 'Corrigir DFDs divergentes pela Centi', 1, '{}'),
+      (2, 'Conferir DFDs × Centi', 2, '{}'),
+      (3, 'Conferir 1 DFD × Centi', 1, '{}'),
+      (4, 'Minha automação', 1, '{"nos":[{"id":"s","tipo":"fluxo.executar","config":{"fluxoId":"3"}}]}')`);
+    db.exec(readFileSync(join(DIR, "0191_automacao_centi_unica.sql"), "utf8"));
+    assert.deepEqual(nomes(db), ["1:Conferir e corrigir DFDs × Centi:1", "2:Conferir DFDs × Centi:2", "3:Conferir 1 DFD × Centi:1", "4:Minha automação:1"]);
+    // Idempotente.
+    db.exec(readFileSync(join(DIR, "0191_automacao_centi_unica.sql"), "utf8"));
+    assert.equal(nomes(db).length, 4);
+  });
+});

@@ -319,11 +319,11 @@ test("protocolos com repartição e sem departamento na resposta: para com erro"
   assert.match(r.erro ?? "", /departamento/);
 });
 
-test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”, em paralelo, e marca divergente/convergente", async () => {
+test("automação única, só conferindo: cada DFD pela etapa de 1 DFD, em paralelo, e marca divergente/convergente", async () => {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
-  assert.deepEqual(m?.dependencias, ["conferir-1-dfd"]);
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
+  assert.deepEqual(m?.dependencias, ["conferir-corrigir-1-dfd"]);
   const marcados: { dfdId: number }[] = [];
   const centi: Record<string, unknown> = {
     "100": { numero: "10", planejamento: "100", tipo: "DFD-S", objeto: "Cadeiras", valor: 50, totalItens: 2 },
@@ -332,7 +332,7 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
   const progresso = new Map<string, string>();
   let lendoAoMesmoTempo = 0;
   let maxSimultaneo = 0;
-  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-corrigir-1-dfd", 50]])), REGISTRO_NOS, {
     centi: async () => ({ ok: false }),
     api: async (url: string, o?: { body?: unknown }) => {
       if (url.endsWith("execucao-dfds"))
@@ -351,9 +351,10 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
     },
     cancelado: () => false,
     host: {
+      __soConferir: true,
       chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
       mapaEntidades: { "o:1": "2" },
-      carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+      carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
       progresso: {
         ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
         gravar: async (_no: string, its: { chave: string; estado: string }[]) => {
@@ -381,8 +382,11 @@ test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”
       { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
     ],
   );
-  assert.equal(r.apontados.filter((a) => a.subfluxo === "Conferir 1 DFD × Centi").length, 3);
-  assert.ok(r.apontados.some((a) => /DFD 13 .*não conferido — o órgão do DFD não tem o ID da Centi/.test(String(a.mensagem))));
+  // Só conferindo: cada DFD não convergente é apontado (atenção) com o motivo — nada é corrigido.
+  const daEtapa = r.apontados.filter((a) => a.subfluxo === "Conferir e corrigir 1 DFD × Centi").map((a) => String(a.mensagem));
+  assert.equal(daEtapa.length, 3);
+  assert.ok(daEtapa.some((m) => /^DFD 11 \(planejamento 101\) sem correção: só conferir — 1 diferença — Valor total/.test(m)), daEtapa.join("\n"));
+  assert.ok(daEtapa.some((m) => /^DFD 13 \(planejamento 100\) sem correção: não conferido — o órgão do DFD não tem o ID da Centi/.test(m)), daEtapa.join("\n"));
   // O DFD 13 voltou "não conferido": não está feito — a retomada o guarda como falha (refeito na próxima) e não é esquecida.
   assert.equal(progresso.get("4"), "falha");
   assert.equal(progresso.get("1"), "ok");
@@ -508,16 +512,16 @@ test("Executar fluxo: retoma de onde parou e manda as falhas à porta Falhas; Ex
   assert.equal(rp.passos.p.itens, 2);
 });
 
-test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha e a retomada tenta o DFD de novo", async () => {
+test("Conferir e corrigir × Centi (só conferir): falha de comunicação não marca, fica como falha e a retomada tenta o DFD de novo", async () => {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   const progresso = new Map<string, string>();
   const marcados: { dfdId: number }[] = [];
   let rede = false;
   const lidos: string[] = [];
   const rodar = () =>
-    executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+    executarFluxo(grafoDoModelo(m as never, new Map([["conferir-corrigir-1-dfd", 50]])), REGISTRO_NOS, {
       centi: async () => ({ ok: false }),
       api: async (url: string, o?: { body?: unknown }) => {
         if (url.endsWith("execucao-dfds"))
@@ -527,10 +531,11 @@ test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha
       },
       cancelado: () => false,
       host: {
-        chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
+        __soConferir: true,
+      chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
         mapaEntidades: { "o:1": "2" },
         esperaCentiMs: 0,
-        carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+        carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
         progresso: {
           ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
           gravar: async (_no: string, its: { chave: string; estado: string }[]) => {
@@ -556,23 +561,24 @@ test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha
   assert.deepEqual(marcados.map((x) => x.dfdId).sort(), [1, 2]);
 });
 
-test("Conferir DFDs × Centi: a Centi é chamada UM DFD por vez (mesmo em paralelo), a falha passageira tenta de novo e a falha não é apontada em dobro", async () => {
+test("Conferir e corrigir × Centi (só conferir): a Centi é chamada UM DFD por vez (mesmo em paralelo), a falha passageira tenta de novo e a falha não é apontada em dobro", async () => {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   const dfds = Array.from({ length: 10 }, (_, i) => ({ id: i + 1, numero: String(10 + i), planejamento: String(100 + i), valor: 5, totalItens: 1, orgaoId: 1 }));
   let emCurso = 0;
   let maximo = 0;
   const tentativas = new Map<string, number>();
-  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-corrigir-1-dfd", 50]])), REGISTRO_NOS, {
     centi: async () => ({ ok: false }),
     api: async (url: string) => (url.endsWith("execucao-dfds") ? { ok: true, dfds } : { ok: true }),
     cancelado: () => false,
     host: {
+      __soConferir: true,
       chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
       mapaEntidades: { "o:1": "2" },
       esperaCentiMs: 0,
-      carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+      carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
       lerDfdCenti: async (plan: string) => {
         emCurso++;
         maximo = Math.max(maximo, emCurso);
@@ -594,19 +600,19 @@ test("Conferir DFDs × Centi: a Centi é chamada UM DFD por vez (mesmo em parale
   assert.equal(r.apontados.filter((a) => /102/.test(String(a.mensagem))).length, 1, "a falha sai uma vez só nos apontamentos");
 });
 
-test("Conferir DFDs × Centi: o planejamento que não abre no órgão do DFD é tentado nos outros órgãos", async () => {
+test("Conferir e corrigir × Centi (só conferir): o planejamento que não abre no órgão do DFD é tentado nos outros órgãos", async () => {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const { entidadesParaTentar } = await import("../src/lib/fluxo-nos.ts");
   assert.deepEqual(entidadesParaTentar({ a: "02", b: "3", c: "2", d: "" }, "2"), ["3"]);
-  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   const dfds = [
     { id: 1, numero: "10", planejamento: "100", valor: 5, totalItens: 1, orgaoId: 1 }, // abre no órgão 3
     { id: 2, numero: "11", planejamento: "101", valor: 5, totalItens: 1, orgaoId: 1 }, // não abre em nenhum
   ];
   const pedidos: string[] = [];
   let marcados: { dfdId: number; status: string; motivo?: string }[] = [];
-  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-corrigir-1-dfd", 50]])), REGISTRO_NOS, {
     centi: async () => ({ ok: false }),
     api: async (url: string, corpo?: unknown) => {
       if (url.endsWith("execucao-dfds")) return { ok: true, dfds };
@@ -615,10 +621,11 @@ test("Conferir DFDs × Centi: o planejamento que não abre no órgão do DFD é 
     },
     cancelado: () => false,
     host: {
+      __soConferir: true,
       chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
       mapaEntidades: { "o:1": "2", "o:2": "3" },
       esperaCentiMs: 0,
-      carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+      carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
       lerDfdCenti: async (plan: string, ent?: string) => {
         pedidos.push(`${plan}@${ent}`);
         if (plan === "100" && ent === "3") return { numero: "10", planejamento: plan, valor: 5, totalItens: 1 };
@@ -672,13 +679,13 @@ test("fluxos por ADM: o dono mexe; o público e o sem dono, qualquer ADM lê", a
 
 test("prévia da seleção: só o trecho antes dela e só de leitura", async () => {
   const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "substituir-dfds-centi");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   assert.ok(m);
   const sub = subgrafoAte(m.grafo, "sel1");
-  assert.deepEqual(sub.nos.map((n) => n.id).sort(), ["dfds1", "inicio1"]);
-  assert.equal(sub.conexoes.length, 1);
+  assert.deepEqual(sub.nos.map((n) => n.id).sort(), ["dfds1", "div1", "inicio1"]);
+  assert.equal(sub.conexoes.length, 2);
   assert.equal(subgrafoSoLeitura(sub, REGISTRO_NOS), true);
-  assert.equal(subgrafoSoLeitura(subgrafoAte(m.grafo, "err2"), REGISTRO_NOS), false);
+  assert.equal(subgrafoSoLeitura(subgrafoAte(m.grafo, "err1"), REGISTRO_NOS), false);
   assert.equal(subgrafoSoLeitura({ v: 1, nos: [], conexoes: [] }, REGISTRO_NOS), false);
 });
 

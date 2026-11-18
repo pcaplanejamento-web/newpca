@@ -56,13 +56,14 @@ export const valoresConferencia = (s: string | null | undefined, motivo?: string
 ];
 
 /**
- * As AÇÕES da Mesa sobre a conferência com a Centi (o painel do selo): reconferir os DFDs e trocar os dados deles pelos da
- * Centi — rodam a automação em segundo plano (quem fornece confirma antes). Sem o provedor (ou sem a automação), as ações
+ * As AÇÕES da Mesa sobre a conferência com a Centi (o painel do selo): reconferir os DFDs e corrigi-los automaticamente pela
+ * Centi — as duas rodam a automação "Conferir e corrigir DFDs × Centi" em segundo plano (quem fornece confirma antes). Sem o provedor (ou sem a automação), as ações
  * não aparecem. O histórico precisa só do id do DFD.
  */
 export type AcoesCenti = {
   reconferir?: (dfdIds: number[]) => void;
-  substituir?: (dfdIds: number[]) => void;
+  /** Reconfere agora e corrige o que diverge (a automação, sem escolher dado a dado). */
+  corrigirAuto?: (dfdIds: number[]) => void;
   /** Abre o banner do DFD na correção pela Centi (Manter sistema | Usar Centi, dado a dado). */
   corrigir?: (dfdId: number) => void;
   /** Exclui o DFD (a situação é "cancelado" na Centi) — quem fornece confirma. */
@@ -209,7 +210,7 @@ function PainelDivergencias({
         }
       : undefined;
   const reconferir = rodar(acoes.reconferir);
-  const substituir = status === "divergente" ? rodar(acoes.substituir) : undefined;
+  const corrigirAuto = status === "divergente" ? rodar(acoes.corrigirAuto) : undefined;
   const corrigir =
     status === "divergente" && acoes.corrigir && dfdId != null
       ? () => {
@@ -396,7 +397,7 @@ function PainelDivergencias({
           )}
         </div>
       )}
-      {(reconferir || substituir || dfdId != null) && (
+      {(reconferir || corrigirAuto || dfdId != null) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
           {servidor && (
             <Button
@@ -415,9 +416,9 @@ function PainelDivergencias({
               Reconferir
             </Button>
           )}
-          {substituir && (
-            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={substituir}>
-              Usar os dados da Centi
+          {corrigirAuto && (
+            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} title="Reconfere na Centi agora e corrige só o que diverge, sem escolher dado a dado" onClick={corrigirAuto}>
+              Corrigir automaticamente
             </Button>
           )}
           {dfdId != null && (

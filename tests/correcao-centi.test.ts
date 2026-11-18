@@ -275,10 +275,10 @@ test("nó Corrigir DFD pela Centi: só o reconferido agora; aceito vai a 'sem co
   await assert.rejects(no.executar({ entrada: itens.slice(0, 3) }, {}, ctx("interrompido") as never, {} as never), /interrompido/);
 });
 
-test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marcados, reconferidos agora, são corrigidos", async () => {
+test("Modelo “Conferir e corrigir DFDs × Centi”: só os divergentes marcados, reconferidos agora, são corrigidos", async () => {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const { executarFluxo, lerGrafo } = await import("../src/lib/fluxo-core.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
   const g0 = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
@@ -297,8 +297,6 @@ test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marc
   const host = {
     protocolos: [],
     __cache: new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]),
-    __daMesa: true,
-    __entrada: dfds,
     esperaCentiMs: 0,
     mapaEntidades: { "2": "2" },
     carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
@@ -324,8 +322,66 @@ test("Modelo “Corrigir DFDs divergentes pela Centi”: só os divergentes marc
   assert.deepEqual(corrigidos, [1], "só o divergente reconferido e lido na Centi agora; o convergente nem entra");
 });
 
-test("Modelo 'Corrigir divergentes': as marcas da aba Do sistema não valem — a Seleção decide; sem marcar, a Análise avisa", async () => {
-  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+test("Automação única: “Corrigir os divergentes” desligado ou o Reconferir da Mesa SÓ CONFEREM — marcam e nada é corrigido", async () => {
+  const { executarFluxo, lerGrafo } = await import("../src/lib/fluxo-core.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
+  assert.ok(m && filho);
+  const base = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
+  const comCorrigir = (corrigir: boolean | undefined, quais = "todos") => ({
+    ...base,
+    nos: base.nos.map((n) => (n.tipo === "dados.filtrarConferencia" ? { ...n, config: { quais, ...(corrigir === undefined ? {} : { corrigir }) } } : n)),
+  });
+  const dfds = [
+    { id: 1, numero: "1", planejamento: "11", entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "divergente" },
+    { id: 2, numero: "2", planejamento: "22", entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "convergente" },
+  ];
+  const rodar = async (g: Grafo, extra: Record<string, unknown> = {}) => {
+    const corrigidos: number[] = [];
+    const marcados: number[] = [];
+    const host = {
+      protocolos: [],
+      __cache: new Map<string, unknown>([["dfds", Promise.resolve(dfds)]]),
+      esperaCentiMs: 0,
+      mapaEntidades: { "2": "2" },
+      carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
+      lerDfdCenti: async (plan: string) => ({ planejamento: plan, numero: plan[0], tipo: "DFD-S", objeto: "Outro objeto", valor: 10, totalItens: 1, situacao: "Aprovado" }),
+      corrigirPelaCenti: async (id: number) => {
+        corrigidos.push(id);
+        return { resultado: "corrigido", status: "convergente", motivo: null };
+      },
+      ...extra,
+    };
+    const api = async (c: string, init?: unknown) => {
+      if (c.includes("conferencia-dfds")) for (const x of ((init as { body: { itens: { dfdId: number }[] } }).body.itens ?? [])) marcados.push(x.dfdId);
+      return { ok: true, marcados: 1 };
+    };
+    const r = await executarFluxo(g, REGISTRO_NOS, { centi: async () => ({ ok: true }), api, cancelado: () => false, host });
+    return { r, corrigidos, marcados: [...new Set(marcados)].sort() };
+  };
+  // Padrão (campo ausente = ligado): confere os dois (Todos) e corrige os divergentes.
+  const padrao = await rodar(comCorrigir(undefined));
+  assert.equal(padrao.r.estado, "concluido", padrao.r.erro);
+  assert.deepEqual(padrao.marcados, [1, 2]);
+  assert.deepEqual(padrao.corrigidos.sort(), [1, 2]);
+  // Desligado: só confere.
+  const so = await rodar(comCorrigir(false));
+  assert.equal(so.r.estado, "concluido", so.r.erro);
+  assert.deepEqual(so.marcados, [1, 2], "a conferência é marcada");
+  assert.deepEqual(so.corrigidos, [], "nada é corrigido");
+  assert.ok(so.r.apontados.some((a) => /só conferir/.test(String(a.mensagem))), "a Análise diz o divergente não corrigido");
+  // O "Reconferir" da Mesa: mesmo com a correção ligada no fluxo, nada é corrigido; e o filtro deixa passar os escolhidos lá.
+  const mesa = await rodar(comCorrigir(true, "divergentes"), { __daMesa: true, __soConferir: true, __entrada: [{ id: 2, numero: "2", planejamento: "22" }] });
+  assert.equal(mesa.r.estado, "concluido", mesa.r.erro);
+  assert.deepEqual(mesa.marcados, [2], "o convergente escolhido na Mesa é reconferido (o filtro não o tira)");
+  assert.deepEqual(mesa.corrigidos, []);
+  // O "Corrigir automaticamente" da Mesa: corrige o escolhido.
+  const corr = await rodar(comCorrigir(true, "divergentes"), { __daMesa: true, __entrada: [{ id: 2, numero: "2", planejamento: "22" }] });
+  assert.deepEqual(corr.corrigidos, [2]);
+});
+
+test("Modelo 'Conferir e corrigir': as marcas da aba Do sistema não valem — a Seleção decide; sem marcar, a Análise avisa", async () => {
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
   const b0 = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
@@ -384,9 +440,9 @@ test("Modelo 'Corrigir divergentes': as marcas da aba Do sistema não valem — 
   assert.equal(marcadosDuplicados(semSel).size, 0);
 });
 
-test("Subfluxo “Conferir 1 DFD × Centi” SALVO antes do DFD inteiro: lê o DFD inteiro (guarda os dados da Centi) e acusa desatualizado", async () => {
+test("Subfluxo “Conferir e corrigir 1 DFD × Centi” SALVO antes do DFD inteiro: lê o DFD inteiro (guarda os dados da Centi) e acusa desatualizado", async () => {
   const { desatualizadoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
-  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(filho);
   const atual = lerGrafo(filho.grafo);
   // O salvo antigo: o "Buscar DFD" sem a chave dfdInteiro.
@@ -569,7 +625,7 @@ test("execução: gravou mas a reconferência falhou — “pendente”, nunca �
 });
 
 test("DFD a DFD: cada um é corrigido logo depois da SUA reconferência; o que falha é refeito e o já feito não", async () => {
-  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
   assert.deepEqual(m.dependencias, ["conferir-corrigir-1-dfd"]);
@@ -623,7 +679,7 @@ test("DFD a DFD: cada um é corrigido logo depois da SUA reconferência; o que f
   assert.equal(um.r.estado, "concluido", um.r.erro);
   assert.deepEqual(um.ordem.slice(0, 3), ["ler:11", "marcar", "corrigir:1"], "a correção espera a conferência gravada do MESMO DFD");
   assert.deepEqual(um.corrigidos, [1, 2, 3]);
-  assert.ok(um.r.apontados.some((a) => /DFD 2 .*não corrigido: .*ainda diverge/.test(String(a.mensagem))), "o parcial vira falha com o motivo");
+  assert.ok(um.r.apontados.some((a) => /DFD 2 \(planejamento 22\): .*ainda diverge/.test(String(a.mensagem))), "o parcial vira falha com o motivo");
   // A próxima execução refaz SÓ o que falhou.
   const dois = await rodar({});
   assert.equal(dois.r.estado, "concluido", dois.r.erro);
@@ -876,7 +932,7 @@ test("Quais DFDs: Todos reconfere também os gravados convergentes; os outros fi
   assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "todos")), [true, true, true, true]);
   assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "divergentes")), [false, false, true, false]);
   assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "pendentes")), [false, true, true, true]);
-  const m = MODELOS_FLUXO.find((x) => x.id === "corrigir-divergentes-centi");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   assert.equal(m?.grafo.nos.find((x) => x.id === "div1")?.tipo, "dados.filtrarConferencia");
   assert.equal(m?.grafo.nos.find((x) => x.id === "sel1")?.config.semMarcar, "todos");
 });

@@ -57,6 +57,8 @@ export type HostPainel = {
   /** Os fluxos salvos (o seletor do "Executar fluxo") e o aberto agora (não pode usar a si mesmo). */
   fluxos: { id: number; nome: string }[];
   fluxoAtual: number | null;
+  /** Abre outro fluxo salvo no editor (o "Abrir" do passo "Executar fluxo" — a etapa interna não está na lista). */
+  abrirFluxo: (id: number) => void;
   /** Esquece o progresso de um nó "Executar fluxo" (a próxima execução recomeça do zero). */
   recomecar: (no: string) => Promise<void>;
   /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
@@ -256,15 +258,24 @@ export function CampoFluxo({ rotulo, valor, onValor, varios, somenteLeitura }: {
     );
   }
   return (
-    <SelectField aria-label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
-      <option value="">Escolha um fluxo salvo…</option>
-      {lista.map((f) => (
-        <option key={f.id} value={String(f.id)}>
-          {f.nome}
-        </option>
-      ))}
-      {valor && !lista.some((f) => String(f.id) === valor) && <option value={valor}>Fluxo {valor} (não encontrado)</option>}
-    </SelectField>
+    <div className="flex items-end gap-2">
+      <div className="min-w-0 flex-1">
+      <SelectField aria-label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
+        <option value="">Escolha um fluxo salvo…</option>
+        {lista.map((f) => (
+          <option key={f.id} value={String(f.id)}>
+            {f.nome}
+          </option>
+        ))}
+        {valor && !lista.some((f) => String(f.id) === valor) && <option value={valor}>Fluxo {valor} (não encontrado)</option>}
+      </SelectField>
+      </div>
+      {host && lista.some((f) => String(f.id) === valor) && (
+        <Button size="sm" variant="secondary" title="Abre este fluxo no editor (salve antes as alterações deste)" onClick={() => host.abrirFluxo(Number(valor))}>
+          Abrir
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -794,6 +805,8 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     return null;
   }
   if (tipo === "saida.corrigirPelaCenti") {
+    // Só conferir: o resultado da conferência, sem correção (o não conferido é refeito pela retomada).
+    if (it.correcao === "soConferir") return it.naoMarcar === true || it.centiFalha ? { rotulo: "Não conferido", tom: "amber", texto: s(it.motivo) } : { rotulo: "Divergente (não corrigido)", tom: "amber", texto: s(it.motivo) };
     if (it.correcao === "parcial") return { rotulo: "Corrigido em parte", tom: "amber", texto: s(it.motivo) || s(it.motivoDepois) };
     if (it.correcao === "pendente") return { rotulo: "Gravado, sem reconferir", tom: "amber", texto: s(it.motivo) };
     if (s(it.erro)) return { rotulo: "Não corrigido", tom: "red", texto: s(it.erro) };

@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.0",
+    data: "2026-11-18",
+    titulo: "Uma automação só para conferir e corrigir DFDs × Centi",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "As automações de conferir e corrigir DFDs com a Centi viraram UMA: “Conferir e corrigir DFDs × Centi”. Nos Dados de entrada você escolhe quais DFDs (todos, por nº de planejamento, nº do DFD ou protocolo), quais pela conferência gravada (todos, divergentes ou pendentes) e se corrige os divergentes ou só confere. As antigas (Conferir DFDs, Conferir 1 DFD, DFDs de um protocolo, Substituir DFDs e Corrigir divergentes) saíram do painel — a de corrigir foi renomeada e mantém a agenda e a retomada; a etapa de UM DFD fica dentro dela (abre pelo passo “Executar fluxo”).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto:
+          "No selo “Divergente” da coluna Centi, “Reconferir” usa a automação única só conferindo (nada do DFD é alterado) e “Corrigir automaticamente” (no lugar de “Usar os dados da Centi”) reconfere e troca só o que diverge.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.295.21",
     data: "2026-11-17",
     titulo: "Conferência com a Centi com os valores dos itens",
