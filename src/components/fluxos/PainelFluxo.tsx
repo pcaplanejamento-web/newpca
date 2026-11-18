@@ -6,7 +6,7 @@ import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { contagemDfds } from "@/lib/automacao-dfds-estado";
 import { dataHoraBR } from "@/lib/format";
 import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
-import { useAlturaTela } from "../AlturaCheia";
+import { FOLGA, useAlturaTela } from "../AlturaCheia";
 import { Badge, type Tone } from "../Badge";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
@@ -65,7 +65,9 @@ export function PainelFluxo({
 }) {
   const host = useContext(HostPainelCtx);
   const ref = useRef<HTMLDivElement>(null);
-  const altura = useAlturaTela(ref, 420);
+  // Sem a folga de arredondamento: o fim do cartão fica à MESMA distância do display que a barra do topo tem do cabeçalho
+  // (--pad-canvas-y nos dois) — a altura já é arredondada para baixo.
+  const altura = useAlturaTela(ref, 420, -FOLGA);
   const etapas = useMemo(() => etapasDoGrafo(grafo), [grafo]);
   const entradas = etapas
     .map((n) => {

@@ -62,7 +62,7 @@ import { organizarGrafo } from "@/lib/fluxo-layout";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
-import { useAlturaTela } from "../AlturaCheia";
+import { FOLGA, useAlturaTela } from "../AlturaCheia";
 import { EsqueletoGradeEspacos } from "../CartaoEspacoEsqueleto";
 import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
@@ -982,7 +982,7 @@ function ListaFluxos({
   const grade = useRef<HTMLDivElement>(null);
   // A grade ROLA POR DENTRO, na altura até o fim do display (a página não rola — como o painel "Novo fluxo").
   const rolo = useRef<HTMLDivElement>(null);
-  const alturaRolo = useAlturaTela(rolo, 320);
+  const alturaRolo = useAlturaTela(rolo, 320, -FOLGA);
   const col = useColunas(area);
   // No desktop o painel ocupa a ÚLTIMA coluna (com 1 coluna só, ele vira a folha do celular).
   const lateral = desktop && !!col && col.n >= 2;
@@ -1128,7 +1128,7 @@ function ListaFluxos({
 /** O painel "Novo fluxo" na última coluna: preso ao rolar e com a altura EXATA até o fim do display (rola por dentro). */
 function PainelLateral({ largura, zona, ativa, children }: { largura: number; /** Um fluxo da lista em arrasto: o painel recebe a devolução. */ zona: boolean; ativa: boolean; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
-  const altura = useAlturaTela(ref, 320);
+  const altura = useAlturaTela(ref, 320, -FOLGA);
   return (
     <aside
       ref={ref}
@@ -1406,7 +1406,7 @@ function EditorFluxo({
   };
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
   const ref = useRef<HTMLDivElement>(null);
-  const altura = useAlturaTela(ref, 320) ?? 560;
+  const altura = useAlturaTela(ref, 320, -FOLGA) ?? 560;
   const naTela = useNaTela();
   // biome-ignore lint/correctness/useExhaustiveDependencies: só quando chega um resultado novo
   useEffect(() => {
@@ -1536,7 +1536,7 @@ function EditorFluxo({
             ));
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="linha-topico flex flex-wrap items-center gap-2">
         <BotaoVoltar onClick={onVoltar} rotulo="os fluxos" />
         <input
           aria-label="Nome do fluxo"

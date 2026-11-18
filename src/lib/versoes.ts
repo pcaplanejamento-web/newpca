@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.5",
+    data: "2026-11-18",
+    titulo: "Espaçamento igual em cima e embaixo nas automações",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A barra de botões da automação fica à mesma distância do cabeçalho e do painel abaixo dela, e o painel termina a essa mesma distância do fim da tela — também na lista e no diagrama.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.4",
     data: "2026-11-18",
     titulo: "Automação sobre os DFDs filtrados na tabela",

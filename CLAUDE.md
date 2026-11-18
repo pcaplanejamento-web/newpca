@@ -1102,6 +1102,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   padding e a borda de baixo do cartão; observa o cartão), então o respiro tabela → cartão é o mesmo nos 4 lados, com ou sem
   dados; o painel e o diagrama dos fluxos levam `!mb-0` (a margem do `space-y` sobrava embaixo): cartão → fim do display =
   barra → cartão. Tabela nova dentro de cartão de altura fixa = `data-altura-limite` no cartão, nunca `reservaInferior` à mão.
+  **v1.296.5:** a barra do editor dos fluxos é `.linha-topico` e as alturas da Automação (painel, lista, painel lateral,
+  diagrama) usam `useAlturaTela(…, -FOLGA)`: cabeçalho → barra = barra → painel = painel → fim do display = `--pad-canvas-y`.
   **v1.296.4 (migração `0193`) — OS FILTRADOS NA TABELA:** "Quais" do `sistema.ler` ganhou `tabela` (`BUSCA_TABELA`, o padrão
   dos DFDs e dos modelos; a `0193` trocou `"buscaDfds":"todos"` por `"tabela"` nos diagramas salvos — sem filtro, lê todos):
   a leitura traz tudo e `filtrarPelaTabela` (`fluxo-ler-sistema.ts`, testado) recorta pela config do nó — `filtrados` (os
