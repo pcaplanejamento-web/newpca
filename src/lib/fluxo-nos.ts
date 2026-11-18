@@ -53,6 +53,9 @@ import {
   assinaturaDfdCenti,
   montarRetrato,
   motivoDivergencias,
+  motivoSemSecoes810,
+  comSecoesDoSistema,
+  notaConferencia,
   SEPARADOR_DIVERGENCIAS,
   textoRetrato,
   tipoCurto,
@@ -200,7 +203,10 @@ export async function confirmarLeituraCenti(it: Item, dfd: DfdParseado, ctx: Pic
   ctx.aviso(`Confirmando os dados da Centi do DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) — segunda leitura…`);
   const y = await lerNaCenti(() => reler(str(it.planejamento), str(it.entidade) || undefined, true, true, false), ctx);
   const d2 = (y?.dfd as unknown as DfdParseado | undefined) ?? null;
-  if (!d2 || assinaturaDfdCenti(dfd) !== assinaturaDfdCenti(d2))
+  // Sem o registro das seções 8 a 10 elas não valem (nem entram na comparação das duas emissões).
+  const sem810 = (it.centi as Item | null | undefined)?.semSecoes810 === true;
+  const conteudo = (d: DfdParseado) => assinaturaDfdCenti(sem810 ? comSecoesDoSistema(d, { secoes: [] }) : d);
+  if (!d2 || conteudo(dfd) !== conteudo(d2))
     throw new Error("A Centi devolveu conteúdos diferentes em duas emissões do mesmo planejamento (dados de outro registro misturados) — nada foi gravado; confira de novo.");
 }
 
@@ -2483,8 +2489,10 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     }
     // A identidade (órgão, situação, nº, tipo) pela MESMA régua da reconferência pelo retrato.
     const difs: string[] = difsIdentidadeCenti(d, x);
+    // Emitido SEM o registro das seções 8 a 10 (o planejamento não o tem): elas não são comparadas.
+    const semSecoes810 = x.semSecoes810 === true;
     if (dfdCenti && dfdSistema && typeof dfdSistema === "object") {
-      for (const f of diferencasDfdCenti(dfdSistema as unknown as DfdSistemaComparavel, dfdCenti, o.tolerancia))
+      for (const f of diferencasDfdCenti(dfdSistema as unknown as DfdSistemaComparavel, dfdCenti, o.tolerancia, semSecoes810))
         if (o.objeto || !f.startsWith("Objeto:")) difs.push(f);
     } else {
       const vs = numeroDe(d.valor);
@@ -2501,6 +2509,9 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     if (difs.length) {
       const mensagem = motivoDivergencias(ref, difs);
       out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem });
+    } else if (semSecoes810) {
+      // Sem outra diferença: "convergente*" — convergente com a NOTA da falta das seções 8 a 10 (âmbar na tela).
+      out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: motivoSemSecoes810(ref) });
     } else out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: null });
   }
   return out;
@@ -2525,9 +2536,13 @@ export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { 
   }
   for (const it of conformes) {
     const id = idDe(it);
-    if (id != null && !m.has(id)) m.set(id, { dfdId: id, status: "convergente", msgs: [] });
+    // O convergente leva motivo só com a NOTA ("convergente*": sem as seções 8 a 10 na Centi).
+    const nota = notaConferencia("convergente", str(it.conferenciaCentiMotivo)) ? str(it.conferenciaCentiMotivo) : "";
+    if (id != null && !m.has(id)) m.set(id, { dfdId: id, status: "convergente", msgs: nota ? [nota] : [] });
   }
-  return [...m.values()].map((x) => (x.status === "divergente" ? { dfdId: x.dfdId, status: x.status, motivo: x.msgs.join(SEPARADOR_DIVERGENCIAS).slice(0, MAX_MOTIVO_CENTI) } : { dfdId: x.dfdId, status: x.status }));
+  return [...m.values()].map((x) =>
+    x.status === "divergente" || x.msgs.length ? { dfdId: x.dfdId, status: x.status, motivo: x.msgs.join(SEPARADOR_DIVERGENCIAS).slice(0, MAX_MOTIVO_CENTI) } : { dfdId: x.dfdId, status: x.status },
+  );
 }
 
 export type OpcoesCm002 = { proibidas: string[]; esperada: string[]; campoValor: string; tolerancia: number; entidade: ((d: Item) => string) | null };

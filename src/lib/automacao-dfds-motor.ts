@@ -65,8 +65,10 @@ export type Emissao = {
   ambiente?: boolean;
   entidade?: string;
   recusada?: boolean;
-  /** O planejamento ABRIU, mas não pode ser emitido (sem o registro das seções 8–10): não vale tentar outros órgãos. */
+  /** O planejamento ABRIU, mas a Centi não emitiu o DFD dele: não vale tentar outros órgãos. */
   definitivo?: boolean;
+  /** Emitido SEM o registro das seções 8 a 10 (o planejamento não o tem): elas não valem (nem são comparadas). */
+  semSecoes810?: boolean;
 };
 /** A resposta da extensão (o que o motor lê). */
 export type RespostaExt = {
@@ -169,13 +171,18 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     const msg = mensagemDoLoad(load.j);
     return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}.` };
   }
-  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi (sem ele, não emite).
+  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele (o planejamento
+  // não tem), o DFD é emitido mesmo assim, com o campo VAZIO — nunca o registro de outro planejamento — e as seções 8 a 10
+  // que vierem não valem (`semSecoes810`): as demais seções seguem conferidas.
   const ass = assinaturaDoLoad(load.j, id);
-  if ("erro" in ass) return { erro: ass.erro, definitivo: true };
-  const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), ass.id), entidade }, 150_000);
+  const semSecoes810 = "erro" in ass;
+  const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), "erro" in ass ? "" : ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
   if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {
+    // Sem o registro das seções 8 a 10, a recusa é DESTE planejamento (não da operação): não conta para parar a execução.
+    if (semSecoes810)
+      return { erro: `A Centi não emitiu o DFD do planejamento ${id}${onde} sem o registro das seções 8 a 10 (o planejamento não o tem): “Usuário sem permissão!”.`, amostra: a.amostra, definitivo: true };
     if (!deNovo) {
       const e = await c.pedir("estado", null, 8000);
       if (e.ok && c.aplicarOperacao(e.operacao)) return emitirNaSessao(c, id, entidade, true, load);
@@ -183,7 +190,10 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     return { erro: `A Centi negou a emissão do DFD do planejamento ${id}${onde}: “Usuário sem permissão!”.`, amostra: a.amostra, recusada: true };
   }
   const r2 = await pdfDoAchado(a, baixarPelaExtensao(c.pedir as unknown as PedirExtensao, entidade));
-  if ("pdf" in r2) return { pdf: r2.pdf };
+  if ("pdf" in r2) return semSecoes810 ? { pdf: r2.pdf, semSecoes810 } : { pdf: r2.pdf };
+  // Sem o registro, a Centi pode recusar a emissão: o motivo diz isso (e não vale tentar outros órgãos — o load abriu).
+  if (semSecoes810)
+    return { erro: `A Centi não emitiu o DFD do planejamento ${id}${onde} sem o registro das seções 8 a 10 (o planejamento não o tem): ${r2.erro}`, amostra: r2.amostra, definitivo: true };
   return { erro: r2.erro, amostra: r2.amostra, ambiente: a.tipo === "nada" && /sessão/i.test(a.erro) };
 }
 

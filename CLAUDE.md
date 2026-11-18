@@ -1109,6 +1109,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Mesa), corrigir dado a dado = `host.abrir({tipo:"dfd", id, corrigirCenti:true})` e as gravadas na conferência. A célula
   Centi das tabelas das automações recebe o id do DFD (`LinhaDfd.dfdId` — a `key` lá é a posição; `dadosDfdDoItem` leva o
   `conferenciaCentiEm`). O `saida.corrigirPelaCenti` põe no item a conferência de DEPOIS (corrigido/parcial).
+  **v1.296.7 — SEM AS SEÇÕES 8 A 10 = "Convergente*" (regra do usuário):** o planejamento sem o
+  `IdPlanejamentoAssinaturaDFD` no load é EMITIDO com o campo vazio (`emitirNaSessao` → `Emissao.semSecoes810`; a recusa
+  nesse caso é `definitivo`, nunca `recusada` — não conta no `RecusasCenti`) e o resumo/retrato levam `semSecoes810`:
+  `diferencasDfdCenti(…, semSecoes810)` não compara as seções 8–10 (`SECOES_ASSINATURA_DFD` pela `chaveSecao`), a dupla
+  emissão compara sem elas e `novoDaCenti` mantém as do sistema (`comSecoesDoSistema`). Sem outra diferença = convergente
+  COM o motivo `motivoSemSecoes810(ref)` (`NOTA_SEM_SECOES_810`; a rota de marcação guarda o motivo também do
+  convergente) → `notaConferencia(status, motivo)` → selo âmbar `ROTULO_COM_NOTA` "Convergente*" (Mesa e automações, filtro
+  próprio) e o painel com "Faltam as seções 8 a 10 na Centi"; com outra diferença, a regra de sempre.
   **v1.296.4 (migração `0193`) — OS FILTRADOS NA TABELA:** "Quais" do `sistema.ler` ganhou `tabela` (`BUSCA_TABELA`, o padrão
   dos DFDs e dos modelos; a `0193` trocou `"buscaDfds":"todos"` por `"tabela"` nos diagramas salvos — sem filtro, lê todos):
   a leitura traz tudo e `filtrarPelaTabela` (`fluxo-ler-sistema.ts`, testado) recorta pela config do nó — `filtrados` (os

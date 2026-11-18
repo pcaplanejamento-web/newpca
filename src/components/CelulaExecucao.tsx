@@ -14,6 +14,7 @@ import {
   lerAceite,
   MAX_JUSTIFICATIVA,
   MIN_JUSTIFICATIVA,
+  notaConferencia,
   orientacoesDivergencias,
   textoRelatorioCenti,
   tiposDivergencia,
@@ -40,6 +41,9 @@ export const rotuloConferencia = (s: string | null | undefined) => (s === "conve
 /** O rótulo do FILTRO da conferência DESATUALIZADA (o DFD mudou depois dela). */
 export const ROTULO_RECONFERIR = "Reconferir";
 
+/** O rótulo do CONVERGENTE COM NOTA (sem as seções 8 a 10 na Centi — não comparadas): âmbar, com a nota no painel. */
+export const ROTULO_COM_NOTA = "Convergente*";
+
 /** O rótulo da divergência ACEITA (a Centi é que está errada — vale enquanto o motivo for o mesmo). */
 export const ROTULO_RESSALVA = "Convergente com ressalva";
 
@@ -50,7 +54,7 @@ export const comRessalva = (s: string | null | undefined, motivo: string | null 
 /** Os valores do FILTRO da coluna Centi: o status, "Reconferir" quando desatualizada e, no divergente, cada TIPO de
  * divergência ("Divergente · Valor total") — ou, ACEITA, "Convergente com ressalva" (os tipos seguem filtráveis). */
 export const valoresConferencia = (s: string | null | undefined, motivo?: string | null, desatualizada = false, ressalva = false): string[] => [
-  ressalva && s === "divergente" ? ROTULO_RESSALVA : rotuloConferencia(s),
+  ressalva && s === "divergente" ? ROTULO_RESSALVA : notaConferencia(s, motivo) ? ROTULO_COM_NOTA : rotuloConferencia(s),
   ...(desatualizada && (s === "convergente" || s === "divergente") ? [ROTULO_RECONFERIR] : []),
   ...(s === "divergente" ? tiposDoMotivo(motivo).map((t) => `Divergente · ${t}`) : []),
 ];
@@ -107,6 +111,8 @@ export function CelulaConferenciaCenti({
   const quando = conferidoEm ? ` em ${dataHoraBR(conferidoEm)}` : "";
   const ac = lerAceite(aceite);
   const ressalva = ac && status === "divergente" && (ressalvaDoDfd || aceiteVale(status, motivo ?? null, ac)) ? ac : null;
+  // "Convergente*": confere, mas a Centi não tem as seções 8 a 10 do planejamento (não comparadas) — a nota no painel.
+  const nota = notaConferencia(status, motivo);
   const selo = desatualizada ? (
     <Badge tone="amber" dot>
       {ROTULO_RECONFERIR}
@@ -115,6 +121,10 @@ export function CelulaConferenciaCenti({
     <Badge tone="blue" dot>
       Com ressalva
     </Badge>
+  ) : nota ? (
+    <Badge tone="amber" dot>
+      {ROTULO_COM_NOTA}
+    </Badge>
   ) : (
     <Badge tone={status === "convergente" ? "emerald" : "red"} dot>
       {rotuloConferencia(status)}
@@ -122,13 +132,15 @@ export function CelulaConferenciaCenti({
   );
   const grupos = status === "divergente" ? divergenciasDoMotivo(motivo) : [];
   // Convergente em dia e sem DFD: só o selo (não há o que listar nem fazer).
-  if (!desatualizada && status === "convergente" && dfdId == null) return <span title={`Confere com a Centi${quando}`}>{selo}</span>;
+  if (!desatualizada && status === "convergente" && !nota && dfdId == null) return <span title={`Confere com a Centi${quando}`}>{selo}</span>;
   if (!desatualizada && status === "divergente" && !grupos.length && dfdId == null)
     return <span title="Divergente — sem detalhes gravados">{selo}</span>;
   const total = contarDivergencias(grupos);
   const titulo = desatualizada
     ? `O DFD mudou depois da conferência (${rotuloConferencia(status).toLowerCase()}${quando}) — reconfira`
-    : status === "convergente"
+    : nota
+      ? `Confere com a Centi${quando}, sem as seções 8 a 10 — ver a observação`
+      : status === "convergente"
       ? `Confere com a Centi${quando}`
       : ressalva
         ? `Divergência aceita — ${ressalva.justificativa}`
@@ -152,6 +164,7 @@ export function CelulaConferenciaCenti({
           desatualizada={desatualizada}
           rotulo={rotulo}
           ressalva={ressalva}
+          nota={nota}
           fechar={fechar}
         />
       )}
@@ -174,9 +187,12 @@ function PainelDivergencias({
   desatualizada,
   rotulo,
   ressalva,
+  nota,
   fechar,
 }: {
   ressalva: ReturnType<typeof lerAceite>;
+  /** A observação do "Convergente*" (sem as seções 8 a 10 na Centi). */
+  nota: string | null;
   grupos: GrupoDivergencias[];
   total: number;
   status: "convergente" | "divergente";
@@ -244,6 +260,8 @@ function PainelDivergencias({
             <>
               {rotulo ? `${rotulo} — d` : "D"}ivergências com a Centi <span className="font-normal text-muted">({ativo === TODOS ? total : `${nVistos} de ${total}`})</span>
             </>
+          ) : nota ? (
+            "Confere com a Centi*"
           ) : (
             "Confere com a Centi"
           )}
@@ -275,6 +293,15 @@ function PainelDivergencias({
               <ListaDivergencias itens={g.itens} />
             </section>
           ))}
+        </div>
+      )}
+      {nota && (
+        <div className="space-y-1 rounded-control border border-[color-mix(in_srgb,var(--warn)_40%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-2 py-1.5 text-[12.5px]">
+          <p className="font-medium text-text">Faltam as seções 8 a 10 na Centi</p>
+          <p className="break-words text-text-2">{nota.replace(/^[^—]*—\s*/, "").replace(/^./, (c) => c.toUpperCase())}</p>
+          <p className="text-[12px] text-muted">
+            Indicação da equipe, secretário demandante e autorização não foram comparadas — valem as do sistema. Para conferi-las, cadastre o registro de assinatura do DFD no planejamento da Centi e reconfira.
+          </p>
         </div>
       )}
       {ressalva && (

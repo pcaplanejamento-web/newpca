@@ -301,3 +301,50 @@ test("a emissão da conferência manda “Emitir valor referência” = Sim mesm
   // O que `lerNaSessao` faz: a mesma configuração com o valor de referência ligado.
   assert.equal(param(pedidoEmitirDfd("131", { ...doAparelho, valorReferencia: true }, new Date(2026, 10, 17), "114"), "EmitirValorReferencia"), "1");
 });
+
+test("sem o registro das seções 8 a 10 na Centi: só elas não contam — “convergente*” com a nota; outra diferença = divergente", async () => {
+  const { conferenciaDoRetrato, lerRetrato, montarRetrato, notaConferencia, NOTA_SEM_SECOES_810, textoRetrato } = await import("../src/lib/conferencia-dfd-centi.ts");
+  const { marcacoesConferencia } = await import("../src/lib/fluxo-nos.ts");
+  const { novoDaCenti } = await import("../src/lib/correcao-centi-core.ts");
+  const s = base();
+  s.secoes = [...s.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "ANA, BIA" }, { numero: 10, titulo: "10 - AUTORIZAÇÃO", texto: "Autorizo." }];
+  // A Centi sem as seções 8 a 10 (ou com as de OUTRO registro): não comparadas.
+  const c = base();
+  c.secoes = [...c.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "OUTRA EQUIPE" }];
+  assert.ok(diferencasDfdCenti(sistema(s), c).some((x) => x.startsWith("Seção 8")), "com o registro, comparadas");
+  assert.deepEqual(diferencasDfdCenti(sistema(s), c, 0.01, true), [], "sem o registro, fora da comparação");
+  const it = (dfd: DfdParseado) => ({ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(s), centi: { numero: "123", semSecoes810: true, dfd } });
+  const so = compararDfdCenti([it(c)], { tolerancia: 0.01, objeto: true });
+  assert.equal(so.conformes.length, 1);
+  assert.equal(so.conformes[0].conferenciaCenti, "convergente");
+  assert.match(String(so.conformes[0].conferenciaCentiMotivo), /^DFD 123 \(Planej\. 456\): Sem as seções 8 a 10 na Centi/);
+  assert.ok(notaConferencia("convergente", String(so.conformes[0].conferenciaCentiMotivo))?.startsWith(NOTA_SEM_SECOES_810));
+  assert.equal(notaConferencia("convergente", null), null);
+  assert.equal(notaConferencia("divergente", String(so.conformes[0].conferenciaCentiMotivo)), null);
+  // A marcação grava o convergente COM a nota (a tela mostra "Convergente*"); o comum segue sem motivo.
+  const m = marcacoesConferencia([], [...so.conformes, { id: 10, conferenciaCenti: "convergente", conferenciaCentiMotivo: null }]);
+  assert.equal(m.find((x) => x.dfdId === 9)?.motivo, so.conformes[0].conferenciaCentiMotivo);
+  assert.equal("motivo" in (m.find((x) => x.dfdId === 10) ?? {}), false);
+  // Qualquer outra diferença: a lógica de sempre (divergente, sem a nota).
+  const c2 = { ...c, objeto: "Aquisição de cadeiras" };
+  const div = compararDfdCenti([it(c2)], { tolerancia: 0.01, objeto: true });
+  assert.equal(div.divergentes.length, 1);
+  assert.match(String(div.divergentes[0].mensagem), /1 diferença — Objeto:/);
+  // O retrato guarda a falta: a reconferência pela Mesa dá o MESMO resultado e a correção mantém as seções do sistema.
+  const r = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" }, { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true }, c2, { objeto: true, tolerancia: 0.01 })));
+  assert.equal(r?.semSecoes810, true);
+  assert.equal(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, r!).status, "divergente");
+  assert.match(String(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, { ...r!, dfd: c }).motivo), /Sem as seções 8 a 10/);
+  const novo = novoDaCenti(s, r!, 2027);
+  assert.deepEqual(
+    novo.secoes.filter((x) => /EQUIPE|AUTORIZA/.test(x.titulo)).map((x) => x.texto),
+    ["ANA, BIA", "Autorizo."],
+    "a correção nunca apaga nem troca as seções 8 a 10 do sistema",
+  );
+});
+
+test("emissão sem o registro das seções 8 a 10: o campo vai VAZIO (nunca o de outro planejamento)", () => {
+  const corpo = JSON.stringify(pedidoEmitirDfd("456", lerConfigCenti(null), new Date("2026-11-18T12:00:00Z"), ""));
+  assert.match(corpo, /IdPlanejamentoAssinaturaDFD/);
+  assert.doesNotMatch(corpo, /IdPlanejamentoAssinaturaDFD[^\]]*163/);
+});

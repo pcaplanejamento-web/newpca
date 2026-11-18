@@ -8,6 +8,8 @@ import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-m
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, fimDaLeitura, type Grafo, type Item, marcadosDuplicados, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
+import { notaConferencia } from "@/lib/conferencia-dfd-centi";
+import { ROTULO_COM_NOTA } from "../CelulaExecucao";
 import { BUSCA_TABELA, buscaDoNo, type FontesSistema, opcoesDaBusca, planejamentosDoCampo } from "@/lib/fluxo-ler-sistema";
 import type { FiltroValor } from "@/lib/tabela-filtros";
 import { lerCaptura } from "@/lib/fluxo-dados";
@@ -971,6 +973,9 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     if (it.naoMarcar === true) return { rotulo: "Não conferido", tom: "amber", texto: s(it.mensagem) };
     // Divergente é um RESULTADO da conferência (conta em Atenção), não uma falha da execução (só "Falhou" conta em Falhas).
     if (s(it.mensagem)) return { rotulo: "Divergente", tom: "amber", texto: s(it.mensagem) };
+    // Confere, mas a Centi não tem as seções 8 a 10 do planejamento (não comparadas): "Convergente*" com a nota.
+    const nota = notaConferencia(s(it.conferenciaCenti), s(it.conferenciaCentiMotivo));
+    if (nota) return { rotulo: ROTULO_COM_NOTA, tom: "amber", texto: nota };
     return { rotulo: "Convergente", tom: "emerald", texto: "" };
   }
   return null;

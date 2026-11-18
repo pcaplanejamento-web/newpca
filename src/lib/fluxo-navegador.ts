@@ -168,6 +168,8 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   // Sem nenhum valor nos itens = o PDF saiu sem o valor de referência: NÃO confere (nunca compara nem guarda "R$ 0,00").
   if (semValores(d)) throw new Error("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido.");
   const resumo = {
+    // Sem o registro das seções 8 a 10 no planejamento: elas não são comparadas (a conferência diz "convergente*").
+    ...(e.semSecoes810 ? { semSecoes810: true } : {}),
     numero: d.numero,
     planejamento: d.planejamento,
     tipo: d.tipo,

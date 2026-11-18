@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     antes.set(r.id, { s: r.s, m: r.m, em: r.em, at: r.at });
   const mudou = unicos.filter((x) => {
     const a = antes.get(x.dfdId);
-    return a && (a.s !== x.status || (a.m ?? null) !== (x.status === "divergente" ? (x.motivo ?? null) : null));
+    return a && (a.s !== x.status || (a.m ?? null) !== (x.motivo ?? null));
   });
   // A conferência que estava DESATUALIZADA (o DFD mudou depois dela) e volta igual também renova a versão dos dados —
   // senão a Mesa seguiria mostrando "Reconferir" pela lista memorizada.
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     const fatia = unicos.slice(i, i + LOTE).map((x) =>
       db
         .update(dfds)
-        .set({ conferenciaCenti: x.status, conferenciaCentiMotivo: x.status === "divergente" ? (x.motivo ?? null) : null, conferenciaCentiEm: em })
+        .set({ conferenciaCenti: x.status, conferenciaCentiMotivo: x.motivo ?? null, conferenciaCentiEm: em })
         .where(eq(dfds.id, x.dfdId)),
     );
     await db.batch(fatia as [(typeof fatia)[number], ...typeof fatia]);
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
   if (mudou.length) {
     const cmds = comandosHistoricoCenti(
       db,
-      mudou.map((x) => ({ dfdId: x.dfdId, status: x.status, motivo: x.status === "divergente" ? (x.motivo ?? null) : null, em, porNome: g.u.nome ?? null })),
+      mudou.map((x) => ({ dfdId: x.dfdId, status: x.status, motivo: x.motivo ?? null, em, porNome: g.u.nome ?? null })),
     );
     await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
   }

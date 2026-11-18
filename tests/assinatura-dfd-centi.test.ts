@@ -89,13 +89,15 @@ test("emissão: abre o planejamento pelo módulo da tela (101045) e manda o regi
   assert.equal((ops[0] as unknown as { ModuleKey: number }).ModuleKey, 120477);
 });
 
-test("emissão: sem o registro no planejamento, NADA é emitido (erro só dele, sem tentar outros órgãos); sem abrir, a mensagem da Centi", async () => {
+test("emissão: sem o registro no planejamento, emite com o campo VAZIO e marca semSecoes810 (as demais seções seguem conferidas); sem abrir, a mensagem da Centi", async () => {
   const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, null) });
   const r = await emitirUm(c, "131");
-  assert.equal(r.pdf, undefined);
-  assert.equal(r.definitivo, true);
-  assert.match(r.erro ?? "", /seções 8 a 10/);
-  assert.equal(pedidos.filter((p) => p.acao === "pedir").length, 0, "nenhum Emitir DFD sem o registro");
+  assert.ok(r.pdf, "o DFD é emitido mesmo sem o registro das seções 8 a 10");
+  assert.equal(r.semSecoes810, true);
+  assert.equal(r.recusada, undefined, "a falta do registro nunca conta como recusa da Centi");
+  const ops = pedidos.filter((p) => p.acao === "pedir").map((p) => p.dados.corpo);
+  assert.equal(ops.length, 1);
+  assert.equal(param(ops[0], "IdPlanejamentoAssinaturaDFD"), "", "nunca um id de outro planejamento");
   const n = centiFalsa({ [caminhoLoadPlanejamento("5")]: { Entity: null, Message: "Registro não encontrado" } });
   const x = await emitirUm(n.c, "5", "3");
   assert.match(x.erro ?? "", /Não consegui abrir o planejamento 5 na Centi \(órgão 3\) — Registro não encontrado/);

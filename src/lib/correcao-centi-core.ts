@@ -4,7 +4,7 @@
  * a tolerância nos valores) — quais dados DIVERGEM. O banner usa as escolhas da sobrescrita (Manter sistema | Usar Centi)
  * com só as divergências já marcadas "Usar Centi"; a correção em massa aplica só os TIPOS escolhidos.
  */
-import { conferenciaDoRetrato, paraComparar, tipoCurto, type RetratoCenti } from "./conferencia-dfd-centi.ts";
+import { comSecoesDoSistema, conferenciaDoRetrato, paraComparar, tipoCurto, type RetratoCenti } from "./conferencia-dfd-centi.ts";
 import { normalizarSecoesDfd } from "./dfd-tratamento.ts";
 import { arredondarValor, type DfdParseado, normComparacao, valorDosItens } from "./parse-dfd-comum.ts";
 import { chaveSecao, type DfdComparavel, herdarTratamentos, parearItens } from "./comparar-protocolo.ts";
@@ -15,7 +15,9 @@ import { aplicarTodas, comparacaoEscolha, type EntradaEscolha, entradasEscolha, 
 export function novoDaCenti(sistema: DfdParseado, r: RetratoCenti, anoPca: number | null): DfdParseado {
   // O que a Centi NÃO traz (ou traz fora do padrão) e a equipe tratou no sistema — tipo, seções obrigatórias,
   // referências do DFD-R — fica o do sistema: a correção nunca APAGA um tratamento (a mesma régua do reenvio).
-  const c = herdarTratamentos(normalizarSecoesDfd(r.dfd, undefined, anoPca).dfd, sistema, anoPca, { assinaturas: false }).dfd;
+  // Sem o registro das seções 8 a 10 na Centi: ficam as do sistema (nunca apagadas nem trocadas por outro registro).
+  const dfdCenti = r.semSecoes810 ? comSecoesDoSistema(r.dfd, sistema) : r.dfd;
+  const c = herdarTratamentos(normalizarSecoesDfd(dfdCenti, undefined, anoPca).dfd, sistema, anoPca, { assinaturas: false }).dfd;
   return {
     ...c,
     numero: sistema.numero,

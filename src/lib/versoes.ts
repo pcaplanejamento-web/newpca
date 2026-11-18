@@ -35,6 +35,32 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.7",
+    data: "2026-11-18",
+    titulo: "Sem as seções 8 a 10 na Centi: Convergente*",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "O planejamento sem o registro de assinatura do DFD (seções 8 a 10) não é mais erro nem impede a conferência: o DFD é emitido e as demais seções são comparadas. Quando essa é a única diferença, a conferência fica “Convergente*” em amarelo; havendo outra, vale a regra de sempre.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "Tocar no selo “Convergente*” mostra que faltam as seções 8 a 10 na Centi e que valem as do sistema; o filtro da coluna Centi separa esses DFDs.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O título “Apontamentos” da Análise fica com o mesmo espaço do componente de cima e da tabela de baixo.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.6",
     data: "2026-11-18",
     titulo: "Resolver as divergências na própria automação",

@@ -325,7 +325,7 @@ function AnaliseAoVivo({
       : null;
   const resumo = ultima.resumo;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col gap-[var(--gap-block)] overflow-y-auto">
       <div className="flex flex-wrap items-center gap-2">
         {situacao ? <Badge tone={situacao.tom} dot>{situacao.rotulo}</Badge> : <Badge tone="slate">Pronto para executar</Badge>}
         <span className="min-w-0 flex-1 truncate text-sm text-muted">
@@ -374,14 +374,15 @@ function AnaliseAoVivo({
         </div>
       )}
       {resultado && apontados.length > 0 && (
-        <div className="space-y-1">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Apontamentos</h4>
+        // O título no padrão dos do painel ("Dados de entrada", "Etapas"): o MESMO respiro acima e até a tabela.
+        <div className="space-y-[var(--gap-block)]">
+          <h4 className="text-sm font-semibold text-text">Apontamentos</h4>
           <DataTable columns={colunasAp} rows={apontados} getKey={(r) => apontados.indexOf(r)} density="compact" exportar={{ nome: "Apontamentos do fluxo" }} pageSize={10} />
         </div>
       )}
       {processados.length > 0 && (
-        <div className="space-y-1">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
+        <div className="space-y-[var(--gap-block)]">
+          <h4 className="text-sm font-semibold text-text">
             {fonte ? `${nomeDoNo(fonte, REGISTRO_NOS)} · ${rodando ? "ao vivo" : "resultado"}` : "Itens"}
           </h4>
           {host && (
