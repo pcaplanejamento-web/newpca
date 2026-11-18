@@ -271,7 +271,8 @@ export type ProblemaGrafo = { no?: string; texto: string; nivel: "erro" | "atenc
 export const nomeDoNo = (n: NoFluxo, reg: Registro) => reg.get(n.tipo)?.rotulo ?? n.tipo;
 
 /** O RESUMO do que o nó está configurado para fazer: os 2 primeiros campos visíveis e preenchidos ("Rótulo: valor"). */
-export function resumoDoNo(n: NoFluxo, def: DefNo | undefined): string {
+/** `nomeFluxo` = o nome do fluxo salvo pelo id (os campos "Fluxo"/"Fluxos" mostram o nome, não o número). */
+export function resumoDoNo(n: NoFluxo, def: DefNo | undefined, nomeFluxo?: (id: string) => string | undefined): string {
   if (!def) return "";
   const partes: string[] = [];
   for (const c of def.campos) {
@@ -279,7 +280,15 @@ export function resumoDoNo(n: NoFluxo, def: DefNo | undefined): string {
     const v = n.config[c.chave] ?? c.padrao;
     if (v == null || v === "" || v === false || (Array.isArray(v) && !v.length)) continue;
     const t =
-      c.tipo === "booleano" ? "sim" : c.tipo === "selecao" ? (c.opcoes?.find((o) => o.valor === String(v))?.rotulo ?? String(v)) : Array.isArray(v) ? `${v.length}` : String(v);
+      c.tipo === "booleano"
+        ? "sim"
+        : c.tipo === "selecao"
+          ? (c.opcoes?.find((o) => o.valor === String(v))?.rotulo ?? String(v))
+          : (c.tipo === "fluxo" || c.tipo === "fluxos") && nomeFluxo
+            ? String(v).split(/[;,\s]+/).filter(Boolean).map((id) => nomeFluxo(id) ?? `nº ${id}`).join(", ")
+            : Array.isArray(v)
+              ? `${v.length}`
+              : String(v);
     partes.push(`${c.rotulo}: ${t.replace(/\s+/g, " ").slice(0, 40)}`);
   }
   return partes.join(" · ");

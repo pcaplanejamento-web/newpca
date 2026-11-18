@@ -1081,7 +1081,8 @@ const NOS: DefNo[] = [
     tipo: "dados.filtrarConferencia",
     categoria: "dados",
     rotulo: "Filtrar pela conferência da Centi",
-    descricao: "Escolhe quais DFDs seguem pelo resultado GRAVADO da conferência com a Centi (coluna “Centi”): todos, só os divergentes ou os divergentes e os ainda não conferidos.",
+    descricao:
+      "Escolhe quais DFDs seguem pelo resultado GRAVADO da conferência com a Centi (coluna “Centi”) — todos, só os divergentes ou os divergentes e os ainda não conferidos — e se os divergentes serão corrigidos ou só conferidos.",
     icone: "filter",
     entradas: ["entrada"],
     saidas: ["saida"],
@@ -1093,9 +1094,9 @@ const NOS: DefNo[] = [
         entrada: true,
         padrao: "todos",
         ajuda:
-          "Todos = cada DFD é conferido de novo na Centi agora (também os gravados como Convergente — a conferência gravada pode estar velha) e só o que sair divergente é corrigido. Só os divergentes = só os gravados Divergente. Divergentes e não conferidos = os Divergente, os sem conferência e os “Reconferir”.",
+          "Todos = cada DFD é conferido de novo na Centi agora (também os gravados como Convergente — a conferência gravada pode estar velha). Só os divergentes = só os gravados Divergente. Divergentes e não conferidos = os Divergente, os sem conferência e os “Reconferir”. Vindo da Mesa, seguem os DFDs escolhidos lá.",
         opcoes: [
-          { valor: "todos", rotulo: "Todos — conferir e corrigir" },
+          { valor: "todos", rotulo: "Todos" },
           { valor: "divergentes", rotulo: "Só os divergentes gravados" },
           { valor: "pendentes", rotulo: "Divergentes e não conferidos" },
         ],
@@ -1708,7 +1709,7 @@ const NOS: DefNo[] = [
     categoria: "saida",
     rotulo: "Corrigir DFD pela Centi",
     descricao:
-      "Corrige cada DFD (id) DIVERGENTE com os dados da Centi guardados na conferência — a MESMA correção do “Usar a Centi em…” da Mesa: só o que diverge; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema; refaz a conferência.",
+      "Corrige cada DFD (id) DIVERGENTE com os dados da Centi guardados na conferência — a MESMA correção do “Usar a Centi em…” da Mesa: só o que diverge; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema; refaz a conferência. Com “Corrigir os divergentes” desligado (ou o “Reconferir” da Mesa), não grava nada: o DFD sai em “Sem correção”.",
     icone: "save",
     // "depois" (opcional): só espera — ex.: o "Marcar conferência" gravar o retrato antes da correção; os itens dela são ignorados.
     entradas: ["entrada", "depois"],
@@ -2012,7 +2013,7 @@ const NOS: DefNo[] = [
     tipo: "saida.marcarConferencia",
     categoria: "saida",
     rotulo: "Marcar DFDs × Centi",
-    descricao: "Marca cada DFD do sistema como DIVERGENTE (com o motivo) ou CONVERGENTE em relação à CM002 — a coluna “Centi” da Mesa.",
+    descricao: "Marca cada DFD do sistema como DIVERGENTE (com o motivo) ou CONVERGENTE na conferência com a Centi — a coluna “Centi” da Mesa.",
     icone: "save",
     entradas: ["divergentes", "conformes"],
     saidas: ["saida"],

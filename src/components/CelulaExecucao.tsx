@@ -28,7 +28,7 @@ import { ChipsEscolha } from "./ChipsEscolha";
 import { Dropdown } from "./Dropdown";
 import { usePodeExportar } from "./ExportarTabelas";
 import { TextArea, TextField } from "./Field";
-import { IconBuilding, IconCheck, IconClock, IconCopy, IconDownload, IconMerge, IconPencil, IconRefresh, IconTrash, IconUndo } from "./icons";
+import { IconBuilding, IconCheck, IconClock, IconCopy, IconDownload, IconMerge, IconPencil, IconRefresh, IconRobo, IconTrash, IconUndo } from "./icons";
 import { toast } from "./Toast";
 
 const TOM: Record<"executado" | "cancelado" | "outro", Tone> = { executado: "emerald", cancelado: "red", outro: "amber" };
@@ -417,7 +417,7 @@ function PainelDivergencias({
             </Button>
           )}
           {corrigirAuto && (
-            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} title="Reconfere na Centi agora e corrige só o que diverge, sem escolher dado a dado" onClick={corrigirAuto}>
+            <Button size="sm" variant="secondary" icon={<IconRobo className="h-4 w-4" />} title="Reconfere na Centi agora e corrige só o que diverge, sem escolher dado a dado" onClick={corrigirAuto}>
               Corrigir automaticamente
             </Button>
           )}

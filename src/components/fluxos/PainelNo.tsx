@@ -30,7 +30,7 @@ import { IconLock, IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
-import { CampoColunasCm002, CampoFluxo, CampoOrgaosCenti, CampoReparticoesCenti, CampoValoresSistema, RecomecarSubfluxo } from "./paineis";
+import { CampoColunasCm002, CampoFluxo, useNomeFluxo, CampoOrgaosCenti, CampoReparticoesCenti, CampoValoresSistema, RecomecarSubfluxo } from "./paineis";
 
 /**
  * O painel do NÓ marcado: o nome, os campos do tipo (formulário DECLARATIVO do registro — novo tipo de nó não pede tela
@@ -64,6 +64,7 @@ export function PainelNo({
   onExcluir: () => void;
   somenteLeitura?: boolean;
 }) {
+  const nomeFluxo = useNomeFluxo();
   const [aba, setAba] = useState<"config" | "saida">("config");
   if (!def)
     return (
@@ -81,7 +82,7 @@ export function PainelNo({
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-text">{def.rotulo}</p>
-          {resumoDoNo(no, def) && <p className="truncate text-xs text-muted">{resumoDoNo(no, def)}</p>}
+          {resumoDoNo(no, def, nomeFluxo) && <p className="truncate text-xs text-muted">{resumoDoNo(no, def, nomeFluxo)}</p>}
         </div>
         <AjudaNo def={def} />
         {!somenteLeitura && (

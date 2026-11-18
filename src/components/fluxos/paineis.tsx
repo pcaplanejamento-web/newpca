@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { type AlvoCenti, type ArquivoSaida, alvoDoArquivo, descricaoDoArquivo, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { jaAnexados } from "@/lib/automacao-cliente";
 import { conferenciaAnexos, type DocCenti, type EstadoDfd, type LinhaConferencia, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
@@ -76,6 +76,11 @@ export type HostPainel = {
 };
 export const HostPainelCtx = createContext<HostPainel | null>(null);
 const useHost = () => useContext(HostPainelCtx);
+/** O nome de um fluxo salvo pelo id (o resumo do passo "Executar fluxo" mostra o nome, não o número). */
+export function useNomeFluxo(): (id: string) => string | undefined {
+  const host = useHost();
+  return useCallback((id: string) => host?.fluxos.find((f) => String(f.id) === id)?.nome, [host]);
+}
 
 export type PropsVisao = { no: NoFluxo; grafo: Grafo; onGrafo: (g: Grafo) => void };
 export type Visao = { titulo: string; Componente: (p: PropsVisao) => React.ReactNode };

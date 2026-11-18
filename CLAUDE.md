@@ -1073,6 +1073,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ligado — carimba `corrigir` em cada item; vindo da Mesa — `__daMesa` — deixa passar todos) → `entrada.selecionar` →
   `fluxo.executar` da etapa **`conferir-corrigir-1-dfd`** (`interno: true` — fora do "Novo fluxo"; o fluxo salvo usado como
   subfluxo por outro fica FORA da lista de automações e abre pelo "Abrir" do passo "Executar fluxo" — `HostPainel.abrirFluxo`;
+  o resumo do passo mostra o NOME do fluxo — `resumoDoNo(n, def, nomeFluxo)` + `useNomeFluxo`;
   excluir a principal exclui as etapas `interno` soltas) → `erros.apontar`. **Só conferir** = `saida.corrigirPelaCenti` não
   grava quando `ctx.host.__soConferir` ou `it.corrigir === false` (porta `semMudanca`, `correcao: "soConferir"`, motivo "só
   conferir — …"/"não conferido — …"; a conferência já foi marcada). Mesa: `automacoesCentiDaMesa` → `{conferir, corrigir}`

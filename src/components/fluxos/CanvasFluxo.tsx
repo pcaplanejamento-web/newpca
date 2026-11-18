@@ -11,6 +11,7 @@ import { IconTrash } from "../icons";
 import { segurar } from "../segurar";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
+import { useNomeFluxo } from "./paineis";
 
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 1.8;
@@ -68,6 +69,7 @@ export function CanvasFluxo({
   /** Sobreposições (ex.: botões de zoom) dentro do quadro. */
   extra?: ReactNode;
 }) {
+  const nomeFluxo = useNomeFluxo();
   const ref = useRef<HTMLDivElement>(null);
   const arrasto = useRef<Arrasto | null>(null);
   const soltarSel = useRef<(() => void) | null>(null);
@@ -398,7 +400,7 @@ export function CanvasFluxo({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-text">{d?.rotulo ?? n.tipo}</span>
-                  <span className="block truncate text-[11px] text-muted">{passo && passo.estado !== "fila" ? textoPasso(passo) : d ? resumoDoNo(n, d) || d.descricao : "Tipo desconhecido"}</span>
+                  <span className="block truncate text-[11px] text-muted">{passo && passo.estado !== "fila" ? textoPasso(passo) : d ? resumoDoNo(n, d, nomeFluxo) || d.descricao : "Tipo desconhecido"}</span>
                 </span>
                 {passo && passo.estado !== "fila" && (
                   <span

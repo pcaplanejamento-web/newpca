@@ -53,6 +53,12 @@ export const VERSOES: readonly Versao[] = [
           "No selo “Divergente” da coluna Centi, “Reconferir” usa a automação única só conferindo (nada do DFD é alterado) e “Corrigir automaticamente” (no lugar de “Usar os dados da Centi”) reconfere e troca só o que diverge.",
         link: "/painel/mesa?vista=dfds",
       },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "No diagrama, o passo “Executar fluxo” mostra o NOME do fluxo que roda dentro dele (antes, o número) e tem o botão “Abrir”.",
+        link: "/painel/automacao",
+      },
     ],
   },
   {
