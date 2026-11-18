@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.1",
+    data: "2026-11-18",
+    titulo: "Conferir e corrigir DFDs × Centi: uma só, escolhida no campo",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Ficou UMA “Conferir e corrigir DFDs × Centi” por pessoa (as cópias saíram) e com o diagrama atual — a salva tinha ficado com o antigo (Seleção “não segue nenhum” e Corrigir fora da etapa). A agenda e o “Disponível na Mesa” continuam.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Os DFDs são escolhidos só no campo: “Quais” (todos, nº de planejamento, nº do DFD ou protocolo) e “Valor procurado” — um ou vários, na lista ou digitados com “:”. Saíram a aba “Seleção” e a marcação; a aba “DFDs” mostra, antes de executar, exatamente os DFDs que serão conferidos (já com o “Quais DFDs”).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Dados de entrada e Etapas alinhados: um bloco por componente, um sobre o outro, com o mesmo espaço entre eles; o nome do componente em destaque e os campos na altura padrão dos controles.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.0",
     data: "2026-11-18",
     titulo: "Uma automação só para conferir e corrigir DFDs × Centi",

@@ -378,7 +378,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     dependencias: ["conferir-corrigir-1-dfd"],
     ajuda: {
       funciona:
-        "1) “Quais” lê os DFDs do sistema: todos ou só os de um nº de planejamento, nº do DFD ou protocolo (vários com “:”). 2) “Quais DFDs” filtra pela conferência gravada: Todos (padrão — a gravada pode estar velha), Só os divergentes ou Divergentes e não conferidos. 3) Na aba “Seleção” você pode marcar só alguns; sem nada marcado, seguem todos. 4) Cada DFD é lido INTEIRO na Centi agora (até 3 ao mesmo tempo), comparado com o gravado e marcado na coluna “Centi”. 5) Com “Corrigir os divergentes” ligado, o que sair divergente é corrigido em seguida — só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema — e a conferência é refeita. Desligado, só confere. Divergência aceita ou só de situação/órgão/nº nunca é alterada.",
+        "1) “Quais” + “Valor procurado” escolhem os DFDs: todos, ou um ou vários pelo nº de planejamento, nº do DFD ou protocolo (escolha na lista ou digite, vários separados por “:”). 2) “Quais DFDs” filtra pela conferência gravada: Todos (padrão — a gravada pode estar velha), Só os divergentes ou Divergentes e não conferidos. 3) A aba “DFDs” mostra, antes de executar, exatamente os DFDs que serão conferidos. 4) Cada DFD é lido INTEIRO na Centi agora (até 3 ao mesmo tempo), comparado com o gravado e marcado na coluna “Centi”. 5) Com “Corrigir os divergentes” ligado, o que sair divergente é corrigido em seguida — só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema — e a conferência é refeita. Desligado, só confere. Divergência aceita ou só de situação/órgão/nº nunca é alterada.",
       executa:
         "Com a extensão da Centi pronta: escolha nos Dados de entrada quais DFDs e se corrige, e execute. Interrompida, a próxima execução continua dos que faltam e refaz os que falharam (“Refazer tudo” na Análise recomeça). Na Mesa do sistema, o selo “Divergente” e a barra de seleção usam esta automação: “Reconferir” (só confere) e “Corrigir pela Centi”.",
       resultado:
@@ -388,13 +388,12 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
-        n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista", marcar: false }),
         n("div1", "dados.filtrarConferencia", 576, 160, { quais: "todos" }),
-        n("sel1", "entrada.selecionar", 872, 160, { chave: "id", semMarcar: "todos" }),
-        n("conf1", "fluxo.executar", 1168, 160, { fluxoModelo: "conferir-corrigir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }),
-        n("err1", "erros.apontar", 1464, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{subfluxo.erro}}", nivel: "erro" }),
+        n("conf1", "fluxo.executar", 872, 160, { fluxoModelo: "conferir-corrigir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }),
+        n("err1", "erros.apontar", 1168, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{subfluxo.erro}}", nivel: "erro" }),
       ],
-      conexoes: [c("inicio1", "dfds1"), c("dfds1", "div1"), c("div1", "sel1"), c("sel1", "conf1"), c("conf1", "err1", "falhas")],
+      conexoes: [c("inicio1", "dfds1"), c("dfds1", "div1"), c("div1", "conf1"), c("conf1", "err1", "falhas")],
     },
   },
 ];

@@ -268,8 +268,8 @@ function AjudaCampo({ campo: c }: { campo: CampoNo }) {
 /** O RÓTULO de todo campo de nó: o nome + o "(?)" didático. */
 function RotuloCampo({ campo: c, htmlFor }: { campo: CampoNo; htmlFor?: string }) {
   return (
-    <div className="mb-2 flex items-center gap-1">
-      <label htmlFor={htmlFor} className="text-[13.5px] font-bold text-text">
+    <div className="mb-1.5 flex items-center gap-1">
+      <label htmlFor={htmlFor} className="text-xs font-medium text-muted">
         {c.rotulo}
         {c.obrigatorio ? " *" : ""}
       </label>
@@ -351,7 +351,7 @@ function ControleCampo({
   switch (c.tipo) {
     case "selecao":
       return (
-        <SelectField id={id} value={s} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
+        <SelectField compacto id={id} value={s} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
           {/* Um valor gravado antes e fora das opções (ex.: um limite antigo) segue à vista. */}
           {s && !(c.opcoes ?? []).some((o) => o.valor === s) && <option value={s}>{s}</option>}
           {(c.opcoes ?? []).map((o) => (
@@ -366,6 +366,7 @@ function ControleCampo({
     case "numero":
       return (
         <TextField
+          compacto
           id={id}
           inputMode="decimal"
           value={s}
@@ -406,7 +407,7 @@ function ControleCampo({
       if (c.aceitaCampo === "inserir")
         return (
           <div className="space-y-2">
-            <TextField id={id} value={s} disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />
+            <TextField compacto id={id} value={s} disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />
             {caminhos.length > 0 && !somenteLeitura && (
               <SelectField compacto label="Inserir campo" value="" onChange={(e) => e.target.value && onValor(`${s}{{${e.target.value}}}`)}>
                 <option value="">Escolha…</option>
@@ -419,7 +420,7 @@ function ControleCampo({
             )}
           </div>
         );
-      return <TextField id={id} value={s} disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />;
+      return <TextField compacto id={id} value={s} disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />;
   }
 }
 
@@ -477,7 +478,7 @@ export function CampoNomeLista({
   if (digitar || (!lista.length && !vazio))
     return (
       <div className="space-y-1">
-        <TextField id={id} value={valor} placeholder="Digite o nome" disabled={somenteLeitura} maxLength={60} onChange={(e) => onValor(e.target.value)} />
+        <TextField compacto id={id} value={valor} placeholder="Digite o nome" disabled={somenteLeitura} maxLength={60} onChange={(e) => onValor(e.target.value)} />
         {lista.length > 0 && (
           <Button size="xs" variant="ghost" onClick={() => setDigitar(false)}>
             Escolher da lista
@@ -486,7 +487,7 @@ export function CampoNomeLista({
       </div>
     );
   return (
-    <SelectField id={id} value={valor} disabled={somenteLeitura} onChange={(e) => (e.target.value === OUTRO ? setDigitar(true) : onValor(e.target.value))}>
+    <SelectField compacto id={id} value={valor} disabled={somenteLeitura} onChange={(e) => (e.target.value === OUTRO ? setDigitar(true) : onValor(e.target.value))}>
       <option value="">{vazio ?? "Escolha…"}</option>
       {lista.map((x) => (
         <option key={x} value={x}>
@@ -504,7 +505,7 @@ function CampoCaminho({ id, valor, caminhos, onValor, somenteLeitura }: { id: st
   if (!caminhos.length || digitar)
     return (
       <div className="space-y-1">
-        <TextField id={id} value={valor} placeholder="Nome do campo" disabled={somenteLeitura} maxLength={200} onChange={(e) => onValor(e.target.value)} />
+        <TextField compacto id={id} value={valor} placeholder="Nome do campo" disabled={somenteLeitura} maxLength={200} onChange={(e) => onValor(e.target.value)} />
         {caminhos.length > 0 && (
           <Button size="xs" variant="ghost" onClick={() => setDigitar(false)}>
             Escolher da lista
@@ -514,7 +515,7 @@ function CampoCaminho({ id, valor, caminhos, onValor, somenteLeitura }: { id: st
     );
   const opcoes = valor && !caminhos.includes(valor) ? [valor, ...caminhos] : caminhos;
   return (
-    <SelectField id={id} value={valor} disabled={somenteLeitura} onChange={(e) => (e.target.value === OUTRO ? setDigitar(true) : onValor(e.target.value))}>
+    <SelectField compacto id={id} value={valor} disabled={somenteLeitura} onChange={(e) => (e.target.value === OUTRO ? setDigitar(true) : onValor(e.target.value))}>
       <option value="">Escolha um campo…</option>
       {opcoes.map((x) => (
         <option key={x} value={x}>
@@ -550,9 +551,12 @@ function CampoComOrigem({
 }) {
   const campo = campoDoValor(valor);
   const opcoes = campo && !caminhos.includes(campo) ? [campo, ...caminhos] : caminhos;
+  // Sem campos que venham do nó anterior (ex.: nos Dados de entrada do painel), a ORIGEM não tem o que oferecer: só o valor.
+  if (!opcoes.length) return fixo ?? <TextField compacto id={id} aria-label="Valor fixo" value={valor} placeholder="Digite o valor" disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />;
   return (
     <div className="space-y-2">
       <SelectField
+        compacto
         id={id}
         aria-label="Origem do valor"
         value={campo ?? ""}
@@ -567,14 +571,14 @@ function CampoComOrigem({
         ))}
       </SelectField>
       {campo ? (
-        <div className="flex min-h-11 items-center gap-2 rounded-control border border-border bg-surface-2 px-3 py-2 text-sm text-text" title="Vem do nó anterior — troque pela origem acima">
+        <div className="flex min-h-11 items-center gap-2 rounded-control border border-border bg-surface-2 px-3 py-1.5 text-[13px] text-text desktop:min-h-[var(--h-control-sm)]" title="Vem do nó anterior — troque pela origem acima">
           <IconLock className="size-4 shrink-0 text-muted" aria-hidden />
           <span className="min-w-0">
             Vem {origem ? <>de <strong>{origem}</strong></> : "do nó anterior"}: <code className="font-mono text-[13px]">{campo}</code>
           </span>
         </div>
       ) : (
-        (fixo ?? <TextField aria-label="Valor fixo" value={valor} placeholder="Digite o valor" disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />)
+        (fixo ?? <TextField compacto aria-label="Valor fixo" value={valor} placeholder="Digite o valor" disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />)
       )}
     </div>
   );

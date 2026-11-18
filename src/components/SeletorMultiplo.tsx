@@ -32,6 +32,7 @@ export function SeletorMultiplo({
   onChange,
   disabled = false,
   suspenso = false,
+  semRotulo = false,
   textoVazio = "Todos",
   campo,
   completo = false,
@@ -48,6 +49,9 @@ export function SeletorMultiplo({
   /** CAMPO de formulário: o rótulo EM CIMA e a caixa do `TextField`/`SelectField` (mesma altura — `denso`), mostrando os
    * escolhidos; abre o MESMO painel do `suspenso`. `extra` = ao lado do rótulo (ex.: a `Ajuda compacta`). */
   campo?: { denso?: boolean; extra?: ReactNode };
+  /** No `suspenso`: o gatilho mostra os ESCOLHIDOS (ou `textoVazio`) no lugar do rótulo — quando o rótulo já está ACIMA do
+   * campo (ex.: os campos dos componentes das automações). */
+  semRotulo?: boolean;
   /** No `suspenso`: o gatilho mostra os ESCOLHIDOS por inteiro (sem o rótulo, sem abreviar — ex.: numa célula de tabela). */
   completo?: boolean;
   /** Os valores do ESTADO INICIAL (vazio = "Todos"): igual a ele, o gatilho fica neutro — não é filtro. */
@@ -71,8 +75,14 @@ export function SeletorMultiplo({
       </>
     ) : (
     <>
-      <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-text">{rotulo}</span>
-      {marcado && n > 0 ? (
+      {semRotulo ? (
+        <span className={`min-w-0 flex-1 truncate text-left text-[13px] ${n > 0 ? "font-semibold text-text" : "text-muted"}`} title={n ? selecionados.map(nomeDe).join(", ") : undefined}>
+          {n ? resumoNeutro : textoVazio}
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-text">{rotulo}</span>
+      )}
+      {semRotulo ? null : marcado && n > 0 ? (
         // A contagem num SELO (o rótulo fica inteiro mesmo em colunas estreitas); por extenso para o leitor de tela.
         <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-none text-white tabular-nums" title={`${num(n)} selecionado${n === 1 ? "" : "s"}`}>
           {num(n)}

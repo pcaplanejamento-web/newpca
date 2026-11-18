@@ -18,7 +18,7 @@ import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { useEstimativa } from "./useEstimativa";
 import { CampoDoNo } from "./PainelNo";
-import { estadoDoItem, HostPainelCtx, rotuloItem, TesteProtocoloCenti, useExecutarSelecionados, VISOES } from "./paineis";
+import { estadoDoItem, HostPainelCtx, rotuloItem, TesteProtocoloCenti, tituloVisao, useExecutarSelecionados, VISOES } from "./paineis";
 
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
@@ -79,7 +79,7 @@ export function PainelFluxo({
 
   // As ABAS: as visões dos componentes do fluxo + a Análise.
   const visoes = etapas.filter((n) => VISOES[n.tipo] && !n.desativado);
-  const opcoes = [...visoes.map((n) => ({ value: n.id, label: VISOES[n.tipo].titulo })), { value: ANALISE, label: "Análise" }];
+  const opcoes = [...visoes.map((n) => ({ value: n.id, label: tituloVisao(n) })), { value: ANALISE, label: "Análise" }];
   const [aba, setAba] = useState<string>(opcoes[0].value);
   const abaValida = opcoes.some((o) => o.value === aba) ? aba : opcoes[0].value;
   // Ao executar, a aba que acompanha ao vivo: a dos DFDs (Baixar/anexar), senão a Análise.
@@ -114,18 +114,22 @@ export function PainelFluxo({
       <aside className="flex min-h-0 flex-col gap-[var(--gap-block)] lg:overflow-y-auto">
         {entradas.length > 0 && (
           <section className={CARTAO} aria-labelledby="fluxo-entradas">
-            <h3 id="fluxo-entradas" className="mb-3 text-sm font-semibold text-text">
+            <h3 id="fluxo-entradas" className="text-sm font-semibold text-text">
               Dados de entrada
             </h3>
-            <div className="space-y-4">
+            {/* Um BLOCO por componente, um sobre o outro, separados por uma linha com o MESMO respiro; dentro, o nome do
+                componente e os campos com o mesmo espaço entre si. */}
+            <div className="mt-3 divide-y divide-border">
               {entradas.map(({ n, def, campos }) => (
-                <fieldset key={n.id} className="space-y-2">
-                  <legend className="mb-1 flex items-center gap-2 text-xs font-semibold text-muted">
-                    <span className="flex size-5 items-center justify-center rounded text-white" style={{ background: corCategoria(def.categoria) }}>
-                      <IconeNo nome={def.icone} className="size-3" />
+                <fieldset key={n.id} className="flex min-w-0 flex-col gap-3 py-3 first:pt-0 last:pb-0">
+                  <legend className="contents">
+                    <span className="flex items-center gap-2 text-[13px] font-semibold text-text">
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-md text-white" style={{ background: corCategoria(def.categoria) }}>
+                        <IconeNo nome={def.icone} className="size-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{def.rotulo}</span>
+                      <AjudaNo def={def} />
                     </span>
-                    {def.rotulo}
-                    <AjudaNo def={def} />
                   </legend>
                   {campos.map((c) => (
                     <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} config={n.config} somenteLeitura={rodando} />
@@ -137,7 +141,7 @@ export function PainelFluxo({
           </section>
         )}
         <section className={CARTAO} aria-labelledby="fluxo-etapas">
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
             <h3 id="fluxo-etapas" className="text-sm font-semibold text-text">
               Etapas
             </h3>
@@ -146,9 +150,13 @@ export function PainelFluxo({
               {feitas}/{etapas.length}
             </span>
           </div>
-          {(rodando || terminou) && <Progress value={terminou ? 100 : fracao * 100} />}
+          {(rodando || terminou) && (
+            <div className="mt-3">
+              <Progress value={terminou ? 100 : fracao * 100} />
+            </div>
+          )}
           {rodando && <p className="mt-1 text-xs tabular-nums text-muted">{restante == null ? "Calculando o tempo restante…" : `Termina em ${textoDuracao(restante)}`}</p>}
-          <ol className="mt-2 space-y-1.5">
+          <ol className="mt-3 space-y-2">
             {etapas.map((n) => {
               const def = REGISTRO_NOS.get(n.tipo);
               const p = passos[n.id];

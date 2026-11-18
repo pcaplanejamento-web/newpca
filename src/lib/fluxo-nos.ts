@@ -744,7 +744,8 @@ const NOS: DefNo[] = [
         // aba "Do sistema" (nenhuma = todas) decidem o que passa — menos com itens de fora: a seleção de lá vale.
         const lido = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
         const deFora = !str(c.valor) && Array.isArray(ctx.host.__entrada) ? restringirPelaEntrada(lido, ctx.host.__entrada, objeto, !!ctx.host.__daMesa) : lido;
-        const lidos = ctx.host.__daMesa ? deFora : filtrarMarcados(deFora, c.marcados, (it) => chaveSelecao(it, "id"));
+        // `marcar: false` (ex.: "Conferir e corrigir DFDs × Centi"): quem escolhe é o "Quais" + "Valor procurado" — sem marcação.
+        const lidos = ctx.host.__daMesa || c.marcar === false ? deFora : filtrarMarcados(deFora, c.marcados, (it) => chaveSelecao(it, "id"));
         if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
         est.fila = [...lidos];
         est.total = lidos.length;

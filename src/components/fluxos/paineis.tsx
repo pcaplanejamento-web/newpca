@@ -6,7 +6,7 @@ import { jaAnexados } from "@/lib/automacao-cliente";
 import { conferenciaAnexos, type DocCenti, type EstadoDfd, type LinhaConferencia, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
-import { caminhosDosItens, type Grafo, type Item, marcadosDuplicados, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
+import { caminhosDosItens, fimDaLeitura, type Grafo, type Item, marcadosDuplicados, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
 import { buscaDoNo, type FontesSistema, opcoesDaBusca } from "@/lib/fluxo-ler-sistema";
 import { lerCaptura } from "@/lib/fluxo-dados";
@@ -111,7 +111,7 @@ export function CampoReparticoesCenti({ rotulo, valor, onValor, somenteLeitura }
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <SeletorMultiplo suspenso rotulo={rotulo} textoVazio="Nenhuma" opcoes={opcoes} selecionados={escolhidas} onChange={(v) => onValor(v.join("; "))} disabled={somenteLeitura || !opcoes.length} />
+          <SeletorMultiplo suspenso semRotulo rotulo={rotulo} textoVazio="Nenhuma" opcoes={opcoes} selecionados={escolhidas} onChange={(v) => onValor(v.join("; "))} disabled={somenteLeitura || !opcoes.length} />
         </div>
         {host && (
           <Button size="sm" variant="secondary" onClick={host.reparticoes.buscar} loading={host.reparticoes.buscando} disabled={somenteLeitura} title="Buscar as repartições na Centi (pela API)">
@@ -147,6 +147,7 @@ export function CampoColunasCm002({ rotulo, valor, onValor, somenteLeitura }: { 
       <div className="min-w-0 flex-1">
         <SeletorMultiplo
           suspenso
+          semRotulo
           rotulo={rotulo}
           textoVazio="Nenhuma"
           opcoes={opcoes}
@@ -210,6 +211,7 @@ export function CampoValoresSistema({ rotulo, valor, onValor, config, somenteLei
   return (
     <SeletorMultiplo
       suspenso
+      semRotulo
       rotulo={rotulo}
       textoVazio={fontes === "erro" ? "Não consegui ler" : fontes ? `Escolha (${lista.length})` : "Carregando…"}
       opcoes={opcoes}
@@ -234,6 +236,7 @@ export function CampoOrgaosCenti({ rotulo, valor, onValor, somenteLeitura }: { r
   return (
     <SeletorMultiplo
       suspenso
+      semRotulo
       rotulo={rotulo}
       textoVazio="Todos"
       opcoes={opcoes}
@@ -253,6 +256,7 @@ export function CampoFluxo({ rotulo, valor, onValor, varios, somenteLeitura }: {
     return (
       <SeletorMultiplo
         suspenso
+        semRotulo
         rotulo={rotulo}
         textoVazio="Nenhum"
         opcoes={lista.map((f) => ({ valor: String(f.id), rotulo: f.nome }))}
@@ -265,7 +269,7 @@ export function CampoFluxo({ rotulo, valor, onValor, varios, somenteLeitura }: {
   return (
     <div className="flex items-end gap-2">
       <div className="min-w-0 flex-1">
-      <SelectField aria-label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
+      <SelectField compacto aria-label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
         <option value="">Escolha um fluxo salvo…</option>
         {lista.map((f) => (
           <option key={f.id} value={String(f.id)}>
@@ -436,7 +440,18 @@ export function useExecutarSelecionados(grafo: Grafo, itens: Item[], chave: (it:
 }
 
 // ---------------------------------------------------------------- DO SISTEMA
-/** O que o "Ler do sistema" lê (DFDs, protocolos ou itens) — já ao abrir o fluxo, sem executar e sem a extensão. */
+/** O título da aba de uma visão — a do "Ler do sistema" que só mostra a prévia (`marcar: false`) diz O QUE segue. */
+export function tituloVisao(n: NoFluxo): string {
+  if (n.tipo === "sistema.ler" && n.config.marcar === false) return ROTULO_OBJETO[buscaDoNo(n.config).objeto] ?? "Do sistema";
+  return VISOES[n.tipo]?.titulo ?? "";
+}
+const ROTULO_OBJETO: Record<string, string> = { dfds: "DFDs", protocolos: "Protocolos", itens: "Itens" };
+
+/**
+ * O que o "Ler do sistema" lê (DFDs, protocolos ou itens) — já ao abrir o fluxo, sem executar e sem a extensão, e com os
+ * filtros de DADOS que vêm logo depois (`fimDaLeitura`): a tabela mostra exatamente o que segue. Com `marcar: false` no nó
+ * (ex.: "Conferir e corrigir DFDs × Centi"), quem escolhe é o "Quais" + "Valor procurado" — a tabela é só a prévia.
+ */
 function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
   const host = useHost();
   // A prévia lê TUDO de uma vez (no "Um por vez" ela entregaria só o primeiro, sem quem devolva pela Volta) e SEM as
@@ -445,11 +460,17 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
     () => ({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, entrega: "lista", marcados: undefined } } : n)) }),
     [grafo, no.id],
   );
-  const itens = host?.previas[no.id]?.itens ?? [];
-  const { previa, podePrevia, recarregar } = usePreviaDoNo(grafoLista, no.id, true, true, !!host?.previas[no.id]?.itens);
+  const ate = useMemo(() => fimDaLeitura(grafo, no.id, REGISTRO_NOS), [grafo, no.id]);
+  const itens = host?.previas[ate]?.itens ?? [];
+  // Recarrega a cada mudança da ESCOLHA (o trecho até `ate` mudou — ex.: outro planejamento no "Valor procurado"); mudar o
+  // que vem depois (paralelo, retomar) não muda o trecho e não recarrega.
+  const { previa, podePrevia, recarregar } = usePreviaDoNo(grafoLista, ate, true, true, false);
   const { marcados, definir } = useMarcadosDoNo(no, grafo, onGrafo);
   // Com uma "Seleção" depois deste nó, ela é quem escolhe: aqui não se marca (as marcas antigas não valem).
   const temSelecao = useMemo(() => marcadosDuplicados(grafo).has(no.id), [grafo, no.id]);
+  const soPrevia = no.config.marcar === false;
+  const podeMarcar = !temSelecao && !soPrevia;
+  const nome = (ROTULO_OBJETO[buscaDoNo(no.config).objeto] ?? "item(ns)").toLowerCase();
   const genericas = useMemo(() => colunasGenericas(itens), [itens]);
   if (!host) return null;
   return (
@@ -459,8 +480,8 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
       genericas={genericas}
       gestao={host.gestao}
       onAbrir={host.abrir}
-      selected={temSelecao ? undefined : marcados}
-      onSelected={temSelecao || host.rodando ? undefined : definir}
+      selected={podeMarcar ? marcados : undefined}
+      onSelected={!podeMarcar || host.rodando ? undefined : definir}
       vazio={
         previa?.carregando
           ? "Carregando do sistema…"
@@ -472,9 +493,11 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
       }
       acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar do sistema" onClick={recarregar} disabled={host.rodando} /> : undefined}
       resumo={(ls) =>
-        temSelecao
-          ? `${ls.length} item(ns) · a escolha é feita na aba Seleção${marcados.size ? " (marcação antiga desta aba ignorada)" : ""}`
-          : `${ls.length} item(ns) · ${marcados.size ? `${marcados.size} marcado(s) — só eles passam` : "nenhum marcado — todos passam"}`
+        soPrevia
+          ? `${ls.length} ${nome} seguem na automação · escolha quais em “Quais” e “Valor procurado”`
+          : temSelecao
+            ? `${ls.length} item(ns) · a escolha é feita na aba Seleção${marcados.size ? " (marcação antiga desta aba ignorada)" : ""}`
+            : `${ls.length} item(ns) · ${marcados.size ? `${marcados.size} marcado(s) — só eles passam` : "nenhum marcado — todos passam"}`
       }
     />
   );

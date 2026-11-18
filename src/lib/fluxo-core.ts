@@ -320,6 +320,24 @@ export function subgrafoSoLeitura(g: Grafo, reg: Registro): boolean {
   return g.nos.length > 0 && g.nos.every((n) => SO_LEITURA.has(reg.get(n.tipo)?.categoria as CategoriaNo));
 }
 
+/**
+ * O último nó que ainda trata os itens LIDOS por `id`, sem ir a lugar nenhum: segue a ÚNICA ligação de saída enquanto o
+ * próximo é um nó de DADOS (filtrar, ordenar…) ativo e com uma só entrada. A prévia da leitura vai até ele — a tabela
+ * mostra o que de fato segue (ex.: os DFDs já filtrados pelo "Quais DFDs").
+ */
+export function fimDaLeitura(g: Grafo, id: string, reg: Registro): string {
+  let atual = id;
+  for (let i = 0; i < 10; i++) {
+    const saem = g.conexoes.filter((c) => c.de === atual);
+    if (saem.length !== 1) break;
+    const prox = g.nos.find((n) => n.id === saem[0].para);
+    if (!prox || prox.desativado || reg.get(prox.tipo)?.categoria !== "dados") break;
+    if (g.conexoes.filter((c) => c.para === prox.id).length !== 1) break;
+    atual = prox.id;
+  }
+  return atual;
+}
+
 export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
   const p: ProblemaGrafo[] = [];
   const nome = (n: NoFluxo) => nomeDoNo(n, reg);

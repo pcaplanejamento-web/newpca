@@ -380,30 +380,23 @@ test("Automação única: “Corrigir os divergentes” desligado ou o Reconferi
   assert.deepEqual(corr.corrigidos, [2]);
 });
 
-test("Modelo 'Conferir e corrigir': as marcas da aba Do sistema não valem — a Seleção decide; sem marcar, a Análise avisa", async () => {
+test("Modelo 'Conferir e corrigir': quem escolhe é o CAMPO (Quais + Valor procurado) — marcação antiga não vale e não há Seleção", async () => {
   const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m && filho);
+  assert.ok(!m.grafo.nos.some((n) => n.tipo === "entrada.selecionar"), "sem a Seleção");
+  assert.equal(m.grafo.nos.find((n) => n.id === "dfds1")?.config.marcar, false, "o Ler do sistema não marca");
   const b0 = lerGrafo(grafoDoModelo(m, new Map([["conferir-corrigir-1-dfd", 77]])));
-  const base = {
-    ...b0,
-    nos: b0.nos.map((n) =>
-      n.tipo === "dados.filtrarConferencia" ? { ...n, config: { quais: "divergentes" } } : n.tipo === "entrada.selecionar" ? { ...n, config: { ...n.config, semMarcar: "nenhum" } } : n,
-    ),
-  };
   const dfds = [
-    { id: 1, numero: "1", planejamento: "11", entidade: "2", conferenciaCenti: "divergente" },
-    { id: 2, numero: "2", planejamento: "22", entidade: "2", conferenciaCenti: "divergente" },
-    { id: 3, numero: "3", planejamento: "33", entidade: "2", conferenciaCenti: "convergente" },
+    { id: 1, numero: "1", planejamento: "11", entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "divergente" },
+    { id: 2, numero: "2", planejamento: "22", entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "divergente" },
+    { id: 3, numero: "3", planejamento: "33", entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "convergente" },
   ];
-  // O caso do print: o DFD 3 marcado na aba "Do sistema" (filtrava tudo) e nada na Seleção.
-  const comMarcas = (sel: string[] | undefined) => ({
-    ...base,
-    nos: base.nos.map((n) =>
-      n.tipo === "sistema.ler" ? { ...n, config: { ...n.config, marcados: ["3"] } } : n.tipo === "entrada.selecionar" ? { ...n, config: { ...n.config, marcados: sel } } : n,
-    ),
+  const com = (ler: Record<string, unknown>): Grafo => ({
+    ...b0,
+    nos: b0.nos.map((n) => (n.tipo === "sistema.ler" ? { ...n, config: { ...n.config, ...ler } } : n)),
   });
-  assert.ok(marcadosDuplicados(base).has("dfds1"));
+  assert.equal(marcadosDuplicados(b0).size, 0);
   const rodar = async (g: Grafo) => {
     const corrigidos: number[] = [];
     const passos: Record<string, number> = {};
@@ -425,19 +418,18 @@ test("Modelo 'Conferir e corrigir': as marcas da aba Do sistema não valem — a
     });
     return { r, corrigidos, passos };
   };
-  const vazio = await rodar(comMarcas(undefined));
-  assert.equal(vazio.r.estado, "concluido", vazio.r.erro);
-  assert.equal(vazio.passos.dfds1, 3, "o Ler do sistema lê TODOS — a marca antiga da aba Do sistema não vale");
-  assert.equal(vazio.passos.div1, 2, "os dois divergentes chegam à Seleção");
-  assert.deepEqual(vazio.corrigidos, []);
-  assert.ok(vazio.r.apontados.some((a) => a.nivel === "atencao" && /nada seguiu/.test(String(a.mensagem))), "sem marcar: a Análise avisa");
-  const um = await rodar(comMarcas(["2"]));
-  assert.deepEqual(um.corrigidos, [2], "só o marcado na Seleção é corrigido");
-  assert.ok(!um.r.apontados.some((a) => /nada seguiu/.test(String(a.mensagem))));
-  // O salvo não muda; sem Seleção depois, a marca do Ler do sistema segue valendo.
-  assert.deepEqual(comMarcas(undefined).nos.find((n) => n.id === "dfds1")?.config.marcados, ["3"]);
-  const semSel: Grafo = { v: 1, nos: [base.nos[0], base.nos[1]], conexoes: [{ de: "inicio1", saida: "saida", para: "dfds1", entrada: "entrada" }] };
-  assert.equal(marcadosDuplicados(semSel).size, 0);
+  // Uma marcação antiga gravada no Ler do sistema NÃO filtra (marcar: false): todos seguem.
+  const todos = await rodar(com({ marcados: ["3"] }));
+  assert.equal(todos.r.estado, "concluido", todos.r.erro);
+  assert.equal(todos.passos.dfds1, 3);
+  assert.deepEqual(todos.corrigidos.sort(), [1, 2, 3], JSON.stringify(todos.r.apontados));
+  // Dois planejamentos escritos no campo: só eles são conferidos e corrigidos.
+  const dois = await rodar(com({ buscaDfds: "planejamento", valor: "11:33" }));
+  assert.equal(dois.passos.dfds1, 2);
+  assert.deepEqual(dois.corrigidos.sort(), [1, 3]);
+  // Um DFD pelo nº.
+  const um = await rodar(com({ buscaDfds: "numero", valor: "2" }));
+  assert.deepEqual(um.corrigidos, [2]);
 });
 
 test("Subfluxo “Conferir e corrigir 1 DFD × Centi” SALVO antes do DFD inteiro: lê o DFD inteiro (guarda os dados da Centi) e acusa desatualizado", async () => {
@@ -633,7 +625,7 @@ test("DFD a DFD: cada um é corrigido logo depois da SUA reconferência; o que f
   const g = (paralelo: number): Grafo => ({
     ...base,
     nos: base.nos.map((n) =>
-      n.tipo === "entrada.selecionar" ? { ...n, config: { ...n.config, marcados: ["1", "2", "3"] } } : n.tipo === "fluxo.executar" ? { ...n, config: { ...n.config, paralelo } } : n,
+      n.tipo === "fluxo.executar" ? { ...n, config: { ...n.config, paralelo } } : n,
     ),
   });
   const dfds = [1, 2, 3].map((i) => ({ id: i, numero: String(i), planejamento: `${i}${i}`, entidade: "2", objeto: "Objeto do sistema", conferenciaCenti: "divergente" }));
@@ -934,7 +926,7 @@ test("Quais DFDs: Todos reconfere também os gravados convergentes; os outros fi
   assert.deepEqual([conv, velho, div, nunca].map((x) => passaConferencia(x, "pendentes")), [false, true, true, true]);
   const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   assert.equal(m?.grafo.nos.find((x) => x.id === "div1")?.tipo, "dados.filtrarConferencia");
-  assert.equal(m?.grafo.nos.find((x) => x.id === "sel1")?.config.semMarcar, "todos");
+  assert.ok(!m?.grafo.nos.some((x) => x.tipo === "entrada.selecionar"), "sem a Seleção: o campo escolhe");
 });
 
 test("todo modelo cabe nos limites do salvar (nome e descrição — senão “Atualizar pelo modelo” falha)", () => {

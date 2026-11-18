@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { before, describe, it } from "node:test";
 import { papelSistema } from "../src/lib/papeis-core.ts";
+import { grafoDoModelo, MODELOS_FLUXO } from "../src/lib/fluxo-modelos.ts";
 
 // Aplica toda a cadeia de migrações (drizzle/*.sql) num SQLite em memória —
 // mesmo dialeto do D1 — garantindo que a cadeia evolui sem erro e que o schema
@@ -1461,5 +1462,69 @@ describe("0191: uma automação para conferir e corrigir DFDs × Centi", () => {
     // Idempotente.
     db.exec(readFileSync(join(DIR, "0191_automacao_centi_unica.sql"), "utf8"));
     assert.equal(nomes(db).length, 4);
+  });
+});
+
+describe("0192: a automação única com o diagrama atual e uma por pessoa", () => {
+  const PAI = "Conferir e corrigir DFDs × Centi";
+  const FILHO = "Conferir e corrigir 1 DFD × Centi";
+  const modelo = (id: string) => MODELOS_FLUXO.find((m) => m.id === id)!;
+  const preparar = () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0191_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h'), (2, 'Bia', 'bia@x', 'h')");
+    return db;
+  };
+  const rodar = (db: DatabaseSync) => db.exec(readFileSync(join(DIR, "0192_automacao_centi_unica_grafo.sql"), "utf8"));
+  const linhas = (db: DatabaseSync) =>
+    db.prepare("SELECT id, nome, criado_por AS dono, grafo FROM automacao_fluxos ORDER BY id").all() as { id: number; nome: string; dono: number | null; grafo: string }[];
+  const ANTIGO = '{"v":1,"nos":[{"id":"sel1","tipo":"entrada.selecionar","config":{"semMarcar":"nenhum"}},{"id":"conf1","tipo":"fluxo.executar","config":{"fluxoId":"3"}}],"conexoes":[]}';
+
+  it("deixa UMA por pessoa, com o diagrama do modelo (igual ao do código) e a etapa interna atual", () => {
+    const db = preparar();
+    db.exec(`INSERT INTO automacao_fluxos (id, nome, criado_por, grafo, frequencia, ativo) VALUES
+      (3, 'Conferir 1 DFD × Centi', 1, '{}', '{"tipo":"manual"}', 0),
+      (4, '${PAI}', 1, '${ANTIGO}', '{"tipo":"diario","hora":"07:00"}', 1),
+      (5, '${PAI}', 1, '${ANTIGO}', '{"tipo":"manual"}', 0),
+      (6, 'Outra automação', 1, '{}', '{"tipo":"manual"}', 0)`);
+    db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES (4, 'conf1', '10', 'ok', '2026-11-18')`);
+    rodar(db);
+    const ls = linhas(db);
+    assert.deepEqual(
+      ls.map((l) => `${l.id}:${l.nome}`),
+      [`4:${PAI}`, "6:Outra automação", `7:${FILHO}`],
+      "a duplicata (5) e a etapa antiga (3) saem; a interna é criada",
+    );
+    const filho = ls.find((l) => l.nome === FILHO)!;
+    assert.deepEqual(JSON.parse(ls[0].grafo), grafoDoModelo(modelo("conferir-corrigir-centi"), new Map([["conferir-corrigir-1-dfd", filho.id]])));
+    assert.deepEqual(JSON.parse(filho.grafo), grafoDoModelo(modelo("conferir-corrigir-1-dfd"), new Map()));
+    assert.equal(filho.dono, 1);
+    const pai = db.prepare("SELECT frequencia, ativo FROM automacao_fluxos WHERE id = 4").get() as { frequencia: string; ativo: number };
+    assert.equal(pai.ativo, 1, "a agenda fica");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0, "a retomada do diagrama antigo sai");
+    // Idempotente.
+    rodar(db);
+    assert.deepEqual(linhas(db), ls);
+  });
+
+  it("reaproveita a interna do dono, a de dono vira a sem dono e nada usado como etapa sai", () => {
+    const db = preparar();
+    db.exec(`INSERT INTO automacao_fluxos (id, nome, criado_por, grafo) VALUES
+      (1, '${PAI}', NULL, '${ANTIGO}'),
+      (2, '${PAI}', 1, '${ANTIGO}'),
+      (3, '${FILHO}', NULL, '{}'),
+      (4, '${PAI}', 2, '${ANTIGO}'),
+      (5, 'Usa a 4', 2, '{"nos":[{"id":"s","tipo":"fluxo.executar","config":{"fluxoId":"4"}}]}'),
+      (6, 'Conferir 1 DFD × Centi', 2, '{}')`);
+    rodar(db);
+    const ls = linhas(db);
+    assert.deepEqual(
+      ls.map((l) => `${l.id}:${l.nome}:${l.dono}`),
+      [`1:${PAI}:null`, `3:${FILHO}:null`, `4:${PAI}:2`, "5:Usa a 4:2", `7:${FILHO}:2`],
+      "a de dono 1 sai (há a sem dono); a 4 é usada como etapa e fica; a etapa antiga da Bia sai",
+    );
+    assert.match(ls[0].grafo, /"fluxoId":"3"/, "a sem dono usa a interna sem dono");
+    assert.match(ls[2].grafo, /"fluxoId":"7"/, "a da Bia usa a interna dela");
   });
 });

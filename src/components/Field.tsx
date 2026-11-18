@@ -22,6 +22,9 @@ type CampoProps = {
   fundo?: ReactNode;
   /** Classes a mais do `<input>` (ex.: fonte monoespaçada alinhada ao `fundo`). */
   classeEntrada?: string;
+  /** COMPACTO: na altura dos controles das barras (`--h-control-sm` no desktop, 44px no toque) — a mesma do
+   * `SelectField compacto` e do `SeletorMultiplo suspenso` (ex.: os campos dos componentes das automações). */
+  compacto?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size">;
 
 /** Altura da caixa no padrão (54px) ou no modo DENSO (44px). */
@@ -82,14 +85,15 @@ const SETA_NA_CAIXA = "!pr-0";
 const INPUT =
   "min-w-0 flex-1 bg-transparent text-[15px] text-text outline-none placeholder:text-faint";
 
-export function TextField({ label, icon, trailing, hint, error, denso, rotuloExtra, fundo, classeEntrada = "", id, ...rest }: CampoProps) {
+export function TextField({ label, icon, trailing, hint, error, denso, rotuloExtra, fundo, classeEntrada = "", compacto = false, id, ...rest }: CampoProps) {
   const auto = useId();
   const fid = id ?? auto;
   const errId = `${fid}-erro`;
+  const altura = compacto ? "h-11 !px-3 desktop:h-[var(--h-control-sm)]" : alturaCls(denso);
   return (
     <div className="min-w-0">
       <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} extra={rotuloExtra} />
-      <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+      <div className={`${WRAP} ${altura} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         {icon && <span className="shrink-0 text-muted">{icon}</span>}
         {fundo ? (
           <span className="relative flex h-full min-w-0 flex-1 items-center">
@@ -103,7 +107,7 @@ export function TextField({ label, icon, trailing, hint, error, denso, rotuloExt
             />
           </span>
         ) : (
-          <input id={fid} className={`${INPUT} ${classeEntrada}`} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
+          <input id={fid} className={`${INPUT} ${compacto ? "!text-[13px]" : ""} ${classeEntrada}`} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
         )}
         {trailing}
       </div>

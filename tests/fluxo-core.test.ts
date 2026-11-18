@@ -14,6 +14,7 @@ import {
   atrasada,
   fluxosDevidos,
   resolverCaminho,
+  fimDaLeitura,
   subgrafoAte,
   subgrafoSoLeitura,
   temCicloSemLaco,
@@ -677,13 +678,18 @@ test("fluxos por ADM: o dono mexe; o público e o sem dono, qualquer ADM lê", a
   assert.equal(fluxoEditavel(semDono, 2), true);
 });
 
-test("prévia da seleção: só o trecho antes dela e só de leitura", async () => {
+test("prévia da leitura: vai até o filtro de dados logo depois (fimDaLeitura) e só lê", async () => {
   const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
   const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   assert.ok(m);
-  const sub = subgrafoAte(m.grafo, "sel1");
+  const ate = fimDaLeitura(m.grafo, "dfds1", REGISTRO_NOS);
+  assert.equal(ate, "div1", "a prévia dos DFDs já com o “Quais DFDs”");
+  const sub = subgrafoAte(m.grafo, ate, true);
   assert.deepEqual(sub.nos.map((n) => n.id).sort(), ["dfds1", "div1", "inicio1"]);
   assert.equal(sub.conexoes.length, 2);
+  // Desligado, o filtro não entra; sem nó de dados depois, fica no próprio nó.
+  assert.equal(fimDaLeitura({ ...m.grafo, nos: m.grafo.nos.map((n) => (n.id === "div1" ? { ...n, desativado: true } : n)) }, "dfds1", REGISTRO_NOS), "dfds1");
+  assert.equal(fimDaLeitura(m.grafo, "div1", REGISTRO_NOS), "div1");
   assert.equal(subgrafoSoLeitura(sub, REGISTRO_NOS), true);
   assert.equal(subgrafoSoLeitura(subgrafoAte(m.grafo, "err1"), REGISTRO_NOS), false);
   assert.equal(subgrafoSoLeitura({ v: 1, nos: [], conexoes: [] }, REGISTRO_NOS), false);
