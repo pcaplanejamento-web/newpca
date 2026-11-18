@@ -50,6 +50,8 @@ const PROCESSANDO_ROTULO: Record<ProcessandoDfd, string> = {
  */
 export type LinhaDfd = {
   key: number; // idx (import) ou id do DFD (gravado)
+  /** O id do DFD gravado quando a `key` é a posição (ex.: as tabelas das automações). */
+  dfdId?: number;
   numero: string;
   planejamento: string | null;
   sigla: string; // código da repartição (ou sigla do setor)
@@ -371,7 +373,7 @@ export function propsPlanilhaDfds({
               <CelulaConferenciaCenti
                 status={r.conferencia?.status}
                 motivo={r.conferencia?.motivo}
-                dfdId={r.conferencia?.em !== undefined ? r.key : undefined}
+                dfdId={r.conferencia?.em !== undefined ? (r.dfdId ?? r.key) : undefined}
                 conferidoEm={r.conferencia?.em}
                 desatualizada={r.conferencia?.desatualizada}
                 aceite={r.conferencia?.aceite}

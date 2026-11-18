@@ -1104,6 +1104,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   barra → cartão. Tabela nova dentro de cartão de altura fixa = `data-altura-limite` no cartão, nunca `reservaInferior` à mão.
   **v1.296.5:** a barra do editor dos fluxos é `.linha-topico` e as alturas da Automação (painel, lista, painel lateral,
   diagrama) usam `useAlturaTela(…, -FOLGA)`: cabeçalho → barra = barra → painel = painel → fim do display = `--pad-canvas-y`.
+  **v1.296.6 — resolver na automação:** o `PainelFluxo` dá às tabelas o `ProvedorAcoesCenti` (`useAcoesCentiDoFluxo`):
+  reconferir/corrigir automaticamente = `HostPainel.executarCom(g, dfds, soConferir)` (o fluxo aberto só com o DFD, como a
+  Mesa), corrigir dado a dado = `host.abrir({tipo:"dfd", id, corrigirCenti:true})` e as gravadas na conferência. A célula
+  Centi das tabelas das automações recebe o id do DFD (`LinhaDfd.dfdId` — a `key` lá é a posição; `dadosDfdDoItem` leva o
+  `conferenciaCentiEm`). O `saida.corrigirPelaCenti` põe no item a conferência de DEPOIS (corrigido/parcial).
   **v1.296.4 (migração `0193`) — OS FILTRADOS NA TABELA:** "Quais" do `sistema.ler` ganhou `tabela` (`BUSCA_TABELA`, o padrão
   dos DFDs e dos modelos; a `0193` trocou `"buscaDfds":"todos"` por `"tabela"` nos diagramas salvos — sem filtro, lê todos):
   a leitura traz tudo e `filtrarPelaTabela` (`fluxo-ler-sistema.ts`, testado) recorta pela config do nó — `filtrados` (os

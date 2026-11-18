@@ -749,9 +749,9 @@ export function FluxosAutomacao({
           void executar(f, g);
         });
       },
-      executarCom: (g, itens) => {
+      executarCom: (g, itens, soConferir) => {
         const f = fluxos?.find((x) => x.id === aberto);
-        if (f) void executar(f, g, false, itens);
+        if (f) void executar(f, g, false, itens, null, soConferir === true);
       },
       enviarArquivos: (g, noId, nomes) => {
         const f = fluxos?.find((x) => x.id === aberto);

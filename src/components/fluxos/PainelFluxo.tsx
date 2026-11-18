@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { contagemDfds } from "@/lib/automacao-dfds-estado";
@@ -13,6 +13,9 @@ import { type Column, DataTable } from "../DataTable";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
 import { StatMini } from "../StatMini";
+import { type AcoesCenti, ProvedorAcoesCenti } from "../CelulaExecucao";
+import { useConfirmacao } from "../Confirmacao";
+import { toast } from "../Toast";
 import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
@@ -106,6 +109,7 @@ export function PainelFluxo({
   const atual = etapas.find((n) => passos[n.id]?.estado === "rodando");
   const noAberto = visoes.find((n) => n.id === abaValida);
   const Visao = noAberto ? VISOES[noAberto.tipo].Componente : null;
+  const { acoes: acoesCenti, confirmacao: confirmacaoCenti } = useAcoesCentiDoFluxo(grafo, passos);
 
   return (
     <div
@@ -197,13 +201,16 @@ export function PainelFluxo({
           afastamento do contorno nos quatro lados (`limiteDoBloco`). */}
       <section data-altura-limite className={`${CARTAO} flex min-h-[28rem] min-w-0 flex-col gap-3 lg:min-h-0`}>
         {opcoes.length > 1 && <Segmented ariaLabel="Visões do fluxo" value={abaValida} onChange={setAba} options={opcoes} className="self-start" />}
-        <div className="flex min-h-0 flex-1 flex-col">
-          {Visao && noAberto ? (
-            <Visao no={noAberto} grafo={grafo} onGrafo={onGrafo} />
-          ) : (
-            <AnaliseAoVivo grafo={grafo} etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
-          )}
-        </div>
+        <ProvedorAcoesCenti value={acoesCenti}>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {Visao && noAberto ? (
+              <Visao no={noAberto} grafo={grafo} onGrafo={onGrafo} />
+            ) : (
+              <AnaliseAoVivo grafo={grafo} etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
+            )}
+          </div>
+        </ProvedorAcoesCenti>
+        {confirmacaoCenti}
       </section>
     </div>
   );
@@ -397,4 +404,75 @@ function AnaliseAoVivo({
       )}
     </div>
   );
+}
+
+/**
+ * As AÇÕES do painel de divergências da coluna Centi (o selo "Divergente") nas tabelas da automação — as MESMAS da Mesa:
+ * reconferir e corrigir automaticamente (roda ESTE fluxo só com o DFD, sem gravar no "Reconferir"), corrigir dado a dado
+ * (o banner do DFD na correção pela Centi) e as gravadas na conferência (recalcular, aceitar, desfazer o aceite). A tela da
+ * Automação é só do Administrador.
+ */
+function useAcoesCentiDoFluxo(grafo: Grafo, passos: Record<string, PassoExec>): { acoes: AcoesCenti; confirmacao: React.ReactNode } {
+  const host = useContext(HostPainelCtx);
+  const { confirmar, confirmacao } = useConfirmacao();
+  // Os DFDs conhecidos (as saídas, os ao vivo e as prévias): a automação recebe o DFD com nº e planejamento.
+  const conhecidos = useCallback(
+    (ids: number[]): Item[] => {
+      const quer = new Set(ids);
+      const achados = new Map<number, Item>();
+      const listas = [...Object.values(host?.saidas ?? {}), ...Object.values(host?.parciais ?? {}), ...Object.values(host?.previas ?? {}).map((p) => p.itens ?? [])];
+      for (const p of Object.values(passos)) for (const l of Object.values(p.amostra ?? {})) listas.push(l as Item[]);
+      for (const l of listas)
+        for (const it of l) {
+          const id = Number(it.id);
+          if (quer.has(id) && !achados.has(id)) achados.set(id, { id, numero: it.numero, planejamento: it.planejamento });
+        }
+      return ids.map((id) => achados.get(id) ?? { id });
+    },
+    [host, passos],
+  );
+  const servidor = useCallback(async (id: number, corpo: Record<string, unknown>) => {
+    try {
+      const r = await fetch(`/api/dfd/${id}/conferencia-centi`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string };
+      if (!r.ok || !j.ok) {
+        toast.error(j.error ?? "Não foi possível gravar.");
+        return false;
+      }
+      const msg: Record<string, string> = {
+        recalcular: j.status === "convergente" ? "Recalculado: agora confere com a Centi." : "Recalculado com os dados guardados da Centi.",
+        aceitar: "Divergência aceita — o DFD fica “convergente com ressalva”.",
+        desfazerAceite: "Aceite desfeito.",
+        planejamento: "Nº de planejamento corrigido — reconfira na Centi.",
+      };
+      toast.success(`${msg[String(corpo.acao)] ?? "Gravado."} Execute de novo para atualizar a análise.`);
+      return true;
+    } catch {
+      toast.error("Sem conexão com o sistema — tente de novo.");
+      return false;
+    }
+  }, []);
+  const acoes = useMemo<AcoesCenti>(() => {
+    if (!host) return {};
+    const rodar = (soConferir: boolean) => async (ids: number[]) => {
+      if (host.rodando) return void toast.warning("A automação está em execução — espere terminar.");
+      const n = ids.length;
+      const ok = await confirmar({
+        titulo: soConferir ? (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`) : n === 1 ? "Corrigir este DFD pela Centi?" : `Corrigir ${n} DFDs pela Centi?`,
+        texto: soConferir
+          ? "Roda esta automação só com o DFD: busca na Centi e compara de novo. Nada do DFD é alterado."
+          : "Roda esta automação só com o DFD: busca na Centi, compara e troca pelos da Centi SÓ os dados que divergem (nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema).",
+        confirmar: soConferir ? "Reconferir" : "Corrigir",
+      });
+      if (ok) host.executarCom(grafo, conhecidos(ids), soConferir);
+    };
+    return {
+      admin: true,
+      servidor,
+      reconferir: rodar(true),
+      corrigirAuto: rodar(false),
+      corrigir: (id) => host.abrir({ tipo: "dfd", id, corrigirCenti: true }),
+    };
+  }, [host, grafo, confirmar, conhecidos, servidor]);
+  return { acoes, confirmacao };
 }

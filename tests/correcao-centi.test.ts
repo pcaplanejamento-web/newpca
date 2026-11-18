@@ -264,6 +264,10 @@ test("nó Corrigir DFD pela Centi: só o reconferido agora; aceito vai a 'sem co
   const r = (await no.executar({ entrada: itens }, {}, ctx("HTTP 500") as never, {} as never)) as Record<string, Record<string, unknown>[]>;
   assert.deepEqual(feitos, [1, 2, 3]);
   assert.deepEqual(r.corrigidos.map((x) => x.id), [1]);
+  // A Análise mostra a conferência de DEPOIS da correção (não o "Divergente" da comparação de antes).
+  assert.equal(r.corrigidos[0].conferenciaCenti, "convergente");
+  assert.equal(r.corrigidos[0].conferenciaCentiMotivo, null);
+  assert.equal(r.convergentes[0].conferenciaCenti, undefined, "o aceito não muda o que foi comparado");
   assert.deepEqual(r.semMudanca.map((x) => x.id), [6]);
   assert.deepEqual(r.convergentes.map((x) => x.id), [2], "aceito = já convergente, não é pendência");
   assert.equal(r.convergentes[0].motivo, MOTIVO_SEM_CORRECAO.aceito);

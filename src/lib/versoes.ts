@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.6",
+    data: "2026-11-18",
+    titulo: "Resolver as divergências na própria automação",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Na tabela da automação (DFDs e Análise), tocar no selo “Divergente” abre as mesmas ações da Mesa: Corrigir pela Centi (dado a dado), Corrigir automaticamente, Reconferir, Recalcular e Aceitar divergência.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Depois de corrigir, a Análise mostra a conferência atualizada do DFD (antes seguia “Divergente” com as diferenças da comparação feita antes da correção).",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.5",
     data: "2026-11-18",
     titulo: "Espaçamento igual em cima e embaixo nas automações",

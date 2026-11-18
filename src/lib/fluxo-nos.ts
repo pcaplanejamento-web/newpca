@@ -1796,6 +1796,10 @@ const NOS: DefNo[] = [
         try {
           const r = await corrigir(id);
           feito = { ...leve, correcao: r.resultado, conferenciaDepois: r.status, motivoDepois: r.motivo };
+          // Gravado e reconferido: o item passa a mostrar a conferência de DEPOIS (a coluna Centi da Análise não fica com
+          // o "Divergente" da comparação feita antes da correção).
+          if (r.status && ["corrigido", "parcial"].includes(r.resultado))
+            feito = { ...feito, conferenciaCenti: r.status, conferenciaCentiMotivo: r.motivo, conferenciaCentiEm: new Date().toISOString() };
           if (r.resultado === "corrigido") corrigidos.push(feito);
           else if (r.resultado === "parcial") {
             // Gravou, mas AINDA diverge: vai a "Não corrigidos" com o que restou (nunca conta como corrigido).

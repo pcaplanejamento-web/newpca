@@ -8,7 +8,7 @@ import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
 type Item = Record<string, unknown>;
 export type TipoItemMesa = "protocolo" | "dfd" | "item";
 /** O mesmo formato da `AberturaMesa` (a pilha de banners da Mesa). */
-export type AberturaItem = { tipo: "protocolo"; id: number } | { tipo: "dfd"; id: number } | { tipo: "item"; dfdId: number; itemId: number; item: { item: number | null; codigo: string | null } };
+export type AberturaItem = { tipo: "protocolo"; id: number } | { tipo: "dfd"; id: number; corrigirCenti?: boolean } | { tipo: "item"; dfdId: number; itemId: number; item: { item: number | null; codigo: string | null } };
 
 const txt = (v: unknown) => (v == null ? "" : String(v).trim());
 const num = (v: unknown): number | null => {
@@ -59,7 +59,9 @@ export function dadosDfdDoItem(it: Item) {
     valor: num(it.valor ?? it.valorTotal),
     protocolo: txt(it.protocolo) || null,
     ...(execucao ? { execucao } : {}),
-    ...(conferencia ? { conferencia: { status: conferencia, motivo: txt(it.conferenciaCentiMotivo) || null } } : {}),
+    // O id do DFD e a data da conferência: com eles, o selo da coluna Centi abre as ações (reconferir, corrigir, aceitar).
+    dfdId: idPositivo(it.id) ?? undefined,
+    ...(conferencia ? { conferencia: { status: conferencia, motivo: txt(it.conferenciaCentiMotivo) || null, em: txt(it.conferenciaCentiEm) || null } } : {}),
   };
 }
 

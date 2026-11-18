@@ -65,7 +65,7 @@ export type HostPainel = {
   /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
   previas: Record<string, { carregando: boolean; erro?: string; itens?: Item[] }>;
   /** Executa o fluxo aberto (o grafo da tela) SÓ com estes itens — os selecionados numa tabela de resultado. */
-  executarCom: (grafo: Grafo, itens: Item[]) => void;
+  executarCom: (grafo: Grafo, itens: Item[], soConferir?: boolean) => void;
   /** Esquece a retomada do "Executar fluxo" (`no`) e roda o fluxo de novo com TODOS os itens (pede confirmação). */
   refazerTudo: (grafo: Grafo, no: string, pulados: number) => void;
   /** Executa o fluxo aberto com o "Baixar/anexar DFDs" (`no`) limitado a ESTES arquivos (os que faltam no protocolo). */
