@@ -110,3 +110,46 @@ test("campos dos nós: origem {{campo}}, ajuda em todo tipo e os campos que acei
       if (c.aceitaCampo) assert.equal(c.tipo, "texto", `${def.tipo}.${c.chave}: aceitaCampo só em texto`);
     }
 });
+
+test("“Os filtrados na tabela”: lê tudo; o campo de planejamento e os ids da tabela recortam — e a tabela é a verdade", async () => {
+  const { BUSCAS, BUSCA_TABELA, filtrarPelaTabela, planejamentosDoCampo } = await import("../src/lib/fluxo-ler-sistema.ts");
+  for (const o of ["protocolos", "dfds", "itens"] as const) assert.equal(BUSCAS[o][1].valor, BUSCA_TABELA, o);
+  assert.equal(lerDoSistema(fontes, "dfds", BUSCA_TABELA, []).length, 3, "lê tudo");
+  assert.deepEqual(planejamentosDoCampo("1119: 0120;  130 1119"), ["1119", "120", "130"]);
+  const d = fontes.dfds;
+  assert.deepEqual(filtrarPelaTabela(d, {}, "dfds").map((x) => x.id), [10, 11, 12], "sem filtro = todos");
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "120:130" }, "dfds").map((x) => x.id), [11, 12], "pelo campo (zeros à esquerda)");
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "9999" }, "dfds").map((x) => x.id), [], "nº que não existe = nenhum");
+  // Os ids vistos com o MESMO campo valem (incluem os filtros das outras colunas); com o campo mudado, vale o campo.
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "120:130", filtrados: [12], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [12]);
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "1119", filtrados: [12], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [10]);
+  assert.deepEqual(filtrarPelaTabela(d, { filtrados: [10, 11] }, "dfds").map((x) => x.id), [10, 11], "só filtros de coluna");
+  assert.deepEqual(filtrarPelaTabela(fontes.itens, { planejamentos: "130" }, "itens").length, 2, "o campo é só dos DFDs");
+});
+
+test("Ler do sistema em “Os filtrados na tabela”: a execução segue o filtro; da Mesa, a escolha de lá vale", async () => {
+  const g: Grafo = {
+    v: 1,
+    nos: [
+      { id: "i", tipo: "gatilho.inicio", x: 0, y: 0, config: {} },
+      { id: "l", tipo: "sistema.ler", x: 200, y: 0, config: { objeto: "dfds", buscaDfds: "tabela", planejamentos: "1119:130", entrega: "lista", marcar: false } },
+    ],
+    conexoes: [{ de: "i", saida: "saida", para: "l", entrada: "entrada" }],
+  };
+  const rodar = async (extra: Record<string, unknown>) => {
+    const host = { protocolos: fontes.protocolos, __cache: new Map([["dfds", Promise.resolve(fontes.dfds)]]), ...extra };
+    const r = await executarFluxo(g, REGISTRO_NOS, { centi: async () => ({ ok: false }), api: async () => ({ ok: false }), cancelado: () => false, host });
+    assert.equal(r.estado, "concluido", r.erro);
+    return (r.passos.l.amostra?.saida ?? []).map((x) => x.numero);
+  };
+  assert.deepEqual(await rodar({}), ["10", "12"]);
+  assert.deepEqual(await rodar({ __daMesa: true, __entrada: [{ id: 11, planejamento: "0120" }] }), ["11"], "a Mesa escolhe");
+  // O "Quais" inicial do componente e do modelo é o filtro da tabela (sem filtro, lê todos — como o "Todos").
+  const campo = REGISTRO_NOS.get("sistema.ler")?.campos.find((c) => c.chave === "buscaDfds");
+  assert.equal(campo?.padrao, "tabela");
+  const plan = REGISTRO_NOS.get("sistema.ler")?.campos.find((c) => c.chave === "planejamentos");
+  assert.equal(plan?.visivel?.({ objeto: "dfds", buscaDfds: "tabela" }), true);
+  assert.equal(plan?.visivel?.({ objeto: "dfds", buscaDfds: "todos" }), false);
+  const valor = REGISTRO_NOS.get("sistema.ler")?.campos.find((c) => c.chave === "valor");
+  assert.equal(valor?.visivel?.({ objeto: "dfds", buscaDfds: "tabela" }), false, "sem valor procurado nos filtrados");
+});

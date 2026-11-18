@@ -69,7 +69,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
-        n("ler1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("ler1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "tabela", entrega: "lista" }),
         n("sel1", "entrada.selecionar", 576, 160, { chave: "id", semMarcar: "nenhum" }),
         n("dfds1", "saida.dfdsCenti", 880, 160),
       ],
@@ -205,7 +205,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 224),
-        n("dfds1", "sistema.ler", 280, 224, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("dfds1", "sistema.ler", 280, 224, { objeto: "dfds", buscaDfds: "tabela", entrega: "lista" }),
         n("org1", "centi.orgao", 280, 416, { origem: "itens", campo: "entidade", entrega: "todos" }),
         n("err3", "erros.apontar", 576, 560, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): o órgão não tem o ID da Centi cadastrado", nivel: "atencao" }),
         n("ord1", "dados.ordenar", 576, 96, { campo: "entidade", ordem: "asc", limite: 0 }),
@@ -258,7 +258,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 224),
-        n("dfds1", "sistema.ler", 280, 224, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("dfds1", "sistema.ler", 280, 224, { objeto: "dfds", buscaDfds: "tabela", entrega: "lista" }),
         n("org1", "centi.orgao", 280, 416, { origem: "itens", campo: "entidade", entrega: "todos" }),
         n("err1", "erros.apontar", 576, 560, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): o órgão não tem o ID da Centi cadastrado", nivel: "atencao" }),
         n("ord1", "dados.ordenar", 576, 96, { campo: "entidade", ordem: "asc", limite: 0 }),
@@ -346,7 +346,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
-        n("dfds1", "sistema.ler", 280, 64, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("dfds1", "sistema.ler", 280, 64, { objeto: "dfds", buscaDfds: "tabela", entrega: "lista" }),
         { ...n("cm1", "centi.cm002", 280, 288, { colunas: true }), tentar: { vezes: 2, esperaS: 30 } },
         n("proc1", "logica.procurar", 576, 160, { valor: "{{planejamento}}", onde: "coluna", coluna: "planejamento", operador: "igual", resultado: "primeiro" }),
         n("regra1", "dados.regra", 880, 96, {
@@ -378,7 +378,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     dependencias: ["conferir-corrigir-1-dfd"],
     ajuda: {
       funciona:
-        "1) “Quais” + “Valor procurado” escolhem os DFDs: todos, ou um ou vários pelo nº de planejamento, nº do DFD ou protocolo (escolha na lista ou digite, vários separados por “:”). 2) “Quais DFDs” filtra pela conferência gravada: Todos (padrão — a gravada pode estar velha), Só os divergentes ou Divergentes e não conferidos. 3) A aba “DFDs” mostra, antes de executar, exatamente os DFDs que serão conferidos. 4) Cada DFD é lido INTEIRO na Centi agora (até 3 ao mesmo tempo), comparado com o gravado e marcado na coluna “Centi”. 5) Com “Corrigir os divergentes” ligado, o que sair divergente é corrigido em seguida — só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema — e a conferência é refeita. Desligado, só confere. Divergência aceita ou só de situação/órgão/nº nunca é alterada.",
+        "1) “Quais” escolhe os DFDs. Em “Os filtrados na tabela” (o padrão), seguem os que passam nos filtros da tabela da aba “DFDs”: filtre qualquer coluna ou escreva em “Nº de planejamento” um ou vários números separados por “:” (é o mesmo filtro da coluna Nº Plan.); sem filtro, todos. Também dá para escolher pelo nº de planejamento, nº do DFD ou protocolo no “Valor procurado”. 2) “Quais DFDs” filtra pela conferência gravada: Todos (padrão — a gravada pode estar velha), Só os divergentes ou Divergentes e não conferidos. 3) A aba “DFDs” mostra, antes de executar, exatamente os DFDs que serão conferidos. 4) Cada DFD é lido INTEIRO na Centi agora (até 3 ao mesmo tempo), comparado com o gravado e marcado na coluna “Centi”. 5) Com “Corrigir os divergentes” ligado, o que sair divergente é corrigido em seguida — só os dados que divergem são trocados pelos da Centi; nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema — e a conferência é refeita. Desligado, só confere. Divergência aceita ou só de situação/órgão/nº nunca é alterada.",
       executa:
         "Com a extensão da Centi pronta: escolha nos Dados de entrada quais DFDs e se corrige, e execute. Interrompida, a próxima execução continua dos que faltam e refaz os que falharam (“Refazer tudo” na Análise recomeça). Na Mesa do sistema, o selo “Divergente” e a barra de seleção usam esta automação: “Reconferir” (só confere) e “Corrigir pela Centi”.",
       resultado:
@@ -388,7 +388,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
-        n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista", marcar: false }),
+        n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "tabela", entrega: "lista", marcar: false }),
         n("div1", "dados.filtrarConferencia", 576, 160, { quais: "todos" }),
         n("conf1", "fluxo.executar", 872, 160, { fluxoModelo: "conferir-corrigir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }),
         n("err1", "erros.apontar", 1168, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{subfluxo.erro}}", nivel: "erro" }),

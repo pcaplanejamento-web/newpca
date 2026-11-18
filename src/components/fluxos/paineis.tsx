@@ -8,7 +8,8 @@ import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-m
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, fimDaLeitura, type Grafo, type Item, marcadosDuplicados, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
-import { buscaDoNo, type FontesSistema, opcoesDaBusca } from "@/lib/fluxo-ler-sistema";
+import { BUSCA_TABELA, buscaDoNo, type FontesSistema, opcoesDaBusca, planejamentosDoCampo } from "@/lib/fluxo-ler-sistema";
+import type { FiltroValor } from "@/lib/tabela-filtros";
 import { lerCaptura } from "@/lib/fluxo-dados";
 import { chaveSelecao, REGISTRO_NOS, selecionados } from "@/lib/fluxo-nos";
 import { Badge, type Tone } from "../Badge";
@@ -456,8 +457,15 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
   const host = useHost();
   // A prévia lê TUDO de uma vez (no "Um por vez" ela entregaria só o primeiro, sem quem devolva pela Volta) e SEM as
   // marcações — a tabela mostra tudo o que o nó lê; as marcadas decidem o que passa.
+  // Nem os FILTROS da tabela ("Os filtrados na tabela"): a tabela mostra tudo e é ela que filtra — mudar um filtro não
+  // relê do sistema.
   const grafoLista = useMemo(
-    () => ({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, entrega: "lista", marcados: undefined } } : n)) }),
+    () => ({
+      ...grafo,
+      nos: grafo.nos.map((n) =>
+        n.id === no.id ? { ...n, config: { ...n.config, entrega: "lista", marcados: undefined, planejamentos: undefined, filtrados: undefined, filtradosCom: undefined, filtrosTabela: undefined } } : n,
+      ),
+    }),
     [grafo, no.id],
   );
   const ate = useMemo(() => fimDaLeitura(grafo, no.id, REGISTRO_NOS), [grafo, no.id]);
@@ -472,9 +480,12 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
   const podeMarcar = !temSelecao && !soPrevia;
   const nome = (ROTULO_OBJETO[buscaDoNo(no.config).objeto] ?? "item(ns)").toLowerCase();
   const genericas = useMemo(() => colunasGenericas(itens), [itens]);
+  const filtros = useFiltrosDaTabela(no, grafo, onGrafo, itens, !!previa?.carregando);
   if (!host) return null;
   return (
     <TabelaMesaFluxo
+      key={filtros?.versao}
+      filtros={filtros ?? undefined}
       itens={itens}
       chave={(it) => chaveSelecao(it, "id")}
       genericas={genericas}
@@ -493,7 +504,9 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
       }
       acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar do sistema" onClick={recarregar} disabled={host.rodando} /> : undefined}
       resumo={(ls) =>
-        soPrevia
+        filtros
+          ? `${ls.length} de ${itens.length} ${nome} seguem na automação · filtre as colunas ou escreva os nºs de planejamento`
+          : soPrevia
           ? `${ls.length} ${nome} seguem na automação · escolha quais em “Quais” e “Valor procurado”`
           : temSelecao
             ? `${ls.length} item(ns) · a escolha é feita na aba Seleção${marcados.size ? " (marcação antiga desta aba ignorada)" : ""}`
@@ -501,6 +514,98 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
       }
     />
   );
+}
+
+/** Filtros vazios saem (seleção vazia, sem datas, sem faixa): a mesma régua de "filtro ativo" para comparar e gravar. */
+function filtrosAtivos(f: Record<string, FiltroValor> | undefined): Record<string, FiltroValor> {
+  const r: Record<string, FiltroValor> = {};
+  for (const [k, v] of Object.entries(f ?? {})) {
+    if (Array.isArray(v) ? v.length > 0 : v && Object.values(v).some((x) => x != null && x !== "")) r[k] = v;
+  }
+  return r;
+}
+
+/** O filtro da coluna Nº Plan. pelo campo "Nº de planejamento": os valores da coluna que casam (o mesmo nº sem zeros à
+ * esquerda) + os digitados que não existem (a coluna fica vazia — como a execução, que não acharia nenhum). */
+function filtroDoCampo(texto: unknown, itens: Item[]): string[] {
+  const quer = planejamentosDoCampo(texto);
+  if (!quer.length) return [];
+  const existentes = new Map<string, string>();
+  for (const it of itens) {
+    const v = String(it.planejamento ?? "").trim();
+    if (v) existentes.set(planejamentosDoCampo(v)[0] ?? v, v);
+  }
+  return quer.map((n) => existentes.get(n) ?? n);
+}
+
+/**
+ * "OS FILTRADOS NA TABELA" (Ler do sistema): a tabela da aba é o filtro da automação. Os filtros das colunas e os ids que
+ * passam ficam na config do nó (`filtrosTabela`, `filtrados` — a execução usa os ids) e o campo "Nº de planejamento" é o
+ * MESMO filtro da coluna Nº Plan.: escrever no campo remonta a tabela com a coluna filtrada (`versao`); filtrar a coluna
+ * escreve no campo. Só com o "Quais" em "Os filtrados na tabela"; o campo só nos DFDs.
+ */
+function useFiltrosDaTabela(no: NoFluxo, grafo: Grafo, onGrafo: (g: Grafo) => void, itens: Item[], carregando: boolean) {
+  const { objeto, busca } = buscaDoNo(no.config);
+  const ativo = busca === BUSCA_TABELA;
+  const dfds = objeto === "dfds";
+  const campo = String(no.config.planejamentos ?? "");
+  // O texto do campo que a PRÓPRIA tabela escreveu: esse não remonta a tabela (senão cada filtro da coluna a remontaria).
+  const daTabela = useRef<string | null>(null);
+  const [versao, setVersao] = useState(0);
+  const [campoVisto, setCampoVisto] = useState(campo);
+  if (campoVisto !== campo) {
+    setCampoVisto(campo);
+    if (daTabela.current === campo) daTabela.current = null;
+    else setVersao((v) => v + 1);
+  }
+  const grafoRef = useRef(grafo);
+  grafoRef.current = grafo;
+  const plan = dfds ? filtroDoCampo(campo, itens) : [];
+  const iniciais: Record<string, FiltroValor> = { ...filtrosAtivos(no.config.filtrosTabela as Record<string, FiltroValor> | undefined) };
+  if (plan.length) iniciais.planejamento = plan;
+  const vazia = carregando || !itens.length;
+  const onMudar = useCallback(
+    (f: Record<string, FiltroValor>, passam: string[] | null) => {
+      const g = grafoRef.current;
+      const atual = g.nos.find((n) => n.id === no.id);
+      if (!atual) return;
+      const todos = filtrosAtivos(f);
+      // O campo guarda o planejamento; os DEMAIS filtros ficam em `filtrosTabela` (a tabela volta como estava).
+      const { planejamento, ...outros } = todos;
+      const guardar = dfds ? outros : todos;
+      const cfg: Record<string, unknown> = { ...atual.config };
+      if (Object.keys(guardar).length) cfg.filtrosTabela = guardar;
+      else delete cfg.filtrosTabela;
+      let novoCampo: string | null = null;
+      if (dfds) {
+        const naColuna = Array.isArray(planejamento) ? planejamento.filter((v) => v !== "—") : [];
+        const doCampo = planejamentosDoCampo(atual.config.planejamentos);
+        const daColuna = naColuna.flatMap((v) => planejamentosDoCampo(v));
+        // O MESMO conjunto: o texto do campo fica como a pessoa escreveu ("1509:" no meio da digitação não perde o ":").
+        const mesmo = doCampo.length === daColuna.length && daColuna.every((v) => doCampo.includes(v));
+        novoCampo = mesmo ? String(atual.config.planejamentos ?? "") : naColuna.join(":");
+        if (novoCampo) cfg.planejamentos = novoCampo;
+        else delete cfg.planejamentos;
+      }
+      // Os ids que passam, com o campo com que foram vistos (`filtradosCom`): a execução só os usa com o MESMO campo.
+      // Recarregando (a lista ainda vazia), os ids não valem — ficam os de antes.
+      if (!vazia) {
+        if (passam) {
+          // Números quando os ids são números (o diagrama gravado fica menor — o teto do fluxo é de 200 mil caracteres).
+          cfg.filtrados = passam.map((k) => (/^\d+$/.test(k) ? Number(k) : k));
+          cfg.filtradosCom = novoCampo ?? "";
+        } else {
+          delete cfg.filtrados;
+          delete cfg.filtradosCom;
+        }
+      }
+      if (JSON.stringify(cfg) === JSON.stringify(atual.config)) return;
+      if (novoCampo != null) daTabela.current = novoCampo;
+      onGrafo({ ...g, nos: g.nos.map((n) => (n.id === no.id ? { ...n, config: cfg } : n)) });
+    },
+    [no.id, dfds, vazia, onGrafo],
+  );
+  return ativo ? { iniciais, onMudar, versao: `${no.id}:${versao}` } : null;
 }
 
 /** As colunas dos itens que NÃO são da Mesa (repartições, linhas da CM002…): os campos do 1º nível, como vêm. */

@@ -41,7 +41,7 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, mensagemRecusaGeral, novasRecusas, PREFIXO_RECUSA, pararPorRecusa, type RecusasCenti, registrarRecusaCenti, registrarSucessoCenti, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
 import { filaSerial } from "./ocr-assinatura-core.ts";
-import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
+import { BUSCA_TABELA, BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, filtrarPelaTabela, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, passaConferencia, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
@@ -699,9 +699,9 @@ const NOS: DefNo[] = [
           { valor: "itens", rotulo: "Itens (produtos)" },
         ],
       },
-      { chave: "buscaProtocolos", rotulo: "Quais", entrada: true, ajuda: "Quais protocolos trazer: todos ou só os que casam com o valor procurado (pelo nº ou pelo Id).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
-      { chave: "buscaDfds", rotulo: "Quais", entrada: true, ajuda: "Quais DFDs trazer: todos ou só os que casam com o valor procurado (pelo planejamento, pelo nº do DFD ou pelo protocolo).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
-      { chave: "buscaItens", rotulo: "Quais", entrada: true, ajuda: "Quais itens trazer: todos ou só os que casam com o valor procurado (planejamento, nº do DFD, protocolo ou produto).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
+      { chave: "buscaProtocolos", rotulo: "Quais", entrada: true, ajuda: "Quais protocolos trazer: todos, os filtrados na tabela ao lado ou só os que casam com o valor procurado (pelo nº ou pelo Id).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
+      { chave: "buscaDfds", rotulo: "Quais", entrada: true, ajuda: "Quais DFDs trazer: todos, os FILTRADOS NA TABELA ao lado (filtre qualquer coluna ou escreva os nºs de planejamento) ou só os que casam com o valor procurado (pelo planejamento, pelo nº do DFD ou pelo protocolo).", tipo: "selecao", padrao: "tabela", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
+      { chave: "buscaItens", rotulo: "Quais", entrada: true, ajuda: "Quais itens trazer: todos, os filtrados na tabela ao lado ou só os que casam com o valor procurado (planejamento, nº do DFD, protocolo ou produto).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
       {
         chave: "valor",
         rotulo: "Valor procurado",
@@ -710,9 +710,19 @@ const NOS: DefNo[] = [
         aceitaCampo: true,
         valoresSistema: true,
         // Com "Quais" em Todos, o valor não é usado — o campo some.
-        visivel: (c) => buscaDoNo(c).busca !== "todos",
+        visivel: (c) => !["todos", BUSCA_TABELA].includes(buscaDoNo(c).busca),
         ajuda:
           "Do nó anterior: o campo de cada item que chega (ex.: o planejamento). Rodando sozinho — sem esse campo nos itens —, lê TODOS e a seleção mostra tudo. Valor fixo: escolha um ou mais na lista do que existe no sistema.",
+      },
+      {
+        chave: "planejamentos",
+        rotulo: "Nº de planejamento",
+        tipo: "texto",
+        entrada: true,
+        quando: { campo: "objeto", valores: ["dfds"] },
+        visivel: (c) => buscaDoNo(c).busca === BUSCA_TABELA,
+        ajuda:
+          "Um ou vários números de planejamento separados por “:” (ex.: 1509:1510). É o MESMO filtro da coluna Nº Plan. da tabela ao lado: escrever aqui filtra a coluna e filtrar a coluna escreve aqui. Vazio = todos os planejamentos.",
       },
       {
         chave: "entrega",
@@ -745,7 +755,10 @@ const NOS: DefNo[] = [
         const lido = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
         const deFora = !str(c.valor) && Array.isArray(ctx.host.__entrada) ? restringirPelaEntrada(lido, ctx.host.__entrada, objeto, !!ctx.host.__daMesa) : lido;
         // `marcar: false` (ex.: "Conferir e corrigir DFDs × Centi"): quem escolhe é o "Quais" + "Valor procurado" — sem marcação.
-        const lidos = ctx.host.__daMesa || c.marcar === false ? deFora : filtrarMarcados(deFora, c.marcados, (it) => chaveSelecao(it, "id"));
+        const escolhidos = ctx.host.__daMesa || c.marcar === false ? deFora : filtrarMarcados(deFora, c.marcados, (it) => chaveSelecao(it, "id"));
+        // "Os filtrados na tabela": só o que passa nos filtros da tabela da aba do nó (Nº de planejamento + as colunas).
+        // Os itens escolhidos FORA (a Mesa, "Executar com os selecionados") valem mais: a escolha de lá é a que conta.
+        const lidos = busca === BUSCA_TABELA && !ctx.host.__daMesa && deFora === lido ? filtrarPelaTabela(escolhidos, c, objeto) : escolhidos;
         if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
         est.fila = [...lidos];
         est.total = lidos.length;

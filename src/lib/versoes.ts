@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.296.4",
+    data: "2026-11-18",
+    titulo: "Automação sobre os DFDs filtrados na tabela",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "No “Ler do sistema”, “Quais” ganhou “Os filtrados na tabela” (já marcado): a automação roda só com os DFDs que passam nos filtros da tabela ao lado — qualquer coluna — e fica salvo com ela, inclusive para as execuções agendadas.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Campo “Nº de planejamento”: escreva um ou vários números separados por “:” (ex.: 1509:1510) e a coluna Nº Plan. da tabela é filtrada; filtrar a coluna escreve no campo.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.296.3",
     data: "2026-11-18",
     titulo: "Afastamentos padronizados nas automações",

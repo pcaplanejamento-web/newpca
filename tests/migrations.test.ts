@@ -1476,7 +1476,11 @@ describe("0192: a automação única com o diagrama atual e uma por pessoa", () 
     db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h'), (2, 'Bia', 'bia@x', 'h')");
     return db;
   };
-  const rodar = (db: DatabaseSync) => db.exec(readFileSync(join(DIR, "0192_automacao_centi_unica_grafo.sql"), "utf8"));
+  // A 0193 (o "Quais" inicial = os filtrados na tabela) vem junto: o diagrama gravado tem de ser IGUAL ao do código atual.
+  const rodar = (db: DatabaseSync) => {
+    db.exec(readFileSync(join(DIR, "0192_automacao_centi_unica_grafo.sql"), "utf8"));
+    db.exec(readFileSync(join(DIR, "0193_automacao_filtrados_tabela.sql"), "utf8"));
+  };
   const linhas = (db: DatabaseSync) =>
     db.prepare("SELECT id, nome, criado_por AS dono, grafo FROM automacao_fluxos ORDER BY id").all() as { id: number; nome: string; dono: number | null; grafo: string }[];
   const ANTIGO = '{"v":1,"nos":[{"id":"sel1","tipo":"entrada.selecionar","config":{"semMarcar":"nenhum"}},{"id":"conf1","tipo":"fluxo.executar","config":{"fluxoId":"3"}}],"conexoes":[]}';

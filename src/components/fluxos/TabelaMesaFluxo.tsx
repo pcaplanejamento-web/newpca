@@ -7,6 +7,7 @@ import { type AberturaItem, aberturaDoItem, dadosDfdDoItem, type TipoItemMesa, t
 import { COLUNAS_PROTOCOLOS, type GestaoAutomacao, useColunasGestao } from "../automacao/ProtocolosAutomacao";
 import { CelulaTexto } from "../CelulaLista";
 import { colunasItemMesa, type LinhaItemMesa } from "../ColunasItensMesa";
+import type { FiltroValor } from "@/lib/tabela-filtros";
 import { type Column, DataTable } from "../DataTable";
 import { type LinhaDfd, PlanilhaDfds } from "../PlanilhaDfds";
 
@@ -64,6 +65,7 @@ export function TabelaMesaFluxo({
   scrollInterno = true,
   linhasSalvas,
   onOrdem,
+  filtros,
 }: {
   itens: Item[];
   /** A chave de cada linha (a mesma da seleção). */
@@ -90,6 +92,11 @@ export function TabelaMesaFluxo({
   linhasSalvas?: string;
   /** A SEQUÊNCIA da tabela: as chaves das linhas na ordem mostrada (ordenação + filtros) e se há filtro (menos linhas). */
   onOrdem?: (chaves: string[], filtrada: boolean) => void;
+  /**
+   * Os FILTROS DAS COLUNAS ligados a quem usa (o "Os filtrados na tabela" do Ler do sistema): a tabela começa neles
+   * (`iniciais`) e informa a cada mudança os filtros e as CHAVES dos itens que passam (`null` = nenhum filtro ativo).
+   */
+  filtros?: { iniciais: Record<string, FiltroValor>; onMudar: (filtros: Record<string, FiltroValor>, passam: string[] | null) => void };
 }) {
   const tipo: TipoItemMesa | null = useMemo(() => tipoDosItens(itens), [itens]);
   const comUnidadeCenti = useMemo(() => itens.some((it) => "unidadeCentroCusto" in it), [itens]);
@@ -100,7 +107,12 @@ export function TabelaMesaFluxo({
     if (a) onAbrir(a);
   } : undefined;
   const ordenadas = onOrdem ? (ls: Item[]) => onOrdem(ls.map((it) => String(chave(it))), ls.length < itens.length) : undefined;
-  const comum = { selectable: !!onSelected, selected, onSelected, acoesRodape, vazio, exportar, density: "compact", scrollInterno, linhasSalvas, onOrdenadas: ordenadas } as const;
+  const conexao = filtros && {
+    base: itens,
+    filtros: filtros.iniciais,
+    onMudar: (e: { filtros: Record<string, FiltroValor>; passam: (string | number)[] | null }) => filtros.onMudar(e.filtros, e.passam && e.passam.map(String)),
+  };
+  const comum = { selectable: !!onSelected, selected, onSelected, acoesRodape, vazio, exportar, density: "compact", scrollInterno, linhasSalvas, onOrdenadas: ordenadas, conexao } as const;
 
   // DFDs: a PLANILHA DE DFDs da Mesa (a chave da linha = a posição; a seleção traduz para a chave do item).
   const dfds = useMemo(() => (tipo === "dfd" ? itens.map((it, i): LinhaDfd => ({ ...dadosDfdDoItem(it), key: i, estado: "regular" })) : []), [tipo, itens]);
@@ -121,6 +133,13 @@ export function TabelaMesaFluxo({
         vazio={vazio}
         exportar={exportar}
         onOrdenadas={onOrdem && ((ls) => onOrdem(ls.map((r) => String(chaves[r.key])), ls.length < itens.length))}
+        conexao={
+          filtros && {
+            base: dfds,
+            filtros: filtros.iniciais,
+            onMudar: (e) => filtros.onMudar(e.filtros, e.passam && e.passam.map((k) => String(chaves[Number(k)]))),
+          }
+        }
       />
     );
   }

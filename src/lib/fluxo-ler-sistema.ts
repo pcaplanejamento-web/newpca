@@ -11,23 +11,51 @@ export type ObjetoLeitura = "protocolos" | "dfds" | "itens";
 export const BUSCAS: Record<ObjetoLeitura, { valor: string; rotulo: string }[]> = {
   protocolos: [
     { valor: "todos", rotulo: "Todos (geral)" },
+    { valor: "tabela", rotulo: "Os filtrados na tabela" },
     { valor: "numero", rotulo: "Nº do protocolo" },
     { valor: "id", rotulo: "Id do protocolo (capa)" },
   ],
   dfds: [
     { valor: "todos", rotulo: "Todos (geral)" },
+    { valor: "tabela", rotulo: "Os filtrados na tabela" },
     { valor: "planejamento", rotulo: "Nº de planejamento" },
     { valor: "numero", rotulo: "Nº do DFD" },
     { valor: "protocolo", rotulo: "Do protocolo (nº ou Id)" },
   ],
   itens: [
     { valor: "todos", rotulo: "Todos (geral)" },
+    { valor: "tabela", rotulo: "Os filtrados na tabela" },
     { valor: "planejamento", rotulo: "Do DFD (nº de planejamento)" },
     { valor: "dfd", rotulo: "Do DFD (nº do DFD)" },
     { valor: "protocolo", rotulo: "Do protocolo (nº ou Id)" },
     { valor: "produto", rotulo: "Produto (código)" },
   ],
 };
+
+/**
+ * "Os filtrados na tabela": a leitura traz TUDO e a automação segue só com o que passa nos filtros da tabela ao lado (a
+ * aba do nó). Na config do nó: `filtrados` (os ids que passavam em TODOS os filtros da tabela quando ela foi vista; sem
+ * filtro, ausente = todos) com `filtradosCom` (o campo "Nº de planejamento" daquele momento) e `planejamentos` (o campo —
+ * o MESMO filtro da coluna Nº Plan.). A tabela é a verdade: com os ids do mesmo campo, valem eles; sem eles (o campo
+ * mudou sem a tabela à vista), vale o campo.
+ */
+export const BUSCA_TABELA = "tabela";
+
+/** Os números de planejamento do campo (sem repetir, só os dígitos antes da barra, sem zeros à esquerda). */
+export const planejamentosDoCampo = (texto: unknown): string[] => valoresProcurados(String(texto ?? "").replace(/\s+/g, ":"), []);
+
+/** O recorte de "Os filtrados na tabela" sobre o que foi lido (o campo de planejamento só nos DFDs). */
+export function filtrarPelaTabela(itens: Item[], c: Record<string, unknown>, objeto: ObjetoLeitura): Item[] {
+  const campo = objeto === "dfds" ? String(c.planejamentos ?? "") : "";
+  if (Array.isArray(c.filtrados) && String(c.filtradosCom ?? "") === campo) {
+    const ids = new Set(c.filtrados.map(String));
+    return itens.filter((it) => ids.has(String(it.id)));
+  }
+  const plan = planejamentosDoCampo(campo);
+  if (!plan.length) return itens;
+  const quer = new Set(plan);
+  return itens.filter((it) => quer.has(chaveNum(it.planejamento)));
+}
 
 /** As fontes já carregadas (cada uma lida UMA vez por execução). */
 export type FontesSistema = { protocolos: Item[]; dfds: Item[]; itens: Item[] };
@@ -47,12 +75,14 @@ export function valoresProcurados(valor: string, entrada: Item[]): string[] {
  * o campo —, a prévia da seleção), lê TODOS: a seleção mostra tudo e o usuário escolhe; com o campo nos itens (ex.: os
  * DFDs da Mesa), filtra pelo valor. Valor fixo vazio = `null` (erro). */
 export function buscaEfetiva(busca: string, valor: string, valores: string[]): string | null {
-  if (busca === "todos" || valores.length) return busca;
+  if (busca === "todos" || busca === BUSCA_TABELA || valores.length) return busca;
   return /\{\{/.test(valor) ? "todos" : null;
 }
 
 /** Os itens do recorte, na ordem da fonte (sem repetir). `todos` ignora os valores. */
-export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, busca: string, valores: string[]): Item[] {
+export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, pedida: string, valores: string[]): Item[] {
+  // "Os filtrados na tabela" lê TUDO: o recorte é o filtro da tabela (`filtrarPelaTabela`), aplicado depois.
+  const busca = pedida === BUSCA_TABELA ? "todos" : pedida;
   const quer = new Set(valores);
   const tem = (v: unknown) => quer.has(chaveNum(v));
   const protoQuer = (p: Item) => tem(p.numero) || tem(p.idExterno);
