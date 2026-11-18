@@ -3,6 +3,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
+import { tipoDosItens } from "@/lib/fluxo-tipo-item";
 import { contagemDfds } from "@/lib/automacao-dfds-estado";
 import { dataHoraBR } from "@/lib/format";
 import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
@@ -269,8 +270,11 @@ function AnaliseAoVivo({
         : [],
     [fonte, itensFonte, noDfds, anexarDfds],
   );
+  // A posição de cada item (a chave da linha) — um mapa, não um `indexOf` por célula (milhares de DFDs).
+  const posicao = useMemo(() => new Map(itensFonte.map((it, i) => [it, i])), [itensFonte]);
+  const pos = (it: Item) => posicao.get(it) ?? -1;
   // Marcar itens do resultado e rodar o fluxo de novo só com eles (quando o fluxo os recebe).
-  const exec = useExecutarSelecionados(grafo, rodando ? [] : itensFonte, (it) => itensFonte.indexOf(it));
+  const exec = useExecutarSelecionados(grafo, rodando ? [] : itensFonte, pos);
   // Quantos itens entram no componente (o que os anteriores entregaram) — o andamento "n de N".
   const total = fonte ? Math.max(itensFonte.length, ...etapas.filter((n) => n.x < fonte.x).map((n) => passos[n.id]?.itens ?? 0)) : 0;
   const jaAntes = fonte?.tipo === "fluxo.executar" && !rodando && resultado?.estado === "concluido" ? Math.max(0, total - processados.length) : 0;
@@ -297,13 +301,27 @@ function AnaliseAoVivo({
   );
   // A tabela ao vivo é a da MESA quando os itens são protocolos, DFDs ou itens (o toque abre o banner); o Órgão, o Estado e o
   // Detalhe do componente vão no fim de qualquer tipo.
-  const estadoDe = (it: Item) => processados[itensFonte.indexOf(it)]?.estado ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" };
-  const orgaoDe = (it: Item) => processados[itensFonte.indexOf(it)]?.orgao ?? "";
+  const estadoDe = (it: Item) => processados[pos(it)]?.estado ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" };
+  const orgaoDe = (it: Item) => processados[pos(it)]?.orgao ?? "";
+  // Nas linhas de DFD, a coluna Centi já abre o painel com o motivo: o detalhe vai na dica do Estado (sem coluna repetida).
+  const soDfds = tipoDosItens(itensFonte) === "dfd";
   const genericasVivo: Column<Item>[] = [{ key: "item", header: "Item", nowrap: true, align: "left", value: (it) => rotuloItem(it), render: (it) => rotuloItem(it) }];
   const extrasVivo: Column<Item>[] = [
     ...(processados.some((p) => p.orgao) ? [{ key: "orgao", header: "Órgão", align: "left" as const, minWidth: 160, value: (it: Item) => orgaoDe(it) || "—", render: (it: Item) => <span className="whitespace-normal">{orgaoDe(it) || "—"}</span> }] : []),
-    { key: "estadoEtapa", header: "Estado", nowrap: true, value: (it) => estadoDe(it).rotulo, render: (it) => <Badge tone={estadoDe(it).tom} dot>{estadoDe(it).rotulo}</Badge> },
-    { key: "detalhe", header: "Detalhe", align: "left", minWidth: 240, value: (it) => estadoDe(it).texto, render: (it) => <span className="whitespace-normal text-muted">{estadoDe(it).texto || "—"}</span> },
+    {
+      key: "estadoEtapa",
+      header: "Estado",
+      nowrap: true,
+      value: (it) => estadoDe(it).rotulo,
+      render: (it) => (
+        <Badge tone={estadoDe(it).tom} dot title={soDfds ? estadoDe(it).texto || undefined : undefined}>
+          {estadoDe(it).rotulo}
+        </Badge>
+      ),
+    },
+    ...(soDfds
+      ? []
+      : [{ key: "detalhe", header: "Detalhe", align: "left" as const, minWidth: 240, value: (it: Item) => estadoDe(it).texto, render: (it: Item) => <span className="whitespace-normal text-muted">{estadoDe(it).texto || "—"}</span> }]),
   ];
   const apAtencao = apontados.filter((a) => a.nivel === "Atenção").length;
   // Os itens que entraram: a 1ª etapa de dados depois do Início (ex.: os DFDs do "Ler do sistema").
@@ -367,9 +385,9 @@ function AnaliseAoVivo({
       )}
       {jaAntes > 0 && fonte && host && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span className="min-w-0 flex-1">A retomada pulou os {jaAntes.toLocaleString("pt-BR")} já concluídos; enquanto houver falha, só as falhas são refeitas.</span>
+          <span className="min-w-0 flex-1">A retomada pulou os {jaAntes.toLocaleString("pt-BR")} já concluídos nesta rodada (com as mesmas escolhas); a próxima execução que terminar sem interrupção recomeça do zero.</span>
           <Button size="sm" variant="secondary" onClick={() => host.refazerTudo(grafo, fonte.id, jaAntes)}>
-            Refazer tudo
+            Recomeçar do zero
           </Button>
         </div>
       )}
@@ -388,7 +406,7 @@ function AnaliseAoVivo({
           {host && (
             <TabelaMesaFluxo
               itens={itensFonte}
-              chave={(it) => itensFonte.indexOf(it)}
+              chave={pos}
               genericas={genericasVivo}
               extras={extrasVivo}
               gestao={host.gestao}
@@ -465,7 +483,7 @@ function useAcoesCentiDoFluxo(grafo: Grafo, passos: Record<string, PassoExec>): 
           : "Roda esta automação só com o DFD: busca na Centi, compara e troca pelos da Centi SÓ os dados que divergem (nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam os do sistema).",
         confirmar: soConferir ? "Reconferir" : "Corrigir",
       });
-      if (ok) host.executarCom(grafo, conhecidos(ids), soConferir);
+      if (ok) host.executarCom(grafo, conhecidos(ids), soConferir ? "conferir" : "corrigir");
     };
     return {
       admin: true,

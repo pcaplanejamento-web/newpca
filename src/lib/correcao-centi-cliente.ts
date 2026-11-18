@@ -6,7 +6,7 @@
  * assinaturas, unidade, protocolo e PCA nunca mudam (`novoDaCenti`). `fetch` injetável (testado).
  */
 import { aceiteVale, lerAceite, MSG_RETRATO_VENCIDO, type RetratoCenti, retratoDoPlanejamento, tiposDoMotivo } from "./conferencia-dfd-centi.ts";
-import { aplicarCentiPorTipos, planoCorrecao, tiposCorrigiveisDoMotivo } from "./correcao-centi-core.ts";
+import { aplicarCentiPorTipos, planoCorrecao, SEM_CORRECAO_CENTI, tiposCorrigiveisDoMotivo } from "./correcao-centi-core.ts";
 import type { DfdDetalhe } from "./dfd.ts";
 import { detalheParaParseado, diffDfdGravado } from "./dfd-edicao.ts";
 import { semMarcas } from "./sobrescrita-dfd.ts";
@@ -20,12 +20,9 @@ export type ResultadoCorrecao = {
   /** O status da conferência DEPOIS (o do `recalcular` quando gravou; senão o atual). */
   status: string | null;
   motivo: string | null;
-  /** Os tipos que ainda divergem depois de gravar (só no `parcial`). */
+  /** Os tipos que ainda divergem depois de gravar (no `parcial`; no `corrigido`, os que a Centi não corrige). */
   restam?: string[];
 };
-
-/** O que a Centi NÃO corrige no DFD (identidade/situação, ou nada lido): a automação desiste só com eles. */
-const SEM_CORRECAO: ReadonlySet<string> = new Set(["Situação", "Órgão", "Nº do DFD", "Não encontrado na Centi"]);
 
 type Busca = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -54,7 +51,7 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
   const usar = tipos ? alcance.filter((t) => tipos.includes(t)) : alcance;
   // A automação (`tipos` null): só desiste quando o motivo tem SÓ o que a Centi não corrige de fato ("Outras" = linha não
   // classificada — o retrato decide). A massa usa a régua de sempre.
-  const desiste = tipos ? !alcance.length : tiposDoMotivo(motivo).every((t) => SEM_CORRECAO.has(t));
+  const desiste = tipos ? !alcance.length : tiposDoMotivo(motivo).every((t) => SEM_CORRECAO_CENTI.has(t));
   if (desiste && !cortado) return { resultado: "naoCorrigivel", status, motivo };
   if (tipos && !usar.length) return { resultado: "sem", status, motivo };
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
@@ -88,7 +85,13 @@ export async function corrigirDfdPelaCenti(id: number, tipos: readonly string[] 
     const j4 = await lerJson<{ status?: string; motivo?: string | null }>(r4);
     if (r4.ok && j4.ok) {
       const depois = j4.status ?? null;
-      if (depois === "divergente") return { resultado: "parcial", status: depois, motivo: j4.motivo ?? null, restam: tiposDoMotivo(j4.motivo) };
+      if (depois === "divergente") {
+        const restam = tiposDoMotivo(j4.motivo);
+        // Só restou o que a Centi não corrige (situação, órgão, nº): a correção terminou — o resto é tratado no painel.
+        if (tipos === null && restam.length && restam.every((t) => SEM_CORRECAO_CENTI.has(t)))
+          return { resultado: "corrigido", status: depois, motivo: j4.motivo ?? null, restam };
+        return { resultado: "parcial", status: depois, motivo: j4.motivo ?? null, restam };
+      }
       return { resultado: "corrigido", status: depois, motivo: j4.motivo ?? null };
     }
   } catch {

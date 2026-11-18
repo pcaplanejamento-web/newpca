@@ -4,7 +4,7 @@ import { getDb } from "./db";
 import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "./automacao-mesa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { type AjudaFluxo, atrasada, cicloDeSubfluxos, fluxosDevidos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
-import { type AutomacoesCenti, automacoesCentiDaMesa } from "./automacao-centi-mesa";
+import { type AutomacaoCenti, automacaoCentiDaMesa } from "./automacao-centi-mesa";
 import { comandoLimparProgresso, comandoReservarFluxo, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
 import { feriadosNoIntervalo } from "./calendario-core";
 import { somarDias } from "./tarefas-core";
@@ -111,10 +111,10 @@ export async function automacoesDaMesa(usuarioId: number): Promise<{ id: number;
   return ids.flatMap((id) => por.get(id) ?? []);
 }
 
-/** As automações de RECONFERIR e de SUBSTITUIR pela Centi que a pessoa vê (as dela, as sem dono e as públicas). */
-export async function automacoesCentiDe(usuarioId: number): Promise<AutomacoesCenti> {
+/** A automação "Verificar DFDs na Centi" que a pessoa vê (as dela, as sem dono e as públicas) — Reconferir e Corrigir. */
+export async function automacaoCentiDe(usuarioId: number): Promise<AutomacaoCenti> {
   const [meus, publicos] = await Promise.all([listarFluxosDe(usuarioId), listarPublicos(usuarioId)]);
-  return automacoesCentiDaMesa([...meus, ...publicos]);
+  return automacaoCentiDaMesa([...meus, ...publicos]);
 }
 
 export async function getFluxo(id: number): Promise<FluxoAutomacao | null> {

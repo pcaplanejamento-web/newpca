@@ -118,9 +118,11 @@ export async function lerDfdCentiPorCodigo(
  * para o ADM ver o arquivo como veio. */
 const pdfsLidos = new Map<string, Uint8Array>();
 const MAX_PDFS_LIDOS = 30;
-/** O PDF (base64) da última emissão do planejamento nesta aba; null = nenhum. */
-export function pdfLidoNaCenti(planejamento: string): string | null {
-  const b = pdfsLidos.get(s(planejamento).replace(/\D/g, ""));
+/** A chave do PDF guardado: o planejamento NO ÓRGÃO (o mesmo nº existe em órgãos diferentes da Centi). */
+const chavePdf = (planejamento: string, entidade?: string) => `${s(planejamento).replace(/\D/g, "")}@${s(entidade).replace(/^0+(?=\d)/, "")}`;
+/** O PDF (base64) da última emissão do planejamento (no órgão) nesta aba; null = nenhum. */
+export function pdfLidoNaCenti(planejamento: string, entidade?: string): string | null {
+  const b = pdfsLidos.get(chavePdf(planejamento, entidade));
   if (!b) return null;
   let t = "";
   for (let i = 0; i < b.length; i += 0x8000) t += String.fromCharCode(...b.subarray(i, i + 0x8000));
@@ -146,7 +148,9 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const situacao = topo.situacao ?? s(acharValor(l.j, /^situa/i, 0, ehTextoComLetras));
   const centroCusto = topo.centroCusto ?? s(acharValor(l.j, /^(id)?centro.?(de)?.?custo|^(id)?c\.?\s?custo/i, 0, ehTextoComLetras));
   const finalidade = topo.finalidade ?? s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
-  const extra = { centroCusto, finalidade, ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
+  // `registro: false` = a Centi não abriu o registro do planejamento (só a emissão saiu): a situação e o centro de custo
+  // NÃO foram lidos — quem grava não apaga o que já estava (nunca vira "sem centro de custo" por falta de leitura).
+  const extra = { centroCusto, finalidade, ...(semRegistro !== null ? { registro: false } : {}), ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
   // A MESMA emissão do "Baixar DFDs", SEMPRE com o valor de referência ("Emitir valor referência" = Sim): sem ele a Centi
   // emite a seção 4 sem as colunas de valor e a conferência compararia "R$ 0,00". A chave do aparelho vale só no Baixar/anexar.
@@ -159,8 +163,9 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     if (semRegistro && planejamentoInexistente(semRegistro)) throw naoEncontrado();
     throw new Error(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
   }
-  pdfsLidos.delete(plan);
-  pdfsLidos.set(plan, e.pdf);
+  const kPdf = chavePdf(plan, entidade);
+  pdfsLidos.delete(kPdf);
+  pdfsLidos.set(kPdf, e.pdf);
   while (pdfsLidos.size > MAX_PDFS_LIDOS) pdfsLidos.delete(pdfsLidos.keys().next().value as string);
   const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))

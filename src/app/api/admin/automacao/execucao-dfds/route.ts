@@ -36,6 +36,9 @@ const lerDfds = () =>
       conferenciaCenti: dfds.conferenciaCenti,
       conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
       conferenciaCentiEm: dfds.conferenciaCentiEm,
+      conferenciaCentiAceite: dfds.conferenciaCentiAceite,
+      // O centro de custo GRAVADO (a coluna "Centro de Custo" da tabela antes da verificação).
+      centroCusto: dfds.centroCusto,
       atualizadoEm: dfds.atualizadoEm,
     })
     .from(dfds)

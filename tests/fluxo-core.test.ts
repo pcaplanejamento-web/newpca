@@ -352,10 +352,12 @@ test("automação única, só conferindo: cada DFD pela etapa de 1 DFD, em paral
     },
     cancelado: () => false,
     host: {
+      // O "Reconferir" da Mesa: só o conteúdo, sem corrigir (`hostDaAcaoCenti("conferir")`).
       __soConferir: true,
+      __verificacoes: ["conteudo"],
       chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
       mapaEntidades: { "o:1": "2" },
-      carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
+      carregarFluxo: async (id: number) => ({ id, nome: "Verificar 1 DFD na Centi", grafo: filho?.grafo }),
       progresso: {
         ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
         gravar: async (_no: string, its: { chave: string; estado: string }[]) => {
@@ -383,14 +385,15 @@ test("automação única, só conferindo: cada DFD pela etapa de 1 DFD, em paral
       { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
     ],
   );
-  // Só conferindo: cada DFD não convergente é apontado (atenção) com o motivo — nada é corrigido.
-  const daEtapa = r.apontados.filter((a) => a.subfluxo === "Conferir e corrigir 1 DFD × Centi").map((a) => String(a.mensagem));
-  assert.equal(daEtapa.length, 3);
-  assert.ok(daEtapa.some((m) => /^DFD 11 \(planejamento 101\) sem correção: só conferir — 1 diferença — Valor total/.test(m)), daEtapa.join("\n"));
-  assert.ok(daEtapa.some((m) => /^DFD 13 \(planejamento 100\) sem correção: não conferido — o órgão do DFD não tem o ID da Centi/.test(m)), daEtapa.join("\n"));
-  // O DFD 13 voltou "não conferido": não está feito — a retomada o guarda como falha (refeito na próxima) e não é esquecida.
-  assert.equal(progresso.get("4"), "falha");
-  assert.equal(progresso.get("1"), "ok");
+  // Só conferindo: o resultado de cada DFD volta na Análise (Divergente / Não conferido) — sem apontamento repetido e sem
+  // passar pela correção.
+  assert.equal(r.apontados.filter((a) => a.subfluxo === "Verificar 1 DFD na Centi").length, 0);
+  const ret = new Map((r.retorno ?? []).map((it) => [Number(it.id), it]));
+  assert.equal(ret.get(2)?.conferenciaCenti, "divergente");
+  assert.equal(ret.get(2)?.correcao, undefined, "nada é corrigido");
+  assert.equal(ret.get(4)?.naoMarcar, true, "o órgão sem o ID da Centi: não conferido");
+  // A fila inteira passou (sem interrupção): a retomada recomeça do zero — a próxima execução reconfere todos.
+  assert.equal(progresso.size, 0);
 });
 
 test("modelo Baixar/anexar por protocolo: só os MARCADOS seguem; falha vira apontamento", async () => {
@@ -533,10 +536,11 @@ test("Conferir e corrigir × Centi (só conferir): falha de comunicação não m
       cancelado: () => false,
       host: {
         __soConferir: true,
-      chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
+        __verificacoes: ["conteudo"],
+        chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
         mapaEntidades: { "o:1": "2" },
         esperaCentiMs: 0,
-        carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
+        carregarFluxo: async (id: number) => ({ id, nome: "Verificar 1 DFD na Centi", grafo: filho?.grafo }),
         progresso: {
           ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
           gravar: async (_no: string, its: { chave: string; estado: string }[]) => {
@@ -551,15 +555,15 @@ test("Conferir e corrigir × Centi (só conferir): falha de comunicação não m
         },
       },
     } as never);
-  await rodar();
+  const r1 = await rodar();
   assert.deepEqual(marcados.map((x) => x.dfdId), [1], "o DFD que falhou na comunicação NÃO é marcado");
-  assert.equal(progresso.get("1"), "ok");
-  assert.equal(progresso.get("2"), "falha", "a falha fica registrada para a retomada");
+  assert.ok((r1.retorno ?? []).some((it) => Number(it.id) === 2 && (it.subfluxo as { estado?: string } | undefined)?.estado === "falhou"), "fica como falha na Análise");
+  assert.equal(progresso.size, 0, "a fila inteira passou: a próxima execução reconfere todos");
   rede = true;
   lidos.length = 0;
   await rodar();
-  assert.deepEqual(lidos, ["101"], "a retomada pula o já conferido e tenta de novo só o que falhou");
-  assert.deepEqual(marcados.map((x) => x.dfdId).sort(), [1, 2]);
+  assert.deepEqual(lidos.sort(), ["100", "101"]);
+  assert.deepEqual(marcados.map((x) => x.dfdId).sort(), [1, 1, 2]);
 });
 
 test("Conferir e corrigir × Centi (só conferir): a Centi é chamada UM DFD por vez (mesmo em paralelo), a falha passageira tenta de novo e a falha não é apontada em dobro", async () => {
@@ -576,10 +580,11 @@ test("Conferir e corrigir × Centi (só conferir): a Centi é chamada UM DFD por
     cancelado: () => false,
     host: {
       __soConferir: true,
+      __verificacoes: ["conteudo"],
       chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
       mapaEntidades: { "o:1": "2" },
       esperaCentiMs: 0,
-      carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
+      carregarFluxo: async (id: number) => ({ id, nome: "Verificar 1 DFD na Centi", grafo: filho?.grafo }),
       lerDfdCenti: async (plan: string) => {
         emCurso++;
         maximo = Math.max(maximo, emCurso);
@@ -623,10 +628,11 @@ test("Conferir e corrigir × Centi (só conferir): o planejamento que não abre 
     cancelado: () => false,
     host: {
       __soConferir: true,
+      __verificacoes: ["conteudo"],
       chaveOrgao: (id: number | null) => (id ? `o:${id}` : null),
       mapaEntidades: { "o:1": "2", "o:2": "3" },
       esperaCentiMs: 0,
-      carregarFluxo: async (id: number) => ({ id, nome: "Conferir e corrigir 1 DFD × Centi", grafo: filho?.grafo }),
+      carregarFluxo: async (id: number) => ({ id, nome: "Verificar 1 DFD na Centi", grafo: filho?.grafo }),
       lerDfdCenti: async (plan: string, ent?: string) => {
         pedidos.push(`${plan}@${ent}`);
         if (plan === "100" && ent === "3") return { numero: "10", planejamento: plan, valor: 5, totalItens: 1 };
@@ -636,8 +642,10 @@ test("Conferir e corrigir × Centi (só conferir): o planejamento que não abre 
   } as never);
   assert.equal(r.estado, "concluido", r.erro);
   assert.deepEqual(pedidos.sort(), ["100@2", "100@3", "101@2", "101@3"]);
+  // O achado em outro órgão é um RESULTADO (Divergente, na Análise); o que não abre em nenhum, uma falha apontada.
+  const um = (r.retorno ?? []).find((it) => Number(it.id) === 1);
+  assert.match(String(um?.conferenciaCentiMotivo), /achado na Centi no órgão 3, mas o DFD está cadastrado no órgão 2/);
   const txt = r.apontados.map((a) => String(a.mensagem)).join("\n");
-  assert.match(txt, /achado na Centi no órgão 3, mas o DFD está cadastrado no órgão 2/);
   assert.match(txt, /não abre em nenhum dos 2 órgãos da Centi \(tentados: 2, 3\)/);
 });
 

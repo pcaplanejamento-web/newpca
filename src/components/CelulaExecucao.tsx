@@ -18,8 +18,8 @@ import {
   orientacoesDivergencias,
   textoRelatorioCenti,
   tiposDivergencia,
-  tiposDoMotivo,
 } from "@/lib/conferencia-dfd-centi";
+import { ROTULO_COM_NOTA, ROTULO_RECONFERIR, ROTULO_RESSALVA_CURTO, rotuloConferencia } from "@/lib/dfd-colunas-valor";
 import { dataHoraBR } from "@/lib/format";
 import { classeExecucao } from "@/lib/execucao-centi";
 import { Badge, type Tone } from "./Badge";
@@ -36,28 +36,8 @@ const TOM: Record<"executado" | "cancelado" | "outro", Tone> = { executado: "eme
 
 /** A EXECUÇÃO do DFD na Centi (a situação do planejamento na CM002): verde = executado · vermelho = cancelado · âmbar =
  * outra situação · "—" = ainda não verificado. Na Mesa (DFDs/Itens) e na tarefa "Verificar execução" da Automação. */
-export const rotuloConferencia = (s: string | null | undefined) => (s === "convergente" ? "Convergente" : s === "divergente" ? "Divergente" : "Não conferido");
-
-/** O rótulo do FILTRO da conferência DESATUALIZADA (o DFD mudou depois dela). */
-export const ROTULO_RECONFERIR = "Reconferir";
-
-/** O rótulo do CONVERGENTE COM NOTA (sem as seções 8 a 10 na Centi — não comparadas): âmbar, com a nota no painel. */
-export const ROTULO_COM_NOTA = "Convergente*";
-
-/** O rótulo da divergência ACEITA (a Centi é que está errada — vale enquanto o motivo for o mesmo). */
-export const ROTULO_RESSALVA = "Convergente com ressalva";
-
-/** A divergência foi ACEITA (o aceite gravado é deste MESMO motivo). */
-export const comRessalva = (s: string | null | undefined, motivo: string | null | undefined, aceite: string | null | undefined) =>
-  aceiteVale(s, motivo ?? null, lerAceite(aceite));
-
-/** Os valores do FILTRO da coluna Centi: o status, "Reconferir" quando desatualizada e, no divergente, cada TIPO de
- * divergência ("Divergente · Valor total") — ou, ACEITA, "Convergente com ressalva" (os tipos seguem filtráveis). */
-export const valoresConferencia = (s: string | null | undefined, motivo?: string | null, desatualizada = false, ressalva = false): string[] => [
-  ressalva && s === "divergente" ? ROTULO_RESSALVA : notaConferencia(s, motivo) ? ROTULO_COM_NOTA : rotuloConferencia(s),
-  ...(desatualizada && (s === "convergente" || s === "divergente") ? [ROTULO_RECONFERIR] : []),
-  ...(s === "divergente" ? tiposDoMotivo(motivo).map((t) => `Divergente · ${t}`) : []),
-];
+// Os rótulos e os valores do filtro da coluna Centi moram no núcleo puro (a planilha e a automação usam os mesmos).
+export { comRessalva, ROTULO_COM_NOTA, ROTULO_RECONFERIR, ROTULO_RESSALVA, rotuloConferencia, valoresConferencia } from "@/lib/dfd-colunas-valor";
 
 /**
  * As AÇÕES da Mesa sobre a conferência com a Centi (o painel do selo): reconferir os DFDs e corrigi-los automaticamente pela
@@ -119,7 +99,7 @@ export function CelulaConferenciaCenti({
     </Badge>
   ) : ressalva ? (
     <Badge tone="blue" dot>
-      Com ressalva
+      {ROTULO_RESSALVA_CURTO}
     </Badge>
   ) : nota ? (
     <Badge tone="amber" dot>
@@ -302,6 +282,17 @@ function PainelDivergencias({
           <p className="text-[12px] text-muted">
             Indicação da equipe, secretário demandante e autorização não foram comparadas — valem as do sistema. Para conferi-las, cadastre o registro de assinatura do DFD no planejamento da Centi e reconfira.
           </p>
+          {dfdId != null && (
+            <a
+              href={`/api/dfd/${dfdId}/conferencia-centi?pdf=1`}
+              target="_blank"
+              rel="noopener"
+              title="O PDF que a Centi gerou na última conferência — o que a automação leu"
+              className="inline-flex h-11 items-center gap-1.5 rounded-control px-1 text-[13px] font-medium text-accent hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
+            >
+              <IconDownload className="h-4 w-4" /> PDF da Centi
+            </a>
+          )}
         </div>
       )}
       {ressalva && (
@@ -424,9 +415,11 @@ function PainelDivergencias({
           )}
         </div>
       )}
-      {(reconferir || corrigirAuto || dfdId != null) && (
+      {/* Com um formulário aberto (aceitar, nº de planejamento), só ele: as ações voltam ao cancelar. */}
+      {form == null && (reconferir || corrigirAuto || dfdId != null) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
-          {servidor && (
+          {/* O Recalcular usa o RETRATO da Centi — guardado só no divergente. */}
+          {servidor && status === "divergente" && (
             <Button
               size="sm"
               variant="secondary"
@@ -504,13 +497,15 @@ function HistoricoConferencias({ dfdId }: { dfdId: number }) {
     <ol className="max-h-[40vh] space-y-2 overflow-y-auto overscroll-contain pr-1">
       {lista.map((h, i) => {
         const anterior = lista[i + 1];
-        const cmp = anterior ? comparacaoConferencias(anterior.motivo, h.motivo) : null;
-        const n = contarDivergencias(divergenciasDoMotivo(h.motivo));
+        // Só o motivo do DIVERGENTE é lista de divergências (o do convergente* é a nota).
+        const div = (x: HistoricoCenti) => (x.status === "divergente" ? x.motivo : null);
+        const cmp = anterior ? comparacaoConferencias(div(anterior), div(h)) : null;
+        const n = contarDivergencias(divergenciasDoMotivo(div(h)));
         return (
           <li key={h.id} className="space-y-1 rounded-control border border-border px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-              <Badge tone={h.status === "convergente" ? "emerald" : "red"} dot>
-                {rotuloConferencia(h.status)}
+              <Badge tone={notaConferencia(h.status, h.motivo) ? "amber" : h.status === "convergente" ? "emerald" : "red"} dot>
+                {notaConferencia(h.status, h.motivo) ? ROTULO_COM_NOTA : rotuloConferencia(h.status)}
               </Badge>
               <span className="text-muted">
                 {dataHoraBR(h.em)}

@@ -7,8 +7,7 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
-import type { AutomacoesCenti } from "./automacao-centi-mesa";
-import { automacoesCentiDe, automacoesDaMesa } from "./fluxos";
+import { automacaoCentiDe, automacoesDaMesa } from "./fluxos";
 import { colunasDaMesa } from "./mesa-colunas";
 import { chaveFonte, idDoFiltro, lerFontesAbas, passaFiltroId, siglasDoCabecalho } from "./escopo-unidades-core";
 import { getGrupoAtivo, getReparticaoContexto, unidadesAcessiveis, unidadesDaSessao } from "./grupos";
@@ -171,7 +170,6 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
  */
 /** A versão `dados` desta carga (memorizada por requisição — o layout já a leu): a lista de itens guardada na aba só vale
  * com ela. Falhou = `null` (a lista é buscada de novo). */
-const SEM_AUTOMACOES_CENTI: AutomacoesCenti = { conferir: null, corrigir: null };
 const versaoDosItens = () =>
   versaoDados()
     .then((v) => v.dados)
@@ -179,15 +177,15 @@ const versaoDosItens = () =>
 
 export async function carregarMesa(u: UsuarioSessao | null) {
   // As AUTOMAÇÕES que a pessoa pôs na Mesa (só a Mesa do SISTEMA; a Automação é do Administrador).
-  // E as de RECONFERIR/SUBSTITUIR pela Centi (o painel das divergências) — também só do Administrador.
-  const [{ dfds, protocolos, ...resto }, automacoes, automacoesCenti, versaoItens] = await Promise.all([
+  // E a "Verificar DFDs na Centi" (o Reconferir/Corrigir do painel das divergências) — também só do Administrador.
+  const [{ dfds, protocolos, ...resto }, automacoes, automacaoCenti, versaoItens] = await Promise.all([
     montarMesa(u),
     u?.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
-    u?.admin ? automacoesCentiDe(u.id).catch(() => SEM_AUTOMACOES_CENTI) : Promise.resolve(SEM_AUTOMACOES_CENTI),
+    u?.admin ? automacaoCentiDe(u.id).catch(() => null) : Promise.resolve(null),
     versaoDosItens(),
   ]);
   const confs = await confsDaMesa(protocolos, dfds, resto.regras, resto.orgaos);
-  return { ...resto, automacoes, automacoesCenti, versaoItens, listas: listasParaTexto({ protocolos, dfds, confs }, Date.now()) };
+  return { ...resto, automacoes, automacaoCenti, versaoItens, listas: listasParaTexto({ protocolos, dfds, confs }, Date.now()) };
 }
 
 /**

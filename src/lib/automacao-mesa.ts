@@ -17,10 +17,18 @@ export function alternarAutomacaoMesa(ids: number[], id: number, ligado: boolean
 }
 
 /**
- * O que a Mesa manda à Automação: o fluxo e os DFDs de entrada (o Início do fluxo os entrega). `soConferir` = o "Reconferir":
- * a execução não altera nenhum DFD (o nó que grava respeita, também dentro dos subfluxos).
+ * A ação da coluna Centi (Mesa e Análise) sobre a automação "Verificar DFDs na Centi": "conferir" = o Reconferir (nada do DFD
+ * é alterado) · "corrigir" = o Corrigir automaticamente (corrige mesmo com a caixa "Corrigir" desligada). As duas verificam
+ * SÓ o conteúdo — a situação e o centro de custo ficam para a execução completa.
  */
-export type DisparoMesa = { fluxoId: number; itens: Item[]; soConferir?: boolean };
+export type AcaoCenti = "conferir" | "corrigir";
+
+/** O que a ação põe no host da execução (os nós leem — também dentro dos subfluxos). Sem ação: nada. */
+export const hostDaAcaoCenti = (a?: AcaoCenti | null): Record<string, unknown> =>
+  a === "conferir" ? { __soConferir: true, __verificacoes: ["conteudo"] } : a === "corrigir" ? { __corrigir: true, __verificacoes: ["conteudo"] } : {};
+
+/** O que a Mesa manda à Automação: o fluxo, os DFDs de entrada (o Início do fluxo os entrega) e a ação da coluna Centi. */
+export type DisparoMesa = { fluxoId: number; itens: Item[]; acao?: AcaoCenti };
 const CHAVE_DISPARO = "automacao:disparo";
 
 /** O evento que avisa a Automação já montada (em segundo plano) de um disparo novo. */
@@ -59,8 +67,10 @@ export function lerDisparoMesa(): DisparoMesa | null {
   try {
     const t = sessionStorage.getItem(CHAVE_DISPARO);
     sessionStorage.removeItem(CHAVE_DISPARO);
-    const d = t ? (JSON.parse(t) as DisparoMesa) : null;
-    return d && Number(d.fluxoId) > 0 && Array.isArray(d.itens) ? { fluxoId: Number(d.fluxoId), itens: d.itens, ...(d.soConferir === true ? { soConferir: true } : {}) } : null;
+    const d = t ? (JSON.parse(t) as DisparoMesa & { soConferir?: boolean }) : null;
+    // `soConferir` = o formato de antes (uma aba aberta antes da atualização).
+    const acao: AcaoCenti | null = d?.acao === "conferir" || d?.acao === "corrigir" ? d.acao : d?.soConferir === true ? "conferir" : null;
+    return d && Number(d.fluxoId) > 0 && Array.isArray(d.itens) ? { fluxoId: Number(d.fluxoId), itens: d.itens, ...(acao ? { acao } : {}) } : null;
   } catch {
     return null;
   }

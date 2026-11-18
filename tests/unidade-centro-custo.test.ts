@@ -190,7 +190,7 @@ test("centroCustoConfere: o texto inteiro ou o último nome, sem caixa/acento/po
   assert.equal(centroCustoConfere("GGIM", ""), false);
 });
 
-test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO da Centi; a leitura que falhou fica de fora", () => {
+test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO da Centi; a leitura que falhou vai marcada (não grava)", () => {
   const cad = [
     { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centrosCusto: ["PM RV, SEC. MUN. DE PLANEJAMENTO E GESTAO"] },
     { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] },
@@ -213,7 +213,7 @@ test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO d
     ],
     cad,
   );
-  const por = Object.fromEntries(r.todos.map((x) => [x.id, x.centroCustoCenti]));
+  const por = Object.fromEntries(r.todos.filter((x) => !x.centroNaoLido).map((x) => [x.id, x.centroCustoCenti]));
   assert.deepEqual(por, {
     1: "PM RV, GABINETE DO PREFEITO, GGIM",
     2: "PM RV, GABINETE DO PREFEITO, GGIM",
@@ -225,8 +225,12 @@ test("conferirUnidades: a porta “todos” leva cada DFD com o texto COMPLETO d
     9: "PM RV",
     10: "",
   });
-  // A leitura que FALHOU não vai à coluna (o valor já gravado fica); a automação não compara com o cadastro.
+  // A leitura que FALHOU segue na cadeia marcada (`centroNaoLido` — quem grava a pula: o valor já gravado fica).
   assert.ok(!(5 in por) && !(11 in por));
+  assert.deepEqual(r.todos.filter((x) => x.centroNaoLido).map((x) => [x.id, x.unidadeConfere]), [[5, "naoLido"], [11, "naoLido"]]);
+  // Em “todos” a mensagem da unidade vai em `mensagemUnidade` (a `mensagem` é a do conteúdo).
+  assert.ok(r.todos.every((x) => !("mensagem" in x)));
+  assert.ok(r.todos.some((x) => String(x.mensagemUnidade ?? "").length > 0));
   assert.ok(r.todos.every((x) => !("centroCustoConfere" in x)));
   // Os fora da CM002 / sem órgão vão SÓ para “todos” (o apontamento é do nó anterior — sem duplicar).
   const nasPortas = [...r.divergentes, ...r.desconhecidas, ...r.conformes].map((x) => x.id);

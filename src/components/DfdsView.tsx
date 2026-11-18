@@ -103,7 +103,7 @@ import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
 import { AutomacoesMesa, useRodarAutomacao } from "./AutomacoesMesa";
 import { dfdsDoAlvo } from "@/lib/automacao-mesa";
-import type { AutomacoesCenti } from "@/lib/automacao-centi-mesa";
+import type { AutomacaoCenti } from "@/lib/automacao-centi-mesa";
 import { conferenciaDesatualizada, type DfdRelatorioCenti, divergenciasDoItem, motivoDivergencias } from "@/lib/conferencia-dfd-centi";
 import { type AcoesCenti, CelulaConferenciaCenti, comRessalva, ProvedorAcoesCenti, RelatorioCenti, valoresConferencia } from "./CelulaExecucao";
 import { useConfirmacao } from "./Confirmacao";
@@ -295,7 +295,7 @@ export function DfdsView({
   seletorMesa,
   colunasAuto,
   automacoes = [],
-  automacoesCenti,
+  automacaoCenti,
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
@@ -344,7 +344,7 @@ export function DfdsView({
   /** As AUTOMAÇÕES que a pessoa pôs na Mesa (só na Mesa do SISTEMA — a do PCA não recebe). */
   automacoes?: { id: number; nome: string }[];
   /** As automações de RECONFERIR e de SUBSTITUIR pela Centi (o painel das divergências; só a Mesa do sistema, ADM). */
-  automacoesCenti?: AutomacoesCenti;
+  automacaoCenti?: AutomacaoCenti;
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -818,10 +818,10 @@ export function DfdsView({
         void excluirDfd(id, d.numero, saidaPca(d.protocoloPcaId, d.protocoloPcaIncorporadoEm, d.totalItens ?? 0));
       },
     };
-    if (modoPca || !automacoesCenti) return base;
-    const montar = (a: { id: number; nome: string } | null, titulo: (n: number) => string, texto: string, botao: string, soConferir: boolean) =>
-      a
-        ? async (ids: number[]) => {
+    if (modoPca || !automacaoCenti) return base;
+    const a = automacaoCenti;
+    const montar = (titulo: (n: number) => string, texto: string, botao: string, soConferir: boolean) =>
+      async (ids: number[]) => {
             // Só os DFDs COM nº de planejamento (a Centi é lida por ele) — e a lista que a automação recebe precisa ser
             // reconhecida como DFDs, senão o "Ler do sistema" não a usaria como recorte e leria TODOS os DFDs.
             const lista = dfdsDoAlvo(dfds, "id", new Set(ids)).filter((d) => String(d.planejamento ?? "").trim());
@@ -829,21 +829,19 @@ export function DfdsView({
             // Corrigir regrava o DFD: o papel precisa importar na Mesa de cada um (a mesma régua do banner).
             if (!soConferir && lista.some((d) => !podeEm(Number(d.id)).importar)) return void toast.error("Corrigir regrava o DFD — seu papel precisa importar nesta Mesa.");
             if (await confirmarCenti({ titulo: titulo(lista.length), texto: `${texto} Automação “${a.nome}”, em segundo plano — acompanhe no canto inferior.`, confirmar: botao }))
-              rodar(a.id, lista, { soConferir });
-          }
-        : undefined;
+              rodar(a.id, lista, soConferir ? "conferir" : "corrigir");
+          };
     return {
       ...base,
-      reconferir: montar(automacoesCenti.conferir, (n) => (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`), "Busca o DFD na Centi e compara de novo; a coluna Centi é atualizada. Nada do DFD é alterado.", "Reconferir", true),
+      reconferir: montar((n) => (n === 1 ? "Reconferir este DFD na Centi?" : `Reconferir ${n} DFDs na Centi?`), "Busca o DFD na Centi e compara de novo; a coluna Centi é atualizada. Nada do DFD é alterado.", "Reconferir", true),
       corrigirAuto: montar(
-        automacoesCenti.corrigir,
         (n) => (n === 1 ? "Corrigir este DFD pela Centi?" : `Corrigir ${n} DFDs pela Centi?`),
         "Cada DFD é conferido de novo na Centi e, se divergir, só os dados que divergem são trocados pelos da Centi — nº do DFD, planejamento, assinaturas, unidade, protocolo e PCA ficam; o histórico registra a edição.",
         "Corrigir",
         false,
       ),
     };
-  }, [modoPca, automacoesCenti, dfds, confirmarCenti, rodar, pode, adminMesa]);
+  }, [modoPca, automacaoCenti, dfds, confirmarCenti, rodar, pode, adminMesa]);
   const automacaoSel = (rotulo: string) =>
     !modoPca && automacoes.length ? (
       <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />

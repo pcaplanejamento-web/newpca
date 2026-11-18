@@ -199,53 +199,158 @@ test("Tabela: teto de linhas/bytes, colunas pela união e o recorte de colunas e
   assert.deepEqual(recorteTabela([{ a: 1, b: 2 }, { a: 3, b: 4 }, { a: 5, b: 6 }], lerColunas("b => B"), 2, 3), [{ B: 4 }, { B: 6 }]);
 });
 
-test("Modelo “Execução dos DFDs na CM002”: grava a situação, aponta os fora da CM002 e salva os só na Centi numa tabela", async () => {
-  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "cm002");
-  assert.ok(m);
-  const dfds = [
-    { id: 1, numero: "1707", planejamento: "1732", entidade: "2" },
-    { id: 2, numero: "228", planejamento: "0278", entidade: "2" },
-    { id: 3, numero: "500", planejamento: "999", entidade: "3" },
-  ];
-  const pedidos: string[] = [];
-  const posts: { c: string; body: unknown }[] = [];
-  const centi = async (_a: string, d: unknown) => {
-    const ent = (d as { entidade: string }).entidade;
-    pedidos.push(ent);
-    return ent === "2"
-      ? { ok: true, linhas: [{ id: "1732", situacao: "Executado" }, { id: "278", situacao: "Não Executado" }, { id: "1731", situacao: "Não Executado" }] }
-      : { ok: true, linhas: [] };
-  };
-  const api = async (c: string, init?: unknown) => {
-    posts.push({ c, body: (init as { body?: unknown } | undefined)?.body });
-    return c.includes("execucao-dfds") ? { ok: true, lidos: 2, atualizados: 2 } : { ok: true, total: 1, cortadas: 0 };
-  };
-  const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
-    centi,
-    api,
+/** Roda a automação ÚNICA ("Verificar DFDs na Centi") com o "O que verificar" dado — o host falso da Centi e do sistema. */
+async function verificar(o: {
+  dfds: Record<string, unknown>[];
+  centi: (plan: string, entidade?: string) => Record<string, unknown> | Error;
+  config: Record<string, unknown>;
+  unidades?: Record<string, unknown>[];
+}) {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const pai = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
+  assert.ok(pai && filho);
+  const g = lerGrafo(grafoDoModelo(pai, new Map([["conferir-corrigir-1-dfd", 50]])));
+  g.nos = g.nos.map((n) => (n.tipo === "dados.filtrarConferencia" ? { ...n, config: { ...n.config, ...o.config } } : n));
+  const posts: { c: string; body: Record<string, unknown> }[] = [];
+  const lidos: string[] = [];
+  const r = await executarFluxo(g, REGISTRO_NOS, {
+    centi: async () => ({ ok: true, linhas: [] }),
+    api: async (c: string, init?: unknown) => {
+      const body = ((init as { body?: unknown } | undefined)?.body ?? {}) as Record<string, unknown>;
+      posts.push({ c, body });
+      if (c.includes("execucao-dfds")) {
+        const ids = (body.dfdIds ?? []) as number[];
+        const ls = (body.linhas ?? []) as { valores: string[] }[];
+        return { ok: true, atualizados: ids.length, linhas: ids.map((id, i) => ({ id, antes: null, situacao: ls[i]?.valores[1] })) };
+      }
+      return { ok: true, marcados: 1, alterados: 1, falhas: [], total: 1, cortadas: 0 };
+    },
     cancelado: () => false,
-    host: { protocolos: [], __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
+    host: {
+      protocolos: [],
+      unidades: o.unidades ?? [],
+      esperaCentiMs: 0,
+      __cache: new Map([["dfds", Promise.resolve(o.dfds)]]),
+      carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
+      lerDfdCenti: async (plan: string, entidade?: string, pdf?: boolean) => {
+        lidos.push(`${plan}@${entidade}:${pdf}`);
+        const x = o.centi(plan, entidade);
+        if (x instanceof Error) throw x;
+        return { planejamento: plan, ...x };
+      },
+      corrigirPelaCenti: async (id: number) => {
+        posts.push({ c: "corrigir", body: { id } });
+        return { resultado: "corrigido", status: "convergente", motivo: null };
+      },
+    },
   });
-  assert.equal(r.estado, "concluido", r.erro);
-  assert.deepEqual(pedidos.sort(), ["2", "3"], "só as entidades dos DFDs, uma vez cada");
-  const grav = posts.find((p) => p.c.includes("execucao-dfds"));
-  assert.ok(grav);
-  assert.deepEqual(((grav as { body: unknown }).body as { linhas: unknown[]; dfdIds: number[] }).dfdIds, [1, 2]);
-  assert.deepEqual(((grav as { body: unknown }).body as { linhas: { valores: string[] }[] }).linhas.map((l) => l.valores), [
-    ["1732", "Executado"],
-    ["0278", "Não Executado"],
-  ]);
-  const nao = posts.filter((p) => p.c.includes("execucao-dfds"))[1];
-  assert.ok(nao);
-  assert.deepEqual(((nao as { body: unknown }).body as { linhas: { valores: string[] }[] }).linhas.map((l) => l.valores), [["999", "Não encontrado na CM002"]]);
-  const tab = posts.find((p) => p.c.includes("/tabelas"));
-  assert.ok(tab);
-  assert.deepEqual(((tab as { body: unknown }).body as { linhas: { planejamento: string }[] }).linhas.map((l) => l.planejamento), ["1731"]);
-  assert.deepEqual(r.apontados.map((a) => a.mensagem).sort(), [
-    "DFD 228 (planejamento 0278): Não Executado na CM002",
-    "DFD 500 (planejamento 999) não está na CM002 do órgão 3",
-  ]);
+  const gravado = (rota: string, campo: "situacao" | "centro") =>
+    Object.fromEntries(
+      posts
+        .filter((p) => p.c.includes(rota))
+        .flatMap((p) =>
+          campo === "situacao"
+            ? ((p.body.dfdIds ?? []) as number[]).map((id, i) => [id, ((p.body.linhas as { valores: string[] }[])[i]?.valores ?? [])[1]])
+            : ((p.body.itens ?? []) as { dfdId: number; centro: string | null }[]).map((v) => [v.dfdId, v.centro]),
+        ),
+    );
+  return { r, posts, lidos, situacoes: gravado("execucao-dfds", "situacao"), centros: gravado("centro-custo-dfds", "centro") };
+}
+
+test("Verificar DFDs na Centi — só a SITUAÇÃO: sem PDF, a de cada órgão (mesmo nº em dois órgãos) e “Não encontrado na Centi”", async () => {
+  const dfds = [
+    { id: 10, numero: "1028", planejamento: "1082", entidade: "6" },
+    { id: 11, numero: "77", planejamento: "1082", entidade: "2" },
+    { id: 12, numero: "500", planejamento: "999", entidade: "2" },
+  ];
+  const v = await verificar({
+    dfds,
+    config: { conteudo: false, situacao: true, centro: false },
+    centi: (plan, ent) => (plan === "999" ? new Error("NAO_ENCONTRADO: a Centi não abriu o planejamento 999 — Registro não encontrado.") : { situacao: ent === "6" ? "Executado" : "Não Executado" }),
+  });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.lidos.sort(), ["1082@2:false", "1082@6:false", "999@2:false"], "uma leitura por DFD, só o registro (sem PDF)");
+  assert.deepEqual(v.situacoes, { 10: "Executado", 11: "Não Executado", 12: "Não encontrado na Centi" });
+  assert.equal(v.posts.filter((p) => p.c.includes("conferencia-dfds") || p.c.includes("centro-custo-dfds")).length, 0, "nada do conteúdo nem do centro de custo");
+  const ret = new Map((v.r.retorno ?? []).map((it) => [Number(it.id), it]));
+  assert.equal(ret.size, 3, "um resultado por DFD");
+  assert.equal(ret.get(10)?.situacaoGravada, "Executado");
+});
+
+test("Verificar DFDs na Centi — só o CENTRO DE CUSTO: grava o texto, aponta a unidade divergente/desconhecida e só troca com a caixa", async () => {
+  const unidades = [
+    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centrosCusto: ["PM RV, SEPLAN"] },
+    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] },
+    { id: 3, codigo: "SMC", nome: "Secretaria Municipal de Comunicação", orgaoId: 1 },
+  ];
+  const dfds = [
+    { id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 3, numero: "30", planejamento: "300", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 4, numero: "40", planejamento: "400", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+    { id: 5, numero: "50", planejamento: "500", entidade: "2", reparticaoId: 3, sigla: "SMC", orgaoId: 1 },
+    { id: 6, numero: "60", planejamento: "600", entidade: "2", reparticaoId: 3, sigla: "SMC", orgaoId: 1 },
+  ];
+  const centros: Record<string, string> = {
+    "100": "PM RV, GABINETE DO PREFEITO, GGIM",
+    "300": "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL",
+    "400": "PM RV, GABINETE DO PREFEITO, GGIM",
+    "500": "PM RV, SECRETARIA MUNICIPAL DE COMUNICAÇÃO",
+  };
+  const centi = (plan: string) => (plan === "600" ? new Error("Sem resposta da extensão.") : { situacao: "Executado", centroCusto: centros[plan] });
+  const v = await verificar({ dfds, unidades, config: { conteudo: false, situacao: false, centro: true }, centi });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.ok(v.lidos.every((l) => l.endsWith(":false")), "sem PDF");
+  assert.deepEqual(v.centros, { 1: centros["100"], 3: centros["300"], 4: centros["400"], 5: centros["500"] }, "a leitura que falhou não grava (o valor de antes fica)");
+  assert.equal(v.posts.filter((p) => p.c === "/api/dfd/massa").length, 0, "sem a caixa, a unidade não é trocada");
+  const ap = v.r.apontados.map((a) => `${a.nivel}:${String(a.mensagem)}`);
+  assert.ok(ap.some((t) => t.startsWith("atencao:DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")), ap.join("\n"));
+  assert.ok(ap.some((t) => t.startsWith("erro:") && t.includes("“GUARDA CIVIL MUNICIPAL” não existe no sistema") && t.includes("cadastre a unidade")), ap.join("\n"));
+  assert.ok(!ap.some((t) => t.includes("DFD 40") || t.includes("DFD 50")), "a unidade igual não é apontada");
+  assert.ok(ap.some((t) => t.startsWith("erro:") && t.includes("DFD 60")), "a falha de leitura é apontada (a retomada tenta de novo)");
+  // Com a caixa: o divergente passa para a unidade da Centi (a edição em massa da Mesa) e não é mais apontado.
+  const t = await verificar({ dfds, unidades, config: { conteudo: false, situacao: false, centro: true, trocarUnidade: true }, centi });
+  assert.deepEqual(
+    t.posts.filter((p) => p.c === "/api/dfd/massa").map((p) => p.body),
+    [{ ids: [1], acao: { campo: "reparticao", reparticaoId: 2 } }],
+  );
+  assert.equal((t.r.retorno ?? []).find((it) => Number(it.id) === 1)?.unidadeTrocada, true);
+  assert.ok(!t.r.apontados.some((a) => String(a.mensagem).startsWith("DFD 10 (planejamento 100): no sistema")));
+});
+
+test("Verificar DFDs na Centi — TUDO de uma vez: UMA leitura por DFD (com o PDF) serve à situação, ao centro de custo e ao conteúdo", async () => {
+  const dfds = [{ id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1, valor: 50, totalItens: 2, tipo: "DFD-S" }];
+  const v = await verificar({
+    dfds,
+    unidades: [{ id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] }],
+    config: {},
+    centi: () => ({ numero: "10", tipo: "DFD-S", valor: 50, totalItens: 2, situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }),
+  });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.lidos, ["100@2:true"], "uma leitura só, com o PDF (o conteúdo é verificado)");
+  assert.deepEqual(v.situacoes, { 1: "Executado" });
+  assert.deepEqual(v.centros, { 1: "PM RV, GABINETE DO PREFEITO, GGIM" });
+  assert.deepEqual(
+    v.posts.filter((p) => p.c.includes("conferencia-dfds")).flatMap((p) => (p.body.itens ?? []) as { dfdId: number; status: string }[]).map((x) => [x.dfdId, x.status]),
+    [[1, "convergente"]],
+  );
+  const it = (v.r.retorno ?? [])[0];
+  assert.equal(it?.situacaoGravada, "Executado");
+  assert.equal(it?.unidadeConfere, "sim");
+  assert.equal(it?.conferenciaCenti, "convergente");
+  assert.equal(v.r.apontados.length, 0);
+});
+
+test("O que verificar: nenhuma marcada = erro claro; a escolha vai em cada DFD", async () => {
+  const def = REGISTRO_NOS.get("dados.filtrarConferencia") as DefNo;
+  const c = ctx() as never;
+  await assert.rejects(def.executar({ entrada: [{ id: 1 }] }, { conteudo: false, situacao: false, centro: false }, c, {}), /Escolha ao menos uma verificação/);
+  const r = await def.executar({ entrada: [{ id: 1, conferenciaCenti: "convergente" }, { id: 2, conferenciaCenti: "divergente" }] }, { quais: "divergentes", corrigir: false, centro: false }, c, {});
+  assert.deepEqual(r.saida?.map((x) => x.id), [2], "“Pela conferência gravada” filtra (com o conteúdo)");
+  assert.deepEqual(r.saida?.[0].verificar, { conteudo: "sim", corrigir: "nao", situacao: "sim", centro: "nao", trocarUnidade: "nao", semDfd: "nao" });
+  // Sem o conteúdo, o filtro da conferência não vale: todos seguem.
+  const s = await def.executar({ entrada: [{ id: 1, conferenciaCenti: "convergente" }] }, { conteudo: false, quais: "divergentes" }, c, {});
+  assert.equal(s.saida?.length, 1);
 });
 
 test("Órgão na Centi: o do item (com trava), fixos e um órgão por vez trocando na Centi", async () => {
@@ -278,162 +383,6 @@ test("Órgão na Centi: o do item (com trava), fixos e um órgão por vez trocan
   const f = await def.executar({ volta: [{ ok: 2 }] }, { origem: "itens", entrega: "umPorVez" }, c, est);
   assert.equal(f.fim?.length, 2);
   assert.deepEqual(trocas, [["trocarOrgao", "2"], ["trocarOrgao", "6"], ["trocarOrgao", null]]);
-});
-
-test("Modelo “Unidades dos DFDs × Centro de Custo”: aponta as divergências/desconhecidas e troca SÓ os marcados, por destino", async () => {
-  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
-  assert.ok(m);
-  const unidades = [
-    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centrosCusto: ["PM RV, SEPLAN"] },
-    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] },
-    { id: 3, codigo: "SMC", nome: "Secretaria Municipal de Comunicação", orgaoId: 1 },
-  ];
-  const dfds = [
-    { id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-    { id: 2, numero: "20", planejamento: "200", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-    { id: 3, numero: "30", planejamento: "300", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-    { id: 4, numero: "40", planejamento: "400", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
-    { id: 5, numero: "50", planejamento: "500", entidade: "2", reparticaoId: 3, sigla: "SMC", orgaoId: 1 },
-    { id: 6, numero: "60", planejamento: "600", entidade: "", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-    { id: 7, numero: "70", planejamento: "700", entidade: "2", reparticaoId: 3, sigla: "SMC", orgaoId: 1 },
-  ];
-  const centi = async () => ({
-    ok: true,
-    linhas: [
-      { id: "100", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
-      { id: "200", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
-      { id: "300", situacao: "Executado", centroCusto: "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL" },
-      { id: "400", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
-      { id: "500", situacao: "Executado", centroCusto: "PM RV, SECRETARIA MUNICIPAL DE COMUNICAÇÃO" },
-    ],
-  });
-  const grafo = lerGrafo(m.grafo);
-  const sel = grafo.nos.find((n) => n.tipo === "entrada.selecionar");
-  assert.ok(sel);
-  sel.config = { ...sel.config, marcados: ["2"] };
-  const posts: { c: string; body: unknown }[] = [];
-  const api = async (c: string, init?: unknown) => {
-    const body = (init as { body?: unknown } | undefined)?.body;
-    posts.push({ c, body });
-    return { ok: true, alterados: 1, falhas: [] };
-  };
-  const r = await executarFluxo(grafo, REGISTRO_NOS, { centi, api, cancelado: () => false, host: { protocolos: [], unidades, __cache: new Map([["dfds", Promise.resolve(dfds)]]) } });
-  assert.equal(r.estado, "concluido", r.erro);
-  // O Centro de Custo da Centi de TODO DFD vai ao PRÓPRIO DFD (a coluna fixa da Mesa — os itens herdam) — os de fora da
-  // CM002 e sem órgão ficam vazios (o DFD volta a ser apontado); nada vai a uma coluna genérica da automação.
-  assert.equal(posts.filter((p) => p.c.startsWith("/api/admin/automacao/colunas")).length, 0);
-  const valores = Object.fromEntries(
-    posts
-      .filter((p) => p.c === "/api/admin/automacao/centro-custo-dfds")
-      .flatMap((p) => (p.body as { itens: { dfdId: number; centro: string | null }[] }).itens)
-      .map((v) => [v.dfdId, v.centro]),
-  );
-  assert.deepEqual(valores, {
-    1: "PM RV, GABINETE DO PREFEITO, GGIM",
-    2: "PM RV, GABINETE DO PREFEITO, GGIM",
-    3: "PM RV, CAMARA MUNICIPAL, GUARDA CIVIL MUNICIPAL",
-    4: "PM RV, GABINETE DO PREFEITO, GGIM",
-    5: "PM RV, SECRETARIA MUNICIPAL DE COMUNICAÇÃO",
-    6: null,
-    7: null,
-  });
-  const massa = posts.filter((p) => p.c === "/api/dfd/massa");
-  assert.deepEqual(massa.map((p) => p.body), [{ ids: [2], acao: { campo: "reparticao", reparticaoId: 2 } }], "só o marcado, para a unidade da Centi");
-  const msgs = r.apontados.map((a) => a.mensagem).sort();
-  assert.ok(msgs.some((t) => String(t).startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")));
-  assert.ok(msgs.some((t) => String(t).includes("“GUARDA CIVIL MUNICIPAL” não existe no sistema")));
-  assert.ok(!msgs.some((t) => String(t).startsWith("DFD 40")), "a unidade igual não é apontada");
-});
-
-test("Modelo “Unidades × Centro de Custo”: a CM002 SEM a coluna — cada DFD é lido pelo ID (o registro do planejamento)", async () => {
-  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
-  assert.ok(m);
-  const unidades = [
-    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
-    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1 },
-  ];
-  const dfds = [
-    { id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-    { id: 2, numero: "20", planejamento: "200", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
-    { id: 3, numero: "30", planejamento: "300", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-  ];
-  // A consulta aprendida traz só Id + Situação (a da Execução).
-  const centi = async () => ({ ok: true, linhas: dfds.map((d) => ({ id: d.planejamento, situacao: "Executado", centroCusto: "" })) });
-  const lidos: string[] = [];
-  const gravados = new Map<number, string | null>();
-  const lerDfdCenti = async (plan: string, entidade?: string, pdf?: boolean) => {
-    lidos.push(`${plan}@${entidade}:${pdf}`);
-    if (plan === "300") throw new Error("Sem resposta do sistema");
-    return { planejamento: plan, situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM", finalidade: "" };
-  };
-  const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
-    centi,
-    api: async (c: string, init?: unknown) => {
-      const body = (init as { body?: { itens?: { dfdId: number; centro: string | null }[] } } | undefined)?.body;
-      if (c === "/api/admin/automacao/centro-custo-dfds") for (const v of body?.itens ?? []) gravados.set(v.dfdId, v.centro);
-      return { ok: true, alterados: 0, falhas: [] };
-    },
-    cancelado: () => false,
-    host: { protocolos: [], unidades, lerDfdCenti, esperaCentiMs: 0, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
-  });
-  assert.equal(r.estado, "concluido", r.erro);
-  // O 300 falha sem resposta: a falha passageira tenta UMA vez de novo.
-  assert.deepEqual(lidos.sort(), ["100@2:false", "200@2:false", "300@2:false", "300@2:false"], "só o load (sem PDF), na entidade do órgão");
-  const msgs = r.apontados.map((a) => String(a.mensagem));
-  assert.ok(msgs.some((t) => t.startsWith("DFD 10 (planejamento 100): no sistema SEPLAN, na Centi GGIM")), msgs.join("\n"));
-  assert.ok(!msgs.some((t) => t.startsWith("DFD 20")), "a unidade igual não é apontada");
-  assert.ok(msgs.some((t) => t.startsWith("DFD 30") && t.includes("não conferido na Centi")), msgs.join("\n"));
-  assert.ok(!msgs.some((t) => t.includes("o planejamento na Centi não trouxe")));
-  assert.deepEqual([...gravados.entries()].sort(), [[1, "PM RV, GABINETE DO PREFEITO, GGIM"], [2, "PM RV, GABINETE DO PREFEITO, GGIM"]], "os lidos pelo ID mantêm o id do DFD; o que falhou não é gravado (o valor anterior fica)");
-});
-
-test("Conferir unidade no fluxo salvo ANTIGO (sem o SE/Buscar): o próprio nó lê o planejamento pelo ID", async () => {
-  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
-  assert.ok(m);
-  // O diagrama de antes da v1.266.7: o Procurar ligado direto ao Conferir.
-  const g = lerGrafo(m.grafo);
-  const se = g.nos.find((n) => n.tipo === "logica.se");
-  const busca = g.nos.find((n) => n.tipo === "leitura.dfdCenti");
-  const proc = g.nos.find((n) => n.tipo === "logica.procurar");
-  const conf = g.nos.find((n) => n.tipo === "dados.conferirUnidade");
-  assert.ok(se && busca && proc && conf);
-  g.nos = g.nos.filter((n) => n !== se && n !== busca);
-  g.conexoes = g.conexoes.filter((c) => ![se.id, busca.id].includes(c.de) && ![se.id, busca.id].includes(c.para));
-  g.conexoes.push({ de: proc.id, saida: "encontrados", para: conf.id, entrada: "entrada" });
-  const unidades = [
-    { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1 },
-    { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1 },
-  ];
-  const dfds = [
-    { id: 1, numero: "93", planejamento: "132", entidade: "2", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
-    { id: 2, numero: "94", planejamento: "133", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
-  ];
-  const centi = async () => ({
-    ok: true,
-    linhas: [
-      { id: "132", situacao: "Executado", centroCusto: "" },
-      { id: "133", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
-    ],
-  });
-  const lidos: string[] = [];
-  const lerDfdCenti = async (plan: string, entidade?: string, pdf?: boolean) => {
-    lidos.push(`${plan}@${entidade}:${pdf}`);
-    return { planejamento: plan, centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM", finalidade: "" };
-  };
-  const r = await executarFluxo(g, REGISTRO_NOS, {
-    centi,
-    api: async () => ({ ok: true, alterados: 0, falhas: [] }),
-    cancelado: () => false,
-    host: { protocolos: [], unidades, lerDfdCenti, __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
-  });
-  assert.equal(r.estado, "concluido", r.erro);
-  assert.deepEqual(lidos, ["132@2:false"], "só o que veio sem centro de custo, sem PDF");
-  const msgs = r.apontados.map((a) => String(a.mensagem));
-  assert.ok(msgs.some((t) => t.startsWith("DFD 93 (planejamento 132): no sistema SEPLAN, na Centi GGIM")), msgs.join("\n"));
-  assert.ok(!msgs.some((t) => t.includes("não trouxe o centro de custo")), msgs.join("\n"));
 });
 
 test("Conferir unidade: sem nenhuma fonte de centro de custo, a mensagem lista as colunas da linha da CM002", async () => {
@@ -568,7 +517,7 @@ test("Nó CM002: a extensão antiga pede atualização e o diagnóstico vai na m
 
 test("Fluxo salvo desatualizado: os tipos dos nós e as opções que o modelo liga e o salvo não tem", async () => {
   const { MODELOS_FLUXO, desatualizadoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "unidades-cm002");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(m);
   const g = lerGrafo(m.grafo);
   // Posição e ajustes (inclusive desligar uma opção — "false" gravado) não acusam.
@@ -620,46 +569,6 @@ test("Nó CM002: as colunas escolhidas viram campos do item (e o item fica leve 
   assert.equal(it?.centroCusto, "PM RV, GGIM");
   assert.equal(it?.codigo, "03.52.000");
   assert.equal("centi" in (it ?? {}), false);
-});
-
-test("Modelo cm002: o MESMO nº de planejamento em dois órgãos grava a situação de cada um (um pedido por órgão)", async () => {
-  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  const m = MODELOS_FLUXO.find((x) => x.id === "cm002");
-  assert.ok(m);
-  const dfds = [
-    { id: 10, numero: "1028", planejamento: "1082", entidade: "6" },
-    { id: 11, numero: "77", planejamento: "1082", entidade: "2" },
-  ];
-  const centi = async (_a: string, d: unknown) => {
-    const ent = (d as { entidade: string }).entidade;
-    return { ok: true, linhas: [{ id: "1082", situacao: ent === "6" ? "Executado" : "Não Executado" }] };
-  };
-  const grav: { dfdIds: number[]; linhas: { valores: string[] }[] }[] = [];
-  const api = async (c: string, init?: unknown) => {
-    if (!c.includes("execucao-dfds")) return { ok: true, total: 1, cortadas: 0 };
-    const b = (init as { body: { dfdIds: number[]; linhas: { valores: string[] }[] } }).body;
-    grav.push(b);
-    return { ok: true, lidos: 1, atualizados: 1, linhas: b.dfdIds.map((id, i) => ({ id, antes: null, situacao: b.linhas[i].valores[1] })) };
-  };
-  const passos: Record<string, number> = {};
-  const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
-    centi,
-    api,
-    cancelado: () => false,
-    host: { protocolos: [], __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
-  }, (p) => {
-    passos[p.no] = p.itens;
-  });
-  assert.equal(r.estado, "concluido", r.erro);
-  const porDfd = new Map(grav.flatMap((b) => b.dfdIds.map((id, i) => [id, b.linhas[i].valores[1]] as const)));
-  assert.equal(grav.length, 2, "um pedido por órgão");
-  assert.equal(porDfd.get(10), "Executado");
-  assert.equal(porDfd.get(11), "Não Executado");
-  for (const b of grav) assert.equal(new Set(b.dfdIds.map((id) => dfds.find((d) => d.id === id)?.entidade)).size, 1);
-  // As etapas contam os DFDs, sem o marcador do "fim"; o "Gravar execução" conta os DFDs gravados.
-  assert.equal(passos.dfds1, 2);
-  assert.equal(passos.org1, 2);
-  assert.equal(passos.grav1, 2);
 });
 
 test("ehMarcadorFim: o marcador sozinho da porta fim não conta como item", async () => {

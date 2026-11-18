@@ -37,10 +37,10 @@ import {
 import { corrigirDfdPelaCenti } from "@/lib/correcao-centi-cliente";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, pdfLidoNaCenti, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
-import { alternarAutomacaoMesa, EVENTO_DISPARO_MESA, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
+import { type AcaoCenti, alternarAutomacaoMesa, EVENTO_DISPARO_MESA, hostDaAcaoCenti, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
-import { desatualizadoDoModelo, grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
+import { desatualizadoDoModelo, grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo, modeloDoFluxo } from "@/lib/fluxo-modelos";
 import type { FluxoAutomacao } from "@/lib/fluxos";
 import { BotaoVoltar } from "../AbasEspaco";
 import { Badge } from "../Badge";
@@ -158,7 +158,7 @@ export function FluxosAutomacao({
   const [exec, setExec] = useState<{ id: number; nome: string; total: number } | null>(null);
   const [agora, setAgora] = useState("");
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
-  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[]; agendado?: boolean; atrasadaDesde?: string | null; soConferir?: boolean }[]>([]);
+  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[]; agendado?: boolean; atrasadaDesde?: string | null; acao?: AcaoCenti }[]>([]);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
   /** O destino do Baixar/anexar em curso é um protocolo da Centi (o rótulo "Anexado" × "Salvo"). */
   const [dfdsAnexar, setDfdsAnexar] = useState(false);
@@ -350,7 +350,7 @@ export function FluxosAutomacao({
       lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean, completo?: boolean, ocr?: boolean) =>
         // A entidade no MESMO formato da aberta na Centi — como o "Baixar DFDs" (6 → "06" quando a aberta é "02").
         lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true, ocr ?? completo === true),
-      pdfCenti: (plan: string) => pdfLidoNaCenti(plan),
+      pdfCenti: (plan: string, entidade?: string) => pdfLidoNaCenti(plan, entidade),
       dfdDoSistema: (id: number) => dfdDoSistema(id) as unknown as Promise<Item>,
       substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
       corrigirPelaCenti: (id: number) => corrigirDfdPelaCenti(id, null),
@@ -364,10 +364,10 @@ export function FluxosAutomacao({
 
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
   const executar = useCallback(
-    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[], atrasadaDesde?: string | null, soConferir = false): Promise<ResultadoExec | null> => {
+    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[], atrasadaDesde?: string | null, acao?: AcaoCenti): Promise<ResultadoExec | null> => {
       if (rodandoRef.current != null) {
         if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) return null;
-        fila.current.push({ f, grafo, entrada, agendado, atrasadaDesde, soConferir });
+        fila.current.push({ f, grafo, entrada, agendado, atrasadaDesde, acao });
         setNaFila(fila.current.length);
         if (!agendado) toast.info(`${f.nome}: na fila — roda quando o fluxo atual terminar.`);
         return null;
@@ -414,12 +414,14 @@ export function FluxosAutomacao({
               carregarFluxo: carregadorDeFluxos(),
               progresso: progressoDe(f.id),
               ...(entrada ? { __entrada: entrada, __daMesa: true } : {}),
-              // O "Reconferir" da Mesa: nada do DFD é alterado (o nó que grava respeita — também nos subfluxos).
-              ...(soConferir ? { __soConferir: true } : {}),
+              // A ação da coluna Centi (Reconferir · Corrigir automaticamente): só o conteúdo; os nós respeitam nos subfluxos.
+              ...hostDaAcaoCenti(acao),
             },
             // A saída COMPLETA de cada nó (o corpo de um laço roda várias vezes: acumula) e os itens AO VIVO.
             aoConcluir: (no, ps) => {
-              const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "__retorno" && k !== "erro" && v.length)?.[1] ?? [];
+              // TODAS as portas (os "Falhou" do "Executar fluxo" vão por `falhas` — antes sumiam da Análise), sem repetir o
+              // item entregue por duas portas (ex.: `todos` e `divergentes`).
+              const its = [...new Set(Object.entries(ps).flatMap(([k, v]) => (k === "__apontados" || k === "__retorno" || k === "erro" ? [] : v)))];
               setSaidas((m) => ({ ...m, [no]: [...(m[no] ?? []), ...its] }));
             },
             aoParcial: (no, its) => setParciais((m) => ({ ...m, [no]: [...(m[no] ?? []), ...its] })),
@@ -467,7 +469,7 @@ export function FluxosAutomacao({
         // O próximo da fila (no próximo tique — o estado desta execução já assentou).
         const prox = fila.current.shift();
         setNaFila(fila.current.length);
-        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, prox.agendado === true, prox.entrada, prox.atrasadaDesde, prox.soConferir === true), 0);
+        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, prox.agendado === true, prox.entrada, prox.atrasadaDesde, prox.acao), 0);
       }
     },
     [pronto, pedir, lote, interrompido, host],
@@ -538,7 +540,7 @@ export function FluxosAutomacao({
     const f = [...fluxos, ...publicos].find((x) => x.id === d.fluxoId);
     if (!f) return void toast.error("A automação escolhida na Mesa não está mais disponível.");
     if (fluxos.some((x) => x.id === f.id)) setAberto(f.id); // a pública de outra pessoa roda sem abrir o editor
-    void executarRef.current(f, f.grafo, false, d.itens, null, d.soConferir === true);
+    void executarRef.current(f, f.grafo, false, d.itens, null, d.acao);
   }, [pronto, fluxos, publicos, disparos]);
 
   /** Regrava um fluxo salvo com o grafo e a descrição do modelo (o "Atualizar pelo modelo"). */
@@ -560,7 +562,7 @@ export function FluxosAutomacao({
     for (const dep of modelo?.dependencias ?? []) {
       const md = MODELOS_FLUXO.find((x) => x.id === dep);
       if (!md) continue;
-      const existe = (fluxos ?? []).find((f) => f.nome === md.nome);
+      const existe = (fluxos ?? []).find((f) => modeloDoFluxo(f)?.id === md.id);
       if (existe) {
         // Com `atualizar` ou DESATUALIZADO (o modelo de hoje mudou): regrava — o fluxo novo nunca usa um subfluxo antigo.
         const velho = !opcoes?.atualizar && desatualizadoDoModelo(lerGrafo(existe.grafo), md);
@@ -575,7 +577,9 @@ export function FluxosAutomacao({
       criados.set(dep, novoDep.id);
       setFluxos((fs) => [novoDep, ...(fs ?? [])]);
     }
-    const existente = opcoes?.atualizar && modelo ? (fluxos ?? []).find((f) => f.nome === modelo.nome) : undefined;
+    // O "Atualizar pelo modelo" regrava o fluxo ABERTO (uma cópia de outro nome também nasce do modelo).
+    const doModelo = (f: FluxoAutomacao) => !!modelo && modeloDoFluxo(f)?.id === modelo.id;
+    const existente = opcoes?.atualizar && modelo ? ((fluxos ?? []).find((f) => f.id === aberto && doModelo(f)) ?? (fluxos ?? []).find(doModelo)) : undefined;
     if (existente && modelo) {
       if (!(await regravar(existente, organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS), modelo))) return;
       toast.success(`“${existente.nome}” atualizado pelo modelo.`);
@@ -622,8 +626,7 @@ export function FluxosAutomacao({
     // As ETAPAS internas dele (os modelos `interno`) que nenhum outro fluxo usa saem junto — não ficam soltas na lista.
     const resto = (fluxos ?? []).filter((x) => x.id !== f.id);
     const usados = new Set(resto.flatMap((x) => subfluxosDoGrafo(x.grafo)));
-    const nomesInternos = new Set(MODELOS_FLUXO.filter((m) => m.interno).map((m) => m.nome));
-    const soltos = resto.filter((x) => subfluxosDoGrafo(f.grafo).includes(x.id) && !usados.has(x.id) && nomesInternos.has(x.nome));
+    const soltos = resto.filter((x) => subfluxosDoGrafo(f.grafo).includes(x.id) && !usados.has(x.id) && modeloDoFluxo(x)?.interno === true);
     const tirados = new Set([f.id]);
     for (const x of soltos) if ((await api(`/api/admin/automacao/fluxos/${x.id}`, { method: "DELETE" })).ok) tirados.add(x.id);
     setFluxos((fs) => fs?.filter((x) => !tirados.has(x.id)) ?? fs);
@@ -633,7 +636,8 @@ export function FluxosAutomacao({
   const fluxo = fluxos?.find((f) => f.id === aberto) ?? null;
   // Regravado pelo modelo: o editor remonta com o grafo novo (o estado dele nasce do fluxo).
   const [versaoEditor, setVersaoEditor] = useState(0);
-  const modeloDoAberto = fluxo ? MODELOS_FLUXO.find((m) => m.nome === fluxo.nome) : undefined;
+  // O modelo de que o fluxo nasceu — pelo id gravado no diagrama (renomear não o perde).
+  const modeloDoAberto = fluxo ? modeloDoFluxo({ nome: fluxo.nome, grafo: lerGrafo(fluxo.grafo) }) : undefined;
   async function atualizarPeloModelo(f: FluxoAutomacao, m: ModeloFluxo) {
     if (!(await confirmar({ titulo: `Atualizar “${f.nome}” pelo modelo?`, texto: "O diagrama, a descrição e a ajuda voltam a ser os do modelo de hoje (as alterações feitas neste fluxo se perdem).", confirmar: "Atualizar" }))) return;
     await criar(m, m.nome, { atualizar: true });
@@ -740,18 +744,18 @@ export function FluxosAutomacao({
         const f = fluxos?.find((x) => x.id === aberto);
         if (!f || aberto == null) return;
         void confirmar({
-          titulo: "Refazer tudo do zero?",
+          titulo: "Recomeçar do zero?",
           texto: `A retomada é esquecida e o fluxo roda de novo com TODOS os itens — inclusive os ${pulados.toLocaleString("pt-BR")} já feitos antes.`,
-          confirmar: "Refazer tudo",
+          confirmar: "Recomeçar",
         }).then(async (sim) => {
           if (!sim) return;
           await progressoDe(aberto).limpar(no).catch(() => undefined);
           void executar(f, g);
         });
       },
-      executarCom: (g, itens, soConferir) => {
+      executarCom: (g, itens, acao) => {
         const f = fluxos?.find((x) => x.id === aberto);
-        if (f) void executar(f, g, false, itens, null, soConferir === true);
+        if (f) void executar(f, g, false, itens, null, acao);
       },
       enviarArquivos: (g, noId, nomes) => {
         const f = fluxos?.find((x) => x.id === aberto);
@@ -913,9 +917,9 @@ function useDeslizar(ref: React.RefObject<HTMLDivElement | null>, versao: string
   }, [ref, versao]);
 }
 
-/** A AJUDA de um fluxo salvo: a dele; sem ela, a do modelo de mesmo nome (o fluxo criado antes da ajuda existir). */
-function ajudaDoFluxo(f: Pick<FluxoAutomacao, "ajuda" | "nome">) {
-  return ajudaVazia(f.ajuda) ? (MODELOS_FLUXO.find((m) => m.nome === f.nome)?.ajuda ?? f.ajuda) : f.ajuda;
+/** A AJUDA de um fluxo salvo: a dele; sem ela, a do modelo de que nasceu (o fluxo criado antes da ajuda existir). */
+function ajudaDoFluxo(f: Pick<FluxoAutomacao, "ajuda" | "nome" | "grafo">) {
+  return ajudaVazia(f.ajuda) ? (modeloDoFluxo({ nome: f.nome, grafo: lerGrafo(f.grafo) })?.ajuda ?? f.ajuda) : f.ajuda;
 }
 
 /** O cartão de um fluxo salvo: frequência, estado e os números (nós · última execução · erros). */
@@ -1254,12 +1258,14 @@ function EscolherNovoFluxo({
   const [nome, setNome] = useState("");
   const [modelo, setModelo] = useState<string>("");
   const [criando, setCriando] = useState(false);
-  // Só o que ainda não está no painel (pelo nome): o modelo criado e a pública já copiada somem.
+  // Só o que ainda não está no painel: o modelo já criado (pelo modelo de que o fluxo nasceu — renomear não o traz de volta)
+  // e a pública já copiada (pelo nome) somem.
   const nomes = useMemo(() => new Set(fluxos.map((f) => f.nome)), [fluxos]);
+  const criados = useMemo(() => new Set(fluxos.map((f) => modeloDoFluxo(f)?.id).filter(Boolean)), [fluxos]);
   // Os modelos `interno` (a etapa de outro modelo) nascem junto com ele — não aparecem sozinhos.
-  const modelos = useMemo(() => [EM_BRANCO, ...MODELOS_FLUXO.filter((x) => !x.interno && !nomes.has(x.nome))], [nomes]);
+  const modelos = useMemo(() => [EM_BRANCO, ...MODELOS_FLUXO.filter((x) => !x.interno && !criados.has(x.id))], [criados]);
   const pubs = useMemo(() => publicos.filter((x) => !nomes.has(x.nome)), [publicos, nomes]);
-  const m = MODELOS_FLUXO.find((x) => x.id === modelo && !x.interno && !nomes.has(x.nome)) ?? null;
+  const m = MODELOS_FLUXO.find((x) => x.id === modelo && !x.interno && !criados.has(x.id)) ?? null;
   const pub = pubs.find((x) => `p:${x.id}` === modelo) ?? null;
   const criar = async () => {
     setCriando(true);
@@ -1410,9 +1416,10 @@ function EditorFluxo({
   const naTela = useNaTela();
   // biome-ignore lint/correctness/useExhaustiveDependencies: só quando chega um resultado novo
   useEffect(() => {
-    // Fora da tela (execução em segundo plano), o relatório não abre sozinho — o painel minimizado avisa o desfecho.
+    // Fora da tela (execução em segundo plano), o relatório não abre sozinho — o painel minimizado avisa o desfecho. No
+    // PAINEL também não: a Análise já mostra tudo ao lado (o relatório repetiria); só no diagrama, para ir ao componente.
     if (!naTela) return;
-    if (resultado?.apontados.length || resultado?.estado === "falhou") setRelatorio(true);
+    if (modo === "diagrama" && (resultado?.apontados.length || resultado?.estado === "falhou")) setRelatorio(true);
     if (resultado?.noErro) setSel(resultado.noErro);
   }, [resultado]);
   // Avisa ao sair com alteração não salva.
@@ -1634,10 +1641,8 @@ function EditorFluxo({
         <ConfigFluxo
           open={configAberta}
           onClose={() => setConfigAberta(false)}
-          nome={nome}
           descricao={descricao}
           ajuda={ajuda}
-          onNome={setNome}
           onDescricao={setDescricao}
           onAjuda={setAjuda}
         >

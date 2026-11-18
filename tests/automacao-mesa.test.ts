@@ -27,21 +27,23 @@ test("metaDoDfd: o cabeçalho do DFD lido + a unidade/PCA/origem de quem grava",
 test("UMA automação × Centi: os modelos antigos saíram; o interno só nasce como etapa; o Substituir é legado", async () => {
   const { REGISTRO_NOS, NOS_POR_CATEGORIA } = await import("../src/lib/fluxo-nos.ts");
   const ids = MODELOS_FLUXO.map((m) => m.id);
-  for (const velho of ["conferir-1-dfd", "conferir-dfds-cm002", "dfds-de-protocolo-centi", "substituir-dfds-centi", "corrigir-divergentes-centi"]) assert.ok(!ids.includes(velho), velho);
+  for (const velho of ["conferir-1-dfd", "conferir-dfds-cm002", "dfds-de-protocolo-centi", "substituir-dfds-centi", "corrigir-divergentes-centi", "cm002", "unidades-cm002", "situacao-cm002-coluna"])
+    assert.ok(!ids.includes(velho), velho);
   const unica = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
-  assert.equal(unica?.nome, "Conferir e corrigir DFDs × Centi");
+  assert.equal(unica?.nome, "Verificar DFDs na Centi");
   assert.deepEqual(unica?.dependencias, ["conferir-corrigir-1-dfd"]);
   // Todo modelo interno é etapa de algum outro modelo.
   for (const m of MODELOS_FLUXO.filter((x) => x.interno)) assert.ok(MODELOS_FLUXO.some((o) => o.dependencias?.includes(m.id)), m.id);
-  // Os dados de entrada da única: quais DFDs, pela conferência e se corrige.
+  // Os dados de entrada da única: quais DFDs e O QUE verificar (só as decisões — paralelo e retomada não).
   const campos = (tipo: string) => (REGISTRO_NOS.get(tipo)?.campos ?? []).filter((c) => c.entrada).map((c) => c.chave);
   assert.ok(campos("sistema.ler").includes("buscaDfds"));
-  assert.deepEqual(campos("dados.filtrarConferencia"), ["quais", "corrigir"]);
+  assert.deepEqual(campos("dados.filtrarConferencia"), ["conteudo", "quais", "corrigir", "situacao", "centro", "trocarUnidade", "semDfd"]);
+  assert.deepEqual(campos("fluxo.executar"), []);
   assert.equal(REGISTRO_NOS.get("saida.substituirDfd")?.legado, true);
   assert.ok(!NOS_POR_CATEGORIA.some((c) => c.nos.some((n) => n.tipo === "saida.substituirDfd")), "fora da paleta");
 });
 
-test("disparo da Mesa: o “só conferir” vai e volta", async () => {
+test("disparo da Mesa: a ação da coluna Centi vai e volta (e o formato antigo vira “conferir”)", async () => {
   const { gravarDisparoMesa, lerDisparoMesa } = await import("../src/lib/automacao-mesa.ts");
   const guardado = new Map<string, string>();
   const g = globalThis as unknown as { sessionStorage?: unknown; window?: unknown };
@@ -49,8 +51,10 @@ test("disparo da Mesa: o “só conferir” vai e volta", async () => {
   g.sessionStorage = { setItem: (k: string, v: string) => guardado.set(k, v), getItem: (k: string) => guardado.get(k) ?? null, removeItem: (k: string) => guardado.delete(k) };
   g.window = { dispatchEvent: () => true };
   try {
-    assert.equal(gravarDisparoMesa({ fluxoId: 3, itens: [{ id: 1 }], soConferir: true }), true);
-    assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }], soConferir: true });
+    assert.equal(gravarDisparoMesa({ fluxoId: 3, itens: [{ id: 1 }], acao: "corrigir" }), true);
+    assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }], acao: "corrigir" });
+    guardado.set("automacao:disparo", JSON.stringify({ fluxoId: 3, itens: [{ id: 1 }], soConferir: true }));
+    assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }], acao: "conferir" });
     gravarDisparoMesa({ fluxoId: 3, itens: [{ id: 1 }] });
     assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }] });
     assert.equal(lerDisparoMesa(), null, "roda uma vez só");

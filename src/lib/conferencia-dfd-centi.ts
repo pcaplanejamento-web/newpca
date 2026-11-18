@@ -24,7 +24,7 @@ export const SECOES_ASSINATURA_DFD: ReadonlySet<string> = new Set(["equipe", "de
 export const NOTA_SEM_SECOES_810 = "Sem as seções 8 a 10 na Centi";
 /** O motivo gravado no "convergente*": a referência do DFD + a nota (a mesma forma "<ref>: …" dos motivos). */
 export const motivoSemSecoes810 = (ref: string) =>
-  `${ref}: ${NOTA_SEM_SECOES_810} — o planejamento não tem o registro de assinatura do DFD (indicação da equipe, secretário demandante e autorização); as demais informações conferem.`;
+  `${ref}: ${NOTA_SEM_SECOES_810} — o planejamento não tem o registro de assinatura do DFD (indicação da equipe, secretário demandante e autorização). As demais informações conferem.`;
 /** A NOTA do "convergente*" (o texto depois da referência) — `null` quando é o convergente comum ou não é convergente. */
 export function notaConferencia(status: string | null | undefined, motivo: string | null | undefined): string | null {
   const m = String(motivo ?? "");
@@ -533,7 +533,7 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
   try {
     const r = JSON.parse(t) as Partial<RetratoCenti>;
     const d = r?.dfd as DfdParseado | undefined;
-    // Só o retrato v 3 (assinatura do próprio planejamento, confirmado) e lido no PRÓPRIO órgão do DFD.
+    // Só o retrato v 4 (assinatura do próprio planejamento, confirmado, com os valores) e lido no PRÓPRIO órgão do DFD.
     if (r?.v !== 4 || !d || !Array.isArray(d.itens) || !Array.isArray(d.secoes)) return null;
     if (str(r.entidadeAchada) && str(r.entidadeAchada) !== str(r.entidade)) return null;
     return {

@@ -203,5 +203,9 @@ export function simularCorrecao(
  * coluna Centi. A MESMA régua na correção em massa da Mesa e na automação. */
 export const NAO_CORRIGIVEIS: ReadonlySet<string> = new Set(["Situação", "Órgão", "Nº do DFD", "Não encontrado na Centi", "Outras"]);
 
+/** Os que a Centi NÃO corrige DE FATO (sem "Outras" — a linha não classificada, que o retrato decide): a automação desiste
+ * só com eles e, depois de gravar, o que resta só deles não é pendência. */
+export const SEM_CORRECAO_CENTI: ReadonlySet<string> = new Set([...NAO_CORRIGIVEIS].filter((t) => t !== "Outras"));
+
 /** Os tipos do motivo da conferência que a correção pela Centi alcança (sem repetir). */
 export const tiposCorrigiveisDoMotivo = (tipos: readonly string[]): string[] => [...new Set(tipos.filter((t) => !NAO_CORRIGIVEIS.has(t)))];

@@ -23,6 +23,6 @@ export function assinaturaDoLoad(j: unknown, plan: string): { id: string } | { e
   const id = idTexto(v) ?? idTexto(campos(v).find((f) => f?.Key === "Id")?.Value);
   if (id) return { id };
   return {
-    erro: `A Centi não trouxe, no planejamento ${plan}, o registro das seções 8 a 10 do DFD (equipe, secretário demandante, autorização — campo ${CAMPO_ASSINATURA_DFD}) — o DFD não foi emitido; confira o planejamento na Centi.`,
+    erro: `A Centi não trouxe, no planejamento ${plan}, o registro das seções 8 a 10 do DFD (equipe, secretário demandante, autorização — campo ${CAMPO_ASSINATURA_DFD}) — o DFD é emitido sem elas e a conferência não as compara (Convergente*).`,
   };
 }

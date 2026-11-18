@@ -3,13 +3,14 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { type AlvoCenti, type ArquivoSaida, alvoDoArquivo, descricaoDoArquivo, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { jaAnexados } from "@/lib/automacao-cliente";
+import type { AcaoCenti } from "@/lib/automacao-mesa";
 import { conferenciaAnexos, type DocCenti, type EstadoDfd, type LinhaConferencia, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, fimDaLeitura, type Grafo, type Item, marcadosDuplicados, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
 import { notaConferencia } from "@/lib/conferencia-dfd-centi";
-import { ROTULO_COM_NOTA } from "../CelulaExecucao";
+import { comRessalva, ROTULO_COM_NOTA, ROTULO_RESSALVA_CURTO, VALOR_COLUNA_DFD } from "@/lib/dfd-colunas-valor";
 import { BUSCA_TABELA, buscaDoNo, type FontesSistema, opcoesDaBusca, planejamentosDoCampo } from "@/lib/fluxo-ler-sistema";
 import type { FiltroValor } from "@/lib/tabela-filtros";
 import { lerCaptura } from "@/lib/fluxo-dados";
@@ -67,7 +68,7 @@ export type HostPainel = {
   /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
   previas: Record<string, { carregando: boolean; erro?: string; itens?: Item[] }>;
   /** Executa o fluxo aberto (o grafo da tela) SÓ com estes itens — os selecionados numa tabela de resultado. */
-  executarCom: (grafo: Grafo, itens: Item[], soConferir?: boolean) => void;
+  executarCom: (grafo: Grafo, itens: Item[], acao?: AcaoCenti) => void;
   /** Esquece a retomada do "Executar fluxo" (`no`) e roda o fluxo de novo com TODOS os itens (pede confirmação). */
   refazerTudo: (grafo: Grafo, no: string, pulados: number) => void;
   /** Executa o fluxo aberto com o "Baixar/anexar DFDs" (`no`) limitado a ESTES arquivos (os que faltam no protocolo). */
@@ -465,7 +466,12 @@ function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
     () => ({
       ...grafo,
       nos: grafo.nos.map((n) =>
-        n.id === no.id ? { ...n, config: { ...n.config, entrega: "lista", marcados: undefined, planejamentos: undefined, filtrados: undefined, filtradosCom: undefined, filtrosTabela: undefined } } : n,
+        n.id === no.id
+          ? { ...n, config: { ...n.config, entrega: "lista", marcados: undefined, planejamentos: undefined, filtrados: undefined, filtradosCom: undefined, filtrosTabela: undefined } }
+          : n.tipo === "dados.filtrarConferencia"
+            ? // Só o "Conteúdo" e "Pela conferência gravada" mudam QUAIS DFDs seguem: as demais escolhas não relêem a prévia.
+              { ...n, config: { conteudo: n.config.conteudo, quais: n.config.quais } }
+            : n,
       ),
     }),
     [grafo, no.id],
@@ -591,7 +597,13 @@ function useFiltrosDaTabela(no: NoFluxo, grafo: Grafo, onGrafo: (g: Grafo) => vo
       }
       // Os ids que passam, com o campo com que foram vistos (`filtradosCom`): a execução só os usa com o MESMO campo.
       // Recarregando (a lista ainda vazia), os ids não valem — ficam os de antes.
-      if (!vazia) {
+      // Nos DFDs, filtros só de colunas com régua pura (`VALOR_COLUNA_DFD`) são REAPLICADOS na execução aos DFDs de agora —
+      // a lista de ids não é gravada (nem fica velha). Os demais guardam os ids vistos, como reserva.
+      const vivos = dfds && Object.keys(guardar).every((k) => k in VALOR_COLUNA_DFD);
+      if (vivos) {
+        delete cfg.filtrados;
+        delete cfg.filtradosCom;
+      } else if (!vazia) {
         if (passam) {
           // Números quando os ids são números (o diagrama gravado fica menor — o teto do fluxo é de 200 mil caracteres).
           cfg.filtrados = passam.map((k) => (/^\d+$/.test(k) ? Number(k) : k));
@@ -968,15 +980,24 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
-    // O subfluxo de conferir E corrigir: o resultado da correção vale mais que o da conferência.
-    if (s(it.correcao)) return estadoDoItem("saida.corrigirPelaCenti", it);
+    // O que a verificação FEZ vale primeiro: a correção do conteúdo e a troca da unidade.
+    if (s(it.correcao) && it.correcao !== "soConferir") return estadoDoItem("saida.corrigirPelaCenti", it);
+    if (it.unidadeTrocada === true) return { rotulo: "Unidade trocada", tom: "emerald", texto: s(it.mensagemUnidade) };
+    if (it.unidadeTrocada === false) return { rotulo: "Unidade não trocada", tom: "red", texto: s(it.motivoTroca) };
+    // O resultado do CONTEÚDO (as colunas Centi/Situação/Centro de custo mostram o resto).
     if (it.naoMarcar === true) return { rotulo: "Não conferido", tom: "amber", texto: s(it.mensagem) };
-    // Divergente é um RESULTADO da conferência (conta em Atenção), não uma falha da execução (só "Falhou" conta em Falhas).
-    if (s(it.mensagem)) return { rotulo: "Divergente", tom: "amber", texto: s(it.mensagem) };
-    // Confere, mas a Centi não tem as seções 8 a 10 do planejamento (não comparadas): "Convergente*" com a nota.
-    const nota = notaConferencia(s(it.conferenciaCenti), s(it.conferenciaCentiMotivo));
+    const st = s(it.conferenciaCenti);
+    const motivo = s(it.conferenciaCentiMotivo);
+    if (st === "divergente")
+      return comRessalva(st, motivo, s(it.conferenciaCentiAceite) || null)
+        ? { rotulo: ROTULO_RESSALVA_CURTO, tom: "blue", texto: motivo }
+        : { rotulo: "Divergente", tom: "amber", texto: motivo };
+    const nota = notaConferencia(st, motivo);
     if (nota) return { rotulo: ROTULO_COM_NOTA, tom: "amber", texto: nota };
-    return { rotulo: "Convergente", tom: "emerald", texto: "" };
+    if (st === "convergente") return { rotulo: "Convergente", tom: "emerald", texto: "" };
+    // Sem o conteúdo: a leitura da Centi que não veio, ou só verificado.
+    if (it.centroNaoLido === true || it.centiFalha === true) return { rotulo: "Não lido na Centi", tom: "amber", texto: s(it.centiErro) };
+    return { rotulo: "Verificado", tom: "emerald", texto: "" };
   }
   return null;
 }

@@ -13,23 +13,36 @@ import { type LinhaDfd, PlanilhaDfds } from "../PlanilhaDfds";
 
 type Chave = string | number;
 
-/** A unidade da Centi ao lado da do sistema (o "Conferir unidade × Centro de Custo"): só quando os itens a trazem. */
-const COLUNAS_UNIDADE_CENTI: Column<Item>[] = [
-  {
-    key: "unidadeCenti",
-    header: "Unidade na Centi",
-    nowrap: true,
-    value: (it) => String(it.unidadeCentiSigla || "Desconhecida"),
-    render: (it) => <span title={String(it.unidadeCentiNome ?? "")}>{String(it.unidadeCentiSigla || "Desconhecida")}</span>,
+/** A unidade que o centro de custo da Centi indica (`unidadeConfere`, do "Conferir unidade × Centro de Custo"). */
+const unidadeNaCenti = (it: Item): string => {
+  const c = String(it.unidadeConfere ?? "");
+  if (c === "sim" || c === "nao") return String(it.unidadeCentiSigla || "—");
+  return c === "desconhecida" ? "Desconhecida" : c === "naoLido" ? "Não lido" : "—";
+};
+/** A unidade da Centi ao lado da do sistema: só quando os itens a trazem (o Centro de Custo vem na planilha de DFDs). */
+const COLUNA_UNIDADE_CENTI: Column<Item> = {
+  key: "unidadeCenti",
+  header: "Unidade na Centi",
+  nowrap: true,
+  value: unidadeNaCenti,
+  render: (it) => {
+    const c = String(it.unidadeConfere ?? "");
+    const tom = c === "nao" ? "text-[var(--warn)]" : c === "desconhecida" ? "text-[var(--danger)]" : c === "sim" ? "" : "text-muted";
+    return (
+      <span className={tom} title={String(it.mensagemUnidade ?? it.unidadeCentiNome ?? "")}>
+        {unidadeNaCenti(it)}
+      </span>
+    );
   },
-  {
-    key: "centroCusto",
-    header: "Centro de custo",
-    minWidth: 220,
-    value: (it) => String(it.unidadeCentroCusto ?? ""),
-    render: (it) => <CelulaTexto texto={String(it.unidadeCentroCusto ?? "")} />,
-  },
-];
+};
+/** Fora da planilha de DFDs (outros dados), o texto do centro de custo vai numa coluna própria. */
+const COLUNA_CENTRO_CENTI: Column<Item> = {
+  key: "centroCustoCenti",
+  header: "Centro de custo",
+  minWidth: 220,
+  value: (it) => String(it.unidadeCentroCusto ?? ""),
+  render: (it) => <CelulaTexto texto={String(it.unidadeCentroCusto ?? "")} />,
+};
 
 /** Leva colunas de um ITEM (ex.: o Estado/Detalhe da análise) para uma tabela cujas linhas são outra forma do mesmo item. */
 function adaptar<R>(cols: Column<Item>[], item: (r: R) => Item): Column<R>[] {
@@ -99,8 +112,8 @@ export function TabelaMesaFluxo({
   filtros?: { iniciais: Record<string, FiltroValor>; onMudar: (filtros: Record<string, FiltroValor>, passam: string[] | null) => void };
 }) {
   const tipo: TipoItemMesa | null = useMemo(() => tipoDosItens(itens), [itens]);
-  const comUnidadeCenti = useMemo(() => itens.some((it) => "unidadeCentroCusto" in it), [itens]);
-  const extras = comUnidadeCenti ? [...COLUNAS_UNIDADE_CENTI, ...extrasDoHost] : extrasDoHost;
+  const comUnidadeCenti = useMemo(() => itens.some((it) => "unidadeConfere" in it), [itens]);
+  const extras = comUnidadeCenti ? [COLUNA_UNIDADE_CENTI, ...(tipo === "dfd" ? [] : [COLUNA_CENTRO_CENTI]), ...extrasDoHost] : extrasDoHost;
   const colGestao = useColunasGestao(gestao);
   const abrir = onAbrir ? (it: Item) => {
     const a = aberturaDoItem(it);
@@ -132,6 +145,7 @@ export function TabelaMesaFluxo({
         acoesRodape={acoesRodape}
         vazio={vazio}
         exportar={exportar}
+        linhasSalvas={linhasSalvas}
         onOrdenadas={onOrdem && ((ls) => onOrdem(ls.map((r) => String(chaves[r.key])), ls.length < itens.length))}
         conexao={
           filtros && {

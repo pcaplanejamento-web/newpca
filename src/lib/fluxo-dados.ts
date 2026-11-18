@@ -5,7 +5,7 @@
  */
 import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
-import { conferenciaDesatualizada } from "./conferencia-dfd-centi.ts";
+import { aceiteVale, conferenciaDesatualizada, lerAceite } from "./conferencia-dfd-centi.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
 const chaveIgual = (v: unknown) => {
@@ -269,25 +269,38 @@ export function conferirUnidades(
   // Cada item vai à sua porta e a `todos` (a coluna "Centro de Custo" da Mesa) com o texto COMPLETO da Centi
   // (`centroCustoCenti`; "" = a Centi respondeu e não tem o dado — a coluna é limpa). A leitura que FALHOU
   // (`todos: false`) não vai a `todos`: o valor já gravado fica.
+  // Cada DFD vai a `todos` (a cadeia do "Verificar 1 DFD" nunca o perde); a leitura que FALHOU leva `centroNaoLido` —
+  // quem grava o pula (o valor já gravado fica). `unidadeConfere`: sim · nao (outra unidade cadastrada) · desconhecida ·
+  // semDado (a Centi não tem o centro de custo / não encontrado) · naoLido.
   const enviar = (porta: "divergentes" | "desconhecidas" | "conformes" | null, x: Item, centro: string, todos = true) => {
-    const y = { ...x, centroCustoCenti: centro };
+    const confere = porta === "conformes" ? "sim" : porta === "divergentes" ? "nao" : !todos ? "naoLido" : String(x.unidadeConfere ?? "") || (centro ? "desconhecida" : "semDado");
+    const y = todos ? { ...x, centroCustoCenti: centro, unidadeConfere: confere } : { ...x, centroNaoLido: true, unidadeConfere: confere };
     if (porta) out[porta].push(y);
-    if (todos) out.todos.push(y);
+    // Em `todos` a mensagem vai a `mensagemUnidade`: o DFD segue pela cadeia do "Verificar 1 DFD" e a `mensagem` é a da
+    // conferência do conteúdo (uma mensagem da unidade nunca passa por divergência do conteúdo).
+    const { mensagem, ...semMensagem } = y as Item & { mensagem?: unknown };
+    out.todos.push(mensagem === undefined ? y : { ...semMensagem, mensagemUnidade: mensagem });
   };
   for (const it of itens) {
     // As fontes da Centi, na ordem: a linha da lista da CM002 (`encontrado`, com as colunas cruas em `centi`) e o
     // registro do planejamento lido pelo ID (`it.centi`). Vale a 1ª que TEM centro de custo.
-    const { lista, load, cru, centro } = fontesCentroCusto(it, unidades);
+    const { lista, load: lido, cru, centro } = fontesCentroCusto(it, unidades);
+    // O load em que a Centi NÃO abriu o registro (só a emissão saiu): nada foi lido do planejamento.
+    if (!lista && lido?.registro === false) {
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")}): não conferido na Centi — a Centi não abriu o registro do planejamento` }, "", false);
+      continue;
+    }
+    const load = lido;
     const finalidadeDe = String(lista?.finalidade ?? "").trim() || String(load?.finalidade ?? "").trim();
     const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
     if (!lista && !load && !("centi" in it)) {
       // Fora da CM002 (ou o órgão sem o ID da Centi): só para as colunas — o apontamento é do nó anterior.
-      enviar(null, { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? "") }, "");
+      enviar(null, { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), unidadeConfere: "semDado" }, "");
       continue;
     }
     if (!lista && !load) {
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
-      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` }, "", !it.centiFalha);
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), unidadeConfere: "semDado", mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` }, "", !it.centiFalha);
       continue;
     }
     const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
@@ -296,7 +309,7 @@ export function conferirUnidades(
     if (!centro && "centi" in it && !load) {
       // A lista da CM002 não trouxe o centro de custo e o planejamento não foi lido pelo ID: não conferido (tente de novo).
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
-      enviar("desconhecidas", { ...base, mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo} (a CM002 não trouxe o centro de custo)` }, "", !it.centiFalha);
+      enviar("desconhecidas", { ...base, unidadeConfere: "semDado", mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo} (a CM002 não trouxe o centro de custo)` }, "", !it.centiFalha);
       continue;
     }
     if (!centro) {
@@ -308,13 +321,13 @@ export function conferirUnidades(
             ? Object.keys(cru)
             : Object.keys(lista ?? load ?? {});
       const campos = nomes.length ? ` (campos que vieram: ${nomes.slice(0, 40).join(", ")})` : "";
-      enviar("desconhecidas", { ...base, mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` }, "");
+      enviar("desconhecidas", { ...base, unidadeConfere: "semDado", mensagem: `${ref}: o planejamento na Centi não trouxe o centro de custo${campos}` }, "");
       continue;
     }
     // A unidade é SEMPRE o último nome; só a entidade ("PM RV") = o planejamento não tem unidade na Centi.
-    const lido = unidadeDoCentroCusto(centro);
-    let { nome } = lido;
-    const { truncado } = lido;
+    const daUnidade = unidadeDoCentroCusto(centro);
+    let { nome } = daUnidade;
+    const { truncado } = daUnidade;
     // Curto e SEM vírgula: em geral só a entidade ("PM RV"); mas um centro/sigla CADASTRADO (o Fundo "FMS") é a unidade.
     if (!nome && !centro.includes(",")) {
       const curto = casarPorCentroCusto(centro, unidades, orgaoId) ?? casarUnidadePorNome(centro, false, unidades, orgaoId);
@@ -397,7 +410,27 @@ export function valorCapturado(linha: Item, campo: string): string {
 export function passaConferencia(it: Record<string, unknown>, quais: string): boolean {
   if (quais === "todos") return true;
   const st = it.conferenciaCenti == null ? "" : String(it.conferenciaCenti);
-  if (quais === "divergentes") return st === "divergente";
-  if (st === "divergente" || st === "") return true;
+  // A divergência ACEITA (convergente com ressalva) não volta a ser verificada nem corrigida por estes filtros.
+  const aceita = aceiteVale(st, it.conferenciaCentiMotivo as string | null, lerAceite(it.conferenciaCentiAceite as string | null));
+  if (quais === "divergentes") return st === "divergente" && !aceita;
+  if ((st === "divergente" && !aceita) || st === "") return true;
   return conferenciaDesatualizada(it.conferenciaCentiEm as string | null, it.atualizadoEm as string | null);
+}
+
+/** O que cada DFD verifica na Centi (o nó "O que verificar na Centi"). */
+export type Verificacoes = { conteudo: boolean; corrigir: boolean; situacao: boolean; centro: boolean; trocarUnidade: boolean; semDfd: boolean };
+
+/**
+ * As verificações escolhidas no nó (`c`; caixa ausente = o padrão: as três verificações ligadas, corrigir ligado, trocar e a
+ * lista da CM002 desligadas) com os overrides do host — as ações da coluna Centi: `__verificacoes` (as únicas ligadas,
+ * ex.: ["conteudo"]), `__soConferir` (nunca corrige) e `__corrigir` (corrige mesmo com a caixa desligada).
+ */
+export function verificacoesDoNo(c: Record<string, unknown>, host: Record<string, unknown> = {}): Verificacoes {
+  const liga = (k: string, padrao: boolean) => (c[k] === undefined ? padrao : c[k] === true);
+  const so = Array.isArray(host.__verificacoes) ? new Set((host.__verificacoes as unknown[]).map(String)) : null;
+  const v = (k: "conteudo" | "situacao" | "centro" | "semDfd", padrao: boolean) => (so ? so.has(k) : liga(k, padrao));
+  const conteudo = v("conteudo", true);
+  const centro = v("centro", true);
+  const corrigir = conteudo && !host.__soConferir && (host.__corrigir === true || liga("corrigir", true));
+  return { conteudo, corrigir, situacao: v("situacao", true), centro, trocarUnidade: centro && !so && liga("trocarUnidade", false), semDfd: v("semDfd", false) };
 }

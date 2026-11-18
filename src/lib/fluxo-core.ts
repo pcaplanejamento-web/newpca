@@ -48,7 +48,8 @@ export function variaveis(host: Record<string, unknown>): Record<string, unknown
 }
 /** `x` = a DOBRA vertical da linha ajustada à mão no diagrama (sem ela, a rota automática). */
 export type Conexao = { de: string; saida: string; para: string; entrada: string; x?: number };
-export type Grafo = { v: 1; nos: NoFluxo[]; conexoes: Conexao[] };
+/** `modelo` = o id do modelo de que o fluxo nasceu (acha o modelo mesmo depois de renomear o fluxo). */
+export type Grafo = { v: 1; nos: NoFluxo[]; conexoes: Conexao[]; modelo?: string };
 
 export const GRAFO_VAZIO: Grafo = { v: 1, nos: [], conexoes: [] };
 export const SAIDA_ERRO = "erro";
@@ -232,7 +233,7 @@ const numero = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Ma
 
 /** Qualquer JSON → um grafo válido na FORMA (nós com id único, conexões entre nós existentes, sem repetir). */
 export function lerGrafo(v: unknown): Grafo {
-  const o = (v && typeof v === "object" ? v : {}) as { nos?: unknown; conexoes?: unknown };
+  const o = (v && typeof v === "object" ? v : {}) as { nos?: unknown; conexoes?: unknown; modelo?: unknown };
   const nos: NoFluxo[] = [];
   const ids = new Set<string>();
   for (const n of Array.isArray(o.nos) ? o.nos : []) {
@@ -262,7 +263,8 @@ export function lerGrafo(v: unknown): Grafo {
     vistas.add(chave);
     conexoes.push(k);
   }
-  return { v: 1, nos, conexoes };
+  const modelo = texto(o.modelo, 60);
+  return modelo ? { v: 1, nos, conexoes, modelo } : { v: 1, nos, conexoes };
 }
 
 export type ProblemaGrafo = { no?: string; texto: string; nivel: "erro" | "atencao" };
@@ -981,6 +983,22 @@ export function cicloDeSubfluxos(id: number, usa: ReadonlyMap<number, readonly n
 export const chaveDoItem = (it: Item, campo: string): string => {
   const v = resolverCaminho(it, campo || "id");
   return v == null || typeof v === "object" ? "" : String(v).trim();
+};
+
+/**
+ * A chave da RETOMADA: a do item + as ESCOLHAS que ele leva (`verificar` do "O que verificar na Centi") — um DFD feito só
+ * conferindo NÃO conta como feito numa execução que corrige (nem o que só verificou a situação numa que verifica tudo).
+ */
+export const chaveRetomada = (it: Item, campo: string): string => {
+  const k = chaveDoItem(it, campo);
+  const v = it.verificar;
+  if (!k || !v || typeof v !== "object" || Array.isArray(v)) return k;
+  const sig = Object.entries(v as Record<string, unknown>)
+    .filter(([, x]) => x === "sim")
+    .map(([n]) => n)
+    .sort()
+    .join("+");
+  return sig ? `${k}|${sig}` : k;
 };
 
 /**

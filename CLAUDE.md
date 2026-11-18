@@ -1067,6 +1067,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     vinculado NÃO pode ser excluído** (`DELETE` → 409 via `orgaoTemVinculo`/`unidadeTemVinculo`); o ADM **oculta**
     (`OrgaosAdmin`/`ReparticoesAdmin`: ação ocultar/reexibir + badge). Ocultos **somem do uso futuro** (matchers e
     seletores de documento novo filtram), mas o **histórico é preservado**.
+- **VERIFICAR DFDs NA CENTI = A AUTOMAÇÃO ÚNICA (v1.297.0, migração `0194`) — regra firme:** o modelo
+  `conferir-corrigir-centi` chama-se **"Verificar DFDs na Centi"** e substitui também "Execução dos DFDs na CM002",
+  "Unidades dos DFDs × Centro de Custo da CM002" e "Situação da CM002 numa coluna da Mesa" (modelos removidos; a `0194`
+  renomeia, grava o diagrama do código, leva a agenda ativa da antiga à única e apaga as antigas do mesmo dono que nenhum
+  fluxo usa como etapa). Grafo: Ler do sistema (DFDs) → **"O que verificar na Centi"** (`dados.filtrarConferencia`: caixas
+  Conteúdo [+ "Pela conferência gravada" e "Corrigir os divergentes"] · Situação · Centro de custo [+ "Trocar a unidade
+  divergente", desligada] · "Listar planejamentos da Centi sem DFD", desligada; nenhuma = erro; cada DFD leva
+  `verificar {…: "sim"|"nao"}` + `corrigir`; `verificacoesDoNo` em `fluxo-dados.ts` = a régua, com os overrides do host
+  `__verificacoes`/`__soConferir`/`__corrigir`) → `fluxo.executar` da etapa **"Verificar 1 DFD na Centi"** (interna; paralelo
+  e retomar fora dos Dados de entrada) e → **`centi.semDfd`** (lê a CM002 dos órgãos escolhidos uma vez por órgão e compara
+  planejamento + órgão com TODOS os DFDs; tabela `NOME_TABELA_SEM_DFD`). A etapa interna é uma CADEIA de `logica.se`
+  (nenhum DFD sai dela): completar → `leitura.dfdCenti` (UMA leitura; o PDF só com o conteúdo — por item) → Situação
+  (`saida.gravarExecucao` `naoEncontrado`; passa todos; achado em outro órgão não grava) → Centro de custo
+  (`conferirUnidade` porta `todos` — a falha vai com `centroNaoLido`, a mensagem em `mensagemUnidade`; `gravarCentroCusto`
+  pula o não lido; desconhecida = erro, divergente sem troca = atenção; `trocarUnidade` marca `unidadeTrocada`) → Conteúdo
+  (`verificar.conteudo` e `.corrigir` com "diferente de nao": sem a escolha no item, a etapa faz só o conteúdo, como antes)
+  → Retornar: UM item por DFD. **Retomada:** a chave = `chaveRetomada` (id + as verificações) e a fila inteira sem
+  interrupção limpa o progresso (a agendada reconfere todos). **Mesa:** `automacaoCentiDaMesa` → `{id, nome}`; Reconferir/
+  Corrigir automaticamente = `AcaoCenti` "conferir"|"corrigir" → `hostDaAcaoCenti` (só o conteúdo). **Filtros vivos:**
+  `dfd-colunas-valor.ts` (`VALOR_COLUNA_DFD`, `valorDaColunaDfd`, `filtrarDfdsPelaTabela`) = a régua das colunas da
+  `PlanilhaDfds`; o `filtrarPelaTabela` reaplica os `filtrosTabela` aos DFDs de agora (os ids `filtrados` só como reserva
+  para coluna sem régua pura). `Grafo.modelo` + `modeloDoFluxo` acham o modelo mesmo renomeado. Análise: todas as portas
+  do nó (os "Falhou" aparecem), Estado = o que foi feito/resultado (`estadoDoItem("fluxo.executar")`), colunas Situação ·
+  Centro de Custo · Unidade na Centi. Testes: `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em
+  `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts` (0194). O bloco abaixo é o HISTÓRICO.
 - **CONFERIR E CORRIGIR DFDs × CENTI = UMA AUTOMAÇÃO (v1.296.0, migração `0191`) — regra firme:** o único modelo é
   **`conferir-corrigir-centi`** ("Conferir e corrigir DFDs × Centi") = `sistema.ler` (DFDs; "Quais" todos/planejamento/nº/
   protocolo) → `dados.filtrarConferencia` ("Quais DFDs" todos/divergentes/pendentes + **"Corrigir os divergentes"**, padrão

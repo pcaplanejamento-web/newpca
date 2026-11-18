@@ -120,10 +120,13 @@ test("“Os filtrados na tabela”: lê tudo; o campo de planejamento e os ids d
   assert.deepEqual(filtrarPelaTabela(d, {}, "dfds").map((x) => x.id), [10, 11, 12], "sem filtro = todos");
   assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "120:130" }, "dfds").map((x) => x.id), [11, 12], "pelo campo (zeros à esquerda)");
   assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "9999" }, "dfds").map((x) => x.id), [], "nº que não existe = nenhum");
-  // Os ids vistos com o MESMO campo valem (incluem os filtros das outras colunas); com o campo mudado, vale o campo.
-  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "120:130", filtrados: [12], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [12]);
-  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "1119", filtrados: [12], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [10]);
-  assert.deepEqual(filtrarPelaTabela(d, { filtrados: [10, 11] }, "dfds").map((x) => x.id), [10, 11], "só filtros de coluna");
+  // Os FILTROS das colunas são reaplicados aos DFDs de agora (vale na agendada) — os ids vistos não são mais a régua.
+  assert.deepEqual(filtrarPelaTabela(d, { filtrosTabela: { numero: ["10", "12"] } }, "dfds").map((x) => x.id), [10, 12]);
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "120:130", filtrosTabela: { numero: ["12"] }, filtrados: [11], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [12], "o filtro vivo vence os ids velhos");
+  // Coluna sem régua pura (ex.: a Assinatura): a reserva são os ids vistos com o MESMO campo; com o campo mudado, vale o campo.
+  const sem = { assinatura: ["Centi"] };
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "120:130", filtrosTabela: sem, filtrados: [12], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [12]);
+  assert.deepEqual(filtrarPelaTabela(d, { planejamentos: "1119", filtrosTabela: sem, filtrados: [12], filtradosCom: "120:130" }, "dfds").map((x) => x.id), [10]);
   assert.deepEqual(filtrarPelaTabela(fontes.itens, { planejamentos: "130" }, "itens").length, 2, "o campo é só dos DFDs");
 });
 

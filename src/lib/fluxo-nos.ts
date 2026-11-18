@@ -12,6 +12,7 @@ import {
   chaveJuncao,
   comparar,
   chaveDoItem,
+  chaveRetomada,
   type ContextoNo,
   type DefNo,
   executarEmPool,
@@ -41,9 +42,9 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, mensagemRecusaGeral, novasRecusas, PREFIXO_RECUSA, pararPorRecusa, type RecusasCenti, registrarRecusaCenti, registrarSucessoCenti, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
 import { filaSerial } from "./ocr-assinatura-core.ts";
-import { BUSCA_TABELA, BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, filtrarPelaTabela, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
+import { BUSCA_TABELA, BUSCAS, buscaDoNo, buscaEfetiva, configDaLeitura, type FontesSistema, filtrarPelaTabela, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, passaConferencia, procurarNaTabela, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
+import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, passaConferencia, procurarNaTabela, verificacoesDoNo, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
 import {
   type DfdSistemaComparavel,
@@ -58,10 +59,14 @@ import {
   notaConferencia,
   SEPARADOR_DIVERGENCIAS,
   textoRetrato,
-  tipoCurto,
+  tiposDoMotivo,
 } from "./conferencia-dfd-centi.ts";
+import { SEM_CORRECAO_CENTI } from "./correcao-centi-core.ts";
 import type { DfdParseado } from "./parse-dfd-comum.ts";
 import { chaveColuna, colunaReservada, ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
+
+/** A tabela salva com os planejamentos da CM002 que não têm DFD no sistema. */
+export const NOME_TABELA_SEM_DFD = "CM002 sem DFD no sistema";
 
 /** "17 a 56" — a faixa dos IDs (numéricos) de um conjunto, para a mensagem. */
 function faixaIds(ids: Set<string>): string {
@@ -658,6 +663,44 @@ const NOS: DefNo[] = [
     },
   },
 
+  {
+    tipo: "centi.semDfd",
+    categoria: "centi",
+    rotulo: "Planejamentos da Centi sem DFD",
+    descricao:
+      "Lê a CM002 de cada órgão dos DFDs que chegam (uma vez por órgão) e salva na tabela “CM002 sem DFD no sistema” os planejamentos que não têm DFD aqui (pelo nº de planejamento no mesmo órgão). Só roda com “Listar planejamentos da Centi sem DFD no sistema” marcado no “O que verificar na Centi”.",
+    icone: "list",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [],
+    executar: async (e, _c, ctx) => {
+      // Só com a escolha (o "O que verificar" a leva em cada DFD): sem ela, nada é lido nem gravado.
+      const pedidos = so(e).filter((it) => obj(it.verificar).semDfd === "sim");
+      if (!pedidos.length) return { saida: [] };
+      const ent = (v: unknown) => str(v).replace(/^0+(?=\d)/, "");
+      const plan = (v: unknown) => str(v).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+      const comOrgao = pedidos.filter((it) => ent(it.entidade));
+      const aviso = (mensagem: string) => ({ saida: [], [PORTA_APONTADOS]: [{ mensagem: `Planejamentos da Centi sem DFD: ${mensagem}`, nivel: "atencao" }] });
+      if (!comOrgao.length) return aviso("nenhum DFD escolhido tem o órgão com o ID da Centi cadastrado (Órgãos e Unidades).");
+      let linhas: Item[];
+      try {
+        linhas = (await (REGISTRO_NOS.get("centi.cm002") as DefNo).executar({ entrada: comOrgao }, { dosItens: true }, ctx, {})).saida ?? [];
+      } catch (x) {
+        const m = x instanceof Error ? x.message : String(x);
+        if (/interrompid/i.test(m)) throw x;
+        return aviso(`a CM002 não foi lida — ${m}`);
+      }
+      // TODOS os DFDs do sistema (não só os escolhidos): o planejamento que tem DFD em qualquer lugar não é listado.
+      const fontes = await fontesDoSistema(ctx, "dfds");
+      const tem = new Set(fontes.dfds.map((d) => `${plan(d.planejamento)}@${ent(d.entidade)}`));
+      const sem = linhas.filter((l) => plan(l.planejamento) && !tem.has(`${plan(l.planejamento)}@${ent(l.entidade)}`));
+      const r = await ctx.api("/api/admin/automacao/tabelas", { method: "POST", body: { nome: NOME_TABELA_SEM_DFD, modo: "substituir", linhas: sem.slice(0, MAX_LINHAS_TABELA) } });
+      if (!r.ok) throw new Error(r.error || "Não consegui salvar a tabela.");
+      ctx.aviso(`${sem.length} planejamento(s) da Centi sem DFD no sistema — na tabela “${NOME_TABELA_SEM_DFD}”.`);
+      return { saida: sem };
+    },
+  },
+
   // ——— Sistema
   {
     tipo: "sistema.dfds",
@@ -744,8 +787,9 @@ const NOS: DefNo[] = [
     rodaSemItens: true,
     entregaParcial: true,
     iterador: true,
-    executar: async (e, c, ctx, est): Promise<Portas> => {
+    executar: async (e, c0, ctx, est): Promise<Portas> => {
       if (e.entrada) {
+        const c = configDaLeitura(c0);
         const { objeto, busca: pedida } = buscaDoNo(c);
         const valores = valoresProcurados(str(c.valor), e.entrada);
         // Da MESA com {{campo}} que nenhum item escolhido preenche (ex.: DFDs sem nº de planejamento): NADA é lido — o
@@ -792,10 +836,13 @@ const NOS: DefNo[] = [
     rotulosPortas: { saida: "DFDs", naoEncontrados: "Não encontrados" },
     campos: [{ chave: "planejamento", rotulo: "Planejamento (rodando sozinho)", tipo: "texto", entrada: true, ajuda: "O nº de planejamento usado quando o item que chega não traz um — ex.: para testar o fluxo com um DFD só." }],
     executar: async (e, c, ctx) => {
-      const itens = so(e).map((it) => (str(it.planejamento) ? it : { ...it, planejamento: str(c.planejamento) }));
+      const todos = so(e).map((it) => (str(it.planejamento) ? it : { ...it, planejamento: str(c.planejamento) }));
+      // Sem nº de planejamento não há o que buscar (nem aqui nem na Centi): sai com o motivo.
+      const semPlan = todos.filter((it) => !str(it.planejamento).replace(/\D/g, "")).map((it) => ({ ...it, motivo: `DFD ${str(it.numero) || "sem nº"}: sem nº de planejamento — não há o que verificar na Centi` }));
+      const itens = todos.filter((it) => str(it.planejamento).replace(/\D/g, ""));
       const prontos = itens.filter((it) => it.id != null && str(it.numero) && str(it.planejamento));
       const faltam = itens.filter((it) => !prontos.includes(it));
-      if (!faltam.length) return { saida: prontos, naoEncontrados: [] };
+      if (!faltam.length) return { saida: prontos, naoEncontrados: semPlan };
       // Os DFDs do sistema são lidos UMA vez por execução (o cache vive no host — vale para todos os subfluxos).
       const cache = ctx.host.__cache as Map<string, unknown> | undefined;
       let dfds = cache?.get("dfds") as Promise<Item[]> | undefined;
@@ -819,9 +866,9 @@ const NOS: DefNo[] = [
       for (const it of faltam) {
         const ds = porPlan.get(str(it.planejamento).replace(/^0+(?=\d)/, "")) ?? [];
         for (const d of ds) saida.push({ ...d, ...Object.fromEntries(Object.entries(it).filter(([k]) => !(k in d))) });
-        if (!ds.length) naoEncontrados.push(it);
+        if (!ds.length) naoEncontrados.push({ ...it, motivo: `Planejamento ${str(it.planejamento)}: DFD não encontrado no sistema` });
       }
-      return { saida, naoEncontrados };
+      return { saida, naoEncontrados: [...semPlan, ...naoEncontrados] };
     },
   },
   {
@@ -895,7 +942,7 @@ const NOS: DefNo[] = [
     saidas: ["saida"],
     campos: [
       { chave: "limite", rotulo: "Máximo de DFDs", tipo: "selecao", padrao: 5000, opcoes: opcoesNum([100, 500, 1000, 5000, 10000, 20000]), ajuda: "Um teto de segurança: o nó busca no máximo esta quantidade de DFDs na Centi por execução." },
-      { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
+      { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação, centro de custo) — bem mais rápido. O DFD que não verifica o conteúdo (“O que verificar na Centi”) nunca emite o PDF." },
       { chave: "completo", rotulo: "Guardar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo (com a assinatura por OCR) vai em “centi.dfd” — a base do “Substituir DFD pela Centi”." },
       { chave: "dfdInteiro", rotulo: "Comparar o DFD inteiro", tipo: "booleano", padrao: true, ajuda: "Ligado (o padrão): o DFD lido completo (sem OCR — mais rápido) vai em “centi.dfd” para o “Comparar DFD × Centi” conferir TODAS as informações (cabeçalho, seções e itens) e guardar os dados da Centi — a base da correção pela Centi. Desligado: só o resumo (tipo, valor, nº de itens, objeto) e nada a corrigir." },
       {
@@ -907,16 +954,24 @@ const NOS: DefNo[] = [
       },
       {
         chave: "exigirOrgao",
-        rotulo: "Só no órgão do DFD",
+        rotulo: "Exigir o ID da Centi do órgão",
         tipo: "booleano",
         padrao: false,
-        ajuda: "Ligado: o DFD sem o ID da Centi no órgão NÃO é buscado (fica “não conferido”) — sem ele, a busca iria ao órgão aberto na Centi, que pode ter o mesmo nº de planejamento. Desligado: usa o órgão aberto.",
+        ajuda: "Ligado: o DFD cujo órgão não tem o ID da Centi cadastrado NÃO é buscado (fica “não conferido”) — sem ele, a busca iria ao órgão aberto na Centi, que pode ter o mesmo nº de planejamento. Com o ID, o planejamento que não abre no órgão é procurado nos outros órgãos. Desligado: usa o órgão aberto.",
       },
     ],
     executar: async (e, c, ctx) => {
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
-      const out = (await lerPlanejamentosPeloId(so(e).slice(0, max), ctx, { pdf: c.pdf !== false, completo: c.completo === true || c.dfdInteiro !== false, ocr: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true })).filter((x): x is Item => x !== undefined);
-      return { saida: out };
+      const itens = so(e).slice(0, max);
+      // O PDF só para quem verifica o CONTEÚDO (`verificar.conteudo` do "O que verificar"); os demais, só o load.
+      const semPdf = (it: Item) => c.pdf === false || obj(it.verificar).conteudo === "nao";
+      const op = { completo: c.completo === true || c.dfdInteiro !== false, ocr: c.completo === true, falhaErro: c.falhaErro === true, exigirOrgao: c.exigirOrgao === true };
+      const com = itens.filter((it) => !semPdf(it));
+      const sem = itens.filter(semPdf);
+      const lidos = new Map<Item, Item | undefined>();
+      if (com.length) (await lerPlanejamentosPeloId(com, ctx, { ...op, pdf: true })).forEach((x, i) => void lidos.set(com[i], x));
+      if (sem.length) (await lerPlanejamentosPeloId(sem, ctx, { ...op, pdf: false })).forEach((x, i) => void lidos.set(sem[i], x));
+      return { saida: itens.map((it) => lidos.get(it)).filter((x): x is Item => x !== undefined) };
     },
   },
 
@@ -1100,21 +1155,23 @@ const NOS: DefNo[] = [
   {
     tipo: "dados.filtrarConferencia",
     categoria: "dados",
-    rotulo: "Filtrar pela conferência da Centi",
+    rotulo: "O que verificar na Centi",
     descricao:
-      "Escolhe quais DFDs seguem pelo resultado GRAVADO da conferência com a Centi (coluna “Centi”) — todos, só os divergentes ou os divergentes e os ainda não conferidos — e se os divergentes serão corrigidos ou só conferidos.",
+      "Escolhe o que é verificado em cada DFD na Centi — o conteúdo (e se os divergentes são corrigidos), a situação (execução), o centro de custo com a unidade e a lista dos planejamentos da Centi sem DFD — ou tudo de uma vez. No conteúdo, “Pela conferência gravada” escolhe só os divergentes ou também os não conferidos.",
     icone: "filter",
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
+      { chave: "conteudo", rotulo: "Conteúdo do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Compara TODAS as informações do DFD com as da Centi (cabeçalho, seções e cada item) e marca a coluna “Centi” da Mesa. Emite o PDF do DFD na Centi — a verificação mais demorada." },
       {
         chave: "quais",
-        rotulo: "Quais DFDs",
+        rotulo: "Pela conferência gravada",
         tipo: "selecao",
         entrada: true,
         padrao: "todos",
+        quando: { campo: "conteudo", valores: ["true"] },
         ajuda:
-          "Todos = cada DFD é conferido de novo na Centi agora (também os gravados como Convergente — a conferência gravada pode estar velha). Só os divergentes = só os gravados Divergente. Divergentes e não conferidos = os Divergente, os sem conferência e os “Reconferir”. Vindo da Mesa, seguem os DFDs escolhidos lá.",
+          "Todos = cada DFD é verificado de novo (também os gravados como Convergente — a conferência gravada pode estar velha). Só os divergentes = só os gravados Divergente. Divergentes e não conferidos = os Divergente, os sem conferência e os “Reconferir”. Vindo da Mesa, seguem os DFDs escolhidos lá.",
         opcoes: [
           { valor: "todos", rotulo: "Todos" },
           { valor: "divergentes", rotulo: "Só os divergentes gravados" },
@@ -1127,16 +1184,33 @@ const NOS: DefNo[] = [
         tipo: "booleano",
         entrada: true,
         padrao: true,
-        ajuda:
-          "Ligado: o DFD que sair divergente na conferência é corrigido em seguida com os dados da Centi (só o que diverge). Desligado: só confere — a coluna “Centi” é marcada e nada do DFD é alterado.",
+        quando: { campo: "conteudo", valores: ["true"] },
+        ajuda: "Ligado: o DFD que sair divergente é corrigido em seguida com os dados da Centi (só o que diverge). Desligado: só confere — a coluna “Centi” é marcada e nada do DFD é alterado.",
       },
+      { chave: "situacao", rotulo: "Situação (execução)", tipo: "booleano", entrada: true, padrao: true, ajuda: "Grava a situação do planejamento na Centi (Executado, Cancelado…) na coluna “Situação” da Mesa; o planejamento que a Centi não tem fica “Não encontrado na Centi”." },
+      { chave: "centro", rotulo: "Centro de custo e unidade", tipo: "booleano", entrada: true, padrao: true, ajuda: "Grava o texto completo do centro de custo da Centi na coluna “Centro de Custo” da Mesa (os itens herdam o do DFD) e confere a unidade do DFD com a do centro de custo." },
+      {
+        chave: "trocarUnidade",
+        rotulo: "Trocar a unidade divergente pela da Centi",
+        tipo: "booleano",
+        entrada: true,
+        padrao: false,
+        quando: { campo: "centro", valores: ["true"] },
+        ajuda: "Ligado: o DFD cuja unidade é OUTRA unidade cadastrada no centro de custo da Centi passa para ela (a mesma edição em massa da Mesa: histórico e reconferência da assinatura). Desligado: só mostra a divergência (coluna “Unidade na Centi” da Análise).",
+      },
+      { chave: "semDfd", rotulo: "Listar planejamentos da Centi sem DFD no sistema", tipo: "booleano", entrada: true, padrao: false, ajuda: "Lê a CM002 de cada órgão dos DFDs escolhidos e salva na tabela “CM002 sem DFD no sistema” os planejamentos que não têm DFD aqui. Exige a consulta da CM002 aprendida (clique em Pesquisar UMA vez na CM002 da Centi)." },
     ],
-    // Cada item leva a escolha (`corrigir`) ao fluxo de UM DFD — quem grava ("Corrigir DFD pela Centi") a respeita. Vindo da
-    // MESA (`__daMesa`), os DFDs foram escolhidos lá: seguem todos; o "Reconferir" da Mesa nunca corrige (`__soConferir`).
+    // Cada item leva as escolhas (`verificar` — "sim"/"nao" — e `corrigir`) ao fluxo de UM DFD. Overrides do host (as ações
+    // da coluna Centi na Mesa e na Análise): `__verificacoes` = só o conteúdo; `__soConferir` não corrige; `__corrigir`
+    // corrige mesmo com a caixa desligada. Vindo da MESA (`__daMesa`), os DFDs foram escolhidos lá: seguem todos.
     executar: async (e, c, ctx) => {
-      const corrigir = c.corrigir !== false && !ctx.host.__soConferir;
-      const itens = ctx.host.__daMesa ? so(e) : so(e).filter((it) => passaConferencia(it, str(c.quais) || "todos"));
-      return { saida: itens.map((it) => ({ ...it, corrigir })) };
+      const v = verificacoesDoNo(c, ctx.host);
+      if (!v.conteudo && !v.situacao && !v.centro && !v.semDfd) throw new Error("Escolha ao menos uma verificação.");
+      const filtrar = v.conteudo && !ctx.host.__daMesa;
+      const itens = filtrar ? so(e).filter((it) => passaConferencia(it, str(c.quais) || "todos")) : so(e);
+      const sn = (b: boolean) => (b ? "sim" : "nao");
+      const verificar = { conteudo: sn(v.conteudo), corrigir: sn(v.corrigir), situacao: sn(v.situacao), centro: sn(v.centro), trocarUnidade: sn(v.trocarUnidade), semDfd: sn(v.semDfd) };
+      return { saida: itens.map((it) => ({ ...it, verificar, corrigir: v.corrigir })) };
     },
   },
   {
@@ -1401,8 +1475,10 @@ const NOS: DefNo[] = [
             if (!dfd || !Number.isInteger(id) || id <= 0) return it;
             try {
               return { ...it, dfdSistema: await ler(id) };
-            } catch {
-              return it; // sem o do sistema, fica o resumo (nada quebra)
+            } catch (x) {
+              // Sem o DFD do sistema não há como comparar TUDO: "não conferido" (nunca um Convergente só pelo resumo).
+              const m = x instanceof Error ? x.message : String(x);
+              return { ...it, centi: null, centiFalha: true, centiErro: `não consegui ler o DFD do sistema — ${m}` };
             }
               },
               ctx.cancelado,
@@ -1417,7 +1493,7 @@ const NOS: DefNo[] = [
       // O PDF que a Centi GEROU (base64) vai junto do retrato — o ADM vê o arquivo como veio.
       if (!(ctx.host.__pdfsCenti instanceof Map)) ctx.host.__pdfsCenti = new Map<number, string>();
       const pdfs = ctx.host.__pdfsCenti as Map<number, string>;
-      const pdfDe = ctx.host.pdfCenti as ((plan: string) => string | null) | undefined;
+      const pdfDe = ctx.host.pdfCenti as ((plan: string, entidade?: string) => string | null) | undefined;
       const idDe = (it: Item) => Number(it.dfdId ?? it.id);
       const dfdDe = (it: Item) => {
         const d = (it.centi as Item | null | undefined)?.dfd as unknown as DfdParseado | undefined;
@@ -1426,9 +1502,11 @@ const NOS: DefNo[] = [
       // Só o DIVERGENTE vira base de correção — e só CONFIRMADO: lido de novo na Centi (outra emissão, na trava da sessão),
       // o conteúdo tem de ser IGUAL. Diferente = a Centi misturou outro registro (a sessão dela é uma só): o DFD fica NÃO
       // conferido e nada desta leitura corrige o sistema. Achado em OUTRO órgão nunca é base de correção.
+      // A confirmação (segunda emissão) só vale para o que a Centi CORRIGE: a divergência só de situação, órgão ou nº não
+      // tem retrato a guardar — economiza uma ida à Centi.
       const divergentes = new Set(
         compararDfdCenti(prontos, opcoes)
-          .divergentes.filter((x) => x.naoMarcar !== true)
+          .divergentes.filter((x) => x.naoMarcar !== true && tiposDoMotivo(str(x.conferenciaCentiMotivo)).some((t) => !SEM_CORRECAO_CENTI.has(t)))
           .map(idDe),
       );
       const finais: Item[] = [];
@@ -1454,10 +1532,11 @@ const NOS: DefNo[] = [
         if (confere) {
           const t = textoRetrato(montarRetrato(it, x, dfd, opcoes));
           if (t) retratos.set(id, t);
-          const pdf = pdfDe?.(str(it.planejamento));
+          const pdf = pdfDe?.(str(it.planejamento), str(it.entidade) || undefined);
           if (t && pdf) pdfs.set(id, pdf);
           else pdfs.delete(id);
-          finais.push(it);
+          // Sem retrato (grande demais para guardar): a correção automática não tem com o que corrigir — o banner corrige.
+          finais.push(t ? it : { ...it, retratoGrande: true });
         } else {
           retratos.delete(id);
           pdfs.delete(id);
@@ -1518,8 +1597,8 @@ const NOS: DefNo[] = [
         ],
         padrao: "porItem",
       },
-      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "selecao", entrada: true, padrao: 3, opcoes: opcoesNum([1, 2, 3, 4, 5, 6]), ajuda: "Quantos itens o fluxo escolhido processa juntos. A Centi é sempre chamada um DFD por vez (a sessão dela é uma só) — o paralelo acelera a parte do sistema.", quando: { campo: "modo", valores: ["porItem"] } },
-      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Ligado: a próxima execução pula os itens já concluídos e refaz só os que faltam ou falharam — até uma execução terminar sem falha, quando tudo recomeça do zero. Para refazer todos antes disso, use “Refazer tudo” na Análise (ou desligue esta opção).", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "selecao", padrao: 3, opcoes: opcoesNum([1, 2, 3, 4, 5, 6]), ajuda: "Quantos itens o fluxo escolhido processa juntos. A Centi é sempre chamada um DFD por vez (a sessão dela é uma só) — o paralelo acelera a parte do sistema.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", padrao: true, ajuda: "Ligado: interrompida, a próxima execução pula os itens já concluídos (com as mesmas escolhas) e refaz só os que faltam ou falharam; uma execução que percorre a fila inteira faz a próxima recomeçar do zero. Para recomeçar antes, use “Recomeçar do zero” na Análise.", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "chave", rotulo: "Campo que identifica o item", ajuda: "O dado que identifica cada item na retomada (ex.: planejamento).", tipo: "caminho", padrao: "id", quando: { campo: "modo", valores: ["porItem"] } },
       { chave: "limite", rotulo: "Máximo de itens", tipo: "selecao", padrao: 20000, opcoes: opcoesNum([10, 100, 1000, 5000, 20000]), ajuda: "Um teto de segurança: quantos itens, no máximo, rodam o fluxo escolhido.", quando: { campo: "modo", valores: ["porItem"] } },
     ],
@@ -1540,7 +1619,7 @@ const NOS: DefNo[] = [
       const prog = c.retomar !== false && !ctx.host.__daMesa ? (ctx.host.progresso as ProgressoHost | undefined) : undefined;
       const noProg = [...pilhaDe(ctx), str(ctx.no)].join("/");
       const feitos = prog ? new Set(await prog.ler(noProg)) : new Set<string>();
-      const fila = lista.filter((it) => !feitos.has(chaveDoItem(it, campo)));
+      const fila = lista.filter((it) => !feitos.has(chaveRetomada(it, campo)));
       const pulados = lista.length - fila.length;
       const saida: Item[] = [];
       const falhas: Item[] = [];
@@ -1552,8 +1631,6 @@ const NOS: DefNo[] = [
       };
       let feitosAgora = 0;
       let emCurso = 0;
-      // Os devolvidos como "não conferido": não estão feitos — a retomada não é esquecida enquanto houver algum.
-      let pendentes = 0;
       const avisar = () =>
         ctx.aviso(`${filho.nome}: ${feitosAgora} de ${fila.length}${emCurso ? ` · ${emCurso} em andamento` : ""}${pulados ? ` · ${pulados} já feitos antes` : ""}`);
       avisar();
@@ -1571,11 +1648,13 @@ const NOS: DefNo[] = [
               // A Centi recusou a operação / o lote foi encerrado: os demais falhariam igual — para tudo.
               if (erroTxt && PARA_TUDO.test(erroTxt)) throw new Error(`${filho.nome}: ${erroTxt}`);
               apontados.push(...comOrigem(r.apontados, filho.nome));
-              const k = chaveDoItem(it, campo);
+              const k = chaveRetomada(it, campo);
               if (erroTxt) {
                 const f = { ...it, subfluxo: { estado: "falhou", erro: erroTxt } };
                 falhas.push(f);
-                apontados.push({ mensagem: `${filho.nome}${k ? ` (${k})` : ""}: ${erroTxt}`, nivel: "erro", item: it, __dePorta: "falhas" });
+                // O item pelo que a pessoa reconhece (o DFD e o planejamento; senão a chave) — nunca a chave da retomada.
+                const ref = str(it.numero) && str(it.planejamento) ? `DFD ${str(it.numero)} (planejamento ${str(it.planejamento)})` : chaveDoItem(it, campo);
+                apontados.push({ mensagem: `${filho.nome}${ref ? ` · ${ref}` : ""}: ${erroTxt}`, nivel: "erro", item: it, __dePorta: "falhas" });
                 if (k) gravar.push({ chave: k, estado: "falha" });
                 ctx.parcial?.([f]);
               } else {
@@ -1583,7 +1662,6 @@ const NOS: DefNo[] = [
                 saida.push(...volta);
                 // "Não conferido" (a leitura não foi confirmada, o órgão sem ID…) NÃO está feito: a retomada o refaz.
                 const pendente = r.retorno.some((x) => x.naoMarcar === true);
-                if (pendente) pendentes++;
                 if (k) gravar.push({ chave: k, estado: pendente ? "falha" : "ok" });
                 ctx.parcial?.(volta);
               }
@@ -1599,8 +1677,9 @@ const NOS: DefNo[] = [
       } finally {
         await descarregar();
       }
-      // Tudo concluído sem falha: a próxima execução recomeça do zero.
-      if (prog && !ctx.cancelado() && !falhas.length && !pendentes && fila.length + pulados === lista.length) await prog.limpar(noProg).catch(() => undefined);
+      // A fila INTEIRA passou (sem interrupção): a próxima execução recomeça do zero — refaz também os que falharam. A
+      // retomada só vale para a execução interrompida no meio (a próxima continua dos que faltam).
+      if (prog && !ctx.cancelado() && feitosAgora === fila.length) await prog.limpar(noProg).catch(() => undefined);
       return { saida, falhas, [PORTA_APONTADOS]: apontados };
     },
   },
@@ -1795,6 +1874,13 @@ const NOS: DefNo[] = [
           ctx.parcial?.([f]);
           continue;
         }
+        if (it.retratoGrande === true) {
+          // Os dados da Centi passaram do tamanho que a conferência guarda: só o banner do DFD corrige (campo a campo).
+          const f = { ...it, centi: undefined, dfdSistema: undefined, correcao: "grande", motivo: MOTIVO_SEM_CORRECAO.grande };
+          sem.push(f);
+          ctx.parcial?.([f]);
+          continue;
+        }
         if (!corrigir) throw new Error("A correção pela Centi só funciona na tela da Automação.");
         ctx.aviso(`Corrigindo o DFD ${str(it.numero)} pela Centi (${i + 1} de ${itens.length})…`);
         const leve: Item = { ...it, centi: undefined, dfdSistema: undefined };
@@ -1806,7 +1892,11 @@ const NOS: DefNo[] = [
           // o "Divergente" da comparação feita antes da correção).
           if (r.status && ["corrigido", "parcial"].includes(r.resultado))
             feito = { ...feito, conferenciaCenti: r.status, conferenciaCentiMotivo: r.motivo, conferenciaCentiEm: new Date().toISOString() };
-          if (r.resultado === "corrigido") corrigidos.push(feito);
+          if (r.resultado === "corrigido") {
+            // Corrigido; restou só o que a Centi não corrige (situação, órgão, nº) — fica dito, para tratar no painel.
+            if (Array.isArray(r.restam) && r.restam.length) feito = { ...feito, motivo: `Corrigido — resta tratar no painel da coluna Centi: ${r.restam.join(", ")}.` };
+            corrigidos.push(feito);
+          }
           else if (r.resultado === "parcial") {
             // Gravou, mas AINDA diverge: vai a "Não corrigidos" com o que restou (nunca conta como corrigido).
             const restam = Array.isArray(r.restam) ? r.restam.join(", ") : "";
@@ -1860,14 +1950,34 @@ const NOS: DefNo[] = [
         tipo: "texto",
         ajuda: "Grava este texto em todos os DFDs que chegam (ex.: Não encontrado na CM002). Vazio = o campo da situação.",
       },
+      {
+        chave: "naoEncontrado",
+        rotulo: "Texto do não encontrado",
+        tipo: "texto",
+        ajuda: "Grava este texto no DFD cujo planejamento a Centi respondeu que não tem (o “Buscar DFD na Centi” não o achou). Vazio = não grava nada nesse DFD.",
+      },
     ],
-    executar: async (e, c, ctx) => {
+    executar: async (e, c, ctx): Promise<Portas> => {
       // Cada item JÁ é o DFD (id) com a situação lida (do "Buscar DFD na Centi" ou da linha achada na CM002) — grava direto.
+      // TODO DFD segue adiante: o que não tem situação lida (a leitura falhou, a Centi não abriu o registro) passa sem gravar
+      // — o valor já gravado fica. Achado em OUTRO órgão da Centi: a situação é de outro registro — não grava e aponta.
       const campo = str(c.campoSituacao, "centi.situacao") || "centi.situacao";
       const fixa = str(c.situacaoFixa).trim();
-      const situacao = (it: Item) => fixa || str(resolverCaminho(it, campo)).trim();
-      const lidos = so(e).filter((it) => situacao(it) && Number(it.id) > 0);
-      if (lidos.length) {
+      const naoEnc = str(c.naoEncontrado).trim();
+      const leitura = (it: Item) => (it.centi && typeof it.centi === "object" ? (it.centi as Item) : null);
+      const outroOrgao = (it: Item) => !!str(it.entidadeAchada) && str(it.entidadeAchada) !== str(it.entidade);
+      const situacao = (it: Item) => {
+        if (fixa) return fixa;
+        if (outroOrgao(it) || leitura(it)?.registro === false) return "";
+        if ("centi" in it && it.centi === null) return it.centiFalha ? "" : naoEnc;
+        return str(resolverCaminho(it, campo)).trim();
+      };
+      const todos = so(e);
+      const apontados = todos
+        .filter((it) => !fixa && outroOrgao(it))
+        .map((it) => ({ mensagem: `DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}): achado na Centi no órgão ${str(it.entidadeAchada)}, não no do DFD — situação não gravada`, nivel: "atencao", item: it }));
+      const lidos = todos.filter((it) => situacao(it) && Number(it.id) > 0);
+      if (lidos.length || todos.some((it) => Number(it.id) > 0)) {
         // UM pedido por ÓRGÃO: o ID da CM002 (nº de planejamento) só é único dentro do órgão — num pedido só, dois DFDs de
         // órgãos diferentes com o mesmo nº receberiam a situação do primeiro.
         const porOrgao = new Map<string, Item[]>();
@@ -1875,7 +1985,7 @@ const NOS: DefNo[] = [
           const k = str(it.entidade).replace(/^0+(?=\d)/, "");
           porOrgao.set(k, [...(porOrgao.get(k) ?? []), it]);
         }
-        const out: Item[] = [];
+        const gravadoDe = new Map<Item, Item>();
         let feitos = 0;
         let atualizados = 0;
         for (const grupo of porOrgao.values())
@@ -1899,11 +2009,14 @@ const NOS: DefNo[] = [
                 .filter((l) => l.situacao != null && l.situacao !== l.antes)
                 .map((l) => Number(l.id)),
             );
-            for (const p of f) out.push({ ...p, situacaoGravada: situacao(p), atualizado: mudou.has(Number(p.id)) });
+            for (const p of f) {
+              gravadoDe.set(p, { ...p, situacaoGravada: situacao(p), atualizado: mudou.has(Number(p.id)) });
+            }
             feitos += f.length;
             ctx.aviso(`Gravados ${feitos} de ${lidos.length} · ${atualizados} atualizado(s)…`);
           }
-        return { saida: out };
+        // Os que não foram gravados seguem como chegaram (na ordem de chegada).
+        return { saida: todos.map((it) => gravadoDe.get(it) ?? it), [PORTA_APONTADOS]: apontados };
       }
       const r = await ctx.api("/api/admin/automacao/execucao-dfds");
       if (!r.ok || !Array.isArray(r.dfds)) throw new Error(r.error || "Não consegui ler os DFDs.");
@@ -2104,7 +2217,7 @@ const NOS: DefNo[] = [
       for (const it of so(e)) {
         const destino = numeroDe(resolverCaminho(it, campoU));
         const id = numeroDe(resolverCaminho(it, campoId));
-        if (!destino || !id) erros.push({ ...it, motivo: "Sem o DFD ou a unidade nova." });
+        if (!destino || !id) erros.push({ ...it, unidadeTrocada: false, motivoTroca: "Sem o DFD ou a unidade nova.", motivo: "Sem o DFD ou a unidade nova." });
         else porDestino.set(destino, [...(porDestino.get(destino) ?? []), it]);
       }
       const total = [...porDestino.values()].reduce((n, l) => n + l.length, 0);
@@ -2120,14 +2233,14 @@ const NOS: DefNo[] = [
           });
           feitos += fatia.length;
           if (!r.ok) {
-            for (const it of fatia) erros.push({ ...it, motivo: r.error || "Não consegui trocar a unidade." });
+            for (const it of fatia) erros.push({ ...it, unidadeTrocada: false, motivoTroca: r.error || "Não consegui trocar a unidade.", motivo: r.error || "Não consegui trocar a unidade." });
             continue;
           }
           const falhas = new Map((Array.isArray(r.falhas) ? r.falhas : []).map((f) => [Number(obj(f).id), String(obj(f).motivo ?? "")]));
           for (const it of fatia) {
             const m = falhas.get(Number(numeroDe(resolverCaminho(it, campoId))));
-            if (m != null) erros.push({ ...it, motivo: m || "Não alterado." });
-            else alterados.push(it);
+            if (m != null) erros.push({ ...it, unidadeTrocada: false, motivoTroca: m || "Não alterado.", motivo: m || "Não alterado." });
+            else alterados.push({ ...it, unidadeTrocada: true });
           }
         }
       }
@@ -2156,6 +2269,8 @@ const NOS: DefNo[] = [
       for (const it of so(e)) {
         const id = Number(resolverCaminho(it, str(c.campoId, "id") || "id"));
         if (!Number.isInteger(id) || id <= 0) ignorados.push(it);
+        // A leitura da Centi falhou (`centroNaoLido`): segue sem gravar — o centro de custo já gravado fica.
+        else if (it.centroNaoLido === true) saida.push(it);
         else {
           porDfd.set(id, str(resolverCaminho(it, str(c.campoCentro, "centroCustoCenti") || "centroCustoCenti")).trim() || null);
           saida.push(it);
@@ -2362,6 +2477,7 @@ export const MOTIVO_SEM_CORRECAO: Record<string, string> = {
   naoCorrigivel: "Só divergências que a Centi não corrige (situação, órgão, nº do DFD) — trate no painel da coluna Centi.",
   sem: "Nada a corrigir nos dados do DFD.",
   pendente: "Gravado, mas a reconferência falhou — execute de novo para confirmar.",
+  grande: "Os dados da Centi deste DFD são grandes demais para a correção automática — corrija no banner do DFD (coluna Centi → Corrigir).",
 };
 
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
@@ -2478,13 +2594,14 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     const x = x0 && dfdCenti ? (({ dfd: _dfd, ...r }) => r)(x0) : x0;
     if (x !== x0) d.centi = x;
     if (!x && d.centiFalha) {
-      // Falha de comunicação: aponta, mas NÃO marca o DFD (não foi conferido).
-      out.divergentes.push({ ...d, naoMarcar: true, mensagem: `${ref}: não conferido — ${str(d.centiErro)}` });
+      // Falha de comunicação: aponta, mas NÃO marca o DFD (não foi conferido) — e não mostra a conferência gravada antes.
+      out.divergentes.push({ ...d, naoMarcar: true, mensagem: `${ref}: não conferido — ${str(d.centiErro)}`, conferenciaCenti: undefined, conferenciaCentiMotivo: undefined, conferenciaCentiEm: undefined });
       continue;
     }
+    const em = new Date().toISOString();
     if (!x) {
       const mensagem = `${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`;
-      out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem });
+      out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem, conferenciaCentiEm: em });
       continue;
     }
     // A identidade (órgão, situação, nº, tipo) pela MESMA régua da reconferência pelo retrato.
@@ -2508,11 +2625,11 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     // O resultado DESTA conferência no próprio item (as colunas Centi/Divergências da Análise mostram ele, não o lido antes).
     if (difs.length) {
       const mensagem = motivoDivergencias(ref, difs);
-      out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem });
+      out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem, conferenciaCentiEm: em });
     } else if (semSecoes810) {
       // Sem outra diferença: "convergente*" — convergente com a NOTA da falta das seções 8 a 10 (âmbar na tela).
-      out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: motivoSemSecoes810(ref) });
-    } else out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: null });
+      out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: motivoSemSecoes810(ref), conferenciaCentiEm: em });
+    } else out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: null, conferenciaCentiEm: em });
   }
   return out;
 }

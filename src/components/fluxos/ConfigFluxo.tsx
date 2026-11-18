@@ -42,20 +42,16 @@ export function AjudaDoFluxo({ titulo, ajuda }: { titulo: string; ajuda: AjudaFl
 export function ConfigFluxo({
   open,
   onClose,
-  nome,
   descricao,
   ajuda,
-  onNome,
   onDescricao,
   onAjuda,
   children,
 }: {
   open: boolean;
   onClose: () => void;
-  nome: string;
   descricao: string;
   ajuda: AjudaFluxo;
-  onNome: (v: string) => void;
   onDescricao: (v: string) => void;
   onAjuda: (a: AjudaFluxo) => void;
   /** Os controles da frequência/agendamento. */
@@ -64,7 +60,6 @@ export function ConfigFluxo({
   return (
     <Modal open={open} onClose={onClose} titulo="Configurações da automação" rodape={<Button size="sm" onClick={onClose}>Concluir</Button>}>
       <div className="space-y-[var(--gap-block)]">
-        <TextField label="Nome" value={nome} maxLength={80} onChange={(e) => onNome(e.target.value)} />
         <TextField label="Descrição (o cartão)" value={descricao} maxLength={400} onChange={(e) => onDescricao(e.target.value)} />
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
         <p className="text-sm font-semibold text-text">Ajuda (?)</p>

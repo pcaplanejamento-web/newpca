@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { Item } from "@/lib/fluxo-core";
-import { gravarDisparoMesa } from "@/lib/automacao-mesa";
+import { type AcaoCenti, gravarDisparoMesa } from "@/lib/automacao-mesa";
 import { AutomacaoViva, CHAVE_AUTOMACAO } from "./AutomacaoViva";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
@@ -93,9 +93,9 @@ export function AutomacoesMesa({
 export function useRodarAutomacao() {
   const rodarFora = useRodarFora();
   const router = useRouter();
-  return (fluxoId: number, itens: Item[], opcoes?: { soConferir?: boolean }) => {
+  return (fluxoId: number, itens: Item[], acao?: AcaoCenti) => {
     if (!itens.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
-    if (!gravarDisparoMesa({ fluxoId, itens, ...(opcoes?.soConferir ? { soConferir: true } : {}) })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
+    if (!gravarDisparoMesa({ fluxoId, itens, ...(acao ? { acao } : {}) })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
     if (rodarFora) {
       rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
       toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");

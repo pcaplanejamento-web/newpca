@@ -35,6 +35,46 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.297.0",
+    data: "2026-11-18",
+    titulo: "Uma automação só: Verificar DFDs na Centi",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "“Verificar DFDs na Centi” junta tudo numa automação: escolha o que verificar — o conteúdo (com a correção dos divergentes), a situação e o centro de custo (com a troca da unidade divergente, opcional) — ou tudo de uma vez. Cada DFD é lido na Centi uma vez só; o PDF só é emitido quando o conteúdo é verificado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Opção “Listar planejamentos da Centi sem DFD no sistema”: lê a CM002 dos órgãos escolhidos e salva a tabela “CM002 sem DFD no sistema”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "As automações “Execução dos DFDs na CM002”, “Unidades dos DFDs × Centro de Custo da CM002” e “Situação da CM002 numa coluna da Mesa” passaram para a única (a agenda ativa vem junto). Os filtros da tabela de DFDs valem também na execução agendada, aplicados aos DFDs do momento.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Retomada com as escolhas de cada execução (e recomeçando do zero depois de uma execução completa), os DFDs que falharam aparecem na Análise, o “Corrigir automaticamente” da Mesa corrige de fato e uma falha de leitura nunca vira um falso Convergente nem apaga o centro de custo gravado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "A coluna Centi mostra o PDF da Centi também no “Convergente*” e o Recalcular só onde há os dados guardados; o Dashboard separa os “Convergente*”.",
+        link: "/painel/mesa?vista=dfds",
+      },
+    ],
+  },
+  {
     versao: "1.296.7",
     data: "2026-11-18",
     titulo: "Sem as seções 8 a 10 na Centi: Convergente*",

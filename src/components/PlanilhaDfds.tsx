@@ -2,9 +2,9 @@
 
 import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
-import { CelulaConferenciaCenti, CelulaExecucao, comRessalva, valoresConferencia } from "./CelulaExecucao";
+import { CelulaConferenciaCenti, CelulaExecucao } from "./CelulaExecucao";
+import { comRessalva, SEM_CENTRO_CUSTO, VALOR_COLUNA_DFD, valorDaColunaDfd, valoresConferencia } from "@/lib/dfd-colunas-valor";
 import { contarDivergencias, deltaValorDoMotivo, divergenciasDoMotivo } from "@/lib/conferencia-dfd-centi";
-import { dataIsoBrasilia } from "@/lib/format";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import type { OrigemValidacao } from "@/lib/conferencia-dfd";
 import {
@@ -28,6 +28,16 @@ import { PresencaNoItem } from "./PresencaNoItem";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
 /** Quem validou a assinatura — o selo ao lado dos formatos (auto · equipe · ADM). */
+/** Os valores da régua pura (`dfd-colunas-valor.ts`) — a MESMA da automação, que reaplica os filtros gravados. */
+const colunaValores = (k: string, r: LinhaDfd): string[] => {
+  const c = VALOR_COLUNA_DFD[k];
+  return c?.filter === "values" ? c.valores(r) : [];
+};
+const colunaNumero = (k: string, r: LinhaDfd): number | null => {
+  const c = VALOR_COLUNA_DFD[k];
+  return c?.filter === "range" ? c.numero(r) : null;
+};
+
 const ROTULO_VALIDACAO: Record<OrigemValidacao, string> = { auto: "auto", equipe: "equipe", adm: "ADM" };
 const COR_VALIDACAO: Record<OrigemValidacao, string> = { auto: "var(--ok)", equipe: "var(--info)", adm: "var(--accent)" };
 
@@ -87,7 +97,7 @@ export type LinhaDfd = {
 };
 
 /** O texto da subunidade nos filtros/ordem/exportação (a MESMA régua nas tabelas de DFDs e Itens). */
-export const SEM_CENTRO_CUSTO = "Sem centro de custo";
+export { SEM_CENTRO_CUSTO };
 /** As duas situações sem subunidade — juntas no topo do filtro da coluna Subunidade. */
 export const SUBUNIDADE_NO_TOPO = [SUB_NAO_DEFINIDA, SUB_EM_BRANCO];
 
@@ -231,7 +241,9 @@ export function propsPlanilhaDfds({
   const temPrioridade = linhas.some((l) => l.prioridade !== undefined);
   const temExecucao = linhas.some((l) => l.execucao != null);
   const temConferencia = linhas.some((l) => l.conferencia?.status);
-  const temGravados = linhas.some((l) => l.centroCusto !== undefined);
+  // Subunidade e Centro de Custo: colunas próprias (a automação traz o centro de custo da Centi sem a subunidade).
+  const temCentro = linhas.some((l) => l.centroCusto !== undefined);
+  const temSubunidade = linhas.some((l) => l.subunidade !== undefined);
 
   const colEstado: Column<LinhaDfd>[] = semEstado
     ? []
@@ -315,7 +327,7 @@ export function propsPlanilhaDfds({
         </span>
       ),
     },
-    ...(temGravados
+    ...(temSubunidade
       ? [
           {
             key: "subunidade",
@@ -326,11 +338,15 @@ export function propsPlanilhaDfds({
             value: (r: LinhaDfd) => rotuloSubunidade(r.subunidade),
             render: (r: LinhaDfd) => <CelulaSubunidade nome={r.subunidade?.nome ?? null} falta={!!r.subunidade?.falta} cor={r.subunidade?.cor} dica={r.subunidade?.dica} />,
           },
+        ]
+      : []),
+    ...(temCentro
+      ? [
           {
             key: "centroCusto",
             header: "Centro de Custo",
             minWidth: 200,
-            value: (r: LinhaDfd) => r.centroCusto?.texto || SEM_CENTRO_CUSTO,
+            value: (r: LinhaDfd) => valorDaColunaDfd("centroCusto", r),
             render: (r: LinhaDfd) => <CelulaCentroCusto centro={r.centroCusto?.texto} cor={r.centroCusto?.cor} />,
           },
         ]
@@ -355,7 +371,7 @@ export function propsPlanilhaDfds({
             header: "Situação",
             align: "center" as const,
             nowrap: true,
-            value: (r: LinhaDfd) => r.execucao ?? "Não verificado",
+            value: (r: LinhaDfd) => valorDaColunaDfd("execucao", r),
             render: (r: LinhaDfd) => <CelulaExecucao situacao={r.execucao} />,
           },
         ]
@@ -368,7 +384,7 @@ export function propsPlanilhaDfds({
             align: "center" as const,
             nowrap: true,
             value: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo, false, comRessalva(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.aceite))[0],
-            valores: (r: LinhaDfd) => valoresConferencia(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.desatualizada, comRessalva(r.conferencia?.status, r.conferencia?.motivo, r.conferencia?.aceite)),
+            valores: (r: LinhaDfd) => colunaValores("conferenciaCenti", r),
             render: (r: LinhaDfd) => (
               <CelulaConferenciaCenti
                 status={r.conferencia?.status}
@@ -389,7 +405,7 @@ export function propsPlanilhaDfds({
             grupo: "Conferência com a Centi",
             filter: "range" as const,
             formatarFaixa: (v: number) => num(v),
-            numero: (r: LinhaDfd) => (r.conferencia?.status === "divergente" ? contarDivergencias(divergenciasDoMotivo(r.conferencia.motivo)) : r.conferencia?.status ? 0 : null),
+            numero: (r: LinhaDfd) => colunaNumero("divergenciasCenti", r),
             render: (r: LinhaDfd) =>
               r.conferencia?.status === "divergente" ? num(contarDivergencias(divergenciasDoMotivo(r.conferencia.motivo))) : r.conferencia?.status ? "0" : <span className="text-faint">—</span>,
           },
@@ -400,7 +416,7 @@ export function propsPlanilhaDfds({
             nowrap: true,
             grupo: "Conferência com a Centi",
             filter: "range" as const,
-            numero: (r: LinhaDfd) => deltaValorDoMotivo(r.conferencia?.motivo),
+            numero: (r: LinhaDfd) => colunaNumero("deltaCenti", r),
             render: (r: LinhaDfd) => {
               const d = deltaValorDoMotivo(r.conferencia?.motivo);
               return d == null ? <span className="text-faint">—</span> : <span className={d < 0 ? "text-[var(--danger)]" : ""} title="Sistema − Centi">{brl(d)}</span>;
@@ -413,7 +429,7 @@ export function propsPlanilhaDfds({
             nowrap: true,
             grupo: "Conferência com a Centi",
             filter: "date" as const,
-            value: (r: LinhaDfd) => (r.conferencia?.em ? dataIsoBrasilia(r.conferencia.em) : ""),
+            value: (r: LinhaDfd) => valorDaColunaDfd("conferidoCenti", r),
             render: (r: LinhaDfd) =>
               r.conferencia?.em ? (
                 <span className={r.conferencia.desatualizada ? "text-[var(--warn)]" : ""} title={r.conferencia.desatualizada ? "O DFD mudou depois da conferência" : undefined}>
@@ -516,7 +532,7 @@ export function propsPlanilhaDfds({
   // (tabela cinza à parte).
   const descartado = linhas.filter((l) => foraDoEnvio(l.estado));
   const ok = linhas.filter((l) => l.estado !== "erro" && l.estado !== "atencao" && !foraDoEnvio(l.estado));
-  const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0) + (temGravados ? 340 : 0);
+  const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0) + (temSubunidade ? 140 : 0) + (temCentro ? 200 : 0);
   // Densidade COMPACTA em todo lugar: a MESMA altura de linha das tabelas de protocolos e itens.
   const comum = {
     columns: semSigla ? cols.filter((c) => c.key !== "sigla") : cols,

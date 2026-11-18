@@ -1468,7 +1468,6 @@ describe("0191: uma automação para conferir e corrigir DFDs × Centi", () => {
 describe("0192: a automação única com o diagrama atual e uma por pessoa", () => {
   const PAI = "Conferir e corrigir DFDs × Centi";
   const FILHO = "Conferir e corrigir 1 DFD × Centi";
-  const modelo = (id: string) => MODELOS_FLUXO.find((m) => m.id === id)!;
   const preparar = () => {
     const db = new DatabaseSync(":memory:");
     db.exec("PRAGMA foreign_keys = ON");
@@ -1476,7 +1475,7 @@ describe("0192: a automação única com o diagrama atual e uma por pessoa", () 
     db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h'), (2, 'Bia', 'bia@x', 'h')");
     return db;
   };
-  // A 0193 (o "Quais" inicial = os filtrados na tabela) vem junto: o diagrama gravado tem de ser IGUAL ao do código atual.
+  // A 0193 (o "Quais" inicial = os filtrados na tabela) vem junto.
   const rodar = (db: DatabaseSync) => {
     db.exec(readFileSync(join(DIR, "0192_automacao_centi_unica_grafo.sql"), "utf8"));
     db.exec(readFileSync(join(DIR, "0193_automacao_filtrados_tabela.sql"), "utf8"));
@@ -1501,8 +1500,8 @@ describe("0192: a automação única com o diagrama atual e uma por pessoa", () 
       "a duplicata (5) e a etapa antiga (3) saem; a interna é criada",
     );
     const filho = ls.find((l) => l.nome === FILHO)!;
-    assert.deepEqual(JSON.parse(ls[0].grafo), grafoDoModelo(modelo("conferir-corrigir-centi"), new Map([["conferir-corrigir-1-dfd", filho.id]])));
-    assert.deepEqual(JSON.parse(filho.grafo), grafoDoModelo(modelo("conferir-corrigir-1-dfd"), new Map()));
+    // O diagrama de então (a 0194 grava o atual): a única usa a interna do dono.
+    assert.match(ls[0].grafo, new RegExp(`"fluxoId":"${filho.id}"`));
     assert.equal(filho.dono, 1);
     const pai = db.prepare("SELECT frequencia, ativo FROM automacao_fluxos WHERE id = 4").get() as { frequencia: string; ativo: number };
     assert.equal(pai.ativo, 1, "a agenda fica");
@@ -1530,5 +1529,76 @@ describe("0192: a automação única com o diagrama atual e uma por pessoa", () 
     );
     assert.match(ls[0].grafo, /"fluxoId":"3"/, "a sem dono usa a interna sem dono");
     assert.match(ls[2].grafo, /"fluxoId":"7"/, "a da Bia usa a interna dela");
+  });
+});
+
+describe("0194: UMA automação — Verificar DFDs na Centi (conteúdo · situação · centro de custo)", () => {
+  const PAI = "Verificar DFDs na Centi";
+  const FILHO = "Verificar 1 DFD na Centi";
+  const modelo = (id: string) => MODELOS_FLUXO.find((m) => m.id === id)!;
+  const preparar = () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0193_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h'), (2, 'Bia', 'bia@x', 'h')");
+    return db;
+  };
+  const rodar = (db: DatabaseSync) => db.exec(readFileSync(join(DIR, "0194_automacao_verificar_unica.sql"), "utf8"));
+  const linhas = (db: DatabaseSync) =>
+    db.prepare("SELECT id, nome, criado_por AS dono, grafo, ativo, frequencia, proxima_em AS proxima FROM automacao_fluxos ORDER BY id").all() as {
+      id: number;
+      nome: string;
+      dono: number | null;
+      grafo: string;
+      ativo: number;
+      frequencia: string;
+      proxima: string | null;
+    }[];
+
+  it("renomeia, grava o diagrama do código, leva a agenda e tira as antigas do mesmo dono", () => {
+    const db = preparar();
+    db.exec(`INSERT INTO automacao_fluxos (id, nome, criado_por, grafo, frequencia, ativo, proxima_em) VALUES
+      (1, 'Conferir e corrigir 1 DFD × Centi', 1, '{}', '{"tipo":"manual"}', 0, NULL),
+      (2, 'Conferir e corrigir DFDs × Centi', 1, '{"nos":[{"id":"conf1","tipo":"fluxo.executar","config":{"fluxoId":"1"}}]}', '{"tipo":"manual"}', 0, NULL),
+      (3, 'Execução dos DFDs na CM002', 1, '{}', '{"tipo":"diario","hora":"07:00"}', 1, '2026-11-19T10:00:00Z'),
+      (4, 'Unidades dos DFDs × Centro de Custo da CM002', 1, '{}', '{"tipo":"manual"}', 0, NULL),
+      (5, 'Situação da CM002 numa coluna da Mesa', 1, '{}', '{"tipo":"manual"}', 0, NULL),
+      (6, 'Execução dos DFDs na CM002', 2, '{}', '{"tipo":"manual"}', 0, NULL),
+      (7, 'Outra automação', 1, '{}', '{"tipo":"manual"}', 0, NULL)`);
+    db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES (2, 'conf1', '10', 'ok', '2026-11-18'), (3, 'x', '1', 'ok', '2026-11-18')`);
+    rodar(db);
+    const ls = linhas(db);
+    assert.deepEqual(
+      ls.map((l) => `${l.id}:${l.nome}:${l.dono}`),
+      [`1:${FILHO}:1`, `2:${PAI}:1`, "6:Execução dos DFDs na CM002:2", "7:Outra automação:1"],
+      "as antigas da Ana saem; a da Bia (sem a única) fica",
+    );
+    assert.deepEqual(JSON.parse(ls[1].grafo), grafoDoModelo(modelo("conferir-corrigir-centi"), new Map([["conferir-corrigir-1-dfd", 1]])), "o diagrama do código, com a interna do dono");
+    assert.deepEqual(JSON.parse(ls[0].grafo), grafoDoModelo(modelo("conferir-corrigir-1-dfd"), new Map()));
+    assert.equal(JSON.parse(ls[1].grafo).modelo, "conferir-corrigir-centi", "o modelo gravado no diagrama");
+    assert.equal(ls[1].ativo, 1, "a agenda da antiga ativa passa à única");
+    assert.equal(ls[1].frequencia, '{"tipo":"diario","hora":"07:00"}');
+    assert.equal(ls[1].proxima, "2026-11-19T10:00:00Z");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0, "a retomada antiga sai (e a das excluídas, pela cascata)");
+    // Idempotente.
+    rodar(db);
+    assert.deepEqual(linhas(db), ls);
+  });
+
+  it("não tira a agenda da única nem a antiga usada como etapa", () => {
+    const db = preparar();
+    db.exec(`INSERT INTO automacao_fluxos (id, nome, criado_por, grafo, frequencia, ativo) VALUES
+      (1, 'Conferir e corrigir 1 DFD × Centi', NULL, '{}', '{"tipo":"manual"}', 0),
+      (2, 'Conferir e corrigir DFDs × Centi', NULL, '{}', '{"tipo":"semanal","hora":"08:00","dias":[1]}', 1),
+      (3, 'Execução dos DFDs na CM002', NULL, '{}', '{"tipo":"diario","hora":"07:00"}', 1),
+      (4, 'Unidades dos DFDs × Centro de Custo da CM002', NULL, '{}', '{"tipo":"manual"}', 0),
+      (5, 'Usa a 4', NULL, '{"nos":[{"id":"s","tipo":"fluxo.executar","config":{"fluxoId":"4"}}]}', '{"tipo":"manual"}', 0)`);
+    rodar(db);
+    const ls = linhas(db);
+    assert.deepEqual(
+      ls.map((l) => `${l.id}:${l.nome}`),
+      [`1:${FILHO}`, `2:${PAI}`, "4:Unidades dos DFDs × Centro de Custo da CM002", "5:Usa a 4"],
+    );
+    assert.equal(ls[1].frequencia, '{"tipo":"semanal","hora":"08:00","dias":[1]}', "a agenda da única fica");
   });
 });

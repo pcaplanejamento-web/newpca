@@ -4,7 +4,9 @@
  * entrega em LISTA ou UM POR VEZ (iterador com a porta "volta", como o Laço).
  */
 import { interpolar, type Item } from "./fluxo-core.ts";
-import { type TipoItemMesa, tipoDosItens } from "./fluxo-tipo-item.ts";
+import { filtrarDfdsPelaTabela } from "./dfd-colunas-valor.ts";
+import { dadosDfdDoItem, type TipoItemMesa, tipoDosItens } from "./fluxo-tipo-item.ts";
+import type { FiltroValor } from "./tabela-filtros.ts";
 
 export type ObjetoLeitura = "protocolos" | "dfds" | "itens";
 /** Por onde o recorte é feito ("todos" = Geral). */
@@ -15,10 +17,11 @@ export const BUSCAS: Record<ObjetoLeitura, { valor: string; rotulo: string }[]> 
     { valor: "numero", rotulo: "Nº do protocolo" },
     { valor: "id", rotulo: "Id do protocolo (capa)" },
   ],
+  // O "Nº de planejamento" é o campo de "Os filtrados na tabela" (o mesmo filtro da coluna Nº Plan.) — sem opção própria.
+  // O salvo antigo `buscaDfds: "planejamento"` segue valendo (`buscaDoNo`).
   dfds: [
     { valor: "todos", rotulo: "Todos (geral)" },
     { valor: "tabela", rotulo: "Os filtrados na tabela" },
-    { valor: "planejamento", rotulo: "Nº de planejamento" },
     { valor: "numero", rotulo: "Nº do DFD" },
     { valor: "protocolo", rotulo: "Do protocolo (nº ou Id)" },
   ],
@@ -44,17 +47,29 @@ export const BUSCA_TABELA = "tabela";
 /** Os números de planejamento do campo (sem repetir, só os dígitos antes da barra, sem zeros à esquerda). */
 export const planejamentosDoCampo = (texto: unknown): string[] => valoresProcurados(String(texto ?? "").replace(/\s+/g, ":"), []);
 
-/** O recorte de "Os filtrados na tabela" sobre o que foi lido (o campo de planejamento só nos DFDs). */
+/**
+ * O recorte de "Os filtrados na tabela" sobre o que foi lido AGORA. Nos DFDs, os FILTROS gravados (`filtrosTabela`) são
+ * reaplicados com a régua da planilha (`filtrarDfdsPelaTabela`) — o DFD que passou a divergir entra, o corrigido sai, a
+ * execução agendada segue o filtro — e o campo "Nº de planejamento" (o filtro da coluna Nº Plan.) também. Só quando algum
+ * filtro é de uma coluna sem régua (ou em protocolos/itens) vale a reserva: os ids vistos na tabela com o mesmo campo.
+ */
 export function filtrarPelaTabela(itens: Item[], c: Record<string, unknown>, objeto: ObjetoLeitura): Item[] {
   const campo = objeto === "dfds" ? String(c.planejamentos ?? "") : "";
+  const filtros = c.filtrosTabela && typeof c.filtrosTabela === "object" && !Array.isArray(c.filtrosTabela) ? (c.filtrosTabela as Record<string, FiltroValor>) : {};
+  const plan = new Set(planejamentosDoCampo(campo));
+  const pelaColuna = plan.size ? itens.filter((it) => plan.has(chaveNum(it.planejamento))) : itens;
+  if (objeto === "dfds") {
+    const vivos = filtrarDfdsPelaTabela(
+      pelaColuna.map((it) => ({ ...dadosDfdDoItem(it), it })),
+      filtros,
+    );
+    if (vivos) return vivos.map((x) => x.it);
+  }
   if (Array.isArray(c.filtrados) && String(c.filtradosCom ?? "") === campo) {
     const ids = new Set(c.filtrados.map(String));
     return itens.filter((it) => ids.has(String(it.id)));
   }
-  const plan = planejamentosDoCampo(campo);
-  if (!plan.length) return itens;
-  const quer = new Set(plan);
-  return itens.filter((it) => quer.has(chaveNum(it.planejamento)));
+  return pelaColuna;
 }
 
 /** As fontes já carregadas (cada uma lida UMA vez por execução). */
@@ -117,7 +132,19 @@ export const TIPO_DO_OBJETO: Record<ObjetoLeitura, TipoItemMesa> = { protocolos:
 export function buscaDoNo(c: Record<string, unknown>): { objeto: ObjetoLeitura; busca: string } {
   const objeto = (String(c.objeto ?? "dfds") as ObjetoLeitura) in BUSCAS ? (String(c.objeto ?? "dfds") as ObjetoLeitura) : "dfds";
   const v = objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens;
-  return { objeto, busca: String(v ?? "") || "todos" };
+  const busca = String(v ?? "") || "todos";
+  // O salvo antigo "Nº de planejamento" com valor FIXO = os filtrados na tabela pelo campo (`configDaLeitura`).
+  if (objeto === "dfds" && busca === "planejamento" && !/\{\{/.test(String(c.valor ?? ""))) return { objeto, busca: BUSCA_TABELA };
+  return { objeto, busca };
+}
+
+/** A config efetiva do "Ler do sistema": o valor procurado só com uma busca que o usa (escondido, um valor velho não
+ * restringe nada) e o salvo antigo "Nº de planejamento" fixo levado ao campo da tabela. */
+export function configDaLeitura(c: Record<string, unknown>): Record<string, unknown> {
+  const { objeto, busca } = buscaDoNo(c);
+  const legado = objeto === "dfds" && String(c.buscaDfds ?? "") === "planejamento" && busca === BUSCA_TABELA;
+  if (legado) return { ...c, buscaDfds: BUSCA_TABELA, planejamentos: String(c.planejamentos ?? "") || String(c.valor ?? ""), valor: "", filtrados: undefined, filtradosCom: undefined };
+  return busca === "todos" || busca === BUSCA_TABELA ? { ...c, valor: "" } : c;
 }
 
 /**

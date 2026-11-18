@@ -3,6 +3,7 @@
  * MESMO banner ao tocar na linha. Puro (testado em `tests/fluxo-tipo-item.test.ts`).
  */
 import type { Grafo } from "./fluxo-core.ts";
+import { conferenciaDesatualizada } from "./conferencia-dfd-centi.ts";
 import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
 
 type Item = Record<string, unknown>;
@@ -47,8 +48,12 @@ export function aberturaDoItem(it: Item): AberturaItem | null {
 
 /** Os dados de um DFD para a planilha de DFDs da Mesa (`LinhaDfd` sem o estado — a automação não confere). */
 export function dadosDfdDoItem(it: Item) {
-  const execucao = txt(it.execucaoCenti);
+  // A situação gravada AGORA pela verificação (`situacaoGravada`) vale mais que a lida do sistema antes dela.
+  const execucao = txt(it.situacaoGravada) || txt(it.execucaoCenti);
   const conferencia = txt(it.conferenciaCenti);
+  // O centro de custo: o lido na Centi AGORA (`centroCustoCenti`; "" = a Centi não tem) ou o gravado no DFD (`centroCusto`);
+  // a leitura que falhou (`centroNaoLido`) mostra o gravado. Sem nenhum dos dois campos, a coluna não existe.
+  const centro = "centroCustoCenti" in it && it.centroNaoLido !== true ? it.centroCustoCenti : "centroCusto" in it ? it.centroCusto : undefined;
   return {
     key: idPositivo(it.id) as number,
     numero: txt(it.numero),
@@ -61,7 +66,18 @@ export function dadosDfdDoItem(it: Item) {
     ...(execucao ? { execucao } : {}),
     // O id do DFD e a data da conferência: com eles, o selo da coluna Centi abre as ações (reconferir, corrigir, aceitar).
     dfdId: idPositivo(it.id) ?? undefined,
-    ...(conferencia ? { conferencia: { status: conferencia, motivo: txt(it.conferenciaCentiMotivo) || null, em: txt(it.conferenciaCentiEm) || null } } : {}),
+    ...(centro !== undefined ? { centroCusto: { texto: txt(centro) || null } } : {}),
+    ...(conferencia
+      ? {
+          conferencia: {
+            status: conferencia,
+            motivo: txt(it.conferenciaCentiMotivo) || null,
+            em: txt(it.conferenciaCentiEm) || null,
+            aceite: txt(it.conferenciaCentiAceite) || null,
+            desatualizada: conferenciaDesatualizada(txt(it.conferenciaCentiEm) || null, txt(it.atualizadoEm) || null),
+          },
+        }
+      : {}),
   };
 }
 

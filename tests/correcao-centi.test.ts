@@ -373,7 +373,10 @@ test("Automação única: “Corrigir os divergentes” desligado ou o Reconferi
   assert.equal(so.r.estado, "concluido", so.r.erro);
   assert.deepEqual(so.marcados, [1, 2], "a conferência é marcada");
   assert.deepEqual(so.corrigidos, [], "nada é corrigido");
-  assert.ok(so.r.apontados.some((a) => /só conferir/.test(String(a.mensagem))), "a Análise diz o divergente não corrigido");
+  assert.ok(
+    (so.r.retorno ?? []).some((it) => it.conferenciaCenti === "divergente" && !it.correcao),
+    "o divergente volta Divergente, sem passar pela correção",
+  );
   // O "Reconferir" da Mesa: mesmo com a correção ligada no fluxo, nada é corrigido; e o filtro deixa passar os escolhidos lá.
   const mesa = await rodar(comCorrigir(true, "divergentes"), { __daMesa: true, __soConferir: true, __entrada: [{ id: 2, numero: "2", planejamento: "22" }] });
   assert.equal(mesa.r.estado, "concluido", mesa.r.erro);
@@ -571,8 +574,11 @@ test("auditoria: o motivo CORTADO (e mais N) não deixa divergência para trás 
 test("auditoria: gravou mas a reconferência ainda diverge — “parcial” com o que restou (nunca “corrigido”)", async () => {
   const sv = servidor({ status: "divergente", depois: { status: "divergente", motivo: "DFD 123 (Planej. 456): 1 diferença — situação CANCELADO na Centi" } });
   const r = await corrigirDfdPelaCenti(9, null, sv.busca);
-  assert.equal(r.resultado, "parcial");
+  // O que resta é só o que a Centi não corrige (Situação): "corrigido", com o que resta tratar no painel — não falha sempre.
+  assert.equal(r.resultado, "corrigido");
   assert.deepEqual(r.restam, ["Situação"]);
+  const sv2 = servidor({ status: "divergente", depois: { status: "divergente", motivo: "DFD 123 (Planej. 456): 1 diferença — Objeto: “a” no sistema × “b” na Centi" } });
+  assert.equal((await corrigirDfdPelaCenti(9, null, sv2.busca)).resultado, "parcial", "ainda diverge num corrigível: parcial (nunca corrigido)");
 });
 
 test("auditoria: Situação, Órgão e Nº do DFD não se corrigem pela Centi — ficam apontados", () => {
@@ -676,11 +682,11 @@ test("DFD a DFD: cada um é corrigido logo depois da SUA reconferência; o que f
   assert.deepEqual(um.ordem.slice(0, 3), ["ler:11", "marcar", "corrigir:1"], "a correção espera a conferência gravada do MESMO DFD");
   assert.deepEqual(um.corrigidos, [1, 2, 3]);
   assert.ok(um.r.apontados.some((a) => /DFD 2 \(planejamento 22\): .*ainda diverge/.test(String(a.mensagem))), "o parcial vira falha com o motivo");
-  // A próxima execução refaz SÓ o que falhou.
+  // A fila INTEIRA passou (sem interrupção): a próxima execução recomeça do zero — a agendada reconfere todos, sempre.
+  assert.equal(progresso.size, 0, "a fila inteira passou: a retomada recomeça do zero");
   const dois = await rodar({});
   assert.equal(dois.r.estado, "concluido", dois.r.erro);
-  assert.deepEqual(dois.corrigidos, [2]);
-  assert.equal(progresso.size, 0, "tudo feito: a retomada recomeça do zero");
+  assert.deepEqual(dois.corrigidos, [1, 2, 3]);
   // Interrompido no meio: o já corrigido fica; a próxima execução continua dos que faltam.
   const tres = await rodar({ pararEm: "22" });
   assert.deepEqual(tres.corrigidos, [1]);
