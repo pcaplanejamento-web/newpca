@@ -23,6 +23,7 @@ import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
+import { Modal } from "./Modal";
 import { PasswordField, TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
@@ -111,10 +112,11 @@ function AtualizacaoExtensao({ a }: { a: AtualizacaoExt | null | undefined }) {
           próprios arquivos e se recarrega sozinha — <strong>nunca</strong> no meio de uma automação.
         </p>
         <p>
-          Para isso, instale o <strong>atualizador</strong> UMA vez em cada computador, de dentro da pasta da extensão:{" "}
-          <strong>atualizador/instalar-windows.bat</strong> no Windows ou <strong>atualizador/instalar-mac.command</strong> no Mac.
-          Não precisa ser administrador. No Mac, se ele não abrir: Ajustes do Sistema → Privacidade e Segurança →{" "}
-          <strong>Abrir Mesmo Assim</strong> — ou, no Terminal, digite <strong>sh</strong> e arraste o arquivo para a janela.
+          Para isso, rode o <strong>instalador</strong> UMA vez em cada computador, de dentro da pasta extraída da extensão:{" "}
+          <strong>atualizador/instalar-windows.bat</strong> no Windows ou <strong>atualizador/instalar-mac.command</strong> no Mac
+          (o botão de baixar a extensão mostra os passos). Ele copia a extensão para uma pasta fixa e instala o atualizador; não
+          precisa ser administrador. No Mac, se ele não abrir: Ajustes do Sistema → Privacidade e Segurança →{" "}
+          <strong>Abrir Mesmo Assim</strong>.
         </p>
         <p>
           O atualizador só troca os arquivos da extensão, depois de conferir que o pacote veio inteiro, que é desta mesma
@@ -217,6 +219,63 @@ const URL_EXTENSAO = "/api/admin/automacao/extensao";
 const baixarExtensao = () => {
   window.location.href = URL_EXTENSAO;
 };
+/** Os 3 PASSOS da instalação depois de baixar (o instalador de um duplo clique + o "Carregar sem compactação" do Chrome). */
+function ComoInstalarExtensao({ onFechar }: { onFechar: () => void }) {
+  const mac = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
+  const passos = mac
+    ? [
+        <>
+          Abra o arquivo baixado (<strong>extensao-centi-{VERSAO_EXTENSAO_CENTI}.zip</strong>) com dois cliques — ele vira uma pasta.
+        </>,
+        <>
+          Na pasta, abra <strong>atualizador</strong> e dê dois cliques em <strong>instalar-mac.command</strong>. Se o Mac bloquear:
+          Ajustes do Sistema → Privacidade e Segurança → <strong>Abrir Mesmo Assim</strong>. Ele copia a extensão para uma pasta
+          fixa, instala a atualização automática, copia o caminho e abre a página de extensões do Chrome.
+        </>,
+        <>
+          No Chrome: ligue o <strong>Modo do desenvolvedor</strong> (canto superior direito), toque em{" "}
+          <strong>Carregar sem compactação</strong>, aperte <strong>Cmd+Shift+G</strong>, <strong>Cmd+V</strong> e Enter, e depois
+          “Selecionar”.
+        </>,
+      ]
+    : [
+        <>
+          Abra a pasta Downloads, clique com o botão direito em <strong>extensao-centi-{VERSAO_EXTENSAO_CENTI}.zip</strong> →{" "}
+          <strong>Extrair tudo</strong>.
+        </>,
+        <>
+          Na pasta extraída, abra <strong>atualizador</strong> e dê dois cliques em <strong>instalar-windows.bat</strong>. Ele copia
+          a extensão para uma pasta fixa, instala a atualização automática, copia o caminho e abre a página de extensões do
+          Chrome.
+        </>,
+        <>
+          No Chrome: ligue o <strong>Modo do desenvolvedor</strong> (canto superior direito), toque em{" "}
+          <strong>Carregar sem compactação</strong>, clique na barra de endereço da janela, aperte <strong>Ctrl+V</strong> e Enter,
+          e depois “Selecionar pasta”.
+        </>,
+      ];
+  return (
+    <Modal open onClose={onFechar} titulo={`Instalar a extensão ${VERSAO_EXTENSAO_CENTI}`} size="md">
+      <div className="space-y-3 text-sm">
+        <ol className="space-y-3">
+          {passos.map((p, i) => (
+            <li key={i} className="flex gap-3">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white tabular-nums">
+                {i + 1}
+              </span>
+              <span className="text-text-2">{p}</span>
+            </li>
+          ))}
+        </ol>
+        <Callout kind="info">
+          É uma vez por computador: depois disso a extensão se atualiza sozinha. O Chrome não deixa nenhum programa fazer o
+          “Carregar sem compactação” por você — por isso esse passo é seu. Já tinha a extensão? Faça o mesmo: a pasta nova
+          substitui a antiga.
+        </Callout>
+      </div>
+    </Modal>
+  );
+}
 
 /** A operação Emitir DFD (ModuleKey e Guid) como corpo + chave comparável; inválida = null. */
 function chaveOp(op: unknown): { chave: string; corpo: { moduleKey: number; guid: string } } | null {
@@ -524,6 +583,11 @@ export function AutomacaoAdmin({
 }) {
   const router = useRouter();
   const { ext, pedir, lote: loteRef, interrompido: interrompidoRef } = useExtensaoCenti();
+  const [comoInstalar, setComoInstalar] = useState(false);
+  const baixarEInstalar = () => {
+    baixarExtensao();
+    setComoInstalar(true);
+  };
   const [cfg, setCfg] = useState<ConfigCenti>(CONFIG_CENTI_PADRAO);
   const [mapa, setMapa] = useState<Record<string, string>>({});
   const mapaRef = useRef(mapa);
@@ -860,7 +924,7 @@ export function AutomacaoAdmin({
           <Button
             size="sm"
             variant={atualizada ? "secondary" : "primary"}
-            onClick={baixarExtensao}
+            onClick={baixarEInstalar}
             title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}
             aria-label={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}
           >
@@ -899,7 +963,7 @@ export function AutomacaoAdmin({
                 detalhe="Verificando a extensão e a Centi…"
                 onClick={() => void giroVerificar.girar(async () => void (await verificar(true)))}
               />
-              <Button size="sm" variant="secondary" onClick={baixarExtensao}>
+              <Button size="sm" variant="secondary" onClick={baixarEInstalar}>
                 <IconDownload className="h-4 w-4 shrink-0" /> Baixar a extensão {VERSAO_EXTENSAO_CENTI}
               </Button>
             </div>
@@ -1011,6 +1075,7 @@ export function AutomacaoAdmin({
         onAlterado={() => router.refresh()}
       />
       {historico && <HistoricoExecucoes onFechar={() => setHistorico(false)} />}
+      {comoInstalar && <ComoInstalarExtensao onFechar={() => setComoInstalar(false)} />}
       {gravados && <GravadorReceitas passos={gravados} onFechar={() => setGravados(null)} />}
       {confirmacao}
     </div>

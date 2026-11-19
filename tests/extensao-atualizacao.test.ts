@@ -190,3 +190,40 @@ test("zip da extensão: leva o atualizador — CRLF/BOM no Windows, executável 
   assert.ok(ps1 > 0, "o .ps1 com BOM");
   assert.ok(zip.includes(Buffer.from("$ErrorActionPreference = 'Stop'\r\n")), "CRLF no .ps1");
 });
+
+test("instalador do Mac: copia para a pasta fixa e registra o atualizador nela (rodado de verdade, numa pasta temporária)", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, readFileSync: ler, existsSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, dirname } = await import("node:path");
+  const { spawnSync } = await import("node:child_process");
+  const { ARQUIVOS_EXTENSAO } = await import("../src/lib/extensao-centi-arquivos.ts");
+  const raiz = mkdtempSync(join(tmpdir(), "pca-inst-"));
+  try {
+    const baixado = join(raiz, "Downloads", "extensao-centi");
+    for (const [n, t] of Object.entries(ARQUIVOS_EXTENSAO)) {
+      mkdirSync(dirname(join(baixado, n)), { recursive: true });
+      writeFileSync(join(baixado, n), t);
+    }
+    const r = spawnSync("sh", [join(baixado, "atualizador/instalar-mac.command")], { env: { ...process.env, HOME: raiz }, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const fixa = join(raiz, "Library/Application Support/Automacao PCA/extensao");
+    assert.ok(existsSync(join(fixa, "manifest.json")), "a extensão na pasta fixa");
+    assert.ok(existsSync(join(fixa, "atualizador/atualizador.jxa")));
+    const host = JSON.parse(ler(join(raiz, "Library/Application Support/Google/Chrome/NativeMessagingHosts/br.gov.governarv.pca_atualizador.json"), "utf8"));
+    assert.equal(host.path, join(fixa, "atualizador/atualizador.jxa"), "o host aponta para a pasta FIXA");
+    assert.deepEqual(host.allowed_origins, ["chrome-extension://lhdooglmnecpbocibgfobaefahliicnn/"]);
+    assert.match(r.stdout, /Carregar sem compactação/);
+    assert.match(r.stdout, new RegExp(`Caminho: ${fixa.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test("instalador do Windows: pasta fixa em LOCALAPPDATA, o caminho copiado e a página de extensões aberta", () => {
+  const t = arq("instalar-windows.ps1");
+  assert.match(t, /\$env:LOCALAPPDATA 'Automacao PCA\\extensao'/);
+  assert.match(t, /Set-Clipboard -Value \$pasta/);
+  assert.match(t, /chrome:\/\/extensions\//);
+  assert.match(t, /HKCU:\\Software\\Google\\Chrome\\NativeMessagingHosts/);
+  assert.match(t, /Join-Path \$aqui 'atualizador\.bat'/, "o host da pasta fixa");
+});

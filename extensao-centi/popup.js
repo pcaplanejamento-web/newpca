@@ -566,7 +566,8 @@
     $("ajudaAtual").setAttribute("aria-expanded", String(!aberta));
     $("textoAjudaAtual").hidden = aberta;
   });
-  const INSTALAR = "Na pasta da extensão, abra atualizador/instalar-windows.bat (Windows) ou atualizador/instalar-mac.command (Mac).";
+  const INSTALAR =
+    "Baixe a extensão na tela Automação do sistema e rode o instalador (atualizador/instalar-windows.bat no Windows ou atualizador/instalar-mac.command no Mac): ele mostra os passos.";
   function mostrarAtualizacao(a) {
     const s = a?.situacao;
     const [texto, cor] =
@@ -590,7 +591,8 @@
     $("atualSelo").title = texto;
     const linhas = [];
     if (s === "ausente") linhas.push(INSTALAR);
-    if (s === "outraPasta") linhas.push(`O atualizador foi instalado para outra pasta${a.pasta ? ` (${a.pasta})` : ""}. ${INSTALAR}`);
+    if (s === "outraPasta")
+      linhas.push(`O Chrome carrega a extensão de uma pasta e o atualizador cuida de outra${a.pasta ? ` (${a.pasta})` : ""}: no Chrome, carregue a pasta que o instalador mostrou.`);
     if (s === "falhou" && a.erro) linhas.push(a.erro);
     if (a?.para && a?.de && a?.atualizadaEm) linhas.push(`Atualizada de ${a.de} para ${a.para} ${haQuanto(a.atualizadaEm)}.`);
     else if (a?.verificadaEm) linhas.push(`Conferida ${haQuanto(a.verificadaEm)}${a.publicada ? ` · publicada: ${a.publicada}` : ""}.`);

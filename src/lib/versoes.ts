@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.305.0",
+    data: "2026-11-19",
+    titulo: "Instalador da extensão em um duplo clique",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Extensão 1.44.2 com INSTALADOR: na pasta extraída, dois cliques em atualizador/instalar-windows.bat (ou instalar-mac.command no Mac) copiam a extensão para uma pasta fixa, instalam a atualização automática, copiam o caminho e abrem a página de extensões do Chrome — no Chrome falta só o “Carregar sem compactação”, uma vez.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Ao baixar a extensão, a tela mostra os 3 passos da instalação para o seu sistema (Windows ou Mac).",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.304.1",
     data: "2026-11-19",
     titulo: "Atualização automática da extensão mais segura",

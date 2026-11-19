@@ -1160,7 +1160,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ou uma ação na Centi há < 3 min; espera o fim). v1.304.1 (extensão 1.44.1): fora do sistema = `semSistema` sem gastar o
   intervalo (confere ao abrir o `/painel`); instalada/atualizada à mão confere na hora; o host do Windows tira o `zip` da
   mensagem ANTES do `ConvertFrom-Json` (limite de ~2 MB no PowerShell 5.1; aceita o "\/" escapado); o instalador registra o
-  Chrome mesmo se o Edge falhar. A situação fica em
+  Chrome mesmo se o Edge falhar. **INSTALADOR de um duplo clique (v1.305.0, extensão 1.44.2):** `instalar-windows.bat`/
+  `instalar-mac.command` copiam a extensão para uma PASTA FIXA (`%LOCALAPPDATA%\Automacao PCA\extensao` ou
+  `~/Library/Application Support/Automacao PCA/extensao` — rodando dela, só refaz o registro), registram o host NELA, copiam o
+  caminho (`Set-Clipboard`/`pbcopy`), abrem `chrome://extensions/` e dizem os 3 passos (avisam quando a extensão já está no
+  Chrome — o id nas "Secure Preferences"). O "Carregar sem compactação" é do Chrome (nenhum programa pode fazer) — uma vez.
+  Na tela, "Baixar a extensão" abre `ComoInstalarExtensao` (os passos do Windows ou do Mac, pelo `userAgent`). Os
+  instaladores ficam em `atualizador/` (o host pula a pasta — um arquivo novo na raiz quebraria os hosts já instalados). A situação fica em
   `chrome.storage.local.atualizacao` e vai no `estado` (popup: grupo "Atualização automática"; a tela: `AtualizacaoExtensao`
   no menu "Extensão e Centi"). O .zip (`zipDaExtensao`) leva `atualizador/*` com CRLF nos `.bat`/`.ps1`, BOM no `.ps1` e o
   modo 0755 nos do Mac (`ZipArmazenar.adicionar(…, {executavel})`); `scripts/gerar-extensao.mjs` inclui a pasta. Testes:
