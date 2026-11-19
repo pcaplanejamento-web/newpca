@@ -26,9 +26,10 @@ export function comandoGuardarLoginCenti(db: Db, usuarioId: number, cifrado: str
 export const comandoRecifrarLoginCenti = (db: Db, usuarioId: number, cifrado: string, auto: boolean) =>
   db.update(centiLogins).set({ cifrado, auto: auto ? 1 : 0 }).where(eq(centiLogins.usuarioId, usuarioId));
 
-/** Só o "Entrar sozinho" (sem regravar a senha nem tirar a pausa). */
+/** Salvar SEM trocar usuário/senha: o "Entrar sozinho" e o RETOMAR (a pessoa conferiu — ex.: a verificação da Centi
+ * já passou), sem regravar a senha. Como todo salvar, zera a pausa. */
 export const comandoAutoLoginCenti = (db: Db, usuarioId: number, auto: boolean, em: string) =>
-  db.update(centiLogins).set({ auto: auto ? 1 : 0, atualizadoEm: em }).where(eq(centiLogins.usuarioId, usuarioId));
+  db.update(centiLogins).set({ auto: auto ? 1 : 0, atualizadoEm: em, pausadoEm: null, motivo: null }).where(eq(centiLogins.usuarioId, usuarioId));
 
 /** A Centi RECUSOU a senha: pausa para todos os navegadores da pessoa até salvar de novo. */
 export const comandoPausarLoginCenti = (db: Db, usuarioId: number, motivo: string, em: string) =>

@@ -202,7 +202,7 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
   useEffect(() => {
     void carregar();
   }, [carregar]);
-  const mudou = !!usuario.trim() || !!senha || (s?.tem === true && auto !== s.auto);
+  const mudou = !!usuario.trim() || !!senha || (s?.tem === true && (auto !== s.auto || !!s.pausadoEm));
   const falta = !s?.tem && (!usuario.trim() || !senha);
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -242,7 +242,7 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
             <span className="text-xs text-muted">{falha ?? "Conferindo…"}</span>
           ) : s.pausadoEm ? (
             <Badge tone="amber" dot title={s.motivo ?? undefined}>
-              Pausado — {s.motivo ?? "a Centi recusou a senha"}. Salve de novo para retomar.
+              Pausado — {s.motivo ?? "a Centi recusou a senha"}. Confira e salve para retomar.
             </Badge>
           ) : s.tem ? (
             <Badge tone="emerald" dot>

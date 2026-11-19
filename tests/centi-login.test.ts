@@ -53,7 +53,7 @@ describe("login da Centi — banco", () => {
     await comandoAutoLoginCenti(orm, 1, false, "2026-11-19T11:30:00Z");
     [l] = await consultaLoginCenti(orm, 1);
     assert.equal(l.auto, 0);
-    assert.ok(l.pausadoEm, "trocar só o automático não tira a pausa");
+    assert.equal(l.pausadoEm, null, "salvar sem trocar a senha (retomar) tira a pausa");
     await comandoGuardarLoginCenti(orm, 1, "v2:c:d", true, "2026-11-19T12:00:00Z");
     [l] = await consultaLoginCenti(orm, 1);
     assert.deepEqual([l.cifrado, l.auto, l.pausadoEm, l.motivo, l.atualizadoEm], ["v2:c:d", 1, null, null, "2026-11-19T12:00:00Z"]);
