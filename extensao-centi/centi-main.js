@@ -402,7 +402,8 @@
     if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/"))
       this.addEventListener("load", () => {
         trocarToken(tokenDoXhr(this));
-        notarResposta(this.status);
+        // Só a resposta de um pedido com a sessão da tela conta (o envio próprio da extensão pode levar outra entidade).
+        if (!this.__pcaInterno) notarResposta(this.status);
       });
     if (this.__pcaUrl && !this.__pcaInterno && String(this.__pcaUrl).includes("/restauth/")) {
       const url = this.__pcaUrl;
@@ -423,7 +424,7 @@
         try {
           if (String(r.url || "").includes("/restauth/")) {
             trocarToken((n) => r.headers.get(n));
-            notarResposta(r.status);
+            if (!init?.__pcaInterno) notarResposta(r.status);
           }
         } catch {}
         return r;

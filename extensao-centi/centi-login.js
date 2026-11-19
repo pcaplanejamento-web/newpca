@@ -96,10 +96,12 @@
     if (!t) return "A aba não está na tela de login.";
     definirValor(t.usuario, usuario);
     definirValor(t.senha, senha);
-    entrar(t);
+    ultimoEnvio = entrar(t);
     return "enviado";
   }
 
+  // Como o último login foi enviado: só o que NÃO foi um clique no ENTRAR (estava desabilitado) é tocado de novo.
+  let ultimoEnvio = null;
   /** Toca em ENTRAR (habilitado); desabilitado, envia o formulário; sem formulário, Enter no campo da senha. */
   function entrar(t) {
     if (!t.botao.disabled && t.botao.getAttribute?.("aria-disabled") !== "true") {
@@ -118,9 +120,11 @@
 
   /** Ainda na tela com os campos preenchidos e o ENTRAR habilitado agora: toca de novo (o ENTRAR que habilitou depois). */
   function tocarEntrarDeNovo(doc) {
+    if (ultimoEnvio === "clique" || ultimoEnvio === "de-novo") return false;
     const t = telaDeLogin(doc);
     if (!t || t.botao.disabled || !t.senha.value) return false;
     t.botao.click();
+    ultimoEnvio = "de-novo";
     return true;
   }
 

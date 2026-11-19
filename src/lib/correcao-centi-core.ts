@@ -251,12 +251,25 @@ export function grupoDoTipo(rotulo: string): GrupoCorrecao | null {
   return "cabecalho";
 }
 
-/** Os grupos escolhidos, válidos e sem repetir (qualquer valor → lista; vazio/ausente = null = todos). */
+/** Os grupos escolhidos, válidos e sem repetir: null = TODOS (ausente, todos marcados ou só valores desconhecidos);
+ * [] = NENHUM (a lista desmarcada inteira — só confere). */
 export function lerGruposCorrecao(v: unknown): GrupoCorrecao[] | null {
+  if (Array.isArray(v) && !v.length) return [];
   const bruto = Array.isArray(v) ? v : typeof v === "string" ? v.split(/[;|]/) : [];
   const validos = new Set<string>(TODOS_GRUPOS_CORRECAO);
   const g = [...new Set(bruto.map((x) => String(x).trim()).filter((x) => validos.has(x)))] as GrupoCorrecao[];
   return g.length && g.length < TODOS_GRUPOS_CORRECAO.length ? g : null;
+}
+
+/** O que restou FORA da escolha não é pendência da correção: os tipos de grupos não escolhidos — e o "Valor total" que
+ * vem de um item incluído/retirado quando "Itens" não foi escolhido (o total só fecha com o item). */
+export function restaForaDaEscolha(restam: readonly string[], grupos: readonly GrupoCorrecao[] | null): string[] {
+  if (!grupos) return [];
+  const itensFora = !grupos.includes("itens") && restam.some((t) => grupoDoTipo(t) === "itens");
+  return restam.filter((t) => {
+    const g = grupoDoTipo(t);
+    return g !== null && (!grupos.includes(g) || (t === "Valor total" && itensFora));
+  });
 }
 
 /** Os tipos dos grupos escolhidos (null = todos os corrigíveis). */

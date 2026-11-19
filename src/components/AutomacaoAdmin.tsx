@@ -612,7 +612,7 @@ export function AutomacaoAdmin({
         trigger={
           <span
             title="Extensão e Centi: verificar, baixar a extensão e os ajustes"
-            className="inline-flex size-11 items-center justify-center rounded-control border border-border-2 bg-surface text-text lg:size-[var(--h-control-sm)]"
+            className="inline-flex size-11 items-center justify-center rounded-control border border-border-2 bg-surface text-text desktop:size-[var(--h-control-sm)]"
           >
             <IconPlug className="h-4 w-4" aria-hidden="true" />
           </span>
@@ -762,13 +762,23 @@ function LoginCenti({
     : login.pausado
       ? (login.motivo ?? "Login automático pausado")
       : login.auto
-        ? "entrando sozinha…"
+        ? "a extensão entra sozinha (depois de uma falha, espera 5 min entre as tentativas)"
         : "login automático desligado";
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       <Badge tone={login?.pausado ? "red" : "amber"} dot>
         {/* O que está acontecendo À VISTA (não só na dica): entrando sozinha, sem login salvo ou pausado (com o motivo). */}
-        <span title={detalhe}>{login?.pausado ? "Login da Centi pausado" : !login?.credenciais ? "Centi pede login — sem login salvo" : login.auto ? "Centi pede login — entrando…" : "Centi pede login"}</span>
+        <span title={detalhe}>
+          {!login
+            ? "Centi pede login"
+            : login.pausado
+              ? "Login da Centi pausado"
+              : !login.credenciais
+                ? "Centi pede login — sem login salvo"
+                : login.auto
+                  ? "Centi pede login — o login automático entra sozinho"
+                  : "Centi pede login"}
+        </span>
       </Badge>
       {pronto && (
         <Button size="sm" variant="secondary" onClick={onEntrar} loading={entrando} title="A extensão entra agora com o login guardado nela">

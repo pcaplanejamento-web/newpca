@@ -23,10 +23,19 @@ export const avisosSistema = (): Estado => estado;
 const INICIAL: Estado = { versaoNova: null, sessaoTerminou: false };
 export const avisosSistemaNoServidor = (): Estado => INICIAL;
 
-/** A versão que o SERVIDOR informou: diferente da desta página = há uma versão nova (recarregar traz o código novo). */
+/** "1.298.0" > "1.297.4"? (numérico por parte; o que não é número vale 0). */
+export function versaoMaior(a: string, b: string): boolean {
+  const pa = a.split(".").map((x) => Number.parseInt(x, 10) || 0);
+  const pb = b.split(".").map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
+  return false;
+}
+
+/** A versão que o SERVIDOR informou: MAIOR que a desta página = há uma versão nova (recarregar traz o código novo). Uma
+ * resposta do servidor também prova que a sessão voltou (entrou de novo em outra aba): o aviso de sessão some. */
 export function versaoDoServidor(v: unknown): void {
   if (typeof v !== "string" || !v) return;
-  if (v !== VERSAO_ATUAL) mudar({ versaoNova: v });
+  mudar({ sessaoTerminou: false, ...(versaoMaior(v, VERSAO_ATUAL) ? { versaoNova: v } : {}) });
 }
 
 /** A sessão do sistema terminou (um pedido voltou 401). */
@@ -40,5 +49,5 @@ export function conferirVersaoAgora(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENTO_CONFERIR_VERSAO));
 }
 
-/** O texto de um erro de API: 401 = a sessão terminou (avisa e diz o que fazer); senão o erro dado. */
+/** O texto no lugar do "Não autenticado" das telas (o aviso único diz o que fazer). */
 export const MSG_SESSAO_TERMINOU = "Sua sessão no sistema terminou — entre de novo.";

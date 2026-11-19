@@ -376,7 +376,7 @@ test("serviço: fora do login e sem a sessão = faz a 'pesquisa' (aquecer) e fic
   assert.equal(s.enviados.filter((e) => e.m.acao === "aquecer").length, 1, "pronta e ativa: não aquece de novo");
 });
 
-test("serviço: sem a tela da Centi carregada, recarrega a aba (1 vez a cada 2 min); parada há 10 min, mantém viva", async () => {
+test("serviço: sem a tela da Centi carregada, recarrega a aba só depois de 3 falhas seguidas (1 vez a cada 2 min)", async () => {
   const s = servicoFalso({
     naAba: (_id, m) => {
       if (m.acao === "aquecer") return { ok: false, semCliente: true };
@@ -387,12 +387,22 @@ test("serviço: sem a tela da Centi carregada, recarrega a aba (1 vez a cada 2 m
   const r = (await s.pedir({ acao: "estado" })) as { ok: boolean; erro: string };
   assert.equal(r.ok, false);
   assert.match(r.erro, /Preparando a Centi/);
-  assert.equal(s.recarregadas.length, 1);
-  await s.pedir({ acao: "estado" });
-  assert.equal(s.recarregadas.length, 1, "nem aquece nem recarrega em laço");
+  assert.equal(s.recarregadas.length, 0, "uma falha só não recarrega");
+  await s.pedir({ acao: "entrarAgora" });
+  await s.pedir({ acao: "entrarAgora" });
+  assert.equal(s.recarregadas.length, 1, "a 3ª seguida recarrega");
+  for (let i = 0; i < 3; i++) await s.pedir({ acao: "entrarAgora" });
+  assert.equal(s.recarregadas.length, 1, "nunca em laço (2 min entre recargas)");
+});
+
+test("serviço: manter viva só pela conferência do estado, ociosa — nunca junto de uma ação", async () => {
   const viva = servicoFalso({ naAba: (_id, m) => (m.acao === "estado" ? { ok: true, logado: true, ativoEm: Date.now() - 11 * 60_000 } : undefined) });
+  await viva.pedir({ acao: "ler", dados: {} });
+  assert.equal(viva.enviados.filter((e) => e.m.acao === "aquecer").length, 0, "a ação não aquece");
   await viva.pedir({ acao: "estado" });
-  await pausa(20);
-  assert.equal(viva.enviados.filter((e) => e.m.acao === "aquecer").length, 1, "parada há mais de 10 min: uma leitura a mantém viva");
-  assert.ok(viva.alarmes.includes("login-centi"), "o alarme do login existe também sem a instalação");
+  assert.equal(viva.enviados.filter((e) => e.m.acao === "aquecer").length, 0, "logo depois de uma ação, não aquece");
+  const ociosa = servicoFalso({ naAba: (_id, m) => (m.acao === "estado" ? { ok: true, logado: true, ativoEm: Date.now() - 11 * 60_000 } : undefined) });
+  await ociosa.pedir({ acao: "estado" });
+  assert.equal(ociosa.enviados.filter((e) => e.m.acao === "aquecer").length, 1, "parada há mais de 10 min e ociosa: uma leitura a mantém viva");
+  assert.ok(ociosa.alarmes.includes("login-centi"), "o alarme do login existe também sem a instalação");
 });

@@ -267,9 +267,11 @@ export function lerGrafo(v: unknown): Grafo {
   return modelo ? { v: 1, nos, conexoes, modelo } : { v: 1, nos, conexoes };
 }
 
-/** `versaoNova` = um componente que esta página não conhece — gravado por uma versão mais nova do sistema (recarregar). */
+/** `versaoNova` = um componente que esta página não conhece — em geral gravado por uma versão mais nova (recarregar). */
 export type ProblemaGrafo = { no?: string; texto: string; nivel: "erro" | "atencao"; versaoNova?: boolean };
-export const MSG_COMPONENTE_NOVO = "Este fluxo usa um componente de uma versão mais nova do sistema — recarregue a página.";
+/** O componente que esta página não conhece: a versão publicada pode ser mais nova (recarregar) — ou o tipo saiu (excluir). */
+export const msgComponenteDesconhecido = (tipo: string) =>
+  `Componente desconhecido (${tipo}). Se o sistema foi atualizado, recarregue a página; se continuar, exclua o componente.`;
 
 /** O NOME do nó = a função do tipo (não se edita). */
 export const nomeDoNo = (n: NoFluxo, reg: Registro) => reg.get(n.tipo)?.rotulo ?? n.tipo;
@@ -355,7 +357,7 @@ export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
   for (const n of g.nos) {
     const d = reg.get(n.tipo);
     if (!d) {
-      p.push({ no: n.id, texto: MSG_COMPONENTE_NOVO, nivel: "erro", versaoNova: true });
+      p.push({ no: n.id, texto: msgComponenteDesconhecido(n.tipo), nivel: "erro", versaoNova: true });
       continue;
     }
     if (d.unico) unicos.set(n.tipo, (unicos.get(n.tipo) ?? 0) + 1);

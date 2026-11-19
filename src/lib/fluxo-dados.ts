@@ -441,8 +441,10 @@ export function verificacoesDoNo(c: Record<string, unknown>, host: Record<string
   const v = (k: "conteudo" | "situacao" | "centro" | "semDfd", padrao: boolean) => (so ? so.has(k) : liga(k, padrao));
   const conteudo = v("conteudo", true);
   const centro = v("centro", true);
-  const corrigir = conteudo && !host.__soConferir && (host.__corrigir === true || liga("corrigir", true));
-  const grupos = corrigir && !so ? lerGruposCorrecao(c.corrigirTipos) : null;
+  // "O que corrigir" todo desmarcado = só confere (nada a corrigir).
+  const escolha = !so ? lerGruposCorrecao(c.corrigirTipos) : null;
+  const corrigir = conteudo && !host.__soConferir && (host.__corrigir === true || (liga("corrigir", true) && !(escolha && !escolha.length)));
+  const grupos = corrigir && escolha?.length ? escolha : null;
   return {
     conteudo,
     corrigir,

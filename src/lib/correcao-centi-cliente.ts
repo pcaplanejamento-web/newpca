@@ -9,8 +9,8 @@ import { aceiteVale, lerAceite, MSG_RETRATO_VENCIDO, type RetratoCenti, retratoD
 import {
   aplicarCentiPorTipos,
   type GrupoCorrecao,
-  grupoDoTipo,
   planoCorrecao,
+  restaForaDaEscolha,
   SEM_CORRECAO_CENTI,
   tiposCorrigiveis,
   tiposCorrigiveisDoMotivo,
@@ -31,6 +31,8 @@ export type ResultadoCorrecao = {
   motivo: string | null;
   /** Os tipos que ainda divergem depois de gravar (no `parcial`; no `corrigido`, os que a Centi não corrige). */
   restam?: string[];
+  /** "O que corrigir": os tipos que ficaram como estão por ESCOLHA (fora dos grupos marcados) — no `corrigido` e no `sem`. */
+  foraDaEscolha?: string[];
 };
 
 type Busca = (url: string, init?: RequestInit) => Promise<Response>;
@@ -70,7 +72,7 @@ export async function corrigirDfdPelaCenti(
   if (desiste && !cortado) return { resultado: "naoCorrigivel", status, motivo };
   if (tipos && !usar.length) return { resultado: "sem", status, motivo };
   // Por grupo: nada do motivo nos grupos escolhidos = nada a fazer (o motivo cortado decide pelo retrato).
-  if (grupos && !tipos && !cortado && !tiposDosGrupos(alcance, grupos).length) return { resultado: "sem", status, motivo };
+  if (grupos && !tipos && !cortado && !tiposDosGrupos(alcance, grupos).length) return { resultado: "sem", status, motivo, foraDaEscolha: alcance };
   const r2 = await busca(`/api/dfd/${id}/conferencia-centi?retrato=1`);
   const j2 = await lerJson<{ retrato?: RetratoCenti | null; vencido?: boolean }>(r2);
   if (!r2.ok || !j2.ok) throw new Error(j2.error ?? "não foi possível ler os dados da Centi");
@@ -81,7 +83,7 @@ export async function corrigirDfdPelaCenti(
   const plano = planoCorrecao(g, retrato, o.anoPca ?? o.protocoloAnoPca ?? null);
   // A automação (`tipos` null) corrige TODA divergência do retrato — não só as que couberam no motivo gravado.
   const doPlano = grupos && !tipos ? tiposDosGrupos(tiposCorrigiveis(plano), grupos) : null;
-  if (doPlano && !doPlano.length) return { resultado: "sem", status, motivo };
+  if (doPlano && !doPlano.length) return { resultado: "sem", status, motivo, foraDaEscolha: tiposCorrigiveis(plano) };
   const corrigido = semMarcas(aplicarCentiPorTipos(g, plano, tipos ? usar : doPlano, doPlano ? grupos : null));
   const itensMudaram = JSON.stringify(corrigido.itens) !== JSON.stringify(g.itens);
   if (itensMudaram && corrigido.itens.length === 0) throw new Error("a Centi não tem itens — corrija no banner do DFD");
@@ -108,11 +110,10 @@ export async function corrigirDfdPelaCenti(
         const restam = tiposDoMotivo(j4.motivo);
         // Só restou o que a Centi não corrige (situação, órgão, nº): a correção terminou — o resto é tratado no painel.
         // Por grupo: o que restou FORA dos grupos escolhidos também não é pendência desta correção.
-        const fora = (t: string) => {
-          const gr = grupoDoTipo(t);
-          return SEM_CORRECAO_CENTI.has(t) || (!!grupos && gr !== null && !grupos.includes(gr));
-        };
-        if (tipos === null && restam.length && restam.every(fora)) return { resultado: "corrigido", status: depois, motivo: j4.motivo ?? null, restam };
+        const fora = restaForaDaEscolha(restam, grupos);
+        const pendente = restam.filter((t) => !SEM_CORRECAO_CENTI.has(t) && !fora.includes(t));
+        if (tipos === null && restam.length && !pendente.length)
+          return { resultado: "corrigido", status: depois, motivo: j4.motivo ?? null, restam: restam.filter((t) => !fora.includes(t)), foraDaEscolha: fora };
         return { resultado: "parcial", status: depois, motivo: j4.motivo ?? null, restam };
       }
       return { resultado: "corrigido", status: depois, motivo: j4.motivo ?? null };

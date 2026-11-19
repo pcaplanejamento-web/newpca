@@ -1196,7 +1196,7 @@ const NOS: DefNo[] = [
         opcoes: GRUPOS_CORRECAO.map((g) => ({ valor: g.valor, rotulo: g.rotulo })),
         visivel: (c) => c.conteudo !== false && c.corrigir !== false,
         ajuda:
-          "Quais divergências do conteúdo são corrigidas com os dados da Centi. Todos marcados = tudo o que diverge. Desmarcado = a divergência fica como está (a coluna “Centi” segue mostrando) e não conta como pendência da correção. Situação, órgão e nº do DFD a Centi nunca corrige — são tratados no painel da coluna Centi.",
+          "Quais divergências do conteúdo são corrigidas com os dados da Centi. Todos marcados = tudo o que diverge; nenhum = só confere. O tipo desmarcado fica como está (a coluna “Centi” segue mostrando) e não conta como pendência da correção — sem “Itens incluídos ou retirados”, o valor total que depende desses itens também fica. Situação, órgão e nº do DFD a Centi nunca corrige — são tratados no painel da coluna Centi.",
       },
       { chave: "situacao", rotulo: "Situação (execução)", tipo: "booleano", entrada: true, padrao: true, ajuda: "Grava a situação do planejamento na Centi (Executado, Cancelado…) na coluna “Situação” da Mesa; o planejamento que a Centi não tem fica “Não encontrado na Centi”." },
       { chave: "centro", rotulo: "Centro de custo e unidade", tipo: "booleano", entrada: true, padrao: true, ajuda: "Grava o texto completo do centro de custo da Centi na coluna “Centro de Custo” da Mesa (os itens herdam o do DFD) e confere a unidade do DFD com a do centro de custo." },
@@ -1838,7 +1838,7 @@ const NOS: DefNo[] = [
     ],
     executar: async (e, c, ctx) => {
       const corrigir = ctx.host.corrigirPelaCenti as
-        | ((id: number, grupos?: string[] | null) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>)
+        | ((id: number, grupos?: string[] | null) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[]; foraDaEscolha?: string[] }>)
         | undefined;
       const corrigidos: Item[] = [];
       const convergentes: Item[] = [];
@@ -1907,9 +1907,16 @@ const NOS: DefNo[] = [
           // o "Divergente" da comparação feita antes da correção).
           if (r.status && ["corrigido", "parcial"].includes(r.resultado))
             feito = { ...feito, conferenciaCenti: r.status, conferenciaCentiMotivo: r.motivo, conferenciaCentiEm: new Date().toISOString() };
+          const porEscolha = Array.isArray(r.foraDaEscolha) && r.foraDaEscolha.length ? r.foraDaEscolha : null;
+          if (porEscolha) feito = { ...feito, foraDaEscolha: porEscolha };
           if (r.resultado === "corrigido") {
-            // Corrigido; restou só o que a Centi não corrige (situação, órgão, nº) — fica dito, para tratar no painel.
-            if (Array.isArray(r.restam) && r.restam.length) feito = { ...feito, motivo: `Corrigido — resta tratar no painel da coluna Centi: ${r.restam.join(", ")}.` };
+            // Corrigido; restou o que a Centi não corrige (situação, órgão, nº — tratar no painel) e/ou o que ficou FORA
+            // do "O que corrigir" (como está, por escolha) — os dois ficam ditos, separados.
+            const partes = [
+              Array.isArray(r.restam) && r.restam.length ? `resta tratar no painel da coluna Centi: ${r.restam.join(", ")}` : "",
+              porEscolha ? `fora do que foi escolhido para corrigir: ${porEscolha.join(", ")}` : "",
+            ].filter(Boolean);
+            if (partes.length) feito = { ...feito, motivo: `Corrigido — ${partes.join("; ")}.` };
             corrigidos.push(feito);
           }
           else if (r.resultado === "parcial") {
@@ -1927,7 +1934,13 @@ const NOS: DefNo[] = [
             feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO[r.resultado] };
             convergentes.push(feito);
           } else {
-            feito = { ...feito, motivo: MOTIVO_SEM_CORRECAO[r.resultado] ?? "Nada a corrigir." };
+            feito = {
+              ...feito,
+              motivo:
+                r.resultado === "sem" && porEscolha
+                  ? `Nada a corrigir no que foi escolhido — fica como está por escolha: ${porEscolha.join(", ")}.`
+                  : (MOTIVO_SEM_CORRECAO[r.resultado] ?? "Nada a corrigir."),
+            };
             sem.push(feito);
           }
         } catch (x) {

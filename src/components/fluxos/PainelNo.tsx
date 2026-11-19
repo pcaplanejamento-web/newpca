@@ -12,7 +12,7 @@ import {
   type DefNo,
   type Item,
   lerTentar,
-  MSG_COMPONENTE_NOVO,
+  msgComponenteDesconhecido,
   MAX_TENTATIVAS,
   type NoFluxo,
   nomeVariavel,
@@ -71,8 +71,8 @@ export function PainelNo({
   if (!def)
     return (
       <Callout kind="warn">
-        <strong className="block">Componente de uma versão mais nova</strong>
-        {MSG_COMPONENTE_NOVO}
+        <strong className="block">Componente desconhecido</strong>
+        {msgComponenteDesconhecido(no.tipo)}
         <span className="mt-2 block">
           <Button size="sm" variant="primary" onClick={() => window.location.reload()}>
             Recarregar
@@ -326,13 +326,14 @@ export function CampoDoNo({
     );
   return (
     <div>
-      <RotuloCampo campo={c} htmlFor={id} />
+      {/* A lista (SeletorMultiplo) tem o rótulo dela no próprio gatilho — o rótulo de cima não aponta para um campo. */}
+      <RotuloCampo campo={c} htmlFor={c.tipo === "lista" && c.opcoes?.length ? undefined : id} />
       {c.tipo === "lista" && c.opcoes?.length ? (
         <SeletorMultiplo
           suspenso
           semRotulo
           rotulo={c.rotulo}
-          textoVazio="Todos"
+          textoVazio="Nenhum"
           opcoes={c.opcoes}
           selecionados={(Array.isArray(valor) ? valor : s.split(/[;|]/)).map((x) => String(x).trim()).filter(Boolean)}
           onChange={(v) => onValor(v)}

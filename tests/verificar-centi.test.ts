@@ -5,7 +5,8 @@ import { chaveRetomada, type DefNo, lerGrafo } from "../src/lib/fluxo-core.ts";
 import { verificacoesDoNo } from "../src/lib/fluxo-dados.ts";
 import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
 import { modeloDoFluxo } from "../src/lib/fluxo-modelos.ts";
-import { aplicarCentiPorTipos, GRUPOS_CORRECAO, grupoDoTipo, lerGruposCorrecao, NAO_CORRIGIVEIS, tiposDosGrupos } from "../src/lib/correcao-centi-core.ts";
+import { aplicarCentiPorTipos, GRUPOS_CORRECAO, grupoDoTipo, lerGruposCorrecao, NAO_CORRIGIVEIS, restaForaDaEscolha, tiposDosGrupos } from "../src/lib/correcao-centi-core.ts";
+import { versaoMaior } from "../src/lib/avisos-sistema-store.ts";
 import { tiposDivergencia } from "../src/lib/conferencia-dfd-centi.ts";
 
 test("O que verificar: o padrão, as escolhas e os da ação da Mesa (só o conteúdo)", () => {
@@ -123,7 +124,7 @@ test("O que corrigir: cada tipo de divergência cai num grupo; os não corrigív
   assert.deepEqual(tiposDosGrupos(tipos, ["valores"]).sort(), ["Item: quantidade", "Item: valor unitário", "Valor total"].sort());
   // Todos os grupos (ou nenhum, ou lixo) = null (tudo); a escolha parcial vem limpa e sem repetir.
   assert.equal(lerGruposCorrecao(GRUPOS_CORRECAO.map((g) => g.valor)), null);
-  assert.equal(lerGruposCorrecao([]), null);
+  assert.deepEqual(lerGruposCorrecao([]), [], "tudo desmarcado = nenhum");
   assert.equal(lerGruposCorrecao(["xyz"]), null);
   assert.deepEqual(lerGruposCorrecao(["valores", "valores", "secoes"]), ["valores", "secoes"]);
 });
@@ -132,6 +133,7 @@ test("O que corrigir: os grupos chegam ao item, entram na retomada e só os valo
   const v = verificacoesDoNo({ corrigirTipos: ["valores"] }, {});
   assert.deepEqual(v.grupos, ["valores"]);
   assert.equal(verificacoesDoNo({ corrigirTipos: ["valores"], corrigir: false }, {}).grupos, null, "sem corrigir, nada a escolher");
+  assert.equal(verificacoesDoNo({ corrigirTipos: [] }, {}).corrigir, false, "nenhum tipo marcado = só confere");
   assert.equal(verificacoesDoNo({ corrigirTipos: ["valores"] }, { __verificacoes: ["conteudo"], __corrigir: true }).grupos, null, "a ação da Mesa corrige tudo");
   const sim = { conteudo: "sim", corrigir: "sim" };
   assert.notEqual(chaveRetomada({ id: 7, verificar: sim, corrigirGrupos: ["valores"] }, "id"), chaveRetomada({ id: 7, verificar: sim }, "id"));
@@ -167,3 +169,17 @@ test("O que corrigir: o item que só existe na Centi NÃO entra quando só os va
 function ctxFalso() {
   return { host: {}, aviso() {}, cancelado: () => false, api: async () => ({}) } as never;
 }
+
+test("O que corrigir: o que resta fora da escolha não é pendência (o total dos itens não escolhidos também)", () => {
+  assert.deepEqual(restaForaDaEscolha(["Item só na Centi", "Nº de itens", "Valor total"], ["valores"]), ["Item só na Centi", "Nº de itens", "Valor total"]);
+  assert.deepEqual(restaForaDaEscolha(["Valor total"], ["valores"]), [], "o total dentro da escolha segue pendência");
+  assert.deepEqual(restaForaDaEscolha(["Seção X", "Situação"], ["valores"]), ["Seção X"], "o que a Centi não corrige não é escolha");
+  assert.deepEqual(restaForaDaEscolha(["Seção X"], null), []);
+});
+
+test("versão nova: só a do servidor MAIOR avisa (um isolate antigo no deploy não)", () => {
+  assert.equal(versaoMaior("1.298.0", "1.297.9"), true);
+  assert.equal(versaoMaior("1.297.0", "1.298.0"), false);
+  assert.equal(versaoMaior("1.298.0", "1.298.0"), false);
+  assert.equal(versaoMaior("2.0.0", "1.999.99"), true);
+});

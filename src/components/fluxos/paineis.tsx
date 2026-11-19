@@ -966,7 +966,10 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     if (it.correcao === "corrigido")
       return it.conferenciaDepois === "convergente"
         ? { rotulo: "Corrigido", tom: "emerald", texto: "Gravado com os dados da Centi — convergente" }
-        : { rotulo: "Corrigido em parte", tom: "amber", texto: s(it.motivoDepois) || "Ainda há divergência que a Centi não corrige" };
+        : Array.isArray(it.foraDaEscolha) && it.foraDaEscolha.length
+          ? { rotulo: "Corrigido o escolhido", tom: "emerald", texto: s(it.motivo) || "O que não foi escolhido para corrigir ficou como está" }
+          : { rotulo: "Corrigido — falta o painel", tom: "amber", texto: s(it.motivo) || s(it.motivoDepois) || "Resta o que a Centi não corrige (situação, órgão, nº)" };
+    if (it.correcao === "sem" && Array.isArray(it.foraDaEscolha) && it.foraDaEscolha.length) return { rotulo: "Fora do escolhido", tom: "slate", texto: s(it.motivo) };
     if (s(it.correcao)) return { rotulo: "Sem correção", tom: "slate", texto: s(it.motivo) };
     return null;
   }
