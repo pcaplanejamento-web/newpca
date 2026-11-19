@@ -1092,7 +1092,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do nó (os "Falhou" aparecem), Estado = o que foi feito/resultado (`estadoDoItem("fluxo.executar")`), colunas Situação ·
   Centro de Custo · Unidade na Centi. Testes: `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em
   `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts` (0194). O bloco abaixo é o HISTÓRICO.
-- **LOGIN DA CENTI NO BANCO + ENTREGA SELADA (v1.299.0 → v1.302.0, extensão 1.42.0, migrações `0195`/`0196`/`0197`) —
+- **LOGIN DA CENTI NO BANCO + ENTREGA SELADA (v1.299.0 → v1.302.1, extensão 1.42.1, migrações `0195`/`0196`/`0197`) —
   regra firme: o BANCO é a ÚNICA fonte, ESTAR LOGADO COMO ADM BASTA (nenhuma autorização de navegador — regra do
   usuário; a `0197` apagou a `centi_login_chaves` da v1.300.0) e a senha NUNCA trafega em claro.** Cada ADM guarda o
   PRÓPRIO login em `centi_logins` (`usuario_id` PK cascade · `cifrado` · `auto` · `atualizado_em` · `pausado_em`/`motivo` ·
@@ -1108,9 +1108,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `credencial-centi`: `GET` = SÓ a situação (usuário mascarado, datas, pausa, `conta`; com `publica` = 422 "Atualize a
   extensão"); `PUT` tela (ou a extensão antiga); `POST` só da extensão (o `Origin` dela): `entregar` = `{tem:false}` ·
   `{pausado, motivo}` · `{selado, auto}`, `pausar` por CÓDIGO (`MOTIVO_PAUSA`) e `importar` (atômico — nunca
-  sobrescreve); **regra firme: pedido que só a extensão pode fazer = POST** (o `Origin` só vem em POST/PUT); `DELETE` só a tela. **Tela:** Automação → Ajustes → "Login da Centi" (`LoginDaCenti`:
+  sobrescreve); **regra firme: pedido que só a extensão pode fazer = POST** (o `Origin` só vem em POST/PUT; `pedidoDaExtensao`,
+  `centi-login-core.ts`: o `Origin` da extensão, ou POST/PUT SEM `Origin` com `Sec-Fetch-Site` ausente/"none" — página
+  nenhuma manda assim; GET nunca); `DELETE` só a tela. **Tela:** Automação → Ajustes → "Login da Centi" (`LoginDaCenti`:
   `TextField`/`PasswordField` com `autoComplete="off"` e `name` neutro/`Switch`/`Button`/`useConfirmacao`/`Ajuda`/`Badge`).
-  **LOGIN E RE-LOGIN AUTOMÁTICOS (extensão 1.41.0 → 1.42.0):** `prepararCenti` (no `tabs.onUpdated` das páginas `/painel` do sistema,
+  **LOGIN E RE-LOGIN AUTOMÁTICOS (extensão 1.41.0 → 1.42.1):** a aba que aparece LOGADA zera a espera entre tentativas
+  (`conferirAba` — o login que deu certo sem resposta da aba não atrasa o próximo relogin); um 403 do sistema que não é
+  "sem ADM/bloqueio" mostra o motivo real (`apiLogin`). `prepararCenti` (no `tabs.onUpdated` das páginas `/painel` do sistema,
   no `onStartup` e no alarme sem aba; no máximo a cada 2 min) abre a aba da automação e entra; a aba que cai no login entra
   de novo sozinha (`conferirAba` no carregamento e no alarme de 5 min); `tentarLogin` pede a entrega na hora, abre o selado
   só na memória, confere que a aba ainda está na Centi e manda ao `frameId 0` (a `centi-ponte` recusa fora da origem da

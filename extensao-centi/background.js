@@ -195,7 +195,13 @@ async function apiLogin(metodo, corpo, consulta = "") {
     });
     const j = await r.json().catch(() => null);
     if (r.ok && j?.ok) return j;
-    if (r.status === 401 || r.status === 403) return { ok: false, semSistema: true, erro: MSG_SEM_SISTEMA };
+    if (r.status === 401) return { ok: false, semSistema: true, erro: MSG_SEM_SISTEMA };
+    // 403: sem ser ADM (ou com o acesso bloqueado) = "entre no sistema"; outra recusa (a origem) diz o motivo do sistema.
+    if (r.status === 403) {
+      const motivo = typeof j?.error === "string" ? j.error : "";
+      const semSistema = !motivo || /administrador|bloque|termo|aparelho/i.test(motivo);
+      return { ok: false, semSistema, erro: semSistema ? MSG_SEM_SISTEMA : motivo };
+    }
     return { ok: false, status: r.status, erro: j?.error ?? `O sistema respondeu ${r.status}.` };
   } catch {
     return { ok: false, semSistema: true, erro: "Sem conexão com o sistema PCA." };
@@ -672,6 +678,9 @@ async function conferirAba(tabId) {
       const de = await estadoDaAba(tabId);
       if (de && !de.logado && de.tela !== "login" && (await aquecerAba(aba, { recarregar: true }))?.logado) await sessao.tirar("loginUltima");
     }
+  } else if (e?.logado) {
+    // Logada (o login de antes deu certo, mesmo sem a resposta da aba): a próxima queda entra de novo na hora.
+    await sessao.tirar("loginUltima");
   } else if (e && !e.logado && (await aquecerJa(AQUECER_SEM_SESSAO_MS))) await aquecerAba(aba, { recarregar: true });
 }
 chrome.tabs?.onUpdated?.addListener((tabId, info, tab) => {

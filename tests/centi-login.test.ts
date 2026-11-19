@@ -11,6 +11,7 @@ import {
   MOTIVO_PAUSA,
   mascararUsuario,
   PROPOSITO_LOGIN_CENTI,
+  pedidoDaExtensao,
   selarParaChave,
 } from "../src/lib/centi-login-core.ts";
 import {
@@ -120,5 +121,23 @@ describe("login da Centi — importação", () => {
     assert.equal((await comandoImportarLoginCenti(orm, 1, "v2:c:d", true, "2026-11-19T11:00:00Z")).length, 0);
     const [l] = await consultaLoginCenti(orm, 1);
     assert.deepEqual([l.cifrado, l.auto], ["v2:a:b", 0]);
+  });
+});
+
+describe("login da Centi — quem é a extensão", () => {
+  const EXT = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
+  it("o Origin da extensão vale; o da página do sistema ou de outra extensão, nunca", () => {
+    assert.equal(pedidoDaExtensao("POST", EXT, "none", EXT), true);
+    assert.equal(pedidoDaExtensao("POST", "https://governarv.com.br", "same-origin", EXT), false);
+    assert.equal(pedidoDaExtensao("POST", "chrome-extension://outra", "none", EXT), false);
+    assert.equal(pedidoDaExtensao("POST", "null", null, EXT), false);
+  });
+  it("POST sem Origin vale (página nenhuma manda assim); GET nunca — nem com o Origin ausente", () => {
+    assert.equal(pedidoDaExtensao("POST", null, null, EXT), true);
+    assert.equal(pedidoDaExtensao("PUT", null, "none", EXT), true);
+    assert.equal(pedidoDaExtensao("POST", null, "same-origin", EXT), false, "o Sec-Fetch-Site de uma página recusa");
+    assert.equal(pedidoDaExtensao("POST", null, "cross-site", EXT), false);
+    assert.equal(pedidoDaExtensao("GET", null, null, EXT), false);
+    assert.equal(pedidoDaExtensao("GET", EXT, null, EXT), true);
   });
 });

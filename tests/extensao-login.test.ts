@@ -141,7 +141,7 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
         pausadoEm: banco.pausado ? "2026-11-19T10:00:00Z" : null,
         motivo: banco.motivo,
       });
-    if (init.method === "GET") return resp(422, { ok: false, error: "Atualize a extensão (1.42.0) para entrar sozinha na Centi." });
+    if (init.method === "GET") return resp(422, { ok: false, error: "Atualize a extensão (1.42.1) para entrar sozinha na Centi." });
     if (init.method === "POST" && corpo?.acao === "entregar") {
       const publica = String(corpo.publica ?? "");
       if (!publica) return resp(422, { ok: false, error: "Pedido inválido." });
@@ -233,6 +233,48 @@ test("serviço: login com sucesso zera a espera (uma queda logo depois entra de 
   await s.pedir({ acao: "estado" });
   await pausa(20);
   assert.equal(s.logins.length, 2);
+});
+
+test("serviço: login sem resposta da aba que entrou — a aba logada zera a espera (a próxima queda entra na hora)", async () => {
+  const sis = sistemaFalso();
+  let logado = false;
+  const logins: unknown[] = [];
+  const s = servicoFalso({
+    abas: [{ id: 1, url: COMPRAS }],
+    sessao: { abaAutomacao: 1 },
+    fetch: sis.fetch,
+    naAba: (_id, m) => {
+      if (m.alvo === "centi-login") {
+        logins.push(m);
+        logado = true;
+        return { resultado: "sem-resposta" };
+      }
+      if (m.acao === "estado") return logado ? { ok: true, logado: true, entidade: "1" } : { ok: true, logado: false, tela: "login" };
+      return undefined;
+    },
+  });
+  await s.pedir({ acao: "estado" }, { url: TELA, tab: { id: 50 } });
+  await pausa(20);
+  assert.equal(logins.length, 1);
+  assert.equal(typeof s.sessao.loginUltima, "number", "sem a resposta, a espera fica armada");
+  s.atualizarAba(1, { status: "complete" });
+  await pausa(1600);
+  assert.equal(s.sessao.loginUltima, undefined, "a aba logada zera a espera");
+});
+
+test("serviço: a recusa de ORIGEM do sistema aparece com o motivo — nunca como 'entre no sistema'", async () => {
+  const s = servicoFalso({
+    abas: [{ id: 1, url: COMPRAS }],
+    sessao: { abaAutomacao: 1 },
+    fetch: async (_url: string, init: Record<string, unknown>) => ({
+      ok: false,
+      status: 403,
+      json: async () => ({ ok: false, error: init.method === "GET" ? "Somente o Administrador pode fazer isto." : "Só a extensão faz este pedido." }),
+    }),
+    naAba: (_id, m) => (m.acao === "estado" ? { ok: true, logado: false, tela: "login" } : undefined),
+  });
+  const e = (await s.pedir({ acao: "entrarAgora" }, { url: TELA, tab: { id: 50 } })) as { erro: string };
+  assert.match(String(e.erro), /Só a extensão faz este pedido/);
 });
 
 test("serviço: sem login no sistema, com o automático desligado ou sem o sistema logado, não tenta — e diz por quê", async () => {

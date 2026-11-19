@@ -3,6 +3,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { ORIGEM_EXTENSAO_CENTI, VERSAO_EXTENSAO_CENTI } from "@/lib/automacao-centi-core";
 import { credencialCentiExtensaoSchema, credencialCentiSchema } from "@/lib/automacao-validation";
 import { apagarLoginCenti, cofreDisponivel, entregarLoginCenti, guardarLoginCenti, importarLoginCenti, pausarLoginCenti, situacaoLoginCenti } from "@/lib/centi-login-cofre";
+import { pedidoDaExtensao } from "@/lib/centi-login-core";
 import { erro, ok } from "@/lib/http";
 import { origemPermitida } from "@/lib/origem";
 import { contarTentativa, respostaLimite } from "@/lib/seguranca-acesso";
@@ -15,7 +16,8 @@ export const dynamic = "force-dynamic";
  * - A EXTENSÃO do navegador em que o ADM está logado pede a ENTREGA (POST) com a chave pública dela: a senha sai SELADA a
  *   essa chave — nunca em claro. Ela também avisa a PAUSA (por código) e, pedido pela pessoa, IMPORTA o login antigo dela.
  */
-const daExtensao = (req: Request) => req.headers.get("origin") === ORIGEM_EXTENSAO_CENTI;
+const daExtensao = (req: Request) =>
+  pedidoDaExtensao(req.method, req.headers.get("origin"), req.headers.get("sec-fetch-site"), ORIGEM_EXTENSAO_CENTI);
 /** Escrita pela tela: o `Origin` do próprio site é OBRIGATÓRIO (sem ele, recusa). */
 const daTela = (req: Request) => !!req.headers.get("origin") && origemPermitida(req);
 const semCache = (r: Response) => {

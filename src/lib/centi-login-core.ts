@@ -52,6 +52,19 @@ export function mascararUsuario(u: string): string {
   return `${t.slice(0, Math.min(2, Math.max(1, t.length - 2)))}•••`;
 }
 
+/**
+ * O pedido veio da EXTENSÃO? O `Origin` dela (`chrome-extension://<id fixo>`) — página nenhuma o imita. Um pedido de
+ * ESCRITA (POST/PUT) SEM `Origin` também vale: o navegador SEMPRE põe o `Origin` da página num POST/PUT, então nenhuma
+ * página manda assim (e o `Sec-Fetch-Site`, quando vem, tem de ser "none" — nunca o de uma página). Um GET nunca vale: num
+ * GET o navegador não põe o `Origin` nem para a extensão nem para a página do sistema — não dá para separar as duas.
+ */
+export function pedidoDaExtensao(metodo: string, origem: string | null, secFetchSite: string | null, extensao: string): boolean {
+  if (origem) return origem === extensao;
+  const m = metodo.toUpperCase();
+  if (m === "GET" || m === "HEAD") return false;
+  return !secFetchSite || secFetchSite === "none";
+}
+
 // ---------------------------------------------------------------- A ENTREGA SELADA À EXTENSÃO
 // A senha NUNCA sai do servidor em claro: ela vai SELADA à chave da extensão que pediu. A extensão gera um par ECDH P-256
 // com a parte privada NÃO EXTRAÍVEL (fica no IndexedDB dela) e manda a pública no pedido. Na entrega, o servidor cria um

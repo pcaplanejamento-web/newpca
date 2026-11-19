@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.302.1",
+    data: "2026-11-19",
+    titulo: "Login da Centi mais robusto",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.42.1: depois de um login que deu certo, uma nova queda da sessão da Centi entra de novo na hora, e uma recusa do sistema aparece com o motivo real (nunca como \"entre no sistema\").",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.302.0",
     data: "2026-11-19",
     titulo: "Login automático da Centi funcionando",
