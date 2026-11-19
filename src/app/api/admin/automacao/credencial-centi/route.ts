@@ -1,6 +1,6 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { ORIGEM_EXTENSAO_CENTI } from "@/lib/automacao-centi-core";
+import { ORIGEM_EXTENSAO_CENTI, VERSAO_EXTENSAO_CENTI } from "@/lib/automacao-centi-core";
 import { credencialCentiExtensaoSchema, credencialCentiSchema } from "@/lib/automacao-validation";
 import { apagarLoginCenti, cofreDisponivel, entregarLoginCenti, guardarLoginCenti, importarLoginCenti, pausarLoginCenti, situacaoLoginCenti } from "@/lib/centi-login-cofre";
 import { erro, ok } from "@/lib/http";
@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 /**
  * O LOGIN DA CENTI de cada ADM no BANCO (`centi-login-cofre.ts`) — a ÚNICA fonte, valendo em qualquer navegador.
  * - A TELA do sistema (o próprio site, com o `Origin` dele) SALVA e REMOVE e só recebe a SITUAÇÃO — a senha nunca volta.
- * - A EXTENSÃO do navegador em que o ADM está logado pede a ENTREGA com a chave pública dela: a senha sai SELADA a essa
- *   chave — nunca em claro. Ela também avisa a PAUSA (por código) e, pedido pela pessoa, IMPORTA o login antigo dela.
+ * - A EXTENSÃO do navegador em que o ADM está logado pede a ENTREGA (POST) com a chave pública dela: a senha sai SELADA a
+ *   essa chave — nunca em claro. Ela também avisa a PAUSA (por código) e, pedido pela pessoa, IMPORTA o login antigo dela.
  */
 const daExtensao = (req: Request) => req.headers.get("origin") === ORIGEM_EXTENSAO_CENTI;
 /** Escrita pela tela: o `Origin` do próprio site é OBRIGATÓRIO (sem ele, recusa). */
@@ -23,21 +23,15 @@ const semCache = (r: Response) => {
   return r;
 };
 const SEM_CHAVE = "O sistema está sem a chave mestra (INTEGRACOES_CHAVE) para cifrar o login.";
+const MSG_ATUALIZE = `Atualize a extensão (${VERSAO_EXTENSAO_CENTI}) para entrar sozinha na Centi.`;
 
 export async function GET(req: Request) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
-  const q = new URL(req.url).searchParams;
-  if (!daExtensao(req) || q.get("situacao") === "1") return semCache(ok({ ...(await situacaoLoginCenti(g.u)), disponivel: cofreDisponivel() }));
-  const publica = q.get("publica");
-  if (!publica || publica.length > 120) return erro("Atualize a extensão para entrar sozinha na Centi.", 422);
-  const esperar = await contarTentativa("loginCentiLeitura", String(g.u.id), true);
-  if (esperar > 0) return respostaLimite(esperar);
-  const e = await entregarLoginCenti(g.u.id, publica);
-  if (e.estado === "chaveInvalida") return erro("A chave da extensão é inválida — reinstale a extensão.", 422);
-  if (e.estado === "semLogin") return semCache(ok({ tem: false }));
-  if (e.estado === "pausado") return semCache(ok({ tem: true, pausado: true, motivo: e.motivo ?? "Login pausado." }));
-  return semCache(ok({ tem: true, auto: e.auto, selado: e.selado }));
+  // A entrega é pelo POST (o navegador só põe o `Origin` da extensão em POST/PUT — num GET ele não vem): a extensão antiga
+  // que ainda pede aqui recebe o aviso para atualizar, nunca a situação no lugar do pacote.
+  if (new URL(req.url).searchParams.has("publica")) return erro(MSG_ATUALIZE, 422);
+  return semCache(ok({ ...(await situacaoLoginCenti(g.u)), disponivel: cofreDisponivel() }));
 }
 
 /** Salvar pela TELA (`null` mantém o guardado) — e pela extensão antiga (até a 1.38.0, o "Guardar no sistema" do popup
@@ -63,13 +57,25 @@ export async function PUT(req: Request) {
   return semCache(ok(await situacaoLoginCenti(g.u)));
 }
 
-/** Pela EXTENSÃO: a pausa (por código) ou a importação do login da extensão antiga (nunca sobrescreve). */
+/**
+ * Pela EXTENSÃO (o `Origin` dela — página nenhuma o imita, e o navegador só o põe em POST/PUT): a ENTREGA do login selado à
+ * chave pública dela, a pausa (por código) e a importação do login da extensão antiga (nunca sobrescreve).
+ */
 export async function POST(req: Request) {
   if (!daExtensao(req)) return erro("Só a extensão faz este pedido.", 403);
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
   const p = credencialCentiExtensaoSchema.safeParse(await req.json().catch(() => null));
   if (!p.success) return erro("Pedido inválido.", 422);
+  if (p.data.acao === "entregar") {
+    const esperar = await contarTentativa("loginCentiLeitura", String(g.u.id), true);
+    if (esperar > 0) return respostaLimite(esperar);
+    const e = await entregarLoginCenti(g.u.id, p.data.publica);
+    if (e.estado === "chaveInvalida") return erro("A chave da extensão é inválida — reinstale a extensão.", 422);
+    if (e.estado === "semLogin") return semCache(ok({ tem: false }));
+    if (e.estado === "pausado") return semCache(ok({ tem: true, pausado: true, motivo: e.motivo ?? "Login pausado." }));
+    return semCache(ok({ tem: true, auto: e.auto, selado: e.selado }));
+  }
   const esperar = await contarTentativa("loginCentiEscrita", String(g.u.id));
   if (esperar > 0) return respostaLimite(esperar);
   if (p.data.acao === "pausar") {

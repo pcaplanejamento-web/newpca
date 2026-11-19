@@ -1092,7 +1092,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do nó (os "Falhou" aparecem), Estado = o que foi feito/resultado (`estadoDoItem("fluxo.executar")`), colunas Situação ·
   Centro de Custo · Unidade na Centi. Testes: `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em
   `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts` (0194). O bloco abaixo é o HISTÓRICO.
-- **LOGIN DA CENTI NO BANCO + ENTREGA SELADA (v1.299.0 → v1.301.0, extensão 1.41.0, migrações `0195`/`0196`/`0197`) —
+- **LOGIN DA CENTI NO BANCO + ENTREGA SELADA (v1.299.0 → v1.302.0, extensão 1.42.0, migrações `0195`/`0196`/`0197`) —
   regra firme: o BANCO é a ÚNICA fonte, ESTAR LOGADO COMO ADM BASTA (nenhuma autorização de navegador — regra do
   usuário; a `0197` apagou a `centi_login_chaves` da v1.300.0) e a senha NUNCA trafega em claro.** Cada ADM guarda o
   PRÓPRIO login em `centi_logins` (`usuario_id` PK cascade · `cifrado` · `auto` · `atualizado_em` · `pausado_em`/`motivo` ·
@@ -1100,15 +1100,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `PROPOSITO_LOGIN_CENTI`) e o DONO como dado adicional (`cifrarComAad`, `aadLoginCenti` — copiado para outra pessoa não
   abre), formato `v2:`; o formato antigo é regravado na 1ª leitura (`abrirLoginCenti`); sem abrir = `ilegivel` na tela.
   **Na entrega:** a extensão tem um par ECDH P-256 com a privada NÃO EXTRAÍVEL no IndexedDB `pca-chave` (`parDeChaves`,
-  `background.js`) e manda a pública no pedido (`GET …/credencial-centi?publica=`); o servidor sela com chave efêmera
+  `background.js`) e manda a pública no pedido (`POST …/credencial-centi {acao:"entregar", publica}` — v1.302.0: até a v1.301.0 era um
+  GET e NUNCA funcionou: o navegador não põe o `Origin` da extensão num GET, a rota caía no ramo da tela e devolvia a
+  situação sem o pacote — "O login chegou, mas não abriu"); o servidor sela com chave efêmera
   (ECDH → HKDF, sal `SAL_ENTREGA`, AAD `aadEntrega(impressao)` → AES-GCM — `selarParaChave`/`abrirSelado`,
   `centi-login-core.ts`; `entregarLoginCenti`, limite `loginCentiLeitura` 30/h que fecha na falha). **Rota**
-  `credencial-centi`: `GET` da tela (ou `?situacao=1`) = a situação (usuário mascarado, datas, pausa, `conta`); `GET` da
-  EXTENSÃO = `{tem:false}` · `{pausado, motivo}` · `{selado, auto}` (sem `publica` = 422 "Atualize a extensão"); `PUT` tela
-  (ou a extensão antiga); `POST` só da extensão: `pausar` por CÓDIGO (`MOTIVO_PAUSA`) e `importar` (atômico — nunca
-  sobrescreve); `DELETE` só a tela. **Tela:** Automação → Ajustes → "Login da Centi" (`LoginDaCenti`:
+  `credencial-centi`: `GET` = SÓ a situação (usuário mascarado, datas, pausa, `conta`; com `publica` = 422 "Atualize a
+  extensão"); `PUT` tela (ou a extensão antiga); `POST` só da extensão (o `Origin` dela): `entregar` = `{tem:false}` ·
+  `{pausado, motivo}` · `{selado, auto}`, `pausar` por CÓDIGO (`MOTIVO_PAUSA`) e `importar` (atômico — nunca
+  sobrescreve); **regra firme: pedido que só a extensão pode fazer = POST** (o `Origin` só vem em POST/PUT); `DELETE` só a tela. **Tela:** Automação → Ajustes → "Login da Centi" (`LoginDaCenti`:
   `TextField`/`PasswordField` com `autoComplete="off"` e `name` neutro/`Switch`/`Button`/`useConfirmacao`/`Ajuda`/`Badge`).
-  **LOGIN E RE-LOGIN AUTOMÁTICOS (extensão 1.41.0):** `prepararCenti` (no `tabs.onUpdated` das páginas `/painel` do sistema,
+  **LOGIN E RE-LOGIN AUTOMÁTICOS (extensão 1.41.0 → 1.42.0):** `prepararCenti` (no `tabs.onUpdated` das páginas `/painel` do sistema,
   no `onStartup` e no alarme sem aba; no máximo a cada 2 min) abre a aba da automação e entra; a aba que cai no login entra
   de novo sozinha (`conferirAba` no carregamento e no alarme de 5 min); `tentarLogin` pede a entrega na hora, abre o selado
   só na memória, confere que a aba ainda está na Centi e manda ao `frameId 0` (a `centi-ponte` recusa fora da origem da

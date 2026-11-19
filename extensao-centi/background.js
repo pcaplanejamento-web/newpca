@@ -262,17 +262,19 @@ function tentarLogin(aba, forcar) {
     tentando = (async () => {
       const p = podeTentarLogin(Date.now(), (await sessao.ler("loginUltima")) ?? null, forcar);
       if (!p.pode) return { resultado: "espera", erro: p.motivo, esperarS: p.esperarS ?? null };
-      // O login vem do sistema NA HORA, SELADO à chave deste navegador (nada fica guardado na extensão).
+      // O login vem do sistema NA HORA, SELADO à chave deste navegador (nada fica guardado na extensão). Por POST: o
+      // navegador só põe o `Origin` da extensão (o que prova ao sistema quem pede) em POST/PUT — num GET ele não vem.
       const k = await parDeChaves().catch(() => null);
       if (!k) return { resultado: "falha", erro: "A extensão não conseguiu criar a chave dela — reinstale-a." };
-      const entrega = await apiLogin("GET", null, `?publica=${encodeURIComponent(k.publica)}`);
+      const entrega = await apiLogin("POST", { acao: "entregar", publica: k.publica });
       await sessao.tirar("loginInfo");
       if (!entrega.ok) return { resultado: entrega.semSistema ? "semSistema" : "falha", erro: entrega.erro };
       if (entrega.tem !== true) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
       if (entrega.pausado) return { resultado: "pausado", erro: entrega.motivo ?? "Login da Centi pausado — salve de novo no sistema." };
       if (!forcar && entrega.auto === false) return { resultado: "desligado" };
-      const cred = entrega.selado ? await abrirSelado(k.privada, k.impressao, entrega.selado) : null;
-      if (!cred) return { resultado: "falha", erro: "O login chegou, mas não abriu com a chave deste navegador — autorize-o de novo no sistema." };
+      if (!entrega.selado) return { resultado: "falha", erro: "O sistema não entregou o login — atualize a página do sistema e tente de novo." };
+      const cred = await abrirSelado(k.privada, k.impressao, entrega.selado);
+      if (!cred) return { resultado: "falha", erro: "O login chegou, mas a chave desta extensão não o abriu — reinstale a extensão." };
       // Só na aba da automação, ainda na Centi (a aba pode ter navegado desde a conferência).
       const atual = await chrome.tabs.get(aba.id).catch(() => null);
       if (!atual?.url?.startsWith(INICIO_CENTI)) return { resultado: "falha", erro: "A aba da automação saiu da Centi." };

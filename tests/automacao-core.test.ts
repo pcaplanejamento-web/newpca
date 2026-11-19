@@ -10,7 +10,7 @@ import {
   receitaAtiva,
   textoAlvoAnexo,
 } from "../src/lib/automacao-core.ts";
-import { autorizarSchema, configAutomacaoSchema, consumirSchema, criarExecucaoSchema } from "../src/lib/automacao-validation.ts";
+import { autorizarSchema, configAutomacaoSchema, consumirSchema, credencialCentiExtensaoSchema, criarExecucaoSchema } from "../src/lib/automacao-validation.ts";
 
 describe("automação — núcleo", () => {
   it("configuração: qualquer JSON vira válida; receita desconhecida e operação inválida são descartadas", () => {
@@ -78,5 +78,14 @@ describe("automação — núcleo", () => {
     assert.ok(autorizarSchema.safeParse({ chave: "a", capacidade: "anexar", alvo }).success);
     assert.ok(!autorizarSchema.safeParse({ chave: "a", capacidade: "operar", alvo }).success, "só capacidade de escrita");
     assert.ok(!consumirSchema.safeParse({ token: "curto", capacidade: "anexar", alvo }).success);
+  });
+
+  it("login da Centi: a entrega selada é POST com a chave pública (88 caracteres), nunca vazia nem longa demais", () => {
+    const publica = btoa(String.fromCharCode(4, ...new Array(64).fill(7)));
+    assert.equal(publica.length, 88);
+    assert.ok(credencialCentiExtensaoSchema.safeParse({ acao: "entregar", publica }).success);
+    assert.ok(!credencialCentiExtensaoSchema.safeParse({ acao: "entregar", publica: "" }).success);
+    assert.ok(!credencialCentiExtensaoSchema.safeParse({ acao: "entregar", publica: "x".repeat(121) }).success);
+    assert.ok(!credencialCentiExtensaoSchema.safeParse({ acao: "entregar", publica, senha: "a" }).success, "nada além da chave");
   });
 });

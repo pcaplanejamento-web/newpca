@@ -92,6 +92,8 @@ export const credencialCentiSchema = z
 /** O que a EXTENSÃO manda: a pausa (um CÓDIGO — nunca o texto da Centi) ou, pedido pela pessoa no popup, o login que a
  * extensão antiga guardava (nunca sobrescreve um guardado). */
 export const credencialCentiExtensaoSchema = z.discriminatedUnion("acao", [
+  // A chave pública P-256 da extensão em base64 (65 bytes = 88 caracteres); `impressaoDaChave` confere o ponto.
+  z.object({ acao: z.literal("entregar"), publica: z.string().min(80).max(120) }).strict(),
   z.object({ acao: z.literal("pausar"), motivo: z.enum(["recusado", "verificacao"]) }).strict(),
   z
     .object({

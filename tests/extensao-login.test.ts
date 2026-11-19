@@ -107,11 +107,12 @@ test("login: lê a mensagem de senha recusada", () => {
 });
 
 /**
- * O SISTEMA falso: o login da Centi guardado no banco (a rota `credencial-centi`), os NAVEGADORES autorizados (a chave
- * pública da extensão) e os pedidos que a extensão fez. A senha só sai SELADA à chave do navegador autorizado — a MESMA
- * conta do servidor (`selarParaChave`, `centi-login-core.ts`).
+ * O SISTEMA falso, com a RÉGUA REAL da rota `credencial-centi`: o GET é só a situação (o navegador NÃO põe o `Origin` da
+ * extensão num GET — o GET com `publica` recebe 422) e a ENTREGA é `POST {acao:"entregar", publica}`, o único pedido em que
+ * o `Origin` da extensão vem. A senha só sai SELADA à chave pública que chegou — a MESMA conta do servidor
+ * (`selarParaChave`, `centi-login-core.ts`).
  */
-function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; semSistema?: boolean } = {}) {
+function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; semSistema?: boolean; semSelado?: boolean } = {}) {
   const banco = {
     tem: o.tem !== false,
     auto: o.auto !== false,
@@ -140,10 +141,13 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
         pausadoEm: banco.pausado ? "2026-11-19T10:00:00Z" : null,
         motivo: banco.motivo,
       });
-    if (init.method === "GET") {
-      const publica = u.searchParams.get("publica");
-      if (!publica) return resp(422, { ok: false, error: "Atualize a extensão." });
+    if (init.method === "GET") return resp(422, { ok: false, error: "Atualize a extensão (1.42.0) para entrar sozinha na Centi." });
+    if (init.method === "POST" && corpo?.acao === "entregar") {
+      const publica = String(corpo.publica ?? "");
+      if (!publica) return resp(422, { ok: false, error: "Pedido inválido." });
       if (!banco.tem) return resp(200, { ok: true, tem: false });
+      // Um sistema que respondesse a situação no lugar do pacote (a falha da v1.301.0).
+      if (o.semSelado) return resp(200, { ok: true, tem: true, auto: banco.auto, conta: "Maria Souza", pausadoEm: null });
       if (banco.pausado) return resp(200, { ok: true, tem: true, pausado: true, motivo: banco.motivo });
       const impressao = (await impressaoDaChave(publica)) as string;
       banco.chaves.set(impressao, publica);
@@ -167,7 +171,7 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
 }
 
 // O serviço com o SISTEMA falso e a ABA DA AUTOMAÇÃO (id 1) na tela de login: quando entra, quantas vezes e quando pausa.
-function servico(o: { tem?: boolean; auto?: boolean; semSistema?: boolean; resultado?: string } = {}) {
+function servico(o: { tem?: boolean; auto?: boolean; semSistema?: boolean; semSelado?: boolean; resultado?: string } = {}) {
   const sis = sistemaFalso(o);
   const logins: unknown[] = [];
   const s = servicoFalso({
@@ -197,8 +201,10 @@ test("serviço: aba na tela de login → lê o login do SISTEMA e entra UMA vez;
   assert.deepEqual(JSON.parse(JSON.stringify(s.logins[0])), { alvo: "centi-login", usuario: "maria", senha: "s3gredo" });
   // O login veio do sistema SELADO à chave pública que a extensão mandou — sem autorizar nada: estar logado basta.
   assert.equal(s.sis.banco.chaves.size, 1);
-  const entrega = s.sis.pedidos.find((p) => p.metodo === "GET" && /credencial-centi\?publica=/.test(p.url));
-  assert.ok(entrega, "a entrega pede com a chave pública");
+  const entrega = s.sis.pedidos.find((p) => p.metodo === "POST" && p.corpo?.acao === "entregar");
+  assert.ok(entrega, "a entrega é POST (o único pedido em que o navegador põe o Origin da extensão)");
+  assert.equal(typeof entrega.corpo?.publica, "string", "a entrega leva a chave pública no corpo");
+  assert.ok(!s.sis.pedidos.some((p) => p.metodo === "GET" && p.url.includes("publica")), "nenhum GET leva a chave pública");
   assert.ok(!s.sis.pedidos.some((p) => p.url.includes("/navegadores")), "nenhuma autorização de navegador");
   assert.equal(s.sis.banco.pausado, true, "a pausa vale para todos os navegadores");
   assert.match(String(s.sis.banco.motivo), /Senha recusada pela Centi/);
@@ -371,6 +377,15 @@ test("serviço: uma verificação da Centi (captcha) não pausa — tenta de nov
   await s.pedir({ acao: "estado" });
   await pausa(20);
   assert.equal(s.logins.length, 2, "re-login sozinho, sem ninguém salvar nada");
+});
+
+test("serviço: o sistema sem o pacote selado dá a mensagem certa — nunca manda autorizar nada", async () => {
+  const s = servico({ semSelado: true, resultado: "ok" });
+  const e = (await s.pedir({ acao: "entrarAgora" })) as { ok: boolean; erro: string };
+  await pausa(20);
+  assert.equal(s.logins.length, 0, "sem o pacote, nada é preenchido na Centi");
+  assert.match(String(e.erro), /não entregou o login/);
+  assert.doesNotMatch(String(e.erro), /autoriz/i);
 });
 
 test("serviço: a senha nunca trafega em claro — só o selado, que outra chave não abre", async () => {
