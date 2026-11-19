@@ -767,7 +767,8 @@ function LoginCenti({
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       <Badge tone={login?.pausado ? "red" : "amber"} dot>
-        <span title={detalhe}>{login?.pausado ? "Centi: login pausado" : "Centi na tela de login"}</span>
+        {/* O que está acontecendo À VISTA (não só na dica): entrando sozinha, sem login salvo ou pausado (com o motivo). */}
+        <span title={detalhe}>{login?.pausado ? "Login da Centi pausado" : !login?.credenciais ? "Centi pede login — sem login salvo" : login.auto ? "Centi pede login — entrando…" : "Centi pede login"}</span>
       </Badge>
       {pronto && (
         <Button size="sm" variant="secondary" onClick={onEntrar} loading={entrando} title="A extensão entra agora com o login guardado nela">

@@ -267,7 +267,9 @@ export function lerGrafo(v: unknown): Grafo {
   return modelo ? { v: 1, nos, conexoes, modelo } : { v: 1, nos, conexoes };
 }
 
-export type ProblemaGrafo = { no?: string; texto: string; nivel: "erro" | "atencao" };
+/** `versaoNova` = um componente que esta página não conhece — gravado por uma versão mais nova do sistema (recarregar). */
+export type ProblemaGrafo = { no?: string; texto: string; nivel: "erro" | "atencao"; versaoNova?: boolean };
+export const MSG_COMPONENTE_NOVO = "Este fluxo usa um componente de uma versão mais nova do sistema — recarregue a página.";
 
 /** O NOME do nó = a função do tipo (não se edita). */
 export const nomeDoNo = (n: NoFluxo, reg: Registro) => reg.get(n.tipo)?.rotulo ?? n.tipo;
@@ -289,7 +291,11 @@ export function resumoDoNo(n: NoFluxo, def: DefNo | undefined, nomeFluxo?: (id: 
           : (c.tipo === "fluxo" || c.tipo === "fluxos") && nomeFluxo
             ? String(v).split(/[;,\s]+/).filter(Boolean).map((id) => nomeFluxo(id) ?? `nº ${id}`).join(", ")
             : Array.isArray(v)
-              ? `${v.length}`
+              ? c.opcoes?.length && v.length >= c.opcoes.length
+                ? "todos"
+                : c.opcoes?.length
+                  ? `${v.length} de ${c.opcoes.length}`
+                  : `${v.length}`
               : String(v);
     partes.push(`${c.rotulo}: ${t.replace(/\s+/g, " ").slice(0, 40)}`);
   }
@@ -349,7 +355,7 @@ export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
   for (const n of g.nos) {
     const d = reg.get(n.tipo);
     if (!d) {
-      p.push({ no: n.id, texto: `Tipo de nó desconhecido: ${n.tipo}.`, nivel: "erro" });
+      p.push({ no: n.id, texto: MSG_COMPONENTE_NOVO, nivel: "erro", versaoNova: true });
       continue;
     }
     if (d.unico) unicos.set(n.tipo, (unicos.get(n.tipo) ?? 0) + 1);
@@ -998,7 +1004,9 @@ export const chaveRetomada = (it: Item, campo: string): string => {
     .map(([n]) => n)
     .sort()
     .join("+");
-  return sig ? `${k}|${sig}` : k;
+  // "O que corrigir" escolhido (nem todos): corrigir só os valores não vale como corrigir tudo.
+  const grupos = Array.isArray(it.corrigirGrupos) && it.corrigirGrupos.length ? `|g:${[...it.corrigirGrupos].map(String).sort().join(",")}` : "";
+  return sig ? `${k}|${sig}${grupos}` : k;
 };
 
 /**

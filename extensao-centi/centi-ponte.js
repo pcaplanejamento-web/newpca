@@ -3,7 +3,7 @@
 // extensão e vão direto aos campos da tela — o script da página e o sistema PCA nunca os veem.
 (() => {
   // Protocolo da conversa com o script da página (centi-main.js): só muda se o formato das mensagens mudar.
-  const P = 45;
+  const P = 46;
   const MARCA = `__pcaCentiPonte_p${P}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -49,8 +49,11 @@
     if (r !== "enviado") return { resultado: "falha", erro: r };
     let erroSumiu = !erroAntes;
     const fim = Date.now() + 15000;
+    let deNovo = false;
     while (Date.now() < fim) {
       await esperar(600);
+      // O ENTRAR que só habilitou depois de preencher: toca UMA vez de novo (sem erro na tela).
+      if (!deNovo && Date.now() > fim - 13000 && naTelaDeLogin() && !l.erroDeLogin(document)) deNovo = !!l.tocarEntrarDeNovo?.(document);
       const b = l.sinaisDeBloqueio(document);
       if (b) return { resultado: "bloqueio", erro: b };
       const erro = l.erroDeLogin(document);
@@ -59,9 +62,13 @@
       if (!naTelaDeLogin()) {
         const e = await pedirPagina("estado", null, 3000);
         if (e?.logado) return { resultado: "ok" };
+        // Saiu do login sem a sessão capturada: a "pesquisa" (uma leitura pelo cliente da Centi) a captura.
+        const a = await pedirPagina("aquecer", null, 15000);
+        if (a?.logado) return { resultado: "ok" };
       }
     }
-    return { resultado: naTelaDeLogin() ? "sem-resposta" : "ok" };
+    // Fora do login sem sessão = entrou, mas a sessão ainda não foi lida (o serviço tenta a "pesquisa" de novo).
+    return naTelaDeLogin() ? { resultado: "sem-resposta" } : { resultado: "sem-sessao", erro: "Entrou, mas a sessão ainda não foi lida." };
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, responder) => {

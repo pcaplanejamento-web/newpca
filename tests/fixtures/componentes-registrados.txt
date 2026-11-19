@@ -8,6 +8,7 @@ AcoesCadastro.tsx
 AgendasExternas.tsx
 Ajuda.tsx
 Avisos.tsx
+AvisosDoSistema.tsx
 AjudaVisoes.tsx
 AlturaCheia.tsx
 AparelhosConta.tsx

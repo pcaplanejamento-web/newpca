@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 45;
+  const PROTOCOLO = 46;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -85,6 +85,21 @@
   // O TOKEN da Centi TROCA a cada resposta: o servidor devolve "token" e "refreshtoken" novos e a tela passa a usá-los
   // (Authorization = "Bearer <token>"). A extensão acompanha — lê o token novo de TODA resposta (da tela e dela) e sempre
   // manda o mais recente; com o antigo, o salvar dava "Erro inesperado" (500) e as renovações forçadas, 429.
+  // A ÚLTIMA resposta boa da Centi (qualquer pedido restauth < 400) — o "manter viva" da extensão só aquece depois de um
+  // tempo parado. Uma resposta 401 = a sessão caiu: a cópia guardada não vale mais (o estado passa a "sem sessão").
+  let ativoEm = 0;
+  function notarResposta(status) {
+    const st = Number(status);
+    if (!st) return;
+    if (st === 401) {
+      cabecalhos = null;
+      ativoEm = 0;
+      try {
+        sessionStorage.removeItem(SESSAO);
+      } catch {}
+    } else if (st < 400) ativoEm = Date.now();
+  }
+
   function trocarToken(ler) {
     const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
     if (!cabecalhos || !A) return;
@@ -384,7 +399,11 @@
       aprenderOperacao(this.__pcaUrl, this.__pcaMetodo, r[0]);
       gravarPasso(this.__pcaUrl, this.__pcaMetodo, r[0]);
     }
-    if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
+    if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/"))
+      this.addEventListener("load", () => {
+        trocarToken(tokenDoXhr(this));
+        notarResposta(this.status);
+      });
     if (this.__pcaUrl && !this.__pcaInterno && String(this.__pcaUrl).includes("/restauth/")) {
       const url = this.__pcaUrl;
       const metodo = this.__pcaMetodo;
@@ -402,7 +421,10 @@
     const comToken = (p) =>
       p.then((r) => {
         try {
-          if (String(r.url || "").includes("/restauth/")) trocarToken((n) => r.headers.get(n));
+          if (String(r.url || "").includes("/restauth/")) {
+            trocarToken((n) => r.headers.get(n));
+            notarResposta(r.status);
+          }
         } catch {}
         return r;
       });
@@ -1083,7 +1105,22 @@
     if (!colunas?.length) return { ok: false, semColunas: true, erro: "Abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — a extensão lê as colunas da tela." };
     return { ok: true, colunas };
   }
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, cm002, telaApi, reparticoesApi, trocarOrgao, cm002Colunas };
+  // AQUECER = a "pesquisa" depois do login (ou do tempo parado): UMA leitura inofensiva — o planejamento 0, que não existe —
+  // pelo cliente HTTP da PRÓPRIA Centi. Os interceptors dela põem a sessão nova e o `guardar` a captura (o sistema passa a
+  // ver a Centi pronta sem ninguém abrir uma tela). Nada é gravado; 401 = a sessão não vale (o login de novo resolve).
+  async function aquecer() {
+    if (!acharClienteCenti()) return { ok: false, semCliente: true, erro: "A tela da Centi ainda não carregou." };
+    let r;
+    try {
+      r = await pelaCenti("GET", "restauth/load?entity=101045&key=0");
+    } catch (err) {
+      return { ok: false, erro: err?.message || "Sem resposta da Centi." };
+    }
+    if (!r) return { ok: false, semCliente: true, erro: "A tela da Centi ainda não carregou." };
+    if (r.status === 401) return { ok: false, logado: false, erro: "A Centi recusou a sessão (precisa entrar de novo)." };
+    return { ok: !!cabecalhos, logado: !!cabecalhos, status: r.status, erro: cabecalhos ? undefined : "A Centi respondeu sem a sessão." };
+  }
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, cm002, telaApi, reparticoesApi, trocarOrgao, cm002Colunas, aquecer };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;
@@ -1091,7 +1128,7 @@
     try {
       resposta =
         acao === "estado"
-          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual(), operacao: operacaoComFonte(), aprendido: aprendidos() }
+          ? { ok: true, logado: !!cabecalhos, ativoEm, entidade: entidadeAtual(), operacao: operacaoComFonte(), aprendido: aprendidos() }
           : Object.hasOwn(ACOES, acao)
             ? await ACOES[acao](dados)
             : { ok: false, erro: "Ação desconhecida." };

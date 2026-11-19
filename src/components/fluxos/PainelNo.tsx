@@ -12,6 +12,7 @@ import {
   type DefNo,
   type Item,
   lerTentar,
+  MSG_COMPONENTE_NOVO,
   MAX_TENTATIVAS,
   type NoFluxo,
   nomeVariavel,
@@ -28,6 +29,7 @@ import { type Column, DataTable } from "../DataTable";
 import { Checkbox, SelectField, TextArea, TextField } from "../Field";
 import { IconLock, IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
+import { SeletorMultiplo } from "../SeletorMultiplo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoColunasCm002, CampoFluxo, useNomeFluxo, CampoOrgaosCenti, CampoReparticoesCenti, CampoValoresSistema, RecomecarSubfluxo } from "./paineis";
@@ -68,9 +70,14 @@ export function PainelNo({
   const [aba, setAba] = useState<"config" | "saida">("config");
   if (!def)
     return (
-      <Callout kind="danger">
-<strong className="block">{"Tipo de nó desconhecido"}</strong>
-        {no.tipo} — exclua o nó.
+      <Callout kind="warn">
+        <strong className="block">Componente de uma versão mais nova</strong>
+        {MSG_COMPONENTE_NOVO}
+        <span className="mt-2 block">
+          <Button size="sm" variant="primary" onClick={() => window.location.reload()}>
+            Recarregar
+          </Button>
+        </span>
       </Callout>
     );
   const definir = (chave: string, v: unknown) => onMudar({ ...no, config: { ...no.config, [chave]: v } });
@@ -320,7 +327,18 @@ export function CampoDoNo({
   return (
     <div>
       <RotuloCampo campo={c} htmlFor={id} />
-      {c.tipo === "nomeLista" ? (
+      {c.tipo === "lista" && c.opcoes?.length ? (
+        <SeletorMultiplo
+          suspenso
+          semRotulo
+          rotulo={c.rotulo}
+          textoVazio="Todos"
+          opcoes={c.opcoes}
+          selecionados={(Array.isArray(valor) ? valor : s.split(/[;|]/)).map((x) => String(x).trim()).filter(Boolean)}
+          onChange={(v) => onValor(v)}
+          disabled={somenteLeitura}
+        />
+      ) : c.tipo === "nomeLista" ? (
         <CampoNomeLista id={id} campo={c} valor={s} onValor={onValor} variaveis={variaveis} config={config} somenteLeitura={somenteLeitura} />
       ) : (
         <ControleCampo id={id} campo={c} s={s} onValor={onValor} caminhos={caminhos} origem={origem} config={config} somenteLeitura={somenteLeitura} />

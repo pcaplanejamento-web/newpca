@@ -236,7 +236,8 @@ function tentarLogin(aba, forcar) {
         r = null; // a página recarregou ao entrar: confere-se pelo estado depois
       }
       const resultado = r?.resultado ?? "sem-resposta";
-      if (resultado === "ok") await sessao.tirar("loginUltima");
+      // Entrou (com ou sem a sessão já capturada): a próxima queda pode tentar de novo na hora.
+      if (resultado === "ok" || resultado === "sem-sessao") await sessao.tirar("loginUltima");
       if (resultado === "recusado") {
         await C.pausar(`Senha recusada pela Centi${r.erro ? ` (${r.erro})` : ""} — confira e salve de novo.`);
         await sessao.tirar("credenciaisPedidas");
@@ -251,6 +252,35 @@ function tentarLogin(aba, forcar) {
   return tentando;
 }
 
+// A "PESQUISA" que deixa a Centi pronta: depois do login (ou sem a sessão capturada) a aba faz UMA leitura inofensiva pelo
+// cliente da própria Centi e a sessão é capturada (`aquecer`, centi-main.js). Parada há mais de 10 min com o sistema
+// aberto, a mesma leitura mantém a sessão viva. Sem a tela da Centi carregada, a aba é recarregada (no máximo 1 vez a cada
+// 2 min) — a tela recarregada faz os pedidos dela.
+const AQUECER_SEM_SESSAO_MS = 60 * 1000;
+const MANTER_VIVA_MS = 10 * 60 * 1000;
+const RECARREGAR_MS = 2 * 60 * 1000;
+async function aquecerAba(aba) {
+  await sessao.gravar("aquecidoEm", Date.now());
+  let r = null;
+  try {
+    r = await comPrazo(chrome.tabs.sendMessage(aba.id, { alvo: "centi", acao: "aquecer" }), 20000, null);
+  } catch {
+    r = null;
+  }
+  if (!r?.logado && (r?.semCliente || r?.logado === false)) {
+    const ultima = await sessao.ler("recarregadaEm");
+    if (!(typeof ultima === "number" && Date.now() - ultima < RECARREGAR_MS)) {
+      await sessao.gravar("recarregadaEm", Date.now());
+      await chrome.tabs.reload(aba.id).catch(() => {});
+    }
+  }
+  return r;
+}
+const aquecerJa = async (intervalo) => {
+  const ultimo = await sessao.ler("aquecidoEm");
+  return !(typeof ultimo === "number" && Date.now() - ultimo < intervalo);
+};
+
 /**
  * A aba da automação com a sessão. `criar` = abre a aba se não houver (sem ela, só quando o usuário não a fechou);
  * `esperar` = espera o login (senão ele corre por trás); `forcar` = "Entrar agora".
@@ -264,15 +294,30 @@ async function garantirSessao({ criar = true, esperarLogin = false, forcar = fal
   }
   if (!noCompras(aba)) aba = await irParaCompras(aba);
   const e = await estadoDaAba(aba.id);
-  if (e?.logado && e.tela !== "login") return { aba, estado: e };
-  if (e?.tela !== "login")
-    return { motivo: "semSessao", aba, erro: "Centi abrindo na aba da automação — aguarde ou abra qualquer tela nela." };
+  if (e?.logado && e.tela !== "login") {
+    // Manter viva: parada há mais de 10 min (ou sem resposta conhecida desde o F5), uma leitura renova — sem esperar.
+    const parada = !(Number(e.ativoEm) > 0) || Date.now() - Number(e.ativoEm) > MANTER_VIVA_MS;
+    if (parada && (await aquecerJa(MANTER_VIVA_MS))) aquecerAba(aba).catch(() => {});
+    return { aba, estado: e };
+  }
+  if (e?.tela !== "login") {
+    // Fora do login e sem a sessão capturada: a "pesquisa" a captura (no máximo 1 vez por minuto; o "Entrar agora" já).
+    if (e && (forcar || esperarLogin || (await aquecerJa(AQUECER_SEM_SESSAO_MS)))) {
+      const a = await aquecerAba(aba);
+      if (a?.logado) {
+        const de = await estadoDaAba(aba.id);
+        if (de?.logado && de.tela !== "login") return { aba, estado: de };
+      }
+    }
+    return { motivo: "semSessao", aba, erro: "Preparando a Centi na aba da automação (lendo a sessão)…" };
+  }
   const t = tentarLogin(aba, forcar).catch(() => ({ resultado: "falha" }));
-  if (!esperarLogin && !forcar) return { motivo: "login", aba, erro: "Centi na tela de login." };
+  if (!esperarLogin && !forcar) return { motivo: "login", aba, erro: "Centi na tela de login — entrando…" };
   const res = await t;
-  if (res.resultado === "ok" || res.resultado === "sem-resposta") {
+  if (res.resultado === "ok" || res.resultado === "sem-sessao" || res.resultado === "sem-resposta") {
     await esperar(1500);
-    const de = await estadoDaAba(aba.id);
+    let de = await estadoDaAba(aba.id);
+    if (de && !de.logado && de.tela !== "login" && (await aquecerAba(aba))?.logado) de = await estadoDaAba(aba.id);
     if (de?.logado && de.tela !== "login") return { aba, estado: de };
   }
   return { motivo: "login", aba, erro: "Centi na tela de login.", tentativa: res };
@@ -460,7 +505,19 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms?.create("login-centi", { periodInMinutes: 5 });
   restaurarDoSistema().catch(() => {});
 });
-chrome.runtime.onStartup?.addListener(() => restaurarDoSistema().catch(() => {}));
+// O alarme do login "sempre que cair" — criado também ao abrir o navegador e a cada vez que o serviço acorda (o Chrome
+// pode perder os alarmes ao reiniciar).
+async function garantirAlarme() {
+  try {
+    if (!chrome.alarms) return;
+    if (!(await chrome.alarms.get("login-centi"))) await chrome.alarms.create("login-centi", { periodInMinutes: 5 });
+  } catch {}
+}
+garantirAlarme();
+chrome.runtime.onStartup?.addListener(() => {
+  garantirAlarme();
+  restaurarDoSistema().catch(() => {});
+});
 
 // "Sempre que cair": a aba da automação que carregou (F5) na tela de login entra sozinha; o cartão volta à aba.
 async function conferirAba(tabId) {
@@ -468,7 +525,15 @@ async function conferirAba(tabId) {
   if (aba?.id !== tabId) return;
   const e = await estadoDaAba(tabId);
   await avisarPainel(tabId, await lerAtividade());
-  if (e?.tela === "login") await tentarLogin({ id: tabId }, false);
+  if (e?.tela === "login") {
+    const r = await tentarLogin({ id: tabId }, false);
+    // Entrou: a "pesquisa" já deixa a sessão capturada (o sistema vê a Centi pronta sem abrir tela nenhuma).
+    if (r?.resultado === "ok" || r?.resultado === "sem-sessao") {
+      await esperar(1500);
+      const de = await estadoDaAba(tabId);
+      if (de && !de.logado && de.tela !== "login") await aquecerAba(aba);
+    }
+  } else if (e && !e.logado && (await aquecerJa(AQUECER_SEM_SESSAO_MS))) await aquecerAba(aba);
 }
 chrome.tabs?.onUpdated?.addListener((tabId, info, tab) => {
   // Só uma NAVEGAÇÃO de verdade para fora da Automação para o lote (o "loading" sem url muda de status sem sair da tela —

@@ -6,6 +6,7 @@
 import { type CasamentoUnidade, casarPorCentroCusto, casarUnidadePorNome, type ReparticaoMatch, siglaDaFinalidade, unidadeDoCentroCusto } from "./reparticao-match.ts";
 import { comparar, interpolar, type Item, normTexto, numeroDe, resolverCaminho } from "./fluxo-core.ts";
 import { aceiteVale, conferenciaDesatualizada, lerAceite } from "./conferencia-dfd-centi.ts";
+import { type GrupoCorrecao, lerGruposCorrecao } from "./correcao-centi-core.ts";
 
 /** A chave de igualdade — a MESMA régua do operador "igual" (número compara como número). */
 const chaveIgual = (v: unknown) => {
@@ -418,7 +419,16 @@ export function passaConferencia(it: Record<string, unknown>, quais: string): bo
 }
 
 /** O que cada DFD verifica na Centi (o nó "O que verificar na Centi"). */
-export type Verificacoes = { conteudo: boolean; corrigir: boolean; situacao: boolean; centro: boolean; trocarUnidade: boolean; semDfd: boolean };
+export type Verificacoes = {
+  conteudo: boolean;
+  corrigir: boolean;
+  /** "O que corrigir": os grupos escolhidos; null = todos (o padrão e as ações da coluna Centi). */
+  grupos: GrupoCorrecao[] | null;
+  situacao: boolean;
+  centro: boolean;
+  trocarUnidade: boolean;
+  semDfd: boolean;
+};
 
 /**
  * As verificações escolhidas no nó (`c`; caixa ausente = o padrão: as três verificações ligadas, corrigir ligado, trocar e a
@@ -432,5 +442,14 @@ export function verificacoesDoNo(c: Record<string, unknown>, host: Record<string
   const conteudo = v("conteudo", true);
   const centro = v("centro", true);
   const corrigir = conteudo && !host.__soConferir && (host.__corrigir === true || liga("corrigir", true));
-  return { conteudo, corrigir, situacao: v("situacao", true), centro, trocarUnidade: centro && !so && liga("trocarUnidade", false), semDfd: v("semDfd", false) };
+  const grupos = corrigir && !so ? lerGruposCorrecao(c.corrigirTipos) : null;
+  return {
+    conteudo,
+    corrigir,
+    grupos,
+    situacao: v("situacao", true),
+    centro,
+    trocarUnidade: centro && !so && liga("trocarUnidade", false),
+    semDfd: v("semDfd", false),
+  };
 }

@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.298.0",
+    data: "2026-11-19",
+    titulo: "Escolher o que corrigir e a Centi sempre pronta",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "“O que corrigir” no Verificar DFDs na Centi: escolha quais divergências do conteúdo são corrigidas — cabeçalho, tipo, seções, itens incluídos ou retirados, quantidades e valores, descrição e código dos itens. O que fica fora da escolha continua apontado e não conta como pendência.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Extensão 1.38.0: reconhece a tela de login nova da Centi (Layout 4.0), entra sozinha quando a sessão cai e faz a “pesquisa” que deixa a Centi pronta — sem abrir tela nenhuma. Com o sistema aberto, a sessão é mantida viva. Atualize a extensão pelo botão da Automação.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Sistema",
+        texto:
+          "Página aberta numa versão anterior avisa “Versão nova do sistema — Recarregar”, e a sessão que terminou avisa “Entrar de novo” (no lugar de “Não autenticado”).",
+        link: "/painel",
+      },
+    ],
+  },
+  {
     versao: "1.297.0",
     data: "2026-11-18",
     titulo: "Uma automação só: Verificar DFDs na Centi",

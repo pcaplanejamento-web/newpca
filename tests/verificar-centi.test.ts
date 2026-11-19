@@ -5,12 +5,15 @@ import { chaveRetomada, type DefNo, lerGrafo } from "../src/lib/fluxo-core.ts";
 import { verificacoesDoNo } from "../src/lib/fluxo-dados.ts";
 import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
 import { modeloDoFluxo } from "../src/lib/fluxo-modelos.ts";
+import { aplicarCentiPorTipos, GRUPOS_CORRECAO, grupoDoTipo, lerGruposCorrecao, NAO_CORRIGIVEIS, tiposDosGrupos } from "../src/lib/correcao-centi-core.ts";
+import { tiposDivergencia } from "../src/lib/conferencia-dfd-centi.ts";
 
 test("O que verificar: o padrão, as escolhas e os da ação da Mesa (só o conteúdo)", () => {
-  assert.deepEqual(verificacoesDoNo({}, {}), { conteudo: true, corrigir: true, situacao: true, centro: true, trocarUnidade: false, semDfd: false });
+  assert.deepEqual(verificacoesDoNo({}, {}), { conteudo: true, corrigir: true, grupos: null, situacao: true, centro: true, trocarUnidade: false, semDfd: false });
   assert.deepEqual(verificacoesDoNo({ conteudo: false, corrigir: true, trocarUnidade: true }, {}), {
     conteudo: false,
     corrigir: false,
+    grupos: null,
     situacao: true,
     centro: true,
     trocarUnidade: true,
@@ -20,6 +23,7 @@ test("O que verificar: o padrão, as escolhas e os da ação da Mesa (só o cont
   assert.deepEqual(verificacoesDoNo({ corrigir: true, trocarUnidade: true }, { __verificacoes: ["conteudo"], __soConferir: true }), {
     conteudo: true,
     corrigir: false,
+    grupos: null,
     situacao: false,
     centro: false,
     trocarUnidade: false,
@@ -98,3 +102,68 @@ test("Planejamentos da Centi sem DFD: só com a escolha; compara por planejament
   const sem = await def.executar({ entrada: [{ id: 9, planejamento: "9", entidade: "", ...sim }] }, {}, ctx, {});
   assert.match(String((sem.__apontados ?? [])[0]?.mensagem), /ID da Centi/);
 });
+
+test("O que corrigir: cada tipo de divergência cai num grupo; os não corrigíveis em nenhum", () => {
+  const exemplos = [
+    "Objeto: “A” no sistema × “B” na Centi",
+    "Setor requisitante: “X” no sistema × “Y” na Centi",
+    "Tipo: DFD-S no sistema × DFD-R na Centi",
+    "Seção 3 - JUSTIFICATIVA diferente",
+    "Item 3 (52410) só na Centi",
+    "Item 4 (99) só no sistema",
+    "Item 1 (52410): quantidade 10 × 12, valor unitário 1,00 × 2,00 (sistema × Centi)",
+    "Item 2 (52410): descricao A × B, codigo 1 × 2, medida UN × CX (sistema × Centi)",
+    "Valor total: R$ 10,00 no sistema × R$ 12,00 na Centi",
+    "Nº de itens: 3 no sistema × 4 na Centi",
+  ];
+  const tipos = [...new Set(exemplos.flatMap(tiposDivergencia))];
+  for (const t of tipos) assert.ok(grupoDoTipo(t), `${t} sem grupo`);
+  for (const t of NAO_CORRIGIVEIS) assert.equal(grupoDoTipo(t), null, t);
+  assert.deepEqual(new Set(tipos.map(grupoDoTipo)), new Set(GRUPOS_CORRECAO.map((g) => g.valor)), "todos os grupos têm exemplo");
+  assert.deepEqual(tiposDosGrupos(tipos, ["valores"]).sort(), ["Item: quantidade", "Item: valor unitário", "Valor total"].sort());
+  // Todos os grupos (ou nenhum, ou lixo) = null (tudo); a escolha parcial vem limpa e sem repetir.
+  assert.equal(lerGruposCorrecao(GRUPOS_CORRECAO.map((g) => g.valor)), null);
+  assert.equal(lerGruposCorrecao([]), null);
+  assert.equal(lerGruposCorrecao(["xyz"]), null);
+  assert.deepEqual(lerGruposCorrecao(["valores", "valores", "secoes"]), ["valores", "secoes"]);
+});
+
+test("O que corrigir: os grupos chegam ao item, entram na retomada e só os valores corrigem SÓ os valores", () => {
+  const v = verificacoesDoNo({ corrigirTipos: ["valores"] }, {});
+  assert.deepEqual(v.grupos, ["valores"]);
+  assert.equal(verificacoesDoNo({ corrigirTipos: ["valores"], corrigir: false }, {}).grupos, null, "sem corrigir, nada a escolher");
+  assert.equal(verificacoesDoNo({ corrigirTipos: ["valores"] }, { __verificacoes: ["conteudo"], __corrigir: true }).grupos, null, "a ação da Mesa corrige tudo");
+  const sim = { conteudo: "sim", corrigir: "sim" };
+  assert.notEqual(chaveRetomada({ id: 7, verificar: sim, corrigirGrupos: ["valores"] }, "id"), chaveRetomada({ id: 7, verificar: sim }, "id"));
+  // O nó leva os grupos só quando são uma escolha.
+  const def = REGISTRO_NOS.get("dados.filtrarConferencia") as DefNo;
+  return Promise.all([
+    def.executar({ entrada: [{ id: 1 }] }, { corrigirTipos: ["valores"] }, ctxFalso(), {} as never),
+    def.executar({ entrada: [{ id: 1 }] }, {}, ctxFalso(), {} as never),
+  ]).then(([a, b]) => {
+    assert.deepEqual((a.saida as { corrigirGrupos?: string[] }[])[0].corrigirGrupos, ["valores"]);
+    assert.equal((b.saida as { corrigirGrupos?: string[] }[])[0].corrigirGrupos, undefined);
+  });
+});
+
+test("O que corrigir: o item que só existe na Centi NÃO entra quando só os valores foram escolhidos", () => {
+  const base = { numero: "1", planejamento: "10", tipo: "DFD-S", objeto: "X", secoes: [], assinaturas: [], valorTotal: 10 } as never;
+  const sist = { ...(base as object), itens: [{ item: 1, codigo: "1", descricao: "A", unidade: "UN", quantidade: 1, valorUnitario: 10, valorTotal: 10 }] };
+  const plano = {
+    tolerancia: 0.01,
+    centi: { ...(base as object), itens: [{ item: 1, codigo: "1", descricao: "A", unidade: "UN", quantidade: 2, valorUnitario: 10, valorTotal: 20 }, { item: 2, codigo: "9", descricao: "N", unidade: "UN", quantidade: 1, valorUnitario: 5, valorTotal: 5 }] },
+    entradas: [],
+    divergentes: [
+      { entrada: { tipo: "item", chave: "n:1" }, tipos: ["Item só na Centi", "Nº de itens", "Valor total"] },
+      { entrada: { tipo: "item", chave: "a:0:0" }, tipos: ["Item: quantidade", "Valor total"] },
+    ],
+    pares: [[0, 0]],
+  };
+  const r = aplicarCentiPorTipos(sist as never, plano as never, ["Item: quantidade", "Valor total"], ["valores"]) as unknown as { itens: { quantidade: number }[] };
+  assert.equal(r.itens.length, 1, "o item só da Centi não entrou");
+  assert.equal(r.itens[0].quantidade, 2, "a quantidade foi corrigida");
+});
+
+function ctxFalso() {
+  return { host: {}, aviso() {}, cancelado: () => false, api: async () => ({}) } as never;
+}

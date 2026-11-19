@@ -37,7 +37,7 @@ test("UMA automação × Centi: os modelos antigos saíram; o interno só nasce 
   // Os dados de entrada da única: quais DFDs e O QUE verificar (só as decisões — paralelo e retomada não).
   const campos = (tipo: string) => (REGISTRO_NOS.get(tipo)?.campos ?? []).filter((c) => c.entrada).map((c) => c.chave);
   assert.ok(campos("sistema.ler").includes("buscaDfds"));
-  assert.deepEqual(campos("dados.filtrarConferencia"), ["conteudo", "quais", "corrigir", "situacao", "centro", "trocarUnidade", "semDfd"]);
+  assert.deepEqual(campos("dados.filtrarConferencia"), ["conteudo", "quais", "corrigir", "corrigirTipos", "situacao", "centro", "trocarUnidade", "semDfd"]);
   assert.deepEqual(campos("fluxo.executar"), []);
   assert.equal(REGISTRO_NOS.get("saida.substituirDfd")?.legado, true);
   assert.ok(!NOS_POR_CATEGORIA.some((c) => c.nos.some((n) => n.tipo === "saida.substituirDfd")), "fora da paleta");

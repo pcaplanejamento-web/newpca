@@ -138,11 +138,25 @@ const VALORES_ITEM = new Set(["quantidade", "valorUnitario", "valorTotal"]);
 /** Aplica a Centi nas divergências — todas (o banner: cada escolha inteira), ou só as dos `tipos` escolhidos (a massa):
  * no ITEM que existe dos dois lados, só os CAMPOS daqueles tipos ("Valor total" = quantidade, valor unitário e total).
  * O resultado traz as marcas de origem dos itens (a tela das escolhas as usa); antes de gravar, `semMarcas`. */
-export function aplicarCentiPorTipos(sistema: DfdParseado, p: PlanoCorrecao, tipos?: readonly string[] | null): DfdParseado {
+export function aplicarCentiPorTipos(
+  sistema: DfdParseado,
+  p: PlanoCorrecao,
+  tipos?: readonly string[] | null,
+  grupos?: readonly GrupoCorrecao[] | null,
+): DfdParseado {
   const base = marcarItensGravados(sistema);
   if (!tipos) return acertarTotal(p.divergentes.length ? aplicarTodas(p.divergentes.map((d) => d.entrada), "novo", base, base, p.centi) : base, p);
   const quer = new Set(tipos);
-  const escolhidas = p.divergentes.filter((d) => d.tipos.some((t) => quer.has(t)));
+  // Por GRUPO (a automação): a escolha conta pelo grupo do 1º tipo dela — o item de um lado só é "Itens", nunca entra
+  // só porque também muda o valor total.
+  const noGrupo = (t: string) => {
+    const g = grupoDoTipo(t);
+    return g !== null && !!grupos?.includes(g);
+  };
+  // O item dos DOIS lados é corrigido campo a campo (qualquer campo de um grupo escolhido).
+  const doGrupo = (d: { entrada: EntradaEscolha; tipos: string[] }) =>
+    !grupos || (d.entrada.tipo === "item" && d.entrada.chave.startsWith("a:") ? d.tipos.some(noGrupo) : noGrupo(d.tipos[0] ?? ""));
+  const escolhidas = p.divergentes.filter((d) => doGrupo(d) && d.tipos.some((t) => quer.has(t)));
   // Cabeçalho, seções e itens que só existem de um lado: a escolha inteira.
   const inteiras = escolhidas.filter((d) => !(d.entrada.tipo === "item" && d.entrada.chave.startsWith("a:"))).map((d) => d.entrada);
   let w = inteiras.length ? aplicarTodas(inteiras, "novo", base, base, p.centi) : base;
@@ -209,3 +223,45 @@ export const SEM_CORRECAO_CENTI: ReadonlySet<string> = new Set([...NAO_CORRIGIVE
 
 /** Os tipos do motivo da conferência que a correção pela Centi alcança (sem repetir). */
 export const tiposCorrigiveisDoMotivo = (tipos: readonly string[]): string[] => [...new Set(tipos.filter((t) => !NAO_CORRIGIVEIS.has(t)))];
+
+/** OS GRUPOS do que corrigir na automação ("O que corrigir"): cada rótulo de divergência (`tiposDivergencia`) cai em UM.
+ * Os rótulos do cabeçalho são dinâmicos (os campos do DFD) — o que não é de outro grupo é do cabeçalho. */
+export const GRUPOS_CORRECAO = [
+  { valor: "cabecalho", rotulo: "Cabeçalho (objeto, órgão, setor, responsável, contatos, referências)" },
+  { valor: "tipo", rotulo: "Tipo do DFD" },
+  { valor: "secoes", rotulo: "Seções do DFD" },
+  { valor: "itens", rotulo: "Itens incluídos ou retirados" },
+  { valor: "valores", rotulo: "Quantidades e valores" },
+  { valor: "descricao", rotulo: "Descrição, código e medida dos itens" },
+] as const;
+export type GrupoCorrecao = (typeof GRUPOS_CORRECAO)[number]["valor"];
+export const TODOS_GRUPOS_CORRECAO: readonly GrupoCorrecao[] = GRUPOS_CORRECAO.map((g) => g.valor);
+
+const ITEM_VALORES = new Set(["Valor total", "Item: quantidade", "Item: valor unitário", "Item: valor total"]);
+
+/** O grupo de UM rótulo de divergência; null = o que a Centi não corrige (situação, órgão, nº, não encontrado, outras). */
+export function grupoDoTipo(rotulo: string): GrupoCorrecao | null {
+  const t = String(rotulo ?? "").trim();
+  if (!t || NAO_CORRIGIVEIS.has(t)) return null;
+  if (t === "Tipo") return "tipo";
+  if (t.startsWith("Seção ")) return "secoes";
+  if (t === "Item só na Centi" || t === "Item só no sistema" || t === "Nº de itens") return "itens";
+  if (ITEM_VALORES.has(t)) return "valores";
+  if (t.startsWith("Item: ")) return "descricao";
+  return "cabecalho";
+}
+
+/** Os grupos escolhidos, válidos e sem repetir (qualquer valor → lista; vazio/ausente = null = todos). */
+export function lerGruposCorrecao(v: unknown): GrupoCorrecao[] | null {
+  const bruto = Array.isArray(v) ? v : typeof v === "string" ? v.split(/[;|]/) : [];
+  const validos = new Set<string>(TODOS_GRUPOS_CORRECAO);
+  const g = [...new Set(bruto.map((x) => String(x).trim()).filter((x) => validos.has(x)))] as GrupoCorrecao[];
+  return g.length && g.length < TODOS_GRUPOS_CORRECAO.length ? g : null;
+}
+
+/** Os tipos dos grupos escolhidos (null = todos os corrigíveis). */
+export const tiposDosGrupos = (tipos: readonly string[], grupos: readonly GrupoCorrecao[] | null): string[] =>
+  tipos.filter((t) => {
+    const g = grupoDoTipo(t);
+    return g !== null && (!grupos || grupos.includes(g));
+  });

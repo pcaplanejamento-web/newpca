@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { EVENTO_CONFERIR_VERSAO, sessaoDoSistemaTerminou, versaoDoServidor } from "@/lib/avisos-sistema-store";
 import { apagarDadosLocais, definirVersaoGeral } from "@/lib/dados-cliente";
 import { sessaoEncerrada } from "@/lib/dados-cliente-core";
 import { type VersoesDados, versaoDaRota } from "@/lib/versao-dados-core";
@@ -50,8 +51,9 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
   }, [pathname]);
 
   useEffect(() => {
-    type Lida = { versao: string; dados: string; tarefas?: string; agenda?: string; execucao?: string };
+    type Lida = { versao: string; dados: string; tarefas?: string; agenda?: string; execucao?: string; app?: string };
     const aplicar = (j: Lida) => {
+      versaoDoServidor(j.app);
       definirVersaoGeral(j.versao);
       const c = conhecida.current;
       ultima.current = { completa: j.versao, dados: j.dados, tarefas: j.tarefas ?? c.tarefas, agenda: j.agenda ?? c.agenda, execucao: j.execucao ?? c.execucao };
@@ -71,17 +73,20 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
         ultimaConsulta.current = Date.now();
         aplicar(j as Lida);
       };
-    const conferir = async () => {
+    const conferir = async (agora = false) => {
       if (consultando.current || document.visibilityState !== "visible") return;
-      if (Date.now() - ultimaConsulta.current < INTERVALO_MS) return;
+      if (!agora && Date.now() - ultimaConsulta.current < INTERVALO_MS) return;
       consultando.current = true;
       ultimaConsulta.current = Date.now();
       try {
         const r = await fetch("/api/dados/versao", { cache: "no-store" });
         // Sessão encerrada (saiu em outro aparelho, inatividade): nada fica guardado neste navegador.
-        if (sessaoEncerrada(r.status)) void apagarDadosLocais();
+        if (sessaoEncerrada(r.status)) {
+          void apagarDadosLocais();
+          if (r.status === 401) sessaoDoSistemaTerminou();
+        }
         const j = (await r.json().catch(() => null)) as
-          | { ok?: boolean; versao?: string; dados?: string; tarefas?: string; agenda?: string; execucao?: string }
+          | { ok?: boolean; versao?: string; dados?: string; tarefas?: string; agenda?: string; execucao?: string; app?: string }
           | null;
         if (j?.ok && j.versao && j.dados) {
           aplicar(j as Lida);
@@ -98,10 +103,13 @@ export function SincronizarDados({ versoes }: { versoes: VersoesDados }) {
       }
     };
     const aoVoltar = () => void conferir();
+    const jaPedido = () => void conferir(true);
     const relogio = window.setInterval(aoVoltar, INTERVALO_MS);
     document.addEventListener("visibilitychange", aoVoltar);
     window.addEventListener("focus", aoVoltar);
+    window.addEventListener(EVENTO_CONFERIR_VERSAO, jaPedido);
     return () => {
+      window.removeEventListener(EVENTO_CONFERIR_VERSAO, jaPedido);
       document.removeEventListener("visibilitychange", aoVoltar);
       window.removeEventListener("focus", aoVoltar);
       window.clearInterval(relogio);

@@ -1,5 +1,6 @@
 "use client";
 
+import { MSG_SESSAO_TERMINOU, sessaoDoSistemaTerminou } from "@/lib/avisos-sistema-store";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { type AlvoCenti, type ArquivoSaida, alvoDoArquivo, descricaoDoArquivo, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { jaAnexados } from "@/lib/automacao-cliente";
@@ -175,7 +176,11 @@ function fonteDaApi(url: string, campo: "dfds" | "itens"): Promise<Item[]> {
   let p = cacheFontes.get(url);
   if (!p) {
     p = fetch(url)
-      .then((r) => r.json() as Promise<Record<string, unknown>>)
+      .then((r) => {
+        if (r.status !== 401) return r.json() as Promise<Record<string, unknown>>;
+        sessaoDoSistemaTerminou();
+        return { error: MSG_SESSAO_TERMINOU } as Record<string, unknown>;
+      })
       .then((j) => (Array.isArray(j[campo]) ? (j[campo] as Item[]) : Promise.reject(new Error(String(j.error ?? "falhou")))))
       .catch((e: unknown) => {
         cacheFontes.delete(url);

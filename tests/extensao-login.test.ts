@@ -43,7 +43,7 @@ function dom(o: { senhas?: number; botao?: string; texto?: string; iframe?: stri
       if (sel === "input[type=password]") return senhas;
       if (sel === "input") return [usuario, ...senhas];
       if (sel.startsWith("button")) return [botao];
-      if (sel === "iframe") return o.iframe ? [{ src: o.iframe }] : [];
+      if (sel === "iframe") return o.iframe ? [{ src: o.iframe, offsetWidth: 300 }] : [];
       return [];
     },
   };
@@ -295,4 +295,104 @@ test("serviço: login guardado NO SISTEMA — reinstalada a extensão, volta soz
   // A TELA do sistema não pede o login guardado (não há essa ação para ela).
   const r = (await s.pedir({ acao: "loginNoSistema", guardar: true })) as { ok: boolean };
   assert.equal(r.ok, false);
+});
+
+// ---------------------------------------------------------------- A CENTI 4.0 (LAYOUT 4.0) E A "PESQUISA" DEPOIS DE ENTRAR
+type El = Record<string, unknown> & { eventos?: string[] };
+function campo4(o: { type: string; placeholder?: string; disabled?: boolean; largura?: number }): El {
+  const c: El = { tagName: "INPUT", type: o.type, placeholder: o.placeholder, offsetWidth: o.largura ?? 100, disabled: !!o.disabled, eventos: [], _v: "" };
+  Object.defineProperty(c, "value", { get: () => c._v, set: (v) => (c._v = v), enumerable: true });
+  c.focus = () => {};
+  c.getAttribute = () => null;
+  c.dispatchEvent = (e: { type: string }) => (c.eventos as string[]).push(e.type);
+  return c;
+}
+/** A tela de login 4.0: uma busca no topo, "Usuário", "Senha" (o olho pode mostrar o texto), ENTRAR (pode vir desabilitado,
+ * com ícone) e "Entrar com o Google"; o selo "protected by reCAPTCHA" e um iframe invisível do reCAPTCHA. */
+function dom4(o: { olho?: boolean; entrarDesabilitado?: boolean; form?: boolean } = {}) {
+  const busca = campo4({ type: "text", placeholder: "Pesquisar" });
+  const usuario = campo4({ type: "text", placeholder: "Usuário" });
+  const senha = campo4({ type: o.olho ? "text" : "password", placeholder: "Senha" });
+  const cliques: string[] = [];
+  const envios: string[] = [];
+  const botao = (t: string, desab = false) => ({ tagName: "BUTTON", textContent: t, offsetWidth: 80, disabled: desab, click: () => cliques.push(t.trim()), getAttribute: () => null });
+  const entrar = botao(" ENTRAR arrow_forward ", !!o.entrarDesabilitado);
+  const google = botao("Entrar com o Google");
+  if (o.form) senha.form = { requestSubmit: () => envios.push("form") };
+  const doc = {
+    body: { innerText: "Usuário Senha ESQUECEU SUA SENHA? ENTRAR Entrar com o Google protected by reCAPTCHA Privacy Terms" },
+    querySelectorAll(sel: string) {
+      if (sel === "input") return [busca, usuario, senha];
+      if (sel.startsWith("button")) return [google, entrar];
+      if (sel === "iframe") return [{ src: "https://www.google.com/recaptcha/api2/anchor?size=invisible", offsetWidth: 0 }];
+      return [];
+    },
+  };
+  return { doc, busca, usuario, senha, entrar, cliques, envios };
+}
+
+test("login 4.0: reconhece pela tela nova — usuário pelo nome, ENTRAR com ícone, sem o Google nem a busca", () => {
+  const L = pecaLogin() as ReturnType<typeof pecaLogin> & { tocarEntrarDeNovo: (d: unknown) => boolean };
+  const d = dom4();
+  const t = L.telaDeLogin(d.doc) as { usuario: unknown; senha: unknown; botao: unknown };
+  assert.equal(t.usuario, d.usuario, "o campo Usuário, não a busca do topo");
+  assert.equal(t.botao, d.entrar, "o ENTRAR, nunca o Entrar com o Google");
+  assert.equal(L.sinaisDeBloqueio(d.doc), null, "o reCAPTCHA invisível e o selo dele não são bloqueio");
+  assert.equal(L.preencherEEntrar(d.doc, "maria", "s3gredo"), "enviado");
+  assert.equal(d.usuario.value, "maria");
+  assert.equal(d.busca.value, "", "a busca não recebe o usuário");
+  assert.deepEqual(d.cliques, ["ENTRAR arrow_forward"]);
+});
+
+test("login 4.0: o olho da senha ligado e o ENTRAR desabilitado também entram", () => {
+  const L = pecaLogin() as ReturnType<typeof pecaLogin> & { tocarEntrarDeNovo: (d: unknown) => boolean };
+  const olho = dom4({ olho: true });
+  assert.ok(L.telaDeLogin(olho.doc), "senha à vista pelo olho = campo de texto com o nome Senha");
+  const d = dom4({ entrarDesabilitado: true, form: true });
+  assert.ok(L.telaDeLogin(d.doc), "o ENTRAR desabilitado identifica a tela");
+  assert.equal(L.preencherEEntrar(d.doc, "maria", "s3gredo"), "enviado");
+  assert.deepEqual(d.envios, ["form"], "desabilitado = envia o formulário");
+  d.entrar.disabled = false;
+  assert.equal(L.tocarEntrarDeNovo(d.doc), true, "habilitou depois: toca de novo");
+  assert.deepEqual(d.cliques, ["ENTRAR arrow_forward"]);
+});
+
+test("serviço: fora do login e sem a sessão = faz a 'pesquisa' (aquecer) e fica pronto; no máximo 1 vez por minuto", async () => {
+  let aquecida = false;
+  const s = servicoFalso({
+    naAba: (_id, m) => {
+      if (m.acao === "aquecer") {
+        aquecida = true;
+        return { ok: true, logado: true };
+      }
+      if (m.acao === "estado") return { ok: true, logado: aquecida, ativoEm: aquecida ? Date.now() : 0 };
+      return undefined;
+    },
+  });
+  const r = (await s.pedir({ acao: "estado" })) as { ok: boolean };
+  assert.equal(r.ok, true, "pronta sem ninguém abrir uma tela na Centi");
+  assert.equal(s.enviados.filter((e) => e.m.acao === "aquecer").length, 1);
+  await s.pedir({ acao: "estado" });
+  assert.equal(s.enviados.filter((e) => e.m.acao === "aquecer").length, 1, "pronta e ativa: não aquece de novo");
+});
+
+test("serviço: sem a tela da Centi carregada, recarrega a aba (1 vez a cada 2 min); parada há 10 min, mantém viva", async () => {
+  const s = servicoFalso({
+    naAba: (_id, m) => {
+      if (m.acao === "aquecer") return { ok: false, semCliente: true };
+      if (m.acao === "estado") return { ok: true, logado: false };
+      return undefined;
+    },
+  });
+  const r = (await s.pedir({ acao: "estado" })) as { ok: boolean; erro: string };
+  assert.equal(r.ok, false);
+  assert.match(r.erro, /Preparando a Centi/);
+  assert.equal(s.recarregadas.length, 1);
+  await s.pedir({ acao: "estado" });
+  assert.equal(s.recarregadas.length, 1, "nem aquece nem recarrega em laço");
+  const viva = servicoFalso({ naAba: (_id, m) => (m.acao === "estado" ? { ok: true, logado: true, ativoEm: Date.now() - 11 * 60_000 } : undefined) });
+  await viva.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(viva.enviados.filter((e) => e.m.acao === "aquecer").length, 1, "parada há mais de 10 min: uma leitura a mantém viva");
+  assert.ok(viva.alarmes.includes("login-centi"), "o alarme do login existe também sem a instalação");
 });

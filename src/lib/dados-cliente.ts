@@ -3,6 +3,7 @@
 // Nada aqui decide o que a pessoa pode ver (o servidor já filtrou o que mandou); qualquer falha do armazém cai no pedido
 // normal ao servidor. A pessoa e o escopo vêm do `EscopoCliente` (layout do painel).
 
+import { sessaoDoSistemaTerminou } from "./avisos-sistema-store";
 import { useSyncExternalStore } from "react";
 import { aApagar, chaveDado, type EntradaDado, type Escopo, entradaVale, FORMATO_DADOS, sessaoEncerrada } from "./dados-cliente-core";
 
@@ -173,7 +174,10 @@ export async function lerDado<T>(recurso: string, url: string, versao: string, l
     const r = await fetch(url, { cache: "no-store" });
     contagem.servidor++;
     contagem.msServidor += Date.now() - t0;
-    if (sessaoEncerrada(r.status)) void apagarDadosLocais();
+    if (sessaoEncerrada(r.status)) {
+      void apagarDadosLocais();
+      if (r.status === 401) sessaoDoSistemaTerminou();
+    }
     const valor = await ler(r);
     // Só guarda se a pessoa/escopo ainda são os mesmos de quando o pedido saiu.
     if (e && chave && versao && escopo === e) {

@@ -35,6 +35,8 @@ import {
   variaveisDoGrafo,
 } from "@/lib/fluxo-core";
 import { corrigirDfdPelaCenti } from "@/lib/correcao-centi-cliente";
+import { lerGruposCorrecao } from "@/lib/correcao-centi-core";
+import { conferirVersaoAgora, MSG_SESSAO_TERMINOU, sessaoDoSistemaTerminou } from "@/lib/avisos-sistema-store";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, dfdDoSistema, pdfLidoNaCenti, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { type AcaoCenti, alternarAutomacaoMesa, EVENTO_DISPARO_MESA, hostDaAcaoCenti, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
@@ -91,6 +93,11 @@ async function api<T = Record<string, unknown>>(caminho: string, init?: { method
       headers: init?.body ? { "Content-Type": "application/json" } : undefined,
       body: init?.body ? JSON.stringify(init.body) : undefined,
     });
+    // Sessão do sistema encerrada: o aviso único (Entrar de novo) e o texto claro no lugar do "Não autenticado".
+    if (r.status === 401) {
+      sessaoDoSistemaTerminou();
+      return { ok: false, error: MSG_SESSAO_TERMINOU } as T & { ok?: boolean; error?: string };
+    }
     return (await r.json()) as T & { ok?: boolean; error?: string };
   } catch {
     return { ok: false, error: "Sem conexão com o sistema." } as T & { ok?: boolean; error?: string };
@@ -353,7 +360,7 @@ export function FluxosAutomacao({
       pdfCenti: (plan: string, entidade?: string) => pdfLidoNaCenti(plan, entidade),
       dfdDoSistema: (id: number) => dfdDoSistema(id) as unknown as Promise<Item>,
       substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
-      corrigirPelaCenti: (id: number) => corrigirDfdPelaCenti(id, null),
+      corrigirPelaCenti: (id: number, grupos?: string[] | null) => corrigirDfdPelaCenti(id, null, fetch, lerGruposCorrecao(grupos)),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {
         relatorio.current.push(...l);
@@ -1401,6 +1408,11 @@ function EditorFluxo({
   const sujo =
     JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || publico !== fluxo.publico || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
+  // Um componente desconhecido = a versão publicada é mais nova que esta página: confere já (o aviso "Recarregar" aparece).
+  const componenteNovo = problemas.some((p) => p.versaoNova);
+  useEffect(() => {
+    if (componenteNovo) conferirVersaoAgora();
+  }, [componenteNovo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
   const nomeDoComponente = (id: string) => {
     const n = grafo.nos.find((x) => x.id === id);

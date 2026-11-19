@@ -14,6 +14,7 @@ import { NAV_MODULOS } from "./navModulos";
 import type { PcaCardDados } from "./PcaCard";
 import { PcaSeletor } from "./PcaSeletor";
 import { AcessoNovidades, VersaoSistema } from "./Novidades";
+import { AvisosDoSistema } from "./AvisosDoSistema";
 import { PreCarregarTelas, SincronizarDados } from "./SincronizarDados";
 import { SetaDropdown } from "./SetaDropdown";
 import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
@@ -320,6 +321,7 @@ export function AppShell({
     <AcessoNovidades telas={abas} admin={usuario.admin}>
     <div className="min-h-dvh overflow-x-clip bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versoes={versaoDados} />}
+      <AvisosDoSistema />
       <PreCarregarTelas telas={secoesVisiveis(usuario.admin, modulos).flatMap((sc) => sc.itens.map((i) => i.href))} versoes={versaoDados} />
       <MenuLateral
         topo={<MarcaLink href="/" dica={DICA_SITE} identidade={identidade} />}

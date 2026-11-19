@@ -40,6 +40,8 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   const janelas: string[] = [];
   const selos: string[] = [];
   let proxAba = 100;
+  const alarmes: string[] = [];
+  const recarregadas: number[] = [];
   const chrome = {
     runtime: {
       id: "ext",
@@ -158,8 +160,14 @@ export function servicoFalso(o: OpcoesFalso = {}) {
         },
       },
       onRemoved: { addListener: (f: (id: number) => void) => removidas.push(f) },
+      reload: async (id: number) => void recarregadas.push(id),
     },
     scripting: { executeScript: async () => [] },
+    alarms: {
+      get: async (n: string) => (alarmes.includes(n) ? { name: n } : undefined),
+      create: async (n: string) => void alarmes.push(n),
+      onAlarm: { addListener() {} },
+    },
   };
   const ctx: Record<string, unknown> = { chrome, URL, URLSearchParams, crypto, setTimeout, clearTimeout, Promise, Date, Math, Number, String, JSON };
   if (o.cofre) ctx.CofreCenti = o.cofre;
@@ -180,6 +188,8 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     enviados,
     janelas,
     selos,
+    alarmes,
+    recarregadas,
     fecharAba: (id: number) => {
       const i = abas.findIndex((a) => a.id === id);
       if (i >= 0) abas.splice(i, 1);

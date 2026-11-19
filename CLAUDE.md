@@ -1092,6 +1092,35 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do nó (os "Falhou" aparecem), Estado = o que foi feito/resultado (`estadoDoItem("fluxo.executar")`), colunas Situação ·
   Centro de Custo · Unidade na Centi. Testes: `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em
   `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts` (0194). O bloco abaixo é o HISTÓRICO.
+- **O QUE CORRIGIR + CENTI SEMPRE PRONTA + VERSÃO/SESSÃO (v1.298.0, extensão 1.38.0, sem migração):**
+  - **"O que corrigir"** (campo `corrigirTipos` do `dados.filtrarConferencia`, tipo de campo `lista` com `opcoes` → `SeletorMultiplo
+    suspenso` no `CampoDoNo`; visível com Conteúdo + Corrigir): os grupos FIXOS `GRUPOS_CORRECAO` (`correcao-centi-core.ts`:
+    cabeçalho · tipo · seções · itens · valores · descrição) classificam os rótulos dinâmicos de `tiposDivergencia`
+    (`grupoDoTipo`; rótulo desconhecido = cabeçalho; os `NAO_CORRIGIVEIS` = nenhum). `lerGruposCorrecao` (todos/nenhum = null =
+    tudo) → `verificacoesDoNo().grupos` → o item leva `corrigirGrupos` (só quando é escolha) → `chaveRetomada` (`|g:`) →
+    `saida.corrigirPelaCenti` → host `corrigirDfdPelaCenti(id, null, fetch, grupos)`: só os tipos do plano nos grupos
+    (`tiposDosGrupos(tiposCorrigiveis(plano))`), nada nos grupos = "sem", o que resta FORA dos grupos não é "parcial".
+    `aplicarCentiPorTipos(…, grupos)`: a escolha conta pelo grupo do 1º tipo (o item de um lado só é "Itens" — nunca entra
+    por "Valor total"); o item dos dois lados, campo a campo. Sem migração: o padrão (todos) vale no grafo salvo.
+  - **Versão nova e sessão encerrada:** `GET /api/dados/versao` devolve `app` = `VERSAO_ATUAL`; o `SincronizarDados` compara
+    (`versaoDoServidor`) e no 401 chama `sessaoDoSistemaTerminou` (armazém `avisos-sistema-store.ts`); o **`AvisosDoSistema`**
+    (DS, no `AppShell`) mostra "Versão nova do sistema — Recarregar" ou "Sua sessão no sistema terminou — Entrar de novo",
+    persistentes. 401 nas chamadas da Automação (`FluxosAutomacao.api`, `paineis.fonteDaApi`) e no `lerDado` dispara o mesmo
+    aviso (`MSG_SESSAO_TERMINOU` no lugar de "Não autenticado"). Nó de tipo desconhecido = `versaoNova` no `validarGrafo`
+    (`MSG_COMPONENTE_NOVO`): o `ProblemasFluxo` e o `PainelNo` oferecem **Recarregar** e o editor pede a conferência já
+    (`conferirVersaoAgora` → `EVENTO_CONFERIR_VERSAO`).
+  - **Login da Centi 4.0 (extensão 1.38.0, protocolo 46):** `centi-login.js` acha a senha também com o OLHO ligado (texto com
+    nome "Senha"), o usuário pelo nome (placeholder/name/aria-label) ou o de texto logo ANTES da senha (nunca a busca do topo),
+    o ENTRAR pelo texto só com letras (ícone junto vale; Google/gov.br/certificado não) e também DESABILITADO (envia o
+    formulário ou Enter; `tocarEntrarDeNovo` quando habilita); captcha só com o desafio VISÍVEL (o reCAPTCHA invisível não
+    pausa). **A "pesquisa" (`aquecer`, `centi-main.js`):** UMA leitura inofensiva (`load?entity=101045&key=0`) pelo cliente HTTP
+    da própria Centi — a sessão é capturada sem ninguém abrir tela. `garantirSessao` (`background.js`): fora do login sem
+    sessão = aquece (1×/min; o "Entrar agora" já); logada e parada há > 10 min (`ativoEm` do estado) = aquece por trás (manter
+    viva, só com o sistema consultando); sem a tela da Centi carregada = recarrega a aba (1× a cada 2 min). Depois do login
+    (`entrar` da ponte e `conferirAba`) aquece e só conta "ok" com a sessão; `sem-sessao` = entrou, falta ler a sessão (não
+    pausa). 401 de qualquer pedido restauth (`notarResposta`) apaga a sessão guardada. Alarme `login-centi` garantido também no
+    `onStartup` e ao acordar o serviço (`garantirAlarme`). Testes: `tests/extensao-login.test.ts` (DOM do Layout 4.0),
+    `tests/verificar-centi.test.ts` (grupos).
 - **CONFERIR E CORRIGIR DFDs × CENTI = UMA AUTOMAÇÃO (v1.296.0, migração `0191`) — regra firme:** o único modelo é
   **`conferir-corrigir-centi`** ("Conferir e corrigir DFDs × Centi") = `sistema.ler` (DFDs; "Quais" todos/planejamento/nº/
   protocolo) → `dados.filtrarConferencia` ("Quais DFDs" todos/divergentes/pendentes + **"Corrigir os divergentes"**, padrão

@@ -61,7 +61,7 @@ import {
   textoRetrato,
   tiposDoMotivo,
 } from "./conferencia-dfd-centi.ts";
-import { SEM_CORRECAO_CENTI } from "./correcao-centi-core.ts";
+import { GRUPOS_CORRECAO, lerGruposCorrecao, SEM_CORRECAO_CENTI, TODOS_GRUPOS_CORRECAO } from "./correcao-centi-core.ts";
 import type { DfdParseado } from "./parse-dfd-comum.ts";
 import { chaveColuna, colunaReservada, ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
@@ -1187,6 +1187,17 @@ const NOS: DefNo[] = [
         quando: { campo: "conteudo", valores: ["true"] },
         ajuda: "Ligado: o DFD que sair divergente é corrigido em seguida com os dados da Centi (só o que diverge). Desligado: só confere — a coluna “Centi” é marcada e nada do DFD é alterado.",
       },
+      {
+        chave: "corrigirTipos",
+        rotulo: "O que corrigir",
+        tipo: "lista",
+        entrada: true,
+        padrao: TODOS_GRUPOS_CORRECAO,
+        opcoes: GRUPOS_CORRECAO.map((g) => ({ valor: g.valor, rotulo: g.rotulo })),
+        visivel: (c) => c.conteudo !== false && c.corrigir !== false,
+        ajuda:
+          "Quais divergências do conteúdo são corrigidas com os dados da Centi. Todos marcados = tudo o que diverge. Desmarcado = a divergência fica como está (a coluna “Centi” segue mostrando) e não conta como pendência da correção. Situação, órgão e nº do DFD a Centi nunca corrige — são tratados no painel da coluna Centi.",
+      },
       { chave: "situacao", rotulo: "Situação (execução)", tipo: "booleano", entrada: true, padrao: true, ajuda: "Grava a situação do planejamento na Centi (Executado, Cancelado…) na coluna “Situação” da Mesa; o planejamento que a Centi não tem fica “Não encontrado na Centi”." },
       { chave: "centro", rotulo: "Centro de custo e unidade", tipo: "booleano", entrada: true, padrao: true, ajuda: "Grava o texto completo do centro de custo da Centi na coluna “Centro de Custo” da Mesa (os itens herdam o do DFD) e confere a unidade do DFD com a do centro de custo." },
       {
@@ -1210,7 +1221,9 @@ const NOS: DefNo[] = [
       const itens = filtrar ? so(e).filter((it) => passaConferencia(it, str(c.quais) || "todos")) : so(e);
       const sn = (b: boolean) => (b ? "sim" : "nao");
       const verificar = { conteudo: sn(v.conteudo), corrigir: sn(v.corrigir), situacao: sn(v.situacao), centro: sn(v.centro), trocarUnidade: sn(v.trocarUnidade), semDfd: sn(v.semDfd) };
-      return { saida: itens.map((it) => ({ ...it, verificar, corrigir: v.corrigir })) };
+      // Os grupos só viajam quando são uma ESCOLHA (nem todos): o item sem eles corrige tudo, como antes.
+      const extra = v.grupos ? { corrigirGrupos: v.grupos } : {};
+      return { saida: itens.map((it) => ({ ...it, verificar, corrigir: v.corrigir, ...extra })) };
     },
   },
   {
@@ -1824,7 +1837,9 @@ const NOS: DefNo[] = [
       },
     ],
     executar: async (e, c, ctx) => {
-      const corrigir = ctx.host.corrigirPelaCenti as ((id: number) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>) | undefined;
+      const corrigir = ctx.host.corrigirPelaCenti as
+        | ((id: number, grupos?: string[] | null) => Promise<{ resultado: string; status: string | null; motivo: string | null; restam?: string[] }>)
+        | undefined;
       const corrigidos: Item[] = [];
       const convergentes: Item[] = [];
       const sem: Item[] = [];
@@ -1886,7 +1901,7 @@ const NOS: DefNo[] = [
         const leve: Item = { ...it, centi: undefined, dfdSistema: undefined };
         let feito: Item;
         try {
-          const r = await corrigir(id);
+          const r = await corrigir(id, lerGruposCorrecao(it.corrigirGrupos));
           feito = { ...leve, correcao: r.resultado, conferenciaDepois: r.status, motivoDepois: r.motivo };
           // Gravado e reconferido: o item passa a mostrar a conferência de DEPOIS (a coluna Centi da Análise não fica com
           // o "Divergente" da comparação feita antes da correção).

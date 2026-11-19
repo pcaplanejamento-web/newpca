@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProblemaGrafo } from "@/lib/fluxo-core";
+import { Button } from "../Button";
 import { Dropdown } from "../Dropdown";
 import { IconAlert, IconChevronRight } from "../icons";
 
@@ -43,6 +44,14 @@ export function ProblemasFluxo({
       {(fechar) => (
         <div className="p-2">
           <p className="px-2 pb-2 text-xs font-semibold text-muted">{erro ? "Corrija para executar" : "Não impedem executar"}</p>
+          {/* Um componente que esta página não conhece = a versão publicada é mais nova: recarregar resolve. */}
+          {itens.some((p) => p.versaoNova) && (
+            <div className="px-2 pb-2">
+              <Button size="sm" variant="primary" onClick={() => window.location.reload()}>
+                Recarregar a página
+              </Button>
+            </div>
+          )}
           <ul className="space-y-1">
             {itens.map((p, i) => {
               const nome = p.no ? nomeDo(p.no) : null;
