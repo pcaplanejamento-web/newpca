@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * O LOGIN DA CENTI de cada ADM no BANCO (`centi-login-cofre.ts`) — a ÚNICA fonte, valendo em qualquer navegador.
- * - A TELA do sistema (o próprio site, com o `Origin` dele) SALVA e REMOVE e só recebe a SITUAÇÃO — a senha nunca volta.
+ * - A TELA do sistema (o próprio site, com o `Origin` dele) e o BANNER da extensão SALVAM e REMOVEM e só recebem a
+ *   SITUAÇÃO — a senha nunca volta.
  * - A EXTENSÃO do navegador em que o ADM está logado pede a ENTREGA (POST) com a chave pública dela: a senha sai SELADA a
  *   essa chave — nunca em claro. Ela também avisa a PAUSA (por código) e, pedido pela pessoa, IMPORTA o login antigo dela.
  */
@@ -33,11 +34,11 @@ export async function GET(req: Request) {
   // A entrega é pelo POST (o navegador só põe o `Origin` da extensão em POST/PUT — num GET ele não vem): a extensão antiga
   // que ainda pede aqui recebe o aviso para atualizar, nunca a situação no lugar do pacote.
   if (new URL(req.url).searchParams.has("publica")) return erro(MSG_ATUALIZE, 422);
-  return semCache(ok({ ...(await situacaoLoginCenti(g.u)), disponivel: cofreDisponivel() }));
+  // `extensao` = a versão recomendada: o banner da extensão avisa quando há uma mais nova.
+  return semCache(ok({ ...(await situacaoLoginCenti(g.u)), disponivel: cofreDisponivel(), extensao: VERSAO_EXTENSAO_CENTI }));
 }
 
-/** Salvar pela TELA (`null` mantém o guardado) — e pela extensão antiga (até a 1.38.0, o "Guardar no sistema" do popup
- * dela): escrever o PRÓPRIO login nunca expõe a senha. */
+/** Salvar pela TELA ou pelo BANNER da extensão (`null` mantém o guardado): escrever o PRÓPRIO login nunca expõe a senha. */
 export async function PUT(req: Request) {
   if (!daTela(req) && !daExtensao(req)) return erro("Origem não permitida.", 403);
   const g = await exigirAdmin();
@@ -92,9 +93,9 @@ export async function POST(req: Request) {
   return ok();
 }
 
-/** Remover: só pela TELA. */
+/** Remover: pela TELA ou pelo banner da EXTENSÃO (o próprio login — nunca expõe a senha). */
 export async function DELETE(req: Request) {
-  if (!daTela(req)) return erro("Origem não permitida.", 403);
+  if (!daTela(req) && !daExtensao(req)) return erro("Origem não permitida.", 403);
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
   await apagarLoginCenti(g.u.id);

@@ -4,83 +4,330 @@
 <meta charset="utf-8">
 <title>Automação PCA</title>
 <style>
-  :root { color-scheme: light dark; --fundo: #ffffff; --texto: #18181b; --suave: #52525b; --borda: #e4e4e7; --info: #2563eb; --ok: #16a34a; --alerta: #d97706; --erro: #dc2626; --botao: #18181b; --botao-texto: #ffffff; }
-  @media (prefers-color-scheme: dark) { :root { --fundo: #18181b; --texto: #fafafa; --suave: #a1a1aa; --borda: #3f3f46; --botao: #fafafa; --botao-texto: #18181b; } }
-  body { margin: 0; width: 340px; padding: 14px; background: var(--fundo); color: var(--texto); font: 13px/1.45 Inter, Roboto, system-ui, sans-serif; }
+  /* Os MESMOS tokens do sistema PCA (globals.css) e as MESMAS peças dos Ajustes da Automação: Badge, Ajuda (?),
+     TextField/PasswordField, Switch, Button primário/secundário/perigo, os grupos com título em caixa alta. */
+  :root {
+    color-scheme: light;
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #f4f6f8; --text: #0f1626; --text-2: #2d3644; --muted: #586173; --faint: #8a93a3;
+    --border: #ebeef2; --border-2: #dee2e8; --accent: #4f46e5; --accent-soft: #eef1ff;
+    --ok: #16a34a; --warn: #ca8a04; --danger: #dc2626; --info: #2563eb;
+    --radius-card: 14px; --radius-control: 10px; --radius-chip: 9px; --h-control: 38px; --h-control-sm: 34px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0a0c11; --surface: #141821; --surface-2: #1a1f2a; --text: #f4f6f9; --text-2: #d3d8e1; --muted: #98a1b2; --faint: #6d7585;
+      --border: #232834; --border-2: #2c3240; --accent: #818cf8; --accent-soft: #20233c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  body { width: 380px; padding: 12px; color: var(--text); font: 14px/1.45 Geist, Inter, Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
   body.janela { width: auto; }
-  h1 { font-size: 15px; margin: 0 0 8px; }
-  h2 { font-size: 13px; margin: 0 0 6px; }
-  .linha { display: flex; align-items: center; gap: 8px; }
-  .p { width: 8px; height: 8px; border-radius: 50%; background: var(--suave); flex: none; }
-  .p.ok { background: var(--ok); } .p.alerta { background: var(--alerta); } .p.erro { background: var(--erro); } .p.info { background: var(--info); }
-  .caixa { border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
-  .titulo { font-weight: 700; }
-  .s { color: var(--suave); overflow-wrap: anywhere; }
-  .barra { height: 6px; border-radius: 3px; background: rgba(127,127,127,.2); overflow: hidden; margin: 8px 0; }
-  .barra > i { display: block; height: 100%; background: var(--info); width: 0; transition: width .3s; }
-  ol { margin: 6px 0 0; padding: 0 0 0 16px; max-height: 140px; overflow: auto; color: var(--suave); }
-  li { margin: 2px 0; }
-  .msg { margin-top: 8px; font-size: 12px; }
-  .msg.ok { color: var(--ok); } .msg.alerta { color: var(--alerta); } .msg.erro { color: var(--erro); }
-  .acoes { display: grid; gap: 8px; margin-top: 12px; }
-  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-  button { min-height: 36px; padding: 0 12px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--borda); background: transparent; color: var(--texto); }
-  button.principal { background: var(--botao); color: var(--botao-texto); border-color: var(--botao); }
-  button.parar { background: var(--erro); border-color: var(--erro); color: #fff; }
-  button:disabled { opacity: .5; cursor: default; }
-  .confirmar { border-color: var(--alerta); box-shadow: 0 0 0 1px var(--alerta) inset; }
-  .confirmar h2 { margin: 0 0 2px; font-size: 14px; }
-  .confirmar dl { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
-  .confirmar dt { color: var(--suave); }
-  .confirmar dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-  .confirmar .aviso { color: var(--alerta); font-size: 12px; margin: 0 0 8px; }
-  .nota { margin: 8px 0 0; font-size: 11px; color: var(--suave); }
+  [hidden] { display: none !important; }
+  svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .stack { display: grid; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px; }
+  .s { color: var(--muted); overflow-wrap: anywhere; }
+  .texto-xs { font-size: 12px; color: var(--muted); margin: 0; }
+  .linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .linha.sem-quebra { flex-wrap: nowrap; }
+  .linha.sem-quebra .badge { min-width: 0; flex: 0 1 auto; }
+  .linha.sem-quebra .ajuda { flex: none; }
+  .entre { justify-content: space-between; }
+  .fim { justify-content: flex-end; }
+  /* Topo: o nome, a versão (e a nova que o sistema recomenda) e a Centi. */
+  .topo { display: flex; align-items: center; gap: 8px; }
+  .topo img { width: 26px; height: 26px; border-radius: 7px; flex: none; }
+  .topo h1 { font-size: 15px; font-weight: 700; margin: 0; flex: 1; min-width: 0; }
+  .estado { display: flex; align-items: center; gap: 10px; }
+  .estado .texto { flex: 1; min-width: 0; }
+  .estado strong { display: block; font-size: 13.5px; font-weight: 600; }
+  .estado .s { font-size: 12px; }
+  .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+  .ponto.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+  .ponto.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent); }
+  .ponto.danger { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent); }
+  .ponto.vivo { animation: pulso 1.4s ease-in-out infinite; }
+  @keyframes pulso { 50% { opacity: .45; } }
+  /* Badge. */
+  .badge { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 10px; border-radius: var(--radius-chip); border: 1px solid transparent; font-size: 12.5px; font-weight: 600; line-height: 18px; background: var(--surface-2); color: var(--muted); }
+  .badge.dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .badge.emerald { background: color-mix(in srgb, var(--ok) 10%, transparent); border-color: color-mix(in srgb, var(--ok) 30%, transparent); color: var(--ok); }
+  .badge.amber { background: color-mix(in srgb, var(--warn) 10%, transparent); border-color: color-mix(in srgb, var(--warn) 30%, transparent); color: var(--warn); }
+  .badge.red { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: color-mix(in srgb, var(--danger) 30%, transparent); color: var(--danger); }
+  .badge.blue { background: color-mix(in srgb, var(--info) 10%, transparent); border-color: color-mix(in srgb, var(--info) 30%, transparent); color: var(--info); }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+  /* Os grupos dos Ajustes (título em caixa alta, separados por linha). */
+  .grupo { display: grid; gap: 10px; padding: 0 4px 14px; border-bottom: 1px solid var(--border); }
+  .grupo + .grupo { padding-top: 14px; }
+  .grupo:last-child { border-bottom: 0; padding-bottom: 2px; }
+  .grupo > h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  /* Ajuda (?). */
+  .ajuda { width: var(--h-control-sm); height: var(--h-control-sm); display: inline-grid; place-items: center; border-radius: var(--radius-control); border: 1px solid var(--border-2); background: var(--surface); color: var(--text); cursor: pointer; padding: 0; }
+  .ajuda:hover { background: var(--surface-2); }
+  .ajuda[aria-expanded="true"] { background: var(--surface-2); }
+  .texto-ajuda { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-control); background: var(--surface-2); font-size: 12.5px; color: var(--text-2); }
+  .texto-ajuda p { margin: 0; }
+  /* TextField / PasswordField. */
+  .campo { display: grid; gap: 8px; }
+  .campo > label { font-size: 13.5px; font-weight: 700; color: var(--text); }
+  .caixa { display: flex; align-items: center; gap: 10px; height: var(--h-control); padding: 0 14px; border: 1px solid var(--border-2); border-radius: var(--radius-control); background: var(--surface-2); transition: border-color .15s, box-shadow .15s, background-color .15s; }
+  .caixa:focus-within { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .caixa.desligada { opacity: .6; }
+  .caixa > svg { color: var(--muted); }
+  .caixa input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; padding: 0; }
+  .caixa input::placeholder { color: var(--faint); }
+  .olho { width: 28px; height: 28px; margin-right: -6px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; border-radius: 999px; padding: 0; }
+  .olho:hover { background: var(--surface); color: var(--text); }
+  .olho .fechado, .olho[aria-pressed="true"] .aberto { display: none; }
+  .olho[aria-pressed="true"] .fechado { display: block; }
+  .celula { width: 64px; height: 30px; text-align: center; border: 1px solid var(--border-2); border-radius: 8px; background: var(--surface-2); color: var(--text); font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; outline: 0; }
+  .celula:focus { border-color: var(--accent); background: var(--surface); }
+  /* Switch. */
+  .switch { display: inline-flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; user-select: none; }
+  .switch.desligado { cursor: default; opacity: .6; }
+  .switch button { position: relative; width: 44px; height: 24px; flex: none; padding: 0; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface-2); cursor: inherit; transition: background-color .15s, border-color .15s; }
+  .switch button::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+  .switch button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch button[aria-checked="true"]::after { transform: translateX(20px); }
+  .switch button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 2px; }
+  .switch span { font-size: 14px; color: var(--text-2); }
+  /* Button. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h-control-sm); padding: 0 14px; border-radius: var(--radius-control); border: 1px solid transparent; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity .15s, background-color .15s, transform .1s; }
+  .btn:active:not(:disabled) { transform: scale(.97); }
+  .btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+  .btn.primario { background: var(--text); color: var(--surface); }
+  .btn.primario:hover:not(:disabled) { opacity: .9; }
+  .btn.secundario { background: var(--surface); color: var(--text); border-color: var(--border-2); }
+  .btn.secundario:hover:not(:disabled) { background: var(--surface-2); }
+  .btn.perigo { background: var(--danger); color: #fff; }
+  .btn.perigo:hover:not(:disabled) { filter: brightness(1.06); }
+  .btn.mini { height: 28px; padding: 0 10px; font-size: 12.5px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.largo { width: 100%; }
+  .gira { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: gira .7s linear infinite; flex: none; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+  /* Mensagens. */
+  .msg { margin: 0; font-size: 12.5px; }
+  .msg:empty { display: none; }
+  .msg.ok { color: var(--ok); } .msg.warn { color: var(--warn); } .msg.danger { color: var(--danger); }
+  .confirma { display: grid; gap: 8px; padding: 10px 12px; border-radius: var(--radius-control); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 8%, transparent); font-size: 12.5px; }
+  .confirma.perigo { border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 7%, transparent); }
+  /* Listas (histórico, gravação, órgãos). */
+  .lista { display: grid; max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-control); }
+  .lista > * { border-bottom: 1px solid var(--border); }
+  .lista > *:last-child { border-bottom: 0; }
+  .item { display: grid; gap: 4px; width: 100%; padding: 8px 10px; background: transparent; border: 0; border-bottom: 1px solid var(--border); color: var(--text); font: inherit; font-size: 12.5px; text-align: left; }
+  button.item { cursor: pointer; }
+  button.item:hover { background: var(--surface-2); }
+  .item .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
+  .orgao { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; }
+  .orgao .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .orgao .fixa { width: 64px; text-align: center; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  .vazio { padding: 12px; text-align: center; font-size: 12.5px; color: var(--muted); }
+  .barra { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 8px 0; }
+  .barra > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  ol { margin: 6px 0 0; padding: 0 0 0 18px; max-height: 120px; overflow: auto; color: var(--muted); font-size: 12.5px; }
+  .aviso-gravar { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn) inset; }
+  .aviso-gravar dl { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
+  .aviso-gravar dt { color: var(--muted); }
+  .aviso-gravar dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-  <h1>Automação PCA</h1>
-  <div class="linha"><span id="ponto" class="p"></span><span id="centi">Conferindo a Centi…</span></div>
-  <section id="confirmacao" class="caixa confirmar" hidden aria-labelledby="confTitulo">
-    <h2 id="confTitulo">Anexar ao protocolo da Centi?</h2>
-    <div class="s">O sistema PCA pediu para gravar na Centi. Confira antes de permitir.</div>
-    <dl>
-      <dt>Protocolo</dt><dd id="confProtocolo"></dd>
-      <dt>Id na Centi</dt><dd id="confId"></dd>
-      <dt>Documento</dt><dd id="confDescricao"></dd>
-      <dt>Execução</dt><dd id="confExecucao"></dd>
-    </dl>
-    <p class="aviso">Cada PDF entra como um documento NOVO; nada do protocolo é alterado. Vale para os documentos desta execução neste protocolo.</p>
-    <div class="dupla">
-      <button id="confNao" type="button">Recusar</button>
-      <button id="confSim" class="principal" type="button">Permitir</button>
-    </div>
-    <p class="nota" id="confPrazo"></p>
-  </section>
-  <div id="atividade" class="caixa" hidden>
-    <div class="titulo" id="titulo"></div>
-    <div class="s" id="passo"></div>
-    <div class="barra"><i id="barra"></i></div>
-    <ol id="passos"></ol>
-  </div>
-  <div id="login" class="caixa">
-    <h2>Login da Centi</h2>
-    <div id="situacao" class="msg" role="status" aria-live="polite">Conferindo…</div>
-    <div class="dupla">
-      <button id="configurar" type="button">Configurar no sistema</button>
-      <button id="entrar" class="principal" type="button" hidden>Entrar agora</button>
-    </div>
-    <div id="antigo" hidden>
-      <p class="msg alerta" id="antigoTexto"></p>
-      <div class="dupla">
-        <button id="antigoDescartar" type="button">Descartar</button>
-        <button id="antigoEnviar" class="principal" type="button">Enviar</button>
+  <div class="stack">
+    <header class="topo">
+      <img id="icone" alt="" hidden>
+      <h1>Automação PCA</h1>
+      <span id="nova" class="badge amber dot" hidden></span>
+      <span id="versao" class="badge accent" title="Versão desta extensão"></span>
+    </header>
+
+    <section class="card estado" aria-live="polite">
+      <span id="ponto" class="ponto vivo"></span>
+      <div class="texto">
+        <strong id="centiTitulo">Conferindo a Centi…</strong>
+        <span id="centiDetalhe" class="s"></span>
       </div>
-    </div>
-    <p class="nota">Fica cifrado no sistema PCA, na sua conta — vale em qualquer navegador. A senha chega selada à chave desta extensão só na hora de entrar na Centi; nada fica guardado aqui.</p>
-  </div>
-  <div class="acoes">
-    <button id="parar" class="parar" type="button" hidden>Interromper</button>
-    <button id="aba" type="button">Ir para a aba da automação</button>
+      <button id="entrar" class="btn primario" type="button" hidden>Entrar agora</button>
+    </section>
+
+    <section id="confirmacao" class="card aviso-gravar" hidden aria-labelledby="confTitulo">
+      <h2 id="confTitulo" style="margin:0 0 2px;font-size:14px">Anexar ao protocolo da Centi?</h2>
+      <div class="s">O sistema PCA pediu para gravar na Centi. Confira antes de permitir.</div>
+      <dl>
+        <dt>Protocolo</dt><dd id="confProtocolo"></dd>
+        <dt>Id na Centi</dt><dd id="confId"></dd>
+        <dt>Documento</dt><dd id="confDescricao"></dd>
+        <dt>Execução</dt><dd id="confExecucao"></dd>
+      </dl>
+      <p class="msg warn" style="margin-bottom:8px">Cada PDF entra como um documento NOVO; nada do protocolo é alterado. Vale para os documentos desta execução neste protocolo.</p>
+      <div class="dupla">
+        <button id="confNao" class="btn secundario" type="button">Recusar</button>
+        <button id="confSim" class="btn primario" type="button">Permitir</button>
+      </div>
+      <p class="texto-xs" id="confPrazo" style="margin-top:8px"></p>
+    </section>
+
+    <section id="atividade" class="card" hidden>
+      <div class="linha entre"><strong id="titulo" style="font-size:13.5px"></strong><span id="estadoLote" class="badge dot"></span></div>
+      <div class="s" id="passo" style="font-size:12.5px;margin-top:4px"></div>
+      <div class="barra"><i id="barra"></i></div>
+      <ol id="passos"></ol>
+      <button id="parar" class="btn perigo largo" type="button" hidden style="margin-top:10px">Interromper</button>
+    </section>
+
+    <section class="card" aria-label="Ajustes da Automação" style="padding:14px 10px">
+      <!-- LOGIN DA CENTI -->
+      <div class="grupo">
+        <h2>Login da Centi</h2>
+        <form id="form" class="stack" autocomplete="off" novalidate>
+          <div class="linha sem-quebra">
+            <span id="loginSelo" class="badge dot">Conferindo…</span>
+            <button id="ajudaLogin" class="ajuda" type="button" aria-expanded="false" aria-controls="textoAjudaLogin" title="Ajuda">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
+            </button>
+          </div>
+          <div id="textoAjudaLogin" class="texto-ajuda" hidden>
+            <p>O usuário e a senha da Centi ficam <strong>cifrados no banco</strong>, na sua conta — valem em qualquer navegador e com qualquer versão do sistema ou da extensão. A senha nunca volta: deixe em branco para manter a guardada.</p>
+            <p>Configure uma vez: em qualquer computador em que você entrar no sistema com a extensão instalada, ela abre a Centi e faz o login sozinha. A senha vai cifrada para a extensão daquele navegador — nunca em texto aberto.</p>
+            <p>Se a Centi recusar a senha, o login é <strong>pausado</strong> em todos os navegadores (a conta na Centi não é bloqueada) até você salvar de novo.</p>
+          </div>
+          <p id="semChave" class="msg danger" hidden>O sistema está sem a chave mestra para cifrar o login (INTEGRACOES_CHAVE).</p>
+          <div class="campo">
+            <label for="usuario">Usuário</label>
+            <div class="caixa"><input id="usuario" name="centi-usuario" type="text" autocomplete="off" spellcheck="false" maxlength="120" placeholder="Usuário da Centi"></div>
+          </div>
+          <div class="campo">
+            <label for="senha">Senha da Centi</label>
+            <div class="caixa">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              <input id="senha" name="centi-chave" type="password" autocomplete="off" data-lpignore="true" maxlength="200" placeholder="Senha da Centi">
+              <button id="olho" class="olho" type="button" aria-label="Mostrar a senha" aria-pressed="false">
+                <svg class="aberto" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="fechado" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.7 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.2M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/></svg>
+              </button>
+            </div>
+          </div>
+          <label class="switch" id="autoLinha">
+            <button id="auto" type="button" role="switch" aria-checked="true" aria-labelledby="autoRotulo"></button>
+            <span id="autoRotulo">Entrar sozinho quando a sessão cair</span>
+          </label>
+          <p id="msg" class="msg" role="status" aria-live="polite"></p>
+          <div id="removerConfirma" class="confirma perigo" hidden>
+            <span>Remover o login da Centi? A extensão deixa de entrar sozinha em todos os navegadores até você salvar de novo.</span>
+            <div class="linha fim">
+              <button id="removerNao" class="btn secundario mini" type="button">Cancelar</button>
+              <button id="removerSim" class="btn perigo mini" type="button">Remover</button>
+            </div>
+          </div>
+          <div class="linha fim">
+            <button id="remover" class="btn secundario" type="button" hidden>Remover</button>
+            <button id="salvar" class="btn primario" type="submit" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>
+              <span id="salvarTexto">Salvar</span>
+            </button>
+          </div>
+        </form>
+        <div id="antigo" class="confirma" hidden>
+          <span id="antigoTexto"></span>
+          <div class="linha fim">
+            <button id="antigoDescartar" class="btn secundario mini" type="button">Descartar</button>
+            <button id="antigoEnviar" class="btn primario mini" type="button">Enviar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAVAÇÃO NA CENTI -->
+      <div class="grupo">
+        <h2>Gravação na Centi</h2>
+        <div class="linha entre">
+          <label class="switch" id="gravacaoLinha">
+            <button id="gravacao" type="button" role="switch" aria-checked="true" aria-labelledby="gravacaoRotulo" disabled></button>
+            <span id="gravacaoRotulo">Ligada</span>
+          </label>
+          <button id="historico" class="btn secundario" type="button" aria-expanded="false" aria-controls="painelHistorico">Histórico das execuções</button>
+        </div>
+        <div id="gravacaoConfirma" class="confirma" hidden>
+          <span>Pausar a gravação na Centi? Nenhum anexo será gravado (por ninguém) até ligar de novo. Uma gravação em andamento para no próximo documento.</span>
+          <div class="linha fim">
+            <button id="gravacaoNao" class="btn secundario mini" type="button">Cancelar</button>
+            <button id="gravacaoSim" class="btn primario mini" type="button">Pausar</button>
+          </div>
+        </div>
+        <div id="painelHistorico" class="stack" hidden>
+          <div id="listaExecucoes" class="lista"></div>
+          <div id="detalheExecucao" class="stack" hidden>
+            <div class="linha entre">
+              <strong id="execTitulo" style="font-size:13px"></strong>
+              <button id="execVoltar" class="btn secundario mini" type="button">Voltar</button>
+            </div>
+            <p id="execErro" class="msg danger"></p>
+            <div id="listaPassos" class="lista"></div>
+            <button id="execCancelar" class="btn perigo" type="button" hidden>Cancelar execução</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAVADOR DE RECEITAS -->
+      <div class="grupo">
+        <h2>Gravador de receitas</h2>
+        <p class="texto-xs">Grava a FORMA dos pedidos que a tela da Centi faz (sem valores) — ligue, faça a ação lá e pare para ver e copiar.</p>
+        <div class="linha"><button id="gravador" class="btn secundario" type="button">Gravar uma ação na Centi</button></div>
+        <div id="painelGravacao" class="stack" hidden>
+          <div class="linha entre"><strong id="gravacaoTitulo" style="font-size:13px"></strong><button id="copiarGravacao" class="btn secundario mini" type="button">Copiar a gravação</button></div>
+          <div id="listaGravacao" class="lista"></div>
+        </div>
+      </div>
+
+      <!-- EMISSÃO DO DFD -->
+      <div class="grupo">
+        <h2>Emissão do DFD</h2>
+        <label class="switch" title="Vale no Baixar/anexar DFDs. A conferência com a Centi sempre emite com o valor de referência.">
+          <button id="valorReferencia" type="button" role="switch" aria-checked="true" aria-labelledby="valorReferenciaRotulo" disabled></button>
+          <span id="valorReferenciaRotulo">Emitir valor de referência</span>
+        </label>
+        <label class="switch">
+          <button id="emitirData" type="button" role="switch" aria-checked="false" aria-labelledby="emitirDataRotulo" disabled></button>
+          <span id="emitirDataRotulo">Emitir data</span>
+        </label>
+      </div>
+
+      <!-- ÓRGÃO NA CENTI -->
+      <div class="grupo">
+        <h2>Órgão na Centi (ID)</h2>
+        <p class="texto-xs">O ID cadastrado no órgão (Órgãos e Unidades) vale sempre; descobrir/tentar só para os órgãos sem ele.</p>
+        <label class="switch">
+          <button id="descobrirEntidade" type="button" role="switch" aria-checked="true" aria-labelledby="descobrirRotulo" disabled></button>
+          <span id="descobrirRotulo">Descobrir sozinho (órgãos sem ID)</span>
+        </label>
+        <div class="campo">
+          <label for="entidades">IDs de órgão a tentar</label>
+          <div class="caixa"><input id="entidades" type="text" autocomplete="off" spellcheck="false" maxlength="300" placeholder="02:03:04" disabled></div>
+        </div>
+        <div id="listaOrgaos" class="lista" hidden></div>
+      </div>
+
+      <!-- AVANÇADO -->
+      <div class="grupo">
+        <h2>Avançado</h2>
+        <p class="texto-xs">Seções 8 a 10 do DFD: o registro de cada planejamento é lido do próprio planejamento aberto na Centi, como a tela dela faz.</p>
+        <div class="campo">
+          <label for="moduleKey">ModuleKey</label>
+          <div class="caixa"><input id="moduleKey" type="text" inputmode="numeric" autocomplete="off" disabled></div>
+        </div>
+        <div class="campo">
+          <label for="guid">Guid da operação</label>
+          <div class="caixa"><input id="guid" type="text" autocomplete="off" spellcheck="false" disabled></div>
+        </div>
+        <p id="msgAjustes" class="msg" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <button id="aba" class="btn secundario largo" type="button">Ir para a aba da automação</button>
   </div>
   <script src="popup.js"></script>
 </body>

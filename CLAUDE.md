@@ -1125,6 +1125,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   e `VERSAO_MINIMA_CENTI` = a que FUNCIONA (`versaoFunciona` decide o `pronto`) — extensão nova publicada nunca trava as
   automações agendadas. Testes: `tests/extensao-login.test.ts` (sistema falso que sela de verdade),
   `tests/centi-login.test.ts`, `tests/cripto.test.ts`, `migrations` (0195, 0197).
+- **AJUSTES DA AUTOMAÇÃO NO SISTEMA + BANNER DA EXTENSÃO (v1.303.0, extensão 1.43.0, sem migração) — regra firme: o
+  banner do ícone da extensão é o ESPELHO dos Ajustes da Automação e NADA fica guardado na extensão.** Os ajustes de cada
+  ADM (emissão do DFD — `valorReferencia`/`emitirData` — e o órgão na Centi — `descobrirEntidade`, `entidades`, o `mapa`
+  órgão → ID) moram em `preferencias_tabela` chave `PREF_AJUSTES_CENTI` = `automacao:ajustes-centi` (núcleo puro
+  `automacao-ajustes-core.ts`: `lerAjustesCenti`, `aplicarAjustes` — UM órgão por vez em `entidade`, o mapa inteiro só na
+  migração —, `textoMudancaAjustes`; D1 `automacao-ajustes.ts`: `lerAjustes`, `gravarAjustes`, `operacaoEmUso`,
+  `orgaosDaAutomacao`); a gravação (o freio) e a operação ModuleKey/Guid seguem GLOBAIS em `configuracoes.automacao`. Rota
+  **`GET/PATCH /api/admin/automacao/ajustes`** (ADM; o PATCH aceita a tela ou a extensão — `pedidoDaExtensao`;
+  `ajustesCentiPatchSchema` estrito; auditoria "Ajustes da Automação[ (pela extensão)]"). A tela (`AutomacaoAdmin`) lê do
+  sistema, grava com 600 ms de espera e, sem preferência salva, leva UMA vez o que estava no `localStorage`
+  (`automacao:centi`/`automacao:centi-entidades`) e o apaga. `parseCorpo(schema, req, {extensao: true})` = a rota aceita o
+  pedido da extensão (hoje o `PATCH …/execucoes/[id]` — cancelar). **Extensão:** o `popup.html`/`popup.js` repete os MESMOS
+  blocos e componentes dos Ajustes (tokens do `globals.css` claro/escuro; selo, (?), campo, olho, `Switch`, botões) — Login
+  da Centi (`salvarLogin` → `PUT credencial-centi` e entra na hora; `removerLogin` → `DELETE`; a senha nunca volta nem é
+  guardada), Gravação na Centi (+ Histórico das execuções e cancelar), Gravador de receitas, Emissão do DFD, Órgão na Centi
+  e Avançado — e mostra a VERSÃO do manifesto. O `background.js` é só o CANAL (`apiAutomacao`; tipos `ajustes`,
+  `mudarAjustes` [só os campos `CAMPOS_AJUSTES`], `execucoes`, `execucao`, `cancelarExecucao`, `gravador`, `salvarLogin`,
+  `removerLogin`); só o popup da própria extensão os usa. Abrir o ícone roda o `garantirSessao` (a Centi pronta). Testes:
+  `tests/automacao-ajustes.test.ts`, `tests/extensao-login.test.ts` (o banner, o canal e que o popup não usa storage).
 - **O QUE CORRIGIR + CENTI SEMPRE PRONTA + VERSÃO/SESSÃO (v1.298.0, extensão 1.38.0, sem migração):**
   - **"O que corrigir"** (campo `corrigirTipos` do `dados.filtrarConferencia`, tipo de campo `lista` com `opcoes` → `SeletorMultiplo
     suspenso` no `CampoDoNo`; visível com Conteúdo + Corrigir): os grupos FIXOS `GRUPOS_CORRECAO` (`correcao-centi-core.ts`:

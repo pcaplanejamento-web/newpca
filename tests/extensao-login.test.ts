@@ -138,10 +138,12 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
         tem: banco.tem,
         auto: banco.auto,
         conta: "Maria Souza",
+        usuario: banco.tem ? "ma***" : "",
+        extensao: "1.43.0",
         pausadoEm: banco.pausado ? "2026-11-19T10:00:00Z" : null,
         motivo: banco.motivo,
       });
-    if (init.method === "GET") return resp(422, { ok: false, error: "Atualize a extensão (1.42.1) para entrar sozinha na Centi." });
+    if (init.method === "GET") return resp(422, { ok: false, error: "Atualize a extensão (1.43.0) para entrar sozinha na Centi." });
     if (init.method === "POST" && corpo?.acao === "entregar") {
       const publica = String(corpo.publica ?? "");
       if (!publica) return resp(422, { ok: false, error: "Pedido inválido." });
@@ -158,6 +160,17 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
       assert.equal(corpo.motivo, "recusado", "só a senha recusada pausa — por CÓDIGO, nunca o texto da Centi");
       banco.pausado = true;
       banco.motivo = corpo.motivo === "recusado" ? "Senha recusada pela Centi" : "A Centi pediu uma verificação";
+      return resp(200, { ok: true });
+    }
+    if (init.method === "PUT") {
+      // Salvar pela TELA ou pelo BANNER da extensão: `null` mantém o guardado; salvar retoma a pausa.
+      if (corpo?.usuario) banco.usuario = String(corpo.usuario);
+      if (corpo?.senha) banco.senha = String(corpo.senha);
+      Object.assign(banco, { tem: true, auto: corpo?.auto !== false, pausado: false, motivo: null });
+      return resp(200, { ok: true, tem: true, auto: banco.auto, usuario: "ma***", atualizadoEm: "2026-11-19T12:00:00Z", pausadoEm: null });
+    }
+    if (init.method === "DELETE") {
+      banco.tem = false;
       return resp(200, { ok: true });
     }
     if (init.method === "POST" && corpo?.acao === "importar") {
@@ -279,7 +292,7 @@ test("serviço: a recusa de ORIGEM do sistema aparece com o motivo — nunca com
 
 test("serviço: sem login no sistema, com o automático desligado ou sem o sistema logado, não tenta — e diz por quê", async () => {
   for (const [o, msg] of [
-    [{ tem: false }, /Configure o login da Centi no sistema/],
+    [{ tem: false }, /Configure o login da Centi no ícone da extensão/],
     [{ auto: false }, null],
     [{ semSistema: true }, /Entre no sistema PCA neste navegador/],
   ] as const) {
@@ -310,13 +323,95 @@ test("serviço: nada da senha fica no armazenamento da extensão (nem no local n
   assert.ok(!JSON.stringify({ l: s.s.local, s: s.s.sessao }).includes("s3gredo"));
 });
 
-test("popup: 'Configurar no sistema' abre a tela do login no sistema", async () => {
-  const s = servico();
-  const r = (await s.s.pedir({ tipo: "configurarLogin" }, { url: "chrome-extension://ext/popup.html" })) as { ok: boolean };
+const POPUP = { url: "chrome-extension://ext/popup.html" };
+
+test("banner: salvar o login vai DIRETO ao sistema (PUT), retoma a pausa e entra na Centi — nada fica na extensão", async () => {
+  const s = servico({ pausado: true, resultado: "ok" } as Parameters<typeof servico>[0]);
+  s.sis.banco.pausado = true;
+  const r = (await s.s.pedir({ tipo: "salvarLogin", dados: { usuario: " joana ", senha: "n0va", auto: true } }, POPUP)) as {
+    ok: boolean;
+    login: { credenciais: boolean; pausado: boolean; usuario: string };
+  };
   assert.equal(r.ok, true);
-  assert.ok(s.s.abas.some((a) => a.url === "https://governarv.com.br/painel/automacao?ajustes=login"));
+  const put = s.sis.pedidos.find((p) => p.metodo === "PUT");
+  assert.deepEqual(put?.corpo, { usuario: "joana", senha: "n0va", auto: true }, "o usuário vai sem os espaços");
+  assert.equal(s.sis.banco.pausado, false, "salvar retoma");
+  assert.equal(r.login.credenciais, true);
+  assert.equal(r.login.usuario, "ma***", "a situação volta com o usuário MASCARADO");
+  assert.ok(!JSON.stringify(r).includes("n0va"), "a senha nunca volta ao banner");
+  await pausa(30);
+  assert.equal(s.logins.length, 1, "salvo, a Centi entra na hora");
+  assert.deepEqual(JSON.parse(JSON.stringify(s.logins[0])), { alvo: "centi-login", usuario: "joana", senha: "n0va" });
+  assert.ok(!JSON.stringify({ l: s.s.local, s: s.s.sessao }).includes("n0va"), "nada da senha no armazenamento da extensão");
+});
+
+test("banner: senha em branco mantém a guardada; pedido inválido é recusado; remover apaga no sistema", async () => {
+  const s = servico({ resultado: "ok" });
+  await s.s.pedir({ tipo: "salvarLogin", dados: { usuario: "", senha: "", auto: false } }, POPUP);
+  assert.deepEqual(s.sis.pedidos.find((p) => p.metodo === "PUT")?.corpo, { usuario: null, senha: null, auto: false });
+  const inval = (await s.s.pedir({ tipo: "salvarLogin", dados: { usuario: "a", senha: "b" } }, POPUP)) as { ok: boolean };
+  assert.equal(inval.ok, false, "sem o 'entrar sozinho' explícito, nada vai ao sistema");
+  const longo = (await s.s.pedir({ tipo: "salvarLogin", dados: { usuario: "a", senha: "x".repeat(201), auto: true } }, POPUP)) as { ok: boolean };
+  assert.equal(longo.ok, true);
+  assert.equal(s.sis.pedidos.filter((p) => p.metodo === "PUT").at(-1)?.corpo?.senha, null, "senha fora do limite não vai");
+  const rem = (await s.s.pedir({ tipo: "removerLogin" }, POPUP)) as { ok: boolean; login: { credenciais: boolean } };
+  assert.equal(rem.ok, true);
+  assert.equal(s.sis.pedidos.at(-2)?.metodo, "DELETE");
+  assert.equal(s.sis.banco.tem, false);
+});
+
+test("banner: abrir mostra a versão e deixa a Centi pronta (entra com o login guardado); nada de redirecionar", async () => {
+  const s = servico({ resultado: "ok" });
+  const r = (await s.s.pedir({ tipo: "estado", fresco: true }, POPUP)) as { ok: boolean; versao: string; login: { recomendada: string | null } };
+  assert.equal(r.ok, true);
+  assert.equal(r.versao, "9.9.9", "a versão instalada (do manifesto)");
+  assert.equal(r.login.recomendada, "1.43.0", "a versão recomendada vem do sistema");
+  await pausa(30);
+  assert.equal(s.logins.length, 1, "abrir o banner já entra na Centi");
+  const abas = s.s.abas.length;
+  const c = (await s.s.pedir({ tipo: "configurarLogin" }, POPUP)) as { ok: boolean };
+  assert.equal(c.ok, false, "o banner não abre o sistema — o login é configurado nele mesmo");
+  assert.equal(s.s.abas.length, abas);
   // A tela do sistema não tem as ações antigas do cofre da extensão.
   for (const acao of ["abrirOpcoes", "loginNoSistema", "restaurarLogin"]) assert.equal(((await s.pedir({ acao })) as { ok: boolean }).ok, false);
+});
+
+test("banner: os AJUSTES vão às MESMAS rotas da tela (só os campos conhecidos); histórico e gravador sem redirecionar", async () => {
+  const pedidos: { url: string; metodo: string; corpo: unknown }[] = [];
+  const s = servicoFalso({
+    abas: [{ id: 1, url: COMPRAS }],
+    sessao: { abaAutomacao: 1 },
+    fetch: async (url: string, init: Record<string, unknown>) => {
+      pedidos.push({ url, metodo: String(init.method), corpo: init.body ? JSON.parse(String(init.body)) : null });
+      return { ok: true, status: 200, json: async () => ({ ok: true, ajustes: {}, gravacao: true, operacao: {}, orgaos: [], execucoes: [], passos: [] }) };
+    },
+    naAba: (_id, m) => {
+      if (m.acao === "estado") return { ok: true, logado: true, entidade: "02" };
+      if (m.acao === "gravador") return { ok: true, gravando: (m as { dados?: { acao?: string } }).dados?.acao === "iniciar", passos: [] };
+      return undefined;
+    },
+  });
+  const sis = "https://governarv.com.br/api/admin/automacao/";
+  assert.equal(((await s.pedir({ tipo: "ajustes" }, POPUP)) as { ok: boolean }).ok, true);
+  assert.equal(pedidos.at(-1)?.url, `${sis}ajustes?orgaos=1`);
+  await s.pedir({ tipo: "mudarAjustes", dados: { ajustes: { emitirData: true }, invasor: { x: 1 } } }, POPUP);
+  assert.deepEqual(pedidos.at(-1), { url: `${sis}ajustes`, metodo: "PATCH", corpo: { ajustes: { emitirData: true } } }, "só os campos conhecidos");
+  const n = pedidos.length;
+  assert.equal(((await s.pedir({ tipo: "mudarAjustes", dados: { invasor: 1 } }, POPUP)) as { ok: boolean }).ok, false);
+  assert.equal(((await s.pedir({ tipo: "execucao", id: "1; drop" }, POPUP)) as { ok: boolean }).ok, false, "id inválido não vai");
+  assert.equal(pedidos.length, n, "nada inválido chega ao sistema");
+  await s.pedir({ tipo: "execucoes" }, POPUP);
+  assert.equal(pedidos.at(-1)?.url, `${sis}execucoes`);
+  await s.pedir({ tipo: "cancelarExecucao", id: 7 }, POPUP);
+  assert.deepEqual(pedidos.at(-1), { url: `${sis}execucoes/7`, metodo: "PATCH", corpo: { estado: "cancelada" } });
+  const g = (await s.pedir({ tipo: "gravador", acao: "iniciar" }, POPUP)) as { ok: boolean; gravando: boolean };
+  assert.deepEqual([g.ok, g.gravando], [true, true]);
+  assert.equal(((await s.pedir({ tipo: "gravador", acao: "apagar-tudo" }, POPUP)) as { ok: boolean }).ok, false);
+  // Uma página (não o banner) não usa estas ações.
+  const m = pedidos.length;
+  const pagina = (await s.pedir({ tipo: "mudarAjustes", dados: { gravacao: false } }, { url: TELA, tab: { id: 50 } })) as { ok: boolean };
+  assert.equal(pagina.ok, false);
+  assert.equal(pedidos.length, m);
 });
 
 test("extensão: a senha nunca passa pelo mundo da página nem pela ponte do sistema; o cofre local saiu", () => {
@@ -328,8 +423,11 @@ test("extensão: a senha nunca passa pelo mundo da página nem pela ponte do sis
   assert.ok(!/sessionStorage/.test(ponte));
   assert.match(ponte, /sender\.id !== chrome\.runtime\.id \|\| sender\.tab/);
   assert.ok(!/importScripts/.test(fonte("background.js")), "sem o cofre.js");
-  assert.ok(!/cofre\.js|type="password"/.test(fonte("popup.html")), "o popup não pede senha");
-  assert.ok(!/\.senha\b|senha: /.test(semComentarios(fonte("popup.js"))), "o popup não lida com a senha");
+  assert.ok(!/cofre\.js/.test(fonte("popup.html")));
+  // O banner digita a senha e a manda ao serviço — mas nunca a guarda (nem no armazenamento da extensão nem no navegador).
+  const popup = semComentarios(fonte("popup.js"));
+  assert.ok(!/localStorage|sessionStorage|indexedDB|storage\.(local|session)\.set/.test(popup), "o banner não guarda nada");
+  assert.match(fonte("popup.html"), /id="senha"[^>]*autocomplete="off"/, "o navegador não guarda a senha do campo");
 });
 
 // A TRANSIÇÃO: o cofre antigo (até a 1.38.0 — chrome.storage.local + a chave no IndexedDB) vai ao sistema UMA vez.

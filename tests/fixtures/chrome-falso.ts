@@ -49,6 +49,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     runtime: {
       id: "ext",
       getURL: (p: string) => `chrome-extension://ext/${p}`,
+      getManifest: () => ({ version: "9.9.9" }),
       onInstalled: { addListener: (f: () => unknown) => instalada.push(f) },
       onMessage: {
         addListener: (f: Ouvinte) => ouvintes.push(f),

@@ -13,6 +13,7 @@ import {
   versaoAtende,
   versaoFunciona,
 } from "@/lib/automacao-centi-core";
+import { type AjustesCenti, lerMapaEntidades } from "@/lib/automacao-ajustes-core";
 import { haQuanto } from "@/lib/acessos-core";
 import { dataHoraBR } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
@@ -135,20 +136,29 @@ function useExtensaoCenti() {
   return { ext, pedir, lote, interrompido };
 }
 
-function lerLocal<T>(chave: string, ler: (v: unknown) => T, padrao: T): T {
+// Até a v1.303.0 os ajustes ficavam NESTE aparelho: lidos UMA vez para levar ao sistema (a migração) e apagados.
+function lerLocal(chave: string): unknown {
   try {
-    return ler(JSON.parse(localStorage.getItem(chave) ?? "null"));
+    return JSON.parse(localStorage.getItem(chave) ?? "null");
   } catch {
-    return padrao;
+    return null;
   }
 }
-function gravarLocal(chave: string, v: unknown) {
+function apagarLocal(...chaves: string[]) {
   try {
-    localStorage.setItem(chave, JSON.stringify(v));
+    for (const c of chaves) localStorage.removeItem(c);
   } catch {}
 }
-const lerMapa = (v: unknown): Record<string, string> =>
-  Object.fromEntries(Object.entries(v && typeof v === "object" ? v : {}).filter(([, x]) => typeof x === "string" && /^[\w.-]{1,40}$/.test(x))) as Record<string, string>;
+/** O estado dos AJUSTES no sistema (`/api/admin/automacao/ajustes`) — a fonte única da tela e do banner da extensão. */
+type EstadoAjustes = { ajustes: AjustesCenti; salvo: boolean; gravacao: boolean; operacao: { moduleKey: number; guid: string } };
+const URL_AJUSTES = "/api/admin/automacao/ajustes";
+async function pedirAjustes(corpo?: Record<string, unknown>): Promise<EstadoAjustes | { erro: string }> {
+  const r = await fetch(URL_AJUSTES, corpo ? { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) } : { cache: "no-store" }).catch(
+    () => null,
+  );
+  const j = (await r?.json().catch(() => null)) as ({ ok?: boolean; error?: string } & EstadoAjustes) | null;
+  return j?.ok ? j : { erro: j?.error ?? "Sem conexão com o sistema." };
+}
 
 const URL_EXTENSAO = "/api/admin/automacao/extensao";
 const baixarExtensao = () => {
@@ -478,20 +488,74 @@ export function AutomacaoAdmin({
   const [noEditor, setNoEditor] = useState(false);
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
-  useEffect(() => {
-    setCfg(lerLocal(CHAVE_CONFIG, lerConfigCenti, CONFIG_CENTI_PADRAO));
-    const m = lerLocal(CHAVE_ENTIDADES, lerMapa, {});
-    mapaRef.current = m;
-    setMapa(m);
-  }, []);
   // A configuração mais recente (a emissão roda em laço assíncrono e pode ser ajustada no meio dele).
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
+  // Os AJUSTES vêm do SISTEMA (de cada ADM — os MESMOS do banner da extensão): o que mudar lá aparece aqui ao voltar à tela.
+  const [gravacao, setGravacao] = useState<boolean | null>(null);
+  const pendentes = useRef<Partial<AjustesCenti>>({});
+  const timerAjustes = useRef<number | null>(null);
+  const aplicarAjustes = useCallback((e: EstadoAjustes) => {
+    const { mapa: m, ...resto } = e.ajustes;
+    // O que ainda não foi enviado (digitando) fica como está na tela.
+    const n = lerConfigCenti({ ...cfgRef.current, ...resto, ...pendentes.current, moduleKey: e.operacao.moduleKey, guid: e.operacao.guid });
+    cfgRef.current = n;
+    setCfg(n);
+    mapaRef.current = m;
+    setMapa(m);
+    setGravacao(e.gravacao);
+  }, []);
+  const lerAjustesDoSistema = useCallback(async () => {
+    const e = await pedirAjustes();
+    if ("erro" in e) return;
+    // A MIGRAÇÃO: o que estava guardado neste aparelho vai UMA vez ao sistema (se ele ainda não tiver os ajustes).
+    const local = lerLocal(CHAVE_CONFIG);
+    const mapaLocal = lerLocal(CHAVE_ENTIDADES);
+    if (!e.salvo && (local || mapaLocal)) {
+      const c = lerConfigCenti(local);
+      const m = await pedirAjustes({
+        ajustes: { valorReferencia: c.valorReferencia, emitirData: c.emitirData, descobrirEntidade: c.descobrirEntidade, entidades: c.entidades, mapa: lerMapaEntidades(mapaLocal) },
+      });
+      if ("erro" in m) return aplicarAjustes(e);
+      apagarLocal(CHAVE_CONFIG, CHAVE_ENTIDADES);
+      return aplicarAjustes(m);
+    }
+    if (e.salvo) apagarLocal(CHAVE_CONFIG, CHAVE_ENTIDADES);
+    aplicarAjustes(e);
+  }, [aplicarAjustes]);
+  useEffect(() => {
+    void lerAjustesDoSistema();
+    const voltar = () => {
+      if (document.visibilityState === "visible" && !Object.keys(pendentes.current).length) void lerAjustesDoSistema();
+    };
+    window.addEventListener("focus", voltar);
+    document.addEventListener("visibilitychange", voltar);
+    return () => {
+      window.removeEventListener("focus", voltar);
+      document.removeEventListener("visibilitychange", voltar);
+    };
+  }, [lerAjustesDoSistema]);
+  const enviarPendentes = useCallback(async () => {
+    timerAjustes.current = null;
+    const corpo = pendentes.current;
+    pendentes.current = {};
+    if (!Object.keys(corpo).length) return;
+    const e = await pedirAjustes({ ajustes: corpo });
+    if ("erro" in e) toast.error(`Ajustes: ${e.erro}`);
+  }, []);
   const mudar = (p: Partial<ConfigCenti>) => {
     const n = lerConfigCenti({ ...cfgRef.current, ...p });
     cfgRef.current = n;
     setCfg(n);
-    gravarLocal(CHAVE_CONFIG, n);
+    // Emissão e órgão = os ajustes do ADM (no sistema, 600 ms depois da última mudança); ModuleKey/Guid = a operação de todos.
+    const ajustes: Partial<AjustesCenti> = {};
+    for (const k of ["valorReferencia", "emitirData", "descobrirEntidade", "entidades"] as const) if (k in p) Object.assign(ajustes, { [k]: n[k] });
+    if (Object.keys(ajustes).length) {
+      Object.assign(pendentes.current, ajustes);
+      if (timerAjustes.current != null) window.clearTimeout(timerAjustes.current);
+      timerAjustes.current = window.setTimeout(() => void enviarPendentes(), 600);
+    }
+    if ("moduleKey" in p || "guid" in p) compartilharOperacao({ moduleKey: n.moduleKey, guid: n.guid });
   };
   // A operação "Emitir DFD" que a extensão pegou da tela da Centi: se a Centi a mudou, o sistema acompanha sozinho.
   // A operação guardada no SERVIDOR (vale para todos os ADMs): a da tela da Centi que for diferente vai para lá.
@@ -525,7 +589,9 @@ export function AutomacaoAdmin({
     else delete n[orgao];
     mapaRef.current = n;
     setMapa(n);
-    gravarLocal(CHAVE_ENTIDADES, n);
+    void pedirAjustes({ entidade: { orgao, entidade: n[orgao] ?? "" } }).then((e) => {
+      if ("erro" in e) toast.error(`Órgão na Centi: ${e.erro}`);
+    });
   }, []);
   // O EMISSOR de DFDs dos fluxos: lê a configuração e o mapa VIVOS (refs) — ajustes no meio de um lote valem já.
   const emissor = useMemo<ContextoEmissor>(
@@ -610,7 +676,6 @@ export function AutomacaoAdmin({
   }, [ext, verificar]);
 
   // O FREIO de emergência (Configuração da plataforma, no servidor): desligado, nenhuma gravação na Centi passa.
-  const [gravacao, setGravacao] = useState<boolean | null>(null);
   const [historico, setHistorico] = useState(false);
   // O GRAVADOR de receitas (na aba da Centi): ligar → o ADM faz a ação lá → parar mostra a estrutura gravada.
   const [gravando, setGravando] = useState(false);

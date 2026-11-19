@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
+import { ORIGEM_EXTENSAO_CENTI } from "./automacao-centi-core";
+import { pedidoDaExtensao } from "./centi-login-core";
 import { origemPermitida } from "./origem";
 import "./zod-config";
 
@@ -24,8 +26,12 @@ export function erro(mensagem: string, status = 400) {
 export async function parseCorpo<T>(
   schema: ZodType<T>,
   req: Request,
+  opcoes?: { extensao?: boolean },
 ): Promise<{ data: T } | { resp: NextResponse }> {
-  if (!origemPermitida(req)) return { resp: erro("Origem não permitida.", 403) };
+  // `extensao` = a rota aceita também o banner da extensão da Automação (o `Origin` dela — página nenhuma o imita).
+  const daExtensao =
+    opcoes?.extensao === true && pedidoDaExtensao(req.method, req.headers.get("origin"), req.headers.get("sec-fetch-site"), ORIGEM_EXTENSAO_CENTI);
+  if (!daExtensao && !origemPermitida(req)) return { resp: erro("Origem não permitida.", 403) };
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return {

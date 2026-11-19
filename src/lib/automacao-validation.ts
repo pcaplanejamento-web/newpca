@@ -104,3 +104,30 @@ export const credencialCentiExtensaoSchema = z.discriminatedUnion("acao", [
     })
     .strict(),
 ]);
+
+/** Os AJUSTES da Automação (tela Automação → Ajustes e o banner da extensão — `automacao-ajustes-core.ts`). */
+const idEntidade = z.string().trim().max(40);
+export const ajustesCentiPatchSchema = z
+  .object({
+    ajustes: z
+      .object({
+        valorReferencia: z.boolean().optional(),
+        emitirData: z.boolean().optional(),
+        descobrirEntidade: z.boolean().optional(),
+        entidades: z.string().max(300).optional(),
+        /** O mapa INTEIRO (a migração do que estava guardado no aparelho). */
+        mapa: z.record(z.string().max(80), idEntidade).optional(),
+      })
+      .strict()
+      .optional(),
+    entidade: z.object({ orgao: z.string().regex(/^[ot]:\S.{0,79}$/), entidade: idEntidade }).strict().optional(),
+    /** O freio de emergência (a Gravação na Centi). */
+    gravacao: z.boolean().optional(),
+    /** O Avançado: a operação Emitir DFD (vale para todos os ADMs). */
+    operacao: z
+      .object({ moduleKey: z.number().int().positive(), guid: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, "Nada a mudar.");

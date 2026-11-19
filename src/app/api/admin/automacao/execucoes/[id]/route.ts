@@ -25,7 +25,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
   const id = intId((await ctx.params).id);
-  const p = await parseCorpo(estadoExecucaoSchema, req);
+  const p = await parseCorpo(estadoExecucaoSchema, req, { extensao: true });
   if ("resp" in p) return p.resp;
   const x = id ? await getExecucao(id) : null;
   if (!id || !x) return erro("Execução não encontrada.", 404);

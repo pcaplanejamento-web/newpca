@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.303.0",
+    data: "2026-11-19",
+    titulo: "Ajustes da Automação também no ícone da extensão",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Extensão 1.43.0: o ícone da extensão mostra a versão dela e os MESMOS Ajustes da Automação (login da Centi, gravação, histórico das execuções, gravador, emissão do DFD, órgão na Centi e avançado). O que muda ali vale na hora no sistema — nada fica só no navegador.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Os ajustes da emissão do DFD e do órgão na Centi ficam guardados no sistema, na sua conta: valem em qualquer computador (os que estavam só neste navegador são levados sozinhos).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Ao abrir o ícone, a extensão confere a Centi e, se a sessão caiu, entra de novo sozinha — fica sempre pronta para as automações.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.302.1",
     data: "2026-11-19",
     titulo: "Login da Centi mais robusto",

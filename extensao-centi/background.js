@@ -1,7 +1,7 @@
 // Serviço da extensão: leva o pedido da aba Automação à ABA PRÓPRIA da automação na Centi (aberta e guardada pela
 // extensão, no grupo "Automação PCA") e devolve o resultado. As abas da Centi do usuário não são usadas.
-// Também: o login automático (o login de cada ADM fica SÓ no sistema PCA, cifrado no banco — a extensão o lê na hora de
-// entrar e não guarda nada dele), o andamento do lote (selo no ícone, cartão na aba da automação e o popup) e o
+// Também: o login automático (o login de cada ADM fica SÓ no sistema PCA, cifrado no banco — o banner do ícone o SALVA lá
+// e a extensão o lê na hora de entrar, sem guardar nada dele), o andamento do lote (selo no ícone, cartão na aba da automação e o popup) e o
 // INTERROMPER pela extensão.
 const CENTI = "https://rioverde.centi.com.br/*";
 const INICIO_CENTI = "https://rioverde.centi.com.br/";
@@ -181,12 +181,14 @@ async function abrirSelado(privada, impressao, s) {
     return null;
   }
 }
-const API_LOGIN = `${ORIGENS[0]}/api/admin/automacao/credencial-centi`;
+const API_AUTOMACAO = `${ORIGENS[0]}/api/admin/automacao/`;
 const MSG_SEM_SISTEMA = "Entre no sistema PCA neste navegador (como administrador) — o login da Centi vem de lá.";
-const MSG_SEM_LOGIN = "Configure o login da Centi no sistema (Automação → Ajustes → Login da Centi).";
-async function apiLogin(metodo, corpo, consulta = "") {
+const MSG_SEM_LOGIN = "Configure o login da Centi no ícone da extensão (ou no sistema: Automação → Ajustes → Login da Centi).";
+const apiLogin = (metodo, corpo, consulta = "") => apiAutomacao(metodo, `credencial-centi${consulta}`, corpo);
+/** Um pedido às rotas da Automação no sistema (só elas — `caminho` fixo, montado aqui), com a sessão de quem está logado. */
+async function apiAutomacao(metodo, caminho, corpo) {
   try {
-    const r = await fetch(`${API_LOGIN}${consulta}`, {
+    const r = await fetch(`${API_AUTOMACAO}${caminho}`, {
       method: metodo,
       credentials: "include",
       cache: "no-store",
@@ -220,6 +222,13 @@ async function infoLogin(fresco = false) {
         pausado: !!j.pausadoEm,
         motivo: j.pausadoEm ? (j.motivo ?? "Login pausado.") : null,
         conta: typeof j.conta === "string" ? j.conta : null,
+        // O banner da extensão mostra o mesmo que a tela do sistema (o usuário MASCARADO, nunca a senha).
+        usuario: typeof j.usuario === "string" ? j.usuario : "",
+        atualizadoEm: typeof j.atualizadoEm === "string" ? j.atualizadoEm : null,
+        ultimoUsoEm: typeof j.ultimoUsoEm === "string" ? j.ultimoUsoEm : null,
+        ilegivel: j.ilegivel === true,
+        disponivel: j.disponivel !== false,
+        recomendada: typeof j.extensao === "string" ? j.extensao : null,
         // O login da extensão antiga ainda está aqui: o popup pergunta para qual conta ele vai.
         antigo: antigo && j.tem !== true,
       }
@@ -276,7 +285,7 @@ function tentarLogin(aba, forcar) {
       await sessao.tirar("loginInfo");
       if (!entrega.ok) return { resultado: entrega.semSistema ? "semSistema" : "falha", erro: entrega.erro };
       if (entrega.tem !== true) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
-      if (entrega.pausado) return { resultado: "pausado", erro: entrega.motivo ?? "Login da Centi pausado — salve de novo no sistema." };
+      if (entrega.pausado) return { resultado: "pausado", erro: entrega.motivo ?? "Login da Centi pausado — confira e salve de novo no ícone da extensão." };
       if (!forcar && entrega.auto === false) return { resultado: "desligado" };
       if (!entrega.selado) return { resultado: "falha", erro: "O sistema não entregou o login — atualize a página do sistema e tente de novo." };
       const cred = await abrirSelado(k.privada, k.impressao, entrega.selado);
@@ -298,7 +307,7 @@ function tentarLogin(aba, forcar) {
       // Só a senha RECUSADA pausa (por CÓDIGO — o texto da Centi pode trazer o usuário). Uma verificação (captcha) não pausa:
       // a extensão tenta de novo depois do intervalo, sem ninguém precisar salvar nada.
       if (resultado === "recusado") await pausarNoSistema("recusado");
-      return { resultado, erro: resultado === "recusado" ? "A Centi recusou o usuário ou a senha — confira e salve de novo no sistema." : (r?.erro ?? null) };
+      return { resultado, erro: resultado === "recusado" ? "A Centi recusou o usuário ou a senha — confira e salve de novo no ícone da extensão." : (r?.erro ?? null) };
     })().finally(() => {
       tentando = null;
     });
@@ -727,14 +736,68 @@ const respostaLogada = async (r) => ({
   atividade: await lerAtividade(),
 });
 
+/**
+ * SALVAR o login da Centi pelo BANNER (o mesmo do sistema): vai direto ao sistema — cifrado no banco, na conta de quem está
+ * logado — e nada fica guardado aqui. `null` mantém o guardado. Salvo, a Centi entra já (sem esperar o intervalo).
+ */
+async function salvarLogin(d) {
+  const texto = (v, max) => (typeof v === "string" && v.length <= max ? v : null);
+  const usuario = texto(d?.usuario, 120)?.trim() || null;
+  const senha = texto(d?.senha, 200) || null;
+  if (typeof d?.auto !== "boolean") return { ok: false, erro: "Pedido inválido." };
+  const r = await apiLogin("PUT", { usuario, senha, auto: d.auto });
+  await sessao.tirar("loginInfo");
+  if (!r.ok) return { ok: false, erro: r.erro, semSistema: r.semSistema === true };
+  await sessao.tirar("loginUltima");
+  if (d.auto) garantirSessao({ criar: true }).catch(() => {});
+  return { ok: true, login: await infoLogin(true) };
+}
+async function removerLogin() {
+  const r = await apiLogin("DELETE", null);
+  await sessao.tirar("loginInfo");
+  return r.ok ? { ok: true, login: await infoLogin(true) } : { ok: false, erro: r.erro };
+}
+const CENTI_DO_MOTIVO = { semAba: "semAba", login: "login", semSessao: "semSessao" };
+// Os AJUSTES da Automação pelo BANNER: a MESMA rota da tela Automação → Ajustes (o sistema valida e grava, por quem está
+// logado) — o banner muda e o sistema guarda; nada fica na extensão.
+const CAMPOS_AJUSTES = ["ajustes", "entidade", "gravacao", "operacao"];
+async function mudarAjustes(d) {
+  if (!d || typeof d !== "object" || Array.isArray(d)) return { ok: false, erro: "Pedido inválido." };
+  const corpo = Object.fromEntries(Object.entries(d).filter(([k]) => CAMPOS_AJUSTES.includes(k)));
+  if (!Object.keys(corpo).length) return { ok: false, erro: "Pedido inválido." };
+  return apiAutomacao("PATCH", "ajustes", corpo);
+}
+const idExecucao = (v) => (Number.isInteger(v) && v > 0 && v < 2 ** 31 ? v : null);
+/** O GRAVADOR de receitas na aba da automação (o mesmo da tela): ligar → a ação na Centi → parar devolve a estrutura;
+ * `consultar` = só o estado (qualquer outra ação do gravador na aba devolve o estado sem mudar nada). */
+async function usarGravador(acao) {
+  if (acao !== "iniciar" && acao !== "parar" && acao !== "consultar") return { ok: false, erro: "Pedido inválido." };
+  // `consultar` (o banner ao abrir) só lê se há gravação em andamento — nunca abre a aba.
+  const r = await garantirSessao({ criar: acao !== "consultar" });
+  if (r.motivo) return { ok: false, erro: r.erro ?? "A Centi não está pronta." };
+  try {
+    const resp = await comPrazo(chrome.tabs.sendMessage(r.aba.id, { alvo: "centi", acao: "gravador", dados: { acao } }, { frameId: 0 }), 8000, null);
+    return resp ?? { ok: false, erro: "A aba da Centi não respondeu." };
+  } catch {
+    return { ok: false, erro: "A aba da Centi não respondeu — aperte F5 nela." };
+  }
+}
+
 /** O popup (dropdown do ícone da extensão, ou a janelinha dele). */
 async function daExtensao(msg) {
   if (msg.tipo === "interromper") return interromper();
   if (msg.tipo === "loginAntigo") return decidirLoginAntigo(msg.enviar === true);
-  if (msg.tipo === "configurarLogin") {
-    await chrome.tabs.create({ url: `${ORIGENS[0]}/painel/automacao?ajustes=login`, active: true });
-    return { ok: true };
+  if (msg.tipo === "salvarLogin") return salvarLogin(msg.dados);
+  if (msg.tipo === "removerLogin") return removerLogin();
+  if (msg.tipo === "ajustes") return apiAutomacao("GET", "ajustes?orgaos=1");
+  if (msg.tipo === "mudarAjustes") return mudarAjustes(msg.dados);
+  if (msg.tipo === "execucoes") return apiAutomacao("GET", "execucoes");
+  if (msg.tipo === "execucao" || msg.tipo === "cancelarExecucao") {
+    const id = idExecucao(msg.id);
+    if (!id) return { ok: false, erro: "Pedido inválido." };
+    return msg.tipo === "execucao" ? apiAutomacao("GET", `execucoes/${id}`) : apiAutomacao("PATCH", `execucoes/${id}`, { estado: "cancelada" });
   }
+  if (msg.tipo === "gravador") return usarGravador(msg.acao);
   if (msg.tipo === "entrarAgora") {
     const r = await garantirSessao({ criar: true, esperarLogin: true, forcar: true });
     return r.motivo ? { ok: false, erro: r.tentativa?.erro || r.erro } : { ok: true };
@@ -746,10 +809,21 @@ async function daExtensao(msg) {
     return { ok: true };
   }
   if (msg.tipo === "estado") {
-    const aba = await abaGuardada();
-    const e = aba ? await estadoDaAba(aba.id) : null;
-    const centi = !aba ? "semAba" : e?.tela === "login" ? "login" : e?.logado ? "logada" : "semSessao";
-    return { ok: true, centi, entidade: e?.entidade ?? null, login: await infoLogin(), atividade: await lerAtividade() };
+    // SEMPRE PRONTA: abrir o banner confere a Centi e faz o que faltar — abre a aba da automação, entra (login guardado)
+    // ou captura a sessão. Não espera o login: o banner confere de novo em seguida.
+    const login = await infoLogin(msg.fresco === true);
+    const g = login.credenciais && !login.pausado && login.auto ? await comPrazo(garantirSessao({ criar: true, manterViva: true }), 8000, null) : null;
+    const aba = g?.aba ?? (await abaGuardada());
+    const e = g && !g.motivo ? g.estado : aba ? await estadoDaAba(aba.id) : null;
+    const centi = g?.motivo ? CENTI_DO_MOTIVO[g.motivo] : !aba ? "semAba" : e?.tela === "login" ? "login" : e?.logado ? "logada" : "semSessao";
+    return {
+      ok: true,
+      centi: centi ?? "semSessao",
+      entidade: e?.entidade ?? null,
+      login: await infoLogin(),
+      atividade: await lerAtividade(),
+      versao: chrome.runtime.getManifest?.().version ?? null,
+    };
   }
   return { ok: false, erro: "Pedido desconhecido." };
 }

@@ -13,7 +13,8 @@ export async function GET() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
   await reconciliarExecucoes();
-  return ok({ execucoes: await listarExecucoes() });
+  // `receitaNome` = o nome legível (o banner da extensão não tem o catálogo das receitas).
+  return ok({ execucoes: (await listarExecucoes()).map((e) => ({ ...e, receitaNome: receitaPorId(e.receita)?.nome ?? e.receita })) });
 }
 
 /** Cria a execução a partir do PLANO da receita (os passos) — preparada; nada roda na Centi aqui. */
