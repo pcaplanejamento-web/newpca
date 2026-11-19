@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 47;
+  const PROTOCOLO = 48;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -46,6 +46,12 @@
   const IGNORAR = /^(content-type|accept|content-length|x-ts)/i;
   const SESSAO_CAB = /^(authorization|token|refreshtoken|company)$/i;
 
+  const COPIAS = "__pcaCentiCopias_v1";
+  let copias = {};
+  try {
+    copias = JSON.parse(sessionStorage.getItem(COPIAS) || "{}") || {};
+  } catch {}
+  const caminho_ = (u, i) => u.slice(i);
   function guardar(url, hs, metodo, via) {
     const u = String(url);
     const i = u.indexOf("/restauth/");
@@ -59,6 +65,16 @@
     if (internos > 0 && cabecalhos) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
+    // As OUTRAS cópias que valem tentar no load do planejamento: a do load que a própria TELA fez (o pedido que a
+    // automação repete) e a do último pedido da tela pelo XHR (o cliente antigo da Centi) — a do fetch pode trazer outros
+    // cabeçalhos (token, user, year) com que a Centi não abre o registro.
+    if (internos === 0) {
+      if (/[?&]entity=101045(&|$)/.test(caminho_(u, i))) copias.planejamento = limpos;
+      if (via === "xhr") copias.xhr = limpos;
+      try {
+        sessionStorage.setItem(COPIAS, JSON.stringify(copias));
+      } catch {}
+    }
     const caminho = u.slice(i);
     const passo = `${String(metodo || "GET").toUpperCase()} ${caminho.slice("/restauth/".length).slice(0, 160)}`;
     trilha = [...trilha, passo].slice(-12);
@@ -494,7 +510,8 @@
       x.__pcaInterno = true;
       x.open(metodo, bruto);
       x.responseType = comoTexto ? "text" : "arraybuffer";
-      const k = nomeEntidade();
+      // O nome do cabeçalho do órgão na cópia USADA (a do XHR pode escrever "Company"; a do fetch, "company").
+      const k = Object.keys(cab || {}).find((n) => /^company$/i.test(n)) ?? nomeEntidade();
       // O rastreio vai NOVO em cada pedido (como a tela gera) — nunca o identificador de um pedido antigo.
       const hs = A && rastreioNovo ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab;
       for (const [n, v] of Object.entries(hs)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
@@ -537,7 +554,7 @@
     // TRAVA: a leitura (GET) só baixa o ARQUIVO gerado (getbinlink/GetBinCache/getbin/getfile) — nenhum outro endereço da API.
     if (d.metodo === "GET") {
       if (!ARQUIVO.test(new URL(url).pathname)) return { ok: false, erro: "Só o download do PDF gerado é permitido." };
-      return (await binarioPelaCenti("GET", url, null, ent)) ?? executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);
+      return (await binarioPelaCenti("GET", url, null, ent)) ?? executar("GET", url, null, ent, false, cabecalhosDaEmissao(), "application/json", url, false);
     }
     if (d.metodo !== "POST" || !/\/restauth\/operation$/.test(new URL(url).pathname)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const c = d.corpo;
@@ -549,7 +566,7 @@
     const params = c.Params.map((p) => ({ Key: String(p.Key), Value: p.Key in TRAVAS ? TRAVAS[p.Key] : String(p.Value ?? "") }));
     for (const [Key, Value] of Object.entries(TRAVAS)) if (!params.some((p) => p.Key === Key)) params.push({ Key, Value });
     const corpo = { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params };
-    return (await binarioPelaCenti("POST", url, corpo, ent)) ?? executar("POST", url, corpo, ent, false, cabecalhos, "application/json", url, false);
+    return (await binarioPelaCenti("POST", url, corpo, ent)) ?? executar("POST", url, corpo, ent, false, cabecalhosDaEmissao(), "application/json", url, false);
   }
 
   // A EMISSÃO e o download saem pelo CLIENTE HTTP DA PRÓPRIA CENTI — o MESMO caminho do anexo, que funciona: os
@@ -661,14 +678,17 @@
   function acharClienteCenti() {
     if (clienteCenti) return clienteCenti;
     try {
-      const nome = Object.keys(window).find((k) => k.startsWith("webpackJsonp") && Array.isArray(window[k]));
+      // webpack 4 = "webpackJsonp…" (o 3º item são as entradas); webpack 5 = "webpackChunk…" (o 3º item é uma função que
+      // recebe o __webpack_require__).
+      const nome = Object.keys(window).find((k) => (k.startsWith("webpackJsonp") || k.startsWith("webpackChunk")) && Array.isArray(window[k]));
       if (!nome) {
         motivoSemCliente = "a página não expõe os módulos";
         return null;
       }
       let req = null;
       const id = `__pcaCenti${Date.now()}${Math.random().toString(36).slice(2)}`;
-      window[nome].push([[id], { [id]: (_m, _e, r) => (req = r) }, [[id]]]);
+      if (nome.startsWith("webpackChunk")) window[nome].push([[id], {}, (r) => (req = r)]);
+      else window[nome].push([[id], { [id]: (_m, _e, r) => (req = r) }, [[id]]]);
       if (!req?.c) {
         motivoSemCliente = "sem acesso aos módulos da página";
         return null;
@@ -902,6 +922,37 @@
     return { ok: true, ...salvo };
   }
 
+  // As CÓPIAS dos cabeçalhos para o load do planejamento e a emissão: a última da tela; a do load que a tela fez; a do
+  // último pedido da tela pelo XHR; a última sem token/Authorization; e a mínima (Refreshtoken + Company + Month — a do
+  // operation da tela). As de outra hora levam o token ATUAL. Sem repetir; a que já abriu um registro vai primeiro.
+  let varianteBoa = null;
+  function variantes() {
+    const atual = cabecalhos || {};
+    const valor = (re) => Object.entries(atual).find(([k]) => re.test(k))?.[1];
+    const token = valor(/^token$/i) ?? (String(valor(/^authorization$/i) || "").replace(/^Bearer\s+/i, "") || undefined);
+    const refresh = valor(/^refreshtoken$/i);
+    const atualizada = (c) => (A ? A.comTokenNovo(c, token, refresh) : c);
+    const sem = (c, re) => Object.fromEntries(Object.entries(c).filter(([k]) => !re.test(k)));
+    const lista = [
+      { nome: "da tela", cab: atual },
+      copias.planejamento && { nome: "do load da tela", cab: atualizada(copias.planejamento) },
+      copias.xhr && { nome: "do XHR da tela", cab: atualizada(copias.xhr) },
+      { nome: "sem token", cab: sem(atual, /^(token|authorization)$/i) },
+      { nome: "mínima", cab: Object.fromEntries(Object.entries(atual).filter(([k]) => /^(refreshtoken|company|month)$/i.test(k))) },
+    ].filter((v) => v && Object.keys(v.cab).some((k) => SESSAO_CAB.test(k)));
+    const vistos = new Set();
+    const unicas = lista.filter((v) => {
+      const chave = JSON.stringify(Object.entries(v.cab).map(([k, x]) => [k.toLowerCase(), x]).sort());
+      if (vistos.has(chave)) return false;
+      vistos.add(chave);
+      return true;
+    });
+    const i = unicas.findIndex((v) => v.nome === varianteBoa);
+    return i > 0 ? [unicas[i], ...unicas.slice(0, i), ...unicas.slice(i + 1)] : unicas;
+  }
+  /** Os cabeçalhos da emissão: a cópia que abriu o último load (sem nenhuma, a da tela). */
+  const cabecalhosDaEmissao = () => variantes()[0]?.cab ?? cabecalhos;
+
   // Só LEITURA: repete uma CONSULTA aprendida (a Tela Protocolo) — a trava confere o verbo (nunca salvar/excluir/tramitar).
   async function ler(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
@@ -923,20 +974,34 @@
       // Um load que veio SEM o registro (`Entity: null`) ainda tenta a cópia — vale a que abrir.
       const vazio = (j) => !!j && typeof j === "object" && "Entity" in j && j.Entity == null;
       if (valeCenti && !vazio(pc.j)) return { ok: true, j: pc.j, via: "centi" };
-      const r = await executar(metodo, url, corpo, ent, true);
-      let j = null;
-      try {
-        j = JSON.parse(r.texto);
-      } catch {}
-      // Só os NOMES dos cabeçalhos (nunca os valores) — o diagnóstico de quando o registro não abre.
-      const cab = Object.keys(cabecalhos || {}).filter((k) => !/^x-ts/i.test(k));
-      const viaCenti = pc ? `cliente da Centi: ${pc.status}${vazio(pc.j) ? " sem o registro" : ""}` : "sem o cliente da Centi";
-      if (r.status >= 400 || !j) {
-        if (valeCenti) return { ok: true, j: pc.j, via: `centi (cópia: ${r.status})`, cabecalhos: cab };
-        return { ok: false, erro: `A Centi recusou a consulta (${r.status}; ${viaCenti}).` };
+      // Sem o cliente (ou sem o registro por ele): as CÓPIAS dos cabeçalhos, uma a uma — a que já abriu primeiro. Vale a
+      // primeira que abrir o registro; todas sem ele = o load vazio com o diagnóstico (os caminhos e os NOMES).
+      const tentados = [];
+      let ultimo = null;
+      let falha = null;
+      for (const v of variantes()) {
+        const r = await executar(metodo, url, corpo, ent, true, v.cab);
+        let j = null;
+        try {
+          j = JSON.parse(r.texto);
+        } catch {}
+        tentados.push(`${v.nome} ${r.status}${j && vazio(j) ? " sem o registro" : !j ? " sem JSON" : ""}`);
+        if (r.status >= 400 || !j) {
+          falha ??= r.status;
+          continue;
+        }
+        if (!vazio(j)) {
+          varianteBoa = v.nome;
+          return { ok: true, j, via: `cópia ${v.nome}` };
+        }
+        ultimo ??= { j, cab: v.cab };
       }
-      if (vazio(j) && valeCenti) return { ok: true, j: pc.j, via: `centi e cópia, os dois sem o registro`, cabecalhos: cab };
-      return { ok: true, j, via: `cópia (${viaCenti})`, cabecalhos: cab };
+      const viaCenti = pc ? `cliente da Centi: ${pc.status}${vazio(pc.j) ? " sem o registro" : ""}` : `sem o cliente da Centi${motivoSemCliente ? ` — ${motivoSemCliente}` : ""}`;
+      const diag = `${viaCenti}; ${tentados.join("; ")}`;
+      const nomes = (c) => Object.keys(c || {}).filter((k) => !/^x-ts/i.test(k));
+      if (valeCenti) return { ok: true, j: pc.j, via: diag, cabecalhos: nomes(cabecalhos) };
+      if (ultimo) return { ok: true, j: ultimo.j, via: diag, cabecalhos: nomes(ultimo.cab) };
+      return { ok: false, erro: `A Centi recusou a consulta (${falha ?? "?"}; ${diag}).` };
     }
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }

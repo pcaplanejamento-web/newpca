@@ -1164,7 +1164,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   NÃO troca a cópia de um pedido da tela pelo de um pedido da própria extensão pelo cliente (`internos > 0` — o `aquecer`, a
   emissão, o load): só preenche quando não há cópia (a causa do "não abre em nenhum dos 18 órgãos" — desde a entrada
   automática, a cópia virava a do `aquecer`). Teste com a aba da Centi falsa (cliente axios pelo webpack + XHR):
-  `tests/centi-main-load.test.ts`.
+  `tests/centi-main-load.test.ts`. **v1.307.1 (extensão 1.45.1, protocolo 48):** a Centi nova manda a sessão pelo fetch com
+  cabeçalhos em minúsculas (user, token, refreshtoken, company, year, month) e o load com essa cópia volta `Entity: null` em
+  todos os órgãos. `variantes()` = as cópias a tentar, na ordem: a da tela · a do load que a TELA fez (`copias.planejamento`)
+  · a do último XHR da tela (`copias.xhr`) · sem token/Authorization · a mínima (Refreshtoken + Company + Month) — as
+  antigas com o token ATUAL (`comTokenNovo`); a que abriu (`varianteBoa`) vai primeiro e é a da emissão
+  (`cabecalhosDaEmissao`). O `executar` acha o cabeçalho do órgão na cópia usada (qualquer caixa). O cliente da Centi é
+  achado também no webpack 5 (`webpackChunk…`). Todas sem o registro = o diagnóstico lista cada cópia com o status.
 - **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
   grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
   toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o

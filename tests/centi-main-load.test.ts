@@ -7,7 +7,7 @@ import vm from "node:vm";
 // Cada pedido do cliente passa pelo XHR (como o axios real), então o `guardar` da extensão o vê.
 type Pedido = { via: "centi" | "xhr"; url: string; headers: Record<string, string> };
 
-function abaCenti(opcoes: { cliente?: boolean; respostaCenti?: (url: string, h: Record<string, string>) => unknown; respostaXhr?: (url: string, h: Record<string, string>) => unknown }) {
+function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: (url: string, h: Record<string, string>) => unknown; respostaXhr?: (url: string, h: Record<string, string>) => unknown }) {
   const pedidos: Pedido[] = [];
   const ouvintes: ((e: unknown) => void)[] = [];
   const respostas: unknown[] = [];
@@ -105,12 +105,18 @@ function abaCenti(opcoes: { cliente?: boolean; respostaCenti?: (url: string, h: 
     const modulos = { 1: { exports: { default: axios } } };
     const fila: unknown[] = [];
     fila.push = (item: unknown) => {
+      if (opcoes.chunk) {
+        // webpack 5: o 3º item é a função que recebe o __webpack_require__.
+        (item as [unknown, unknown, (r: unknown) => void])[2]({ c: modulos });
+        return 1;
+      }
       const [, defs, executar] = item as [unknown, Record<string, (m: unknown, e: unknown, r: unknown) => void>, string[][]];
       const id = executar[0][0];
       defs[id]({}, {}, { c: modulos });
       return 1;
     };
-    ctx.webpackJsonp = fila;
+    if (opcoes.chunk) ctx.webpackChunkcenti = fila;
+    else ctx.webpackJsonp = fila;
   }
   vm.createContext(ctx);
   vm.runInContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
@@ -182,8 +188,35 @@ test("Centi: sem o cliente da Centi, o load sai pela cópia de sempre", async ()
   aba.pedidoDaTela({ Refreshtoken: "rt", Company: "2" });
   const r = await aba.acao("ler", { metodo: "GET", caminho: LOAD, entidade: "6" });
   assert.equal(r.ok, true);
-  assert.match(r.via, /sem o cliente/);
+  assert.match(r.via, /cópia da tela/);
   assert.equal(aba.pedidos.at(-1)?.headers.Company, "6");
+});
+
+test("Centi: sem o cliente, a cópia COM token não abre e a sem token abre — vale também para a emissão", async () => {
+  // A Centi nova (fetch): os cabeçalhos em minúsculas com token/user/year; o registro só abre sem o token.
+  const aba = abaCenti({
+    cliente: false,
+    respostaXhr: (u, h) => (u.includes("key=718") ? ("token" in h ? { Entity: null } : { Entity: { Fields: [{ Key: "Id", Value: 718 }] } }) : {}),
+  });
+  aba.pedidoDaTela({ user: "9", token: "t", refreshtoken: "rt", company: "2", year: "2026", month: "11" });
+  const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=718", entidade: "6" });
+  assert.equal(r.ok, true);
+  assert.ok(r.j.Entity, "a cópia sem o token abriu");
+  assert.equal(r.via, "cópia sem token");
+  assert.equal(aba.pedidos.at(-1)?.headers.company, "6", "o órgão pedido no cabeçalho em minúsculas");
+  // A próxima leitura já começa pela que abriu.
+  const antes = aba.pedidos.length;
+  await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=718", entidade: "6" });
+  assert.equal(aba.pedidos.length - antes, 1);
+
+  const nada = abaCenti({ cliente: false, respostaXhr: () => ({ Entity: null }) });
+  nada.pedidoDaTela({ user: "9", token: "segredo", refreshtoken: "rt", company: "2", year: "2026" });
+  const r2 = await nada.acao("ler", { metodo: "GET", caminho: LOAD, entidade: "6" });
+  assert.equal(r2.ok, true);
+  assert.equal(r2.j.Entity, null);
+  assert.match(r2.via, /sem o cliente da Centi/);
+  assert.match(r2.via, /da tela 200 sem o registro; sem token 200 sem o registro; mínima 200 sem o registro/);
+  assert.ok(!JSON.stringify(r2).includes("segredo"));
 });
 
 test("Centi: o AQUECER não troca a cópia de um pedido da tela (só preenche quando não há)", async () => {
@@ -196,4 +229,11 @@ test("Centi: o AQUECER não troca a cópia de um pedido da tela (só preenche qu
   const r = await vazia.acao("aquecer");
   assert.equal(r.ok, true, "sem cópia, o aquecer a preenche");
   assert.equal((await vazia.acao("estado")).entidade, "2");
+});
+
+test("Centi: o cliente também é achado no webpack 5 (webpackChunk…)", async () => {
+  const aba = abaCenti({ chunk: true, respostaCenti: () => ({ Entity: { Fields: [] } }) });
+  aba.pedidoDaTela({ Refreshtoken: "rt", Company: "2" });
+  const r = await aba.acao("ler", { metodo: "GET", caminho: LOAD, entidade: "6" });
+  assert.equal(r.via, "centi");
 });

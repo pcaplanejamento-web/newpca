@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.307.1",
+    data: "2026-11-19",
+    titulo: "Automação: o planejamento abre com a sessão certa da Centi",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.45.1: a Centi passou a mandar a sessão em outro formato (com token, usuário e ano) e o planejamento não abria em nenhum órgão. Agora a extensão tenta as cópias da sessão — a do próprio load da tela, a antiga, a sem token e a mínima —, guarda a que abriu para os próximos e a usa também na emissão do DFD; o cliente da Centi é achado também no formato novo da página.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.307.0",
     data: "2026-11-19",
     titulo: "Automação acha os planejamentos de novo + painel padrão nos selos + cartões proporcionais",
