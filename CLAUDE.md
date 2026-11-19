@@ -1185,6 +1185,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`padraoDoValor`, nunca o valor) e os últimos pedidos da tela (`__pcaRastroTela_v1`, só a estrutura). Endereço fixo de
   módulo da Centi = sempre aprendido da tela, com o fixo de reserva. Testes: `tests/centi-main-load.test.ts` (a Centi nova
   falsa) e `tests/automacao-centi.test.ts` (a estrutura real do load de 17/11).
+  **v1.307.3 (extensão 1.46.1, protocolo 50) — SÓ O CADASTRO COMPLETO VALE (regra firme):** o load completo do planejamento
+  traz `IdCentroCusto` e `IdPlanejamentoAssinaturaDFD` (`ESSENCIAIS_PLANEJAMENTO`); uma PRÉVIA (sem os dois) nunca vale.
+  Extensão: o modelo guarda `pontos` (`pontosPlanejamento`) e só o mais completo troca o guardado (`melhorModelo`); no `ler`,
+  o load que abre sem os essenciais (`faltasPlanejamento`) não para a busca — sem nenhum completo, devolve o mais completo
+  com `incompleto`. Sistema: `loadIncompleto` (os dois ausentes) → `emitirNaSessao` NÃO emite e o DFD fica não conferido
+  (`definitivo`, com `MSG_ENSINAR_PLANEJAMENTO`) — nunca "Convergente*" sem ter lido o cadastro; só o `IdPlanejamentoAssinaturaDFD`
+  ausente (com o centro de custo) segue o caso legítimo do Convergente*. Centro de custo: o texto da referência é o `Display`
+  › o `Object.Caminho`/`Nome`; `centroCustoLidoNoLoad` separa o NÃO LIDO (campo ausente ou referência com Id e sem texto →
+  `centroAusente` → `conferirUnidades` manda `centroNaoLido`, o gravado fica) do "a Centi não tem" (Id 0/nulo → a coluna é
+  limpa). Cada DFD: load + emissão na MESMA `comSessaoCenti` (nenhum outro registro aberto no meio).
 - **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
   grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
   toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o

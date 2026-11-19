@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.307.3",
+    data: "2026-11-19",
+    titulo: "Automação: só o cadastro completo do planejamento vale; o centro de custo nunca é apagado sem ser lido",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.46.1: a extensão podia aprender uma PRÉVIA do planejamento (sem o centro de custo e sem o registro das seções 8 a 10) e a conferência marcava “Convergente*” e gravava “Sem centro de custo” por cima do valor certo. Agora só o cadastro completo vale (uma prévia nunca troca o completo aprendido); o planejamento aberto incompleto fica NÃO conferido, com o que faltou e o que fazer; e o centro de custo que não foi lido nunca apaga o gravado. Cada DFD segue analisado sozinho: o load e a emissão dele na mesma trava da sessão da Centi.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.307.2",
     data: "2026-11-19",
     titulo: "Automação: a extensão aprende como a Centi nova abre o planejamento",

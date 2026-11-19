@@ -265,6 +265,7 @@ const planejamentoReal = (id: string, modulo = 101045) => ({
         Value: { ModuleKey: 0, Fields: [{ Key: "Id", Value: 75 }, { Key: "Display", Value: "PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO" }] },
       },
       { Key: "Finalidade", Value: "EMPENHO COMPLEMENTAR DO CONTRATO 177/2023" },
+      { Key: "IdPlanejamentoAssinaturaDFD", Value: { ModuleKey: 0, Fields: [{ Key: "Id", Value: 114 }, { Key: "Display", Value: "SECRETARIA" }] } },
       {
         Key: "IdProtocolo",
         Value: {
@@ -347,4 +348,32 @@ test("Centi nova: o pedido aprendido usa a cópia dos cabeçalhos do PRÓPRIO lo
   assert.equal(r.ok, true);
   assert.ok(r.j.Entity, "abriu pela cópia do load da tela");
   assert.match(r.via, /cópia do load da tela$/);
+});
+
+test("Centi nova: uma PRÉVIA do planejamento (sem o centro de custo e as seções 8–10) nunca vale como o load", async () => {
+  // A tela pede uma prévia (módulo 777777, só Finalidade/Situacao) e o cadastro completo (999999).
+  const previa = (id: string) => ({ Entity: { ModuleKey: 777777, Fields: [{ Key: "Finalidade", Value: "x" }, { Key: "Situacao", Value: 1 }, { Key: "Id", Value: id }] } });
+  const resposta = (u: string, h: Record<string, string>) => {
+    const m = /entity=(\d+)&key=(\d+)/.exec(u);
+    if (m?.[1] === "777777") return previa(m[2]);
+    return CENTI_NOVA(u, h);
+  };
+  const aba = abaCenti({ cliente: false, respostaXhr: resposta });
+  // Só a prévia aprendida: o load "abre" incompleto — vale o mais completo, marcado, e os fixos são tentados.
+  aba.telaAbre("restauth/load?entity=777777&key=131", DA_TELA);
+  await aba.espera();
+  const r1 = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", entidade: "3", planejamento: "24" });
+  assert.deepEqual(r1.incompleto, ["IdCentroCusto", "IdPlanejamentoAssinaturaDFD"]);
+  assert.match(r1.via, /INCOMPLETO/);
+  assert.match(r1.via, /módulo 101045: /, "os fixos também foram tentados");
+  // O cadastro completo aberto pela tela substitui a prévia; a prévia depois NÃO o troca de volta.
+  aba.telaAbre("restauth/load?entity=999999&key=131", DA_TELA);
+  await aba.espera();
+  aba.telaAbre("restauth/load?entity=777777&key=132", DA_TELA);
+  await aba.espera();
+  assert.equal(JSON.parse(aba.local.getItem("__pcaLoadPlanejamento_v1") ?? "null").modulo, 999999);
+  const r2 = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", entidade: "3", planejamento: "24" });
+  assert.equal(r2.incompleto, undefined);
+  assert.equal(r2.j.Entity.ModuleKey, 999999);
+  assert.equal(r2.j.Entity.Fields.find((f: { Key: string }) => f.Key === "Id").Value, "24", "o registro DESTE planejamento");
 });

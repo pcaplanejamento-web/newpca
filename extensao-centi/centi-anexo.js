@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p49";
+  const NOME = "__pcaCentiAnexo_p50";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -143,6 +143,21 @@
   // um protocolo (NrProtocolo no topo) nunca — o `NrProtocolo` aninhado (o protocolo ligado ao planejamento) não conta.
   const MODULOS_PLANEJAMENTO = [101045, 101026];
   const CAMPOS_PLANEJAMENTO = ["IdPlanejamentoAssinaturaDFD", "Finalidade", "IdCentroCusto", "IdComprasPlanejamento"];
+  // O load COMPLETO do planejamento (o da tela ao abrir o cadastro — DevTools 17/11: 45 campos) traz o centro de custo e o
+  // registro das seções 8–10; uma resposta "leve" (uma prévia, a linha da grade) traz só alguns — nunca vale como o load.
+  const ESSENCIAIS_PLANEJAMENTO = ["IdCentroCusto", "IdPlanejamentoAssinaturaDFD"];
+  const PONTOS_PLANEJAMENTO = [...ESSENCIAIS_PLANEJAMENTO, "Finalidade", "NumeroDFD", "TipoDFD", "IdProtocolo", "Situacao", "PrevisaoEntregaExecucao"];
+  const chavesDoTopo = (j) => new Set((Array.isArray(j?.Entity?.Fields) ? j.Entity.Fields : []).map((f) => f?.Key));
+  /** Os campos ESSENCIAIS que faltam no load do planejamento ([] = completo). */
+  function faltasPlanejamento(j) {
+    const c = chavesDoTopo(j);
+    return ESSENCIAIS_PLANEJAMENTO.filter((k) => !c.has(k));
+  }
+  /** Quantos campos do cadastro do planejamento a resposta traz (o modelo mais completo vence). */
+  function pontosPlanejamento(j) {
+    const c = chavesDoTopo(j);
+    return PONTOS_PLANEJAMENTO.filter((k) => c.has(k)).length;
+  }
   /** A resposta parece um planejamento (o `Entity` do topo)? — para o reconhecimento e o diagnóstico. */
   function pareceSerPlanejamento(j) {
     const e = j?.Entity;
@@ -174,7 +189,15 @@
       b = marcarNoCorpo(limpo, id);
     }
     if (!caminho.includes(MARCA_ID) && !/\{id(:n)?\}/.test(JSON.stringify(b ?? ""))) return null;
-    return { metodo: m, caminho, corpo: b, modulo: e.ModuleKey };
+    return { metodo: m, caminho, corpo: b, modulo: e.ModuleKey, pontos: pontosPlanejamento(j), completo: faltasPlanejamento(j).length === 0 };
+  }
+  /** O modelo novo substitui o guardado? Só o mais completo (ou o mesmo pedido de novo) — uma resposta leve da tela (uma
+   * prévia) nunca troca o load completo aprendido. */
+  function melhorModelo(novo, guardado) {
+    if (!novo) return false;
+    if (!guardado || typeof guardado !== "object") return true;
+    if (guardado.caminho === novo.caminho && guardado.metodo === novo.metodo) return true;
+    return (Number(novo.pontos) || 0) >= (Number(guardado.pontos) || 0);
   }
   /** O ÓRGÃO no MESMO formato do valor que a tela mandou no cabeçalho `company` (zeros à esquerda, prefixo e sufixo): "3"
    * com a tela "02" = "03"; com "E-02" = "E-03". Valor da tela com mais de um número (ou sem nenhum) = o órgão como veio. */
@@ -1097,5 +1120,5 @@
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo, fonteDaAssinatura, diagnosticoAssinatura,
-    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, loadDoPlanejamento, pareceSerPlanejamento, entidadeNoFormato, padraoDoValor, MODULOS_PLANEJAMENTO, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, loadDoPlanejamento, pareceSerPlanejamento, faltasPlanejamento, pontosPlanejamento, melhorModelo, entidadeNoFormato, padraoDoValor, MODULOS_PLANEJAMENTO, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

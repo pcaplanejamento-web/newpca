@@ -152,7 +152,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.44.3"), false);
   assert.equal(versaoAtende("1.45.0"), false);
   assert.equal(versaoAtende("1.45.1"), false);
-  assert.equal(versaoAtende("1.46.0"), true);
+  assert.equal(versaoAtende("1.46.0"), false);
+  assert.equal(versaoAtende("1.46.1"), true);
   // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
   assert.equal(versaoFunciona("1.37.0"), false);
   assert.equal(versaoFunciona("1.38.0"), true);
@@ -759,7 +760,13 @@ test("Centi nova: aprende como a TELA abre o PLANEJAMENTO; o protocolo aninhado 
   assert.equal(A.loadDoProtocolo(url, "GET", null, { Entity: plan }), null, "não é protocolo");
   assert.equal(A.pareceSerPlanejamento({ Entity: plan }), true);
   const m = A.loadDoPlanejamento(url, "GET", null, { Entity: plan });
-  assert.deepEqual(m, { metodo: "GET", caminho: "restauth/load?entity=101045&key={id}", corpo: null, modulo: 101045 });
+  assert.deepEqual(m, { metodo: "GET", caminho: "restauth/load?entity=101045&key={id}", corpo: null, modulo: 101045, pontos: 3, completo: false });
+  // O modelo mais completo vence; uma prévia (menos campos) não troca o guardado; o mesmo pedido de novo, sim.
+  assert.equal(A.melhorModelo({ ...m, pontos: 8 }, m), true);
+  assert.equal(A.melhorModelo({ ...m, caminho: "restauth/load?entity=7&key={id}", pontos: 1 }, { ...m, pontos: 8 }), false);
+  assert.equal(A.melhorModelo({ ...m, pontos: 1 }, { ...m, pontos: 8 }), true);
+  assert.equal(A.melhorModelo(m, null), true);
+  assert.deepEqual(A.faltasPlanejamento({ Entity: plan }), ["IdPlanejamentoAssinaturaDFD"]);
   assert.deepEqual(A.pedidoDoLoad(m, "24"), { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", corpo: null });
   // Pelo corpo (POST) de um verbo de leitura, sem segredos; em texto também.
   const p = A.loadDoPlanejamento("restauth/loadplanejamento", "POST", JSON.stringify({ Key: 131, token: "x" }), { Entity: plan });

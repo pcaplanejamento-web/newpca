@@ -307,3 +307,17 @@ test("Diagrama antigo: “Gravar na coluna da Mesa” com “Centro de Custo” 
   assert.match(avisos.join(" "), /Atualizar pelo modelo/);
   await assert.rejects(() => def.executar({ entrada: [{ id: 7, valor: "x" }] }, { entidade: "dfd", coluna: "Subunidade" }, c, {}), /coluna do sistema/);
 });
+
+test("Centro de custo NÃO LIDO (o registro veio sem ele): o DFD não vai à coluna como 'sem centro de custo' — o gravado fica", () => {
+  const it = { id: 14, numero: "14", planejamento: "24", sigla: "FMS", reparticaoId: 8, orgaoId: 2, centi: { planejamento: "24", centroCusto: "", centroAusente: true, camposCenti: ["Finalidade", "Situacao", "Id"] } };
+  const r = conferirUnidades([it], UNIDADES);
+  assert.equal(r.todos.length, 1);
+  const x = r.todos[0] as Record<string, unknown>;
+  assert.equal(x.centroNaoLido, true, "quem grava o pula");
+  assert.ok(!("centroCustoCenti" in x));
+  assert.equal(x.unidadeConfere, "naoLido");
+  assert.match(String(x.mensagemUnidade), /não conferido na Centi — o registro do planejamento veio sem o centro de custo \(campos que vieram: Finalidade, Situacao, Id\)/);
+  // A Centi LEU e não tem: aí sim a coluna é limpa (centroCustoCenti "").
+  const semDado = conferirUnidades([{ ...it, centi: { planejamento: "24", centroCusto: "", camposCenti: ["IdCentroCusto"] } }], UNIDADES);
+  assert.equal((semDado.todos[0] as Record<string, unknown>).centroCustoCenti, "");
+});

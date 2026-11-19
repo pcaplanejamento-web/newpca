@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 49;
+  const PROTOCOLO = 50;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -393,6 +393,7 @@
       }
       // O PLANEJAMENTO aberto pela tela: o modelo do pedido (sem segredos) e a cópia dos cabeçalhos DESTE pedido.
       const lpl = A.loadDoPlanejamento(url, m, b, j);
+      if (lpl && !A.melhorModelo(lpl, loadPlanAprendido())) return;
       if (lpl) {
         localStorage.setItem(LOAD_PLANEJAMENTO, JSON.stringify({ ...lpl, em: new Date().toISOString() }));
         const s = String(url);
@@ -1090,6 +1091,9 @@
       const partes = [];
       let ultimo = null;
       let falha = null;
+      // O load que ABRE mas vem INCOMPLETO (sem o centro de custo / o registro das seções 8–10) não para a busca: as outras
+      // tentativas podem trazer o cadastro inteiro; sem nenhuma completa, vale o mais completo, marcado `incompleto`.
+      let parcial = null;
       for (const t of tentativas) {
         const url = destino(t.caminho);
         if (!url) {
@@ -1097,7 +1101,16 @@
           continue;
         }
         const r = await tentarConsulta(t.metodo, url, t.metodo === "POST" ? t.corpo : null, ent, !!t.daTela);
-        if (r.j) return { ok: true, j: r.j, via: `${t.rotulo ? `${t.rotulo} · ` : ""}${r.via}` };
+        const via = `${t.rotulo ? `${t.rotulo} · ` : ""}${r.via}`;
+        if (r.j && plan) {
+          const faltam = A.faltasPlanejamento(r.j);
+          if (!faltam.length) return { ok: true, j: r.j, via };
+          const pontos = A.pontosPlanejamento(r.j);
+          if (!parcial || pontos > parcial.pontos) parcial = { j: r.j, via, faltam, pontos };
+          partes.push(`${t.rotulo}: abriu sem ${faltam.join(", ")}`);
+          continue;
+        }
+        if (r.j) return { ok: true, j: r.j, via };
         partes.push(`${t.rotulo ? `${t.rotulo}: ` : ""}${r.diag}`);
         ultimo ??= r.ultimo;
         falha ??= r.falha;
@@ -1111,6 +1124,7 @@
         semModelo ? `sem o load aprendido — pedidos da tela: ${pedidosDaTela() || "nenhum visto"}` : "",
       ].filter(Boolean);
       const diag = [...partes, ...extra].join(" | ");
+      if (parcial) return { ok: true, j: parcial.j, via: `${parcial.via} — INCOMPLETO (sem ${parcial.faltam.join(", ")}) | ${diag}`, incompleto: parcial.faltam, semModelo };
       if (ultimo) return { ok: true, j: ultimo.j, via: diag, cabecalhos: nomes(ultimo.cab), semModelo };
       return { ok: false, erro: `A Centi recusou a consulta (${falha ?? "?"}; ${diag}).`, semModelo };
     }

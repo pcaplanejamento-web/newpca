@@ -3,7 +3,7 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { analisarRespostaCenti, dadosDoPlanejamento, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
+import { analisarRespostaCenti, centroCustoLidoNoLoad, dadosDoPlanejamento, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
 import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
@@ -150,7 +150,16 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   const finalidade = topo.finalidade ?? s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
   // `registro: false` = a Centi não abriu o registro do planejamento (só a emissão saiu): a situação e o centro de custo
   // NÃO foram lidos — quem grava não apaga o que já estava (nunca vira "sem centro de custo" por falta de leitura).
-  const extra = { centroCusto, finalidade, ...(semRegistro !== null ? { registro: false } : {}), ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }) };
+  // `centroAusente` = o load abriu o registro e NÃO trouxe o centro de custo (o campo não veio, ou só a referência sem o
+  // texto): não foi lido — quem grava o pula; "" só quando a Centi diz que não tem.
+  const centroAusente = semRegistro === null && !centroCusto && !centroCustoLidoNoLoad(l.j);
+  const extra = {
+    centroCusto,
+    finalidade,
+    ...(semRegistro !== null ? { registro: false } : {}),
+    ...(centroAusente ? { centroAusente: true } : {}),
+    ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }),
+  };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
   // A MESMA emissão do "Baixar DFDs", SEMPRE com o valor de referência ("Emitir valor referência" = Sim): sem ele a Centi
   // emite a seção 4 sem as colunas de valor e a conferência compararia "R$ 0,00". A chave do aparelho vale só no Baixar/anexar.

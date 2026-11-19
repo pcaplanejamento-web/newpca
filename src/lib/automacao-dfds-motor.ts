@@ -14,6 +14,8 @@ import {
   analisarRespostaCenti,
   type ConfigCenti,
   caminhoLoadPlanejamento,
+  faltasDoLoad,
+  loadIncompleto,
   candidatosEntidade,
   conferirConteudoDfd,
   descricaoDoArquivo,
@@ -201,6 +203,13 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
   // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele (o planejamento
   // não tem), o DFD é emitido mesmo assim, com o campo VAZIO — nunca o registro de outro planejamento — e as seções 8 a 10
   // que vierem não valem (`semSecoes810`): as demais seções seguem conferidas.
+  // O load abriu uma PRÉVIA (sem o centro de custo e sem o registro das seções 8–10): nada é emitido nem conferido — emitir
+  // com o campo vazio daria um DFD sem as seções 8–10 e a conferência marcaria "Convergente*" sem ter lido o cadastro.
+  if (loadIncompleto(load.j))
+    return {
+      erro: `A Centi devolveu o planejamento ${id}${onde} INCOMPLETO (sem ${faltasDoLoad(load.j).join(" e ")}) — não conferido.${load.diagnostico ? ` [${load.diagnostico}]` : ""} ${MSG_ENSINAR_PLANEJAMENTO}`,
+      definitivo: true,
+    };
   const ass = assinaturaDoLoad(load.j, id);
   const semSecoes810 = "erro" in ass;
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), "erro" in ass ? "" : ass.id), entidade }, 150_000);

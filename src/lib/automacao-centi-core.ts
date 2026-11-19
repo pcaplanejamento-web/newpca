@@ -31,7 +31,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.46.0";
+export const VERSAO_EXTENSAO_CENTI = "1.46.1";
 /**
  * A versão MÍNIMA com que as automações RODAM (o protocolo da tela com a extensão não mudou desde ela). Uma versão nova
  * da extensão NUNCA trava as automações de quem ainda não atualizou: abaixo da recomendada (`VERSAO_EXTENSAO_CENTI`),
@@ -689,6 +689,34 @@ export const caminhoLoadPlanejamento = (id: string) => `restauth/load?entity=${M
  * protocolo, que traz a situação dele): o texto do campo ou, numa referência `{Fields: [Display]}`, o `Display`.
  * Centro de custo = `IdCentroCusto`/`CentroCusto`; finalidade = `Finalidade`; situação SÓ quando é texto com letras (o
  * 101045 manda um CÓDIGO — vira ""). `undefined` = o campo não está no topo (resposta de outro formato). */
+/** Os campos ESSENCIAIS do load COMPLETO do planejamento (o cadastro que a tela abre — DevTools 17/11/2026: 45 campos) que
+ * NÃO vieram no topo da `Entity` ([] = completo; sem `Entity` = []). Sem os dois, a resposta é uma prévia — nunca o load. */
+export const ESSENCIAIS_PLANEJAMENTO = ["IdCentroCusto", "IdPlanejamentoAssinaturaDFD"] as const;
+export function faltasDoLoad(j: unknown): string[] {
+  const ent = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : undefined;
+  if (!ent || typeof ent !== "object" || !Array.isArray((ent as { Fields?: unknown }).Fields)) return [];
+  const chaves = new Set(((ent as { Fields: { Key?: unknown }[] }).Fields).map((f) => f?.Key));
+  return ESSENCIAIS_PLANEJAMENTO.filter((k) => !chaves.has(k));
+}
+/** O CENTRO DE CUSTO foi LIDO no load? Não = o campo não veio no topo da `Entity`, ou veio a referência com um Id e sem
+ * nenhum texto (`Display`/`Object`). Só o lido pode virar "sem centro de custo" — o não lido nunca apaga o gravado. */
+export function centroCustoLidoNoLoad(j: unknown): boolean {
+  const ent = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : undefined;
+  const fields = ent && typeof ent === "object" && Array.isArray((ent as { Fields?: unknown }).Fields) ? ((ent as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields) : [];
+  const f = fields.find((x) => typeof x?.Key === "string" && /^(id)?centro.?(de)?.?custo$/i.test(x.Key));
+  if (!f) return false;
+  if (dadosDoPlanejamento(j).centroCusto) return true;
+  const v = f.Value;
+  const ref = v && typeof v === "object" && Array.isArray((v as { Fields?: unknown }).Fields) ? ((v as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields) : null;
+  const idRef = ref ? Number(ref.find((x) => x?.Key === "Id")?.Value) : Number.NaN;
+  // A referência com um Id de verdade e sem texto = não lido; Id 0/vazio ou o campo nulo = a Centi não tem o centro de custo.
+  return !(ref && Number.isFinite(idRef) && idRef > 0);
+}
+
+/** O load abriu o registro mas veio SEM os dois campos essenciais: incompleto (o centro de custo e as seções 8–10 não
+ * foram lidos — nada é gravado nem comparado com eles). */
+export const loadIncompleto = (j: unknown): boolean => faltasDoLoad(j).length === ESSENCIAIS_PLANEJAMENTO.length;
+
 export function dadosDoPlanejamento(j: unknown): { situacao?: string; centroCusto?: string; finalidade?: string } {
   const ent = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : undefined;
   const fields = ent && typeof ent === "object" && Array.isArray((ent as { Fields?: unknown }).Fields) ? ((ent as { Fields: unknown[] }).Fields as { Key?: unknown; Value?: unknown }[]) : [];
@@ -696,8 +724,14 @@ export function dadosDoPlanejamento(j: unknown): { situacao?: string; centroCust
     if (typeof v === "string") return v.trim();
     if (typeof v === "number") return String(v);
     if (v && typeof v === "object" && Array.isArray((v as { Fields?: unknown }).Fields)) {
-      const d = ((v as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields).find((f) => f?.Key === "Display")?.Value;
-      return typeof d === "string" ? d.trim() : null;
+      const fs = (v as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields;
+      const d = fs.find((f) => f?.Key === "Display")?.Value;
+      if (typeof d === "string" && d.trim()) return d.trim();
+      // Sem o `Display`, o registro ligado (`Object`): o caminho completo ("PM RV, SECRETARIA…") ou o nome.
+      const o = fs.find((f) => f?.Key === "Object")?.Value;
+      const of = o && typeof o === "object" && Array.isArray((o as { Fields?: unknown }).Fields) ? ((o as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields) : [];
+      const t = ["Caminho", "Nome", "Descricao"].map((k) => of.find((f) => f?.Key === k)?.Value).find((x) => typeof x === "string" && x.trim());
+      return typeof t === "string" ? t.trim() : typeof d === "string" ? d.trim() : null;
     }
     return null;
   };

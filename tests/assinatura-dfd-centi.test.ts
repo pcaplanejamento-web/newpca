@@ -163,3 +163,39 @@ test("dadosDoPlanejamento: os campos do PRÓPRIO planejamento (formato real do 1
   assert.deepEqual(dadosDoPlanejamento({ Entity: null }), {});
   assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "IdCentroCusto", Value: 12 }] } }), { centroCusto: "" }, "o id numérico nunca é o centro de custo");
 });
+
+// A Centi 3.0.216.217 (19/11/2026): o load que a extensão aprendeu podia ser uma PRÉVIA do planejamento (sem o centro de
+// custo e sem o registro das seções 8–10). Com ela a automação marcava "Convergente*" e gravava "sem centro de custo".
+const previa = (plan: number) => ({ Entity: { ModuleKey: 999999, Fields: [{ Key: "Finalidade", Value: "x" }, { Key: "Situacao", Value: 1 }, { Key: "Id", Value: String(plan) }] }, Message: null });
+
+test("load INCOMPLETO (uma prévia, sem o centro de custo e sem as seções 8–10): nada é emitido nem conferido", async () => {
+  const { faltasDoLoad, loadIncompleto } = await import("../src/lib/automacao-centi-core.ts");
+  assert.deepEqual(faltasDoLoad(loadDaTela(131, 114)), []);
+  assert.deepEqual(faltasDoLoad(loadDaTela(131, null)), ["IdPlanejamentoAssinaturaDFD"]);
+  assert.equal(loadIncompleto(loadDaTela(131, null)), false, "o planejamento sem o registro (com o centro de custo) é o caso legítimo do Convergente*");
+  assert.equal(loadIncompleto(previa(24)), true);
+  assert.equal(loadIncompleto({ Entity: null }), false);
+  const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
+  const r = await emitirUm(c, "24", "3");
+  assert.equal(r.pdf, undefined);
+  assert.match(r.erro ?? "", /INCOMPLETO \(sem IdCentroCusto e IdPlanejamentoAssinaturaDFD\) — não conferido/);
+  assert.match(r.erro ?? "", /Abra UM planejamento na CM002/);
+  assert.equal(r.definitivo, true, "o load abriu neste órgão — não tenta os outros");
+  assert.equal(pedidos.filter((p) => p.acao === "pedir").length, 0, "nunca emite com as seções 8–10 vazias");
+});
+
+test("centro de custo: o texto da referência (Display › o registro ligado) e o NÃO LIDO separado do 'não tem'", async () => {
+  const { centroCustoLidoNoLoad, dadosDoPlanejamento } = await import("../src/lib/automacao-centi-core.ts");
+  const comCentro = (v: unknown) => ({ Entity: { Fields: [{ Key: "IdCentroCusto", Value: v }, { Key: "Id", Value: "24" }] } });
+  // Sem o Display: o caminho do registro ligado (a estrutura real do 17/11 — Object.Caminho).
+  const semDisplay = comCentro(ref(75, [{ Key: "Object", Value: { ModuleKey: 103729, Fields: [{ Key: "Nome", Value: "FUNDO" }, { Key: "Caminho", Value: "FUNDO MUNICIPAL DE SAUDE" }] } }]));
+  assert.equal(dadosDoPlanejamento(semDisplay).centroCusto, "FUNDO MUNICIPAL DE SAUDE");
+  assert.equal(centroCustoLidoNoLoad(semDisplay), true);
+  assert.equal(centroCustoLidoNoLoad(loadDaTela(131, 114)), true);
+  // Não lido: o campo não veio, ou a referência com um Id e sem texto.
+  assert.equal(centroCustoLidoNoLoad(previa(24)), false);
+  assert.equal(centroCustoLidoNoLoad(comCentro(ref(75))), false);
+  // Lido e vazio (a Centi não tem): Id 0 ou nulo.
+  assert.equal(centroCustoLidoNoLoad(comCentro(ref(0))), true);
+  assert.equal(centroCustoLidoNoLoad(comCentro(null)), true);
+});

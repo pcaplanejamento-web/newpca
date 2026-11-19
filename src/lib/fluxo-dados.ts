@@ -313,6 +313,18 @@ export function conferirUnidades(
       enviar("desconhecidas", { ...base, unidadeConfere: "semDado", mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo} (a CM002 não trouxe o centro de custo)` }, "", !it.centiFalha);
       continue;
     }
+    if (!centro && load?.centroAusente === true) {
+      // O registro abriu SEM o centro de custo (uma prévia do planejamento): NÃO lido — o valor gravado fica (nunca vira
+      // "sem centro de custo" por falta de leitura).
+      const nomes = Array.isArray(load.camposCenti) ? (load.camposCenti as unknown[]).map(String).slice(0, 40) : [];
+      enviar(
+        "desconhecidas",
+        { ...base, mensagem: `${ref}: não conferido na Centi — o registro do planejamento veio sem o centro de custo${nomes.length ? ` (campos que vieram: ${nomes.join(", ")})` : ""}` },
+        "",
+        false,
+      );
+      continue;
+    }
     if (!centro) {
       // O diagnóstico SEMPRE: os campos do registro (load) › as colunas cruas › as chaves da linha da CM002.
       const nomes =
