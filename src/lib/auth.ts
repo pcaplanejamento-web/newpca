@@ -178,18 +178,6 @@ export async function sessaoAtualId(): Promise<number | null> {
   return r?.id ?? null;
 }
 
-/** A sessão ATUAL com a hora em que foi criada (o login neste navegador) — `null` sem sessão. */
-export async function sessaoAtual(): Promise<{ id: number; criadoEm: string | null } | null> {
-  const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return null;
-  const [r] = await getDb()
-    .select({ id: sessoes.id, criadoEm: sessoes.criadoEm })
-    .from(sessoes)
-    .where(eq(sessoes.tokenHash, await sha256Hex(token)))
-    .limit(1);
-  return r ?? null;
-}
-
 /** Sai da conta ATUAL. Com outra conta guardada neste navegador, ela vira a ativa (devolve a pessoa). */
 export async function encerrarSessaoAtual(): Promise<UsuarioSessao | null> {
   const jar = await cookies();

@@ -3013,24 +3013,3 @@ export const centiLogins = sqliteTable("centi_logins", {
   motivo: text("motivo"),
   ultimoUsoEm: text("ultimo_uso_em"),
 });
-
-/** Os NAVEGADORES autorizados a receber o login da Centi (migração `0196`): a chave PÚBLICA ECDH P-256 da extensão de
- * cada navegador (a privada nunca sai dela) e a impressão (SHA-256). Autorizar exige a senha do sistema; a senha da Centi
- * só sai SELADA a uma destas chaves. */
-export const centiLoginChaves = sqliteTable(
-  "centi_login_chaves",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    usuarioId: integer("usuario_id")
-      .notNull()
-      .references(() => usuarios.id, { onDelete: "cascade" }),
-    impressao: text("impressao").notNull(),
-    publica: text("publica").notNull(),
-    navegador: text("navegador").notNull(),
-    /** A sessão que autorizou sozinha (sem a senha, logo depois de entrar) — no máximo uma chave por sessão assim. */
-    sessaoId: integer("sessao_id"),
-    criadoEm: text("criado_em").notNull(),
-    usadoEm: text("usado_em"),
-  },
-  (t) => [uniqueIndex("centi_login_chaves_uq").on(t.usuarioId, t.impressao)],
-);

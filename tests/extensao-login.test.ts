@@ -111,7 +111,7 @@ test("login: lê a mensagem de senha recusada", () => {
  * pública da extensão) e os pedidos que a extensão fez. A senha só sai SELADA à chave do navegador autorizado — a MESMA
  * conta do servidor (`selarParaChave`, `centi-login-core.ts`).
  */
-function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; semSistema?: boolean; recemEntrou?: boolean } = {}) {
+function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; semSistema?: boolean } = {}) {
   const banco = {
     tem: o.tem !== false,
     auto: o.auto !== false,
@@ -119,6 +119,7 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
     motivo: o.pausado ? "Senha recusada" : (null as string | null),
     usuario: "maria",
     senha: "s3gredo",
+    /** As chaves públicas que chegaram nos pedidos (para conferir o selo). */
     chaves: new Map<string, string>(),
   };
   const pedidos: { url: string; metodo: string; corpo: Record<string, unknown> | null }[] = [];
@@ -130,36 +131,27 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
     assert.equal(init.cache, "no-store");
     if (o.semSistema) return resp(401, { ok: false, error: "Não autenticado" });
     const u = new URL(url);
-    const impressao = u.searchParams.get("impressao");
-    if (u.pathname.endsWith("/navegadores") && init.method === "POST") {
-      // Sem a senha do sistema, só numa sessão recém-criada (a pessoa acabou de entrar no sistema neste navegador).
-      if (corpo?.senha === null && o.recemEntrou === false) return resp(422, { ok: false, error: "Entre no sistema de novo." });
-      const imp = await impressaoDaChave(String(corpo?.publica));
-      if (!imp) return resp(422, { ok: false, error: "Chave inválida." });
-      banco.chaves.set(imp, String(corpo?.publica));
-      return resp(200, { ok: true });
-    }
     if (init.method === "GET" && u.searchParams.get("situacao") === "1")
       return resp(200, {
         ok: true,
         tem: banco.tem,
         auto: banco.auto,
-        autorizada: !!impressao && banco.chaves.has(impressao),
         conta: "Maria Souza",
         pausadoEm: banco.pausado ? "2026-11-19T10:00:00Z" : null,
         motivo: banco.motivo,
       });
     if (init.method === "GET") {
-      if (!impressao) return resp(422, { ok: false, error: "Pedido sem a chave da extensão." });
+      const publica = u.searchParams.get("publica");
+      if (!publica) return resp(422, { ok: false, error: "Atualize a extensão." });
       if (!banco.tem) return resp(200, { ok: true, tem: false });
-      const publica = banco.chaves.get(impressao);
-      if (!publica) return resp(200, { ok: true, tem: false, autorizar: true });
       if (banco.pausado) return resp(200, { ok: true, tem: true, pausado: true, motivo: banco.motivo });
+      const impressao = (await impressaoDaChave(publica)) as string;
+      banco.chaves.set(impressao, publica);
       const selado = await selarParaChave(publica, impressao, JSON.stringify({ usuario: banco.usuario, senha: banco.senha }));
       return resp(200, { ok: true, tem: true, auto: banco.auto, selado });
     }
     if (init.method === "POST" && corpo?.acao === "pausar") {
-      assert.ok(corpo.motivo === "recusado" || corpo.motivo === "verificacao", "a pausa vai por CÓDIGO, nunca o texto da Centi");
+      assert.equal(corpo.motivo, "recusado", "só a senha recusada pausa — por CÓDIGO, nunca o texto da Centi");
       banco.pausado = true;
       banco.motivo = corpo.motivo === "recusado" ? "Senha recusada pela Centi" : "A Centi pediu uma verificação";
       return resp(200, { ok: true });
@@ -175,7 +167,7 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
 }
 
 // O serviço com o SISTEMA falso e a ABA DA AUTOMAÇÃO (id 1) na tela de login: quando entra, quantas vezes e quando pausa.
-function servico(o: { tem?: boolean; auto?: boolean; semSistema?: boolean; recemEntrou?: boolean; resultado?: string } = {}) {
+function servico(o: { tem?: boolean; auto?: boolean; semSistema?: boolean; resultado?: string } = {}) {
   const sis = sistemaFalso(o);
   const logins: unknown[] = [];
   const s = servicoFalso({
@@ -203,10 +195,11 @@ test("serviço: aba na tela de login → lê o login do SISTEMA e entra UMA vez;
   await pausa(20);
   assert.equal(s.logins.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(s.logins[0])), { alvo: "centi-login", usuario: "maria", senha: "s3gredo" });
-  // O login veio do sistema SELADO à chave deste navegador (que se autorizou sozinho: a pessoa acabou de entrar no sistema).
+  // O login veio do sistema SELADO à chave pública que a extensão mandou — sem autorizar nada: estar logado basta.
   assert.equal(s.sis.banco.chaves.size, 1);
-  const entrega = s.sis.pedidos.find((p) => p.metodo === "GET" && /credencial-centi\?impressao=[0-9a-f]{64}$/.test(p.url));
-  assert.ok(entrega, "a entrega pede com a impressão da chave");
+  const entrega = s.sis.pedidos.find((p) => p.metodo === "GET" && /credencial-centi\?publica=/.test(p.url));
+  assert.ok(entrega, "a entrega pede com a chave pública");
+  assert.ok(!s.sis.pedidos.some((p) => p.url.includes("/navegadores")), "nenhuma autorização de navegador");
   assert.equal(s.sis.banco.pausado, true, "a pausa vale para todos os navegadores");
   assert.match(String(s.sis.banco.motivo), /Senha recusada pela Centi/);
   await s.pedir({ acao: "estado" });
@@ -368,15 +361,16 @@ test("transição: o cofre antigo NUNCA vai sozinho ao sistema — só pela esco
   assert.deepEqual(c4.apagados, []);
 });
 
-test("serviço: sem autorização (sessão antiga no sistema), não recebe a senha e pede para autorizar", async () => {
-  const s = servico({ recemEntrou: false, resultado: "ok" });
+test("serviço: uma verificação da Centi (captcha) não pausa — tenta de novo sozinha depois do intervalo", async () => {
+  const s = servico({ resultado: "bloqueio" });
   await s.pedir({ acao: "estado" });
   await pausa(20);
-  assert.equal(s.logins.length, 0);
-  assert.equal(s.sis.banco.chaves.size, 0);
-  const r = (await s.pedir({ acao: "entrarAgora" })) as { erro: string };
-  assert.match(r.erro, /Autorize este navegador/);
-  assert.ok(!s.sis.pedidos.some((p) => JSON.stringify(p).includes("s3gredo")));
+  assert.equal(s.logins.length, 1);
+  assert.equal(s.sis.banco.pausado, false);
+  s.s.sessao.loginUltima = Date.now() - 6 * 60 * 1000;
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(s.logins.length, 2, "re-login sozinho, sem ninguém salvar nada");
 });
 
 test("serviço: a senha nunca trafega em claro — só o selado, que outra chave não abre", async () => {

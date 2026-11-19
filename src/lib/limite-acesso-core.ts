@@ -37,10 +37,8 @@ export const LIMITES_ACESSO = {
   verificarDeclaracaoIp: { max: 30, janelaS: 10 * 60 },
   /** "Pedir liberação ao ADM" da troca de aparelho (por pessoa). */
   liberacaoAparelho: { max: 3, janelaS: 24 * 60 * 60 },
-  /** ENTREGAS do login da Centi (selado) à extensão — uma por tentativa de entrar (1 a cada 5 min por navegador). */
-  loginCentiLeitura: { max: 12, janelaS: 60 * 60 },
-  /** AUTORIZAR um navegador (confere a senha do sistema): tentativas da MESMA pessoa. */
-  autorizarNavegador: { max: 5, janelaS: 15 * 60 },
+  /** ENTREGAS do login da Centi (selado) à extensão — uma por tentativa de entrar, somando os computadores da pessoa. */
+  loginCentiLeitura: { max: 30, janelaS: 60 * 60 },
   /** GRAVAÇÕES do login da Centi (salvar, pausar, importar) da MESMA pessoa. */
   loginCentiEscrita: { max: 20, janelaS: 60 * 60 },
 } as const satisfies Record<string, RegraLimite>;

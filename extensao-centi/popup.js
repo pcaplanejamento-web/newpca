@@ -71,13 +71,11 @@
     if (!l) texto = "Sem resposta do sistema PCA.";
     else if (l.semSistema) [texto, classe] = [l.erro ?? "Entre no sistema PCA neste navegador.", "alerta"];
     else if (!l.credenciais) [texto, classe] = ["Não configurado — salve o usuário e a senha da Centi no sistema.", "alerta"];
-    else if (!l.autorizada)
-      [texto, classe] = ["Este navegador ainda não recebe o login: entre no sistema de novo aqui (autoriza sozinho) ou autorize em “Configurar no sistema”.", "alerta"];
     else if (l.pausado) [texto, classe] = [`Pausado: ${l.motivo ?? "a Centi recusou o login"}. Salve de novo no sistema.`, "erro"];
     else if (!l.auto) [texto, classe] = ["Guardado no sistema; entrar sozinho está desligado.", "alerta"];
     else [texto, classe] = ["Guardado no sistema: a extensão entra sozinha quando a sessão cair.", "ok"];
     situacao(texto, classe);
-    $("entrar").hidden = !(l?.credenciais && l.autorizada && !l.pausado && r.centi !== "logada");
+    $("entrar").hidden = !(l?.credenciais && !l.pausado && r.centi !== "logada");
     // O login da versão anterior da extensão: a PESSOA decide para qual conta ele vai (nunca sozinho).
     $("antigo").hidden = !l?.antigo;
     if (l?.antigo)

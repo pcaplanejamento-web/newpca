@@ -109,10 +109,10 @@ function criarAba() {
 
 // ---------------------------------------------------------------- LOGIN AUTOMÁTICO
 // O login da Centi de cada ADM fica SÓ no sistema PCA (cifrado no banco — Automação → Ajustes → Login da Centi): vale em
-// qualquer navegador e com qualquer versão. A extensão o LÊ a cada tentativa (a rota só entrega a senha à ORIGEM da
-// extensão, com a pessoa logada no sistema neste navegador) e não guarda nada dele. No máximo UMA tentativa a cada 5 min
-// DEPOIS DE UMA FALHA (entrar zera a espera); senha recusada ou verificação pedida = PAUSA no sistema (todos os navegadores)
-// até o login ser salvo de novo. `forcar` ignora só o intervalo, nunca a pausa.
+// qualquer navegador em que a pessoa estiver logada no sistema. A extensão o LÊ a cada tentativa (SELADO à chave dela) e não
+// guarda nada dele. Entra e RE-ENTRA sozinha: ao abrir o sistema, quando a aba da Centi cai no login e a cada 5 min no
+// alarme. Depois de uma falha, no máximo UMA tentativa a cada 5 min (entrar zera a espera); só a senha RECUSADA pausa (no
+// sistema, todos os navegadores — a conta na Centi não é bloqueada) até salvar de novo. `forcar` ignora só o intervalo.
 const INTERVALO_LOGIN_MS = 5 * 60 * 1000;
 let tentando = null;
 function podeTentarLogin(agora, ultima, forcar) {
@@ -121,7 +121,7 @@ function podeTentarLogin(agora, ultima, forcar) {
   return { pode: true };
 }
 // A CHAVE desta extensão (ECDH P-256): a privada NÃO EXTRAÍVEL fica no IndexedDB da extensão — nenhuma página nem outra
-// extensão a lê; a pública é autorizada uma vez no sistema (com a senha do sistema). O login chega SELADO a ela.
+// extensão a lê; a pública vai em cada pedido e o login chega SELADO a ela (nunca em texto aberto).
 const BANCO_CHAVE = "pca-chave";
 let chaveMemoria = null;
 function abrirBancoChave() {
@@ -184,7 +184,6 @@ async function abrirSelado(privada, impressao, s) {
 const API_LOGIN = `${ORIGENS[0]}/api/admin/automacao/credencial-centi`;
 const MSG_SEM_SISTEMA = "Entre no sistema PCA neste navegador (como administrador) — o login da Centi vem de lá.";
 const MSG_SEM_LOGIN = "Configure o login da Centi no sistema (Automação → Ajustes → Login da Centi).";
-const MSG_AUTORIZAR = "Autorize este navegador no sistema (Automação → Ajustes → Login da Centi) — uma vez, com a senha do sistema.";
 async function apiLogin(metodo, corpo, consulta = "") {
   try {
     const r = await fetch(`${API_LOGIN}${consulta}`, {
@@ -206,8 +205,7 @@ async function apiLogin(metodo, corpo, consulta = "") {
 async function infoLogin(fresco = false) {
   const guardada = await sessao.ler("loginInfo");
   if (!fresco && guardada && Date.now() - guardada.em < 60 * 1000) return guardada.v;
-  const k = await parDeChaves().catch(() => null);
-  const j = await apiLogin("GET", null, `?situacao=1${k ? `&impressao=${k.impressao}` : ""}`);
+  const j = await apiLogin("GET", null, "?situacao=1");
   const antigo = !!(await chrome.storage.local.get("credCenti")).credCenti;
   const v = j.ok
     ? {
@@ -215,42 +213,24 @@ async function infoLogin(fresco = false) {
         auto: j.auto !== false,
         pausado: !!j.pausadoEm,
         motivo: j.pausadoEm ? (j.motivo ?? "Login pausado.") : null,
-        autorizada: j.autorizada === true,
-        // A chave PÚBLICA deste navegador — a tela a manda ao sistema para autorizar (não é segredo).
-        chave: k ? { publica: k.publica, impressao: k.impressao } : null,
         conta: typeof j.conta === "string" ? j.conta : null,
         // O login da extensão antiga ainda está aqui: o popup pergunta para qual conta ele vai.
         antigo: antigo && j.tem !== true,
       }
-    : { credenciais: false, auto: false, pausado: false, motivo: null, semSistema: j.semSistema === true, erro: j.erro, chave: k ? { publica: k.publica, impressao: k.impressao } : null };
+    : { credenciais: false, auto: false, pausado: false, motivo: null, semSistema: j.semSistema === true, erro: j.erro };
   await sessao.gravar("loginInfo", { em: Date.now(), v });
   return v;
 }
 
 /**
- * AUTORIZAR este navegador SEM senha: o sistema aceita logo depois de a pessoa ENTRAR nele neste navegador (sessão
- * recém-criada) — em outro computador, entrar no sistema basta para a Centi ficar pronta. Fora dessa janela, a tela pede
- * a senha do sistema. `true` = autorizado.
- */
-async function garantirAutorizacao() {
-  const i = await infoLogin(true);
-  if (i.autorizada) return true;
-  if (!i.credenciais || !i.chave) return false;
-  const r = await apiLogin("POST", { publica: i.chave.publica, navegador: "", senha: null }, "/navegadores");
-  await sessao.tirar("loginInfo");
-  return r.ok === true;
-}
-
-/**
  * SEMPRE PRONTO: ao abrir o sistema (ou o navegador, e no alarme), com o login da Centi guardado e o "entrar sozinho"
- * ligado, este navegador se autoriza, a aba da automação abre (em segundo plano) e a Centi entra sozinha. No máximo uma
+ * ligado, a aba da automação abre (em segundo plano) e a Centi entra sozinha. No máximo uma
  * vez a cada 2 min; a aba que a pessoa fechou só volta pela tela da Automação ("Verificar").
  */
 async function prepararCenti() {
   const ultimo = await sessao.ler("preparadoEm");
   if (typeof ultimo === "number" && Date.now() - ultimo < 2 * 60 * 1000) return;
   await sessao.gravar("preparadoEm", Date.now());
-  if (!(await garantirAutorizacao())) return;
   const i = await infoLogin();
   if (!i.credenciais || i.pausado || !i.auto) return;
   await garantirSessao({ criar: !(await sessao.ler("abaFechada")) });
@@ -285,14 +265,9 @@ function tentarLogin(aba, forcar) {
       // O login vem do sistema NA HORA, SELADO à chave deste navegador (nada fica guardado na extensão).
       const k = await parDeChaves().catch(() => null);
       if (!k) return { resultado: "falha", erro: "A extensão não conseguiu criar a chave dela — reinstale-a." };
-      const l = await apiLogin("GET", null, `?impressao=${k.impressao}`);
+      const entrega = await apiLogin("GET", null, `?publica=${encodeURIComponent(k.publica)}`);
       await sessao.tirar("loginInfo");
-      if (!l.ok) return { resultado: l.semSistema ? "semSistema" : "falha", erro: l.erro };
-      let entrega = l;
-      // Ainda não autorizado: tenta se autorizar (vale logo depois de entrar no sistema neste navegador) e pede de novo.
-      if (entrega.autorizar && (await garantirAutorizacao())) entrega = await apiLogin("GET", null, `?impressao=${k.impressao}`);
       if (!entrega.ok) return { resultado: entrega.semSistema ? "semSistema" : "falha", erro: entrega.erro };
-      if (entrega.autorizar) return { resultado: "naoAutorizado", erro: MSG_AUTORIZAR };
       if (entrega.tem !== true) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
       if (entrega.pausado) return { resultado: "pausado", erro: entrega.motivo ?? "Login da Centi pausado — salve de novo no sistema." };
       if (!forcar && entrega.auto === false) return { resultado: "desligado" };
@@ -312,9 +287,9 @@ function tentarLogin(aba, forcar) {
       // Entrou COM a sessão: a próxima queda pode tentar de novo na hora ("sem-sessao" só zera depois que a "pesquisa"
       // confirmar a sessão — senão uma tela que não é a do login viraria um laço de tentativas).
       if (resultado === "ok") await sessao.tirar("loginUltima");
-      // A pausa vai por CÓDIGO (o texto da Centi pode trazer o usuário — nunca é gravado).
+      // Só a senha RECUSADA pausa (por CÓDIGO — o texto da Centi pode trazer o usuário). Uma verificação (captcha) não pausa:
+      // a extensão tenta de novo depois do intervalo, sem ninguém precisar salvar nada.
       if (resultado === "recusado") await pausarNoSistema("recusado");
-      if (resultado === "bloqueio") await pausarNoSistema("verificacao");
       return { resultado, erro: resultado === "recusado" ? "A Centi recusou o usuário ou a senha — confira e salve de novo no sistema." : (r?.erro ?? null) };
     })().finally(() => {
       tentando = null;

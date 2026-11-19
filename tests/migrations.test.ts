@@ -1621,16 +1621,16 @@ describe("0195: o login da Centi de cada ADM no banco", () => {
   });
 });
 
-describe("0196: os navegadores autorizados a receber o login da Centi", () => {
-  it("uma chave por pessoa e impressão; sai junto com a pessoa", () => {
+describe("0196 → 0197: a autorização por navegador entrou e saiu", () => {
+  it("a 0197 tira a tabela dos navegadores; o login da Centi fica", () => {
     const db = new DatabaseSync(":memory:");
     db.exec("PRAGMA foreign_keys = ON");
     for (const arq of arquivos.filter((f) => f <= "0196_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
     db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h')");
-    const ins = "INSERT INTO centi_login_chaves (usuario_id, impressao, publica, navegador, criado_em) VALUES (1, 'i', 'p', 'Chrome', '2026-11-19')";
-    db.exec(ins);
-    assert.throws(() => db.exec(ins), /UNIQUE/);
-    db.exec("DELETE FROM usuarios WHERE id = 1");
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM centi_login_chaves").get() as { n: number }).n, 0);
+    db.exec("INSERT INTO centi_logins (usuario_id, cifrado, auto, atualizado_em) VALUES (1, 'v2:a:b', 1, '2026-11-19')");
+    db.exec("INSERT INTO centi_login_chaves (usuario_id, impressao, publica, navegador, criado_em) VALUES (1, 'i', 'p', 'Chrome', '2026-11-19')");
+    db.exec(readFileSync(join(DIR, "0197_sem_autorizar_navegador.sql"), "utf8"));
+    assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name = 'centi_login_chaves'").get(), undefined);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM centi_logins").get() as { n: number }).n, 1);
   });
 });

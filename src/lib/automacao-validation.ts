@@ -102,13 +102,3 @@ export const credencialCentiExtensaoSchema = z.discriminatedUnion("acao", [
     })
     .strict(),
 ]);
-
-/** AUTORIZAR um navegador: a chave pública ECDH da extensão + a SENHA DO SISTEMA (ou `null` = logo depois de entrar no
- * sistema neste navegador — `podeAutorizarSemSenha`). */
-export const autorizarNavegadorSchema = z
-  .object({
-    publica: z.string().min(80).max(120),
-    navegador: z.string().trim().max(80),
-    senha: z.string().min(1).max(128).nullable(),
-  })
-  .strict();

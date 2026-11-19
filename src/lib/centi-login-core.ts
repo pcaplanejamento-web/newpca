@@ -53,10 +53,10 @@ export function mascararUsuario(u: string): string {
 }
 
 // ---------------------------------------------------------------- A ENTREGA SELADA À EXTENSÃO
-// A senha NUNCA sai do servidor em claro: ela vai SELADA à chave de UM navegador autorizado. A extensão gera um par ECDH
-// P-256 com a parte privada NÃO EXTRAÍVEL (fica no IndexedDB dela); a pública é autorizada uma vez, com a senha do
-// sistema. Na entrega, o servidor cria um par efêmero, deriva o segredo (ECDH → HKDF-SHA256) e cifra com AES-GCM, com a
-// impressão da chave como dado adicional. Quem só tem o cookie da sessão recebe um pacote que não consegue abrir.
+// A senha NUNCA sai do servidor em claro: ela vai SELADA à chave da extensão que pediu. A extensão gera um par ECDH P-256
+// com a parte privada NÃO EXTRAÍVEL (fica no IndexedDB dela) e manda a pública no pedido. Na entrega, o servidor cria um
+// par efêmero, deriva o segredo (ECDH → HKDF-SHA256) e cifra com AES-GCM, com a impressão da chave como dado adicional:
+// só aquela extensão abre o pacote.
 
 export const SAL_ENTREGA = "pca/centi-entrega/v1";
 export const aadEntrega = (impressao: string) => `centi-entrega:${impressao}`;
@@ -129,23 +129,3 @@ export const MOTIVO_PAUSA = {
   verificacao: "A Centi pediu uma verificação (captcha, código ou troca de senha) — entre à mão na aba da automação e salve de novo.",
 } as const;
 export type CodigoPausa = keyof typeof MOTIVO_PAUSA;
-
-/** Por quanto tempo depois de ENTRAR NO SISTEMA a extensão daquele navegador se autoriza sozinha (sem a senha). */
-export const JANELA_AUTORIZACAO_MS = 30 * 60 * 1000;
-
-/** O instante de `criado_em` da sessão (SQLite "AAAA-MM-DD HH:MM:SS" em UTC, ou ISO). `null` = não lido. */
-export function instanteSessao(criadoEm: string | null | undefined): number | null {
-  if (!criadoEm) return null;
-  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(criadoEm) ? criadoEm : `${criadoEm.replace(" ", "T")}Z`);
-  return Number.isFinite(t) ? t : null;
-}
-
-/**
- * AUTORIZAR SEM A SENHA: só uma sessão RECÉM-CRIADA (a pessoa acabou de entrar no sistema neste navegador — até
- * `JANELA_AUTORIZACAO_MS`) e que ainda não autorizou nenhum navegador. Um cookie roubado depois disso não autoriza a
- * chave de quem o roubou; a pessoa é avisada a cada navegador autorizado.
- */
-export function podeAutorizarSemSenha(criadoEm: string | null | undefined, agora: number, jaAutorizouNestaSessao: boolean): boolean {
-  const t = instanteSessao(criadoEm);
-  return t !== null && !jaAutorizouNestaSessao && agora >= t - 60_000 && agora - t <= JANELA_AUTORIZACAO_MS;
-}

@@ -35,6 +35,32 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.301.0",
+    data: "2026-11-19",
+    titulo: "Login e relogin na Centi automáticos, sem autorizar navegador",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Estar logado no sistema basta: em qualquer computador com a extensão, a Centi abre e entra sozinha com o login salvo — sem autorizar navegador nem digitar senha.",
+        link: "/painel/automacao?ajustes=login",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Quando a sessão da Centi cai, a extensão entra de novo sozinha. Uma verificação da Centi (captcha) não pausa mais o login — ela tenta de novo depois.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Extensão 1.41.0: a senha continua cifrada no banco e vai cifrada só para a extensão que pediu.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.300.0",
     data: "2026-11-19",
     titulo: "Senha da Centi blindada e Centi pronta em qualquer computador",

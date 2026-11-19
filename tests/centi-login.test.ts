@@ -8,24 +8,15 @@ import {
   abrirSelado,
   cifrarLoginCenti,
   impressaoDaChave,
-  instanteSessao,
-  JANELA_AUTORIZACAO_MS,
   MOTIVO_PAUSA,
   mascararUsuario,
   PROPOSITO_LOGIN_CENTI,
-  podeAutorizarSemSenha,
   selarParaChave,
 } from "../src/lib/centi-login-core.ts";
 import {
   comandoApagarLoginCenti,
   comandoAutoLoginCenti,
   comandoImportarLoginCenti,
-  comandosAutorizarChave,
-  comandoTirarChave,
-  consultaAutorizouNaSessao,
-  consultaChaveLogin,
-  consultaChavesLogin,
-  MAX_NAVEGADORES,
   comandoGuardarLoginCenti,
   comandoPausarLoginCenti,
   comandoRecifrarLoginCenti,
@@ -115,47 +106,12 @@ describe("login da Centi — entrega selada", () => {
     assert.equal(await impressaoDaChave(btoa("x".repeat(65))), null);
   });
 
-  it("sem a senha do sistema, só numa sessão recém-criada e uma vez por sessão", () => {
-    const agora = Date.parse("2026-11-19T12:00:00Z");
-    assert.equal(podeAutorizarSemSenha("2026-11-19T11:50:00Z", agora, false), true);
-    assert.equal(podeAutorizarSemSenha("2026-11-19T11:50:00Z", agora, true), false, "uma vez por sessão");
-    assert.equal(podeAutorizarSemSenha(new Date(agora - JANELA_AUTORIZACAO_MS - 1000).toISOString(), agora, false), false, "sessão antiga");
-    assert.equal(podeAutorizarSemSenha("2026-11-19T12:10:00Z", agora, false), false, "data no futuro não vale");
-    assert.equal(podeAutorizarSemSenha(null, agora, false), false);
-    assert.equal(instanteSessao("2026-11-19 11:50:00"), Date.parse("2026-11-19T11:50:00Z"), "o formato do SQLite é UTC");
-    assert.equal(instanteSessao("lixo"), null);
-  });
-
   it("a pausa é por código, com o texto fixo do sistema", () => {
     assert.deepEqual(Object.keys(MOTIVO_PAUSA).sort(), ["recusado", "verificacao"]);
   });
 });
 
-describe("login da Centi — navegadores autorizados e importação", () => {
-  it("autoriza, renova sem duplicar, poda além do teto, sabe se a sessão já autorizou e tira só o próprio", async () => {
-    const db = bancoMigrado();
-    const orm = drizzle(d1Sobre(db) as never, { schema });
-    db.exec(`INSERT INTO usuarios (id, email, nome, senha_hash, status) VALUES (1, 'a@x', 'A', 'x', 'ativo'), (2, 'b@x', 'B', 'x', 'ativo')`);
-    const autorizar = (u: number, i: number, sessaoId: number | null = null) =>
-      orm.batch([...comandosAutorizarChave(orm, { usuarioId: u, impressao: `imp${i}`, publica: `pub${i}`, navegador: `Nav ${i}`, em: `2026-11-19T10:${String(i).padStart(2, "0")}:00Z`, sessaoId })]);
-    await autorizar(1, 1, 99);
-    await autorizar(1, 1, 99);
-    assert.equal((await consultaChavesLogin(orm, 1)).length, 1, "a mesma chave não duplica");
-    assert.equal((await consultaAutorizouNaSessao(orm, 1, 99)).length, 1);
-    assert.equal((await consultaAutorizouNaSessao(orm, 1, 98)).length, 0);
-    for (let i = 2; i <= MAX_NAVEGADORES + 2; i++) await autorizar(1, i);
-    const lista = await consultaChavesLogin(orm, 1);
-    assert.equal(lista.length, MAX_NAVEGADORES);
-    assert.equal(lista.at(-1)?.impressao, "imp3", "os mais antigos saem");
-    await autorizar(2, 1);
-    assert.equal((await consultaChaveLogin(orm, 2, "imp1")).length, 1, "a mesma chave de outra pessoa é outra linha");
-    const [alheia] = await consultaChaveLogin(orm, 2, "imp1");
-    assert.equal((await comandoTirarChave(orm, 1, alheia.id)).length, 0, "não tira o navegador de outra pessoa");
-    assert.equal((await comandoTirarChave(orm, 2, alheia.id)).length, 1);
-    db.exec("DELETE FROM usuarios WHERE id = 1");
-    assert.equal((await consultaChavesLogin(orm, 1)).length, 0, "a pessoa excluída leva os navegadores");
-  });
-
+describe("login da Centi — importação", () => {
   it("a importação só entra com o banco vazio — nunca sobrescreve", async () => {
     const db = bancoMigrado();
     const orm = drizzle(d1Sobre(db) as never, { schema });
