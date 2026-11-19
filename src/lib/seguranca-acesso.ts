@@ -33,7 +33,8 @@ export function respostaLimite(esperarS: number) {
 }
 
 /** CONTA uma tentativa; devolve a espera (s) quando passou do limite — 0 = pode seguir. Falha do banco não trava o acesso. */
-export async function contarTentativa(tipo: TipoLimite, sujeito: string): Promise<number> {
+/** `fecharNaFalha` = sem conseguir contar (o banco falhou), RECUSA em vez de deixar passar (o que entrega segredo). */
+export async function contarTentativa(tipo: TipoLimite, sujeito: string, fecharNaFalha = false): Promise<number> {
   const regra = LIMITES_ACESSO[tipo];
   const t = agoraS();
   try {
@@ -41,7 +42,7 @@ export async function contarTentativa(tipo: TipoLimite, sujeito: string): Promis
     return r ? esperaLimite(r.contagem, r.inicio, t, regra) : 0;
   } catch (e) {
     console.error("[limite] falha ao contar:", (e as Error).message);
-    return 0;
+    return fecharNaFalha ? 60 : 0;
   }
 }
 

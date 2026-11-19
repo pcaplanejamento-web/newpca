@@ -35,6 +35,46 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.300.0",
+    data: "2026-11-19",
+    titulo: "Senha da Centi blindada e Centi pronta em qualquer computador",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "A senha da Centi nunca trafega em claro: o sistema a entrega cifrada só para o navegador autorizado — nenhum outro, nem quem tiver o cookie da sessão, consegue abri-la.",
+        link: "/painel/automacao?ajustes=login",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Em outro computador basta entrar no sistema: a extensão se autoriza, abre a Centi e faz o login sozinha. Fora disso, autorize com a senha do sistema. Cada navegador autorizado avisa você.",
+        link: "/painel/automacao?ajustes=login",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Lista dos navegadores autorizados a usar o seu login da Centi, com remover.",
+        link: "/painel/automacao?ajustes=login",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Versão nova da extensão não trava mais as automações agendadas nem o salvamento do login — a anterior continua funcionando e só aparece o aviso de atualização.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "O login antigo guardado na extensão só vai ao sistema quando você escolhe, no popup, vendo para qual conta.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.299.0",
     data: "2026-11-19",
     titulo: "Login da Centi guardado no sistema",

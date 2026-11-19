@@ -89,9 +89,10 @@ export const credencialCentiSchema = z
   })
   .strict();
 
-/** O que a EXTENSÃO manda: a pausa (a Centi recusou a senha) ou, UMA vez, o login que ela tinha guardado antes da 1.39.0. */
+/** O que a EXTENSÃO manda: a pausa (um CÓDIGO — nunca o texto da Centi) ou, pedido pela pessoa no popup, o login que a
+ * extensão antiga guardava (nunca sobrescreve um guardado). */
 export const credencialCentiExtensaoSchema = z.discriminatedUnion("acao", [
-  z.object({ acao: z.literal("pausar"), motivo: z.string().trim().min(1).max(300) }).strict(),
+  z.object({ acao: z.literal("pausar"), motivo: z.enum(["recusado", "verificacao"]) }).strict(),
   z
     .object({
       acao: z.literal("importar"),
@@ -101,3 +102,13 @@ export const credencialCentiExtensaoSchema = z.discriminatedUnion("acao", [
     })
     .strict(),
 ]);
+
+/** AUTORIZAR um navegador: a chave pública ECDH da extensão + a SENHA DO SISTEMA (ou `null` = logo depois de entrar no
+ * sistema neste navegador — `podeAutorizarSemSenha`). */
+export const autorizarNavegadorSchema = z
+  .object({
+    publica: z.string().min(80).max(120),
+    navegador: z.string().trim().max(80),
+    senha: z.string().min(1).max(128).nullable(),
+  })
+  .strict();

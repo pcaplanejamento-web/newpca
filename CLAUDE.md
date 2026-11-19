@@ -1092,28 +1092,40 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   do nó (os "Falhou" aparecem), Estado = o que foi feito/resultado (`estadoDoItem("fluxo.executar")`), colunas Situação ·
   Centro de Custo · Unidade na Centi. Testes: `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em
   `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts` (0194). O bloco abaixo é o HISTÓRICO.
-- **LOGIN DA CENTI NO BANCO (v1.299.0, extensão 1.39.0, migração `0195`) — regra firme: o BANCO é a ÚNICA fonte.** Cada
-  ADM guarda o PRÓPRIO login da Centi em `centi_logins` (`usuario_id` PK cascade · `cifrado` · `auto` · `atualizado_em` ·
-  `pausado_em`/`motivo` · `ultimo_uso_em`; a `0195` levou o antigo `cofre:centi-login` das preferências e o apagou de lá).
-  **Cifra:** AES-256-GCM com a chave DERIVADA da mestra por HKDF (`cripto.chaveDerivada`, propósito `PROPOSITO_LOGIN_CENTI`
-  — nunca a dos outros segredos) e o DONO como dado adicional (`cifrarComAad`/`decifrarComAad`, `aadLoginCenti` — o blob
-  copiado para outra pessoa não abre), formato `v2:`; o formato antigo (`cifrarSegredo`) abre pela `chaveDosSegredos` e é
-  regravado no novo na 1ª leitura (`abrirLoginCenti`, `centi-login-core.ts`). D1 `centi-login-cofre.ts` + builders
-  `centi-login-sql.ts` (testados no D1 real — `tests/centi-login.test.ts`). **Rota** `credencial-centi`: `GET` da TELA (ou
-  `?situacao=1`) = só a situação (usuário mascarado, datas, pausa — a senha NUNCA volta à tela); `GET` da EXTENSÃO
-  (`Origin` = `ORIGEM_EXTENSAO_CENTI`) = a senha (limite `loginCentiLeitura` 30/h; com a pausa, sem a senha); `PUT` só pela
-  TELA com o `Origin` do site OBRIGATÓRIO (`null` = mantém o guardado; salvar zera a pausa; `loginCentiEscrita`); `POST`
-  só pela extensão: `pausar` (senha recusada ou verificação da Centi — vale para TODOS os navegadores, a conta não é
-  bloqueada) e `importar` (UMA vez, o login do cofre antigo, só com o banco vazio — 409 senão); `DELETE` tela ou extensão;
-  auditoria sem a senha nem o usuário inteiro. **Tela:** Automação → Ajustes → grupo "Login da Centi" (`LoginDaCenti`,
-  `AutomacaoAdmin.tsx` — `TextField`/`PasswordField`/`Switch`/`Button`/`useConfirmacao`/`Ajuda`); o "Configurar login" do
-  selo da Centi e o `?ajustes=login` (o popup da extensão) abrem os Ajustes nele; salvar pede à extensão `entrarAgora`.
-  **Extensão 1.39.0:** sem `cofre.js` nem formulário no popup (o popup só mostra a situação + "Configurar no sistema" +
-  "Entrar agora"); `tentarLogin` lê a rota NA HORA (a senha só na memória do serviço durante a tentativa; nada em
-  `chrome.storage`), régua `podeTentarLogin` (1 a cada 5 min depois de falha) no `background.js`, `infoLogin` (situação,
-  60 s na sessão do navegador); a transição `levarLoginAntigo` (`onInstalled`, `onStartup`, alarme) decifra o cofre
-  antigo, importa e APAGA `credCenti`/`loginCenti`/`credNoSistema` e o IndexedDB `pca-cofre` (sem o sistema logado, tenta
-  de novo depois). Testes: `tests/extensao-login.test.ts` (sistema falso), `tests/cripto.test.ts`, `migrations` (0195).
+- **LOGIN DA CENTI NO BANCO + ENTREGA SELADA (v1.299.0 → v1.300.0, extensão 1.40.0, migrações `0195`/`0196`) — regra
+  firme: o BANCO é a ÚNICA fonte e a senha NUNCA trafega em claro.** Cada ADM guarda o PRÓPRIO login em `centi_logins`
+  (`usuario_id` PK cascade · `cifrado` · `auto` · `atualizado_em` · `pausado_em`/`motivo` · `ultimo_uso_em`; a `0195` levou
+  o antigo `cofre:centi-login` das preferências e o apagou de lá). **Cifra em repouso:** AES-256-GCM com a chave DERIVADA da
+  mestra por HKDF (`cripto.chaveDerivada`, `PROPOSITO_LOGIN_CENTI` — nunca a dos outros segredos) e o DONO como dado
+  adicional (`cifrarComAad`, `aadLoginCenti` — copiado para outra pessoa não abre), formato `v2:`; o formato antigo abre pela
+  `chaveDosSegredos` e é regravado na 1ª leitura (`abrirLoginCenti`). Sem abrir (chave mestra trocada) = `ilegivel` na tela.
+  **ENTREGA SELADA (v1.300.0):** a extensão tem um par ECDH P-256 com a privada NÃO EXTRAÍVEL no IndexedDB `pca-chave`
+  (`parDeChaves`, `background.js`); a impressão = SHA-256 da pública crua (`impressaoDaChave`). Tabela `centi_login_chaves`
+  (`0196` — usuario + impressão únicos, `publica`, `navegador`, `sessao_id`, até `MAX_NAVEGADORES`=10, o mais antigo sai).
+  O servidor sela com chave efêmera ECDH → HKDF (sal `SAL_ENTREGA`, AAD `aadEntrega(impressao)`) → AES-GCM
+  (`selarParaChave`/`abrirSelado`, `centi-login-core.ts`): só aquele navegador abre. **Autorizar um navegador**
+  (`POST …/credencial-centi/navegadores`, tela OU extensão, limite `autorizarNavegador` 5/15 min que FECHA na falha):
+  com a SENHA DO SISTEMA (tela) ou, sem ela, só numa sessão RECÉM-CRIADA — `podeAutorizarSemSenha` (`JANELA_AUTORIZACAO_MS`
+  = 30 min desde `sessoes.criado_em`, uma vez por sessão — `consultaAutorizouNaSessao`): entrar no sistema num computador
+  novo já deixa a Centi pronta; um cookie antigo roubado não autoriza. Cada navegador autorizado avisa a pessoa (sino +
+  e-mail, tipo `seguranca`) e entra na auditoria; remover = só a tela (`DELETE ?id=`). **Rota** `credencial-centi`: `GET` da
+  tela (ou `?situacao=1`) = a situação (usuário mascarado, datas, pausa, `autorizada`, `navegadores`, `conta`); `GET` da
+  EXTENSÃO exige `?impressao=` e devolve `{tem:false}` · `{autorizar:true}` · `{pausado, motivo}` · `{selado, auto}`
+  (`entregarLoginCenti`; limite `loginCentiLeitura` 12/h que fecha na falha); `PUT` tela (ou a extensão antiga — escrever o
+  próprio login não expõe nada); `POST` só da extensão: `pausar` por CÓDIGO (`recusado`|`verificacao` → `MOTIVO_PAUSA`,
+  nunca o texto da Centi) e `importar` (atômico, `onConflictDoNothing` — nunca sobrescreve); `DELETE` só a tela.
+  **Tela:** Automação → Ajustes → "Login da Centi" (`LoginDaCenti`: `TextField`/`PasswordField` com `autoComplete="off"` e
+  `name` neutro/`Switch`/`Button`/`useConfirmacao`/`Ajuda`/`Badge`; "Autorizar este navegador" com a senha do sistema; a
+  lista de navegadores com remover). **Extensão 1.40.0:** sem `cofre.js` nem formulário; `tentarLogin` pede a ENTREGA na
+  hora, autoriza-se sozinha quando pode (`garantirAutorizacao`), abre o selado só na memória, confere que a aba ainda está
+  na Centi e manda ao `frameId 0` (a `centi-ponte` recusa fora da origem da Centi); **sempre pronto** = `prepararCenti` (no
+  `tabs.onUpdated` das páginas `/painel` do sistema, no `onStartup` e no alarme sem aba; no máximo a cada 2 min): autoriza →
+  abre a aba da automação → entra. O cofre antigo (até a 1.38.0) NUNCA vai sozinho: `limparCofreAntigo` só apaga o ilegível
+  ou quando o sistema já tem login; enviar é escolha da pessoa no popup, vendo a conta (`loginAntigo`). **Versão:**
+  `VERSAO_EXTENSAO_CENTI` = a recomendada (selo "Atualização disponível") e `VERSAO_MINIMA_CENTI` = a que FUNCIONA
+  (`versaoFunciona` decide o `pronto`) — extensão nova publicada nunca trava as automações agendadas (era a causa das
+  execuções automáticas paradas). Testes: `tests/extensao-login.test.ts` (sistema falso que sela de verdade),
+  `tests/centi-login.test.ts`, `tests/cripto.test.ts`, `migrations` (0195, 0196).
 - **O QUE CORRIGIR + CENTI SEMPRE PRONTA + VERSÃO/SESSÃO (v1.298.0, extensão 1.38.0, sem migração):**
   - **"O que corrigir"** (campo `corrigirTipos` do `dados.filtrarConferencia`, tipo de campo `lista` com `opcoes` → `SeletorMultiplo
     suspenso` no `CampoDoNo`; visível com Conteúdo + Corrigir): os grupos FIXOS `GRUPOS_CORRECAO` (`correcao-centi-core.ts`:

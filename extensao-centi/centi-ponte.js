@@ -75,6 +75,11 @@
     // O login só do SERVIÇO da extensão (sem aba de origem) — nunca de uma página.
     if (msg?.alvo === "centi-login") {
       if (sender.id !== chrome.runtime.id || sender.tab) return false;
+      // Só na própria Centi (nunca preenche a senha numa página de outro endereço).
+      if (location.origin !== "https://rioverde.centi.com.br") {
+        responder({ resultado: "falha", erro: "Página fora da Centi." });
+        return false;
+      }
       entrar(msg.usuario, msg.senha).then(responder, () => responder({ resultado: "falha", erro: "Falha ao preencher o login." }));
       return true;
     }

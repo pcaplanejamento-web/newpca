@@ -31,7 +31,13 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.39.0";
+export const VERSAO_EXTENSAO_CENTI = "1.40.0";
+/**
+ * A versão MÍNIMA com que as automações RODAM (o protocolo da tela com a extensão não mudou desde ela). Uma versão nova
+ * da extensão NUNCA trava as automações de quem ainda não atualizou: abaixo da recomendada (`VERSAO_EXTENSAO_CENTI`),
+ * a tela só avisa "atualização disponível". Suba esta só quando a tela passar a depender de algo novo da extensão.
+ */
+export const VERSAO_MINIMA_CENTI = "1.38.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -558,7 +564,10 @@ export function maiorVersao(a: string, b: string): string {
   return a;
 }
 
+/** A instalada é a RECOMENDADA (a publicada junto) ou mais nova. */
 export const versaoAtende = (instalada: string) => maiorVersao(instalada || "0", VERSAO_EXTENSAO_CENTI) === instalada;
+/** A instalada RODA as automações (≥ `VERSAO_MINIMA_CENTI`). */
+export const versaoFunciona = (instalada: string) => maiorVersao(instalada || "0", VERSAO_MINIMA_CENTI) === instalada;
 
 export const ehPdf = (b: Uint8Array) => b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
 

@@ -71,11 +71,17 @@
     if (!l) texto = "Sem resposta do sistema PCA.";
     else if (l.semSistema) [texto, classe] = [l.erro ?? "Entre no sistema PCA neste navegador.", "alerta"];
     else if (!l.credenciais) [texto, classe] = ["Não configurado — salve o usuário e a senha da Centi no sistema.", "alerta"];
+    else if (!l.autorizada)
+      [texto, classe] = ["Este navegador ainda não recebe o login: entre no sistema de novo aqui (autoriza sozinho) ou autorize em “Configurar no sistema”.", "alerta"];
     else if (l.pausado) [texto, classe] = [`Pausado: ${l.motivo ?? "a Centi recusou o login"}. Salve de novo no sistema.`, "erro"];
     else if (!l.auto) [texto, classe] = ["Guardado no sistema; entrar sozinho está desligado.", "alerta"];
     else [texto, classe] = ["Guardado no sistema: a extensão entra sozinha quando a sessão cair.", "ok"];
     situacao(texto, classe);
-    $("entrar").hidden = !(l?.credenciais && !l.pausado && r.centi !== "logada");
+    $("entrar").hidden = !(l?.credenciais && l.autorizada && !l.pausado && r.centi !== "logada");
+    // O login da versão anterior da extensão: a PESSOA decide para qual conta ele vai (nunca sozinho).
+    $("antigo").hidden = !l?.antigo;
+    if (l?.antigo)
+      $("antigoTexto").textContent = `Há um login da Centi da versão anterior nesta extensão. Enviar para a conta ${l.conta ?? "logada"} no sistema?`;
   }
 
   async function carregar() {
@@ -94,6 +100,17 @@
     mostrarLogin(r);
   }
 
+  async function loginAntigo(enviar) {
+    $("antigoEnviar").disabled = true;
+    $("antigoDescartar").disabled = true;
+    const r = await chrome.runtime.sendMessage({ tipo: "loginAntigo", enviar }).catch(() => null);
+    $("antigoEnviar").disabled = false;
+    $("antigoDescartar").disabled = false;
+    if (!r?.ok) return situacao(r?.erro ?? "Não consegui — tente de novo.", "erro");
+    await carregar();
+  }
+  $("antigoEnviar").addEventListener("click", () => loginAntigo(true));
+  $("antigoDescartar").addEventListener("click", () => loginAntigo(false));
   $("configurar").addEventListener("click", async () => {
     await chrome.runtime.sendMessage({ tipo: "configurarLogin" }).catch(() => {});
     window.close();

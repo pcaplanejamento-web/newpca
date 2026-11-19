@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { centiLogins } from "../db/schema.ts";
+import { centiLoginChaves, centiLogins } from "../db/schema.ts";
 
 /**
  * O LOGIN DA CENTI no banco (`centi_logins`, um por pessoa) — os comandos, sem a cifra (o blob já vem pronto de
@@ -39,3 +39,62 @@ export const comandoUsoLoginCenti = (db: Db, usuarioId: number, em: string) =>
   db.update(centiLogins).set({ ultimoUsoEm: em }).where(eq(centiLogins.usuarioId, usuarioId));
 
 export const comandoApagarLoginCenti = (db: Db, usuarioId: number) => db.delete(centiLogins).where(eq(centiLogins.usuarioId, usuarioId));
+
+/** A IMPORTAÇÃO (o login da extensão antiga): só entra quando não há login guardado — nunca sobrescreve (atômico). */
+export const comandoImportarLoginCenti = (db: Db, usuarioId: number, cifrado: string, auto: boolean, em: string) =>
+  db
+    .insert(centiLogins)
+    .values({ usuarioId, cifrado, auto: auto ? 1 : 0, atualizadoEm: em })
+    .onConflictDoNothing()
+    .returning({ usuarioId: centiLogins.usuarioId });
+
+// ---------------------------------------------------------------- OS NAVEGADORES AUTORIZADOS
+/** Quantos navegadores cada pessoa pode ter autorizados (o mais antigo sai). */
+export const MAX_NAVEGADORES = 10;
+
+export const consultaChavesLogin = (db: Db, usuarioId: number) =>
+  db.select().from(centiLoginChaves).where(eq(centiLoginChaves.usuarioId, usuarioId)).orderBy(desc(centiLoginChaves.id));
+
+export const consultaChaveLogin = (db: Db, usuarioId: number, impressao: string) =>
+  db
+    .select()
+    .from(centiLoginChaves)
+    .where(and(eq(centiLoginChaves.usuarioId, usuarioId), eq(centiLoginChaves.impressao, impressao)))
+    .limit(1);
+
+/** Autoriza (ou renova) a chave de um navegador e poda além de `MAX_NAVEGADORES` — num lote. */
+export function comandosAutorizarChave(db: Db, c: { usuarioId: number; impressao: string; publica: string; navegador: string; em: string; sessaoId: number | null }) {
+  return [
+    db
+      .insert(centiLoginChaves)
+      .values({ ...c, criadoEm: c.em })
+      .onConflictDoUpdate({ target: [centiLoginChaves.usuarioId, centiLoginChaves.impressao], set: { navegador: c.navegador, criadoEm: c.em, sessaoId: c.sessaoId } }),
+    db
+      .delete(centiLoginChaves)
+      .where(
+        and(
+          eq(centiLoginChaves.usuarioId, c.usuarioId),
+          notInArray(
+            centiLoginChaves.id,
+            sql`(SELECT k.id FROM centi_login_chaves AS k WHERE k.usuario_id = ${c.usuarioId} ORDER BY k.id DESC LIMIT ${MAX_NAVEGADORES})`,
+          ),
+        ),
+      ),
+  ] as const;
+}
+
+export const comandoUsoChave = (db: Db, id: number, em: string) => db.update(centiLoginChaves).set({ usadoEm: em }).where(eq(centiLoginChaves.id, id));
+
+export const comandoTirarChave = (db: Db, usuarioId: number, id: number) =>
+  db
+    .delete(centiLoginChaves)
+    .where(and(eq(centiLoginChaves.usuarioId, usuarioId), eq(centiLoginChaves.id, id)))
+    .returning({ id: centiLoginChaves.id });
+
+/** Esta sessão já autorizou um navegador sem a senha? */
+export const consultaAutorizouNaSessao = (db: Db, usuarioId: number, sessaoId: number) =>
+  db
+    .select({ id: centiLoginChaves.id })
+    .from(centiLoginChaves)
+    .where(and(eq(centiLoginChaves.usuarioId, usuarioId), eq(centiLoginChaves.sessaoId, sessaoId)))
+    .limit(1);

@@ -54,7 +54,7 @@ test("a versão da tela é a do manifest da extensão", async () => {
 });
 
 test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esqueleto sem token", async () => {
-  const { analisarRespostaCenti, caminhoDoArquivo, linkDaResposta, versaoAtende } = await import("../src/lib/automacao-centi-core.ts");
+  const { analisarRespostaCenti, caminhoDoArquivo, linkDaResposta, versaoAtende, versaoFunciona } = await import("../src/lib/automacao-centi-core.ts");
   const enc = (t: string) => new TextEncoder().encode(t);
   assert.equal(analisarRespostaCenti(enc("%PDF-1.7"), 200).tipo, "pdf");
   assert.equal(analisarRespostaCenti(enc(JSON.stringify({ R: { File: "JVBERi0x" } })), 200).tipo, "base64");
@@ -141,7 +141,12 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.36.0"), false);
   assert.equal(versaoAtende("1.37.0"), false);
   assert.equal(versaoAtende("1.38.0"), false);
-  assert.equal(versaoAtende("1.39.0"), true);
+  assert.equal(versaoAtende("1.39.0"), false);
+  assert.equal(versaoAtende("1.40.0"), true);
+  // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
+  assert.equal(versaoFunciona("1.37.0"), false);
+  assert.equal(versaoFunciona("1.38.0"), true);
+  assert.equal(versaoFunciona("1.39.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {

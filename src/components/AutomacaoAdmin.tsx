@@ -10,7 +10,9 @@ import {
   type ProtocoloAutomacao,
   ajusteDaOperacao,
   VERSAO_EXTENSAO_CENTI,
-  versaoAtende, } from "@/lib/automacao-centi-core";
+  versaoAtende,
+  versaoFunciona,
+} from "@/lib/automacao-centi-core";
 import { haQuanto } from "@/lib/acessos-core";
 import { dataHoraBR } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
@@ -23,7 +25,7 @@ import { Dropdown } from "./Dropdown";
 import { PasswordField, TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { IconDownload, IconKey, IconPlug, IconPlus } from "./icons";
+import { IconDownload, IconKey, IconPlug, IconPlus, IconTrash } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
@@ -55,7 +57,17 @@ type Resposta = {
   tela?: "login";
   /** O login automático: `credenciais` = há login guardado no sistema para quem está logado; `semSistema` = a extensão não
    * conseguiu falar com o sistema neste navegador (sem sessão). A senha nunca vem aqui. */
-  login?: { credenciais: boolean; auto: boolean; pausado: boolean; motivo: string | null; semSistema?: boolean } | null;
+  login?: {
+    credenciais: boolean;
+    auto: boolean;
+    pausado: boolean;
+    motivo: string | null;
+    semSistema?: boolean;
+    /** Este navegador recebe o login (a chave da extensão autorizada no sistema). */
+    autorizada?: boolean;
+    /** A chave PÚBLICA da extensão (não é segredo) — para autorizar este navegador. */
+    chave?: { publica: string; impressao: string } | null;
+  } | null;
   /** O lote foi INTERROMPIDO pela extensão (popup ou cartão na aba da automação). */
   interrompido?: boolean;
   /** O andamento do último lote, como a extensão o guardou (sobrevive ao F5 desta tela). */
@@ -172,19 +184,35 @@ type SituacaoLogin = {
   pausadoEm: string | null;
   motivo: string | null;
   disponivel: boolean;
+  ilegivel: boolean;
+  navegadores: { id: number; navegador: string; criadoEm: string; usadoEm: string | null }[];
 };
 
 /**
  * O LOGIN DA CENTI (de cada ADM) — salvo AQUI, cifrado no banco: vale em qualquer navegador, com qualquer versão da
- * extensão. A senha nunca volta a esta tela (vazia = mantém a guardada); só a extensão a lê para entrar na Centi.
+ * extensão. A senha nunca volta a esta tela (vazia = mantém a guardada); a extensão só a recebe SELADA à chave dela, num
+ * navegador autorizado (sozinho logo depois de entrar no sistema nele; ou aqui, com a senha do sistema).
  */
-function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: () => void; confirmar: ReturnType<typeof useConfirmacao>["confirmar"] }) {
+function LoginDaCenti({
+  foco,
+  onSalvo,
+  confirmar,
+  extensao,
+}: {
+  foco: boolean;
+  onSalvo: () => void;
+  confirmar: ReturnType<typeof useConfirmacao>["confirmar"];
+  /** A extensão deste navegador: a chave pública (para autorizar) e se já está autorizada. */
+  extensao: { publica: string; autorizada: boolean } | null;
+}) {
   const [s, setS] = useState<SituacaoLogin | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [auto, setAuto] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [senhaSistema, setSenhaSistema] = useState("");
+  const [autorizando, setAutorizando] = useState(false);
   const aplicar = useCallback((j: SituacaoLogin) => {
     setS(j);
     setAuto(j.auto);
@@ -233,6 +261,35 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
     toast.success("Login da Centi removido.");
     await carregar();
   }
+  async function autorizar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!extensao || !senhaSistema || autorizando) return;
+    setAutorizando(true);
+    const r = await fetch("/api/admin/automacao/credencial-centi/navegadores", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ publica: extensao.publica, navegador: "", senha: senhaSistema }),
+    }).catch(() => null);
+    const j = (await r?.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    setAutorizando(false);
+    setSenhaSistema("");
+    if (!j?.ok) return toast.error(j?.error ?? "Não consegui autorizar este navegador.");
+    toast.success("Navegador autorizado.");
+    await carregar();
+    onSalvo();
+  }
+  async function tirarNavegador(id: number, nome: string) {
+    const sim = await confirmar({
+      titulo: "Remover este navegador?",
+      texto: `${nome} deixa de receber o login da Centi até ser autorizado de novo.`,
+      confirmar: "Remover",
+      perigo: true,
+    });
+    if (!sim) return;
+    const r = await fetch(`/api/admin/automacao/credencial-centi/navegadores?id=${id}`, { method: "DELETE" }).catch(() => null);
+    if (!r?.ok) return toast.error("Não consegui remover — tente de novo.");
+    await carregar();
+  }
   const agora = Date.now();
   return (
     <Grupo titulo="Login da Centi">
@@ -243,6 +300,10 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
           ) : s.pausadoEm ? (
             <Badge tone="amber" dot title={s.motivo ?? undefined}>
               Pausado — {s.motivo ?? "a Centi recusou a senha"}. Confira e salve para retomar.
+            </Badge>
+          ) : s.ilegivel ? (
+            <Badge tone="red" dot>
+              O login guardado não abre (a chave do sistema mudou) — salve de novo
             </Badge>
           ) : s.tem ? (
             <Badge tone="emerald" dot>
@@ -261,9 +322,14 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
               guardada.
             </p>
             <p>
-              Só a extensão do Chrome (com você logado no sistema) lê a senha, na hora de entrar na Centi; nada fica guardado no
-              navegador. Se a Centi recusar a senha, o login é <strong>pausado</strong> em todos os navegadores (a conta na
-              Centi não é bloqueada) até você salvar de novo.
+              A senha só sai do sistema <strong>selada</strong> à chave da extensão de um navegador autorizado — nem quem tivesse
+              o cookie da sua sessão a leria. Em outro computador, basta entrar no sistema com a extensão instalada: o navegador
+              se autoriza sozinho e a Centi entra. Depois disso, só com a senha do sistema (aqui embaixo). Cada navegador
+              autorizado gera um aviso para você.
+            </p>
+            <p>
+              Se a Centi recusar a senha, o login é <strong>pausado</strong> em todos os navegadores (a conta na Centi não é
+              bloqueada) até você salvar de novo.
             </p>
           </Ajuda>
         </div>
@@ -278,16 +344,20 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
               value={usuario}
               placeholder={s?.tem ? `${s.usuario} (guardado)` : "Usuário da Centi"}
               onChange={(e) => setUsuario(e.target.value)}
+              name="centi-usuario"
               autoComplete="off"
               spellCheck={false}
               maxLength={120}
             />
             <PasswordField
               compacto
+              label="Senha da Centi"
               value={senha}
               placeholder={s?.tem ? "•••••• (guardada)" : "Senha da Centi"}
               onChange={(e) => setSenha(e.target.value)}
-              autoComplete="new-password"
+              name="centi-chave"
+              autoComplete="off"
+              data-lpignore="true"
               maxLength={200}
             />
             <Switch checked={auto} onChange={setAuto} label="Entrar sozinho quando a sessão cair" />
@@ -304,6 +374,35 @@ function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: ()
           </>
         )}
       </form>
+      {s?.tem && extensao && !extensao.autorizada && (
+        <form className="space-y-2 border-t border-border pt-2" onSubmit={autorizar} autoComplete="off">
+          <p className="text-xs text-muted">Este navegador ainda não recebe o login. Confirme com a senha do sistema (ou entre no sistema de novo neste navegador).</p>
+          <PasswordField compacto label="Sua senha do sistema" value={senhaSistema} onChange={(e) => setSenhaSistema(e.target.value)} autoComplete="current-password" maxLength={128} />
+          <div className="flex justify-end">
+            <Button size="sm" variant="primary" type="submit" loading={autorizando} disabled={!senhaSistema}>
+              Autorizar este navegador
+            </Button>
+          </div>
+        </form>
+      )}
+      {!!s?.navegadores.length && (
+        <div className="space-y-1 border-t border-border pt-2">
+          <p className="text-xs font-medium text-text-2">Navegadores autorizados</p>
+          <ul className="space-y-1">
+            {s.navegadores.map((n) => (
+              <li key={n.id} className="flex items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate" title={`Autorizado em ${dataHoraBR(n.criadoEm)}`}>
+                  {n.navegador}
+                  <span className="text-muted"> · {n.usadoEm ? `usado ${haQuanto(n.usadoEm, agora)}` : "ainda não usado"}</span>
+                </span>
+                <Button size="xs" variant="icon" aria-label={`Remover ${n.navegador}`} title="Remover este navegador" onClick={() => void tirarNavegador(n.id, n.navegador)}>
+                  <IconTrash className="h-3.5 w-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Grupo>
   );
 }
@@ -325,7 +424,9 @@ function Ajustes({
   focoLogin,
   onLoginSalvo,
   confirmar,
+  extensaoLogin,
 }: {
+  extensaoLogin: { publica: string; autorizada: boolean } | null;
   /** O cursor já no usuário (aberto pelo "Configurar login"). */
   focoLogin: boolean;
   /** Salvo o login: a extensão tenta entrar na hora. */
@@ -349,7 +450,7 @@ function Ajustes({
 }) {
   return (
     <div className="space-y-3 p-1">
-      <LoginDaCenti foco={focoLogin} onSalvo={onLoginSalvo} confirmar={confirmar} />
+      <LoginDaCenti foco={focoLogin} onSalvo={onLoginSalvo} confirmar={confirmar} extensao={extensaoLogin} />
       <Grupo titulo="Gravação na Centi">
         <div className="flex flex-wrap items-center justify-between gap-2">
         <Switch
@@ -567,7 +668,7 @@ export function AutomacaoAdmin({
     return () => window.removeEventListener("beforeunload", avisar);
   }, [rodando]);
   useEffect(() => {
-    if (!ext || !versaoAtende(ext.versao)) return;
+    if (!ext || !versaoFunciona(ext.versao)) return;
     void verificar(true);
     const ver = () => {
       if (document.visibilityState === "visible" && !rodandoRef.current) void verificar();
@@ -643,7 +744,9 @@ export function AutomacaoAdmin({
     return [...m.entries()].sort((a, b) => b[1].n - a[1].n);
   }, [protocolos]);
 
-  const atualizada = !!ext && versaoAtende(ext.versao);
+  // FUNCIONA = roda as automações (≥ a mínima); RECOMENDADA = a publicada junto. Versão nova da extensão nunca trava.
+  const atualizada = !!ext && versaoFunciona(ext.versao);
+  const recomendada = !!ext && versaoAtende(ext.versao);
   const pronto = atualizada && !!logado?.ok && !!logado.logado;
   const importacao = useMemo(
     () => ({ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }) as unknown as ContextoImportacao,
@@ -664,6 +767,11 @@ export function AutomacaoAdmin({
       {ext && ext.copias > 1 && (
         <Badge tone="amber" dot>
           {ext.copias} cópias da extensão — remova a antiga
+        </Badge>
+      )}
+      {atualizada && !recomendada && (
+        <Badge tone="amber" dot className="shrink-0" title={`A extensão ${ext?.versao} funciona; a ${VERSAO_EXTENSAO_CENTI} traz melhorias — baixe e recarregue em chrome://extensions.`}>
+          Atualização da extensão disponível
         </Badge>
       )}
       {/* O MESMO selo de estado do PCA (Preview/Publicado — `tamanho="linha"`): o ponto que pulsa = situação ao vivo. */}
@@ -694,7 +802,7 @@ export function AutomacaoAdmin({
         </Badge>
       )}
       {/* Sem a extensão em dia ou sem a Centi logada: verificar e baixar à vista (com tudo certo, só no menu). */}
-      {!pronto && (
+      {(!pronto || !recomendada) && (
         <>
           <BotaoAtualizar
             ativo={giroVerificar.girando}
@@ -736,7 +844,7 @@ export function AutomacaoAdmin({
       >
         <div className="space-y-3">
           {/* Com tudo certo, verificar e baixar ficam SÓ aqui; com problema, estão à vista na linha (nunca nos dois). */}
-          {pronto && (
+          {pronto && recomendada && (
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-1 pb-3">
               <BotaoAtualizar
                 ativo={giroVerificar.girando}
@@ -764,6 +872,7 @@ export function AutomacaoAdmin({
             gravando={pronto ? gravando : null}
             onGravador={(a) => void usarGravador(a)}
             focoLogin={focoLogin}
+            extensaoLogin={logado?.login?.chave ? { publica: logado.login.chave.publica, autorizada: logado.login.autorizada === true } : null}
             onLoginSalvo={() => void entrarAgora()}
             confirmar={confirmar}
           />
@@ -874,11 +983,13 @@ function LoginCenti({
   onEntrar: () => void;
   onOpcoes: () => void;
 }) {
-  const pronto = !!login?.credenciais && !login.pausado;
+  const pronto = !!login?.credenciais && !login.pausado && login.autorizada !== false;
   const detalhe = login?.semSistema
     ? "A extensão não consegue falar com o sistema neste navegador — entre no sistema PCA"
     : !login?.credenciais
     ? "Sem login da Centi salvo no sistema"
+    : login.autorizada === false
+    ? "Este navegador ainda não recebe o login — entre no sistema de novo nele ou autorize nos Ajustes"
     : login.pausado
       ? (login.motivo ?? "Login automático pausado")
       : login.auto
@@ -895,7 +1006,9 @@ function LoginCenti({
               ? "Login da Centi pausado"
               : !login.credenciais
                 ? "Centi pede login — sem login salvo no sistema"
-                : login.auto
+                : login.autorizada === false
+                  ? "Centi pede login — autorize este navegador"
+                  : login.auto
                   ? "Centi pede login — o login automático entra sozinho"
                   : "Centi pede login"}
         </span>

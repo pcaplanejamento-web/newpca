@@ -120,9 +120,71 @@ function podeTentarLogin(agora, ultima, forcar) {
     return { pode: false, motivo: "Aguardando o intervalo entre tentativas.", esperarS: Math.ceil((INTERVALO_LOGIN_MS - (agora - ultima)) / 1000) };
   return { pode: true };
 }
+// A CHAVE desta extensão (ECDH P-256): a privada NÃO EXTRAÍVEL fica no IndexedDB da extensão — nenhuma página nem outra
+// extensão a lê; a pública é autorizada uma vez no sistema (com a senha do sistema). O login chega SELADO a ela.
+const BANCO_CHAVE = "pca-chave";
+let chaveMemoria = null;
+function abrirBancoChave() {
+  return new Promise((ok, falha) => {
+    const r = indexedDB.open(BANCO_CHAVE, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("chaves");
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => falha(r.error);
+  });
+}
+const pedidoIdb = (r) =>
+  new Promise((ok, falha) => {
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => falha(r.error);
+  });
+async function parDeChaves() {
+  if (chaveMemoria) return chaveMemoria;
+  let par = null;
+  if (typeof indexedDB !== "undefined") {
+    const db = await abrirBancoChave();
+    try {
+      par = await pedidoIdb(db.transaction("chaves").objectStore("chaves").get("centi"));
+      if (!par) {
+        par = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+        await pedidoIdb(db.transaction("chaves", "readwrite").objectStore("chaves").put(par, "centi"));
+      }
+    } finally {
+      db.close();
+    }
+  } else par = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", par.publicKey));
+  const publica = btoa(String.fromCharCode(...raw));
+  const impressao = [...new Uint8Array(await crypto.subtle.digest("SHA-256", raw))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  chaveMemoria = { privada: par.privateKey, publica, impressao };
+  return chaveMemoria;
+}
+/** Abre o login SELADO (a mesma conta de `centi-login-core.ts` → `abrirSelado`). `null` = não abre. */
+async function abrirSelado(privada, impressao, s) {
+  try {
+    const deB64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+    const enc = new TextEncoder();
+    const aad = enc.encode(`centi-entrega:${impressao}`);
+    const epk = await crypto.subtle.importKey("raw", deB64(s.epk), { name: "ECDH", namedCurve: "P-256" }, true, []);
+    const segredo = await crypto.subtle.deriveBits({ name: "ECDH", public: epk }, privada, 256);
+    const base = await crypto.subtle.importKey("raw", segredo, "HKDF", false, ["deriveKey"]);
+    const k = await crypto.subtle.deriveKey(
+      { name: "HKDF", hash: "SHA-256", salt: enc.encode("pca/centi-entrega/v1"), info: aad },
+      base,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    );
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: deB64(s.iv), additionalData: aad }, k, deB64(s.ct));
+    const j = JSON.parse(new TextDecoder().decode(pt));
+    return typeof j?.usuario === "string" && typeof j?.senha === "string" && j.usuario && j.senha ? j : null;
+  } catch {
+    return null;
+  }
+}
 const API_LOGIN = `${ORIGENS[0]}/api/admin/automacao/credencial-centi`;
 const MSG_SEM_SISTEMA = "Entre no sistema PCA neste navegador (como administrador) — o login da Centi vem de lá.";
 const MSG_SEM_LOGIN = "Configure o login da Centi no sistema (Automação → Ajustes → Login da Centi).";
+const MSG_AUTORIZAR = "Autorize este navegador no sistema (Automação → Ajustes → Login da Centi) — uma vez, com a senha do sistema.";
 async function apiLogin(metodo, corpo, consulta = "") {
   try {
     const r = await fetch(`${API_LOGIN}${consulta}`, {
@@ -144,12 +206,54 @@ async function apiLogin(metodo, corpo, consulta = "") {
 async function infoLogin(fresco = false) {
   const guardada = await sessao.ler("loginInfo");
   if (!fresco && guardada && Date.now() - guardada.em < 60 * 1000) return guardada.v;
-  const j = await apiLogin("GET", null, "?situacao=1");
+  const k = await parDeChaves().catch(() => null);
+  const j = await apiLogin("GET", null, `?situacao=1${k ? `&impressao=${k.impressao}` : ""}`);
+  const antigo = !!(await chrome.storage.local.get("credCenti")).credCenti;
   const v = j.ok
-    ? { credenciais: j.tem === true, auto: j.auto !== false, pausado: !!j.pausadoEm, motivo: j.pausadoEm ? (j.motivo ?? "Login pausado.") : null }
-    : { credenciais: false, auto: false, pausado: false, motivo: null, semSistema: j.semSistema === true, erro: j.erro };
+    ? {
+        credenciais: j.tem === true,
+        auto: j.auto !== false,
+        pausado: !!j.pausadoEm,
+        motivo: j.pausadoEm ? (j.motivo ?? "Login pausado.") : null,
+        autorizada: j.autorizada === true,
+        // A chave PÚBLICA deste navegador — a tela a manda ao sistema para autorizar (não é segredo).
+        chave: k ? { publica: k.publica, impressao: k.impressao } : null,
+        conta: typeof j.conta === "string" ? j.conta : null,
+        // O login da extensão antiga ainda está aqui: o popup pergunta para qual conta ele vai.
+        antigo: antigo && j.tem !== true,
+      }
+    : { credenciais: false, auto: false, pausado: false, motivo: null, semSistema: j.semSistema === true, erro: j.erro, chave: k ? { publica: k.publica, impressao: k.impressao } : null };
   await sessao.gravar("loginInfo", { em: Date.now(), v });
   return v;
+}
+
+/**
+ * AUTORIZAR este navegador SEM senha: o sistema aceita logo depois de a pessoa ENTRAR nele neste navegador (sessão
+ * recém-criada) — em outro computador, entrar no sistema basta para a Centi ficar pronta. Fora dessa janela, a tela pede
+ * a senha do sistema. `true` = autorizado.
+ */
+async function garantirAutorizacao() {
+  const i = await infoLogin(true);
+  if (i.autorizada) return true;
+  if (!i.credenciais || !i.chave) return false;
+  const r = await apiLogin("POST", { publica: i.chave.publica, navegador: "", senha: null }, "/navegadores");
+  await sessao.tirar("loginInfo");
+  return r.ok === true;
+}
+
+/**
+ * SEMPRE PRONTO: ao abrir o sistema (ou o navegador, e no alarme), com o login da Centi guardado e o "entrar sozinho"
+ * ligado, este navegador se autoriza, a aba da automação abre (em segundo plano) e a Centi entra sozinha. No máximo uma
+ * vez a cada 2 min; a aba que a pessoa fechou só volta pela tela da Automação ("Verificar").
+ */
+async function prepararCenti() {
+  const ultimo = await sessao.ler("preparadoEm");
+  if (typeof ultimo === "number" && Date.now() - ultimo < 2 * 60 * 1000) return;
+  await sessao.gravar("preparadoEm", Date.now());
+  if (!(await garantirAutorizacao())) return;
+  const i = await infoLogin();
+  if (!i.credenciais || i.pausado || !i.auto) return;
+  await garantirSessao({ criar: !(await sessao.ler("abaFechada")) });
 }
 
 let indoCompras = null;
@@ -168,8 +272,8 @@ function irParaCompras(aba) {
 }
 
 /** A Centi recusou o login ou pediu uma verificação: pausa NO SISTEMA (nenhum navegador tenta de novo a mesma senha). */
-async function pausarNoSistema(motivo) {
-  await apiLogin("POST", { acao: "pausar", motivo: String(motivo).slice(0, 300) });
+async function pausarNoSistema(codigo) {
+  await apiLogin("POST", { acao: "pausar", motivo: codigo });
   await sessao.tirar("loginInfo");
 }
 
@@ -178,18 +282,29 @@ function tentarLogin(aba, forcar) {
     tentando = (async () => {
       const p = podeTentarLogin(Date.now(), (await sessao.ler("loginUltima")) ?? null, forcar);
       if (!p.pode) return { resultado: "espera", erro: p.motivo, esperarS: p.esperarS ?? null };
-      // O login vem do sistema NA HORA (nada fica guardado na extensão).
-      const l = await apiLogin("GET");
+      // O login vem do sistema NA HORA, SELADO à chave deste navegador (nada fica guardado na extensão).
+      const k = await parDeChaves().catch(() => null);
+      if (!k) return { resultado: "falha", erro: "A extensão não conseguiu criar a chave dela — reinstale-a." };
+      const l = await apiLogin("GET", null, `?impressao=${k.impressao}`);
       await sessao.tirar("loginInfo");
       if (!l.ok) return { resultado: l.semSistema ? "semSistema" : "falha", erro: l.erro };
-      if (l.tem !== true) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
-      if (l.pausado) return { resultado: "pausado", erro: l.motivo ?? "Login da Centi pausado — salve de novo no sistema." };
-      if (!forcar && l.auto === false) return { resultado: "desligado" };
-      if (typeof l.usuario !== "string" || typeof l.senha !== "string" || !l.usuario || !l.senha) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
+      let entrega = l;
+      // Ainda não autorizado: tenta se autorizar (vale logo depois de entrar no sistema neste navegador) e pede de novo.
+      if (entrega.autorizar && (await garantirAutorizacao())) entrega = await apiLogin("GET", null, `?impressao=${k.impressao}`);
+      if (!entrega.ok) return { resultado: entrega.semSistema ? "semSistema" : "falha", erro: entrega.erro };
+      if (entrega.autorizar) return { resultado: "naoAutorizado", erro: MSG_AUTORIZAR };
+      if (entrega.tem !== true) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
+      if (entrega.pausado) return { resultado: "pausado", erro: entrega.motivo ?? "Login da Centi pausado — salve de novo no sistema." };
+      if (!forcar && entrega.auto === false) return { resultado: "desligado" };
+      const cred = entrega.selado ? await abrirSelado(k.privada, k.impressao, entrega.selado) : null;
+      if (!cred) return { resultado: "falha", erro: "O login chegou, mas não abriu com a chave deste navegador — autorize-o de novo no sistema." };
+      // Só na aba da automação, ainda na Centi (a aba pode ter navegado desde a conferência).
+      const atual = await chrome.tabs.get(aba.id).catch(() => null);
+      if (!atual?.url?.startsWith(INICIO_CENTI)) return { resultado: "falha", erro: "A aba da automação saiu da Centi." };
       await sessao.gravar("loginUltima", Date.now());
       let r = null;
       try {
-        r = await comPrazo(chrome.tabs.sendMessage(aba.id, { alvo: "centi-login", usuario: l.usuario, senha: l.senha }), 25000, null);
+        r = await comPrazo(chrome.tabs.sendMessage(aba.id, { alvo: "centi-login", usuario: cred.usuario, senha: cred.senha }, { frameId: 0 }), 25000, null);
       } catch {
         r = null; // a página recarregou ao entrar: confere-se pelo estado depois
       }
@@ -197,19 +312,19 @@ function tentarLogin(aba, forcar) {
       // Entrou COM a sessão: a próxima queda pode tentar de novo na hora ("sem-sessao" só zera depois que a "pesquisa"
       // confirmar a sessão — senão uma tela que não é a do login viraria um laço de tentativas).
       if (resultado === "ok") await sessao.tirar("loginUltima");
-      if (resultado === "recusado") await pausarNoSistema(`Senha recusada pela Centi${r.erro ? ` (${r.erro})` : ""} — confira e salve de novo no sistema.`);
-      if (resultado === "bloqueio")
-        await pausarNoSistema("A Centi pediu uma verificação (captcha, código ou troca de senha) — entre à mão na aba da automação e salve de novo no sistema.");
-      return { resultado, erro: r?.erro ?? null };
+      // A pausa vai por CÓDIGO (o texto da Centi pode trazer o usuário — nunca é gravado).
+      if (resultado === "recusado") await pausarNoSistema("recusado");
+      if (resultado === "bloqueio") await pausarNoSistema("verificacao");
+      return { resultado, erro: resultado === "recusado" ? "A Centi recusou o usuário ou a senha — confira e salve de novo no sistema." : (r?.erro ?? null) };
     })().finally(() => {
       tentando = null;
     });
   return tentando;
 }
 
-// A TRANSIÇÃO (uma vez): até a 1.38.0 o login ficava cifrado AQUI (chrome.storage.local "credCenti" + a chave no IndexedDB
-// "pca-cofre"). Ele vai ao sistema — só se lá ainda não houver login — e o cofre local é APAGADO. Sem o sistema logado
-// agora, tenta de novo ao abrir o navegador e no alarme; o que não abre é só apagado.
+// A TRANSIÇÃO: até a 1.38.0 o login ficava cifrado AQUI (chrome.storage.local "credCenti" + a chave no IndexedDB
+// "pca-cofre"). Com um login já guardado no sistema, o cofre antigo é só APAGADO. Sem ele, quem decide é a PESSOA, no popup
+// ("Enviar para a conta <nome>" ou "Descartar") — nunca vai sozinho à conta que estiver logada (pode ser de outra pessoa).
 async function chaveDoCofreAntigo() {
   return new Promise((ok) => {
     try {
@@ -244,26 +359,39 @@ async function apagarCofreAntigo() {
     indexedDB.deleteDatabase("pca-cofre");
   } catch {}
 }
-async function levarLoginAntigo() {
+async function lerCofreAntigo() {
   const o = await chrome.storage.local.get(["credCenti", "loginCenti"]);
-  if (!o.credCenti) return;
-  let cred = null;
+  if (!o.credCenti) return null;
   try {
     const k = await chaveDoCofreAntigo();
     const b = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
-    if (k) cred = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b(o.credCenti.iv) }, k, b(o.credCenti.dados))));
+    if (!k) return { ilegivel: true };
+    const cred = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b(o.credCenti.iv) }, k, b(o.credCenti.dados))));
+    if (!cred?.usuario || !cred?.senha) return { ilegivel: true };
+    return { usuario: String(cred.usuario), senha: String(cred.senha), auto: o.loginCenti?.auto !== false };
   } catch {
-    cred = null;
+    return { ilegivel: true };
   }
-  if (!cred?.usuario || !cred?.senha) return apagarCofreAntigo();
+}
+/** Sozinho: só APAGA o cofre antigo quando não serve mais (ilegível, ou o sistema já tem login). */
+async function limparCofreAntigo() {
+  const c = await lerCofreAntigo();
+  if (!c) return;
+  if (c.ilegivel) return apagarCofreAntigo();
   const s = await apiLogin("GET", null, "?situacao=1");
-  if (!s.ok) return; // sem o sistema agora: fica para a próxima vez
-  if (s.tem !== true) {
-    const r = await apiLogin("POST", { acao: "importar", usuario: String(cred.usuario), senha: String(cred.senha), auto: o.loginCenti?.auto !== false });
-    if (!r.ok && r.status !== 409) return;
+  if (s.ok && s.tem === true) await apagarCofreAntigo();
+}
+/** Pela PESSOA, no popup: envia o login antigo à conta logada (que ela viu pelo nome) ou o descarta. */
+async function decidirLoginAntigo(enviar) {
+  const c = await lerCofreAntigo();
+  if (!c) return { ok: true };
+  if (enviar && !c.ilegivel) {
+    const r = await apiLogin("POST", { acao: "importar", usuario: c.usuario, senha: c.senha, auto: c.auto });
+    if (!r.ok && r.status !== 409) return { ok: false, erro: r.erro };
   }
-  await sessao.tirar("loginInfo");
   await apagarCofreAntigo();
+  await sessao.tirar("loginInfo");
+  return { ok: true };
 }
 
 // A "PESQUISA" que deixa a Centi pronta: depois do login (ou sem a sessão capturada) a aba faz UMA leitura inofensiva pelo
@@ -536,7 +664,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   for (const a of await chrome.tabs.query({ url: SISTEMA }))
     chrome.scripting.executeScript({ target: { tabId: a.id }, files: ["sistema-ponte.js"] }).catch(() => {});
   chrome.alarms?.create("login-centi", { periodInMinutes: 5 });
-  levarLoginAntigo().catch(() => {});
+  limparCofreAntigo().catch(() => {});
 });
 // O alarme do login "sempre que cair" — criado também ao abrir o navegador e a cada vez que o serviço acorda (o Chrome
 // pode perder os alarmes ao reiniciar).
@@ -549,7 +677,8 @@ async function garantirAlarme() {
 garantirAlarme();
 chrome.runtime.onStartup?.addListener(() => {
   garantirAlarme();
-  levarLoginAntigo().catch(() => {});
+  limparCofreAntigo().catch(() => {});
+  prepararCenti().catch(() => {});
 });
 
 // "Sempre que cair": a aba da automação que carregou (F5) na tela de login entra sozinha; o cartão volta à aba.
@@ -572,6 +701,8 @@ chrome.tabs?.onUpdated?.addListener((tabId, info, tab) => {
   // Só uma NAVEGAÇÃO de verdade para fora da Automação para o lote (o "loading" sem url muda de status sem sair da tela —
   // marcava o lote como parado no meio de um fluxo). O F5 / fechar a página avisa pela ponte ("saiu", pagehide).
   if (info.url && !info.url.includes("/painel/automacao")) donoSaiu(tabId).catch(() => {});
+  // Abriu o SISTEMA (inclusive logo depois de entrar): deixa a Centi pronta.
+  if (info.status === "complete" && ORIGENS.some((o) => tab?.url?.startsWith(`${o}/painel`))) prepararCenti().catch(() => {});
   if (info.status !== "complete" || !tab?.url?.startsWith(INICIO_CENTI)) return;
   setTimeout(() => conferirAba(tabId).catch(() => {}), 1500);
 });
@@ -584,9 +715,10 @@ chrome.tabs?.onRemoved?.addListener(async (tabId) => {
 });
 chrome.alarms?.onAlarm?.addListener(async (a) => {
   if (a.name !== "login-centi") return;
-  levarLoginAntigo().catch(() => {});
+  limparCofreAntigo().catch(() => {});
   const aba = await abaGuardada().catch(() => null);
   if (aba) await conferirAba(aba.id).catch(() => {});
+  else await prepararCenti().catch(() => {});
 });
 
 const resumoLogin = async (r) => ({
@@ -602,6 +734,7 @@ const resumoLogin = async (r) => ({
 const respostaLogada = async (r) => ({
   ok: true,
   logado: true,
+  login: await infoLogin(),
   entidade: r.estado?.entidade ?? null,
   operacao: r.estado?.operacao ?? null,
   aprendido: r.estado?.aprendido ?? null,
@@ -611,6 +744,7 @@ const respostaLogada = async (r) => ({
 /** O popup (dropdown do ícone da extensão, ou a janelinha dele). */
 async function daExtensao(msg) {
   if (msg.tipo === "interromper") return interromper();
+  if (msg.tipo === "loginAntigo") return decidirLoginAntigo(msg.enviar === true);
   if (msg.tipo === "configurarLogin") {
     await chrome.tabs.create({ url: `${ORIGENS[0]}/painel/automacao?ajustes=login`, active: true });
     return { ok: true };

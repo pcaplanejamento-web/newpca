@@ -51,3 +51,101 @@ export function mascararUsuario(u: string): string {
   if (!t) return "";
   return `${t.slice(0, Math.min(2, Math.max(1, t.length - 2)))}•••`;
 }
+
+// ---------------------------------------------------------------- A ENTREGA SELADA À EXTENSÃO
+// A senha NUNCA sai do servidor em claro: ela vai SELADA à chave de UM navegador autorizado. A extensão gera um par ECDH
+// P-256 com a parte privada NÃO EXTRAÍVEL (fica no IndexedDB dela); a pública é autorizada uma vez, com a senha do
+// sistema. Na entrega, o servidor cria um par efêmero, deriva o segredo (ECDH → HKDF-SHA256) e cifra com AES-GCM, com a
+// impressão da chave como dado adicional. Quem só tem o cookie da sessão recebe um pacote que não consegue abrir.
+
+export const SAL_ENTREGA = "pca/centi-entrega/v1";
+export const aadEntrega = (impressao: string) => `centi-entrega:${impressao}`;
+export type Selado = { epk: string; iv: string; ct: string };
+
+const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
+const deB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const hex = (u: ArrayBuffer) => [...new Uint8Array(u)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+/** A chave pública da extensão (base64 do ponto P-256 sem compressão: 65 bytes começando em 0x04) → a IMPRESSÃO (SHA-256
+ * hex). `null` = não é uma chave P-256 válida. */
+export async function impressaoDaChave(publica: string): Promise<string | null> {
+  try {
+    const raw = deB64(publica);
+    if (raw.length !== 65 || raw[0] !== 4) return null;
+    await crypto.subtle.importKey("raw", raw as BufferSource, { name: "ECDH", namedCurve: "P-256" }, true, []);
+    return hex(await crypto.subtle.digest("SHA-256", raw as BufferSource));
+  } catch {
+    return null;
+  }
+}
+
+async function chaveDaEntrega(segredo: ArrayBuffer, impressao: string): Promise<CryptoKey> {
+  const base = await crypto.subtle.importKey("raw", segredo, "HKDF", false, ["deriveKey"]);
+  const enc = new TextEncoder();
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: enc.encode(SAL_ENTREGA) as BufferSource, info: enc.encode(aadEntrega(impressao)) as BufferSource },
+    base,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+/** Sela `texto` para a chave pública da extensão (o lado do SERVIDOR). */
+export async function selarParaChave(publica: string, impressao: string, texto: string): Promise<Selado> {
+  const destino = await crypto.subtle.importKey("raw", deB64(publica) as BufferSource, { name: "ECDH", namedCurve: "P-256" }, true, []);
+  const efemera = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as CryptoKeyPair;
+  const segredo = await crypto.subtle.deriveBits({ name: "ECDH", public: destino } as EcdhKeyDeriveParams, efemera.privateKey, 256);
+  const k = await chaveDaEntrega(segredo, impressao);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv as BufferSource, additionalData: new TextEncoder().encode(aadEntrega(impressao)) as BufferSource },
+    k,
+    new TextEncoder().encode(texto),
+  );
+  return { epk: b64(new Uint8Array(await crypto.subtle.exportKey("raw", efemera.publicKey))), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
+}
+
+/** Abre o pacote com a chave PRIVADA (o lado da EXTENSÃO — a mesma conta de `background.js`, aqui para os testes). */
+export async function abrirSelado(privada: CryptoKey, impressao: string, s: Selado): Promise<string | null> {
+  try {
+    const epk = await crypto.subtle.importKey("raw", deB64(s.epk) as BufferSource, { name: "ECDH", namedCurve: "P-256" }, true, []);
+    const segredo = await crypto.subtle.deriveBits({ name: "ECDH", public: epk } as EcdhKeyDeriveParams, privada, 256);
+    const k = await chaveDaEntrega(segredo, impressao);
+    const pt = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: deB64(s.iv) as BufferSource, additionalData: new TextEncoder().encode(aadEntrega(impressao)) as BufferSource },
+      k,
+      deB64(s.ct) as BufferSource,
+    );
+    return new TextDecoder().decode(pt);
+  } catch {
+    return null;
+  }
+}
+
+/** O motivo da PAUSA é um código fixo (nunca o texto da Centi, que pode trazer o usuário). */
+export const MOTIVO_PAUSA = {
+  recusado: "A Centi recusou o usuário ou a senha — confira e salve de novo.",
+  verificacao: "A Centi pediu uma verificação (captcha, código ou troca de senha) — entre à mão na aba da automação e salve de novo.",
+} as const;
+export type CodigoPausa = keyof typeof MOTIVO_PAUSA;
+
+/** Por quanto tempo depois de ENTRAR NO SISTEMA a extensão daquele navegador se autoriza sozinha (sem a senha). */
+export const JANELA_AUTORIZACAO_MS = 30 * 60 * 1000;
+
+/** O instante de `criado_em` da sessão (SQLite "AAAA-MM-DD HH:MM:SS" em UTC, ou ISO). `null` = não lido. */
+export function instanteSessao(criadoEm: string | null | undefined): number | null {
+  if (!criadoEm) return null;
+  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(criadoEm) ? criadoEm : `${criadoEm.replace(" ", "T")}Z`);
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * AUTORIZAR SEM A SENHA: só uma sessão RECÉM-CRIADA (a pessoa acabou de entrar no sistema neste navegador — até
+ * `JANELA_AUTORIZACAO_MS`) e que ainda não autorizou nenhum navegador. Um cookie roubado depois disso não autoriza a
+ * chave de quem o roubou; a pessoa é avisada a cada navegador autorizado.
+ */
+export function podeAutorizarSemSenha(criadoEm: string | null | undefined, agora: number, jaAutorizouNestaSessao: boolean): boolean {
+  const t = instanteSessao(criadoEm);
+  return t !== null && !jaAutorizouNestaSessao && agora >= t - 60_000 && agora - t <= JANELA_AUTORIZACAO_MS;
+}

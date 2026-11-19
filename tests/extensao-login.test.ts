@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { abrirSelado, impressaoDaChave, selarParaChave } from "../src/lib/centi-login-core.ts";
 import { COMPRAS, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
 
 const fonte = (n: string) => readFileSync(new URL(`../extensao-centi/${n}`, import.meta.url), "utf8");
@@ -105,9 +106,21 @@ test("login: lê a mensagem de senha recusada", () => {
   assert.equal(L.erroDeLogin(dom({}).doc), null);
 });
 
-/** O SISTEMA falso: o login da Centi guardado no banco (a rota `credencial-centi`) e os pedidos que a extensão fez. */
-function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; semSistema?: boolean } = {}) {
-  const banco = { tem: o.tem !== false, auto: o.auto !== false, pausado: !!o.pausado, motivo: o.pausado ? "Senha recusada" : (null as string | null), usuario: "maria", senha: "s3gredo" };
+/**
+ * O SISTEMA falso: o login da Centi guardado no banco (a rota `credencial-centi`), os NAVEGADORES autorizados (a chave
+ * pública da extensão) e os pedidos que a extensão fez. A senha só sai SELADA à chave do navegador autorizado — a MESMA
+ * conta do servidor (`selarParaChave`, `centi-login-core.ts`).
+ */
+function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; semSistema?: boolean; recemEntrou?: boolean } = {}) {
+  const banco = {
+    tem: o.tem !== false,
+    auto: o.auto !== false,
+    pausado: !!o.pausado,
+    motivo: o.pausado ? "Senha recusada" : (null as string | null),
+    usuario: "maria",
+    senha: "s3gredo",
+    chaves: new Map<string, string>(),
+  };
   const pedidos: { url: string; metodo: string; corpo: Record<string, unknown> | null }[] = [];
   const resp = (status: number, corpo: unknown) => ({ ok: status < 300, status, json: async () => corpo });
   const fetch = async (url: string, init: Record<string, unknown>) => {
@@ -116,16 +129,39 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
     assert.equal(init.credentials, "include");
     assert.equal(init.cache, "no-store");
     if (o.semSistema) return resp(401, { ok: false, error: "Não autenticado" });
-    if (init.method === "GET" && url.endsWith("?situacao=1"))
-      return resp(200, { ok: true, tem: banco.tem, auto: banco.auto, pausadoEm: banco.pausado ? "2026-11-19T10:00:00Z" : null, motivo: banco.motivo });
+    const u = new URL(url);
+    const impressao = u.searchParams.get("impressao");
+    if (u.pathname.endsWith("/navegadores") && init.method === "POST") {
+      // Sem a senha do sistema, só numa sessão recém-criada (a pessoa acabou de entrar no sistema neste navegador).
+      if (corpo?.senha === null && o.recemEntrou === false) return resp(422, { ok: false, error: "Entre no sistema de novo." });
+      const imp = await impressaoDaChave(String(corpo?.publica));
+      if (!imp) return resp(422, { ok: false, error: "Chave inválida." });
+      banco.chaves.set(imp, String(corpo?.publica));
+      return resp(200, { ok: true });
+    }
+    if (init.method === "GET" && u.searchParams.get("situacao") === "1")
+      return resp(200, {
+        ok: true,
+        tem: banco.tem,
+        auto: banco.auto,
+        autorizada: !!impressao && banco.chaves.has(impressao),
+        conta: "Maria Souza",
+        pausadoEm: banco.pausado ? "2026-11-19T10:00:00Z" : null,
+        motivo: banco.motivo,
+      });
     if (init.method === "GET") {
+      if (!impressao) return resp(422, { ok: false, error: "Pedido sem a chave da extensão." });
       if (!banco.tem) return resp(200, { ok: true, tem: false });
+      const publica = banco.chaves.get(impressao);
+      if (!publica) return resp(200, { ok: true, tem: false, autorizar: true });
       if (banco.pausado) return resp(200, { ok: true, tem: true, pausado: true, motivo: banco.motivo });
-      return resp(200, { ok: true, tem: true, usuario: banco.usuario, senha: banco.senha, auto: banco.auto });
+      const selado = await selarParaChave(publica, impressao, JSON.stringify({ usuario: banco.usuario, senha: banco.senha }));
+      return resp(200, { ok: true, tem: true, auto: banco.auto, selado });
     }
     if (init.method === "POST" && corpo?.acao === "pausar") {
+      assert.ok(corpo.motivo === "recusado" || corpo.motivo === "verificacao", "a pausa vai por CÓDIGO, nunca o texto da Centi");
       banco.pausado = true;
-      banco.motivo = String(corpo.motivo);
+      banco.motivo = corpo.motivo === "recusado" ? "Senha recusada pela Centi" : "A Centi pediu uma verificação";
       return resp(200, { ok: true });
     }
     if (init.method === "POST" && corpo?.acao === "importar") {
@@ -139,7 +175,7 @@ function sistemaFalso(o: { tem?: boolean; auto?: boolean; pausado?: boolean; sem
 }
 
 // O serviço com o SISTEMA falso e a ABA DA AUTOMAÇÃO (id 1) na tela de login: quando entra, quantas vezes e quando pausa.
-function servico(o: { tem?: boolean; auto?: boolean; semSistema?: boolean; resultado?: string } = {}) {
+function servico(o: { tem?: boolean; auto?: boolean; semSistema?: boolean; recemEntrou?: boolean; resultado?: string } = {}) {
   const sis = sistemaFalso(o);
   const logins: unknown[] = [];
   const s = servicoFalso({
@@ -167,7 +203,10 @@ test("serviço: aba na tela de login → lê o login do SISTEMA e entra UMA vez;
   await pausa(20);
   assert.equal(s.logins.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(s.logins[0])), { alvo: "centi-login", usuario: "maria", senha: "s3gredo" });
-  assert.ok(s.sis.pedidos.some((p) => p.url === "https://governarv.com.br/api/admin/automacao/credencial-centi" && p.metodo === "GET"));
+  // O login veio do sistema SELADO à chave deste navegador (que se autorizou sozinho: a pessoa acabou de entrar no sistema).
+  assert.equal(s.sis.banco.chaves.size, 1);
+  const entrega = s.sis.pedidos.find((p) => p.metodo === "GET" && /credencial-centi\?impressao=[0-9a-f]{64}$/.test(p.url));
+  assert.ok(entrega, "a entrega pede com a impressão da chave");
   assert.equal(s.sis.banco.pausado, true, "a pausa vale para todos os navegadores");
   assert.match(String(s.sis.banco.motivo), /Senha recusada pela Centi/);
   await s.pedir({ acao: "estado" });
@@ -287,26 +326,74 @@ async function cofreAntigo(usuario: string, senha: string) {
   return { local: { credCenti: { iv: b64(iv), dados: b64(dados) }, loginCenti: { auto: false }, credNoSistema: true }, idb, apagados };
 }
 
-test("transição: o login do cofre antigo vai ao sistema (só com o banco vazio) e o cofre local é apagado", async () => {
-  for (const tem of [false, true]) {
-    const c = await cofreAntigo("joao", "antiga");
-    const sis = sistemaFalso({ tem });
-    const s = servicoFalso({ local: c.local, indexedDB: c.idb, fetch: sis.fetch });
-    await s.instalar();
-    await pausa(30);
-    const importou = sis.pedidos.find((p) => p.corpo?.acao === "importar");
-    if (tem) assert.equal(importou, undefined, "o do banco vale mais: não é sobrescrito");
-    else assert.deepEqual(importou?.corpo, { acao: "importar", usuario: "joao", senha: "antiga", auto: false });
-    assert.deepEqual(s.local, {}, "o cofre local saiu");
-    assert.deepEqual(c.apagados, ["pca-cofre"]);
-  }
-  // Sem o sistema logado agora: o cofre antigo fica para a próxima vez (nada se perde).
+test("transição: o cofre antigo NUNCA vai sozinho ao sistema — só pela escolha da pessoa no popup, para a conta que ela viu", async () => {
+  // Com o sistema SEM login: nada é enviado sozinho; o popup mostra a conta e pergunta.
   const c = await cofreAntigo("joao", "antiga");
-  const s = servicoFalso({ local: c.local, indexedDB: c.idb, fetch: sistemaFalso({ semSistema: true }).fetch });
+  const sis = sistemaFalso({ tem: false });
+  const s = servicoFalso({ local: c.local, indexedDB: c.idb, fetch: sis.fetch });
   await s.instalar();
   await pausa(30);
-  assert.ok(s.local.credCenti);
-  assert.deepEqual(c.apagados, []);
+  assert.equal(sis.pedidos.find((p) => p.corpo?.acao === "importar"), undefined, "nunca vai sozinho à conta logada");
+  assert.ok(s.local.credCenti, "o cofre fica até a pessoa decidir");
+  const popup = { url: "chrome-extension://ext/popup.html" };
+  assert.deepEqual(JSON.parse(JSON.stringify(await s.pedir({ tipo: "loginAntigo", enviar: true }, popup))), { ok: true });
+  const importou = sis.pedidos.find((p) => p.corpo?.acao === "importar");
+  assert.deepEqual(importou?.corpo, { acao: "importar", usuario: "joao", senha: "antiga", auto: false });
+  assert.deepEqual(s.local, {}, "o cofre local saiu");
+  assert.deepEqual(c.apagados, ["pca-cofre"]);
+
+  // Descartar: apaga sem enviar.
+  const c2 = await cofreAntigo("joao", "antiga");
+  const sis2 = sistemaFalso({ tem: false });
+  const s2 = servicoFalso({ local: c2.local, indexedDB: c2.idb, fetch: sis2.fetch });
+  await s2.pedir({ tipo: "loginAntigo", enviar: false }, popup);
+  assert.equal(sis2.pedidos.find((p) => p.corpo?.acao === "importar"), undefined);
+  assert.deepEqual(s2.local, {});
+
+  // O sistema JÁ tem login: o cofre antigo só é apagado (o do banco vale mais — nunca sobrescrito).
+  const c3 = await cofreAntigo("joao", "antiga");
+  const sis3 = sistemaFalso({ tem: true });
+  const s3 = servicoFalso({ local: c3.local, indexedDB: c3.idb, fetch: sis3.fetch });
+  await s3.instalar();
+  await pausa(30);
+  assert.equal(sis3.pedidos.find((p) => p.corpo?.acao === "importar"), undefined);
+  assert.deepEqual(s3.local, {});
+
+  // Sem o sistema logado agora: o cofre antigo fica para a próxima vez (nada se perde).
+  const c4 = await cofreAntigo("joao", "antiga");
+  const s4 = servicoFalso({ local: c4.local, indexedDB: c4.idb, fetch: sistemaFalso({ semSistema: true }).fetch });
+  await s4.instalar();
+  await pausa(30);
+  assert.ok(s4.local.credCenti);
+  assert.deepEqual(c4.apagados, []);
+});
+
+test("serviço: sem autorização (sessão antiga no sistema), não recebe a senha e pede para autorizar", async () => {
+  const s = servico({ recemEntrou: false, resultado: "ok" });
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(s.logins.length, 0);
+  assert.equal(s.sis.banco.chaves.size, 0);
+  const r = (await s.pedir({ acao: "entrarAgora" })) as { erro: string };
+  assert.match(r.erro, /Autorize este navegador/);
+  assert.ok(!s.sis.pedidos.some((p) => JSON.stringify(p).includes("s3gredo")));
+});
+
+test("serviço: a senha nunca trafega em claro — só o selado, que outra chave não abre", async () => {
+  const s = servico({ resultado: "ok" });
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(s.logins.length, 1);
+  const [imp, publica] = [...s.sis.banco.chaves][0];
+  const selado = await selarParaChave(publica, imp, JSON.stringify({ usuario: "maria", senha: "s3gredo" }));
+  assert.ok(!JSON.stringify(selado).includes("s3gredo"));
+  // Uma chave diferente (outro navegador) não abre o que foi selado para esta.
+  const outra = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+  assert.equal(await abrirSelado(outra.privateKey, imp, selado), null);
+});
+
+test("centi-ponte: o login só é preenchido na origem da Centi", () => {
+  assert.match(fonte("centi-ponte.js"), /location\.origin !== "https:\/\/rioverde\.centi\.com\.br"/);
 });
 
 // ---------------------------------------------------------------- A CENTI 4.0 (LAYOUT 4.0) E A "PESQUISA" DEPOIS DE ENTRAR

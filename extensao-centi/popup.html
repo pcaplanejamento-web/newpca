@@ -69,7 +69,14 @@
       <button id="configurar" type="button">Configurar no sistema</button>
       <button id="entrar" class="principal" type="button" hidden>Entrar agora</button>
     </div>
-    <p class="nota">Fica cifrado no sistema PCA, na sua conta — vale em qualquer navegador. A extensão só o lê na hora de entrar na Centi e não guarda nada.</p>
+    <div id="antigo" hidden>
+      <p class="msg alerta" id="antigoTexto"></p>
+      <div class="dupla">
+        <button id="antigoDescartar" type="button">Descartar</button>
+        <button id="antigoEnviar" class="principal" type="button">Enviar</button>
+      </div>
+    </div>
+    <p class="nota">Fica cifrado no sistema PCA, na sua conta — vale em qualquer navegador. A senha chega selada à chave desta extensão só na hora de entrar na Centi; nada fica guardado aqui.</p>
   </div>
   <div class="acoes">
     <button id="parar" class="parar" type="button" hidden>Interromper</button>
