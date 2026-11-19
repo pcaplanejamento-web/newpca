@@ -20,9 +20,6 @@
   .barra > i { display: block; height: 100%; background: var(--info); width: 0; transition: width .3s; }
   ol { margin: 6px 0 0; padding: 0 0 0 16px; max-height: 140px; overflow: auto; color: var(--suave); }
   li { margin: 2px 0; }
-  label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 3px; }
-  input[type=text], input[type=password] { box-sizing: border-box; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--borda); background: transparent; color: var(--texto); font: inherit; }
-  .chave { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-weight: 400; cursor: pointer; }
   .msg { margin-top: 8px; font-size: 12px; }
   .msg.ok { color: var(--ok); } .msg.alerta { color: var(--alerta); } .msg.erro { color: var(--erro); }
   .acoes { display: grid; gap: 8px; margin-top: 12px; }
@@ -65,27 +62,19 @@
     <div class="barra"><i id="barra"></i></div>
     <ol id="passos"></ol>
   </div>
-  <form id="login" class="caixa" autocomplete="off" hidden>
+  <div id="login" class="caixa">
     <h2>Login da Centi</h2>
-    <label for="usuario">Usuário</label>
-    <input id="usuario" type="text" autocomplete="off" spellcheck="false" maxlength="120">
-    <label for="senha">Senha</label>
-    <input id="senha" type="password" autocomplete="new-password" maxlength="200">
-    <label class="chave"><input id="auto" type="checkbox" checked> Entrar sozinho quando a sessão cair</label>
-    <label class="chave"><input id="noSistema" type="checkbox" checked> Guardar também no sistema PCA (cifrado) — volta sozinho se a extensão for reinstalada</label>
-    <div id="situacao" class="msg" role="status" aria-live="polite"></div>
+    <div id="situacao" class="msg" role="status" aria-live="polite">Conferindo…</div>
     <div class="dupla">
-      <button id="esquecer" type="button">Esquecer</button>
-      <button id="salvar" class="principal" type="submit">Salvar e entrar</button>
+      <button id="configurar" type="button">Configurar no sistema</button>
+      <button id="entrar" class="principal" type="button" hidden>Entrar agora</button>
     </div>
-    <p class="nota">Cifrada na extensão deste navegador. Com “Guardar também no sistema”, vai cifrada à sua conta no sistema PCA e só a extensão a lê de volta.</p>
-  </form>
+    <p class="nota">Fica cifrado no sistema PCA, na sua conta — vale em qualquer navegador. A extensão só o lê na hora de entrar na Centi e não guarda nada.</p>
+  </div>
   <div class="acoes">
     <button id="parar" class="parar" type="button" hidden>Interromper</button>
     <button id="aba" type="button">Ir para a aba da automação</button>
-    <button id="abrirLogin" type="button">Login da Centi</button>
   </div>
-  <script src="cofre.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

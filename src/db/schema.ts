@@ -2998,3 +2998,18 @@ export const frotaEstado = sqliteTable("frota_estado", {
   versao: integer("versao").notNull().default(0),
   em: text("em"),
 });
+
+/** O LOGIN DA CENTI de cada ADM (migração `0195`) — a ÚNICA fonte: usuário + senha CIFRADOS (AES-GCM com a chave
+ * derivada para este propósito e o dono como dado adicional — `centi-login-cofre.ts`). A extensão lê pela rota (só a
+ * origem dela recebe a senha); a pausa (senha recusada) vale para todos os navegadores da pessoa. */
+export const centiLogins = sqliteTable("centi_logins", {
+  usuarioId: integer("usuario_id")
+    .primaryKey()
+    .references(() => usuarios.id, { onDelete: "cascade" }),
+  cifrado: text("cifrado").notNull(),
+  auto: integer("auto").notNull().default(1),
+  atualizadoEm: text("atualizado_em").notNull(),
+  pausadoEm: text("pausado_em"),
+  motivo: text("motivo"),
+  ultimoUsoEm: text("ultimo_uso_em"),
+});

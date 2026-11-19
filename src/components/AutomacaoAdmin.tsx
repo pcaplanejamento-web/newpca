@@ -11,7 +11,8 @@ import {
   ajusteDaOperacao,
   VERSAO_EXTENSAO_CENTI,
   versaoAtende, } from "@/lib/automacao-centi-core";
-import { dataHoraBR, } from "@/lib/format";
+import { haQuanto } from "@/lib/acessos-core";
+import { dataHoraBR } from "@/lib/format";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Callout } from "./Callout";
@@ -19,7 +20,7 @@ import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
-import { TextField } from "./Field";
+import { PasswordField, TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { IconDownload, IconKey, IconPlug, IconPlus } from "./icons";
@@ -34,7 +35,7 @@ import type { ContextoImportacao } from "@/lib/importar-protocolo-auto";
 
 // Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
 // por protocolo, dentro da pasta "PCA <ano>") ou por Id. Quem fala com a Centi é a EXTENSÃO do Chrome (extensao-centi/),
-// usando a sessão da Centi já aberta — nenhuma senha fica no sistema. Destino: uma PASTA (Downloads ou a escolhida) ou
+// usando a sessão da Centi (o login de cada ADM fica cifrado no banco e só a extensão o lê). Destino: uma PASTA (Downloads ou a escolhida) ou
 // ANEXAR os PDFs a um PROTOCOLO da Centi informado pelo ADM (Id + nº): a única gravação na Centi, montada e travada na
 // extensão (abre o protocolo, confere Id + nº, acrescenta UM documento, não repete a mesma descrição).
 // Cada DFD é emitido na ENTIDADE da Centi do órgão dele e CONFERIDO (é um PDF, traz o planejamento e o DFD pedidos, a
@@ -52,8 +53,9 @@ type Resposta = {
   operacao?: unknown;
   /** A aba da Centi está na TELA DE LOGIN (a sessão caiu). */
   tela?: "login";
-  /** O login automático da extensão (as credenciais ficam SÓ nela — aqui só a situação). */
-  login?: { credenciais: boolean; auto: boolean; pausado: boolean; motivo: string | null } | null;
+  /** O login automático: `credenciais` = há login guardado no sistema para quem está logado; `semSistema` = a extensão não
+   * conseguiu falar com o sistema neste navegador (sem sessão). A senha nunca vem aqui. */
+  login?: { credenciais: boolean; auto: boolean; pausado: boolean; motivo: string | null; semSistema?: boolean } | null;
   /** O lote foi INTERROMPIDO pela extensão (popup ou cartão na aba da automação). */
   interrompido?: boolean;
   /** O andamento do último lote, como a extensão o guardou (sobrevive ao F5 desta tela). */
@@ -161,57 +163,147 @@ function Grupo({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
+type SituacaoLogin = {
+  tem: boolean;
+  usuario: string;
+  auto: boolean;
+  atualizadoEm: string | null;
+  ultimoUsoEm: string | null;
+  pausadoEm: string | null;
+  motivo: string | null;
+  disponivel: boolean;
+};
+
 /**
- * O LOGIN DA CENTI GUARDADO NO SISTEMA (opcional, cifrado): a situação + remover. Guardar é só na extensão ("Guardar
- * também no sistema PCA" no login dela) — a senha nunca passa por esta tela.
+ * O LOGIN DA CENTI (de cada ADM) — salvo AQUI, cifrado no banco: vale em qualquer navegador, com qualquer versão da
+ * extensão. A senha nunca volta a esta tela (vazia = mantém a guardada); só a extensão a lê para entrar na Centi.
  */
-function LoginNoSistema({ onConfigurar }: { onConfigurar: () => void }) {
-  const [s, setS] = useState<{ tem: boolean; atualizadoEm: string | null; disponivel: boolean } | null>(null);
-  const [remover, setRemover] = useState<"pergunta" | "removendo" | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+function LoginDaCenti({ foco, onSalvo, confirmar }: { foco: boolean; onSalvo: () => void; confirmar: ReturnType<typeof useConfirmacao>["confirmar"] }) {
+  const [s, setS] = useState<SituacaoLogin | null>(null);
+  const [falha, setFalha] = useState<string | null>(null);
+  const [usuario, setUsuario] = useState("");
+  const [senha, setSenha] = useState("");
+  const [auto, setAuto] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const aplicar = useCallback((j: SituacaoLogin) => {
+    setS(j);
+    setAuto(j.auto);
+    setUsuario("");
+    setSenha("");
+  }, []);
   const carregar = useCallback(async () => {
     const r = await fetch("/api/admin/automacao/credencial-centi", { cache: "no-store" }).catch(() => null);
-    const j = (await r?.json().catch(() => null)) as { ok?: boolean; tem?: boolean; atualizadoEm?: string | null; disponivel?: boolean } | null;
-    setS(j?.ok ? { tem: j.tem === true, atualizadoEm: j.atualizadoEm ?? null, disponivel: j.disponivel !== false } : null);
-  }, []);
+    const j = (await r?.json().catch(() => null)) as ({ ok?: boolean; error?: string } & SituacaoLogin) | null;
+    if (j?.ok) {
+      aplicar(j);
+      setFalha(null);
+    } else setFalha(j?.error ?? "Não consegui ler o login da Centi — tente de novo.");
+  }, [aplicar]);
   useEffect(() => {
     void carregar();
   }, [carregar]);
-  async function tirar() {
-    setRemover("removendo");
+  const mudou = !!usuario.trim() || !!senha || (s?.tem === true && auto !== s.auto);
+  const falta = !s?.tem && (!usuario.trim() || !senha);
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mudou || falta || salvando) return;
+    setSalvando(true);
+    const r = await fetch("/api/admin/automacao/credencial-centi", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ usuario: usuario.trim() || null, senha: senha || null, auto }),
+    }).catch(() => null);
+    const j = (await r?.json().catch(() => null)) as ({ ok?: boolean; error?: string } & SituacaoLogin) | null;
+    setSalvando(false);
+    if (!j?.ok) return toast.error(j?.error ?? "Não consegui salvar o login da Centi.");
+    aplicar({ ...j, disponivel: true });
+    toast.success("Login da Centi salvo (cifrado).");
+    onSalvo();
+  }
+  async function remover() {
+    const sim = await confirmar({
+      titulo: "Remover o login da Centi?",
+      texto: "A extensão deixa de entrar sozinha na Centi em todos os navegadores até você salvar de novo.",
+      confirmar: "Remover",
+      perigo: true,
+    });
+    if (!sim) return;
     const r = await fetch("/api/admin/automacao/credencial-centi", { method: "DELETE" }).catch(() => null);
-    setRemover(null);
-    if (!r?.ok) return setErro("Não consegui remover — tente de novo.");
-    setErro(null);
+    if (!r?.ok) return toast.error("Não consegui remover — tente de novo.");
+    toast.success("Login da Centi removido.");
     await carregar();
   }
+  const agora = Date.now();
   return (
     <Grupo titulo="Login da Centi">
-      <p className="text-xs text-muted">
-        {s === null
-          ? "Conferindo…"
-          : s.tem
-            ? `Guardado no sistema (cifrado)${s.atualizadoEm ? ` em ${dataHoraBR(s.atualizadoEm)}` : ""} — volta sozinho se a extensão for reinstalada.`
-            : s.disponivel
-              ? "Só na extensão. Para guardar também no sistema (cifrado), marque a opção no login da extensão."
-              : "O sistema está sem a chave mestra para cifrar o login — fica só na extensão."}
-      </p>
-      {erro && <p className="text-xs text-[var(--danger)]">{erro}</p>}
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={onConfigurar}>
-          <IconKey className="h-4 w-4" /> Configurar login
-        </Button>
-        {s?.tem &&
-          (remover === null ? (
-            <Button size="sm" variant="secondary" onClick={() => setRemover("pergunta")}>
-              Remover do sistema
-            </Button>
+      <form className="space-y-2" onSubmit={salvar} autoComplete="off">
+        <div className="flex flex-wrap items-center gap-2">
+          {s === null ? (
+            <span className="text-xs text-muted">{falha ?? "Conferindo…"}</span>
+          ) : s.pausadoEm ? (
+            <Badge tone="amber" dot title={s.motivo ?? undefined}>
+              Pausado — {s.motivo ?? "a Centi recusou a senha"}. Salve de novo para retomar.
+            </Badge>
+          ) : s.tem ? (
+            <Badge tone="emerald" dot>
+              Guardado{s.atualizadoEm ? ` em ${dataHoraBR(s.atualizadoEm)}` : ""}
+              {s.ultimoUsoEm ? ` · usado ${haQuanto(s.ultimoUsoEm, agora)}` : ""}
+            </Badge>
           ) : (
-            <Button size="sm" variant="danger" onClick={() => void tirar()} loading={remover === "removendo"}>
-              Confirmar remoção
-            </Button>
-          ))}
-      </div>
+            <Badge tone="amber" dot>
+              Não configurado
+            </Badge>
+          )}
+          <Ajuda titulo="Login da Centi" botao="sm">
+            <p>
+              O usuário e a senha da Centi ficam <strong>cifrados no banco</strong>, na sua conta — valem em qualquer navegador
+              e com qualquer versão do sistema ou da extensão. A senha nunca volta a esta tela: deixe em branco para manter a
+              guardada.
+            </p>
+            <p>
+              Só a extensão do Chrome (com você logado no sistema) lê a senha, na hora de entrar na Centi; nada fica guardado no
+              navegador. Se a Centi recusar a senha, o login é <strong>pausado</strong> em todos os navegadores (a conta na
+              Centi não é bloqueada) até você salvar de novo.
+            </p>
+          </Ajuda>
+        </div>
+        {s?.disponivel === false ? (
+          <p className="text-xs text-[var(--danger)]">O sistema está sem a chave mestra para cifrar o login (INTEGRACOES_CHAVE).</p>
+        ) : (
+          <>
+            <TextField
+              compacto
+              label="Usuário"
+              autoFocus={foco}
+              value={usuario}
+              placeholder={s?.tem ? `${s.usuario} (guardado)` : "Usuário da Centi"}
+              onChange={(e) => setUsuario(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={120}
+            />
+            <PasswordField
+              compacto
+              value={senha}
+              placeholder={s?.tem ? "•••••• (guardada)" : "Senha da Centi"}
+              onChange={(e) => setSenha(e.target.value)}
+              autoComplete="new-password"
+              maxLength={200}
+            />
+            <Switch checked={auto} onChange={setAuto} label="Entrar sozinho quando a sessão cair" />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {s?.tem && (
+                <Button size="sm" variant="secondary" onClick={() => void remover()}>
+                  Remover
+                </Button>
+              )}
+              <Button size="sm" variant="primary" type="submit" loading={salvando} disabled={!mudou || falta}>
+                <IconKey className="h-4 w-4" /> {s?.pausadoEm ? "Salvar e retomar" : "Salvar"}
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
     </Grupo>
   );
 }
@@ -230,10 +322,15 @@ function Ajustes({
   onHistorico,
   gravando,
   onGravador,
-  onConfigurarLogin,
+  focoLogin,
+  onLoginSalvo,
+  confirmar,
 }: {
-  /** Abre o login da extensão (o dropdown do ícone). */
-  onConfigurarLogin: () => void;
+  /** O cursor já no usuário (aberto pelo "Configurar login"). */
+  focoLogin: boolean;
+  /** Salvo o login: a extensão tenta entrar na hora. */
+  onLoginSalvo: () => void;
+  confirmar: ReturnType<typeof useConfirmacao>["confirmar"];
   /** O gravador de receitas na aba da Centi (null = desconhecido). */
   gravando: boolean | null;
   onGravador: (acao: "iniciar" | "parar") => void;
@@ -252,7 +349,7 @@ function Ajustes({
 }) {
   return (
     <div className="space-y-3 p-1">
-      <LoginNoSistema onConfigurar={onConfigurarLogin} />
+      <LoginDaCenti foco={focoLogin} onSalvo={onLoginSalvo} confirmar={confirmar} />
       <Grupo titulo="Gravação na Centi">
         <div className="flex flex-wrap items-center justify-between gap-2">
         <Switch
@@ -432,7 +529,7 @@ export function AutomacaoAdmin({
     },
     [pedir],
   );
-  // LOGIN AUTOMÁTICO: a extensão entra com as credenciais guardadas NELA (o sistema só pede e mostra a situação).
+  // LOGIN AUTOMÁTICO: a extensão entra com o login guardado NO SISTEMA (cifrado no banco — lido só por ela).
   const [entrando, setEntrando] = useState(false);
   const entrarAgora = useCallback(async () => {
     setEntrando(true);
@@ -442,6 +539,20 @@ export function AutomacaoAdmin({
     if (r.ok && r.logado) toast.success("Centi logada.");
     else toast.error(r.login?.pausado ? (r.login.motivo ?? "Login automático pausado.") : (r.erro ?? "Não consegui entrar na Centi."));
   }, [pedir]);
+  // "Configurar login" (o selo da Centi, ou o popup da extensão por `?ajustes=login`): abre os ajustes no login da Centi.
+  const [ajustesAbertos, setAjustesAbertos] = useState(false);
+  const [focoLogin, setFocoLogin] = useState(false);
+  const abrirLoginCenti = useCallback(() => {
+    setFocoLogin(true);
+    setAjustesAbertos(true);
+  }, []);
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("ajustes") !== "login") return;
+    u.searchParams.delete("ajustes");
+    window.history.replaceState(window.history.state, "", u.toString());
+    abrirLoginCenti();
+  }, [abrirLoginCenti]);
   // AO VIVO: a extensão se anuncia sozinha (instalada/atualizada — sem F5); o estado da Centi é conferido ao abrir, ao
   // voltar à janela e a cada 20 s com a tela à vista (fora do meio de um lote — o canal fica com a Centi).
   const rodandoRef = useRef(false);
@@ -576,7 +687,7 @@ export function AutomacaoAdmin({
           Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
         </Badge>
       ) : logado?.tela === "login" ? (
-        <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={() => void pedir("abrirOpcoes", null, 8000)} />
+        <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={abrirLoginCenti} />
       ) : (
         <Badge tone="amber" dot tamanho="linha" className="shrink-0">
           {logado?.erro ?? "Centi sem login"}
@@ -606,6 +717,11 @@ export function AutomacaoAdmin({
       )}
       <Dropdown
         papel="dialog"
+        aberto={ajustesAbertos}
+        onAberto={(a) => {
+          setAjustesAbertos(a);
+          if (!a) setFocoLogin(false);
+        }}
         ariaLabel="Extensão e Centi"
         align="end"
         width={360}
@@ -647,7 +763,9 @@ export function AutomacaoAdmin({
             onHistorico={() => setHistorico(true)}
             gravando={pronto ? gravando : null}
             onGravador={(a) => void usarGravador(a)}
-            onConfigurarLogin={() => void pedir("abrirOpcoes", null, 8000)}
+            focoLogin={focoLogin}
+            onLoginSalvo={() => void entrarAgora()}
+            confirmar={confirmar}
           />
         </div>
       </Dropdown>
@@ -744,7 +862,7 @@ export function AutomacaoAdmin({
   );
 }
 
-/** A aba da Centi está na TELA DE LOGIN: a situação do login automático da extensão + Entrar agora / Configurar login. */
+/** A aba da Centi está na TELA DE LOGIN: a situação do login automático + Entrar agora / Configurar login (os ajustes). */
 function LoginCenti({
   login,
   entrando,
@@ -757,8 +875,10 @@ function LoginCenti({
   onOpcoes: () => void;
 }) {
   const pronto = !!login?.credenciais && !login.pausado;
-  const detalhe = !login?.credenciais
-    ? "Sem login salvo na extensão"
+  const detalhe = login?.semSistema
+    ? "A extensão não consegue falar com o sistema neste navegador — entre no sistema PCA"
+    : !login?.credenciais
+    ? "Sem login da Centi salvo no sistema"
     : login.pausado
       ? (login.motivo ?? "Login automático pausado")
       : login.auto
@@ -774,14 +894,14 @@ function LoginCenti({
             : login.pausado
               ? "Login da Centi pausado"
               : !login.credenciais
-                ? "Centi pede login — sem login salvo"
+                ? "Centi pede login — sem login salvo no sistema"
                 : login.auto
                   ? "Centi pede login — o login automático entra sozinho"
                   : "Centi pede login"}
         </span>
       </Badge>
       {pronto && (
-        <Button size="sm" variant="secondary" onClick={onEntrar} loading={entrando} title="A extensão entra agora com o login guardado nela">
+        <Button size="sm" variant="secondary" onClick={onEntrar} loading={entrando} title="A extensão entra agora com o login guardado no sistema">
           Entrar agora
         </Button>
       )}

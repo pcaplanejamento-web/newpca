@@ -37,6 +37,10 @@ export const LIMITES_ACESSO = {
   verificarDeclaracaoIp: { max: 30, janelaS: 10 * 60 },
   /** "Pedir liberação ao ADM" da troca de aparelho (por pessoa). */
   liberacaoAparelho: { max: 3, janelaS: 24 * 60 * 60 },
+  /** LEITURAS do login da Centi pela extensão (uma por tentativa de entrar — a régua é 1 a cada 5 min por navegador). */
+  loginCentiLeitura: { max: 30, janelaS: 60 * 60 },
+  /** GRAVAÇÕES do login da Centi (salvar, pausar, importar) da MESMA pessoa. */
+  loginCentiEscrita: { max: 20, janelaS: 60 * 60 },
 } as const satisfies Record<string, RegraLimite>;
 
 export type TipoLimite = keyof typeof LIMITES_ACESSO;

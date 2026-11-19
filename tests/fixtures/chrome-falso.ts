@@ -16,14 +16,16 @@ type Aba = { id: number; url: string; groupId?: number; windowId?: number };
 export type OpcoesFalso = {
   /** O que a aba da Centi responde a cada mensagem do serviço. */
   naAba?: (tabId: number, m: { alvo: string; acao?: string; usuario?: string }) => unknown;
-  /** O cofre (o real lê o IndexedDB); sem ele, o serviço segue sem login automático. */
-  cofre?: Record<string, unknown>;
+  /** O armazenamento local da extensão já existente (ex.: o cofre antigo, até a 1.38.0). */
+  local?: Record<string, unknown>;
+  /** O IndexedDB (o cofre antigo guardava a chave nele). */
+  indexedDB?: unknown;
   /** A resposta da janela de confirmação do anexo (null = fechada). */
   confirmacao?: boolean | null;
   abas?: Aba[];
   sessao?: Record<string, unknown>;
   grupos?: { id: number; title: string; color?: string }[];
-  /** O fetch do serviço (o login guardado no sistema). */
+  /** O fetch do serviço (o login da Centi vem do sistema). */
   fetch?: (url: string, init: Record<string, unknown>) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 };
 
@@ -33,7 +35,8 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   const removidas: ((id: number) => void)[] = [];
   const janelasFechadas: ((id: number) => void)[] = [];
   const sessao: Record<string, unknown> = { ...(o.sessao ?? {}) };
-  const local: Record<string, unknown> = {};
+  const local: Record<string, unknown> = { ...(o.local ?? {}) };
+  const instalada: (() => unknown)[] = [];
   const abas: Aba[] = [...(o.abas ?? [])];
   const grupos = [...(o.grupos ?? [])];
   const enviados: { tabId: number; m: Record<string, unknown> }[] = [];
@@ -46,7 +49,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     runtime: {
       id: "ext",
       getURL: (p: string) => `chrome-extension://ext/${p}`,
-      onInstalled: { addListener() {} },
+      onInstalled: { addListener: (f: () => unknown) => instalada.push(f) },
       onMessage: {
         addListener: (f: Ouvinte) => ouvintes.push(f),
         removeListener: (f: Ouvinte) => {
@@ -91,10 +94,10 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     },
     storage: {
       local: {
-        get: async (k: string) => ({ [k]: local[k] }),
+        get: async (k: string | string[]) => Object.fromEntries((Array.isArray(k) ? k : [k]).map((c) => [c, local[c]])),
         set: async (x: Record<string, unknown>) => Object.assign(local, x),
-        remove: async (k: string) => {
-          delete local[k];
+        remove: async (k: string | string[]) => {
+          for (const c of Array.isArray(k) ? k : [k]) delete local[c];
         },
       },
       session: {
@@ -169,8 +172,26 @@ export function servicoFalso(o: OpcoesFalso = {}) {
       onAlarm: { addListener() {} },
     },
   };
-  const ctx: Record<string, unknown> = { chrome, URL, URLSearchParams, crypto, setTimeout, clearTimeout, Promise, Date, Math, Number, String, JSON };
-  if (o.cofre) ctx.CofreCenti = o.cofre;
+  const ctx: Record<string, unknown> = {
+    chrome,
+    URL,
+    URLSearchParams,
+    crypto,
+    setTimeout,
+    clearTimeout,
+    Promise,
+    Date,
+    Math,
+    Number,
+    String,
+    JSON,
+    atob,
+    btoa,
+    TextEncoder,
+    TextDecoder,
+    Uint8Array,
+  };
+  if (o.indexedDB) ctx.indexedDB = o.indexedDB;
   if (o.fetch) ctx.fetch = o.fetch;
   vm.runInNewContext(fonteExtensao("background.js"), ctx);
   /** Uma mensagem ao serviço, como se viesse de `url` (a tela do sistema, por padrão). */
@@ -181,6 +202,10 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     });
   return {
     pedir,
+    /** O `onInstalled` (extensão instalada ou atualizada). */
+    instalar: async () => {
+      for (const f of instalada) await f();
+    },
     sessao,
     local,
     abas,

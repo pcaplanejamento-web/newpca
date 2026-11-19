@@ -46,3 +46,45 @@ export async function decifrar(chaveBytes: Uint8Array, blob: string): Promise<st
     return null;
   }
 }
+
+/**
+ * Chave DERIVADA da mestra para UM propósito (HKDF-SHA256, `info` = o propósito): cada uso tem a sua chave — vazar
+ * um blob de um propósito não ajuda a abrir os de outro.
+ */
+export async function chaveDerivada(mestra: string, proposito: string): Promise<Uint8Array> {
+  const base = await crypto.subtle.importKey("raw", enc.encode(mestra) as BufferSource, "HKDF", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt: enc.encode("pca/hkdf/v1") as BufferSource, info: enc.encode(proposito) as BufferSource },
+    base,
+    256,
+  );
+  return new Uint8Array(bits);
+}
+
+/**
+ * AES-GCM com DADOS ADICIONAIS (AAD): o blob só abre com o MESMO `aad` (ex.: o dono) — copiado para outro registro, não
+ * abre. Formato "v2:<ivHex>:<ctHex>".
+ */
+export async function cifrarComAad(chaveBytes: Uint8Array, texto: string, aad: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const key = await importarChave(chaveBytes);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv as BufferSource, additionalData: enc.encode(aad) as BufferSource }, key, enc.encode(texto));
+  return `v2:${toHex(iv)}:${toHex(new Uint8Array(ct))}`;
+}
+
+/** Decifra um blob "v2:…" com o MESMO `aad`. `null` em qualquer erro (outro dono, chave errada, blob corrompido). */
+export async function decifrarComAad(chaveBytes: Uint8Array, blob: string, aad: string): Promise<string | null> {
+  try {
+    const [v, ivHex, ctHex] = String(blob).split(":");
+    if (v !== "v2" || !ivHex || !ctHex) return null;
+    const key = await importarChave(chaveBytes);
+    const pt = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: fromHex(ivHex) as BufferSource, additionalData: enc.encode(aad) as BufferSource },
+      key,
+      fromHex(ctHex) as BufferSource,
+    );
+    return dec.decode(pt);
+  } catch {
+    return null;
+  }
+}

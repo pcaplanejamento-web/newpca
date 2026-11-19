@@ -35,6 +35,33 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.299.0",
+    data: "2026-11-19",
+    titulo: "Login da Centi guardado no sistema",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "O login da Centi de cada administrador fica guardado no sistema, cifrado no banco: vale em qualquer navegador e não se perde com versão nova do sistema ou da extensão. Salve em Ajustes → Login da Centi.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Extensão 1.39.0: não guarda mais a senha — lê o login do sistema na hora de entrar na Centi. O login que estava na extensão sobe sozinho para o sistema ao atualizar.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Senha recusada pela Centi pausa o login em todos os navegadores até salvar de novo — a conta na Centi não é bloqueada.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.298.0",
     data: "2026-11-19",
     titulo: "Escolher o que corrigir e a Centi sempre pronta",

@@ -33,3 +33,19 @@ describe("cripto (AES-GCM dos segredos de integração)", () => {
     assert.equal(await decifrar(k, ""), null);
   });
 });
+
+describe("cripto com AAD + chave derivada (login da Centi)", async () => {
+  const { chaveDerivada, cifrarComAad, decifrarComAad } = await import("../src/lib/cripto.ts");
+  it("abre só com o mesmo dono e a mesma chave derivada", async () => {
+    const k = await chaveDerivada("mestra", "pca/centi-login/v2");
+    const blob = await cifrarComAad(k, "segredo", "centi-login:u1");
+    assert.match(blob, /^v2:[0-9a-f]+:[0-9a-f]+$/);
+    assert.equal(await decifrarComAad(k, blob, "centi-login:u1"), "segredo");
+    assert.equal(await decifrarComAad(k, blob, "centi-login:u2"), null); // copiado para outra pessoa: não abre
+    const outra = await chaveDerivada("mestra", "outro-proposito");
+    assert.equal(await decifrarComAad(outra, blob, "centi-login:u1"), null); // outro propósito: outra chave
+    assert.notDeepEqual(k, await chaveDeSegredo("mestra"));
+    assert.equal(await decifrarComAad(k, "lixo", "centi-login:u1"), null);
+    assert.equal(await decifrarComAad(k, blob.slice(3), "centi-login:u1"), null); // sem o "v2:"
+  });
+});

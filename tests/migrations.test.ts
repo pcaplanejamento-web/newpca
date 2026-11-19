@@ -1602,3 +1602,21 @@ describe("0194: UMA automação — Verificar DFDs na Centi (conteúdo · situa�
     assert.equal(ls[1].frequencia, '{"tipo":"semanal","hora":"08:00","dias":[1]}', "a agenda da única fica");
   });
 });
+
+describe("0195: o login da Centi de cada ADM no banco", () => {
+  it("leva o cofre das preferências para centi_logins e o tira das preferências", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0194_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (1, 'Ana', 'ana@x', 'h'), (2, 'Bia', 'bia@x', 'h')");
+    db.exec(`INSERT INTO preferencias_tabela (usuario_id, chave, valor) VALUES
+      (1, 'cofre:centi-login', '{"dados":"aa:bb","em":"2026-11-01T10:00:00Z"}'),
+      (2, 'cofre:centi-login', 'lixo'),
+      (2, 'mesa:dados-completos', '{"ligado":true}')`);
+    db.exec(readFileSync(join(DIR, "0195_centi_logins.sql"), "utf8"));
+    const logins = db.prepare("SELECT usuario_id AS u, cifrado, auto, atualizado_em AS em FROM centi_logins").all();
+    assert.deepEqual(JSON.parse(JSON.stringify(logins)), [{ u: 1, cifrado: "aa:bb", auto: 1, em: "2026-11-01T10:00:00Z" }]);
+    const prefs = db.prepare("SELECT chave FROM preferencias_tabela ORDER BY id").all() as { chave: string }[];
+    assert.deepEqual(prefs.map((p) => p.chave), ["mesa:dados-completos"]);
+  });
+});

@@ -80,11 +80,24 @@ export const registrarSchema = z.object({
   protocoloId: z.number().int().positive().nullable(),
 });
 
-/** O login da Centi que a EXTENSÃO guarda (cifrado) no sistema — opcional, para voltar sozinho depois de reinstalar. */
+/** O LOGIN DA CENTI salvo pela TELA do sistema: `null` = mantém o guardado (a senha nunca volta à tela). */
 export const credencialCentiSchema = z
   .object({
-    usuario: z.string().trim().min(1).max(120),
-    senha: z.string().min(1).max(200),
+    usuario: z.string().trim().min(1).max(120).nullable(),
+    senha: z.string().min(1).max(200).nullable(),
     auto: z.boolean(),
   })
   .strict();
+
+/** O que a EXTENSÃO manda: a pausa (a Centi recusou a senha) ou, UMA vez, o login que ela tinha guardado antes da 1.39.0. */
+export const credencialCentiExtensaoSchema = z.discriminatedUnion("acao", [
+  z.object({ acao: z.literal("pausar"), motivo: z.string().trim().min(1).max(300) }).strict(),
+  z
+    .object({
+      acao: z.literal("importar"),
+      usuario: z.string().trim().min(1).max(120),
+      senha: z.string().min(1).max(200),
+      auto: z.boolean(),
+    })
+    .strict(),
+]);

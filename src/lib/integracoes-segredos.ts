@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { chaveDeSegredo, cifrar, decifrar } from "./cripto.ts";
+import { chaveDeSegredo, chaveDerivada, cifrar, decifrar } from "./cripto.ts";
 
 /**
  * Wrapper SERVER-ONLY: lê a chave mestra (Worker Secret `INTEGRACOES_CHAVE`) do
@@ -35,4 +35,16 @@ export async function decifrarSegredo(blob: string): Promise<string | null> {
   const mestra = chaveMestraRaw();
   if (!mestra || !blob) return null;
   return decifrar(await chaveDeSegredo(mestra), blob);
+}
+
+/** A chave DERIVADA da mestra para um propósito (HKDF — `cripto.chaveDerivada`). `null` sem a chave mestra. */
+export async function chaveDoProposito(proposito: string): Promise<Uint8Array | null> {
+  const mestra = chaveMestraRaw();
+  return mestra ? chaveDerivada(mestra, proposito) : null;
+}
+
+/** A chave dos SEGREDOS (a de `cifrarSegredo`) — só para abrir o que foi cifrado com ela e regravá-lo noutra chave. */
+export async function chaveDosSegredos(): Promise<Uint8Array | null> {
+  const mestra = chaveMestraRaw();
+  return mestra ? chaveDeSegredo(mestra) : null;
 }
