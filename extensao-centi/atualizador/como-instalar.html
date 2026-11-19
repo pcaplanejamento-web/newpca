@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalar a extensão Automação PCA</title>
+<!-- Aberta pelo INSTALADOR (instalar-windows.bat / instalar-mac.command) no Chrome: o Chrome não deixa nenhum programa abrir
+     chrome://extensions nem carregar a extensão — esta página mostra o que falta e copia o endereço e o caminho. O caminho sai
+     do próprio endereço desta página (ela fica em <pasta da extensão>/atualizador/). Nada sai deste computador. -->
+<style>
+  :root { color-scheme: light dark; --bg: #f6f7f9; --surface: #fff; --text: #111827; --muted: #6b7280; --border: #e5e7eb; --accent: #2563eb; --ok: #059669; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --surface: #171a21; --text: #e5e7eb; --muted: #9ca3af; --border: #2a2f3a; --accent: #60a5fa; --ok: #34d399; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .ok { display: flex; gap: 8px; align-items: center; color: var(--ok); font-weight: 600; margin: 0 0 16px; }
+  ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  li { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .corpo { min-width: 0; display: grid; gap: 8px; }
+  .copiar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; overflow-wrap: anywhere; }
+  button { font: inherit; font-size: 14px; font-weight: 600; min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .aviso { margin-top: 16px; color: var(--muted); font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Falta só um passo no Chrome</h1>
+  <p class="sub">O instalador já colocou a extensão numa pasta fixa e ligou a atualização automática.</p>
+  <p class="ok" id="jaTem" hidden>A extensão já estava no Chrome: carregar a pasta abaixo a substitui (se a antiga continuar na lista, remova-a).</p>
+  <ol>
+    <li><span class="n">1</span><div class="corpo">
+      <span>Abra a página de extensões: cole este endereço numa aba nova e aperte Enter.</span>
+      <div class="copiar"><code>chrome://extensions</code><button type="button" data-copiar="chrome://extensions">Copiar</button></div>
+    </div></li>
+    <li><span class="n">2</span><div class="corpo">
+      <span>Ligue o <strong>Modo do desenvolvedor</strong> (canto superior direito) e toque em <strong>Carregar sem compactação</strong>.</span>
+    </div></li>
+    <li><span class="n">3</span><div class="corpo">
+      <span id="instrucao">Na janela, cole o caminho da pasta da extensão e confirme:</span>
+      <div class="copiar"><code id="caminho"></code><button type="button" id="copiarCaminho">Copiar</button></div>
+    </div></li>
+  </ol>
+  <p class="aviso">É uma vez por computador: depois disso a extensão se atualiza sozinha. Não apague a pasta acima. Pode fechar esta página quando terminar.</p>
+</main>
+<script>
+  // O caminho da pasta da extensão = o desta página sem "/atualizador/como-instalar.html".
+  const p = decodeURIComponent(location.pathname).replace(/\/atualizador\/[^/]*$/, "");
+  const windows = /^\/[A-Za-z]:\//.test(p);
+  const caminho = windows ? p.slice(1).replace(/\//g, "\\") : p;
+  document.getElementById("caminho").textContent = caminho;
+  document.getElementById("copiarCaminho").dataset.copiar = caminho;
+  document.getElementById("instrucao").textContent = windows
+    ? "Na janela, clique na barra de endereço, cole o caminho (Ctrl+V), aperte Enter e depois em Selecionar pasta:"
+    : "Na janela, aperte Cmd+Shift+G, cole o caminho (Cmd+V), aperte Enter e depois em Selecionar:";
+  document.getElementById("jaTem").hidden = !new URLSearchParams(location.search).has("ja");
+  async function copiar(b) {
+    const t = b.dataset.copiar;
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      const a = document.createElement("textarea");
+      a.value = t;
+      document.body.append(a);
+      a.select();
+      document.execCommand("copy");
+      a.remove();
+    }
+    const antes = b.textContent;
+    b.textContent = "Copiado!";
+    setTimeout(() => (b.textContent = antes), 1500);
+  }
+  for (const b of document.querySelectorAll("button")) b.addEventListener("click", () => copiar(b));
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ const pasta = new URL("../extensao-centi/", import.meta.url);
 // A extensão (a raiz) + o ATUALIZADOR (atualizador/ — os instaladores e o host de cada sistema operacional).
 const daRaiz = readdirSync(pasta).filter((n) => /\.(js|json|html)$/.test(n));
 const doAtualizador = readdirSync(new URL("atualizador/", pasta))
-  .filter((n) => /\.(bat|ps1|command|jxa)$/.test(n))
+  .filter((n) => /\.(bat|ps1|command|jxa|html)$/.test(n))
   .map((n) => `atualizador/${n}`);
 const arquivos = Object.fromEntries(
   [...daRaiz, ...doAtualizador].sort().map((n) => [n, readFileSync(new URL(n, pasta), "utf8")]),

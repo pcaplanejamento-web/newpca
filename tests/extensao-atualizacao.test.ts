@@ -204,7 +204,14 @@ test("instalador do Mac: copia para a pasta fixa e registra o atualizador nela (
       mkdirSync(dirname(join(baixado, n)), { recursive: true });
       writeFileSync(join(baixado, n), t);
     }
-    const r = spawnSync("sh", [join(baixado, "atualizador/instalar-mac.command")], { env: { ...process.env, HOME: raiz }, encoding: "utf8" });
+    // Os comandos do Mac (open, pbcopy) FALSOS: anotam com o que foram chamados.
+    const bin = join(raiz, "bin");
+    mkdirSync(bin);
+    for (const c of ["open", "pbcopy"]) {
+      writeFileSync(join(bin, c), `#!/bin/sh\necho "${c} $*" >> "${join(raiz, "chamadas.txt")}"\ncat >/dev/null 2>&1 || true\n`, { mode: 0o755 });
+    }
+    const env = { ...process.env, HOME: raiz, PATH: `${bin}:${process.env.PATH}` };
+    const r = spawnSync("sh", [join(baixado, "atualizador/instalar-mac.command")], { env, encoding: "utf8", input: "" });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     const fixa = join(raiz, "Library/Application Support/Automacao PCA/extensao");
     assert.ok(existsSync(join(fixa, "manifest.json")), "a extensão na pasta fixa");
@@ -213,6 +220,18 @@ test("instalador do Mac: copia para a pasta fixa e registra o atualizador nela (
     assert.equal(host.path, join(fixa, "atualizador/atualizador.jxa"), "o host aponta para a pasta FIXA");
     assert.deepEqual(host.allowed_origins, ["chrome-extension://lhdooglmnecpbocibgfobaefahliicnn/"]);
     assert.match(r.stdout, /Carregar sem compactação/);
+    // A PÁGINA do que falta (nunca chrome://extensions — o Chrome a recusa vinda de fora), no Chrome.
+    const chamadas = ler(join(raiz, "chamadas.txt"), "utf8");
+    assert.match(chamadas, /open -a Google Chrome file:\/\/.*\/Application%20Support\/Automacao%20PCA\/extensao\/atualizador\/como-instalar\.html/);
+    assert.ok(!chamadas.includes("chrome://"), "nunca abre chrome:// por fora");
+    assert.ok(existsSync(join(fixa, "atualizador/como-instalar.html")));
+    // Rodar um instalador ANTIGO depois de a extensão já ter se atualizado: nunca rebaixa.
+    const m = JSON.parse(ler(join(fixa, "manifest.json"), "utf8"));
+    writeFileSync(join(fixa, "manifest.json"), JSON.stringify({ ...m, version: "99.0.0" }));
+    const r2 = spawnSync("sh", [join(baixado, "atualizador/instalar-mac.command")], { env, encoding: "utf8", input: "" });
+    assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+    assert.match(r2.stdout, /já tem a versão 99\.0\.0/);
+    assert.equal(JSON.parse(ler(join(fixa, "manifest.json"), "utf8")).version, "99.0.0", "não rebaixou");
     assert.match(r.stdout, new RegExp(`Caminho: ${fixa.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   } finally {
     rmSync(raiz, { recursive: true, force: true });
@@ -223,7 +242,16 @@ test("instalador do Windows: pasta fixa em LOCALAPPDATA, o caminho copiado e a p
   const t = arq("instalar-windows.ps1");
   assert.match(t, /\$env:LOCALAPPDATA 'Automacao PCA\\extensao'/);
   assert.match(t, /Set-Clipboard -Value \$pasta/);
-  assert.match(t, /chrome:\/\/extensions\//);
+  assert.match(t, /como-instalar\.html/, "abre a página do que falta");
+  assert.ok(!/Start-Process[^\n]*chrome:\/\//.test(t), "nunca abre chrome:// por fora (o Chrome recusa)");
+  assert.match(t, /-gt \(Versao \$origem\)/, "nunca rebaixa");
   assert.match(t, /HKCU:\\Software\\Google\\Chrome\\NativeMessagingHosts/);
   assert.match(t, /Join-Path \$aqui 'atualizador\.bat'/, "o host da pasta fixa");
+});
+
+test("página do que falta: o caminho sai do próprio endereço (Windows e Mac) e há os botões de copiar", () => {
+  const t = arq("como-instalar.html");
+  assert.match(t, /data-copiar="chrome:\/\/extensions"/);
+  assert.ok(t.includes("\\/atualizador\\/[^/]*$"), "o caminho = o desta página sem /atualizador/…");
+  assert.ok(!/<script[^>]+src=/.test(t), "nada externo");
 });

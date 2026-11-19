@@ -148,7 +148,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.43.0"), false);
   assert.equal(versaoAtende("1.44.0"), false);
   assert.equal(versaoAtende("1.44.1"), false);
-  assert.equal(versaoAtende("1.44.2"), true);
+  assert.equal(versaoAtende("1.44.2"), false);
+  assert.equal(versaoAtende("1.44.3"), true);
   // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
   assert.equal(versaoFunciona("1.37.0"), false);
   assert.equal(versaoFunciona("1.38.0"), true);
@@ -245,7 +246,7 @@ test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", 
   const nomes = [
     ...readdirSync(pasta).filter((n) => /\.(js|json|html)$/.test(n)),
     ...readdirSync(new URL("atualizador/", pasta))
-      .filter((n) => /\.(bat|ps1|command|jxa)$/.test(n))
+      .filter((n) => /\.(bat|ps1|command|jxa|html)$/.test(n))
       .map((n) => `atualizador/${n}`),
   ].sort();
   assert.deepEqual(Object.keys(ARQUIVOS_EXTENSAO).sort(), nomes, "rode: node scripts/gerar-extensao.mjs");

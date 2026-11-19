@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.305.1",
+    data: "2026-11-19",
+    titulo: "Instalador da extensão revisado",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.44.3: o instalador abre no Chrome uma página com o que falta — o caminho da pasta já preenchido e os botões de copiar (o Chrome não deixa programa nenhum abrir a página de extensões direto). Rodar de novo um instalador antigo nunca rebaixa a extensão já atualizada, e os passos explicam o aviso do Windows ao abrir o instalador.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.305.0",
     data: "2026-11-19",
     titulo: "Instalador da extensão em um duplo clique",

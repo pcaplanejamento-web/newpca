@@ -230,12 +230,12 @@ function ComoInstalarExtensao({ onFechar }: { onFechar: () => void }) {
         <>
           Na pasta, abra <strong>atualizador</strong> e dê dois cliques em <strong>instalar-mac.command</strong>. Se o Mac bloquear:
           Ajustes do Sistema → Privacidade e Segurança → <strong>Abrir Mesmo Assim</strong>. Ele copia a extensão para uma pasta
-          fixa, instala a atualização automática, copia o caminho e abre a página de extensões do Chrome.
+          fixa, instala a atualização automática, copia o caminho e abre no Chrome uma página com o que falta.
         </>,
         <>
-          No Chrome: ligue o <strong>Modo do desenvolvedor</strong> (canto superior direito), toque em{" "}
-          <strong>Carregar sem compactação</strong>, aperte <strong>Cmd+Shift+G</strong>, <strong>Cmd+V</strong> e Enter, e depois
-          “Selecionar”.
+          No Chrome, abra <strong>chrome://extensions</strong>, ligue o <strong>Modo do desenvolvedor</strong> (canto superior
+          direito), toque em <strong>Carregar sem compactação</strong>, aperte <strong>Cmd+Shift+G</strong>, <strong>Cmd+V</strong>{" "}
+          e Enter, e depois “Selecionar”.
         </>,
       ]
     : [
@@ -244,14 +244,15 @@ function ComoInstalarExtensao({ onFechar }: { onFechar: () => void }) {
           <strong>Extrair tudo</strong>.
         </>,
         <>
-          Na pasta extraída, abra <strong>atualizador</strong> e dê dois cliques em <strong>instalar-windows.bat</strong>. Ele copia
-          a extensão para uma pasta fixa, instala a atualização automática, copia o caminho e abre a página de extensões do
-          Chrome.
+          Na pasta extraída, abra <strong>atualizador</strong> e dê dois cliques em <strong>instalar-windows.bat</strong> (se o
+          Windows avisar que protegeu o computador: <strong>Mais informações → Executar assim mesmo</strong>). Ele copia a
+          extensão para uma pasta fixa, instala a atualização automática, copia o caminho e abre no Chrome uma página com o que
+          falta.
         </>,
         <>
-          No Chrome: ligue o <strong>Modo do desenvolvedor</strong> (canto superior direito), toque em{" "}
-          <strong>Carregar sem compactação</strong>, clique na barra de endereço da janela, aperte <strong>Ctrl+V</strong> e Enter,
-          e depois “Selecionar pasta”.
+          No Chrome, abra <strong>chrome://extensions</strong>, ligue o <strong>Modo do desenvolvedor</strong> (canto superior
+          direito), toque em <strong>Carregar sem compactação</strong>, clique na barra de endereço da janela, aperte{" "}
+          <strong>Ctrl+V</strong> e Enter, e depois “Selecionar pasta”.
         </>,
       ];
   return (

@@ -1163,8 +1163,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Chrome mesmo se o Edge falhar. **INSTALADOR de um duplo clique (v1.305.0, extensão 1.44.2):** `instalar-windows.bat`/
   `instalar-mac.command` copiam a extensão para uma PASTA FIXA (`%LOCALAPPDATA%\Automacao PCA\extensao` ou
   `~/Library/Application Support/Automacao PCA/extensao` — rodando dela, só refaz o registro), registram o host NELA, copiam o
-  caminho (`Set-Clipboard`/`pbcopy`), abrem `chrome://extensions/` e dizem os 3 passos (avisam quando a extensão já está no
-  Chrome — o id nas "Secure Preferences"). O "Carregar sem compactação" é do Chrome (nenhum programa pode fazer) — uma vez.
+  caminho (`Set-Clipboard`/`pbcopy`) e abrem no Chrome `atualizador/como-instalar.html` (os 3 passos, o caminho tirado do
+  próprio endereço da página e os botões de copiar; `?ja=1` = a extensão já está no Chrome — o id nas "Secure Preferences")
+  — NUNCA `chrome://extensions` por fora (o Chrome recusa URLs chrome:// vindas da linha de comando). Nunca REBAIXAM (a pasta
+  fixa com versão maior fica). v1.305.1: os scripts rodam como arquivo (`-ExecutionPolicy Bypass`); uma política de grupo da
+  TI que bloqueie scripts NÃO é contornada — o instalador mostra o erro e pede à TI. O "Carregar sem compactação" é do Chrome (nenhum programa pode fazer) — uma vez.
   Na tela, "Baixar a extensão" abre `ComoInstalarExtensao` (os passos do Windows ou do Mac, pelo `userAgent`). Os
   instaladores ficam em `atualizador/` (o host pula a pasta — um arquivo novo na raiz quebraria os hosts já instalados). A situação fica em
   `chrome.storage.local.atualizacao` e vai no `estado` (popup: grupo "Atualização automática"; a tela: `AtualizacaoExtensao`

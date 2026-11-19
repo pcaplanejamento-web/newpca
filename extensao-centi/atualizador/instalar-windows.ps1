@@ -1,12 +1,17 @@
 # INSTALADOR da extensão Automação PCA (Windows) — UM duplo clique em instalar-windows.bat, só para este usuário, sem
 # administrador. Faz tudo o que o Chrome permite fazer por fora:
-#   1. copia a extensão para uma pasta FIXA (%LOCALAPPDATA%\Automacao PCA\extensao) — limpar Downloads não a apaga;
+#   1. copia a extensão para uma pasta FIXA (%LOCALAPPDATA%\Automacao PCA\extensao) — limpar Downloads não a apaga; nunca
+#      rebaixa (a pasta com uma versão mais nova fica como está);
 #   2. instala o ATUALIZADOR (a extensão passa a se atualizar sozinha);
-#   3. copia o caminho da pasta e abre a página de extensões do Chrome.
+#   3. copia o caminho da pasta e abre no navegador a página com o que falta (atualizador\como-instalar.html — o Chrome não
+#      deixa programa nenhum abrir chrome://extensions).
 # O "Carregar sem compactação" é do próprio Chrome (nenhum programa pode fazer por você) — uma vez por computador.
 $ErrorActionPreference = 'Stop'
 $ID = 'lhdooglmnecpbocibgfobaefahliicnn'
 function Passo([string]$t) { Write-Host "  $t" }
+function Versao([string]$d) {
+  try { return [version][string](Get-Content -Raw -Encoding UTF8 (Join-Path $d 'manifest.json') | ConvertFrom-Json).version } catch { return [version]'0.0.0' }
+}
 try {
   Write-Host ''
   Write-Host '  Automação PCA — instalando a extensão' -ForegroundColor Cyan
@@ -14,11 +19,15 @@ try {
   $origem = Split-Path -Parent $PSScriptRoot
   if (-not (Test-Path (Join-Path $origem 'manifest.json'))) { throw 'Rode este instalador de dentro da pasta extraída da extensão (atualizador\instalar-windows.bat).' }
 
-  # 1. A PASTA FIXA (rodando dela mesma = só atualiza o registro).
+  # 1. A PASTA FIXA (rodando dela mesma = só refaz o registro).
   $pasta = Join-Path $env:LOCALAPPDATA 'Automacao PCA\extensao'
   if ((Resolve-Path $origem).Path.TrimEnd('\') -ne $pasta.TrimEnd('\')) {
-    New-Item -ItemType Directory -Force -Path $pasta | Out-Null
-    Copy-Item -Path (Join-Path $origem '*') -Destination $pasta -Recurse -Force
+    if ((Test-Path (Join-Path $pasta 'manifest.json')) -and ((Versao $pasta) -gt (Versao $origem))) {
+      Passo "[ok] A pasta fixa já tem a versão $(Versao $pasta), mais nova que esta ($(Versao $origem)) — mantida."
+    } else {
+      New-Item -ItemType Directory -Force -Path $pasta | Out-Null
+      Copy-Item -Path (Join-Path $origem '*') -Destination $pasta -Recurse -Force
+    }
   }
   Get-ChildItem -Recurse -File $pasta | Unblock-File
   Passo "[ok] Extensão em: $pasta"
@@ -58,14 +67,20 @@ try {
     "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
     "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
   ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+  # A PÁGINA do que falta (o caminho já preenchido e os botões de copiar), no Chrome — sem ele, no navegador padrão.
+  $pagina = ([Uri](Join-Path $aqui 'como-instalar.html')).AbsoluteUri
+  if ($jaTem) { $pagina += '?ja=1' }
   $abriu = $false
-  if ($chrome) { try { Start-Process -FilePath $chrome -ArgumentList 'chrome://extensions/'; $abriu = $true } catch {} }
+  try {
+    if ($chrome) { Start-Process -FilePath $chrome -ArgumentList $pagina } else { Start-Process $pagina }
+    $abriu = $true
+  } catch {}
 
   Write-Host ''
   Write-Host '  Falta só no Chrome (uma vez):' -ForegroundColor Green
-  if (-not $abriu) { Passo '- Abra o Chrome e digite na barra de endereço: chrome://extensions' }
-  Passo '1. Ligue o "Modo do desenvolvedor" (canto superior direito).'
-  Passo '2. Toque em "Carregar sem compactação".'
+  if ($abriu) { Passo '(a página com estes passos e os botões de copiar foi aberta no navegador)' }
+  Passo '1. Abra uma aba nova e digite: chrome://extensions'
+  Passo '2. Ligue o "Modo do desenvolvedor" (canto superior direito) e toque em "Carregar sem compactação".'
   Passo '3. Na janela, clique na barra de endereço, aperte Ctrl+V (o caminho já foi copiado) e Enter; depois "Selecionar pasta".'
   if ($jaTem) {
     Write-Host ''
@@ -77,4 +92,5 @@ try {
 } catch {
   Write-Host ''
   Write-Host ('  Não foi possível instalar: ' + $_.Exception.Message) -ForegroundColor Red
+  Write-Host '  Se o Windows bloqueou os scripts por política da TI, peça à TI para liberar este instalador.'
 }
