@@ -9,6 +9,8 @@ export const INICIO_CENTI = "https://rioverde.centi.com.br/";
 /** O sistema Compras da Centi — onde a aba da automação trabalha (a raiz é só o portal). */
 export const COMPRAS = "https://rioverde.centi.com.br/compras/";
 export const TELA = "https://governarv.com.br/painel/automacao";
+/** O popup (o banner do ícone) — de onde vêm os pedidos dele. */
+export const POPUP_URL = "chrome-extension://ext/popup.html";
 
 type Ouvinte = (m: unknown, sender: Record<string, unknown>, responder?: (r: unknown) => void) => unknown;
 type Aba = { id: number; url: string; groupId?: number; windowId?: number };
@@ -26,7 +28,14 @@ export type OpcoesFalso = {
   sessao?: Record<string, unknown>;
   grupos?: { id: number; title: string; color?: string }[];
   /** O fetch do serviço (o login da Centi vem do sistema). */
-  fetch?: (url: string, init: Record<string, unknown>) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+  fetch?: (
+    url: string,
+    init: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; arrayBuffer?: () => Promise<ArrayBuffer> }>;
+  /** A versão do manifesto (padrão 9.9.9). */
+  versao?: string;
+  /** O ATUALIZADOR local (native messaging); sem ele = "host não encontrado". */
+  nativo?: (host: string, m: Record<string, unknown>) => unknown;
 };
 
 export function servicoFalso(o: OpcoesFalso = {}) {
@@ -36,7 +45,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   const janelasFechadas: ((id: number) => void)[] = [];
   const sessao: Record<string, unknown> = { ...(o.sessao ?? {}) };
   const local: Record<string, unknown> = { ...(o.local ?? {}) };
-  const instalada: (() => unknown)[] = [];
+  const instalada: ((d?: Record<string, unknown>) => unknown)[] = [];
   const abas: Aba[] = [...(o.abas ?? [])];
   const grupos = [...(o.grupos ?? [])];
   const enviados: { tabId: number; m: Record<string, unknown> }[] = [];
@@ -45,12 +54,21 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   let proxAba = 100;
   const alarmes: string[] = [];
   const recarregadas: number[] = [];
+  const nativos: { host: string; m: Record<string, unknown> }[] = [];
+  const recargas: number[] = [];
+  const disparos: ((a: { name: string }) => unknown)[] = [];
   const chrome = {
     runtime: {
       id: "ext",
       getURL: (p: string) => `chrome-extension://ext/${p}`,
-      getManifest: () => ({ version: "9.9.9" }),
-      onInstalled: { addListener: (f: () => unknown) => instalada.push(f) },
+      getManifest: () => ({ version: o.versao ?? "9.9.9" }),
+      sendNativeMessage: async (host: string, m: Record<string, unknown>) => {
+        nativos.push({ host, m });
+        if (!o.nativo) throw new Error("Specified native messaging host not found.");
+        return o.nativo(host, m);
+      },
+      reload: () => void recargas.push(Date.now()),
+      onInstalled: { addListener: (f: (d?: Record<string, unknown>) => unknown) => instalada.push(f) },
       onMessage: {
         addListener: (f: Ouvinte) => ouvintes.push(f),
         removeListener: (f: Ouvinte) => {
@@ -170,7 +188,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     alarms: {
       get: async (n: string) => (alarmes.includes(n) ? { name: n } : undefined),
       create: async (n: string) => void alarmes.push(n),
-      onAlarm: { addListener() {} },
+      onAlarm: { addListener: (f: (a: { name: string }) => unknown) => disparos.push(f) },
     },
   };
   const ctx: Record<string, unknown> = {
@@ -204,8 +222,8 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   return {
     pedir,
     /** O `onInstalled` (extensão instalada ou atualizada). */
-    instalar: async () => {
-      for (const f of instalada) await f();
+    instalar: async (d?: Record<string, unknown>) => {
+      for (const f of instalada) await f(d);
     },
     sessao,
     local,
@@ -216,6 +234,13 @@ export function servicoFalso(o: OpcoesFalso = {}) {
     selos,
     alarmes,
     recarregadas,
+    /** As mensagens ao atualizador local e os recarregar da extensão. */
+    nativos,
+    recargas,
+    /** Dispara um alarme (ex.: "atualizar-extensao"). */
+    alarme: async (name: string) => {
+      for (const f of disparos) await f({ name });
+    },
     fecharAba: (id: number) => {
       const i = abas.findIndex((a) => a.id === id);
       if (i >= 0) abas.splice(i, 1);
@@ -228,3 +253,8 @@ export function servicoFalso(o: OpcoesFalso = {}) {
 }
 
 export const pausa = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+/** Espera a CONDIÇÃO (até `ms`) — o trabalho em segundo plano do serviço não tem prazo fixo numa máquina ocupada. */
+export async function ate(cond: () => boolean, ms = 3000) {
+  const fim = Date.now() + ms;
+  while (!cond() && Date.now() < fim) await pausa(5);
+}

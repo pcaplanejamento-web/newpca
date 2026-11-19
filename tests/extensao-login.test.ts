@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { abrirSelado, impressaoDaChave, selarParaChave } from "../src/lib/centi-login-core.ts";
-import { COMPRAS, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
+import { ate, COMPRAS, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
 
 const fonte = (n: string) => readFileSync(new URL(`../extensao-centi/${n}`, import.meta.url), "utf8");
 
@@ -209,7 +209,7 @@ test("serviço: aba na tela de login → lê o login do SISTEMA e entra UMA vez;
   assert.equal(r.ok, false);
   assert.equal(r.tela, "login");
   assert.ok(!JSON.stringify(r).includes("s3gredo"), "a senha nunca vai à tela do sistema");
-  await pausa(20);
+  await ate(() => s.logins.length >= 1 && s.sis.banco.pausado === true);
   assert.equal(s.logins.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(s.logins[0])), { alvo: "centi-login", usuario: "maria", senha: "s3gredo" });
   // O login veio do sistema SELADO à chave pública que a extensão mandou — sem autorizar nada: estar logado basta.

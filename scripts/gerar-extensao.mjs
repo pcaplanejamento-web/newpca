@@ -3,11 +3,13 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const pasta = new URL("../extensao-centi/", import.meta.url);
+// A extensão (a raiz) + o ATUALIZADOR (atualizador/ — os instaladores e o host de cada sistema operacional).
+const daRaiz = readdirSync(pasta).filter((n) => /\.(js|json|html)$/.test(n));
+const doAtualizador = readdirSync(new URL("atualizador/", pasta))
+  .filter((n) => /\.(bat|ps1|command|jxa)$/.test(n))
+  .map((n) => `atualizador/${n}`);
 const arquivos = Object.fromEntries(
-  readdirSync(pasta)
-    .filter((n) => /\.(js|json|html)$/.test(n))
-    .sort()
-    .map((n) => [n, readFileSync(new URL(n, pasta), "utf8")]),
+  [...daRaiz, ...doAtualizador].sort().map((n) => [n, readFileSync(new URL(n, pasta), "utf8")]),
 );
 writeFileSync(
   new URL("../src/lib/extensao-centi-arquivos.ts", import.meta.url),

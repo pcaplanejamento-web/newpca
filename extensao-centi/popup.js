@@ -39,7 +39,7 @@
     $("nova").hidden = !tem;
     if (tem) {
       $("nova").textContent = `Nova ${recomendada}`;
-      $("nova").title = `Há a versão ${recomendada} — baixe na tela Automação do sistema e reinstale.`;
+      $("nova").title = `Há a versão ${recomendada} — com o atualizador instalado, ela entra sozinha (ou toque em Atualizar agora).`;
     }
   }
 
@@ -560,6 +560,50 @@
     }
   });
 
+  // ---------------------------------------------------------------- ATUALIZAÇÃO AUTOMÁTICA (o atualizador local)
+  $("ajudaAtual").addEventListener("click", () => {
+    const aberta = $("ajudaAtual").getAttribute("aria-expanded") === "true";
+    $("ajudaAtual").setAttribute("aria-expanded", String(!aberta));
+    $("textoAjudaAtual").hidden = aberta;
+  });
+  const INSTALAR = "Na pasta da extensão, abra atualizador/instalar-windows.bat (Windows) ou atualizador/instalar-mac.command (Mac).";
+  function mostrarAtualizacao(a) {
+    const s = a?.situacao;
+    const [texto, cor] =
+      s === "emDia"
+        ? ["Ativa", "emerald"]
+        : s === "ausente"
+          ? ["Instale o atualizador", "amber"]
+          : s === "outraPasta"
+            ? ["Atualizador em outra pasta", "amber"]
+            : s === "atualizando" || s === "recarregar"
+              ? ["Atualizando…", "blue"]
+              : s === "ocupada"
+                ? ["Espera a automação terminar", "blue"]
+                : s === "semSistema"
+                  ? ["Entre no sistema para conferir", "amber"]
+                  : s === "falhou"
+                    ? ["Falhou", "red"]
+                    : ["Conferindo…", ""];
+    $("atualSelo").textContent = texto;
+    $("atualSelo").className = `badge dot ${cor}`;
+    $("atualSelo").title = texto;
+    const linhas = [];
+    if (s === "ausente") linhas.push(INSTALAR);
+    if (s === "outraPasta") linhas.push(`O atualizador foi instalado para outra pasta${a.pasta ? ` (${a.pasta})` : ""}. ${INSTALAR}`);
+    if (s === "falhou" && a.erro) linhas.push(a.erro);
+    if (a?.para && a?.de && a?.atualizadaEm) linhas.push(`Atualizada de ${a.de} para ${a.para} ${haQuanto(a.atualizadaEm)}.`);
+    else if (a?.verificadaEm) linhas.push(`Conferida ${haQuanto(a.verificadaEm)}${a.publicada ? ` · publicada: ${a.publicada}` : ""}.`);
+    $("atualTexto").textContent = linhas.join(" ");
+    $("atualTexto").className = `texto-xs${s === "falhou" ? " danger" : ""}`;
+    $("atualizarAgora").disabled = s === "atualizando" || s === "recarregar";
+  }
+  $("atualizarAgora").addEventListener("click", async () => {
+    mostrarAtualizacao({ situacao: "atualizando" });
+    const r = await pedir({ tipo: "atualizarAgora" });
+    mostrarAtualizacao(r?.atualizacao ?? { situacao: "falhou", erro: r?.erro ?? "A extensão não respondeu." });
+  });
+
   // ---------------------------------------------------------------- CARREGAR e ACOMPANHAR até a Centi ficar pronta
   async function carregar(fresco = false) {
     const r = await pedir({ tipo: "estado", fresco });
@@ -569,6 +613,7 @@
       return r;
     }
     mostrarAtividade(r.atividade ?? null);
+    mostrarAtualizacao(r.atualizacao ?? null);
     // Não apaga o que a pessoa está digitando: só o selo, as dicas e o "entrar sozinho" mudam.
     if (!salvando) mostrarLogin(r.login);
     if (ajustes) $("entidades").placeholder = aberta ? `vazio = 0 a 28 (aberta: ${aberta})` : "02:03:04";
@@ -594,6 +639,9 @@
   chrome.storage.session.onChanged.addListener((m) => {
     if (m.atividade) mostrarAtividade(m.atividade.newValue ?? null);
     if (m.confirmacao) mostrarConfirmacao(m.confirmacao.newValue ?? null);
+  });
+  chrome.storage.local.onChanged?.addListener((m) => {
+    if (m.atualizacao) mostrarAtualizacao(m.atualizacao.newValue ?? null);
   });
   mostrarGravador();
   carregar(true).then(async (r) => {

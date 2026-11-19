@@ -1144,6 +1144,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mudarAjustes` [só os campos `CAMPOS_AJUSTES`], `execucoes`, `execucao`, `cancelarExecucao`, `gravador`, `salvarLogin`,
   `removerLogin`); só o popup da própria extensão os usa. Abrir o ícone roda o `garantirSessao` (a Centi pronta). Testes:
   `tests/automacao-ajustes.test.ts`, `tests/extensao-login.test.ts` (o banner, o canal e que o popup não usa storage).
+- **ATUALIZAÇÃO AUTOMÁTICA DA EXTENSÃO (v1.304.0, extensão 1.44.0, sem migração) — regra firme: o ATUALIZADOR local nunca
+  se atualiza nem roda nada do pacote.** A extensão segue instalada pelo .zip (descompactada); o Chrome não a deixa trocar os
+  próprios arquivos, então um host de native messaging (`br.gov.governarv.pca_atualizador`, permissão `nativeMessaging`) faz
+  isso. Instalado UMA vez por computador, sem administrador, de dentro da pasta da extensão: `extensao-centi/atualizador/`
+  `instalar-windows.bat` (+ `.ps1`: `Unblock-File`, o manifesto do host e o registro em HKCU do Chrome e do Edge; host =
+  `atualizador.bat` → `atualizador.ps1`) ou `instalar-mac.command` (tira a quarentena, `chmod +x`, o manifesto em
+  `~/Library/Application Support/…/NativeMessagingHosts`; host = `atualizador.jxa`, JavaScript for Automation). O host só
+  grava a LISTA BRANCA (`*.js|*.json|*.html` da raiz + `icone.png`), pula `atualizador/`, confere o SHA-256, a MESMA `key` e
+  uma versão MAIOR, guarda a cópia em `atualizador/anterior/` (volta se falhar) e grava o `manifest.json` por último.
+  `background.js` → `verificarAtualizacao(forcar)`: no `onStartup`, no alarme `atualizar-extensao` (30 min) e no "Atualizar
+  agora" do popup; `GET /api/admin/automacao/extensao?info=1` (`{versao, minima}`) → só com versão nova pergunta ao host
+  (`versao` — `ausente`/`outraPasta`), baixa o .zip pela sessão do ADM e manda `{acao:"atualizar", zip base64, sha256,
+  versao}` → `chrome.runtime.reload()` (`recarregarSeLivre`: nunca com lote rodando — espera o fim). A situação fica em
+  `chrome.storage.local.atualizacao` e vai no `estado` (popup: grupo "Atualização automática"; a tela: `AtualizacaoExtensao`
+  no menu "Extensão e Centi"). O .zip (`zipDaExtensao`) leva `atualizador/*` com CRLF nos `.bat`/`.ps1`, BOM no `.ps1` e o
+  modo 0755 nos do Mac (`ZipArmazenar.adicionar(…, {executavel})`); `scripts/gerar-extensao.mjs` inclui a pasta. Testes:
+  `tests/extensao-atualizacao.test.ts`.
 - **O QUE CORRIGIR + CENTI SEMPRE PRONTA + VERSÃO/SESSÃO (v1.298.0, extensão 1.38.0, sem migração):**
   - **"O que corrigir"** (campo `corrigirTipos` do `dados.filtrarConferencia`, tipo de campo `lista` com `opcoes` → `SeletorMultiplo
     suspenso` no `CampoDoNo`; visível com Conteúdo + Corrigir): os grupos FIXOS `GRUPOS_CORRECAO` (`correcao-centi-core.ts`:

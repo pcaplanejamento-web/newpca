@@ -70,7 +70,59 @@ type Resposta = {
   /** O andamento do último lote, como a extensão o guardou (sobrevive ao F5 desta tela). */
   atividade?: { estado: string; titulo: string; passo: string; atualizado: number } | null;
   loteId?: string;
+  /** A ATUALIZAÇÃO AUTOMÁTICA da extensão (o atualizador local, desde a 1.44.0). */
+  atualizacao?: AtualizacaoExt | null;
 };
+type AtualizacaoExt = {
+  situacao?: string;
+  erro?: string | null;
+  pasta?: string | null;
+  de?: string | null;
+  para?: string | null;
+  atualizadaEm?: number;
+  verificadaEm?: number;
+  publicada?: string | null;
+};
+const SITUACAO_ATUALIZACAO: Record<string, [string, "emerald" | "amber" | "blue" | "red"]> = {
+  emDia: ["Atualização automática ativa", "emerald"],
+  ausente: ["Instale o atualizador", "amber"],
+  outraPasta: ["Atualizador em outra pasta", "amber"],
+  atualizando: ["Atualizando a extensão…", "blue"],
+  recarregar: ["Atualizando a extensão…", "blue"],
+  ocupada: ["Atualiza ao fim da automação", "blue"],
+  semSistema: ["Atualização: entre no sistema", "amber"],
+  falhou: ["Atualização falhou", "red"],
+};
+/** A situação da ATUALIZAÇÃO AUTOMÁTICA da extensão (a mesma do banner do ícone) + o passo único do atualizador. */
+function AtualizacaoExtensao({ a }: { a: AtualizacaoExt | null | undefined }) {
+  // A extensão antes da 1.44.0 não informa: ela ainda se atualiza à mão.
+  const [texto, tom]: [string, "emerald" | "amber" | "blue" | "red"] = a?.situacao
+    ? (SITUACAO_ATUALIZACAO[a.situacao] ?? ["Conferindo a atualização…", "blue"])
+    : ["Atualização manual (extensão antiga)", "amber"];
+  const detalhe = a?.situacao === "falhou" || a?.situacao === "semSistema" ? (a.erro ?? undefined) : a?.situacao === "outraPasta" ? (a.pasta ?? undefined) : undefined;
+  return (
+    <div className="flex items-center gap-2 border-b border-border px-1 pb-3">
+      <Badge tone={tom} dot title={detalhe ?? texto} className="min-w-0">
+        <span className="truncate">{texto}</span>
+      </Badge>
+      <Ajuda titulo="Atualização automática da extensão" botao="sm">
+        <p>
+          A extensão confere a versão publicada a cada 30 min e ao abrir o navegador. Havendo uma nova, ela baixa, troca os
+          próprios arquivos e se recarrega sozinha — <strong>nunca</strong> no meio de uma automação.
+        </p>
+        <p>
+          Para isso, instale o <strong>atualizador</strong> UMA vez em cada computador, de dentro da pasta da extensão:{" "}
+          <strong>atualizador/instalar-windows.bat</strong> no Windows ou <strong>atualizador/instalar-mac.command</strong> no Mac
+          (botão direito → Abrir na primeira vez). Não precisa ser administrador.
+        </p>
+        <p>
+          O atualizador só troca os arquivos da extensão, depois de conferir que o pacote veio inteiro, que é desta mesma
+          extensão e que a versão é mais nova. Ele nunca muda a si mesmo. No ícone da extensão, “Atualizar agora” confere na hora.
+        </p>
+      </Ajuda>
+    </div>
+  );
+}
 type Ext = { versao: string; copias: number } | null;
 /** O contexto dos BANNERS da Mesa (o protocolo aberto pela linha): o mesmo da Mesa (`contextoBanners`). */
 export type ContextoBannersAutomacao = Pick<Parameters<typeof BannersMesa>[0], "pode" | "reparticoes" | "regras" | "orgaos" | "pcas">;
@@ -851,6 +903,7 @@ export function AutomacaoAdmin({
               </Button>
             </div>
           )}
+          {ext && <AtualizacaoExtensao a={logado?.atualizacao} />}
           <Ajustes
             cfg={cfg}
             onCfg={mudar}

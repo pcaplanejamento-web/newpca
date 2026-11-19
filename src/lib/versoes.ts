@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.304.0",
+    data: "2026-11-19",
+    titulo: "Extensão da Automação se atualiza sozinha",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Extensão 1.44.0 com ATUALIZAÇÃO AUTOMÁTICA, mesmo instalada pelo .zip: a cada 30 min ela confere a versão publicada e, havendo uma nova, baixa, troca os próprios arquivos e se recarrega — nunca no meio de uma automação. Basta instalar o atualizador UMA vez em cada computador (atualizador/instalar-windows.bat ou instalar-mac.command, na pasta da extensão).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "No ícone da extensão e em Automação → Extensão e Centi: a situação da atualização automática (ativa, instale o atualizador, atualizando) e o botão “Atualizar agora”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.303.0",
     data: "2026-11-19",
     titulo: "Ajustes da Automação também no ícone da extensão",

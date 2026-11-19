@@ -1,0 +1,122 @@
+#!/usr/bin/osascript -l JavaScript
+// ATUALIZADOR da extensão Automação PCA (macOS) — o host de "native messaging" que o Chrome abre a pedido da extensão.
+// REGRA FIRME: ele NUNCA se atualiza nem roda nada do pacote. Só grava, na pasta da extensão, os arquivos da LISTA BRANCA
+// (*.js, *.json e *.html da raiz e icone.png), depois de conferir o SHA-256, a MESMA "key" (o mesmo id da extensão) e uma
+// versão MAIOR. A pasta "atualizador" nunca é tocada. Instalado UMA vez por instalar-mac.command.
+ObjC.import("Foundation");
+ObjC.import("stdlib");
+
+const app = Application.currentApplication();
+app.includeStandardAdditions = true;
+const LIMITE = 20 * 1024 * 1024;
+const fm = $.NSFileManager.defaultManager;
+const aspas = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+// Sem trocar o fim das linhas por "\r" (o padrão do doShellScript).
+const sh = (cmd) => app.doShellScript(cmd, { alteringLineEndings: false });
+
+// A pasta da extensão = a de cima da deste script (o caminho vem nos argumentos do osascript).
+const script = ObjC.deepUnwrap($.NSProcessInfo.processInfo.arguments).find((a) => /atualizador\.jxa$/.test(a)) || "";
+const aqui = $(script).stringByStandardizingPath.stringByDeletingLastPathComponent.js;
+const pasta = $(aqui).stringByDeletingLastPathComponent.js;
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function bytesDe(data) {
+  const s = data.base64EncodedStringWithOptions(0).js;
+  const out = [];
+  for (let i = 0; i < s.length; i += 4) {
+    const n = [0, 1, 2, 3].map((k) => (s[i + k] === "=" || s[i + k] === undefined ? 0 : B64.indexOf(s[i + k])));
+    const v = (n[0] << 18) | (n[1] << 12) | (n[2] << 6) | n[3];
+    out.push((v >> 16) & 255);
+    if (s[i + 2] !== "=") out.push((v >> 8) & 255);
+    if (s[i + 3] !== "=") out.push(v & 255);
+  }
+  return out;
+}
+function dataDe(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const v = (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+    s += B64[(v >> 18) & 63] + B64[(v >> 12) & 63] + (i + 1 < bytes.length ? B64[(v >> 6) & 63] : "=") + (i + 2 < bytes.length ? B64[v & 63] : "=");
+  }
+  return $.NSData.alloc.initWithBase64EncodedStringOptions(s, 0);
+}
+const entrada = $.NSFileHandle.fileHandleWithStandardInput;
+function lerBytes(n) {
+  const d = entrada.readDataOfLength(n);
+  if (d.length < n) throw new Error("Mensagem incompleta.");
+  return d;
+}
+function responder(obj) {
+  const corpo = $(JSON.stringify(obj)).dataUsingEncoding($.NSUTF8StringEncoding);
+  const n = corpo.length;
+  const saida = $.NSFileHandle.fileHandleWithStandardOutput;
+  saida.writeData(dataDe([n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255]));
+  saida.writeData(corpo);
+}
+const lerTexto = (caminho) => $.NSString.stringWithContentsOfFileEncodingError(caminho, $.NSUTF8StringEncoding, null).js;
+const manifestoAtual = () => JSON.parse(lerTexto(`${pasta}/manifest.json`));
+const nomePermitido = (n) => n === "icone.png" || /^[a-z0-9][a-z0-9-]*\.(js|json|html)$/.test(n);
+const partes = (v) => String(v).split(".").map((x) => Number.parseInt(x, 10) || 0);
+function maior(a, b) {
+  const [x, y] = [partes(a), partes(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  return false;
+}
+
+function atualizar(m) {
+  const atual = manifestoAtual();
+  const tmp = sh("/usr/bin/mktemp -d -t pca-atualizador");
+  try {
+    const zip = `${tmp}/pacote.zip`;
+    $.NSData.alloc.initWithBase64EncodedStringOptions(String(m.zip), 0).writeToFileAtomically(zip, true);
+    const sha = sh(`/usr/bin/shasum -a 256 ${aspas(zip)}`).split(/\s+/)[0].toLowerCase();
+    if (sha !== String(m.sha256).toLowerCase()) throw new Error("O pacote chegou diferente do baixado (SHA-256).");
+    const nomes = sh(`/usr/bin/zipinfo -1 ${aspas(zip)}`).split(/\r?\n/).filter(Boolean);
+    const novos = [];
+    for (const n of nomes) {
+      if (n.startsWith("atualizador/") || n.endsWith("/")) continue;
+      if (n.includes("..") || n.includes("\\") || n.includes("/") || !nomePermitido(n)) throw new Error(`Arquivo fora da lista: ${n}`);
+      novos.push(n);
+    }
+    if (!novos.includes("manifest.json")) throw new Error("O pacote não tem o manifest.json.");
+    const novaPasta = `${tmp}/novo`;
+    sh(`/usr/bin/ditto -x -k ${aspas(zip)} ${aspas(novaPasta)}`);
+    const novo = JSON.parse(lerTexto(`${novaPasta}/manifest.json`));
+    if (String(novo.key) !== String(atual.key)) throw new Error("O pacote é de outra extensão (key diferente).");
+    if (!maior(novo.version, atual.version)) throw new Error(`A versão ${novo.version} não é mais nova que a ${atual.version}.`);
+    if (String(novo.version) !== String(m.versao)) throw new Error("A versão do pacote não confere com a pedida.");
+
+    // A CÓPIA de segurança: os arquivos de agora, para voltar se algo falhar no meio.
+    const anterior = `${aqui}/anterior`;
+    sh(`/bin/rm -rf ${aspas(anterior)} && /bin/mkdir -p ${aspas(anterior)}`);
+    const agora = ObjC.deepUnwrap(fm.contentsOfDirectoryAtPathError(pasta, null)) || [];
+    for (const n of agora) if (nomePermitido(n)) sh(`/bin/cp -p ${aspas(`${pasta}/${n}`)} ${aspas(anterior)}/`);
+    try {
+      // O manifest.json por ÚLTIMO: até ele entrar, o Chrome segue vendo a versão de antes.
+      for (const n of [...novos.filter((x) => x !== "manifest.json"), "manifest.json"])
+        sh(`/bin/cp ${aspas(`${novaPasta}/${n}`)} ${aspas(`${pasta}/${n}.novo`)} && /bin/mv -f ${aspas(`${pasta}/${n}.novo`)} ${aspas(`${pasta}/${n}`)}`);
+    } catch (e) {
+      sh(`/bin/cp -p ${aspas(anterior)}/* ${aspas(pasta)}/ ; /bin/rm -f ${aspas(pasta)}/*.novo`);
+      throw e;
+    }
+    return { ok: true, versao: String(novo.version) };
+  } finally {
+    sh(`/bin/rm -rf ${aspas(tmp)}`);
+  }
+}
+
+function run() {
+  try {
+    const cab = bytesDe(lerBytes(4));
+    const tam = cab[0] | (cab[1] << 8) | (cab[2] << 16) | (cab[3] << 24);
+    if (tam <= 0 || tam > LIMITE) throw new Error("Mensagem de tamanho inválido.");
+    const m = JSON.parse($.NSString.alloc.initWithDataEncoding(lerBytes(tam), $.NSUTF8StringEncoding).js);
+    if (m.acao === "versao") responder({ ok: true, versao: String(manifestoAtual().version), pasta });
+    else if (m.acao === "atualizar") responder(atualizar(m));
+    else responder({ ok: false, erro: "Pedido desconhecido." });
+  } catch (e) {
+    responder({ ok: false, erro: String(e?.message || e) });
+  }
+  // Sai já: o osascript não escreve o resultado do script na saída (o Chrome leria como mensagem).
+  $.exit(0);
+}

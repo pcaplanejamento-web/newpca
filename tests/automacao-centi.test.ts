@@ -145,7 +145,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.41.0"), false);
   assert.equal(versaoAtende("1.42.0"), false);
   assert.equal(versaoAtende("1.42.1"), false);
-  assert.equal(versaoAtende("1.43.0"), true);
+  assert.equal(versaoAtende("1.43.0"), false);
+  assert.equal(versaoAtende("1.44.0"), true);
   // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
   assert.equal(versaoFunciona("1.37.0"), false);
   assert.equal(versaoFunciona("1.38.0"), true);
@@ -239,7 +240,12 @@ test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", 
   const { ARQUIVOS_EXTENSAO } = await import("../src/lib/extensao-centi-arquivos.ts");
   const { pngDoDataUrl, zipDaExtensao } = await import("../src/lib/extensao-zip.ts");
   const pasta = new URL("../extensao-centi/", import.meta.url);
-  const nomes = readdirSync(pasta).filter((n) => /\.(js|json|html)$/.test(n)).sort();
+  const nomes = [
+    ...readdirSync(pasta).filter((n) => /\.(js|json|html)$/.test(n)),
+    ...readdirSync(new URL("atualizador/", pasta))
+      .filter((n) => /\.(bat|ps1|command|jxa)$/.test(n))
+      .map((n) => `atualizador/${n}`),
+  ].sort();
   assert.deepEqual(Object.keys(ARQUIVOS_EXTENSAO).sort(), nomes, "rode: node scripts/gerar-extensao.mjs");
   for (const n of nomes) assert.equal(ARQUIVOS_EXTENSAO[n], readFileSync(new URL(n, pasta), "utf8"), `${n} desatualizado — rode: node scripts/gerar-extensao.mjs`);
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0]);
@@ -252,8 +258,16 @@ test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", 
   // A CHAVE fixa do manifesto vai no .zip (o id da extensão não muda — as credenciais salvas sobrevivem a cada atualização).
   const chave = JSON.parse(ARQUIVOS_EXTENSAO["manifest.json"]).key as string;
   assert.ok(zip.includes(Buffer.from(`"key": "${chave}"`)));
+  // Os NOMES do diretório central (o texto dos arquivos também cita "icone.png" — o atualizador o tem na lista branca).
+  const nomesDoZip = (z: Buffer) => {
+    const lista: string[] = [];
+    for (let i = z.indexOf(Buffer.from([0x50, 0x4b, 1, 2])); i >= 0; i = z.indexOf(Buffer.from([0x50, 0x4b, 1, 2]), i + 46))
+      lista.push(z.subarray(i + 46, i + 46 + z.readUInt16LE(i + 28)).toString("utf8"));
+    return lista;
+  };
+  assert.ok(nomesDoZip(zip).includes("icone.png"));
   const semIcone = Buffer.concat(zipDaExtensao(ARQUIVOS_EXTENSAO, null));
-  assert.ok(!semIcone.includes(Buffer.from("icone.png")));
+  assert.ok(!nomesDoZip(semIcone).includes("icone.png"));
 });
 
 test("conferirConteudoDfd: só o PDF do planejamento e do DFD pedidos", async () => {

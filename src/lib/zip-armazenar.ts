@@ -34,8 +34,11 @@ export class ZipArmazenar {
     this.agora = agora;
   }
 
-  /** Acrescenta um arquivo; devolve os pedaços do zip a gravar (cabeçalho local + dados). Nome repetido ganha " (2)". */
-  adicionar(caminho: string, dados: Uint8Array): Uint8Array[] {
+  /**
+   * Acrescenta um arquivo; devolve os pedaços do zip a gravar (cabeçalho local + dados). Nome repetido ganha " (2)".
+   * `executavel` = permissão Unix 0755 (o Utilitário de Arquivo do Mac mantém — um .command abre com dois cliques).
+   */
+  adicionar(caminho: string, dados: Uint8Array, opcoes: { executavel?: boolean } = {}): Uint8Array[] {
     let nome = caminho;
     for (let i = 2; this.nomes.has(nome); i++) nome = caminho.replace(/(\.[^./]+)?$/, ` (${i})$1`);
     this.nomes.add(nome);
@@ -58,7 +61,8 @@ export class ZipArmazenar {
     const c = new Uint8Array(46 + n.length);
     const v = new DataView(c.buffer);
     v.setUint32(0, 0x02014b50, true);
-    v.setUint16(4, 20, true);
+    // "Feito por" Unix (3) só com a permissão a guardar; os atributos externos levam o modo no byte alto.
+    v.setUint16(4, opcoes.executavel ? (3 << 8) | 20 : 20, true);
     v.setUint16(6, 20, true);
     v.setUint16(8, 0x0800, true);
     v.setUint16(12, hora, true);
@@ -67,6 +71,7 @@ export class ZipArmazenar {
     v.setUint32(20, dados.length, true);
     v.setUint32(24, dados.length, true);
     v.setUint16(28, n.length, true);
+    if (opcoes.executavel) v.setUint32(38, (0o100755 << 16) >>> 0, true);
     v.setUint32(42, this.posicao, true);
     c.set(n, 46);
     this.central.push(c);

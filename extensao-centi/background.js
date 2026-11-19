@@ -557,6 +557,8 @@ async function lote(dados, dono) {
   }
   a.atualizado = agora;
   await gravarAtividade(a);
+  // Uma versão nova já baixada esperava o fim da automação: recarrega logo depois.
+  if (dados.fase === "fim") setTimeout(() => recarregarSeLivre().catch(() => {}), 5000);
   return { ok: true, interrompido: a.estado === "interrompido" };
 }
 
@@ -649,8 +651,119 @@ async function confirmarEscrita(a) {
   return sim;
 }
 
+// ---------------------------------------------------------------- ATUALIZAÇÃO AUTOMÁTICA (o .zip, sem a Web Store)
+// O Chrome não deixa a extensão descompactada trocar os próprios arquivos: o ATUALIZADOR (atualizador/, instalado UMA vez
+// por computador — instalar-windows.bat ou instalar-mac.command) faz isso a pedido dela. A cada 30 min (e ao abrir o
+// navegador) a extensão pergunta ao sistema a versão publicada; sendo mais nova, baixa o .zip pela sessão do ADM, manda ao
+// atualizador com o SHA-256 e se recarrega (o Chrome relê a pasta). Nunca durante uma automação em curso. O atualizador só
+// grava os arquivos da lista branca, com a MESMA key e uma versão MAIOR — nunca a si mesmo.
+const HOST_ATUALIZADOR = "br.gov.governarv.pca_atualizador";
+const INTERVALO_ATUALIZACAO_MS = 30 * 60 * 1000;
+const MAX_ZIP_ATUALIZACAO = 10 * 1024 * 1024;
+const versaoAqui = () => chrome.runtime.getManifest?.().version ?? "0";
+const numerosVersao = (v) => String(v ?? "").split(".").map((n) => Number.parseInt(n, 10) || 0);
+function versaoMaior(a, b) {
+  const [x, y] = [numerosVersao(a), numerosVersao(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  return false;
+}
+const lerAtualizacao = async () => (await chrome.storage.local.get("atualizacao")).atualizacao ?? {};
+async function gravarAtualizacao(mudanca) {
+  const a = { ...(await lerAtualizacao()), ...mudanca, em: Date.now() };
+  await chrome.storage.local.set({ atualizacao: a });
+  return a;
+}
+/** Uma mensagem ao atualizador; sem ele instalado, `{ausente:true}`. */
+async function falarComAtualizador(m) {
+  try {
+    if (!chrome.runtime.sendNativeMessage) return { ok: false, ausente: true };
+    return (await chrome.runtime.sendNativeMessage(HOST_ATUALIZADOR, m)) ?? { ok: false, erro: "O atualizador não respondeu." };
+  } catch (e) {
+    const t = String(e?.message ?? e);
+    // "Specified native messaging host not found" / "Access to the specified native messaging host is forbidden".
+    if (/not found|forbidden|não encontrado/i.test(t)) return { ok: false, ausente: true };
+    return { ok: false, erro: `O atualizador falhou: ${t}` };
+  }
+}
+function base64DeBytes(b) {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+let atualizando = null;
+/**
+ * Confere e, havendo versão nova, atualiza. `forcar` = o "Atualizar agora" (ignora o intervalo). Devolve a SITUAÇÃO:
+ * `situacao` emDia | ausente (sem o atualizador) | outraPasta | ocupada | semSistema | falhou | atualizando | recarregar.
+ */
+function verificarAtualizacao(forcar = false) {
+  if (!atualizando)
+    atualizando = (async () => {
+      const antes = await lerAtualizacao();
+      if (!forcar && typeof antes.verificadaEm === "number" && Date.now() - antes.verificadaEm < INTERVALO_ATUALIZACAO_MS) return antes;
+      if ((await lerAtividade())?.estado === "rodando") return gravarAtualizacao({ situacao: "ocupada", verificadaEm: antes.verificadaEm ?? null });
+      const agora = Date.now();
+      const atual = versaoAqui();
+      const info = await apiAutomacao("GET", "extensao?info=1");
+      // Fora do sistema (ou sem ser ADM): confere de novo no próximo alarme, sem chamar de falha.
+      if (!info.ok) return gravarAtualizacao({ situacao: info.semSistema ? "semSistema" : "falhou", erro: info.erro, verificadaEm: agora });
+      const publicada = typeof info.versao === "string" ? info.versao : null;
+      const nova = !!publicada && versaoMaior(publicada, atual);
+      // O atualizador só é chamado quando há versão nova — ou para saber se está instalado (ainda não se sabe, ou pedido).
+      if (!nova && !forcar && typeof antes.instalado === "boolean")
+        return gravarAtualizacao({ publicada, verificadaEm: agora, erro: null, situacao: antes.instalado ? "emDia" : "ausente" });
+      const host = await falarComAtualizador({ acao: "versao" });
+      const instalado = host.ok === true;
+      const base = { instalado, publicada, verificadaEm: agora, erro: null };
+      if (host.ausente) return gravarAtualizacao({ ...base, instalado: false, situacao: "ausente" });
+      if (!instalado) return gravarAtualizacao({ ...base, situacao: "falhou", erro: host.erro ?? "O atualizador não respondeu." });
+      if (!nova) return gravarAtualizacao({ ...base, situacao: "emDia" });
+      // O atualizador cuida de OUTRA pasta (a extensão foi carregada de outro lugar): instalar de novo na pasta certa.
+      if (String(host.versao) !== atual) return gravarAtualizacao({ ...base, situacao: "outraPasta", pasta: host.pasta ?? null });
+      await gravarAtualizacao({ ...base, situacao: "atualizando" });
+      let bytes;
+      try {
+        const r = await fetch(`${API_AUTOMACAO}extensao`, { credentials: "include", cache: "no-store" });
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? MSG_SEM_SISTEMA : `O sistema respondeu ${r.status}.`);
+        bytes = new Uint8Array(await r.arrayBuffer());
+        if (!bytes.length || bytes.length > MAX_ZIP_ATUALIZACAO) throw new Error("O pacote da extensão veio vazio ou grande demais.");
+      } catch (e) {
+        return gravarAtualizacao({ ...base, situacao: "falhou", erro: e?.message || "Não consegui baixar a versão nova." });
+      }
+      const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const r = await falarComAtualizador({ acao: "atualizar", versao: publicada, sha256: sha, zip: base64DeBytes(bytes) });
+      if (!r.ok) return gravarAtualizacao({ ...base, situacao: "falhou", erro: r.erro ?? "O atualizador não trocou os arquivos." });
+      // A automação começou enquanto baixava: os arquivos já estão trocados, mas o recarregar espera o fim dela.
+      await gravarAtualizacao({ ...base, situacao: "recarregar", de: atual, para: r.versao ?? publicada });
+      await recarregarSeLivre();
+      return lerAtualizacao();
+    })().finally(() => {
+      atualizando = null;
+    });
+  return atualizando;
+}
+/** Recarrega a extensão (o Chrome relê a pasta já atualizada) — só sem automação em curso. */
+async function recarregarSeLivre() {
+  const a = await lerAtualizacao();
+  if (a.situacao !== "recarregar" || (await lerAtividade())?.estado === "rodando") return false;
+  chrome.runtime.reload();
+  return true;
+}
+async function garantirAlarmeAtualizacao() {
+  try {
+    if (chrome.alarms && !(await chrome.alarms.get("atualizar-extensao")))
+      await chrome.alarms.create("atualizar-extensao", { delayInMinutes: 1, periodInMinutes: 30 });
+  } catch {}
+}
+
 // ---------------------------------------------------------------- EVENTOS DO NAVEGADOR
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (d) => {
+  // Voltou de um recarregar da ATUALIZAÇÃO: registra a versão nova (o banner mostra "Atualizada de X para Y").
+  if (d?.reason === "update") {
+    const a = await lerAtualizacao().catch(() => ({}));
+    const agora = versaoAqui();
+    await gravarAtualizacao({ situacao: "emDia", erro: null, de: d.previousVersion ?? a.de ?? null, para: agora, atualizadaEm: Date.now() }).catch(() => {});
+  }
+  garantirAlarmeAtualizacao();
   const aba = await abaGuardada().catch(() => null);
   if (aba) injetarCenti(aba.id).catch(() => {});
   for (const a of await chrome.tabs.query({ url: SISTEMA }))
@@ -667,8 +780,11 @@ async function garantirAlarme() {
   } catch {}
 }
 garantirAlarme();
+garantirAlarmeAtualizacao();
 chrome.runtime.onStartup?.addListener(() => {
   garantirAlarme();
+  garantirAlarmeAtualizacao();
+  verificarAtualizacao(true).catch(() => {});
   limparCofreAntigo().catch(() => {});
   prepararCenti().catch(() => {});
 });
@@ -709,6 +825,11 @@ chrome.tabs?.onRemoved?.addListener(async (tabId) => {
   }
 });
 chrome.alarms?.onAlarm?.addListener(async (a) => {
+  if (a.name === "atualizar-extensao") {
+    // Os arquivos já trocados esperando o fim de uma automação: recarrega agora; senão, confere a versão.
+    if (!(await recarregarSeLivre().catch(() => false))) await verificarAtualizacao().catch(() => {});
+    return;
+  }
   if (a.name !== "login-centi") return;
   limparCofreAntigo().catch(() => {});
   const aba = await abaGuardada().catch(() => null);
@@ -725,6 +846,7 @@ const resumoLogin = async (r) => ({
   login: await infoLogin(!!r.tentativa),
   tentativa: r.tentativa ?? null,
   atividade: await lerAtividade(),
+  atualizacao: await lerAtualizacao(),
 });
 const respostaLogada = async (r) => ({
   ok: true,
@@ -734,6 +856,7 @@ const respostaLogada = async (r) => ({
   operacao: r.estado?.operacao ?? null,
   aprendido: r.estado?.aprendido ?? null,
   atividade: await lerAtividade(),
+  atualizacao: await lerAtualizacao(),
 });
 
 /**
@@ -798,6 +921,7 @@ async function daExtensao(msg) {
     return msg.tipo === "execucao" ? apiAutomacao("GET", `execucoes/${id}`) : apiAutomacao("PATCH", `execucoes/${id}`, { estado: "cancelada" });
   }
   if (msg.tipo === "gravador") return usarGravador(msg.acao);
+  if (msg.tipo === "atualizarAgora") return { ok: true, atualizacao: await verificarAtualizacao(true) };
   if (msg.tipo === "entrarAgora") {
     const r = await garantirSessao({ criar: true, esperarLogin: true, forcar: true });
     return r.motivo ? { ok: false, erro: r.tentativa?.erro || r.erro } : { ok: true };
@@ -823,6 +947,7 @@ async function daExtensao(msg) {
       login: await infoLogin(),
       atividade: await lerAtividade(),
       versao: chrome.runtime.getManifest?.().version ?? null,
+      atualizacao: await lerAtualizacao(),
     };
   }
   return { ok: false, erro: "Pedido desconhecido." };

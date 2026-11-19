@@ -29,7 +29,12 @@ export function zipDaExtensao(arquivos: Record<string, string>, icone: Uint8Arra
       m.action = { ...acao, default_icon: icones, default_title: String(acao.default_title ?? m.name ?? "") };
       conteudo = `${JSON.stringify(m, null, 2)}\n`;
     }
-    partes.push(...z.adicionar(nome, enc.encode(conteudo)));
+    // O ATUALIZADOR (atualizador/): no Windows, CRLF (o cmd lê o .bat assim) e o .ps1 com BOM (o PowerShell 5.1 lê UTF-8
+    // só com ele); no Mac, o instalador e o host executáveis.
+    if (/\.(bat|ps1)$/.test(nome)) conteudo = conteudo.replace(/\r?\n/g, "\r\n");
+    const bytes = enc.encode(conteudo);
+    const comBom = nome.endsWith(".ps1") ? new Uint8Array([0xef, 0xbb, 0xbf, ...bytes]) : bytes;
+    partes.push(...z.adicionar(nome, comBom, { executavel: /\.(command|jxa)$/.test(nome) }));
   }
   if (icone) partes.push(...z.adicionar("icone.png", icone));
   partes.push(...z.fechar());

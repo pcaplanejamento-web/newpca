@@ -30,6 +30,7 @@
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px; }
   .s { color: var(--muted); overflow-wrap: anywhere; }
   .texto-xs { font-size: 12px; color: var(--muted); margin: 0; }
+  .texto-xs.danger { color: var(--danger); }
   .linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .linha.sem-quebra { flex-wrap: nowrap; }
   .linha.sem-quebra .badge { min-width: 0; flex: 0 1 auto; }
@@ -309,6 +310,26 @@
           <div class="caixa"><input id="entidades" type="text" autocomplete="off" spellcheck="false" maxlength="300" placeholder="02:03:04" disabled></div>
         </div>
         <div id="listaOrgaos" class="lista" hidden></div>
+      </div>
+
+      <!-- ATUALIZAÇÃO AUTOMÁTICA -->
+      <div class="grupo">
+        <h2>Atualização automática</h2>
+        <div class="linha entre">
+          <div class="linha sem-quebra">
+            <span id="atualSelo" class="badge dot">Conferindo…</span>
+            <button id="ajudaAtual" class="ajuda" type="button" aria-expanded="false" aria-controls="textoAjudaAtual" title="Ajuda">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
+            </button>
+          </div>
+          <button id="atualizarAgora" class="btn secundario" type="button">Atualizar agora</button>
+        </div>
+        <div id="textoAjudaAtual" class="texto-ajuda" hidden>
+          <p>A extensão confere a versão publicada no sistema a cada 30 min e ao abrir o navegador. Havendo uma nova, ela baixa, troca os próprios arquivos e se recarrega — <strong>nunca</strong> no meio de uma automação.</p>
+          <p>Para isso, instale o <strong>atualizador</strong> UMA vez em cada computador, de dentro da pasta da extensão: <strong>atualizador/instalar-windows.bat</strong> (Windows) ou <strong>atualizador/instalar-mac.command</strong> (Mac — botão direito → Abrir na 1ª vez). Não precisa ser administrador.</p>
+          <p>O atualizador só troca os arquivos da extensão, depois de conferir que o pacote veio inteiro, que é desta mesma extensão e que a versão é mais nova. Ele nunca muda a si mesmo.</p>
+        </div>
+        <p id="atualTexto" class="texto-xs"></p>
       </div>
 
       <!-- AVANÇADO -->
