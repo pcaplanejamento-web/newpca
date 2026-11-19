@@ -140,6 +140,7 @@ import { CorrecaoCentiMassa } from "@/components/CorrecaoCentiMassa";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
 import { ProblemasFluxo } from "@/components/fluxos/ProblemasFluxo";
+import { BannerExecucaoFluxo, BannerItemFluxo } from "@/components/fluxos/DetalheExecucao";
 import { ConferenciaAnexos } from "@/components/fluxos/ConferenciaAnexos";
 import { AjudaNo } from "@/components/fluxos/AjudaNo";
 import { AjudaDoFluxo } from "@/components/fluxos/ConfigFluxo";
@@ -477,6 +478,43 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 }
 
 /** Demo da CONFIRMAÇÃO POR CÓDIGO (cadastro, "Esqueci a senha", senha do Perfil) na moldura das telas de acesso. */
+function DemoDetalheExecucao() {
+  const [aberto, setAberto] = useState<"item" | "execucao" | null>(null);
+  const falha = { rotulo: "Falhou", tom: "red" as const, texto: "Buscar DFD na Centi: DFD 1209 (planejamento 1509) não conferido: sem resposta da extensão." };
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="secondary" onClick={() => setAberto("item")}>Item que falhou</Button>
+      <Button size="sm" variant="secondary" onClick={() => setAberto("execucao")}>Execução</Button>
+      <BannerItemFluxo
+        aberto={aberto === "item"}
+        onClose={() => setAberto(null)}
+        titulo="DFD 1209 · Planej. 1509"
+        etapa="Executar fluxo"
+        estado={falha}
+        campos={[{ rotulo: "Nº do DFD", valor: "1209" }, { rotulo: "Planejamento", valor: "1509" }, { rotulo: "Órgão", valor: "FMS" }]}
+        onAbrirRegistro={() => setAberto(null)}
+        rotuloAbrir="Abrir o DFD"
+        onExecutarDeNovo={() => setAberto(null)}
+      />
+      <BannerExecucaoFluxo
+        aberto={aberto === "execucao"}
+        onClose={() => setAberto(null)}
+        titulo="Executar fluxo"
+        situacao={{ rotulo: "Executando", tom: "blue" }}
+        texto="Verificar 1 DFD na Centi: 3 de 1240 · 3 em andamento"
+        feito={3}
+        total={1240}
+        restante="Termina em ≈ 2 h"
+        linhas={[
+          { chave: "0", item: "DFD 1209 · Planej. 1509", estado: falha },
+          { chave: "1", item: "DFD 1210 · Planej. 1510", estado: { rotulo: "Convergente", tom: "emerald", texto: "" } },
+        ]}
+        onAbrirLinha={() => setAberto("item")}
+      />
+    </div>
+  );
+}
+
 function DemoAcesso() {
   const [codigo, setCodigo] = useState("");
   // ErroAuth é flutuante (canto do display): a demo o mostra ao tocar em "Mostrar erro".
@@ -3615,6 +3653,9 @@ export function Catalogo() {
           gestao={{ pessoas: [], outras: [], situacoes: [], usuarioId: 0 }}
           scrollInterno={false}
         />
+      </Secao>
+      <Secao titulo="Banners da execução (BannerItemFluxo · BannerExecucaoFluxo)">
+        <DemoDetalheExecucao />
       </Secao>
       <Secao titulo="Problemas do fluxo (ProblemasFluxo)">
         <div className="flex flex-wrap gap-2">

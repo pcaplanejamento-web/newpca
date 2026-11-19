@@ -732,3 +732,14 @@ test("conferir × Centi: tipo vazio (':') não acusa diferença; R × S acusa", 
   assert.match(String(r2.divergentes[0]?.mensagem), /Tipo: DFD-R no sistema × DFD-S na Centi/);
   assert.equal(tipoCurto(":"), null);
 });
+
+test("falhaSistematica: as primeiras falhas iguais (sem sucesso) param; números diferentes contam como iguais", async () => {
+  const { falhaSistematica, MAX_FALHAS_IGUAIS } = await import("../src/lib/fluxo-core.ts");
+  const msg = (n: number) => `Buscar DFD na Centi: DFD ${n} (planejamento ${n + 100}) não conferido: sem resposta da extensão.`;
+  const cinco = [1, 2, 3, 4, 5].map(msg);
+  assert.equal(MAX_FALHAS_IGUAIS, 5);
+  assert.equal(falhaSistematica(cinco.slice(0, 4), 0), null, "ainda não chegou ao limite");
+  assert.match(falhaSistematica(cinco, 0) ?? "", /Os 5 primeiros itens falharam pelo mesmo motivo.*sem resposta da extensão/);
+  assert.equal(falhaSistematica(cinco, 1), null, "com um sucesso, não para");
+  assert.equal(falhaSistematica([...cinco.slice(0, 4), "Outro motivo"], 0), null, "motivos diferentes não param");
+});

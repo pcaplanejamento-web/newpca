@@ -13,6 +13,7 @@ import {
   comparar,
   chaveDoItem,
   chaveRetomada,
+  falhaSistematica,
   type ContextoNo,
   type DefNo,
   executarEmPool,
@@ -1644,6 +1645,9 @@ const NOS: DefNo[] = [
       };
       let feitosAgora = 0;
       let emCurso = 0;
+      // O freio: as primeiras falhas, todas pelo mesmo motivo e sem nenhum sucesso, param a execução (`falhaSistematica`).
+      const falhasAte: string[] = [];
+      let sucessos = 0;
       const avisar = () =>
         ctx.aviso(`${filho.nome}: ${feitosAgora} de ${fila.length}${emCurso ? ` · ${emCurso} em andamento` : ""}${pulados ? ` · ${pulados} já feitos antes` : ""}`);
       avisar();
@@ -1670,7 +1674,11 @@ const NOS: DefNo[] = [
                 apontados.push({ mensagem: `${filho.nome}${ref ? ` · ${ref}` : ""}: ${erroTxt}`, nivel: "erro", item: it, __dePorta: "falhas" });
                 if (k) gravar.push({ chave: k, estado: "falha" });
                 ctx.parcial?.([f]);
+                if (!sucessos) falhasAte.push(erroTxt);
+                const parar = falhaSistematica(falhasAte, sucessos);
+                if (parar) throw new Error(`${filho.nome}: ${parar}`);
               } else {
+                sucessos++;
                 const volta = r.retorno.length ? r.retorno.map((x) => ({ ...x, subfluxo: { estado: "concluido" } })) : [{ ...it, subfluxo: { estado: "concluido" } }];
                 saida.push(...volta);
                 // "Não conferido" (a leitura não foi confirmada, o órgão sem ID…) NÃO está feito: a retomada o refaz.

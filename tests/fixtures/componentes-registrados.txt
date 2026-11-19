@@ -339,6 +339,7 @@ fluxos/CanvasFluxo.tsx
 fluxos/CartaoFluxo.tsx
 fluxos/ConferenciaAnexos.tsx
 fluxos/ConfigFluxo.tsx
+fluxos/DetalheExecucao.tsx
 fluxos/FluxosAutomacao.tsx
 fluxos/IconeNo.tsx
 fluxos/PainelFluxo.tsx

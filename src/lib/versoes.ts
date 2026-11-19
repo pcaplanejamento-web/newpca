@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.306.0",
+    data: "2026-11-19",
+    titulo: "Automação: o motivo de cada falha num toque",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Na Análise de uma automação, tocar no selo da coluna Estado (Falhou, Convergente, Divergente…) abre o banner do item com a mensagem inteira (com Copiar), os dados do DFD e as ações Abrir o DFD e Executar de novo só com este.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto:
+          "Tocar no selo da situação (Executando, Concluído, Falhou) abre o banner da execução: o que roda agora, o andamento, um cartão por resultado e a lista dos itens com a mensagem de cada um — as falhas primeiro.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Freio: quando os 5 primeiros itens falham pelo MESMO motivo e nenhum dá certo, a execução para e mostra o motivo no topo — os demais falhariam igual (extensão, sessão ou configuração), sem gastar horas com centenas de falhas.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.305.1",
     data: "2026-11-19",
     titulo: "Instalador da extensão revisado",

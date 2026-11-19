@@ -1144,6 +1144,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mudarAjustes` [só os campos `CAMPOS_AJUSTES`], `execucoes`, `execucao`, `cancelarExecucao`, `gravador`, `salvarLogin`,
   `removerLogin`); só o popup da própria extensão os usa. Abrir o ícone roda o `garantirSessao` (a Centi pronta). Testes:
   `tests/automacao-ajustes.test.ts`, `tests/extensao-login.test.ts` (o banner, o canal e que o popup não usa storage).
+- **MOTIVO DE CADA ITEM + FREIO DAS FALHAS (v1.306.0, sem migração):** na Análise do painel do fluxo (`PainelFluxo` →
+  `AnaliseAoVivo`), o selo da coluna Estado é um botão que abre o **`BannerItemFluxo`** (`fluxos/DetalheExecucao.tsx`, DS:
+  `Modal` + `SecaoBanner` + `Callout` com a mensagem inteira — `estadoDoItem(...).texto`, o `subfluxo.erro` da falha — +
+  `BotaoCopiar`, os dados do item e Abrir o registro [`aberturaDoItem` → `host.abrir`] · Executar de novo só com este
+  [`host.executarCom`, só quando o fluxo aceita itens de fora]); o selo da situação abre o **`BannerExecucaoFluxo`** (o que
+  roda agora, `Progress`, um `StatMini` por resultado e a `DataTable` dos itens com a mensagem — as falhas primeiro; tocar abre
+  o item). O `fluxo.executar` PARA quando os `MAX_FALHAS_IGUAIS`=5 primeiros itens falham pelo MESMO motivo sem nenhum sucesso
+  (`falhaSistematica`, `fluxo-core.ts` — os números da mensagem não contam): o motivo vai ao topo da Análise.
 - **ATUALIZAÇÃO AUTOMÁTICA DA EXTENSÃO (v1.304.0, extensão 1.44.0, sem migração) — regra firme: o ATUALIZADOR local nunca
   se atualiza nem roda nada do pacote.** A extensão segue instalada pelo .zip (descompactada); o Chrome não a deixa trocar os
   próprios arquivos, então um host de native messaging (`br.gov.governarv.pca_atualizador`, permissão `nativeMessaging`) faz

@@ -987,6 +987,21 @@ export function cicloDeSubfluxos(id: number, usa: ReadonlyMap<number, readonly n
   return ir(id);
 }
 
+/** Quantas falhas IGUAIS seguidas, sem nenhum sucesso, param o "Executar fluxo" (os demais falhariam pelo mesmo motivo). */
+export const MAX_FALHAS_IGUAIS = 5;
+/** A falha sem o que muda de um item para outro (números: DFD, planejamento, protocolo) — a "mesma" falha. */
+const assinaturaFalha = (msg: string) => msg.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
+/**
+ * A falha SISTEMÁTICA: as primeiras `n` execuções do subfluxo falharam todas pelo MESMO motivo e nenhuma deu certo — o
+ * problema é do ambiente (extensão, sessão, configuração), não dos itens. Devolve a mensagem para parar; senão `null`.
+ */
+export function falhaSistematica(falhas: readonly string[], sucessos: number, n = MAX_FALHAS_IGUAIS): string | null {
+  if (sucessos > 0 || falhas.length < n) return null;
+  const a = assinaturaFalha(falhas[0]);
+  if (!a || falhas.slice(0, n).some((f) => assinaturaFalha(f) !== a)) return null;
+  return `Os ${n} primeiros itens falharam pelo mesmo motivo e nenhum deu certo — a execução parou (os demais falhariam igual). Motivo: ${falhas[0]}`;
+}
+
 /** A chave que identifica um item (retomada): o valor do campo; vazio = sem chave. */
 export const chaveDoItem = (it: Item, campo: string): string => {
   const v = resolverCaminho(it, campo || "id");

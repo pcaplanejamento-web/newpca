@@ -3,7 +3,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
-import { tipoDosItens } from "@/lib/fluxo-tipo-item";
+import { aberturaDoItem, tipoDosItens } from "@/lib/fluxo-tipo-item";
 import { contagemDfds } from "@/lib/automacao-dfds-estado";
 import { dataHoraBR } from "@/lib/format";
 import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
@@ -18,6 +18,7 @@ import { type AcoesCenti, ProvedorAcoesCenti } from "../CelulaExecucao";
 import { useConfirmacao } from "../Confirmacao";
 import { toast } from "../Toast";
 import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
+import { BannerExecucaoFluxo, BannerItemFluxo, type CampoItemFluxo } from "./DetalheExecucao";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { useEstimativa } from "./useEstimativa";
@@ -207,7 +208,7 @@ export function PainelFluxo({
             {Visao && noAberto ? (
               <Visao no={noAberto} grafo={grafo} onGrafo={onGrafo} />
             ) : (
-              <AnaliseAoVivo grafo={grafo} etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
+              <AnaliseAoVivo grafo={grafo} etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} restante={rodando && restante != null ? `Termina em ${textoDuracao(restante)}` : null} />
             )}
           </div>
         </ProvedorAcoesCenti>
@@ -227,6 +228,7 @@ function AnaliseAoVivo({
   rodando,
   atual,
   ultima,
+  restante,
 }: {
   grafo: Grafo;
   etapas: NoFluxo[];
@@ -235,8 +237,13 @@ function AnaliseAoVivo({
   rodando: boolean;
   atual: NoFluxo | undefined;
   ultima: { em: string | null; resumo: Record<string, unknown> | null };
+  /** O tempo restante já em texto (só executando). */
+  restante: string | null;
 }) {
   const host = useContext(HostPainelCtx);
+  // Os BANNERS: o de um item (o toque no selo Estado) e o da execução (o toque no selo da situação).
+  const [itemAberto, setItemAberto] = useState<Item | null>(null);
+  const [execucaoAberta, setExecucaoAberta] = useState(false);
   // O componente que processa item a item (o de agora; senão o último que processou).
   // O Baixar/anexar DFDs não entrega parciais: o andamento dele são as linhas dos DFDs (`host.dfds`, ao vivo e no fim).
   const noDfds = etapas.find((n) => n.tipo === "saida.dfdsCenti") ?? null;
@@ -314,9 +321,20 @@ function AnaliseAoVivo({
       nowrap: true,
       value: (it) => estadoDe(it).rotulo,
       render: (it) => (
-        <Badge tone={estadoDe(it).tom} dot title={soDfds ? estadoDe(it).texto || undefined : undefined}>
-          {estadoDe(it).rotulo}
-        </Badge>
+        // O toque no selo abre o BANNER do item com a mensagem inteira (não abre a linha).
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setItemAberto(it);
+          }}
+          title={estadoDe(it).texto ? `${estadoDe(it).texto} — toque para ver tudo` : "Ver o resultado deste item"}
+          className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:min-h-11"
+        >
+          <Badge tone={estadoDe(it).tom} dot>
+            {estadoDe(it).rotulo}
+          </Badge>
+        </button>
       ),
     },
     ...(soDfds
@@ -342,18 +360,47 @@ function AnaliseAoVivo({
           : { rotulo: "Falhou", tom: "red" as Tone }
       : null;
   const resumo = ultima.resumo;
+  const textoSituacao = rodando
+    ? (atual && passos[atual.id]?.aviso) || "Executando…"
+    : resultado
+      ? (resultado.erro ?? `Terminou ${dataHoraBR(resultado.fim)}`)
+      : resumo
+        ? `Última execução${ultima.em ? ` ${dataHoraBR(ultima.em)}` : ""}: ${s(resumo.estado) === "concluido" ? "concluída" : s(resumo.estado) === "cancelado" ? "interrompida" : "falhou"} · ${s(resumo.apontados || 0)} apontamento(s)`
+        : "Ajuste os dados de entrada e toque em Executar.";
+  // O item aberto no banner: os dados que a pessoa reconhece e as ações (abrir o registro; executar de novo só com ele).
+  const camposDo = (it: Item): CampoItemFluxo[] =>
+    (
+      [
+        ["Nº do DFD", s(it.numero)],
+        ["Planejamento", s(it.planejamento)],
+        ["Protocolo", s(it.protocoloNumero ?? it.protocolo)],
+        ["Unidade", s(it.sigla)],
+        ["Órgão", orgaoDe(it)],
+        ["Etapa", fonte ? nomeDoNo(fonte, REGISTRO_NOS) : ""],
+      ] as const
+    )
+      .filter(([, v]) => v)
+      .map(([rotulo, valor]) => ({ rotulo, valor }));
+  const abrirItem = itemAberto && host ? aberturaDoItem(itemAberto) : null;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[var(--gap-block)] overflow-y-auto">
       <div className="flex flex-wrap items-center gap-2">
-        {situacao ? <Badge tone={situacao.tom} dot>{situacao.rotulo}</Badge> : <Badge tone="slate">Pronto para executar</Badge>}
+        {situacao ? (
+          <button
+            type="button"
+            onClick={() => setExecucaoAberta(true)}
+            title="Ver a execução: o que roda agora e a mensagem de cada item"
+            className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:min-h-11"
+          >
+            <Badge tone={situacao.tom} dot>
+              {situacao.rotulo}
+            </Badge>
+          </button>
+        ) : (
+          <Badge tone="slate">Pronto para executar</Badge>
+        )}
         <span className="min-w-0 flex-1 truncate text-sm text-muted">
-          {rodando
-            ? (atual && passos[atual.id]?.aviso) || "Executando…"
-            : resultado
-              ? (resultado.erro ?? `Terminou ${dataHoraBR(resultado.fim)}`)
-              : resumo
-                ? `Última execução${ultima.em ? ` ${dataHoraBR(ultima.em)}` : ""}: ${s(resumo.estado) === "concluido" ? "concluída" : s(resumo.estado) === "cancelado" ? "interrompida" : "falhou"} · ${s(resumo.apontados || 0)} apontamento(s)`
-                : "Ajuste os dados de entrada e toque em Executar."}
+          {textoSituacao}
         </span>
       </div>
       {fonte && rodando && total > 0 && <Progress value={(itensFonte.length / total) * 100} label={`${itensFonte.length} de ${total}`} />}
@@ -420,6 +467,51 @@ function AnaliseAoVivo({
             />
           )}
         </div>
+      )}
+      {itemAberto && (
+        <BannerItemFluxo
+          aberto
+          onClose={() => setItemAberto(null)}
+          titulo={rotuloItem(itemAberto)}
+          etapa={fonte ? nomeDoNo(fonte, REGISTRO_NOS) : undefined}
+          estado={estadoDe(itemAberto)}
+          campos={camposDo(itemAberto)}
+          onAbrirRegistro={
+            abrirItem && host
+              ? () => {
+                  setItemAberto(null);
+                  host.abrir(abrirItem);
+                }
+              : undefined
+          }
+          rotuloAbrir={abrirItem?.tipo === "protocolo" ? "Abrir o protocolo" : abrirItem?.tipo === "item" ? "Abrir o item" : "Abrir o DFD"}
+          onExecutarDeNovo={
+            exec && host && !rodando
+              ? () => {
+                  const it = itemAberto;
+                  setItemAberto(null);
+                  host.executarCom(grafo, [it]);
+                }
+              : undefined
+          }
+        />
+      )}
+      {situacao && (
+        <BannerExecucaoFluxo
+          aberto={execucaoAberta}
+          onClose={() => setExecucaoAberta(false)}
+          titulo={fonte ? nomeDoNo(fonte, REGISTRO_NOS) : "Execução"}
+          situacao={situacao}
+          texto={textoSituacao}
+          feito={processados.length}
+          total={total}
+          restante={restante}
+          linhas={processados.map((p) => ({ chave: p.chave, item: p.item, estado: p.estado }))}
+          onAbrirLinha={(chave) => {
+            const it = itensFonte[Number(chave)];
+            if (it) setItemAberto(it);
+          }}
+        />
       )}
     </div>
   );
