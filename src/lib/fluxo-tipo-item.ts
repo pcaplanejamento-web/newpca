@@ -50,7 +50,10 @@ export function aberturaDoItem(it: Item): AberturaItem | null {
 export function dadosDfdDoItem(it: Item) {
   // A situação gravada AGORA pela verificação (`situacaoGravada`) vale mais que a lida do sistema antes dela.
   const execucao = txt(it.situacaoGravada) || txt(it.execucaoCenti);
-  const conferencia = txt(it.conferenciaCenti);
+  // O DFD cuja verificação FALHOU nesta execução não mostra a conferência gravada antes (seria um "Convergente" de outra
+  // vez ao lado de "Falhou"): a coluna fica sem conferência.
+  const falhou = !!it.subfluxo && typeof it.subfluxo === "object" && (it.subfluxo as Item).estado === "falhou";
+  const conferencia = falhou ? "" : txt(it.conferenciaCenti);
   // O centro de custo: o lido na Centi AGORA (`centroCustoCenti`; "" = a Centi não tem) ou o gravado no DFD (`centroCusto`);
   // a leitura que falhou (`centroNaoLido`) mostra o gravado. Sem nenhum dos dois campos, a coluna não existe.
   const centro = "centroCustoCenti" in it && it.centroNaoLido !== true ? it.centroCustoCenti : "centroCusto" in it ? it.centroCusto : undefined;

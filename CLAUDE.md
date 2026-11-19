@@ -1195,6 +1195,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   › o `Object.Caminho`/`Nome`; `centroCustoLidoNoLoad` separa o NÃO LIDO (campo ausente ou referência com Id e sem texto →
   `centroAusente` → `conferirUnidades` manda `centroNaoLido`, o gravado fica) do "a Centi não tem" (Id 0/nulo → a coluna é
   limpa). Cada DFD: load + emissão na MESMA `comSessaoCenti` (nenhum outro registro aberto no meio).
+  **v1.307.4 (extensão 1.46.2, protocolo 51) — O REGISTRO EM QUALQUER ENVELOPE (regra firme):** a Centi 217 responde
+  `{Data, Count, IdLog, Success, Message, Code}`; a de 17/11, `{Entity:{ModuleKey, Fields}}`. `registroDaResposta`
+  (`centi-anexo.js`) acha o registro com Id em `Entity` · `Data` · `Data[0]` (lista de UM) · `Data.Entity` · `Object`/`Result`/
+  `Registro`, convertendo o objeto simples em `{Fields:[{Key,Value}]}` (`paraFields`; a referência `{Id, Descricao…}` ganha o
+  `Display`); `normalizarRegistro` entrega ao sistema SEMPRE `Entity.Fields` (os leitores do sistema não mudam). As peças do
+  planejamento (`pareceSerPlanejamento`, `faltasPlanejamento`, `pontosPlanejamento`, `loadDoPlanejamento` — o `ModuleKey`
+  deixou de ser obrigatório; o modelo guarda `onde`) usam ele, e o `ler` do planejamento considera vazia a resposta sem
+  registro (`tentarConsulta(…, registro)`). O aprendizado roda ANTES da trava de leitura; o que não vira modelo vai ao
+  diagnóstico com `motivoSemModelo`. O rastro marca `cad` (a resposta tem `IdCentroCusto`/`IdPlanejamentoAssinaturaDFD` em
+  qualquer lugar), o envelope e os campos; `pedidosDaTela` lista primeiro os que trouxeram o cadastro, depois quaisquer
+  (não só load/entity). Na Análise, o item do `fluxo.executar` que FALHOU não mostra a conferência gravada antes
+  (`dadosDfdDoItem`). Teste da Centi 217 falsa (`searchentity` com o Id no corpo): `tests/centi-main-load.test.ts`.
 - **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
   grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
   toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o

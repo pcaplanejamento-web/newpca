@@ -77,7 +77,8 @@ export function SeletorMultiplo({
     <>
       {semRotulo ? (
         <span className={`min-w-0 flex-1 truncate text-left text-[13px] ${n > 0 ? "font-semibold text-text" : "text-muted"}`} title={n ? selecionados.map(nomeDe).join(", ") : undefined}>
-          {n ? resumoNeutro : textoVazio}
+          {/* Todas marcadas: "Todos (N)" — o resumo cortado ("Cabeçalho (objeto…") não dizia que estavam todas. */}
+          {n && n === opcoes.length && n > 2 ? `Todos (${num(n)})` : n ? resumoNeutro : textoVazio}
         </span>
       ) : (
         <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-text">{rotulo}</span>

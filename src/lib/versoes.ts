@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.307.4",
+    data: "2026-11-19",
+    titulo: "Automação: a extensão lê o cadastro do planejamento no formato novo da Centi",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.46.2: a Centi 3.0.216.217 passou a responder no formato novo ({Data, Count, Success…}) e a extensão só procurava o formato antigo (Entity) — por isso nunca aprendia como a tela abre o planejamento e a conferência ficava “não conferido”. Agora o cadastro é reconhecido em qualquer formato, aprendido no duplo clique da CM002 e entregue ao sistema como antes (centro de custo, seções 8 a 10, situação). Se ainda faltar, o erro diz qual pedido da tela trouxe o cadastro e por que não foi aprendido.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "O DFD cuja verificação falhou não mostra mais a conferência gravada antes (um “Convergente” ao lado de “Falhou”); a orientação “Abra UM planejamento…” aparece uma vez só; e o “O que corrigir” com tudo marcado mostra “Todos (6)”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.307.3",
     data: "2026-11-19",
     titulo: "Automação: só o cadastro completo do planejamento vale; o centro de custo nunca é apagado sem ser lido",

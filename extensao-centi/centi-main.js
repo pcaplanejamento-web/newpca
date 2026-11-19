@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 50;
+  const PROTOCOLO = 51;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -245,6 +245,8 @@
   // As OPERAÇÕES aprendidas que GERARAM UM ARQUIVO (um relatório da tela): só elas, além do Emitir DFD, podem ser
   // repetidas — com as travas forçadas. No localStorage da Centi (valem depois de reabrir a aba).
   const OPERACOES = "__pcaOperacoesArquivo_v1";
+  // Por que o último cadastro de planejamento que a tela abriu NÃO virou o modelo ("" = virou, ou nenhum visto).
+  let planSemModelo = "";
   let internos = 0; // pedidos da PRÓPRIA extensão pelo cliente da Centi — não se aprende deles
   const lerAprendiz = () => {
     try {
@@ -324,7 +326,7 @@
   // O RASTRO dos últimos pedidos da TELA à API (só a estrutura — caminho com os números trocados, a forma da resposta;
   // nunca valores): sem o load aprendido, o erro mostra o que a tela pediu e o endereço novo aparece ali.
   const RASTRO = "__pcaRastroTela_v1";
-  function rastrear(url, metodo, status, j) {
+  function rastrear(url, metodo, status, j, texto) {
     try {
       const c = A?.caminhoDaApi(url);
       if (!c) return;
@@ -333,6 +335,7 @@
         .replace(/([?&](?!entity=)[^=&]+=)\d+/gi, "$1{n}")
         .replace(/\/\d+(?=[/?]|$)/g, "/{n}");
       const e = j && typeof j === "object" ? j.Entity : undefined;
+      const reg = A?.registroDaResposta?.(j);
       const item = {
         p: `${String(metodo || "GET").toUpperCase()} ${caminho}`.slice(0, 140),
         st: Number(status) || 0,
@@ -340,6 +343,10 @@
         mk: e && typeof e === "object" && Number.isInteger(e.ModuleKey) ? e.ModuleKey : null,
         f: !!(e && Array.isArray(e.Fields)),
         pl: !!A?.pareceSerPlanejamento(j),
+        // O cadastro do planejamento em QUALQUER lugar da resposta (os campos que só o cadastro inteiro traz).
+        cad: typeof texto === "string" && /"(Key"\s*:\s*")?(IdCentroCusto|IdPlanejamentoAssinaturaDFD)"/.test(texto),
+        onde: reg?.onde ?? "",
+        n: reg?.n ?? 0,
       };
       const r = [item, ...lerRastro()].slice(0, 30);
       sessionStorage.setItem(RASTRO, JSON.stringify(r));
@@ -374,12 +381,36 @@
         else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
       } catch {}
       const j = JSON.parse(texto);
-      rastrear(url, m, status, j);
+      rastrear(url, m, status, j, texto);
       // Para aprender (e diagnosticar) as seções 8–10 do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
       // A fonte só usa as consultas aceitas (a peça confere de novo).
       if (texto.length <= 2_000_000) {
         respostasTela.unshift({ caminho: c.caminho, metodo: m, corpo: b, j });
         if (respostasTela.length > 60) respostasTela.length = 60;
+      }
+      // O PLANEJAMENTO aberto pela tela (em qualquer envelope — `Entity` ou o `Data` da Centi 217): o modelo do pedido (sem
+      // segredos) e a cópia dos cabeçalhos DESTE pedido. O que não vira modelo vai ao diagnóstico com o motivo (só nomes).
+      if (A.pareceSerPlanejamento(j)) {
+        const lpl = A.loadDoPlanejamento(url, m, b, j);
+        if (!lpl) {
+          const mot = A.motivoSemModelo(url, m, b, j);
+          diagnosticar({ caminho: c.caminho.replace(/\d+/g, "{n}").slice(0, 120), motivo: `planejamento sem modelo — ${mot ?? "?"}`, colunas: [] });
+          planSemModelo = mot ?? "";
+        } else if (A.melhorModelo(lpl, loadPlanAprendido())) {
+          localStorage.setItem(LOAD_PLANEJAMENTO, JSON.stringify({ ...lpl, em: new Date().toISOString() }));
+          planSemModelo = "";
+          const s = String(url);
+          const i = s.indexOf("/restauth/");
+          const cab = i >= 0 ? cabDaUrl.get(s.slice(i)) : null;
+          if (cab) {
+            copias.planejamento = cab;
+            copias.companyTela = Object.entries(cab).find(([k]) => /^company$/i.test(k))?.[1] ?? null;
+            try {
+              sessionStorage.setItem(COPIAS, JSON.stringify(copias));
+            } catch {}
+          }
+        }
+        if (lpl) return;
       }
       if (!A.consultaPermitida(c.caminho, m, b)) {
         // Diagnóstico: uma lista que veio por um pedido que a trava não aceita como leitura.
@@ -391,25 +422,6 @@
         localStorage.setItem(LOAD_PROTOCOLO, JSON.stringify({ ...lp, em: new Date().toISOString() }));
         return;
       }
-      // O PLANEJAMENTO aberto pela tela: o modelo do pedido (sem segredos) e a cópia dos cabeçalhos DESTE pedido.
-      const lpl = A.loadDoPlanejamento(url, m, b, j);
-      if (lpl && !A.melhorModelo(lpl, loadPlanAprendido())) return;
-      if (lpl) {
-        localStorage.setItem(LOAD_PLANEJAMENTO, JSON.stringify({ ...lpl, em: new Date().toISOString() }));
-        const s = String(url);
-        const i = s.indexOf("/restauth/");
-        const cab = i >= 0 ? cabDaUrl.get(s.slice(i)) : null;
-        if (cab) {
-          copias.planejamento = cab;
-          copias.companyTela = Object.entries(cab).find(([k]) => /^company$/i.test(k))?.[1] ?? null;
-          try {
-            sessionStorage.setItem(COPIAS, JSON.stringify(copias));
-          } catch {}
-        }
-        return;
-      }
-      // Diagnóstico: um planejamento que a tela abriu por um pedido que não vira modelo (só os nomes, nunca os dados).
-      if (A.pareceSerPlanejamento(j)) diagnosticar({ caminho: c.caminho.replace(/\d+/g, "{n}").slice(0, 120), motivo: `planejamento sem modelo (${m}, módulo ${j.Entity?.ModuleKey ?? "?"})`, colunas: [] });
       const forma = JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b });
       const pl = A.planejamentosCm002(j);
       if (pl) {
@@ -1025,8 +1037,11 @@
   // UMA consulta numa entidade: 1º pelo cliente da própria Centi; sem ele (ou sem o registro por ele), as CÓPIAS dos
   // cabeçalhos, uma a uma — com `daTela`, a do pedido que a tela fez para abrir um planejamento primeiro. `j` = a 1ª que
   // trouxe o registro; senão o diagnóstico de cada tentativa e a última resposta vazia.
-  const vazio = (j) => !!j && typeof j === "object" && "Entity" in j && j.Entity == null;
-  async function tentarConsulta(metodo, url, corpo, ent, daTela) {
+  // Sem o registro: `Entity: null` (a Centi de 17/11); com `registro` (o load do planejamento), qualquer resposta sem um
+  // registro com Id em nenhum envelope (`Entity`, `Data`… — a Centi 217 responde `{Data, Count, Success…}`).
+  const semEntity = (j) => !!j && typeof j === "object" && "Entity" in j && j.Entity == null;
+  async function tentarConsulta(metodo, url, corpo, ent, daTela, registro = false) {
+    const vazio = registro ? (j) => !!j && typeof j === "object" && !A.registroDaResposta(j) : semEntity;
     const pc = await jsonPelaCenti(metodo, url, corpo, ent);
     const valeCenti = !!pc && pc.status < 400 && !!pc.j && typeof pc.j === "object";
     if (valeCenti && !vazio(pc.j)) return { j: pc.j, via: "centi" };
@@ -1055,13 +1070,23 @@
     const viaCenti = pc ? `cliente da Centi: ${pc.status}${vazio(pc.j) ? " sem o registro" : ""}` : `sem o cliente da Centi${motivoSemCliente ? ` — ${motivoSemCliente}` : ""}`;
     return { diag: [viaCenti, ...tentados].join("; "), ultimo, falha };
   }
-  /** Os últimos pedidos da tela que abrem um registro (load/entity/Entity), em poucas palavras. */
+  /** Os últimos pedidos da TELA, em poucas palavras: 1º os que trouxeram o CADASTRO do planejamento (o envelope e quantos
+   * campos), depois os demais de qualquer caminho — até 6, sem repetir. Só a estrutura, nunca valores. */
   function pedidosDaTela() {
-    return lerRastro()
-      .filter((x) => /load|entity/i.test(x.p) || x.f)
-      .slice(0, 5)
-      .map((x) => `${x.p} → ${x.st}${x.mk ? ` módulo ${x.mk}` : ""}${x.pl ? " (planejamento)" : x.f ? " (registro)" : x.r ? ` (${x.r})` : ""}`)
-      .join(" | ");
+    const r = lerRastro();
+    const fmt = (x) =>
+      `${x.p} → ${x.st}${x.mk ? ` módulo ${x.mk}` : ""}${x.cad ? ` (CADASTRO do planejamento${x.onde ? ` em ${x.onde}, ${x.n} campos` : ""})` : x.pl ? " (planejamento)" : x.onde ? ` (registro em ${x.onde})` : x.r ? ` (${x.r})` : ""}`;
+    const vistos = new Set();
+    const lista = [];
+    for (const x of [...r.filter((y) => y.cad), ...r]) {
+      const t = fmt(x);
+      if (vistos.has(t)) continue;
+      vistos.add(t);
+      lista.push(t);
+      if (lista.length >= 6) break;
+    }
+    const algumCadastro = r.some((y) => y.cad);
+    return `${lista.join(" | ") || "nenhum visto"}${algumCadastro ? "" : " — nenhum pedido da tela trouxe o cadastro do planejamento desde o último F5"}${planSemModelo ? ` — o cadastro visto não virou modelo: ${planSemModelo}` : ""}`;
   }
 
   // Só LEITURA: repete uma CONSULTA aprendida (a Tela Protocolo) — a trava confere o verbo (nunca salvar/excluir/tramitar).
@@ -1100,9 +1125,13 @@
           partes.push(`${t.rotulo}: destino fora da API`);
           continue;
         }
-        const r = await tentarConsulta(t.metodo, url, t.metodo === "POST" ? t.corpo : null, ent, !!t.daTela);
-        const via = `${t.rotulo ? `${t.rotulo} · ` : ""}${r.via}`;
+        const r = await tentarConsulta(t.metodo, url, t.metodo === "POST" ? t.corpo : null, ent, !!t.daTela, !!plan);
+        let via = `${t.rotulo ? `${t.rotulo} · ` : ""}${r.via}`;
         if (r.j && plan) {
+          // O registro no formato que o sistema lê (`Entity.Fields`), venha no envelope que vier.
+          const onde = A.registroDaResposta(r.j)?.onde;
+          if (onde && onde !== "Entity") via += ` · em ${onde}`;
+          r.j = A.normalizarRegistro(r.j);
           const faltam = A.faltasPlanejamento(r.j);
           if (!faltam.length) return { ok: true, j: r.j, via };
           const pontos = A.pontosPlanejamento(r.j);
@@ -1121,7 +1150,7 @@
       const semModelo = !!plan && !modelo;
       const extra = [
         `órgão da tela: ${A.padraoDoValor(copias.companyTela ?? entidadeAtual())}`,
-        semModelo ? `sem o load aprendido — pedidos da tela: ${pedidosDaTela() || "nenhum visto"}` : "",
+        semModelo ? `sem o load aprendido — pedidos da tela: ${pedidosDaTela()}` : "",
       ].filter(Boolean);
       const diag = [...partes, ...extra].join(" | ");
       if (parcial) return { ok: true, j: parcial.j, via: `${parcial.via} — INCOMPLETO (sem ${parcial.faltam.join(", ")}) | ${diag}`, incompleto: parcial.faltam, semModelo };

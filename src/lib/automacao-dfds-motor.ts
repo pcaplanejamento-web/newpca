@@ -207,7 +207,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
   // com o campo vazio daria um DFD sem as seções 8–10 e a conferência marcaria "Convergente*" sem ter lido o cadastro.
   if (loadIncompleto(load.j))
     return {
-      erro: `A Centi devolveu o planejamento ${id}${onde} INCOMPLETO (sem ${faltasDoLoad(load.j).join(" e ")}) — não conferido.${load.diagnostico ? ` [${load.diagnostico}]` : ""} ${MSG_ENSINAR_PLANEJAMENTO}`,
+      erro: `A Centi devolveu o planejamento ${id}${onde} INCOMPLETO (sem ${faltasDoLoad(load.j).join(" e ")}) — não conferido.${load.diagnostico ? ` [${load.diagnostico}]` : ""}${load.diagnostico?.includes(MSG_ENSINAR_PLANEJAMENTO) ? "" : ` ${MSG_ENSINAR_PLANEJAMENTO}`}`,
       definitivo: true,
     };
   const ass = assinaturaDoLoad(load.j, id);

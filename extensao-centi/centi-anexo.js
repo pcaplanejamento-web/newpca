@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p50";
+  const NOME = "__pcaCentiAnexo_p51";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -147,7 +147,55 @@
   // registro das seções 8–10; uma resposta "leve" (uma prévia, a linha da grade) traz só alguns — nunca vale como o load.
   const ESSENCIAIS_PLANEJAMENTO = ["IdCentroCusto", "IdPlanejamentoAssinaturaDFD"];
   const PONTOS_PLANEJAMENTO = [...ESSENCIAIS_PLANEJAMENTO, "Finalidade", "NumeroDFD", "TipoDFD", "IdProtocolo", "Situacao", "PrevisaoEntregaExecucao"];
-  const chavesDoTopo = (j) => new Set((Array.isArray(j?.Entity?.Fields) ? j.Entity.Fields : []).map((f) => f?.Key));
+  // O REGISTRO numa resposta da Centi, em QUALQUER envelope: a Centi de 17/11 responde `{Entity: {ModuleKey, Fields}}`; a
+  // 3.0.216.217 (19/11) responde `{Data, Count, IdLog, Success, Message, Code}`. O registro sai sempre como
+  // `{Fields: [{Key, Value}]}` — o formato que o sistema lê. Objeto simples vira Fields; a referência aninhada com texto
+  // ({Id, Descricao…}) ganha o `Display` (o que a tela mostra), como a referência da Centi de 17/11.
+  const temFields = (o) => !!o && typeof o === "object" && !Array.isArray(o) && Array.isArray(o.Fields);
+  const TEXTO_REF = ["Display", "Caminho", "Descricao", "Nome", "Text", "Description"];
+  function valorConvertido(v, prof) {
+    if (Array.isArray(v)) return prof > 4 ? [] : v.slice(0, 200).map((x) => valorConvertido(x, prof + 1));
+    if (v && typeof v === "object") return prof > 4 ? null : paraFields(v, prof);
+    return v;
+  }
+  function paraFields(o, prof = 0) {
+    if (temFields(o)) return o;
+    const out = [];
+    for (const [k, v] of Object.entries(o).slice(0, 200)) out.push({ Key: k, Value: valorConvertido(v, prof + 1) });
+    if (!("Display" in o) && "Id" in o) {
+      const t = TEXTO_REF.map((k) => o[k]).find((x) => typeof x === "string" && x.trim());
+      if (t) out.push({ Key: "Display", Value: t.trim() });
+    }
+    return { Fields: out };
+  }
+  /** O registro da resposta → `{fields, modulo, onde, n}` (null = a resposta não traz um registro com Id). */
+  function registroDaResposta(j) {
+    if (!j || typeof j !== "object" || Array.isArray(j)) return null;
+    const cands = [];
+    if (j.Entity && typeof j.Entity === "object") cands.push(["Entity", j.Entity]);
+    const d = j.Data ?? j.data;
+    if (Array.isArray(d)) {
+      if (d.length === 1) cands.push(["Data[0]", d[0]]);
+    } else if (d && typeof d === "object") {
+      if (d.Entity && typeof d.Entity === "object") cands.push(["Data.Entity", d.Entity]);
+      cands.push(["Data", d]);
+    }
+    for (const k of ["Object", "Result", "Registro"]) if (j[k] && typeof j[k] === "object") cands.push([k, j[k]]);
+    for (const [onde, r] of cands) {
+      if (!r || typeof r !== "object" || Array.isArray(r)) continue;
+      const fields = (temFields(r) ? r : paraFields(r)).Fields;
+      if (!fields.some((f) => f?.Key === "Id")) continue;
+      return { fields, modulo: Number.isInteger(r.ModuleKey) ? r.ModuleKey : null, onde, n: fields.length };
+    }
+    return null;
+  }
+  /** A resposta no formato que o sistema lê: `{…, Entity: {ModuleKey, Fields}}` (a de 17/11 volta como veio). */
+  function normalizarRegistro(j) {
+    const r = registroDaResposta(j);
+    if (!r || r.onde === "Entity") return j;
+    return { ...j, Entity: { ModuleKey: r.modulo, Fields: r.fields } };
+  }
+  const chavesDoTopo = (j) => new Set((registroDaResposta(j)?.fields ?? []).map((f) => f?.Key));
   /** Os campos ESSENCIAIS que faltam no load do planejamento ([] = completo). */
   function faltasPlanejamento(j) {
     const c = chavesDoTopo(j);
@@ -160,19 +208,21 @@
   }
   /** A resposta parece um planejamento (o `Entity` do topo)? — para o reconhecimento e o diagnóstico. */
   function pareceSerPlanejamento(j) {
-    const e = j?.Entity;
-    if (!e || !Array.isArray(e.Fields)) return false;
-    const chaves = new Set(e.Fields.map((f) => f?.Key));
+    const r = registroDaResposta(j);
+    if (!r) return false;
+    const chaves = new Set(r.fields.map((f) => f?.Key));
     return CAMPOS_PLANEJAMENTO.some((k) => chaves.has(k)) && !chaves.has("NrProtocolo");
   }
-  function loadDoPlanejamento(url, metodo, corpo, j) {
+  // O pedido da tela que trouxe o planejamento, já como modelo — ou por que não vira (`motivo`, só nomes e padrões).
+  function analisarPedidoPlanejamento(url, metodo, corpo, j) {
     const m = String(metodo || "GET").toUpperCase();
+    if (!pareceSerPlanejamento(j)) return { motivo: "a resposta não é o cadastro de um planejamento" };
     const c = caminhoDaApi(url);
-    if (!c || !consultaPermitida(c.caminho, m, corpo)) return null;
-    const e = j?.Entity;
-    if (!pareceSerPlanejamento(j) || !Number.isInteger(e.ModuleKey)) return null;
-    const id = texto(valor(e, "Id"));
-    if (!/^\d{1,12}$/.test(id) || id === "0") return null;
+    if (!c) return { motivo: "o pedido não é da API da Centi" };
+    if (!consultaPermitida(c.caminho, m, corpo)) return { motivo: `o pedido ${m} ${c.verbo} não é de leitura` };
+    const r = registroDaResposta(j);
+    const id = texto(valor({ Fields: r.fields }, "Id"));
+    if (!/^\d{1,12}$/.test(id) || id === "0") return { motivo: `o registro veio sem o nº (em ${r.onde})` };
     const caminho = trocarId(c.caminho, id);
     let b = null;
     if (m === "POST" && corpo != null) {
@@ -181,15 +231,25 @@
         try {
           bruto = JSON.parse(bruto);
         } catch {
-          return null;
+          return { motivo: "o corpo do pedido não é JSON" };
         }
       }
       const limpo = semSegredos(bruto);
-      if (limpo === undefined) return null;
+      if (limpo === undefined) return { motivo: "o corpo do pedido tem formato desconhecido" };
       b = marcarNoCorpo(limpo, id);
     }
-    if (!caminho.includes(MARCA_ID) && !/\{id(:n)?\}/.test(JSON.stringify(b ?? ""))) return null;
-    return { metodo: m, caminho, corpo: b, modulo: e.ModuleKey, pontos: pontosPlanejamento(j), completo: faltasPlanejamento(j).length === 0 };
+    if (!caminho.includes(MARCA_ID) && !/\{id(:n)?\}/.test(JSON.stringify(b ?? "")))
+      return { motivo: `o nº do planejamento não está no pedido (${m} ${c.verbo}, registro em ${r.onde})` };
+    const modulo = r.modulo ?? (Number(/[?&]entity=(\d+)/i.exec(c.caminho)?.[1]) || 0);
+    return { modelo: { metodo: m, caminho, corpo: b, modulo, onde: r.onde, pontos: pontosPlanejamento(j), completo: faltasPlanejamento(j).length === 0 } };
+  }
+  function loadDoPlanejamento(url, metodo, corpo, j) {
+    return analisarPedidoPlanejamento(url, metodo, corpo, j).modelo ?? null;
+  }
+  /** Por que um cadastro de planejamento visto na tela NÃO virou o modelo (null = virou, ou não é planejamento). */
+  function motivoSemModelo(url, metodo, corpo, j) {
+    if (!pareceSerPlanejamento(j)) return null;
+    return analisarPedidoPlanejamento(url, metodo, corpo, j).motivo ?? null;
   }
   /** O modelo novo substitui o guardado? Só o mais completo (ou o mesmo pedido de novo) — uma resposta leve da tela (uma
    * prévia) nunca troca o load completo aprendido. */
@@ -1120,5 +1180,5 @@
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo, fonteDaAssinatura, diagnosticoAssinatura,
-    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, loadDoPlanejamento, pareceSerPlanejamento, faltasPlanejamento, pontosPlanejamento, melhorModelo, entidadeNoFormato, padraoDoValor, MODULOS_PLANEJAMENTO, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, loadDoPlanejamento, pareceSerPlanejamento, registroDaResposta, normalizarRegistro, paraFields, motivoSemModelo, faltasPlanejamento, pontosPlanejamento, melhorModelo, entidadeNoFormato, padraoDoValor, MODULOS_PLANEJAMENTO, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

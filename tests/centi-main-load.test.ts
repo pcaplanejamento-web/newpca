@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
+import { assinaturaDoLoad } from "../src/lib/assinatura-dfd-centi.ts";
+import { dadosDoPlanejamento, faltasDoLoad, centroCustoLidoNoLoad } from "../src/lib/automacao-centi-core.ts";
 
 // A aba da Centi FALSA: o cliente HTTP da própria Centi (axios em ".../restauth" achado pelo webpack) e o XHR da página.
 // Cada pedido do cliente passa pelo XHR (como o axios real), então o `guardar` da extensão o vê.
 type Pedido = { via: "centi" | "xhr"; url: string; headers: Record<string, string> };
 
-function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: (url: string, h: Record<string, string>) => unknown; respostaXhr?: (url: string, h: Record<string, string>) => unknown }) {
+function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: (url: string, h: Record<string, string>) => unknown; respostaXhr?: (url: string, h: Record<string, string>, corpo?: string) => unknown }) {
   const pedidos: Pedido[] = [];
   const ouvintes: ((e: unknown) => void)[] = [];
   const respostas: unknown[] = [];
@@ -45,9 +47,9 @@ function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: 
     addEventListener(_t: string, f: () => void) {
       this._ouv.push(f);
     }
-    send() {
+    send(corpo?: unknown) {
       pedidos.push({ via: "xhr", url: this._url, headers: { ...this._h } });
-      const j = opcoes.respostaXhr?.(this._url, this._h) ?? { Entity: null };
+      const j = opcoes.respostaXhr?.(this._url, this._h, typeof corpo === "string" ? corpo : undefined) ?? { Entity: null };
       this.status = 200;
       this.response = this.responseType === "text" ? JSON.stringify(j) : new TextEncoder().encode(JSON.stringify(j)).buffer;
       queueMicrotask(() => {
@@ -153,8 +155,16 @@ function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: 
     for (const [k, v] of Object.entries(h)) x.setRequestHeader(k, v);
     x.send();
   };
+  // A TELA da Centi 217 abre o cadastro por um POST com o corpo (ex.: o `searchentity` com o filtro pelo Id).
+  const telaPost = (url: string, corpo: unknown, h: Record<string, string>) => {
+    const XH = ctx.XMLHttpRequest as typeof XHR;
+    const x = new XH();
+    x.open("POST", `${ORIGEM}/compras/${url}`);
+    for (const [k, v] of Object.entries(h)) x.setRequestHeader(k, v);
+    x.send(JSON.stringify(corpo));
+  };
   const espera = () => new Promise((ok) => setTimeout(ok, 5));
-  return { acao, pedidos, pedidoDaTela, telaAbre, espera, local: ctx.localStorage as { getItem: (k: string) => string | null } };
+  return { acao, pedidos, pedidoDaTela, telaAbre, telaPost, espera, local: ctx.localStorage as { getItem: (k: string) => string | null } };
 }
 
 const LOAD = "restauth/load?entity=101045&key=640";
@@ -376,4 +386,85 @@ test("Centi nova: uma PRÉVIA do planejamento (sem o centro de custo e as seçõ
   assert.equal(r2.incompleto, undefined);
   assert.equal(r2.j.Entity.ModuleKey, 999999);
   assert.equal(r2.j.Entity.Fields.find((f: { Key: string }) => f.Key === "Id").Value, "24", "o registro DESTE planejamento");
+});
+
+// A Centi 3.0.216.217 (19/11/2026): as respostas vêm no envelope {Data, Count, IdLog, Success, Message, Code} (o print do
+// diagnóstico: "POST restauth/searchentity → 200 (Data,Count,IdLog,Success,Message,Code)"). A tela abre o cadastro por um
+// POST com o Id no corpo; o registro vem como OBJETO SIMPLES em `Data` (ou numa lista de um em `Data`).
+const cadastro217 = (id: number) => ({
+  Id: id,
+  Finalidade: "AQUISIÇÃO DE MATERIAL",
+  IdCentroCusto: { Id: 9, Descricao: "PM RV, AGENCIA MUN. DE MEIO AMBIENTE E ORDENAMENTO TERRITORIAL" },
+  IdPlanejamentoAssinaturaDFD: { Id: 114, Descricao: "SECRETARIA" },
+  Situacao: { Id: 2, Descricao: "Não Executado" },
+  NumeroDFD: 227,
+});
+const CENTI_217 = (emLista = false) => (u: string, h: Record<string, string>, corpo?: string) => {
+  if (/entity=101045/.test(u)) return { Entity: null, Message: null };
+  if (/entity=101026/.test(u)) return { Entity: { ModuleKey: 101026, Fields: [{ Key: "Finalidade", Value: "x" }, { Key: "Id", Value: "277" }] } };
+  if (/searchentity/.test(u)) {
+    const b = corpo ? JSON.parse(corpo) : {};
+    const id = Number(b?.Filtro?.Id);
+    if (!id) return { Data: [{ Id: 1 }, { Id: 2 }, { Id: 3 }], Count: 3, IdLog: 1, Success: true, Message: null, Code: 0 };
+    if (h.company && !/^\d{2}$/.test(h.company)) return { Data: null, Count: 0, IdLog: 1, Success: true, Message: null, Code: 0 };
+    return { Data: emLista ? [cadastro217(id)] : cadastro217(id), Count: 1, IdLog: 1, Success: true, Message: null, Code: 0 };
+  }
+  return {};
+};
+const CORPO_217 = (id: number) => ({ Entidade: "ComprasPlanejamento", Filtro: { Id: id }, Pagina: 1 });
+
+for (const emLista of [false, true]) {
+  test(`Centi 217: o cadastro em \`Data${emLista ? "[0]" : ""}\` é APRENDIDO e lido no formato do sistema (centro de custo e seções 8–10)`, async () => {
+    const aba = abaCenti({ cliente: false, respostaXhr: CENTI_217(emLista) });
+    // A pesquisa da CM002 (a lista) nunca vira modelo.
+    aba.telaPost("restauth/searchentity", { Entidade: "ComprasPlanejamento", Pagina: 1 }, DA_TELA);
+    await aba.espera();
+    assert.equal(aba.local.getItem("__pcaLoadPlanejamento_v1"), null);
+    // O duplo clique no planejamento 131: o POST com o Id no corpo.
+    aba.telaPost("restauth/searchentity", CORPO_217(131), DA_TELA);
+    await aba.espera();
+    const modelo = JSON.parse(aba.local.getItem("__pcaLoadPlanejamento_v1") ?? "null");
+    assert.equal(modelo.metodo, "POST");
+    assert.equal(modelo.caminho, "restauth/searchentity");
+    assert.equal(modelo.onde, emLista ? "Data[0]" : "Data");
+    assert.equal(modelo.completo, true);
+    assert.deepEqual(modelo.corpo.Filtro, { Id: "{id:n}" });
+
+    const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=277", entidade: "8", planejamento: "277" });
+    assert.equal(r.ok, true);
+    assert.equal(r.incompleto, undefined);
+    assert.match(r.via, new RegExp(`^como a tela abre \\(módulo 0\\) · cópia (do load )?da tela · em Data${emLista ? "\\[0\\]" : ""}$`));
+    assert.equal(aba.pedidos.at(-1)?.headers.company, "08", "o órgão no formato da tela");
+    // O SISTEMA lê como lia o load de 17/11: as seções 8–10, o centro de custo, a situação.
+    assert.deepEqual(faltasDoLoad(r.j), []);
+    assert.deepEqual(assinaturaDoLoad(r.j, "277"), { id: "114" });
+    const dados = dadosDoPlanejamento(r.j);
+    assert.equal(dados.centroCusto, "PM RV, AGENCIA MUN. DE MEIO AMBIENTE E ORDENAMENTO TERRITORIAL");
+    assert.equal(dados.situacao, "Não Executado");
+    assert.equal(centroCustoLidoNoLoad(r.j), true);
+  });
+}
+
+test("Centi 217: o cadastro visto por um pedido SEM o nº do planejamento não vira modelo — o erro diz qual pedido e por quê", async () => {
+  const aba = abaCenti({
+    cliente: false,
+    respostaXhr: (u, h, c) => (/getcurrent/.test(u) ? { Data: cadastro217(131), Count: 1, Success: true } : CENTI_217()(u, h, c)),
+  });
+  aba.telaPost("restauth/getcurrent", { Entidade: "ComprasPlanejamento" }, DA_TELA);
+  await aba.espera();
+  assert.equal(aba.local.getItem("__pcaLoadPlanejamento_v1"), null);
+  const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=277", entidade: "8", planejamento: "277" });
+  assert.deepEqual(r.incompleto, ["IdCentroCusto", "IdPlanejamentoAssinaturaDFD"], "só a prévia do 101026 abriu");
+  assert.match(r.via, /POST restauth\/getcurrent → 200 \(CADASTRO do planejamento em Data, \d+ campos\)/);
+  assert.match(r.via, /o nº do planejamento não está no pedido/);
+  assert.ok(!r.via.includes("AGENCIA"), "nunca os dados");
+});
+
+test("Centi 217: sem o duplo clique, o diagnóstico diz que nenhum pedido da tela trouxe o cadastro", async () => {
+  const aba = abaCenti({ cliente: false, respostaXhr: CENTI_217() });
+  aba.telaPost("restauth/searchentity", { Entidade: "ComprasPlanejamento", Pagina: 1 }, DA_TELA);
+  await aba.espera();
+  const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=277", entidade: "8", planejamento: "277" });
+  assert.match(r.via, /POST restauth\/searchentity → 200 \(Data,Count,IdLog,Success,Message,Code\)/);
+  assert.match(r.via, /nenhum pedido da tela trouxe o cadastro do planejamento desde o último F5/);
 });

@@ -31,7 +31,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.46.1";
+export const VERSAO_EXTENSAO_CENTI = "1.46.2";
 /**
  * A versão MÍNIMA com que as automações RODAM (o protocolo da tela com a extensão não mudou desde ela). Uma versão nova
  * da extensão NUNCA trava as automações de quem ainda não atualizou: abaixo da recomendada (`VERSAO_EXTENSAO_CENTI`),
@@ -730,7 +730,8 @@ export function dadosDoPlanejamento(j: unknown): { situacao?: string; centroCust
       // Sem o `Display`, o registro ligado (`Object`): o caminho completo ("PM RV, SECRETARIA…") ou o nome.
       const o = fs.find((f) => f?.Key === "Object")?.Value;
       const of = o && typeof o === "object" && Array.isArray((o as { Fields?: unknown }).Fields) ? ((o as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields) : [];
-      const t = ["Caminho", "Nome", "Descricao"].map((k) => of.find((f) => f?.Key === k)?.Value).find((x) => typeof x === "string" && x.trim());
+      // Sem o `Object`, a própria referência (o envelope da Centi 217, convertido pela extensão: {Id, Caminho|Nome|Descricao}).
+      const t = ["Caminho", "Nome", "Descricao"].flatMap((k) => [of.find((f) => f?.Key === k)?.Value, fs.find((f) => f?.Key === k)?.Value]).find((x) => typeof x === "string" && x.trim());
       return typeof t === "string" ? t.trim() : typeof d === "string" ? d.trim() : null;
     }
     return null;
