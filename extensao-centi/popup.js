@@ -573,15 +573,15 @@
       s === "emDia"
         ? ["Ativa", "emerald"]
         : s === "ausente"
-          ? ["Instale o atualizador", "amber"]
+          ? ["Sem atualizador", "amber"]
           : s === "outraPasta"
-            ? ["Atualizador em outra pasta", "amber"]
+            ? ["Outra pasta", "amber"]
             : s === "atualizando" || s === "recarregar"
               ? ["Atualizando…", "blue"]
               : s === "ocupada"
-                ? ["Espera a automação terminar", "blue"]
+                ? ["Após a automação", "blue"]
                 : s === "semSistema"
-                  ? ["Entre no sistema para conferir", "amber"]
+                  ? ["Entre no sistema", "amber"]
                   : s === "falhou"
                     ? ["Falhou", "red"]
                     : ["Conferindo…", ""];

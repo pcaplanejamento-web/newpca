@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.304.1",
+    data: "2026-11-19",
+    titulo: "Atualização automática da extensão mais segura",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.44.1: a atualização automática nunca recarrega no meio de um fluxo (também os que não usam lote), confere de novo assim que você entra no sistema e, instalada à mão, já mostra se o atualizador está presente. No Windows, o atualizador lê pacotes de qualquer tamanho e a instalação no Chrome não depende do Edge; no Mac, a ajuda ensina o “Abrir Mesmo Assim”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.304.0",
     data: "2026-11-19",
     titulo: "Extensão da Automação se atualiza sozinha",

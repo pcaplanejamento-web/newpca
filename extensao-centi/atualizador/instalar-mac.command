@@ -1,6 +1,7 @@
 #!/bin/sh
-# INSTALA o atualizador da extensão Automação PCA neste Mac (só para este usuário). Abra UMA vez com dois cliques (ou botão
-# direito → Abrir), DENTRO da pasta da extensão. Depois a extensão se atualiza sozinha.
+# INSTALA o atualizador da extensão Automação PCA neste Mac (só para este usuário). Abra UMA vez com dois cliques, DENTRO
+# da pasta da extensão (bloqueado: Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim; ou no Terminal:
+# sh <este arquivo>). Depois a extensão se atualiza sozinha.
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 PASTA="$(dirname "$AQUI")"
 if [ ! -f "$PASTA/manifest.json" ]; then

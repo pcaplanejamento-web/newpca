@@ -700,12 +700,15 @@ function verificarAtualizacao(forcar = false) {
     atualizando = (async () => {
       const antes = await lerAtualizacao();
       if (!forcar && typeof antes.verificadaEm === "number" && Date.now() - antes.verificadaEm < INTERVALO_ATUALIZACAO_MS) return antes;
-      if ((await lerAtividade())?.estado === "rodando") return gravarAtualizacao({ situacao: "ocupada", verificadaEm: antes.verificadaEm ?? null });
+      if (await automacaoEmCurso()) return gravarAtualizacao({ situacao: "ocupada", verificadaEm: antes.verificadaEm ?? null });
       const agora = Date.now();
       const atual = versaoAqui();
       const info = await apiAutomacao("GET", "extensao?info=1");
-      // Fora do sistema (ou sem ser ADM): confere de novo no próximo alarme, sem chamar de falha.
-      if (!info.ok) return gravarAtualizacao({ situacao: info.semSistema ? "semSistema" : "falhou", erro: info.erro, verificadaEm: agora });
+      // Fora do sistema (ou sem ser ADM): não é falha — confere de novo assim que o sistema abrir (sem esperar o intervalo).
+      if (!info.ok)
+        return info.semSistema
+          ? gravarAtualizacao({ situacao: "semSistema", erro: info.erro, verificadaEm: antes.verificadaEm ?? null })
+          : gravarAtualizacao({ situacao: "falhou", erro: info.erro, verificadaEm: agora });
       const publicada = typeof info.versao === "string" ? info.versao : null;
       const nova = !!publicada && versaoMaior(publicada, atual);
       // O atualizador só é chamado quando há versão nova — ou para saber se está instalado (ainda não se sabe, ou pedido).
@@ -741,12 +744,25 @@ function verificarAtualizacao(forcar = false) {
     });
   return atualizando;
 }
+/** Uma automação em curso: um lote rodando ou uma ação na Centi há pouco (um fluxo sem lote também conta). */
+const ACAO_RECENTE_MS = 3 * 60 * 1000;
+async function automacaoEmCurso() {
+  if ((await lerAtividade())?.estado === "rodando") return true;
+  const acaoEm = await sessao.ler("acaoEm");
+  return typeof acaoEm === "number" && Date.now() - acaoEm < ACAO_RECENTE_MS;
+}
 /** Recarrega a extensão (o Chrome relê a pasta já atualizada) — só sem automação em curso. */
 async function recarregarSeLivre() {
   const a = await lerAtualizacao();
-  if (a.situacao !== "recarregar" || (await lerAtividade())?.estado === "rodando") return false;
+  if (a.situacao !== "recarregar" || (await automacaoEmCurso())) return false;
   chrome.runtime.reload();
   return true;
+}
+/** A situação para o banner; sem nenhuma ainda, confere agora (o banner acompanha pelo armazenamento). */
+async function atualizacaoParaMostrar() {
+  const a = await lerAtualizacao();
+  if (!a.situacao) verificarAtualizacao(true).catch(() => {});
+  return a;
 }
 async function garantirAlarmeAtualizacao() {
   try {
@@ -758,10 +774,12 @@ async function garantirAlarmeAtualizacao() {
 // ---------------------------------------------------------------- EVENTOS DO NAVEGADOR
 chrome.runtime.onInstalled.addListener(async (d) => {
   // Voltou de um recarregar da ATUALIZAÇÃO: registra a versão nova (o banner mostra "Atualizada de X para Y").
-  if (d?.reason === "update") {
+  // Instalada (ou atualizada à mão): confere já se o atualizador está presente.
+  if (d?.reason === "update" || d?.reason === "install") {
     const a = await lerAtualizacao().catch(() => ({}));
-    const agora = versaoAqui();
-    await gravarAtualizacao({ situacao: "emDia", erro: null, de: d.previousVersion ?? a.de ?? null, para: agora, atualizadaEm: Date.now() }).catch(() => {});
+    if (a.situacao === "recarregar")
+      await gravarAtualizacao({ situacao: "emDia", erro: null, de: d.previousVersion ?? a.de ?? null, para: versaoAqui(), atualizadaEm: Date.now() }).catch(() => {});
+    else verificarAtualizacao(true).catch(() => {});
   }
   garantirAlarmeAtualizacao();
   const aba = await abaGuardada().catch(() => null);
@@ -813,7 +831,11 @@ chrome.tabs?.onUpdated?.addListener((tabId, info, tab) => {
   // marcava o lote como parado no meio de um fluxo). O F5 / fechar a página avisa pela ponte ("saiu", pagehide).
   if (info.url && !info.url.includes("/painel/automacao")) donoSaiu(tabId).catch(() => {});
   // Abriu o SISTEMA (inclusive logo depois de entrar): deixa a Centi pronta.
-  if (info.status === "complete" && ORIGENS.some((o) => tab?.url?.startsWith(`${o}/painel`))) prepararCenti().catch(() => {});
+  if (info.status === "complete" && ORIGENS.some((o) => tab?.url?.startsWith(`${o}/painel`))) {
+    prepararCenti().catch(() => {});
+    // E confere a versão (dentro do intervalo de 30 min, nada é pedido).
+    verificarAtualizacao().catch(() => {});
+  }
   if (info.status !== "complete" || !tab?.url?.startsWith(INICIO_CENTI)) return;
   setTimeout(() => conferirAba(tabId).catch(() => {}), 1500);
 });
@@ -947,7 +969,7 @@ async function daExtensao(msg) {
       login: await infoLogin(),
       atividade: await lerAtividade(),
       versao: chrome.runtime.getManifest?.().version ?? null,
-      atualizacao: await lerAtualizacao(),
+      atualizacao: await atualizacaoParaMostrar(),
     };
   }
   return { ok: false, erro: "Pedido desconhecido." };

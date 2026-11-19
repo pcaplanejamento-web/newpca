@@ -1156,7 +1156,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `background.js` → `verificarAtualizacao(forcar)`: no `onStartup`, no alarme `atualizar-extensao` (30 min) e no "Atualizar
   agora" do popup; `GET /api/admin/automacao/extensao?info=1` (`{versao, minima}`) → só com versão nova pergunta ao host
   (`versao` — `ausente`/`outraPasta`), baixa o .zip pela sessão do ADM e manda `{acao:"atualizar", zip base64, sha256,
-  versao}` → `chrome.runtime.reload()` (`recarregarSeLivre`: nunca com lote rodando — espera o fim). A situação fica em
+  versao}` → `chrome.runtime.reload()` (`recarregarSeLivre`: nunca com automação em curso — `automacaoEmCurso` = lote rodando
+  ou uma ação na Centi há < 3 min; espera o fim). v1.304.1 (extensão 1.44.1): fora do sistema = `semSistema` sem gastar o
+  intervalo (confere ao abrir o `/painel`); instalada/atualizada à mão confere na hora; o host do Windows tira o `zip` da
+  mensagem ANTES do `ConvertFrom-Json` (limite de ~2 MB no PowerShell 5.1; aceita o "\/" escapado); o instalador registra o
+  Chrome mesmo se o Edge falhar. A situação fica em
   `chrome.storage.local.atualizacao` e vai no `estado` (popup: grupo "Atualização automática"; a tela: `AtualizacaoExtensao`
   no menu "Extensão e Centi"). O .zip (`zipDaExtensao`) leva `atualizador/*` com CRLF nos `.bat`/`.ps1`, BOM no `.ps1` e o
   modo 0755 nos do Mac (`ZipArmazenar.adicionar(…, {executavel})`); `scripts/gerar-extensao.mjs` inclui a pasta. Testes:

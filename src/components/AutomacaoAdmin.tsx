@@ -112,8 +112,9 @@ function AtualizacaoExtensao({ a }: { a: AtualizacaoExt | null | undefined }) {
         </p>
         <p>
           Para isso, instale o <strong>atualizador</strong> UMA vez em cada computador, de dentro da pasta da extensão:{" "}
-          <strong>atualizador/instalar-windows.bat</strong> no Windows ou <strong>atualizador/instalar-mac.command</strong> no Mac
-          (botão direito → Abrir na primeira vez). Não precisa ser administrador.
+          <strong>atualizador/instalar-windows.bat</strong> no Windows ou <strong>atualizador/instalar-mac.command</strong> no Mac.
+          Não precisa ser administrador. No Mac, se ele não abrir: Ajustes do Sistema → Privacidade e Segurança →{" "}
+          <strong>Abrir Mesmo Assim</strong> — ou, no Terminal, digite <strong>sh</strong> e arraste o arquivo para a janela.
         </p>
         <p>
           O atualizador só troca os arquivos da extensão, depois de conferir que o pacote veio inteiro, que é desta mesma

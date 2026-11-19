@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { POPUP_URL, pausa, servicoFalso } from "./fixtures/chrome-falso.ts";
+import { ate, POPUP_URL, pausa, servicoFalso } from "./fixtures/chrome-falso.ts";
 
 const ZIP = new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8]);
 const sha = createHash("sha256").update(ZIP).digest("hex");
@@ -114,6 +114,37 @@ test("o alarme respeita o intervalo de 30 min; o 'Atualizar agora' ignora", asyn
   assert.equal(sis.pedidos.filter((u) => u.endsWith("info=1")).length, 1);
   assert.ok(s.alarmes.includes("atualizar-extensao"), "o alarme de 30 min existe");
   await pausa(1);
+});
+
+test("ação na Centi há pouco (um fluxo sem lote) também segura a atualização", async () => {
+  const sis = sistema();
+  const s = servicoFalso({ versao: "1.44.0", fetch: sis.fetch, nativo: hostOk(), sessao: { acaoEm: Date.now() } });
+  const r = (await s.pedir({ tipo: "atualizarAgora" }, { url: POPUP_URL })) as { atualizacao: Record<string, unknown> };
+  assert.equal(r.atualizacao.situacao, "ocupada");
+  assert.equal(s.nativos.length, 0);
+});
+
+test("fora do sistema: 'semSistema' sem gastar o intervalo — confere de novo ao abrir o sistema", async () => {
+  let logado = false;
+  const sis = sistema("1.44.0");
+  const fetch = async (url: string, init: Record<string, unknown>) =>
+    logado ? sis.fetch(url, init) : { ok: false, status: 401, json: async () => ({ ok: false, error: "Não autenticado" }) };
+  const s = servicoFalso({ versao: "1.44.0", fetch, nativo: hostOk() });
+  const r = (await s.pedir({ tipo: "atualizarAgora" }, { url: POPUP_URL })) as { atualizacao: Record<string, unknown> };
+  assert.equal(r.atualizacao.situacao, "semSistema");
+  assert.equal(r.atualizacao.verificadaEm ?? null, null, "não conta como conferida");
+  logado = true;
+  await s.alarme("atualizar-extensao");
+  assert.equal((s.local.atualizacao as Record<string, unknown>).situacao, "emDia");
+});
+
+test("abrir o banner sem situação ainda: confere sozinho; instalada à mão: confere já", async () => {
+  const sis = sistema("1.44.0");
+  const s = servicoFalso({ versao: "1.44.0", fetch: sis.fetch, nativo: hostOk() });
+  await s.instalar({ reason: "update", previousVersion: "1.43.0" });
+  await ate(() => (s.local.atualizacao as { situacao?: string } | undefined)?.situacao === "emDia");
+  assert.equal((s.local.atualizacao as Record<string, unknown>).instalado, true, "conferiu o atualizador");
+  assert.ok(!("para" in (s.local.atualizacao as object)), "não diz 'atualizada' quando foi à mão");
 });
 
 // ---------------------------------------------------------------- O ATUALIZADOR (atualizador/)

@@ -16,9 +16,13 @@ try {
   }
   $arquivo = Join-Path $aqui "$nome.json"
   [IO.File]::WriteAllText($arquivo, ($host_ | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
-  foreach ($chave in 'HKCU:\Software\Google\Chrome\NativeMessagingHosts', 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts') {
+  # O Chrome (obrigatório) e o Edge (se der — nunca impede o do Chrome).
+  function Registrar([string]$chave) {
+    if (-not (Test-Path $chave)) { New-Item -Path $chave -Force | Out-Null }
     New-Item -Force -Path "$chave\$nome" -Value $arquivo | Out-Null
   }
+  Registrar 'HKCU:\Software\Google\Chrome\NativeMessagingHosts'
+  try { Registrar 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts' } catch {}
   Write-Host ''
   Write-Host 'Pronto! O atualizador da extensão Automação PCA está instalado.' -ForegroundColor Green
   Write-Host 'Volte ao Chrome e abra o ícone da extensão: "Atualização automática" deve aparecer como Ativa.'

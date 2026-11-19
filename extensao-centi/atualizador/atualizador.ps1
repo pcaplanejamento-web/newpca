@@ -79,7 +79,17 @@ function Atualizar($m) {
 try {
   $tam = [BitConverter]::ToInt32((Ler-Bytes 4), 0)
   if ($tam -le 0 -or $tam -gt $LIMITE) { throw 'Mensagem de tamanho inválido.' }
-  $m = [Text.Encoding]::UTF8.GetString((Ler-Bytes $tam)) | ConvertFrom-Json
+  $texto = [Text.Encoding]::UTF8.GetString((Ler-Bytes $tam))
+  # O .zip (base64) sai ANTES do ConvertFrom-Json: no PowerShell 5.1 ele recusa textos acima de ~2 MB.
+  $zip64 = ''
+  # (o "/" do base64 pode vir escapado como "\/" no JSON)
+  $achado = [regex]::Match($texto, '"zip"\s*:\s*"([A-Za-z0-9+/=\\]*)"')
+  if ($achado.Success) {
+    $zip64 = $achado.Groups[1].Value.Replace('\/', '/')
+    $texto = $texto.Remove($achado.Groups[1].Index, $achado.Groups[1].Length)
+  }
+  $m = $texto | ConvertFrom-Json
+  $m | Add-Member -Force -NotePropertyName zip -NotePropertyValue $zip64
   if ($m.acao -eq 'versao') { Responder @{ ok = $true; versao = [string](Manifesto-Atual).version; pasta = $pasta } }
   elseif ($m.acao -eq 'atualizar') { Responder (Atualizar $m) }
   else { Responder @{ ok = $false; erro = 'Pedido desconhecido.' } }
