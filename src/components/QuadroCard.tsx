@@ -33,7 +33,7 @@ export function CapaQuadro({ quadro: q, children }: { quadro: Pick<QuadroCardDad
 }
 
 /** Um número do rodapé do card (rótulo + valor; `cor` = a do valor — ex.: atrasadas em vermelho). */
-export type MetricaCartao = { rotulo: string; valor: string; cor?: string };
+export type MetricaCartao = { rotulo: string; valor: string; cor?: string; /** A dica (o detalhe que não cabe no card). */ dica?: string };
 
 /**
  * O CARD de um ESPAÇO (o desenho do card de quadro de Tarefas, compartilhado com o Catálogo): a CAPA 16:9 dentro do card,
@@ -66,27 +66,29 @@ export function CartaoEspaco({
   esmaecido?: boolean;
   canto?: ReactNode;
 }) {
-  const classe = `group flex h-full w-full flex-col overflow-hidden rounded-card border bg-surface p-2 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
+  // ESCALA COMO IMAGEM (`.cartao-escala`, globals.css): toda medida interna é proporcional à largura do card — a mesma
+  // proporção em qualquer tela, as linhas do sobretítulo e do nome reservadas e nada cortado nem abreviado.
+  const classe = `cartao-escala group flex h-full w-full flex-col overflow-hidden rounded-card border bg-surface text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 ${
     atual ? "border-accent ring-2 ring-accent" : "border-border"
   } ${esmaecido ? "opacity-60" : ""}`;
   const corpo = (
     <>
       {capa}
-      <div className="flex flex-1 flex-col px-1.5 pt-2 pb-1">
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-faint" title={sobretitulo}>
+      <div className="ce-corpo flex flex-1 flex-col">
+        <div className="ce-topo flex items-start">
+          <span className="ce-sobre min-w-0 flex-1 font-semibold uppercase tracking-wide text-faint" title={sobretitulo}>
             {sobretitulo}
           </span>
-          {selo}
+          {selo && <span className="ce-selo shrink-0">{selo}</span>}
         </div>
-        <h3 className="mt-0.5 line-clamp-2 min-h-[2.5em] text-[14px] font-semibold leading-snug text-text group-hover:text-accent" title={nome}>
+        <h3 className="ce-nome font-semibold text-text group-hover:text-accent" title={nome}>
           {nome}
         </h3>
-        <dl className="mt-auto grid grid-cols-3 gap-x-2 border-t border-border pt-2 text-[11px]">
+        <dl className="ce-metricas mt-auto flex justify-between border-t border-border">
           {metricas.map((m) => (
-            <div key={m.rotulo} className="min-w-0">
-              <dt className="truncate text-muted">{m.rotulo}</dt>
-              <dd className="truncate text-[15px] font-bold tabular-nums" style={{ color: m.cor ?? "var(--text)" }} title={m.valor}>
+            <div key={m.rotulo} className="whitespace-nowrap" title={m.dica}>
+              <dt className="text-muted">{m.rotulo}</dt>
+              <dd className="ce-valor font-bold tabular-nums" style={{ color: m.cor ?? "var(--text)" }}>
                 {m.valor}
               </dd>
             </div>
@@ -96,7 +98,7 @@ export function CartaoEspaco({
     </>
   );
   return (
-    <div className="relative h-full">
+    <div className="relative h-full [container-type:inline-size]">
       {href ? (
         <Link href={href} unstable_dynamicOnHover onClick={onClick} aria-current={atual ? "page" : undefined} aria-label={ariaLabel} className={classe}>
           {corpo}

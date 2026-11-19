@@ -29,6 +29,7 @@ import { ChipsEscolha } from "./ChipsEscolha";
 import { Dropdown } from "./Dropdown";
 import { usePodeExportar } from "./ExportarTabelas";
 import { TextArea, TextField } from "./Field";
+import { ListaMensagens, PainelSelo, SeloComPainel } from "./SeloComPainel";
 import { IconBuilding, IconCheck, IconClock, IconCopy, IconDownload, IconMerge, IconPencil, IconRefresh, IconRobo, IconTrash, IconUndo } from "./icons";
 import { toast } from "./Toast";
 
@@ -126,14 +127,7 @@ export function CelulaConferenciaCenti({
         ? `Divergência aceita — ${ressalva.justificativa}`
         : "Ver todas as divergências";
   return (
-    <Dropdown
-      papel="dialog"
-      ariaLabel={status === "divergente" ? `Divergências com a Centi (${total})` : "Conferência com a Centi"}
-      title={titulo}
-      width={460}
-      triggerClassName="cursor-pointer min-h-11 desktop:min-h-0 hover:opacity-80"
-      trigger={selo}
-    >
+    <SeloComPainel selo={selo} ariaLabel={status === "divergente" ? `Divergências com a Centi (${total})` : "Conferência com a Centi"} title={titulo}>
       {(fechar) => (
         <PainelDivergencias
           grupos={grupos}
@@ -148,7 +142,7 @@ export function CelulaConferenciaCenti({
           fechar={fechar}
         />
       )}
-    </Dropdown>
+    </SeloComPainel>
   );
 }
 
@@ -232,30 +226,30 @@ function PainelDivergencias({
   };
   const justOk = justificativa.trim().length >= MIN_JUSTIFICATIVA;
   return (
-    /* O painel PARA o clique: numa célula, o toque atravessaria o portal e abriria a linha. */
-    <div role="none" className="-m-2 space-y-2 p-2" onClick={(e) => e.stopPropagation()}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 text-[13px] font-semibold text-text">
-          {status === "divergente" ? (
-            <>
-              {rotulo ? `${rotulo} — d` : "D"}ivergências com a Centi <span className="font-normal text-muted">({ativo === TODOS ? total : `${nVistos} de ${total}`})</span>
-            </>
-          ) : nota ? (
-            "Confere com a Centi*"
-          ) : (
-            "Confere com a Centi"
-          )}
-        </p>
-        {status === "divergente" && texto && (
+    <PainelSelo
+      titulo={
+        status === "divergente" ? (
+          <>
+            {rotulo ? `${rotulo} — d` : "D"}ivergências com a Centi <span className="font-normal text-muted">({ativo === TODOS ? total : `${nVistos} de ${total}`})</span>
+          </>
+        ) : nota ? (
+          "Confere com a Centi*"
+        ) : (
+          "Confere com a Centi"
+        )
+      }
+      extra={
+        status === "divergente" && texto ? (
           <BotaoCopiar texto={texto} rotulo="Copiar" titulo={ativo === TODOS ? "Copiar todas as divergências" : `Copiar as divergências de ${ativo}`} />
-        )}
-      </div>
-      {(conferidoEm || desatualizada) && (
-        <p className={`text-[12px] ${desatualizada ? "text-[var(--warn)]" : "text-muted"}`}>
-          {conferidoEm ? `Conferido em ${dataHoraBR(conferidoEm)}.` : ""}
-          {desatualizada ? " O DFD foi alterado depois — o resultado pode não valer mais: reconfira." : ""}
-        </p>
-      )}
+        ) : undefined
+      }
+      linha={
+        conferidoEm || desatualizada
+          ? `${conferidoEm ? `Conferido em ${dataHoraBR(conferidoEm)}.` : ""}${desatualizada ? " O DFD foi alterado depois — o resultado pode não valer mais: reconfira." : ""}`.trim()
+          : undefined
+      }
+      linhaTom={desatualizada ? "warn" : "muted"}
+    >
       {conta.size > 1 && (
         <ChipsEscolha
           rolar
@@ -270,7 +264,7 @@ function PainelDivergencias({
           {vistos.map((g, gi) => (
             <section key={gi} className="space-y-1">
               {g.titulo && <p className="text-[12px] font-medium text-muted">{g.titulo}</p>}
-              <ListaDivergencias itens={g.itens} />
+              <ListaMensagens itens={g.itens} />
             </section>
           ))}
         </div>
@@ -455,20 +449,7 @@ function PainelDivergencias({
         </div>
       )}
       {verHistorico && dfdId != null && <HistoricoConferencias dfdId={dfdId} />}
-    </div>
-  );
-}
-
-function ListaDivergencias({ itens, cor = "var(--danger)", riscado = false }: { itens: string[]; cor?: string; riscado?: boolean }) {
-  return (
-    <ol className="space-y-1">
-      {itens.map((it, i) => (
-        <li key={i} className="flex gap-2 rounded-control bg-surface-2 px-2 py-1.5 text-[12.5px] leading-snug text-text">
-          <span aria-hidden="true" className="mt-[5px] size-1.5 shrink-0 rounded-full" style={{ background: cor }} />
-          <span className={`min-w-0 break-words ${riscado ? "text-muted line-through" : ""}`}>{it}</span>
-        </li>
-      ))}
-    </ol>
+    </PainelSelo>
   );
 }
 
@@ -519,8 +500,8 @@ function HistoricoConferencias({ dfdId }: { dfdId: number }) {
                   {cmp.resolvidas.length} resolvida{cmp.resolvidas.length === 1 ? "" : "s"} · {cmp.novas.length} nova{cmp.novas.length === 1 ? "" : "s"}
                 </summary>
                 <div className="mt-1 space-y-1">
-                  {cmp.resolvidas.length > 0 && <ListaDivergencias itens={cmp.resolvidas} cor="var(--ok)" riscado />}
-                  {cmp.novas.length > 0 && <ListaDivergencias itens={cmp.novas} />}
+                  {cmp.resolvidas.length > 0 && <ListaMensagens itens={cmp.resolvidas} cor="var(--ok)" riscado />}
+                  {cmp.novas.length > 0 && <ListaMensagens itens={cmp.novas} />}
                 </div>
               </details>
             )}
@@ -605,12 +586,49 @@ export function RelatorioCenti({ dfds, rotulo = "Relatório da Centi" }: { dfds:
   );
 }
 
-export function CelulaExecucao({ situacao }: { situacao: string | null | undefined }) {
+const SENTIDO_EXECUCAO: Record<"executado" | "cancelado" | "outro", string> = {
+  executado: "O planejamento foi executado na Centi (CM002): a contratação seguiu.",
+  cancelado: "O planejamento está cancelado na Centi (CM002): ele não segue — confira se o DFD ainda vale no sistema.",
+  outro: "O planejamento ainda não chegou ao fim na Centi (CM002) — a situação é a escrita lá.",
+};
+
+/** A SITUAÇÃO do planejamento na Centi (CM002). Tocar abre o PAINEL PADRÃO do selo: a situação, quando foi verificada, o
+ * que ela quer dizer e Reconferir (com o DFD e a automação disponíveis). */
+export function CelulaExecucao({ situacao, dfdId, em }: { situacao: string | null | undefined; dfdId?: number; em?: string | null }) {
+  const acoes = useContext(AcoesCentiCtx);
   const c = classeExecucao(situacao);
-  if (!c || !situacao) return <span className="text-faint" title="Ainda não verificado na Centi (Automação → Verificar execução)">—</span>;
-  return (
+  if (!c || !situacao) return <span className="text-faint" title="Ainda não verificado na Centi (Automação → Verificar DFDs na Centi)">—</span>;
+  const selo = (
     <Badge tone={TOM[c]} dot>
       {situacao}
     </Badge>
+  );
+  const reconferir = acoes.reconferir && dfdId != null ? acoes.reconferir : undefined;
+  return (
+    <SeloComPainel selo={selo} ariaLabel={`Situação na Centi: ${situacao}`} title={`Situação na Centi: ${situacao}${em ? ` — verificada em ${dataHoraBR(em)}` : ""}`}>
+      {(fechar) => (
+        <PainelSelo
+          titulo={`Situação na Centi: ${situacao}`}
+          linha={em ? `Verificada em ${dataHoraBR(em)}.` : "Lida na última verificação da Centi."}
+          acoes={
+            reconferir ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<IconRefresh className="h-4 w-4" />}
+                onClick={() => {
+                  fechar();
+                  if (dfdId != null) reconferir([dfdId]);
+                }}
+              >
+                Reconferir
+              </Button>
+            ) : undefined
+          }
+        >
+          <p className="text-[12.5px] text-text-2">{SENTIDO_EXECUCAO[c]}</p>
+        </PainelSelo>
+      )}
+    </SeloComPainel>
   );
 }

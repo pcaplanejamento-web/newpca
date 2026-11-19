@@ -35,6 +35,40 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.307.0",
+    data: "2026-11-19",
+    titulo: "Automação acha os planejamentos de novo + painel padrão nos selos + cartões proporcionais",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.45.0: o planejamento passa a ser aberto na Centi pelo mesmo caminho da emissão do DFD (o cliente da própria Centi) — o erro “Não consegui abrir o planejamento… não abre em nenhum dos órgãos” deixa de acontecer. A entrada automática na Centi não troca mais a sessão guardada da tela e, se o planejamento ainda não abrir, a mensagem diz o caminho usado e os cabeçalhos enviados.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Os selos Falhou, Convergente, Executado e o da situação (Executando, Concluído) abrem todos o MESMO painel preso ao selo: o título, a data ou o que roda agora, a mensagem inteira e as ações (Copiar, Abrir o DFD, Executar de novo, Reconferir, Recomeçar do zero).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Mesa",
+        texto: "O selo da Situação na Centi (Executado, Cancelado…) abre o painel com a data da verificação e o Reconferir.",
+        link: "/painel/mesa?vista=dfds",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Os cartões das automações, dos quadros de Tarefas, dos catálogos e dos documentos mantêm a mesma proporção em qualquer tela: crescem como uma imagem, sem cortar nem abreviar o texto; a grade das automações não esconde mais a 1ª coluna.",
+        link: "/painel/tarefas",
+      },
+    ],
+  },
+  {
     versao: "1.306.0",
     data: "2026-11-19",
     titulo: "Automação: o motivo de cada falha num toque",

@@ -144,11 +144,24 @@ export type ContextoEmissor = {
 };
 
 /** O LOAD do planejamento (CM002) na Centi, por API — o que a tela faz antes de emitir; devolve o JSON (a situação). */
-export async function carregarPlanejamento(c: Pick<ContextoEmissor, "pedir">, id: string, entidade?: string): Promise<{ j: unknown } | { erro: string; ambiente?: boolean }> {
-  const l = (await c.pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(id), entidade }, 60_000)) as RespostaExt & { j?: unknown };
+export async function carregarPlanejamento(
+  c: Pick<ContextoEmissor, "pedir">,
+  id: string,
+  entidade?: string,
+): Promise<{ j: unknown; diagnostico?: string } | { erro: string; ambiente?: boolean }> {
+  const l = (await c.pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(id), entidade }, 60_000)) as RespostaExt & { j?: unknown; via?: unknown; cabecalhos?: unknown };
   if (l.interrompido) return { erro: "Interrompido na extensão.", ambiente: true };
   if (!l.ok) return { erro: `Não consegui abrir o planejamento ${id} na Centi: ${l.erro ?? "sem resposta"}.`, ambiente: /encerrado|sessão|não respondeu/i.test(l.erro ?? "") };
-  return { j: l.j };
+  return { j: l.j, diagnostico: diagnosticoDoLoad(l.via, l.cabecalhos) };
+}
+
+/** O caminho do load (o cliente da Centi ou a cópia dos cabeçalhos) e os NOMES dos cabeçalhos — nunca os valores. Só a
+ * extensão 1.45.0+ informa; vazio = nada a dizer. */
+export function diagnosticoDoLoad(via: unknown, cabecalhos: unknown): string | undefined {
+  const v = typeof via === "string" ? via.slice(0, 120) : "";
+  const cab = Array.isArray(cabecalhos) ? cabecalhos.filter((k): k is string => typeof k === "string" && /^[\w-]{1,40}$/.test(k)).slice(0, 12) : [];
+  if (!v && !cab.length) return undefined;
+  return `caminho: ${v || "?"}${cab.length ? `; cabeçalhos: ${cab.join(", ")}` : ""}`;
 }
 
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
@@ -159,7 +172,7 @@ export async function emitirUm(c: ContextoEmissor, id: string, entidade?: string
 
 async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string, deNovo = false, carregado?: { j: unknown }): Promise<Emissao> {
   // Como a tela da Centi: carrega o planejamento ANTES do Emitir DFD (sem o load, "Usuário sem permissão!").
-  let load = carregado;
+  let load: { j: unknown; diagnostico?: string } | undefined = carregado;
   if (!load) {
     const l = await carregarPlanejamento(c, id, entidade);
     if ("erro" in l) return l;
@@ -169,7 +182,7 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
   // O load NÃO abriu o planejamento (outro órgão, sem acesso): nada é emitido — vale tentar os outros órgãos.
   if (!abriuNoLoad(load.j)) {
     const msg = mensagemDoLoad(load.j);
-    return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}.` };
+    return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}${load.diagnostico ? ` [${load.diagnostico}]` : ""}.` };
   }
   // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele (o planejamento
   // não tem), o DFD é emitido mesmo assim, com o campo VAZIO — nunca o registro de outro planejamento — e as seções 8 a 10

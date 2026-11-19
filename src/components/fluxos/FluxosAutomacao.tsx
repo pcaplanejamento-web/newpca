@@ -938,13 +938,14 @@ function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
     titulo: f.nome,
     ajuda: ajudaDoFluxo(f),
     // Sem repetir: o sobretítulo diz QUANDO roda; o selo, só o estado especial (executando/agendado).
-    sobretitulo: f.ativo ? `${rotuloFrequencia(f.frequencia)}${f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}` : "Manual",
+    // A próxima sem o ano (a data inteira na dica do selo/cartão): cabe nas 2 linhas do sobretítulo sem cortar.
+    sobretitulo: f.ativo ? `${rotuloFrequencia(f.frequencia)}${f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm).replace(/\/\d{4}/, "")}` : ""}` : "Manual",
     selo:
       rodando === f.id ? (
         <Badge tone="blue">Executando</Badge>
       ) : atrasadaAgora && f.proximaEm ? (
-        <Badge tone="amber" dot title={`Devia rodar em ${dataHoraBR(f.proximaEm)} — o sistema não estava aberto ou a extensão da Centi não estava pronta. Roda uma vez assim que a extensão estiver pronta.`}>
-          Atrasada desde {dataHoraBR(f.proximaEm)}
+        <Badge tone="amber" dot title={`Atrasada desde ${dataHoraBR(f.proximaEm)} — o sistema não estava aberto ou a extensão da Centi não estava pronta. Roda uma vez assim que a extensão estiver pronta.`}>
+          Atrasada
         </Badge>
       ) : f.ativo ? (
         <Badge tone="emerald">Agendado</Badge>
@@ -955,7 +956,7 @@ function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
       ) : undefined,
     metricas: [
       { rotulo: "Nós", valor: String(f.grafo.nos.length) },
-      { rotulo: "Última", valor: u?.atrasada ? `${ultima} (atrasada)` : ultima, cor: !u?.estado ? undefined : u.estado === "concluido" && !u.apontados ? "var(--ok)" : "var(--warn)" },
+      { rotulo: "Última", valor: ultima, dica: u?.atrasada ? `${ultima} — rodou atrasada (depois da hora agendada)` : undefined, cor: !u?.estado ? undefined : u.estado === "concluido" && !u.apontados ? "var(--ok)" : "var(--warn)" },
       { rotulo: "Erros", valor: u?.estado ? String(u.apontados ?? 0) : "—", cor: u?.apontados ? "var(--danger)" : undefined },
     ],
   };
@@ -1040,7 +1041,8 @@ function ListaFluxos({
   const daLista = !!arrasto?.chave.startsWith("f:") && !arrasto.pousando;
   useDeslizar(grade, `${colunas}|${lista.map((f) => f.id).join(",")}|${arrasto?.destino.antesDe ?? ""}|${arrasto?.destino.depoisDe ?? ""}|${!!arrasto}|${!!fora}`);
 
-  const estiloGrade = col ? { gridTemplateColumns: `repeat(${colunas}, ${col.largura}px)`, gap: col.vao } : undefined;
+  // Colunas IGUAIS que cabem na área (a barra de rolagem da lista nunca empurra a 1ª coluna para fora).
+  const estiloGrade = col ? { gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))`, gap: col.vao } : undefined;
   // A SOMBRA só existe com o ponteiro SOBRE a lista: é o lugar exato em que o card vai cair.
   const sombra = arrasto && !arrasto.pousando && !fora ? <SombraGrade key="__sombra" altura={arrasto.altura} marcada /> : null;
   const itens: ReactNode[] = [];

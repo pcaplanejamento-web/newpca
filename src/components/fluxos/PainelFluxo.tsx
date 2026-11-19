@@ -9,16 +9,18 @@ import { dataHoraBR } from "@/lib/format";
 import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { FOLGA, useAlturaTela } from "../AlturaCheia";
 import { Badge, type Tone } from "../Badge";
+import { BotaoCopiar } from "../BotaoCopiar";
+import { IconRefresh } from "../icons";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
+import { ListaMensagens, PainelSelo, SeloComPainel } from "../SeloComPainel";
 import { StatMini } from "../StatMini";
 import { type AcoesCenti, ProvedorAcoesCenti } from "../CelulaExecucao";
 import { useConfirmacao } from "../Confirmacao";
 import { toast } from "../Toast";
 import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
-import { BannerExecucaoFluxo, BannerItemFluxo, type CampoItemFluxo } from "./DetalheExecucao";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { useEstimativa } from "./useEstimativa";
@@ -241,9 +243,6 @@ function AnaliseAoVivo({
   restante: string | null;
 }) {
   const host = useContext(HostPainelCtx);
-  // Os BANNERS: o de um item (o toque no selo Estado) e o da execução (o toque no selo da situação).
-  const [itemAberto, setItemAberto] = useState<Item | null>(null);
-  const [execucaoAberta, setExecucaoAberta] = useState(false);
   // O componente que processa item a item (o de agora; senão o último que processou).
   // O Baixar/anexar DFDs não entrega parciais: o andamento dele são as linhas dos DFDs (`host.dfds`, ao vivo e no fim).
   const noDfds = etapas.find((n) => n.tipo === "saida.dfdsCenti") ?? null;
@@ -320,22 +319,8 @@ function AnaliseAoVivo({
       header: "Estado",
       nowrap: true,
       value: (it) => estadoDe(it).rotulo,
-      render: (it) => (
-        // O toque no selo abre o BANNER do item com a mensagem inteira (não abre a linha).
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setItemAberto(it);
-          }}
-          title={estadoDe(it).texto ? `${estadoDe(it).texto} — toque para ver tudo` : "Ver o resultado deste item"}
-          className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:min-h-11"
-        >
-          <Badge tone={estadoDe(it).tom} dot>
-            {estadoDe(it).rotulo}
-          </Badge>
-        </button>
-      ),
+      // O toque no selo abre o PAINEL PADRÃO do selo com a mensagem inteira (não abre a linha).
+      render: (it) => seloDoItem(it),
     },
     ...(soDfds
       ? []
@@ -367,35 +352,143 @@ function AnaliseAoVivo({
       : resumo
         ? `Última execução${ultima.em ? ` ${dataHoraBR(ultima.em)}` : ""}: ${s(resumo.estado) === "concluido" ? "concluída" : s(resumo.estado) === "cancelado" ? "interrompida" : "falhou"} · ${s(resumo.apontados || 0)} apontamento(s)`
         : "Ajuste os dados de entrada e toque em Executar.";
-  // O item aberto no banner: os dados que a pessoa reconhece e as ações (abrir o registro; executar de novo só com ele).
-  const camposDo = (it: Item): CampoItemFluxo[] =>
-    (
-      [
-        ["Nº do DFD", s(it.numero)],
-        ["Planejamento", s(it.planejamento)],
-        ["Protocolo", s(it.protocoloNumero ?? it.protocolo)],
-        ["Unidade", s(it.sigla)],
-        ["Órgão", orgaoDe(it)],
-        ["Etapa", fonte ? nomeDoNo(fonte, REGISTRO_NOS) : ""],
-      ] as const
-    )
-      .filter(([, v]) => v)
-      .map(([rotulo, valor]) => ({ rotulo, valor }));
-  const abrirItem = itemAberto && host ? aberturaDoItem(itemAberto) : null;
+  // O PAINEL do selo de um item: o resultado, os dados que a pessoa reconhece, a mensagem inteira e as ações (copiar; abrir o
+  // registro; executar de novo só com ele).
+  // Uma FUNÇÃO (não um componente local): o painel aberto não é recriado a cada atualização ao vivo.
+  const seloDoItem = (it: Item) => {
+    const e = estadoDe(it);
+    const msg = e.texto.trim();
+    const dados = [s(it.numero) && `DFD ${s(it.numero)}`, s(it.planejamento) && `Planej. ${s(it.planejamento)}`, s(it.protocoloNumero ?? it.protocolo) && `Protocolo ${s(it.protocoloNumero ?? it.protocolo)}`, s(it.sigla), orgaoDe(it)]
+      .filter(Boolean)
+      .join(" · ");
+    const abrir = host ? aberturaDoItem(it) : null;
+    return (
+      <SeloComPainel
+        selo={
+          <Badge tone={e.tom} dot>
+            {e.rotulo}
+          </Badge>
+        }
+        ariaLabel={`${e.rotulo} — ${rotuloItem(it)}`}
+        title={msg ? `${msg} — toque para ver tudo` : "Ver o resultado deste item"}
+      >
+        {(fechar) => (
+          <PainelSelo
+            titulo={`${e.rotulo} — ${rotuloItem(it)}`}
+            linha={[dados, fonte ? nomeDoNo(fonte, REGISTRO_NOS) : ""].filter(Boolean).join(" · ")}
+            acoes={
+              <>
+                {msg && <BotaoCopiar texto={msg} rotulo="Copiar" titulo="Copiar a mensagem" />}
+                {abrir && host && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      fechar();
+                      host.abrir(abrir);
+                    }}
+                  >
+                    {abrir.tipo === "protocolo" ? "Abrir o protocolo" : abrir.tipo === "item" ? "Abrir o item" : "Abrir o DFD"}
+                  </Button>
+                )}
+                {exec && host && !rodando && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<IconRefresh className="h-4 w-4" />}
+                    onClick={() => {
+                      fechar();
+                      host.executarCom(grafo, [it]);
+                    }}
+                  >
+                    Executar de novo só com este
+                  </Button>
+                )}
+              </>
+            }
+          >
+            <ListaMensagens
+              itens={[msg || (e.tom === "red" ? "A etapa falhou sem informar o motivo." : `${e.rotulo}.`)]}
+              cor={e.tom === "red" ? "var(--danger)" : e.tom === "amber" ? "var(--warn)" : e.tom === "emerald" ? "var(--ok)" : "var(--muted)"}
+            />
+          </PainelSelo>
+        )}
+      </SeloComPainel>
+    );
+  };
+  // O PAINEL do selo da execução: o que roda agora, o andamento, quantos de cada resultado e as falhas com a mensagem.
+  const falhas = processados.filter((p) => p.estado.tom === "red" || p.estado.tom === "amber");
+  const textoFalhas = falhas.map((p) => `${p.item}: ${p.estado.texto || p.estado.rotulo}`).join("\n");
+  const tomPonto = (t: Tone) => (t === "red" ? "var(--danger)" : t === "amber" ? "var(--warn)" : "var(--muted)");
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[var(--gap-block)] overflow-y-auto">
       <div className="flex flex-wrap items-center gap-2">
         {situacao ? (
-          <button
-            type="button"
-            onClick={() => setExecucaoAberta(true)}
-            title="Ver a execução: o que roda agora e a mensagem de cada item"
-            className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:min-h-11"
+          <SeloComPainel
+            selo={
+              <Badge tone={situacao.tom} dot>
+                {situacao.rotulo}
+              </Badge>
+            }
+            ariaLabel={`Execução: ${situacao.rotulo}`}
+            title="Ver a execução: o que roda agora e as falhas com a mensagem"
+            align="start"
           >
-            <Badge tone={situacao.tom} dot>
-              {situacao.rotulo}
-            </Badge>
-          </button>
+            {(fechar) => (
+              <PainelSelo
+                titulo={`${situacao.rotulo}${fonte ? ` — ${nomeDoNo(fonte, REGISTRO_NOS)}` : ""}`}
+                linha={textoSituacao}
+                linhaTom={situacao.tom === "red" ? "danger" : "muted"}
+                acoes={
+                  textoFalhas || (jaAntes > 0 && fonte && host) ? (
+                    <>
+                      {textoFalhas && <BotaoCopiar texto={textoFalhas} rotulo="Copiar as falhas" titulo="Copiar cada item com a mensagem" />}
+                      {jaAntes > 0 && fonte && host && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<IconRefresh className="h-4 w-4" />}
+                          onClick={() => {
+                            fechar();
+                            host.refazerTudo(grafo, fonte.id, jaAntes);
+                          }}
+                        >
+                          Recomeçar do zero
+                        </Button>
+                      )}
+                    </>
+                  ) : undefined
+                }
+              >
+                {total > 0 && (
+                  <div className="space-y-1">
+                    <Progress value={(Math.min(processados.length, total) / total) * 100} label={`${processados.length.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")}`} />
+                    {restante && <p className="text-[12px] tabular-nums text-muted">{restante}</p>}
+                  </div>
+                )}
+                {porResultado.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {porResultado.map((r) => (
+                      <Badge key={r.rotulo} tone={r.tom} dot>
+                        {r.rotulo} · {r.n.toLocaleString("pt-BR")}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {falhas.length > 0 && (
+                  <div className="max-h-[45vh] space-y-1 overflow-y-auto overscroll-contain pr-1">
+                    {falhas.slice(0, 200).map((p) => (
+                      <section key={p.chave} className="space-y-0.5">
+                        <p className="text-[12px] font-medium text-muted">{p.item}</p>
+                        <ListaMensagens itens={[p.estado.texto || p.estado.rotulo]} cor={tomPonto(p.estado.tom)} />
+                      </section>
+                    ))}
+                    {falhas.length > 200 && <p className="text-[12px] text-muted">E mais {(falhas.length - 200).toLocaleString("pt-BR")} — copie para ver todas.</p>}
+                  </div>
+                )}
+              </PainelSelo>
+            )}
+          </SeloComPainel>
         ) : (
           <Badge tone="slate">Pronto para executar</Badge>
         )}
@@ -467,51 +560,6 @@ function AnaliseAoVivo({
             />
           )}
         </div>
-      )}
-      {itemAberto && (
-        <BannerItemFluxo
-          aberto
-          onClose={() => setItemAberto(null)}
-          titulo={rotuloItem(itemAberto)}
-          etapa={fonte ? nomeDoNo(fonte, REGISTRO_NOS) : undefined}
-          estado={estadoDe(itemAberto)}
-          campos={camposDo(itemAberto)}
-          onAbrirRegistro={
-            abrirItem && host
-              ? () => {
-                  setItemAberto(null);
-                  host.abrir(abrirItem);
-                }
-              : undefined
-          }
-          rotuloAbrir={abrirItem?.tipo === "protocolo" ? "Abrir o protocolo" : abrirItem?.tipo === "item" ? "Abrir o item" : "Abrir o DFD"}
-          onExecutarDeNovo={
-            exec && host && !rodando
-              ? () => {
-                  const it = itemAberto;
-                  setItemAberto(null);
-                  host.executarCom(grafo, [it]);
-                }
-              : undefined
-          }
-        />
-      )}
-      {situacao && (
-        <BannerExecucaoFluxo
-          aberto={execucaoAberta}
-          onClose={() => setExecucaoAberta(false)}
-          titulo={fonte ? nomeDoNo(fonte, REGISTRO_NOS) : "Execução"}
-          situacao={situacao}
-          texto={textoSituacao}
-          feito={processados.length}
-          total={total}
-          restante={restante}
-          linhas={processados.map((p) => ({ chave: p.chave, item: p.item, estado: p.estado }))}
-          onAbrirLinha={(chave) => {
-            const it = itensFonte[Number(chave)];
-            if (it) setItemAberto(it);
-          }}
-        />
       )}
     </div>
   );

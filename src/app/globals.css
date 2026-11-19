@@ -1313,6 +1313,62 @@ select:not([multiple]):not([size]) {
   margin-block-end: var(--pad-canvas-y);
 }
 
+/* CARTÃO QUE ESCALA COMO IMAGEM (`CartaoEspaco` e o esqueleto dele — automações, quadros, catálogos, documentos, grupos):
+   o pai é um contêiner (`container-type: inline-size`) e toda medida interna é `N × --cq`, com --cq = 1/240 da largura do
+   card (a 240px, o desenho de sempre). Assim a PROPORÇÃO é a mesma em qualquer tela; o sobretítulo reserva 2 linhas e o nome
+   3, e as métricas ficam numa linha sem cortar. Sem camada: vence as medidas dos utilitários (inclusive as do selo). */
+.cartao-escala {
+  --cq: calc(100cqw / 240);
+  padding: calc(8 * var(--cq));
+}
+.cartao-escala .ce-corpo {
+  padding: calc(8 * var(--cq)) calc(6 * var(--cq)) calc(4 * var(--cq));
+}
+.cartao-escala .ce-topo {
+  gap: calc(8 * var(--cq));
+}
+.cartao-escala .ce-sobre {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: calc(11 * var(--cq));
+  line-height: 1.3;
+  min-height: 2.6em;
+}
+.cartao-escala .ce-selo > span {
+  font-size: calc(12 * var(--cq));
+  padding: calc(2 * var(--cq)) calc(9 * var(--cq));
+  gap: calc(6 * var(--cq));
+  white-space: nowrap;
+}
+.cartao-escala .ce-selo > span > span:first-child:empty {
+  width: calc(6 * var(--cq));
+  height: calc(6 * var(--cq));
+}
+.cartao-escala .ce-nome {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  margin-top: calc(2 * var(--cq));
+  font-size: calc(14 * var(--cq));
+  line-height: 1.375;
+  min-height: 4.125em;
+}
+.cartao-escala .ce-metricas {
+  gap: calc(8 * var(--cq));
+  padding-top: calc(8 * var(--cq));
+  font-size: calc(11 * var(--cq));
+  line-height: 1.35;
+}
+.cartao-escala .ce-valor {
+  font-size: calc(15 * var(--cq));
+  line-height: 1.35;
+}
+
 /* SELO DE CONTAGEM (o desenho do selo do sino, o padrão do sistema): o número no canto de DENTRO de um botão. A cor fica em
    quem usa pelo significado (bg-accent = contagem · var(--danger) = alerta/não lida · a gravidade nos avisos) e a posição
    também (absolute top-0.5 right-0.5). Sem contorno; acima de 99, "99+". */

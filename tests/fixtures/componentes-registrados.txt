@@ -265,6 +265,7 @@ SegundoPlano.tsx
 SegurancaAdmin.tsx
 Selecao.tsx
 SeletorBusca.tsx
+SeloComPainel.tsx
 SeletorCelula.tsx
 SeletorEtiquetas.tsx
 SeletorFiltro.tsx
@@ -339,7 +340,6 @@ fluxos/CanvasFluxo.tsx
 fluxos/CartaoFluxo.tsx
 fluxos/ConferenciaAnexos.tsx
 fluxos/ConfigFluxo.tsx
-fluxos/DetalheExecucao.tsx
 fluxos/FluxosAutomacao.tsx
 fluxos/IconeNo.tsx
 fluxos/PainelFluxo.tsx
@@ -367,7 +367,6 @@ EscopoCliente.tsx
 MaisIndicadores.tsx
 IndicadoresKpi.tsx
 FrotaEsqueleto.tsx
-
 BannerPesquisa.tsx
 PesquisaPublica.tsx
 PcaEspacoEsqueleto.tsx

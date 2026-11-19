@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 46;
+  const PROTOCOLO = 47;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -54,6 +54,9 @@
     for (const [k, v] of Object.entries(hs)) if (!IGNORAR.test(k)) limpos[k] = v;
     // A sessão da Centi vai num destes cabeçalhos (no "operation" capturado: Refreshtoken + Company + Month).
     if (!Object.keys(limpos).some((k) => SESSAO_CAB.test(k))) return;
+    // O pedido que a PRÓPRIA extensão faz pelo cliente da Centi (o aquecer, a emissão, o load do planejamento — com o
+    // órgão trocado só nele) nunca substitui a cópia de um pedido da TELA: só preenche quando ainda não há nenhuma.
+    if (internos > 0 && cabecalhos) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
     const caminho = u.slice(i);
@@ -587,6 +590,39 @@
     }
   }
 
+  // Uma CONSULTA (JSON) numa entidade pelo CLIENTE HTTP DA PRÓPRIA CENTI — o mesmo caminho da emissão, que funciona: o
+  // load do planejamento pela cópia dos cabeçalhos voltava `Entity: null` em todos os órgãos. Sem o cliente: null.
+  async function jsonPelaCenti(metodo, url, corpo, ent) {
+    const cli = acharClienteCenti();
+    if (!cli) return null;
+    const u = new URL(url);
+    const i = u.pathname.indexOf("/restauth/");
+    if (i < 0) return null;
+    const rel = `${u.pathname.slice(i + "/restauth".length)}${u.search}`;
+    const headers = {};
+    if (ent !== null) headers[nomeEntidade() || "Company"] = ent;
+    const ler = (r) => {
+      tokenNosClientes(cli, r.headers);
+      let j = r.data;
+      if (typeof j === "string") {
+        try {
+          j = JSON.parse(j);
+        } catch {
+          j = null;
+        }
+      }
+      return { status: r.status, j, enviados: Object.keys(headers) };
+    };
+    internos++;
+    try {
+      return ler(await cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers }));
+    } catch (e) {
+      return e?.response ? ler(e.response) : null;
+    } finally {
+      internos--;
+    }
+  }
+
   // JSON da API da Centi (load/confirmsave/save): HTTP de erro ou corpo que não é JSON → o motivo, nunca segue às cegas.
   const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
   // `passo` entra no erro (load/confirmsave/save): diz ONDE a Centi recusou.
@@ -881,13 +917,26 @@
       if (!/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
       const url = destino(caminho);
       if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
+      // 1º pelo cliente da própria Centi (o caminho da emissão); sem ele, a cópia dos cabeçalhos guardada na aba.
+      const pc = await jsonPelaCenti(metodo, url, corpo, ent);
+      const valeCenti = !!pc && pc.status < 400 && !!pc.j && typeof pc.j === "object";
+      // Um load que veio SEM o registro (`Entity: null`) ainda tenta a cópia — vale a que abrir.
+      const vazio = (j) => !!j && typeof j === "object" && "Entity" in j && j.Entity == null;
+      if (valeCenti && !vazio(pc.j)) return { ok: true, j: pc.j, via: "centi" };
       const r = await executar(metodo, url, corpo, ent, true);
       let j = null;
       try {
         j = JSON.parse(r.texto);
       } catch {}
-      if (r.status >= 400 || !j) return { ok: false, erro: `A Centi recusou a consulta (${r.status}).` };
-      return { ok: true, j };
+      // Só os NOMES dos cabeçalhos (nunca os valores) — o diagnóstico de quando o registro não abre.
+      const cab = Object.keys(cabecalhos || {}).filter((k) => !/^x-ts/i.test(k));
+      const viaCenti = pc ? `cliente da Centi: ${pc.status}${vazio(pc.j) ? " sem o registro" : ""}` : "sem o cliente da Centi";
+      if (r.status >= 400 || !j) {
+        if (valeCenti) return { ok: true, j: pc.j, via: `centi (cópia: ${r.status})`, cabecalhos: cab };
+        return { ok: false, erro: `A Centi recusou a consulta (${r.status}; ${viaCenti}).` };
+      }
+      if (vazio(j) && valeCenti) return { ok: true, j: pc.j, via: `centi e cópia, os dois sem o registro`, cabecalhos: cab };
+      return { ok: true, j, via: `cópia (${viaCenti})`, cabecalhos: cab };
     }
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }

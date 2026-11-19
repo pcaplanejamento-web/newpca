@@ -88,6 +88,8 @@ export type LinhaDfd = {
   prioridade?: string | null;
   /** Situação do planejamento na Centi (CM002); undefined = a tela não traz a coluna. */
   execucao?: string | null;
+  /** Quando a situação foi lida na Centi. */
+  execucaoEm?: string | null;
   /** Conferência com a CM002: convergente | divergente (+ o motivo); undefined = a tela não traz a coluna. */
   conferencia?: { status: string | null; motivo: string | null; em?: string | null; desatualizada?: boolean; aceite?: string | null };
   /** A SUBUNIDADE efetiva (`subunidadeDoDfd`) e o CENTRO DE CUSTO da Centi — só o DFD GRAVADO (undefined = sem as
@@ -372,7 +374,7 @@ export function propsPlanilhaDfds({
             align: "center" as const,
             nowrap: true,
             value: (r: LinhaDfd) => valorDaColunaDfd("execucao", r),
-            render: (r: LinhaDfd) => <CelulaExecucao situacao={r.execucao} />,
+            render: (r: LinhaDfd) => <CelulaExecucao situacao={r.execucao} dfdId={r.dfdId ?? (r.conferencia?.em !== undefined ? r.key : undefined)} em={r.execucaoEm} />,
           },
         ]
       : []),

@@ -1389,6 +1389,7 @@ export function DfdsView({
       protocolo: d.protocoloNumero,
       prioridade: d.prioridade,
       execucao: d.execucaoCenti,
+      execucaoEm: d.execucaoCentiEm,
       conferencia: {
         status: d.conferenciaCenti,
         motivo: d.conferenciaCentiMotivo,

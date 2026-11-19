@@ -90,6 +90,8 @@ export type DfdResumo = {
   prioridade: Prioridade | null;
   /** Situação do planejamento na Centi (CM002 — "Executado", "Cancelado"…), lida pela Automação; null = não verificado. */
   execucaoCenti: string | null;
+  /** Quando a situação foi lida na Centi (ISO). */
+  execucaoCentiEm?: string | null;
   /** Conferência com a CM002 (Automação → Fluxos): convergente | divergente + o motivo; null = não conferido. */
   conferenciaCenti: string | null;
   conferenciaCentiMotivo: string | null;
@@ -239,6 +241,7 @@ const colunasDfd = {
   anoPca: dfds.anoPca,
   prioridadeTexto: prioridadeTextoSql,
   execucaoCenti: dfds.execucaoCenti,
+  execucaoCentiEm: dfds.execucaoCentiEm,
   conferenciaCenti: dfds.conferenciaCenti,
   conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
   conferenciaCentiEm: dfds.conferenciaCentiEm,

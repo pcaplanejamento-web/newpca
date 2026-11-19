@@ -1144,14 +1144,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mudarAjustes` [só os campos `CAMPOS_AJUSTES`], `execucoes`, `execucao`, `cancelarExecucao`, `gravador`, `salvarLogin`,
   `removerLogin`); só o popup da própria extensão os usa. Abrir o ícone roda o `garantirSessao` (a Centi pronta). Testes:
   `tests/automacao-ajustes.test.ts`, `tests/extensao-login.test.ts` (o banner, o canal e que o popup não usa storage).
-- **MOTIVO DE CADA ITEM + FREIO DAS FALHAS (v1.306.0, sem migração):** na Análise do painel do fluxo (`PainelFluxo` →
-  `AnaliseAoVivo`), o selo da coluna Estado é um botão que abre o **`BannerItemFluxo`** (`fluxos/DetalheExecucao.tsx`, DS:
-  `Modal` + `SecaoBanner` + `Callout` com a mensagem inteira — `estadoDoItem(...).texto`, o `subfluxo.erro` da falha — +
-  `BotaoCopiar`, os dados do item e Abrir o registro [`aberturaDoItem` → `host.abrir`] · Executar de novo só com este
-  [`host.executarCom`, só quando o fluxo aceita itens de fora]); o selo da situação abre o **`BannerExecucaoFluxo`** (o que
-  roda agora, `Progress`, um `StatMini` por resultado e a `DataTable` dos itens com a mensagem — as falhas primeiro; tocar abre
-  o item). O `fluxo.executar` PARA quando os `MAX_FALHAS_IGUAIS`=5 primeiros itens falham pelo MESMO motivo sem nenhum sucesso
-  (`falhaSistematica`, `fluxo-core.ts` — os números da mensagem não contam): o motivo vai ao topo da Análise.
+- **PAINEL PADRÃO DOS SELOS + FREIO DAS FALHAS (v1.306.0 → v1.307.0, sem migração) — regra firme:** tocar num SELO de estado
+  abre o painel PRESO a ele — **`SeloComPainel`** (`SeloComPainel.tsx`, DS: `Dropdown papel="dialog"` 460px que PARA o clique
+  — numa célula não abre a linha) + **`PainelSelo`** (título 13px + `extra` à direita · `linha` 12px [data, o que roda agora;
+  `linhaTom`] · corpo · `acoes` com `Button size="sm"` separadas por uma linha) + **`ListaMensagens`** (uma mensagem por
+  linha com o ponto na cor) — NUNCA um `Modal`. Usam: a coluna Centi (`CelulaConferenciaCenti` → `PainelDivergencias`), o
+  selo da Situação na Centi (`CelulaExecucao {situacao, dfdId, em}` — `LinhaDfd.execucaoEm`/`DfdResumo.execucaoCentiEm`;
+  Reconferir pelo `AcoesCentiCtx`), a coluna Estado da Análise do fluxo (`PainelFluxo` → `seloDoItem` — uma FUNÇÃO, não
+  componente local: o painel aberto sobrevive às atualizações ao vivo; a mensagem inteira, os dados do DFD, Copiar · Abrir o
+  DFD [`aberturaDoItem` → `host.abrir`] · Executar de novo só com este [`host.executarCom`]) e o selo da situação (o que roda
+  agora, `Progress`, um selo por resultado, as falhas com a mensagem — até 200 —, Copiar as falhas · Recomeçar do zero). Selo
+  novo com detalhe = este painel. O `fluxo.executar` PARA quando os `MAX_FALHAS_IGUAIS`=5 primeiros itens falham pelo MESMO
+  motivo sem nenhum sucesso (`falhaSistematica`, `fluxo-core.ts` — os números da mensagem não contam).
+- **PLANEJAMENTO ABERTO PELO CLIENTE DA CENTI (v1.307.0, extensão 1.45.0, protocolo 47) — regra firme:** a ação `ler` com
+  `entidade` (o load do planejamento — `carregarPlanejamento`) sai 1º pelo CLIENTE HTTP DA PRÓPRIA CENTI (`jsonPelaCenti`,
+  irmã do `binarioPelaCenti` da emissão; o órgão só no cabeçalho daquele pedido) e só sem o cliente — ou com o load sem o
+  registro (`Entity: null`) — pela cópia dos cabeçalhos (`executar`); a resposta leva `via` e os NOMES dos cabeçalhos
+  (`cabecalhos`, nunca valores) → `diagnosticoDoLoad` entra na mensagem "Não consegui abrir o planejamento…". O `guardar()`
+  NÃO troca a cópia de um pedido da tela pelo de um pedido da própria extensão pelo cliente (`internos > 0` — o `aquecer`, a
+  emissão, o load): só preenche quando não há cópia (a causa do "não abre em nenhum dos 18 órgãos" — desde a entrada
+  automática, a cópia virava a do `aquecer`). Teste com a aba da Centi falsa (cliente axios pelo webpack + XHR):
+  `tests/centi-main-load.test.ts`.
+- **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
+  grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
+  toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o
+  nome 3, as métricas numa linha (`flex justify-between`, sem truncar; `MetricaCartao.dica`) e o selo escala junto
+  (`.ce-selo`). A PROPORÇÃO é a mesma em qualquer largura (medido 200–480px: 1,19) e nada é cortado. Texto de cartão =
+  curto o bastante para caber a 240px (ex.: a próxima execução sem o ano; o "Atrasada" com a data na dica). A grade das
+  automações (`ListaFluxos`) usa `repeat(n, minmax(0, 1fr))` — a barra de rolagem não esconde a 1ª coluna.
 - **ATUALIZAÇÃO AUTOMÁTICA DA EXTENSÃO (v1.304.0, extensão 1.44.0, sem migração) — regra firme: o ATUALIZADOR local nunca
   se atualiza nem roda nada do pacote.** A extensão segue instalada pelo .zip (descompactada); o Chrome não a deixa trocar os
   próprios arquivos, então um host de native messaging (`br.gov.governarv.pca_atualizador`, permissão `nativeMessaging`) faz

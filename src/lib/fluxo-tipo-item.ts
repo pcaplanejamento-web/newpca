@@ -63,7 +63,7 @@ export function dadosDfdDoItem(it: Item) {
     itens: num(it.totalItens ?? it.itens),
     valor: num(it.valor ?? it.valorTotal),
     protocolo: txt(it.protocolo) || null,
-    ...(execucao ? { execucao } : {}),
+    ...(execucao ? { execucao, execucaoEm: txt(it.situacaoGravada) ? null : txt(it.execucaoCentiEm) || null } : {}),
     // O id do DFD e a data da conferência: com eles, o selo da coluna Centi abre as ações (reconferir, corrigir, aceitar).
     dfdId: idPositivo(it.id) ?? undefined,
     ...(centro !== undefined ? { centroCusto: { texto: txt(centro) || null } } : {}),
