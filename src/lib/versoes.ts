@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.307.2",
+    data: "2026-11-19",
+    titulo: "Automação: a extensão aprende como a Centi nova abre o planejamento",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.46.0: a Centi publicou a versão 3.0.216.217 (19/11/2026) e o endereço fixo com que a automação abria o planejamento passou a voltar vazio em todos os órgãos. Agora a extensão APRENDE o pedido que a tela da Centi faz ao abrir um planejamento (basta dar duplo clique em UM planejamento na CM002, na aba da automação) e passa a usá-lo — com os mesmos cabeçalhos e o órgão no formato da tela; o endereço antigo fica de reserva. Se ainda não abrir, o “Falhou” diz cada caminho tentado, o formato do órgão e os últimos pedidos da tela.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.307.1",
     data: "2026-11-19",
     titulo: "Automação: o planejamento abre com a sessão certa da Centi",

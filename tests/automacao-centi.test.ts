@@ -151,7 +151,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.44.2"), false);
   assert.equal(versaoAtende("1.44.3"), false);
   assert.equal(versaoAtende("1.45.0"), false);
-  assert.equal(versaoAtende("1.45.1"), true);
+  assert.equal(versaoAtende("1.45.1"), false);
+  assert.equal(versaoAtende("1.46.0"), true);
   // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
   assert.equal(versaoFunciona("1.37.0"), false);
   assert.equal(versaoFunciona("1.38.0"), true);
@@ -740,4 +741,45 @@ test("Emitir DFD recusado: o load que não abriu e o contador das recusas seguid
   c.registrarSucessoCenti(s);
   for (const p of ["1", "2", "3", "4"]) c.registrarRecusaCenti(s, p);
   assert.equal(c.pararPorRecusa(s), false, "com um emitido na execução, a operação funciona");
+});
+
+test("Centi nova: aprende como a TELA abre o PLANEJAMENTO; o protocolo aninhado não confunde; o órgão no formato da tela", async () => {
+  const A = await pecasAnexo();
+  // A estrutura real (DevTools, 17/11/2026 — planejamento 131), com o protocolo ligado ANINHADO.
+  const plan = {
+    ModuleKey: 101045,
+    Fields: [
+      { Key: "IdCentroCusto", Value: { ModuleKey: 0, Fields: [{ Key: "Id", Value: 75 }, { Key: "Display", Value: "PM RV, SEC" }] } },
+      { Key: "Finalidade", Value: "EMPENHO COMPLEMENTAR" },
+      { Key: "IdProtocolo", Value: { ModuleKey: 0, Fields: [{ Key: "Id", Value: 2275339 }, { Key: "Object", Value: { Fields: [{ Key: "NrProtocolo", Value: "99422" }] } }] } },
+      { Key: "Id", Value: "131" },
+    ],
+  };
+  const url = "https://rioverde.centi.com.br/wcf/restauth/load?entity=101045&key=131";
+  assert.equal(A.loadDoProtocolo(url, "GET", null, { Entity: plan }), null, "não é protocolo");
+  assert.equal(A.pareceSerPlanejamento({ Entity: plan }), true);
+  const m = A.loadDoPlanejamento(url, "GET", null, { Entity: plan });
+  assert.deepEqual(m, { metodo: "GET", caminho: "restauth/load?entity=101045&key={id}", corpo: null, modulo: 101045 });
+  assert.deepEqual(A.pedidoDoLoad(m, "24"), { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", corpo: null });
+  // Pelo corpo (POST) de um verbo de leitura, sem segredos; em texto também.
+  const p = A.loadDoPlanejamento("restauth/loadplanejamento", "POST", JSON.stringify({ Key: 131, token: "x" }), { Entity: plan });
+  assert.deepEqual(p.corpo, { Key: "{id:n}" });
+  // Não é modelo: um protocolo (NrProtocolo no topo), verbo de escrita, sem o Id no pedido, Id 0 (o "aquecer").
+  const prot = { ModuleKey: 102908, Fields: [{ Key: "Id", Value: "131" }, { Key: "NrProtocolo", Value: "1" }, { Key: "Finalidade", Value: "x" }] };
+  assert.equal(A.loadDoPlanejamento(url, "GET", null, { Entity: prot }), null);
+  assert.equal(A.loadDoPlanejamento("restauth/save?key=131", "POST", null, { Entity: plan }), null);
+  assert.equal(A.loadDoPlanejamento("restauth/load?entity=101045", "GET", null, { Entity: plan }), null);
+  assert.equal(A.loadDoPlanejamento("restauth/load?entity=101045&key=0", "GET", null, { Entity: { ...plan, Fields: [...plan.Fields.slice(0, 3), { Key: "Id", Value: "0" }] } }), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(A.MODULOS_PLANEJAMENTO())), [101045, 101026]);
+  // O órgão no formato do valor da tela; o padrão do diagnóstico nunca traz o valor.
+  assert.equal(A.entidadeNoFormato("3", "02"), "03");
+  assert.equal(A.entidadeNoFormato("3", "2"), "3");
+  assert.equal(A.entidadeNoFormato("03", "2"), "3");
+  assert.equal(A.entidadeNoFormato("3", "E-02"), "E-03");
+  assert.equal(A.entidadeNoFormato("3", "2026-02"), "3", "dois números: como veio");
+  assert.equal(A.entidadeNoFormato("3", null), "3");
+  assert.equal(A.padraoDoValor("02"), "99");
+  assert.equal(A.padraoDoValor("E-02"), "a-99");
+  assert.equal(A.padraoDoValor("eyJhbGciOiJIUzI1NiJ9.segredo"), "texto de 28 caracteres");
+  assert.equal(A.padraoDoValor(""), "vazio");
 });

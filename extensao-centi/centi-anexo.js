@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p48";
+  const NOME = "__pcaCentiAnexo_p49";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -135,6 +135,64 @@
     if (!consultaPermitida(caminho, m)) return null;
     const corpo = modelo.corpo == null ? null : preencherCorpo(modelo.corpo, String(id));
     return { metodo: m, caminho, corpo };
+  }
+
+  // O LOAD DO PLANEJAMENTO como a TELA o faz (CM002 — a Centi 3.0.216.217 de 19/11/2026 mudou o cliente e o load fixo
+  // `entity=101045` passou a voltar `Entity: null` em todos os órgãos): a resposta da tela que traz um PLANEJAMENTO vira o
+  // modelo do pedido, com o Id trocado por {id}. Planejamento = o `Entity` do topo com Id numérico e um campo PRÓPRIO dele;
+  // um protocolo (NrProtocolo no topo) nunca — o `NrProtocolo` aninhado (o protocolo ligado ao planejamento) não conta.
+  const MODULOS_PLANEJAMENTO = [101045, 101026];
+  const CAMPOS_PLANEJAMENTO = ["IdPlanejamentoAssinaturaDFD", "Finalidade", "IdCentroCusto", "IdComprasPlanejamento"];
+  /** A resposta parece um planejamento (o `Entity` do topo)? — para o reconhecimento e o diagnóstico. */
+  function pareceSerPlanejamento(j) {
+    const e = j?.Entity;
+    if (!e || !Array.isArray(e.Fields)) return false;
+    const chaves = new Set(e.Fields.map((f) => f?.Key));
+    return CAMPOS_PLANEJAMENTO.some((k) => chaves.has(k)) && !chaves.has("NrProtocolo");
+  }
+  function loadDoPlanejamento(url, metodo, corpo, j) {
+    const m = String(metodo || "GET").toUpperCase();
+    const c = caminhoDaApi(url);
+    if (!c || !consultaPermitida(c.caminho, m, corpo)) return null;
+    const e = j?.Entity;
+    if (!pareceSerPlanejamento(j) || !Number.isInteger(e.ModuleKey)) return null;
+    const id = texto(valor(e, "Id"));
+    if (!/^\d{1,12}$/.test(id) || id === "0") return null;
+    const caminho = trocarId(c.caminho, id);
+    let b = null;
+    if (m === "POST" && corpo != null) {
+      let bruto = corpo;
+      if (typeof bruto === "string") {
+        try {
+          bruto = JSON.parse(bruto);
+        } catch {
+          return null;
+        }
+      }
+      const limpo = semSegredos(bruto);
+      if (limpo === undefined) return null;
+      b = marcarNoCorpo(limpo, id);
+    }
+    if (!caminho.includes(MARCA_ID) && !/\{id(:n)?\}/.test(JSON.stringify(b ?? ""))) return null;
+    return { metodo: m, caminho, corpo: b, modulo: e.ModuleKey };
+  }
+  /** O ÓRGÃO no MESMO formato do valor que a tela mandou no cabeçalho `company` (zeros à esquerda, prefixo e sufixo): "3"
+   * com a tela "02" = "03"; com "E-02" = "E-03". Valor da tela com mais de um número (ou sem nenhum) = o órgão como veio. */
+  function entidadeNoFormato(ent, daTela) {
+    const e = texto(ent);
+    const t = texto(daTela);
+    if (!/^\d{1,9}$/.test(e) || !t) return e;
+    const m = /^(\D*)(\d+)(\D*)$/.exec(t);
+    if (!m) return e;
+    const n = e.replace(/^0+/, "") || "0";
+    return `${m[1]}${n.padStart(m[2].length, "0")}${m[3]}`;
+  }
+  /** O PADRÃO de um valor de cabeçalho para o diagnóstico — nunca o valor: dígitos viram 9 e letras viram "a" (até 16). */
+  function padraoDoValor(v) {
+    const t = texto(v);
+    if (!t) return "vazio";
+    if (t.length > 16) return `texto de ${t.length} caracteres`;
+    return t.replace(/\d/g, "9").replace(/[A-Za-zÀ-ÿ]/g, "a");
   }
 
   // A ASSINATURA DO DFD (seções 8–10: equipe, secretário demandante, autorização) é de CADA planejamento: a janela
@@ -1039,5 +1097,5 @@
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo, fonteDaAssinatura, diagnosticoAssinatura,
-    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, loadDoPlanejamento, pareceSerPlanejamento, entidadeNoFormato, padraoDoValor, MODULOS_PLANEJAMENTO, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

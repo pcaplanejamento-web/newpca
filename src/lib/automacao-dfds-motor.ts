@@ -149,19 +149,33 @@ export async function carregarPlanejamento(
   id: string,
   entidade?: string,
 ): Promise<{ j: unknown; diagnostico?: string } | { erro: string; ambiente?: boolean }> {
-  const l = (await c.pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(id), entidade }, 60_000)) as RespostaExt & { j?: unknown; via?: unknown; cabecalhos?: unknown };
+  // `planejamento` = a extensão 1.46.0+ abre como a TELA da Centi abre (o pedido aprendido) e usa o caminho fixo só de reserva.
+  const l = (await c.pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(id), entidade, planejamento: String(id).replace(/\D/g, "") }, 60_000)) as RespostaExt & {
+    j?: unknown;
+    via?: unknown;
+    cabecalhos?: unknown;
+    semModelo?: unknown;
+  };
   if (l.interrompido) return { erro: "Interrompido na extensão.", ambiente: true };
-  if (!l.ok) return { erro: `Não consegui abrir o planejamento ${id} na Centi: ${l.erro ?? "sem resposta"}.`, ambiente: /encerrado|sessão|não respondeu/i.test(l.erro ?? "") };
-  return { j: l.j, diagnostico: diagnosticoDoLoad(l.via, l.cabecalhos) };
+  if (!l.ok)
+    return {
+      erro: `Não consegui abrir o planejamento ${id} na Centi: ${l.erro ?? "sem resposta"}.${l.semModelo === true ? ` ${MSG_ENSINAR_PLANEJAMENTO}` : ""}`,
+      ambiente: /encerrado|sessão|não respondeu/i.test(l.erro ?? ""),
+    };
+  return { j: l.j, diagnostico: diagnosticoDoLoad(l.via, l.cabecalhos, l.semModelo === true) };
 }
 
-/** O caminho do load (o cliente da Centi ou a cópia dos cabeçalhos) e os NOMES dos cabeçalhos — nunca os valores. Só a
- * extensão 1.45.0+ informa; vazio = nada a dizer. */
-export function diagnosticoDoLoad(via: unknown, cabecalhos: unknown): string | undefined {
-  const v = typeof via === "string" ? via.slice(0, 120) : "";
+/** O que fazer quando a extensão ainda não aprendeu como a Centi abre o planejamento (a Centi 3.0.216.217 mudou o load). */
+export const MSG_ENSINAR_PLANEJAMENTO =
+  "Abra UM planejamento na CM002 da Centi (duplo clique na linha), na aba da automação, com a extensão ativa — ela aprende como a Centi abre o planejamento — e execute de novo.";
+
+/** O caminho do load (cada tentativa: o pedido aprendido da tela, os módulos fixos, as cópias dos cabeçalhos) e os NOMES
+ * dos cabeçalhos — nunca os valores. Só a extensão 1.45.0+ informa; vazio = nada a dizer. `semModelo` = o que fazer. */
+export function diagnosticoDoLoad(via: unknown, cabecalhos: unknown, semModelo = false): string | undefined {
+  const v = typeof via === "string" ? via.slice(0, 700) : "";
   const cab = Array.isArray(cabecalhos) ? cabecalhos.filter((k): k is string => typeof k === "string" && /^[\w-]{1,40}$/.test(k)).slice(0, 12) : [];
   if (!v && !cab.length) return undefined;
-  return `caminho: ${v || "?"}${cab.length ? `; cabeçalhos: ${cab.join(", ")}` : ""}`;
+  return `caminho: ${v || "?"}${cab.length ? `; cabeçalhos: ${cab.join(", ")}` : ""}${semModelo ? ` — ${MSG_ENSINAR_PLANEJAMENTO}` : ""}`;
 }
 
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do

@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 48;
+  const PROTOCOLO = 49;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -52,6 +52,7 @@
     copias = JSON.parse(sessionStorage.getItem(COPIAS) || "{}") || {};
   } catch {}
   const caminho_ = (u, i) => u.slice(i);
+  const cabDaUrl = new Map();
   function guardar(url, hs, metodo, via) {
     const u = String(url);
     const i = u.indexOf("/restauth/");
@@ -69,7 +70,10 @@
     // automação repete) e a do último pedido da tela pelo XHR (o cliente antigo da Centi) — a do fetch pode trazer outros
     // cabeçalhos (token, user, year) com que a Centi não abre o registro.
     if (internos === 0) {
-      if (/[?&]entity=101045(&|$)/.test(caminho_(u, i))) copias.planejamento = limpos;
+      // Os cabeçalhos dos últimos pedidos da tela, por endereço (só na memória): o reconhecimento da RESPOSTA de um load de
+      // planejamento (`lembrarCm002`) põe os deste pedido em `copias.planejamento` — vale qualquer endereço/módulo.
+      cabDaUrl.set(caminho_(u, i), limpos);
+      if (cabDaUrl.size > 20) cabDaUrl.delete(cabDaUrl.keys().next().value);
       if (via === "xhr") copias.xhr = limpos;
       try {
         sessionStorage.setItem(COPIAS, JSON.stringify(copias));
@@ -306,6 +310,49 @@
   const DIAG_TELA = "__pcaAprendizTela_v1";
   // Como a TELA abre um protocolo (o load aprendido — ver `loadDoProtocolo`).
   const LOAD_PROTOCOLO = "__pcaLoadProtocolo_v1";
+  // Como a TELA abre um PLANEJAMENTO (CM002) — o load aprendido (`loadDoPlanejamento`); a cópia dos cabeçalhos dele vai em
+  // `copias.planejamento` (sessionStorage, com a sessão) e o valor do órgão que a tela mandou, em `copias.companyTela`.
+  const LOAD_PLANEJAMENTO = "__pcaLoadPlanejamento_v1";
+  function loadPlanAprendido() {
+    try {
+      const g = JSON.parse(localStorage.getItem(LOAD_PLANEJAMENTO) || "null");
+      return g && typeof g === "object" ? g : null;
+    } catch {
+      return null;
+    }
+  }
+  // O RASTRO dos últimos pedidos da TELA à API (só a estrutura — caminho com os números trocados, a forma da resposta;
+  // nunca valores): sem o load aprendido, o erro mostra o que a tela pediu e o endereço novo aparece ali.
+  const RASTRO = "__pcaRastroTela_v1";
+  function rastrear(url, metodo, status, j) {
+    try {
+      const c = A?.caminhoDaApi(url);
+      if (!c) return;
+      // Os números viram {n} (o Id do registro aberto), menos o módulo (`entity=`), que é o que interessa ver.
+      const caminho = c.caminho
+        .replace(/([?&](?!entity=)[^=&]+=)\d+/gi, "$1{n}")
+        .replace(/\/\d+(?=[/?]|$)/g, "/{n}");
+      const e = j && typeof j === "object" ? j.Entity : undefined;
+      const item = {
+        p: `${String(metodo || "GET").toUpperCase()} ${caminho}`.slice(0, 140),
+        st: Number(status) || 0,
+        r: j && typeof j === "object" && !Array.isArray(j) ? Object.keys(j).slice(0, 6).join(",") : Array.isArray(j) ? "lista" : "",
+        mk: e && typeof e === "object" && Number.isInteger(e.ModuleKey) ? e.ModuleKey : null,
+        f: !!(e && Array.isArray(e.Fields)),
+        pl: !!A?.pareceSerPlanejamento(j),
+      };
+      const r = [item, ...lerRastro()].slice(0, 30);
+      sessionStorage.setItem(RASTRO, JSON.stringify(r));
+    } catch {}
+  }
+  function lerRastro() {
+    try {
+      const r = JSON.parse(sessionStorage.getItem(RASTRO) || "[]");
+      return Array.isArray(r) ? r : [];
+    } catch {
+      return [];
+    }
+  }
   function loadAprendido() {
     try {
       const g = JSON.parse(localStorage.getItem(LOAD_PROTOCOLO) || "null");
@@ -327,6 +374,7 @@
         else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
       } catch {}
       const j = JSON.parse(texto);
+      rastrear(url, m, status, j);
       // Para aprender (e diagnosticar) as seções 8–10 do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
       // A fonte só usa as consultas aceitas (a peça confere de novo).
       if (texto.length <= 2_000_000) {
@@ -343,6 +391,24 @@
         localStorage.setItem(LOAD_PROTOCOLO, JSON.stringify({ ...lp, em: new Date().toISOString() }));
         return;
       }
+      // O PLANEJAMENTO aberto pela tela: o modelo do pedido (sem segredos) e a cópia dos cabeçalhos DESTE pedido.
+      const lpl = A.loadDoPlanejamento(url, m, b, j);
+      if (lpl) {
+        localStorage.setItem(LOAD_PLANEJAMENTO, JSON.stringify({ ...lpl, em: new Date().toISOString() }));
+        const s = String(url);
+        const i = s.indexOf("/restauth/");
+        const cab = i >= 0 ? cabDaUrl.get(s.slice(i)) : null;
+        if (cab) {
+          copias.planejamento = cab;
+          copias.companyTela = Object.entries(cab).find(([k]) => /^company$/i.test(k))?.[1] ?? null;
+          try {
+            sessionStorage.setItem(COPIAS, JSON.stringify(copias));
+          } catch {}
+        }
+        return;
+      }
+      // Diagnóstico: um planejamento que a tela abriu por um pedido que não vira modelo (só os nomes, nunca os dados).
+      if (A.pareceSerPlanejamento(j)) diagnosticar({ caminho: c.caminho.replace(/\d+/g, "{n}").slice(0, 120), motivo: `planejamento sem modelo (${m}, módulo ${j.Entity?.ModuleKey ?? "?"})`, colunas: [] });
       const forma = JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b });
       const pl = A.planejamentosCm002(j);
       if (pl) {
@@ -514,7 +580,9 @@
       const k = Object.keys(cab || {}).find((n) => /^company$/i.test(n)) ?? nomeEntidade();
       // O rastreio vai NOVO em cada pedido (como a tela gera) — nunca o identificador de um pedido antigo.
       const hs = A && rastreioNovo ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab;
-      for (const [n, v] of Object.entries(hs)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
+      // O órgão no MESMO formato do valor que esta cópia traz (a tela 3.0.216.217 pode mandar "02", "E-02"…).
+      const ent = entidade && k && A ? A.entidadeNoFormato(entidade, cab?.[k]) : entidade;
+      for (const [n, v] of Object.entries(hs)) x.setRequestHeader(n, ent && n === k ? ent : v);
       if (entidade && !k) x.setRequestHeader("Company", entidade);
       if (corpo) x.setRequestHeader("Content-Type", tipo);
       x.setRequestHeader("Accept", "application/json, text/plain, */*");
@@ -617,7 +685,7 @@
     if (i < 0) return null;
     const rel = `${u.pathname.slice(i + "/restauth".length)}${u.search}`;
     const headers = {};
-    if (ent !== null) headers[nomeEntidade() || "Company"] = ent;
+    if (ent !== null) headers[nomeEntidade() || "Company"] = A ? A.entidadeNoFormato(ent, entidadeAtual()) : ent;
     const ler = (r) => {
       tokenNosClientes(cli, r.headers);
       let j = r.data;
@@ -953,6 +1021,48 @@
   /** Os cabeçalhos da emissão: a cópia que abriu o último load (sem nenhuma, a da tela). */
   const cabecalhosDaEmissao = () => variantes()[0]?.cab ?? cabecalhos;
 
+  // UMA consulta numa entidade: 1º pelo cliente da própria Centi; sem ele (ou sem o registro por ele), as CÓPIAS dos
+  // cabeçalhos, uma a uma — com `daTela`, a do pedido que a tela fez para abrir um planejamento primeiro. `j` = a 1ª que
+  // trouxe o registro; senão o diagnóstico de cada tentativa e a última resposta vazia.
+  const vazio = (j) => !!j && typeof j === "object" && "Entity" in j && j.Entity == null;
+  async function tentarConsulta(metodo, url, corpo, ent, daTela) {
+    const pc = await jsonPelaCenti(metodo, url, corpo, ent);
+    const valeCenti = !!pc && pc.status < 400 && !!pc.j && typeof pc.j === "object";
+    if (valeCenti && !vazio(pc.j)) return { j: pc.j, via: "centi" };
+    const tentados = [];
+    let ultimo = valeCenti ? { j: pc.j, cab: cabecalhos } : null;
+    let falha = null;
+    const lista = variantes();
+    const ordem = daTela ? [...lista.filter((v) => v.nome === "do load da tela"), ...lista.filter((v) => v.nome !== "do load da tela")] : lista;
+    for (const v of ordem) {
+      const r = await executar(metodo, url, corpo, ent, true, v.cab);
+      let j = null;
+      try {
+        j = JSON.parse(r.texto);
+      } catch {}
+      tentados.push(`${v.nome} ${r.status}${j && vazio(j) ? " sem o registro" : !j ? " sem JSON" : ""}`);
+      if (r.status >= 400 || !j) {
+        falha ??= r.status;
+        continue;
+      }
+      if (!vazio(j)) {
+        varianteBoa = v.nome;
+        return { j, via: `cópia ${v.nome}` };
+      }
+      ultimo ??= { j, cab: v.cab };
+    }
+    const viaCenti = pc ? `cliente da Centi: ${pc.status}${vazio(pc.j) ? " sem o registro" : ""}` : `sem o cliente da Centi${motivoSemCliente ? ` — ${motivoSemCliente}` : ""}`;
+    return { diag: [viaCenti, ...tentados].join("; "), ultimo, falha };
+  }
+  /** Os últimos pedidos da tela que abrem um registro (load/entity/Entity), em poucas palavras. */
+  function pedidosDaTela() {
+    return lerRastro()
+      .filter((x) => /load|entity/i.test(x.p) || x.f)
+      .slice(0, 5)
+      .map((x) => `${x.p} → ${x.st}${x.mk ? ` módulo ${x.mk}` : ""}${x.pl ? " (planejamento)" : x.f ? " (registro)" : x.r ? ` (${x.r})` : ""}`)
+      .join(" | ");
+  }
+
   // Só LEITURA: repete uma CONSULTA aprendida (a Tela Protocolo) — a trava confere o verbo (nunca salvar/excluir/tramitar).
   async function ler(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
@@ -966,42 +1076,43 @@
     const ent = d?.entidade == null || d.entidade === "" ? null : String(d.entidade);
     if (ent !== null) {
       if (!/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
-      const url = destino(caminho);
-      if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
-      // 1º pelo cliente da própria Centi (o caminho da emissão); sem ele, a cópia dos cabeçalhos guardada na aba.
-      const pc = await jsonPelaCenti(metodo, url, corpo, ent);
-      const valeCenti = !!pc && pc.status < 400 && !!pc.j && typeof pc.j === "object";
-      // Um load que veio SEM o registro (`Entity: null`) ainda tenta a cópia — vale a que abrir.
-      const vazio = (j) => !!j && typeof j === "object" && "Entity" in j && j.Entity == null;
-      if (valeCenti && !vazio(pc.j)) return { ok: true, j: pc.j, via: "centi" };
-      // Sem o cliente (ou sem o registro por ele): as CÓPIAS dos cabeçalhos, uma a uma — a que já abriu primeiro. Vale a
-      // primeira que abrir o registro; todas sem ele = o load vazio com o diagnóstico (os caminhos e os NOMES).
-      const tentados = [];
+      // O LOAD DO PLANEJAMENTO (`planejamento`): 1º como a TELA o abre (o pedido aprendido, com a cópia dos cabeçalhos dele) —
+      // a Centi 3.0.216.217 (19/11/2026) mudou o cliente e o módulo fixo passou a voltar vazio —; depois os módulos fixos.
+      const plan = d?.planejamento == null ? "" : String(d.planejamento).replace(/\D/g, "");
+      const modelo = plan ? loadPlanAprendido() : null;
+      const doModelo = modelo ? A.pedidoDoLoad(modelo, plan) : null;
+      const tentativas = plan
+        ? [
+            ...(doModelo ? [{ rotulo: `como a tela abre (módulo ${modelo.modulo})`, ...doModelo, daTela: true }] : []),
+            ...A.MODULOS_PLANEJAMENTO.map((m) => ({ rotulo: `módulo ${m}`, metodo: "GET", caminho: `restauth/load?entity=${m}&key=${plan}`, corpo: null })),
+          ]
+        : [{ rotulo: "", metodo, caminho, corpo }];
+      const partes = [];
       let ultimo = null;
       let falha = null;
-      for (const v of variantes()) {
-        const r = await executar(metodo, url, corpo, ent, true, v.cab);
-        let j = null;
-        try {
-          j = JSON.parse(r.texto);
-        } catch {}
-        tentados.push(`${v.nome} ${r.status}${j && vazio(j) ? " sem o registro" : !j ? " sem JSON" : ""}`);
-        if (r.status >= 400 || !j) {
-          falha ??= r.status;
+      for (const t of tentativas) {
+        const url = destino(t.caminho);
+        if (!url) {
+          partes.push(`${t.rotulo}: destino fora da API`);
           continue;
         }
-        if (!vazio(j)) {
-          varianteBoa = v.nome;
-          return { ok: true, j, via: `cópia ${v.nome}` };
-        }
-        ultimo ??= { j, cab: v.cab };
+        const r = await tentarConsulta(t.metodo, url, t.metodo === "POST" ? t.corpo : null, ent, !!t.daTela);
+        if (r.j) return { ok: true, j: r.j, via: `${t.rotulo ? `${t.rotulo} · ` : ""}${r.via}` };
+        partes.push(`${t.rotulo ? `${t.rotulo}: ` : ""}${r.diag}`);
+        ultimo ??= r.ultimo;
+        falha ??= r.falha;
       }
-      const viaCenti = pc ? `cliente da Centi: ${pc.status}${vazio(pc.j) ? " sem o registro" : ""}` : `sem o cliente da Centi${motivoSemCliente ? ` — ${motivoSemCliente}` : ""}`;
-      const diag = `${viaCenti}; ${tentados.join("; ")}`;
+      // Nada abriu: o diagnóstico (os caminhos, os NOMES dos cabeçalhos, o PADRÃO do órgão da tela — nunca valores) e, sem o
+      // modelo aprendido, os últimos pedidos da tela à API (o endereço novo aparece neles).
       const nomes = (c) => Object.keys(c || {}).filter((k) => !/^x-ts/i.test(k));
-      if (valeCenti) return { ok: true, j: pc.j, via: diag, cabecalhos: nomes(cabecalhos) };
-      if (ultimo) return { ok: true, j: ultimo.j, via: diag, cabecalhos: nomes(ultimo.cab) };
-      return { ok: false, erro: `A Centi recusou a consulta (${falha ?? "?"}; ${diag}).` };
+      const semModelo = !!plan && !modelo;
+      const extra = [
+        `órgão da tela: ${A.padraoDoValor(copias.companyTela ?? entidadeAtual())}`,
+        semModelo ? `sem o load aprendido — pedidos da tela: ${pedidosDaTela() || "nenhum visto"}` : "",
+      ].filter(Boolean);
+      const diag = [...partes, ...extra].join(" | ");
+      if (ultimo) return { ok: true, j: ultimo.j, via: diag, cabecalhos: nomes(ultimo.cab), semModelo };
+      return { ok: false, erro: `A Centi recusou a consulta (${falha ?? "?"}; ${diag}).`, semModelo };
     }
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }
@@ -1159,7 +1270,7 @@
         return { ok: false };
       }
     };
-    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO), assinatura: ler(FONTE_ASSINATURA), assinaturaDiag: ler(FONTE_DIAG) };
+    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO), loadPlanejamento: ler(LOAD_PLANEJAMENTO), assinatura: ler(FONTE_ASSINATURA), assinaturaDiag: ler(FONTE_DIAG) };
   }
   async function telaApi(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };

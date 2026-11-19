@@ -1171,6 +1171,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   antigas com o token ATUAL (`comTokenNovo`); a que abriu (`varianteBoa`) vai primeiro e é a da emissão
   (`cabecalhosDaEmissao`). O `executar` acha o cabeçalho do órgão na cópia usada (qualquer caixa). O cliente da Centi é
   achado também no webpack 5 (`webpackChunk…`). Todas sem o registro = o diagnóstico lista cada cópia com o status.
+  **v1.307.2 (extensão 1.46.0, protocolo 49) — O LOAD DO PLANEJAMENTO É APRENDIDO DA TELA (regra firme):** a Centi
+  3.0.216.217 (19/11/2026 01:17 — o rodapé do login diz a versão) trocou o cliente (fetch, sem webpack exposto) e o
+  `load?entity=101045` fixo passou a voltar vazio com qualquer cópia. Como o protocolo (`loadDoProtocolo`), o planejamento
+  que a TELA abre vira modelo: `loadDoPlanejamento` (`centi-anexo.js`; planejamento = `Entity` do topo com Id e um de
+  `IdPlanejamentoAssinaturaDFD`/`Finalidade`/`IdCentroCusto`/`IdComprasPlanejamento`, sem `NrProtocolo` no topo — o
+  aninhado não conta; Id 0 nunca) → `localStorage __pcaLoadPlanejamento_v1` e os cabeçalhos DAQUELE pedido
+  (`cabDaUrl`, memória por endereço) → `copias.planejamento` + `copias.companyTela`. O sistema manda `planejamento` no
+  `ler` (`carregarPlanejamento`); a extensão tenta "como a tela abre (módulo N)" (`pedidoDoLoad`, a cópia do load da tela
+  primeiro — `tentarConsulta`) e só depois os fixos `MODULOS_PLANEJAMENTO` [101045, 101026]. O órgão vai no FORMATO do
+  valor que a cópia traz (`entidadeNoFormato`: "3" com "02" = "03"; também no cliente da Centi). Sem modelo: `semModelo`
+  → `MSG_ENSINAR_PLANEJAMENTO` (duplo clique em UM planejamento na CM002) e o diagnóstico com o PADRÃO do órgão
+  (`padraoDoValor`, nunca o valor) e os últimos pedidos da tela (`__pcaRastroTela_v1`, só a estrutura). Endereço fixo de
+  módulo da Centi = sempre aprendido da tela, com o fixo de reserva. Testes: `tests/centi-main-load.test.ts` (a Centi nova
+  falsa) e `tests/automacao-centi.test.ts` (a estrutura real do load de 17/11).
 - **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
   grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
   toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o

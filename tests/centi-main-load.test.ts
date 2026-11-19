@@ -33,6 +33,9 @@ function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: 
     setRequestHeader(k: string, v: string) {
       this._h[k] = v;
     }
+    get responseText() {
+      return typeof this.response === "string" ? this.response : new TextDecoder().decode(this.response as ArrayBuffer);
+    }
     getResponseHeader() {
       return null;
     }
@@ -142,7 +145,16 @@ function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: 
     for (const [k, v] of Object.entries(h)) x.setRequestHeader(k, v);
     x.send();
   };
-  return { acao, pedidos, pedidoDaTela };
+  // A TELA abre um registro (o duplo clique na CM002): o pedido dela à API, com os cabeçalhos dela.
+  const telaAbre = (url: string, h: Record<string, string>) => {
+    const XH = ctx.XMLHttpRequest as typeof XHR;
+    const x = new XH();
+    x.open("GET", `${ORIGEM}/compras/${url}`);
+    for (const [k, v] of Object.entries(h)) x.setRequestHeader(k, v);
+    x.send();
+  };
+  const espera = () => new Promise((ok) => setTimeout(ok, 5));
+  return { acao, pedidos, pedidoDaTela, telaAbre, espera, local: ctx.localStorage as { getItem: (k: string) => string | null } };
 }
 
 const LOAD = "restauth/load?entity=101045&key=640";
@@ -236,4 +248,103 @@ test("Centi: o cliente também é achado no webpack 5 (webpackChunk…)", async 
   aba.pedidoDaTela({ Refreshtoken: "rt", Company: "2" });
   const r = await aba.acao("ler", { metodo: "GET", caminho: LOAD, entidade: "6" });
   assert.equal(r.via, "centi");
+});
+
+// A ESTRUTURA REAL do load do planejamento que a tela da Centi devolveu (DevTools, 17/11/2026 — planejamento 131): o
+// planejamento traz o protocolo ligado ANINHADO (com NrProtocolo dentro) — nunca vira modelo de protocolo.
+const planejamentoReal = (id: string, modulo = 101045) => ({
+  $type: "ORM.ObjectsJSON.Returns.LoadReturn, ORM",
+  Entity: {
+    Type: 0,
+    State: 3,
+    ModuleKey: modulo,
+    Fields: [
+      { Key: "DataInicial", Value: "01/01/2027" },
+      {
+        Key: "IdCentroCusto",
+        Value: { ModuleKey: 0, Fields: [{ Key: "Id", Value: 75 }, { Key: "Display", Value: "PM RV, SECRETARIA MUNICIPAL DE PLANEJAMENTO E GESTÃO" }] },
+      },
+      { Key: "Finalidade", Value: "EMPENHO COMPLEMENTAR DO CONTRATO 177/2023" },
+      {
+        Key: "IdProtocolo",
+        Value: {
+          ModuleKey: 0,
+          Fields: [
+            { Key: "Id", Value: 2275339 },
+            { Key: "Display", Value: "99422/2026" },
+            { Key: "Object", Value: { ModuleKey: 102951, Fields: [{ Key: "NrProtocolo", Value: "99422" }, { Key: "AnoReferencia", Value: "2026" }] } },
+          ],
+        },
+      },
+      { Key: "Id", Value: id },
+    ],
+  },
+  Message: null,
+});
+// A Centi 3.0.216.217: a tela abre o planejamento por OUTRO módulo (aqui 999999) e com os cabeçalhos em minúsculas; o
+// módulo fixo 101045 volta vazio. O registro só abre pelo módulo novo com o órgão no formato da tela ("03").
+const CENTI_NOVA = (u: string, h: Record<string, string>) => {
+  const m = /entity=(\d+)&key=(\d+)/.exec(u);
+  if (!m) return {};
+  if (m[1] !== "999999") return { Entity: null };
+  return h.company && !/^\d{2}$/.test(h.company) ? { Entity: null } : { ...planejamentoReal(m[2], 999999), org: h.company };
+};
+const DA_TELA = { user: "9", token: "tk-da-tela", refreshtoken: "rt", company: "02", year: "2026", month: "11" };
+
+test("Centi nova: a extensão APRENDE como a tela abre o planejamento e passa a abrir por ele (órgão no formato da tela)", async () => {
+  const aba = abaCenti({ cliente: false, respostaXhr: CENTI_NOVA });
+  // Sem aprender: os módulos fixos voltam vazios e o diagnóstico diz o que fazer, com os pedidos da tela.
+  aba.telaAbre("restauth/postdata", DA_TELA);
+  await aba.espera();
+  const antes = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", entidade: "3", planejamento: "24" });
+  assert.equal(antes.ok, true);
+  assert.equal(antes.j.Entity, null);
+  assert.equal(antes.semModelo, true);
+  assert.match(antes.via, /módulo 101045: .*sem o registro/);
+  assert.match(antes.via, /módulo 101026: /);
+  assert.match(antes.via, /órgão da tela: 99/);
+  assert.match(antes.via, /sem o load aprendido/);
+  assert.ok(!JSON.stringify(antes).includes("tk-da-tela"), "nunca o valor do token");
+
+  // A pessoa abre UM planejamento na CM002: a tela pede pelo módulo novo e a extensão aprende.
+  aba.telaAbre("restauth/load?entity=999999&key=131", DA_TELA);
+  await aba.espera();
+  const modelo = JSON.parse(aba.local.getItem("__pcaLoadPlanejamento_v1") ?? "null");
+  assert.equal(modelo.modulo, 999999);
+  assert.equal(modelo.caminho, "restauth/load?entity=999999&key={id}");
+  assert.equal(aba.local.getItem("__pcaLoadProtocolo_v1"), null, "o protocolo aninhado não vira modelo de protocolo");
+  assert.equal((await aba.acao("estado")).aprendido.loadPlanejamento.ok, true);
+
+  // Agora o planejamento 24 no órgão 3: pelo pedido aprendido, com o órgão "03" (o formato da tela).
+  const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", entidade: "3", planejamento: "24" });
+  assert.equal(r.ok, true);
+  assert.equal(r.j.Entity.ModuleKey, 999999);
+  assert.equal(r.j.org, "03");
+  assert.match(r.via, /^como a tela abre \(módulo 999999\) · cópia (do load )?da tela$/);
+  const ultimo = aba.pedidos.at(-1);
+  assert.match(ultimo?.url ?? "", /entity=999999&key=24$/);
+  assert.equal(ultimo?.headers.company, "03");
+});
+
+test("Centi: sem `planejamento` (a extensão antiga do sistema), o load segue o caminho pedido", async () => {
+  const aba = abaCenti({ cliente: false, respostaXhr: () => ({ Entity: { Fields: [] } }) });
+  aba.pedidoDaTela({ Refreshtoken: "rt", Company: "2" });
+  const r = await aba.acao("ler", { metodo: "GET", caminho: LOAD, entidade: "6" });
+  assert.equal(r.via, "cópia da tela");
+  assert.match(aba.pedidos.at(-1)?.url ?? "", /entity=101045&key=640$/);
+});
+
+test("Centi nova: o pedido aprendido usa a cópia dos cabeçalhos do PRÓPRIO load da tela (não a do último pedido)", async () => {
+  // A cópia do load da tela abre; a do último pedido (outro contexto — o exercício) não. O token é sempre o mais novo.
+  const aba = abaCenti({
+    cliente: false,
+    respostaXhr: (u, h) => (u.includes("entity=999999") && h.year !== "2026" ? { Entity: null } : CENTI_NOVA(u, h)),
+  });
+  aba.telaAbre("restauth/load?entity=999999&key=131", DA_TELA);
+  await aba.espera();
+  aba.pedidoDaTela({ ...DA_TELA, year: "2025" });
+  const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=24", entidade: "03", planejamento: "24" });
+  assert.equal(r.ok, true);
+  assert.ok(r.j.Entity, "abriu pela cópia do load da tela");
+  assert.match(r.via, /cópia do load da tela$/);
 });
