@@ -205,6 +205,17 @@ test("seções 8–10 pelo PDF: preenchidas (qualquer uma) = comparadas; todas e
   assert.equal(temSecoes810({ secoes: base }), false, "sem as seções 8–10");
   assert.equal(temSecoes810({ secoes: [...base, sec("8 - INDICAÇÃO DO(S) INTEGRANTE(S) DA EQUIPE DE PLANEJAMENTO E RESPONSÁVEL PELA FISCALIZAÇÃO", "  ")] }), false, "só o título");
   assert.equal(temSecoes810({ secoes: [...base, sec("9 - AUTORIZAÇÃO DEMANDA", "Autorizo o início da formalização da demanda. FULANO GESTOR")] }), true);
+  // O texto FIXO que a Centi imprime sem o registro (rótulos, a frase da autorização) não é conteúdo.
+  assert.equal(
+    temSecoes810({
+      secoes: [
+        ...base,
+        sec("8 - INDICAÇÃO DO(S) INTEGRANTE(S) DA EQUIPE DE PLANEJAMENTO E RESPONSÁVEL PELA FISCALIZAÇÃO", "Integrantes Equipe: Nome: Matrícula: Email: Responsável Fiscalização: Nome: Matrícula: Email:"),
+        sec("9 - AUTORIZAÇÃO DEMANDA", "Autorizo o início da formalização da demanda."),
+      ],
+    }),
+    false,
+  );
   assert.equal(temSecoes810({ secoes: [...base, sec("8 - INDICAÇÃO DO(S) INTEGRANTE(S) DA EQUIPE DE PLANEJAMENTO E RESPONSÁVEL PELA FISCALIZAÇÃO", "Integrantes Equipe: Nome: X")] }), true);
 });
 

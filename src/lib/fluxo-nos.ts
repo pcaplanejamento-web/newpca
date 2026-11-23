@@ -2872,8 +2872,9 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     const difs: string[] = difsIdentidadeCenti(d, x);
     // O PDF da Centi com as seções 8 a 10 em branco: elas não são comparadas (a decisão é do PDF, nunca do load).
     // A nota só quando o sistema TEM as seções 8 a 10 e o PDF as trouxe em branco (sem elas dos dois lados, nada a dizer).
-    const sistemaCom810 = !!dfdSistema && typeof dfdSistema === "object" && temSecoes810(dfdSistema as unknown as DfdParseado);
-    const semSecoes810 = dfdCenti ? !temSecoes810(dfdCenti) && sistemaCom810 : x.semSecoes810 === true;
+    // Sem o DFD do sistema não se sabe: a nota fica (o lado cauteloso).
+    const sistemaCom810 = dfdSistema && typeof dfdSistema === "object" ? temSecoes810(dfdSistema as unknown as DfdParseado) : true;
+    const semSecoes810 = (dfdCenti ? !temSecoes810(dfdCenti) : x.semSecoes810 === true) && sistemaCom810;
     if (dfdCenti && dfdSistema && typeof dfdSistema === "object") {
       for (const f of diferencasDfdCenti(dfdSistema as unknown as DfdSistemaComparavel, dfdCenti, o.tolerancia))
         if (o.objeto || !f.startsWith("Objeto:")) difs.push(f);

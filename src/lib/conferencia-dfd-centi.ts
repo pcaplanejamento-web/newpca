@@ -21,9 +21,12 @@ export type DfdSistemaComparavel = Omit<DfdComparavel, "anoPca" | "reparticaoId"
 
 /** As seções do registro de assinatura do DFD (8 a 10), pela chave da seção padrão (`SECOES_PADRAO`). */
 export const SECOES_ASSINATURA_DFD: ReadonlySet<string> = new Set(["equipe", "demandante", "autorizacao"]);
-/** O PDF do DFD traz alguma das seções 8 a 10 COM CONTEÚDO (o título sozinho não conta). Pura. */
+/** O texto FIXO que a Centi imprime nas seções 8 a 10 mesmo sem o registro (os rótulos e a frase da autorização) — não é
+ * conteúdo. */
+const FIXO_810 = /\b(INTEGRANTES? (DA )?EQUIPE|RESPONSAVEL (PELA )?FISCALIZACAO|NOME|MATRICULA|E ?MAIL|CARGO|AUTORIZO O INICIO DA FORMALIZACAO DA DEMANDA)\b/g;
+/** O PDF do DFD traz alguma das seções 8 a 10 COM CONTEÚDO (o título e o texto fixo da Centi sozinhos não contam). Pura. */
 export const temSecoes810 = (d: { secoes: readonly { titulo: string; texto: string }[] }): boolean =>
-  d.secoes.some((s) => SECOES_ASSINATURA_DFD.has(chaveSecao(s.titulo)) && normComparacao(s.texto ?? "") !== "");
+  d.secoes.some((s) => SECOES_ASSINATURA_DFD.has(chaveSecao(s.titulo)) && normComparacao(s.texto ?? "").replace(FIXO_810, "").trim() !== "");
 export const NOTA_SEM_SECOES_810 = "Seções 8 a 10 em branco no DFD da Centi";
 /** As notas de versões anteriores (ainda nos motivos gravados): continuam reconhecidas na leitura. */
 const NOTAS_ANTIGAS_810 = ["Sem as seções 8 a 10 na Centi"];

@@ -1644,14 +1644,15 @@ describe("0198: as seções 8 a 10 decididas pelo PDF", () => {
       (1, 'A', 'convergente', 'DFD A (Planej. 1): Seções 8 a 10 não conferidas — x', '2026-11-23'),
       (2, 'B', 'convergente', 'DFD B (Planej. 2): Sem as seções 8 a 10 na Centi — x', '2026-11-23'),
       (3, 'C', 'convergente', NULL, '2026-11-23'),
-      (4, 'D', 'divergente', 'Seção X diferente', '2026-11-23')`);
-    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (1, '{}', '2026-11-23'), (4, '{}', '2026-11-23')`);
+      (4, 'D', 'divergente', 'Seção X diferente', '2026-11-23'),
+      (5, 'E', 'divergente', 'Objeto diferente', '2026-11-23')`);
+    db.exec(`INSERT INTO conferencias_centi_retrato (dfd_id, retrato, em) VALUES (1, '{}', '2026-11-23'), (4, '{}', '2026-11-23'), (5, '{"v":4,"semSecoes810":true}', '2026-11-23')`);
     db.exec(`INSERT INTO conferencias_centi_pdf (dfd_id, pdf, em) VALUES (1, 'JVBER', '2026-11-23'), (4, 'JVBER', '2026-11-23')`);
     db.exec("INSERT INTO automacao_fluxos (id, nome) VALUES (1, 'Verificar')");
     db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES (1, 'sub1', '1', 'ok', '2026-11-23')`);
     db.exec(readFileSync(join(DIR, "0198_secoes_810_pelo_pdf.sql"), "utf8"));
     const st = (db.prepare("SELECT id, conferencia_centi AS c FROM dfds ORDER BY id").all() as { id: number; c: string | null }[]).map((r) => `${r.id}:${r.c}`);
-    assert.deepEqual(st, ["1:null", "2:null", "3:convergente", "4:divergente"]);
+    assert.deepEqual(st, ["1:null", "2:null", "3:convergente", "4:divergente", "5:null"], "o divergente com retrato sem as seções 8 a 10 também volta");
     for (const t of ["conferencias_centi_retrato", "conferencias_centi_pdf"])
       assert.deepEqual((db.prepare(`SELECT dfd_id AS d FROM ${t}`).all() as { d: number }[]).map((r) => r.d), [4], t);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0);
