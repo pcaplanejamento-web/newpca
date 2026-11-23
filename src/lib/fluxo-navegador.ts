@@ -5,7 +5,7 @@
  */
 import { analisarRespostaCenti, centroCustoLidoNoLoad, dadosDoPlanejamento, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
 import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
-import { acharValor, ehTextoComLetras, nomesDosCampos } from "./fluxo-core";
+import { nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdDetalhe } from "./dfd";
@@ -132,22 +132,27 @@ export function pdfLidoNaCenti(planejamento: string, entidade?: string): string 
 async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | undefined, comPdf: boolean, completo: boolean, ocr: boolean): Promise<Item> {
   const l = await carregarPlanejamento(c, plan, entidade || undefined);
   if ("erro" in l) throw new Error(l.erro);
-  if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
+  const ondeOrgao = entidade ? ` (órgão ${entidade})` : "";
+  const diag = l.diagnostico ? ` [${l.diagnostico}]` : "";
+  // A resposta VAZIA não diz nada (a Centi 217 responde assim também ao planejamento que existe): NÃO ABRIU — nunca "não
+  // encontrado" (que gravaria "Não encontrado na Centi" e limparia o centro de custo). Os outros órgãos são tentados.
+  if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`Não consegui abrir o planejamento ${plan} na Centi${ondeOrgao} — a Centi respondeu vazio.${diag}`);
   // A Centi responde `{Entity: null, Message}` quando NÃO abre o registro: o motivo é a mensagem dela, nunca "sem o campo".
   const semRegistro = mensagemSemRegistro(l.j);
-  const ondeOrgao = entidade ? ` (órgão ${entidade})` : "";
   const naoEncontrado = () => new Error(`NAO_ENCONTRADO: a Centi não abriu o planejamento ${plan}${ondeOrgao}${semRegistro ? ` — ${semRegistro}` : ""}.`);
   // Só a leitura SEM o PDF depende do registro; com o PDF, a emissão segue como no "Baixar DFDs" (que não lê o load).
+  // "Não encontrado" SÓ quando a mensagem da Centi diz; sem ela (ou outra mensagem), não abriu — tenta os outros órgãos.
   if (!comPdf && semRegistro !== null) {
     if (planejamentoInexistente(semRegistro)) throw naoEncontrado();
-    throw new Error(`A Centi não abriu o planejamento ${plan}${ondeOrgao} — ${semRegistro}`);
+    throw new Error(`Não consegui abrir o planejamento ${plan} na Centi${ondeOrgao}${semRegistro ? ` — ${semRegistro}` : ""}.${diag}`);
   }
-  // Os campos do PRÓPRIO planejamento (o topo da `Entity`; a referência dá o `Display`); sem o campo no topo (outro
-  // formato), a busca de antes. Só TEXTO: o código numérico da situação e o `IdCentroCusto` numérico nunca valem.
+  // Os campos do PRÓPRIO planejamento — SÓ o topo da `Entity` (a referência dá o `Display`); nunca uma busca nos registros
+  // ligados (o protocolo traz a situação dele). Só TEXTO: o código numérico da situação e o `IdCentroCusto` numérico nunca
+  // valem. O que não veio fica "" — quem grava usa a CM002 ou mantém o gravado (nunca um dado de outro registro).
   const topo = dadosDoPlanejamento(l.j);
-  const situacao = topo.situacao ?? s(acharValor(l.j, /^situa/i, 0, ehTextoComLetras));
-  const centroCusto = topo.centroCusto ?? s(acharValor(l.j, /^(id)?centro.?(de)?.?custo|^(id)?c\.?\s?custo/i, 0, ehTextoComLetras));
-  const finalidade = topo.finalidade ?? s(acharValor(l.j, /^(id)?finalidade/i, 0, ehTextoComLetras));
+  const situacao = topo.situacao ?? "";
+  const centroCusto = topo.centroCusto ?? "";
+  const finalidade = topo.finalidade ?? "";
   // `registro: false` = a Centi não abriu o registro do planejamento (só a emissão saiu): a situação e o centro de custo
   // NÃO foram lidos — quem grava não apaga o que já estava (nunca vira "sem centro de custo" por falta de leitura).
   // `centroAusente` = o load abriu o registro e NÃO trouxe o centro de custo (o campo não veio, ou só a referência sem o
@@ -161,6 +166,13 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     ...(centroCusto ? {} : { camposCenti: nomesDosCampos(l.j) }),
   };
   if (!comPdf) return { planejamento: plan, situacao, ...extra };
+  // O load ABRIU o registro e só o CONTEÚDO (a emissão, o PDF) falhou: o erro leva o que o load leu (`carga` — situação,
+  // centro de custo) para quem verifica também eles gravar o que foi lido (as verificações são independentes por DFD).
+  const falha = (msg: string) => {
+    const x = new Error(msg);
+    if (semRegistro === null) Object.assign(x, { carga: { planejamento: plan, situacao, ...extra } });
+    return x;
+  };
   // A MESMA emissão do "Baixar DFDs", SEMPRE com o valor de referência ("Emitir valor referência" = Sim): sem ele a Centi
   // emite a seção 4 sem as colunas de valor e a conferência compararia "R$ 0,00". A chave do aparelho vale só no Baixar/anexar.
   const comValores: ContextoEmissor = { ...c, cfg: () => ({ ...c.cfg(), valorReferencia: true }) };
@@ -170,20 +182,26 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     // O load já DIZIA (a mensagem da Centi) que o planejamento NÃO EXISTE e a emissão também falhou: é "não encontrado" (marca Divergente),
     // não falha de comunicação (que deixaria o DFD sem conferir e refeito em toda execução).
     if (semRegistro && planejamentoInexistente(semRegistro)) throw naoEncontrado();
-    throw new Error(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
+    throw falha(e.recusada ? `${PREFIXO_RECUSA}${e.erro}` : (e.erro ?? "Falha ao emitir."));
   }
   const kPdf = chavePdf(plan, entidade);
   pdfsLidos.delete(kPdf);
   pdfsLidos.set(kPdf, e.pdf);
   while (pdfsLidos.size > MAX_PDFS_LIDOS) pdfsLidos.delete(pdfsLidos.keys().next().value as string);
-  const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
+  let d: DfdParseado;
+  try {
+    d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
+  } catch (x) {
+    throw falha(x instanceof Error ? x.message : String(x));
+  }
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
-    throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
+    throw falha(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
   // Sem nenhum valor nos itens = o PDF saiu sem o valor de referência: NÃO confere (nunca compara nem guarda "R$ 0,00").
-  if (semValores(d)) throw new Error("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido.");
+  if (semValores(d)) throw falha("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido.");
   const resumo = {
-    // Sem o registro das seções 8 a 10 no planejamento: elas não são comparadas (a conferência diz "convergente*").
-    ...(e.semSecoes810 ? { semSecoes810: true } : {}),
+    // Sem o registro das seções 8 a 10: elas não são comparadas (a conferência diz "convergente*"); `secoes810NaoLidas` =
+    // a leitura não trouxe o registro (a prévia do planejamento) — a nota diz "não conferidas", nunca "não tem".
+    ...(e.semSecoes810 ? { semSecoes810: true, ...(e.secoes810NaoLidas ? { secoes810NaoLidas: true } : {}) } : {}),
     numero: d.numero,
     planejamento: d.planejamento,
     tipo: d.tipo,

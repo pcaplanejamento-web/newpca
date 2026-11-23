@@ -31,7 +31,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.46.2";
+export const VERSAO_EXTENSAO_CENTI = "1.47.0";
 /**
  * A versão MÍNIMA com que as automações RODAM (o protocolo da tela com a extensão não mudou desde ela). Uma versão nova
  * da extensão NUNCA trava as automações de quem ainda não atualizou: abaixo da recomendada (`VERSAO_EXTENSAO_CENTI`),
@@ -101,8 +101,10 @@ export function mensagemSemRegistro(j: unknown): string | null {
   const t = typeof m === "string" ? m : m && typeof m === "object" ? ((m as { Text?: unknown }).Text ?? (m as { Descricao?: unknown }).Descricao) : "";
   return String(t ?? "").replace(/\s+/g, " ").trim();
 }
-/** A mensagem do load diz que o planejamento NÃO EXISTE (vazia também: a Centi não abriu nada). */
-export const planejamentoInexistente = (msg: string | null): boolean => msg !== null && (!msg || /n[aã]o (foi )?encontrad|inexist|n[aã]o existe/i.test(msg));
+/** A mensagem do load DIZ que o planejamento NÃO EXISTE. Vazia NÃO: a Centi 3.0.216.217 responde `{Entity: null}` sem
+ * mensagem também para o planejamento que existe e só não abriu por aquele caminho — "não encontrado" só quando a Centi
+ * diz (senão a automação gravaria "Não encontrado na Centi" e limparia o centro de custo de um planejamento que existe). */
+export const planejamentoInexistente = (msg: string | null): boolean => !!msg && /n[aã]o (foi )?encontrad|inexist|n[aã]o existe/i.test(msg);
 /** O contador das recusas do Emitir DFD numa execução: UMA recusa é do planejamento (fica como falha dele); só várias
  * seguidas, sem NENHUM DFD emitido, indicam que a operação mudou. */
 export type RecusasCenti = { seguidas: string[]; sucessos: number };
@@ -685,10 +687,6 @@ export function formatoEntidade(valor: string, aberta: string | null): string {
 export const MODULO_PLANEJAMENTO = 101045;
 export const caminhoLoadPlanejamento = (id: string) => `restauth/load?entity=${MODULO_PLANEJAMENTO}&key=${encodeURIComponent(String(id).replace(/\D/g, ""))}`;
 
-/** Os dados do PRÓPRIO planejamento no load (só `Entity.Fields` do topo — nunca os de um registro ligado, como o
- * protocolo, que traz a situação dele): o texto do campo ou, numa referência `{Fields: [Display]}`, o `Display`.
- * Centro de custo = `IdCentroCusto`/`CentroCusto`; finalidade = `Finalidade`; situação SÓ quando é texto com letras (o
- * 101045 manda um CÓDIGO — vira ""). `undefined` = o campo não está no topo (resposta de outro formato). */
 /** Os campos ESSENCIAIS do load COMPLETO do planejamento (o cadastro que a tela abre — DevTools 17/11/2026: 45 campos) que
  * NÃO vieram no topo da `Entity` ([] = completo; sem `Entity` = []). Sem os dois, a resposta é uma prévia — nunca o load. */
 export const ESSENCIAIS_PLANEJAMENTO = ["IdCentroCusto", "IdPlanejamentoAssinaturaDFD"] as const;
@@ -713,10 +711,15 @@ export function centroCustoLidoNoLoad(j: unknown): boolean {
   return !(ref && Number.isFinite(idRef) && idRef > 0);
 }
 
-/** O load abriu o registro mas veio SEM os dois campos essenciais: incompleto (o centro de custo e as seções 8–10 não
- * foram lidos — nada é gravado nem comparado com eles). */
+/** O load abriu só a PRÉVIA do planejamento (SEM os dois campos essenciais — a Centi 3.0.216.217): o DFD é emitido e
+ * conferido mesmo assim, mas o centro de custo e as seções 8–10 NÃO foram lidos — nunca gravados nem comparados com eles
+ * (as seções 8–10 ficam "não conferidas"; o centro de custo vem da CM002 ou fica como está). */
 export const loadIncompleto = (j: unknown): boolean => faltasDoLoad(j).length === ESSENCIAIS_PLANEJAMENTO.length;
 
+/** Os dados do PRÓPRIO planejamento no load (só `Entity.Fields` do topo — nunca os de um registro ligado, como o
+ * protocolo, que traz a situação dele): o texto do campo ou, numa referência `{Fields: [Display]}`, o `Display`.
+ * Centro de custo = `IdCentroCusto`/`CentroCusto`; finalidade = `Finalidade`; situação SÓ quando é texto com letras (o
+ * 101045 manda um CÓDIGO — vale a descrição do topo, `SituacaoDescricao`, ou ""). `undefined` = o campo não está no topo. */
 export function dadosDoPlanejamento(j: unknown): { situacao?: string; centroCusto?: string; finalidade?: string } {
   const ent = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : undefined;
   const fields = ent && typeof ent === "object" && Array.isArray((ent as { Fields?: unknown }).Fields) ? ((ent as { Fields: unknown[] }).Fields as { Key?: unknown; Value?: unknown }[]) : [];
@@ -739,8 +742,11 @@ export function dadosDoPlanejamento(j: unknown): { situacao?: string; centroCust
   const campo = (re: RegExp) => fields.find((f) => typeof f?.Key === "string" && re.test(f.Key));
   const comLetras = (t: string | null) => (t && /\p{L}/u.test(t) ? t : "");
   const out: { situacao?: string; centroCusto?: string; finalidade?: string } = {};
+  // A situação do PRÓPRIO planejamento: o `Situacao` com texto; com um código (o 101045 manda "1"), a DESCRIÇÃO dela no
+  // topo do planejamento (`SituacaoDescricao`/`SituacaoNome`). Nunca a de um registro ligado (o protocolo tem a sua).
   const sit = campo(/^situacao$/i);
-  if (sit) out.situacao = comLetras(texto(sit.Value));
+  const desc = fields.find((f) => typeof f?.Key === "string" && /^situacao(descricao|desc|nome|texto|display)$/i.test(f.Key) && comLetras(texto(f.Value)));
+  if (sit || desc) out.situacao = comLetras(texto(sit?.Value)) || comLetras(texto(desc?.Value));
   const cc = campo(/^(id)?centro.?(de)?.?custo$/i);
   if (cc) out.centroCusto = comLetras(texto(cc.Value));
   const fin = campo(/^(id)?finalidade$/i);

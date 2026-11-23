@@ -496,7 +496,7 @@ function gruposDoProtocolo(rec: RecorteMetricas<ProtocoloPainel>, p: ProtocoloPa
           : k === CHAVE_RESSALVA
             ? "Convergente com ressalva (divergência aceita)"
             : k === CHAVE_COM_NOTA
-              ? "Convergente* (sem as seções 8 a 10 na Centi)"
+              ? "Convergente* (seções 8 a 10 não conferidas ou ausentes na Centi)"
               : rotulo;
         const ordem = k === CHAVE_CONVERGENTE || k === CHAVE_RESSALVA || k === CHAVE_COM_NOTA ? 1 : k === CHAVE_NAO_CONFERIDO ? 2 : 0;
         return { chave: k, rotulo, titulo, ordem, totais: tot };

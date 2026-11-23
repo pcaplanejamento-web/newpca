@@ -205,6 +205,10 @@ async function verificar(o: {
   centi: (plan: string, entidade?: string) => Record<string, unknown> | Error;
   config: Record<string, unknown>;
   unidades?: Record<string, unknown>[];
+  /** A LISTA da CM002 de cada órgão (a extensão falsa) — sem ela, a lista vem vazia. */
+  cm002?: (entidade: string) => Record<string, unknown>[] | Error;
+  /** Os órgãos com o ID da Centi (os outros órgãos tentados quando o planejamento não abre no do DFD). */
+  mapa?: Record<string, string>;
 }) {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const pai = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
@@ -214,8 +218,16 @@ async function verificar(o: {
   g.nos = g.nos.map((n) => (n.tipo === "dados.filtrarConferencia" ? { ...n, config: { ...n.config, ...o.config } } : n));
   const posts: { c: string; body: Record<string, unknown> }[] = [];
   const lidos: string[] = [];
+  const cm002: string[] = [];
+  const retomada = new Map<string, string>();
   const r = await executarFluxo(g, REGISTRO_NOS, {
-    centi: async () => ({ ok: true, linhas: [] }),
+    centi: async (acao: string, d?: unknown) => {
+      if (acao !== "cm002") return { ok: true, linhas: [] };
+      const ent = String((d as { entidade?: unknown } | undefined)?.entidade ?? "");
+      cm002.push(ent);
+      const x = o.cm002?.(ent) ?? [];
+      return x instanceof Error ? { ok: false, erro: x.message } : { ok: true, linhas: x, total: x.length, completa: true };
+    },
     api: async (c: string, init?: unknown) => {
       const body = ((init as { body?: unknown } | undefined)?.body ?? {}) as Record<string, unknown>;
       posts.push({ c, body });
@@ -231,6 +243,14 @@ async function verificar(o: {
       protocolos: [],
       unidades: o.unidades ?? [],
       esperaCentiMs: 0,
+      mapaEntidades: o.mapa ?? {},
+      progresso: {
+        ler: async () => [],
+        gravar: async (_no: string, l: { chave: string; estado: string }[]) => {
+          for (const x of l) retomada.set(x.chave.split("|")[0], x.estado);
+        },
+        limpar: async () => {},
+      },
       __cache: new Map([["dfds", Promise.resolve(o.dfds)]]),
       carregarFluxo: async (id: number) => ({ id, nome: filho.nome, grafo: lerGrafo(filho.grafo) }),
       lerDfdCenti: async (plan: string, entidade?: string, pdf?: boolean) => {
@@ -255,7 +275,7 @@ async function verificar(o: {
             : ((p.body.itens ?? []) as { dfdId: number; centro: string | null }[]).map((v) => [v.dfdId, v.centro]),
         ),
     );
-  return { r, posts, lidos, situacoes: gravado("execucao-dfds", "situacao"), centros: gravado("centro-custo-dfds", "centro") };
+  return { r, posts, lidos, cm002, retomada, situacoes: gravado("execucao-dfds", "situacao"), centros: gravado("centro-custo-dfds", "centro") };
 }
 
 test("Verificar DFDs na Centi — só a SITUAÇÃO: sem PDF, a de cada órgão (mesmo nº em dois órgãos) e “Não encontrado na Centi”", async () => {
@@ -339,6 +359,115 @@ test("Verificar DFDs na Centi — TUDO de uma vez: UMA leitura por DFD (com o PD
   assert.equal(it?.unidadeConfere, "sim");
   assert.equal(it?.conferenciaCenti, "convergente");
   assert.equal(v.r.apontados.length, 0);
+});
+
+// A Centi 3.0.216.217: o planejamento abre só como PRÉVIA (sem a situação em texto e sem o centro de custo). A situação e
+// o centro de custo vêm da LISTA da CM002 do órgão do DFD — a fonte de antes da unificação —, lida UMA vez por órgão.
+const PREVIA = { situacao: "", centroCusto: "", finalidade: "", centroAusente: true, camposCenti: ["Finalidade", "Situacao", "Id"] };
+const UNIDADES = [
+  { id: 1, codigo: "SEPLAN", nome: "Secretaria Municipal de Planejamento e Gestão", orgaoId: 1, centrosCusto: ["PM RV, SEPLAN"] },
+  { id: 2, codigo: "GGIM", nome: "Gabinete de Gestão Integrada Municipal", orgaoId: 1, centrosCusto: ["PM RV, GABINETE DO PREFEITO, GGIM"] },
+];
+
+test("Verificar DFDs na Centi — a PRÉVIA sem situação/centro: os dois pela CM002 do órgão, UMA leitura para todos os DFDs dele", async () => {
+  const dfds = [
+    { id: 1, numero: "227", planejamento: "277", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+    { id: 2, numero: "228", planejamento: "278", entidade: "8", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+    { id: 3, numero: "229", planejamento: "279", entidade: "8", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+  ];
+  const v = await verificar({
+    dfds,
+    unidades: UNIDADES,
+    config: { conteudo: false, situacao: true, centro: true },
+    centi: () => PREVIA,
+    cm002: (ent) =>
+      ent === "8"
+        ? [
+            { id: "277", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+            { id: "278", situacao: "Não Executado", centroCusto: "PM RV, SEPLAN" },
+          ]
+        : [],
+  });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.cm002, ["8"], "a lista da CM002 do órgão é lida UMA vez (os DFDs em paralelo compartilham)");
+  assert.deepEqual(v.situacoes, { 1: "Executado", 2: "Não Executado" }, "a situação da CM002; a do 279 (fora da lista) não é gravada");
+  assert.deepEqual(v.centros, { 1: "PM RV, GABINETE DO PREFEITO, GGIM", 2: "PM RV, SEPLAN" }, "o centro de custo da CM002; o do 279 fica o gravado");
+  const ap = v.r.apontados.map((a) => `${a.nivel}:${String(a.mensagem)}`);
+  assert.ok(ap.some((t) => t.startsWith("atencao:DFD 229 (planejamento 279): situação não lida na Centi (a gravada foi mantida)") && t.includes("não veio na lista da CM002 do órgão 8")), ap.join("\n"));
+  assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("DFD 229") && t.includes("veio sem o centro de custo") && t.includes("O centro de custo gravado foi mantido")), ap.join("\n"));
+  assert.ok(!ap.some((t) => t.includes("DFD 227") || t.includes("DFD 228")), "os lidos pela CM002 não são apontados");
+});
+
+test("Verificar DFDs na Centi — a CM002 também falha: ATENÇÃO com o motivo e o que fazer; nada é gravado nem apagado", async () => {
+  const dfds = [{ id: 1, numero: "227", planejamento: "277", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 }];
+  const v = await verificar({ dfds, unidades: UNIDADES, config: { conteudo: false, situacao: true, centro: true }, centi: () => PREVIA, cm002: () => new Error("Sem a consulta da CM002.") });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.situacoes, {});
+  assert.deepEqual(v.centros, {}, "o centro de custo não lido nunca é apagado");
+  const ap = v.r.apontados.map((a) => `${a.nivel}:${String(a.mensagem)}`);
+  assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("situação não lida") && t.includes("a CM002 do órgão 8 não foi lida") && t.includes("Pesquisar UMA vez")), ap.join("\n"));
+  assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("não conferido na Centi") && t.includes("a CM002 do órgão 8 não foi lida")), ap.join("\n"));
+});
+
+test("Verificar DFDs na Centi — o planejamento achado em OUTRO órgão nunca dá a situação nem o centro de custo", async () => {
+  const dfds = [{ id: 1, numero: "30", planejamento: "300", entidade: "8", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 }];
+  const v = await verificar({
+    dfds,
+    unidades: UNIDADES,
+    mapa: { "o:1": "8", "o:2": "2" },
+    config: { conteudo: false, situacao: true, centro: true },
+    centi: (_plan, ent) => (ent === "8" ? new Error("Não consegui abrir o planejamento 300 na Centi (órgão 8).") : { situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }),
+    cm002: () => [{ id: "300", situacao: "Cancelado", centroCusto: "PM RV, SEPLAN" }],
+  });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.lidos, ["300@8:false", "300@2:false"]);
+  assert.deepEqual(v.situacoes, {}, "a situação de outro órgão não é gravada");
+  assert.deepEqual(v.centros, {}, "o centro de custo de outro órgão não é gravado");
+  assert.deepEqual(v.cm002, [], "nem a CM002 do órgão do DFD (o planejamento é de outro órgão)");
+  const ap = v.r.apontados.map((a) => `${a.nivel}:${String(a.mensagem)}`);
+  assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("achado na Centi no órgão 2") && t.includes("situação não gravada")), ap.join("\n"));
+  assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("achado no órgão 2, não no do DFD") && t.includes("O centro de custo gravado foi mantido")), ap.join("\n"));
+});
+
+test("Verificar DFDs na Centi — o planejamento NÃO ABRE em nenhum órgão: a CM002 do órgão dá a situação e o centro de custo; sem a linha, o DFD falha", async () => {
+  const dfds = [
+    { id: 1, numero: "227", planejamento: "277", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+    { id: 2, numero: "228", planejamento: "278", entidade: "8", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+  ];
+  const v = await verificar({
+    dfds,
+    unidades: UNIDADES,
+    config: { conteudo: false, situacao: true, centro: true },
+    centi: (plan) => new Error(`Não consegui abrir o planejamento ${plan} na Centi (órgão 8).`),
+    cm002: () => [{ id: "277", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }],
+  });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.situacoes, { 1: "Executado" });
+  assert.deepEqual(v.centros, { 1: "PM RV, GABINETE DO PREFEITO, GGIM" });
+  assert.equal(v.retomada.get("1"), "ok");
+  assert.equal(v.retomada.get("2"), "falha", "sem a linha da CM002: o DFD falha e a retomada o refaz");
+  assert.ok(v.r.apontados.some((a) => a.nivel === "erro" && String(a.mensagem).includes("DFD 228") && String(a.mensagem).includes("não conferido")));
+});
+
+test("Verificar DFDs na Centi — o CONTEÚDO falha depois de o planejamento abrir: a situação e o centro de custo são gravados; o conteúdo fica não conferido e a retomada o refaz", async () => {
+  const dfds = [{ id: 1, numero: "10", planejamento: "100", entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1, valor: 50, totalItens: 2, tipo: "DFD-S" }];
+  const carga = { planejamento: "100", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM", finalidade: "" };
+  const falha = () => Object.assign(new Error("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido."), { carga });
+  const v = await verificar({ dfds, unidades: UNIDADES, config: {}, centi: () => falha() });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.situacoes, { 1: "Executado" }, "a situação lida no load vale (as verificações são independentes)");
+  assert.deepEqual(v.centros, { 1: "PM RV, GABINETE DO PREFEITO, GGIM" });
+  assert.equal(v.posts.filter((p) => p.c.includes("conferencia-dfds")).flatMap((p) => (p.body.itens ?? []) as unknown[]).length, 0, "o conteúdo não conferido não é marcado");
+  assert.equal(v.posts.filter((p) => p.c.includes("corrigir")).length, 0, "nem corrigido");
+  assert.equal(v.retomada.get("1"), "falha");
+  assert.ok(v.r.apontados.some((a) => a.nivel === "erro" && String(a.mensagem).includes("sem os valores dos itens")), v.r.apontados.map((a) => String(a.mensagem)).join("\n"));
+  // Só o conteúdo pedido: a falha é do DFD inteiro, como sempre.
+  const s = await verificar({ dfds, unidades: UNIDADES, config: { conteudo: true, situacao: false, centro: false }, centi: () => falha() });
+  assert.equal(s.r.estado, "concluido", s.r.erro);
+  assert.deepEqual(s.situacoes, {});
+  assert.deepEqual(s.centros, {});
+  assert.equal(s.retomada.get("1"), "falha");
+  assert.ok(s.r.apontados.some((a) => a.nivel === "erro" && String(a.mensagem).includes("DFD 10") && String(a.mensagem).includes("sem os valores dos itens")));
 });
 
 test("O que verificar: nenhuma marcada = erro claro; a escolha vai em cada DFD", async () => {

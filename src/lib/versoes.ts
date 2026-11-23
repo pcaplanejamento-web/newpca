@@ -35,6 +35,41 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.308.0",
+    data: "2026-11-23",
+    titulo: "Verificar DFDs na Centi: conteúdo, situação e centro de custo funcionando na Centi nova",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A Centi 3.0.216.217 só abre a PRÉVIA do planejamento (sem o centro de custo e sem o registro das seções 8 a 10). A versão anterior deixou de emitir o DFD com ela e todo DFD ficava “não conferido”. Agora a prévia emite e o conteúdo é conferido; as seções 8 a 10 que a Centi não informou ficam fora da comparação e da correção — “Convergente*” com a nota “Seções 8 a 10 não conferidas”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Situação e centro de custo: quando o planejamento não os traz (ou não abre), vêm da lista da CM002 do órgão do DFD — como antes da unificação —, lida uma vez por órgão. Sem nenhuma das duas fontes, o DFD aparece em atenção com o motivo e o que fazer; o valor gravado nunca é apagado e nunca vem de outro órgão.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Cada verificação é independente: a falha do conteúdo (o PDF do DFD) não impede gravar a situação e o centro de custo do mesmo DFD — o conteúdo fica “não conferido” e a próxima execução o refaz. “Não encontrado na Centi” só quando a própria Centi diz: a resposta vazia não grava mais “Não encontrado” nem limpa o centro de custo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Extensão 1.47.0: aprende a consulta da CM002 e a abertura do planejamento também quando a Centi nova faz o pedido pelo fetch (o corpo dentro do pedido). Na aba da automação, abra a CM002, escolha “Mostrar: Todos” e clique em Pesquisar uma vez.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.307.4",
     data: "2026-11-19",
     titulo: "Automação: a extensão lê o cadastro do planejamento no formato novo da Centi",

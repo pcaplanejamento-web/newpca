@@ -14,7 +14,6 @@ import {
   analisarRespostaCenti,
   type ConfigCenti,
   caminhoLoadPlanejamento,
-  faltasDoLoad,
   loadIncompleto,
   candidatosEntidade,
   conferirConteudoDfd,
@@ -69,8 +68,11 @@ export type Emissao = {
   recusada?: boolean;
   /** O planejamento ABRIU, mas a Centi não emitiu o DFD dele: não vale tentar outros órgãos. */
   definitivo?: boolean;
-  /** Emitido SEM o registro das seções 8 a 10 (o planejamento não o tem): elas não valem (nem são comparadas). */
+  /** Emitido SEM o registro das seções 8 a 10: elas não valem (nem são comparadas nem corrigidas). */
   semSecoes810?: boolean;
+  /** …porque o campo do registro NEM VEIO na leitura (a prévia do planejamento — Centi 217): elas não foram conferidas,
+   * o que é diferente de "o planejamento não tem" (o campo veio vazio). */
+  secoes810NaoLidas?: boolean;
 };
 /** A resposta da extensão (o que o motor lê). */
 export type RespostaExt = {
@@ -200,25 +202,24 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     const msg = mensagemDoLoad(load.j);
     return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}${load.diagnostico ? ` [${load.diagnostico}]` : ""}.` };
   }
-  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele (o planejamento
-  // não tem), o DFD é emitido mesmo assim, com o campo VAZIO — nunca o registro de outro planejamento — e as seções 8 a 10
-  // que vierem não valem (`semSecoes810`): as demais seções seguem conferidas.
-  // O load abriu uma PRÉVIA (sem o centro de custo e sem o registro das seções 8–10): nada é emitido nem conferido — emitir
-  // com o campo vazio daria um DFD sem as seções 8–10 e a conferência marcaria "Convergente*" sem ter lido o cadastro.
-  if (loadIncompleto(load.j))
-    return {
-      erro: `A Centi devolveu o planejamento ${id}${onde} INCOMPLETO (sem ${faltasDoLoad(load.j).join(" e ")}) — não conferido.${load.diagnostico ? ` [${load.diagnostico}]` : ""}${load.diagnostico?.includes(MSG_ENSINAR_PLANEJAMENTO) ? "" : ` ${MSG_ENSINAR_PLANEJAMENTO}`}`,
-      definitivo: true,
-    };
+  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele, o DFD é emitido
+  // mesmo assim, com o campo VAZIO — nunca o registro de outro planejamento — e as seções 8 a 10 que vierem não valem
+  // (`semSecoes810`): as demais seções seguem conferidas (a regra do "Convergente*"). A PRÉVIA do planejamento (a Centi
+  // 3.0.216.217 só abre ela: sem o centro de custo e sem o registro — `loadIncompleto`) emite IGUAL — as seções 8–10 ficam
+  // "não conferidas" (`secoes810NaoLidas`), nunca "o planejamento não tem". O centro de custo da prévia não é lido (quem
+  // grava o pula — `centroAusente`).
   const ass = assinaturaDoLoad(load.j, id);
   const semSecoes810 = "erro" in ass;
+  const secoes810NaoLidas = semSecoes810 && loadIncompleto(load.j);
+  const causa810 = secoes810NaoLidas ? "o registro das seções 8 a 10 não veio na leitura da Centi" : "o planejamento não tem o registro das seções 8 a 10";
+  const sem810 = semSecoes810 ? (secoes810NaoLidas ? { semSecoes810, secoes810NaoLidas } : { semSecoes810 }) : {};
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), "erro" in ass ? "" : ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
   if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {
     // Sem o registro das seções 8 a 10, a recusa é DESTE planejamento (não da operação): não conta para parar a execução.
     if (semSecoes810)
-      return { erro: `A Centi não emitiu o DFD do planejamento ${id}${onde} sem o registro das seções 8 a 10 (o planejamento não o tem): “Usuário sem permissão!”.`, amostra: a.amostra, definitivo: true };
+      return { erro: `A Centi não emitiu o DFD do planejamento ${id}${onde} sem o registro das seções 8 a 10 (${causa810}): “Usuário sem permissão!”.`, amostra: a.amostra, definitivo: true };
     if (!deNovo) {
       const e = await c.pedir("estado", null, 8000);
       if (e.ok && c.aplicarOperacao(e.operacao)) return emitirNaSessao(c, id, entidade, true, load);
@@ -226,10 +227,10 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     return { erro: `A Centi negou a emissão do DFD do planejamento ${id}${onde}: “Usuário sem permissão!”.`, amostra: a.amostra, recusada: true };
   }
   const r2 = await pdfDoAchado(a, baixarPelaExtensao(c.pedir as unknown as PedirExtensao, entidade));
-  if ("pdf" in r2) return semSecoes810 ? { pdf: r2.pdf, semSecoes810 } : { pdf: r2.pdf };
+  if ("pdf" in r2) return { pdf: r2.pdf, ...sem810 };
   // Sem o registro, a Centi pode recusar a emissão: o motivo diz isso (e não vale tentar outros órgãos — o load abriu).
   if (semSecoes810)
-    return { erro: `A Centi não emitiu o DFD do planejamento ${id}${onde} sem o registro das seções 8 a 10 (o planejamento não o tem): ${r2.erro}`, amostra: r2.amostra, definitivo: true };
+    return { erro: `A Centi não emitiu o DFD do planejamento ${id}${onde} sem o registro das seções 8 a 10 (${causa810}): ${r2.erro}`, amostra: r2.amostra, definitivo: true };
   return { erro: r2.erro, amostra: r2.amostra, ambiente: a.tipo === "nada" && /sessão/i.test(a.erro) };
 }
 

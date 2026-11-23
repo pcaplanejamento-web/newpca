@@ -42,10 +42,11 @@ import {
 } from "./fluxo-core.ts";
 import { lerIdsCenti, MAX_IDS_CENTI, mensagemRecusaGeral, novasRecusas, PREFIXO_RECUSA, pararPorRecusa, type RecusasCenti, registrarRecusaCenti, registrarSucessoCenti, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
+import { limparSituacao } from "./execucao-centi.ts";
 import { filaSerial } from "./ocr-assinatura-core.ts";
 import { BUSCA_TABELA, BUSCAS, buscaDoNo, buscaEfetiva, configDaLeitura, type FontesSistema, filtrarPelaTabela, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, centroCustoDoItem, conferirUnidades, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, passaConferencia, procurarNaTabela, verificacoesDoNo, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
+import { aplicarRegra, centroCustoDoItem, conferirUnidades, deOutroOrgao, escolherColunas, filtrarMarcados, lerCaptura, lerColunas, lerRegras, MAX_LINHAS_TABELA, MSG_ENSINAR_CM002, operarVariavel, passaConferencia, procurarNaTabela, verificacoesDoNo, recorteTabela, valorCapturado } from "./fluxo-dados.ts";
 import type { ReparticaoMatch } from "./reparticao-match.ts";
 import {
   type DfdSistemaComparavel,
@@ -186,8 +187,19 @@ async function lerPlanejamentosPeloId(
         }
         // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
         const nao = msg.startsWith("NAO_ENCONTRADO: ");
-        if (!nao && op.falhaErro) throw new Error(`DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) não conferido: ${msg}`);
-        r = { ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao };
+        // CADA VERIFICAÇÃO É INDEPENDENTE: o planejamento ABRIU no PRÓPRIO órgão e só o conteúdo (a emissão/leitura do PDF)
+        // falhou — o DFD que verifica também a situação ou o centro de custo segue com o que o load leu (`carga`; nunca o de
+        // outro órgão). O conteúdo fica "não conferido" (`conteudoFalhou`) e a correção falha no fim. Sem nada lido (a
+        // comunicação falhou), o DFD inteiro falha como sempre — a retomada o refaz.
+        const c0 = x0 instanceof Error ? (x0 as unknown as { carga?: unknown }).carga : undefined;
+        let carga = !nao && verificaOutros(it) && c0 && typeof c0 === "object" ? (c0 as Item) : null;
+        // O planejamento NÃO ABRIU (em nenhum órgão — a Centi respondeu sem o registro): a LISTA da CM002 do órgão do DFD (a
+        // fonte da situação e do centro de custo antes da unificação) ainda pode dar os dois — com a linha dele, segue sem o
+        // registro (`registro: false`: quem grava lê a CM002). Sem a linha, o DFD falha como sempre.
+        if (!carga && !nao && verificaOutros(it) && naoAbriu(msg) && !ctx.cancelado() && "linha" in (await linhaDaCm002(it, ctx)))
+          carga = { planejamento: str(it.planejamento), registro: false };
+        if (!nao && op.falhaErro && !carga) throw new Error(`DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) não conferido: ${msg}`);
+        r = carga ? { ...it, centi: { ...carga, conteudoFalhou: msg } } : { ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao };
       }
       feitos++;
       ctx.parcial?.([r]);
@@ -218,6 +230,48 @@ export async function confirmarLeituraCenti(it: Item, dfd: DfdParseado, ctx: Pic
 
 /** O load do planejamento falhou na Centi (não abriu nesse órgão). */
 const naoAbriu = (msg: string) => /n[aã]o consegui abrir o planejamento/i.test(msg);
+/** O DFD verifica também a situação ou o centro de custo (o "O que verificar na Centi" leva a escolha em cada DFD). */
+const verificaOutros = (it: Item) => {
+  const v = it.verificar && typeof it.verificar === "object" ? (it.verificar as Item) : {};
+  return v.situacao === "sim" || v.centro === "sim";
+};
+const soNumero = (v: unknown) => str(v).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+
+/**
+ * A linha do planejamento na LISTA da CM002 do órgão do DFD — a fonte da situação e do centro de custo ANTES da unificação
+ * (a "Execução dos DFDs na CM002" e o "Unidades × Centro de Custo"). A lista do órgão é lida UMA vez por execução (a
+ * PROMESSA fica em `host.__cache`, compartilhada pelos subfluxos — os DFDs em paralelo fazem uma leitura só), pelo
+ * `executar` do `centi.cm002`. Devolve a linha ou o motivo (a falha também fica guardada: não relê a cada DFD);
+ * "interrompido" relança. A ausência na lista NUNCA vira "não encontrado" (a consulta aprendida pode estar filtrada).
+ */
+export async function linhaDaCm002(it: Item, ctx: ContextoNo): Promise<{ linha: Item } | { motivo: string }> {
+  const ent = soNumero(it.entidade);
+  const plan = soNumero(it.planejamento);
+  if (!ent) return { motivo: "o órgão do DFD não tem o ID da Centi cadastrado (Órgãos e Unidades)" };
+  if (!plan) return { motivo: "o DFD não tem nº de planejamento" };
+  const cache = ctx.host.__cache as Map<string, unknown> | undefined;
+  const k = `cm002:${ent}`;
+  let lista = cache?.get(k) as Promise<Map<string, Item> | { motivo: string }> | undefined;
+  if (!lista) {
+    lista = (async () => {
+      try {
+        const linhas = (await (REGISTRO_NOS.get("centi.cm002") as DefNo).executar({ entrada: [] }, { entidades: ent }, ctx, {})).saida ?? [];
+        return new Map(linhas.map((l) => [soNumero(l.planejamento), l] as const));
+      } catch (x) {
+        const m = x instanceof Error ? x.message : String(x);
+        if (/interrompid/i.test(m)) throw x;
+        return { motivo: m };
+      }
+    })();
+    cache?.set(k, lista);
+  }
+  const r = await lista;
+  // O que fazer vai junto quando a CM002 é que precisa ser ensinada (a mensagem da extensão às vezes já diz).
+  const ensinar = (m: string) => (/pesquisar/i.test(m) ? m : `${m.replace(/[.\s]+$/, "")}. ${MSG_ENSINAR_CM002}`);
+  if (!(r instanceof Map)) return { motivo: ensinar(`a CM002 do órgão ${ent} não foi lida — ${r.motivo}`) };
+  const linha = r.get(plan);
+  return linha ? { linha } : { motivo: ensinar(`o planejamento ${plan} não veio na lista da CM002 do órgão ${ent}`) };
+}
 /** As OUTRAS entidades da Centi a tentar (os IDs cadastrados nos órgãos), sem repetir e sem a já tentada. */
 export function entidadesParaTentar(mapa: Record<string, string>, ja: string): string[] {
   const n = (v: string) => String(v ?? "").trim().replace(/^0+(?=\d)/, "");
@@ -1575,16 +1629,30 @@ const NOS: DefNo[] = [
     executar: async (e, _c, ctx) => {
       // Sem o centro de custo na linha da CM002 (a consulta aprendida costuma trazer só Id + Situação), o planejamento é
       // lido pelo ID AQUI — vale em qualquer diagrama salvo, antigo ou novo; o que já veio lido (`centi`) não é relido.
-      const itens = so(e);
+      const unidades = (ctx.host.unidades ?? []) as ReparticaoMatch[];
+      // O DFD LIDO neste fluxo ("Buscar DFD na Centi" — `centi` no item) sem o centro de custo em fonte nenhuma (a prévia
+      // do planejamento não o traz): a linha da CM002 do órgão dele — a fonte de antes da unificação. Nunca para o "não
+      // encontrado" nem para o achado em outro órgão; sem a linha, o motivo vai na mensagem do "não lido".
+      const itens: Item[] = [];
+      for (const it of so(e)) {
+        const precisa =
+          "centi" in it && !(it.encontrado && typeof it.encontrado === "object") && !deOutroOrgao(it) && !(it.centi === null && !it.centiFalha) && !centroCustoDoItem(it, unidades);
+        if (!precisa || ctx.cancelado()) {
+          itens.push(it);
+          continue;
+        }
+        const r = await linhaDaCm002(it, ctx);
+        itens.push("linha" in r ? { ...it, encontrado: r.linha } : { ...it, cm002Motivo: r.motivo });
+      }
       // Só os que TÊM a linha da CM002 (`encontrado`): os de fora da CM002 / sem órgão vão direto para as colunas.
       const temLinha = (it: Item) => !!it.encontrado && typeof it.encontrado === "object";
-      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => temLinha(it) && !("centi" in it) && !centroCustoDoItem(it, (ctx.host.unidades ?? []) as ReparticaoMatch[])) : [];
-      if (!faltam.length) return conferirUnidades(itens, (ctx.host.unidades ?? []) as ReparticaoMatch[]);
+      const faltam = ctx.host.lerDfdCenti ? itens.filter((it) => temLinha(it) && !("centi" in it) && !centroCustoDoItem(it, unidades)) : [];
+      if (!faltam.length) return conferirUnidades(itens, unidades);
       const lidos = await lerPlanejamentosPeloId(faltam, ctx, { pdf: false, paralelo: 3, rotulo: "Lendo o planejamento pelo ID — " });
       const porItem = new Map(faltam.map((it, i) => [it, lidos[i]]));
       // Interrompido no meio: os não lidos ficam de fora (não viram "sem centro de custo").
       const juntos = itens.flatMap((it) => (porItem.has(it) ? (porItem.get(it) ? [porItem.get(it) as Item] : []) : [it]));
-      return conferirUnidades(juntos, (ctx.host.unidades ?? []) as ReparticaoMatch[]);
+      return conferirUnidades(juntos, unidades);
     },
   },
 
@@ -2001,17 +2069,42 @@ const NOS: DefNo[] = [
       const fixa = str(c.situacaoFixa).trim();
       const naoEnc = str(c.naoEncontrado).trim();
       const leitura = (it: Item) => (it.centi && typeof it.centi === "object" ? (it.centi as Item) : null);
-      const outroOrgao = (it: Item) => !!str(it.entidadeAchada) && str(it.entidadeAchada) !== str(it.entidade);
-      const situacao = (it: Item) => {
+      const outroOrgao = deOutroOrgao;
+      // A situação lida na CM002 (quando o load deste fluxo não a trouxe) — a fonte de antes da unificação.
+      const daCm002 = new Map<Item, string>();
+      const doLoad = (it: Item) => {
         if (fixa) return fixa;
         if (outroOrgao(it) || leitura(it)?.registro === false) return "";
         if ("centi" in it && it.centi === null) return it.centiFalha ? "" : naoEnc;
-        return str(resolverCaminho(it, campo)).trim();
+        return limparSituacao(resolverCaminho(it, campo)) ?? "";
       };
+      const situacao = (it: Item) => doLoad(it) || daCm002.get(it) || "";
       const todos = so(e);
-      const apontados = todos
+      const apontados: Item[] = todos
         .filter((it) => !fixa && outroOrgao(it))
         .map((it) => ({ mensagem: `DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}): achado na Centi no órgão ${str(it.entidadeAchada)}, não no do DFD — situação não gravada`, nivel: "atencao", item: it }));
+      // O DFD LIDO neste fluxo ("Buscar DFD na Centi" — `centi` no item) cuja situação não veio do load (a prévia do
+      // planejamento sem ela, o registro não aberto, a falha de comunicação): a linha da CM002 do órgão dele. Nunca para o
+      // "não encontrado" (a Centi disse que não tem) nem para outro órgão. Sem nenhuma: ATENÇÃO — a gravada fica.
+      if (!fixa && campo === "centi.situacao")
+        for (const it of todos) {
+          if (ctx.cancelado()) break;
+          if (!("centi" in it) || outroOrgao(it) || Number(it.id) <= 0 || (it.centi === null && !it.centiFalha) || doLoad(it)) continue;
+          const r = await linhaDaCm002(it, ctx);
+          const sit = "linha" in r ? (limparSituacao(r.linha.situacao) ?? "") : "";
+          if (sit) {
+            daCm002.set(it, sit);
+            continue;
+          }
+          const lido = leitura(it);
+          const porque = !lido ? `a leitura falhou (${str(it.centiErro) || "sem resposta"})` : lido.registro === false ? "a Centi não abriu o registro do planejamento" : "o planejamento veio sem a situação";
+          const cm = "linha" in r ? "a CM002 também não trouxe a situação" : r.motivo;
+          apontados.push({
+            mensagem: `DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}): situação não lida na Centi (a gravada foi mantida) — ${porque}; ${cm}`,
+            nivel: "atencao",
+            item: it,
+          });
+        }
       const lidos = todos.filter((it) => situacao(it) && Number(it.id) > 0);
       if (lidos.length || todos.some((it) => Number(it.id) > 0)) {
         // UM pedido por ÓRGÃO: o ID da CM002 (nº de planejamento) só é único dentro do órgão — num pedido só, dois DFDs de
@@ -2302,11 +2395,17 @@ const NOS: DefNo[] = [
       const porDfd = new Map<number, string | null>();
       const saida: Item[] = [];
       const ignorados: Item[] = [];
+      const apontados: Item[] = [];
       for (const it of so(e)) {
         const id = Number(resolverCaminho(it, str(c.campoId, "id") || "id"));
         if (!Number.isInteger(id) || id <= 0) ignorados.push(it);
-        // A leitura da Centi falhou (`centroNaoLido`): segue sem gravar — o centro de custo já gravado fica.
-        else if (it.centroNaoLido === true) saida.push(it);
+        // A leitura da Centi falhou (`centroNaoLido`): segue sem gravar — o centro de custo já gravado fica — e AVISA (nunca
+        // calado: a mensagem diz por que não foi lido e o que fazer).
+        else if (it.centroNaoLido === true) {
+          saida.push(it);
+          const m = str(it.mensagemUnidade) || str(it.mensagem) || `DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}): centro de custo não lido na Centi`;
+          apontados.push({ mensagem: `${m.replace(/[.\s]+$/, "")}. O centro de custo gravado foi mantido.`, nivel: "atencao", item: it });
+        }
         else {
           porDfd.set(id, str(resolverCaminho(it, str(c.campoCentro, "centroCustoCenti") || "centroCustoCenti")).trim() || null);
           saida.push(it);
@@ -2314,7 +2413,7 @@ const NOS: DefNo[] = [
       }
       await gravarCentrosDfds(porDfd, ctx);
       if (ignorados.length) ctx.aviso(`${ignorados.length} item(ns) sem o id do DFD — não gravados.`);
-      return { saida, ignorados };
+      return { saida, ignorados, [PORTA_APONTADOS]: apontados };
     },
   },
   {
@@ -2625,6 +2724,13 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     const { dfdSistema, ...d } = d0;
     const ref = `DFD ${str(d.numero)} (Planej. ${str(d.planejamento)})`;
     const x0 = d.centi && typeof d.centi === "object" ? (d.centi as Item) : null;
+    // O load abriu, mas o CONTEÚDO não foi lido (a emissão ou o PDF falhou): não conferido — nada é marcado nem corrigido
+    // (a situação e o centro de custo lidos já seguiram pelas suas verificações).
+    const falhou = x0 && typeof x0.conteudoFalhou === "string" ? x0.conteudoFalhou.trim() : "";
+    if (falhou) {
+      out.divergentes.push({ ...d, naoMarcar: true, centiErro: falhou, mensagem: `${ref}: não conferido — ${falhou}`, conferenciaCenti: undefined, conferenciaCentiMotivo: undefined, conferenciaCentiEm: undefined });
+      continue;
+    }
     const dfdCenti = x0?.dfd && typeof x0.dfd === "object" ? (x0.dfd as unknown as DfdParseado) : null;
     // O DFD inteiro só serve à comparação: não segue adiante (o retorno e a análise ficam leves).
     const x = x0 && dfdCenti ? (({ dfd: _dfd, ...r }) => r)(x0) : x0;
@@ -2664,7 +2770,7 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
       out.divergentes.push({ ...d, mensagem, conferenciaCenti: "divergente", conferenciaCentiMotivo: mensagem, conferenciaCentiEm: em });
     } else if (semSecoes810) {
       // Sem outra diferença: "convergente*" — convergente com a NOTA da falta das seções 8 a 10 (âmbar na tela).
-      out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: motivoSemSecoes810(ref), conferenciaCentiEm: em });
+      out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: motivoSemSecoes810(ref, x.secoes810NaoLidas === true), conferenciaCentiEm: em });
     } else out.conformes.push({ ...d, conferenciaCenti: "convergente", conferenciaCentiMotivo: null, conferenciaCentiEm: em });
   }
   return out;

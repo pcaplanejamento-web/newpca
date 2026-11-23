@@ -343,6 +343,44 @@ test("sem o registro das seções 8 a 10 na Centi: só elas não contam — “c
   );
 });
 
+test("seções 8 a 10 NÃO LIDAS (a prévia da Centi 217) × o planejamento sem o registro: a nota diz qual — e o retrato a guarda", async () => {
+  const { conferenciaDoRetrato, lerRetrato, montarRetrato, notaConferencia, notaSemLeitura, NOTA_SECOES_810_NAO_LIDAS, NOTA_SEM_SECOES_810, textoRetrato } = await import("../src/lib/conferencia-dfd-centi.ts");
+  const s = base();
+  s.secoes = [...s.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "ANA, BIA" }];
+  const c = base();
+  const it = (naoLidas: boolean) => ({ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(s), centi: { numero: "123", semSecoes810: true, ...(naoLidas ? { secoes810NaoLidas: true } : {}), dfd: c } });
+  const lida = compararDfdCenti([it(true)], { tolerancia: 0.01, objeto: true });
+  assert.equal(lida.conformes.length, 1, "o resto confere: Convergente* (nunca erro, nunca bloqueia as outras seções)");
+  const m1 = String(lida.conformes[0].conferenciaCentiMotivo);
+  assert.match(m1, /^DFD 123 \(Planej\. 456\): Seções 8 a 10 não conferidas — a Centi não informou/);
+  assert.doesNotMatch(m1, /não tem o registro/, "não lido nunca vira 'o planejamento não tem'");
+  const n1 = notaConferencia("convergente", m1);
+  assert.ok(n1?.startsWith(NOTA_SECOES_810_NAO_LIDAS));
+  assert.equal(notaSemLeitura(n1), true);
+  const tem = compararDfdCenti([it(false)], { tolerancia: 0.01, objeto: true });
+  const m2 = String(tem.conformes[0].conferenciaCentiMotivo);
+  assert.match(m2, /Sem as seções 8 a 10 na Centi — o planejamento não tem o registro/);
+  assert.ok(notaConferencia("convergente", m2)?.startsWith(NOTA_SEM_SECOES_810));
+  assert.equal(notaSemLeitura(notaConferencia("convergente", m2)), false);
+  // O retrato guarda a marca: a reconferência pela Mesa dá o MESMO texto.
+  const r = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" }, { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true, secoes810NaoLidas: true }, c, { objeto: true, tolerancia: 0.01 })));
+  assert.equal(r?.semSecoes810, true);
+  assert.equal(r?.secoes810NaoLidas, true);
+  const rec = conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, r!);
+  assert.equal(rec.status, "convergente");
+  assert.match(String(rec.motivo), /Seções 8 a 10 não conferidas/);
+  // Sem a marca no retrato (o planejamento não tem): o texto de sempre.
+  const r2 = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" }, { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true }, c, { objeto: true, tolerancia: 0.01 })));
+  assert.equal(r2?.secoes810NaoLidas, undefined);
+  assert.match(String(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, r2!).motivo), /Sem as seções 8 a 10 na Centi/);
+});
+
+test("“não encontrado na Centi” SÓ quando a Centi diz: a resposta vazia (a Centi 217 também a dá ao planejamento que existe) é 'não abriu'", async () => {
+  const { planejamentoInexistente } = await import("../src/lib/automacao-centi-core.ts");
+  assert.equal(planejamentoInexistente(""), false, "sem mensagem: não abriu — nunca grava 'Não encontrado' nem limpa o centro de custo");
+  assert.equal(planejamentoInexistente("Registro não encontrado."), true);
+});
+
 test("emissão sem o registro das seções 8 a 10: o campo vai VAZIO (nunca o de outro planejamento)", () => {
   const corpo = JSON.stringify(pedidoEmitirDfd("456", lerConfigCenti(null), new Date("2026-11-18T12:00:00Z"), ""));
   assert.match(corpo, /IdPlanejamentoAssinaturaDFD/);

@@ -1090,8 +1090,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `PlanilhaDfds`; o `filtrarPelaTabela` reaplica os `filtrosTabela` aos DFDs de agora (os ids `filtrados` só como reserva
   para coluna sem régua pura). `Grafo.modelo` + `modeloDoFluxo` acham o modelo mesmo renomeado. Análise: todas as portas
   do nó (os "Falhou" aparecem), Estado = o que foi feito/resultado (`estadoDoItem("fluxo.executar")`), colunas Situação ·
-  Centro de Custo · Unidade na Centi. Testes: `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em
-  `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts` (0194). O bloco abaixo é o HISTÓRICO.
+  Centro de Custo · Unidade na Centi. **Fontes (v1.308.0):** situação e centro de custo = o load do PRÓPRIO órgão ou a
+  lista da CM002 do órgão do DFD (`linhaDaCm002`); o load de outro órgão nunca; o não lido nunca é gravado nem calado
+  (atenção com o motivo); as verificações de cada DFD são independentes (a falha do conteúdo não impede as outras). Testes:
+  `tests/verificar-centi.test.ts`, "Verificar DFDs na Centi" em `tests/fluxo-dados.test.ts`, `tests/migrations.test.ts`
+  (0194). O bloco abaixo é o HISTÓRICO.
 - **LOGIN DA CENTI NO BANCO + ENTREGA SELADA (v1.299.0 → v1.302.1, extensão 1.42.1, migrações `0195`/`0196`/`0197`) —
   regra firme: o BANCO é a ÚNICA fonte, ESTAR LOGADO COMO ADM BASTA (nenhuma autorização de navegador — regra do
   usuário; a `0197` apagou a `centi_login_chaves` da v1.300.0) e a senha NUNCA trafega em claro.** Cada ADM guarda o
@@ -1185,16 +1188,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`padraoDoValor`, nunca o valor) e os últimos pedidos da tela (`__pcaRastroTela_v1`, só a estrutura). Endereço fixo de
   módulo da Centi = sempre aprendido da tela, com o fixo de reserva. Testes: `tests/centi-main-load.test.ts` (a Centi nova
   falsa) e `tests/automacao-centi.test.ts` (a estrutura real do load de 17/11).
-  **v1.307.3 (extensão 1.46.1, protocolo 50) — SÓ O CADASTRO COMPLETO VALE (regra firme):** o load completo do planejamento
-  traz `IdCentroCusto` e `IdPlanejamentoAssinaturaDFD` (`ESSENCIAIS_PLANEJAMENTO`); uma PRÉVIA (sem os dois) nunca vale.
-  Extensão: o modelo guarda `pontos` (`pontosPlanejamento`) e só o mais completo troca o guardado (`melhorModelo`); no `ler`,
-  o load que abre sem os essenciais (`faltasPlanejamento`) não para a busca — sem nenhum completo, devolve o mais completo
-  com `incompleto`. Sistema: `loadIncompleto` (os dois ausentes) → `emitirNaSessao` NÃO emite e o DFD fica não conferido
-  (`definitivo`, com `MSG_ENSINAR_PLANEJAMENTO`) — nunca "Convergente*" sem ter lido o cadastro; só o `IdPlanejamentoAssinaturaDFD`
-  ausente (com o centro de custo) segue o caso legítimo do Convergente*. Centro de custo: o texto da referência é o `Display`
-  › o `Object.Caminho`/`Nome`; `centroCustoLidoNoLoad` separa o NÃO LIDO (campo ausente ou referência com Id e sem texto →
-  `centroAusente` → `conferirUnidades` manda `centroNaoLido`, o gravado fica) do "a Centi não tem" (Id 0/nulo → a coluna é
-  limpa). Cada DFD: load + emissão na MESMA `comSessaoCenti` (nenhum outro registro aberto no meio).
+  **v1.307.3 → v1.308.0 — A PRÉVIA EMITE; O QUE NÃO FOI LIDO NUNCA É GRAVADO NEM CALADO (regra firme; a regra "só o
+  cadastro completo vale" da v1.307.3 SAIU — ela não emitia nada com a prévia e todo DFD ficava "não conferido"):** o load
+  completo traz `IdCentroCusto` e `IdPlanejamentoAssinaturaDFD` (`ESSENCIAIS_PLANEJAMENTO`); a Centi 217 só abre a PRÉVIA
+  (o 101026, sem os dois). Extensão: o modelo guarda `pontos` (`pontosPlanejamento`) e só o mais completo troca o guardado
+  (`melhorModelo`); no `ler`, sem nenhum completo, devolve o mais completo com `incompleto`. Sistema: `emitirNaSessao` emite
+  com o registro do PRÓPRIO load (`assinaturaDoLoad`) ou, sem ele, com o campo VAZIO (`semSecoes810`); `secoes810NaoLidas`
+  = sem o registro E `loadIncompleto` (a prévia) → a nota `NOTA_SECOES_810_NAO_LIDAS` "Seções 8 a 10 não conferidas"
+  (`motivoSemSecoes810(ref, naoLidas)`, `notaSemLeitura`; o painel do selo orienta a abrir UM planejamento na CM002) — o
+  load completo sem o campo = "Sem as seções 8 a 10 na Centi" (o planejamento não tem); os dois = "Convergente*", as seções
+  8–10 nunca comparadas nem corrigidas (o retrato guarda `secoes810NaoLidas`; `conferenciaDoRetrato` dá o mesmo texto).
+  Centro de custo: o texto da referência é o `Display` › o `Object.Caminho`/`Nome`; `centroCustoLidoNoLoad` separa o NÃO
+  LIDO (campo ausente ou referência com Id e sem texto → `centroAusente` → `conferirUnidades` manda `centroNaoLido` e o
+  `saida.gravarCentroCusto` APONTA em atenção "o centro de custo gravado foi mantido") do "a Centi não tem" (Id 0/nulo → a
+  coluna é limpa). Os dados do planejamento só do TOPO da `Entity` (`dadosDoPlanejamento`: `Situacao` com texto › a chave
+  `Situacao*` do topo com letras — nunca o registro ligado; nada de `acharValor` profundo). **"Não encontrado" SÓ quando a
+  Centi diz** (`planejamentoInexistente` exige a mensagem; a resposta vazia — que a 217 dá também ao planejamento que
+  existe — é "Não consegui abrir", tenta os outros órgãos e nunca grava "Não encontrado na Centi" nem limpa o centro).
+  Cada DFD: load + emissão na MESMA `comSessaoCenti` (nenhum outro registro aberto no meio).
   **v1.307.4 (extensão 1.46.2, protocolo 51) — O REGISTRO EM QUALQUER ENVELOPE (regra firme):** a Centi 217 responde
   `{Data, Count, IdLog, Success, Message, Code}`; a de 17/11, `{Entity:{ModuleKey, Fields}}`. `registroDaResposta`
   (`centi-anexo.js`) acha o registro com Id em `Entity` · `Data` · `Data[0]` (lista de UM) · `Data.Entity` · `Object`/`Result`/
@@ -1207,6 +1218,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   qualquer lugar), o envelope e os campos; `pedidosDaTela` lista primeiro os que trouxeram o cadastro, depois quaisquer
   (não só load/entity). Na Análise, o item do `fluxo.executar` que FALHOU não mostra a conferência gravada antes
   (`dadosDfdDoItem`). Teste da Centi 217 falsa (`searchentity` com o Id no corpo): `tests/centi-main-load.test.ts`.
+  **v1.308.0 (extensão 1.47.0, protocolo 52) — SITUAÇÃO E CENTRO DE CUSTO PELA CM002 + VERIFICAÇÕES INDEPENDENTES (regra
+  firme):** a situação e o centro de custo vêm do load do planejamento ou, quando ele não os traz (a prévia) ou não abre,
+  da LISTA da CM002 do órgão do DFD — a fonte de antes da unificação — por **`linhaDaCm002`** (`fluxo-nos.ts`: o `executar`
+  do `centi.cm002` com `{entidades}`, a PROMESSA em `host.__cache` `cm002:<órgão>` — os DFDs em paralelo e os subfluxos
+  fazem UMA leitura; a falha também fica guardada, com `MSG_ENSINAR_CM002`). Sem mudar o diagrama (vale nos fluxos salvos):
+  `saida.gravarExecucao` (DFD lido neste fluxo, sem a situação do load, nunca "não encontrado"/outro órgão; sem nenhuma =
+  atenção "situação não lida na Centi (a gravada foi mantida)") e `dados.conferirUnidade` (`encontrado` = a linha;
+  `cm002Motivo` na falha → as mensagens do "não lido"). O load de OUTRO órgão (`deOutroOrgao`) NUNCA é fonte (nem a CM002
+  do órgão do DFD é lida). **Independentes:** o planejamento ABRIU no próprio órgão e só o conteúdo falhou → o erro leva a
+  `carga` (`fluxo-navegador.ts`) e o DFD que verifica também situação/centro (`verificaOutros`) segue com ela
+  (`conteudoFalhou` → `compararDfdCenti` "não conferido", `naoMarcar`; com "Corrigir" o `corr1 {falhar}` faz o subfluxo
+  falhar no fim — retomada e freio valem); NÃO ABRIU em nenhum órgão (`naoAbriu`) → com a linha da CM002 segue
+  `{registro: false}` (a CM002 dá os dois); sem nada lido (comunicação), o DFD falha como sempre. **Extensão:** o gancho
+  do `fetch` lê o endereço de um `URL` e o CORPO de um `Request` (clonado ANTES do fetch) — a Centi 217 (cliente fetch)
+  ensina a consulta da CM002 e o planejamento com o corpo. Testes: "Verificar DFDs na Centi — a PRÉVIA…/a CM002 também
+  falha/OUTRO órgão/NÃO ABRE/o CONTEÚDO falha" (`tests/fluxo-dados.test.ts`, com a CM002 falsa e a retomada),
+  `tests/assinatura-dfd-centi.test.ts`, `tests/conferencia-dfd-centi.test.ts`, `tests/centi-main-load.test.ts`.
 - **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
   grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
   toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o

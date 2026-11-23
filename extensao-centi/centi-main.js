@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 51;
+  const PROTOCOLO = 52;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -529,28 +529,36 @@
       });
     if (init?.__pcaInterno) return comToken(buscar.call(this, rec, init, ...resto));
     try {
-      const url = typeof rec === "string" ? rec : rec?.url;
-      const hs = new Headers(init?.headers || (typeof rec === "object" ? rec.headers : undefined));
-      const metodo = init?.method || (typeof rec === "object" ? rec.method : "GET");
+      // A Centi 3.0.216.217 usa fetch: o pedido pode vir como `Request` (método, cabeçalhos e CORPO dentro dele) ou com o
+      // endereço num `URL`. O corpo do Request é lido de uma CÓPIA feita ANTES do fetch (o fetch consome o original) — sem
+      // ele, a consulta da CM002 e o modelo do planejamento eram aprendidos sem o corpo e não se repetiam.
+      const ehReq = typeof Request !== "undefined" && rec instanceof Request;
+      const url = typeof rec === "string" ? rec : rec instanceof URL ? rec.href : rec?.url;
+      const hs = new Headers(init?.headers || (ehReq ? rec.headers : undefined));
+      const metodo = init?.method || (ehReq ? rec.method : "GET");
+      const corpoP =
+        init?.body !== undefined ? Promise.resolve(init.body) : ehReq && !/^(GET|HEAD)$/i.test(rec.method) ? rec.clone().text().catch(() => undefined) : Promise.resolve(undefined);
       guardar(url, Object.fromEntries(hs.entries()), metodo, "fetch");
-      aprenderOperacao(url, metodo, init?.body);
-      gravarPasso(url, metodo, init?.body);
+      corpoP
+        .then((b) => {
+          aprenderOperacao(url, metodo, b);
+          gravarPasso(url, metodo, b);
+        })
+        .catch(() => {});
       if (internos === 0 && String(url || "").includes("/restauth/"))
         return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
-          r.clone()
-            .text()
-            .then((t) => {
-              lembrarCm002(url, metodo, init?.body, r.status, t);
-              if (lerAprendiz().ativo) aprenderResposta(url, metodo, init?.body, r.status, r.headers.get("content-type"), t);
+          Promise.all([corpoP, r.clone().text()])
+            .then(([b, t]) => {
+              lembrarCm002(url, metodo, b, r.status, t);
+              if (lerAprendiz().ativo) aprenderResposta(url, metodo, b, r.status, r.headers.get("content-type"), t);
             })
             .catch(() => {});
           return r;
         });
       if (internos === 0 && lerAprendiz().ativo)
         return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
-          r.clone()
-            .text()
-            .then((t) => aprenderResposta(url, metodo, init?.body, r.status, r.headers.get("content-type"), t))
+          Promise.all([corpoP, r.clone().text()])
+            .then(([b, t]) => aprenderResposta(url, metodo, b, r.status, r.headers.get("content-type"), t))
             .catch(() => {});
           return r;
         });

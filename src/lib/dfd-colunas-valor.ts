@@ -12,7 +12,7 @@ import { aplicarFiltros, type ColunaDados, type FiltroValor } from "./tabela-fil
 export const rotuloConferencia = (s: string | null | undefined) => (s === "convergente" ? "Convergente" : s === "divergente" ? "Divergente" : "Não conferido");
 /** O rótulo do FILTRO da conferência DESATUALIZADA (o DFD mudou depois dela). */
 export const ROTULO_RECONFERIR = "Reconferir";
-/** O rótulo do CONVERGENTE COM NOTA (sem as seções 8 a 10 na Centi — não comparadas): âmbar, com a nota no painel. */
+/** O rótulo do CONVERGENTE COM NOTA (as seções 8 a 10 sem o registro na Centi ou não lidas — não comparadas): âmbar, com a nota no painel. */
 export const ROTULO_COM_NOTA = "Convergente*";
 /** O rótulo da divergência ACEITA (a Centi é que está errada — vale enquanto o motivo for o mesmo). */
 export const ROTULO_RESSALVA = "Convergente com ressalva";

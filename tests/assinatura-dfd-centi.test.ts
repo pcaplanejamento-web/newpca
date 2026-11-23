@@ -162,13 +162,19 @@ test("dadosDoPlanejamento: os campos do PRÓPRIO planejamento (formato real do 1
   assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "Situacao", Value: "Executado" }] } }), { situacao: "Executado" });
   assert.deepEqual(dadosDoPlanejamento({ Entity: null }), {});
   assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "IdCentroCusto", Value: 12 }] } }), { centroCusto: "" }, "o id numérico nunca é o centro de custo");
+  // O texto da situação no TOPO do próprio planejamento (Situacao só com o código): vale o SituacaoDescricao do topo.
+  assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "Situacao", Value: 2 }, { Key: "SituacaoDescricao", Value: "Não Executado" }] } }), { situacao: "Não Executado" });
+  // O do registro LIGADO (aninhado) nunca vale — nem com o Situacao do topo ausente.
+  assert.deepEqual(dadosDoPlanejamento({ Entity: { Fields: [{ Key: "IdProtocolo", Value: ref(3, "1/2026", [{ Key: "SituacaoDescricao", Value: "Em Andamento" }]) }] } }), {});
 });
 
-// A Centi 3.0.216.217 (19/11/2026): o load que a extensão aprendeu podia ser uma PRÉVIA do planejamento (sem o centro de
-// custo e sem o registro das seções 8–10). Com ela a automação marcava "Convergente*" e gravava "sem centro de custo".
+// A Centi 3.0.216.217 (19/11/2026): o load completo (101045) voltou vazio e o 101026 abre só uma PRÉVIA do planejamento
+// (sem o centro de custo e sem o registro das seções 8–10). A v1.307.3 parou de emitir com a prévia e TODO DFD ficou "não
+// conferido"; a emissão com o campo VAZIO funciona (a Centi usa o do planejamento) — a prévia EMITE e as seções 8–10 ficam
+// "não conferidas" (nunca comparadas nem corrigidas); o centro de custo da prévia nunca é gravado (`centroAusente`).
 const previa = (plan: number) => ({ Entity: { ModuleKey: 999999, Fields: [{ Key: "Finalidade", Value: "x" }, { Key: "Situacao", Value: 1 }, { Key: "Id", Value: String(plan) }] }, Message: null });
 
-test("load INCOMPLETO (uma prévia, sem o centro de custo e sem as seções 8–10): nada é emitido nem conferido", async () => {
+test("load PRÉVIA (sem o centro de custo e sem as seções 8–10): EMITE com o campo vazio e marca as seções 8–10 como NÃO LIDAS", async () => {
   const { faltasDoLoad, loadIncompleto } = await import("../src/lib/automacao-centi-core.ts");
   assert.deepEqual(faltasDoLoad(loadDaTela(131, 114)), []);
   assert.deepEqual(faltasDoLoad(loadDaTela(131, null)), ["IdPlanejamentoAssinaturaDFD"]);
@@ -177,11 +183,42 @@ test("load INCOMPLETO (uma prévia, sem o centro de custo e sem as seções 8–
   assert.equal(loadIncompleto({ Entity: null }), false);
   const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
   const r = await emitirUm(c, "24", "3");
+  assert.ok(r.pdf, "a prévia emite (a Centi 217 aceita o campo vazio)");
+  assert.equal(r.erro, undefined);
+  assert.equal(r.semSecoes810, true);
+  assert.equal(r.secoes810NaoLidas, true, "o registro das seções 8–10 não veio NA LEITURA — nunca 'o planejamento não tem'");
+  const ops = pedidos.filter((p) => p.acao === "pedir").map((p) => p.dados.corpo);
+  assert.equal(ops.length, 1, "UMA emissão");
+  assert.equal(param(ops[0], "IdComprasPlanejamento"), "24");
+  assert.equal(param(ops[0], "IdPlanejamentoAssinaturaDFD"), "", "nunca um id de outro planejamento");
+  // O load completo sem o campo: o planejamento NÃO TEM o registro (não é "não lido").
+  const t = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, null) });
+  const x = await emitirUm(t.c, "131");
+  assert.ok(x.pdf);
+  assert.equal(x.semSecoes810, true);
+  assert.equal(x.secoes810NaoLidas, undefined);
+  // Com o registro: emite com ele e as seções 8–10 são comparadas.
+  const u = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, 114) });
+  const y = await emitirUm(u.c, "131");
+  assert.ok(y.pdf);
+  assert.equal(y.semSecoes810, undefined);
+  assert.equal(param(u.pedidos.find((p) => p.acao === "pedir")?.dados.corpo, "IdPlanejamentoAssinaturaDFD"), "114");
+});
+
+test("recusa do Emitir DFD com a prévia: a causa certa (o registro NÃO VEIO na leitura) e nunca 'o planejamento não tem'", async () => {
+  const pedidos: string[] = [];
+  const pedir = async (acao: string, dados: unknown) => {
+    pedidos.push(acao);
+    const d = dados as { caminho: string };
+    if (acao === "ler") return { ok: true, j: d.caminho === caminhoLoadPlanejamento("24") ? previa(24) : { Entity: null, Message: null } };
+    if (acao === "pedir") return { ok: true, b64: Buffer.from(JSON.stringify({ Success: false, Message: "Usuário sem permissão!" })).toString("base64"), status: 200 };
+    return { ok: true };
+  };
+  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {} };
+  const r = await emitirUm(c, "24", "3");
   assert.equal(r.pdf, undefined);
-  assert.match(r.erro ?? "", /INCOMPLETO \(sem IdCentroCusto e IdPlanejamentoAssinaturaDFD\) — não conferido/);
-  assert.match(r.erro ?? "", /Abra UM planejamento na CM002/);
-  assert.equal(r.definitivo, true, "o load abriu neste órgão — não tenta os outros");
-  assert.equal(pedidos.filter((p) => p.acao === "pedir").length, 0, "nunca emite com as seções 8–10 vazias");
+  assert.match(r.erro ?? "", /o registro das seções 8 a 10 não veio na leitura da Centi/);
+  assert.doesNotMatch(r.erro ?? "", /o planejamento não tem o registro/);
 });
 
 test("centro de custo: o texto da referência (Display › o registro ligado) e o NÃO LIDO separado do 'não tem'", async () => {

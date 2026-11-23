@@ -153,7 +153,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.45.0"), false);
   assert.equal(versaoAtende("1.45.1"), false);
   assert.equal(versaoAtende("1.46.1"), false);
-  assert.equal(versaoAtende("1.46.2"), true);
+  assert.equal(versaoAtende("1.46.2"), false);
+  assert.equal(versaoAtende("1.47.0"), true);
   // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
   assert.equal(versaoFunciona("1.37.0"), false);
   assert.equal(versaoFunciona("1.38.0"), true);

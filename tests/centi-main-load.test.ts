@@ -9,7 +9,14 @@ import { dadosDoPlanejamento, faltasDoLoad, centroCustoLidoNoLoad } from "../src
 // Cada pedido do cliente passa pelo XHR (como o axios real), então o `guardar` da extensão o vê.
 type Pedido = { via: "centi" | "xhr"; url: string; headers: Record<string, string> };
 
-function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: (url: string, h: Record<string, string>) => unknown; respostaXhr?: (url: string, h: Record<string, string>, corpo?: string) => unknown }) {
+function abaCenti(opcoes: {
+  chunk?: boolean;
+  cliente?: boolean;
+  respostaCenti?: (url: string, h: Record<string, string>) => unknown;
+  respostaXhr?: (url: string, h: Record<string, string>, corpo?: string) => unknown;
+  /** A página chama `fetch` (a Centi 3.0.216.217): a resposta de cada pedido; sem ela, o fetch da página falha. */
+  respostaFetch?: (url: string, metodo: string, corpo?: string) => unknown;
+}) {
   const pedidos: Pedido[] = [];
   const ouvintes: ((e: unknown) => void)[] = [];
   const respostas: unknown[] = [];
@@ -74,8 +81,15 @@ function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: 
     location: { href: `${ORIGEM}/compras/`, origin: ORIGEM },
     sessionStorage: armazem(),
     localStorage: armazem(),
-    fetch: async () => {
-      throw new Error("sem fetch");
+    Request,
+    Response,
+    // A grade da CM002 (as colunas da tela, lidas 1,5 s depois da lista): nenhuma nesta aba falsa.
+    document: { querySelectorAll: () => [] },
+    fetch: async (rec: unknown, init?: RequestInit) => {
+      if (!opcoes.respostaFetch) throw new Error("sem fetch");
+      const req = new Request(rec as string | Request | URL, init);
+      const corpo = /^(GET|HEAD)$/i.test(req.method) ? undefined : await req.text();
+      return new Response(JSON.stringify(opcoes.respostaFetch(req.url, req.method, corpo)), { status: 200, headers: { "content-type": "application/json" } });
     },
     addEventListener: (t: string, f: (e: unknown) => void) => t === "message" && ouvintes.push(f),
     postMessage: (m: unknown) => {
@@ -164,7 +178,9 @@ function abaCenti(opcoes: { chunk?: boolean; cliente?: boolean; respostaCenti?: 
     x.send(JSON.stringify(corpo));
   };
   const espera = () => new Promise((ok) => setTimeout(ok, 5));
-  return { acao, pedidos, pedidoDaTela, telaAbre, telaPost, espera, local: ctx.localStorage as { getItem: (k: string) => string | null } };
+  // A TELA pede pelo `fetch` da página (já com o gancho da extensão).
+  const telaFetch = (rec: unknown, init?: RequestInit) => (janela as { fetch: (r: unknown, i?: RequestInit) => Promise<Response> }).fetch(rec, init);
+  return { acao, pedidos, pedidoDaTela, telaAbre, telaPost, telaFetch, espera, ORIGEM, local: ctx.localStorage as { getItem: (k: string) => string | null } };
 }
 
 const LOAD = "restauth/load?entity=101045&key=640";
@@ -467,4 +483,28 @@ test("Centi 217: sem o duplo clique, o diagnóstico diz que nenhum pedido da tel
   const r = await aba.acao("ler", { metodo: "GET", caminho: "restauth/load?entity=101045&key=277", entidade: "8", planejamento: "277" });
   assert.match(r.via, /POST restauth\/searchentity → 200 \(Data,Count,IdLog,Success,Message,Code\)/);
   assert.match(r.via, /nenhum pedido da tela trouxe o cadastro do planejamento desde o último F5/);
+});
+
+test("Centi 217 (cliente fetch): a consulta da CM002 pedida com um REQUEST (o corpo dentro dele) ou um URL é aprendida COM o corpo", async () => {
+  const LISTA = { Data: [{ Id: 277, Situacao: "Executado", Finalidade: "Aquisição", CentroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }], Count: 1, Success: true, Message: null, Code: 0 };
+  const corpo = { Filtro: { Referencia: 2027 }, Take: 50, Skip: 0 };
+  const aba = abaCenti({ cliente: false, respostaFetch: (url) => (/searchentity/.test(url) ? LISTA : { Entity: null }) });
+  // A página manda um Request (método, cabeçalhos e o CORPO dentro dele) — o fetch consome o corpo do original.
+  const r = await aba.telaFetch(new Request(`${aba.ORIGEM}/compras/restauth/searchentity`, { method: "POST", body: JSON.stringify(corpo), headers: { "Content-Type": "application/json", Refreshtoken: "rt-da-tela", Company: "8" } }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), LISTA, "a resposta chega inteira à página");
+  for (let i = 0; i < 20 && !aba.local.getItem("__pcaCm002_v1"); i++) await aba.espera();
+  const g = JSON.parse(aba.local.getItem("__pcaCm002_v1") ?? "null");
+  assert.ok(g, "a consulta da CM002 foi aprendida");
+  assert.equal(g.metodo, "POST");
+  assert.equal(g.caminho, "restauth/searchentity");
+  assert.deepEqual(g.corpo, corpo, "com o corpo (antes: vazio — a consulta não se repetia)");
+  assert.ok(!JSON.stringify(g).includes("rt-da-tela"), "nunca os valores dos cabeçalhos");
+  // O endereço num URL (sem Request): também aprendido, com o corpo do init.
+  const b = abaCenti({ cliente: false, respostaFetch: (url) => (/searchentity/.test(url) ? LISTA : { Entity: null }) });
+  await b.telaFetch(new URL(`${b.ORIGEM}/compras/restauth/searchentity`), { method: "POST", body: JSON.stringify(corpo) });
+  for (let i = 0; i < 20 && !b.local.getItem("__pcaCm002_v1"); i++) await b.espera();
+  const h = JSON.parse(b.local.getItem("__pcaCm002_v1") ?? "null");
+  assert.equal(h?.caminho, "restauth/searchentity");
+  assert.deepEqual(h?.corpo, corpo);
 });

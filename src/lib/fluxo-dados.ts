@@ -214,8 +214,14 @@ const NAO_CENTRO = /situa|status|usuar|login|user|finalidade|descri|observ|objet
 /** O valor tem cara de NOME (2+ palavras com letras — "PM RV, X" ou "FUNDO MUNICIPAL DE TURISMO"), nunca um login. */
 const pareceNome = (v: string) => (v.match(/\p{L}{2,}/gu) ?? []).length >= 2 && !/^[\w.-]+@?[\w.-]*$/u.test(v);
 
+/** O que fazer para a CM002 voltar a responder (a extensão aprende a consulta que a TELA da Centi faz ao pesquisar). */
+export const MSG_ENSINAR_CM002 = "Na aba da automação, abra a CM002 da Centi, escolha “Mostrar: Todos” e clique em Pesquisar UMA vez — a extensão aprende a consulta — e execute de novo.";
+/** O DFD foi achado na Centi em OUTRO órgão (não no dele): nada do que veio de lá vale para este DFD. */
+export const deOutroOrgao = (it: Item): boolean => !!String(it.entidadeAchada ?? "").trim() && String(it.entidadeAchada ?? "").trim() !== String(it.entidade ?? "").trim();
+
 /**
  * As fontes do centro de custo de um item, na ordem: a linha da CM002 (`encontrado`), as colunas cruas dela e o load.
+ * O load achado em OUTRO órgão nunca é fonte (é o registro de outra entidade).
  * Nas colunas cruas: pelo NOME da coluna; sem ele, pelo VALOR — com as `unidades`, o valor que casa uma unidade
  * cadastrada (com ou sem vírgula: as entidades dos FUNDOS não têm a "PM RV," na frente); sem elas, a entidade curta e a
  * vírgula ("PM RV, SECRETARIA…").
@@ -223,7 +229,7 @@ const pareceNome = (v: string) => (v.match(/\p{L}{2,}/gu) ?? []).length >= 2 && 
 function fontesCentroCusto(it: Item, unidades?: ReparticaoMatch[]): { lista: Item | null; load: Item | null; cru: Item | null; centro: string } {
   const obj = (x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? (x as Item) : null);
   const lista = obj(it.encontrado);
-  const load = obj(it.centi);
+  const load = deOutroOrgao(it) ? null : obj(it.centi);
   const cru = lista ? obj(lista.centi) : null;
   const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
   const casa = (v: string) => {
@@ -284,16 +290,26 @@ export function conferirUnidades(
   };
   for (const it of itens) {
     // As fontes da Centi, na ordem: a linha da lista da CM002 (`encontrado`, com as colunas cruas em `centi`) e o
-    // registro do planejamento lido pelo ID (`it.centi`). Vale a 1ª que TEM centro de custo.
+    // registro do planejamento lido pelo ID (`it.centi` — nunca o de OUTRO órgão). Vale a 1ª que TEM centro de custo.
     const { lista, load: lido, cru, centro } = fontesCentroCusto(it, unidades);
-    // O load em que a Centi NÃO abriu o registro (só a emissão saiu): nada foi lido do planejamento.
-    if (!lista && lido?.registro === false) {
-      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")}): não conferido na Centi — a Centi não abriu o registro do planejamento` }, "", false);
+    const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
+    // Por que a CM002 não deu o centro de custo (o fluxo a consultou e não achou; já com o que fazer) — no fim do "não lido".
+    const cm002 = String(it.cm002Motivo ?? "").trim();
+    const eCm002 = (texto: string) => (cm002 ? `${texto}; ${cm002}` : texto);
+    // Achado em OUTRO órgão da Centi (sem a linha da CM002 do órgão do DFD): o registro é de outra entidade — NÃO lido.
+    if (!lista && deOutroOrgao(it)) {
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: não conferido na Centi — achado no órgão ${String(it.entidadeAchada)}, não no do DFD` }, "", false);
+      continue;
+    }
+    // O load em que a Centi NÃO abriu o registro (só a emissão saiu, ou nada abriu): nada foi lido do planejamento — só a
+    // linha da CM002 pode dar o centro de custo; sem ele nela, NÃO lido (nunca "a Centi não tem": o gravado fica).
+    if (!centro && lido?.registro === false) {
+      const texto = `${ref}: não conferido na Centi — a Centi não abriu o registro do planejamento${lista ? "; a linha da CM002 não trouxe o centro de custo" : ""}`;
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: eCm002(texto) }, "", false);
       continue;
     }
     const load = lido;
     const finalidadeDe = String(lista?.finalidade ?? "").trim() || String(load?.finalidade ?? "").trim();
-    const ref = `DFD ${String(it.numero ?? "")} (planejamento ${String(it.planejamento ?? "")})`;
     if (!lista && !load && !("centi" in it)) {
       // Fora da CM002 (ou o órgão sem o ID da Centi): só para as colunas — o apontamento é do nó anterior.
       enviar(null, { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), unidadeConfere: "semDado" }, "");
@@ -301,7 +317,8 @@ export function conferirUnidades(
     }
     if (!lista && !load) {
       const motivo = String(it.centiErro ?? "").trim() || "sem resposta";
-      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), unidadeConfere: "semDado", mensagem: `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}` }, "", !it.centiFalha);
+      const texto = `${ref}: ${it.centiFalha ? "não conferido na Centi" : "não encontrado na Centi"} — ${motivo}`;
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), unidadeConfere: "semDado", mensagem: it.centiFalha ? eCm002(texto) : texto }, "", !it.centiFalha);
       continue;
     }
     const orgaoId = typeof it.orgaoId === "number" ? it.orgaoId : null;
@@ -315,14 +332,10 @@ export function conferirUnidades(
     }
     if (!centro && load?.centroAusente === true) {
       // O registro abriu SEM o centro de custo (uma prévia do planejamento): NÃO lido — o valor gravado fica (nunca vira
-      // "sem centro de custo" por falta de leitura).
+      // "sem centro de custo" por falta de leitura). A linha da CM002 (quando veio) também não o trouxe.
       const nomes = Array.isArray(load.camposCenti) ? (load.camposCenti as unknown[]).map(String).slice(0, 40) : [];
-      enviar(
-        "desconhecidas",
-        { ...base, mensagem: `${ref}: não conferido na Centi — o registro do planejamento veio sem o centro de custo${nomes.length ? ` (campos que vieram: ${nomes.join(", ")})` : ""}` },
-        "",
-        false,
-      );
+      const texto = `${ref}: não conferido na Centi — o registro do planejamento veio sem o centro de custo${nomes.length ? ` (campos que vieram: ${nomes.join(", ")})` : ""}${lista ? "; a linha da CM002 também não o trouxe" : ""}`;
+      enviar("desconhecidas", { ...base, mensagem: eCm002(texto) }, "", false);
       continue;
     }
     if (!centro) {
