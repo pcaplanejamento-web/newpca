@@ -31,7 +31,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.47.0";
+export const VERSAO_EXTENSAO_CENTI = "1.47.1";
 /**
  * A versão MÍNIMA com que as automações RODAM (o protocolo da tela com a extensão não mudou desde ela). Uma versão nova
  * da extensão NUNCA trava as automações de quem ainda não atualizou: abaixo da recomendada (`VERSAO_EXTENSAO_CENTI`),
@@ -71,12 +71,12 @@ export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigC
 /** A resposta da Centi recusou a OPERAÇÃO ("Usuário sem permissão!") — não é a entidade nem a sessão. */
 export const operacaoRecusada = (texto: string | undefined) => /sem permiss/i.test(texto ?? "");
 
-/** O LOAD do planejamento ABRIU o registro? `{Entity: null, Message}` = não abriu (outro órgão, sem acesso); sem a chave
- * `Entity` (outro formato) = abriu. Sem abrir, o Emitir DFD volta "Usuário sem permissão!" — não é a operação. */
+/** O LOAD do planejamento ABRIU o registro? Só com a `Entity` (o registro — a extensão entrega o de qualquer envelope da
+ * Centi nela). `{Entity: null, Message}` ou a resposta SEM a `Entity` (o envelope da Centi 3.0.216.217 sem registro —
+ * `{Data: null, Count: 0, Success…}` — que a extensão devolve cru quando nada abriu) = não abriu (outro órgão, sem
+ * acesso): o Emitir DFD voltaria "Usuário sem permissão!" — não é a operação. */
 export function abriuNoLoad(j: unknown): boolean {
-  if (!j || typeof j !== "object") return true;
-  if (!("Entity" in j)) return true;
-  const e = (j as { Entity?: unknown }).Entity;
+  const e = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : null;
   return e != null && typeof e === "object";
 }
 
@@ -92,11 +92,11 @@ export const MAX_RECUSAS_SEGUIDAS = 3;
 /** O erro de UM planejamento recusado (lido pelos fluxos — nunca contém "recusou o Emitir DFD" sozinho no início). */
 export const PREFIXO_RECUSA = "RECUSA: ";
 
-/** A Centi NÃO ABRIU o registro no load (`{Entity: null, Message}`): a mensagem dela (vazia = sem mensagem); `null` = abriu. */
+/** A Centi NÃO ABRIU o registro no load (`{Entity: null, Message}` ou a resposta sem a `Entity` — `abriuNoLoad`): a
+ * mensagem dela (vazia = sem mensagem); `null` = abriu. */
 export function mensagemSemRegistro(j: unknown): string | null {
-  if (!j || typeof j !== "object" || !("Entity" in (j as object))) return null;
-  const r = j as { Entity?: unknown; Message?: unknown };
-  if (r.Entity != null && typeof r.Entity === "object") return null;
+  if (abriuNoLoad(j)) return null;
+  const r = (j && typeof j === "object" ? j : {}) as { Message?: unknown };
   const m = r.Message;
   const t = typeof m === "string" ? m : m && typeof m === "object" ? ((m as { Text?: unknown }).Text ?? (m as { Descricao?: unknown }).Descricao) : "";
   return String(t ?? "").replace(/\s+/g, " ").trim();
@@ -709,6 +709,28 @@ export function centroCustoLidoNoLoad(j: unknown): boolean {
   const idRef = ref ? Number(ref.find((x) => x?.Key === "Id")?.Value) : Number.NaN;
   // A referência com um Id de verdade e sem texto = não lido; Id 0/vazio ou o campo nulo = a Centi não tem o centro de custo.
   return !(ref && Number.isFinite(idRef) && idRef > 0);
+}
+
+/** O load trouxe OUTRO registro, e não o planejamento pedido? — o Id do topo diferente do pedido, ou um registro LIGADO a
+ * ele (um item, um produto: o `IdComprasPlanejamento` do topo aponta outro planejamento). Com o modelo aprendido da tela
+ * (a Centi 3.0.216.217 abre tudo pelo mesmo `searchentity`), um pedido de outro cadastro nunca vale como o planejamento —
+ * nada dele (situação, centro de custo) é lido. O motivo, ou null (é o planejamento pedido, ou não há o Id para conferir). */
+export function outroRegistroNoLoad(j: unknown, plan: string): string | null {
+  const ent = j && typeof j === "object" ? (j as { Entity?: unknown }).Entity : undefined;
+  const fields = ent && typeof ent === "object" && Array.isArray((ent as { Fields?: unknown }).Fields) ? ((ent as { Fields: { Key?: unknown; Value?: unknown }[] }).Fields) : [];
+  const so = (v: unknown) => String(v ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  const idDe = (v: unknown): unknown => {
+    if (!v || typeof v !== "object") return v;
+    const fs = (v as { Fields?: unknown }).Fields;
+    return Array.isArray(fs) ? (fs as { Key?: unknown; Value?: unknown }[]).find((f) => f?.Key === "Id")?.Value : (v as { Id?: unknown }).Id;
+  };
+  const p = so(plan);
+  const id = so(idDe(fields.find((f) => f?.Key === "Id")?.Value));
+  if (!p || !id) return null;
+  if (id !== p) return `a Centi devolveu outro registro (nº ${id})`;
+  const pai = so(idDe(fields.find((f) => f?.Key === "IdComprasPlanejamento")?.Value));
+  if (pai && pai !== p) return `a Centi devolveu um registro ligado ao planejamento ${pai}, não o planejamento`;
+  return null;
 }
 
 /** O load abriu só a PRÉVIA do planejamento (SEM os dois campos essenciais — a Centi 3.0.216.217): o DFD é emitido e

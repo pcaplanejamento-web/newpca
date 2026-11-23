@@ -327,8 +327,8 @@ test("automação única, só conferindo: cada DFD pela etapa de 1 DFD, em paral
   assert.deepEqual(m?.dependencias, ["conferir-corrigir-1-dfd"]);
   const marcados: { dfdId: number }[] = [];
   const centi: Record<string, unknown> = {
-    "100": { numero: "10", planejamento: "100", tipo: "DFD-S", objeto: "Cadeiras", valor: 50, totalItens: 2 },
-    "101": { numero: "11", planejamento: "101", tipo: "DFD-S", objeto: "Mesas", valor: 70, totalItens: 1 },
+    "100": { numero: "10", planejamento: "100", tipo: "DFD-S", objeto: "Cadeiras", valor: 50, totalItens: 2, situacao: "Aprovado" },
+    "101": { numero: "11", planejamento: "101", tipo: "DFD-S", objeto: "Mesas", valor: 70, totalItens: 1, situacao: "Aprovado" },
   };
   const progresso = new Map<string, string>();
   let lendoAoMesmoTempo = 0;
@@ -385,9 +385,11 @@ test("automação única, só conferindo: cada DFD pela etapa de 1 DFD, em paral
       { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
     ],
   );
-  // Só conferindo: o resultado de cada DFD volta na Análise (Divergente / Não conferido) — sem apontamento repetido e sem
-  // passar pela correção.
-  assert.equal(r.apontados.filter((a) => a.subfluxo === "Verificar 1 DFD na Centi").length, 0);
+  // Só conferindo: o resultado de cada DFD volta na Análise (Divergente / Não conferido) sem passar pela correção; só o
+  // NÃO CONFERIDO é apontado (uma vez, com o motivo — nunca calado).
+  const aps = r.apontados.filter((a) => a.subfluxo === "Verificar 1 DFD na Centi");
+  assert.equal(aps.length, 1);
+  assert.match(String(aps[0].mensagem), /DFD 13 .*não conferido — o órgão do DFD não tem o ID da Centi/);
   const ret = new Map((r.retorno ?? []).map((it) => [Number(it.id), it]));
   assert.equal(ret.get(2)?.conferenciaCenti, "divergente");
   assert.equal(ret.get(2)?.correcao, undefined, "nada é corrigido");
@@ -551,7 +553,7 @@ test("Conferir e corrigir × Centi (só conferir): falha de comunicação não m
         lerDfdCenti: async (plan: string) => {
           lidos.push(plan);
           if (plan === "101" && !rede) throw new Error("Sem resposta da extensão.");
-          return { numero: plan === "100" ? "10" : "11", planejamento: plan, valor: plan === "100" ? 5 : 7, totalItens: 1 };
+          return { numero: plan === "100" ? "10" : "11", planejamento: plan, valor: plan === "100" ? 5 : 7, totalItens: 1, situacao: "Aprovado" };
         },
       },
     } as never);

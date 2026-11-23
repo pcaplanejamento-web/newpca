@@ -959,6 +959,8 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
   if (tipo === "saida.corrigirPelaCenti") {
     // Só conferir: o resultado da conferência, sem correção (o não conferido é refeito pela retomada).
     if (it.correcao === "soConferir") return it.naoMarcar === true || it.centiFalha ? { rotulo: "Não conferido", tom: "amber", texto: s(it.motivo) } : { rotulo: "Divergente (não corrigido)", tom: "amber", texto: s(it.motivo) };
+    // Não conferido nesta execução (a leitura do conteúdo ou a situação não confirmadas): nada a corrigir — a retomada o refaz.
+    if (it.correcao === "naoConferido") return { rotulo: "Não conferido", tom: "amber", texto: s(it.motivo) };
     if (it.correcao === "parcial") return { rotulo: "Corrigido em parte", tom: "amber", texto: s(it.motivo) || s(it.motivoDepois) };
     if (it.correcao === "pendente") return { rotulo: "Gravado, sem reconferir", tom: "amber", texto: s(it.motivo) };
     if (s(it.erro)) return { rotulo: "Não corrigido", tom: "red", texto: s(it.erro) };
@@ -989,7 +991,7 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
     // O que a verificação FEZ vale primeiro: a correção do conteúdo e a troca da unidade.
-    if (s(it.correcao) && it.correcao !== "soConferir") return estadoDoItem("saida.corrigirPelaCenti", it);
+    if (s(it.correcao) && it.correcao !== "soConferir" && it.correcao !== "naoConferido") return estadoDoItem("saida.corrigirPelaCenti", it);
     if (it.unidadeTrocada === true) return { rotulo: "Unidade trocada", tom: "emerald", texto: s(it.mensagemUnidade) };
     if (it.unidadeTrocada === false) return { rotulo: "Unidade não trocada", tom: "red", texto: s(it.motivoTroca) };
     // O resultado do CONTEÚDO (as colunas Centi/Situação/Centro de custo mostram o resto).

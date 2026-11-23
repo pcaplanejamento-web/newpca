@@ -772,6 +772,19 @@ export async function executarFluxo(
     return ent;
   };
 
+  // O apontamento de uma falha que o nó também entrega por uma porta (`__dePorta`) só vale quando essa porta NÃO está
+  // ligada — ligada, quem a recebe (ex.: o "Apontar erros") aponta; senão a mesma falha sairia duas vezes.
+  const juntarApontados = (id: string, itens: Item[]) => {
+    for (const a of itens) {
+      const dp = typeof a.__dePorta === "string" ? a.__dePorta : "";
+      if (dp && g.conexoes.some((c) => c.de === id && c.saida === dp)) continue;
+      if (dp) {
+        const { __dePorta: _, ...resto } = a;
+        apontados.push(resto);
+      } else apontados.push(a);
+    }
+  };
+
   for (const n of g.nos) if (reg.get(n.tipo)?.categoria === "gatilho" && !n.desativado) fila.push(n.id);
   let passosTotais = 0;
   while (fila.length) {
@@ -822,17 +835,7 @@ export async function executarFluxo(
       }
       for (const [porta, itens] of Object.entries(saidas)) {
         if (itens.length > MAX_ITENS) throw new Error(`Itens demais na saída “${porta}” (${itens.length}; máximo ${MAX_ITENS}).`);
-        // O apontamento de uma falha que o nó também entrega por uma porta (`__dePorta`) só vale quando essa porta NÃO está
-        // ligada — ligada, quem a recebe (ex.: o "Apontar erros") aponta; senão a mesma falha sairia duas vezes.
-        if (porta === PORTA_APONTADOS)
-          for (const a of itens) {
-            const dp = typeof a.__dePorta === "string" ? a.__dePorta : "";
-            if (dp && g.conexoes.some((c) => c.de === id && c.saida === dp)) continue;
-            if (dp) {
-              const { __dePorta: _, ...resto } = a;
-              apontados.push(resto);
-            } else apontados.push(a);
-          }
+        if (porta === PORTA_APONTADOS) juntarApontados(id, itens);
         if (porta === PORTA_RETORNO) {
           temRetorno = true;
           retornos.push(...itens);
@@ -840,6 +843,9 @@ export async function executarFluxo(
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      // O nó que PARA leva o que já tinha apontado (ex.: o freio do "Executar fluxo"): a análise não perde os itens de antes.
+      const ja = e && typeof e === "object" ? (e as { apontados?: unknown }).apontados : undefined;
+      if (Array.isArray(ja)) juntarApontados(id, ja.filter((a): a is Item => !!a && typeof a === "object"));
       marcar(id, { estado: "erro", erro: msg, ms: (anterior?.ms ?? 0) + Date.now() - t0 });
       guardar({ executado: false, itens: 0, valor: [], erro: msg.slice(0, 300) });
       if (ctx.cancelado()) return fim({ estado: "cancelado", erro: "Interrompido." });

@@ -10,7 +10,7 @@ import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdDetalhe } from "./dfd";
 import { herdarTratamentos } from "./comparar-protocolo";
-import { semValores } from "./conferencia-dfd-centi";
+import { comSecoesDoSistema, semValores } from "./conferencia-dfd-centi";
 import { normalizarSecoesDfd } from "./dfd-tratamento";
 import { enviarDfdEmLotes, metaDoDfd } from "./importar-dfd";
 import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo, type EmissaoProtocolo } from "./automacao-tela-protocolo";
@@ -175,7 +175,8 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   };
   // A MESMA emissão do "Baixar DFDs", SEMPRE com o valor de referência ("Emitir valor referência" = Sim): sem ele a Centi
   // emite a seção 4 sem as colunas de valor e a conferência compararia "R$ 0,00". A chave do aparelho vale só no Baixar/anexar.
-  const comValores: ContextoEmissor = { ...c, cfg: () => ({ ...c.cfg(), valorReferencia: true }) };
+  // A conferência aceita a PRÉVIA do planejamento (as seções 8 a 10 ficam fora da comparação e da correção).
+  const comValores: ContextoEmissor = { ...c, cfg: () => ({ ...c.cfg(), valorReferencia: true }), aceitarPrevia: true };
   const e = await emitirUm(comValores, plan, entidade || undefined, false, l);
   // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
   if (!e.pdf) {
@@ -224,8 +225,11 @@ export async function dfdDoSistema(dfdId: number): Promise<DfdDetalhe> {
   return j.dfd;
 }
 
-export async function substituirDfdPelaCenti(dfdId: number, novo: DfdParseado): Promise<{ numero: string; itens: number }> {
+/** `semSecoes810` = o DFD da Centi veio sem o registro das seções 8 a 10 (a prévia, ou o planejamento sem ele): ficam as
+ * seções 8 a 10 do SISTEMA — nunca as em branco da Centi (a mesma regra da correção). */
+export async function substituirDfdPelaCenti(dfdId: number, lido: DfdParseado, semSecoes810 = false): Promise<{ numero: string; itens: number }> {
   const g = await dfdDoSistema(dfdId);
+  const novo = semSecoes810 ? comSecoesDoSistema(lido, g) : lido;
   const so = (v: unknown) => s(v).replace(/\D/g, "").replace(/^0+/, "");
   if (!so(g.planejamento) || so(g.planejamento) !== so(novo.planejamento))
     throw new Error(`O DFD da Centi é de outro planejamento (${s(novo.planejamento) || "sem nº"} × ${s(g.planejamento) || "sem nº"}).`);

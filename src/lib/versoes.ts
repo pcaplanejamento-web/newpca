@@ -64,7 +64,14 @@ export const VERSOES: readonly Versao[] = [
         tipo: "correcao",
         area: "Automação",
         texto:
-          "Extensão 1.47.0: aprende a consulta da CM002 e a abertura do planejamento também quando a Centi nova faz o pedido pelo fetch (o corpo dentro do pedido). Na aba da automação, abra a CM002, escolha “Mostrar: Todos” e clique em Pesquisar uma vez.",
+          "Extensão 1.47.1: aprende a consulta da CM002 e a abertura do planejamento também quando a Centi nova faz o pedido pelo fetch (o corpo dentro do pedido) — e SÓ na aba da automação: o trabalho nas outras abas da Centi nunca troca o que a automação lê. A consulta da CM002 só é aprendida quando você clica em Pesquisar (uma lista que a tela pede sozinha, ou de outro cadastro, nunca vale) e um item aberto por Id nunca troca a abertura do planejamento. Na aba da automação, abra a CM002, escolha “Mostrar: Todos”, clique em Pesquisar uma vez e abra UM planejamento (duplo clique).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Nada é gravado errado: a conferência nunca sai “Convergente” sem a situação do planejamento (um Cancelado nunca passa); o “Baixar/anexar DFDs” nunca salva nem anexa um DFD emitido da prévia (sairia com as seções 8 a 10 em branco); o “Substituir DFD” mantém as seções 8 a 10 do sistema; e um registro que não é o planejamento pedido nunca é lido como ele.",
         link: "/painel/automacao",
       },
     ],

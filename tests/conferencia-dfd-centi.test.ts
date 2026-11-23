@@ -271,7 +271,9 @@ test("Conferir e corrigir 1 DFD × Centi, só conferindo: grava, muda e volta o 
 test("load sem registro: a mensagem da Centi e quando ela diz que o planejamento não existe", async () => {
   const { mensagemSemRegistro, planejamentoInexistente } = await import("../src/lib/automacao-centi-core.ts");
   assert.equal(mensagemSemRegistro({ Entity: { Fields: [] } }), null);
-  assert.equal(mensagemSemRegistro({ outro: 1 }), null);
+  // A resposta SEM a `Entity` (o envelope da Centi 217 sem registro) também NÃO abriu — a mensagem dela, se houver.
+  assert.equal(mensagemSemRegistro({ outro: 1 }), "");
+  assert.equal(mensagemSemRegistro({ Data: null, Count: 0, Success: false, Message: "Registro não encontrado." }), "Registro não encontrado.");
   assert.equal(mensagemSemRegistro({ Entity: null, Message: "Registro não encontrado." }), "Registro não encontrado.");
   assert.equal(mensagemSemRegistro({ Entity: null, Message: { Text: "Usuário sem permissão!" } }), "Usuário sem permissão!");
   assert.equal(mensagemSemRegistro({ Entity: null }), "");

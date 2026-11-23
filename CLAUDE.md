@@ -1235,6 +1235,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ensina a consulta da CM002 e o planejamento com o corpo. Testes: "Verificar DFDs na Centi — a PRÉVIA…/a CM002 também
   falha/OUTRO órgão/NÃO ABRE/o CONTEÚDO falha" (`tests/fluxo-dados.test.ts`, com a CM002 falsa e a retomada),
   `tests/assinatura-dfd-centi.test.ts`, `tests/conferencia-dfd-centi.test.ts`, `tests/centi-main-load.test.ts`.
+  **v1.308.0 (revisão, extensão 1.47.1) — NUNCA GRAVAR ERRADO (regra firme):** (1) a conferência nunca é "convergente"
+  sem a situação lida (`compararDfdCenti` lê a CM002 antes; sem ela, `situacaoAusente` → não conferido, `naoMarcar`);
+  (2) a PRÉVIA só é emitida na CONFERÊNCIA (`ContextoEmissor.aceitarPrevia`, só no `lerNaSessao`) — o Baixar/anexar
+  recusa (`definitivo`, `MSG_ENSINAR_PLANEJAMENTO`); o `saida.substituirDfd` com `semSecoes810` mantém as seções 8–10 do
+  sistema (`comSecoesDoSistema`); (3) `outroRegistroNoLoad` (`automacao-centi-core.ts`, em `carregarPlanejamento`): o load
+  com outro Id ou um item ligado a outro planejamento (`IdComprasPlanejamento`) = "não abriu"; (4) `fluxo.executar`: o
+  item com `naoFeitoNaCenti` grava "falha" na retomada, vira apontamento de erro, e o freio conta só os DFDs sem nada feito.
+  **Extensão:** a consulta da CM002 e o load do planejamento só são aprendidos na ABA DA AUTOMAÇÃO (o serviço manda o
+  `estado` com `{automacao:true}` → a página marca `sessionStorage __pcaAbaAutomacao_v1`); consulta NOVA da CM002 só da
+  PESQUISA da pessoa (clique em Pesquisar/lupa ou Enter; o pedido começou até 5 s depois — `trocaConsulta`/`mesmaConsulta`
+  em `centi-anexo.js`; a mesma consulta com outra paginação troca pela de mais linhas; a POST sem corpo da 1.46.x é
+  trocada); a lista de protocolos nunca é a CM002; `melhorModelo` compara o CORPO (na 217 tudo sai pelo `searchentity`).
 - **CARTÃO QUE ESCALA COMO IMAGEM (v1.307.0) — regra firme:** o `CartaoEspaco` (automações, quadros, catálogos, documentos,
   grupos) e o `EsqueletoCartaoEspaco` são `.cartao-escala` (`globals.css`) dentro de um contêiner `[container-type:inline-size]`:
   toda medida interna = `N × --cq` (1/240 da largura do card — a 240px, o desenho de sempre); o sobretítulo reserva 2 linhas, o

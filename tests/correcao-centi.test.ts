@@ -6,7 +6,7 @@ import { grafoDoModelo, MODELOS_FLUXO } from "../src/lib/fluxo-modelos.ts";
 import { corrigirDfdPelaCenti } from "../src/lib/correcao-centi-cliente.ts";
 import { aplicarCentiPorTipos, NAO_CORRIGIVEIS, planoCorrecao, simularCorrecao, tiposCorrigiveis, tiposCorrigiveisDoMotivo } from "../src/lib/correcao-centi-core.ts";
 import type { DfdDetalhe } from "../src/lib/dfd.ts";
-import { compararDfdCenti, MOTIVO_SEM_CORRECAO, REGISTRO_NOS, reconferido } from "../src/lib/fluxo-nos.ts";
+import { compararDfdCenti, MOTIVO_SEM_CORRECAO, naoFeitoNaCenti, REGISTRO_NOS, reconferido } from "../src/lib/fluxo-nos.ts";
 import { valorDosItens, type DfdParseado } from "../src/lib/parse-dfd-comum.ts";
 import { estadoEscolha, semMarcas } from "../src/lib/sobrescrita-dfd.ts";
 
@@ -268,10 +268,13 @@ test("nó Corrigir DFD pela Centi: só o reconferido agora; aceito vai a 'sem co
   assert.equal(r.corrigidos[0].conferenciaCenti, "convergente");
   assert.equal(r.corrigidos[0].conferenciaCentiMotivo, null);
   assert.equal(r.convergentes[0].conferenciaCenti, undefined, "o aceito não muda o que foi comparado");
-  assert.deepEqual(r.semMudanca.map((x) => x.id), [6]);
+  // O NÃO CONFERIDO agora (5) não é corrigido nem derruba o fluxo do DFD: "Sem correção" com o motivo (a retomada o refaz).
+  assert.deepEqual(r.semMudanca.map((x) => x.id), [5, 6]);
+  assert.equal(r.semMudanca[0].correcao, "naoConferido");
+  assert.match(String(r.semMudanca[0].motivo), /^não conferido/);
   assert.deepEqual(r.convergentes.map((x) => x.id), [2], "aceito = já convergente, não é pendência");
   assert.equal(r.convergentes[0].motivo, MOTIVO_SEM_CORRECAO.aceito);
-  assert.deepEqual(r.erros.map((x) => x.id), [3, 4, 5]);
+  assert.deepEqual(r.erros.map((x) => x.id), [3, 4]);
   assert.match(String(r.erros[1].erro), /Não reconferido/);
   assert.equal(reconferido({ centi: { a: 1 } }), true);
   assert.equal(reconferido({ centi: { a: 1 }, naoMarcar: true }), false);
@@ -764,8 +767,14 @@ test("DFD 1023: a Centi misturou outro registro numa emissão — NÃO corrige, 
   assert.deepEqual(x.corrigidos, [], "nada foi gravado no DFD");
   assert.ok(!x.marcados.some((m) => m.retrato), "nenhum retrato guardado");
   assert.ok(!x.marcados.some((m) => m.status === "divergente"), "a conferência gravada não muda");
-  assert.equal(x.r.estado, "falhou", "o fluxo de UM DFD falha — o pai refaz na próxima execução");
-  assert.match(String(x.r.erro), /conteúdos diferentes em duas emissões/);
+  // O fluxo de UM DFD conclui (a situação e o centro de custo dele seguem independentes); o DFD volta NÃO conferido — o
+  // "Executar fluxo" o aponta e a retomada o refaz na próxima execução.
+  assert.equal(x.r.estado, "concluido", x.r.erro);
+  const volta = x.r.retorno.find((y) => Number(y.id) === 9);
+  assert.equal(volta?.naoMarcar, true);
+  assert.equal(volta?.correcao, "naoConferido");
+  assert.match(String(volta?.mensagem), /conteúdos diferentes em duas emissões/);
+  assert.equal(naoFeitoNaCenti(volta ?? {}), true);
 });
 
 test("DFD com divergência REAL (as duas emissões iguais): guarda o retrato confirmado (v 4) e corrige", async () => {
@@ -827,6 +836,19 @@ test("Substituir DFD pela Centi: sem a segunda emissão igual, nada é gravado",
   assert.match(String(r.erros[0]?.erro), /conteúdos diferentes/);
   const ok = (await no.executar({ entrada: [it] }, {}, ctx, {})) as { substituidos: unknown[] };
   assert.equal(ok.substituidos.length, 1, "a segunda emissão igual confirma");
+  // Sem o registro das seções 8 a 10 na leitura (a prévia da Centi 217): a substituição mantém as do SISTEMA.
+  const sem: boolean[] = [];
+  const host2 = {
+    lerDfdCenti: async () => ({ dfd: misturado1023() }),
+    substituirDfd: async (_id: number, _d: unknown, semSecoes810?: boolean) => {
+      sem.push(semSecoes810 === true);
+      return { numero: "123", itens: 2 };
+    },
+  };
+  const ctx2 = { host: host2, cancelado: () => false, aviso: () => undefined } as unknown as Parameters<typeof no.executar>[2];
+  await no.executar({ entrada: [{ ...it, centi: { dfd: misturado1023(), semSecoes810: true, secoes810NaoLidas: true } }] }, {}, ctx2, {});
+  await no.executar({ entrada: [{ ...it, centi: { dfd: misturado1023() } }] }, {}, ctx2, {});
+  assert.deepEqual(sem, [true, false]);
 });
 
 test("assinatura do conteúdo: o rodapé que muda a cada emissão (e-Assinatura, hora, página) não conta; a troca de nomes conta", () => {

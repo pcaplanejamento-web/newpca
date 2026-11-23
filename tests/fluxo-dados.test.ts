@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import vmDados from "node:vm";
 import { type DefNo, esperar, executarFluxo, type Grafo, lerGrafo, lerTentar, nomeVariavel } from "../src/lib/fluxo-core.ts";
-import { aplicarRegra, escolherColunas, lerColunas, lerRegras, operarVariavel, procurarNaTabela } from "../src/lib/fluxo-dados.ts";
+import { aplicarRegra, conferirUnidades, escolherColunas, lerColunas, lerRegras, operarVariavel, procurarNaTabela } from "../src/lib/fluxo-dados.ts";
 import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
 
 const ctx = (host: Record<string, unknown> = {}, api = async (_c: string, _i?: unknown) => ({ ok: false }) as Record<string, unknown>) => ({
@@ -209,13 +209,19 @@ async function verificar(o: {
   cm002?: (entidade: string) => Record<string, unknown>[] | Error;
   /** Os órgãos com o ID da Centi (os outros órgãos tentados quando o planejamento não abre no do DFD). */
   mapa?: Record<string, string>;
+  /** Depois de quanto tempo a CM002 que falhou é lida de novo (o padrão do sistema é 30 s). */
+  esperaCm002Ms?: number;
+  /** Os DFDs do fluxo de UM DFD em paralelo (o padrão do modelo é 3). */
+  paralelo?: number;
 }) {
   const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const pai = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-centi");
   const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-corrigir-1-dfd");
   assert.ok(pai && filho);
   const g = lerGrafo(grafoDoModelo(pai, new Map([["conferir-corrigir-1-dfd", 50]])));
-  g.nos = g.nos.map((n) => (n.tipo === "dados.filtrarConferencia" ? { ...n, config: { ...n.config, ...o.config } } : n));
+  g.nos = g.nos.map((n) =>
+    n.tipo === "dados.filtrarConferencia" ? { ...n, config: { ...n.config, ...o.config } } : n.tipo === "fluxo.executar" && o.paralelo ? { ...n, config: { ...n.config, paralelo: o.paralelo } } : n,
+  );
   const posts: { c: string; body: Record<string, unknown> }[] = [];
   const lidos: string[] = [];
   const cm002: string[] = [];
@@ -243,6 +249,7 @@ async function verificar(o: {
       protocolos: [],
       unidades: o.unidades ?? [],
       esperaCentiMs: 0,
+      ...(o.esperaCm002Ms != null ? { esperaCm002Ms: o.esperaCm002Ms } : {}),
       mapaEntidades: o.mapa ?? {},
       progresso: {
         ler: async () => [],
@@ -400,13 +407,133 @@ test("Verificar DFDs na Centi — a PRÉVIA sem situação/centro: os dois pela 
 
 test("Verificar DFDs na Centi — a CM002 também falha: ATENÇÃO com o motivo e o que fazer; nada é gravado nem apagado", async () => {
   const dfds = [{ id: 1, numero: "227", planejamento: "277", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 }];
-  const v = await verificar({ dfds, unidades: UNIDADES, config: { conteudo: false, situacao: true, centro: true }, centi: () => PREVIA, cm002: () => new Error("Sem a consulta da CM002.") });
+  // A mensagem REAL da extensão sem a consulta aprendida (ela já diz o que fazer).
+  const semConsulta = "Abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — o sistema aprende a consulta e passa a ler tudo pela API.";
+  const v = await verificar({ dfds, unidades: UNIDADES, config: { conteudo: false, situacao: true, centro: true }, centi: () => PREVIA, cm002: () => new Error(semConsulta) });
   assert.equal(v.r.estado, "concluido", v.r.erro);
   assert.deepEqual(v.situacoes, {});
   assert.deepEqual(v.centros, {}, "o centro de custo não lido nunca é apagado");
   const ap = v.r.apontados.map((a) => `${a.nivel}:${String(a.mensagem)}`);
   assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("situação não lida") && t.includes("a CM002 do órgão 8 não foi lida") && t.includes("Pesquisar UMA vez")), ap.join("\n"));
   assert.ok(ap.some((t) => t.startsWith("atencao:") && t.includes("não conferido na Centi") && t.includes("a CM002 do órgão 8 não foi lida")), ap.join("\n"));
+  // NADA foi verificado: não está feito — a retomada o refaz (nunca "ok" sem a situação e o centro de custo).
+  assert.equal(v.retomada.get("1"), "falha");
+  // A falha que não é da consulta (a sessão da Centi caiu) não manda ensinar a CM002.
+  const s = await verificar({ dfds, unidades: UNIDADES, config: { conteudo: false, situacao: true, centro: false }, centi: () => PREVIA, cm002: () => new Error("Centi sem sessão.") });
+  const t = s.r.apontados.map((a) => String(a.mensagem)).join("\n");
+  assert.match(t, /a CM002 do órgão 8 não foi lida — Centi sem sessão/);
+  assert.doesNotMatch(t, /Pesquisar/);
+});
+
+test("Verificar DFDs na Centi — a PRÉVIA de um planejamento CANCELADO: a situação da CM002 entra na conferência — Divergente, nunca Convergente*", async () => {
+  const dfds = [{ id: 1, numero: "10", planejamento: "100", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1, valor: 50, totalItens: 2, tipo: "DFD-S" }];
+  const conteudo = { numero: "10", tipo: "DFD-S", valor: 50, totalItens: 2, semSecoes810: true, secoes810NaoLidas: true };
+  const v = await verificar({ dfds, unidades: UNIDADES, config: {}, centi: () => ({ ...PREVIA, ...conteudo }), cm002: () => [{ id: "100", situacao: "Cancelado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }] });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.cm002, ["8"], "UMA leitura da CM002 serve à situação, ao centro de custo e à conferência");
+  assert.deepEqual(v.situacoes, { 1: "Cancelado" });
+  const conf = v.posts.filter((p) => p.c.includes("conferencia-dfds")).flatMap((p) => (p.body.itens ?? []) as { dfdId: number; status: string; motivo?: string }[]);
+  assert.equal(conf.length, 1);
+  assert.equal(conf[0].status, "divergente", "o planejamento cancelado na Centi nunca é Convergente*");
+  assert.match(String(conf[0].motivo), /situação Cancelado na Centi/);
+  // Ativo na CM002: a prévia que confere = Convergente* (as seções 8 a 10 não lidas), como antes.
+  const ok = await verificar({ dfds, unidades: UNIDADES, config: {}, centi: () => ({ ...PREVIA, ...conteudo }), cm002: () => [{ id: "100", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }] });
+  const c2 = ok.posts.filter((p) => p.c.includes("conferencia-dfds")).flatMap((p) => (p.body.itens ?? []) as { status: string; motivo?: string }[]);
+  assert.equal(c2[0]?.status, "convergente");
+  assert.match(String(c2[0]?.motivo), /Seções 8 a 10 não conferidas/);
+  // Sem a situação em fonte nenhuma (a CM002 também falha): a conferência NÃO é feita — nada marcado nem corrigido.
+  const s = await verificar({ dfds, unidades: UNIDADES, config: { situacao: false, centro: false }, centi: () => ({ ...PREVIA, ...conteudo }), cm002: () => new Error("Centi sem sessão.") });
+  assert.equal(s.r.estado, "concluido", s.r.erro);
+  assert.equal(s.posts.filter((p) => p.c.includes("conferencia-dfds")).flatMap((p) => (p.body.itens ?? []) as unknown[]).length, 0);
+  assert.equal(s.posts.filter((p) => p.c === "corrigir").length, 0, "nunca corrigido sem saber a situação");
+  assert.equal(s.retomada.get("1"), "falha");
+  assert.ok(
+    s.r.apontados.some((a) => a.nivel === "erro" && /não conferido — a situação do planejamento não foi lida na Centi — a CM002 do órgão 8 não foi lida — Centi sem sessão/.test(String(a.mensagem))),
+    s.r.apontados.map((a) => String(a.mensagem)).join("\n"),
+  );
+});
+
+test("Verificar DFDs na Centi — a CM002 que falhou é lida de novo (a sessão voltou); “O lote foi encerrado” para tudo", async () => {
+  const dfds = [
+    { id: 1, numero: "227", planejamento: "277", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1 },
+    { id: 2, numero: "228", planejamento: "278", entidade: "8", reparticaoId: 1, sigla: "SEPLAN", orgaoId: 1 },
+  ];
+  let n = 0;
+  const lista = [{ id: "277", situacao: "Executado" }, { id: "278", situacao: "Executado" }];
+  const v = await verificar({
+    dfds,
+    unidades: UNIDADES,
+    paralelo: 1,
+    esperaCm002Ms: 0,
+    config: { conteudo: false, situacao: true, centro: false },
+    centi: () => PREVIA,
+    cm002: () => (n++ === 0 ? new Error("Centi sem sessão.") : lista),
+  });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.deepEqual(v.cm002, ["8", "8"], "a falha não fica para a execução inteira: lida de novo, uma vez");
+  assert.deepEqual(v.situacoes, { 1: "Executado", 2: "Executado" });
+  assert.equal(v.retomada.get("1"), "ok");
+  // Dentro da espera (o padrão, 30 s), a falha vale para os DFDs do órgão — e o que não foi lido NÃO está feito.
+  n = 0;
+  const e = await verificar({ dfds, unidades: UNIDADES, paralelo: 1, config: { conteudo: false, situacao: true, centro: false }, centi: () => PREVIA, cm002: () => (n++ === 0 ? new Error("Centi sem sessão.") : lista) });
+  assert.deepEqual(e.cm002, ["8"]);
+  assert.deepEqual(e.situacoes, {});
+  assert.equal(e.retomada.get("1"), "falha", "o que não foi lido não está feito");
+  assert.equal(e.retomada.get("2"), "falha");
+  // Sempre falhando: no máximo 3 leituras do órgão por execução.
+  const t = await verificar({ dfds, unidades: UNIDADES, paralelo: 1, esperaCm002Ms: 0, config: { conteudo: false, situacao: true, centro: false }, centi: () => PREVIA, cm002: () => new Error("Centi sem sessão.") });
+  assert.equal(t.cm002.length, 3);
+  const p = await verificar({ dfds, unidades: UNIDADES, paralelo: 1, config: { conteudo: false, situacao: true, centro: false }, centi: () => PREVIA, cm002: () => new Error("O lote foi encerrado.") });
+  assert.equal(p.r.estado, "falhou");
+  assert.match(String(p.r.erro), /lote foi encerrado/);
+  assert.deepEqual(p.situacoes, {});
+  assert.notEqual(p.retomada.get("1"), "ok");
+});
+
+test("Verificar DFDs na Centi — a emissão falha IGUAL em todos e a situação/o centro de custo funcionam: TODOS os DFDs são verificados (o freio só conta o DFD sem nada feito)", async () => {
+  const dfds = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, numero: String(10 + i), planejamento: String(100 + i), entidade: "2", reparticaoId: 2, sigla: "GGIM", orgaoId: 1, valor: 50, totalItens: 2, tipo: "DFD-S" }));
+  const falha = (plan: string) =>
+    Object.assign(new Error("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido."), {
+      carga: { planejamento: plan, situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM", finalidade: "" },
+    });
+  const v = await verificar({ dfds, unidades: UNIDADES, paralelo: 1, config: {}, centi: (plan) => falha(plan) });
+  assert.equal(v.r.estado, "concluido", v.r.erro);
+  assert.equal(Object.keys(v.situacoes).length, 7, "a situação de todos");
+  assert.equal(Object.keys(v.centros).length, 7, "o centro de custo de todos");
+  assert.equal(v.r.apontados.filter((a) => a.nivel === "erro" && /não conferido/.test(String(a.mensagem))).length, 7, "cada conteúdo não conferido apontado, uma vez");
+  assert.ok([...v.retomada.values()].every((e) => e === "falha"));
+  // Corrigir desligado: o mesmo — o não conferido nunca é calado.
+  const s = await verificar({ dfds: dfds.slice(0, 1), unidades: UNIDADES, config: { corrigir: false }, centi: (plan) => falha(plan) });
+  assert.ok(s.r.apontados.some((a) => a.nivel === "erro" && /DFD 10 .*não conferido/.test(String(a.mensagem))), s.r.apontados.map((a) => String(a.mensagem)).join("\n"));
+  // Só o conteúdo: nada feito em nenhum — o freio para nos 5 primeiros e a análise mantém o que já foi apontado.
+  const c = await verificar({ dfds, unidades: UNIDADES, paralelo: 1, config: { conteudo: true, situacao: false, centro: false }, centi: (plan) => falha(plan) });
+  assert.equal(c.r.estado, "falhou");
+  assert.match(String(c.r.erro), /Os 5 primeiros itens falharam pelo mesmo motivo/);
+  assert.ok(c.r.apontados.filter((a) => a.nivel === "erro" && /DFD 1\d/.test(String(a.mensagem))).length >= 5, c.r.apontados.map((a) => String(a.mensagem)).join("\n"));
+});
+
+test("Conferir unidade: achado em OUTRO órgão e a linha da CM002 SEM o centro de custo — não lido (nunca apaga o gravado)", () => {
+  const it = {
+    id: 1,
+    numero: "30",
+    planejamento: "300",
+    entidade: "8",
+    entidadeAchada: "2",
+    reparticaoId: 1,
+    sigla: "SEPLAN",
+    orgaoId: 1,
+    encontrado: { planejamento: "300", situacao: "Executado" },
+    centi: { situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" },
+  };
+  const r = conferirUnidades([it], UNIDADES as never);
+  assert.equal(r.todos.length, 1);
+  assert.equal(r.todos[0].centroNaoLido, true);
+  assert.equal(r.todos[0].centroCustoCenti, undefined, "nunca o centro vazio (que limparia a coluna)");
+  assert.match(String(r.todos[0].mensagemUnidade), /não conferido na Centi — achado no órgão 2, não no do DFD; a linha da CM002 do órgão do DFD não trouxe o centro de custo/);
+  // Com o centro de custo na linha da CM002 do órgão do DFD, ela vale (o load de outro órgão nunca).
+  const ok = conferirUnidades([{ ...it, encontrado: { planejamento: "300", situacao: "Executado", centroCusto: "PM RV, SEPLAN" } }], UNIDADES as never);
+  assert.equal(ok.todos[0].centroCustoCenti, "PM RV, SEPLAN");
+  assert.equal(ok.todos[0].unidadeConfere, "sim");
 });
 
 test("Verificar DFDs na Centi — o planejamento achado em OUTRO órgão nunca dá a situação nem o centro de custo", async () => {
@@ -446,7 +573,11 @@ test("Verificar DFDs na Centi — o planejamento NÃO ABRE em nenhum órgão: a 
   assert.deepEqual(v.centros, { 1: "PM RV, GABINETE DO PREFEITO, GGIM" });
   assert.equal(v.retomada.get("1"), "ok");
   assert.equal(v.retomada.get("2"), "falha", "sem a linha da CM002: o DFD falha e a retomada o refaz");
-  assert.ok(v.r.apontados.some((a) => a.nivel === "erro" && String(a.mensagem).includes("DFD 228") && String(a.mensagem).includes("não conferido")));
+  const e228 = v.r.apontados.find((a) => a.nivel === "erro" && String(a.mensagem).includes("DFD 228"));
+  assert.ok(e228 && String(e228.mensagem).includes("não conferido"));
+  // Os DOIS motivos: o planejamento não abriu E a lista da CM002 não trouxe a linha (com o que fazer).
+  assert.match(String(e228?.mensagem), /Não consegui abrir o planejamento 278/);
+  assert.match(String(e228?.mensagem), /o planejamento 278 não veio na lista da CM002 do órgão 8/);
 });
 
 test("Verificar DFDs na Centi — o CONTEÚDO falha depois de o planejamento abrir: a situação e o centro de custo são gravados; o conteúdo fica não conferido e a retomada o refaz", async () => {

@@ -154,7 +154,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.45.1"), false);
   assert.equal(versaoAtende("1.46.1"), false);
   assert.equal(versaoAtende("1.46.2"), false);
-  assert.equal(versaoAtende("1.47.0"), true);
+  assert.equal(versaoAtende("1.47.0"), false);
+  assert.equal(versaoAtende("1.47.1"), true);
   // Versão nova da extensão nunca trava as automações: a 1.38.0 em diante RODA (só a tela avisa a atualização).
   assert.equal(versaoFunciona("1.37.0"), false);
   assert.equal(versaoFunciona("1.38.0"), true);
@@ -729,7 +730,11 @@ test("Emitir DFD recusado: o load que não abriu e o contador das recusas seguid
   const c = await import("../src/lib/automacao-centi-core.ts");
   assert.equal(c.abriuNoLoad({ Entity: null, Message: "Registro não encontrado" }), false);
   assert.equal(c.abriuNoLoad({ Entity: { Fields: [] } }), true);
-  assert.equal(c.abriuNoLoad({ Id: 1 }), true, "sem a chave Entity = outro formato, abriu");
+  // Sem a `Entity` (a extensão entrega o registro de qualquer envelope nela): o envelope da Centi 3.0.216.217 sem registro
+  // — que ela devolve cru quando nada abriu — NÃO abriu (nunca emitido como se o planejamento tivesse sido lido).
+  assert.equal(c.abriuNoLoad({ Data: null, Count: 0, Success: true, Message: "" }), false, "o envelope sem o registro não abriu");
+  assert.equal(c.abriuNoLoad({ Id: 1 }), false);
+  assert.equal(c.abriuNoLoad(null), false);
   assert.equal(c.mensagemDoLoad({ Entity: null, Message: { Text: "Sem acesso" } }), "Sem acesso");
   const r = c.novasRecusas();
   c.registrarRecusaCenti(r, "1");

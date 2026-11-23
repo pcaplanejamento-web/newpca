@@ -280,6 +280,55 @@
   // corpo, sem segredos) para o sistema repeti-la sem paginação, sem mexer na tela. No localStorage da Centi.
   const CM002 = "__pcaCm002_v1";
   const TELA = "__pcaTelaProtocolo_v1";
+  // SÓ A ABA DA AUTOMAÇÃO ENSINA a consulta da CM002 e o load do planejamento (o localStorage é de TODAS as abas da Centi —
+  // o trabalho do dia nas outras nunca troca o que a automação lê). O serviço da extensão marca a aba dela no "estado"; a
+  // marca fica no sessionStorage da aba (vale depois do F5).
+  const ABA_AUTOMACAO = "__pcaAbaAutomacao_v1";
+  let daAutomacao = false;
+  function marcarAbaAutomacao() {
+    daAutomacao = true;
+    try {
+      sessionStorage.setItem(ABA_AUTOMACAO, "1");
+    } catch {}
+  }
+  const ehAbaAutomacao = () => {
+    if (daAutomacao) return true;
+    try {
+      return sessionStorage.getItem(ABA_AUTOMACAO) === "1";
+    } catch {
+      return false;
+    }
+  };
+  // A PESQUISA da pessoa: o clique em Pesquisar (ou Enter num campo). Só um pedido que a tela COMEÇA logo depois dela
+  // ensina uma consulta NOVA da CM002 — nunca uma lista que a tela pede sozinha (as listas de apoio, outro cadastro).
+  let pesquisaEm = 0;
+  const PESQUISA_MS = 5000;
+  const RE_PESQUISA = /pesquis|buscar|procurar|consultar|search|lupa|magnif/i;
+  const classeDe = (el) => String(el?.className?.baseVal ?? el?.className ?? "");
+  function marcarPesquisa(e) {
+    try {
+      const t = e?.target;
+      if (!t || typeof t.closest !== "function") return;
+      const botao = t.closest("button, a, [role='button'], input[type='button'], input[type='submit']");
+      const el = botao ?? t;
+      const rotulo = botao && String(botao.textContent ?? "").trim().length <= 40 ? String(botao.textContent ?? "") : "";
+      const icones = Array.from(el.querySelectorAll?.("i, svg, span") ?? []).slice(0, 6).map(classeDe);
+      const tudo = [rotulo, el.getAttribute?.("aria-label"), el.getAttribute?.("title"), el.getAttribute?.("value"), classeDe(el), ...icones].join(" ");
+      if (RE_PESQUISA.test(tudo)) pesquisaEm = Date.now();
+    } catch {}
+  }
+  try {
+    document.addEventListener?.("click", marcarPesquisa, true);
+    document.addEventListener?.(
+      "keydown",
+      (e) => {
+        if (e?.key === "Enter" && typeof e.target?.closest === "function" && e.target.closest("input, select")) pesquisaEm = Date.now();
+      },
+      true,
+    );
+  } catch {}
+  /** A pesquisa da pessoa que este pedido atende (o instante do clique) — 0 = a tela pediu sozinha. */
+  const pesquisaDoPedido = (pedidoEm) => (pesquisaEm && pedidoEm >= pesquisaEm && pedidoEm - pesquisaEm <= PESQUISA_MS ? pesquisaEm : 0);
   // As COLUNAS da grade da CM002 (título → campo), lidas da PRÓPRIA tela (Wijmo) — a base da captura por título.
   const COLUNAS_CM002 = "__pcaCm002Colunas_v1";
   /** Lê as colunas da grade da CM002 aberta (null = não está à vista) e guarda; devolve as guardadas sem ela. */
@@ -368,7 +417,7 @@
       return null;
     }
   }
-  function lembrarCm002(url, metodo, corpo, status, texto) {
+  function lembrarCm002(url, metodo, corpo, status, texto, pedidoEm = 0) {
     try {
       if (internos > 0 || Number(status) >= 400 || typeof texto !== "string" || !/^\s*[[{]/.test(texto)) return;
       const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
@@ -396,7 +445,7 @@
           const mot = A.motivoSemModelo(url, m, b, j);
           diagnosticar({ caminho: c.caminho.replace(/\d+/g, "{n}").slice(0, 120), motivo: `planejamento sem modelo — ${mot ?? "?"}`, colunas: [] });
           planSemModelo = mot ?? "";
-        } else if (A.melhorModelo(lpl, loadPlanAprendido())) {
+        } else if (ehAbaAutomacao() && A.melhorModelo(lpl, loadPlanAprendido())) {
           localStorage.setItem(LOAD_PLANEJAMENTO, JSON.stringify({ ...lpl, em: new Date().toISOString() }));
           planSemModelo = "";
           const s = String(url);
@@ -423,14 +472,23 @@
         return;
       }
       const forma = JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b });
-      const pl = A.planejamentosCm002(j);
+      // A lista de protocolos (protocolo + ano + interessado) nunca é a da CM002.
+      const pl = A.protocolosTela(j) ? null : A.planejamentosCm002(j);
       if (pl) {
-        // Guarda a consulta que trouxe MAIS linhas (o "Mostrar: Todos" da tela vence a de 50) — ou a de outro endereço.
-        let atual = null;
-        try {
-          atual = JSON.parse(localStorage.getItem(CM002) || "null");
-        } catch {}
-        if (!atual || atual.caminho !== c.caminho || !(atual.linhas > pl.length)) localStorage.setItem(CM002, JSON.stringify({ ...JSON.parse(forma), linhas: pl.length }));
+        // Só na aba da automação. A MESMA consulta: a de MAIS linhas (o "Mostrar: Todos" vence a de 50); uma consulta NOVA só
+        // da pesquisa da pessoa (na Centi 217 toda lista sai pelo mesmo endereço — o corpo diz qual).
+        if (ehAbaAutomacao()) {
+          let atual = null;
+          try {
+            atual = JSON.parse(localStorage.getItem(CM002) || "null");
+          } catch {}
+          const nova = JSON.parse(forma);
+          const pq = pesquisaDoPedido(pedidoEm);
+          if (A.trocaConsulta(atual, nova, pl.length, pq)) {
+            const desde = pq || (A.mesmaConsulta(atual, nova) ? (atual?.pesquisaEm ?? 0) : 0);
+            localStorage.setItem(CM002, JSON.stringify({ ...nova, linhas: pl.length, ...(desde ? { pesquisaEm: desde } : {}) }));
+          }
+        }
         // A grade desenha depois da resposta: as colunas da tela são lidas logo em seguida.
         setTimeout(() => colunasCm002(), 1500);
         return;
@@ -444,7 +502,10 @@
         try {
           atual = JSON.parse(localStorage.getItem(TELA) || "null");
         } catch {}
-        const melhor = !atual || atual.caminho !== c.caminho || (analise && !atual.analise) || (analise === !!atual.analise && p.linhas.length >= (atual.linhas || 0));
+        // A guardada POST sem o corpo (até a 1.46.x) nunca se repetia: a nova (com o corpo) a troca.
+        const semCorpo = !!atual && String(atual.metodo || "GET").toUpperCase() !== "GET" && atual.corpo == null && b != null;
+        const melhor =
+          !atual || semCorpo || atual.caminho !== c.caminho || (analise && !atual.analise) || (analise === !!atual.analise && p.linhas.length >= (atual.linhas || 0));
         if (melhor) localStorage.setItem(TELA, JSON.stringify({ ...JSON.parse(forma), linhas: p.linhas.length, analise, em: new Date().toISOString() }));
         return;
       }
@@ -506,7 +567,8 @@
     if (this.__pcaUrl && !this.__pcaInterno && String(this.__pcaUrl).includes("/restauth/")) {
       const url = this.__pcaUrl;
       const metodo = this.__pcaMetodo;
-      this.addEventListener("load", () => lembrarCm002(url, metodo, r[0], this.status, textoDoXhr(this)));
+      const pedidoEm = Date.now();
+      this.addEventListener("load", () => lembrarCm002(url, metodo, r[0], this.status, textoDoXhr(this), pedidoEm));
     }
     if (this.__pcaUrl && !this.__pcaInterno && internos === 0 && lerAprendiz().ativo) {
       const url = this.__pcaUrl;
@@ -536,8 +598,10 @@
       const url = typeof rec === "string" ? rec : rec instanceof URL ? rec.href : rec?.url;
       const hs = new Headers(init?.headers || (ehReq ? rec.headers : undefined));
       const metodo = init?.method || (ehReq ? rec.method : "GET");
+      // `init.body` nulo = o corpo do Request (a regra do Fetch): só o `init.body` de verdade vale mais que ele.
       const corpoP =
-        init?.body !== undefined ? Promise.resolve(init.body) : ehReq && !/^(GET|HEAD)$/i.test(rec.method) ? rec.clone().text().catch(() => undefined) : Promise.resolve(undefined);
+        init?.body != null ? Promise.resolve(init.body) : ehReq && !/^(GET|HEAD)$/i.test(rec.method) ? rec.clone().text().catch(() => undefined) : Promise.resolve(undefined);
+      const pedidoEm = Date.now();
       guardar(url, Object.fromEntries(hs.entries()), metodo, "fetch");
       corpoP
         .then((b) => {
@@ -549,7 +613,7 @@
         return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
           Promise.all([corpoP, r.clone().text()])
             .then(([b, t]) => {
-              lembrarCm002(url, metodo, b, r.status, t);
+              lembrarCm002(url, metodo, b, r.status, t, pedidoEm);
               if (lerAprendiz().ativo) aprenderResposta(url, metodo, b, r.status, r.headers.get("content-type"), t);
             })
             .catch(() => {});
@@ -1177,7 +1241,7 @@
     try {
       g = JSON.parse(localStorage.getItem(CM002) || "null");
     } catch {}
-    if (!g?.caminho) return { ok: false, semConsulta: true, erro: "Abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — o sistema aprende a consulta e passa a ler tudo pela API." };
+    if (!g?.caminho) return { ok: false, semConsulta: true, erro: "Na aba da automação, abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — o sistema aprende a consulta e passa a ler tudo pela API." };
     if (!A.consultaPermitida(g.caminho, g.metodo, g.corpo)) return { ok: false, erro: "Consulta guardada inválida." };
     const ent = d?.entidade == null || d.entidade === "" ? orgaoFixo() : String(d.entidade);
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Órgão inválido." };
@@ -1270,7 +1334,7 @@
     if (melhor && melhor.linhas.length >= linhas.length) return fim(melhor.linhas, melhor.total ?? total, 1, melhor.modo, completa(melhor.linhas.length));
     if (linhas.length) return fim(linhas, total, paginas, "página a página", completa(linhas.length));
     const motivo = primeiroErro?.status ? `recusou a consulta (${primeiroErro.status})` : `devolveu outra forma (${primeiroErro?.forma ?? "?"})`;
-    return { ok: false, erro: `A Centi ${motivo} na CM002 — abra a CM002 na Centi, escolha Mostrar: Todos e clique em Pesquisar para o sistema reaprender.`, semConsulta: true };
+    return { ok: false, erro: `A Centi ${motivo} na CM002 — na aba da automação, abra a CM002 na Centi, escolha Mostrar: Todos e clique em Pesquisar para o sistema reaprender.`, semConsulta: true };
   }
 
   // O ÓRGÃO em análise (cabeçalho Company) FIXADO pela automação: vale em toda leitura sem órgão explícito, até trocar ou
@@ -1405,7 +1469,8 @@
     try {
       resposta =
         acao === "estado"
-          ? { ok: true, logado: !!cabecalhos, ativoEm, entidade: entidadeAtual(), operacao: operacaoComFonte(), aprendido: aprendidos() }
+          ? (dados?.automacao === true && marcarAbaAutomacao(),
+            { ok: true, logado: !!cabecalhos, ativoEm, entidade: entidadeAtual(), operacao: operacaoComFonte(), aprendido: aprendidos() })
           : Object.hasOwn(ACOES, acao)
             ? await ACOES[acao](dados)
             : { ok: false, erro: "Ação desconhecida." };

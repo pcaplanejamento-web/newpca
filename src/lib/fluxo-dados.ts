@@ -296,9 +296,11 @@ export function conferirUnidades(
     // Por que a CM002 não deu o centro de custo (o fluxo a consultou e não achou; já com o que fazer) — no fim do "não lido".
     const cm002 = String(it.cm002Motivo ?? "").trim();
     const eCm002 = (texto: string) => (cm002 ? `${texto}; ${cm002}` : texto);
-    // Achado em OUTRO órgão da Centi (sem a linha da CM002 do órgão do DFD): o registro é de outra entidade — NÃO lido.
-    if (!lista && deOutroOrgao(it)) {
-      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: `${ref}: não conferido na Centi — achado no órgão ${String(it.entidadeAchada)}, não no do DFD` }, "", false);
+    // Achado em OUTRO órgão da Centi e sem o centro de custo da linha da CM002 do órgão do DFD: o registro lido é de outra
+    // entidade — NÃO lido (o gravado fica; nunca "a Centi não tem").
+    if (!centro && deOutroOrgao(it)) {
+      const texto = `${ref}: não conferido na Centi — achado no órgão ${String(it.entidadeAchada)}, não no do DFD${lista ? "; a linha da CM002 do órgão do DFD não trouxe o centro de custo" : ""}`;
+      enviar("desconhecidas", { ...it, unidadeCentroCusto: "", unidadeSistema: String(it.sigla ?? ""), mensagem: eCm002(texto) }, "", false);
       continue;
     }
     // O load em que a Centi NÃO abriu o registro (só a emissão saiu, ou nada abriu): nada foi lido do planejamento — só a

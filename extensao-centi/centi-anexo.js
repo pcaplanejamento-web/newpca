@@ -251,12 +251,14 @@
     if (!pareceSerPlanejamento(j)) return null;
     return analisarPedidoPlanejamento(url, metodo, corpo, j).motivo ?? null;
   }
-  /** O modelo novo substitui o guardado? Só o mais completo (ou o mesmo pedido de novo) — uma resposta leve da tela (uma
-   * prévia) nunca troca o load completo aprendido. */
+  /** O modelo novo substitui o guardado? Só o mais completo (ou o MESMO pedido de novo — método, caminho E corpo: na Centi
+   * 3.0.216.217 todo cadastro abre pelo mesmo `searchentity`, e o corpo diz qual) — uma resposta leve da tela (uma prévia,
+   * um item do planejamento aberto por Id, a grade filtrada) nunca troca o load completo aprendido. */
   function melhorModelo(novo, guardado) {
     if (!novo) return false;
     if (!guardado || typeof guardado !== "object") return true;
-    if (guardado.caminho === novo.caminho && guardado.metodo === novo.metodo) return true;
+    const mesmoCorpo = JSON.stringify(guardado.corpo ?? null) === JSON.stringify(novo.corpo ?? null);
+    if (guardado.caminho === novo.caminho && guardado.metodo === novo.metodo && mesmoCorpo) return true;
     return (Number(novo.pontos) || 0) >= (Number(guardado.pontos) || 0);
   }
   /** O ÓRGÃO no MESMO formato do valor que a tela mandou no cabeçalho `company` (zeros à esquerda, prefixo e sufixo): "3"
@@ -1153,6 +1155,26 @@
     const p = comPagina(caminho, corpo, null);
     return { caminho: p.caminho, corpo: p.corpo };
   }
+  /** A MESMA consulta? Método, caminho e corpo iguais SEM a paginação ("Mostrar: Todos" muda só a paginação). */
+  function mesmaConsulta(a, b) {
+    if (!a || !b || String(a.metodo || "GET").toUpperCase() !== String(b.metodo || "GET").toUpperCase()) return false;
+    const x = semPaginacao(a.caminho, a.corpo ?? null);
+    const y = semPaginacao(b.caminho, b.corpo ?? null);
+    return x.caminho === y.caminho && JSON.stringify(x.corpo ?? null) === JSON.stringify(y.corpo ?? null);
+  }
+  /** A lista da CM002 vista na tela troca a consulta GUARDADA? Na Centi 3.0.216.217 TODA lista sai pelo mesmo
+   * `searchentity` (o corpo diz qual), então "outra lista com mais linhas" pode ser de OUTRO cadastro. A MESMA consulta (só
+   * a paginação muda): a de mais linhas. Uma consulta NOVA — nada guardado que se repita (a POST sem o corpo, até a 1.46.x,
+   * nunca se repetia) ou outro corpo — só a que a PESSOA pediu (`pesquisaEm` = o clique em Pesquisar logo antes do pedido);
+   * nunca uma lista que a tela pede sozinha (as de apoio). Entre as da MESMA pesquisa, a de mais linhas. */
+  function trocaConsulta(guardada, nova, linhas, pesquisaEm) {
+    const g = guardada && typeof guardada === "object" && guardada.caminho ? guardada : null;
+    const vale = !!g && !(String(g.metodo || "GET").toUpperCase() !== "GET" && g.corpo == null);
+    if (vale && mesmaConsulta(g, nova)) return !(Number(g.linhas) > linhas);
+    if (!pesquisaEm) return false;
+    if (vale && g.pesquisaEm === pesquisaEm) return !(Number(g.linhas) > linhas);
+    return true;
+  }
 
   /** A consulta da PO011 só nas repartições pedidas: marca `selected` em Data.Reparticoes pela Descricao (sem acento/
    * caixa; uma contém a outra) e desmarca as demais. Sem a lista no corpo → `null` (a consulta não filtra por repartição). */
@@ -1176,7 +1198,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, colunasDaTela, ehGradeCm002, valorDaColuna, semPaginacao, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
+    comReparticoes, planejamentosCm002, colunasSemCentroCusto, colunaCentroCustoPeloValor, colunasDaTela, ehGradeCm002, valorDaColuna, semPaginacao, mesmaConsulta, trocaConsulta, totalDaResposta, leituraCompleta, comPagina, campoDoTamanho, diagnosticoConsulta, protocolosTela, motivoNaoTela, consultaPostdata, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo, fonteDaAssinatura, diagnosticoAssinatura,

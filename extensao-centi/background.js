@@ -29,7 +29,8 @@ async function injetarCenti(tabId) {
 }
 
 async function estadoDaAba(tabId) {
-  const perguntar = () => comPrazo(chrome.tabs.sendMessage(tabId, { alvo: "centi", acao: "estado" }), 5000, null);
+  // `automacao`: só a aba DA AUTOMAÇÃO recebe o estado — a página a marca (só ela ensina a consulta da CM002 e o planejamento).
+  const perguntar = () => comPrazo(chrome.tabs.sendMessage(tabId, { alvo: "centi", acao: "estado", dados: { automacao: true } }), 5000, null);
   try {
     const r = await perguntar();
     if (r) return r;

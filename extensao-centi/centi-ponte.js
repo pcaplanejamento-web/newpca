@@ -33,9 +33,10 @@
   const naTelaDeLogin = () => !!L()?.telaDeLogin(document);
   const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
-  // A tela de login vale mais que a sessão guardada (a sessão caída deixa os cabeçalhos antigos para trás).
-  async function estado() {
-    const r = await pedirPagina("estado", null, 4000);
+  // A tela de login vale mais que a sessão guardada (a sessão caída deixa os cabeçalhos antigos para trás). `automacao` = o
+  // SERVIÇO pergunta à aba dele (a da automação): a página marca a aba — só ela ensina o que a automação lê.
+  async function estado(automacao = false) {
+    const r = await pedirPagina("estado", automacao ? { automacao: true } : null, 4000);
     if (naTelaDeLogin()) return { ...r, ok: true, logado: false, tela: "login" };
     return r;
   }
@@ -84,7 +85,7 @@
       return true;
     }
     if (msg?.alvo !== "centi") return false;
-    if (msg.acao === "estado") estado().then(responder);
+    if (msg.acao === "estado") estado(sender.id === chrome.runtime.id && !sender.tab && msg.dados?.automacao === true).then(responder);
     else pedirPagina(msg.acao, msg.dados, 300000).then(responder);
     return true;
   });

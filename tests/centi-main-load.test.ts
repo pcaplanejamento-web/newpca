@@ -16,9 +16,19 @@ function abaCenti(opcoes: {
   respostaXhr?: (url: string, h: Record<string, string>, corpo?: string) => unknown;
   /** A página chama `fetch` (a Centi 3.0.216.217): a resposta de cada pedido; sem ela, o fetch da página falha. */
   respostaFetch?: (url: string, metodo: string, corpo?: string) => unknown;
+  /** É a aba DA AUTOMAÇÃO (o serviço da extensão a marcou no "estado")? Padrão: sim — só ela ensina. */
+  automacao?: boolean;
 }) {
   const pedidos: Pedido[] = [];
   const ouvintes: ((e: unknown) => void)[] = [];
+  const doDocumento: { tipo: string; f: (e: unknown) => void }[] = [];
+  // O relógio da aba (o tempo passa entre o clique da pessoa e os pedidos seguintes — `avancar`).
+  let deslocamento = 0;
+  class Relogio extends Date {
+    static now() {
+      return Date.now() + deslocamento;
+    }
+  }
   const respostas: unknown[] = [];
   const armazem = () => {
     const m = new Map<string, string>();
@@ -67,6 +77,7 @@ function abaCenti(opcoes: {
   }
   const ctx: Record<string, unknown> = {
     URL,
+    Date: Relogio,
     TextEncoder,
     TextDecoder,
     Headers,
@@ -83,8 +94,9 @@ function abaCenti(opcoes: {
     localStorage: armazem(),
     Request,
     Response,
-    // A grade da CM002 (as colunas da tela, lidas 1,5 s depois da lista): nenhuma nesta aba falsa.
-    document: { querySelectorAll: () => [] },
+    // A grade da CM002 (as colunas da tela, lidas 1,5 s depois da lista): nenhuma nesta aba falsa. Os cliques da pessoa
+    // (o Pesquisar) chegam aos ouvintes do documento.
+    document: { querySelectorAll: () => [], addEventListener: (tipo: string, f: (e: unknown) => void) => doDocumento.push({ tipo, f }) },
     fetch: async (rec: unknown, init?: RequestInit) => {
       if (!opcoes.respostaFetch) throw new Error("sem fetch");
       const req = new Request(rec as string | Request | URL, init);
@@ -142,6 +154,19 @@ function abaCenti(opcoes: {
   vm.runInContext(readFileSync("extensao-centi/centi-main.js", "utf8"), ctx);
   const janela = vm.runInContext("window", ctx);
   const p = Number(/const PROTOCOLO = (\d+)/.exec(readFileSync("extensao-centi/centi-main.js", "utf8"))?.[1]);
+  // O serviço da extensão pergunta o estado à aba DELE (a da automação): a página a marca.
+  if (opcoes.automacao !== false) for (const f of ouvintes) f({ source: janela, data: { fonte: "pca-centi-pedido", p, id: 0, acao: "estado", dados: { automacao: true } } });
+  // A pessoa clica num botão da tela (o Pesquisar da CM002 — texto, título ou o ícone da lupa).
+  const clicar = (botao: { texto?: string; titulo?: string; classe?: string }) => {
+    const el = {
+      textContent: botao.texto ?? "",
+      className: botao.classe ?? "",
+      closest: () => el,
+      getAttribute: (k: string) => (k === "title" ? (botao.titulo ?? null) : null),
+      querySelectorAll: () => [],
+    };
+    for (const o of doDocumento) if (o.tipo === "click") o.f({ target: el });
+  };
   let n = 0;
   const acao = async (nome: string, dados?: unknown) => {
     const id = ++n;
@@ -180,7 +205,10 @@ function abaCenti(opcoes: {
   const espera = () => new Promise((ok) => setTimeout(ok, 5));
   // A TELA pede pelo `fetch` da página (já com o gancho da extensão).
   const telaFetch = (rec: unknown, init?: RequestInit) => (janela as { fetch: (r: unknown, i?: RequestInit) => Promise<Response> }).fetch(rec, init);
-  return { acao, pedidos, pedidoDaTela, telaAbre, telaPost, telaFetch, espera, ORIGEM, local: ctx.localStorage as { getItem: (k: string) => string | null } };
+  const avancar = (ms: number) => {
+    deslocamento += ms;
+  };
+  return { acao, pedidos, pedidoDaTela, telaAbre, telaPost, telaFetch, espera, clicar, avancar, ORIGEM, local: ctx.localStorage as { getItem: (k: string) => string | null } };
 }
 
 const LOAD = "restauth/load?entity=101045&key=640";
@@ -489,7 +517,9 @@ test("Centi 217 (cliente fetch): a consulta da CM002 pedida com um REQUEST (o co
   const LISTA = { Data: [{ Id: 277, Situacao: "Executado", Finalidade: "Aquisição", CentroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }], Count: 1, Success: true, Message: null, Code: 0 };
   const corpo = { Filtro: { Referencia: 2027 }, Take: 50, Skip: 0 };
   const aba = abaCenti({ cliente: false, respostaFetch: (url) => (/searchentity/.test(url) ? LISTA : { Entity: null }) });
-  // A página manda um Request (método, cabeçalhos e o CORPO dentro dele) — o fetch consome o corpo do original.
+  // A pessoa clica em Pesquisar; a página manda um Request (método, cabeçalhos e o CORPO dentro dele) — o fetch consome o
+  // corpo do original.
+  aba.clicar({ texto: "Pesquisar" });
   const r = await aba.telaFetch(new Request(`${aba.ORIGEM}/compras/restauth/searchentity`, { method: "POST", body: JSON.stringify(corpo), headers: { "Content-Type": "application/json", Refreshtoken: "rt-da-tela", Company: "8" } }));
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), LISTA, "a resposta chega inteira à página");
@@ -502,9 +532,123 @@ test("Centi 217 (cliente fetch): a consulta da CM002 pedida com um REQUEST (o co
   assert.ok(!JSON.stringify(g).includes("rt-da-tela"), "nunca os valores dos cabeçalhos");
   // O endereço num URL (sem Request): também aprendido, com o corpo do init.
   const b = abaCenti({ cliente: false, respostaFetch: (url) => (/searchentity/.test(url) ? LISTA : { Entity: null }) });
+  b.clicar({ classe: "btn btn-primary", titulo: "Pesquisar" });
   await b.telaFetch(new URL(`${b.ORIGEM}/compras/restauth/searchentity`), { method: "POST", body: JSON.stringify(corpo) });
   for (let i = 0; i < 20 && !b.local.getItem("__pcaCm002_v1"); i++) await b.espera();
   const h = JSON.parse(b.local.getItem("__pcaCm002_v1") ?? "null");
   assert.equal(h?.caminho, "restauth/searchentity");
   assert.deepEqual(h?.corpo, corpo);
+});
+
+// A REVISÃO (v1.308.0, extensão 1.47.1): na Centi 217 TODA lista e todo cadastro saem pelo mesmo `searchentity` — o corpo
+// diz qual. A consulta da CM002 e o load do planejamento aprendidos NUNCA são trocados por outra lista/outro cadastro.
+const PLANEJAMENTOS = (n: number) => ({ Data: Array.from({ length: n }, (_, i) => ({ Id: 1500 + i, Situacao: "Executado", Finalidade: `PCA ${i}`, CentroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" })), Count: n, Success: true });
+const REQUISICOES = (n: number) => ({ Data: Array.from({ length: n }, (_, i) => ({ Id: 1500 + i, Situacao: "Atendida", CentroCusto: "PM RV, SECRETARIA DE SAÚDE, ALMOXARIFADO" })), Count: n, Success: true });
+const CM = { Entidade: "ComprasPlanejamento", Take: 50, Skip: 0 };
+const REQ = { Entidade: "RequisicaoCompra", Take: 50, Skip: 0 };
+function abaComListas(automacao = true) {
+  const aba = abaCenti({
+    cliente: false,
+    automacao,
+    respostaFetch: (_u, _m, corpo) => {
+      const b = corpo ? JSON.parse(corpo) : {};
+      return b.Entidade === "RequisicaoCompra" ? REQUISICOES(b.Take === 9 ? 3 : 900) : PLANEJAMENTOS(b.Take === 100000 ? 700 : b.Take === 7 ? 1 : 2);
+    },
+  });
+  const buscar = async (corpo: unknown) => {
+    await aba.telaFetch(`${aba.ORIGEM}/compras/restauth/searchentity`, { method: "POST", body: JSON.stringify(corpo) });
+    for (let i = 0; i < 10; i++) await aba.espera();
+  };
+  const guardada = () => JSON.parse(aba.local.getItem("__pcaCm002_v1") ?? "null") as { corpo: { Entidade: string; Take: number }; linhas: number } | null;
+  return { aba, buscar, guardada };
+}
+
+test("CM002 (Centi 217): a consulta só é aprendida da PESQUISA da pessoa, na aba da automação — outra lista nunca a troca", async () => {
+  const { aba, buscar, guardada } = abaComListas();
+  // A tela pede uma lista SOZINHA (sem a pessoa pesquisar): nada é aprendido.
+  await buscar(CM);
+  assert.equal(guardada(), null, "lista que a tela pede sozinha (as de apoio) nunca ensina");
+  // A pessoa clica em Pesquisar: aprendida.
+  aba.clicar({ texto: "Pesquisar" });
+  await buscar(CM);
+  assert.equal(guardada()?.corpo.Entidade, "ComprasPlanejamento");
+  // Depois, outra lista pelo MESMO endereço, com MAIS linhas, sem a pessoa pesquisar: nunca troca (o cenário reproduzido).
+  aba.avancar(10_000);
+  await buscar(REQ);
+  assert.equal(guardada()?.corpo.Entidade, "ComprasPlanejamento", "a lista de requisições nunca vira a CM002");
+  // A MESMA consulta com outra paginação ("Mostrar: Todos"): a de mais linhas, sem precisar pesquisar de novo.
+  await buscar({ ...CM, Take: 100000 });
+  assert.deepEqual([guardada()?.corpo.Take, guardada()?.linhas], [100000, 700]);
+  // A mesma consulta com MENOS linhas (a grade filtrada pelo Id) não troca a de mais.
+  await buscar({ ...CM, Take: 7 });
+  assert.equal(guardada()?.linhas, 700);
+  // Uma consulta NOVA só com a pessoa pesquisando (a lupa).
+  aba.avancar(10_000);
+  aba.clicar({ classe: "fa fa-search" });
+  await buscar(REQ);
+  assert.equal(guardada()?.corpo.Entidade, "RequisicaoCompra", "a pesquisa da pessoa reensina (o que ela pediu na aba da automação)");
+});
+
+test("CM002 (Centi 217): outra aba da Centi (o trabalho do dia) nunca ensina, mesmo pesquisando", async () => {
+  const { aba, buscar, guardada } = abaComListas(false);
+  aba.clicar({ texto: "Pesquisar" });
+  await buscar(REQ);
+  aba.clicar({ texto: "Pesquisar" });
+  await buscar(CM);
+  assert.equal(guardada(), null);
+});
+
+test("CM002: a consulta guardada SEM o corpo (até a 1.46.x — nunca se repetia) é trocada pela pesquisa nova, mesmo com menos linhas", async () => {
+  const { aba, buscar, guardada } = abaComListas();
+  (aba.local as unknown as { setItem: (k: string, v: string) => void }).setItem("__pcaCm002_v1", JSON.stringify({ metodo: "POST", caminho: "restauth/searchentity", corpo: null, linhas: 3000 }));
+  aba.clicar({ texto: "Pesquisar" });
+  await buscar(CM);
+  assert.deepEqual(guardada()?.corpo, CM);
+});
+
+test("fetch(Request, {body: null}): o corpo é o do Request (a regra do Fetch) — a consulta é aprendida com ele", async () => {
+  const { aba, guardada } = abaComListas();
+  aba.clicar({ texto: "Pesquisar" });
+  await aba.telaFetch(new Request(`${aba.ORIGEM}/compras/restauth/searchentity`, { method: "POST", body: JSON.stringify(CM) }), { body: null } as RequestInit);
+  for (let i = 0; i < 10; i++) await aba.espera();
+  assert.deepEqual(guardada()?.corpo, CM);
+});
+
+test("Planejamento (Centi 217): um ITEM do planejamento aberto por Id nunca troca o load completo aprendido", async () => {
+  const item = (id: number) => ({ Data: { Id: id, IdComprasPlanejamento: 4321, IdCentroCusto: { Id: 3, Descricao: "PM RV, OUTRA SECRETARIA, OUTRO DEPTO" }, Situacao: "Ativo" }, Count: 1, Success: true });
+  const resposta = (u: string, h: Record<string, string>, corpo?: string) => {
+    const b = corpo ? JSON.parse(corpo) : {};
+    if (/searchentity/.test(u) && b.Entidade === "ComprasPlanejamentoItem") return item(Number(b?.Filtro?.Id));
+    return CENTI_217()(u, h, corpo);
+  };
+  const aba = abaCenti({ cliente: false, respostaXhr: resposta });
+  aba.telaPost("restauth/searchentity", CORPO_217(131), DA_TELA);
+  await aba.espera();
+  const completo = JSON.parse(aba.local.getItem("__pcaLoadPlanejamento_v1") ?? "null");
+  assert.equal(completo.completo, true);
+  // A tela abre um ITEM por Id (o mesmo endereço, outro corpo, menos campos): o modelo fica o do planejamento.
+  aba.telaPost("restauth/searchentity", { Entidade: "ComprasPlanejamentoItem", Filtro: { Id: 5432 }, Pagina: 1 }, DA_TELA);
+  await aba.espera();
+  assert.deepEqual(JSON.parse(aba.local.getItem("__pcaLoadPlanejamento_v1") ?? "null").corpo, completo.corpo);
+  // Outra aba (sem a marca da automação): nunca ensina.
+  const outra = abaCenti({ cliente: false, respostaXhr: resposta, automacao: false });
+  outra.telaPost("restauth/searchentity", CORPO_217(131), DA_TELA);
+  await outra.espera();
+  assert.equal(outra.local.getItem("__pcaLoadPlanejamento_v1"), null);
+});
+
+test("Sistema: o load que traz OUTRO registro (outro Id, ou um item ligado a outro planejamento) não é o planejamento — não abriu", async () => {
+  const { outroRegistroNoLoad } = await import("../src/lib/automacao-centi-core.ts");
+  const { carregarPlanejamento } = await import("../src/lib/automacao-dfds-motor.ts");
+  const ent = (fields: { Key: string; Value: unknown }[]) => ({ Entity: { Fields: fields } });
+  assert.equal(outroRegistroNoLoad(ent([{ Key: "Id", Value: "277" }]), "277"), null);
+  assert.equal(outroRegistroNoLoad(ent([{ Key: "Id", Value: "0277" }, { Key: "IdComprasPlanejamento", Value: "277" }]), "277"), null, "o próprio planejamento");
+  assert.match(outroRegistroNoLoad(ent([{ Key: "Id", Value: "5432" }]), "277") ?? "", /outro registro \(nº 5432\)/);
+  assert.match(outroRegistroNoLoad(ent([{ Key: "Id", Value: "277" }, { Key: "IdComprasPlanejamento", Value: { Fields: [{ Key: "Id", Value: 4321 }] } }]), "277") ?? "", /ligado ao planejamento 4321/);
+  assert.equal(outroRegistroNoLoad({ Entity: null }, "277"), null);
+  const pedir = async () => ({ ok: true, j: ent([{ Key: "Id", Value: "277" }, { Key: "IdComprasPlanejamento", Value: 4321 }, { Key: "Situacao", Value: "Ativo" }]) });
+  const r = await carregarPlanejamento({ pedir: pedir as never }, "277", "8");
+  assert.ok("erro" in r);
+  assert.match((r as { erro: string }).erro, /^Não consegui abrir o planejamento 277 na Centi — a Centi devolveu um registro ligado ao planejamento 4321/);
+  assert.match((r as { erro: string }).erro, /Abra UM planejamento na CM002/);
 });

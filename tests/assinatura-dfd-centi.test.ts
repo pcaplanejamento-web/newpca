@@ -181,9 +181,20 @@ test("load PRÉVIA (sem o centro de custo e sem as seções 8–10): EMITE com o
   assert.equal(loadIncompleto(loadDaTela(131, null)), false, "o planejamento sem o registro (com o centro de custo) é o caso legítimo do Convergente*");
   assert.equal(loadIncompleto(previa(24)), true);
   assert.equal(loadIncompleto({ Entity: null }), false);
-  const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
+  // O Baixar/anexar DFDs NUNCA emite a prévia: o PDF sairia com as seções 8 a 10 em branco e seria salvo/anexado.
+  const baixar = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
+  const z = await emitirUm(baixar.c, "24", "3");
+  assert.equal(z.pdf, undefined);
+  assert.equal(z.definitivo, true, "o mesmo planejamento nos outros órgãos também seria a prévia — não adianta tentar");
+  assert.match(z.erro ?? "", /abriu na Centi só como prévia/);
+  assert.match(z.erro ?? "", /sairia com as seções 8 a 10 em branco/);
+  assert.match(z.erro ?? "", /Abra UM planejamento na CM002 da Centi \(duplo clique na linha\)/);
+  assert.equal(baixar.pedidos.filter((p) => p.acao === "pedir").length, 0, "nenhuma emissão");
+  // A CONFERÊNCIA aceita a prévia (`aceitarPrevia`): as seções 8 a 10 ficam fora da comparação e da correção.
+  const { c: c0, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
+  const c = { ...c0, aceitarPrevia: true };
   const r = await emitirUm(c, "24", "3");
-  assert.ok(r.pdf, "a prévia emite (a Centi 217 aceita o campo vazio)");
+  assert.ok(r.pdf, "a prévia emite na conferência (a Centi 217 aceita o campo vazio)");
   assert.equal(r.erro, undefined);
   assert.equal(r.semSecoes810, true);
   assert.equal(r.secoes810NaoLidas, true, "o registro das seções 8–10 não veio NA LEITURA — nunca 'o planejamento não tem'");
@@ -214,11 +225,47 @@ test("recusa do Emitir DFD com a prévia: a causa certa (o registro NÃO VEIO na
     if (acao === "pedir") return { ok: true, b64: Buffer.from(JSON.stringify({ Success: false, Message: "Usuário sem permissão!" })).toString("base64"), status: 200 };
     return { ok: true };
   };
-  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {} };
+  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {}, aceitarPrevia: true };
   const r = await emitirUm(c, "24", "3");
   assert.equal(r.pdf, undefined);
   assert.match(r.erro ?? "", /o registro das seções 8 a 10 não veio na leitura da Centi/);
+  assert.match(r.erro ?? "", /Abra UM planejamento na CM002 da Centi \(duplo clique na linha\)/, "diz o que fazer");
   assert.doesNotMatch(r.erro ?? "", /o planejamento não tem o registro/);
+  // Na prévia (todo DFD na Centi 217), a recusa CONTA como as outras (várias seguidas param a execução) e a operação é
+  // reaprendida ANTES de qualquer conclusão — a Centi pode ter trocado o Emitir DFD.
+  assert.equal(r.recusada, true);
+  assert.equal(r.definitivo, undefined);
+  assert.deepEqual(pedidos, ["ler", "pedir", "estado"]);
+});
+
+test("recusa do Emitir DFD com a prévia e a operação TROCADA na Centi: reaprende da tela e emite", async () => {
+  let op = 0;
+  const pedidos: string[] = [];
+  const pedir = async (acao: string, dados: unknown) => {
+    pedidos.push(acao);
+    const d = dados as { caminho: string };
+    if (acao === "ler") return { ok: true, j: d.caminho === caminhoLoadPlanejamento("24") ? previa(24) : { Entity: null, Message: null } };
+    if (acao === "estado") return { ok: true, operacao: { moduleKey: 130000, guid: "11111111-2222-3333-4444-555555555555" } };
+    if (acao === "pedir")
+      return op === 0
+        ? { ok: true, b64: Buffer.from(JSON.stringify({ Success: false, Message: "Usuário sem permissão!" })).toString("base64"), status: 200 }
+        : { ok: true, b64: Buffer.from("%PDF-1.4 teste").toString("base64"), status: 200 };
+    return { ok: true };
+  };
+  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => (op++ === 0), mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {}, aceitarPrevia: true };
+  const r = await emitirUm(c, "24", "3");
+  assert.ok(r.pdf, r.erro);
+  assert.equal(r.semSecoes810, true);
+  assert.equal(r.secoes810NaoLidas, true);
+  assert.deepEqual(pedidos, ["ler", "pedir", "estado", "pedir"]);
+});
+
+test("load sem a Entity (o envelope da Centi 217 sem registro, devolvido cru): NÃO abriu — nada é emitido", async () => {
+  const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: { Data: null, Count: 0, Success: true, Message: "" } });
+  const r = await emitirUm(c, "24", "3");
+  assert.equal(r.pdf, undefined);
+  assert.match(r.erro ?? "", /Não consegui abrir o planejamento 24 na Centi \(órgão 3\)/);
+  assert.equal(pedidos.filter((p) => p.acao === "pedir").length, 0, "nunca emitido como se o planejamento tivesse sido lido");
 });
 
 test("centro de custo: o texto da referência (Display › o registro ligado) e o NÃO LIDO separado do 'não tem'", async () => {
