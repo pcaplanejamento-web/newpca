@@ -62,6 +62,8 @@ export async function corrigirDfdPelaCenti(
   // A decisão é do SERVIDOR (o gravado AGORA), nunca do que o item diz.
   if (status !== "divergente") return { resultado: "convergente", status, motivo };
   if (aceiteVale(status, motivo, lerAceite(o.conferenciaCentiAceite))) return { resultado: "aceito", status, motivo };
+  // Planejamento CANCELADO na Centi: nunca corrige o sistema com os dados dele.
+  if (tiposDoMotivo(motivo).includes("Situação")) return { resultado: "naoCorrigivel", status, motivo };
   const alcance = tiposCorrigiveisDoMotivo(tiposDoMotivo(motivo));
   // O motivo tem teto ("e mais N"): cortado, os tipos que ficaram fora do texto também contam (decide o retrato).
   const cortado = /(^|\n)e mais \d+\s*$/.test(String(motivo ?? ""));

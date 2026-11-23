@@ -1,6 +1,7 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { cicloAoGravar, criarFluxo, listarFluxosDe, listarPublicos, subfluxosProibidos } from "@/lib/fluxos";
+import { cicloAoGravar, criarFluxo, listarFluxos, listarFluxosDe, listarPublicos, subfluxosProibidos } from "@/lib/fluxos";
+import { lerGrafo, subfluxosDoGrafo } from "@/lib/fluxo-core";
 import { criarFluxoSchema } from "@/lib/fluxos-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "@/lib/automacao-mesa";
@@ -36,9 +37,10 @@ export async function POST(req: Request) {
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(criarFluxoSchema, req);
   if ("resp" in p) return p.resp;
-  if (p.data.grafo) {
-    if ((await subfluxosProibidos(p.data.grafo, g.u.id)).length) return erro(MSG_SUBFLUXO, 422);
-    const ciclo = await cicloAoGravar(null, p.data.grafo);
+  if (p.data.grafo && subfluxosDoGrafo(lerGrafo(p.data.grafo)).length) {
+    const todos = await listarFluxos();
+    if ((await subfluxosProibidos(p.data.grafo, g.u.id, todos)).length) return erro(MSG_SUBFLUXO, 422);
+    const ciclo = await cicloAoGravar(null, p.data.grafo, todos);
     if (ciclo) return erro(ciclo, 409);
   }
   const fluxo = await criarFluxo(p.data, g.u.id);

@@ -1,9 +1,9 @@
-import { and, desc, eq, getTableColumns, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import { automacaoFluxos, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "./automacao-mesa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
-import { type AjudaFluxo, atrasada, cicloDeSubfluxos, fluxosDevidos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
+import { agendadaVencida, agendaMudou, type AjudaFluxo, atrasada, cicloDeSubfluxos, fluxosDevidos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
 import { type AutomacaoCenti, automacaoCentiDaMesa } from "./automacao-centi-mesa";
 import { comandoLimparProgresso, comandoReservarFluxo, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
 import { feriadosNoIntervalo } from "./calendario-core";
@@ -150,12 +150,13 @@ export async function editarFluxo(
   id: number,
   d: { nome?: string; descricao?: string | null; ajuda?: unknown; grafo?: unknown; frequencia?: unknown; ativo?: boolean; publico?: boolean },
   agora = new Date(),
+  lido?: FluxoAutomacao,
 ): Promise<FluxoAutomacao | null> {
-  const atual = await getFluxo(id);
+  const atual = lido ?? (await getFluxo(id));
   if (!atual) return null;
   const frequencia = d.frequencia === undefined ? atual.frequencia : lerFrequencia(d.frequencia);
   const ativo = d.ativo ?? atual.ativo;
-  const mudouAgenda = d.frequencia !== undefined || d.ativo !== undefined;
+  const mudouAgenda = agendaMudou(atual, frequencia, ativo);
   const proxima = mudouAgenda && ativo ? await proximaComFeriados(frequencia, agora) : null;
   const [l] = await getDb()
     .update(automacaoFluxos)
@@ -172,18 +173,19 @@ export async function editarFluxo(
     })
     .where(eq(automacaoFluxos.id, id))
     .returning();
-  return l ? getFluxo(l.id) : null;
+  return l ? doBanco({ ...l, autor: atual.autor }) : null;
 }
 
 /**
  * Fecha uma execução: grava o resumo. A MANUAL agenda a próxima pela frequência (do FIM — não acumula atraso); a AGENDADA
  * não mexe na próxima — a reserva (`reservarExecucaoFluxo`) já a gravou antes de rodar.
  */
-export async function registrarExecucaoFluxo(id: number, resumo: Record<string, unknown>, agora = new Date()): Promise<FluxoAutomacao | null> {
-  const atual = await getFluxo(id);
+export async function registrarExecucaoFluxo(id: number, resumo: Record<string, unknown>, agora = new Date(), lido?: FluxoAutomacao): Promise<FluxoAutomacao | null> {
+  const atual = lido ?? (await getFluxo(id));
   if (!atual) return null;
   const agendado = resumo.agendado === true;
-  const proxima = agendado ? undefined : atual.ativo ? await proximaComFeriados(atual.frequencia, agora) : null;
+  // A agendada que venceu enquanto a manual rodava fica: o agendador a roda em seguida.
+  const proxima = agendado || (atual.ativo && agendadaVencida(atual.proximaEm, agora.getTime())) ? undefined : atual.ativo ? await proximaComFeriados(atual.frequencia, agora) : null;
   const [l] = await getDb()
     .update(automacaoFluxos)
     .set({
@@ -193,15 +195,19 @@ export async function registrarExecucaoFluxo(id: number, resumo: Record<string, 
     })
     .where(eq(automacaoFluxos.id, id))
     .returning();
-  return l ? getFluxo(l.id) : null;
+  return l ? doBanco({ ...l, autor: atual.autor }) : null;
 }
 
 /**
  * RESERVA a execução AGENDADA de um fluxo cuja hora chegou: a próxima vai à frequência contada de AGORA (a perdida roda
  * uma vez, nunca acumulada). `null` = não está devido, foi desligado ou outra aba/ADM já reservou.
  */
-export async function reservarExecucaoFluxo(id: number, agora = new Date()): Promise<{ fluxo: FluxoAutomacao; atrasadaDesde: string | null } | null> {
-  const atual = await getFluxo(id);
+export async function reservarExecucaoFluxo(
+  id: number,
+  agora = new Date(),
+  lido?: FluxoAutomacao,
+): Promise<{ fluxo: FluxoAutomacao; atrasadaDesde: string | null } | null> {
+  const atual = lido ?? (await getFluxo(id));
   if (!atual?.ativo || !atual.proximaEm || Date.parse(atual.proximaEm) > agora.getTime()) return null;
   const proxima = await proximaComFeriados(atual.frequencia, agora);
   const r = await comandoReservarFluxo(getDb(), id, atual.proximaEm, agora.toISOString(), proxima);
@@ -211,7 +217,17 @@ export async function reservarExecucaoFluxo(id: number, agora = new Date()): Pro
 
 /** A AGENDA da pessoa (o vigia do layout): a próxima hora entre os fluxos ligados do painel dela e os já devidos. */
 export async function agendaDosFluxos(usuarioId: number, agora = Date.now()): Promise<{ proxima: string | null; devidos: { id: number; nome: string; proximaEm: string }[] }> {
-  const ligados = (await listarFluxosDe(usuarioId)).filter((f) => f.ativo && f.proximaEm);
+  // Só as colunas que a agenda usa (sem ler nem interpretar os grafos).
+  const ligados = await getDb()
+    .select({ id: automacaoFluxos.id, nome: automacaoFluxos.nome, ativo: automacaoFluxos.ativo, proximaEm: automacaoFluxos.proximaEm })
+    .from(automacaoFluxos)
+    .where(
+      and(
+        eq(automacaoFluxos.ativo, true),
+        isNotNull(automacaoFluxos.proximaEm),
+        or(eq(automacaoFluxos.criadoPor, usuarioId), isNull(automacaoFluxos.criadoPor)),
+      ),
+    );
   const devidos = fluxosDevidos(ligados, agora).map((f) => ({ id: f.id, nome: f.nome, proximaEm: f.proximaEm as string }));
   const futuras = ligados.map((f) => f.proximaEm as string).filter((p) => Date.parse(p) > agora).sort();
   return { proxima: devidos[0]?.proximaEm ?? futuras[0] ?? null, devidos };
@@ -224,17 +240,17 @@ export async function excluirFluxo(id: number): Promise<boolean> {
 // ———————————————————————————————————————————————— subfluxos
 
 /** Os fluxos que USAM o fluxo `id` dentro deles (a exclusão é recusada enquanto houver). */
-export async function fluxosQueUsam(id: number): Promise<{ id: number; nome: string; criadoPor: number | null; autor: string | null }[]> {
-  return (await listarFluxos())
+export async function fluxosQueUsam(id: number, lista?: FluxoAutomacao[]): Promise<{ id: number; nome: string; criadoPor: number | null; autor: string | null }[]> {
+  return (lista ?? (await listarFluxos()))
     .filter((f) => f.id !== id && subfluxosDoGrafo(f.grafo).includes(id))
     .map((f) => ({ id: f.id, nome: f.nome, criadoPor: f.criadoPor, autor: f.autor }));
 }
 
 /** Os subfluxos do grafo que a pessoa NÃO pode usar (de outra pessoa e privados, ou inexistentes) — os ids. */
-export async function subfluxosProibidos(grafo: unknown, usuarioId: number): Promise<number[]> {
+export async function subfluxosProibidos(grafo: unknown, usuarioId: number, lista?: FluxoAutomacao[]): Promise<number[]> {
   const usados = subfluxosDoGrafo(lerGrafo(grafo));
   if (!usados.length) return [];
-  const todos = new Map((await listarFluxos()).map((f) => [f.id, f]));
+  const todos = new Map((lista ?? (await listarFluxos())).map((f) => [f.id, f]));
   return usados.filter((x) => {
     const f = todos.get(x);
     return !f || !fluxoVisivel(f, usuarioId);
@@ -242,11 +258,11 @@ export async function subfluxosProibidos(grafo: unknown, usuarioId: number): Pro
 }
 
 /** O ciclo (A usa B que usa A) que o grafo novo de `id` criaria — os nomes, ou null. `id` null = fluxo novo. */
-export async function cicloAoGravar(id: number | null, grafo: unknown): Promise<string | null> {
+export async function cicloAoGravar(id: number | null, grafo: unknown, lista?: FluxoAutomacao[]): Promise<string | null> {
   const novo = lerGrafo(grafo);
   const usados = subfluxosDoGrafo(novo);
   if (!usados.length) return null;
-  const todos = await listarFluxos();
+  const todos = lista ?? (await listarFluxos());
   const proprio = id ?? -1;
   if (usados.includes(proprio)) return "Um fluxo não pode usar a si mesmo.";
   const usa = new Map<number, number[]>(todos.map((f) => [f.id, subfluxosDoGrafo(f.grafo)]));

@@ -7,6 +7,7 @@
  */
 import { assinaturaDoLoad } from "./assinatura-dfd-centi.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
+import { temSecoes810 } from "./conferencia-dfd-centi.ts";
 import {
   type AlvoCenti,
   type ArquivoSaida,
@@ -69,10 +70,10 @@ export type Emissao = {
   recusada?: boolean;
   /** O planejamento ABRIU, mas a Centi não emitiu o DFD dele: não vale tentar outros órgãos. */
   definitivo?: boolean;
-  /** Emitido SEM o registro das seções 8 a 10: elas não valem (nem são comparadas nem corrigidas). */
+  /** Emitido SEM o registro das seções 8 a 10 no pedido (o load não o trouxe). Quem decide se elas vieram é o PDF
+   * (`temSecoes810`) — este sinal só diz que vale conferir. */
   semSecoes810?: boolean;
-  /** …porque o campo do registro NEM VEIO na leitura (a prévia do planejamento — Centi 217): elas não foram conferidas,
-   * o que é diferente de "o planejamento não tem" (o campo veio vazio). */
+  /** …porque o load era a PRÉVIA do planejamento (Centi 217): o Baixar/anexar confere o PDF antes de salvar. */
   secoes810NaoLidas?: boolean;
 };
 /** A resposta da extensão (o que o motor lê). */
@@ -146,9 +147,6 @@ export type ContextoEmissor = {
   /** O ID da entidade CADASTRADO no órgão (Órgãos e Unidades) — vale direto. */
   cadastradas: () => Record<string, string>;
   definirEntidade: (orgao: string, entidade: string) => void;
-  /** A CONFERÊNCIA aceita a PRÉVIA do planejamento (as seções 8 a 10 ficam fora da comparação e da correção). Salvar ou
-   * anexar o DFD NUNCA: emitido sem o registro das seções 8 a 10, o PDF sairia com elas em branco. */
-  aceitarPrevia?: boolean;
 };
 
 /** O LOAD do planejamento (CM002) na Centi, por API — o que a tela faz antes de emitir; devolve o JSON (a situação). */
@@ -209,25 +207,16 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     const msg = mensagemDoLoad(load.j);
     return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}${load.diagnostico ? ` [${load.diagnostico}]` : ""}.` };
   }
-  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele, o DFD é emitido
-  // mesmo assim, com o campo VAZIO — nunca o registro de outro planejamento — e as seções 8 a 10 que vierem não valem
-  // (`semSecoes810`): as demais seções seguem conferidas (a regra do "Convergente*"). A PRÉVIA do planejamento (a Centi
-  // 3.0.216.217 só abre ela: sem o centro de custo e sem o registro — `loadIncompleto`) emite IGUAL — as seções 8–10 ficam
-  // "não conferidas" (`secoes810NaoLidas`), nunca "o planejamento não tem". O centro de custo da prévia não é lido (quem
-  // grava o pula — `centroAusente`).
+  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele (a PRÉVIA do
+  // planejamento — a Centi 3.0.216.217 só abre ela — ou o planejamento sem o registro), o DFD é emitido com o campo VAZIO —
+  // nunca o registro de outro planejamento — e a Centi usa o do próprio planejamento. QUEM DECIDE se as seções 8 a 10
+  // vieram é o PDF (`temSecoes810`): a conferência compara o que o PDF traz; o Baixar/anexar confere o PDF antes de salvar.
   const ass = assinaturaDoLoad(load.j, id);
   const semSecoes810 = "erro" in ass;
   const secoes810NaoLidas = semSecoes810 && loadIncompleto(load.j);
   const causa810 = secoes810NaoLidas ? "o registro das seções 8 a 10 não veio na leitura da Centi" : "o planejamento não tem o registro das seções 8 a 10";
   const sem810 = semSecoes810 ? (secoes810NaoLidas ? { semSecoes810, secoes810NaoLidas } : { semSecoes810 }) : {};
-  // Fora da conferência (o Baixar/anexar DFDs), a PRÉVIA nunca é emitida: o DFD sairia com as seções 8 a 10 em branco —
-  // nunca salvo nem anexado ao protocolo da Centi. O que fazer: a extensão aprender como a TELA abre o planejamento.
   const ensinar = secoes810NaoLidas ? ` ${MSG_ENSINAR_PLANEJAMENTO}` : "";
-  if (secoes810NaoLidas && !c.aceitarPrevia)
-    return {
-      erro: `O planejamento ${id}${onde} abriu na Centi só como prévia (sem o registro das seções 8 a 10): o DFD não foi emitido — sairia com as seções 8 a 10 em branco.${ensinar}`,
-      definitivo: true,
-    };
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), "erro" in ass ? "" : ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
@@ -261,10 +250,25 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
 async function emitirConferido(c: ContextoEmissor, t: TarefaCenti, conferir: boolean, entidade?: string, fase?: Fase): Promise<Emissao> {
   fase?.("emitindo");
   const r = await emitirUm(c, t.id, entidade);
-  if (!r.pdf || !conferir) return r;
+  if (!r.pdf) return r;
+  // Emitido da PRÉVIA do planejamento (o load sem o registro das seções 8 a 10): só é salvo/anexado se o PRÓPRIO PDF
+  // trouxer as seções 8 a 10 preenchidas — em branco, nunca.
+  if (r.secoes810NaoLidas && !(await secoes810NoPdf(r.pdf)))
+    return { erro: `O DFD do planejamento ${t.id} saiu da Centi com as seções 8 a 10 em branco — não foi salvo nem anexado. ${MSG_ENSINAR_PLANEJAMENTO}`, definitivo: true };
+  if (!conferir) return r;
   fase?.("conferindo");
   const erro = conferirConteudoDfd(await textoDoPdf(r.pdf).catch(() => ""), t);
   return erro ? { erro } : r;
+}
+
+/** O PDF emitido traz as seções 8 a 10 com conteúdo (lido como na importação, sem OCR). Falha na leitura = não traz. */
+async function secoes810NoPdf(bytes: Uint8Array): Promise<boolean> {
+  try {
+    const { parseDfdPdf } = await import("./parse-dfd-pdf");
+    return temSecoes810(await parseDfdPdf(new File([bytes as Uint8Array<ArrayBuffer>], "dfd.pdf", { type: "application/pdf" }), { ocr: false }));
+  } catch {
+    return false;
+  }
 }
 
 /** A ENTIDADE do DFD: a cadastrada no órgão; senão a do mapa; senão a aberta — e, com "descobrir", tenta as outras e

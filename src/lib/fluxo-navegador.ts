@@ -10,7 +10,7 @@ import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdDetalhe } from "./dfd";
 import { herdarTratamentos } from "./comparar-protocolo";
-import { comSecoesDoSistema, semValores } from "./conferencia-dfd-centi";
+import { comSecoesDoSistema, semValores, temSecoes810 } from "./conferencia-dfd-centi";
 import { normalizarSecoesDfd } from "./dfd-tratamento";
 import { enviarDfdEmLotes, metaDoDfd } from "./importar-dfd";
 import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo, type EmissaoProtocolo } from "./automacao-tela-protocolo";
@@ -175,8 +175,7 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   };
   // A MESMA emissão do "Baixar DFDs", SEMPRE com o valor de referência ("Emitir valor referência" = Sim): sem ele a Centi
   // emite a seção 4 sem as colunas de valor e a conferência compararia "R$ 0,00". A chave do aparelho vale só no Baixar/anexar.
-  // A conferência aceita a PRÉVIA do planejamento (as seções 8 a 10 ficam fora da comparação e da correção).
-  const comValores: ContextoEmissor = { ...c, cfg: () => ({ ...c.cfg(), valorReferencia: true }), aceitarPrevia: true };
+  const comValores: ContextoEmissor = { ...c, cfg: () => ({ ...c.cfg(), valorReferencia: true }) };
   const e = await emitirUm(comValores, plan, entidade || undefined, false, l);
   // `RECUSA:` = a Centi recusou o Emitir DFD DESTE planejamento (o load abriu) — quem chama decide se é a operação.
   if (!e.pdf) {
@@ -200,9 +199,9 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
   // Sem nenhum valor nos itens = o PDF saiu sem o valor de referência: NÃO confere (nunca compara nem guarda "R$ 0,00").
   if (semValores(d)) throw falha("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido.");
   const resumo = {
-    // Sem o registro das seções 8 a 10: elas não são comparadas (a conferência diz "convergente*"); `secoes810NaoLidas` =
-    // a leitura não trouxe o registro (a prévia do planejamento) — a nota diz "não conferidas", nunca "não tem".
-    ...(e.semSecoes810 ? { semSecoes810: true, ...(e.secoes810NaoLidas ? { secoes810NaoLidas: true } : {}) } : {}),
+    // As seções 8 a 10 em branco NO PDF (`temSecoes810`): elas não são comparadas (a conferência diz "convergente*").
+    // Quem decide é o PDF de cada DFD — nunca o load (a prévia da Centi 217 não traz o registro e o PDF vem completo).
+    ...(temSecoes810(d) ? {} : { semSecoes810: true }),
     numero: d.numero,
     planejamento: d.planejamento,
     tipo: d.tipo,
@@ -225,11 +224,11 @@ export async function dfdDoSistema(dfdId: number): Promise<DfdDetalhe> {
   return j.dfd;
 }
 
-/** `semSecoes810` = o DFD da Centi veio sem o registro das seções 8 a 10 (a prévia, ou o planejamento sem ele): ficam as
- * seções 8 a 10 do SISTEMA — nunca as em branco da Centi (a mesma regra da correção). */
-export async function substituirDfdPelaCenti(dfdId: number, lido: DfdParseado, semSecoes810 = false): Promise<{ numero: string; itens: number }> {
+/** O PDF da Centi com as seções 8 a 10 em branco (`temSecoes810`): ficam as do SISTEMA — nunca as em branco da Centi
+ * (a mesma regra da comparação e da correção). */
+export async function substituirDfdPelaCenti(dfdId: number, lido: DfdParseado): Promise<{ numero: string; itens: number }> {
   const g = await dfdDoSistema(dfdId);
-  const novo = semSecoes810 ? comSecoesDoSistema(lido, g) : lido;
+  const novo = temSecoes810(lido) ? lido : comSecoesDoSistema(lido, g);
   const so = (v: unknown) => s(v).replace(/\D/g, "").replace(/^0+/, "");
   if (!so(g.planejamento) || so(g.planejamento) !== so(novo.planejamento))
     throw new Error(`O DFD da Centi é de outro planejamento (${s(novo.planejamento) || "sem nº"} × ${s(g.planejamento) || "sem nº"}).`);

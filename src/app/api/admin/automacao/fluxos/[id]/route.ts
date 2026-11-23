@@ -1,8 +1,8 @@
 import { notificar } from "@/lib/notificacoes";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { fluxoEditavel, fluxoVisivel, rotuloFrequencia } from "@/lib/fluxo-core";
-import { cicloAoGravar, editarFluxo, excluirFluxo, type FluxoAutomacao, fluxosQueUsam, getFluxo, registrarExecucaoFluxo, subfluxosProibidos } from "@/lib/fluxos";
+import { fluxoEditavel, fluxoVisivel, lerGrafo, rotuloFrequencia, subfluxosDoGrafo } from "@/lib/fluxo-core";
+import { cicloAoGravar, editarFluxo, excluirFluxo, type FluxoAutomacao, fluxosQueUsam, getFluxo, listarFluxos, registrarExecucaoFluxo, subfluxosProibidos } from "@/lib/fluxos";
 import { editarFluxoSchema, execucaoFluxoSchema } from "@/lib/fluxos-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -34,23 +34,26 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if ("resp" in p) return p.resp;
   const antes = await doDono(id, g.u.id);
   if (!antes) return erro(NAO_ENCONTRADO, 404);
+  const tornarPrivado = p.data.publico === false && antes.publico;
+  // Todos os fluxos lidos UMA vez — só quando há subfluxo a conferir ou ao tornar privado.
+  const todos = (p.data.grafo && subfluxosDoGrafo(lerGrafo(p.data.grafo)).length) || tornarPrivado ? await listarFluxos() : undefined;
   if (p.data.grafo) {
-    if ((await subfluxosProibidos(p.data.grafo, g.u.id)).length) return erro("O fluxo usa um subfluxo privado de outra pessoa (ou que não existe mais).", 422);
-    const ciclo = await cicloAoGravar(id, p.data.grafo);
+    if ((await subfluxosProibidos(p.data.grafo, g.u.id, todos)).length) return erro("O fluxo usa um subfluxo privado de outra pessoa (ou que não existe mais).", 422);
+    const ciclo = await cicloAoGravar(id, p.data.grafo, todos);
     if (ciclo) return erro(ciclo, 409);
   }
   // Tornar PRIVADO um fluxo que outras pessoas usam dentro dos delas quebraria esses fluxos.
-  if (p.data.publico === false && antes.publico) {
-    const deOutros = (await fluxosQueUsam(id)).filter((f) => f.criadoPor !== g.u.id);
+  if (tornarPrivado) {
+    const deOutros = (await fluxosQueUsam(id, todos)).filter((f) => f.criadoPor !== g.u.id);
     if (deOutros.length)
       return erro(`Outras pessoas usam este fluxo dentro de: ${deOutros.map((f) => `“${f.nome}”${f.autor ? ` (${f.autor})` : ""}`).join(", ")}. Ele precisa seguir público.`, 409);
   }
-  const fluxo = await editarFluxo(id, p.data);
+  const fluxo = await editarFluxo(id, p.data, new Date(), antes);
   if (!fluxo) return erro(NAO_ENCONTRADO, 404);
   const partes: string[] = [];
   if (p.data.nome && p.data.nome !== antes.nome) partes.push(`renomeado para “${fluxo.nome}”`);
   if (p.data.grafo) partes.push(`${fluxo.grafo.nos.length} nó(s), ${fluxo.grafo.conexoes.length} conexão(ões)`);
-  if (p.data.frequencia) partes.push(`frequência: ${rotuloFrequencia(fluxo.frequencia)}`);
+  if (p.data.frequencia && JSON.stringify(fluxo.frequencia) !== JSON.stringify(antes.frequencia)) partes.push(`frequência: ${rotuloFrequencia(fluxo.frequencia)}`);
   if (p.data.ativo !== undefined && p.data.ativo !== antes.ativo) partes.push(fluxo.ativo ? "agendamento LIGADO" : "agendamento desligado");
   if (p.data.publico !== undefined && p.data.publico !== antes.publico) partes.push(fluxo.publico ? "tornado PÚBLICO" : "tornado privado");
   if (partes.length)
@@ -66,8 +69,9 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!id) return erro("Id inválido.", 400);
   const p = await parseCorpo(execucaoFluxoSchema, req);
   if ("resp" in p) return p.resp;
-  if (!(await doDono(id, g.u.id))) return erro(NAO_ENCONTRADO, 404);
-  const fluxo = await registrarExecucaoFluxo(id, p.data);
+  const atual = await doDono(id, g.u.id);
+  if (!atual) return erro(NAO_ENCONTRADO, 404);
+  const fluxo = await registrarExecucaoFluxo(id, p.data, new Date(), atual);
   if (!fluxo) return erro(NAO_ENCONTRADO, 404);
   if (p.data.estado !== "concluido" || p.data.apontados)
     await registrarAuditoria({

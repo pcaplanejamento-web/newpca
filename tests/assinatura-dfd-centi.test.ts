@@ -169,51 +169,43 @@ test("dadosDoPlanejamento: os campos do PRÓPRIO planejamento (formato real do 1
 });
 
 // A Centi 3.0.216.217 (19/11/2026): o load completo (101045) voltou vazio e o 101026 abre só uma PRÉVIA do planejamento
-// (sem o centro de custo e sem o registro das seções 8–10). A v1.307.3 parou de emitir com a prévia e TODO DFD ficou "não
-// conferido"; a emissão com o campo VAZIO funciona (a Centi usa o do planejamento) — a prévia EMITE e as seções 8–10 ficam
-// "não conferidas" (nunca comparadas nem corrigidas); o centro de custo da prévia nunca é gravado (`centroAusente`).
+// (sem o centro de custo e sem o registro das seções 8–10). A emissão com o campo VAZIO funciona (a Centi usa o do
+// planejamento) e QUEM DECIDE se as seções 8–10 vieram é o PDF (`temSecoes810`) — nunca o load.
 const previa = (plan: number) => ({ Entity: { ModuleKey: 999999, Fields: [{ Key: "Finalidade", Value: "x" }, { Key: "Situacao", Value: 1 }, { Key: "Id", Value: String(plan) }] }, Message: null });
 
-test("load PRÉVIA (sem o centro de custo e sem as seções 8–10): EMITE com o campo vazio e marca as seções 8–10 como NÃO LIDAS", async () => {
+test("load PRÉVIA (sem o centro de custo e sem as seções 8–10): EMITE com o campo vazio — o PDF decide as seções 8–10", async () => {
   const { faltasDoLoad, loadIncompleto } = await import("../src/lib/automacao-centi-core.ts");
   assert.deepEqual(faltasDoLoad(loadDaTela(131, 114)), []);
   assert.deepEqual(faltasDoLoad(loadDaTela(131, null)), ["IdPlanejamentoAssinaturaDFD"]);
-  assert.equal(loadIncompleto(loadDaTela(131, null)), false, "o planejamento sem o registro (com o centro de custo) é o caso legítimo do Convergente*");
+  assert.equal(loadIncompleto(loadDaTela(131, null)), false);
   assert.equal(loadIncompleto(previa(24)), true);
   assert.equal(loadIncompleto({ Entity: null }), false);
-  // O Baixar/anexar DFDs NUNCA emite a prévia: o PDF sairia com as seções 8 a 10 em branco e seria salvo/anexado.
-  const baixar = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
-  const z = await emitirUm(baixar.c, "24", "3");
-  assert.equal(z.pdf, undefined);
-  assert.equal(z.definitivo, true, "o mesmo planejamento nos outros órgãos também seria a prévia — não adianta tentar");
-  assert.match(z.erro ?? "", /abriu na Centi só como prévia/);
-  assert.match(z.erro ?? "", /sairia com as seções 8 a 10 em branco/);
-  assert.match(z.erro ?? "", /Abra UM planejamento na CM002 da Centi \(duplo clique na linha\)/);
-  assert.equal(baixar.pedidos.filter((p) => p.acao === "pedir").length, 0, "nenhuma emissão");
-  // A CONFERÊNCIA aceita a prévia (`aceitarPrevia`): as seções 8 a 10 ficam fora da comparação e da correção.
-  const { c: c0, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
-  const c = { ...c0, aceitarPrevia: true };
+  const { c, pedidos } = centiFalsa({ [caminhoLoadPlanejamento("24")]: previa(24) });
   const r = await emitirUm(c, "24", "3");
-  assert.ok(r.pdf, "a prévia emite na conferência (a Centi 217 aceita o campo vazio)");
+  assert.ok(r.pdf, "a prévia emite (a Centi 217 aceita o campo vazio)");
   assert.equal(r.erro, undefined);
-  assert.equal(r.semSecoes810, true);
-  assert.equal(r.secoes810NaoLidas, true, "o registro das seções 8–10 não veio NA LEITURA — nunca 'o planejamento não tem'");
+  assert.equal(r.semSecoes810, true, "só o sinal de que o pedido foi sem o registro — o PDF é que decide");
+  assert.equal(r.secoes810NaoLidas, true, "a prévia: o Baixar/anexar confere o PDF antes de salvar");
   const ops = pedidos.filter((p) => p.acao === "pedir").map((p) => p.dados.corpo);
   assert.equal(ops.length, 1, "UMA emissão");
   assert.equal(param(ops[0], "IdComprasPlanejamento"), "24");
   assert.equal(param(ops[0], "IdPlanejamentoAssinaturaDFD"), "", "nunca um id de outro planejamento");
-  // O load completo sem o campo: o planejamento NÃO TEM o registro (não é "não lido").
-  const t = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, null) });
-  const x = await emitirUm(t.c, "131");
-  assert.ok(x.pdf);
-  assert.equal(x.semSecoes810, true);
-  assert.equal(x.secoes810NaoLidas, undefined);
-  // Com o registro: emite com ele e as seções 8–10 são comparadas.
+  // Com o registro: emite com ele.
   const u = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, 114) });
   const y = await emitirUm(u.c, "131");
   assert.ok(y.pdf);
   assert.equal(y.semSecoes810, undefined);
   assert.equal(param(u.pedidos.find((p) => p.acao === "pedir")?.dados.corpo, "IdPlanejamentoAssinaturaDFD"), "114");
+});
+
+test("seções 8–10 pelo PDF: preenchidas (qualquer uma) = comparadas; todas em branco = não", async () => {
+  const { temSecoes810 } = await import("../src/lib/conferencia-dfd-centi.ts");
+  const sec = (titulo: string, texto: string) => ({ titulo, texto });
+  const base = [sec("3 - JUSTIFICATIVA DA NECESSIDADE DA AQUISIÇÃO", "x")];
+  assert.equal(temSecoes810({ secoes: base }), false, "sem as seções 8–10");
+  assert.equal(temSecoes810({ secoes: [...base, sec("8 - INDICAÇÃO DO(S) INTEGRANTE(S) DA EQUIPE DE PLANEJAMENTO E RESPONSÁVEL PELA FISCALIZAÇÃO", "  ")] }), false, "só o título");
+  assert.equal(temSecoes810({ secoes: [...base, sec("9 - AUTORIZAÇÃO DEMANDA", "Autorizo o início da formalização da demanda. FULANO GESTOR")] }), true);
+  assert.equal(temSecoes810({ secoes: [...base, sec("8 - INDICAÇÃO DO(S) INTEGRANTE(S) DA EQUIPE DE PLANEJAMENTO E RESPONSÁVEL PELA FISCALIZAÇÃO", "Integrantes Equipe: Nome: X")] }), true);
 });
 
 test("recusa do Emitir DFD com a prévia: a causa certa (o registro NÃO VEIO na leitura) e nunca 'o planejamento não tem'", async () => {
@@ -225,7 +217,7 @@ test("recusa do Emitir DFD com a prévia: a causa certa (o registro NÃO VEIO na
     if (acao === "pedir") return { ok: true, b64: Buffer.from(JSON.stringify({ Success: false, Message: "Usuário sem permissão!" })).toString("base64"), status: 200 };
     return { ok: true };
   };
-  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {}, aceitarPrevia: true };
+  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {} };
   const r = await emitirUm(c, "24", "3");
   assert.equal(r.pdf, undefined);
   assert.match(r.erro ?? "", /o registro das seções 8 a 10 não veio na leitura da Centi/);
@@ -252,7 +244,7 @@ test("recusa do Emitir DFD com a prévia e a operação TROCADA na Centi: reapre
         : { ok: true, b64: Buffer.from("%PDF-1.4 teste").toString("base64"), status: 200 };
     return { ok: true };
   };
-  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => (op++ === 0), mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {}, aceitarPrevia: true };
+  const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => (op++ === 0), mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {} };
   const r = await emitirUm(c, "24", "3");
   assert.ok(r.pdf, r.erro);
   assert.equal(r.semSecoes810, true);

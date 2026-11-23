@@ -359,7 +359,7 @@ export function FluxosAutomacao({
         lerDfdCentiPorCodigo(emissor, plan, entidade ? formatoEntidade(entidade, atualRef.current) : undefined, pdf !== false, completo === true, ocr ?? completo === true),
       pdfCenti: (plan: string, entidade?: string) => pdfLidoNaCenti(plan, entidade),
       dfdDoSistema: (id: number) => dfdDoSistema(id) as unknown as Promise<Item>,
-      substituirDfd: (id: number, dfd: Item, semSecoes810?: boolean) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado, semSecoes810 === true),
+      substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
       corrigirPelaCenti: (id: number, grupos?: string[] | null) => corrigirDfdPelaCenti(id, null, fetch, lerGruposCorrecao(grupos)),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {

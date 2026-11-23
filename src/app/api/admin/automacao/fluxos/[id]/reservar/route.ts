@@ -17,6 +17,6 @@ export async function POST(_req: Request, { params }: Ctx) {
   if (!id) return erro("Id inválido.", 400);
   const f = await getFluxo(id);
   if (!f || !fluxoEditavel(f, g.u.id)) return erro("Fluxo não encontrado.", 404);
-  const r = await reservarExecucaoFluxo(id);
+  const r = await reservarExecucaoFluxo(id, new Date(), f);
   return r ? ok(r) : erro("Esta execução agendada já foi reservada (ou não está mais devida).", 409);
 }

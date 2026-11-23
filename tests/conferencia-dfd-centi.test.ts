@@ -304,77 +304,69 @@ test("a emissão da conferência manda “Emitir valor referência” = Sim mesm
   assert.equal(param(pedidoEmitirDfd("131", { ...doAparelho, valorReferencia: true }, new Date(2026, 10, 17), "114"), "EmitirValorReferencia"), "1");
 });
 
-test("sem o registro das seções 8 a 10 na Centi: só elas não contam — “convergente*” com a nota; outra diferença = divergente", async () => {
-  const { conferenciaDoRetrato, lerRetrato, montarRetrato, notaConferencia, NOTA_SEM_SECOES_810, textoRetrato } = await import("../src/lib/conferencia-dfd-centi.ts");
+test("seções 8 a 10 pelo PDF: preenchidas = comparadas a rigor (o load não importa); em branco = “convergente*” com a nota", async () => {
+  const { conferenciaDoRetrato, lerRetrato, montarRetrato, notaConferencia, notaSemLeitura, NOTA_SEM_SECOES_810, textoRetrato } = await import("../src/lib/conferencia-dfd-centi.ts");
   const { marcacoesConferencia } = await import("../src/lib/fluxo-nos.ts");
   const { novoDaCenti } = await import("../src/lib/correcao-centi-core.ts");
   const s = base();
   s.secoes = [...s.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "ANA, BIA" }, { numero: 10, titulo: "10 - AUTORIZAÇÃO", texto: "Autorizo." }];
-  // A Centi sem as seções 8 a 10 (ou com as de OUTRO registro): não comparadas.
+  // O PDF da Centi COM a seção 8 preenchida (o caso do DFD 93 / Planej. 132: a prévia no load, o PDF completo): comparada
+  // — mesmo com o sinal do load (`semSecoes810`) ligado. A 10 ausente com a 8 preenchida também é diferença.
   const c = base();
   c.secoes = [...c.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "OUTRA EQUIPE" }];
-  assert.ok(diferencasDfdCenti(sistema(s), c).some((x) => x.startsWith("Seção 8")), "com o registro, comparadas");
-  assert.deepEqual(diferencasDfdCenti(sistema(s), c, 0.01, true), [], "sem o registro, fora da comparação");
-  const it = (dfd: DfdParseado) => ({ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(s), centi: { numero: "123", semSecoes810: true, dfd } });
-  const so = compararDfdCenti([it(c)], { tolerancia: 0.01, objeto: true });
+  const difs = diferencasDfdCenti(sistema(s), c);
+  assert.ok(difs.some((x) => x.startsWith("Seção 8")), "a 8 do PDF é comparada");
+  assert.ok(difs.some((x) => /Seção 10 .*só no sistema/.test(x)), "a 10 em falta, com a 8 preenchida, é diferença real");
+  const it = (dfd: DfdParseado) => ({ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(s), centi: { numero: "123", semSecoes810: true, secoes810NaoLidas: true, dfd } });
+  const div = compararDfdCenti([it(c)], { tolerancia: 0.01, objeto: true });
+  assert.equal(div.divergentes.length, 1, "o load (a prévia) nunca tira as seções 8–10 da comparação");
+  // Iguais no PDF e no sistema: convergente SEM nota.
+  const igual = base();
+  igual.secoes = [...igual.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "ANA, BIA" }, { numero: 10, titulo: "10 - AUTORIZAÇÃO", texto: "Autorizo." }];
+  const ok = compararDfdCenti([it(igual)], { tolerancia: 0.01, objeto: true });
+  assert.equal(ok.conformes.length, 1);
+  assert.equal(ok.conformes[0].conferenciaCentiMotivo, null, "convergente comum");
+  // O PDF com as seções 8 a 10 EM BRANCO (só o título, ou nenhuma): não comparadas — Convergente* com a nota nova.
+  const branco = base();
+  branco.secoes = [...branco.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "" }];
+  assert.deepEqual(diferencasDfdCenti(sistema(s), branco), [], "em branco, fora da comparação");
+  const so = compararDfdCenti([it(branco)], { tolerancia: 0.01, objeto: true });
   assert.equal(so.conformes.length, 1);
-  assert.equal(so.conformes[0].conferenciaCenti, "convergente");
-  assert.match(String(so.conformes[0].conferenciaCentiMotivo), /^DFD 123 \(Planej\. 456\): Sem as seções 8 a 10 na Centi/);
-  assert.ok(notaConferencia("convergente", String(so.conformes[0].conferenciaCentiMotivo))?.startsWith(NOTA_SEM_SECOES_810));
+  const motivo = String(so.conformes[0].conferenciaCentiMotivo);
+  assert.match(motivo, /^DFD 123 \(Planej\. 456\): Seções 8 a 10 em branco no DFD da Centi/);
+  assert.ok(notaConferencia("convergente", motivo)?.startsWith(NOTA_SEM_SECOES_810));
+  assert.equal(notaSemLeitura(notaConferencia("convergente", motivo)), false);
   assert.equal(notaConferencia("convergente", null), null);
-  assert.equal(notaConferencia("divergente", String(so.conformes[0].conferenciaCentiMotivo)), null);
-  // A marcação grava o convergente COM a nota (a tela mostra "Convergente*"); o comum segue sem motivo.
+  assert.equal(notaConferencia("divergente", motivo), null);
+  // As notas antigas (gravadas antes) seguem reconhecidas na leitura.
+  assert.ok(notaConferencia("convergente", "DFD 1 (Planej. 2): Seções 8 a 10 não conferidas — x"));
+  assert.equal(notaSemLeitura(notaConferencia("convergente", "DFD 1 (Planej. 2): Seções 8 a 10 não conferidas — x")), true);
+  assert.ok(notaConferencia("convergente", "DFD 1 (Planej. 2): Sem as seções 8 a 10 na Centi — x"));
+  // A marcação grava o convergente COM a nota; o comum segue sem motivo.
   const m = marcacoesConferencia([], [...so.conformes, { id: 10, conferenciaCenti: "convergente", conferenciaCentiMotivo: null }]);
-  assert.equal(m.find((x) => x.dfdId === 9)?.motivo, so.conformes[0].conferenciaCentiMotivo);
+  assert.equal(m.find((x) => x.dfdId === 9)?.motivo, motivo);
   assert.equal("motivo" in (m.find((x) => x.dfdId === 10) ?? {}), false);
-  // Qualquer outra diferença: a lógica de sempre (divergente, sem a nota).
-  const c2 = { ...c, objeto: "Aquisição de cadeiras" };
-  const div = compararDfdCenti([it(c2)], { tolerancia: 0.01, objeto: true });
-  assert.equal(div.divergentes.length, 1);
-  assert.match(String(div.divergentes[0].mensagem), /1 diferença — Objeto:/);
-  // O retrato guarda a falta: a reconferência pela Mesa dá o MESMO resultado e a correção mantém as seções do sistema.
-  const r = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" }, { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true }, c2, { objeto: true, tolerancia: 0.01 })));
-  assert.equal(r?.semSecoes810, true);
-  assert.equal(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, r!).status, "divergente");
-  assert.match(String(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, { ...r!, dfd: c }).motivo), /Sem as seções 8 a 10/);
-  const novo = novoDaCenti(s, r!, 2027);
-  assert.deepEqual(
-    novo.secoes.filter((x) => /EQUIPE|AUTORIZA/.test(x.titulo)).map((x) => x.texto),
-    ["ANA, BIA", "Autorizo."],
-    "a correção nunca apaga nem troca as seções 8 a 10 do sistema",
-  );
-});
-
-test("seções 8 a 10 NÃO LIDAS (a prévia da Centi 217) × o planejamento sem o registro: a nota diz qual — e o retrato a guarda", async () => {
-  const { conferenciaDoRetrato, lerRetrato, montarRetrato, notaConferencia, notaSemLeitura, NOTA_SECOES_810_NAO_LIDAS, NOTA_SEM_SECOES_810, textoRetrato } = await import("../src/lib/conferencia-dfd-centi.ts");
-  const s = base();
-  s.secoes = [...s.secoes, { numero: 8, titulo: "8 - INDICAÇÃO DA EQUIPE DE PLANEJAMENTO", texto: "ANA, BIA" }];
-  const c = base();
-  const it = (naoLidas: boolean) => ({ id: 9, numero: "123", planejamento: "456", dfdSistema: sistema(s), centi: { numero: "123", semSecoes810: true, ...(naoLidas ? { secoes810NaoLidas: true } : {}), dfd: c } });
-  const lida = compararDfdCenti([it(true)], { tolerancia: 0.01, objeto: true });
-  assert.equal(lida.conformes.length, 1, "o resto confere: Convergente* (nunca erro, nunca bloqueia as outras seções)");
-  const m1 = String(lida.conformes[0].conferenciaCentiMotivo);
-  assert.match(m1, /^DFD 123 \(Planej\. 456\): Seções 8 a 10 não conferidas — a Centi não informou/);
-  assert.doesNotMatch(m1, /não tem o registro/, "não lido nunca vira 'o planejamento não tem'");
-  const n1 = notaConferencia("convergente", m1);
-  assert.ok(n1?.startsWith(NOTA_SECOES_810_NAO_LIDAS));
-  assert.equal(notaSemLeitura(n1), true);
-  const tem = compararDfdCenti([it(false)], { tolerancia: 0.01, objeto: true });
-  const m2 = String(tem.conformes[0].conferenciaCentiMotivo);
-  assert.match(m2, /Sem as seções 8 a 10 na Centi — o planejamento não tem o registro/);
-  assert.ok(notaConferencia("convergente", m2)?.startsWith(NOTA_SEM_SECOES_810));
-  assert.equal(notaSemLeitura(notaConferencia("convergente", m2)), false);
-  // O retrato guarda a marca: a reconferência pela Mesa dá o MESMO texto.
-  const r = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" }, { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true, secoes810NaoLidas: true }, c, { objeto: true, tolerancia: 0.01 })));
-  assert.equal(r?.semSecoes810, true);
-  assert.equal(r?.secoes810NaoLidas, true);
-  const rec = conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, r!);
+  // O retrato decide pelo PDF guardado (também o antigo, gravado com o sinal do load): a reconferência dá o MESMO resultado.
+  const sinal = { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true, secoes810NaoLidas: true };
+  const id = { numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" };
+  const rc = lerRetrato(textoRetrato(montarRetrato(id, sinal, c, { objeto: true, tolerancia: 0.01 })));
+  assert.equal(rc?.semSecoes810, undefined, "PDF com a seção 8: comparada");
+  assert.equal(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, rc!).status, "divergente");
+  const rb = lerRetrato(textoRetrato(montarRetrato(id, sinal, branco, { objeto: true, tolerancia: 0.01 })));
+  assert.equal(rb?.semSecoes810, true);
+  const rec = conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, rb!);
   assert.equal(rec.status, "convergente");
-  assert.match(String(rec.motivo), /Seções 8 a 10 não conferidas/);
-  // Sem a marca no retrato (o planejamento não tem): o texto de sempre.
-  const r2 = lerRetrato(textoRetrato(montarRetrato({ numero: "123", tipo: "DFD-S", entidade: "2", entidadeAchada: "" }, { situacao: "", numero: "123", tipo: "DFD-S", semSecoes810: true }, c, { objeto: true, tolerancia: 0.01 })));
-  assert.equal(r2?.secoes810NaoLidas, undefined);
-  assert.match(String(conferenciaDoRetrato({ ...sistema(s), numero: "123", planejamento: "456", tipo: "DFD-S" }, r2!).motivo), /Sem as seções 8 a 10 na Centi/);
+  assert.match(String(rec.motivo), /Seções 8 a 10 em branco no DFD da Centi/);
+  // Retrato antigo gravado à mão com o sinal, mas o PDF com as seções: o PDF manda.
+  const antigo = lerRetrato(JSON.stringify({ ...JSON.parse(textoRetrato(montarRetrato(id, sinal, c, { objeto: true, tolerancia: 0.01 })) as string), semSecoes810: true, secoes810NaoLidas: true }));
+  assert.equal(antigo?.semSecoes810, undefined);
+  // A correção: com o PDF em branco, as seções 8–10 do sistema ficam; com o PDF preenchido, vêm as da Centi.
+  assert.deepEqual(
+    novoDaCenti(s, rb!, 2027).secoes.filter((x) => /EQUIPE|AUTORIZA/.test(x.titulo)).map((x) => x.texto),
+    ["ANA, BIA", "Autorizo."],
+    "em branco no PDF: a correção nunca apaga as seções 8 a 10 do sistema",
+  );
+  assert.ok(novoDaCenti(s, rc!, 2027).secoes.some((x) => /EQUIPE/.test(x.titulo) && x.texto === "OUTRA EQUIPE"), "preenchidas no PDF: corrige pela Centi");
 });
 
 test("“não encontrado na Centi” SÓ quando a Centi diz: a resposta vazia (a Centi 217 também a dá ao planejamento que existe) é 'não abriu'", async () => {

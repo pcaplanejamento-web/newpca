@@ -5,6 +5,8 @@
 import type { Grafo } from "./fluxo-core.ts";
 import { conferenciaDesatualizada } from "./conferencia-dfd-centi.ts";
 import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
+// Ciclo com fluxo-ler-sistema: só usado na chamada (nunca na carga do módulo).
+import { configDaLeitura } from "./fluxo-ler-sistema.ts";
 
 type Item = Record<string, unknown>;
 export type TipoItemMesa = "protocolo" | "dfd" | "item";
@@ -102,7 +104,8 @@ export function aceitaItensDeFora(g: Grafo, itens: readonly Item[], categoria: (
     .some((n) => {
       if (!n || n.desativado) return false;
       if (n.tipo === "sistema.ler") {
-        const valor = txt(n.config.valor);
+        // O valor EFETIVO (o escondido de uma busca antiga não restringe nada — a régua da execução).
+        const valor = txt(configDaLeitura(n.config).valor);
         if (!valor) return tipo === TIPO_LIDO[txt(n.config.objeto) || "dfds"];
         return /\{\{/.test(valor);
       }

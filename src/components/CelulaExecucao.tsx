@@ -122,7 +122,7 @@ export function CelulaConferenciaCenti({
   const titulo = desatualizada
     ? `O DFD mudou depois da conferência (${rotuloConferencia(status).toLowerCase()}${quando}) — reconfira`
     : nota
-      ? `Confere com a Centi${quando}, ${notaSemLeitura(nota) ? "seções 8 a 10 não conferidas" : "sem as seções 8 a 10"} — ver a observação`
+      ? `Confere com a Centi${quando}, ${notaSemLeitura(nota) ? "seções 8 a 10 não conferidas" : "seções 8 a 10 em branco no PDF"} — ver a observação`
       : status === "convergente"
       ? `Confere com a Centi${quando}`
       : ressalva
@@ -273,12 +273,12 @@ function PainelDivergencias({
       )}
       {nota && (
         <div className="space-y-1 rounded-control border border-[color-mix(in_srgb,var(--warn)_40%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-2 py-1.5 text-[12.5px]">
-          <p className="font-medium text-text">{notaSemLeitura(nota) ? "Seções 8 a 10 não conferidas" : "Faltam as seções 8 a 10 na Centi"}</p>
+          <p className="font-medium text-text">{notaSemLeitura(nota) ? "Seções 8 a 10 não conferidas" : "Seções 8 a 10 em branco no DFD da Centi"}</p>
           <p className="break-words text-text-2">{nota.replace(/^[^—]*—\s*/, "").replace(/^./, (c) => c.toUpperCase())}</p>
           <p className="text-[12px] text-muted">
             {notaSemLeitura(nota)
-              ? "Indicação da equipe, secretário demandante e autorização não foram comparadas nem corrigidas — valem as do sistema. Para conferi-las, abra UM planejamento na CM002 da Centi (duplo clique na linha), na aba da automação — a extensão aprende como a Centi abre o cadastro completo — e reconfira."
-              : "Indicação da equipe, secretário demandante e autorização não foram comparadas — valem as do sistema. Para conferi-las, cadastre o registro de assinatura do DFD no planejamento da Centi e reconfira."}
+              ? "Conferência de uma versão anterior, que não lia essas seções. Reconfira: agora cada seção é verificada no próprio PDF do DFD."
+              : "O PDF que a Centi emitiu veio sem a indicação da equipe, o secretário demandante e a autorização — não foram comparadas (valem as do sistema). Confira o registro de assinatura do DFD no planejamento da Centi e reconfira."}
           </p>
         </div>
       )}

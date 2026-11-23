@@ -13,30 +13,30 @@ import { type DfdParseado, normComparacao } from "./parse-dfd-comum.ts";
 export type DfdSistemaComparavel = Omit<DfdComparavel, "anoPca" | "reparticaoId"> & { anoPca?: number | null; protocoloAnoPca?: number | null };
 
 // ---------------------------------------------------------------------------
-// SEM AS SEÇÕES 8 A 10 NA CENTI: o planejamento não tem o registro de assinatura do DFD (equipe, secretário demandante,
-// autorização — o campo IdPlanejamentoAssinaturaDFD do load) OU a leitura não o trouxe (a PRÉVIA do planejamento — Centi
-// 3.0.216.217). O DFD é emitido mesmo assim; essas seções NÃO são comparadas nem corrigidas (valem as do sistema) e o resto
-// segue a régua de sempre. Sem nenhuma outra diferença, a conferência é "convergente" com a NOTA — a tela mostra
-// "Convergente*" (âmbar) e a nota no painel do selo, com a causa CERTA (não tem × não conferidas).
+// SEÇÕES 8 A 10 (equipe, secretário demandante, autorização) — QUEM DECIDE É O PDF de cada DFD, nunca o load da Centi:
+// o PDF emitido traz qualquer uma delas com conteúdo → as três são comparadas a rigor (e corrigíveis). O PDF veio com as
+// três em branco → elas NÃO são comparadas nem corrigidas (valem as do sistema); sem outra diferença, a conferência é
+// "convergente" com a NOTA — a tela mostra "Convergente*" (âmbar) e a nota no painel do selo.
 // ---------------------------------------------------------------------------
 
 /** As seções do registro de assinatura do DFD (8 a 10), pela chave da seção padrão (`SECOES_PADRAO`). */
 export const SECOES_ASSINATURA_DFD: ReadonlySet<string> = new Set(["equipe", "demandante", "autorizacao"]);
-export const NOTA_SEM_SECOES_810 = "Sem as seções 8 a 10 na Centi";
-/** A nota quando a LEITURA não trouxe o registro (a prévia do planejamento): as seções 8–10 não foram conferidas — a Centi
- * pode tê-las; nunca se afirma que "o planejamento não tem". */
+/** O PDF do DFD traz alguma das seções 8 a 10 COM CONTEÚDO (o título sozinho não conta). Pura. */
+export const temSecoes810 = (d: { secoes: readonly { titulo: string; texto: string }[] }): boolean =>
+  d.secoes.some((s) => SECOES_ASSINATURA_DFD.has(chaveSecao(s.titulo)) && normComparacao(s.texto ?? "") !== "");
+export const NOTA_SEM_SECOES_810 = "Seções 8 a 10 em branco no DFD da Centi";
+/** As notas de versões anteriores (ainda nos motivos gravados): continuam reconhecidas na leitura. */
+const NOTAS_ANTIGAS_810 = ["Sem as seções 8 a 10 na Centi"];
+/** A nota antiga de quando a decisão vinha do load (a prévia do planejamento) — só para LER os motivos já gravados. */
 export const NOTA_SECOES_810_NAO_LIDAS = "Seções 8 a 10 não conferidas";
-/** O motivo gravado no "convergente*": a referência do DFD + a nota (a mesma forma "<ref>: …" dos motivos). `naoLidas` =
- * a leitura não trouxe o registro (a prévia do planejamento). */
-export const motivoSemSecoes810 = (ref: string, naoLidas = false) =>
-  naoLidas
-    ? `${ref}: ${NOTA_SECOES_810_NAO_LIDAS} — a Centi não informou, nesta leitura, o registro de assinatura do DFD do planejamento (indicação da equipe, secretário demandante e autorização). As demais informações conferem.`
-    : `${ref}: ${NOTA_SEM_SECOES_810} — o planejamento não tem o registro de assinatura do DFD (indicação da equipe, secretário demandante e autorização). As demais informações conferem.`;
+/** O motivo gravado no "convergente*": a referência do DFD + a nota (a mesma forma "<ref>: …" dos motivos). */
+export const motivoSemSecoes810 = (ref: string) =>
+  `${ref}: ${NOTA_SEM_SECOES_810} — o PDF emitido pela Centi veio sem a indicação da equipe, o secretário demandante e a autorização: essas seções não foram comparadas (valem as do sistema). As demais informações conferem.`;
 /** A NOTA do "convergente*" (o texto depois da referência) — `null` quando é o convergente comum ou não é convergente. */
 export function notaConferencia(status: string | null | undefined, motivo: string | null | undefined): string | null {
   const m = String(motivo ?? "");
   if (status !== "convergente") return null;
-  for (const marca of [NOTA_SEM_SECOES_810, NOTA_SECOES_810_NAO_LIDAS]) if (m.includes(marca)) return m.slice(m.indexOf(marca));
+  for (const marca of [NOTA_SEM_SECOES_810, NOTA_SECOES_810_NAO_LIDAS, ...NOTAS_ANTIGAS_810]) if (m.includes(marca)) return m.slice(m.indexOf(marca));
   return null;
 }
 /** A nota é a das seções 8–10 NÃO CONFERIDAS (a leitura não trouxe o registro) — a orientação muda: reler o planejamento
@@ -90,10 +90,11 @@ const rotuloItem = (i: { item: number | null; codigo: string | null }) => `Item 
  * não a traz), nº de planejamento (já conferido), nº do DFD e tipo (o resumo os aponta). O valor total usa a
  * `tolerancia`; as seções da Centi passam pela MESMA normalização da importação (prioridade/previsão).
  */
-export function diferencasDfdCenti(sistema: DfdSistemaComparavel, centi0: DfdParseado, tolerancia = 0.01, semSecoes810 = false): string[] {
+export function diferencasDfdCenti(sistema: DfdSistemaComparavel, centi0: DfdParseado, tolerancia = 0.01): string[] {
   const anoPca = sistema.anoPca ?? sistema.protocoloAnoPca ?? null;
-  // Sem o registro das seções 8 a 10 na Centi: elas não são comparadas (ficam as do sistema).
-  const centi = semSecoes810 ? comSecoesDoSistema(centi0, sistema) : centi0;
+  // O PDF da Centi com as seções 8 a 10 em branco: elas não são comparadas (ficam as do sistema). Com qualquer uma
+  // preenchida, as três são comparadas a rigor (a decisão é do PDF, nunca do load).
+  const centi = temSecoes810(centi0) ? centi0 : comSecoesDoSistema(centi0, sistema);
   // O que a Centi não traz (ou traz fora do padrão) e a equipe tratou no sistema não é divergência — a correção nunca o
   // apaga (a MESMA régua em `novoDaCenti`).
   const c = herdarTratamentos(normalizarSecoesDfd(centi, undefined, anoPca).dfd, sistema as unknown as DfdTratavel, anoPca, { assinaturas: false }).dfd;
@@ -422,7 +423,7 @@ export const tipoCurto = (t: unknown): string | null => {
 /** O DFD conferido (o lado do sistema): nº, tipo e o órgão (o cadastrado e o em que foi achado na Centi). */
 export type DfdConferido = { numero?: unknown; tipo?: unknown; entidade?: unknown; entidadeAchada?: unknown };
 /** O que a Centi diz do planejamento: a situação, o nº do DFD e o tipo. */
-export type ResumoCenti = { situacao?: unknown; numero?: unknown; tipo?: unknown; semSecoes810?: unknown; secoes810NaoLidas?: unknown };
+export type ResumoCenti = { situacao?: unknown; numero?: unknown; tipo?: unknown; semSecoes810?: unknown };
 
 /** As divergências de IDENTIDADE (órgão, situação, nº do DFD, tipo) — as MESMAS na automação e na reconferência. */
 export function difsIdentidadeCenti(d: DfdConferido, x: ResumoCenti): string[] {
@@ -457,10 +458,8 @@ export type RetratoCenti = {
   /** O tipo e o nº do DFD como o LOAD da Centi os deu (a automação compara a identidade por eles, não pelo PDF). */
   tipoCenti?: string | null;
   numeroCenti?: string | null;
-  /** Emitido SEM o registro das seções 8 a 10: elas não são comparadas nem corrigidas. */
+  /** O PDF da Centi veio com as seções 8 a 10 em branco (`temSecoes810`): elas não são comparadas nem corrigidas. */
   semSecoes810?: boolean;
-  /** …porque a leitura não trouxe o registro (a prévia do planejamento): a nota diz "não conferidas". */
-  secoes810NaoLidas?: boolean;
 };
 /** Teto do retrato guardado (uma linha do D1 tem até 2 MB): DFDs gigantes ficam sem retrato (corrigir pelo PDF). */
 export const MAX_RETRATO = 1_500_000;
@@ -477,7 +476,7 @@ export function montarRetrato(d: DfdConferido, x: ResumoCenti, dfdCenti: DfdPars
     tolerancia: Number.isFinite(o.tolerancia) && o.tolerancia >= 0 ? o.tolerancia : 0.01,
     tipoCenti: str(x.tipo) || null,
     numeroCenti: str(x.numero) || null,
-    ...(x.semSecoes810 === true ? { semSecoes810: true, ...(x.secoes810NaoLidas === true ? { secoes810NaoLidas: true } : {}) } : {}),
+    ...(temSecoes810(dfdCenti) ? {} : { semSecoes810: true }),
   };
 }
 
@@ -560,7 +559,8 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
       // Retrato antigo (sem a identidade do load): a do PDF.
       tipoCenti: "tipoCenti" in r ? str(r.tipoCenti) || null : d.tipo,
       numeroCenti: "numeroCenti" in r ? str(r.numeroCenti) || null : d.numero,
-      ...(r.semSecoes810 === true ? { semSecoes810: true, ...(r.secoes810NaoLidas === true ? { secoes810NaoLidas: true } : {}) } : {}),
+      // O PDF decide (também nos retratos antigos, gravados quando a decisão vinha do load).
+      ...(temSecoes810(d) ? {} : { semSecoes810: true }),
     };
   } catch {
     return null;
@@ -570,7 +570,7 @@ export function lerRetrato(t: string | null | undefined): RetratoCenti | null {
 /** A conferência REFEITA com o retrato (o DFD do sistema como está agora): as MESMAS divergências da automação. */
 export function difsDoRetrato(sistema: DfdSistemaComparavel & { numero: string; tipo: string | null }, r: RetratoCenti): string[] {
   const id = difsIdentidadeCenti({ numero: sistema.numero, tipo: sistema.tipo, entidade: r.entidade, entidadeAchada: r.entidadeAchada }, { situacao: r.situacao, numero: r.numeroCenti, tipo: r.tipoCenti });
-  const resto = diferencasDfdCenti(sistema, r.dfd, r.tolerancia, r.semSecoes810 === true).filter((f) => r.objeto || !f.startsWith("Objeto:"));
+  const resto = diferencasDfdCenti(sistema, r.dfd, r.tolerancia).filter((f) => r.objeto || !f.startsWith("Objeto:"));
   return [...id, ...resto];
 }
 
@@ -578,7 +578,8 @@ export function difsDoRetrato(sistema: DfdSistemaComparavel & { numero: string; 
 export function conferenciaDoRetrato(sistema: DfdSistemaComparavel & { numero: string; planejamento: string | null; tipo: string | null }, r: RetratoCenti): { status: "convergente" | "divergente"; motivo: string | null } {
   const difs = difsDoRetrato(sistema, r);
   const ref = `DFD ${sistema.numero} (Planej. ${sistema.planejamento ?? ""})`;
-  if (!difs.length) return { status: "convergente", motivo: r.semSecoes810 ? motivoSemSecoes810(ref, r.secoes810NaoLidas === true) : null };
+  // A nota só quando o sistema TEM as seções 8 a 10 e o PDF as trouxe em branco (sem elas dos dois lados, nada a dizer).
+  if (!difs.length) return { status: "convergente", motivo: r.semSecoes810 && temSecoes810(sistema) ? motivoSemSecoes810(ref) : null };
   return { status: "divergente", motivo: motivoDivergencias(ref, difs) };
 }
 

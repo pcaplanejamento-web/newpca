@@ -836,19 +836,18 @@ test("Substituir DFD pela Centi: sem a segunda emissão igual, nada é gravado",
   assert.match(String(r.erros[0]?.erro), /conteúdos diferentes/);
   const ok = (await no.executar({ entrada: [it] }, {}, ctx, {})) as { substituidos: unknown[] };
   assert.equal(ok.substituidos.length, 1, "a segunda emissão igual confirma");
-  // Sem o registro das seções 8 a 10 na leitura (a prévia da Centi 217): a substituição mantém as do SISTEMA.
-  const sem: boolean[] = [];
+  // As seções 8 a 10 em branco no PDF: quem as mantém é `substituirDfdPelaCenti` (pelo próprio PDF) — o nó só repassa.
+  const args: number[] = [];
   const host2 = {
     lerDfdCenti: async () => ({ dfd: misturado1023() }),
-    substituirDfd: async (_id: number, _d: unknown, semSecoes810?: boolean) => {
-      sem.push(semSecoes810 === true);
+    substituirDfd: async (...a: unknown[]) => {
+      args.push(a.length);
       return { numero: "123", itens: 2 };
     },
   };
   const ctx2 = { host: host2, cancelado: () => false, aviso: () => undefined } as unknown as Parameters<typeof no.executar>[2];
-  await no.executar({ entrada: [{ ...it, centi: { dfd: misturado1023(), semSecoes810: true, secoes810NaoLidas: true } }] }, {}, ctx2, {});
-  await no.executar({ entrada: [{ ...it, centi: { dfd: misturado1023() } }] }, {}, ctx2, {});
-  assert.deepEqual(sem, [true, false]);
+  await no.executar({ entrada: [{ ...it, centi: { dfd: misturado1023(), semSecoes810: true } }] }, {}, ctx2, {});
+  assert.deepEqual(args, [2], "o sinal do load não vai mais à substituição");
 });
 
 test("assinatura do conteúdo: o rodapé que muda a cada emissão (e-Assinatura, hora, página) não conta; a troca de nomes conta", () => {

@@ -598,6 +598,19 @@ export function atrasada(f: { ativo: boolean; proximaEm: string | null }, agora:
 }
 
 /** Os fluxos ligados cuja hora chegou, do mais atrasado ao mais recente (o vigia roda um por vez, nessa ordem). */
+/** A frequência ou o ligado MUDOU de fato (o editor manda os dois em todo salvar — sem mudança, a agenda fica). */
+export function agendaMudou(atual: { frequencia: Frequencia; ativo: boolean }, frequencia: Frequencia, ativo: boolean): boolean {
+  return ativo !== atual.ativo || JSON.stringify(frequencia) !== JSON.stringify(atual.frequencia);
+}
+
+/** A agendada já venceu (a manual que fecha depois dela não a engole — o agendador a roda em seguida). */
+export function agendadaVencida(proximaEm: string | null, agora: number): boolean {
+  return proximaEm != null && Date.parse(proximaEm) <= agora;
+}
+
+/** As portas do CORPO de um iterador (o que vai ao corpo do laço) — o erro e o desativado nunca as alimentam. */
+const PORTAS_CORPO = new Set(["lote", "item"]);
+
 export function fluxosDevidos<T extends { ativo: boolean; proximaEm: string | null }>(lista: readonly T[], agora: number): T[] {
   return lista
     .filter((f) => f.ativo && f.proximaEm && Date.parse(f.proximaEm) <= agora)
@@ -787,19 +800,24 @@ export async function executarFluxo(
 
   for (const n of g.nos) if (reg.get(n.tipo)?.categoria === "gatilho" && !n.desativado) fila.push(n.id);
   let passosTotais = 0;
+  // Com iterador, cada item custa (corpo + 1) passos: o teto acompanha o máximo de itens (senão corta no meio).
+  const maxPassos = g.nos.some((n) => reg.get(n.tipo)?.iterador) ? Math.max(MAX_PASSOS, (MAX_ITENS + 2) * (g.nos.length + 1)) : MAX_PASSOS;
   while (fila.length) {
     if (ctx.cancelado()) return fim({ estado: "cancelado", erro: "Interrompido." });
     const id = fila.shift() as string;
     const n = nos.get(id) as NoFluxo;
     const d = reg.get(n.tipo) as DefNo;
-    if (++passosTotais > MAX_PASSOS) return fim({ estado: "falhou", erro: `Passos demais (${MAX_PASSOS}) — confira o laço.`, noErro: id });
+    if (++passosTotais > maxPassos) return fim({ estado: "falhou", erro: `Passos demais (${maxPassos}) — confira o laço.`, noErro: id });
     const ent = d.categoria === "gatilho" ? {} : recolher(id, d);
     const anterior = passos[id];
     if (n.desativado) {
       // Desativado: repassa a 1ª entrada pela 1ª saída (como no N8N).
       const repasse = Object.values(ent)[0] ?? [];
       marcar(id, { estado: "ignorado", itens: repasse.length });
-      entregar(id, Object.fromEntries(d.saidas.map((s, i) => [s, i === 0 ? repasse : []])));
+      // Iterador desativado: a entrada vai direto ao "fim" e o corpo não recebe nada (senão voltaria e rodaria sem fim).
+      if (d.iterador)
+        entregar(id, { ...Object.fromEntries([...d.saidas, SAIDA_ERRO].filter((s) => !PORTAS_CORPO.has(s)).map((s) => [s, []])), fim: repasse });
+      else entregar(id, Object.fromEntries([...d.saidas, SAIDA_ERRO].map((s, i) => [s, i === 0 ? repasse : []])));
       continue;
     }
     if (d.categoria !== "gatilho" && !d.rodaSemItens && Object.values(ent).every((l) => !l.length)) {
@@ -851,7 +869,8 @@ export async function executarFluxo(
       if (ctx.cancelado()) return fim({ estado: "cancelado", erro: "Interrompido." });
       if (g.conexoes.some((c) => c.de === id && c.saida === SAIDA_ERRO)) {
         const erroItem: Item = { erro: msg, no: d.rotulo, entrada: Object.values(ent)[0]?.length ?? 0 };
-        entregar(id, { ...Object.fromEntries(d.saidas.map((s) => [s, []])), [SAIDA_ERRO]: [erroItem] });
+        // No iterador, o corpo não recebe nada: senão volta vazio, o nó roda de novo e falha de novo até o teto de passos.
+        entregar(id, { ...Object.fromEntries(d.saidas.filter((s) => !d.iterador || !PORTAS_CORPO.has(s)).map((s) => [s, []])), [SAIDA_ERRO]: [erroItem] });
         continue;
       }
       return fim({ estado: "falhou", erro: `${d.rotulo}: ${msg}`, noErro: id });

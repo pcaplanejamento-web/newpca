@@ -81,7 +81,9 @@ export function procurarNaTabela(itens: Item[], tabela: Item[], o: OpcoesProcura
           const m = new Map<string, Item[]>();
           for (const l of tabela) {
             const k = chaveIgual(resolverCaminho(l, o.coluna)) + kExtra(extra && resolverCaminho(l, extra.coluna));
-            m.set(k, [...(m.get(k) ?? []), l]);
+            const g = m.get(k);
+            if (g) g.push(l);
+            else m.set(k, [l]);
           }
           return m;
         })()
@@ -143,18 +145,22 @@ export type AcaoVariavel = "definir" | "somar" | "contar" | "acrescentar" | "ler
 /** O valor novo da variável. `definir` = o texto (número quando é número); `somar` = Σ do valor de cada item; `contar` =
  * + nº de itens; `acrescentar` = a lista + o valor de cada item (até 5000); `limpar` = vazio. */
 export function operarVariavel(atual: unknown, acao: AcaoVariavel, valor: string, itens: Item[]): unknown {
-  const num = (x: unknown) => {
-    const n = Number(String(x ?? "").replace(/\./g, "").replace(",", "."));
-    return typeof x === "number" ? x : Number.isFinite(n) ? n : 0;
+  const num = (x: unknown) => numeroDe(x) ?? 0;
+  // Um `{{campo}}` sozinho com número = o número como está (o texto "1.234" seria lido como milhar).
+  const unico = /^\{\{\s*([\w.]+)\s*\}\}$/.exec(valor.trim());
+  const valorDe = (it: Item): number | string => {
+    const v = unico ? resolverCaminho(it, unico[1]) : undefined;
+    return typeof v === "number" ? v : interpolar(valor, it);
   };
   const base = itens.length ? itens : [{}];
   switch (acao) {
     case "definir": {
-      const t = interpolar(valor, base[0]);
-      return t.trim() !== "" && Number.isFinite(Number(t)) ? Number(t) : t;
+      const t = valorDe(base[0]);
+      if (typeof t === "number") return t;
+      return (t.trim() ? numeroDe(t) : null) ?? t;
     }
     case "somar":
-      return num(atual) + base.reduce((s, it) => s + num(interpolar(valor, it)), 0);
+      return num(atual) + base.reduce((s, it) => s + num(valorDe(it)), 0);
     case "contar":
       return num(atual) + itens.length;
     case "acrescentar":
@@ -274,8 +280,7 @@ export function conferirUnidades(
   const porId = new Map(unidades.map((u) => [u.id, u]));
   const out = { divergentes: [] as Item[], desconhecidas: [] as Item[], conformes: [] as Item[], todos: [] as Item[] };
   // Cada item vai à sua porta e a `todos` (a coluna "Centro de Custo" da Mesa) com o texto COMPLETO da Centi
-  // (`centroCustoCenti`; "" = a Centi respondeu e não tem o dado — a coluna é limpa). A leitura que FALHOU
-  // (`todos: false`) não vai a `todos`: o valor já gravado fica.
+  // (`centroCustoCenti`; "" = a Centi respondeu e não tem o dado — a coluna é limpa).
   // Cada DFD vai a `todos` (a cadeia do "Verificar 1 DFD" nunca o perde); a leitura que FALHOU leva `centroNaoLido` —
   // quem grava o pula (o valor já gravado fica). `unidadeConfere`: sim · nao (outra unidade cadastrada) · desconhecida ·
   // semDado (a Centi não tem o centro de custo / não encontrado) · naoLido.
