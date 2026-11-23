@@ -53,7 +53,7 @@ test("disparo da Mesa: a ação da coluna Centi vai e volta (e o formato antigo 
   try {
     assert.equal(gravarDisparoMesa({ fluxoId: 3, itens: [{ id: 1 }], acao: "corrigir" }), true);
     assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }], acao: "corrigir" });
-    guardado.set("automacao:disparo", JSON.stringify({ fluxoId: 3, itens: [{ id: 1 }], soConferir: true }));
+    guardado.set("automacao:disparo", JSON.stringify({ fluxoId: 3, itens: [{ id: 1 }], soConferir: true, em: Date.now() }));
     assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }], acao: "conferir" });
     gravarDisparoMesa({ fluxoId: 3, itens: [{ id: 1 }] });
     assert.deepEqual(lerDisparoMesa(), { fluxoId: 3, itens: [{ id: 1 }] });

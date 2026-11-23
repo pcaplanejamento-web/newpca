@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { automacaoExecucoes, automacaoPassos, automacaoRegistros, configuracoes } from "@/db/schema";
 import { getDb } from "./db";
 import { lerBlobConfiguracoes } from "./integracoes";
@@ -15,7 +15,6 @@ import {
   limiteAbandono,
   type PassoNovo,
 } from "./automacao-sql.ts";
-import { lotesDeIds } from "./reparticoes";
 
 // AUTOMAÇÃO CENTI — o acesso ao D1 da plataforma (só em escopo de requisição). A configuração é lida SEMPRE do banco
 // (sem cache): o freio de emergência vale na hora, em qualquer isolate do Worker.
@@ -183,18 +182,19 @@ const COLS_REGISTRO = {
 
 /** As escritas feitas nos protocolos do sistema (a coluna "Na Centi"). */
 export async function registrosDosProtocolos(ids: readonly number[]): Promise<RegistroCenti[]> {
-  const db = getDb();
-  const out: RegistroCenti[] = [];
-  for (const lote of lotesDeIds([...ids]))
-    out.push(...(await db.select(COLS_REGISTRO).from(automacaoRegistros).where(inArray(automacaoRegistros.protocoloId, lote))));
-  return out;
+  if (!ids.length) return [];
+  // UMA consulta (os ids num parâmetro JSON — o limite de consultas por requisição do Worker).
+  return getDb()
+    .select(COLS_REGISTRO)
+    .from(automacaoRegistros)
+    .where(sql`${automacaoRegistros.protocoloId} IN (SELECT value FROM json_each(${JSON.stringify([...new Set(ids)])}))`);
 }
 
 /** As escritas feitas nos protocolos DA CENTI indicados (o Id de cada um — a pré-verificação antes de emitir). */
 export async function registrosDosAlvos(alvos: readonly string[]): Promise<RegistroCenti[]> {
-  const db = getDb();
-  const out: RegistroCenti[] = [];
-  for (let i = 0; i < alvos.length; i += 90)
-    out.push(...(await db.select(COLS_REGISTRO).from(automacaoRegistros).where(and(eq(automacaoRegistros.capacidade, "anexar"), inArray(automacaoRegistros.centiAlvo, alvos.slice(i, i + 90))))));
-  return out;
+  if (!alvos.length) return [];
+  return getDb()
+    .select(COLS_REGISTRO)
+    .from(automacaoRegistros)
+    .where(and(eq(automacaoRegistros.capacidade, "anexar"), sql`${automacaoRegistros.centiAlvo} IN (SELECT value FROM json_each(${JSON.stringify([...new Set(alvos)])}))`));
 }

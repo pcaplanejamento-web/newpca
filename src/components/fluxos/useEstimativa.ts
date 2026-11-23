@@ -19,5 +19,6 @@ export function useEstimativa(fracao: number, rodando: boolean, intervaloMs = 10
     const id = setInterval(() => setAgora(Date.now()), intervaloMs);
     return () => clearInterval(id);
   }, [rodando, intervaloMs]);
-  return rodando ? tempoRestanteMs(amostras.current, agora) : null;
+  // O `agora` nunca atrás da última amostra (com um tique longo, a estimativa não "volta").
+  return rodando ? tempoRestanteMs(amostras.current, Math.max(agora, amostras.current.at(-1)?.t ?? agora)) : null;
 }

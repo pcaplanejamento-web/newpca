@@ -464,7 +464,10 @@
       const j = JSON.parse(texto);
       // A lista de protocolos desta resposta, calculada UMA vez (achata todas as linhas).
       let prot;
-      const protocolos = () => (prot === undefined ? (prot = A.protocolosTela(j)) : prot);
+      const protocolos = () => {
+        if (prot === undefined) prot = A.protocolosTela(j);
+        return prot;
+      };
       rastrear(url, m, status, j, texto);
       // Para aprender (e diagnosticar) as seções 8–10 do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
       // A fonte só usa as consultas aceitas (a peça confere de novo).
@@ -1101,8 +1104,8 @@
       depois = await abrirProtocolo(d);
     } catch {}
     if (depois && !A.idsDocumentos(depois).includes(String(salvo.documento))) {
-      // O documento que não persistiu não fica na trava "nunca apagar" (travaria o protocolo enquanto a aba existir).
-      guardarSalvos(String(d.id), A.idsDocumentos(depois));
+      // Só o documento que não persistiu sai da trava "nunca apagar" (o reaberto pode vir desatualizado).
+      guardarSalvos(String(d.id), A.idsDocumentos(resposta.Entity).filter((x) => x !== String(salvo.documento)));
       return { ok: false, erro: `A Centi respondeu que gravou (documento ${salvo.sequencial || "?"}), mas o protocolo aberto de novo não traz o documento — confira na Centi antes de reenviar.` };
     }
     return { ok: true, ...salvo };

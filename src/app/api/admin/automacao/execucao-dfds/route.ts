@@ -1,8 +1,9 @@
-import { eq, isNotNull, sql } from "drizzle-orm";
+import { eq, isNotNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 import { dfdProtocolos, dfds, orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { comandosGravarExecucao, condicaoExecucao } from "@/lib/automacao-dfds-sql";
 import { getDb } from "@/lib/db";
 import { classeExecucao, limparSituacao, planoExecucao, situacoesDaGrade } from "@/lib/execucao-centi";
 import { ok, parseCorpo } from "@/lib/http";
@@ -10,9 +11,8 @@ import { orgaoDaCenti } from "@/lib/reparticao-match";
 
 export const dynamic = "force-dynamic";
 
-const LOTE = 50;
-
-const lerDfds = () =>
+/** Os DFDs com planejamento (`cond` = o escopo do POST, `condicaoExecucao` — sem reler a tabela inteira). */
+const lerDfds = (cond?: SQL) =>
   getDb()
     .select({
       id: dfds.id,
@@ -44,7 +44,7 @@ const lerDfds = () =>
     .from(dfds)
     .leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId))
     .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
-    .where(isNotNull(dfds.planejamento));
+    .where(cond ?? isNotNull(dfds.planejamento));
 
 /** Os DFDs com o ÓRGÃO DA CENTI de cada um (`orgaoId` — o do documento; sem casar, o da unidade) e o nome dele. */
 async function lerDfdsComOrgao() {
@@ -81,22 +81,15 @@ export async function POST(req: Request) {
   const p = await parseCorpo(corpoSchema, req);
   if ("resp" in p) return p.resp;
   const situacoes = situacoesDaGrade(p.data.colunas, p.data.linhas);
-  const escopo = new Set(p.data.dfdIds);
-  const plano = planoExecucao((await lerDfds()).filter((d) => escopo.has(d.id)), situacoes);
+  // Só os DFDs da entidade lida (os ids num parâmetro JSON) e a gravação numa ida por fatia (o limite de consultas do Worker).
+  const plano = planoExecucao(await lerDfds(condicaoExecucao(p.data.dfdIds)), situacoes);
   const em = new Date().toISOString();
   const db = getDb();
-  for (let i = 0; i < plano.atualizar.length; i += LOTE) {
-    const fatia = plano.atualizar.slice(i, i + LOTE).map((a) =>
-      db
-        .update(dfds)
-        .set({ execucaoCenti: limparSituacao(a.situacao), execucaoCentiEm: em })
-        .where(eq(dfds.id, a.id)),
-    );
-    if (fatia.length) await db.batch(fatia as [(typeof fatia)[number], ...typeof fatia]);
-  }
+  for (const c of comandosGravarExecucao(db, plano.atualizar.map((a) => ({ id: a.id, situacao: limparSituacao(a.situacao) })), em)) await c;
   const conta = { executado: 0, cancelado: 0, outro: 0, ausente: 0 };
   for (const l of plano.linhas) conta[classeExecucao(l.situacao) ?? "ausente"]++;
-  await registrarAuditoria({
+  // Sem mudança, nada vai à auditoria (a versão dos dados não sobe e as Mesas não recarregam à toa).
+  if (plano.atualizar.length) await registrarAuditoria({
     usuario: g.u,
     acao: "importar",
     entidade: "automacao",

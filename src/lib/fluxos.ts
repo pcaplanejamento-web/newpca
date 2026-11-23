@@ -177,15 +177,15 @@ export async function editarFluxo(
 }
 
 /**
- * Fecha uma execução: grava o resumo. A MANUAL agenda a próxima pela frequência (do FIM — não acumula atraso); a AGENDADA
- * não mexe na próxima — a reserva (`reservarExecucaoFluxo`) já a gravou antes de rodar.
+ * Fecha uma execução: grava o resumo. A MANUAL agenda a próxima pela frequência (do FIM — não acumula atraso), menos quando
+ * a agendada venceu durante ela (fica para o agendador); a AGENDADA não mexe na próxima — a reserva já a gravou.
  */
 export async function registrarExecucaoFluxo(id: number, resumo: Record<string, unknown>, agora = new Date(), lido?: FluxoAutomacao): Promise<FluxoAutomacao | null> {
   const atual = lido ?? (await getFluxo(id));
   if (!atual) return null;
   const agendado = resumo.agendado === true;
-  // A agendada que venceu enquanto a manual rodava fica: o agendador a roda em seguida.
-  const proxima = agendado || (atual.ativo && agendadaVencida(atual.proximaEm, agora.getTime())) ? undefined : atual.ativo ? await proximaComFeriados(atual.frequencia, agora) : null;
+  // A agendada que venceu DURANTE a manual fica: o agendador a roda em seguida (a que já vencia antes, a manual cobre).
+  const proxima = agendado || (atual.ativo && agendadaVencida(atual.proximaEm, agora.getTime(), Date.parse(String(resumo.inicio)))) ? undefined : atual.ativo ? await proximaComFeriados(atual.frequencia, agora) : null;
   const [l] = await getDb()
     .update(automacaoFluxos)
     .set({

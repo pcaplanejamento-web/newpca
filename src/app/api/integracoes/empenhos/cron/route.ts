@@ -1,11 +1,10 @@
 import { cronAutorizado } from "@/lib/cron";
 import { atualizarEmpenhosAuto } from "@/lib/empenhos-auto";
 import { erro, ok } from "@/lib/http";
-import { getConfigImportacoes } from "@/lib/importacoes-config";
 import { registrarCron } from "@/lib/importacoes-cron";
 import { situacoesDaCenti } from "@/lib/importacoes-cron-sql";
 import { avisarFalhaSistema } from "@/lib/notificacoes";
-import { chamadasDaRodada, depoisDaRodada, registraNaVez, textoTarefas, vezDaRodada } from "@/lib/rodada-cron-core";
+import { depoisDaRodada, registraNaVez, tetoDaRodada, textoTarefas, vezDaRodada } from "@/lib/rodada-cron-core";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +14,12 @@ export async function POST(req: Request) {
   if (!(await cronAutorizado(req))) return erro("Não autorizado.", 401);
   const vez = vezDaRodada(req.url);
   try {
-    const { situacoes, trabalhou, servido } = await atualizarEmpenhosAuto(new Date(), vez, depoisDaRodada(req.url));
-    if (registraNaVez(vez, trabalhou)) {
+    const { situacoes, trabalhou, servido, limite } = await atualizarEmpenhosAuto(new Date(), vez, depoisDaRodada(req.url));
+    if (registraNaVez(vez, trabalhou, tetoDaRodada(req.url))) {
       const comTarefas = situacoes.map((s) => (s.card === 0 && s.situacao === "Ligada" ? { ...s, situacao: `Ligada · ${textoTarefas(vez, trabalhou)}` } : s));
       await registrarCron(situacoesDaCenti(comTarefas));
     }
-    // A 1ª chamada diz à rodada o RITMO de agora (o ritmo leve no expediente — Configurações → Importações).
-    const limite = vez === 0 ? chamadasDaRodada((await getConfigImportacoes()).expedienteLeve, new Date()) : undefined;
+    // A 1ª chamada diz à rodada o RITMO de agora (o ritmo leve no expediente) — calculado com a configuração já lida.
     return ok({ apis: situacoes, trabalhou, depois: servido, limite });
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);

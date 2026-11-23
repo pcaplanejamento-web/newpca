@@ -48,6 +48,12 @@ const REG = new Map<string, DefNo>([
       },
     }),
   ],
+  [
+    "t.lista",
+    def({ tipo: "t.lista", entradas: ["entrada", "volta"], saidas: ["saida", "item", "fim"], iterador: true, executar: async (e) => ({ saida: e.entrada ?? [], fim: [] }) }),
+  ],
+  // Laço sem fim: a volta sempre devolve o mesmo item ao corpo.
+  ["t.semfim", def({ tipo: "t.semfim", entradas: ["entrada", "volta"], saidas: ["item", "fim"], rodaSemItens: true, entregaParcial: true, iterador: true, executar: async (e) => ({ item: e.entrada ?? e.volta ?? [] }) })],
   ["t.juntar", def({ tipo: "t.juntar", entradas: ["a", "b"], rodaSemItens: true, executar: async (e) => ({ saida: [...(e.a ?? []), ...(e.b ?? [])] }) })],
 ]);
 const ctx = { centi: async () => ({ ok: false }), api: async () => ({ ok: false }), cancelado: () => false, host: {} };
@@ -113,9 +119,34 @@ test("salvar sem mudar frequência nem ligado não reagenda", () => {
   assert.equal(agendaMudou(atual, lerFrequencia({ tipo: "intervalo", minutos: 120 }), true), true);
 });
 
-test("a manual que fecha depois da hora agendada mantém a agendada vencida", () => {
+test("a agendada que venceu DURANTE a manual fica; a que já vencia antes, a manual cobre", () => {
   const agora = Date.parse("2026-11-23T11:03:00Z");
-  assert.equal(agendadaVencida("2026-11-23T11:00:00Z", agora), true);
-  assert.equal(agendadaVencida("2026-11-23T12:00:00Z", agora), false);
-  assert.equal(agendadaVencida(null, agora), false);
+  const inicio = Date.parse("2026-11-23T10:50:00Z");
+  assert.equal(agendadaVencida("2026-11-23T11:00:00Z", agora, inicio), true);
+  assert.equal(agendadaVencida("2026-11-23T08:00:00Z", agora, inicio), false);
+  assert.equal(agendadaVencida("2026-11-23T12:00:00Z", agora, inicio), false);
+  assert.equal(agendadaVencida(null, agora, inicio), false);
+  assert.equal(agendadaVencida("2026-11-23T11:00:00Z", agora, Number.NaN), false);
+});
+
+test("iterador desativado cuja 1ª saída é 'saida' repassa a entrada por ela", async () => {
+  limpar();
+  const g = {
+    nos: [no("i", "t.inicio"), no("l", "t.lista", {}, { desativado: true }), no("s", "t.coletar", { nome: "saida" })],
+    conexoes: [con("i", "l"), con("l", "s")],
+  };
+  const r = await executarFluxo(lerGrafo(g), REG, ctx);
+  assert.equal(r.estado, "concluido", `${r.erro}`);
+  assert.deepEqual(coletados.saida, [{ n: 1 }]);
+});
+
+test("laço sem fim para num teto proporcional à fila", async () => {
+  limpar();
+  const g = {
+    nos: [no("i", "t.inicio"), no("it", "t.semfim"), no("c", "t.corpo")],
+    conexoes: [con("i", "it"), con("it", "c", "item"), con("c", "it", "saida", "volta")],
+  };
+  const r = await executarFluxo(lerGrafo(g), REG, ctx);
+  assert.equal(r.estado, "falhou");
+  assert.match(r.erro ?? "", /Passos demais \(2012\)/);
 });

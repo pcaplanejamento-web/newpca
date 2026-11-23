@@ -157,7 +157,9 @@ export function operarVariavel(atual: unknown, acao: AcaoVariavel, valor: string
     case "definir": {
       const t = valorDe(base[0]);
       if (typeof t === "number") return t;
-      return (t.trim() ? numeroDe(t) : null) ?? t;
+      // Só o texto com formato de número vira número ("R10" e "98 99999 0000" seguem texto).
+      const n = t.trim();
+      return (/^-?[\d.]+(,\d+)?$|^-?\d+(\.\d+)?$/.test(n) ? numeroDe(n) : null) ?? t;
     }
     case "somar":
       return num(atual) + base.reduce((s, it) => s + num(valorDe(it)), 0);

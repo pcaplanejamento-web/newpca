@@ -545,7 +545,7 @@ export function FluxosAutomacao({
   // Sem a extensão pronta, o disparo espera — e avisa (uma vez) o que falta.
   useEffect(() => {
     if (pronto || !temDisparoMesa()) return;
-    const id = window.setTimeout(() => toast.warning("A automação da Mesa espera a extensão da Centi (instale, abra a Centi e entre).", 10000), 8000);
+    const id = window.setTimeout(() => toast.warning("A automação da Mesa espera a extensão da Centi por até 2 min (instale, abra a Centi e entre); depois, dispare de novo pela Mesa.", 10000), 8000);
     return () => window.clearTimeout(id);
   }, [pronto, disparos]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `disparos` = um disparo novo da Mesa (relê o armazenado).

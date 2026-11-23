@@ -777,8 +777,17 @@ const NOS: DefNo[] = [
           if (/interrompid/i.test(m)) throw x;
           r = { motivo: m };
         }
-        if (r instanceof Map) linhas.push(...r.values());
-        else falhas.push(r.motivo);
+        if (!(r instanceof Map)) {
+          falhas.push(r.motivo);
+          continue;
+        }
+        // Nenhum planejamento dos DFDs deste órgão na lista = consulta filtrada (outra referência/PCA): não lista nada dele.
+        const pedidosOrgao = new Set(comOrgao.filter((it) => soNumero(it.entidade) === o).map((it) => soNumero(it.planejamento)).filter(Boolean));
+        if (r.size && pedidosOrgao.size && ![...pedidosOrgao].some((x) => r.has(x))) {
+          falhas.push(`Nenhum dos ${pedidosOrgao.size} planejamentos do órgão ${o} veio na CM002 (${r.size} linhas lidas, IDs ${faixaIds(new Set(r.keys()))}). A consulta aprendida está filtrada — na CM002 da Centi, limpe os filtros (Referência/Finalidade) e clique em Pesquisar UMA vez.`);
+          continue;
+        }
+        linhas.push(...r.values());
       }
       if (falhas.length && !linhas.length) return aviso(falhas.join(" · "));
       if (falhas.length) ctx.aviso(`Planejamentos da Centi sem DFD: ${falhas.join(" · ")}`);
@@ -2556,7 +2565,7 @@ const NOS: DefNo[] = [
         const alvoId = Number(resolverCaminho(it, str(c.campoId, "id") || "id"));
         const valor = valorParaColuna(resolverCaminho(it, str(c.campoValor, "valor") || "valor"));
         // A leitura da Centi que FALHOU (`centroNaoLido`) nunca apaga o valor já gravado.
-        if (it.centroNaoLido === true && (centro || valor == null)) {
+        if (it.centroNaoLido === true && (centro || (valor == null && c.apagar === true))) {
           saida.push(it);
           continue;
         }

@@ -1,16 +1,15 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { dfds } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { comandosGravarConferencia, planoConferencia } from "@/lib/automacao-dfds-sql";
 import { comandoApagarPdfs, comandoApagarRetratos, comandoGuardarPdf, comandoGuardarRetrato, comandosHistoricoCenti, MAX_PDF_CENTI } from "@/lib/conferencia-centi-sql";
 import { conferenciaDesatualizada, lerRetrato, MAX_RETRATO } from "@/lib/conferencia-dfd-centi";
 import { getDb } from "@/lib/db";
 import { ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
-
-const LOTE = 50;
 
 const corpoSchema = z.strictObject({
   itens: z
@@ -57,19 +56,13 @@ export async function POST(req: Request) {
     const a = antes.get(x.dfdId);
     return a && !mudou.includes(x) && conferenciaDesatualizada(a.em, a.at);
   });
-  for (let i = 0; i < unicos.length; i += LOTE) {
-    const fatia = unicos.slice(i, i + LOTE).map((x) =>
-      db
-        .update(dfds)
-        .set({ conferenciaCenti: x.status, conferenciaCentiMotivo: x.motivo ?? null, conferenciaCentiEm: em })
-        .where(eq(dfds.id, x.dfdId)),
-    );
-    await db.batch(fatia as [(typeof fatia)[number], ...typeof fatia]);
-  }
+  // Só os DFDs que ainda existem (excluído durante a execução): o retrato/PDF dele quebraria a FK e o lote inteiro.
+  // Retrato que não se lê é tratado como ausente.
+  const { vivos, comRetrato, semRetrato, semPdf } = planoConferencia(unicos, antes, (r) => !!lerRetrato(r));
+  // Os status numa ida por fatia (UPDATE…FROM json_each — o limite de consultas por requisição do Worker).
+  for (const c of comandosGravarConferencia(db, vivos, em)) await c;
   // Os RETRATOS: guardados um por comando (cada um pode ter ~1,5 MB); quem não traz (convergente ou conferido sem o DFD
-  // inteiro) perde o antigo — ele não representa mais a Centi. Retrato que não se lê é tratado como ausente.
-  const comRetrato = unicos.filter((x) => x.retrato && lerRetrato(x.retrato));
-  const semRetrato = unicos.filter((x) => !comRetrato.includes(x)).map((x) => x.dfdId);
+  // inteiro) perde o antigo — ele não representa mais a Centi.
   // Lotes por TAMANHO (~1 MB ou 25 comandos): poucos pedidos ao D1 (o cliente manda até 50 retratos por pedido).
   for (let i = 0; i < comRetrato.length; ) {
     let j = i;
@@ -89,7 +82,6 @@ export async function POST(req: Request) {
     await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
     i = j;
   }
-  const semPdf = [...semRetrato, ...comRetrato.filter((x) => !x.pdf).map((x) => x.dfdId)];
   // Os ids num parâmetro JSON só: UM comando (o limite de consultas por requisição do Worker).
   if (semRetrato.length) await db.batch([comandoApagarRetratos(db, semRetrato)]);
   if (semPdf.length) await db.batch([comandoApagarPdfs(db, semPdf)]);
@@ -101,7 +93,7 @@ export async function POST(req: Request) {
     );
     await db.batch(cmds as [(typeof cmds)[number], ...typeof cmds]);
   }
-  const div = unicos.filter((x) => x.status === "divergente").length;
+  const div = vivos.filter((x) => x.status === "divergente").length;
   if (mudou.length || renovados.length) {
     const divM = mudou.filter((x) => x.status === "divergente").length;
     await registrarAuditoria({
@@ -114,5 +106,5 @@ export async function POST(req: Request) {
         : `Conferência dos DFDs × Centi: ${renovados.length} DFD(s) reconferido(s), sem mudança`,
     });
   }
-  return ok({ marcados: unicos.length, alterados: mudou.length, convergentes: unicos.length - div, divergentes: div, em });
+  return ok({ marcados: vivos.length, alterados: mudou.length, convergentes: vivos.length - div, divergentes: div, em });
 }

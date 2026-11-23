@@ -597,20 +597,22 @@ export function atrasada(f: { ativo: boolean; proximaEm: string | null }, agora:
   return Number.isFinite(t) && agora - t > TOLERANCIA_ATRASO_MS;
 }
 
-/** Os fluxos ligados cuja hora chegou, do mais atrasado ao mais recente (o vigia roda um por vez, nessa ordem). */
 /** A frequência ou o ligado MUDOU de fato (o editor manda os dois em todo salvar — sem mudança, a agenda fica). */
 export function agendaMudou(atual: { frequencia: Frequencia; ativo: boolean }, frequencia: Frequencia, ativo: boolean): boolean {
   return ativo !== atual.ativo || JSON.stringify(frequencia) !== JSON.stringify(atual.frequencia);
 }
 
-/** A agendada já venceu (a manual que fecha depois dela não a engole — o agendador a roda em seguida). */
-export function agendadaVencida(proximaEm: string | null, agora: number): boolean {
-  return proximaEm != null && Date.parse(proximaEm) <= agora;
+/** A agendada venceu DURANTE a manual (depois do início dela): a manual não a engole — o agendador a roda em seguida. */
+export function agendadaVencida(proximaEm: string | null, agora: number, inicio: number): boolean {
+  if (proximaEm == null) return false;
+  const t = Date.parse(proximaEm);
+  return t <= agora && t > inicio;
 }
 
 /** As portas do CORPO de um iterador (o que vai ao corpo do laço) — o erro e o desativado nunca as alimentam. */
 const PORTAS_CORPO = new Set(["lote", "item"]);
 
+/** Os fluxos ligados cuja hora chegou, do mais atrasado ao mais recente (o vigia roda um por vez, nessa ordem). */
 export function fluxosDevidos<T extends { ativo: boolean; proximaEm: string | null }>(lista: readonly T[], agora: number): T[] {
   return lista
     .filter((f) => f.ativo && f.proximaEm && Date.parse(f.proximaEm) <= agora)
@@ -800,8 +802,8 @@ export async function executarFluxo(
 
   for (const n of g.nos) if (reg.get(n.tipo)?.categoria === "gatilho" && !n.desativado) fila.push(n.id);
   let passosTotais = 0;
-  // Com iterador, cada item custa (corpo + 1) passos: o teto acompanha o máximo de itens (senão corta no meio).
-  const maxPassos = g.nos.some((n) => reg.get(n.tipo)?.iterador) ? Math.max(MAX_PASSOS, (MAX_ITENS + 2) * (g.nos.length + 1)) : MAX_PASSOS;
+  // Cada fila que entra num iterador soma (itens + 2) × (nós + 1) ao teto: proporcional à fila real (laço sem fim ainda para).
+  let maxPassos = MAX_PASSOS;
   while (fila.length) {
     if (ctx.cancelado()) return fim({ estado: "cancelado", erro: "Interrompido." });
     const id = fila.shift() as string;
@@ -809,13 +811,14 @@ export async function executarFluxo(
     const d = reg.get(n.tipo) as DefNo;
     if (++passosTotais > maxPassos) return fim({ estado: "falhou", erro: `Passos demais (${maxPassos}) — confira o laço.`, noErro: id });
     const ent = d.categoria === "gatilho" ? {} : recolher(id, d);
+    if (d.iterador && !n.desativado && ent.entrada?.length) maxPassos += (ent.entrada.length + 2) * (g.nos.length + 1);
     const anterior = passos[id];
     if (n.desativado) {
       // Desativado: repassa a 1ª entrada pela 1ª saída (como no N8N).
       const repasse = Object.values(ent)[0] ?? [];
       marcar(id, { estado: "ignorado", itens: repasse.length });
-      // Iterador desativado: a entrada vai direto ao "fim" e o corpo não recebe nada (senão voltaria e rodaria sem fim).
-      if (d.iterador)
+      // Iterador cuja 1ª saída é o corpo (o Laço): a entrada vai direto ao "fim" (senão voltaria e rodaria sem fim).
+      if (d.iterador && PORTAS_CORPO.has(d.saidas[0]))
         entregar(id, { ...Object.fromEntries([...d.saidas, SAIDA_ERRO].filter((s) => !PORTAS_CORPO.has(s)).map((s) => [s, []])), fim: repasse });
       else entregar(id, Object.fromEntries([...d.saidas, SAIDA_ERRO].map((s, i) => [s, i === 0 ? repasse : []])));
       continue;

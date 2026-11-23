@@ -130,8 +130,9 @@ export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, pedida: st
   if (objeto === "dfds") {
     if (busca === "todos") return f.dfds;
     if (busca === "protocolo") {
-      const nums = new Set(f.protocolos.filter(protoQuer).flatMap((p) => (Array.isArray(p.dfds) ? p.dfds : []).map((d) => chaveNum((d as Item).numero))));
-      return f.dfds.filter((d) => nums.has(chaveNum(d.numero)) || protoQuer({ numero: d.protocolo, idExterno: d.protocoloIdExterno }));
+      const nums = new Set(f.protocolos.filter(protoQuer).flatMap((p) => (Array.isArray(p.dfds) ? p.dfds : []).map((d) => chaveProcura((d as Item).numero))));
+      // O nº com o ano, quando há: o DFD "5/2025" não entra pelo "5/2026".
+      return f.dfds.filter((d) => nums.has(chaveProcura(d.numero)) || protoQuer({ numero: d.protocolo, idExterno: d.protocoloIdExterno }));
     }
     return f.dfds.filter((d) => tem(busca === "numero" ? d.numero : d.planejamento));
   }

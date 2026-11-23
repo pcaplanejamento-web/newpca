@@ -4,7 +4,7 @@ import { ok } from "@/lib/http";
 import { registrarCron } from "@/lib/importacoes-cron";
 import { avisarFalhaSistema } from "@/lib/notificacoes";
 import { situacaoComErro } from "@/lib/importacoes-cron-sql";
-import { frotaTrabalhou, registraNaVez, vezDaRodada } from "@/lib/rodada-cron-core";
+import { frotaTrabalhou, registraNaVez, tetoDaRodada, vezDaRodada } from "@/lib/rodada-cron-core";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   try {
     const feito = await passoAutomaticoFrota();
     const trabalhou = frotaTrabalhou(feito);
-    if (registraNaVez(vez, trabalhou)) await registrarCron([{ chave: "frota:geral", situacao: feito, erro: situacaoComErro(feito) }]);
+    if (registraNaVez(vez, trabalhou, tetoDaRodada(req.url))) await registrarCron([{ chave: "frota:geral", situacao: feito, erro: situacaoComErro(feito) }]);
     return ok({ feito, trabalhou });
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);

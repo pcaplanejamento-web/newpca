@@ -20,10 +20,12 @@ test("Comparar DFD × Centi: o DFD desdobrado de um protocolo da Centi (Id da CA
   assert.ok(!todos.some((x) => x.centiFalha === true), "sem falha de leitura do sistema");
   // Existe um DFD com esse id, mas de OUTRO planejamento: nunca é comparado com ele.
   let lidos = 0;
-  const ctxOutro = { host: { dfdDoSistema: async () => { lidos++; return { id: 987654, numero: "99", planejamento: "999", itens: [], secoes: [] }; } }, cancelado: () => false, aviso: () => {} };
+  const ctxOutro = { host: { dfdDoSistema: async () => { lidos++; return { id: 987654, numero: "99", planejamento: "999", objeto: "OUTRA COISA", itens: [{ item: 1, codigo: "1", descricao: "OUTRO ITEM", unidade: "UN", quantidade: 5, valorUnitario: 10, valorTotal: 50 }], secoes: [] }; } }, cancelado: () => false, aviso: () => {} };
   const b = await no("dados.compararDfdCenti")({ entrada: [it] }, {}, ctxOutro, {});
   assert.equal(lidos, 1);
-  assert.ok(!Object.values(b).flat().some((x) => /DFD 99|Planej\. 999/.test(String(x.conferenciaCentiMotivo ?? ""))), "nenhuma divergência contra um DFD sem relação");
+  // O DFD de outro planejamento tem item e objeto diferentes: comparado com ele, haveria divergência.
+  assert.equal((b.divergentes ?? []).length, 0, "nenhuma divergência contra um DFD sem relação");
+  assert.equal((b.conformes ?? []).length, 1);
   assert.ok(!(ctxOutro.host as Record<string, unknown>).__retratosCenti || ((ctxOutro.host as Record<string, unknown>).__retratosCenti as Map<number, string>).size === 0);
 });
 
@@ -50,6 +52,8 @@ test("Variável 'somar': números com ponto decimal não viram milhar", () => {
   assert.equal(operarVariavel(null, "definir", "{{v}}", [{ v: "1.234,56" }]), 1234.56);
   assert.equal(operarVariavel(null, "definir", "{{v}}", [{ v: 1.5 }]), 1.5);
   assert.equal(operarVariavel(null, "definir", "abc", []), "abc");
+  assert.equal(operarVariavel(null, "definir", "{{v}}", [{ v: "R10" }]), "R10");
+  assert.equal(operarVariavel(null, "definir", "{{v}}", [{ v: "98 99999 0000" }]), "98 99999 0000");
 });
 
 test("Gravar na coluna da Mesa (Centro de Custo, diagrama antigo): a leitura que falhou não apaga o centro gravado", async () => {
@@ -65,6 +69,10 @@ test("Gravar na coluna da Mesa (Centro de Custo, diagrama antigo): a leitura que
   posts.length = 0;
   await no("saida.gravarColuna")({ entrada: [{ id: 1, centroNaoLido: true }] }, c, ctx, {});
   assert.deepEqual(posts, [], "nada é gravado (nem apagado)");
+  // Outra coluna, sem "apagar": o item sem valor segue para "ignorados", como antes.
+  const o = await no("saida.gravarColuna")({ entrada: [{ id: 3, centroNaoLido: true }] }, { entidade: "dfd", coluna: "Outra", campoValor: "x" }, ctx, {});
+  assert.equal(o.ignorados.length, 1);
+  assert.equal(o.saida.length, 0);
 });
 
 test("Ler do sistema: o nº com ano não mistura registros de anos diferentes", () => {
@@ -86,6 +94,9 @@ test("Ler do sistema: o nº com ano não mistura registros de anos diferentes", 
   assert.deepEqual(v, ["200/2026"]);
   assert.deepEqual(lerDoSistema(fontes, "protocolos", "numero", v).map((p) => p.id), [2]);
   assert.deepEqual(lerDoSistema(fontes, "itens", "protocolo", v).map((i) => i.id), [101]);
+  // DFDs pelo protocolo: o de mesmo nº em outro ano não entra.
+  const comAno = { ...fontes, protocolos: [{ id: 2, numero: "200/2026", idExterno: "22", dfds: [{ numero: "5/2026" }] }], dfds: [{ id: 20, numero: "5/2026", protocolo: "200/2026" }, { id: 21, numero: "5/2025", protocolo: "300/2025" }] };
+  assert.deepEqual(lerDoSistema(comAno, "dfds", "protocolo", v).map((d) => d.id), [20]);
   // Sem ano no procurado: os dois, como antes.
   assert.deepEqual(lerDoSistema(fontes, "protocolos", "numero", valoresProcurados("200", [])).map((p) => p.id), [1, 2]);
 });
@@ -119,4 +130,22 @@ test("Planejamentos da Centi sem DFD: a CM002 do órgão já lida na execução 
   const s = await no("centi.semDfd")({ entrada: [{ entidade: "8", planejamento: "100", verificar: { semDfd: "sim" } }] }, {}, ctx, {});
   assert.equal(leituras, 1, "uma leitura por órgão na execução");
   assert.deepEqual(s.saida.map((l) => l.planejamento).sort(), ["100", "200"]);
+});
+
+test("Planejamentos da Centi sem DFD: consulta filtrada (nenhum planejamento dos DFDs na lista) não grava a tabela", async () => {
+  const posts: string[] = [];
+  const ctx = {
+    host: { __cache: new Map<string, unknown>() },
+    cancelado: () => false,
+    aviso: () => {},
+    centi: async () => ({ ok: true, linhas: [{ id: "700", situacao: "Executado" }, { id: "800", situacao: "Executado" }] }),
+    api: async (u: string) => {
+      posts.push(u);
+      return u.includes("execucao-dfds") ? { ok: true, dfds: [] } : { ok: true };
+    },
+  };
+  const s = await no("centi.semDfd")({ entrada: [{ entidade: "8", planejamento: "100", verificar: { semDfd: "sim" } }] }, {}, ctx, {});
+  assert.equal(s.saida.length, 0);
+  assert.ok(!posts.some((u) => u.includes("/tabelas")), "a tabela não é substituída");
+  assert.ok(Object.values(s).flat().some((x) => /consulta aprendida está filtrada/.test(String(x.mensagem ?? ""))));
 });

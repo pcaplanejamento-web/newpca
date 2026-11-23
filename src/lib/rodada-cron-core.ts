@@ -29,7 +29,7 @@ export function chamadasDaRodada(expedienteLeve: boolean, agora: Date): number {
  * seguinte) e cada chamada recebe o card servido pela anterior (o rodízio é justo: quem já foi servido vai para o fim).
  */
 export async function rodadaDoCron(
-  chamar: (vez: number, depois: number | null) => Promise<RespostaVez>,
+  chamar: (vez: number, depois: number | null, teto: number) => Promise<RespostaVez>,
   agora: () => number = Date.now,
   limites = { chamadas: MAX_CHAMADAS_RODADA, ms: MAX_MS_RODADA },
 ): Promise<{ vezes: number; tarefas: number }> {
@@ -42,7 +42,7 @@ export async function rodadaDoCron(
   while (vez < teto) {
     if (vez > 0 && agora() - ini + maior > limites.ms) break;
     const t0 = agora();
-    const r = await chamar(vez++, depois);
+    const r = await chamar(vez++, depois, teto);
     maior = Math.max(maior, agora() - t0);
     // A 1ª chamada diz o ritmo de agora (o ritmo leve no expediente): a rodada nunca passa dele.
     if (r.limite && r.limite > 0) teto = Math.min(teto, r.limite);
@@ -72,8 +72,15 @@ export function vezDaRodada(url: string): number {
   return Number.isInteger(n) && n > 0 && n < MAX_CHAMADAS_RODADA ? n : 0;
 }
 
-/** Grava a situação na tela só no começo e no fim da rodada (o meio não multiplica as escritas no D1). */
-export const registraNaVez = (vez: number, trabalhou: boolean) => vez === 0 || !trabalhou || vez === MAX_CHAMADAS_RODADA - 1;
+/** O teto de chamadas da rodada AGORA (o `?teto=` — o ritmo leve baixa para 2) — fora do intervalo = o máximo. */
+export function tetoDaRodada(url: string): number {
+  const n = Number(new URL(url).searchParams.get("teto"));
+  return Number.isInteger(n) && n > 0 && n <= MAX_CHAMADAS_RODADA ? n : MAX_CHAMADAS_RODADA;
+}
+
+/** Grava a situação na tela só no começo e no fim da rodada (o meio não multiplica as escritas no D1); o fim = a última
+ * chamada que o teto ATUAL permite (o ritmo leve encerra antes das 8). */
+export const registraNaVez = (vez: number, trabalhou: boolean, teto = MAX_CHAMADAS_RODADA) => vez === 0 || !trabalhou || vez >= teto - 1;
 
 /** A Frota trabalhou (leu ou dividiu um período)? As demais situações são espera/nada a fazer/erro. */
 export const frotaTrabalhou = (feito: string) => /^(Lido |Período grande demais)/.test(feito);
