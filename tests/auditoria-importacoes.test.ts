@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { cabeOutroPulo, cabePaginaReal, custoDoPulo, ORCAMENTO_CONSULTAS } from "../src/lib/empenhos-core.ts";
+import { CUSTO_PAGINA_REAL, cabeOutroPulo, custoDoPulo, lerPaginaReal, ORCAMENTO_CONSULTAS } from "../src/lib/empenhos-core.ts";
 import { CHAMADAS_EXPEDIENTE, MAX_CHAMADAS_RODADA, registraNaVez, rodadaDoCron, tetoDaRodada } from "../src/lib/rodada-cron-core.ts";
 
 const ler = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -40,22 +40,26 @@ test("rota de empenhos não relê a configuração: o limite vem de atualizarEmp
   assert.match(ler("src/lib/empenhos-auto.ts"), /limite = chamadasDaRodada\(cfg\.expedienteLeve, agora\)/);
 });
 
-test("orçamento dos pulos conta a abertura da execução (nunca passa das 50 consultas)", () => {
+test("orçamento: a página real com outros cards antes fica para a próxima chamada; o 1º card sempre lê", () => {
+  // Abertura da vez 0 (7) + um card de empenhos por órgão com lote novo (11): o 1º card lê mesmo passando do orçamento.
+  assert.equal(lerPaginaReal(7 + 11 + 1, 0, false), true);
+  // Dois cards "esperando" antes (7 cada) + o card que trabalha (11): não cabe — adia (a próxima chamada começa nele).
+  assert.equal(lerPaginaReal(7 + 7 + 7 + 11, 0, true), false);
+  assert.ok(7 + 7 + 7 + 11 + CUSTO_PAGINA_REAL > ORCAMENTO_CONSULTAS);
+  // Um card "fora da hora" antes (2) e o lote aberto: cabe; um card "esperando" antes (7): adia.
+  assert.equal(lerPaginaReal(7 + 2 + 9, 0, true), true);
+  assert.equal(lerPaginaReal(7 + 7 + 9, 0, true), false);
+  // Depois de pulos, a régua é a mesma, com ou sem cards antes.
+  let n = 7 + 9;
+  while (cabeOutroPulo(n, true)) n += custoDoPulo(true);
+  assert.equal(lerPaginaReal(n, 3, false), false);
+  // O gasto lido nunca passa das 50 com o fecho (≤ 4): a página real só entra até o orçamento de 40.
+  assert.ok(ORCAMENTO_CONSULTAS + 4 <= 50);
+});
+
+test("automática conta cada consulta onde acontece e devolve o adiado à rodada", () => {
   const auto = ler("src/lib/empenhos-auto.ts");
-  assert.match(auto, /cabePaginaReal\(conta\.n\)/);
-  assert.match(auto, /cabeOutroPulo\(conta\.n, porOrgao\)/);
-  // Pior caso: abertura da vez 0 (7) + um card "esperando" antes (7) + o card que trabalha (7) + os pulos.
-  for (const porOrgao of [false, true]) {
-    let n = 7 + 7 + 7;
-    let pulos = 0;
-    while (pulos === 0 || cabeOutroPulo(n, porOrgao)) {
-      n += custoDoPulo(porOrgao);
-      pulos++;
-      if (pulos > 20) break;
-    }
-    assert.ok(n <= ORCAMENTO_CONSULTAS + custoDoPulo(porOrgao));
-    // O fim (soltar já contado + registrarCron ≈ 4) fica abaixo das 50.
-    assert.ok(n + 4 <= 50, `${n}`);
-  }
-  assert.equal(cabePaginaReal(7 + 7), true);
+  assert.match(auto, /lerPaginaReal\(conta\.n, pulos, conta\.antes\)/);
+  assert.match(auto, /if \(u\.adiado\) \{[\s\S]*?servido = anterior;/);
+  assert.doesNotMatch(auto, /conta\.n \+= 4/);
 });

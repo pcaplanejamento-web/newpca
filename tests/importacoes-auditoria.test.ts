@@ -36,10 +36,11 @@ test("automática: as liquidações vão MÊS A MÊS (por órgão), com a divis�
 });
 
 test("automática: depois de pulos, a página que MUDOU só é lida se couber uma página real no orçamento de consultas", () => {
-  assert.equal(cabePaginaReal(0), true);
-  assert.equal(cabePaginaReal(3 * custoDoPulo(false)), true);
+  // O gasto parte da abertura da execução + o card (≈ 16).
+  assert.equal(cabePaginaReal(16), true);
+  assert.equal(cabePaginaReal(16 + custoDoPulo(false)), false);
   // Pulos até onde ainda cabe um pulo, mas não uma página real: a página que mudou fica para a próxima execução.
-  let gasto = 0;
+  let gasto = 16;
   while (cabeOutroPulo(gasto + custoDoPulo(true), true)) gasto += custoDoPulo(true);
   assert.equal(cabePaginaReal(gasto), false);
 });

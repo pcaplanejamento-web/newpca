@@ -102,7 +102,10 @@ test("cartão da aba: responde à mensagem do serviço (senão o envio rejeita e
   vm.runInNewContext(fonteExtensao("centi-painel.js"), ctx);
   assert.ok(ouvinte);
   let respondeu: unknown = null;
-  (ouvinte as NonNullable<typeof ouvinte>)({ alvo: "painel", atividade: null }, { id: "ext" }, (r) => (respondeu = r));
+  const f = ouvinte as unknown as (m: unknown, s: unknown, r: (x: unknown) => void) => unknown;
+  f({ alvo: "painel", atividade: null }, { id: "ext" }, (r) => {
+    respondeu = r;
+  });
   assert.deepEqual(JSON.parse(JSON.stringify(respondeu)), { ok: true });
 });
 

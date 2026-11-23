@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.309.0",
+    data: "2026-11-23",
+    titulo: "Seções 8 a 10 verificadas no PDF de cada DFD e auditoria das automações",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Verificar DFDs na Centi: a indicação da equipe, o secretário demandante e a autorização (seções 8 a 10) agora são comparadas no PRÓPRIO PDF de cada DFD — antes eram puladas quando a Centi abria o planejamento só como prévia, mesmo com o PDF completo. Os DFDs marcados “Convergente*” por essa regra voltam a “não conferido” para a próxima verificação.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Auditoria das automações (49 problemas confirmados e corrigidos): nunca corrige pelos dados de um planejamento cancelado; o PDF unido só é anexado completo; a nova tentativa do anexo funciona; o centro de custo não lido não é apagado; o agendador não perde a execução seguinte; laços e nós desativados não repetem sem fim; salvar o fluxo não muda o horário agendado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Extensão 1.47.2: o login automático não esgota mais o limite de entregas, a aba nova não é recarregada no meio do login e o órgão vai no formato da Centi também na emissão. Leituras e gravações mais leves no banco.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.308.0",
     data: "2026-11-23",
     titulo: "Verificar DFDs na Centi: conteúdo, situação e centro de custo funcionando na Centi nova",

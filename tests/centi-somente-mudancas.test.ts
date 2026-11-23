@@ -352,17 +352,16 @@ test("D1 real: a VOLTA SEGUINTE da automática com a Centi idêntica pula a pág
 });
 
 test("orçamento das páginas puladas: nunca passa das 50 consultas ao D1 por execução", () => {
-  for (const [porOrgao, esperado] of [[false, 8], [true, 5]] as const) {
-    let pulos = 0;
-    // O laço da automática: pula e só continua enquanto cabe um pulo inteiro.
+  for (const porOrgao of [false, true]) {
+    // O gasto parte da abertura da execução + o card (o laço da automática: pula enquanto cabe um pulo inteiro).
+    let gasto = 7 + 9;
     for (;;) {
-      pulos++;
-      if (!cabeOutroPulo(pulos * custoDoPulo(porOrgao), porOrgao)) break;
+      gasto += custoDoPulo(porOrgao);
+      if (!cabeOutroPulo(gasto, porOrgao)) break;
     }
-    assert.equal(pulos, esperado);
-    assert.ok(pulos * custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS);
-    // A abertura e a limpeza (≤ 10) cabem na folga do limite do plano gratuito.
-    assert.ok(pulos * custoDoPulo(porOrgao) + 10 <= 50);
+    assert.ok(gasto <= ORCAMENTO_CONSULTAS);
+    // O fecho (soltar, registrar a situação ≤ 10) cabe na folga do limite do plano gratuito.
+    assert.ok(gasto + 10 <= 50);
   }
 });
 

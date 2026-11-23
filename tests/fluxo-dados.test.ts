@@ -427,7 +427,7 @@ test("Verificar DFDs na Centi — a CM002 também falha: ATENÇÃO com o motivo 
 
 test("Verificar DFDs na Centi — a PRÉVIA de um planejamento CANCELADO: a situação da CM002 entra na conferência — Divergente, nunca Convergente*", async () => {
   const dfds = [{ id: 1, numero: "10", planejamento: "100", entidade: "8", reparticaoId: 2, sigla: "GGIM", orgaoId: 1, valor: 50, totalItens: 2, tipo: "DFD-S" }];
-  const conteudo = { numero: "10", tipo: "DFD-S", valor: 50, totalItens: 2, semSecoes810: true, secoes810NaoLidas: true };
+  const conteudo = { numero: "10", tipo: "DFD-S", valor: 50, totalItens: 2, semSecoes810: true };
   const v = await verificar({ dfds, unidades: UNIDADES, config: {}, centi: () => ({ ...PREVIA, ...conteudo }), cm002: () => [{ id: "100", situacao: "Cancelado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }] });
   assert.equal(v.r.estado, "concluido", v.r.erro);
   assert.deepEqual(v.cm002, ["8"], "UMA leitura da CM002 serve à situação, ao centro de custo e à conferência");
@@ -436,11 +436,11 @@ test("Verificar DFDs na Centi — a PRÉVIA de um planejamento CANCELADO: a situ
   assert.equal(conf.length, 1);
   assert.equal(conf[0].status, "divergente", "o planejamento cancelado na Centi nunca é Convergente*");
   assert.match(String(conf[0].motivo), /situação Cancelado na Centi/);
-  // Ativo na CM002: a prévia que confere = Convergente* (as seções 8 a 10 não lidas), como antes.
+  // Ativo na CM002: o PDF com as seções 8 a 10 em branco que confere = Convergente*.
   const ok = await verificar({ dfds, unidades: UNIDADES, config: {}, centi: () => ({ ...PREVIA, ...conteudo }), cm002: () => [{ id: "100", situacao: "Executado", centroCusto: "PM RV, GABINETE DO PREFEITO, GGIM" }] });
   const c2 = ok.posts.filter((p) => p.c.includes("conferencia-dfds")).flatMap((p) => (p.body.itens ?? []) as { status: string; motivo?: string }[]);
   assert.equal(c2[0]?.status, "convergente");
-  assert.match(String(c2[0]?.motivo), /Seções 8 a 10 não conferidas/);
+  assert.match(String(c2[0]?.motivo), /Seções 8 a 10 em branco no DFD da Centi/);
   // Sem a situação em fonte nenhuma (a CM002 também falha): a conferência NÃO é feita — nada marcado nem corrigido.
   const s = await verificar({ dfds, unidades: UNIDADES, config: { situacao: false, centro: false }, centi: () => ({ ...PREVIA, ...conteudo }), cm002: () => new Error("Centi sem sessão.") });
   assert.equal(s.r.estado, "concluido", s.r.erro);

@@ -763,10 +763,10 @@ export function podePular(
 }
 
 /**
- * O ORÇAMENTO de consultas ao D1 das páginas IDÊNTICAS numa execução automática: o plano gratuito permite 50 consultas por
- * execução (cada comando de um batch contado à parte, no pior caso); a abertura (configuração, cards, feriados, lote, condução,
- * trava, leitura) e a limpeza ficam com a folga de 10. Cada pulo custa a retomada + a página anterior (2) + o batch: a cópia do
- * passo, o recontar e o último passo (3) e, por órgão, os 2 do fecho do período.
+ * O ORÇAMENTO de consultas ao D1 de uma execução automática: o plano gratuito permite 50 por execução (cada comando de um
+ * batch contado à parte, no pior caso). O `gasto` é o TOTAL já feito (abertura + cards anteriores na fila + pulos); a folga
+ * de 10 fica só para o fecho (soltar, registrar a situação). Cada pulo custa no máximo 2 leituras + o batch (a cópia do passo,
+ * o recontar e o último passo — 3) e, por órgão, os 2 do fecho do período (estimativa por cima).
  */
 export const ORCAMENTO_CONSULTAS = 40;
 export const custoDoPulo = (porOrgao: boolean) => 2 + 3 + (porOrgao ? 2 : 0);
@@ -775,5 +775,8 @@ export const CUSTO_PAGINA_REAL = 22;
 /** Depois de `gasto` consultas, ainda cabe uma página REAL? Senão, a próxima página só é PULADA (se não mudou) — a que mudou
  * fica para a próxima execução (nunca passa das 50 consultas). */
 export const cabePaginaReal = (gasto: number) => gasto + CUSTO_PAGINA_REAL <= ORCAMENTO_CONSULTAS;
-/** Ainda cabe um pulo INTEIRO depois de `gasto` consultas (empenhos: 8 por execução; por órgão: 5). */
+/** A página que mudou é lida agora? O 1º card da chamada sem pulos sempre lê (a próxima chamada gastaria o mesmo); depois
+ * de pulos ou de outros cards, só se ainda couber uma página real — senão fica para a próxima chamada. */
+export const lerPaginaReal = (gasto: number, pulos: number, outrosCards: boolean) => !(pulos > 0 || outrosCards) || cabePaginaReal(gasto);
+/** Ainda cabe um pulo INTEIRO depois de `gasto` consultas (o quanto cabe depende da abertura já contada). */
 export const cabeOutroPulo = (gasto: number, porOrgao: boolean) => gasto + custoDoPulo(porOrgao) <= ORCAMENTO_CONSULTAS;
