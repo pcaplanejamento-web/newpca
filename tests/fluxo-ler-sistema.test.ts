@@ -30,7 +30,7 @@ test("Ler do sistema: geral e específico (protocolo, DFD, item, produto)", () =
   assert.deepEqual(lerDoSistema(fontes, "itens", "produto", ["555"]).map((i) => i.id), [1]);
   assert.deepEqual(lerDoSistema(fontes, "itens", "protocolo", ["144756"]).map((i) => i.id), [1]);
   assert.deepEqual(valoresProcurados("1119; 0120:130", []), ["1119", "120", "130"]);
-  assert.deepEqual(valoresProcurados("{{numero}}", [{ numero: "144756/2026" }, { numero: "200/2026" }]), ["144756", "200"]);
+  assert.deepEqual(valoresProcurados("{{numero}}", [{ numero: "144756/2026" }, { numero: "200/2026" }]), ["144756/2026", "200/2026"]);
 });
 
 test("Ler do sistema UM POR VEZ: lê um, processa, volta, lê outro — o fim leva executado", async () => {

@@ -1582,9 +1582,7 @@ const NOS: DefNo[] = [
       }
       // Com o DFD da Centi INTEIRO, o do sistema também (GET /api/dfd/[id]) — a comparação de TODAS as informações.
       const ler = ctx.host.dfdDoSistema as ((id: number) => Promise<Item>) | undefined;
-      // O id só é de DFD do SISTEMA quando o item veio dele (`dfdId` ou os campos da leitura do sistema) — o DFD
-      // desdobrado de um protocolo da Centi leva o Id da CAPA (nunca um DFD do sistema).
-      const idDe = (it: Item) => Number(it.dfdId ?? (it.reparticaoId !== undefined || it.orgaoId !== undefined ? it.id : Number.NaN));
+      const idDe = (it: Item) => Number(it.dfdId ?? it.id);
       const prontos = ler
         ? (
             await executarEmPool(
@@ -1596,12 +1594,15 @@ const NOS: DefNo[] = [
             if (!dfd || !Number.isInteger(id) || id <= 0) return it;
             try {
               const sis = await ler(id);
-              // Outro planejamento = não é o DFD deste item: compara pelo resumo.
+              // Outro planejamento = o id não é deste DFD (o desdobrado de um protocolo da Centi leva o Id da CAPA):
+              // compara pelo resumo, sem o DFD do sistema.
               if (soNumero(sis.planejamento) !== soNumero(it.planejamento)) return it;
               return { ...it, dfdSistema: sis };
             } catch (x) {
-              // Sem o DFD do sistema não há como comparar TUDO: "não conferido" (nunca um Convergente só pelo resumo).
               const m = x instanceof Error ? x.message : String(x);
+              // Nenhum DFD com esse id: o item não é um DFD do sistema (idem).
+              if (/DFD não encontrado/i.test(m)) return it;
+              // Sem o DFD do sistema não há como comparar TUDO: "não conferido" (nunca um Convergente só pelo resumo).
               return { ...it, centi: null, centiFalha: true, centiErro: `não consegui ler o DFD do sistema — ${m}` };
             }
               },
@@ -1641,7 +1642,8 @@ const NOS: DefNo[] = [
         const id = idDe(it);
         const dfd = dfdDe(it);
         const x = it.centi as Item;
-        if (!dfd || !Number.isInteger(id) || id <= 0 || !divergentes.has(id) || str(it.entidadeAchada)) {
+        // Com a leitura do sistema, só o item que É o DFD do sistema (com `dfdSistema`) vira base de correção.
+        if (!dfd || !Number.isInteger(id) || id <= 0 || !divergentes.has(id) || str(it.entidadeAchada) || (ler && !it.dfdSistema)) {
           finais.push(it);
           continue;
         }

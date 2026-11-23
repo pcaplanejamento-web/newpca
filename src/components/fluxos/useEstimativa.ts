@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { type Amostra, registrarAmostra, tempoRestanteMs } from "@/lib/fluxo-progresso";
 
-/** O tempo restante AO VIVO de uma execução: amostra a fração a cada mudança e recalcula a cada segundo. */
-export function useEstimativa(fracao: number, rodando: boolean): number | null {
+/** O tempo restante AO VIVO de uma execução: amostra a fração a cada mudança e recalcula a cada `intervaloMs` (padrão 1 s). */
+export function useEstimativa(fracao: number, rodando: boolean, intervaloMs = 1000): number | null {
   const amostras = useRef<Amostra[]>([]);
   const [agora, setAgora] = useState(() => Date.now());
   useEffect(() => {
@@ -16,8 +16,8 @@ export function useEstimativa(fracao: number, rodando: boolean): number | null {
   }, [fracao, rodando]);
   useEffect(() => {
     if (!rodando) return;
-    const id = setInterval(() => setAgora(Date.now()), 1000);
+    const id = setInterval(() => setAgora(Date.now()), intervaloMs);
     return () => clearInterval(id);
-  }, [rodando]);
+  }, [rodando, intervaloMs]);
   return rodando ? tempoRestanteMs(amostras.current, agora) : null;
 }

@@ -34,6 +34,12 @@
   let operacaoTela = null;
   // As operações que a PRÓPRIA extensão está enviando pelo cliente da Centi — não são da tela, não se aprende delas.
   const proprias = new Set();
+  /** Grava a sessão da aba (o MESMO objeto em todo lugar — vale depois de um F5). */
+  function salvarSessao() {
+    try {
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
+    } catch {}
+  }
   // A sessão da Centi é POR ABA (sessionStorage): a última capturada vale também depois de um F5 ou de uma atualização.
   try {
     const salvo = JSON.parse(sessionStorage.getItem(SESSAO) || "null");
@@ -63,13 +69,14 @@
     if (!Object.keys(limpos).some((k) => SESSAO_CAB.test(k))) return;
     // O pedido que a PRÓPRIA extensão faz pelo cliente da Centi (o aquecer, a emissão, o load do planejamento — com o
     // órgão trocado só nele) nunca substitui a cópia de um pedido da TELA: só preenche quando ainda não há nenhuma.
-    if (internos > 0 && cabecalhos) return;
+    const proprio = interno(metodo, u);
+    if (proprio && cabecalhos) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
     // As OUTRAS cópias que valem tentar no load do planejamento: a do load que a própria TELA fez (o pedido que a
     // automação repete) e a do último pedido da tela pelo XHR (o cliente antigo da Centi) — a do fetch pode trazer outros
     // cabeçalhos (token, user, year) com que a Centi não abre o registro.
-    if (internos === 0) {
+    if (!proprio) {
       // Os cabeçalhos dos últimos pedidos da tela, por endereço (só na memória): o reconhecimento da RESPOSTA de um load de
       // planejamento (`lembrarCm002`) põe os deste pedido em `copias.planejamento` — vale qualquer endereço/módulo.
       cabDaUrl.set(caminho_(u, i), limpos);
@@ -91,9 +98,7 @@
       viaSalvar = via;
       if (salvar[1].toLowerCase() === "confirmsave") trilhaSalvar = trilha.slice(0, -1);
     } else if (/[?&]entity=102907(&|$)/.test(caminho)) doProtocolo = limpos;
-    try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
-    } catch {}
+    salvarSessao();
   }
 
   // Os cabeçalhos do salvar: os da tela (salvar › protocolo › último pedido) com a SESSÃO sempre a mais recente.
@@ -129,9 +134,7 @@
     const novo = A.comTokenNovo(cabecalhos, ler("token"), ler("refreshtoken"));
     if (novo === cabecalhos) return;
     cabecalhos = novo;
-    try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
-    } catch {}
+    salvarSessao();
   }
   const tokenDoXhr = (x) => (n) => {
     try {
@@ -205,7 +208,7 @@
       // Diagnóstico: o que a tela recebeu antes deste Processar (só caminhos e chaves) — o ADM copia na Automação.
       if (op.planejamento && op.assinatura)
         localStorage.setItem(FONTE_DIAG, JSON.stringify({ ...pecas.diagnosticoAssinatura(respostasTela, op.planejamento, op.assinatura), aprendido: !!fonte, em }));
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
+      salvarSessao();
     } catch {}
   }
 
@@ -247,7 +250,36 @@
   const OPERACOES = "__pcaOperacoesArquivo_v1";
   // Por que o último cadastro de planejamento que a tela abriu NÃO virou o modelo ("" = virou, ou nenhum visto).
   let planSemModelo = "";
-  let internos = 0; // pedidos da PRÓPRIA extensão pelo cliente da Centi — não se aprende deles
+  // Os pedidos da PRÓPRIA extensão em andamento pelo cliente da Centi ("MÉTODO /caminho?busca" → quantos): não se aprende
+  // deles — SÓ deles (a tela segue ensinando enquanto a automação roda).
+  const internos = new Map();
+  const chaveInterna = (metodo, url) => {
+    try {
+      const u = new URL(String(url ?? ""), location.href);
+      const i = u.pathname.indexOf("/restauth/");
+      return i < 0 ? null : `${String(metodo || "GET").toUpperCase()} ${u.pathname.slice(i + "/restauth".length)}${u.search}`;
+    } catch {
+      return null;
+    }
+  };
+  const interno = (metodo, url) => {
+    const k = chaveInterna(metodo, url);
+    return k !== null && internos.has(k);
+  };
+  /** Marca o pedido próprio enquanto `fazer` roda. */
+  async function comoInterno(metodo, url, fazer) {
+    const k = chaveInterna(metodo, url);
+    if (k !== null) internos.set(k, (internos.get(k) ?? 0) + 1);
+    try {
+      return await fazer();
+    } finally {
+      if (k !== null) {
+        const n = (internos.get(k) ?? 1) - 1;
+        if (n > 0) internos.set(k, n);
+        else internos.delete(k);
+      }
+    }
+  }
   const lerAprendiz = () => {
     try {
       const g = JSON.parse(sessionStorage.getItem(APRENDIZ) || "null");
@@ -266,7 +298,7 @@
   };
   function aprenderResposta(url, metodo, corpo, status, tipo, texto) {
     try {
-      if (internos > 0) return;
+      if (interno(metodo, url)) return;
       const g = lerAprendiz();
       if (!g.ativo) return;
       const r = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.registroDoAprendiz(url, metodo, corpo, status, tipo, texto);
@@ -419,7 +451,7 @@
   }
   function lembrarCm002(url, metodo, corpo, status, texto, pedidoEm = 0) {
     try {
-      if (internos > 0 || Number(status) >= 400 || typeof texto !== "string" || !/^\s*[[{]/.test(texto)) return;
+      if (interno(metodo, url) || Number(status) >= 400 || typeof texto !== "string" || !/^\s*[[{]/.test(texto)) return;
       const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
       const c = A?.caminhoDaApi(url);
       const m = String(metodo || "GET").toUpperCase();
@@ -430,6 +462,9 @@
         else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
       } catch {}
       const j = JSON.parse(texto);
+      // A lista de protocolos desta resposta, calculada UMA vez (achata todas as linhas).
+      let prot;
+      const protocolos = () => (prot === undefined ? (prot = A.protocolosTela(j)) : prot);
       rastrear(url, m, status, j, texto);
       // Para aprender (e diagnosticar) as seções 8–10 do DFD no próximo "Processar": as 60 últimas, até ~2 MB cada.
       // A fonte só usa as consultas aceitas (a peça confere de novo).
@@ -463,7 +498,7 @@
       }
       if (!A.consultaPermitida(c.caminho, m, b)) {
         // Diagnóstico: uma lista que veio por um pedido que a trava não aceita como leitura.
-        if (A.protocolosTela(j)) diagnosticar({ caminho: c.caminho.slice(0, 120), motivo: `não aceito como consulta (${m})`, colunas: [] });
+        if (protocolos()) diagnosticar({ caminho: c.caminho.slice(0, 120), motivo: `não aceito como consulta (${m})`, colunas: [] });
         return;
       }
       const lp = A.loadDoProtocolo(url, m, b, j);
@@ -473,7 +508,7 @@
       }
       const forma = JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b });
       // A lista de protocolos (protocolo + ano + interessado) nunca é a da CM002.
-      const pl = A.protocolosTela(j) ? null : A.planejamentosCm002(j);
+      const pl = protocolos() ? null : A.planejamentosCm002(j);
       if (pl) {
         // Só na aba da automação. A MESMA consulta: a de MAIS linhas (o "Mostrar: Todos" vence a de 50); uma consulta NOVA só
         // da pesquisa da pessoa (na Centi 217 toda lista sai pelo mesmo endereço — o corpo diz qual).
@@ -494,7 +529,7 @@
         return;
       }
       // Tela Protocolo: a lista da aba "Em Análise" (com situação, só a que traz algum "em análise"; sem ela, a última pedida).
-      const p = A.protocolosTela(j);
+      const p = protocolos();
       if (p) {
         // Grava sempre que reconhece a lista; entre duas do mesmo endereço, vale a com "Em análise" e depois a de mais linhas.
         const analise = p.linhas.some((x) => A.emAnalise(x.situacao));
@@ -570,7 +605,7 @@
       const pedidoEm = Date.now();
       this.addEventListener("load", () => lembrarCm002(url, metodo, r[0], this.status, textoDoXhr(this), pedidoEm));
     }
-    if (this.__pcaUrl && !this.__pcaInterno && internos === 0 && lerAprendiz().ativo) {
+    if (this.__pcaUrl && !this.__pcaInterno && !interno(this.__pcaMetodo, this.__pcaUrl) && lerAprendiz().ativo) {
       const url = this.__pcaUrl;
       const metodo = this.__pcaMetodo;
       this.addEventListener("load", () => aprenderResposta(url, metodo, r[0], this.status, this.getResponseHeader("content-type"), textoDoXhr(this)));
@@ -609,7 +644,7 @@
           gravarPasso(url, metodo, b);
         })
         .catch(() => {});
-      if (internos === 0 && String(url || "").includes("/restauth/"))
+      if (!interno(metodo, url) && String(url || "").includes("/restauth/"))
         return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
           Promise.all([corpoP, r.clone().text()])
             .then(([b, t]) => {
@@ -619,7 +654,7 @@
             .catch(() => {});
           return r;
         });
-      if (internos === 0 && lerAprendiz().ativo)
+      if (!interno(metodo, url) && lerAprendiz().ativo)
         return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
           Promise.all([corpoP, r.clone().text()])
             .then(([b, t]) => aprenderResposta(url, metodo, b, r.status, r.headers.get("content-type"), t))
@@ -733,7 +768,8 @@
     if (i < 0) return null;
     const rel = `${u.pathname.slice(i + "/restauth".length)}${u.search}`;
     const headers = {};
-    if (ent !== null) headers[nomeEntidade() || "Company"] = ent;
+    // O órgão no FORMATO da tela ("3" com "02" = "03"), como no load (jsonPelaCenti) — senão a Centi recusa a emissão.
+    if (ent !== null) headers[nomeEntidade() || "Company"] = A ? A.entidadeNoFormato(ent, entidadeAtual()) : ent;
     const resposta = (r) => {
       tokenNosClientes(cli, r.headers);
       const dados = r.data;
@@ -749,13 +785,13 @@
     };
     const propria = corpo ? `${corpo.ModuleKey}|${String(corpo.Guid).toLowerCase()}` : null;
     if (propria) proprias.add(propria);
-    internos++;
     try {
-      return resposta(await cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers, responseType: "arraybuffer" }));
+      return resposta(
+        await comoInterno(metodo, url, () => cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers, responseType: "arraybuffer" })),
+      );
     } catch (e) {
       return e?.response ? resposta(e.response) : null;
     } finally {
-      internos--;
       if (propria) proprias.delete(propria);
     }
   }
@@ -783,13 +819,10 @@
       }
       return { status: r.status, j, enviados: Object.keys(headers) };
     };
-    internos++;
     try {
-      return ler(await cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers }));
+      return ler(await comoInterno(metodo, url, () => cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers })));
     } catch (e) {
       return e?.response ? ler(e.response) : null;
-    } finally {
-      internos--;
     }
   }
 
@@ -919,9 +952,8 @@
     const cli = acharClienteCenti();
     if (!cli) return null;
     const rel = `/${String(caminho).replace(/^\/?restauth\//, "")}`;
-    internos++;
     try {
-      const r = metodo === "GET" ? await cli.principal.get(rel) : await cli.principal.post(rel, corpo);
+      const r = await comoInterno(metodo, `/restauth${rel}`, () => (metodo === "GET" ? cli.principal.get(rel) : cli.principal.post(rel, corpo)));
       tokenNosClientes(cli, r.headers);
       return { status: r.status, j: r.data };
     } catch (e) {
@@ -929,8 +961,6 @@
       if (!r) throw new Error(`Sem resposta da Centi (${e?.message || "rede"}).`);
       tokenNosClientes(cli, r.headers);
       return { status: r.status, j: r.data };
-    } finally {
-      internos--;
     }
   }
   /** A API da Centi: pelo cliente da própria tela; sem ele, pelo envio da extensão. */
@@ -1070,8 +1100,11 @@
     try {
       depois = await abrirProtocolo(d);
     } catch {}
-    if (depois && !A.idsDocumentos(depois).includes(String(salvo.documento)))
+    if (depois && !A.idsDocumentos(depois).includes(String(salvo.documento))) {
+      // O documento que não persistiu não fica na trava "nunca apagar" (travaria o protocolo enquanto a aba existir).
+      guardarSalvos(String(d.id), A.idsDocumentos(depois));
       return { ok: false, erro: `A Centi respondeu que gravou (documento ${salvo.sequencial || "?"}), mas o protocolo aberto de novo não traz o documento — confira na Centi antes de reenviar.` };
+    }
     return { ok: true, ...salvo };
   }
 
@@ -1161,6 +1194,10 @@
     return `${lista.join(" | ") || "nenhum visto"}${algumCadastro ? "" : " — nenhum pedido da tela trouxe o cadastro do planejamento desde o último F5"}${planSemModelo ? ` — o cadastro visto não virou modelo: ${planSemModelo}` : ""}`;
   }
 
+  // Os módulos FIXOS do planejamento que responderam SEM o registro, por órgão ("órgão|rótulo" → hora): com a prévia do
+  // modelo aprendido já em mãos, são pulados por 10 min (na Centi 217 voltam vazios em todo DFD — eram ~12 pedidos a mais).
+  const fixosVazios = new Map();
+  const FIXO_VAZIO_MS = 10 * 60 * 1000;
   // Só LEITURA: repete uma CONSULTA aprendida (a Tela Protocolo) — a trava confere o verbo (nunca salvar/excluir/tramitar).
   async function ler(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
@@ -1197,7 +1234,16 @@
           partes.push(`${t.rotulo}: destino fora da API`);
           continue;
         }
+        const chaveFixo = plan && !t.daTela ? `${ent}|${t.rotulo}` : null;
+        if (chaveFixo && parcial && Date.now() - (fixosVazios.get(chaveFixo) ?? 0) < FIXO_VAZIO_MS) {
+          partes.push(`${t.rotulo}: pulado (sem o registro há pouco)`);
+          continue;
+        }
         const r = await tentarConsulta(t.metodo, url, t.metodo === "POST" ? t.corpo : null, ent, !!t.daTela, !!plan);
+        if (chaveFixo) {
+          if (!r.j && r.ultimo) fixosVazios.set(chaveFixo, Date.now());
+          else fixosVazios.delete(chaveFixo);
+        }
         let via = `${t.rotulo ? `${t.rotulo} · ` : ""}${r.via}`;
         if (r.j && plan) {
           // O registro no formato que o sistema lê (`Entity.Fields`), venha no envelope que vier.

@@ -81,11 +81,7 @@ export function abriuNoLoad(j: unknown): boolean {
 }
 
 /** A mensagem da Centi num load que não abriu (texto ou `{Text|Descricao}`). */
-export function mensagemDoLoad(j: unknown): string {
-  const m = j && typeof j === "object" ? (j as { Message?: unknown }).Message : null;
-  const t = typeof m === "string" ? m : m && typeof m === "object" ? ((m as { Text?: unknown; Descricao?: unknown }).Text ?? (m as { Descricao?: unknown }).Descricao) : "";
-  return typeof t === "string" ? t.trim() : "";
-}
+export const mensagemDoLoad = (j: unknown): string => mensagemSemRegistro(j) ?? "";
 
 /** Quantos planejamentos SEGUIDOS recusados (sem nenhum emitido na execução) param tudo — a operação mudou de fato. */
 export const MAX_RECUSAS_SEGUIDAS = 3;

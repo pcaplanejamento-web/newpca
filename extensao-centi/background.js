@@ -46,7 +46,8 @@ async function estadoDaAba(tabId) {
 // ---------------------------------------------------------------- A ABA PRÓPRIA DA AUTOMAÇÃO
 const grupoDaAutomacao = (titulo) => typeof titulo === "string" && titulo.startsWith(TITULO_GRUPO);
 const daCenti = (t) => !!(t?.url?.startsWith(INICIO_CENTI) || t?.pendingUrl?.startsWith(INICIO_CENTI));
-const noCompras = (t) => !!(t?.url ?? t?.pendingUrl ?? "").startsWith(COMPRAS);
+// A aba recém-criada vem com url "" e o pendingUrl preenchido: `||` (o `??` parava no "").
+const noCompras = (t) => (t?.url || t?.pendingUrl || "").startsWith(COMPRAS);
 
 /** A aba da automação: a guardada nesta sessão do navegador; depois de reabrir o Chrome, a do grupo "Automação PCA". */
 async function abaGuardada() {
@@ -278,13 +279,25 @@ function tentarLogin(aba, forcar) {
     tentando = (async () => {
       const p = podeTentarLogin(Date.now(), (await sessao.ler("loginUltima")) ?? null, forcar);
       if (!p.pode) return { resultado: "espera", erro: p.motivo, esperarS: p.esperarS ?? null };
+      // Sem "Entrar agora": a situação guardada (GET, sem limite) evita pedir a entrega (limite de 30/h) à toa.
+      if (!forcar) {
+        const i = await infoLogin();
+        if (i.erro && !i.credenciais) return { resultado: i.semSistema ? "semSistema" : "falha", erro: i.erro };
+        if (!i.credenciais) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
+        if (i.pausado) return { resultado: "pausado", erro: i.motivo };
+        if (!i.auto) return { resultado: "desligado" };
+      }
       // O login vem do sistema NA HORA, SELADO à chave deste navegador (nada fica guardado na extensão). Por POST: o
       // navegador só põe o `Origin` da extensão (o que prova ao sistema quem pede) em POST/PUT — num GET ele não vem.
       const k = await parDeChaves().catch(() => null);
       if (!k) return { resultado: "falha", erro: "A extensão não conseguiu criar a chave dela — reinstale-a." };
       const entrega = await apiLogin("POST", { acao: "entregar", publica: k.publica });
       await sessao.tirar("loginInfo");
-      if (!entrega.ok) return { resultado: entrega.semSistema ? "semSistema" : "falha", erro: entrega.erro };
+      if (!entrega.ok) {
+        // Falha ou 429: respeita o intervalo (o "Entrar agora" o ignora).
+        await sessao.gravar("loginUltima", Date.now());
+        return { resultado: entrega.semSistema ? "semSistema" : "falha", erro: entrega.erro };
+      }
       if (entrega.tem !== true) return { resultado: "semCredenciais", erro: MSG_SEM_LOGIN };
       if (entrega.pausado) return { resultado: "pausado", erro: entrega.motivo ?? "Login da Centi pausado — confira e salve de novo no ícone da extensão." };
       if (!forcar && entrega.auto === false) return { resultado: "desligado" };

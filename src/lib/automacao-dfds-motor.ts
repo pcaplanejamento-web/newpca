@@ -349,6 +349,8 @@ export async function anexarPelaPlataforma(
   protocoloId: number | null,
   dados: Record<string, unknown>,
   fase?: Fase,
+  /** false = a falha NÃO conclui o passo (quem chama tenta de novo — o último passo concluído encerraria a execução). */
+  registrarFalha = true,
 ): Promise<RespostaExt & { registro?: string }> {
   const uma = async (extra: Record<string, unknown>): Promise<RespostaExt> => {
     fase?.("anexando");
@@ -366,7 +368,7 @@ export async function anexarPelaPlataforma(
     const falhou = await registrarAnexo(execucaoId, passo, r.documento ?? null, protocoloId, notaDoAnexo(r));
     return falhou ? { ...r, registro: falhou } : r;
   }
-  await concluirPasso(execucaoId, passo.chave, "falhou", r.erro ?? "A Centi não gravou.");
+  if (registrarFalha) await concluirPasso(execucaoId, passo.chave, "falhou", r.erro ?? "A Centi não gravou.");
   return r;
 }
 
@@ -601,12 +603,13 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
       };
       const pdf = unido ? bytes : await regravarPdf(bytes).catch(() => bytes);
       const dados = { ...dest.passo.alvo, tipo, arquivo: a.nome, pdf: paraBase64(pdf) };
-      let r = await anexarPelaPlataforma(d, idExec, dest.passo, dest.protocoloId, dados, fase);
-      // Falha passageira: UMA nova tentativa (a extensão confere o protocolo antes — nunca duplica).
+      let r = await anexarPelaPlataforma(d, idExec, dest.passo, dest.protocoloId, dados, fase, false);
+      // Falha passageira: UMA nova tentativa (a extensão confere o protocolo antes — nunca duplica). A 1ª falha não conclui
+      // o passo: concluído o último, a execução encerraria e a nova autorização seria recusada.
       if (!r.ok && falhaPassageira(r.erro) && !d.interrompido()) {
         andamento(`Tentando de novo: ${a.nome}`);
         r = await anexarPelaPlataforma(d, idExec, dest.passo, dest.protocoloId, dados, fase);
-      }
+      } else if (!r.ok) await concluirPasso(idExec, dest.passo.chave, "falhou", r.erro ?? "A Centi não gravou.");
       reportados.add(dest.passo.chave);
       if (!r.ok) throw new Error(r.erro ?? "A Centi não gravou.");
       const nota = notaDoAnexo(r) + (r.registro ? ` O registro no sistema falhou (${r.registro}) — o anexo vale; não reenvie.` : "");
@@ -627,6 +630,8 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
   try {
     for (const a of fila) {
       if (parar || d.interrompido()) break;
+      // Anexo: o sinal de vida já durante a emissão dos DFDs do arquivo.
+      if (anexando) passoAtual = destinos.get(a)?.passo.chave ?? passoAtual;
       const uniao = a.partes.length > 1 ? await novaUniao() : null;
       const unidas: string[] = [];
       for (const t of a.partes) {
@@ -677,7 +682,11 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
         andamento(`Concluído: planejamento ${t.id}`);
         if (!anexando) await enviarResultados(false);
       }
-      if (uniao && !uniao.vazio && !d.interrompido()) {
+      // Anexo: só o PDF unido COMPLETO vai à Centi (o parcial, com a descrição do arquivo, passaria por "já estava" depois).
+      const completa = !anexando || (!parar && unidas.length === a.partes.length);
+      if (uniao && !uniao.vazio && !d.interrompido() && !completa)
+        for (const c of unidas) marcar(c, { estado: "falha", erro: "Não anexado — o PDF unido ficaria incompleto." });
+      else if (uniao && !uniao.vazio && !d.interrompido()) {
         const res = await uniao
           .salvar()
           .then((b) => gravar(a, b, unidas, true))
@@ -704,7 +713,17 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
   if (anexando && naCentiSuportado && !d.interrompido() && !erroGeral) {
     andamento("Conferindo na Centi o que foi anexado");
     const docsFinais = new Map<string, Map<string, DocCenti>>();
+    // Só os protocolos com algum arquivo a conferir (todas as partes ok/já).
+    const precisa = new Set(
+      [...destinos]
+        .filter(([a]) => a.partes.every((t) => {
+          const e = resultados.get(t.chave)?.estado;
+          return e === "ok" || e === "ja";
+        }))
+        .map(([, x]) => x.passo.alvo.id),
+    );
     for (const [id, al] of porIdFinal) {
+      if (!precisa.has(id)) continue;
       const r = await comSessaoCenti(() => d.pedir("protocolo", al, 60_000)).catch(() => ({ ok: false }) as RespostaExt);
       if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) docsFinais.set(id, docsPorDescricao(r.protocolo.docs));
     }
@@ -737,12 +756,12 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
         if (faltam.length) await concluirPassos(idExec, faltam.map((chave) => ({ chave, estado: "falhou" as const, texto: "Não emitido (o lote parou antes)." })));
       }
     } else if (interrompido) await cancelarExecucao(idExec);
-    else
-      for (const [a, x] of destinos)
-        if (!reportados.has(x.passo.chave)) {
-          const motivo = a.partes.map((t) => resultados.get(t.chave)?.texto).find(Boolean) ?? "Nenhum DFD deste arquivo foi emitido.";
-          await concluirPasso(idExec, x.passo.chave, "falhou", motivo);
-        }
+    else {
+      const faltam = [...destinos]
+        .filter(([, x]) => !reportados.has(x.passo.chave))
+        .map(([a, x]) => ({ chave: x.passo.chave, estado: "falhou" as const, texto: a.partes.map((t) => resultados.get(t.chave)?.texto).find(Boolean) ?? "Nenhum DFD deste arquivo foi emitido." }));
+      if (faltam.length) await concluirPassos(idExec, faltam);
+    }
   } catch {
     /* best-effort: a reconciliação do servidor encerra a que ficar para trás */
   }

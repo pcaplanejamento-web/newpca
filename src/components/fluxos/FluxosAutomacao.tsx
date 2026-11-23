@@ -179,7 +179,8 @@ export function FluxosAutomacao({
   const fracaoExec = andDfds?.total
     ? andDfds.feito / andDfds.total
     : progressoFluxo(Array.from({ length: Math.max(exec?.total ?? 0, Object.keys(passos).length) }, (_, i) => ({ estado: Object.values(passos)[i]?.estado })));
-  const restanteExec = useEstimativa(fracaoExec, emCurso);
+  // Só o painel do segundo plano usa (arredonda em 30 s): sem re-render da tela inteira a cada segundo.
+  const restanteExec = useEstimativa(fracaoExec, emCurso, 30_000);
   useTrabalhoSegundoPlano(
     exec
       ? {
@@ -373,7 +374,10 @@ export function FluxosAutomacao({
   const executar = useCallback(
     async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[], atrasadaDesde?: string | null, acao?: AcaoCenti): Promise<ResultadoExec | null> => {
       if (rodandoRef.current != null) {
-        if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) return null;
+        if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) {
+          if (!agendado) toast.warning(`${f.nome} já está em execução ou na fila — espere terminar e dispare de novo.`);
+          return null;
+        }
         fila.current.push({ f, grafo, entrada, agendado, atrasadaDesde, acao });
         setNaFila(fila.current.length);
         if (!agendado) toast.info(`${f.nome}: na fila — roda quando o fluxo atual terminar.`);
@@ -493,9 +497,11 @@ export function FluxosAutomacao({
   useEffect(() => {
     if (!pronto) return;
     let ocupado = false;
+    // Desmontada (a Automação escondida saiu): nada mais é reservado — o devido segue devido e o vigia remonta.
+    let vivo = true;
     const rodarDevidos = async () => {
       for (const f of fluxosDevidos(fluxosRef.current ?? [], Date.now())) {
-        if (rodandoRef.current != null) return; // o fluxo em curso termina antes; o próximo tique segue
+        if (!vivo || rodandoRef.current != null) return; // o fluxo em curso termina antes; o próximo tique segue
         const r = await api<{ fluxo?: FluxoAutomacao; atrasadaDesde?: string | null }>(`/api/admin/automacao/fluxos/${f.id}/reservar`, { method: "POST" });
         if (!r.ok || !r.fluxo) continue; // já reservado (outra aba/ADM) ou não está mais devido
         const reservado = r.fluxo;
@@ -504,7 +510,7 @@ export function FluxosAutomacao({
       }
     };
     const tique = async () => {
-      if (ocupado) return;
+      if (!vivo || ocupado) return;
       ocupado = true;
       try {
         if (!fluxosDevidos(fluxosRef.current ?? [], Date.now()).length) return;
@@ -520,7 +526,10 @@ export function FluxosAutomacao({
     };
     const id = window.setInterval(() => void tique(), 60_000);
     void tique();
-    return () => window.clearInterval(id);
+    return () => {
+      vivo = false;
+      window.clearInterval(id);
+    };
   }, [pronto]);
   const carregarRef = useRef(carregar);
   carregarRef.current = carregar;

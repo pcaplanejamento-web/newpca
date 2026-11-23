@@ -63,7 +63,9 @@ test("aceitaItensDeFora: o Início alimenta quem aceita os itens", () => {
   assert.equal(aceitaItensDeFora(g({ objeto: "dfds" }), itens, cat), true);
   assert.equal(aceitaItensDeFora(g({ objeto: "protocolos" }), itens, cat), false);
   assert.equal(aceitaItensDeFora(g({ objeto: "dfds", valor: "{{planejamento}}" }), itens, cat), true);
-  assert.equal(aceitaItensDeFora(g({ objeto: "dfds", valor: "10" }), itens, cat), false);
+  assert.equal(aceitaItensDeFora(g({ objeto: "dfds", buscaDfds: "numero", valor: "10" }), itens, cat), false);
+  // O valor escondido (busca "Todos"/"Os filtrados") não restringe nada — a régua da execução.
+  assert.equal(aceitaItensDeFora(g({ objeto: "dfds", valor: "10" }), itens, cat), true);
   assert.equal(aceitaItensDeFora(g({}, "centi.cm002"), itens, cat), false);
   assert.equal(aceitaItensDeFora(g({}, "dados.filtrar"), itens, cat), true);
   assert.equal(aceitaItensDeFora(g({ objeto: "dfds" }), [], cat), false);

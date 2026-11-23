@@ -101,9 +101,11 @@
     if (!recolhido) cartao.classList.toggle("min", !a);
   }
 
-  chrome.runtime.onMessage.addListener((msg, sender) => {
+  chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (sender.id !== chrome.runtime.id || msg?.alvo !== "painel") return false;
     mostrar(msg.atividade ?? null);
+    // Responde: sem resposta o envio rejeita e o serviço injetaria o painel de novo.
+    responder({ ok: true });
     return false;
   });
   const colocar = () => (document.body ?? document.documentElement).appendChild(host);

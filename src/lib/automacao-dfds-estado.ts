@@ -5,6 +5,7 @@
  * ícone da extensão leem TODOS a `contagemDfds` — os números nunca se contradizem.
  */
 import type { TarefaCenti } from "./automacao-centi-core.ts";
+import { descricaoCanonica } from "./automacao-core.ts";
 
 export type EstadoDfd =
   | "fila"
@@ -159,12 +160,10 @@ export type LinhaConferencia = {
   erro?: string;
 };
 
-const canonica = (t: string) => t.trim().replace(/\s+/g, " ").toUpperCase();
-
 /** O documento da Centi de cada descrição (canônica — sem caixa/espaços repetidos; o último de mesma descrição). */
 export function docsPorDescricao(docs: readonly DocCenti[]): Map<string, DocCenti> {
   const m = new Map<string, DocCenti>();
-  for (const d of docs) if (d.descricao) m.set(canonica(d.descricao), d);
+  for (const d of docs) if (d.descricao) m.set(descricaoCanonica(d.descricao), d);
   return m;
 }
 
@@ -182,7 +181,7 @@ export function conferenciaAnexos(
   return arquivos.map((a) => {
     const base = { nome: a.nome, descricao: a.descricao, dfds: a.dfds, protocolo: a.protocolo, documento: null, registrado: false };
     if (!a.alvoId) return { ...base, situacao: "semProtocolo", erro: a.erro ?? "Sem o protocolo da Centi." };
-    const registrado = registros.has(`${a.alvoId}|${canonica(a.descricao)}`);
+    const registrado = registros.has(`${a.alvoId}|${descricaoCanonica(a.descricao)}`);
     const lista = docs.get(a.alvoId);
     if (!lista || !Array.isArray(lista)) return { ...base, registrado, situacao: "semProtocolo", erro: lista && "erro" in lista ? lista.erro : "O protocolo não foi aberto." };
     let idx = indices.get(a.alvoId);
@@ -190,7 +189,7 @@ export function conferenciaAnexos(
       idx = docsPorDescricao(lista);
       indices.set(a.alvoId, idx);
     }
-    const doc = idx.get(canonica(a.descricao)) ?? null;
+    const doc = idx.get(descricaoCanonica(a.descricao)) ?? null;
     return { ...base, registrado, documento: doc, situacao: doc ? "anexado" : registrado ? "ausente" : "falta" };
   });
 }

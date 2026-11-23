@@ -449,7 +449,7 @@
     const tem = new Set(idsDocumentos(e));
     const faltam = ids.filter((id) => !tem.has(String(id)));
     return faltam.length
-      ? `A Centi devolveu o protocolo SEM ${faltam.length} documento(s) que já estão nele (desatualizado) — não anexei, para não apagar nada. Recarregue a aba da Centi (F5) e confira o protocolo.`
+      ? `A Centi devolveu o protocolo SEM ${faltam.length} documento(s) que já estão nele (desatualizado) — não anexei, para não apagar nada. Confira o protocolo na Centi; se o documento foi removido de propósito, feche e reabra a aba da automação.`
       : null;
   }
 

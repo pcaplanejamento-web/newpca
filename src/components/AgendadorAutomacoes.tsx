@@ -11,6 +11,26 @@ const MAX_ESPERA_MS = 10 * 60_000;
 const ESPERA_DEVIDA_MS = 2 * 60_000;
 /** Quanto tempo a Automação escondida fica viva até começar o trabalho (buscar os dados + a extensão responder). */
 const PRAZO_MONTAGEM_MS = 180_000;
+/** Quanto a sonda espera a extensão se anunciar (sem ela, nada roda — não vale montar a Automação). */
+const ESPERA_SONDA_MS = 3_000;
+
+/** A extensão está neste navegador? Pergunta à ponte da página (o mesmo "ola" → "pronto" da tela da Automação). */
+function extensaoPresente(): Promise<boolean> {
+  return new Promise((fim) => {
+    const ouvir = (e: MessageEvent) => {
+      if (e.source !== window || e.data?.fonte !== "pca-extensao" || e.data.tipo !== "pronto") return;
+      acabar(true);
+    };
+    const t = window.setTimeout(() => acabar(false), ESPERA_SONDA_MS);
+    function acabar(v: boolean) {
+      window.clearTimeout(t);
+      window.removeEventListener("message", ouvir);
+      fim(v);
+    }
+    window.addEventListener("message", ouvir);
+    window.postMessage({ fonte: "pca-automacao", tipo: "ola" }, window.location.origin);
+  });
+}
 
 /**
  * O VIGIA dos AGENDAMENTOS das automações (só ADM, no layout do painel, sem UI): consulta a agenda (a próxima hora e os
@@ -40,6 +60,9 @@ export function AgendadorAutomacoes() {
           // Uma montagem por conjunto de devidos (de novo só depois de 10 min — a extensão pode ter ficado pronta).
           const chave = devidos.map((d) => `${d.id}:${d.proximaEm}`).join(",");
           if (chave !== ultimo || Date.now() - ultimoEm > MAX_ESPERA_MS) {
+            // Sem a extensão (celular, outro PC) nada pode rodar: não monta a Automação inteira à toa.
+            if (!(await extensaoPresente())) return agendar(MAX_ESPERA_MS);
+            if (ac.signal.aborted) return;
             ultimo = chave;
             ultimoEm = Date.now();
             rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />, PRAZO_MONTAGEM_MS);

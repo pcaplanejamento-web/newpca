@@ -77,12 +77,35 @@ export type FontesSistema = { protocolos: Item[]; dfds: Item[]; itens: Item[] };
 
 /** O número comparável: só os dígitos ANTES da barra, sem zeros à esquerda ("0144756/2026" → "144756"). */
 const chaveNum = (v: unknown) => String(v ?? "").split("/")[0].replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+/** O ano depois da barra ("200/2026" → "2026"); sem ele, "". */
+const anoDe = (v: unknown) => {
+  const a = String(v ?? "").split("/")[1]?.trim() ?? "";
+  return /^\d{4}$/.test(a) ? a : "";
+};
+/** O valor procurado com o ano, quando há ("0200/2026" → "200/2026"). */
+const chaveProcura = (v: unknown) => (chaveNum(v) && anoDe(v) ? `${chaveNum(v)}/${anoDe(v)}` : chaveNum(v));
+/** Casa pelo número e, quando os DOIS lados têm ano, pelo ano também (200/2025 ≠ 200/2026). */
+function casaNumero(valores: Iterable<string>): (v: unknown) => boolean {
+  const anos = new Map<string, Set<string>>();
+  for (const x of valores) {
+    const n = chaveNum(x);
+    if (!n) continue;
+    const s = anos.get(n) ?? new Set<string>();
+    s.add(anoDe(x));
+    anos.set(n, s);
+  }
+  return (v) => {
+    const s = anos.get(chaveNum(v));
+    const a = anoDe(v);
+    return !!s && (!a || s.has("") || s.has(a));
+  };
+}
 
 /** Os valores procurados: o texto do campo (vários por ";", ":" ou ","), com {{campo}} trocado pelo dado de CADA item que
  * chega; sem item que chega, o texto como está. */
 export function valoresProcurados(valor: string, entrada: Item[]): string[] {
   const textos = /\{\{/.test(valor) ? (entrada.length ? entrada : [{}]).map((it) => interpolar(valor, it)) : [valor];
-  const vals = textos.flatMap((t) => t.split(/[;:,\n]/)).map(chaveNum).filter(Boolean);
+  const vals = textos.flatMap((t) => t.split(/[;:,\n]/)).map(chaveProcura).filter(Boolean);
   return [...new Set(vals)];
 }
 
@@ -98,8 +121,7 @@ export function buscaEfetiva(busca: string, valor: string, valores: string[]): s
 export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, pedida: string, valores: string[]): Item[] {
   // "Os filtrados na tabela" lê TUDO: o recorte é o filtro da tabela (`filtrarPelaTabela`), aplicado depois.
   const busca = pedida === BUSCA_TABELA ? "todos" : pedida;
-  const quer = new Set(valores);
-  const tem = (v: unknown) => quer.has(chaveNum(v));
+  const tem = casaNumero(valores);
   const protoQuer = (p: Item) => tem(p.numero) || tem(p.idExterno);
   if (objeto === "protocolos") {
     if (busca === "todos") return f.protocolos;
@@ -117,8 +139,8 @@ export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, pedida: st
   if (busca === "produto") return f.itens.filter((i) => tem(i.codigo));
   if (busca === "dfd") return f.itens.filter((i) => tem(i.dfdNumero));
   if (busca === "planejamento") return f.itens.filter((i) => tem(i.dfdPlanejamento));
-  const protos = new Set(f.protocolos.filter(protoQuer).map((p) => chaveNum(p.numero)));
-  return f.itens.filter((i) => protos.has(chaveNum(i.protocoloNumero)));
+  const doProto = casaNumero(f.protocolos.filter(protoQuer).map((p) => String(p.numero ?? "")));
+  return f.itens.filter((i) => doProto(i.protocoloNumero));
 }
 
 /** A porta "fim": os itens marcados `executado` (o fim do laço) — sem nenhum, um marcador só. */

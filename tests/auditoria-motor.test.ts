@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agendadaVencida, agendaMudou, type DefNo, executarFluxo, type Item, lerFrequencia } from "../src/lib/fluxo-core.ts";
+import { agendadaVencida, agendaMudou, type DefNo, executarFluxo, type Item, lerFrequencia, lerGrafo, type Portas } from "../src/lib/fluxo-core.ts";
 
 // Registro mínimo (independente dos nós reais): início, iterador um por vez, corpo, coletor e junção.
 const base = { descricao: "", icone: "", campos: [] };
@@ -18,7 +18,7 @@ const REG = new Map<string, DefNo>([
       rodaSemItens: true,
       entregaParcial: true,
       iterador: true,
-      executar: async (e, c, _ctx, est) => {
+      executar: async (e, c, _ctx, est): Promise<Portas> => {
         if (c.falhar) throw new Error("falhou");
         if (e.entrada) est.fila = [...e.entrada];
         const fila = est.fila as Item[];
@@ -64,7 +64,7 @@ test("erro num iterador com a saída 'erro' ligada não realimenta o laço", asy
     nos: [no("i", "t.inicio"), no("it", "t.iter", { falhar: true }), no("c", "t.corpo"), no("e", "t.coletar", { nome: "erros" })],
     conexoes: [con("i", "it"), con("it", "c", "item"), con("c", "it", "saida", "volta"), con("it", "e", "erro")],
   };
-  const r = await executarFluxo(g, REG, ctx);
+  const r = await executarFluxo(lerGrafo(g), REG, ctx);
   assert.equal(r.estado, "concluido", `${r.erro}`);
   assert.equal(coletados.erros.length, 1);
   assert.equal(corpoRodou, 0);
@@ -76,7 +76,7 @@ test("iterador DESATIVADO não repassa a volta ao corpo sem fim", async () => {
     nos: [no("i", "t.inicio"), no("it", "t.iter", {}, { desativado: true }), no("c", "t.corpo"), no("f", "t.coletar", { nome: "fim" })],
     conexoes: [con("i", "it"), con("it", "c", "item"), con("c", "it", "saida", "volta"), con("it", "f", "fim")],
   };
-  const r = await executarFluxo(g, REG, ctx);
+  const r = await executarFluxo(lerGrafo(g), REG, ctx);
   assert.equal(r.estado, "concluido", `${r.erro}`);
   assert.equal(corpoRodou, 0);
   assert.deepEqual(coletados.fim, [{ n: 1 }]);
@@ -88,7 +88,7 @@ test("nó desativado entrega a saída 'erro' vazia (a junção não trava)", asy
     nos: [no("i", "t.inicio"), no("a", "t.corpo", {}, { desativado: true }), no("j", "t.juntar"), no("s", "t.coletar", { nome: "fim" })],
     conexoes: [con("i", "a"), con("a", "j", "saida", "a"), con("a", "j", "erro", "b"), con("j", "s")],
   };
-  const r = await executarFluxo(g, REG, ctx);
+  const r = await executarFluxo(lerGrafo(g), REG, ctx);
   assert.equal(r.estado, "concluido", `${r.erro}`);
   assert.deepEqual(coletados.fim, [{ n: 1 }]);
 });
@@ -100,7 +100,7 @@ test("iterador um por vez com 1.500 itens não estoura o teto de passos no meio"
     nos: [no("i", "t.inicio", { itens }), no("it", "t.iter"), no("c", "t.corpo"), no("f", "t.coletar", { nome: "fim" })],
     conexoes: [con("i", "it"), con("it", "c", "item"), con("c", "it", "saida", "volta"), con("it", "f", "fim")],
   };
-  const r = await executarFluxo(g, REG, ctx);
+  const r = await executarFluxo(lerGrafo(g), REG, ctx);
   assert.equal(r.estado, "concluido", `${r.erro}`);
   assert.equal(corpoRodou, 1500);
 });

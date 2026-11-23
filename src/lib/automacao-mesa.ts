@@ -30,6 +30,11 @@ export const hostDaAcaoCenti = (a?: AcaoCenti | null): Record<string, unknown> =
 /** O que a Mesa manda à Automação: o fluxo, os DFDs de entrada (o Início do fluxo os entrega) e a ação da coluna Centi. */
 export type DisparoMesa = { fluxoId: number; itens: Item[]; acao?: AcaoCenti };
 const CHAVE_DISPARO = "automacao:disparo";
+/** Validade do disparo guardado (o prazo da montagem escondida): depois disso, nunca roda sozinho com itens antigos. */
+export const VALIDADE_DISPARO_MS = 120_000;
+
+/** O disparo guardado ainda vale? (sem `em` = formato antigo, descartado). */
+export const disparoValido = (em: unknown, agora: number): boolean => typeof em === "number" && agora - em >= 0 && agora - em <= VALIDADE_DISPARO_MS;
 
 /** O evento que avisa a Automação já montada (em segundo plano) de um disparo novo. */
 export const EVENTO_DISPARO_MESA = "automacao:disparo";
@@ -37,7 +42,7 @@ export const EVENTO_DISPARO_MESA = "automacao:disparo";
 /** Grava o disparo na aba e avisa a Automação montada. `false` = o navegador recusou o armazenamento. */
 export function gravarDisparoMesa(d: DisparoMesa): boolean {
   try {
-    sessionStorage.setItem(CHAVE_DISPARO, JSON.stringify(d));
+    sessionStorage.setItem(CHAVE_DISPARO, JSON.stringify({ ...d, em: Date.now() }));
     window.dispatchEvent(new Event(EVENTO_DISPARO_MESA));
     return true;
   } catch {
@@ -46,9 +51,13 @@ export function gravarDisparoMesa(d: DisparoMesa): boolean {
 }
 
 /** Há um disparo esperando (sem consumi-lo)? */
-export function temDisparoMesa(): boolean {
+export function temDisparoMesa(agora = Date.now()): boolean {
   try {
-    return sessionStorage.getItem(CHAVE_DISPARO) != null;
+    const t = sessionStorage.getItem(CHAVE_DISPARO);
+    if (t == null) return false;
+    if (disparoValido((JSON.parse(t) as { em?: unknown } | null)?.em, agora)) return true;
+    sessionStorage.removeItem(CHAVE_DISPARO); // vencido: apagado
+    return false;
   } catch {
     return false;
   }
@@ -63,11 +72,12 @@ export function dfdsDoAlvo(dfds: readonly DfdParaAutomacao[], campo: "id" | "pro
 }
 
 /** Lê e APAGA o disparo (roda uma vez só). */
-export function lerDisparoMesa(): DisparoMesa | null {
+export function lerDisparoMesa(agora = Date.now()): DisparoMesa | null {
   try {
     const t = sessionStorage.getItem(CHAVE_DISPARO);
     sessionStorage.removeItem(CHAVE_DISPARO);
-    const d = t ? (JSON.parse(t) as DisparoMesa & { soConferir?: boolean }) : null;
+    const d = t ? (JSON.parse(t) as DisparoMesa & { soConferir?: boolean; em?: unknown }) : null;
+    if (!d || !disparoValido(d.em, agora)) return null; // vencido: nunca roda horas depois sem nova confirmação
     // `soConferir` = o formato de antes (uma aba aberta antes da atualização).
     const acao: AcaoCenti | null = d?.acao === "conferir" || d?.acao === "corrigir" ? d.acao : d?.soConferir === true ? "conferir" : null;
     return d && Number(d.fluxoId) > 0 && Array.isArray(d.itens) ? { fluxoId: Number(d.fluxoId), itens: d.itens, ...(acao ? { acao } : {}) } : null;
