@@ -5,7 +5,7 @@
  * autorização de uso único + a confirmação da extensão; o já anexado não é emitido de novo). É a lógica que era da tela
  * da Automação, agora usada pelo componente de fluxo "Baixar/anexar DFDs" (`saida.dfdsCenti`).
  */
-import { assinaturaDoLoad } from "./assinatura-dfd-centi.ts";
+import { assinaturaDoLoad, coerceFonteAssinatura, escolherAssinatura, lerParesAssinatura, pedidoDaFonte } from "./assinatura-dfd-centi.ts";
 import { comSessaoCenti } from "./centi-sessao.ts";
 import { temSecoes810 } from "./conferencia-dfd-centi.ts";
 import {
@@ -178,6 +178,10 @@ export async function carregarPlanejamento(
 export const MSG_ENSINAR_PLANEJAMENTO =
   "Abra UM planejamento na CM002 da Centi (duplo clique na linha), na aba da automação, com a extensão ativa — ela aprende como a Centi abre o planejamento — e execute de novo.";
 
+/** O que fazer quando a automação não tem o registro das seções 8–10 do planejamento (a tela o tem): ensiná-la. */
+export const MSG_ENSINAR_REGISTRO =
+  "Emita UM DFD pela tela da Centi (CM002 → planejamento → Operações → Emitir DFD → Processar) na aba da automação, com a extensão ativa — ela aprende de onde a tela tira o registro das seções 8 a 10 — e execute de novo.";
+
 /** O caminho do load (cada tentativa: o pedido aprendido da tela, os módulos fixos, as cópias dos cabeçalhos) e os NOMES
  * dos cabeçalhos — nunca os valores. Só a extensão 1.45.0+ informa; vazio = nada a dizer. `semModelo` = o que fazer. */
 export function diagnosticoDoLoad(via: unknown, cabecalhos: unknown, semModelo = false): string | undefined {
@@ -185,6 +189,47 @@ export function diagnosticoDoLoad(via: unknown, cabecalhos: unknown, semModelo =
   const cab = Array.isArray(cabecalhos) ? cabecalhos.filter((k): k is string => typeof k === "string" && /^[\w-]{1,40}$/.test(k)).slice(0, 12) : [];
   if (!v && !cab.length) return undefined;
   return `caminho: ${v || "?"}${cab.length ? `; cabeçalhos: ${cab.join(", ")}` : ""}${semModelo ? ` — ${MSG_ENSINAR_PLANEJAMENTO}` : ""}`;
+}
+
+/** O que a extensão aprendeu da TELA da Centi (o "Processar" de cada emissão pela tela): os pares planejamento → registro
+ * das seções 8–10 e a consulta de onde a tela tira o registro. Lido do `estado` da extensão, no máximo a cada 60 s. */
+type DaTela = { em: number; pares: Record<string, string>; fonte: ReturnType<typeof coerceFonteAssinatura> };
+const daTela = new WeakMap<object, DaTela>();
+async function aprendidoDaTela(c: Pick<ContextoEmissor, "pedir">, fresco: boolean): Promise<DaTela> {
+  const ja = daTela.get(c.pedir);
+  if (!fresco && ja && Date.now() - ja.em < 60_000) return ja;
+  const e = await c.pedir("estado", null, 8000);
+  const op = e.ok && e.operacao && typeof e.operacao === "object" ? (e.operacao as Record<string, unknown>) : {};
+  const t = { em: Date.now(), pares: lerParesAssinatura(op.pares), fonte: coerceFonteAssinatura(op.fonte) };
+  daTela.set(c.pedir, t);
+  return t;
+}
+
+/**
+ * O registro das seções 8–10 DESTE planejamento — o mesmo que a tela da Centi manda no Emitir DFD (sem ele, a Centi gera o
+ * PDF com as seções 8 a 10 em branco). Na ordem: o campo do load (como a tela); o id que a PRÓPRIA TELA mandou para este
+ * planejamento; a consulta de onde a tela tira o id, feita para este planejamento. Nunca o de outro planejamento.
+ */
+export async function registroDoPlanejamento(
+  c: Pick<ContextoEmissor, "pedir">,
+  id: string,
+  entidade: string | undefined,
+  j: unknown,
+): Promise<{ id: string } | { erro: string } | { interrompido: true }> {
+  const doLoad = assinaturaDoLoad(j, id);
+  if ("id" in doLoad) return doLoad;
+  const plan = id.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  // O par da tela pode ter acabado de nascer (a pessoa emitiu pela tela agora): sem ele, relê o estado UMA vez.
+  let t = await aprendidoDaTela(c, false);
+  if (!t.pares[plan] && !t.fonte && Date.now() - t.em > 5000) t = await aprendidoDaTela(c, true);
+  if (t.pares[plan]) return { id: t.pares[plan] };
+  const pedido = t.fonte ? pedidoDaFonte(t.fonte, plan) : null;
+  if (!t.fonte || !pedido) return doLoad;
+  const r = (await c.pedir("ler", { metodo: pedido.metodo, caminho: pedido.caminho, corpo: pedido.corpo, entidade }, 60_000)) as RespostaExt & { j?: unknown };
+  if (r.interrompido) return { interrompido: true };
+  if (!r.ok) return doLoad;
+  const e = escolherAssinatura(r.j, t.fonte, plan);
+  return "id" in e ? e : doLoad;
 }
 
 /** Emite UM DFD (load + Emitir DFD; a operação recusada é reaprendida UMA vez) e baixa o PDF. `carregado` = o JSON do
@@ -207,16 +252,16 @@ async function emitirNaSessao(c: ContextoEmissor, id: string, entidade?: string,
     const msg = mensagemDoLoad(load.j);
     return { erro: `Não consegui abrir o planejamento ${id} na Centi${onde}${msg ? ` — ${msg}` : ""}${load.diagnostico ? ` [${load.diagnostico}]` : ""}.` };
   }
-  // O registro das seções 8–10 DESTE planejamento: o campo do próprio load, como a tela da Centi. Sem ele (a PRÉVIA do
-  // planejamento — a Centi 3.0.216.217 só abre ela — ou o planejamento sem o registro), o DFD é emitido com o campo VAZIO —
-  // nunca o registro de outro planejamento — e a Centi usa o do próprio planejamento. QUEM DECIDE se as seções 8 a 10
-  // vieram é o PDF (`temSecoes810`): a conferência compara o que o PDF traz; o Baixar/anexar confere o PDF antes de salvar.
-  const ass = assinaturaDoLoad(load.j, id);
+  // O registro das seções 8–10 DESTE planejamento, o mesmo que a tela da Centi manda (`registroDoPlanejamento`). Sem ele, o
+  // DFD sai com o campo VAZIO — nunca o registro de outro planejamento — e a Centi gera as seções 8 a 10 em branco: a
+  // conferência não o marca (`lerNaSessao`) e o Baixar/anexar não o salva (`emitirConferido`).
+  const ass = await registroDoPlanejamento(c, id, entidade, load.j);
+  if ("interrompido" in ass) return { erro: "Interrompido na extensão.", ambiente: true };
   const semSecoes810 = "erro" in ass;
   const secoes810NaoLidas = semSecoes810 && loadIncompleto(load.j);
   const causa810 = secoes810NaoLidas ? "o registro das seções 8 a 10 não veio na leitura da Centi" : "o planejamento não tem o registro das seções 8 a 10";
   const sem810 = semSecoes810 ? (secoes810NaoLidas ? { semSecoes810, secoes810NaoLidas } : { semSecoes810 }) : {};
-  const ensinar = secoes810NaoLidas ? ` ${MSG_ENSINAR_PLANEJAMENTO}` : "";
+  const ensinar = secoes810NaoLidas ? ` ${MSG_ENSINAR_REGISTRO}` : "";
   const r = await c.pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, c.cfg(), new Date(), "erro" in ass ? "" : ass.id), entidade }, 150_000);
   if (!r.ok || r.b64 == null) return { erro: r.erro ?? "Falha na extensão.", ambiente: true };
   const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
@@ -254,7 +299,7 @@ async function emitirConferido(c: ContextoEmissor, t: TarefaCenti, conferir: boo
   // Emitido da PRÉVIA do planejamento (o load sem o registro das seções 8 a 10): só é salvo/anexado se o PRÓPRIO PDF
   // trouxer as seções 8 a 10 preenchidas — em branco, nunca.
   if (r.secoes810NaoLidas && !(await secoes810NoPdf(r.pdf)))
-    return { erro: `O DFD do planejamento ${t.id} saiu da Centi com as seções 8 a 10 em branco — não foi salvo nem anexado. ${MSG_ENSINAR_PLANEJAMENTO}`, definitivo: true };
+    return { erro: `O DFD do planejamento ${t.id} saiu da Centi com as seções 8 a 10 em branco — não foi salvo nem anexado. ${MSG_ENSINAR_REGISTRO}`, definitivo: true };
   if (!conferir) return r;
   fase?.("conferindo");
   const erro = conferirConteudoDfd(await textoDoPdf(r.pdf).catch(() => ""), t);

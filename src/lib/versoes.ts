@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.309.1",
+    data: "2026-11-23",
+    titulo: "O DFD emitido pela automação igual ao da tela da Centi",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "Desde a atualização da Centi de 19/11, a automação pedia o DFD sem o registro das seções 8 a 10 (equipe, secretário demandante, autorização) e a Centi gerava o PDF com essas seções em branco — diferente do PDF que a tela gera. Agora a automação usa o mesmo registro que a tela da Centi usa para cada planejamento (o que a extensão aprende a cada emissão pela tela) e o PDF sai igual. Sem o registro, o DFD fica “não conferido” com o que fazer — nunca “Convergente*”. Os “Convergente*” anteriores voltaram a “não conferido”.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.309.0",
     data: "2026-11-23",
     titulo: "Seções 8 a 10 verificadas no PDF de cada DFD e auditoria das automações",

@@ -4,7 +4,7 @@
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
 import { analisarRespostaCenti, centroCustoLidoNoLoad, dadosDoPlanejamento, mensagemSemRegistro, operacaoRecusada, PREFIXO_RECUSA, planejamentoInexistente } from "./automacao-centi-core";
-import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
+import { carregarPlanejamento, comSessaoCenti, type ContextoEmissor, emitirUm, MSG_ENSINAR_REGISTRO } from "./automacao-dfds-motor";
 import { nomesDosCampos } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import type { DfdParseado } from "./parse-dfd-comum";
@@ -198,6 +198,10 @@ async function lerNaSessao(c: ContextoEmissor, plan: string, entidade: string | 
     throw falha(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
   // Sem nenhum valor nos itens = o PDF saiu sem o valor de referência: NÃO confere (nunca compara nem guarda "R$ 0,00").
   if (semValores(d)) throw falha("A Centi emitiu o DFD sem os valores dos itens (Emitir valor referência) — não conferido.");
+  // O PDF com as seções 8 a 10 em branco porque a automação NÃO tinha o registro do planejamento (a Centi abriu só a
+  // prévia e a tela não ensinou o registro): é outro PDF, não o que a tela gera — NÃO conferido (nunca "Convergente*").
+  if (e.secoes810NaoLidas && !temSecoes810(d))
+    throw falha(`a Centi gerou o DFD com as seções 8 a 10 em branco porque a automação não tem o registro delas deste planejamento (a tela o manda) — não conferido. ${MSG_ENSINAR_REGISTRO}`);
   const resumo = {
     // As seções 8 a 10 em branco NO PDF (`temSecoes810`): elas não são comparadas (a conferência diz "convergente*").
     // Quem decide é o PDF de cada DFD — nunca o load (a prévia da Centi 217 não traz o registro e o PDF vem completo).

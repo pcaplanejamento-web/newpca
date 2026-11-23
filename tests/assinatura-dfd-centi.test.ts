@@ -57,13 +57,14 @@ test("o registro das seções 8–10 vem do campo IdPlanejamentoAssinaturaDFD do
 });
 
 /** A extensão falsa: o load (o módulo da tela) e o Emitir DFD devolvendo um PDF. */
-function centiFalsa(loads: Record<string, unknown>) {
+function centiFalsa(loads: Record<string, unknown>, operacao?: unknown) {
   const pedidos: { acao: string; dados: { caminho?: string; corpo?: { Params?: { Key: string; Value: string }[] } } }[] = [];
   const pedir = async (acao: string, dados: unknown) => {
     pedidos.push({ acao, dados: dados as never });
     const d = dados as { caminho: string };
     if (acao === "ler") return { ok: true, j: loads[d.caminho] ?? { Entity: null, Message: null } };
     if (acao === "pedir") return { ok: true, b64: Buffer.from("%PDF-1.4 teste").toString("base64"), status: 200 };
+    if (acao === "estado") return { ok: true, operacao: operacao ?? null };
     return { ok: true };
   };
   const c = { pedir: pedir as never, cfg: () => lerConfigCenti(null), aplicarOperacao: () => false, mapa: () => ({}), cadastradas: () => ({}), definirEntidade: () => {} };
@@ -232,13 +233,13 @@ test("recusa do Emitir DFD com a prévia: a causa certa (o registro NÃO VEIO na
   const r = await emitirUm(c, "24", "3");
   assert.equal(r.pdf, undefined);
   assert.match(r.erro ?? "", /o registro das seções 8 a 10 não veio na leitura da Centi/);
-  assert.match(r.erro ?? "", /Abra UM planejamento na CM002 da Centi \(duplo clique na linha\)/, "diz o que fazer");
+  assert.match(r.erro ?? "", /Emita UM DFD pela tela da Centi/, "diz o que fazer");
   assert.doesNotMatch(r.erro ?? "", /o planejamento não tem o registro/);
   // Na prévia (todo DFD na Centi 217), a recusa CONTA como as outras (várias seguidas param a execução) e a operação é
   // reaprendida ANTES de qualquer conclusão — a Centi pode ter trocado o Emitir DFD.
   assert.equal(r.recusada, true);
   assert.equal(r.definitivo, undefined);
-  assert.deepEqual(pedidos, ["ler", "pedir", "estado"]);
+  assert.deepEqual(pedidos, ["ler", "estado", "pedir", "estado"], "o estado antes da emissão = o registro que a tela usa");
 });
 
 test("recusa do Emitir DFD com a prévia e a operação TROCADA na Centi: reaprende da tela e emite", async () => {
@@ -260,7 +261,7 @@ test("recusa do Emitir DFD com a prévia e a operação TROCADA na Centi: reapre
   assert.ok(r.pdf, r.erro);
   assert.equal(r.semSecoes810, true);
   assert.equal(r.secoes810NaoLidas, true);
-  assert.deepEqual(pedidos, ["ler", "pedir", "estado", "pedir"]);
+  assert.deepEqual(pedidos, ["ler", "estado", "pedir", "estado", "pedir"]);
 });
 
 test("load sem a Entity (o envelope da Centi 217 sem registro, devolvido cru): NÃO abriu — nada é emitido", async () => {
@@ -285,4 +286,30 @@ test("centro de custo: o texto da referência (Display › o registro ligado) e 
   // Lido e vazio (a Centi não tem): Id 0 ou nulo.
   assert.equal(centroCustoLidoNoLoad(comCentro(ref(0))), true);
   assert.equal(centroCustoLidoNoLoad(comCentro(null)), true);
+});
+
+test("prévia SEM o registro: vale o que a TELA manda — o par do planejamento, senão a consulta de onde a tela tira (nunca o de outro)", async () => {
+  // 1) o par que a própria tela mandou para ESTE planejamento.
+  const a = centiFalsa({ [caminhoLoadPlanejamento("132")]: previa(132) }, { pares: { "132": "114", "131": "99" } });
+  const ra = await emitirUm(a.c, "132", "3");
+  assert.ok(ra.pdf);
+  assert.equal(ra.semSecoes810, undefined, "com o registro da tela o PDF sai como o da tela");
+  assert.equal(param(a.pedidos.find((p) => p.acao === "pedir")?.dados.corpo, "IdPlanejamentoAssinaturaDFD"), "114");
+  // 2) sem par: a FONTE (a consulta da tela) feita para este planejamento.
+  const fonte = { metodo: "GET", caminho: "restauth/list?entity=102706&filtro={id}", corpo: null, lista: ["Data"], chave: "@Id" };
+  const lista = { Data: [{ Fields: [{ Key: "Id", Value: 201 }] }] };
+  const b = centiFalsa({ [caminhoLoadPlanejamento("133")]: previa(133), "restauth/list?entity=102706&filtro=133": lista }, { pares: {}, fonte });
+  const rb = await emitirUm(b.c, "133", "3");
+  assert.ok(rb.pdf);
+  assert.equal(param(b.pedidos.find((p) => p.acao === "pedir")?.dados.corpo, "IdPlanejamentoAssinaturaDFD"), "201");
+  // 3) a fonte com duas opções sem marca: não escolhe — emite sem o registro (a conferência não marca).
+  const duas = { Data: [{ Fields: [{ Key: "Id", Value: 201 }] }, { Fields: [{ Key: "Id", Value: 202 }] }] };
+  const c2 = centiFalsa({ [caminhoLoadPlanejamento("134")]: previa(134), "restauth/list?entity=102706&filtro=134": duas }, { fonte });
+  const rc = await emitirUm(c2.c, "134", "3");
+  assert.equal(rc.secoes810NaoLidas, true);
+  assert.equal(param(c2.pedidos.find((p) => p.acao === "pedir")?.dados.corpo, "IdPlanejamentoAssinaturaDFD"), "");
+  // 4) o load com o campo vale mais que o par da tela.
+  const d = centiFalsa({ [caminhoLoadPlanejamento("131")]: loadDaTela(131, 114) }, { pares: { "131": "999" } });
+  await emitirUm(d.c, "131");
+  assert.equal(param(d.pedidos.find((p) => p.acao === "pedir")?.dados.corpo, "IdPlanejamentoAssinaturaDFD"), "114");
 });

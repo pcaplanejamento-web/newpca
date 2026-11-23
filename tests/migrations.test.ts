@@ -1658,3 +1658,23 @@ describe("0198: as seções 8 a 10 decididas pelo PDF", () => {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0);
   });
 });
+
+describe("0199: os Convergente* da v1.309.0 voltam a não conferido", () => {
+  it("só os com a nota das seções em branco; o PDF lido fica", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON");
+    for (const arq of arquivos.filter((f) => f <= "0198_z")) db.exec(readFileSync(join(DIR, arq), "utf8"));
+    db.exec(`INSERT INTO dfds (id, numero, conferencia_centi, conferencia_centi_motivo, conferencia_centi_em) VALUES
+      (1, 'A', 'convergente', 'DFD A (Planej. 1): Seções 8 a 10 em branco no DFD da Centi — x', '2026-11-23'),
+      (2, 'B', 'convergente', NULL, '2026-11-23'),
+      (3, 'C', 'divergente', 'Seção X diferente', '2026-11-23')`);
+    db.exec(`INSERT INTO conferencias_centi_pdf (dfd_id, pdf, em) VALUES (1, 'JVBER', '2026-11-23')`);
+    db.exec("INSERT INTO automacao_fluxos (id, nome) VALUES (1, 'Verificar')");
+    db.exec(`INSERT INTO automacao_progresso (fluxo_id, no, chave, estado, em) VALUES (1, 'sub1', '1', 'ok', '2026-11-23')`);
+    db.exec(readFileSync(join(DIR, "0199_registro_810_da_tela.sql"), "utf8"));
+    const st = (db.prepare("SELECT id, conferencia_centi AS c FROM dfds ORDER BY id").all() as { id: number; c: string | null }[]).map((r) => `${r.id}:${r.c}`);
+    assert.deepEqual(st, ["1:null", "2:convergente", "3:divergente"]);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM conferencias_centi_pdf").get() as { n: number }).n, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0);
+  });
+});
