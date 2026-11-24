@@ -5,33 +5,34 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { baixarNoNavegador, comoBlob } from "@/lib/arquivo-navegador";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { itensDoTexto } from "@/lib/itens-dash-texto";
+import { rgbDaPaleta } from "@/lib/documento-pdf-gerar";
 import {
   AUTOMATICOS,
   type Automatico,
   type Autoridade,
-  blocosDocumentoPca,
+  camposComExemplo,
   COLUNAS_ITEM_DOC,
   type ConfigDocumentoPca,
   type ColunaItemDoc,
   LIMITES_DOC,
   lerConfigDocumento,
-  MARCADORES,
   marcadoresDesconhecidos,
   nomeArquivoDocumento,
   ORDEM_COLUNAS,
   type SecaoDocumento,
   textoConfig,
 } from "@/lib/pca-documento-core";
-import type { PacoteDocumento } from "@/lib/pca-documento-pdf";
+import { type PacoteDocumento, PALETA_DOCUMENTO_PCA, paginasDocumentoPca } from "@/lib/pca-documento-pdf";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { CampoLinhaComDados } from "./CampoLinhaComDados";
 import { type Column, DataTable } from "./DataTable";
 import { EditorRico } from "./EditorRico";
 import { Checkbox, TextField } from "./Field";
-import { IconDownload, IconPlus, IconRefresh } from "./icons";
-import { PreviaDocumento } from "./PreviaDocumento";
+import { IconArrowDown, IconArrowUp, IconDownload, IconPlus, IconRefresh } from "./icons";
+import { PreviaPaginas } from "./PreviaPaginas";
 import { Progress } from "./Progress";
 import { SecaoBanner } from "./SecaoBanner";
 import { Switch } from "./Switch";
@@ -101,6 +102,79 @@ function ListaAutoridades({ lista, onMudar, rotulo }: { lista: Autoridade[]; onM
     </div>
   );
 }
+
+/**
+ * As COLUNAS da relação dos itens: quais saem (a caixa), em que ORDEM (↑/↓) e com que TÍTULO. As que saem vêm primeiro, na
+ * ordem do documento; as demais embaixo. Só o sequencial é obrigatório (identifica o item no PCA).
+ */
+function ColunasDosItens({ cfg, muda }: { cfg: ConfigDocumentoPca; muda: (p: Partial<ConfigDocumentoPca>) => void }) {
+  const ocultas = ORDEM_COLUNAS.filter((c) => !cfg.colunas.includes(c));
+  const mover = (i: number, d: -1 | 1) => {
+    const l = [...cfg.colunas];
+    [l[i], l[i + d]] = [l[i + d], l[i]];
+    muda({ colunas: l });
+  };
+  const titulo = (c: ColunaItemDoc, v: string) => muda({ titulosColunas: { ...cfg.titulosColunas, [c]: v } });
+  const linha = (c: ColunaItemDoc, i: number | null) => {
+    const def = COLUNAS_ITEM_DOC[c];
+    const visivel = i != null;
+    return (
+      <li key={c} className={`grid items-center gap-2 py-2 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto] ${visivel ? "" : "opacity-70"}`}>
+        <Checkbox
+          label={
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-text">
+                {def.titulo}
+                {def.fixa ? " (sempre)" : ""}
+              </span>
+              <span className="block text-[11.5px] text-muted">{def.descricao}</span>
+            </span>
+          }
+          checked={visivel}
+          disabled={def.fixa}
+          onChange={() => muda({ colunas: visivel ? cfg.colunas.filter((x) => x !== c) : [...cfg.colunas, c] })}
+        />
+        <TextField
+          aria-label={`Título da coluna ${def.titulo}`}
+          value={cfg.titulosColunas[c] ?? ""}
+          placeholder={def.titulo}
+          maxLength={LIMITES_DOC.tituloColuna}
+          disabled={!visivel}
+          onChange={(e) => titulo(c, e.target.value)}
+          compacto
+        />
+        <span className="flex justify-end gap-1">
+          {visivel ? (
+            <>
+              <Button variant="ghost" size="xs" disabled={i === 0} onClick={() => mover(i, -1)} aria-label={`Mover ${def.titulo} para a esquerda`} icon={<IconArrowUp className="h-4 w-4" />} />
+              <Button variant="ghost" size="xs" disabled={i === cfg.colunas.length - 1} onClick={() => mover(i, 1)} aria-label={`Mover ${def.titulo} para a direita`} icon={<IconArrowDown className="h-4 w-4" />} />
+            </>
+          ) : (
+            <span className="w-[4.5rem]" aria-hidden="true" />
+          )}
+        </span>
+      </li>
+    );
+  };
+  return (
+    <div>
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-faint">No documento ({cfg.colunas.length}) — da esquerda para a direita</p>
+      <ul className="divide-y divide-border">{cfg.colunas.map((c, i) => linha(c, i))}</ul>
+      {ocultas.length > 0 && (
+        <>
+          <p className="mt-3 text-[12px] font-semibold uppercase tracking-wide text-faint">Fora do documento ({ocultas.length})</p>
+          <ul className="divide-y divide-border">{ocultas.map((c) => linha(c, null))}</ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A cor (CSS ou papel da paleta) na prévia — a mesma do arquivo. */
+const corDaPrevia = (css: string) => {
+  const [r, g, b] = rgbDaPaleta(css, PALETA_DOCUMENTO_PCA);
+  return `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
+};
 
 /**
  * DOCUMENTO OFICIAL DO PCA — a tela de controle do ADM (aba "Documento" do espaço do PCA; cada PCA tem o seu): ligar ou
@@ -188,16 +262,37 @@ export function DocumentoPcaAdmin({
 
   const itens = useMemo(() => (dados ? itensDoTexto(dados.itensTexto) : null), [dados]);
   const pcaDoc = useMemo(() => ({ id: pca.id, nome: pca.nome, ano: pca.ano }), [pca.id, pca.nome, pca.ano]);
-  // A PRÉVIA na tela: os blocos de verdade com os NÚMEROS do PCA inteiro; só as listas longas mostram as primeiras linhas
-  // (o PDF completo traz todas). Calculada sobre o valor ADIADO — digitar não espera a prévia.
+  const dadosDoc = useMemo(() => (dados && itens ? { pca: pcaDoc, itens, dfds: dados.dfds, unidades: dados.unidades } : null), [dados, itens, pcaDoc]);
+  // Os CAMPOS DE DADOS dos textos (o seletor "Dado"), com o valor de agora quando os dados já vieram.
+  const campos = useMemo(() => camposComExemplo(dadosDoc, cfg, new Date().toISOString()), [dadosDoc, cfg]);
+  // A PRÉVIA na tela = as PÁGINAS do arquivo (os mesmos blocos, medidas, timbre, carimbo, quebras e orientação), com os
+  // NÚMEROS do PCA inteiro; só as listas longas mostram as primeiras linhas (o PDF completo traz todas). Calculada sobre o
+  // valor ADIADO — digitar não espera a prévia; a resposta de uma configuração antiga é descartada.
   const cfgPrevia = useDeferredValue(cfg);
-  const previa = useMemo(() => {
-    if (!dados || !itens) return null;
-    return blocosDocumentoPca({ pca: pcaDoc, itens, dfds: dados.dfds, unidades: dados.unidades }, cfgPrevia, null, new Date().toISOString(), {
-      itens: LINHAS_NA_PREVIA,
-      dfds: LINHAS_NA_PREVIA,
-    }).filter((b) => b.tipo !== "pagina");
-  }, [dados, itens, cfgPrevia, pcaDoc]);
+  const [previa, setPrevia] = useState<Awaited<ReturnType<typeof paginasDocumentoPca>> | null>(null);
+  const [erroPrevia, setErroPrevia] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dados || !dadosDoc) return;
+    let vivo = true;
+    const t = setTimeout(() => {
+      paginasDocumentoPca({ config: cfgPrevia, pca: pcaDoc, dados, emissao: null }, new Date().toISOString(), {
+        dados: dadosDoc,
+        previa: { itens: LINHAS_NA_PREVIA, dfds: LINHAS_NA_PREVIA },
+      })
+        .then((r) => {
+          if (!vivo) return;
+          setPrevia(r);
+          setErroPrevia(null);
+        })
+        .catch((e: Error) => {
+          if (vivo) setErroPrevia(e.message || "Não foi possível montar a prévia.");
+        });
+    }, 120);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [dados, dadosDoc, cfgPrevia, pcaDoc]);
 
   const baixarPrevia = async () => {
     const d = dados ?? (await carregarDados());
@@ -231,15 +326,21 @@ export function DocumentoPcaAdmin({
     }
   };
 
+  // O ente e o local não levam a si mesmos (o valor seria o próprio texto).
+  const camposSemEnte = useMemo(() => campos.filter((c) => c.chave !== "ente"), [campos]);
+  const camposSemLocal = useMemo(() => campos.filter((c) => c.chave !== "local"), [campos]);
   const mudarSecao = (i: number, p: Partial<SecaoDocumento>) => muda({ secoes: cfg.secoes.map((s, k) => (k === i ? { ...s, ...p } : s)) });
   const desconhecidos = useMemo(() => marcadoresDesconhecidos([cfg.titulo, cfg.subtitulo, cfg.ente, cfg.local, cfg.notas, ...cfg.secoes.flatMap((s) => [s.titulo, s.texto])].join("\n")), [cfg]);
   const ajudaMarcadores = (
-    <Ajuda titulo="Marcadores dos textos">
-      <p>Escreva o marcador e ele é trocado pelo dado do PCA na emissão:</p>
+    <Ajuda titulo="Dados nos textos">
+      <p>
+        Os textos podem levar DADOS do PCA (ano, valor total, número de itens, data da emissão…): toque em <strong>Dado</strong> no campo (ou digite
+        “{"{{"}”) e escolha na lista. O dado aparece como um selo e, na emissão, vira o valor do momento.
+      </p>
       <ul className="mt-2 space-y-1">
-        {Object.entries(MARCADORES).map(([k, v]) => (
-          <li key={k}>
-            <code className="font-mono text-[12px]">{`{{${k}}}`}</code> — {v}
+        {campos.map((c) => (
+          <li key={c.chave}>
+            <span className="campo-dado">{c.rotulo}</span> {c.descricao}
           </li>
         ))}
       </ul>
@@ -261,10 +362,10 @@ export function DocumentoPcaAdmin({
 
         <SecaoBanner titulo="Identificação e capa" acao={ajudaMarcadores}>
           <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Título" value={cfg.titulo} maxLength={LIMITES_DOC.titulo} onChange={(e) => muda({ titulo: e.target.value })} compacto />
-            <TextField label="Subtítulo" value={cfg.subtitulo} maxLength={LIMITES_DOC.titulo} onChange={(e) => muda({ subtitulo: e.target.value })} compacto />
-            <TextField label="Ente (1ª linha da capa)" value={cfg.ente} maxLength={LIMITES_DOC.campo} onChange={(e) => muda({ ente: e.target.value })} compacto />
-            <TextField label="Local (fecho)" value={cfg.local} maxLength={LIMITES_DOC.campo} onChange={(e) => muda({ local: e.target.value })} compacto />
+            <CampoLinhaComDados label="Título" valor={cfg.titulo} campos={campos} maxLength={LIMITES_DOC.titulo} onChange={(v) => muda({ titulo: v })} />
+            <CampoLinhaComDados label="Subtítulo" valor={cfg.subtitulo} campos={campos} maxLength={LIMITES_DOC.titulo} onChange={(v) => muda({ subtitulo: v })} />
+            <CampoLinhaComDados label="Ente (1ª linha da capa)" valor={cfg.ente} campos={camposSemEnte} maxLength={LIMITES_DOC.campo} onChange={(v) => muda({ ente: v })} />
+            <CampoLinhaComDados label="Local (fecho)" valor={cfg.local} campos={camposSemLocal} maxLength={LIMITES_DOC.campo} onChange={(v) => muda({ local: v })} />
           </div>
           <div className="flex flex-col gap-2">
             <Switch checked={cfg.capa} onChange={(v) => muda({ capa: v })} label="Capa (página inicial com o título)" />
@@ -318,7 +419,7 @@ export function DocumentoPcaAdmin({
                             onExcluir={() => muda({ secoes: cfg.secoes.filter((_, k) => k !== i) })}
                   />
                 </div>
-                <EditorRico compacto valor={s.texto} onChange={(v) => mudarSecao(i, { texto: v })} maxLength={LIMITES_DOC.texto} rotulo={`Texto da seção ${i + 1}`} />
+                <EditorRico compacto campos={campos} valor={s.texto} onChange={(v) => mudarSecao(i, { texto: v })} maxLength={LIMITES_DOC.texto} rotulo={`Texto da seção ${i + 1}`} />
               </div>
             ))}
           </div>
@@ -340,25 +441,11 @@ export function DocumentoPcaAdmin({
         </SecaoBanner>
 
         <SecaoBanner titulo="Colunas da relação dos itens">
-          <div className="grid gap-1 sm:grid-cols-2">
-            {ORDEM_COLUNAS.map((c: ColunaItemDoc) => {
-              const fixa = COLUNAS_ITEM_DOC[c].fixa;
-              const marcada = cfg.colunas.includes(c);
-              return (
-                <Checkbox
-                  key={c}
-                  label={`${COLUNAS_ITEM_DOC[c].titulo}${fixa ? " (sempre)" : ""}`}
-                  checked={marcada}
-                  disabled={fixa}
-                  onChange={() => muda({ colunas: marcada ? cfg.colunas.filter((x) => x !== c) : ORDEM_COLUNAS.filter((x) => x === c || cfg.colunas.includes(x)) })}
-                />
-              );
-            })}
-          </div>
+          <ColunasDosItens cfg={cfg} muda={muda} />
         </SecaoBanner>
 
         <SecaoBanner titulo="Notas explicativas">
-          <EditorRico compacto valor={cfg.notas} onChange={(v) => muda({ notas: v })} maxLength={LIMITES_DOC.notas} rotulo="Notas explicativas (opcional)" />
+          <EditorRico compacto campos={campos} valor={cfg.notas} onChange={(v) => muda({ notas: v })} maxLength={LIMITES_DOC.notas} rotulo="Notas explicativas (opcional)" />
         </SecaoBanner>
 
         <SecaoBanner titulo="Assinaturas (fecho)">
@@ -396,10 +483,11 @@ export function DocumentoPcaAdmin({
             </p>
           )}
         </SecaoBanner>
+        {erroPrevia && <Callout kind="danger">{erroPrevia}</Callout>}
         {previa && (
-          <div className="max-h-[70dvh] overflow-y-auto overscroll-contain">
-            <PreviaDocumento blocos={previa} />
-          </div>
+          <section aria-label="Prévia do documento" className="max-h-[75dvh] overflow-y-auto overscroll-contain rounded-card bg-surface-2 p-3">
+            <PreviaPaginas paginas={previa.paginas} tamanhos={previa.tamanhos} cor={corDaPrevia} timbre={previa.timbre} />
+          </section>
         )}
         <SecaoBanner titulo={`Emissões (${num(totalEmissoes)})`}>
           <DataTable

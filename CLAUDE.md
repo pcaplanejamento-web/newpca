@@ -4316,7 +4316,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ConfigDocumentoPca` (ativo · título/subtítulo/ente/local · capa · timbre · itens em página deitada · expediente ·
   `secoes` de texto formatado com MARCADORES `{{ano}}`/`{{nome}}`/`{{ente}}`/`{{itens}}`/`{{dfds}}`/`{{unidades}}`/
   `{{valor}}`/`{{valorExtenso}}`/`{{data}}` · `automaticos` resumo/classificação/unidade/prioridade/cronograma/DFDs/
-  justificativas · `colunas` dos itens — sequencial e descrição FIXAS · notas · assinaturas), `lerConfigDocumento`
+  justificativas · `colunas` dos itens — o sequencial FIXO, as demais escolhidas, ordenadas e renomeadas (v1.315.0) · notas · assinaturas), `lerConfigDocumento`
   (qualquer JSON → válido; sem linha = DESLIGADO), `valorPorExtenso`, `itensEmOrdem` (SEMPRE pelo sequencial),
   `chaveClassificacao` (a mesma escrita = uma), `blocosDocumentoPca` (capa → expediente → seções → resumos → cronograma →
   DFDs sem protocolo → TODOS os itens com o TOTAL → notas → fecho + o quadro da emissão; sem emissão = PRÉVIA marcada),
@@ -4351,6 +4351,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   emissão (sem linha nova). Prioridade canônica (`prioridadeCanonica`), cronograma só do exercício (o de outro ano à parte),
   marcadores por `Object.hasOwn`, textos da capa cortados no que cabe. A verificação confirma a EMISSÃO (data, totais,
   impressão digital dos dados — também no quadro do PDF) e só mostra o nome do PCA publicado.
+- **Prévia = o PDF + colunas configuráveis + CAMPOS DE DADOS (v1.315.0, sem migração) — regras firmes:**
+  - **A prévia É o arquivo:** `montagemDocumentoPca` (`pca-documento-pdf.ts`) dá os blocos e as opções da montagem
+    (rodapé, carimbo, timbre, margem) às DUAS saídas — `gerarPdfDocumentoPca` (o arquivo) e `paginasDocumentoPca` (a tela);
+    `paginasDoDocumento`/`medidasPdf` (`documento-pdf-gerar.ts`, a Helvetica do pdf-lib memorizada) e `rgbDaPaleta` (a cor
+    da paleta) são os MESMOS do gerador; **`PreviaPaginas`** (DS) desenha as operações de cada página em SVG (pontos do PDF,
+    página deitada, timbre). Documento novo com prévia = estas peças, nunca um HTML aproximado.
+  - **Colunas dos itens** (`COLUNAS_ITEM_DOC`: sequencial [fixa] · código · descrição · medida · quantidade · valor unitário
+    · valor total · classificação · domínio · unidade · nome da unidade · **Nº DFD** · **Nº planejamento** · tipo do DFD ·
+    prioridade · previsão): a ORDEM é a da escolha, cada uma com o TÍTULO próprio (`titulosColunas`, só o que difere do
+    padrão; `tituloColuna`); a coluna antiga `dfd` vira `dfdNumero` + `planejamento` (`COLUNAS_ANTIGAS`); `celulaItem` é a
+    régua de cada célula (o planejamento e o tipo vêm do DFD de origem). Tela: `ColunasDosItens` (marcar, ↑/↓, renomear).
+  - **CAMPOS DE DADOS (o "emoji" dos textos)** — núcleo puro **`campos-dados-core.ts`** (testado — `tests/campos-dados.test.ts`):
+    `CampoDado {chave, rotulo, grupo, descricao, exemplo}`; o texto GRAVA `{{chave}}` (sem migração) e a tela mostra o CHIP
+    (`htmlChipCampo` — `<span data-campo contenteditable="false" class="campo-dado">`, escapado; `chaveDoChip` valida a
+    chave; `.campo-dado` em `globals.css`); `htmlComCampos`, `textoDaLinha`, `substituirCampos` (uma passada,
+    `Object.hasOwn`), `camposDesconhecidos`, `camposEmOrdem`. Componentes: **`BotaoCampos`/`ListaCampos`**
+    (`SeletorCampos.tsx` — o botão "Dado" com TODOS os campos disponíveis, agrupados, com o valor de agora e busca),
+    **`useCamposNoTexto`** (a lógica única: inserir, "{{" abre as sugestões, ↑/↓/Enter/Tab/Esc, o `{{chave}}` digitado vira
+    chip), **`EditorRico campos`** (o botão na barra + os chips no texto formatado — `htmlDoTexto(texto, campos)` ↔
+    `textoDoHtml`) e **`CampoLinhaComDados`** (o campo de uma linha com chips). No documento oficial: `CAMPOS_DOCUMENTO` →
+    `camposComExemplo` (os valores do PCA aberto). Texto novo que leve dados consolidados = estes componentes com a lista de
+    campos da tela, nunca `{{…}}` digitado à mão. Quem configura = quem tem a habilitação do papel (acima).
 
 ## Frotas (Vólus) — combustível, manutenção e veículos (v1.257.0, migração `0169`)
 - **Telas de módulo** (`ABA_KEYS`): **`frotas`** (painel), **`combustivel`**, **`manutencao`** e **`veiculos`** — ações visualizar · manipular · importar · exportar · configurar (a `0169` deu tudo ao Administrador e ao Gestor e visualizar + exportar ao Membro). Páginas `/painel/{frotas,combustivel,manutencao}` = **`FrotaView modo`** e `/painel/veiculos` = **`VeiculosView`**; o escopo = a unidade do cabeçalho (`escopoDaFrota` → `unidadeDoModulo("frotas")` + `doEscopo`, o mesmo dos empenhos).

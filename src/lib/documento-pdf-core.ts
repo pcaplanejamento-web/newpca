@@ -122,7 +122,7 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: Opcoes
   return montarPaginas(blocos, medir, opcoes).paginas;
 }
 
-type PaginasMontadas = { paginas: OpDoc[][]; tamanhos: TamanhoPagina[] };
+export type PaginasMontadas = { paginas: OpDoc[][]; tamanhos: TamanhoPagina[] };
 
 /** As páginas e o TAMANHO de cada uma (em pé ou deitada — o bloco `pagina`). */
 export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDocumento): PaginasMontadas {

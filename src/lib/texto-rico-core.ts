@@ -4,26 +4,31 @@
 // pelos dois conversores (só o que o formato conhece fica: títulos, parágrafos, listas, citação, separador, negrito,
 // itálico, código e links http/https).
 
+import { type CampoDado, chaveDoChip, htmlComCampos, mapaCampos, textoDoCampo } from "./campos-dados-core.ts";
 import { type Alinhamento, type Bloco, CSS_ALINHAMENTO, CSS_FONTE, type Fonte, type Inline, lerTextoFormatado, marcasBloco } from "./texto-formatado.ts";
 
 export const escaparHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function inlineHtml(f: Inline[]): string {
+type Campos = ReadonlyMap<string, CampoDado>;
+const SEM_CAMPOS: Campos = new Map();
+
+function inlineHtml(f: Inline[], cs: Campos): string {
   return f
     .map((n) => {
       switch (n.t) {
         case "texto":
-          return escaparHtml(n.v);
+          // Os `{{chave}}` conhecidos viram CHIPS (o editor com `campos`); sem a lista, o texto como está.
+          return htmlComCampos(n.v, cs);
         case "quebra":
           return "<br>";
         case "negrito":
-          return `<strong>${inlineHtml(n.f)}</strong>`;
+          return `<strong>${inlineHtml(n.f, cs)}</strong>`;
         case "italico":
-          return `<em>${inlineHtml(n.f)}</em>`;
+          return `<em>${inlineHtml(n.f, cs)}</em>`;
         case "codigo":
           return `<code>${escaparHtml(n.v)}</code>`;
         case "link":
-          return `<a href="${escaparHtml(n.href)}">${inlineHtml(n.f)}</a>`;
+          return `<a href="${escaparHtml(n.href)}">${inlineHtml(n.f, cs)}</a>`;
         case "mencao":
           return escaparHtml(n.v);
         default:
@@ -39,27 +44,29 @@ const estiloAl = (al: Alinhamento | undefined, fo?: Fonte) => {
   return css.length ? ` style="${css.join(";")}"` : "";
 };
 
-function blocoHtml(b: Bloco): string {
+function blocoHtml(b: Bloco, cs: Campos): string {
   switch (b.t) {
     case "par":
-      return `<p${estiloAl(b.al, b.fo)}>${inlineHtml(b.f) || "<br>"}</p>`;
+      return `<p${estiloAl(b.al, b.fo)}>${inlineHtml(b.f, cs) || "<br>"}</p>`;
     case "titulo":
-      return `<h${b.n}${estiloAl(b.al, b.fo)}>${inlineHtml(b.f)}</h${b.n}>`;
+      return `<h${b.n}${estiloAl(b.al, b.fo)}>${inlineHtml(b.f, cs)}</h${b.n}>`;
     case "lista": {
       const tag = b.ordenada ? "ol" : "ul";
       const inicio = b.ordenada && b.inicio && b.inicio !== 1 ? ` start="${b.inicio}"` : "";
-      return `<${tag}${inicio}${estiloAl(b.al, b.fo)}>${b.itens.map((i) => `<li>${inlineHtml(i) || "<br>"}</li>`).join("")}</${tag}>`;
+      return `<${tag}${inicio}${estiloAl(b.al, b.fo)}>${b.itens.map((i) => `<li>${inlineHtml(i, cs) || "<br>"}</li>`).join("")}</${tag}>`;
     }
     case "citacao":
-      return `<blockquote${estiloAl(b.al, b.fo)}>${inlineHtml(b.f)}</blockquote>`;
+      return `<blockquote${estiloAl(b.al, b.fo)}>${inlineHtml(b.f, cs)}</blockquote>`;
     case "separador":
       return "<hr>";
   }
 }
 
 /** O texto formatado → o HTML do editor (em partes de até ~18 mil caracteres, cortadas nas linhas em branco — o leitor
- * lê 20 mil por vez). Vazio = um parágrafo vazio (o cursor tem onde ficar). */
-export function htmlDoTexto(texto: string): string {
+ * lê 20 mil por vez). Vazio = um parágrafo vazio (o cursor tem onde ficar). `campos` = os CAMPOS DE DADOS conhecidos: os
+ * `{{chave}}` deles viram chips (`campos-dados-core.ts`). */
+export function htmlDoTexto(texto: string, campos?: readonly CampoDado[] | ReadonlyMap<string, CampoDado>): string {
+  const cs: Campos = campos instanceof Map ? campos : campos ? mapaCampos(campos as readonly CampoDado[]) : SEM_CAMPOS;
   const partes: string[] = [];
   let atual = "";
   for (const bloco of texto.replace(/\r\n?/g, "\n").split(/\n{2,}/)) {
@@ -70,7 +77,7 @@ export function htmlDoTexto(texto: string): string {
     atual = atual ? `${atual}\n\n${bloco}` : bloco;
   }
   if (atual) partes.push(atual);
-  const html = partes.flatMap((p) => lerTextoFormatado(p)).map(blocoHtml).join("");
+  const html = partes.flatMap((p) => lerTextoFormatado(p)).map((b) => blocoHtml(b, cs)).join("");
   return html || "<p><br></p>";
 }
 
@@ -129,8 +136,11 @@ function inline(n: NoRico): string {
     case "SCRIPT":
     case "STYLE":
       return "";
-    default:
-      return dentro();
+    default: {
+      // O CHIP de um campo de dados volta a ser `{{chave}}` (o nome mostrado na tela não é gravado).
+      const chave = chaveDoChip(n.getAttribute);
+      return chave ? textoDoCampo(chave) : dentro();
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ATRIBUTO_CAMPO, type CampoDado } from "@/lib/campos-dados-core";
 import { num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
@@ -31,7 +32,9 @@ import {
   IconRedo,
   IconUndo,
 } from "./icons";
+import { BotaoCampos, ListaCampos } from "./SeletorCampos";
 import { SetaDropdown } from "./SetaDropdown";
+import { useCamposNoTexto } from "./useCamposNoTexto";
 import { CONTEUDO, CONTEUDO_COMPACTO } from "./texto-rico-estilo";
 
 /** As classes do CONTEÚDO (a mesma aparência no editor e na folha) — títulos, listas, citação, código, links. */
@@ -75,6 +78,8 @@ function limparDom(raiz: HTMLElement) {
   const guardado = sel && sel.rangeCount ? { no: sel.anchorNode, off: sel.anchorOffset, fno: sel.focusNode, foff: sel.focusOffset } : null;
   let mexeu = false;
   for (const e of Array.from(raiz.querySelectorAll<HTMLElement>("span, font, b, strong, i, em, [style]"))) {
+    // O CHIP de um campo de dados fica como está (é o dado, não um estilo injetado).
+    if (e.hasAttribute(ATRIBUTO_CAMPO)) continue;
     const nome = e.nodeName;
     const peso = e.style.fontWeight;
     const desembrulhar = nome === "SPAN" || nome === "FONT" || ((nome === "B" || nome === "STRONG") && /^(normal|[1-5]00)$/.test(peso));
@@ -194,6 +199,7 @@ export function EditorRico({
   label,
   rotuloExtra,
   hint,
+  campos,
 }: {
   valor: string;
   onChange: (v: string) => void;
@@ -217,6 +223,11 @@ export function EditorRico({
   rotuloExtra?: ReactNode;
   /** A dica abaixo do campo. */
   hint?: ReactNode;
+  /**
+   * Os CAMPOS DE DADOS que o texto pode levar (`campos-dados-core.ts`): o botão "Dado" na barra e digitar "{{" abrem a
+   * lista; o escolhido entra como um CHIP (gravado `{{chave}}`). Sem eles, o editor de sempre.
+   */
+  campos?: readonly CampoDado[];
 }) {
   const idLabel = useId();
   if (mensagem) compacto = true;
@@ -258,14 +269,33 @@ export function EditorRico({
   };
   const alturaFolha = altura ?? (mensagem ? "max-h-[140px]" : compacto ? "max-h-[50dvh]" : "min-h-[50dvh] max-h-[70dvh]");
 
+  // Os CAMPOS DE DADOS (chips): a lógica compartilhada com o campo de uma linha. `restaurar`/`emitir` são definidos abaixo —
+  // vão por função que os chama na hora.
+  const cd = useCamposNoTexto({
+    ref,
+    campos,
+    disabled,
+    restaurar: () => restaurarRef.current(),
+    aoMudar: () => {
+      emitirRef.current();
+      atualizarRef.current();
+    },
+  });
+  const camposSel = useRef(cd.aoSelecionar);
+  camposSel.current = cd.aoSelecionar;
+  const { mapa } = cd;
+  const chavesCampos = useMemo(() => [...mapa.keys()].join(","), [mapa]);
   // O valor de FORA (carga, "voltar ao modelo") redesenha a folha; o que o próprio editor emitiu, não (o cursor fica).
+  // Mudar QUAIS campos existem também (um `{{chave}}` passa a ser chip, ou volta a texto).
+  const chavesDesenhadas = useRef(chavesCampos);
   useEffect(() => {
     const el = ref.current;
-    if (!el || valor === ultimo.current) return;
-    el.innerHTML = htmlDoTexto(valor);
+    if (!el || (valor === ultimo.current && chavesDesenhadas.current === chavesCampos)) return;
+    el.innerHTML = htmlDoTexto(valor, mapa);
     ultimo.current = valor;
+    chavesDesenhadas.current = chavesCampos;
     setVazio(!valor.trim());
-  }, [valor]);
+  }, [valor, mapa, chavesCampos]);
 
   /** Foca o texto com o cursor no FIM. */
   const focarNoFim = useCallback(() => {
@@ -305,6 +335,7 @@ export function EditorRico({
       const m = sel.isCollapsed && no?.nodeType === 3 ? RE_MENCAO.exec((no as Text).data.slice(0, sel.anchorOffset)) : null;
       setMencao(m && no ? { no: no as Text, ini: sel.anchorOffset - m[1].length - 1, fim: sel.anchorOffset, termo: m[1] } : null);
     }
+    camposSel.current?.(sel);
     setEstado({
       negrito: document.queryCommandState("bold"),
       italico: document.queryCommandState("italic"),
@@ -337,6 +368,14 @@ export function EditorRico({
       sel.addRange(r);
     }
   };
+
+  // As funções que o hook dos campos chama (definidas depois dele).
+  const restaurarRef = useRef(restaurar);
+  restaurarRef.current = restaurar;
+  const emitirRef = useRef(emitir);
+  emitirRef.current = emitir;
+  const atualizarRef = useRef(atualizarEstado);
+  atualizarRef.current = atualizarEstado;
 
   const aplicar = (cmd: string, arg?: string) => {
     if (disabled) return;
@@ -426,6 +465,7 @@ export function EditorRico({
   };
 
   function teclas(e: KeyboardEvent<HTMLDivElement>) {
+    if (cd.tecla(e)) return;
     if (sugestoes.length > 0) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -525,6 +565,14 @@ export function EditorRico({
               <IconLink className="h-4 w-4" />
             </BotaoBarra>
             </span>
+            {campos && campos.length > 0 && (
+              <>
+                <Divisor />
+                <span className="flex shrink-0 snap-start items-center">
+                  <BotaoCampos campos={campos} onEscolher={cd.inserir} disabled={disabled} />
+                </span>
+              </>
+            )}
             <Divisor />
             <Dropdown
               ariaLabel="Estilo do parágrafo"
@@ -718,9 +766,10 @@ export function EditorRico({
             }}
             onBlur={() => setFocado(false)}
             onInput={() => {
-              if (ref.current?.querySelector("span, font, [style*='font-weight'], [style*='color'], [style*='font-size']")) limparDom(ref.current);
+              if (ref.current?.querySelector(`span:not([${ATRIBUTO_CAMPO}]), font, [style*='font-weight'], [style*='color'], [style*='font-size']`)) limparDom(ref.current);
               setSemSugestao(false);
               setAtiva(0);
+              cd.aoDigitar();
               emitir();
             }}
             onKeyDown={teclas}
@@ -741,7 +790,7 @@ export function EditorRico({
               // do título — o negrito — para todo o texto colado).
               const b = ref.current && blocoDoNo(document.getSelection()?.anchorNode ?? null, ref.current);
               if (b && /^(H[1-6]|BLOCKQUOTE)$/.test(b.nodeName) && !(b.textContent ?? "").trim()) exec("formatBlock", "<p>");
-              aplicar("insertHTML", htmlDoTexto(texto));
+              aplicar("insertHTML", htmlDoTexto(texto, mapa));
               if (ref.current) limparDom(ref.current);
               emitir();
             }}
@@ -773,6 +822,11 @@ export function EditorRico({
       )}
     </div>
       {hint && <p className="mt-1.5 text-[12px] text-muted">{hint}</p>}
+      {cd.sugestoes.length > 0 && (
+        <div className={`absolute right-0 left-0 z-20 ${mensagem ? "bottom-full mb-1" : "top-full mt-1"} overflow-hidden rounded-card border border-border bg-surface shadow-soft`}>
+          <ListaCampos campos={campos ?? []} termo={cd.termo} ativa={cd.ativa} onAtiva={cd.setAtiva} onEscolher={cd.inserir} />
+        </div>
+      )}
       {sugestoes.length > 0 && (
         <ul aria-label="Mencionar pessoa" className={`absolute right-0 left-0 z-20 ${mensagem ? "bottom-full mb-1" : "top-full mt-1"} overflow-hidden rounded-card border border-border bg-surface shadow-soft`}>
           {sugestoes.map((p, i) => (

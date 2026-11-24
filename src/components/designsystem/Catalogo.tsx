@@ -3,7 +3,10 @@
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
 import { CamposAcessoConta } from "@/components/TermoUsoAdmin";
+import { CampoLinhaComDados } from "@/components/CampoLinhaComDados";
 import { EditorRico } from "@/components/EditorRico";
+import { PreviaPaginas } from "@/components/PreviaPaginas";
+import { BotaoCampos } from "@/components/SeletorCampos";
 import { LeituraTermo } from "@/components/AceiteTermo";
 import { CartaoAparelho } from "@/components/NomearAparelho";
 import { tipoDaExecucao } from "@/lib/execucao-empenho-core";
@@ -636,6 +639,35 @@ function DemoEditorRico() {
       <EditorRico rotulo="Exemplo" valor={t} onChange={setT} maxLength={2000} altura="min-h-[30dvh] max-h-[50dvh]" />
       <EditorRico compacto rotulo="Comentário" valor={c} onChange={setC} maxLength={5000} placeholder="Escrever um comentário… (@ menciona alguém)" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
       <EditorRico mensagem rotulo="Mensagem do chat" valor={m} onChange={setM} maxLength={2000} placeholder="Mensagem…" menciona={{ pessoas, texto: (p) => `@${p.apelido ?? p.nome.split(" ")[0]}` }} />
+    </div>
+  );
+}
+
+/** CAMPOS DE DADOS: os chips dos dados consolidados nos textos (botão "Dado", "{{" sugere) e a prévia FIEL das páginas. */
+const CAMPOS_DEMO = [
+  { chave: "ano", rotulo: "Ano do PCA", grupo: "PCA", descricao: "O exercício do plano", exemplo: "2027" },
+  { chave: "nome", rotulo: "Nome do PCA", grupo: "PCA", exemplo: "PCA 2027" },
+  { chave: "valor", rotulo: "Valor total", grupo: "Totais", exemplo: "R$ 1.234.567,89" },
+];
+function DemoCamposDados() {
+  const [linha, setLinha] = useState("Plano de Contratações Anual {{ano}}");
+  const [texto, setTexto] = useState("O {{nome}} soma **{{valor}}**.");
+  const [ultimo, setUltimo] = useState("");
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <CampoLinhaComDados label="Título" valor={linha} onChange={setLinha} campos={CAMPOS_DEMO} maxLength={200} />
+      <EditorRico compacto rotulo="Texto com dados" valor={texto} onChange={setTexto} maxLength={2000} campos={CAMPOS_DEMO} />
+      <div className="flex items-center gap-2 text-[13px] text-muted">
+        <BotaoCampos campos={CAMPOS_DEMO} onEscolher={(c) => setUltimo(c.rotulo)} />
+        {ultimo ? `Escolhido: ${ultimo}` : "O seletor sozinho"}
+      </div>
+      <div className="max-w-xs">
+        <PreviaPaginas
+          paginas={[[{ t: "texto", x: 56, y: 90, tam: 16, negrito: true, cor: "#111111", texto: "Título do documento" }, { t: "linha", x1: 56, y1: 100, x2: 539, y2: 100, cor: "#999999", espessura: 0.5 }, { t: "retangulo", x: 56, y: 120, w: 483, h: 40, cor: "#eeeeee" }]]}
+          tamanhos={[{ largura: 595.28, altura: 841.89 }]}
+          cor={(c) => c}
+        />
+      </div>
     </div>
   );
 }
@@ -3919,6 +3951,10 @@ export function Catalogo() {
 
       <Secao titulo="Editor visual de texto — EditorRico (como num editor de documentos: estilos de parágrafo, negrito, itálico, código, link, listas, citação, separador, desfazer/refazer, limpar; grava o texto formatado — o MESMO editor em todo o sistema: termo de uso e, na variante compacto com @menção, descrição, notas e comentários das tarefas; na variante mensagem, o campo do chat com o “Aa”)">
         <DemoEditorRico />
+      </Secao>
+
+      <Secao titulo="Campos de dados — CampoLinhaComDados (campo de uma linha com chips), EditorRico campos (os chips no texto formatado), BotaoCampos/ListaCampos (o seletor “Dado”: todos os dados disponíveis, com o valor de agora; “{{” sugere) e PreviaPaginas (a prévia FIEL de um PDF: as mesmas páginas do arquivo)">
+        <DemoCamposDados />
       </Secao>
 
       <Secao titulo="Termo de Uso e aparelhos — CamposAcessoConta, LeituraTermo, CartaoAparelho (Configurações → Termo de uso; os banners BannerTermo — o aceito fecha sozinho no tempo do ADM —, BannerAparelho e FalhaAcesso, com o BotaoSairAcesso, abrem por cima do painel)">

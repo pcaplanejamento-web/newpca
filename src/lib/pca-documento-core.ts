@@ -2,6 +2,7 @@ import type { BlocoDoc, ColunaDoc, LinhaDoc } from "./documento-pdf-core.ts";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "./format.ts";
 import type { ItemRow } from "./queries.ts";
 import { normPrioridade } from "./normalize.ts";
+import { type CampoDado, camposDesconhecidos, substituirCampos } from "./campos-dados-core.ts";
 import { textoSimples } from "./texto-formatado.ts";
 
 /**
@@ -21,23 +22,32 @@ import { textoSimples } from "./texto-formatado.ts";
 export type SecaoDocumento = { id: string; titulo: string; texto: string; ativa: boolean };
 export type Autoridade = { cargo: string; nome: string };
 
-/** As colunas da tabela dos itens (o ADM escolhe quais e em que ordem; o sequencial e a descrição são fixos). */
+/**
+ * As COLUNAS que a tabela dos itens pode ter — o ADM escolhe quais, em que ORDEM e com que TÍTULO (`titulosColunas`). Só o
+ * SEQUENCIAL é fixo: é ele que identifica o item no PCA (os itens vêm sempre pela ordem dele).
+ */
 export const COLUNAS_ITEM_DOC = {
-  sequencial: { titulo: "Seq.", peso: 0.6, alinhar: "center", fixa: true },
-  codigo: { titulo: "Código", peso: 1, alinhar: "center", fixa: false },
-  descricao: { titulo: "Descrição", peso: 4.2, alinhar: "left", fixa: true },
-  medida: { titulo: "Medida", peso: 0.9, alinhar: "center", fixa: false },
-  quantidade: { titulo: "Quantidade", peso: 0.9, alinhar: "right", fixa: false },
-  valorUnitario: { titulo: "Valor unitário", peso: 1.1, alinhar: "right", fixa: false },
-  valorTotal: { titulo: "Valor total", peso: 1.2, alinhar: "right", fixa: false },
-  classificacao: { titulo: "Classificação", peso: 1.3, alinhar: "left", fixa: false },
-  unidade: { titulo: "Unidade", peso: 0.8, alinhar: "center", fixa: false },
-  dfd: { titulo: "DFD (planejamento)", peso: 1.1, alinhar: "center", fixa: false },
-  prioridade: { titulo: "Prioridade", peso: 0.8, alinhar: "center", fixa: false },
-  previsao: { titulo: "Previsão", peso: 0.9, alinhar: "center", fixa: false },
-} as const satisfies Record<string, { titulo: string; peso: number; alinhar: "left" | "center" | "right"; fixa: boolean }>;
+  sequencial: { titulo: "Seq.", descricao: "O número sequencial do item no PCA.", peso: 0.6, alinhar: "center", fixa: true },
+  codigo: { titulo: "Código", descricao: "O código do produto/serviço (catálogo).", peso: 1, alinhar: "center", fixa: false },
+  descricao: { titulo: "Descrição", descricao: "A descrição do item.", peso: 4.2, alinhar: "left", fixa: false },
+  medida: { titulo: "Medida", descricao: "A unidade de medida (UNIDADE, CAIXA…).", peso: 0.9, alinhar: "center", fixa: false },
+  quantidade: { titulo: "Quantidade", descricao: "A quantidade prevista.", peso: 0.9, alinhar: "right", fixa: false },
+  valorUnitario: { titulo: "Valor unitário", descricao: "O valor unitário estimado.", peso: 1.1, alinhar: "right", fixa: false },
+  valorTotal: { titulo: "Valor total", descricao: "O valor total estimado (somado na linha TOTAL).", peso: 1.2, alinhar: "right", fixa: false },
+  classificacao: { titulo: "Classificação", descricao: "A classificação do item (catálogo).", peso: 1.3, alinhar: "left", fixa: false },
+  dominio: { titulo: "Domínio", descricao: "Material ou serviço.", peso: 0.9, alinhar: "center", fixa: false },
+  unidade: { titulo: "Unidade", descricao: "A sigla da unidade requisitante.", peso: 0.8, alinhar: "center", fixa: false },
+  unidadeNome: { titulo: "Unidade requisitante", descricao: "O nome da unidade requisitante.", peso: 2, alinhar: "left", fixa: false },
+  dfdNumero: { titulo: "Nº DFD", descricao: "O número do DFD de origem do item.", peso: 0.7, alinhar: "center", fixa: false },
+  planejamento: { titulo: "Nº planejamento", descricao: "O número de planejamento do DFD de origem.", peso: 0.9, alinhar: "center", fixa: false },
+  tipoDfd: { titulo: "Tipo do DFD", descricao: "O tipo do DFD de origem (DFD-O, DFD-R…).", peso: 0.7, alinhar: "center", fixa: false },
+  prioridade: { titulo: "Prioridade", descricao: "A prioridade do DFD (ALTA, MÉDIA, BAIXA).", peso: 0.8, alinhar: "center", fixa: false },
+  previsao: { titulo: "Previsão", descricao: "A previsão de entrega (mês ou genérica).", peso: 0.9, alinhar: "center", fixa: false },
+} as const satisfies Record<string, { titulo: string; descricao: string; peso: number; alinhar: "left" | "center" | "right"; fixa: boolean }>;
 export type ColunaItemDoc = keyof typeof COLUNAS_ITEM_DOC;
 export const ORDEM_COLUNAS = Object.keys(COLUNAS_ITEM_DOC) as ColunaItemDoc[];
+/** As colunas de ANTES (a "DFD (planejamento)" juntava as duas) → as de agora, no mesmo lugar. */
+const COLUNAS_ANTIGAS: Readonly<Record<string, ColunaItemDoc[]>> = { dfd: ["dfdNumero", "planejamento"] };
 
 /** Os DADOS AUTOMÁTICOS (calculados na emissão) que o ADM liga/desliga — os ITENS são sempre impressos (todos). */
 export const AUTOMATICOS = {
@@ -67,12 +77,15 @@ export type ConfigDocumentoPca = {
   expediente: Autoridade[];
   secoes: SecaoDocumento[];
   automaticos: Record<Automatico, boolean>;
+  /** As colunas dos itens NA ORDEM em que saem (a presença = visível). */
   colunas: ColunaItemDoc[];
+  /** O título de cada coluna (sem ele, o padrão de `COLUNAS_ITEM_DOC`). */
+  titulosColunas: Partial<Record<ColunaItemDoc, string>>;
   notas: string;
   assinaturas: Autoridade[];
 };
 
-export const LIMITES_DOC = { texto: 20000, titulo: 160, campo: 200, secoes: 20, autoridades: 20, notas: 8000 } as const;
+export const LIMITES_DOC = { texto: 20000, titulo: 160, campo: 200, secoes: 20, autoridades: 20, notas: 8000, tituloColuna: 40 } as const;
 
 const novoId = (i: number) => `s${i + 1}`;
 
@@ -124,7 +137,8 @@ export function configPadrao(): ConfigDocumentoPca {
     expediente: [],
     secoes: SECOES_PADRAO.map((s, i) => ({ ...s, id: novoId(i) })),
     automaticos: { resumo: true, classificacao: true, unidade: true, prioridade: true, cronograma: true, dfds: true, justificativas: false },
-    colunas: ["sequencial", "codigo", "descricao", "medida", "quantidade", "valorUnitario", "valorTotal", "classificacao", "unidade", "dfd", "prioridade", "previsao"],
+    colunas: ["sequencial", "codigo", "descricao", "medida", "quantidade", "valorUnitario", "valorTotal", "classificacao", "unidade", "dfdNumero", "planejamento", "prioridade", "previsao"],
+    titulosColunas: {},
     notas: "",
     assinaturas: [],
   };
@@ -159,10 +173,21 @@ export function lerConfigDocumento(v: unknown): ConfigDocumentoPca {
         .slice(0, LIMITES_DOC.secoes)
     : p.secoes;
   const auto = (o.automaticos ?? {}) as Record<string, unknown>;
-  const colunasPedidas = Array.isArray(o.colunas) ? (o.colunas as unknown[]).filter((c): c is ColunaItemDoc => typeof c === "string" && Object.hasOwn(COLUNAS_ITEM_DOC, c)) : p.colunas;
-  // Sem repetir, e as FIXAS sempre (o sequencial e a descrição identificam o item).
+  // As antigas viram as de agora no mesmo lugar; sem repetir; o SEQUENCIAL sempre (no começo, se faltar).
+  const colunasPedidas = Array.isArray(o.colunas)
+    ? (o.colunas as unknown[]).flatMap((c): ColunaItemDoc[] =>
+        typeof c !== "string" ? [] : Object.hasOwn(COLUNAS_ITEM_DOC, c) ? [c as ColunaItemDoc] : Object.hasOwn(COLUNAS_ANTIGAS, c) ? COLUNAS_ANTIGAS[c] : [],
+      )
+    : p.colunas;
   const colunas = [...new Set<ColunaItemDoc>(colunasPedidas)];
-  for (const f of ["descricao", "sequencial"] as const) if (!colunas.includes(f)) colunas.unshift(f);
+  if (!colunas.includes("sequencial")) colunas.unshift("sequencial");
+  const tit = (o.titulosColunas ?? {}) as Record<string, unknown>;
+  const titulosColunas: Partial<Record<ColunaItemDoc, string>> = {};
+  for (const c of ORDEM_COLUNAS) {
+    const t = texto(Object.hasOwn(tit, c) ? tit[c] : "", LIMITES_DOC.tituloColuna).replace(/\s+/g, " ");
+    // Igual ao padrão = sem título próprio (o texto canônico não muda à toa).
+    if (t && t !== COLUNAS_ITEM_DOC[c].titulo) titulosColunas[c] = t;
+  }
   return {
     ativo: bool(o.ativo, p.ativo),
     titulo: texto(o.titulo, LIMITES_DOC.titulo) || p.titulo,
@@ -176,6 +201,7 @@ export function lerConfigDocumento(v: unknown): ConfigDocumentoPca {
     secoes,
     automaticos: Object.fromEntries((Object.keys(AUTOMATICOS) as Automatico[]).map((k) => [k, bool(auto[k], p.automaticos[k])])) as Record<Automatico, boolean>,
     colunas,
+    titulosColunas,
     notas: texto(o.notas, LIMITES_DOC.notas),
     assinaturas: "assinaturas" in o ? autoridades(o.assinaturas) : p.assinaturas,
   };
@@ -238,6 +264,8 @@ export const CAMPOS_ITEM_DOCUMENTO = [
   "classificacao",
   "codigo",
   "dfdNumero",
+  "tipoDfd",
+  "dominio",
   "prioridade",
   "ano",
   "mes",
@@ -341,49 +369,69 @@ export function valorPorExtenso(valor: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Marcadores dos textos
+// Campos de dados dos textos (`campos-dados-core.ts` — os CHIPS do editor; gravados `{{chave}}`)
 // ---------------------------------------------------------------------------
 
-export const MARCADORES = {
-  ano: "O ano do PCA",
-  nome: "O nome do PCA",
-  ente: "O ente (a 1ª linha da capa)",
-  itens: "Quantos itens",
-  dfds: "Quantos DFDs",
-  unidades: "Quantas unidades requisitantes",
-  valor: "O valor total (R$)",
-  valorExtenso: "O valor total por extenso",
-  data: "A data da emissão por extenso",
-} as const;
-export type Marcador = keyof typeof MARCADORES;
+/** Os CAMPOS DE DADOS que os textos do documento podem levar — a lista do seletor "Dado" (o mesmo componente em todo o
+ * sistema). A ORDEM e os grupos são os da lista. */
+export const CAMPOS_DOCUMENTO = [
+  { chave: "ano", rotulo: "Ano do PCA", grupo: "PCA", descricao: "O exercício do plano (ex.: 2026)." },
+  { chave: "nome", rotulo: "Nome do PCA", grupo: "PCA", descricao: "O nome do PCA como está cadastrado." },
+  { chave: "ente", rotulo: "Ente", grupo: "PCA", descricao: "O ente da capa (Prefeitura…)." },
+  { chave: "local", rotulo: "Local", grupo: "PCA", descricao: "A cidade/UF do fecho." },
+  { chave: "valor", rotulo: "Valor total", grupo: "Totais", descricao: "A soma dos itens, em reais." },
+  { chave: "valorExtenso", rotulo: "Valor por extenso", grupo: "Totais", descricao: "O valor total escrito por extenso." },
+  { chave: "itens", rotulo: "Nº de itens", grupo: "Totais", descricao: "Quantos itens o PCA tem." },
+  { chave: "dfds", rotulo: "Nº de DFDs", grupo: "Totais", descricao: "Quantos DFDs o PCA tem." },
+  { chave: "unidades", rotulo: "Nº de unidades", grupo: "Totais", descricao: "Quantas unidades requisitantes." },
+  { chave: "classificacoes", rotulo: "Nº de classificações", grupo: "Totais", descricao: "Quantas classificações de itens." },
+  { chave: "data", rotulo: "Data por extenso", grupo: "Emissão", descricao: "A data da emissão (ex.: 5 de março de 2026)." },
+  { chave: "dataCurta", rotulo: "Data (dd/mm/aaaa)", grupo: "Emissão", descricao: "A data da emissão em números." },
+] as const satisfies readonly CampoDado[];
+export type Marcador = (typeof CAMPOS_DOCUMENTO)[number]["chave"];
+/** Chave → descrição (a lista de antes, para quem ainda consulta por chave). */
+export const MARCADORES = Object.fromEntries(CAMPOS_DOCUMENTO.map((c) => [c.chave, c.rotulo])) as Record<Marcador, string>;
 
 export function dataPorExtensoBR(ts: string): string {
   const m = dataIsoBrasilia(ts).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${Number(m[3])} de ${MESES[Number(m[2]) - 1].toLowerCase()} de ${m[1]}` : ts;
 }
+const dataCurtaBR = (ts: string) => {
+  const m = dataIsoBrasilia(ts).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : ts;
+};
 
-export function valoresMarcadores(d: Pick<DadosDocumento, "pca">, t: Totais, cfg: Pick<ConfigDocumentoPca, "ente">, emitidoEm: string): Record<Marcador, string> {
-  return {
+/**
+ * Os VALORES dos campos. O ente e o local podem levar campos também (ex.: "Rio Verde – {{ano}}"): são trocados com os
+ * demais valores primeiro (uma passada — nunca entram em laço).
+ */
+export function valoresMarcadores(d: Pick<DadosDocumento, "pca">, t: Totais, cfg: Pick<ConfigDocumentoPca, "ente" | "local">, emitidoEm: string): Record<Marcador, string> {
+  const base = {
     ano: d.pca.ano != null ? String(d.pca.ano) : "",
     nome: d.pca.nome,
-    ente: cfg.ente,
     itens: num(t.itens),
     dfds: num(t.dfds),
     unidades: num(t.unidades),
+    classificacoes: num(t.classificacoes),
     valor: brl(t.valor),
     valorExtenso: valorPorExtenso(t.valor),
     data: dataPorExtensoBR(emitidoEm),
+    dataCurta: dataCurtaBR(emitidoEm),
   };
+  return { ...base, ente: substituirCampos(cfg.ente, base), local: substituirCampos(cfg.local, base) };
 }
 
-/** Troca os `{{marcador}}` conhecidos; o desconhecido fica como está (o ADM vê o erro na prévia). */
-export function substituirMarcadores(texto: string, v: Record<Marcador, string>): string {
-  return texto.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (todo, k: string) => (Object.hasOwn(v, k) ? v[k as Marcador] : todo));
-}
+/** Troca os `{{marcador}}` conhecidos; o desconhecido fica como está (o ADM vê o aviso). */
+export const substituirMarcadores = (texto: string, v: Record<Marcador, string>): string => substituirCampos(texto, v);
 
 /** Os marcadores DESCONHECIDOS de um texto (o aviso do editor). */
-export function marcadoresDesconhecidos(texto: string): string[] {
-  return [...new Set([...texto.matchAll(/\{\{\s*([a-zA-Z]+)\s*\}\}/g)].map((m) => m[1]).filter((k) => !Object.hasOwn(MARCADORES, k)))];
+export const marcadoresDesconhecidos = (texto: string): string[] => camposDesconhecidos(texto, MARCADORES);
+
+/** Os campos com o VALOR de agora (a lista do seletor mostra o que cada um vira) — sem dados, só os nomes. */
+export function camposComExemplo(d: DadosDocumento | null, cfg: Pick<ConfigDocumentoPca, "ente" | "local">, agora: string): CampoDado[] {
+  if (!d) return [...CAMPOS_DOCUMENTO];
+  const v = valoresMarcadores(d, totaisDocumento(d), cfg, agora);
+  return CAMPOS_DOCUMENTO.map((c) => ({ ...c, exemplo: v[c.chave] || undefined }));
 }
 
 /** O texto formatado (o `EditorRico`) → blocos do PDF: parágrafos justificados, listas e subtítulos. */
@@ -428,8 +476,11 @@ const COLS_RESUMO = (rotulo: string, peso = 3): ColunaDoc[] => [
 ];
 const linhaTotal = (celulas: string[]): LinhaDoc => ({ celulas, destaque: true, negritos: celulas.map(() => true) });
 
-/** A célula de cada coluna dos itens. */
-function celulaItem(i: ItemRow, c: ColunaItemDoc, planejamento: Map<string, string | null>): string {
+/** O título de uma coluna dos itens (o do ADM, senão o padrão). */
+export const tituloColuna = (cfg: Pick<ConfigDocumentoPca, "titulosColunas">, c: ColunaItemDoc): string => cfg.titulosColunas[c] || COLUNAS_ITEM_DOC[c].titulo;
+
+/** A célula de cada coluna dos itens (o DFD de origem dá o planejamento e o tipo; a sigla, o nome da unidade). */
+export function celulaItem(i: ItemRow, c: ColunaItemDoc, dfds: ReadonlyMap<string, Pick<DfdDocumento, "planejamento" | "tipo">>, unidades: Readonly<Record<string, string>>): string {
   switch (c) {
     case "sequencial":
       return i.sequencial != null ? String(i.sequencial) : "—";
@@ -447,13 +498,18 @@ function celulaItem(i: ItemRow, c: ColunaItemDoc, planejamento: Map<string, stri
       return brl(i.valorTotal);
     case "classificacao":
       return chaveClassificacao(i.classificacao);
+    case "dominio":
+      return ou(i.dominio);
     case "unidade":
       return ou(i.codigo);
-    case "dfd": {
-      if (!i.dfdNumero) return "—";
-      const p = planejamento.get(i.dfdNumero);
-      return p ? `${i.dfdNumero} (${p})` : i.dfdNumero;
-    }
+    case "unidadeNome":
+      return ou(i.codigo ? (Object.hasOwn(unidades, i.codigo) ? unidades[i.codigo] : null) : null);
+    case "dfdNumero":
+      return ou(i.dfdNumero);
+    case "planejamento":
+      return ou(i.dfdNumero ? dfds.get(i.dfdNumero)?.planejamento : null);
+    case "tipoDfd":
+      return ou(i.tipoDfd ?? (i.dfdNumero ? dfds.get(i.dfdNumero)?.tipo : null));
     case "prioridade":
       return prioridadeCanonica(i.prioridade) ?? "—";
     case "previsao":
@@ -487,7 +543,7 @@ export function blocosDocumentoPca(
     mostrados < total ? b.push({ tipo: "nota", texto: `Prévia: mostrando ${num(mostrados)} de ${num(total)} ${o}. O documento emitido traz todos.`, cor: "#4a4a4a" }) : 0;
   const b: BlocoDoc[] = [];
   const itens = itensEmOrdem(d.itens);
-  const planejamento = new Map(d.dfds.map((x) => [x.numero, x.planejamento]));
+  const dfdsPorNumero = new Map(d.dfds.map((x) => [x.numero, x]));
 
   if (cfg.capa) {
     b.push({
@@ -650,12 +706,14 @@ export function blocosDocumentoPca(
   b.push({ tipo: "paragrafo", texto: `${num(t.itens)} itens, identificados pelo número sequencial do PCA, com valor total estimado de ${brl(t.valor)}.`, cor: "muted" });
   const cols = cfg.colunas;
   const colTotal = cols.indexOf("valorTotal");
+  // A contagem dos itens vai na descrição; sem ela, na 2ª coluna que não é o valor.
+  const colItens = cols.includes("descricao") ? cols.indexOf("descricao") : cols.findIndex((c, k) => k > 0 && c !== "valorTotal");
   b.push({
     tipo: "tabela",
-    colunas: cols.map((c) => ({ titulo: COLUNAS_ITEM_DOC[c].titulo, peso: COLUNAS_ITEM_DOC[c].peso, alinhar: COLUNAS_ITEM_DOC[c].alinhar })),
+    colunas: cols.map((c) => ({ titulo: tituloColuna(cfg, c), peso: COLUNAS_ITEM_DOC[c].peso, alinhar: COLUNAS_ITEM_DOC[c].alinhar })),
     linhas: [
-      ...corte(itens, previa?.itens).map((i) => ({ celulas: cols.map((c) => celulaItem(i, c, planejamento)) })),
-      linhaTotal(cols.map((c, k) => (k === 0 ? "TOTAL" : k === colTotal ? brl(t.valor) : c === "descricao" ? `${num(t.itens)} itens` : ""))),
+      ...corte(itens, previa?.itens).map((i) => ({ celulas: cols.map((c) => celulaItem(i, c, dfdsPorNumero, d.unidades)) })),
+      linhaTotal(cols.map((_, k) => (k === 0 ? "TOTAL" : k === colTotal ? brl(t.valor) : k === colItens ? `${num(t.itens)} itens` : ""))),
     ],
     vazio: "Nenhum item no PCA.",
   });

@@ -68,7 +68,7 @@ function dados(n = 250): DadosDocumento {
   };
 }
 
-test("configuração: sem linha = o padrão DESLIGADO; qualquer JSON vira válido, com as colunas fixas e ids únicos", () => {
+test("configuração: sem linha = o padrão DESLIGADO; qualquer JSON vira válido, com o sequencial sempre e ids únicos", () => {
   const p = lerConfigDocumento(null);
   assert.equal(p.ativo, false);
   assert.ok(p.secoes.length >= 4);
@@ -86,7 +86,7 @@ test("configuração: sem linha = o padrão DESLIGADO; qualquer JSON vira válid
   });
   assert.equal(c.ativo, true);
   assert.equal(c.titulo, configPadrao().titulo); // título vazio = o padrão
-  assert.deepEqual(c.colunas, ["sequencial", "descricao", "valorTotal"]);
+  assert.deepEqual(c.colunas, ["sequencial", "valorTotal"]);
   assert.deepEqual(c.secoes.map((s) => s.id), ["a", "ax"]);
   assert.equal(c.secoes[0].ativa, false);
   assert.equal(c.automaticos.dfds, false);
@@ -151,7 +151,12 @@ test("blocos: TODOS os itens, pelo sequencial, com o total; sem protocolo; DFD c
   assert.ok(total.celulas.includes("R$ 5.250,00".replace(/ /g, " ")) || total.celulas.some((c) => c.includes("5.250,00")));
   // O nº do protocolo NUNCA aparece no documento.
   assert.equal(JSON.stringify(b).includes("PROT-999999"), false);
-  assert.ok(itens.linhas.some((l) => l.celulas.includes("101 (2001)")));
+  // Nº do DFD e nº de planejamento em colunas PRÓPRIAS, item a item.
+  const cab = itens.colunas.map((c) => c.titulo);
+  const iDfd = cab.indexOf("Nº DFD");
+  const iPlan = cab.indexOf("Nº planejamento");
+  assert.ok(iDfd > 0 && iPlan > 0);
+  assert.ok(itens.linhas.some((l) => l.celulas[iDfd] === "101" && l.celulas[iPlan] === "2001"));
   // A página deitada antes dos itens e de volta em pé depois.
   const iPag = b.findIndex((x) => x.tipo === "pagina" && x.paisagem);
   assert.ok(iPag > 0 && b.findIndex((x) => x === itens) > iPag);

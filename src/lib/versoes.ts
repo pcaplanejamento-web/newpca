@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.315.0",
+    data: "2026-11-24",
+    titulo: "Documento oficial: prévia igual ao PDF, colunas configuráveis e dados nos textos",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "A prévia do Documento oficial mostra as MESMAS páginas do PDF gerado — posições, quebras, página deitada, timbre, carimbo e rodapé.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "As colunas da relação dos itens são escolhidas, ordenadas e renomeadas; agora há Nº DFD, Nº planejamento, tipo do DFD, domínio, nome da unidade, prioridade e previsão por item.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Dados nos textos: o botão “Dado” (ou digitar “{{”) lista todos os dados disponíveis — ano, nome, valor, valor por extenso, itens, DFDs, data… — com o valor de agora, e insere cada um como uma etiqueta no texto, que vira o valor no documento.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.314.0",
     data: "2026-11-24",
     titulo: "Documento oficial do PCA pela habilitação do papel",

@@ -1,5 +1,5 @@
-import { type BlocoDoc, limparBlocos, montarPaginas, passosDasPaginas } from "./documento-pdf-core.ts";
-import { corRgb, PALETA_PADRAO, type PaletaPdf, textoParaPdf } from "./exportar-pdf-core.ts";
+import { type BlocoDoc, limparBlocos, montarPaginas, type OpcoesDocumento, type PaginasMontadas, passosDasPaginas } from "./documento-pdf-core.ts";
+import { corRgb, type Medir, PALETA_PADRAO, type PaletaPdf, textoParaPdf } from "./exportar-pdf-core.ts";
 
 export type OpcoesGerar = {
   /** O rodapé completo (sem o "Página N de M"). */
@@ -46,6 +46,62 @@ const ceder = () =>
 /** Páginas desenhadas entre duas vezes do navegador. */
 const LOTE_PAGINAS = 25;
 
+/** A cor (CSS ou papel da paleta, "@muted"…) → RGB de 0 a 1 — a MESMA no arquivo e na prévia da tela. */
+export function rgbDaPaleta(css: string, paleta: PaletaPdf = PALETA_PADRAO): [number, number, number] {
+  const papel = css.startsWith("@") ? (paleta[css.slice(1) as keyof Omit<PaletaPdf, "tokens">] ?? paleta.texto) : css;
+  return corRgb(papel, paleta) ?? corRgb(paleta.texto, paleta) ?? [0, 0, 0];
+}
+
+/** As MEDIDAS das fontes do PDF (Helvetica): a largura do texto e a limpeza do que a fonte não tem. Memorizadas — a
+ * prévia da tela mede exatamente como o arquivo. */
+type Medidas = { medir: Medir; limpo: (s: string) => string };
+let medidasMemo: Promise<Medidas> | null = null;
+export function medidasPdf(): Promise<Medidas> {
+  medidasMemo ??= (async () => {
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const pdf = await PDFDocument.create({ updateMetadata: false });
+    const fonte = await pdf.embedFont(StandardFonts.Helvetica);
+    const negrito = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const conjunto = new Set(fonte.getCharacterSet());
+    return {
+      medir: (texto: string, tam: number, b?: boolean) => (b ? negrito : fonte).widthOfTextAtSize(texto, tam),
+      limpo: (s: string) => textoParaPdf(s, (cp) => conjunto.has(cp)),
+    };
+  })().catch((e) => {
+    medidasMemo = null;
+    throw e;
+  });
+  return medidasMemo;
+}
+
+/** O que a MONTAGEM das páginas usa (o arquivo e a prévia — as mesmas opções dão as mesmas páginas). */
+export type OpcoesMontagem = Pick<OpcoesGerar, "rodape" | "carimbo" | "desenhoAntigo" | "margem"> & { timbre?: { largura: number; altura: number } };
+
+/** Os blocos limpos e as opções da montagem (o título e os textos sem o que a fonte não tem). */
+function preparar(doc: { titulo: string; blocos: BlocoDoc[] }, o: OpcoesMontagem, limpo: (s: string) => string): { blocos: BlocoDoc[]; opcoes: OpcoesDocumento } {
+  return {
+    blocos: limparBlocos(doc.blocos, limpo),
+    opcoes: {
+      titulo: limpo(doc.titulo),
+      rodape: limpo(o.rodape),
+      carimbo: o.carimbo ? { titulo: limpo(o.carimbo.titulo), linhas: o.carimbo.linhas.map(limpo), cor: o.carimbo.cor } : undefined,
+      desenhoAntigo: o.desenhoAntigo,
+      timbre: o.timbre && { largura: o.timbre.largura, altura: o.timbre.altura },
+      margem: o.margem,
+    },
+  };
+}
+
+/**
+ * As PÁGINAS do documento como o arquivo as desenha (posições, tamanhos, cores) — a PRÉVIA da tela desenha estas mesmas
+ * operações (`PreviaPaginas`): o que se vê é o que sai no PDF.
+ */
+export async function paginasDoDocumento(doc: { titulo: string; blocos: BlocoDoc[] }, o: OpcoesMontagem): Promise<PaginasMontadas> {
+  const { medir, limpo } = await medidasPdf();
+  const { blocos, opcoes } = preparar(doc, o, limpo);
+  return montarPaginas(blocos, medir, opcoes);
+}
+
 /**
  * Desenha um DOCUMENTO (os blocos do `documento-pdf-core`) com o pdf-lib e devolve os BYTES — sem DOM: roda no navegador e
  * no Worker. Com `data`, a saída é DETERMINÍSTICA (nada depende da hora em que foi gerado).
@@ -55,25 +111,14 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
   const pdf = await PDFDocument.create({ updateMetadata: false });
   const fonte = await pdf.embedFont(StandardFonts.Helvetica);
   const negrito = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const conjunto = new Set(fonte.getCharacterSet());
-  const limpo = (s: string) => textoParaPdf(s, (cp) => conjunto.has(cp));
+  // As MESMAS medidas da prévia da tela (`medidasPdf` — a Helvetica do pdf-lib).
+  const { medir, limpo } = await medidasPdf();
   const paleta = o.paleta ?? PALETA_PADRAO;
   const cor = (css: string) => {
-    const papel = css.startsWith("@") ? (paleta[css.slice(1) as keyof Omit<PaletaPdf, "tokens">] ?? paleta.texto) : css;
-    const [r, g, b] = corRgb(papel, paleta) ?? corRgb(paleta.texto, paleta) ?? [0, 0, 0];
+    const [r, g, b] = rgbDaPaleta(css, paleta);
     return rgb(r, g, b);
   };
-  const medir = (texto: string, tam: number, b?: boolean) => (b ? negrito : fonte).widthOfTextAtSize(texto, tam);
-  const carimbo = o.carimbo ? { titulo: limpo(o.carimbo.titulo), linhas: o.carimbo.linhas.map(limpo), cor: o.carimbo.cor } : undefined;
-  const opcoes = {
-    titulo: limpo(doc.titulo),
-    rodape: limpo(o.rodape),
-    carimbo,
-    desenhoAntigo: o.desenhoAntigo,
-    timbre: o.timbre && { largura: o.timbre.largura, altura: o.timbre.altura },
-    margem: o.margem,
-  };
-  const blocos = limparBlocos(doc.blocos, limpo);
+  const { blocos, opcoes } = preparar(doc, o, limpo);
   let montado: ReturnType<typeof montarPaginas>;
   if (o.onProgresso) {
     // Documento grande: a montagem em PASSOS — a tela repinta, o andamento anda e o cancelamento vale também aqui.
