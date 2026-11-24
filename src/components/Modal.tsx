@@ -4,6 +4,7 @@ import { cloneElement, type ReactElement, type ReactNode, useEffect, useLayoutEf
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
+import { rotuloCamada } from "@/lib/camadas-core";
 import { useArrastoCamadas } from "./useArrastoCamadas";
 import { useArrastoFechar } from "./useArrastoFechar";
 import { useSaida } from "./useSaida";
@@ -175,18 +176,24 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
       easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
     });
   }, [nEntrada]);
-  // O indicador do navegador: as posições/larguras de TODOS os botões (medidas) — durante o arrasto ele anda entre a
-  // camada atual e a vizinha na mesma fração do dedo.
+  // O indicador do navegador: as posições/larguras de TODOS os botões (medidas; de novo quando o navegador muda de
+  // tamanho) — durante o arrasto ele anda entre a camada atual e a vizinha na mesma fração do dedo.
   const nav = useRef<HTMLDivElement>(null);
   const [botoes, setBotoes] = useState<{ x: number; w: number }[]>([]);
+  const chaveLista = camadas.map((c) => `${c.id}:${c.rotulo}`).join("|");
   // biome-ignore lint/correctness/useExhaustiveDependencies: remede quando a lista muda.
   useLayoutEffect(() => {
-    const bs = [...(nav.current?.querySelectorAll<HTMLElement>("[data-camada]") ?? [])];
-    setBotoes(bs.map((b) => ({ x: b.offsetLeft, w: b.offsetWidth })));
-  }, [camadas.map((c) => `${c.id}:${c.rotulo}`).join("|")]);
-  useEffect(() => {
-    nav.current?.querySelector<HTMLElement>(`[data-camada="${CSS.escape(ativa)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  }, [ativa]);
+    const el = nav.current;
+    if (!el) return;
+    const medir = () => {
+      const bs = [...el.querySelectorAll<HTMLElement>("[data-camada]")].map((b) => ({ x: b.offsetLeft, w: b.offsetWidth }));
+      setBotoes((a) => (a.length === bs.length && a.every((v, i) => v.x === bs[i].x && v.w === bs[i].w) ? a : bs));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [chaveLista]);
   const largura = trilho.current?.clientWidth || 1;
   const fracao = arrasto == null ? 0 : Math.max(-1, Math.min(1, -arrasto / largura));
   const viz = Math.max(0, Math.min(botoes.length - 1, idx + Math.sign(fracao)));
@@ -198,11 +205,17 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
         }
       : null;
   const variasCamadas = camadas.length > 1;
+  // Uma camada só: a folha de sempre (rente às bordas, sem navegador). Várias: a área tem a altura fixa (92dvh) — a folha
+  // ocupa o que sobra acima do navegador — e TODO espaço é o padrão do sistema (`--pad-canvas`): as folhas das bordas da
+  // tela e entre si (no deslize), a folha do navegador e o navegador do fim da tela (+ a área segura). A ÁRVORE é a mesma
+  // nos dois casos (só as classes mudam): abrir a 2ª camada nunca remonta a 1ª (um rascunho aberto continua).
   return (
-    <div className="modal-corpo flex w-full flex-col items-stretch gap-2">
-      <div ref={trilho} className="w-full touch-pan-y overflow-hidden">
+    <div
+      className={`modal-corpo flex w-full flex-col ${variasCamadas ? "h-[92dvh] gap-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))]" : ""}`}
+    >
+      <div ref={trilho} className={`w-full touch-pan-y overflow-hidden ${variasCamadas ? "min-h-0 flex-1" : ""}`}>
         <div
-          className="flex items-end"
+          className={`flex ${variasCamadas ? "h-full" : "items-end"}`}
           style={{
             transform: `translate3d(calc(${-idx * 100}% + ${arrasto ?? 0}px), 0, 0)`,
             transition: arrasto != null || semTransicao ? "none" : "transform var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1)",
@@ -212,7 +225,7 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
             <div
               key={c.id}
               data-slot-camada={c.id}
-              className={`flex w-full shrink-0 items-end ${variasCamadas ? "[&>[role=dialog]]:h-[calc(92dvh-3.75rem)] [&>[role=dialog]]:max-h-[calc(92dvh-3.75rem)] [&>[role=dialog]]:rounded-b-2xl" : ""}`}
+              className={`flex w-full shrink-0 ${variasCamadas ? "h-full px-[var(--pad-canvas)] [&>[role=dialog]]:h-full [&>[role=dialog]]:max-h-full [&>[role=dialog]]:rounded-2xl" : "items-end"}`}
               inert={c.id !== ativa}
             >
               {c.painel}
@@ -220,41 +233,44 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
           ))}
         </div>
       </div>
-      {variasCamadas && (
-        <div className="flex justify-center px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          <div
-            ref={nav}
-            role="tablist"
-            aria-label="Banners abertos"
-            className="relative flex max-w-full items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-full border border-border bg-surface p-1 shadow-flutuante [scrollbar-width:none]"
-          >
-            {marca && (
-              <span
-                aria-hidden="true"
-                className={`absolute top-1 bottom-1 rounded-full bg-accent-soft ring-1 ring-accent/30 ${arrasto == null ? "transition-[left,width] duration-[var(--motion-duration)] ease-[cubic-bezier(0.2,0.8,0.2,1)]" : ""}`}
-                style={{ left: marca.x, width: marca.w }}
-              />
-            )}
-            {camadas.map((c, i) => (
+      <div className={`w-full shrink-0 px-[var(--pad-canvas)] ${variasCamadas ? "" : "hidden"}`}>
+        <div
+          ref={nav}
+          role="tablist"
+          aria-label="Banners abertos"
+          className="relative flex w-full items-stretch gap-1 rounded-full border border-border bg-surface p-1 shadow-flutuante"
+        >
+          {marca && (
+            <span
+              aria-hidden="true"
+              className={`absolute top-1 bottom-1 rounded-full bg-accent-soft ring-1 ring-accent/30 ${arrasto == null ? "transition-[left,width] duration-[var(--motion-duration)] ease-[cubic-bezier(0.2,0.8,0.2,1)]" : ""}`}
+              style={{ left: marca.x, width: marca.w }}
+            />
+          )}
+          {camadas.map((c, i) => {
+            const r = rotuloCamada(c.rotulo);
+            const atual = c.id === ativa;
+            return (
               <button
                 key={c.id}
                 type="button"
                 role="tab"
                 data-camada={c.id}
-                aria-selected={c.id === ativa}
+                aria-selected={atual}
+                aria-label={`${i + 1}. ${c.rotulo}`}
                 title={c.rotulo}
                 onClick={() => onAtiva(c.id)}
-                className={`relative z-10 flex h-9 min-w-0 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-[var(--motion-duration)] ${
-                  c.id === ativa ? "text-accent" : "text-muted"
-                }`}
+                className="relative z-10 flex h-11 min-w-0 flex-1 items-center justify-center rounded-full px-2"
               >
-                <span className={`grid h-4.5 w-4.5 shrink-0 place-items-center rounded-full text-[10px] tabular-nums ${c.id === ativa ? "bg-accent text-white" : "bg-surface-2"}`}>{i + 1}</span>
-                <span className="truncate">{c.rotulo}</span>
+                <span aria-hidden="true" className="flex min-w-0 max-w-full flex-col items-center text-center leading-tight">
+                  <span className={`max-w-full truncate text-[12px] font-semibold transition-colors duration-[var(--motion-duration)] ${atual ? "text-accent" : "text-text"}`}>{r.tipo}</span>
+                  {r.detalhe && <span className="max-w-full truncate text-[11px] tabular-nums text-muted">{r.detalhe}</span>}
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
