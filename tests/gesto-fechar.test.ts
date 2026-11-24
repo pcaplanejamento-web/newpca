@@ -45,9 +45,9 @@ test("rótulo da camada: tipo + identificador curto, sem o resto do título", ()
   assert.deepEqual(rotuloCamada("Protocolo 150000/2026"), { tipo: "Protocolo", detalhe: "150000/2026" });
   assert.deepEqual(rotuloCamada("DFD 1000"), { tipo: "DFD", detalhe: "1000" });
   assert.deepEqual(rotuloCamada("Item 3 — DFD 1000"), { tipo: "Item", detalhe: "3" });
-  assert.deepEqual(rotuloCamada("Item — — DFD 1000"), { tipo: "Item", detalhe: "" });
+  assert.deepEqual(rotuloCamada("Item — — DFD 1000"), { tipo: "Item", detalhe: "DFD 1000" });
   assert.deepEqual(rotuloCamada("Histórico do protocolo"), { tipo: "Histórico", detalhe: "do protocolo" });
-  assert.deepEqual(rotuloCamada("Pendências — Protocolo 1/2026"), { tipo: "Pendências", detalhe: "" });
+  assert.deepEqual(rotuloCamada("Pendências — Protocolo 1/2026"), { tipo: "Pendências", detalhe: "Protocolo 1/2026" });
   assert.deepEqual(rotuloCamada("Protocolo"), { tipo: "Protocolo", detalhe: "" });
 });
 

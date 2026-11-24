@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.312.2",
+    data: "2026-11-24",
+    titulo: "Banners no celular: um só componente do início ao fim",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Mesa e consulta pública",
+        texto:
+          "No celular, o banner aberto sozinho (o item sem o DFD e o protocolo dele) já é o mesmo cartão com o navegador embaixo. Abrir o DFD ou o protocolo só acrescenta a aba, que nasce no navegador, e o cartão novo, que desliza ao lado — a forma não muda mais.",
+        link: "/painel/mesa?vista=itens",
+      },
+      {
+        tipo: "correcao",
+        area: "Mesa e consulta pública",
+        texto:
+          "No celular, o cabeçalho do banner com UMA ação (ex.: Histórico) deixa a ação ao lado do X, sem a faixa vazia embaixo; a aba de um item sem número mostra o DFD dele.",
+        link: "/painel/mesa?vista=itens",
+      },
+    ],
+  },
+  {
     versao: "1.312.1",
     data: "2026-11-24",
     titulo: "Camadas no celular: navegador inteiro e espaçamento padrão",

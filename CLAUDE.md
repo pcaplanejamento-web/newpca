@@ -6109,7 +6109,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     com `both` e venceriam). `baixo` = só pela ALÇA `[data-alca-fechar]` com `touch-none` (o `Modal` no celular — `midia`
     até 640px — e a folha do `Dropdown`); `esquerda` = a gaveta inteira (`touch-pan-y`). Fecha com 30% ou peteleco; senão
     volta com mola; fechando, o `translate` FICA até desmontar (a saída parte de onde o dedo deixou). Folha/gaveta nova = este hook. O host mantém o último conteúdo durante a saída do `Modal` (`open={…}` em vez de desmontar — `BannersConsulta`).
-  - **CAMADAS NO CELULAR (v1.312.0 → v1.312.1):** a pilha do `Modal` (Protocolo · DFD · Item, histórico, mensagens) é UMA
+  - **CAMADAS NO CELULAR (v1.312.0 → v1.312.2; v1.312.2: abaixo do `lg` a pilha é SEMPRE o cartão + navegador, já com UMA camada — o mesmo componente do banner sozinho ao de várias; a aba nova nasce no navegador. No `Painel`, uma só ação do cabeçalho fica ao lado do X — 2+ descem para a 2ª linha):** a pilha do `Modal` (Protocolo · DFD · Item, histórico, mensagens) é UMA
     árvore — `PilhaModal` (interno ao `Modal.tsx`) — em qualquer largura: no `lg` o grid de colunas; abaixo, um CARROSSEL na
     ordem fixa das colunas + o navegador EMBAIXO da folha (`role="tablist"` "Banners abertos": abas de largura igual com o
     tipo e o identificador — `rotuloCamada`, `camadas-core.ts`; ←/→/Home/End; o indicador acompanha o dedo). Cruzar 1024px

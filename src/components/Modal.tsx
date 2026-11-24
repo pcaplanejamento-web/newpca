@@ -102,8 +102,8 @@ function Painel({
       tabIndex={-1}
       className={`relative flex max-h-[92dvh] outline-none w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
     >
-      {/* No celular as AÇÕES do cabeçalho (Histórico, Tarefas, Atualizar…) descem para uma 2ª linha: o título (nº, tipo,
-          planejamento) fica inteiro e o X segue no canto. */}
+      {/* No celular, UMA ação do cabeçalho fica na linha do título, ao lado do X (sem faixa vazia embaixo); com DUAS ou mais
+          (Histórico, Tarefas, Atualizar…) elas descem para uma 2ª linha: o título fica inteiro e o X segue no canto. */}
       {onClose && !bloqueado && (
         <div data-alca-fechar aria-hidden="true" className="flex shrink-0 touch-none justify-center pt-2 sm:hidden">
           <span className="h-1 w-10 rounded-full bg-border-2" />
@@ -120,7 +120,11 @@ function Painel({
             {titulo}
           </h3>
         )}
-        {acoesCabecalho && <div className="flex items-center gap-1 max-sm:order-3 max-sm:w-full max-sm:flex-wrap max-sm:justify-end sm:shrink-0">{acoesCabecalho}</div>}
+        {acoesCabecalho && (
+          <div className="flex shrink-0 items-center gap-1 max-sm:[&:has(>:nth-child(2))]:order-3 max-sm:[&:has(>:nth-child(2))]:w-full max-sm:[&:has(>:nth-child(2))]:shrink max-sm:[&:has(>:nth-child(2))]:flex-wrap max-sm:[&:has(>:nth-child(2))]:justify-end">
+            {acoesCabecalho}
+          </div>
+        )}
         {onClose && !bloqueado && (
           <Button variant="icon" aria-label="Fechar" onClick={onClose} className="shrink-0 max-sm:order-2">
             <IconClose className="h-5 w-5" />
@@ -164,7 +168,9 @@ function PilhaModal({
   // No carrossel só as camadas ABERTAS (as colunas vazias/fechando são do desktop).
   const lista = largo ? camadas : camadas.filter((c) => c.aberta);
   const idx = Math.max(0, lista.findIndex((c) => c.id === ativa));
-  const variasCamadas = !largo && lista.length > 1;
+  // No celular/tablet é SEMPRE o mesmo componente — o cartão com o navegador embaixo —, já com UMA camada (o banner
+  // sozinho, sem o DFD/protocolo dele): abrir outro só acrescenta a aba e o cartão ao lado; a forma nunca muda.
+  const emCamadas = !largo;
   const [arrasto, setArrasto] = useState<number | null>(null);
   const trilho = useRef<HTMLDivElement>(null);
   useArrastoCamadas(trilho, {
@@ -196,6 +202,7 @@ function PilhaModal({
       easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
     });
   }, [nEntrada]);
+  const nav = useRef<HTMLDivElement>(null);
   // O FOCO do teclado nunca fica numa camada que saiu de vista (inerte) nem cai no <body>: vai à folha à vista.
   useLayoutEffect(() => {
     if (largo) return;
@@ -206,9 +213,9 @@ function PilhaModal({
   }, [ativa, largo]);
   // O indicador do navegador: as posições/larguras de TODAS as abas (medidas; de novo quando o navegador muda de tamanho)
   // — durante o arrasto ele anda entre a camada atual e a vizinha na mesma fração do dedo.
-  const nav = useRef<HTMLDivElement>(null);
+  const abasVistas = useRef<Set<string>>(new Set());
   const [botoes, setBotoes] = useState<{ x: number; w: number }[]>([]);
-  const chaveLista = `${variasCamadas}|${lista.map((c) => `${c.id}:${c.rotulo}`).join("|")}`;
+  const chaveLista = `${emCamadas}|${lista.map((c) => `${c.id}:${c.rotulo}`).join("|")}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: remede quando a lista muda.
   useLayoutEffect(() => {
     const el = nav.current;
@@ -218,6 +225,14 @@ function PilhaModal({
       setBotoes((a) => (a.length === bs.length && a.every((v, i) => v.x === bs[i].x && v.w === bs[i].w) ? a : bs));
     };
     medir();
+    // A ABA NOVA nasce no navegador (cresce e aparece) enquanto as outras abrem espaço — o indicador desliza até ela.
+    const agora = [...el.querySelectorAll<HTMLElement>("[data-camada]")];
+    const vistas = abasVistas.current;
+    abasVistas.current = new Set(agora.map((b) => b.dataset.camada ?? ""));
+    if (vistas.size && !(matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "off"))
+      for (const b of agora)
+        if (!vistas.has(b.dataset.camada ?? ""))
+          b.animate([{ opacity: 0, scale: "0.6" }, { opacity: 1, scale: "1" }], { duration: duracaoMotionMs(), easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
     const ro = new ResizeObserver(medir);
     ro.observe(el);
     return () => ro.disconnect();
@@ -245,13 +260,13 @@ function PilhaModal({
   const idSlot = (i: number) => `${uid}-camada-${i}`;
   return (
     <div
-      className={`modal-corpo flex w-full flex-col ${largo ? "" : "sm:max-w-2xl"} ${variasCamadas ? "h-[92dvh] gap-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))]" : ""}`}
+      className={`modal-corpo flex w-full flex-col ${largo ? "" : "sm:max-w-2xl"} ${emCamadas ? "h-[92dvh] gap-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))]" : ""}`}
       // No desktop a LARGURA é a das colunas à vista (no próprio invólucro): o clique ao lado dos banners cai no fundo e fecha.
       style={largo ? { maxWidth: grid.maxW, transition: "max-width var(--motion-duration) var(--motion-ease)" } : undefined}
     >
-      <div ref={trilho} className={`w-full ${largo ? "" : "touch-pan-y overflow-hidden"} ${variasCamadas ? "min-h-0 flex-1" : ""}`}>
+      <div ref={trilho} className={`w-full ${largo ? "" : "touch-pan-y overflow-hidden"} ${emCamadas ? "min-h-0 flex-1" : ""}`}>
         <div
-          className={largo ? "grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]" : `flex ${variasCamadas ? "h-full" : "items-end"}`}
+          className={largo ? "grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]" : `flex ${emCamadas ? "h-full" : "items-end"}`}
           style={
             largo
               ? {
@@ -271,12 +286,12 @@ function PilhaModal({
           {lista.map((c, i) => (
             <div
               key={c.id}
-              {...(variasCamadas ? { id: idSlot(i), role: "tabpanel", "aria-labelledby": idAba(i) } : {})}
+              {...(emCamadas ? { id: idSlot(i), role: "tabpanel", "aria-labelledby": idAba(i) } : {})}
               data-slot-camada={c.id}
               className={
                 largo
                   ? "min-w-0 overflow-hidden"
-                  : `flex w-full shrink-0 ${variasCamadas ? "h-full px-[var(--pad-canvas)] [&>[role=dialog]]:h-full [&>[role=dialog]]:max-h-full [&>[role=dialog]]:rounded-2xl [&_[data-rodape-painel]]:pb-[var(--pad-card)]" : "items-end"}`
+                  : `flex w-full shrink-0 ${emCamadas ? "h-full px-[var(--pad-canvas)] [&>[role=dialog]]:h-full [&>[role=dialog]]:max-h-full [&>[role=dialog]]:rounded-2xl [&_[data-rodape-painel]]:pb-[var(--pad-card)]" : "items-end"}`
               }
               inert={largo ? !c.visivel : c.id !== ativa}
             >
@@ -285,7 +300,7 @@ function PilhaModal({
           ))}
         </div>
       </div>
-      <div className={`w-full shrink-0 px-[var(--pad-canvas)] ${variasCamadas ? "" : "hidden"}`}>
+      <div className={`w-full shrink-0 px-[var(--pad-canvas)] ${emCamadas ? "" : "hidden"}`}>
         <div
           ref={nav}
           role="tablist"
@@ -300,7 +315,7 @@ function PilhaModal({
               style={{ left: marca.x, width: marca.w }}
             />
           )}
-          {variasCamadas &&
+          {emCamadas &&
             lista.map((c, i) => {
               const r = rotuloCamada(c.rotulo);
               const atual = c.id === ativa;
