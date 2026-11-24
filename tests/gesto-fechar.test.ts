@@ -36,7 +36,7 @@ test("carrossel de camadas: troca de camada por distância (25%) ou peteleco, nu
   assert.equal(camadaAoSoltar(0, 3, -100, 390, 0), 1);
   assert.equal(camadaAoSoltar(1, 3, 100, 390, 0), 0);
   assert.equal(camadaAoSoltar(1, 3, -60, 390, 0), 1, "pouco e devagar fica");
-  assert.equal(camadaAoSoltar(1, 3, -40, 390, 0.9), 2, "peteleco troca");
+  assert.equal(camadaAoSoltar(1, 3, -40, 390, -0.9), 2, "peteleco troca");
   assert.equal(camadaAoSoltar(2, 3, -200, 390, 0), 2, "não passa da última");
   assert.equal(camadaAoSoltar(0, 3, 200, 390, 0), 0, "não volta antes da primeira");
 });
@@ -49,4 +49,11 @@ test("rótulo da camada: tipo + identificador curto, sem o resto do título", ()
   assert.deepEqual(rotuloCamada("Histórico do protocolo"), { tipo: "Histórico", detalhe: "do protocolo" });
   assert.deepEqual(rotuloCamada("Pendências — Protocolo 1/2026"), { tipo: "Pendências", detalhe: "" });
   assert.deepEqual(rotuloCamada("Protocolo"), { tipo: "Protocolo", detalhe: "" });
+});
+
+test("carrossel: peteleco no sentido contrário ao arrasto não troca de camada", () => {
+  // Arrastou para a esquerda (delta < 0) e puxou de volta rápido para a direita: fica.
+  assert.equal(camadaAoSoltar(0, 3, -30, 390, 0.8), 0);
+  // Mesmo sentido: troca.
+  assert.equal(camadaAoSoltar(0, 3, -30, 390, -0.8), 1);
 });

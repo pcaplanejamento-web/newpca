@@ -116,6 +116,14 @@ export function useArrastoFechar(ref: RefObject<HTMLElement | null>, { direcao, 
         // por um quadro antes de sair).
         fechou = true;
         fecharRef.current?.();
+        // O fechamento pode ser RECUSADO (ex.: "Descartar as alterações?" → Cancelar): o painel continua aberto — volta ao
+        // lugar com a mola (sem isso ficava deslocado para baixo até fechar de outro jeito).
+        setTimeout(() => {
+          if (el.isConnected && !el.closest("[data-saindo]")) {
+            fechou = false;
+            volta();
+          }
+        }, 160);
         return;
       }
       volta();

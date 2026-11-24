@@ -41,7 +41,8 @@ export function deslocamentoCarrossel(delta: number, indice: number, total: numb
 /** Ao soltar o carrossel: a camada de destino — a vizinha quando o dedo passou de 25% da largura ou saiu rápido. */
 export function camadaAoSoltar(indice: number, total: number, delta: number, largura: number, velocidade: number): number {
   const passou = largura > 0 && Math.abs(delta) >= largura * 0.25;
-  const peteleco = Math.abs(velocidade) >= VELOCIDADE_FECHAR && Math.abs(delta) > LIMIAR_GESTO * 2;
+  // O peteleco só vale no MESMO sentido do arrasto (desistir e puxar de volta nunca leva à camada do outro lado).
+  const peteleco = Math.sign(velocidade) === Math.sign(delta) && Math.abs(velocidade) >= VELOCIDADE_FECHAR && Math.abs(delta) > LIMIAR_GESTO * 2;
   if (!passou && !peteleco) return indice;
   const alvo = delta < 0 ? indice + 1 : indice - 1;
   return Math.max(0, Math.min(total - 1, alvo));

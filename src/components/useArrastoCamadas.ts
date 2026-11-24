@@ -36,7 +36,9 @@ export function useArrastoCamadas(
     const down = (e: TouchEvent) => {
       if (id != null || e.touches.length !== 1 || atual.current.total < 2) return;
       const alvo = e.target as Element | null;
-      if (alvo?.closest("input, textarea, select, [contenteditable], [role='slider'], [data-alca-fechar]") || rolaDeLado(alvo)) return;
+      if (alvo?.closest("input, textarea, select, [contenteditable], [role='slider']") || rolaDeLado(alvo)) return;
+      // A alça/cabeçalho é do gesto de FECHAR só onde ele vale (a folha do celular); no tablet, deslizar ali troca a camada.
+      if (alvo?.closest("[data-alca-fechar]") && matchMedia("(max-width: 39.999rem)").matches) return;
       const t = e.changedTouches[0];
       id = t.identifier;
       x0 = t.clientX;
@@ -61,6 +63,11 @@ export function useArrastoCamadas(
         if (!gestoComecou(Math.abs(dx), dy)) {
           // Rolagem vertical clara: o dedo é do conteúdo.
           if (Math.abs(dy) > 12) id = null;
+          return;
+        }
+        // O navegador já tomou o dedo para rolar (o evento não é mais cancelável): é rolagem, não troca de camada.
+        if (!e.cancelable) {
+          id = null;
           return;
         }
         arrastando = true;

@@ -6109,12 +6109,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     com `both` e venceriam). `baixo` = só pela ALÇA `[data-alca-fechar]` com `touch-none` (o `Modal` no celular — `midia`
     até 640px — e a folha do `Dropdown`); `esquerda` = a gaveta inteira (`touch-pan-y`). Fecha com 30% ou peteleco; senão
     volta com mola; fechando, o `translate` FICA até desmontar (a saída parte de onde o dedo deixou). Folha/gaveta nova = este hook. O host mantém o último conteúdo durante a saída do `Modal` (`open={…}` em vez de desmontar — `BannersConsulta`).
-  - **CAMADAS NO CELULAR (v1.312.0):** abaixo do `lg` o `Modal` em pilha (Protocolo · DFD · Item, histórico, mensagens)
-    não põe os banners lado a lado: `CamadasCelular` (interno ao `Modal.tsx`) = um CARROSSEL na ordem fixa das colunas +
-    o navegador flutuante EMBAIXO da folha (`role="tablist"` "Banners abertos", um botão por camada, o indicador desliza e acompanha o dedo).
-    Deslizar de lado = `useArrastoCamadas` (touch, não passivo só depois do gesto horizontal; régua pura
-    `deslocamentoCarrossel`/`camadaAoSoltar` em `gesto-fechar.ts`); abrir/fechar volta ao ÚLTIMO aberto; a camada nova entra
-    pela Web Animations API (o conteúdo nunca remonta). Com 2+ camadas, todas têm a mesma altura.
+  - **CAMADAS NO CELULAR (v1.312.0 → v1.312.1):** a pilha do `Modal` (Protocolo · DFD · Item, histórico, mensagens) é UMA
+    árvore — `PilhaModal` (interno ao `Modal.tsx`) — em qualquer largura: no `lg` o grid de colunas; abaixo, um CARROSSEL na
+    ordem fixa das colunas + o navegador EMBAIXO da folha (`role="tablist"` "Banners abertos": abas de largura igual com o
+    tipo e o identificador — `rotuloCamada`, `camadas-core.ts`; ←/→/Home/End; o indicador acompanha o dedo). Cruzar 1024px
+    nunca remonta um banner. Espaço = `--pad-canvas` entre folhas, navegador e bordas. Deslizar de lado =
+    `useArrastoCamadas` (começa só com o `touchmove` cancelável; a alça só bloqueia no celular; peteleco só no mesmo sentido
+    — `camadaAoSoltar`). A camada à vista = a escolhida, senão a aberta por último; a camada cujo TÍTULO trocou (outro DFD/
+    item no mesmo painel) vem à vista; o Esc fecha a camada à vista; o foco do teclado vai à folha à vista. Painel com
+    `tabIndex={-1}` e o rodapé `data-rodape-painel` (sem a área segura dupla no carrossel). `useArrastoFechar` volta a folha
+    ao lugar quando o fechamento é recusado ("Descartar as alterações?" → Cancelar).
   - **`--nav-inferior`** (`globals.css`): a altura da `BottomNav` (4rem só quando ela existe — `html:has(nav[data-nav-inferior])`);
     o que gruda/flutua no fim do display (rodapé das tabelas, `BarraSelecao`, avisos) usa a variável, nunca `4rem` fixo.
   - Campo com tamanho de fonte `!text-[…]` abaixo de 16px leva `pointer-coarse:!text-[16px]` (o `!important` de camada

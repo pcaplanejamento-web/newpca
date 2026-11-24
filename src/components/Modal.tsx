@@ -1,6 +1,6 @@
 "use client";
 
-import { cloneElement, type ReactElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { cloneElement, type KeyboardEvent as TeclaReact, type ReactElement, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
@@ -99,7 +99,8 @@ function Painel({
       role="dialog"
       aria-modal="true"
       aria-label={titulo}
-      className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
+      tabIndex={-1}
+      className={`relative flex max-h-[92dvh] outline-none w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
     >
       {/* No celular as AÇÕES do cabeçalho (Histórico, Tarefas, Atualizar…) descem para uma 2ª linha: o título (nº, tipo,
           planejamento) fica inteiro e o X segue no canto. */}
@@ -128,39 +129,58 @@ function Painel({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-[var(--pad-card)]">{children}</div>
       {rodape && (
-        <div className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)] max-sm:pb-[calc(var(--pad-card)_+_env(safe-area-inset-bottom))]">{rodape}</div>
+        <div data-rodape-painel className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)] max-sm:pb-[calc(var(--pad-card)_+_env(safe-area-inset-bottom))]">{rodape}</div>
       )}
     </div>
   );
 }
 
-/** Uma CAMADA do carrossel do celular: o rótulo do navegador e o painel. */
-type Camada = { id: string; rotulo: string; painel: ReactNode };
+/** Uma COLUNA/CAMADA da pilha: o painel (null = coluna vazia, só no desktop), se é uma camada aberta e se está à vista. */
+type Camada = { id: string; rotulo: string; painel: ReactNode; aberta: boolean; visivel: boolean };
 
 /**
- * CAMADAS NO CELULAR (abaixo do `lg`): os banners da pilha (Protocolo · DFD · Item, histórico…) não cabem lado a lado —
- * ficam num CARROSSEL na ordem fixa das colunas, com o NAVEGADOR flutuante acima da folha (um botão por camada; o
- * indicador desliza até a atual). Tocar num botão leva à camada; deslizar o dedo de lado também (o trilho segue o dedo,
- * com resistência nas pontas). Uma camada nova entra deslizando; a fechada sai e a anterior volta. Sem movimento
- * (sistema ou o ADM), as trocas são instantâneas (a rede de segurança do `globals.css`).
+ * A PILHA de banners do `Modal` (Protocolo · DFD · Item, histórico…) — a MESMA árvore em qualquer largura (cruzar 1024px
+ * nunca remonta um banner: o rascunho, o cadeado aberto e a rolagem continuam):
+ * - DESKTOP (`largo`): o grid de colunas lado a lado (até 3 à vista; as colunas fechando ficam até o fim da transição);
+ * - CELULAR e TABLET: um CARROSSEL na ordem fixa das colunas, com o NAVEGADOR flutuante EMBAIXO da folha (uma aba por
+ *   camada — o tipo e o identificador; o indicador desliza e acompanha o dedo). Tocar numa aba leva à camada (←/→/Home/End
+ *   no teclado); deslizar de lado também (o trilho segue o dedo, com resistência nas pontas). A camada nova entra
+ *   deslizando. Espaçamento = `--pad-canvas` entre as folhas, o navegador e as bordas.
  */
-function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa: string; onAtiva: (id: string) => void }) {
-  const idx = Math.max(0, camadas.findIndex((c) => c.id === ativa));
+function PilhaModal({
+  camadas,
+  ativa,
+  onAtiva,
+  largo,
+  grid,
+}: {
+  camadas: Camada[];
+  ativa: string;
+  onAtiva: (id: string) => void;
+  largo: boolean;
+  grid: { cols: string; maxW: string; onFim: () => void };
+}) {
+  const uid = useId();
+  // No carrossel só as camadas ABERTAS (as colunas vazias/fechando são do desktop).
+  const lista = largo ? camadas : camadas.filter((c) => c.aberta);
+  const idx = Math.max(0, lista.findIndex((c) => c.id === ativa));
+  const variasCamadas = !largo && lista.length > 1;
   const [arrasto, setArrasto] = useState<number | null>(null);
   const trilho = useRef<HTMLDivElement>(null);
   useArrastoCamadas(trilho, {
     indice: idx,
-    total: camadas.length,
+    total: lista.length,
     onMover: setArrasto,
-    onTrocar: (i) => onAtiva(camadas[i].id),
+    onTrocar: (i) => onAtiva(lista[i].id),
+    ativo: !largo,
   });
   // Lista mudou e a camada à vista é a MESMA (outra abriu/fechou ao lado): reposiciona sem animar — nada se mexe na tela.
   const anterior = useRef({ ativa, idx, n: 0 });
   const semTransicao = anterior.current.ativa === ativa && anterior.current.idx !== idx;
   // A camada à vista TROCOU sem o trilho andar (um banner novo entrou no lugar dela, à esquerda ou à direita): ela entra
   // deslizando do lado de onde veio.
-  const antes = camadas.findIndex((c) => c.id === anterior.current.ativa);
-  const trocouNoLugar = anterior.current.ativa !== ativa && anterior.current.idx === idx;
+  const antes = lista.findIndex((c) => c.id === anterior.current.ativa);
+  const trocouNoLugar = !largo && anterior.current.ativa !== ativa && anterior.current.idx === idx;
   const entrada = useRef<{ id: string; lado: "esq" | "dir"; n: number } | null>(null);
   if (trocouNoLugar) entrada.current = { id: ativa, lado: antes >= 0 && antes < idx ? "dir" : "esq", n: anterior.current.n + 1 };
   anterior.current = { ativa, idx, n: entrada.current?.n ?? anterior.current.n };
@@ -176,11 +196,19 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
       easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
     });
   }, [nEntrada]);
-  // O indicador do navegador: as posições/larguras de TODOS os botões (medidas; de novo quando o navegador muda de
-  // tamanho) — durante o arrasto ele anda entre a camada atual e a vizinha na mesma fração do dedo.
+  // O FOCO do teclado nunca fica numa camada que saiu de vista (inerte) nem cai no <body>: vai à folha à vista.
+  useLayoutEffect(() => {
+    if (largo) return;
+    const at = document.activeElement;
+    const slot = at?.closest?.("[data-slot-camada]");
+    if (at && at !== document.body && (!slot || !slot.hasAttribute("inert"))) return;
+    trilho.current?.querySelector<HTMLElement>(`[data-slot-camada="${CSS.escape(ativa)}"] > [role=dialog]`)?.focus({ preventScroll: true });
+  }, [ativa, largo]);
+  // O indicador do navegador: as posições/larguras de TODAS as abas (medidas; de novo quando o navegador muda de tamanho)
+  // — durante o arrasto ele anda entre a camada atual e a vizinha na mesma fração do dedo.
   const nav = useRef<HTMLDivElement>(null);
   const [botoes, setBotoes] = useState<{ x: number; w: number }[]>([]);
-  const chaveLista = camadas.map((c) => `${c.id}:${c.rotulo}`).join("|");
+  const chaveLista = `${variasCamadas}|${lista.map((c) => `${c.id}:${c.rotulo}`).join("|")}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: remede quando a lista muda.
   useLayoutEffect(() => {
     const el = nav.current;
@@ -204,29 +232,52 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
           w: botoes[idx].w + (botoes[viz].w - botoes[idx].w) * Math.abs(fracao),
         }
       : null;
-  const variasCamadas = camadas.length > 1;
-  // Uma camada só: a folha de sempre (rente às bordas, sem navegador). Várias: a área tem a altura fixa (92dvh) — a folha
-  // ocupa o que sobra acima do navegador — e TODO espaço é o padrão do sistema (`--pad-canvas`): as folhas das bordas da
-  // tela e entre si (no deslize), a folha do navegador e o navegador do fim da tela (+ a área segura). A ÁRVORE é a mesma
-  // nos dois casos (só as classes mudam): abrir a 2ª camada nunca remonta a 1ª (um rascunho aberto continua).
+  /** Teclado na lista de abas: ←/→ vizinha, Home/End primeira/última — o foco acompanha. */
+  const teclaAbas = (e: TeclaReact) => {
+    const alvo = e.key === "ArrowRight" ? idx + 1 : e.key === "ArrowLeft" ? idx - 1 : e.key === "Home" ? 0 : e.key === "End" ? lista.length - 1 : null;
+    if (alvo == null) return;
+    e.preventDefault();
+    const i = Math.max(0, Math.min(lista.length - 1, alvo));
+    onAtiva(lista[i].id);
+    nav.current?.querySelectorAll<HTMLElement>("[data-camada]")[i]?.focus();
+  };
+  const idAba = (i: number) => `${uid}-aba-${i}`;
+  const idSlot = (i: number) => `${uid}-camada-${i}`;
   return (
     <div
-      className={`modal-corpo flex w-full flex-col ${variasCamadas ? "h-[92dvh] gap-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))]" : ""}`}
+      className={`modal-corpo flex w-full flex-col ${largo ? "" : "sm:max-w-2xl"} ${variasCamadas ? "h-[92dvh] gap-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))]" : ""}`}
     >
-      <div ref={trilho} className={`w-full touch-pan-y overflow-hidden ${variasCamadas ? "min-h-0 flex-1" : ""}`}>
+      <div ref={trilho} className={`w-full ${largo ? "" : "touch-pan-y overflow-hidden"} ${variasCamadas ? "min-h-0 flex-1" : ""}`}>
         <div
-          className={`flex ${variasCamadas ? "h-full" : "items-end"}`}
-          style={{
-            transform: `translate3d(calc(${-idx * 100}% + ${arrasto ?? 0}px), 0, 0)`,
-            transition: arrasto != null || semTransicao ? "none" : "transform var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1)",
+          className={largo ? "mx-auto grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]" : `flex ${variasCamadas ? "h-full" : "items-end"}`}
+          style={
+            largo
+              ? {
+                  maxWidth: grid.maxW,
+                  gridTemplateColumns: grid.cols,
+                  transition: "grid-template-columns var(--motion-duration) var(--motion-ease), max-width var(--motion-duration) var(--motion-ease)",
+                }
+              : {
+                  transform: `translate3d(calc(${-idx * 100}% + ${arrasto ?? 0}px), 0, 0)`,
+                  transition: arrasto != null || semTransicao ? "none" : "transform var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1)",
+                }
+          }
+          onTransitionEnd={(e) => {
+            // Transição do grid terminou: desmonta os painéis que FECHARAM (os abertos seguem montados).
+            if (largo && e.target === e.currentTarget && e.propertyName === "grid-template-columns") grid.onFim();
           }}
         >
-          {camadas.map((c) => (
+          {lista.map((c, i) => (
             <div
               key={c.id}
+              {...(variasCamadas ? { id: idSlot(i), role: "tabpanel", "aria-labelledby": idAba(i) } : {})}
               data-slot-camada={c.id}
-              className={`flex w-full shrink-0 ${variasCamadas ? "h-full px-[var(--pad-canvas)] [&>[role=dialog]]:h-full [&>[role=dialog]]:max-h-full [&>[role=dialog]]:rounded-2xl" : "items-end"}`}
-              inert={c.id !== ativa}
+              className={
+                largo
+                  ? "min-w-0 overflow-hidden"
+                  : `flex w-full shrink-0 ${variasCamadas ? "h-full px-[var(--pad-canvas)] [&>[role=dialog]]:h-full [&>[role=dialog]]:max-h-full [&>[role=dialog]]:rounded-2xl [&_[data-rodape-painel]]:pb-[var(--pad-card)]" : "items-end"}`
+              }
+              inert={largo ? !c.visivel : c.id !== ativa}
             >
               {c.painel}
             </div>
@@ -238,6 +289,7 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
           ref={nav}
           role="tablist"
           aria-label="Banners abertos"
+          onKeyDown={teclaAbas}
           className="relative flex w-full items-stretch gap-1 rounded-full border border-border bg-surface p-1 shadow-flutuante"
         >
           {marca && (
@@ -247,28 +299,32 @@ function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa:
               style={{ left: marca.x, width: marca.w }}
             />
           )}
-          {camadas.map((c, i) => {
-            const r = rotuloCamada(c.rotulo);
-            const atual = c.id === ativa;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                role="tab"
-                data-camada={c.id}
-                aria-selected={atual}
-                aria-label={`${i + 1}. ${c.rotulo}`}
-                title={c.rotulo}
-                onClick={() => onAtiva(c.id)}
-                className="relative z-10 flex h-11 min-w-0 flex-1 items-center justify-center rounded-full px-2"
-              >
-                <span aria-hidden="true" className="flex min-w-0 max-w-full flex-col items-center text-center leading-tight">
-                  <span className={`max-w-full truncate text-[12px] font-semibold transition-colors duration-[var(--motion-duration)] ${atual ? "text-accent" : "text-text"}`}>{r.tipo}</span>
-                  {r.detalhe && <span className="max-w-full truncate text-[11px] tabular-nums text-muted">{r.detalhe}</span>}
-                </span>
-              </button>
-            );
-          })}
+          {variasCamadas &&
+            lista.map((c, i) => {
+              const r = rotuloCamada(c.rotulo);
+              const atual = c.id === ativa;
+              return (
+                <button
+                  key={c.id}
+                  id={idAba(i)}
+                  type="button"
+                  role="tab"
+                  data-camada={c.id}
+                  aria-selected={atual}
+                  aria-controls={idSlot(i)}
+                  tabIndex={atual ? 0 : -1}
+                  aria-label={c.rotulo}
+                  title={c.rotulo}
+                  onClick={() => onAtiva(c.id)}
+                  className="relative z-10 flex h-11 min-w-0 flex-1 items-center justify-center rounded-full px-2"
+                >
+                  <span aria-hidden="true" className="flex min-w-0 max-w-full flex-col items-center text-center leading-tight">
+                    <span className={`max-w-full truncate text-[12px] font-semibold transition-colors duration-[var(--motion-duration)] ${atual ? "text-accent" : "text-text"}`}>{r.tipo}</span>
+                    {r.detalhe && <span className="max-w-full truncate text-[11px] tabular-nums text-muted">{r.detalhe}</span>}
+                  </span>
+                </button>
+              );
+            })}
         </div>
       </div>
     </div>
@@ -410,7 +466,25 @@ export function Modal({
   // quando a lista de abertos muda (abriu um banner novo = ele vem à vista; fechou = o anterior).
   const chaveFoco = `${chaveAbertos}#${principalNoTopo ? 1 : 0}`;
   const [foco, setFoco] = useState<{ chave: string; id: string } | null>(null);
+  // O CONTEÚDO de uma camada já aberta trocou (outro DFD no mesmo painel, outro item, o DFD da raiz): ela vem à vista — o
+  // que a pessoa acabou de pedir nunca carrega escondido. "Trocou" = o título mudou sem ser só o complemento do anterior
+  // ("Protocolo" → "Protocolo 150000/2026" é a carga, não uma troca).
+  const titulosRef = useRef(new Map<string, string>());
+  {
+    const agora = new Map<string, string>();
+    agora.set("__principal", titulo);
+    for (const p of pilha) if (p.aberto) agora.set(p.id, p.titulo);
+    let trocou: string | null = null;
+    for (const [id, t] of agora) {
+      const antes = titulosRef.current.get(id);
+      if (antes != null && antes !== t && !t.startsWith(antes) && !antes.startsWith(t)) trocou = id;
+    }
+    titulosRef.current = agora;
+    if (trocou && (foco?.chave !== chaveFoco || foco.id !== trocou)) setFoco({ chave: chaveFoco, id: trocou });
+  }
   const focoAtual = foco?.chave === chaveFoco ? foco.id : null;
+  /** A camada à vista no carrossel (o Esc fecha ESTA): a escolhida, senão a aberta por último. */
+  const ativaRef = useRef<string | null>(null);
 
   // Mantém montado o painel que está FECHANDO (fecha animado): guarda o último conteúdo de cada painel
   // aberto e só desmonta os fechados quando a transição do grid termina (ou, sem transição — motion
@@ -450,6 +524,12 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || bloqueado || e.defaultPrevented) return; // consumido (ex.: fechou um filtro aberto)
       if (modaisAbertos[modaisAbertos.length - 1] !== idModal.current) return; // há outro modal por cima
+      // No carrossel (celular/tablet), o Esc fecha a camada À VISTA — nunca uma escondida.
+      const ativa = ativaRef.current;
+      if (ativa) {
+        const visivel = escRef.current.pilha.find((p) => p.id === ativa && p.aberto);
+        return visivel ? visivel.onClose() : escRef.current.onClose();
+      }
       if (escRef.current.principalNoTopo) return escRef.current.onClose(); // o principal está por cima
       const idUltimo = ordemRef.current[ordemRef.current.length - 1];
       const ultimo = escRef.current.pilha.find((p) => p.id === idUltimo && p.aberto);
@@ -510,97 +590,50 @@ export function Modal({
   const maxW = !isDesktop
     ? "100%"
     : `calc(${colunas.filter((c) => visiveis.has(c.id)).reduce((t, c) => t + largura(c), 0)}rem + ${visiveis.size - 1} * var(--gap-block))`;
-  /** A coluna de UM painel da pilha (montada enquanto aberta ou fechando — fecha animado). */
-  const colunaPainel = (p: ModalPainel) => {
+  const ultimoId = porAbertura[porAbertura.length - 1];
+  const ativa = focoAtual ?? ultimoId;
+  ativaRef.current = largo ? null : ativa;
+  // TODAS as colunas na ordem fixa (a mesma lista nos dois modos — o `PilhaModal` decide o desenho): o principal sempre;
+  // um painel enquanto aberto ou fechando (o desktop o anima saindo).
+  const camadas: Camada[] = colunas.map((c) => {
+    if (c.id === PRINCIPAL)
+      return {
+        id: PRINCIPAL,
+        rotulo: titulo,
+        aberta: true,
+        visivel: visiveis.has(PRINCIPAL),
+        painel: (
+          <Painel titulo={titulo} cabecalho={cabecalho} onClose={onClose} rodape={rodape} bloqueado={bloqueado} acoesCabecalho={acoesCabecalho}>
+            {children}
+          </Painel>
+        ),
+      };
+    const p = pilha.find((x) => x.id === c.id) as ModalPainel;
     const conteudo = p.aberto ? p : cache.current.get(p.id);
     const mostrar = (p.aberto || montados.has(p.id)) && conteudo;
-    return (
-      <div key={p.id} className="min-w-0 overflow-hidden" inert={!visiveis.has(p.id)}>
-        {mostrar && (
-          <Painel
-            titulo={conteudo.titulo}
-            cabecalho={conteudo.cabecalho}
-            onClose={p.onClose}
-            rodape={conteudo.rodape}
-            acoesCabecalho={conteudo.acoesCabecalho}
-            bloqueado={bloqueado}
-          >
-            {conteudo.children}
-          </Painel>
-        )}
-      </div>
-    );
-  };
-
-  // CELULAR e telas menores: os banners não cabem lado a lado — um CARROSSEL de camadas com o navegador flutuante.
-  if (!largo) {
-    const ultimoId = porAbertura[porAbertura.length - 1];
-    const ativa = focoAtual ?? ultimoId;
-    const camadas: Camada[] = colunas
-      .filter((c) => c.id === PRINCIPAL || c.aberto)
-      .map((c) => {
-        if (c.id === PRINCIPAL)
-          return {
-            id: PRINCIPAL,
-            rotulo: titulo,
-            painel: (
-              <Painel titulo={titulo} cabecalho={cabecalho} onClose={onClose} rodape={rodape} bloqueado={bloqueado} acoesCabecalho={acoesCabecalho}>
-                {children}
-              </Painel>
-            ),
-          };
-        const p = pilha.find((x) => x.id === c.id) as ModalPainel;
-        return {
-          id: p.id,
-          rotulo: p.titulo,
-          painel: (
-            <Painel titulo={p.titulo} cabecalho={p.cabecalho} onClose={p.onClose} rodape={p.rodape} acoesCabecalho={p.acoesCabecalho} bloqueado={bloqueado}>
-              {p.children}
-            </Painel>
-          ),
-        };
-      });
-    return portal(
-      <div className="modal-raiz fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
-        {scrim}
-        <div className="relative w-full sm:max-w-2xl">
-          <CamadasCelular camadas={camadas} ativa={ativa} onAtiva={(id) => setFoco({ chave: chaveFoco, id })} />
-        </div>
-      </div>,
-    );
-  }
+    return {
+      id: p.id,
+      rotulo: conteudo?.titulo ?? p.titulo,
+      aberta: p.aberto,
+      visivel: visiveis.has(p.id),
+      painel: mostrar ? (
+        <Painel titulo={conteudo.titulo} cabecalho={conteudo.cabecalho} onClose={p.onClose} rodape={conteudo.rodape} acoesCabecalho={conteudo.acoesCabecalho} bloqueado={bloqueado}>
+          {conteudo.children}
+        </Painel>
+      ) : null,
+    };
+  });
 
   return portal(
     <div className="modal-raiz fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
       {scrim}
-      <div
-        className="modal-corpo grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]"
-        style={{
-          maxWidth: maxW,
-          gridTemplateColumns: cols,
-          transition:
-            "grid-template-columns var(--motion-duration) var(--motion-ease), max-width var(--motion-duration) var(--motion-ease)",
-        }}
-        onTransitionEnd={(e) => {
-          // Transição do grid terminou: desmonta os painéis que FECHARAM (os abertos seguem montados).
-          if (e.target === e.currentTarget && e.propertyName === "grid-template-columns") desmontarFechados();
-        }}
-      >
-        {aEsquerda.map(colunaPainel)}
-        <div className="min-w-0 overflow-hidden" inert={!visiveis.has(PRINCIPAL)}>
-          <Painel
-            titulo={titulo}
-            cabecalho={cabecalho}
-            onClose={onClose}
-            rodape={rodape}
-            bloqueado={bloqueado}
-            acoesCabecalho={acoesCabecalho}
-          >
-            {children}
-          </Painel>
-        </div>
-        {direita.map(colunaPainel)}
-      </div>
+      <PilhaModal
+        camadas={camadas}
+        ativa={ativa}
+        onAtiva={(id) => setFoco({ chave: chaveFoco, id })}
+        largo={largo}
+        grid={{ cols, maxW, onFim: desmontarFechados }}
+      />
     </div>,
   );
 }

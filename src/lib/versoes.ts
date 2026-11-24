@@ -35,6 +35,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.312.1",
+    data: "2026-11-24",
+    titulo: "Camadas no celular: navegador inteiro e espaçamento padrão",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Consulta e Mesa",
+        texto:
+          "O navegador das camadas fica embaixo da folha, com abas de largura igual (tipo e número em duas linhas — nada cortado) e o espaçamento padrão entre a folha, o navegador e as bordas da tela.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "correcao",
+        area: "Consulta e Mesa",
+        texto:
+          "Escolher outro DFD ou item numa camada fora de vista agora a traz para a tela; o Esc fecha a camada que está à vista; girar o tablet não perde o que estava sendo editado; deslize na diagonal não troca de camada; o teclado navega pelas abas com as setas.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.312.0",
     data: "2026-11-24",
     titulo: "Protocolo, DFD e Item em camadas no celular",
