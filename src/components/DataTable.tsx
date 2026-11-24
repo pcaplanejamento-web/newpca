@@ -676,7 +676,10 @@ export function DataTable<R>({
     >
       <div
         ref={rolagemRef}
-        className={`overflow-x-auto overscroll-x-contain ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
+        // O eixo Y só rola por dentro com a altura cheia (`lg`). No resto, `overflow-y-hidden`: com `overflow-x-auto` o Y
+        // vira `auto` e uns px de sobra (os botões de 44px nas linhas compactas) prendiam o deslize do dedo na tabela —
+        // a página não rolava no 1º gesto.
+        className={`overflow-x-auto overflow-y-hidden overscroll-x-contain ${scrollInterno ? `lg:overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
         {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
             "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}

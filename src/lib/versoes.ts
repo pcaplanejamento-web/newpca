@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.312.4",
+    data: "2026-11-24",
+    titulo: "Tabelas no celular: rolar com o dedo sem travar",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Tabelas",
+        texto:
+          "No celular, deslizar o dedo sobre uma tabela (como a consulta de itens) rola a página já no primeiro gesto — antes a tabela prendia o movimento, a página parava e só andava no deslize seguinte. Deslizar de lado continua rolando as colunas.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.312.3",
     data: "2026-11-24",
     titulo: "Tabelas no celular: rodapé inteiro e bem fixado",
