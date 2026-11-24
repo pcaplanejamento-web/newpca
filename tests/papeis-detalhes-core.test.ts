@@ -12,6 +12,7 @@ import {
   detalhesPadrao,
   diffDetalhes,
   MODELOS_DETALHES,
+  podeDocumentoOficial,
   restringeAlgo,
   resumoDetalhes,
   SUBACOES_MESA,
@@ -169,5 +170,35 @@ describe("catálogo das colunas das Mesas", () => {
       colunasOcultaveis("protocolos").map((c) => c.chave),
       ["estado", "situacao", "data"],
     );
+  });
+});
+
+describe("habilitação do documento oficial do PCA", () => {
+  it("padrão = não; o JSON vazio continua sem restrição e sem habilitação", () => {
+    assert.equal(DETALHES_PADRAO.documentoPca.configurar, false);
+    assert.equal(coerceDetalhes({}).documentoPca.configurar, false);
+    assert.equal(coerceDetalhes({ documentoPca: { configurar: "sim" } }).documentoPca.configurar, false);
+    assert.deepEqual(compactarDetalhes(detalhesPadrao()), {});
+  });
+  it("ligada é gravada e volta igual", () => {
+    const d = { ...detalhesPadrao(), documentoPca: { configurar: true } };
+    const c = compactarDetalhes(d);
+    assert.deepEqual(c, { documentoPca: { configurar: true } });
+    assert.equal(coerceDetalhes(c).documentoPca.configurar, true);
+  });
+  it("habilitar não é restrição; desligar num papel em uso é", () => {
+    const liga = diffDetalhes({}, { documentoPca: { configurar: true } });
+    assert.equal(liga.length, 1);
+    assert.equal(liga[0].rotulo, "Configurar o documento oficial");
+    assert.equal(restringeAlgo(liga), false);
+    assert.equal(restringeAlgo(diffDetalhes({ documentoPca: { configurar: true } }, {})), true);
+    assert.equal(contarRestricoes({ documentoPca: { configurar: true } }), 0);
+    assert.deepEqual(resumoDetalhes({ documentoPca: { configurar: true } }).map((l) => l.habilita), [true]);
+  });
+  it("podeDocumentoOficial: ADM sempre; os demais só com a habilitação", () => {
+    const papel = (configurar: boolean) => ({ detalhes: { documentoPca: { configurar } } });
+    assert.equal(podeDocumentoOficial({ admin: true, papel: papel(false) }), true);
+    assert.equal(podeDocumentoOficial({ admin: false, papel: papel(false) }), false);
+    assert.equal(podeDocumentoOficial({ admin: false, papel: papel(true) }), true);
   });
 });

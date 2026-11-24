@@ -4333,8 +4333,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `onClick`) → **`EmitirDocumentoPca`** (anti-robô, `Progress` real, cancelar, baixar de novo, link da verificação).
   Verificação pública `/pca/documento/verificar[/código]` (limite `verificarDocumentoPcaIp`; autêntico · selo não confere ·
   dados do PCA atualizados depois da emissão).
-- **ADM** `GET/PUT /api/admin/pcas/[id]/documento` (`?dados=1` = os dados da prévia, sem registrar) → aba **"Documento
-  oficial"** do espaço do PCA (só `u.admin`) = **`DocumentoPcaAdmin`** (os blocos editáveis, a prévia ao vivo em
+- **Configuração** `GET/PUT /api/pca/[id]/documento/config` (`?dados=1` = os dados da prévia, sem registrar; tela PCA +
+  `recusaPca` + a habilitação) → aba **"Documento oficial"** do espaço do PCA. **Acesso (v1.314.0) = a HABILITAÇÃO DO
+  PAPEL** — Papéis → Detalhes → PCA → "Configurar o documento oficial" (`DetalhesPapel.documentoPca.configurar`, padrão
+  NÃO, gravado só quando ligado; o ADM sempre) — regra ÚNICA `podeDocumentoOficial(u)` (`papeis-detalhes-core.ts`) na
+  página, na pesquisa e na rota; a habilitação não conta como restrição (`LinhaResumoDetalhe.habilita`, selo
+  "habilitação") = **`DocumentoPcaAdmin`** (os blocos editáveis, a prévia ao vivo em
   `PreviaDocumento` — que desenha `capa`/`pagina` —, o PDF completo de prévia e as emissões).
 - **Regras da auditoria (v1.313.0):** os dados vêm SEM a prévia do PCA (`mesaMarcados` falso — o documento é só o que está
   no PCA) e o texto dos itens leva só `CAMPOS_ITEM_DOCUMENTO` (nada de protocolo nem de id interno — a resposta é pública;

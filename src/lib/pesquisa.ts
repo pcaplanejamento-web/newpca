@@ -58,6 +58,7 @@ const padroesSemAcento = (q: string) =>
     .filter(Boolean);
 import { buscarNoCalendario } from "./tarefas";
 import { escopoAtivo, quadrosDoCalendario } from "./tarefas-dados";
+import { podeDocumentoOficial } from "./papeis-detalhes-core";
 
 /**
  * PESQUISA DO SISTEMA — os dados das telas além da Mesa (orçamento, catálogo, histórico de compra, calendário e a
@@ -575,7 +576,7 @@ export async function espacosDaPesquisa(a: Acesso): Promise<EspacoPesquisa[]> {
           (v !== "importacao" || p.fonte === "lista") &&
           (v !== "documentos" || docs) &&
           (v !== "declaracoes" || acessoDeclaracoes(p.declaracoes, a.u.admin) !== "nenhum") &&
-          (v !== "documento" || a.u.admin) &&
+          (v !== "documento" || podeDocumentoOficial(a.u)) &&
           componenteLibera(a, `pca.${v}`),
       );
       if (abas.length) out.push({ tipo: "pca", id: p.id, nome: `${p.ano ?? ""} · ${p.nome}`, abas });

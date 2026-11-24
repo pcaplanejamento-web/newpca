@@ -10,14 +10,25 @@ import { Badge } from "./Badge";
 export function ResumoDetalhesPapel({ detalhes, compacto = false, vazio = "Sem restrições" }: { detalhes: unknown; compacto?: boolean; vazio?: string }) {
   const linhas = resumoDetalhes(detalhes);
   if (linhas.length === 0) return <span className="text-[12.5px] text-faint">{vazio}</span>;
-  if (compacto)
+  if (compacto) {
+    // As habilitações (ex.: o documento oficial do PCA) dão acesso — contam à parte, nunca como restrição.
+    const restricoes = linhas.filter((l) => !l.habilita).length;
+    const habilitacoes = linhas.length - restricoes;
     return (
-      <span title={textoResumoDetalhes(detalhes)}>
-        <Badge tone="amber">
-          {linhas.length} {linhas.length === 1 ? "restrição" : "restrições"}
-        </Badge>
+      <span title={textoResumoDetalhes(detalhes)} className="inline-flex flex-wrap gap-1">
+        {restricoes > 0 && (
+          <Badge tone="amber">
+            {restricoes} {restricoes === 1 ? "restrição" : "restrições"}
+          </Badge>
+        )}
+        {habilitacoes > 0 && (
+          <Badge tone="emerald">
+            {habilitacoes} {habilitacoes === 1 ? "habilitação" : "habilitações"}
+          </Badge>
+        )}
       </span>
     );
+  }
   const grupos = new Map<GrupoDetalhe, LinhaResumoDetalhe[]>();
   for (const l of linhas) grupos.set(l.grupo, [...(grupos.get(l.grupo) ?? []), l]);
   return (

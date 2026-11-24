@@ -154,7 +154,7 @@ export function DocumentoPcaAdmin({
     setSalvando(true);
     const enviado = textoConfig(cfg);
     try {
-      const res = await fetch(`/api/admin/pcas/${pca.id}/documento`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: enviado });
+      const res = await fetch(`/api/pca/${pca.id}/documento/config`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: enviado });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigDocumentoPca };
       if (!res.ok || !j.ok || !j.config) throw new Error(j.error ?? "Não foi possível salvar.");
       const c = lerConfigDocumento(j.config);
@@ -173,7 +173,7 @@ export function DocumentoPcaAdmin({
   const carregarDados = async (): Promise<PacoteDocumento["dados"] | null> => {
     setCarregando(true);
     try {
-      const res = await fetch(`/api/admin/pcas/${pca.id}/documento?dados=1`, { cache: "no-store" });
+      const res = await fetch(`/api/pca/${pca.id}/documento/config?dados=1`, { cache: "no-store" });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; dados?: PacoteDocumento["dados"] };
       if (!res.ok || !j.ok || !j.dados) throw new Error(j.error ?? "Não foi possível carregar os dados do PCA.");
       setDados(j.dados);

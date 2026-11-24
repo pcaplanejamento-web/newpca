@@ -234,6 +234,9 @@ export type DetalhesPapel = {
   presenca: { verOnline: boolean; visivel: boolean };
   /** NOVIDADES do sistema: a versão no menu, o banner das Novidades e o aviso de nova versão no sino. */
   novidades: { ver: boolean };
+  /** DOCUMENTO OFICIAL do PCA: `configurar` = abre a aba Documento oficial e altera a configuração (padrão NÃO — a
+   * habilitação é dada pelo ADM no papel; o Administrador sempre tem). */
+  documentoPca: { configurar: boolean };
 };
 
 const todas = <K extends string>(chaves: readonly K[], v: boolean) => Object.fromEntries(chaves.map((k) => [k, v])) as Record<K, boolean>;
@@ -257,6 +260,7 @@ export function detalhesPadrao(): DetalhesPapel {
     exibicao: { vinculosExpandidos: false },
     presenca: { verOnline: true, visivel: true },
     novidades: { ver: true },
+    documentoPca: { configurar: false },
   };
 }
 export const DETALHES_PADRAO: DetalhesPapel = detalhesPadrao();
@@ -320,7 +324,7 @@ export function coerceDetalhes(bruto: unknown): DetalhesPapel {
     const personalizar = bool(et.personalizar, true);
     edicoes[t] = { personalizar, publicar: personalizar && bool(et.publicar, true), moderar: personalizar && bool(et.moderar, true) };
   }
-  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes), exibicao: { vinculosExpandidos: bool(obj(o.exibicao).vinculosExpandidos, false) }, presenca: { verOnline: bool(obj(o.presenca).verOnline, true), visivel: bool(obj(o.presenca).visivel, true) }, novidades: { ver: bool(obj(o.novidades).ver, true) } };
+  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes), exibicao: { vinculosExpandidos: bool(obj(o.exibicao).vinculosExpandidos, false) }, presenca: { verOnline: bool(obj(o.presenca).verOnline, true), visivel: bool(obj(o.presenca).visivel, true) }, novidades: { ver: bool(obj(o.novidades).ver, true) }, documentoPca: { configurar: bool(obj(o.documentoPca).configurar, false) } };
 }
 
 /** A coluna está oculta nos detalhes (só as ocultáveis da lista — as de controle próprio seguem o controle). */
@@ -371,6 +375,7 @@ export function compactarDetalhes(bruto: DetalhesPapel): Record<string, unknown>
   if (!d.presenca.verOnline || !d.presenca.visivel)
     out.presenca = { ...(d.presenca.verOnline ? {} : { verOnline: false }), ...(d.presenca.visivel ? {} : { visivel: false }) };
   if (!d.novidades.ver) out.novidades = { ver: false };
+  if (d.documentoPca.configurar) out.documentoPca = { configurar: true };
   return out;
 }
 
@@ -387,7 +392,7 @@ export function detalhesDoJson(json: string | null | undefined): DetalhesPapel {
 // Cada detalhe como uma LINHA (rótulo + valor + quanto libera) — a comparação, o resumo e a auditoria saem daqui.
 // ---------------------------------------------------------------------------------------------------------------
 
-export type GrupoDetalhe = "Mesa" | "Mesa do PCA" | "Orçamento" | "Tarefas" | "Presença" | "Novidades" | "Componentes";
+export type GrupoDetalhe = "Mesa" | "Mesa do PCA" | "Orçamento" | "Tarefas" | "Presença" | "Novidades" | "PCA" | "Componentes";
 
 type ItemDetalhe = {
   id: string;
@@ -498,6 +503,13 @@ function itensDetalhe(): ItemDetalhe[] {
     valor: (d) => simNao(d.novidades.ver, "Permitido", "Não"),
     nivel: (d) => +d.novidades.ver,
   });
+  out.push({
+    id: "documentoPca.configurar",
+    grupo: "PCA",
+    rotulo: "Configurar o documento oficial",
+    valor: (d) => simNao(d.documentoPca.configurar, "Permitido", "Não"),
+    nivel: (d) => +d.documentoPca.configurar,
+  });
   for (const x of CATALOGO_COMPONENTES)
     for (const a of acoesDoComponente(x))
       out.push({
@@ -542,7 +554,8 @@ export function textoDiffDetalhes(diff: readonly DiffDetalhe[]): string {
 /** Alguma mudança RETIRA acesso? (a tela avisa antes de gravar num papel em uso) */
 export const restringeAlgo = (diff: readonly DiffDetalhe[]) => diff.some((d) => d.restringe);
 
-export type LinhaResumoDetalhe = { grupo: GrupoDetalhe; rotulo: string; valor: string };
+/** `habilita` = o desvio DÁ acesso (ex.: o documento oficial do PCA) — aparece no resumo, mas não conta como restrição. */
+export type LinhaResumoDetalhe = { grupo: GrupoDetalhe; rotulo: string; valor: string; habilita?: true };
 
 /** Os DESVIOS do padrão (as restrições do papel), para o resumo ("Ver acesso", Perfil, lista de papéis). Vazio = sem
  * restrições. As colunas ocultas de uma tabela saem numa linha só. */
@@ -552,7 +565,7 @@ export function resumoDetalhes(bruto: unknown): LinhaResumoDetalhe[] {
   const out: LinhaResumoDetalhe[] = [];
   for (const i of itens()) {
     if (i.id.startsWith("mesa.colunas.") || i.id.startsWith("componentes.") || i.id.startsWith("exibicao.")) continue;
-    if (i.valor(d) !== i.valor(p)) out.push({ grupo: i.grupo, rotulo: i.rotulo, valor: i.valor(d) });
+    if (i.valor(d) !== i.valor(p)) out.push({ grupo: i.grupo, rotulo: i.rotulo, valor: i.valor(d), ...(i.nivel(d) > i.nivel(p) ? { habilita: true as const } : {}) });
   }
   for (const t of TABELAS_MESA) {
     const ocultas = d.mesa.colunasOcultas[t];
@@ -568,7 +581,7 @@ export function resumoDetalhes(bruto: unknown): LinhaResumoDetalhe[] {
 }
 
 /** Quantas restrições o papel tem (o "Detalhes (N)" do editor). */
-export const contarRestricoes = (bruto: unknown) => resumoDetalhes(bruto).length;
+export const contarRestricoes = (bruto: unknown) => resumoDetalhes(bruto).filter((l) => !l.habilita).length;
 
 /** Numa linha: "Sem restrições" ou "Mesa: Responsável Oculto; Linhas Só os meus · Tarefas: Histórico Sem autores". */
 export function textoResumoDetalhes(bruto: unknown): string {
@@ -595,3 +608,8 @@ export const MODELOS_DETALHES: readonly { id: string; nome: string; descricao: s
     detalhes: coerceDetalhes({ mesa: { linhas: "meus", responsavel: { alterar: "si" } } }),
   },
 ];
+
+/** A pessoa abre a aba Documento oficial do PCA e altera a configuração — o ponto ÚNICO da regra (página, pesquisa e
+ * rota): o Administrador sempre; os demais só com o papel habilitado (`documentoPca.configurar`). */
+export const podeDocumentoOficial = (u: { admin: boolean; papel: { detalhes: Pick<DetalhesPapel, "documentoPca"> } }): boolean =>
+  u.admin || u.papel.detalhes.documentoPca.configurar;

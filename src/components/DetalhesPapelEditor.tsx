@@ -236,6 +236,26 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
         </div>
       </section>
 
+      <section aria-labelledby="det-pca" className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <h4 id="det-pca" className="text-[14px] font-bold text-text">
+          PCA
+        </h4>
+        <div className="divide-y divide-border">
+          <Linha
+            titulo="Configurar o documento oficial"
+            ajuda="A aba Documento oficial do espaço do PCA: ligar a emissão pública do PCA em PDF, as seções, os textos, os dados automáticos e as assinaturas, e ver as emissões. Vale nos PCAs que o grupo da pessoa acessa. Padrão: não — só quem tiver esta habilitação. O Administrador sempre tem."
+            alterado={v.documentoPca.configurar !== o.documentoPca.configurar}
+          >
+            <Switch
+              checked={v.documentoPca.configurar}
+              disabled={so}
+              onChange={(configurar) => onChange?.({ ...v, documentoPca: { configurar } })}
+              label={v.documentoPca.configurar ? "Permitido" : "Não"}
+            />
+          </Linha>
+        </div>
+      </section>
+
       <SecaoComponentes valor={v} original={o} onChange={onChange} />
 
       {m.linhas === "meus" && (m.responsavel.alterar === "grupo" || !m.responsavel.ver) && (

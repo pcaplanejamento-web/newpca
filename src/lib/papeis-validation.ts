@@ -43,6 +43,8 @@ export const detalhesPapelSchema = z
     /** Ver quem está online (a presença do grupo). */
     presenca: z.object({ verOnline: z.boolean().optional(), visivel: z.boolean().optional() }).optional(),
     novidades: z.object({ ver: z.boolean().optional() }).optional(),
+    /** A habilitação para o documento oficial do PCA (padrão não). */
+    documentoPca: z.object({ configurar: z.boolean().optional() }).optional(),
   })
   .transform(coerceDetalhes);
 

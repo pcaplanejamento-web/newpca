@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.314.0",
+    data: "2026-11-24",
+    titulo: "Documento oficial do PCA pela habilitação do papel",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Papéis",
+        texto: "Nos Detalhes do papel, a seção PCA traz “Configurar o documento oficial”: só os papéis habilitados abrem a aba Documento oficial do PCA e alteram a configuração (o Administrador sempre).",
+        link: "/painel/configuracoes?aba=papeis",
+      },
+    ],
+  },
+  {
     versao: "1.313.0",
     data: "2026-11-24",
     titulo: "Documento oficial do PCA, emitido por qualquer pessoa na tela inicial",

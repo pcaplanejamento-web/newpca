@@ -24,6 +24,7 @@ import { itensDeclaraveis, listarDeclaracoes } from "@/lib/declaracoes";
 import { getConfigDocumento, listarEmissoes } from "@/lib/pca-documento";
 import { DocumentoPcaAdmin } from "@/components/DocumentoPcaAdmin";
 import { acessoDeclaracoes } from "@/lib/declaracoes-core";
+import { podeDocumentoOficial } from "@/lib/papeis-detalhes-core";
 import { listarDocumentos } from "@/lib/documentos";
 import { documentoNoPca } from "@/lib/documentos-core";
 import { pcasDosDocumentos } from "@/lib/documentos-pagina";
@@ -79,8 +80,8 @@ export default async function PcaEspacoPage({
   const permitidas = ABAS.filter(
     (a) => (a !== "importacao" || pca.fonte === "lista") && (a !== "documentos" || podeTela(acesso, "documentos").visualizar) &&
       (a !== "declaracoes" || acessoDeclaracoes(pca.declaracoes, u.admin) !== "nenhum") &&
-      // O DOCUMENTO OFICIAL (a emissão pública) é controlado só pelo ADM.
-      (a !== "documento" || u.admin) &&
+      // O DOCUMENTO OFICIAL (a emissão pública): só com a habilitação do papel (o ADM sempre).
+      (a !== "documento" || podeDocumentoOficial(u)) &&
       componenteLibera(acesso, `pca.${a}`),
   );
   const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
@@ -148,7 +149,7 @@ async function ConteudoPca({
       />
     );
   } else if (aba === "declaracoes") conteudo = await abaDeclaracoes(pca, acesso, pode);
-  else if (aba === "documento" && u.admin) {
+  else if (aba === "documento" && podeDocumentoOficial(u)) {
     const [config, emissoes] = await Promise.all([getConfigDocumento(pca.id), listarEmissoes(pca.id)]);
     conteudo = (
       <DocumentoPcaAdmin
