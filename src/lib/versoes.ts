@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.310.0",
+    data: "2026-11-24",
+    titulo: "Ordenar pela seta do cabeçalho",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Tabelas",
+        texto: "Em todas as tabelas, a seta ao lado do nome da coluna ordena com um toque — crescente ou decrescente, por número ou em ordem alfabética. Ao lado dela fica o filtro da coluna (o nome também abre o filtro).",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.309.2",
     data: "2026-11-24",
     titulo: "Copiar os planejamentos dos DFDs apontados",

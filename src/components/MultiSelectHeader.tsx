@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { colarNaBusca, combinarBusca, marcadasDaBusca, opcoesDaBusca, termosSemResultado, textoColado } from "@/lib/tabela-filtros";
-import { Dropdown } from "./Dropdown";
-import { GatilhoFiltro } from "./GatilhoFiltro";
+import { CabecalhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
 
 // Filtro de cabeçalho de tabela (spec do usuário): ordenar (crescente/decrescente)
@@ -48,14 +47,7 @@ export function MultiSelectHeader({
   const filtrado = marcado ?? (value.length > 0 && !options.every((o) => value.includes(o)));
 
   return (
-    <Dropdown
-      align={align}
-      ariaLabel={`Filtrar ${label}`}
-      triggerClassName="w-full gap-1.5 px-1 py-2 min-h-11 desktop:min-h-0"
-      panelClassName="p-0"
-      width={detalhe ? 340 : 280}
-      trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={filtrado} />}
-    >
+    <CabecalhoFiltro label={label} sortDir={sortDir} onSort={onSort} marcado={filtrado} align={align} panelClassName="p-0" width={detalhe ? 340 : 280}>
       {(close) => (
         <Painel
           label={label}
@@ -71,7 +63,7 @@ export function MultiSelectHeader({
           onSort={onSort ? (d) => { onSort(d); close(); } : undefined}
         />
       )}
-    </Dropdown>
+    </CabecalhoFiltro>
   );
 }
 

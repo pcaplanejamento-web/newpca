@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { intervaloDoPeriodo, PERIODO_TODO, type Periodo } from "@/lib/periodo";
 import type { IntervaloData } from "@/lib/tabela-filtros";
-import { Dropdown } from "./Dropdown";
-import { GatilhoFiltro } from "./GatilhoFiltro";
+import { CabecalhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
 import { PECA_LIVRE, PECA_PERIODO, PeriodoCorpo } from "./PeriodoPicker";
 
@@ -46,14 +45,7 @@ export function DateFilterHeader({
   const btn = `${PECA_PERIODO} ${PECA_LIVRE}`;
 
   return (
-    <Dropdown
-      align={align}
-      ariaLabel={`Filtrar ${label}`}
-      papel="dialog"
-      triggerClassName="w-full gap-1.5 px-1 py-2 min-h-11 desktop:min-h-0"
-      width={320}
-      trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={ativo} />}
-    >
+    <CabecalhoFiltro label={label} sortDir={sortDir} onSort={onSort} marcado={ativo} align={align} papel="dialog" width={320}>
       {(close, { teclado }) => (
         <div className="w-full">
           {onSort && (
@@ -98,6 +90,6 @@ export function DateFilterHeader({
           />
         </div>
       )}
-    </Dropdown>
+    </CabecalhoFiltro>
   );
 }

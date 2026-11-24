@@ -142,7 +142,8 @@ export function Dropdown({
       // Os AVISOS FLUTUANTES (a confirmação, o "Desfazer") e as JANELAS FLUTUANTES abertas a partir do painel (ex.: as
       // Novidades ao lado do sino) nascem de dentro dele: tocá-los não o fecha.
       if ((t as Element).closest?.(".avisos-flutuantes, [data-sobre-dropdown]")) return;
-      if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
+      // A ÂNCORA também é "dentro" (ex.: o rótulo da coluna que abre o mesmo filtro — tocar nele não fecha e reabre).
+      if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t) && !ancora?.current?.contains(t)) setOpen(false);
     };
     // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora. O
     // foco volta ao gatilho AQUI (`fechar`): o painel é desmontado antes de qualquer `onKeyDown` do conteúdo rodar (a

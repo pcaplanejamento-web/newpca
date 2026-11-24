@@ -5758,6 +5758,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
   com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
   montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
+- **CABEÇALHO DE COLUNA = rótulo · SETA · filtro (v1.310.0):** `CabecalhoFiltro` (`GatilhoFiltro.tsx`, DS) é o cabeçalho
+  dos três filtros da `DataTable` (`MultiSelectHeader`, `RangeFilterHeader`, `DateFilterHeader`): a SETA é um botão próprio
+  (↕ esmaecida sem ordem; tocar alterna crescente ⇄ decrescente pelo `onSort`) e o rótulo e o "⌄"/funil abrem o painel do
+  filtro (o `Dropdown` controlado com `ancora` = o cabeçalho inteiro; o toque dentro da `ancora` não conta como "fora").
 - **AJUDA + CONFIGURAÇÕES por automação (v1.39.0, migração `0094` — `automacao_fluxos.ajuda` JSON `{funciona, executa,
   resultado}`, `lerAjudaFluxo`/`MAX_AJUDA` em `fluxo-core.ts`):** cada modelo de `fluxo-modelos.ts` traz a `ajuda` (criar e
   "Atualizar pelo modelo" gravam; fluxo sem ajuda mostra a do modelo de mesmo nome). No `EditorFluxo` a barra é SÓ de ícones

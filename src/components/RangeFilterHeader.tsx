@@ -4,9 +4,8 @@ import { useState } from "react";
 import { brl } from "@/lib/format";
 import { parseNumberBR } from "@/lib/normalize";
 import { contarNaFaixa, type FaixaValor, indiceNoDominio, normalizarFaixa } from "@/lib/tabela-filtros";
-import { Dropdown } from "./Dropdown";
 import { Checkbox } from "./Field";
-import { GatilhoFiltro } from "./GatilhoFiltro";
+import { CabecalhoFiltro } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
 
 /**
@@ -41,14 +40,7 @@ export function RangeFilterHeader({
   formatar?: (n: number) => string;
 }) {
   return (
-    <Dropdown
-      align={align}
-      ariaLabel={`Filtrar ${label}`}
-      triggerClassName="w-full gap-1.5 px-1 py-2 min-h-11 desktop:min-h-0"
-      panelClassName="p-0"
-      width={312}
-      trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={marcado} />}
-    >
+    <CabecalhoFiltro label={label} sortDir={sortDir} onSort={onSort} marcado={marcado} align={align} panelClassName="p-0" width={312}>
       {(close) => (
         <PainelFaixa
           dominio={dominio}
@@ -69,7 +61,7 @@ export function RangeFilterHeader({
           }
         />
       )}
-    </Dropdown>
+    </CabecalhoFiltro>
   );
 }
 

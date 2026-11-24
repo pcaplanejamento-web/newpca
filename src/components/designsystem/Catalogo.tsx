@@ -108,7 +108,7 @@ import { SeletorCelula } from "@/components/SeletorCelula";
 import { SeletorFiltro } from "@/components/SeletorFiltro";
 import { SeletorMesa } from "@/components/SeletorMesa";
 import { CarregandoLink, IconeNavegacao } from "@/components/CarregandoLink";
-import { GatilhoFiltro } from "@/components/GatilhoFiltro";
+import { CabecalhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
 import { DfdRodape } from "@/components/DfdRodape";
@@ -4410,12 +4410,16 @@ export function Catalogo() {
           <PeriodoPicker anos={[2027, 2026, 2025]} value={periodoDemo} onChange={setPeriodoDemo} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-4">
-          {/* Gatilho comum dos 3 filtros: coluna FILTRADA = tópico MARCADO (accent + funil). */}
+          {/* Cabeçalho comum dos 3 filtros: rótulo · seta de ordenar (clicável) · filtro; FILTRADA = accent + funil. */}
           <div className="w-40">
-            <GatilhoFiltro label="Unidade" />
+            <CabecalhoFiltro label="Unidade" onSort={(d) => toast(`Ordenar: ${d === "asc" ? "crescente" : "decrescente"}`)}>
+              {() => <p className="p-2 text-[12px] text-muted">Painel do filtro</p>}
+            </CabecalhoFiltro>
           </div>
           <div className="w-40">
-            <GatilhoFiltro label="Estado" sortDir="asc" marcado />
+            <CabecalhoFiltro label="Estado" sortDir="asc" marcado onSort={(d) => toast(`Ordenar: ${d === "asc" ? "crescente" : "decrescente"}`)}>
+              {() => <p className="p-2 text-[12px] text-muted">Painel do filtro</p>}
+            </CabecalhoFiltro>
           </div>
           <span className="text-[12px] text-faint">
             {faixaDemo ? `Faixa: ${faixaDemo.min != null ? brl(faixaDemo.min) : "…"} a ${faixaDemo.max != null ? brl(faixaDemo.max) : "…"}` : "Valor cheio (sem faixa)"}
