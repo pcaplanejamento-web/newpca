@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.311.1",
+    data: "2026-11-24",
+    titulo: "Fechar deslizando sem saltos",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Celular",
+        texto: "Ao soltar o menu lateral ou uma folha arrastados, eles saem a partir de onde o dedo deixou (antes voltavam ao lugar por um instante).",
+        link: "/",
+      },
+      {
+        tipo: "correcao",
+        area: "Página pública",
+        texto: "Os banners da consulta (item, DFD, protocolo) descem ao fechar — pelo X, pelo Esc ou deslizando — em vez de sumir de uma vez.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.311.0",
     data: "2026-11-24",
     titulo: "Página pública no celular + fechar deslizando",

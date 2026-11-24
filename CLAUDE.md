@@ -6108,7 +6108,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     navegador cancelava o gesto), o deslocamento pela propriedade `translate` (as animações de entrada usam `transform`
     com `both` e venceriam). `baixo` = só pela ALÇA `[data-alca-fechar]` com `touch-none` (o `Modal` no celular — `midia`
     até 640px — e a folha do `Dropdown`); `esquerda` = a gaveta inteira (`touch-pan-y`). Fecha com 30% ou peteleco; senão
-    volta com mola. Folha/gaveta nova = este hook.
+    volta com mola; fechando, o `translate` FICA até desmontar (a saída parte de onde o dedo deixou). Folha/gaveta nova = este hook. O host mantém o último conteúdo durante a saída do `Modal` (`open={…}` em vez de desmontar — `BannersConsulta`).
   - **`--nav-inferior`** (`globals.css`): a altura da `BottomNav` (4rem só quando ela existe — `html:has(nav[data-nav-inferior])`);
     o que gruda/flutua no fim do display (rodapé das tabelas, `BarraSelecao`, avisos) usa a variável, nunca `4rem` fixo.
   - Campo com tamanho de fonte `!text-[…]` abaixo de 16px leva `pointer-coarse:!text-[16px]` (o `!important` de camada

@@ -30,6 +30,7 @@ export function useArrastoFechar(ref: RefObject<HTMLElement | null>, { direcao, 
     let arrastando = false;
     let ultimo = { d: 0, t: 0 };
     let velocidade = 0;
+    let fechou = false;
 
     /** Algum ancestral (até o painel) rola de lado? Então o arrasto horizontal é dele. */
     const roladorOcupado = (alvo: Element | null): boolean => {
@@ -110,7 +111,10 @@ export function useArrastoFechar(ref: RefObject<HTMLElement | null>, { direcao, 
       if (e.cancelable) e.preventDefault();
       const tamanho = vertical ? el.offsetHeight : el.offsetWidth;
       if (e.type === "touchend" && deveFechar(ultimo.d, tamanho, velocidade)) {
-        // A saída animada padrão (useSaida) desce/desliza A PARTIR de onde o dedo deixou (o `translate` fica até desmontar).
+        // A saída animada padrão (useSaida) desce/desliza A PARTIR de onde o dedo deixou (o `translate` fica até desmontar
+        // — a limpeza do efeito, que roda quando o painel deixa de estar aberto, não o tira: senão ele voltava ao lugar
+        // por um quadro antes de sair).
+        fechou = true;
         fecharRef.current?.();
         return;
       }
@@ -126,7 +130,7 @@ export function useArrastoFechar(ref: RefObject<HTMLElement | null>, { direcao, 
       window.removeEventListener("touchmove", move);
       window.removeEventListener("touchend", up);
       window.removeEventListener("touchcancel", up);
-      limpar();
+      if (!fechou) limpar();
     };
   }, [ref, direcao, temFechar, ativo, midia]);
 }

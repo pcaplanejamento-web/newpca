@@ -89,12 +89,15 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
 
   useEffect(() => {
     limparTimer();
-    setRaiz(abrir?.tipo ?? null);
+    // Fechado: o último conteúdo fica para a SAÍDA animada do Modal (o banner desce em vez de sumir) — o próximo `abrir`
+    // refaz tudo.
+    if (!abrir) return;
+    setRaiz(abrir.tipo);
     setVerDfd(false);
     setHist(null);
-    setProtoId(abrir?.tipo === "protocolo" ? abrir.id : null);
-    setDfdId(abrir?.tipo === "dfd" ? abrir.id : abrir?.tipo === "item" ? abrir.dfdId : null);
-    setItemId(abrir?.tipo === "item" ? abrir.itemId : null);
+    setProtoId(abrir.tipo === "protocolo" ? abrir.id : null);
+    setDfdId(abrir.tipo === "dfd" ? abrir.id : abrir.tipo === "item" ? abrir.dfdId : null);
+    setItemId(abrir.tipo === "item" ? abrir.itemId : null);
   }, [abrir, limparTimer]);
   useEffect(() => limparTimer, [limparTimer]);
 
@@ -301,7 +304,7 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
 
   return (
     <Modal
-      open
+      open={abrir != null}
       onClose={onFechar}
       larguraPrincipal={largura}
       esquerda={esquerda}
