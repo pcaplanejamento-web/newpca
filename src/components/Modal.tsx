@@ -246,16 +246,17 @@ function PilhaModal({
   return (
     <div
       className={`modal-corpo flex w-full flex-col ${largo ? "" : "sm:max-w-2xl"} ${variasCamadas ? "h-[92dvh] gap-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))]" : ""}`}
+      // No desktop a LARGURA é a das colunas à vista (no próprio invólucro): o clique ao lado dos banners cai no fundo e fecha.
+      style={largo ? { maxWidth: grid.maxW, transition: "max-width var(--motion-duration) var(--motion-ease)" } : undefined}
     >
       <div ref={trilho} className={`w-full ${largo ? "" : "touch-pan-y overflow-hidden"} ${variasCamadas ? "min-h-0 flex-1" : ""}`}>
         <div
-          className={largo ? "mx-auto grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]" : `flex ${variasCamadas ? "h-full" : "items-end"}`}
+          className={largo ? "grid w-full items-end gap-0 sm:items-start sm:gap-[var(--gap-block)]" : `flex ${variasCamadas ? "h-full" : "items-end"}`}
           style={
             largo
               ? {
-                  maxWidth: grid.maxW,
                   gridTemplateColumns: grid.cols,
-                  transition: "grid-template-columns var(--motion-duration) var(--motion-ease), max-width var(--motion-duration) var(--motion-ease)",
+                  transition: "grid-template-columns var(--motion-duration) var(--motion-ease)",
                 }
               : {
                   transform: `translate3d(calc(${-idx * 100}% + ${arrasto ?? 0}px), 0, 0)`,
