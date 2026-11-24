@@ -152,21 +152,27 @@ export function ConsultaPca({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {/* UMA linha: as abas + a busca da aba + o fim (na altura padrão dos controles). */}
+      {/* UMA linha: as abas + a busca da aba + o fim (na altura padrão dos controles). No celular, rótulos curtos — o (?)
+          fica na MESMA linha das abas, sem uma linha vazia só para ele. */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* No celular, abas + (?) numa linha só (a faixa das abas rola de lado); a partir do `sm` o grupo some
+            (`contents`) e o (?) volta ao fim da linha, depois da busca. */}
+        <div className="flex w-full min-w-0 items-center gap-2 sm:contents">
         <Segmented<Visao>
+          className="min-w-0"
           value={visao}
           onChange={setVisao}
           ariaLabel="Visão da consulta"
           options={[
-            { value: "protocolos", label: `Protocolos (${protocolos.length})` },
+            { value: "protocolos", label: `Protocolos (${protocolos.length})`, curto: `Protoc. (${protocolos.length})` },
             { value: "dfds", label: `DFDs (${dfds.length})` },
             { value: "itens", label: `Itens (${itens.length})` },
-            ...(foraDaSoma.length ? [{ value: "fora" as const, label: `Fora da soma (${foraDaSoma.length})` }] : []),
+            ...(foraDaSoma.length ? [{ value: "fora" as const, label: `Fora da soma (${foraDaSoma.length})`, curto: `Fora (${foraDaSoma.length})` }] : []),
           ]}
         />
+        {fim && <div className="ml-auto flex shrink-0 items-center gap-2 sm:order-last">{fim}</div>}
+        </div>
         {!semBusca && <BuscaItens valor={busca} onMudar={setBusca} placeholder={visao === "itens" ? undefined : BUSCA_DA_ABA[visao]} />}
-        {fim && <div className="ml-auto flex shrink-0 items-center gap-2">{fim}</div>}
       </div>
       <div key={visao} className="animate-cat-morph">
         {visao === "itens" ? (

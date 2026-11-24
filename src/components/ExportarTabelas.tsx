@@ -25,7 +25,7 @@ export type FormatoExportacao = "xlsx" | "pdf";
 /**
  * Os botões de EXPORTAR do RODAPÉ das tabelas (`DataTable`, tabela cruzada): **XLSX** e **PDF** lado a lado — as linhas
  * filtradas, com as colunas à vista. `nome` entra no nome acessível; `carregando` = o formato sendo gerado (os dois
- * travam). Compactos (`size="sm"`): 44px no celular.
+ * travam). Compactos (`size="sm"`): 44px no celular, só o ícone abaixo do `sm`.
  */
 export function BotaoExportar({
   nome,
@@ -48,8 +48,10 @@ export function BotaoExportar({
       icon={formato === "pdf" ? <IconFile className="h-4 w-4" /> : <IconDownload className="h-4 w-4" />}
       aria-label={`Baixar ${nome} em ${rotulo}`}
       title={dica}
+      className="max-sm:w-11 max-sm:px-0"
     >
-      {rotulo}
+      {/* No celular, só o ícone (o rótulo fica para o leitor de tela): o rodapé da tabela cabe numa linha. */}
+      <span className="max-sm:sr-only">{rotulo}</span>
     </Button>
   );
   return (

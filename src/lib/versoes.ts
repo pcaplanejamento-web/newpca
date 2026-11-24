@@ -35,6 +35,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.312.3",
+    data: "2026-11-24",
+    titulo: "Tabelas no celular: rodapé inteiro e bem fixado",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Tabelas",
+        texto:
+          "No celular, o rodapé das tabelas cabe inteiro: XLSX e PDF ficam só com o ícone e, se ainda faltar espaço, os controles descem para a linha de baixo — a paginação não sai mais cortada. Preso ao fim da tela, o rodapé ganha os cantos arredondados e uma sombra.",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "correcao",
+        area: "Consulta pública",
+        texto: "Na consulta de itens, o botão de ajuda fica na mesma linha das abas Protocolos · DFDs · Itens, sem uma linha vazia só para ele.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.312.2",
     data: "2026-11-24",
     titulo: "Banners no celular: um só componente do início ao fim",

@@ -924,15 +924,18 @@ export function DataTable<R>({
         className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted ${
           // Rolagem interna no CELULAR (a página rola): o rodapé — resumo, ações (ex.: "Importar"), linhas e paginação —
           // GRUDA acima da navegação inferior (e da barra de seleção fixa, `--reserva-rodape`) enquanto a tabela está na tela.
-          scrollInterno || rodapeGrudado ? "max-lg:sticky max-lg:bottom-[calc(var(--nav-inferior)_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
+          scrollInterno || rodapeGrudado
+            ? "max-lg:sticky max-lg:bottom-[calc(var(--nav-inferior)_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10 max-lg:rounded-b-card max-lg:shadow-[0_-6px_14px_-10px_rgb(0_0_0/0.35)]"
+            : ""
         }`}
       >
         <span>
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
         {/* Os CONTROLES numa linha só, alinhados: o que não cabe rola de lado (a rolagem nativa; os painéis abrem por portal,
-            nada é cortado). O respiro de 2px guarda o anel de foco. */}
-        <div className="-mx-0.5 -my-1 flex min-w-0 max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain px-0.5 py-1 sm:gap-3 [&>*]:shrink-0">
+            nada é cortado). No CELULAR quebram de linha em vez de rolar — nada fica fora da tela. O respiro de 2px guarda o
+            anel de foco. */}
+        <div className="-mx-0.5 -my-1 flex min-w-0 max-w-full items-center gap-2 px-0.5 py-1 max-sm:ml-auto max-sm:flex-wrap max-sm:justify-end max-sm:gap-1 sm:gap-3 sm:overflow-x-auto sm:overscroll-x-contain [&>*]:shrink-0">
           {/* Com visões salvas, os filtros das colunas ficam no PainelFiltros — aqui só os de fora (o Recorte da Mesa). */}
           {(edicoes ? 0 : ativos.length) + (filtrosRodape?.n ?? 0) > 0 && (
             <FiltrosAtivos
