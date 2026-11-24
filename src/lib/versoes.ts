@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.309.2",
+    data: "2026-11-24",
+    titulo: "Copiar os planejamentos dos DFDs apontados",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Na Análise de uma automação, a tabela de Apontamentos mostra o nº de planejamento de cada DFD (com o botão de copiar) e permite selecionar os apontamentos e copiar os planejamentos de uma vez (\"1199:293:349\", sem repetir) — também todos os filtrados, ex.: só os de Erro.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.309.1",
     data: "2026-11-23",
     titulo: "O DFD emitido pela automação igual ao da tela da Centi",

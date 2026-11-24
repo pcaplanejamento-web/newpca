@@ -5,14 +5,17 @@ import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type Passo
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { aberturaDoItem, tipoDosItens } from "@/lib/fluxo-tipo-item";
 import { contagemDfds } from "@/lib/automacao-dfds-estado";
-import { dataHoraBR } from "@/lib/format";
+import { textoPlanejamentos } from "@/lib/dfd-tratamento";
+import { dataHoraBR, num } from "@/lib/format";
 import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { FOLGA, useAlturaTela } from "../AlturaCheia";
 import { Badge, type Tone } from "../Badge";
+import { BarraSelecao } from "../BarraSelecao";
 import { BotaoCopiar } from "../BotaoCopiar";
 import { IconRefresh } from "../icons";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
+import { colunaPlanejamento } from "../PlanilhaDfds";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
 import { ListaMensagens, PainelSelo, SeloComPainel } from "../SeloComPainel";
@@ -42,7 +45,11 @@ const ANALISE = "__analise";
 /** As etapas na ORDEM do fluxo (da esquerda para a direita, de cima para baixo), sem o Início. */
 const etapasDoGrafo = (g: Grafo): NoFluxo[] => g.nos.filter((n) => n.tipo !== "gatilho.inicio").sort((a, b) => a.x - b.x || a.y - b.y);
 
-type Apontado = { nivel: string; mensagem: string; item: string };
+type Apontado = { key: number; nivel: string; mensagem: string; item: string; planejamento: string };
+
+/** O nº de planejamento do item apontado — a MESMA regra do `rotuloItem`: a linha do Baixar/anexar DFDs (o `id` é o
+ * planejamento) ou o DFD (`planejamento`). Outro item (ex.: protocolo) = "". */
+const planejamentoDoApontado = (it: Item): string => ("estado" in it && "dfd" in it && "grupo" in it ? s(it.id) : s(it.planejamento)).trim();
 type Processado = { chave: string; item: string; orgao: string; estado: { rotulo: string; tom: Tone; texto: string } };
 
 /**
@@ -298,13 +305,25 @@ function AnaliseAoVivo({
   }, [processados]);
   const apontados = useMemo<Apontado[]>(
     () =>
-      (resultado?.apontados ?? []).map((a) => ({
-        nivel: s(a.nivel) === "atencao" ? "Atenção" : "Erro",
-        mensagem: s(a.mensagem),
-        item: a.item && typeof a.item === "object" ? rotuloItem(a.item as Item) : "",
-      })),
+      (resultado?.apontados ?? []).map((a, key) => {
+        const it = a.item && typeof a.item === "object" ? (a.item as Item) : null;
+        return {
+          key,
+          nivel: s(a.nivel) === "atencao" ? "Atenção" : "Erro",
+          mensagem: s(a.mensagem),
+          item: it ? rotuloItem(it) : "",
+          planejamento: it ? planejamentoDoApontado(it) : "",
+        };
+      }),
     [resultado],
   );
+  // Selecionar os apontados para copiar os nºs de planejamento (só quando há DFDs entre eles); um resultado novo zera.
+  const comPlanejamento = useMemo(() => apontados.some((a) => a.planejamento), [apontados]);
+  const [selAp, setSelAp] = useState<Set<string | number>>(() => new Set());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera a seleção a cada resultado novo
+  useEffect(() => setSelAp(new Set()), [apontados]);
+  const selecionadosAp = useMemo(() => apontados.filter((a) => selAp.has(a.key)), [apontados, selAp]);
+  const planejamentosSel = textoPlanejamentos(selecionadosAp.map((a) => a.planejamento));
   // A tabela ao vivo é a da MESA quando os itens são protocolos, DFDs ou itens (o toque abre o banner); o Órgão, o Estado e o
   // Detalhe do componente vão no fim de qualquer tipo.
   const estadoDe = (it: Item) => processados[pos(it)]?.estado ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" };
@@ -332,6 +351,7 @@ function AnaliseAoVivo({
   const colunasAp: Column<Apontado>[] = [
     { key: "nivel", header: "Nível", nowrap: true, value: (a) => a.nivel, render: (a) => <Badge tone={a.nivel === "Erro" ? "red" : "amber"} dot>{a.nivel}</Badge> },
     { key: "item", header: "Item", nowrap: true, align: "left", value: (a) => a.item || "—", render: (a) => a.item || "—" },
+    ...(comPlanejamento ? [colunaPlanejamento<Apontado>((a) => a.planejamento || null)] : []),
     { key: "mensagem", header: "Apontamento", align: "left", minWidth: 320, value: (a) => a.mensagem, render: (a) => <span className="whitespace-normal">{a.mensagem}</span> },
   ];
 
@@ -535,7 +555,43 @@ function AnaliseAoVivo({
         // O título no padrão dos do painel ("Dados de entrada", "Etapas"): o MESMO respiro acima e até a tabela.
         <div className="space-y-[var(--gap-block)]">
           <h4 className="text-sm font-semibold text-text">Apontamentos</h4>
-          <DataTable columns={colunasAp} rows={apontados} getKey={(r) => apontados.indexOf(r)} density="compact" exportar={{ nome: "Apontamentos do fluxo" }} pageSize={10} />
+          <DataTable
+            columns={colunasAp}
+            rows={apontados}
+            getKey={(r) => r.key}
+            density="compact"
+            exportar={{ nome: "Apontamentos do fluxo" }}
+            pageSize={10}
+            selectable={comPlanejamento}
+            selected={selAp}
+            onSelected={setSelAp}
+          />
+          {comPlanejamento && selecionadosAp.length > 0 && (
+            <BarraSelecao
+              registros={selecionadosAp.map((a) => ({ key: a.key, rotulo: a.item || `Apontamento ${a.key + 1}` }))}
+              onRemover={(k) =>
+                setSelAp((atual) => {
+                  const n = new Set(atual);
+                  n.delete(k);
+                  return n;
+                })
+              }
+              onLimpar={() => setSelAp(new Set())}
+              resumo={
+                <span>
+                  {num(selecionadosAp.length)} apontamento{selecionadosAp.length === 1 ? "" : "s"} selecionado{selecionadosAp.length === 1 ? "" : "s"} ·{" "}
+                  {num(planejamentosSel ? planejamentosSel.split(":").length : 0)} planejamento(s)
+                </span>
+              }
+              acoes={
+                <BotaoCopiar
+                  texto={planejamentosSel}
+                  rotulo="Copiar planejamentos"
+                  titulo={planejamentosSel ? `Copia: ${planejamentosSel}` : "Os apontamentos selecionados não têm nº de planejamento"}
+                />
+              }
+            />
+          )}
         </div>
       )}
       {processados.length > 0 && (
