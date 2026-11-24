@@ -118,12 +118,12 @@ export function GatilhoPesquisa({ rotulo = "Pesquisa rápida", cabecalho = false
       aria-label={rotulo}
       title={`${rotulo} (${mac ? "⌘K" : "Ctrl+K"})`}
       className={`flex h-11 min-w-0 items-center gap-2.5 overflow-hidden rounded-control border border-border bg-surface text-[13px] text-faint transition-colors hover:border-border-2 hover:text-text-2 desktop:h-[var(--h-control-sm)] ${
-        cabecalho ? "w-11 shrink-0 justify-center sm:w-full sm:max-w-md sm:justify-start sm:px-[13px]" : "w-full px-[13px]"
+        cabecalho ? "w-11 shrink-0 justify-center lg:w-full lg:min-w-11 lg:max-w-md lg:shrink lg:justify-start lg:px-[13px]" : "w-full px-[13px]"
       }`}
     >
       <IconSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className={`min-w-0 flex-1 truncate text-left ${cabecalho ? "hidden sm:block" : "menu-esconde"}`}>{rotulo}…</span>
-      <kbd className={`shrink-0 font-sans text-[11.5px] ${cabecalho ? "hidden md:block" : "menu-esconde"}`}>{atalho}</kbd>
+      <span className={`min-w-0 flex-1 truncate text-left ${cabecalho ? "hidden lg:block" : "menu-esconde"}`}>{rotulo}…</span>
+      <kbd className={`shrink-0 font-sans text-[11.5px] ${cabecalho ? "hidden lg:block" : "menu-esconde"}`}>{atalho}</kbd>
     </button>
   );
 }

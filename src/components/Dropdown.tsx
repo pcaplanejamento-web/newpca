@@ -4,6 +4,7 @@ import { areaVisivel, entre, MARGEM_TELA } from "./area-visivel";
 import { type ButtonHTMLAttributes, type ReactNode, type Ref, type RefObject, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EstadoDropdown } from "./SetaDropdown";
+import { useArrastoFechar } from "./useArrastoFechar";
 import { useSaida } from "./useSaida";
 
 /** Abrir/fechar o painel por OUTRO controle (ex.: o rótulo da coluna): `teclado` = aberto pelo teclado (o conteúdo leva o
@@ -198,11 +199,23 @@ export function Dropdown({
   // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora). Fechando, o último conteúdo fica à vista
   // durante a SAÍDA animada (`useSaida`).
   const { saindo } = useSaida(open);
+  useArrastoFechar(panelRef, { direcao: "baixo", onFechar: fechar, ativo: folha && open });
   const ultimoConteudo = useRef<ReactNode>(null);
   const vivo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;
   if (open) ultimoConteudo.current = vivo;
   else if (!saindo) ultimoConteudo.current = null;
-  const conteudo = open ? vivo : saindo ? ultimoConteudo.current : null;
+  const conteudoVivo = open ? vivo : saindo ? ultimoConteudo.current : null;
+  // A FOLHA (celular) tem a alça no topo: arrastá-la para baixo fecha (o painel segue o dedo).
+  const conteudo = folha ? (
+    <>
+      <div data-alca-fechar aria-hidden="true" className="sticky -top-2 z-10 -mx-2 -mt-2 mb-1 flex touch-none justify-center bg-surface pt-2 pb-1.5">
+        <span className="h-1 w-10 rounded-full bg-border-2" />
+      </div>
+      {conteudoVivo}
+    </>
+  ) : (
+    conteudoVivo
+  );
   // O lado de onde o painel nasce (a entrada e a saída animam a partir do gatilho; a folha, de baixo).
   const marcas = { "data-lado": folha ? "folha" : acima ? "acima" : "abaixo", "data-saindo": saindo ? "" : undefined };
 

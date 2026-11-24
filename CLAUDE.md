@@ -3169,6 +3169,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não
   soma nada); ambíguo/sem equivalente = não mexe; auditoria "adaptada ao QDD novo". Excluir uma visão diz quais PCAs voltam ao orçamento
   inteiro (confirmação e auditoria).
+- **CABEÇALHO DA PÁGINA PÚBLICA (v1.311.0):** abaixo do `lg` a pesquisa é só o ícone (`GatilhoPesquisa cabecalho`), a marca só a logo (`MarcaLink compacta`) e o PCA não encolhe a partir de 640px; o filtro de unidade fica numa linha própria no topo do conteúdo até 768px (`SeletorUnidade cheio`). Medido de 320 a 1280px: nada sobreposto.
 - **ATALHOS (v1.155.0):** o ÚLTIMO item do cabeçalho do painel é o botão "Site" (`IconWeb` → `/`; no celular só o ícone); a página pública lê a sessão (`getUsuarioAtual`, falha = deslogado) e, logado, mostra por ÚLTIMO o botão "Configurar" (ADM → `/painel/configuracoes`) ou "Sistema" (→ `/painel`) — `TelaPublica.painel {href, rotulo, dica}` (as Configurações são só do ADM). v1.156.0: a MARCA (logo + nomes) faz o mesmo — no painel leva a `/`, na pública ao `painel.href` — com o realce do cartão da conta (`hover:bg-surface-2`). v1.157.0: a marca é UM componente, **`MarcaLink`** (`MarcaSistema.tsx`: `Link` + margem negativa que devolve o respiro do realce — a logo fica no lugar, também no trilho recolhido; `claro` = realce `bg-white/10`), usado no `AppShell` (o antigo `Brand` saiu), na `TelaPublica` e no login/cadastro (`TelaAcesso` no celular, `VitrineAcesso` fora da prévia, `NovaSenhaObrigatoria` — leva a `/`). Na pública: o **`PcaSeletor`** = `Dropdown papel="dialog"` à ESQUERDA do cabeçalho (`inicio`), aberto mostra os `PcaCard` dos publicados (`listarPcasCards` filtrado, só com 2+; painel `width` 704; folha com o fundo escurecido no celular — o `Dropdown papel="dialog" folha` ganhou o scrim; mantém a aba e tira o `?unidade=`); a capa do PCA PUBLICADO é pública (`GET /api/pca/[id]/capa`, cache `public`; Preview segue com a guarda); e a página envolve tudo no `ConfigTabelas` (linhas do ADM + `nomesUnidades` do dashboard) — o filtro das colunas de unidade mostra sigla + nome como no painel.
 - **TELA PÚBLICA COM MENU + ABAS PUBLICADAS (v1.151.0, sem migração — blob `configuracoes.publico`):** o menu lateral virou
   UM componente (**`MenuLateral`**/`GavetaMenu`/`ItensMenu`, `MenuLateral.tsx` — o `AppShell` e a tela pública usam o
@@ -6102,6 +6103,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     animação/transição a 0,01ms (o `animationend`/`transitionend` ainda dispara para quem espera por ele).
   - `html { -webkit-tap-highlight-color: transparent }`; Button com `active:scale-[0.97]`; listas e folhas com
     `overscroll-contain`; barras que rolam de lado com `snap-x snap-proximity`.
+  - **FECHAR DESLIZANDO (v1.311.0):** `useArrastoFechar(ref, {direcao, onFechar, ativo, midia})` (`useArrastoFechar.ts`;
+    régua pura `gesto-fechar.ts`, testada) — eventos de TOUCH (o `touchmove` não passivo segura a rolagem; com ponteiros o
+    navegador cancelava o gesto), o deslocamento pela propriedade `translate` (as animações de entrada usam `transform`
+    com `both` e venceriam). `baixo` = só pela ALÇA `[data-alca-fechar]` com `touch-none` (o `Modal` no celular — `midia`
+    até 640px — e a folha do `Dropdown`); `esquerda` = a gaveta inteira (`touch-pan-y`). Fecha com 30% ou peteleco; senão
+    volta com mola. Folha/gaveta nova = este hook.
+  - **`--nav-inferior`** (`globals.css`): a altura da `BottomNav` (4rem só quando ela existe — `html:has(nav[data-nav-inferior])`);
+    o que gruda/flutua no fim do display (rodapé das tabelas, `BarraSelecao`, avisos) usa a variável, nunca `4rem` fixo.
+  - Campo com tamanho de fonte `!text-[…]` abaixo de 16px leva `pointer-coarse:!text-[16px]` (o `!important` de camada
+    vence a regra global do zoom do iOS).
 - **ÁREA VISÍVEL dos painéis flutuantes (v1.225.1):** `area-visivel.ts` (`areaVisivel`, `entre`, `MARGEM_TELA`=8) = a régua ÚNICA de todo painel que se posiciona sozinho — `Dropdown`, `DicaFlutuante`, `JanelaFlutuante`: a largura SEM a barra de rolagem (`clientWidth`, nunca `innerWidth`) e a altura da viewport visual (celular: barra do navegador/teclado); a altura máxima nunca passa da borda (sem o piso de 140px que estourava). Painel novo = esta régua.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

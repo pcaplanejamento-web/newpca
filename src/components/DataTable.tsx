@@ -924,7 +924,7 @@ export function DataTable<R>({
         className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-surface-2 px-3 py-1.5 text-[12.5px] text-muted ${
           // Rolagem interna no CELULAR (a página rola): o rodapé — resumo, ações (ex.: "Importar"), linhas e paginação —
           // GRUDA acima da navegação inferior (e da barra de seleção fixa, `--reserva-rodape`) enquanto a tabela está na tela.
-          scrollInterno || rodapeGrudado ? "max-lg:sticky max-lg:bottom-[calc(4rem_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
+          scrollInterno || rodapeGrudado ? "max-lg:sticky max-lg:bottom-[calc(var(--nav-inferior)_+_env(safe-area-inset-bottom)_+_var(--reserva-rodape,0px))] max-lg:z-10" : ""
         }`}
       >
         <span>

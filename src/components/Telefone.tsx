@@ -48,7 +48,7 @@ export function CampoTelefone({
       }
       icon={<IconWhatsapp className="h-5 w-5 text-[var(--ok)]" />}
       // Números tabulares um pouco menores: "(64) 99999-0000" cabe inteiro na meia coluna do cadastro.
-      classeEntrada="!text-[14px] tabular-nums"
+      classeEntrada="!text-[14px] tabular-nums pointer-coarse:!text-[16px]"
       inputMode="tel"
       autoComplete="tel-national"
       placeholder="(64) 99999-0000"

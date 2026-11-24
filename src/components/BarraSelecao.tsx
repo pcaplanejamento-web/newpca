@@ -126,7 +126,7 @@ export function BarraSelecao({
         fixa
           ? // Acima da navegação inferior no celular (≈4rem + área segura); no desktop, rente ao rodapé com a MESMA
             // margem de baixo do conteúdo (--pad-canvas-y) até a borda do display.
-            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas-y)]"
+            "fixed bottom-[calc(var(--nav-inferior)_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas-y)]"
           : "mb-3"
       }
       style={fixa ? (faixa ? { left: faixa.left, width: faixa.width } : { visibility: "hidden" }) : undefined}

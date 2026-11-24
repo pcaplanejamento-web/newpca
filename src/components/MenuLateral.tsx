@@ -8,6 +8,7 @@ import { ATRIBUTO_MENU, aplicarMenuGuardado, CHAVE_MENU, EVENTO_ALTERNAR_MENU } 
 import { IconeNavegacao } from "./CarregandoLink";
 import { travarScroll } from "./Modal";
 import { IconClose, IconMenu, IconRecolherMenu } from "./icons";
+import { useArrastoFechar } from "./useArrastoFechar";
 import { useSaida } from "./useSaida";
 
 /**
@@ -248,6 +249,8 @@ export function GavetaMenu({
   }, [aberto]);
   // Fechando, a gaveta DESLIZA de volta e o fundo esmaece (a saída animada padrão).
   const { montado, saindo } = useSaida(aberto);
+  // No toque, arrastar a gaveta para a esquerda fecha (ela segue o dedo).
+  useArrastoFechar(asideRef, { direcao: "esquerda", onFechar, ativo: aberto && montado });
   if (!montado) return null;
   return (
     <div className="gaveta-raiz fixed inset-0 z-50 lg:hidden" data-saindo={saindo ? "" : undefined}>
@@ -255,7 +258,7 @@ export function GavetaMenu({
       <aside
         ref={asideRef}
         aria-label="Menu"
-        className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-gaveta-entra flex-col bg-surface shadow-soft"
+        className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] touch-pan-y animate-gaveta-entra flex-col bg-surface shadow-soft"
       >
         <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
           {topo}

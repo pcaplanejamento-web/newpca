@@ -62,13 +62,13 @@ export function PcaSeletor({
         setAberto(v);
       }}
       panelClassName={folha ? "animate-folha-sobe" : "animate-selecao-entra"}
-      triggerClassName={`flex h-11 min-w-0 max-w-full items-center gap-2 rounded-control border px-3 text-sm desktop:h-[var(--h-control-sm)] ${
+      triggerClassName={`flex h-11 w-full min-w-0 max-w-full items-center overflow-hidden gap-2 rounded-control border px-3 text-sm desktop:h-[var(--h-control-sm)] ${
         todos && ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text hover:bg-surface-2"
       }`}
       trigger={
         <>
-          {trocando ? <IconSpinner className="h-4 w-4 shrink-0" /> : <IconBox className="h-[18px] w-[18px] shrink-0 opacity-60" />}
-          <span className="hidden shrink-0 opacity-70 sm:inline">PCA:</span>
+          {trocando ? <IconSpinner className="h-4 w-4 shrink-0" /> : <IconBox className="hidden h-[18px] w-[18px] shrink-0 opacity-60 sm:block" />}
+          <span className="hidden shrink-0 opacity-70 lg:inline">PCA:</span>
           <span className="min-w-0 truncate font-medium">{ativo ? ativo.nome : "Todos os PCAs"}</span>
           <SetaDropdown className="h-4 w-4 shrink-0 opacity-60" />
         </>

@@ -23,6 +23,7 @@ export function SeletorUnidade({
   trocando = false,
   todas,
   travado,
+  cheio = false,
 }: {
   unidades: UnidadeOpcao[];
   ativaId: number | null;
@@ -31,6 +32,8 @@ export function SeletorUnidade({
   todas?: string;
   /** O grupo pôs esta aba na SOMA das unidades da pessoa: o seletor não escolhe — mostra o texto (o motivo na dica). */
   travado?: string;
+  /** Ocupa a largura toda (a linha própria do celular na tela pública). */
+  cheio?: boolean;
 }) {
   const ativa = unidades.find((u) => u.id === ativaId);
   if (travado)
@@ -47,13 +50,14 @@ export function SeletorUnidade({
   return (
     <Dropdown
       align="start"
+      className={cheio ? "w-full" : undefined}
       ariaLabel={`Unidade: ${rotulo}`}
-      triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 desktop:h-[var(--h-control-sm)]"
+      triggerClassName={`${cheio ? "w-full" : ""} gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 desktop:h-[var(--h-control-sm)]`}
       width={340}
       trigger={
         <>
           {trocando ? <IconSpinner className="h-3.5 w-3.5" /> : <IconBuilding className="h-3.5 w-3.5 opacity-70" />}
-          <span className="max-w-[9rem] truncate sm:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap" title={rotulo}>
+          <span className={`truncate ${cheio ? "min-w-0 flex-1 text-left" : "max-w-[9rem] sm:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap"}`} title={rotulo}>
             {ativa?.codigo && todas ? ativa.codigo : rotulo}
           </span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />

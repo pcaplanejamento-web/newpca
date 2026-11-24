@@ -107,7 +107,7 @@ export function TextField({ label, icon, trailing, hint, error, denso, rotuloExt
             />
           </span>
         ) : (
-          <input id={fid} className={`${INPUT} ${compacto ? "!text-[13px]" : ""} ${classeEntrada}`} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
+          <input id={fid} className={`${INPUT} ${compacto ? "!text-[13px] pointer-coarse:!text-[16px]" : ""} ${classeEntrada}`} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
         )}
         {trailing}
       </div>
@@ -229,7 +229,7 @@ export function SearchField({
     <div className={`${WRAP} ${compacto ? "h-11 !px-3 desktop:h-[var(--h-control-sm)]" : "h-[46px]"} border-border-2`}>
       <IconSearch className={`${compacto ? "h-4 w-4" : "h-[18px] w-[18px]"} shrink-0 text-muted`} />
       {/* Com o nosso "limpar", o "×" nativo do campo de busca some (senão aparecem dois). */}
-      <input value={value} placeholder={placeholder} type="search" className={`${INPUT} ${compacto ? "!text-[13px]" : ""} ${onClear ? "[&::-webkit-search-cancel-button]:hidden" : ""}`} {...rest} />
+      <input value={value} placeholder={placeholder} type="search" className={`${INPUT} ${compacto ? "!text-[13px] pointer-coarse:!text-[16px]" : ""} ${onClear ? "[&::-webkit-search-cancel-button]:hidden" : ""}`} {...rest} />
       {preenchido && onClear && (
         <button
           type="button"

@@ -71,11 +71,26 @@ export function TelaPublica({
   const secoes: SecaoMenu[] = [{ chave: "pca", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) }];
   const ativo = (item: { href: string }) => item.href === href(vista);
   const marca = <MarcaLink href={painel?.href ?? "/"} dica={painel?.dica} identidade={identidade} />;
+  const marcaCompacta = <MarcaLink href={painel?.href ?? "/"} dica={painel?.dica ?? "Início"} identidade={identidade} compacta />;
   const entrar = (
     <Button href="/login" variant="primary" icon={<IconTelaAcesso className="h-4 w-4" />} className="w-full rounded-full opacity-60 hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 motion-safe:active:scale-[0.96]">
       Entrar
     </Button>
   );
+  const seletorUnidade = (cheio = false) =>
+    unidades && unidades.lista.length > 1 ? (
+      <SeletorUnidade
+        cheio={cheio}
+        unidades={unidades.lista.map((u) => ({ id: u.id, codigo: u.codigo, nome: u.municipio || u.codigo }))}
+        ativaId={unidades.atual ?? null}
+        todas="Todas as unidades"
+        trocando={trocando}
+        onEscolher={(id, fechar) => {
+          fechar();
+          if (id !== (unidades.atual ?? null)) iniciar(() => router.push(href(vista, id ?? undefined)));
+        }}
+      />
+    ) : null;
   const itens = (fechar?: () => void) => <ItensMenu secoes={secoes} ativo={ativo} onNavigate={fechar} />;
 
   return (
@@ -86,28 +101,25 @@ export function TelaPublica({
         <CabecalhoApp
           onMenu={() => setGaveta(true)}
           inicio={
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="hidden min-w-0 sm:block lg:hidden">{marca}</div>
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              {/* Entre 640px e o menu lateral: só a logo (o nome está no menu) — com o nome, o PCA e a pesquisa ficavam um por cima
+                  do outro. */}
+              <div className="hidden shrink-0 sm:block lg:hidden">{marcaCompacta}</div>
               {/* À esquerda: o PCA, com os cartões de cada um ao abrir (só com 2+ publicados). */}
-              {pcaId != null && pcas.length > 1 && <PcaSeletor pcas={pcas} atual={pcaId} soImagem={soImagem} href={hrefPca} />}
+              {pcaId != null && pcas.length > 1 && (
+                <div className="flex min-w-[4.5rem] max-w-[16rem] shrink sm:shrink-0">
+                  <PcaSeletor pcas={pcas} atual={pcaId} soImagem={soImagem} href={hrefPca} />
+                </div>
+              )}
               {/* A PESQUISA de tudo o que a página mostra (Ctrl+K) — o mesmo banner da pesquisa do sistema. */}
               {pcaId != null && <GatilhoPesquisa cabecalho rotulo="Pesquisar na página" />}
             </div>
           }
           direita={
             <>
-              {unidades && unidades.lista.length > 1 && (
-                <SeletorUnidade
-                  unidades={unidades.lista.map((u) => ({ id: u.id, codigo: u.codigo, nome: u.municipio || u.codigo }))}
-                  ativaId={unidades.atual ?? null}
-                  todas="Todas as unidades"
-                  trocando={trocando}
-                  onEscolher={(id, fechar) => {
-                    fechar();
-                    if (id !== (unidades.atual ?? null)) iniciar(() => router.push(href(vista, id ?? undefined)));
-                  }}
-                />
-              )}
+              {/* O filtro de unidade fica no cabeçalho a partir de 768px; no celular, numa linha própria no topo do conteúdo
+                  (no cabeçalho ele espremia o seletor de PCA e cobria a pesquisa). */}
+              {unidades && unidades.lista.length > 1 && <div className="hidden md:block">{seletorUnidade()}</div>}
               <ThemeToggle />
               {/* Sem sessão, no celular/tablet o "Entrar" fica à vista no cabeçalho (o do menu só aparece abrindo a gaveta). */}
               {!painel && (
@@ -125,7 +137,10 @@ export function TelaPublica({
           }
         />
         {pcaId != null && <PesquisaPublica pcaId={pcaId} vista={vista} unidade={unidades?.atual} />}
-        <main className="min-w-0 flex-1 space-y-[var(--gap-block)] pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)]">{children}</main>
+        <main className="min-w-0 flex-1 space-y-[var(--gap-block)] pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)]">
+          {unidades && unidades.lista.length > 1 && <div className="md:hidden">{seletorUnidade(true)}</div>}
+          {children}
+        </main>
       </div>
     </div>
   );

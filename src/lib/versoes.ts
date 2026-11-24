@@ -35,6 +35,37 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.311.0",
+    data: "2026-11-24",
+    titulo: "Página pública no celular + fechar deslizando",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Página pública",
+        texto: "O cabeçalho não sobrepõe mais os componentes: no celular e no tablet ficam o PCA, a pesquisa (só o ícone), o tema e o Entrar; o filtro de unidade desce para uma linha própria no topo do conteúdo até 768px.",
+        link: "/",
+      },
+      {
+        tipo: "correcao",
+        area: "Tabelas",
+        texto: "Na página pública, o rodapé das tabelas no celular fica rente ao fim da tela (antes ficava suspenso, com linhas aparecendo por baixo).",
+        link: "/?aba=consulta",
+      },
+      {
+        tipo: "novo",
+        area: "Celular",
+        texto: "Fechar deslizando: arraste a alça de um banner ou de uma folha para baixo, ou o menu lateral para a esquerda. Um arrasto curto volta ao lugar.",
+        link: "/",
+      },
+      {
+        tipo: "correcao",
+        area: "Celular",
+        texto: "Os campos de busca compactos e o telefone usam 16px no toque — o iPhone não amplia mais a tela ao tocar neles.",
+        link: "/",
+      },
+    ],
+  },
+  {
     versao: "1.310.1",
     data: "2026-11-24",
     titulo: "Cabeçalho das colunas padronizado",

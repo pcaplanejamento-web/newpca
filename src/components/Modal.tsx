@@ -4,6 +4,7 @@ import { cloneElement, type ReactElement, type ReactNode, useEffect, useRef, use
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
+import { useArrastoFechar } from "./useArrastoFechar";
 import { useSaida } from "./useSaida";
 
 const TAMANHO = { md: "sm:max-w-md", lg: "sm:max-w-lg", xl: "sm:max-w-4xl", full: "sm:max-w-6xl" } as const;
@@ -87,8 +88,12 @@ function Painel({
   className?: string;
   children: ReactNode;
 }) {
+  // No celular (folha que sobe de baixo): arrastar a alça/o cabeçalho para baixo fecha.
+  const ref = useRef<HTMLDivElement>(null);
+  useArrastoFechar(ref, { direcao: "baixo", onFechar: onClose, ativo: !bloqueado, midia: "(max-width: 39.999rem)" });
   return (
     <div
+      ref={ref}
       role="dialog"
       aria-modal="true"
       aria-label={titulo}
@@ -96,7 +101,15 @@ function Painel({
     >
       {/* No celular as AÇÕES do cabeçalho (Histórico, Tarefas, Atualizar…) descem para uma 2ª linha: o título (nº, tipo,
           planejamento) fica inteiro e o X segue no canto. */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-1 gap-y-1.5 border-b border-border p-[var(--pad-card)]">
+      {onClose && !bloqueado && (
+        <div data-alca-fechar aria-hidden="true" className="flex shrink-0 touch-none justify-center pt-2 sm:hidden">
+          <span className="h-1 w-10 rounded-full bg-border-2" />
+        </div>
+      )}
+      <div
+        data-alca-fechar={onClose && !bloqueado ? "" : undefined}
+        className="flex shrink-0 flex-wrap items-center justify-between gap-x-1 gap-y-1.5 border-b border-border p-[var(--pad-card)] max-sm:touch-none"
+      >
         {cabecalho ? (
           <div className="mr-2 min-w-0 flex-1">{cabecalho}</div>
         ) : (

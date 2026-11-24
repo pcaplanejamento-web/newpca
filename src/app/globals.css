@@ -978,6 +978,15 @@
   animation: none;
 }
 
+/* Altura da NAVEGAÇÃO INFERIOR do celular (`BottomNav`, só no painel): o que gruda/flutua no fim do display (rodapé das
+   tabelas, barra de seleção, avisos) fica acima dela. Sem a navegação (a tela pública), 0 — nada fica "no ar". */
+:root {
+  --nav-inferior: 0px;
+}
+html:has(nav[data-nav-inferior]) {
+  --nav-inferior: 4rem;
+}
+
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
    Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o
@@ -992,8 +1001,8 @@
   left: 0.75rem;
   right: 0.75rem;
   bottom: max(
-    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 0.5rem),
-    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+    calc(var(--nav-inferior) + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 0.5rem),
+    calc(var(--nav-inferior) + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
   );
   display: flex;
   flex-direction: column;
