@@ -29,3 +29,20 @@ export function deveFechar(delta: number, tamanho: number, velocidade: number): 
   if (tamanho > 0 && delta >= tamanho * FRACAO_FECHAR) return true;
   return velocidade >= VELOCIDADE_FECHAR && delta > LIMIAR_GESTO * 2;
 }
+
+/** CARROSSEL de camadas (Protocolo · DFD · Item no celular): quanto o trilho anda com o dedo — 1:1 entre camadas e com
+ * resistência além da primeira/última (o puxão "de borracha"). `delta` > 0 = o dedo foi para a DIREITA (camada anterior). */
+export function deslocamentoCarrossel(delta: number, indice: number, total: number): number {
+  const alemDoInicio = indice === 0 && delta > 0;
+  const alemDoFim = indice >= total - 1 && delta < 0;
+  return alemDoInicio || alemDoFim ? delta / 4 : delta;
+}
+
+/** Ao soltar o carrossel: a camada de destino — a vizinha quando o dedo passou de 25% da largura ou saiu rápido. */
+export function camadaAoSoltar(indice: number, total: number, delta: number, largura: number, velocidade: number): number {
+  const passou = largura > 0 && Math.abs(delta) >= largura * 0.25;
+  const peteleco = Math.abs(velocidade) >= VELOCIDADE_FECHAR && Math.abs(delta) > LIMIAR_GESTO * 2;
+  if (!passou && !peteleco) return indice;
+  const alvo = delta < 0 ? indice + 1 : indice - 1;
+  return Math.max(0, Math.min(total - 1, alvo));
+}

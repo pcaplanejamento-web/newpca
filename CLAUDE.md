@@ -6109,6 +6109,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     com `both` e venceriam). `baixo` = só pela ALÇA `[data-alca-fechar]` com `touch-none` (o `Modal` no celular — `midia`
     até 640px — e a folha do `Dropdown`); `esquerda` = a gaveta inteira (`touch-pan-y`). Fecha com 30% ou peteleco; senão
     volta com mola; fechando, o `translate` FICA até desmontar (a saída parte de onde o dedo deixou). Folha/gaveta nova = este hook. O host mantém o último conteúdo durante a saída do `Modal` (`open={…}` em vez de desmontar — `BannersConsulta`).
+  - **CAMADAS NO CELULAR (v1.312.0):** abaixo do `lg` o `Modal` em pilha (Protocolo · DFD · Item, histórico, mensagens)
+    não põe os banners lado a lado: `CamadasCelular` (interno ao `Modal.tsx`) = um CARROSSEL na ordem fixa das colunas +
+    o navegador flutuante EMBAIXO da folha (`role="tablist"` "Banners abertos", um botão por camada, o indicador desliza e acompanha o dedo).
+    Deslizar de lado = `useArrastoCamadas` (touch, não passivo só depois do gesto horizontal; régua pura
+    `deslocamentoCarrossel`/`camadaAoSoltar` em `gesto-fechar.ts`); abrir/fechar volta ao ÚLTIMO aberto; a camada nova entra
+    pela Web Animations API (o conteúdo nunca remonta). Com 2+ camadas, todas têm a mesma altura.
   - **`--nav-inferior`** (`globals.css`): a altura da `BottomNav` (4rem só quando ela existe — `html:has(nav[data-nav-inferior])`);
     o que gruda/flutua no fim do display (rodapé das tabelas, `BarraSelecao`, avisos) usa a variável, nunca `4rem` fixo.
   - Campo com tamanho de fonte `!text-[…]` abaixo de 16px leva `pointer-coarse:!text-[16px]` (o `!important` de camada

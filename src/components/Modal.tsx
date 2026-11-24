@@ -1,9 +1,10 @@
 "use client";
 
-import { cloneElement, type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { cloneElement, type ReactElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconClose } from "./icons";
+import { useArrastoCamadas } from "./useArrastoCamadas";
 import { useArrastoFechar } from "./useArrastoFechar";
 import { useSaida } from "./useSaida";
 
@@ -127,6 +128,132 @@ function Painel({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-[var(--pad-card)]">{children}</div>
       {rodape && (
         <div className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)] max-sm:pb-[calc(var(--pad-card)_+_env(safe-area-inset-bottom))]">{rodape}</div>
+      )}
+    </div>
+  );
+}
+
+/** Uma CAMADA do carrossel do celular: o rótulo do navegador e o painel. */
+type Camada = { id: string; rotulo: string; painel: ReactNode };
+
+/**
+ * CAMADAS NO CELULAR (abaixo do `lg`): os banners da pilha (Protocolo · DFD · Item, histórico…) não cabem lado a lado —
+ * ficam num CARROSSEL na ordem fixa das colunas, com o NAVEGADOR flutuante acima da folha (um botão por camada; o
+ * indicador desliza até a atual). Tocar num botão leva à camada; deslizar o dedo de lado também (o trilho segue o dedo,
+ * com resistência nas pontas). Uma camada nova entra deslizando; a fechada sai e a anterior volta. Sem movimento
+ * (sistema ou o ADM), as trocas são instantâneas (a rede de segurança do `globals.css`).
+ */
+function CamadasCelular({ camadas, ativa, onAtiva }: { camadas: Camada[]; ativa: string; onAtiva: (id: string) => void }) {
+  const idx = Math.max(0, camadas.findIndex((c) => c.id === ativa));
+  const [arrasto, setArrasto] = useState<number | null>(null);
+  const trilho = useRef<HTMLDivElement>(null);
+  useArrastoCamadas(trilho, {
+    indice: idx,
+    total: camadas.length,
+    onMover: setArrasto,
+    onTrocar: (i) => onAtiva(camadas[i].id),
+  });
+  // Lista mudou e a camada à vista é a MESMA (outra abriu/fechou ao lado): reposiciona sem animar — nada se mexe na tela.
+  const anterior = useRef({ ativa, idx, n: 0 });
+  const semTransicao = anterior.current.ativa === ativa && anterior.current.idx !== idx;
+  // A camada à vista TROCOU sem o trilho andar (um banner novo entrou no lugar dela, à esquerda ou à direita): ela entra
+  // deslizando do lado de onde veio.
+  const antes = camadas.findIndex((c) => c.id === anterior.current.ativa);
+  const trocouNoLugar = anterior.current.ativa !== ativa && anterior.current.idx === idx;
+  const entrada = useRef<{ id: string; lado: "esq" | "dir"; n: number } | null>(null);
+  if (trocouNoLugar) entrada.current = { id: ativa, lado: antes >= 0 && antes < idx ? "dir" : "esq", n: anterior.current.n + 1 };
+  anterior.current = { ativa, idx, n: entrada.current?.n ?? anterior.current.n };
+  // A entrada pela Web Animations API (o conteúdo NUNCA remonta — um rascunho aberto no banner continua).
+  const nEntrada = entrada.current?.n ?? 0;
+  useLayoutEffect(() => {
+    const e = entrada.current;
+    if (!e || nEntrada === 0) return;
+    const el = trilho.current?.querySelector<HTMLElement>(`[data-slot-camada="${CSS.escape(e.id)}"]`);
+    if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "off") return;
+    el.animate([{ opacity: 0.4, translate: `${e.lado === "dir" ? 38 : -38}% 0` }, { opacity: 1, translate: "0 0" }], {
+      duration: duracaoMotionMs(),
+      easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+    });
+  }, [nEntrada]);
+  // O indicador do navegador: as posições/larguras de TODOS os botões (medidas) — durante o arrasto ele anda entre a
+  // camada atual e a vizinha na mesma fração do dedo.
+  const nav = useRef<HTMLDivElement>(null);
+  const [botoes, setBotoes] = useState<{ x: number; w: number }[]>([]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: remede quando a lista muda.
+  useLayoutEffect(() => {
+    const bs = [...(nav.current?.querySelectorAll<HTMLElement>("[data-camada]") ?? [])];
+    setBotoes(bs.map((b) => ({ x: b.offsetLeft, w: b.offsetWidth })));
+  }, [camadas.map((c) => `${c.id}:${c.rotulo}`).join("|")]);
+  useEffect(() => {
+    nav.current?.querySelector<HTMLElement>(`[data-camada="${CSS.escape(ativa)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [ativa]);
+  const largura = trilho.current?.clientWidth || 1;
+  const fracao = arrasto == null ? 0 : Math.max(-1, Math.min(1, -arrasto / largura));
+  const viz = Math.max(0, Math.min(botoes.length - 1, idx + Math.sign(fracao)));
+  const marca =
+    botoes[idx] && botoes[viz]
+      ? {
+          x: botoes[idx].x + (botoes[viz].x - botoes[idx].x) * Math.abs(fracao),
+          w: botoes[idx].w + (botoes[viz].w - botoes[idx].w) * Math.abs(fracao),
+        }
+      : null;
+  const variasCamadas = camadas.length > 1;
+  return (
+    <div className="modal-corpo flex w-full flex-col items-stretch gap-2">
+      <div ref={trilho} className="w-full touch-pan-y overflow-hidden">
+        <div
+          className="flex items-end"
+          style={{
+            transform: `translate3d(calc(${-idx * 100}% + ${arrasto ?? 0}px), 0, 0)`,
+            transition: arrasto != null || semTransicao ? "none" : "transform var(--motion-duration) cubic-bezier(0.2, 0.8, 0.2, 1)",
+          }}
+        >
+          {camadas.map((c) => (
+            <div
+              key={c.id}
+              data-slot-camada={c.id}
+              className={`flex w-full shrink-0 items-end ${variasCamadas ? "[&>[role=dialog]]:h-[calc(92dvh-3.75rem)] [&>[role=dialog]]:max-h-[calc(92dvh-3.75rem)] [&>[role=dialog]]:rounded-b-2xl" : ""}`}
+              inert={c.id !== ativa}
+            >
+              {c.painel}
+            </div>
+          ))}
+        </div>
+      </div>
+      {variasCamadas && (
+        <div className="flex justify-center px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div
+            ref={nav}
+            role="tablist"
+            aria-label="Banners abertos"
+            className="relative flex max-w-full items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-full border border-border bg-surface p-1 shadow-flutuante [scrollbar-width:none]"
+          >
+            {marca && (
+              <span
+                aria-hidden="true"
+                className={`absolute top-1 bottom-1 rounded-full bg-accent-soft ring-1 ring-accent/30 ${arrasto == null ? "transition-[left,width] duration-[var(--motion-duration)] ease-[cubic-bezier(0.2,0.8,0.2,1)]" : ""}`}
+                style={{ left: marca.x, width: marca.w }}
+              />
+            )}
+            {camadas.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                role="tab"
+                data-camada={c.id}
+                aria-selected={c.id === ativa}
+                title={c.rotulo}
+                onClick={() => onAtiva(c.id)}
+                className={`relative z-10 flex h-9 min-w-0 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-[var(--motion-duration)] ${
+                  c.id === ativa ? "text-accent" : "text-muted"
+                }`}
+              >
+                <span className={`grid h-4.5 w-4.5 shrink-0 place-items-center rounded-full text-[10px] tabular-nums ${c.id === ativa ? "bg-accent text-white" : "bg-surface-2"}`}>{i + 1}</span>
+                <span className="truncate">{c.rotulo}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -263,6 +390,12 @@ export function Modal({
     ordemRef.current = ordem;
   }
 
+  // CELULAR: a camada à vista no carrossel (escolhida pela pessoa no navegador ou deslizando). Volta ao ÚLTIMO aberto
+  // quando a lista de abertos muda (abriu um banner novo = ele vem à vista; fechou = o anterior).
+  const chaveFoco = `${chaveAbertos}#${principalNoTopo ? 1 : 0}`;
+  const [foco, setFoco] = useState<{ chave: string; id: string } | null>(null);
+  const focoAtual = foco?.chave === chaveFoco ? foco.id : null;
+
   // Mantém montado o painel que está FECHANDO (fecha animado): guarda o último conteúdo de cada painel
   // aberto e só desmonta os fechados quando a transição do grid termina (ou, sem transição — motion
   // desligado —, pelo tempo do token).
@@ -382,6 +515,44 @@ export function Modal({
       </div>
     );
   };
+
+  // CELULAR e telas menores: os banners não cabem lado a lado — um CARROSSEL de camadas com o navegador flutuante.
+  if (!largo) {
+    const ultimoId = porAbertura[porAbertura.length - 1];
+    const ativa = focoAtual ?? ultimoId;
+    const camadas: Camada[] = colunas
+      .filter((c) => c.id === PRINCIPAL || c.aberto)
+      .map((c) => {
+        if (c.id === PRINCIPAL)
+          return {
+            id: PRINCIPAL,
+            rotulo: titulo,
+            painel: (
+              <Painel titulo={titulo} cabecalho={cabecalho} onClose={onClose} rodape={rodape} bloqueado={bloqueado} acoesCabecalho={acoesCabecalho}>
+                {children}
+              </Painel>
+            ),
+          };
+        const p = pilha.find((x) => x.id === c.id) as ModalPainel;
+        return {
+          id: p.id,
+          rotulo: p.titulo,
+          painel: (
+            <Painel titulo={p.titulo} cabecalho={p.cabecalho} onClose={p.onClose} rodape={p.rodape} acoesCabecalho={p.acoesCabecalho} bloqueado={bloqueado}>
+              {p.children}
+            </Painel>
+          ),
+        };
+      });
+    return portal(
+      <div className="modal-raiz fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
+        {scrim}
+        <div className="relative w-full sm:max-w-2xl">
+          <CamadasCelular camadas={camadas} ativa={ativa} onAtiva={(id) => setFoco({ chave: chaveFoco, id })} />
+        </div>
+      </div>,
+    );
+  }
 
   return portal(
     <div className="modal-raiz fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">

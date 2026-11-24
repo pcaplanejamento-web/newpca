@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.312.0",
+    data: "2026-11-24",
+    titulo: "Protocolo, DFD e Item em camadas no celular",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Consulta e Mesa",
+        texto:
+          "No celular e no tablet, os banners de Protocolo, DFD e Item viram camadas: o navegador flutuante embaixo da folha mostra os abertos na ordem (Protocolo › DFD › Item) e leva a qualquer um com um toque; deslizar o dedo de lado passa à camada vizinha, seguindo o dedo. Um banner novo entra deslizando e o que está aberto não perde nada.",
+        link: "/?aba=consulta",
+      },
+    ],
+  },
+  {
     versao: "1.311.1",
     data: "2026-11-24",
     titulo: "Fechar deslizando sem saltos",
