@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.310.1",
+    data: "2026-11-24",
+    titulo: "Cabeçalho das colunas padronizado",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Tabelas",
+        texto: "Toda coluna que pode ser ordenada tem a seta ao lado do nome — também as sem filtro e as travadas pelo filtro do topo — e o mesmo desenho e posição: nome, seta e filtro, alinhados à esquerda. Colunas com vários valores (ex.: PCAs das visões do orçamento) passam a ordenar de verdade.",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "melhoria",
+        area: "Orçamento",
+        texto: "No Comparativo, a seta de ordenar fica ao lado do nome de cada coluna, sempre à vista.",
+        link: "/painel/orcamento",
+      },
+      {
+        tipo: "correcao",
+        area: "Tabelas",
+        texto: "Abrir o filtro pelo nome da coluna com o teclado leva o foco para dentro do painel e o devolve ao nome ao fechar; no celular, a seta e o filtro têm área de toque de 44px; na edição da tabela não aparecem mais duas setas de ordenar.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.310.0",
     data: "2026-11-24",
     titulo: "Ordenar pela seta do cabeçalho",

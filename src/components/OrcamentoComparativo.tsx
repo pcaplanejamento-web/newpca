@@ -219,10 +219,10 @@ export function OrcamentoComparativo({
   };
   // Ordenar: na edição vai ao rascunho (salvo com o layout); fora dela, só a vista. 1º toque: textos crescente, valores
   // do MAIOR para o menor; o 2º inverte.
-  const ordenar = (por: OrdemCruzamento["por"]) => {
+  const ordenar = (por: OrdemCruzamento["por"], desc?: boolean) => {
     const o = ordem;
     const mesma = typeof por === "object" ? typeof o.por === "object" && o.por.coluna === por.coluna : o.por === por;
-    const nova = { por, desc: mesma ? !o.desc : por !== "rotulo" && por !== "extra" };
+    const nova = { por, desc: desc ?? (mesma ? !o.desc : por !== "rotulo" && por !== "extra") };
     if (editando) mudar((l) => ({ ...l, ordemLinhas: nova }));
     else setOrdemVista(nova);
   };

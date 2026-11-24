@@ -150,7 +150,8 @@ export function CabecalhoEdicao({
   onMover: (delta: -1 | 1) => void;
   onCongelar: () => void;
   onOcultar: () => void;
-  onOrdenar: () => void;
+  /** Sem ele (a coluna não ordena), sem a ação de ordenar. */
+  onOrdenar?: () => void;
   largura?: number;
   onLargura: (px: number | null) => void;
   children: ReactNode;
@@ -191,12 +192,14 @@ export function CabecalhoEdicao({
           onClick={onOcultar}
           disabled={!podeOcultar}
         />
+        {onOrdenar && (
         <AcaoColuna
           rotulo={ordem == null ? `Ordenar por ${rotulo}` : `${rotulo}: ${ordem === "desc" ? "decrescente" : "crescente"} (inverter)`}
           ligada={ordem != null}
           icone={<Seta className="h-3.5 w-3.5" />}
           onClick={onOrdenar}
         />
+        )}
       </div>
       {children}
       <AlcaLargura rotulo={rotulo} largura={largura} onLargura={onLargura} />

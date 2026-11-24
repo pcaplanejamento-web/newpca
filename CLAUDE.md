@@ -4481,7 +4481,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   170"; a vírgula decimal "1,5" fica); no `SeletorMultiplo` (`suspenso` = a lista num painel flutuante `Dropdown`; `textoVazio` = o rótulo sem nada marcado), Enter
   marca os encontrados); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
   Estado); **`filter:"range"` + `Column.numero`** = colunas R$ com o **`RangeFilterHeader`**; coluna filtrada fica
-  **MARCADA** (gatilho `GatilhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
+  **MARCADA** (cabeçalho `CabecalhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
   **`reservaInferior`** = altura reservada no fim do display p/ algo fixo abaixo (a `BarraSelecao` da Mesa);
   **`acoesRodape`** = ações no RODAPÉ da tabela, à esquerda do seletor de linhas/paginação (ex.: "Importar protocolo" da Mesa);
   com `scrollInterno`, no CELULAR o rodapé GRUDA acima da navegação inferior (`overflow-clip` no contêiner, `sticky` +
@@ -4541,8 +4541,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (pilha `modaisAbertos`; um Esc já consumido — ex.: fechou o painel de um filtro, que o trata na CAPTURA — não fecha o
   modal); a trava do scroll da página é UMA contagem compartilhada (trava no 1º modal aberto, solta quando o ÚLTIMO fecha
   — fechar fora de ordem nunca deixa a página travada); `duracaoMotionMs()` = duração do motion p/ sequenciar entradas),
-  **`GatilhoFiltro`** (o gatilho de TODO filtro de cabeçalho: rótulo + seta de ordenação, ou chip accent + funil quando
-  filtrado), **`RangeFilterHeader`** (filtro de FAIXA p/ colunas R$: Crescente/Decrescente, **"Valor cheio"** [marcar limpa a
+  **`CabecalhoFiltro`** + **`BotaoOrdenar`** (`GatilhoFiltro.tsx` — o cabeçalho PADRÃO de TODA coluna, v1.310.0/1:
+  rótulo · SETA · filtro, alinhados à esquerda, no MESMO lugar em toda coluna. A SETA = `BotaoOrdenar` (↕ esmaecida sem
+  ordem, ↑/↓ em accent; tocar alterna crescente ⇄ decrescente; 44px no toque) em toda coluna que ORDENA — a `DataTable`
+  ordena pelo `numero` › `value` › `valores` unidos (`ordena`), também nas colunas sem filtro e nas TRAVADAS (o cadeado
+  vira `prefixo`); na edição da tabela, a ordem fica na ação do `CabecalhoEdicao`. O rótulo e o "⌄" (funil na coluna
+  filtrada, chip accent) abrem o painel do filtro: o `Dropdown` controlado com `ancora` = o cabeçalho inteiro e o
+  `controle` (`ControleDropdown.alternar(teclado, origem)` — pelo teclado o foco entra no painel e volta ao rótulo; o toque
+  dentro da `ancora` não fecha). Coluna sem título (ações) fica vazia. A `TabelaCruzada` usa a MESMA `BotaoOrdenar` ao lado
+  do nome — `onOrdenar(por, desc)`), **`RangeFilterHeader`** (filtro de FAIXA p/ colunas R$: Crescente/Decrescente, **"Valor cheio"** [marcar limpa a
   barra; arrastar desmarca], **barra de arrasto DUPLA** mín.–máx. sobre os valores VISÍVEIS (`.faixa-dupla` em `globals.css`,
   alças de 24px p/ toque, teclado ←/→) + campos Mín./Máx.), **`BarraSelecao`** (+ `ResumoSelecao`; registro das seleções em
   chips removíveis + somatório R$ + editor + `acoes` na linha do resumo; `fixa` = rodapé do display, publica
@@ -4946,7 +4953,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     painel apagava na hora); o **`Dropdown`** não fecha ao tocar num AVISO FLUTUANTE (`.avisos-flutuantes` — a confirmação
     e o "Desfazer" nascem de dentro do painel); voltar à janela/trocar de tela busca o aviso NOVO (prévia), não só o número
     (`recontar` = `conferirNovo` com 15 s de intervalo). **Toda ação tem a DICA ao passar o mouse:** `Segmented.dica`,
-    `Switch.dica`, `title` no `GatilhoFiltro` ("Filtrar e ordenar: …"), na `Ajuda` e no `SeletorMultiplo` suspenso; no sino,
+    `Switch.dica`, `title` no `CabecalhoFiltro` ("Filtrar: …"; a seta, "Ordenar …"), na `Ajuda` e no `SeletorMultiplo` suspenso; no sino,
     o aviso inteiro (título, texto, data e "Clique para abrir"), as ações, as pílulas de adiar/silenciar e o rodapé.
   - **VER = LER + FIXAR (migração `0086`, aditiva — `notificacoes.travada`):** o aviso não lido ≥ 60% à vista no sino por
     800 ms (aba à vista) vira VISUALIZADO sozinho, em lote (`PATCH {ids, visto:true}`, IntersectionObserver no painel; fica no
@@ -5758,10 +5765,6 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
   com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
   montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
-- **CABEÇALHO DE COLUNA = rótulo · SETA · filtro (v1.310.0):** `CabecalhoFiltro` (`GatilhoFiltro.tsx`, DS) é o cabeçalho
-  dos três filtros da `DataTable` (`MultiSelectHeader`, `RangeFilterHeader`, `DateFilterHeader`): a SETA é um botão próprio
-  (↕ esmaecida sem ordem; tocar alterna crescente ⇄ decrescente pelo `onSort`) e o rótulo e o "⌄"/funil abrem o painel do
-  filtro (o `Dropdown` controlado com `ancora` = o cabeçalho inteiro; o toque dentro da `ancora` não conta como "fora").
 - **AJUDA + CONFIGURAÇÕES por automação (v1.39.0, migração `0094` — `automacao_fluxos.ajuda` JSON `{funciona, executa,
   resultado}`, `lerAjudaFluxo`/`MAX_AJUDA` em `fluxo-core.ts`):** cada modelo de `fluxo-modelos.ts` traz a `ajuda` (criar e
   "Atualizar pelo modelo" gravam; fluxo sem ajuda mostra a do modelo de mesmo nome). No `EditorFluxo` a barra é SÓ de ícones
@@ -6107,7 +6110,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam. O gatilho da `Selecao` (`.seletor-sistema`) leva a seta como
   ELEMENTO (`SetaDropdown`) no MESMO lugar e com o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
 - **SETA DOS DROPDOWNS (v1.66.0) — `SetaDropdown`** (`SetaDropdown.tsx`, DS): a seta de TODO gatilho de dropdown (`Selecao`,
-  `PeriodoPicker`, `SeletorPessoa`, `SeletorMultiplo suspenso`, `GatilhoFiltro`, `FilterChip`, os seletores do cabeçalho e o
+  `PeriodoPicker`, `SeletorPessoa`, `SeletorMultiplo suspenso`, `CabecalhoFiltro`, `FilterChip`, os seletores do cabeçalho e o
   menu de vistas do Calendário) gira suave (v1.66.1: 1,75× o `--motion-duration` = 0,35 s, ease-in-out `cubic-bezier(.65,0,.35,1)`; parada com "reduzir movimento") e aponta para o lado OPOSTO
   da lista aberta (onde tocar para fechar): aberta embaixo (e a folha) = para cima; aberta em cima = para baixo; fechada =
   para baixo. O estado vem do `Dropdown` pelo contexto `EstadoDropdown` {aberto, acima} (o lado decidido uma vez por

@@ -39,6 +39,7 @@ import { definirVarRaiz, ehDesktop } from "./espacamento";
 import { Dropdown } from "./Dropdown";
 import { IconClose, IconFilter, IconLock } from "./icons";
 import { BotaoExportar, EscolherColunasXlsx, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
+import { CabecalhoFiltro } from "./GatilhoFiltro";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
@@ -134,6 +135,8 @@ function extrairDados<R>(columns: Column<R>[], rows: R[]): ColunaDados[] {
     return { tipo: "none" };
   });
 }
+/** A coluna ORDENA (a seta no cabeçalho): tem a chave da ordem — número, texto ou os vários valores. */
+const ordena = <R,>(c: Column<R>) => !!(c.numero || c.value || c.valores);
 const SEM_EDICOES: EdicaoTabela[] = [];
 const SEM_PADROES: Record<string, unknown> = {};
 const larguraFixa = (px: number): CSSProperties => ({ width: px, minWidth: px, maxWidth: px });
@@ -405,8 +408,8 @@ export function DataTable<R>({
   // Ordenação pela chave extraída uma vez (numérica p/ `numero`; texto natural senão; vazios no fim).
   const ordenadas = useMemo(() => {
     const col = sort.key ? columns.find((c) => c.key === sort.key) : undefined;
-    if (!col || (!col.numero && !col.value)) return facetas.passam.map((i) => rows[i]);
-    const chaves = rows.map((r) => (col.numero ? col.numero(r) : col.value?.(r)));
+    if (!col || !ordena(col)) return facetas.passam.map((i) => rows[i]);
+    const chaves = rows.map((r) => (col.numero ? col.numero(r) : col.value ? col.value(r) : col.valores?.(r).join("; ")));
     return ordenarIndices(facetas.passam, chaves, sort.dir).map((i) => rows[i]);
   }, [facetas, sort, columns, rows]);
   const onOrdenadasRef = useRef(onOrdenadas);
@@ -709,17 +712,20 @@ export function DataTable<R>({
                 const alinha = c.align === "right" ? ("end" as const) : ("start" as const);
                 const opcoes = externo ? externo.opcoes : (facetas.opcoes[j] ?? []);
                 const pos = posicao(c.key, p);
+                // A SETA de ordenar em TODA coluna que ordena (na edição, ordena-se pela ação do topo — `CabecalhoEdicao`).
+                const ordenar = !editando && ordena(c) ? (d: "asc" | "desc") => setSort({ key: c.key, dir: d }) : undefined;
+                // Sem filtro: o MESMO cabeçalho (rótulo · seta), no MESMO lugar; coluna sem título (ações) fica vazia.
+                const semFiltro = c.header.trim() ? <CabecalhoFiltro label={c.header} sortDir={sortDe(c.key)} onSort={ordenar} /> : null;
                 const filtro = c.travado ? (
                   // O motivo da trava também pelo TOQUE (a dica do mouse não existe no celular).
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 py-2 text-left min-h-11 desktop:min-h-0"
-                    title={c.travado}
-                    onClick={() => toast.info(c.travado as string)}
-                  >
-                    <IconLock className="h-3 w-3 shrink-0" aria-hidden />
-                    {c.header}
-                  </button>
+                  <CabecalhoFiltro
+                    label={c.header}
+                    sortDir={sortDe(c.key)}
+                    onSort={ordenar}
+                    prefixo={<IconLock className="h-3 w-3 shrink-0" aria-hidden />}
+                    dica={c.travado}
+                    onRotulo={() => toast.info(c.travado as string)}
+                  />
                 ) : externo ? (
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
@@ -732,13 +738,13 @@ export function DataTable<R>({
                         externo.onChange(normalizarSelecao(v, opcoes));
                         setPage(1);
                       }}
-                      onSort={(d) => setSort({ key: c.key, dir: d })}
+                      onSort={ordenar}
                       sortDir={sortDe(c.key)}
                       align={alinha}
                       marcado={marcado}
                     />
                   ) : (
-                    <span>{c.header}</span>
+                    semFiltro
                   )
                 ) : tipo === "date" ? (
                   <DateFilterHeader
@@ -747,7 +753,7 @@ export function DataTable<R>({
                     anos={facetas.anos[j]?.length ? (facetas.anos[j] as number[]) : undefined}
                     meses={facetas.meses[j]?.length ? (facetas.meses[j] as string[]) : undefined}
                     onApply={(v) => aplicarFiltro(c.key, v.de || v.ate ? v : null)}
-                    onSort={(d) => setSort({ key: c.key, dir: d })}
+                    onSort={ordenar}
                     sortDir={sortDe(c.key)}
                     align={alinha}
                   />
@@ -757,7 +763,7 @@ export function DataTable<R>({
                     dominio={facetas.dominios[j] ?? []}
                     value={filters[c.key] as FaixaValor | undefined}
                     onApply={(f) => aplicarFiltro(c.key, normalizarFaixa(f, facetas.dominios[j] ?? []))}
-                    onSort={(d) => setSort({ key: c.key, dir: d })}
+                    onSort={ordenar}
                     sortDir={sortDe(c.key)}
                     align={alinha}
                     marcado={marcado}
@@ -771,13 +777,13 @@ export function DataTable<R>({
                     options={opcoes}
                     value={(filters[c.key] as string[] | undefined) ?? []}
                     onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}
-                    onSort={(d) => setSort({ key: c.key, dir: d })}
+                    onSort={ordenar}
                     sortDir={sortDe(c.key)}
                     align={alinha}
                     marcado={marcado}
                   />
                 ) : (
-                  <span>{c.header}</span>
+                  semFiltro
                 );
                 return (
                   <th
@@ -793,19 +799,19 @@ export function DataTable<R>({
                       ...pos.estilo,
                       ...(marcado ? { boxShadow: "inset 0 -2px 0 var(--accent)" } : {}),
                     }}
-                    aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
+                    aria-sort={sort.key === c.key && ordena(c) ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                   >
                     {editando ? (
                       <CabecalhoEdicao
                         rotulo={c.header}
                         congelada={p < vista.fixadas.length}
                         oculta={fora.has(c.key)}
-                        ordem={sortDe(c.key)}
+                        ordem={ordena(c) ? sortDe(c.key) : null}
                         onArrastar={(e) => iniciar(e, c.key)}
                         onMover={(d) => mover(c.key, p, d)}
                         onCongelar={() => congelar(c.key)}
                         onOcultar={() => editor.mudar((x) => alternarColuna(x, c.key, padraoOc))}
-                        onOrdenar={() => ordenarPor(c.key)}
+                        onOrdenar={ordena(c) ? () => ordenarPor(c.key) : undefined}
                         largura={lay.larguras[c.key]}
                         onLargura={(px) => editor.mudar((x) => comLargura(x, c.key, px))}
                       >

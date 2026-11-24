@@ -1,10 +1,14 @@
 "use client";
 
 import { areaVisivel, entre, MARGEM_TELA } from "./area-visivel";
-import { type ButtonHTMLAttributes, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, type Ref, type RefObject, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EstadoDropdown } from "./SetaDropdown";
 import { useSaida } from "./useSaida";
+
+/** Abrir/fechar o painel por OUTRO controle (ex.: o rótulo da coluna): `teclado` = aberto pelo teclado (o conteúdo leva o
+ *  foco para dentro) e `origem` = quem recebe o foco de volta ao fechar (sem ela, o gatilho). */
+export type ControleDropdown = { alternar: (teclado: boolean, origem?: HTMLElement | null) => void };
 
 // Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período/SeletorPessoa).
 // O painel é renderizado em PORTAL (position: fixed no body) para NUNCA ser
@@ -39,6 +43,7 @@ export function Dropdown({
   gatilho,
   ancora,
   folha = false,
+  controle,
 }: {
   trigger: ReactNode;
   children: ReactNode | ((close: () => void, abertura: { teclado: boolean }) => ReactNode);
@@ -58,6 +63,7 @@ export function Dropdown({
   gatilho?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className" | "type" | "id">;
   ancora?: RefObject<HTMLElement | null>;
   folha?: boolean;
+  controle?: Ref<ControleDropdown>;
 }) {
   const [openInterno, setOpenInterno] = useState(false);
   const open = aberto ?? openInterno;
@@ -163,11 +169,21 @@ export function Dropdown({
     };
   }, [open]);
 
-  // Fecha; com o foco dentro do painel, ele volta ao gatilho (quem usa pode levá-lo a outro lugar logo depois).
+  // Quem abriu por FORA do gatilho (`controle`) recebe o foco de volta ao fechar.
+  const origemRef = useRef<HTMLElement | null>(null);
+  // Fecha; com o foco dentro do painel, ele volta a quem abriu (quem usa pode levá-lo a outro lugar logo depois).
   function fechar() {
-    if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+    if (panelRef.current?.contains(document.activeElement)) (origemRef.current ?? triggerRef.current)?.focus({ preventScroll: true });
     setOpen(false);
   }
+  useImperativeHandle(controle, () => ({
+    alternar: (tec, origem) => {
+      if (bloqueado) return;
+      origemRef.current = origem ?? null;
+      setTeclado(tec);
+      setOpen((o) => !o);
+    },
+  }));
   const painel = folha
     ? {
         ref: panelRef,
@@ -204,6 +220,7 @@ export function Dropdown({
         {...gatilho}
         onClick={(e) => {
           if (bloqueado || gatilho?.disabled) return;
+          origemRef.current = null;
           setTeclado(e.detail === 0);
           setOpen((o) => !o);
         }}

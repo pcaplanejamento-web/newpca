@@ -1571,7 +1571,7 @@ function TabelaCruzadaDemo() {
           larguras={larguras}
           ocultas={ocultas}
           ordem={ordem}
-          onOrdenar={(por) => setOrdem((o) => ({ por, desc: JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra" }))}
+          onOrdenar={(por, desc) => setOrdem((o) => ({ por, desc: desc ?? (JSON.stringify(o.por) === JSON.stringify(por) ? !o.desc : por !== "rotulo" && por !== "extra") }))}
           onAbrir={editar ? undefined : () => {}}
           edicao={
             editar
@@ -4420,6 +4420,10 @@ export function Catalogo() {
             <CabecalhoFiltro label="Estado" sortDir="asc" marcado onSort={(d) => toast(`Ordenar: ${d === "asc" ? "crescente" : "decrescente"}`)}>
               {() => <p className="p-2 text-[12px] text-muted">Painel do filtro</p>}
             </CabecalhoFiltro>
+          </div>
+          {/* Sem filtro: o mesmo cabeçalho, só rótulo + seta. */}
+          <div className="w-40">
+            <CabecalhoFiltro label="Ticket" onSort={(d) => toast(`Ordenar: ${d === "asc" ? "crescente" : "decrescente"}`)} />
           </div>
           <span className="text-[12px] text-faint">
             {faixaDemo ? `Faixa: ${faixaDemo.min != null ? brl(faixaDemo.min) : "…"} a ${faixaDemo.max != null ? brl(faixaDemo.max) : "…"}` : "Valor cheio (sem faixa)"}

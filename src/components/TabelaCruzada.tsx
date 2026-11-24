@@ -23,6 +23,7 @@ import { LINHAS_TABELA } from "@/lib/theme";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { useLinhasTabela } from "./ConfigTabelas";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
+import { BotaoOrdenar } from "./GatilhoFiltro";
 import { IconArrowDown, IconArrowUp } from "./icons";
 import { Pager } from "./Pager";
 import { Button } from "./Button";
@@ -114,7 +115,8 @@ export function TabelaCruzada({
   ocultas?: string[];
   ordem: OrdemCruzamento;
   /** Ordena as linhas (alterna a cada toque). */
-  onOrdenar: (por: OrdemCruzamento["por"]) => void;
+  /** Ordenar pela coluna: sem `desc`, alterna; com ele (a SETA do cabeçalho), nessa direção. */
+  onOrdenar: (por: OrdemCruzamento["por"], desc?: boolean) => void;
   /** Origem do número: linha e/ou coluna (`null` = todas). */
   onAbrir?: (linha: string | null, coluna: string | null) => void;
   ativa?: { linha: string | null; coluna: string | null } | null;
@@ -215,7 +217,7 @@ export function TabelaCruzada({
     const Seta = ordem.desc ? IconArrowDown : IconArrowUp;
     return <Seta className="h-3 w-3 shrink-0 text-accent" aria-hidden />;
   };
-  const ariaSort = (por: OrdemCruzamento["por"]) => (seta(por) ? (ordem.desc ? "descending" : "ascending") : undefined);
+  const ariaSort = (por: OrdemCruzamento["por"]) => (mesmaOrdem(por) ? (ordem.desc ? "descending" : "ascending") : undefined);
 
   // UM toque MARCA a linha; DOIS (na mesma célula, em até 400 ms — duplo clique ou toque duplo no celular) abrem a origem
   // do número. Delegado — milhares de células sem um manipulador cada. Enter/Espaço marcam e abrem direto.
@@ -266,20 +268,29 @@ export function TabelaCruzada({
     const conteudo = (
       <>
         <span className="line-clamp-2 break-words text-center">{c.rotulo}</span>
-        {seta(por)}
+        {/* O lugar da SETA (o mesmo do `BotaoOrdenar` fora da edição): o nome não muda de lugar ao ligar a edição. */}
+        <span className="inline-flex w-6 shrink-0 justify-center desktop:w-5">{seta(por)}</span>
       </>
     );
     const linha = "flex w-full items-center justify-center gap-1";
+    // Fora da edição: o NOME ordena (alterna) e a SETA ao lado é a mesma de toda tabela (`BotaoOrdenar`).
     if (!edicao)
       return (
-        <button
-          type="button"
-          className={`${linha} rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40`}
-          title={c.rotulo}
-          onClick={() => onOrdenar(por)}
-        >
-          {conteudo}
-        </button>
+        <div className={linha}>
+          <button
+            type="button"
+            className="min-h-11 rounded-[6px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 desktop:min-h-0"
+            title={c.rotulo}
+            onClick={() => onOrdenar(por)}
+          >
+            <span className="line-clamp-2 break-words text-center">{c.rotulo}</span>
+          </button>
+          <BotaoOrdenar
+            label={c.rotulo}
+            sortDir={mesmaOrdem(por) ? (ordem.desc ? "desc" : "asc") : null}
+            onSort={(d) => onOrdenar(por, d === "desc")}
+          />
+        </div>
       );
     return (
       <CabecalhoEdicao
