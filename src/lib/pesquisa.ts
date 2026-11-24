@@ -547,7 +547,7 @@ export const linkDaMesa = (pcaId: number | null, abrir: string) =>
 export type EspacoPesquisa = { tipo: "orcamento" | "quadro" | "pca"; id: number; nome: string; abas: [string, string][] };
 
 const ABAS_ORCAMENTO: [string, string][] = [["lancamentos", "Lançamentos"], ["comparativo", "Comparativo"], ["vinculos", "Vínculos"], ["visoes", "Visões"]];
-const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["importacao", "Importação"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["configuracao", "Configuração"]];
+const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["importacao", "Importação"], ["documentos", "Documentos"], ["declaracoes", "Declarações"], ["documento", "Documento oficial"], ["configuracao", "Configuração"]];
 const ABAS_QUADRO: [string, string][] = [["quadro", "Quadro"], ["lista", "Lista"], ["calendario", "Calendário"], ["dashboard", "Dashboard"], ["configuracao", "Configuração"]];
 
 /**
@@ -575,6 +575,7 @@ export async function espacosDaPesquisa(a: Acesso): Promise<EspacoPesquisa[]> {
           (v !== "importacao" || p.fonte === "lista") &&
           (v !== "documentos" || docs) &&
           (v !== "declaracoes" || acessoDeclaracoes(p.declaracoes, a.u.admin) !== "nenhum") &&
+          (v !== "documento" || a.u.admin) &&
           componenteLibera(a, `pca.${v}`),
       );
       if (abas.length) out.push({ tipo: "pca", id: p.id, nome: `${p.ano ?? ""} · ${p.nome}`, abas });

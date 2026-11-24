@@ -9,10 +9,10 @@ import { useOndeDetalhe } from "./CanalGrupo";
 import { EsqueletoAbaPca } from "./PcaEspacoEsqueleto";
 
 const ESQUELETOS = Object.fromEntries(
-  (["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "configuracao"] as const).map((a) => [a, <EsqueletoAbaPca key={a} aba={a} />]),
+  (["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "documento", "configuracao"] as const).map((a) => [a, <EsqueletoAbaPca key={a} aba={a} />]),
 ) as Record<AbaPca, ReactNode>;
 
-export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "declaracoes" | "configuracao";
+export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "declaracoes" | "documento" | "configuracao";
 
 /**
  * ESPAÇO do PCA (`/painel/pca/[id]`) — sem título (o nome do PCA está no caminho do cabeçalho): a PRIMEIRA linha é o voltar
@@ -68,6 +68,7 @@ export function PcaEspacoView({
           ...(pca.fonte === "lista" ? [{ value: "importacao", label: "Importação", curto: "Import." } as const] : []),
           { value: "documentos", label: "Documentos", curto: "Docs" },
           { value: "declaracoes", label: "Declarações", curto: "Decl." },
+          { value: "documento", label: "Documento oficial", curto: "Doc. PCA" },
           { value: "configuracao", label: "Configuração" },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >

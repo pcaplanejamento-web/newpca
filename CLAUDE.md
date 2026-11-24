@@ -4309,6 +4309,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Editar até exportar + PDF timbrado (v1.249.0, migração `0166` — `declaracoes.editada_em/editada_por_nome/exportada_em/exportada_por_nome` + o gatilho `declaracoes_travada`: mudar o `conteudo` de declaração exportada ou cancelada = RAISE 'declaracao_travada'):** EDITAR = `PUT /api/pca/[id]/declaracoes/[did]` (Manipular + o mesmo pedido da emissão; só quem vê TODOS os itens) → `editarDeclaracao` (`itensParaEdicao` = o saldo sem o que a própria declaração declara; retrato e selo refeitos com o MESMO número/código/data de emissão; `comandosEditarDeclaracao`: o UPDATE PRIMEIRO — o gatilho barra a travada e o lote volta —, depois os itens trocados, o gatilho do saldo vale). EXPORTAR = `POST …/[did]/pdf` (Exportar; `comandoExportarDeclaracao` marca uma vez, auditoria) devolve o PDF final; o `GET …/pdf` é a PRÉVIA (a não exportada sai com o aviso e o carimbo "PRÉVIA") e o `?baixar=1` só baixa de novo a exportada/cancelada (409 antes). A verificação pública diz "em elaboração" antes da exportação. O PDF: o TIMBRE da Prefeitura (`timbre-prefeitura.ts`, PNG 1654×312 em base64, import dinâmico só no servidor) no alto de cada página (`montarDocumento` `timbre`/`margem` → op `timbre`, `embedPng` no `gerarDocumentoPdf`), `PALETA_DECLARACAO` (preto e cinza desde a v1.251.0), título centralizado e parágrafos justificados (`BlocoDoc` `titulo.alinhar`, `paragrafo.alinhar`/`negrito` — também na `PreviaDocumento`), o fecho do art. 12 da Lei 14.133/2021 e "Assinado e datado digitalmente.". A observação é texto formatado (`EditorRico compacto`; `limparObservacao` guarda as linhas, até 4000; no PDF por `textoSimples`). Tela: a tabela das declarações com a coluna de ações logo após o nº (editar em elaboração · PDF = o `VisualizadorPdf` com `rotuloBaixar` "Exportar o PDF", que confirma e trava — `useExportarPdf`) e a Situação Em elaboração/Exportada/Cancelada; a `NovaDeclaracao` é a mesma tela para EDITAR (`edicao`), com o `CampoQuantidade` (rascunho local, grava ao sair/Enter — a tabela não redesenha a cada tecla) e as colunas que decidem à vista.
 - Tela: **`DeclaracoesPca`** (a `DataTable` das declarações + o detalhe num `Modal` com `StatMini`, os itens congelados, o link de verificação, ver/baixar o PDF pelo `VisualizadorPdf` e cancelar) e **`NovaDeclaracao`** (`next/dynamic`: finalidade, processo, observação e os itens COM SALDO — marcar propõe o saldo, a quantidade menor = parcial; `NumInput autoFoco={false}`; confirma antes de emitir).
 
+## Documento oficial do PCA (v1.313.0, migração `0200`)
+- **Cada PCA tem o SEU documento** (tabela `pca_documentos`: `pca_id` PK + `config` JSON) e o registro de cada EMISSÃO
+  (`pca_documento_emissoes`: código de verificação único, itens, valor, DFDs, `dados_hash`, `config_hash`, `selo` SHA-256,
+  o IP só como hash). Núcleo PURO **`pca-documento-core.ts`** (testado — `tests/pca-documento.test.ts`):
+  `ConfigDocumentoPca` (ativo · título/subtítulo/ente/local · capa · timbre · itens em página deitada · expediente ·
+  `secoes` de texto formatado com MARCADORES `{{ano}}`/`{{nome}}`/`{{ente}}`/`{{itens}}`/`{{dfds}}`/`{{unidades}}`/
+  `{{valor}}`/`{{valorExtenso}}`/`{{data}}` · `automaticos` resumo/classificação/unidade/prioridade/cronograma/DFDs/
+  justificativas · `colunas` dos itens — sequencial e descrição FIXAS · notas · assinaturas), `lerConfigDocumento`
+  (qualquer JSON → válido; sem linha = DESLIGADO), `valorPorExtenso`, `itensEmOrdem` (SEMPRE pelo sequencial),
+  `chaveClassificacao` (a mesma escrita = uma), `blocosDocumentoPca` (capa → expediente → seções → resumos → cronograma →
+  DFDs sem protocolo → TODOS os itens com o TOTAL → notas → fecho + o quadro da emissão; sem emissão = PRÉVIA marcada),
+  `textoSelo`. Layout: `documento-pdf-core` ganhou os blocos **`capa`** (centrada na página) e **`pagina`** (`paisagem` =
+  A4 deitado) e `montarPaginas` (as páginas + o tamanho de cada uma); `gerarDocumentoPdf` ganhou `onProgresso`
+  (montando · desenhando página a página · salvando, cedendo a vez ao navegador a cada 25 páginas) e `sinal` (cancelar).
+- **Servidor** (`pca-documento.ts`): `dadosDoDocumento(pca)` em `memoPorVersao` (os itens = o `itensTexto` do Dashboard,
+  os DFDs vigentes com objeto/justificativa MASCARADOS — `mascararTexto` — prioridade e previsão, os nomes das unidades,
+  os totais e o `dadosHash`); `registrarEmissao` (código de 128 bits + selo); `seloConfere`; `listarEmissoes`.
+- **Emissão pública** `POST /api/pca/[id]/documento` (mapa `publica`): origem (`parseCorpo`) → PCA PUBLICADO + documento
+  LIGADO → limite `emitirDocumentoPcaIp` (20/h, fecha na falha) → `verificarCaptcha` → registra e devolve configuração +
+  dados; o PDF (milhares de páginas) é montado NO NAVEGADOR (`pca-documento-pdf.ts`, `gerarPdfDocumentoPca`). Tela:
+  item **"Emitir o PCA (PDF)"** no menu da `TelaPublica` (só com o documento ligado — `documentoAtivo`; o `ItemMenu` ganhou
+  `onClick`) → **`EmitirDocumentoPca`** (anti-robô, `Progress` real, cancelar, baixar de novo, link da verificação).
+  Verificação pública `/pca/documento/verificar[/código]` (limite `verificarDocumentoPcaIp`; autêntico · selo não confere ·
+  dados do PCA atualizados depois da emissão).
+- **ADM** `GET/PUT /api/admin/pcas/[id]/documento` (`?dados=1` = os dados da prévia, sem registrar) → aba **"Documento
+  oficial"** do espaço do PCA (só `u.admin`) = **`DocumentoPcaAdmin`** (os blocos editáveis, a prévia ao vivo em
+  `PreviaDocumento` — que desenha `capa`/`pagina` — com os 40 primeiros itens, o PDF completo de prévia e as emissões).
+
 ## Frotas (Vólus) — combustível, manutenção e veículos (v1.257.0, migração `0169`)
 - **Telas de módulo** (`ABA_KEYS`): **`frotas`** (painel), **`combustivel`**, **`manutencao`** e **`veiculos`** — ações visualizar · manipular · importar · exportar · configurar (a `0169` deu tudo ao Administrador e ao Gestor e visualizar + exportar ao Membro). Páginas `/painel/{frotas,combustivel,manutencao}` = **`FrotaView modo`** e `/painel/veiculos` = **`VeiculosView`**; o escopo = a unidade do cabeçalho (`escopoDaFrota` → `unidadeDoModulo("frotas")` + `doEscopo`, o mesmo dos empenhos).
 - **A API da Vólus** (núcleo puro **`volus-core.ts`** + cliente **`volus-api.ts`**, `fetch` injetável, testados): OAuth `client_credentials` em `HOST_AUTH_VOLUS` (token em cache) e o extrato `extrato.api.volus.com/v1/fleet/{fuel|maintenance}/statement?start_date&end_date&company_id` por CONTRATO (12 dígitos — `codigoEmpresa`; 000617… = combustível, 000600… = manutenção — `produtoProvavel`). Uma resposta acima de `MAX_BYTES_EXTRATO` (200 KB — a CPU do Worker) NÃO é lida: volta `dividir` com `partesPara` e o período é relido em partes (um dia sozinho grande demais = erro, nunca gravação pela metade). Mapeamento (`linhaDaTransacao` → `COLUNAS_TRANSACAO`): placa normalizada, números pt-BR/en, data/hora em Brasília, itens/pedidos da manutenção.

@@ -798,7 +798,7 @@ export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep: nu
 }
 
 /** O que do PCA muda as cargas dele (a chave do `memoPorVersao`). */
-const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}:${p.declaracoes}`;
+export const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}:${p.declaracoes}`;
 
 /**
  * Os "Id:" da capa dos protocolos INCORPORADOS ao PCA — a régua da UNIÃO planilha × protocolo. Vem dos PROTOCOLOS (não dos

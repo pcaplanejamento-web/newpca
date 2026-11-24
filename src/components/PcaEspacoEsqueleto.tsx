@@ -75,6 +75,20 @@ export function EsqueletoAbaPca({ aba }: { aba: AbaPca }) {
           <EsqueletoTabela cheia linhas={14} colunas={10} />
         </EsqueletoColunaEspaco>
       );
+    case "documento":
+      return (
+        <div className="grid gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
+          <div className="space-y-[var(--gap-block)]">
+            {[1, 3, 2, 4, 3, 2].map((linhas, i) => (
+              <SkeletonCartao key={i} linhas={linhas} />
+            ))}
+          </div>
+          <div className="space-y-[var(--gap-block)] lg:self-start">
+            <SkeletonCartao linhas={2} />
+            <SkeletonCartao linhas={5} />
+          </div>
+        </div>
+      );
     case "configuracao":
       return (
         <div className="grid gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">

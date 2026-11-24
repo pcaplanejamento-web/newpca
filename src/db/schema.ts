@@ -3013,3 +3013,34 @@ export const centiLogins = sqliteTable("centi_logins", {
   motivo: text("motivo"),
   ultimoUsoEm: text("ultimo_uso_em"),
 });
+
+/** DOCUMENTO OFICIAL DO PCA (migração `0200`): a configuração de cada PCA (JSON — `pca-documento-core.ts`). */
+export const pcaDocumentos = sqliteTable("pca_documentos", {
+  pcaId: integer("pca_id")
+    .primaryKey()
+    .references(() => pcas.id, { onDelete: "cascade" }),
+  config: text("config").notNull(),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoPorNome: text("atualizado_por_nome"),
+});
+
+/** Cada EMISSÃO pública do documento do PCA: o código de verificação, os números e o selo (o IP só como hash). */
+export const pcaDocumentoEmissoes = sqliteTable(
+  "pca_documento_emissoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    codigo: text("codigo").notNull(),
+    pcaId: integer("pca_id")
+      .notNull()
+      .references(() => pcas.id, { onDelete: "cascade" }),
+    emitidoEm: text("emitido_em").notNull(),
+    itens: integer("itens").notNull(),
+    valor: real("valor").notNull(),
+    dfds: integer("dfds").notNull(),
+    dadosHash: text("dados_hash").notNull(),
+    configHash: text("config_hash").notNull(),
+    selo: text("selo").notNull(),
+    ipHash: text("ip_hash"),
+  },
+  (t) => [uniqueIndex("pca_documento_emissoes_codigo_uq").on(t.codigo), index("pca_documento_emissoes_pca_idx").on(t.pcaId, t.id)],
+);

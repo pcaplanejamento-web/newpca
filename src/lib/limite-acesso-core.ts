@@ -35,6 +35,10 @@ export const LIMITES_ACESSO = {
   verificarTermoIp: { max: 30, janelaS: 10 * 60 },
   /** A verificação PÚBLICA da declaração do PCA pelo código (por IP). */
   verificarDeclaracaoIp: { max: 30, janelaS: 10 * 60 },
+  /** EMISSÕES públicas do documento oficial do PCA (por IP) — cada uma registra um código de verificação. */
+  emitirDocumentoPcaIp: { max: 20, janelaS: 60 * 60 },
+  /** A verificação PÚBLICA do documento do PCA pelo código (por IP). */
+  verificarDocumentoPcaIp: { max: 30, janelaS: 10 * 60 },
   /** "Pedir liberação ao ADM" da troca de aparelho (por pessoa). */
   liberacaoAparelho: { max: 3, janelaS: 24 * 60 * 60 },
   /** ENTREGAS do login da Centi (selado) à extensão — uma por tentativa de entrar, somando os computadores da pessoa. */

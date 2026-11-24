@@ -18,7 +18,8 @@ import { useSaida } from "./useSaida";
  * `GavetaMenu` (hambúrguer) com o mesmo conteúdo.
  */
 
-export type ItemMenu = { href: string; label: string; Icon: LucideIcon };
+/** Um item do menu: o link da tela — ou, com `onClick`, uma AÇÃO (ex.: emitir o documento do PCA na tela pública). */
+export type ItemMenu = { href: string; label: string; Icon: LucideIcon; onClick?: () => void };
 export type SecaoMenu = { chave: string; titulo?: string; itens: readonly ItemMenu[] };
 
 /** Movimento desligado (sistema ou o ADM em Aparência). */
@@ -96,6 +97,25 @@ export function ItensMenu({ secoes, ativo, onNavigate }: { secoes: readonly Seca
             {secao.itens.map((item) => {
               const active = ativo(item);
               const { Icon } = item;
+              const classe = `flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] min-h-11 desktop:min-h-0 transition-colors duration-[var(--motion-duration)] ${
+                active ? "border-border-2 bg-sb-active font-semibold text-text" : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
+              }`;
+              if (item.onClick)
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    title={item.label}
+                    onClick={() => {
+                      onNavigate?.();
+                      item.onClick?.();
+                    }}
+                    className={`${classe} text-left`}
+                  >
+                    <Icon className="h-[17px] w-[17px] shrink-0" strokeWidth={1.8} aria-hidden="true" />
+                    <span className="menu-esconde min-w-0 truncate">{item.label}</span>
+                  </button>
+                );
               return (
                 <Link
                   key={item.href}
@@ -103,11 +123,7 @@ export function ItensMenu({ secoes, ativo, onNavigate }: { secoes: readonly Seca
                   unstable_dynamicOnHover
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] min-h-11 desktop:min-h-0 transition-colors duration-[var(--motion-duration)] ${
-                    active
-                      ? "border-border-2 bg-sb-active font-semibold text-text"
-                      : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
-                  }`}
+                  className={classe}
                 >
                   <IconeNavegacao Icon={Icon} className={`h-[17px] w-[17px] shrink-0 ${active ? "text-accent" : ""}`} strokeWidth={1.8} />
                   <span className="menu-esconde min-w-0 truncate">{item.label}</span>

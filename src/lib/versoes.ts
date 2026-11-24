@@ -35,6 +35,34 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.313.0",
+    data: "2026-11-24",
+    titulo: "Documento oficial do PCA, emitido por qualquer pessoa na tela inicial",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Tela inicial",
+        texto:
+          "Novo item “Emitir o PCA (PDF)” no menu da tela inicial: gera o documento oficial do Plano de Contratações Anual com a apresentação, a base legal, os resumos (por classificação, unidade e prioridade), o cronograma, a relação dos DFDs (sem dados de protocolo) e TODOS os itens pelo número sequencial do PCA. O andamento aparece página a página e cada emissão recebe um código de verificação.",
+        link: "/",
+      },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto:
+          "Aba “Documento oficial” no espaço de cada PCA (só o Administrador): ligar ou desligar a emissão pública, capa e papel timbrado, expediente, as seções de texto com marcadores ({{ano}}, {{valor}}…), os dados automáticos, as colunas dos itens, notas, assinaturas, a prévia e as emissões registradas. Cada PCA tem a sua configuração.",
+        link: "/painel/pca",
+      },
+      {
+        tipo: "novo",
+        area: "Segurança",
+        texto:
+          "A emissão pública exige a verificação anti-robô, tem limite por endereço e registra código e selo; qualquer pessoa confere a autenticidade em /pca/documento/verificar.",
+        link: "/pca/documento/verificar",
+      },
+    ],
+  },
+  {
     versao: "1.312.4",
     data: "2026-11-24",
     titulo: "Tabelas no celular: rolar com o dedo sem travar",

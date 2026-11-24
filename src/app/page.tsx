@@ -13,6 +13,9 @@ import { dashboardDoPca, getPcaEspaco, listarPcasCards, listarPcasPublicados, or
 import { getConfigProtecao } from "@/lib/protecao";
 import { protecaoPublica } from "@/lib/protecao-core";
 import { getConfigPublico } from "@/lib/publico";
+import { getIntegracoes } from "@/lib/integracoes";
+import { turnstileConfigurado } from "@/lib/integracoes-core";
+import { documentoAtivo } from "@/lib/pca-documento";
 import { scriptMenuPublico } from "@/lib/menu-lateral";
 import { linhasTabela } from "@/lib/theme";
 import { podeLerPublico, vistaPublicaPedida, vistasDoMenu } from "@/lib/publico-core";
@@ -92,6 +95,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   let nomesUnidades: Record<string, string> = {};
   let unidades: { lista: { id: number; codigo: string; municipio: string }[]; atual?: number } | undefined;
 
+  // O DOCUMENTO OFICIAL do PCA (o ADM liga por PCA): o item do menu + a verificação anti-robô da emissão.
+  const documento =
+    pca && pca.status === "publicado" && (await documentoAtivo(pca.id))
+      ? await getIntegracoes()
+          .then((integ) => ({ pcaNome: pca.nome, turnstile: { enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey } }))
+          .catch(() => ({ pcaNome: pca.nome, turnstile: undefined }))
+      : null;
   let conteudo: React.ReactNode;
   if (!pca || !liberada) conteudo = <Vazio texto="A equipe ainda não publicou o Plano de Contratações Anual." />;
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca);
@@ -127,7 +137,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da consulta: as linhas do ADM e o NOME de cada sigla no filtro das colunas de unidade. */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesUnidades}>
-      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={cartoes} soImagem={cfg.cartoesSoImagem}>
+      <TelaPublica menuRecolhido={cfg.menu === "recolhido"} painel={painel} identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={cartoes} soImagem={cfg.cartoesSoImagem} documento={documento}>
         {conteudo}
       </TelaPublica>
       </ConfigTabelas>

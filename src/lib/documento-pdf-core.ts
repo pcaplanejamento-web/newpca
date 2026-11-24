@@ -36,7 +36,14 @@ export type BlocoDoc =
   | { tipo: "nota"; texto: string; cor: string }
   | { tipo: "tabela"; colunas: ColunaDoc[]; linhas: LinhaDoc[]; vazio?: string }
   /** QUADRO emoldurado (ex.: o painel da assinatura): título + pares rótulo/valor + nota; nunca se parte entre páginas. */
-  | { tipo: "quadro"; titulo: string; itens: { rotulo: string; valor: string }[]; nota?: string; cor: string };
+  | { tipo: "quadro"; titulo: string; itens: { rotulo: string; valor: string }[]; nota?: string; cor: string }
+  /** PÁGINA NOVA (com a orientação: `paisagem` = A4 deitado — tabelas largas). Numa página ainda vazia, só troca a orientação. */
+  | { tipo: "pagina"; paisagem?: boolean }
+  /** CAPA: as linhas CENTRADAS na página inteira (na vertical e na horizontal); o conteúdo seguinte começa na página seguinte. */
+  | { tipo: "capa"; linhas: LinhaCapa[] };
+
+/** Uma linha da capa: o texto, o tamanho (pt), negrito, a cor e o espaço ANTES dela (pt). */
+export type LinhaCapa = { texto: string; tam: number; negrito?: boolean; cor?: string; espaco?: number };
 
 export type OpDoc =
   | { t: "texto"; x: number; y: number; tam: number; negrito: boolean; cor: string; texto: string }
@@ -50,6 +57,10 @@ export type TimbreDoc = { largura: number; altura: number };
 
 /** A4 em pé (pt). */
 export const PAGINA_A4 = { largura: 595.28, altura: 841.89, margem: 40 };
+/** A4 deitado (pt) — o bloco `pagina` com `paisagem`. */
+export const PAGINA_A4_PAISAGEM = { largura: 841.89, altura: 595.28, margem: 40 };
+/** O tamanho de uma página do documento (pt). */
+export type TamanhoPagina = { largura: number; altura: number };
 const TOPO = 26; // o título do documento + a linha, no alto de cada página
 const RODAPE = 22;
 const TAM = { titulo: 16, secao: 12, subsecao: 9.5, texto: 8.5, tabela: 7.5, rotulo: 7, valor: 11.5, cabecalhoPagina: 7.5, rodape: 7, carimbo: 6.5 };
@@ -77,6 +88,10 @@ export function limparBlocos(blocos: BlocoDoc[], limpo: (s: string) => string): 
         };
       case "quadro":
         return { ...b, titulo: limpo(b.titulo), itens: b.itens.map((i) => ({ rotulo: limpo(i.rotulo), valor: limpo(i.valor) })), nota: b.nota ? limpo(b.nota) : b.nota };
+      case "pagina":
+        return b;
+      case "capa":
+        return { ...b, linhas: b.linhas.map((l) => ({ ...l, texto: limpo(l.texto) })) };
       case "subsecao":
         return { ...b, texto: limpo(b.texto), detalhe: b.detalhe ? limpo(b.detalhe) : b.detalhe };
       default:
@@ -94,38 +109,56 @@ export function limparBlocos(blocos: BlocoDoc[], limpo: (s: string) => string): 
  * v1.251.0 (o carimbo em todas as páginas, as colunas só pelo peso, sem a grade e o texto no topo da célula) — para os documentos já emitidos que conferem pelos
  * bytes, como o comprovante do termo.
  */
-export function montarDocumento(
-  blocos: BlocoDoc[],
-  medir: Medir,
-  opcoes: {
-    titulo: string;
-    rodape: string;
-    carimbo?: { titulo: string; linhas: string[]; cor: string };
-    desenhoAntigo?: boolean;
-    timbre?: TimbreDoc;
-    margem?: number;
-  },
-): OpDoc[][] {
-  const { largura: W, altura: H } = PAGINA_A4;
+export type OpcoesDocumento = {
+  titulo: string;
+  rodape: string;
+  carimbo?: { titulo: string; linhas: string[]; cor: string };
+  desenhoAntigo?: boolean;
+  timbre?: TimbreDoc;
+  margem?: number;
+};
+
+export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDocumento): OpDoc[][] {
+  return montarPaginas(blocos, medir, opcoes).paginas;
+}
+
+/** As páginas e o TAMANHO de cada uma (em pé ou deitada — o bloco `pagina`). */
+export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDocumento): { paginas: OpDoc[][]; tamanhos: TamanhoPagina[] } {
+  // A página EM PÉ manda no timbre (a altura dele é a mesma nas deitadas — centrado).
+  const W0 = PAGINA_A4.largura;
+  let W = PAGINA_A4.largura;
+  let H = PAGINA_A4.altura;
   const M = opcoes.margem ?? PAGINA_A4.margem;
-  const util = W - 2 * M;
-  // Com o timbre, ele ocupa o alto da folha (na largura inteira) e o conteúdo começa logo abaixo.
-  const hTimbre = opcoes.timbre ? (W * opcoes.timbre.altura) / opcoes.timbre.largura : 0;
+  let util = W - 2 * M;
+  // Com o timbre, ele ocupa o alto da folha (na largura da página em pé) e o conteúdo começa logo abaixo.
+  const hTimbre = opcoes.timbre ? (W0 * opcoes.timbre.altura) / opcoes.timbre.largura : 0;
   const inicio = opcoes.timbre ? hTimbre + 8 : M + TOPO;
   const hCarimbo = opcoes.carimbo ? (opcoes.carimbo.linhas.length + 1) * LH(TAM.carimbo) + 2 * PAD + 6 : 0;
-  const fimPadrao = H - M - RODAPE - hCarimbo;
+  let fimPadrao = H - M - RODAPE - hCarimbo;
   // Sem o carimbo (a página da assinatura), o conteúdo vai até o rodapé.
-  const fimSemCarimbo = H - M - RODAPE;
+  let fimSemCarimbo = H - M - RODAPE;
   const assinaturaNoLugar = !!opcoes.carimbo && !opcoes.desenhoAntigo;
   /** As páginas da ASSINATURA (o `quadro`) — sem o carimbo. */
   const semCarimbo = new Set<number>();
   let fim = fimPadrao;
   const paginas: OpDoc[][] = [];
+  const tamanhos: TamanhoPagina[] = [];
   let ops: OpDoc[] = [];
   let y = inicio;
+  let paisagem = false;
+  const medidas = () => {
+    const p = paisagem ? PAGINA_A4_PAISAGEM : PAGINA_A4;
+    W = p.largura;
+    H = p.altura;
+    util = W - 2 * M;
+    fimPadrao = H - M - RODAPE - hCarimbo;
+    fimSemCarimbo = H - M - RODAPE;
+  };
   const nova = () => {
+    medidas();
     ops = [];
     paginas.push(ops);
+    tamanhos.push({ largura: W, altura: H });
     y = inicio;
     fim = fimPadrao;
   };
@@ -290,6 +323,31 @@ export function montarDocumento(
         y += 8;
         break;
       }
+      case "pagina": {
+        paisagem = !!b.paisagem;
+        // A página atual ainda vazia: só troca a orientação dela.
+        if (noTopo() && ops.length === 0) {
+          medidas();
+          tamanhos[tamanhos.length - 1] = { largura: W, altura: H };
+          fim = fimPadrao;
+        } else nova();
+        break;
+      }
+      case "capa": {
+        if (!(noTopo() && ops.length === 0)) nova();
+        const quebradas = b.linhas.map((l) => ({ l, ls: l.texto ? quebrarTexto(l.texto, util, l.tam, medir, !!l.negrito) : [""] }));
+        const altura = quebradas.reduce((s2, q) => s2 + (q.l.espaco ?? 0) + q.ls.length * LH(q.l.tam), 0);
+        y = inicio + Math.max(0, (fim - inicio - altura) / 2);
+        for (const { l, ls } of quebradas) {
+          y += l.espaco ?? 0;
+          for (const t of ls) {
+            texto(t, M + (util - medir(t, l.tam, !!l.negrito)) / 2, y + l.tam, l.tam, !!l.negrito, l.cor ?? "@texto");
+            y += LH(l.tam);
+          }
+        }
+        nova();
+        break;
+      }
     }
   }
 
@@ -403,9 +461,17 @@ export function montarDocumento(
   }
 
   // Topo (o título do documento) e rodapé (quem/quando + Página N de M) em TODAS as páginas.
+  // A capa (ou uma troca de orientação) que fechou o documento deixa uma página VAZIA no fim: sai.
+  if (paginas.length > 1 && paginas[paginas.length - 1].length === 0) {
+    paginas.pop();
+    tamanhos.pop();
+  }
   const total = paginas.length;
   paginas.forEach((p, i) => {
-    if (opcoes.timbre) p.unshift({ t: "timbre", x: 0, y: 0, w: W, h: hTimbre });
+    W = tamanhos[i].largura;
+    H = tamanhos[i].altura;
+    util = W - 2 * M;
+    if (opcoes.timbre) p.unshift({ t: "timbre", x: (W - W0) / 2, y: 0, w: W0, h: hTimbre });
     else
       p.unshift(
         { t: "texto", x: M, y: M + TAM.cabecalhoPagina, tam: TAM.cabecalhoPagina, negrito: true, cor: "@muted", texto: cortar(opcoes.titulo, util, TAM.cabecalhoPagina, medir, true) },
@@ -438,7 +504,7 @@ export function montarDocumento(
       { t: "texto", x: M + util - wpg, y: base, tam: TAM.rodape, negrito: false, cor: "@muted", texto: pg },
     );
   });
-  return paginas;
+  return { paginas, tamanhos };
 }
 
 const larguraPorPeso = (pesos: number[], total: number) => {

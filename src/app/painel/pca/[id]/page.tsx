@@ -21,6 +21,8 @@ import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
 import { DeclaracoesPca } from "@/components/DeclaracoesPca";
 import { DocumentosView } from "@/components/DocumentosView";
 import { itensDeclaraveis, listarDeclaracoes } from "@/lib/declaracoes";
+import { getConfigDocumento, listarEmissoes } from "@/lib/pca-documento";
+import { DocumentoPcaAdmin } from "@/components/DocumentoPcaAdmin";
 import { acessoDeclaracoes } from "@/lib/declaracoes-core";
 import { listarDocumentos } from "@/lib/documentos";
 import { documentoNoPca } from "@/lib/documentos-core";
@@ -45,7 +47,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "configuracao"];
+const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "documentos", "declaracoes", "documento", "configuracao"];
 
 // ESPAÇO do PCA: Dashboard · Orçamento (KPIs + Comparativo) · Mesa (protocolos — TODO PCA recebe) · Importação (só o de
 // lista pronta: as planilhas) · Documentos · Declarações (atestar itens do PCA, total ou parcial) · Configuração.
@@ -77,6 +79,8 @@ export default async function PcaEspacoPage({
   const permitidas = ABAS.filter(
     (a) => (a !== "importacao" || pca.fonte === "lista") && (a !== "documentos" || podeTela(acesso, "documentos").visualizar) &&
       (a !== "declaracoes" || acessoDeclaracoes(pca.declaracoes, u.admin) !== "nenhum") &&
+      // O DOCUMENTO OFICIAL (a emissão pública) é controlado só pelo ADM.
+      (a !== "documento" || u.admin) &&
       componenteLibera(acesso, `pca.${a}`),
   );
   const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
@@ -144,6 +148,17 @@ async function ConteudoPca({
       />
     );
   } else if (aba === "declaracoes") conteudo = await abaDeclaracoes(pca, acesso, pode);
+  else if (aba === "documento" && u.admin) {
+    const [config, emissoes] = await Promise.all([getConfigDocumento(pca.id), listarEmissoes(pca.id)]);
+    conteudo = (
+      <DocumentoPcaAdmin
+        pca={{ id: pca.id, nome: pca.nome, ano: pca.ano, publicado: pca.status === "publicado" }}
+        inicial={config}
+        emissoes={emissoes.lista}
+        totalEmissoes={emissoes.total}
+      />
+    );
+  }
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;

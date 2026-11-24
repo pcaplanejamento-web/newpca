@@ -130,6 +130,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/papeis/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/papeis": { GET: ADMIN, POST: ADMIN },
   "admin/pcas/[id]": { PATCH: ADMIN, DELETE: ADMIN },
+  "admin/pcas/[id]/documento": { GET: ADMIN, PUT: ADMIN },
   "admin/pcas": { POST: ADMIN },
   "admin/reparticoes/[id]/promover": { POST: ADMIN },
   "admin/reparticoes/[id]/subunidades": { GET: ADMIN, PUT: ADMIN },
@@ -332,6 +333,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "pca/[id]/consulta/documento/[docId]": { GET: publica("aba Documentos pública + PCA publicado + documento do PCA") },
   "pca/[id]/consulta/historico": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/consulta/protocolo/[protocoloId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
+  "pca/[id]/documento": { POST: publica("emissão do documento oficial: PCA publicado + documento ligado pelo ADM + limite por IP + anti-robô") },
   "pca/[id]/consulta/pesquisa": { GET: publica("PCA publicado + só as abas publicadas pelo ADM (textos mascarados)") },
   "upload": { POST: tela("pca", "importar", "as planilhas de um PCA de lista") },
 

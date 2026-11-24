@@ -22,14 +22,15 @@ export function AcoesCadastro({
   ultima: boolean;
   disabled?: boolean;
   onMover: (direcao: -1 | 1) => void;
-  onEditar: () => void;
+  /** Sem ele, só ↑/↓ e excluir (a linha já é editada no lugar). */
+  onEditar?: () => void;
   onExcluir: () => void;
 }) {
   return (
     <div className="flex justify-end gap-1">
       <Button variant="ghost" size="xs" onClick={() => onMover(-1)} disabled={disabled || primeira} aria-label={`Mover ${nome} para cima`} icon={<IconArrowUp className="h-4 w-4" />} />
       <Button variant="ghost" size="xs" onClick={() => onMover(1)} disabled={disabled || ultima} aria-label={`Mover ${nome} para baixo`} icon={<IconArrowDown className="h-4 w-4" />} />
-      <Button variant="ghost" size="xs" onClick={onEditar} disabled={disabled} aria-label={`Editar ${nome}`} icon={<IconPencil className="h-4 w-4" />} />
+      {onEditar && <Button variant="ghost" size="xs" onClick={onEditar} disabled={disabled} aria-label={`Editar ${nome}`} icon={<IconPencil className="h-4 w-4" />} />}
       <Button
         variant="ghost"
         size="xs"

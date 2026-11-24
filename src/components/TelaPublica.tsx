@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState, useTransition } from "react";
 import { ROTULO_VISTA_PUBLICA, type VistaPublica } from "@/lib/publico-core";
 import { GatilhoPesquisa } from "./BannerPesquisa";
+import type { ConfigCaptcha } from "./CodigoEmail";
+import { EmitirDocumentoPca } from "./EmitirDocumentoPca";
 import { Button } from "./Button";
-import { IconDashboard, IconDocumentos, IconLinhas, IconSettings, IconTelaAcesso, IconWallet } from "./icons";
+import { IconDashboard, IconDocumentos, IconTermo, IconLinhas, IconSettings, IconTelaAcesso, IconWallet } from "./icons";
 import { type Identidade, MarcaLink } from "./MarcaSistema";
 import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral, type SecaoMenu } from "./MenuLateral";
 import type { PcaCardDados } from "./PcaCard";
@@ -36,8 +38,11 @@ export function TelaPublica({
   soImagem = false,
   unidades,
   painel,
+  documento,
   children,
 }: {
+  /** O DOCUMENTO OFICIAL do PCA ligado pelo ADM: o item "Emitir o PCA" no menu (some quando desligado). */
+  documento?: { pcaNome: string; turnstile: ConfigCaptcha } | null;
   /** Logado: o botão do cabeçalho que volta ao sistema (Configurações para o ADM). */
   painel?: { href: string; rotulo: string; dica: string } | null;
   identidade?: Identidade;
@@ -68,7 +73,11 @@ export function TelaPublica({
     const s = q.toString();
     return s ? `/?${s}` : "/";
   };
-  const secoes: SecaoMenu[] = [{ chave: "pca", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) }];
+  const [emitir, setEmitir] = useState(false);
+  const secoes: SecaoMenu[] = [
+    { chave: "pca", itens: vistas.map((a) => ({ href: href(a), label: ROTULO_VISTA_PUBLICA[a], Icon: ICONE[a] })) },
+    ...(documento && pcaId != null ? [{ chave: "documento", itens: [{ href: "#emitir-pca", label: "Emitir o PCA (PDF)", Icon: IconTermo, onClick: () => setEmitir(true) }] }] : []),
+  ];
   const ativo = (item: { href: string }) => item.href === href(vista);
   const marca = <MarcaLink href={painel?.href ?? "/"} dica={painel?.dica} identidade={identidade} />;
   const marcaCompacta = <MarcaLink href={painel?.href ?? "/"} dica={painel?.dica ?? "Início"} identidade={identidade} compacta />;
@@ -136,6 +145,7 @@ export function TelaPublica({
             </>
           }
         />
+        {documento && pcaId != null && <EmitirDocumentoPca pcaId={pcaId} pcaNome={documento.pcaNome} turnstile={documento.turnstile} open={emitir} onClose={() => setEmitir(false)} />}
         {pcaId != null && <PesquisaPublica pcaId={pcaId} vista={vista} unidade={unidades?.atual} />}
         <main className="min-w-0 flex-1 space-y-[var(--gap-block)] pl-[var(--pad-canvas)] pr-[var(--pad-direita)] py-[var(--pad-canvas-y)]">
           {unidades && unidades.lista.length > 1 && <div className="md:hidden">{seletorUnidade(true)}</div>}

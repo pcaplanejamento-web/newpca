@@ -110,6 +110,7 @@ DfdUploadForm.tsx
 DfdView.tsx
 DfdsView.tsx
 DicaFlutuante.tsx
+DocumentoPcaAdmin.tsx
 DocumentosPublicos.tsx
 DocumentosView.tsx
 Dropdown.tsx
@@ -119,6 +120,7 @@ EdicoesTabela.tsx
 EditorRico.tsx
 EditorVinculoOrcamento.tsx
 EditorVisaoOrcamento.tsx
+EmitirDocumentoPca.tsx
 EmpenhoCardConfig.tsx
 EmpenhoCardImportacao.tsx
 EmpenhoCardLiquidacoes.tsx

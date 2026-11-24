@@ -111,6 +111,23 @@ export function PreviaDocumento({ blocos }: { blocos: BlocoDoc[] }) {
                 )}
               </div>
             );
+          case "capa":
+            // A CAPA: as linhas centradas, numa faixa própria (no PDF, a página inteira).
+            return (
+              <div key={k} className="space-y-1 border-b border-border py-6 text-center">
+                {b.linhas.map((l, j) => (
+                  <p
+                    key={`${j}-${l.texto}`}
+                    className={l.negrito ? "font-bold" : ""}
+                    style={{ fontSize: `${Math.max(11, Math.min(22, l.tam))}px`, color: cor(l.cor), marginTop: l.espaco ? `${Math.min(24, l.espaco / 4)}px` : undefined }}
+                  >
+                    {l.texto}
+                  </p>
+                ))}
+              </div>
+            );
+          case "pagina":
+            return <hr key={k} className="border-dashed border-border-2" aria-label="Página nova" />;
           default:
             return null;
         }

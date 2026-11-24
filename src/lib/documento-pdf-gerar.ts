@@ -1,4 +1,4 @@
-import { type BlocoDoc, limparBlocos, montarDocumento, PAGINA_A4 } from "./documento-pdf-core.ts";
+import { type BlocoDoc, limparBlocos, montarPaginas } from "./documento-pdf-core.ts";
 import { corRgb, PALETA_PADRAO, type PaletaPdf, textoParaPdf } from "./exportar-pdf-core.ts";
 
 export type OpcoesGerar = {
@@ -17,7 +17,19 @@ export type OpcoesGerar = {
   data?: Date;
   assunto?: string;
   palavras?: string[];
+  /**
+   * DOCUMENTO GRANDE (milhares de páginas, no navegador): o andamento de cada etapa — `montando` (o layout), `desenhando`
+   * (página a página) e `salvando` (o arquivo) — e, a cada lote de páginas, a vez do navegador (a tela repinta e não trava).
+   */
+  onProgresso?: (p: { etapa: "montando" | "desenhando" | "salvando"; feito: number; total: number }) => void;
+  /** Interrompe a geração (lança `AbortError`) — ex.: a pessoa cancelou. */
+  sinal?: AbortSignal;
 };
+
+/** Devolve a vez ao navegador (a barra de progresso repinta). */
+const ceder = () => new Promise<void>((r) => setTimeout(r, 0));
+/** Páginas desenhadas entre duas vezes do navegador. */
+const LOTE_PAGINAS = 25;
 
 /**
  * Desenha um DOCUMENTO (os blocos do `documento-pdf-core`) com o pdf-lib e devolve os BYTES — sem DOM: roda no navegador e
@@ -38,7 +50,10 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
   };
   const medir = (texto: string, tam: number, b?: boolean) => (b ? negrito : fonte).widthOfTextAtSize(texto, tam);
   const carimbo = o.carimbo ? { titulo: limpo(o.carimbo.titulo), linhas: o.carimbo.linhas.map(limpo), cor: o.carimbo.cor } : undefined;
-  const paginas = montarDocumento(limparBlocos(doc.blocos, limpo), medir, {
+  o.onProgresso?.({ etapa: "montando", feito: 0, total: 1 });
+  if (o.onProgresso) await ceder();
+  o.sinal?.throwIfAborted();
+  const { paginas, tamanhos } = montarPaginas(limparBlocos(doc.blocos, limpo), medir, {
     titulo: limpo(doc.titulo),
     rodape: limpo(o.rodape),
     carimbo,
@@ -47,8 +62,13 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
     margem: o.margem,
   });
   const timbre = o.timbre ? await pdf.embedPng(o.timbre.png) : null;
-  const { largura: W, altura: H } = PAGINA_A4;
-  for (const ops of paginas) {
+  for (const [n, ops] of paginas.entries()) {
+    if (o.onProgresso && n % LOTE_PAGINAS === 0) {
+      o.onProgresso({ etapa: "desenhando", feito: n, total: paginas.length });
+      await ceder();
+      o.sinal?.throwIfAborted();
+    }
+    const { largura: W, altura: H } = tamanhos[n];
     const pag = pdf.addPage([W, H]);
     for (const op of ops) {
       if (op.t === "texto") pag.drawText(op.texto, { x: op.x, y: H - op.y, size: op.tam, font: op.negrito ? negrito : fonte, color: cor(op.cor) });
@@ -66,5 +86,8 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
   const data = o.data ?? new Date();
   pdf.setCreationDate(data);
   pdf.setModificationDate(data);
-  return pdf.save();
+  o.onProgresso?.({ etapa: "salvando", feito: 0, total: 1 });
+  o.sinal?.throwIfAborted();
+  // Documento grande: o pdf-lib grava em partes, cedendo a vez ao navegador entre elas.
+  return pdf.save(o.onProgresso ? { objectsPerTick: 200 } : undefined);
 }
