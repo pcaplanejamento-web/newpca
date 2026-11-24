@@ -4335,7 +4335,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   dados do PCA atualizados depois da emissão).
 - **ADM** `GET/PUT /api/admin/pcas/[id]/documento` (`?dados=1` = os dados da prévia, sem registrar) → aba **"Documento
   oficial"** do espaço do PCA (só `u.admin`) = **`DocumentoPcaAdmin`** (os blocos editáveis, a prévia ao vivo em
-  `PreviaDocumento` — que desenha `capa`/`pagina` — com os 40 primeiros itens, o PDF completo de prévia e as emissões).
+  `PreviaDocumento` — que desenha `capa`/`pagina` —, o PDF completo de prévia e as emissões).
+- **Regras da auditoria (v1.313.0):** os dados vêm SEM a prévia do PCA (`mesaMarcados` falso — o documento é só o que está
+  no PCA) e o texto dos itens leva só `CAMPOS_ITEM_DOCUMENTO` (nada de protocolo nem de id interno — a resposta é pública;
+  o `dadosHash` é desse texto). A prévia do ADM calcula os NÚMEROS com o PCA inteiro e só corta as listas
+  (`blocosDocumentoPca(…, previa {itens, dfds})`, nota "mostrando N de M"), sobre `useDeferredValue`; o rascunho não salvo
+  fica na aba (`sessionStorage`) e o que se digita durante a gravação não se perde. A montagem das páginas tem a versão em
+  PASSOS (`passosDasPaginas`, `LINHAS_POR_PASSO`, mesmo resultado de `montarPaginas`): o `gerarDocumentoPdf` com
+  `onProgresso` cede a vez à tela (por `MessageChannel` — a aba escondida não atrasa), mostra o andamento da montagem
+  (`linhasTotal`) e cancela também ali e depois do `save`. A mesma origem pedindo o mesmo documento em 10 min recebe a MESMA
+  emissão (sem linha nova). Prioridade canônica (`prioridadeCanonica`), cronograma só do exercício (o de outro ano à parte),
+  marcadores por `Object.hasOwn`, textos da capa cortados no que cabe. A verificação confirma a EMISSÃO (data, totais,
+  impressão digital dos dados — também no quadro do PDF) e só mostra o nome do PCA publicado.
 
 ## Frotas (Vólus) — combustível, manutenção e veículos (v1.257.0, migração `0169`)
 - **Telas de módulo** (`ABA_KEYS`): **`frotas`** (painel), **`combustivel`**, **`manutencao`** e **`veiculos`** — ações visualizar · manipular · importar · exportar · configurar (a `0169` deu tudo ao Administrador e ao Gestor e visualizar + exportar ao Membro). Páginas `/painel/{frotas,combustivel,manutencao}` = **`FrotaView modo`** e `/painel/veiculos` = **`VeiculosView`**; o escopo = a unidade do cabeçalho (`escopoDaFrota` → `unidadeDoModulo("frotas")` + `doEscopo`, o mesmo dos empenhos).

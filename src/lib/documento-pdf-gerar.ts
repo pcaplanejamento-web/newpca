@@ -1,4 +1,4 @@
-import { type BlocoDoc, limparBlocos, montarPaginas } from "./documento-pdf-core.ts";
+import { type BlocoDoc, limparBlocos, montarPaginas, passosDasPaginas } from "./documento-pdf-core.ts";
 import { corRgb, PALETA_PADRAO, type PaletaPdf, textoParaPdf } from "./exportar-pdf-core.ts";
 
 export type OpcoesGerar = {
@@ -22,12 +22,27 @@ export type OpcoesGerar = {
    * (página a página) e `salvando` (o arquivo) — e, a cada lote de páginas, a vez do navegador (a tela repinta e não trava).
    */
   onProgresso?: (p: { etapa: "montando" | "desenhando" | "salvando"; feito: number; total: number }) => void;
+  /** Quantas linhas de tabela o documento tem (o "total" do andamento da montagem — opcional). */
+  linhasTotal?: number;
   /** Interrompe a geração (lança `AbortError`) — ex.: a pessoa cancelou. */
   sinal?: AbortSignal;
 };
 
-/** Devolve a vez ao navegador (a barra de progresso repinta). */
-const ceder = () => new Promise<void>((r) => setTimeout(r, 0));
+/**
+ * Devolve a vez ao navegador (a barra de progresso repinta). Por `MessageChannel`, não `setTimeout`: o navegador limita os
+ * timers da aba ESCONDIDA (1 s, e até 1 min depois de 5 min) — trocar de aba não arrasta a geração por minutos.
+ */
+const ceder = () =>
+  typeof MessageChannel === "undefined"
+    ? new Promise<void>((r) => setTimeout(r, 0))
+    : new Promise<void>((r) => {
+        const c = new MessageChannel();
+        c.port1.onmessage = () => {
+          c.port1.close();
+          r();
+        };
+        c.port2.postMessage(0);
+      });
 /** Páginas desenhadas entre duas vezes do navegador. */
 const LOTE_PAGINAS = 25;
 
@@ -50,17 +65,36 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
   };
   const medir = (texto: string, tam: number, b?: boolean) => (b ? negrito : fonte).widthOfTextAtSize(texto, tam);
   const carimbo = o.carimbo ? { titulo: limpo(o.carimbo.titulo), linhas: o.carimbo.linhas.map(limpo), cor: o.carimbo.cor } : undefined;
-  o.onProgresso?.({ etapa: "montando", feito: 0, total: 1 });
-  if (o.onProgresso) await ceder();
-  o.sinal?.throwIfAborted();
-  const { paginas, tamanhos } = montarPaginas(limparBlocos(doc.blocos, limpo), medir, {
+  const opcoes = {
     titulo: limpo(doc.titulo),
     rodape: limpo(o.rodape),
     carimbo,
     desenhoAntigo: o.desenhoAntigo,
     timbre: o.timbre && { largura: o.timbre.largura, altura: o.timbre.altura },
     margem: o.margem,
-  });
+  };
+  const blocos = limparBlocos(doc.blocos, limpo);
+  let montado: ReturnType<typeof montarPaginas>;
+  if (o.onProgresso) {
+    // Documento grande: a montagem em PASSOS — a tela repinta, o andamento anda e o cancelamento vale também aqui.
+    const total = o.linhasTotal ?? 0;
+    o.onProgresso({ etapa: "montando", feito: 0, total });
+    await ceder();
+    o.sinal?.throwIfAborted();
+    const g = passosDasPaginas(blocos, medir, opcoes);
+    let r = g.next();
+    while (!r.done) {
+      o.onProgresso({ etapa: "montando", feito: r.value, total: Math.max(total, r.value) });
+      await ceder();
+      o.sinal?.throwIfAborted();
+      r = g.next();
+    }
+    montado = r.value;
+  } else {
+    o.sinal?.throwIfAborted();
+    montado = montarPaginas(blocos, medir, opcoes);
+  }
+  const { paginas, tamanhos } = montado;
   const timbre = o.timbre ? await pdf.embedPng(o.timbre.png) : null;
   for (const [n, ops] of paginas.entries()) {
     if (o.onProgresso && n % LOTE_PAGINAS === 0) {
@@ -89,5 +123,8 @@ export async function gerarDocumentoPdf(doc: { titulo: string; blocos: BlocoDoc[
   o.onProgresso?.({ etapa: "salvando", feito: 0, total: 1 });
   o.sinal?.throwIfAborted();
   // Documento grande: o pdf-lib grava em partes, cedendo a vez ao navegador entre elas.
-  return pdf.save(o.onProgresso ? { objectsPerTick: 200 } : undefined);
+  const bytes = await pdf.save(o.onProgresso ? { objectsPerTick: 200 } : undefined);
+  // Cancelado durante a gravação: nada é entregue.
+  o.sinal?.throwIfAborted();
+  return bytes;
 }

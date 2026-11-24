@@ -122,8 +122,26 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: Opcoes
   return montarPaginas(blocos, medir, opcoes).paginas;
 }
 
+type PaginasMontadas = { paginas: OpDoc[][]; tamanhos: TamanhoPagina[] };
+
 /** As páginas e o TAMANHO de cada uma (em pé ou deitada — o bloco `pagina`). */
-export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDocumento): { paginas: OpDoc[][]; tamanhos: TamanhoPagina[] } {
+export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDocumento): PaginasMontadas {
+  const g = passosDasPaginas(blocos, medir, opcoes);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+
+/** Quantas linhas de tabela entre duas pausas da montagem (`passosDasPaginas`). */
+export const LINHAS_POR_PASSO = 250;
+
+/**
+ * A MESMA montagem em PASSOS: a cada `LINHAS_POR_PASSO` linhas de tabela entrega o total de linhas já montadas — quem
+ * conduz (o documento de milhares de páginas, no navegador) devolve a vez ao navegador, mostra o andamento e cancela entre
+ * um passo e outro. O resultado é idêntico ao de `montarPaginas`.
+ */
+export function* passosDasPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDocumento): Generator<number, PaginasMontadas> {
+  let montadas = 0;
   // A página EM PÉ manda no timbre (a altura dele é a mesma nas deitadas — centrado).
   const W0 = PAGINA_A4.largura;
   let W = PAGINA_A4.largura;
@@ -319,7 +337,7 @@ export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDo
         break;
       }
       case "tabela": {
-        tabela(b);
+        yield* tabela(b);
         y += 8;
         break;
       }
@@ -351,7 +369,7 @@ export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDo
     }
   }
 
-  function tabela(b: Extract<BlocoDoc, { tipo: "tabela" }>) {
+  function* tabela(b: Extract<BlocoDoc, { tipo: "tabela" }>): Generator<number, void> {
     const tam = TAM.tabela;
     const larg = opcoes.desenhoAntigo ? larguraPorPeso(b.colunas.map((c) => c.peso), util) : larguraDasColunas(b, util, tam, medir);
     const lh = LH(tam);
@@ -422,7 +440,8 @@ export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDo
     garantir(hCab + Math.min(altura(primeira), fim - inicio - hCab));
     cabecalho();
     let grupo = -1;
-    linhasT.forEach((l, i) => {
+    for (const [i, l] of linhasT.entries()) {
+      if (++montadas % LINHAS_POR_PASSO === 0) yield montadas;
       if (!l.continua) {
         grupo++;
         ultimos = [];
@@ -457,7 +476,7 @@ export function montarPaginas(blocos: BlocoDoc[], medir: Medir, opcoes: OpcoesDo
       l.celulas.forEach((v, j) => {
         if (v) ultimos[j] = v;
       });
-    });
+    }
   }
 
   // Topo (o título do documento) e rodapé (quem/quando + Página N de M) em TODAS as páginas.

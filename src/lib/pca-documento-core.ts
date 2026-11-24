@@ -1,6 +1,7 @@
 import type { BlocoDoc, ColunaDoc, LinhaDoc } from "./documento-pdf-core.ts";
 import { brl, dataHoraBR, dataIsoBrasilia, num } from "./format.ts";
 import type { ItemRow } from "./queries.ts";
+import { normPrioridade } from "./normalize.ts";
 import { textoSimples } from "./texto-formatado.ts";
 
 /**
@@ -158,7 +159,7 @@ export function lerConfigDocumento(v: unknown): ConfigDocumentoPca {
         .slice(0, LIMITES_DOC.secoes)
     : p.secoes;
   const auto = (o.automaticos ?? {}) as Record<string, unknown>;
-  const colunasPedidas = Array.isArray(o.colunas) ? (o.colunas as unknown[]).filter((c): c is ColunaItemDoc => typeof c === "string" && c in COLUNAS_ITEM_DOC) : p.colunas;
+  const colunasPedidas = Array.isArray(o.colunas) ? (o.colunas as unknown[]).filter((c): c is ColunaItemDoc => typeof c === "string" && Object.hasOwn(COLUNAS_ITEM_DOC, c)) : p.colunas;
   // Sem repetir, e as FIXAS sempre (o sequencial e a descrição identificam o item).
   const colunas = [...new Set<ColunaItemDoc>(colunasPedidas)];
   for (const f of ["descricao", "sequencial"] as const) if (!colunas.includes(f)) colunas.unshift(f);
@@ -210,12 +211,40 @@ export type DadosDocumento = {
 };
 
 /** O registro da emissão (vem do servidor). */
-export type EmissaoDocumento = { codigo: string; emitidoEm: string; url: string; selo: string };
+export type EmissaoDocumento = { codigo: string; emitidoEm: string; url: string; selo: string; dadosHash?: string };
 
-/** Os itens SEMPRE pelo sequencial do PCA (sem sequencial, no fim — pelo id, estável). */
+/** Os itens SEMPRE pelo sequencial do PCA (sem sequencial, no fim, na ordem em que vieram — a ordenação é estável). */
 export function itensEmOrdem(itens: readonly ItemRow[]): ItemRow[] {
-  return [...itens].sort((a, b) => (a.sequencial ?? Number.POSITIVE_INFINITY) - (b.sequencial ?? Number.POSITIVE_INFINITY) || a.id - b.id);
+  const seq = (i: ItemRow) => i.sequencial ?? Number.POSITIVE_INFINITY;
+  return [...itens].sort((a, b) => (seq(a) === seq(b) ? 0 : seq(a) < seq(b) ? -1 : 1));
 }
+
+/** A prioridade canônica (ALTA · MÉDIA · BAIXA — "Média", "MEDIA" e "média " são a MESMA); fora do padrão, como veio. */
+export function prioridadeCanonica(s: string | null | undefined): string | null {
+  const t = (s ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  return normPrioridade(t).valor ?? t.toLocaleUpperCase("pt-BR");
+}
+
+/** Os CAMPOS do item que o documento usa — o que vai ao navegador (nada de protocolo nem de id interno). */
+export const CAMPOS_ITEM_DOCUMENTO = [
+  "sequencial",
+  "idProduto",
+  "nomeProduto",
+  "unidadeMedida",
+  "quantidade",
+  "valorReferencia",
+  "valorTotal",
+  "classificacao",
+  "codigo",
+  "dfdNumero",
+  "prioridade",
+  "ano",
+  "mes",
+  "anual",
+  "periodo",
+  "dataDesejada",
+] as const satisfies readonly (keyof ItemRow)[];
 
 /** A classificação canônica (a mesma escrita em caixas/espaços diferentes vira UMA — o documento antigo repetia). */
 export function chaveClassificacao(s: string | null | undefined): string {
@@ -349,12 +378,12 @@ export function valoresMarcadores(d: Pick<DadosDocumento, "pca">, t: Totais, cfg
 
 /** Troca os `{{marcador}}` conhecidos; o desconhecido fica como está (o ADM vê o erro na prévia). */
 export function substituirMarcadores(texto: string, v: Record<Marcador, string>): string {
-  return texto.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (todo, k: string) => (k in v ? v[k as Marcador] : todo));
+  return texto.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (todo, k: string) => (Object.hasOwn(v, k) ? v[k as Marcador] : todo));
 }
 
 /** Os marcadores DESCONHECIDOS de um texto (o aviso do editor). */
 export function marcadoresDesconhecidos(texto: string): string[] {
-  return [...new Set([...texto.matchAll(/\{\{\s*([a-zA-Z]+)\s*\}\}/g)].map((m) => m[1]).filter((k) => !(k in MARCADORES)))];
+  return [...new Set([...texto.matchAll(/\{\{\s*([a-zA-Z]+)\s*\}\}/g)].map((m) => m[1]).filter((k) => !Object.hasOwn(MARCADORES, k)))];
 }
 
 /** O texto formatado (o `EditorRico`) → blocos do PDF: parágrafos justificados, listas e subtítulos. */
@@ -426,7 +455,7 @@ function celulaItem(i: ItemRow, c: ColunaItemDoc, planejamento: Map<string, stri
       return p ? `${i.dfdNumero} (${p})` : i.dfdNumero;
     }
     case "prioridade":
-      return ou(i.prioridade);
+      return prioridadeCanonica(i.prioridade) ?? "—";
     case "previsao":
       return previsaoDoItem(i);
   }
@@ -436,11 +465,26 @@ function celulaItem(i: ItemRow, c: ColunaItemDoc, planejamento: Map<string, stri
  * Os BLOCOS do documento (A4; a tabela dos itens em página deitada quando configurado). `emissao` ausente = a PRÉVIA do
  * ADM (marcada "PRÉVIA", sem código). Os itens são TODOS, pelo sequencial; os DFDs pelo nº.
  */
-export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, emissao: EmissaoDocumento | null, agora: string): BlocoDoc[] {
+export function blocosDocumentoPca(
+  d: DadosDocumento,
+  cfg: ConfigDocumentoPca,
+  emissao: EmissaoDocumento | null,
+  agora: string,
+  previa?: { itens: number; dfds: number },
+): BlocoDoc[] {
   const t = totaisDocumento(d);
   const quando = emissao?.emitidoEm ?? agora;
   const v = valoresMarcadores(d, t, cfg, quando);
   const sub = (s: string) => substituirMarcadores(s, v);
+  /** Na capa, o texto já trocado nunca passa do que cabe numa página (um marcador longo não empurra o carimbo). */
+  const naCapa = (s: string, max: number) => {
+    const x = sub(s);
+    return x.length > max ? `${x.slice(0, max - 1).trimEnd()}…` : x;
+  };
+  /** A PRÉVIA da tela do ADM: os NÚMEROS são do PCA inteiro, só as listas longas (itens, DFDs) mostram as primeiras linhas. */
+  const corte = <T>(lista: T[], n: number | undefined): T[] => (n != null && lista.length > n ? lista.slice(0, n) : lista);
+  const notaCorte = (mostrados: number, total: number, o: string) =>
+    mostrados < total ? b.push({ tipo: "nota", texto: `Prévia: mostrando ${num(mostrados)} de ${num(total)} ${o}. O documento emitido traz todos.`, cor: "#4a4a4a" }) : 0;
   const b: BlocoDoc[] = [];
   const itens = itensEmOrdem(d.itens);
   const planejamento = new Map(d.dfds.map((x) => [x.numero, x.planejamento]));
@@ -449,12 +493,12 @@ export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, e
     b.push({
       tipo: "capa",
       linhas: [
-        ...(cfg.ente ? [{ texto: sub(cfg.ente).toUpperCase(), tam: 12, negrito: true }] : []),
-        { texto: sub(cfg.titulo).toUpperCase(), tam: 24, negrito: true, espaco: 70 },
-        ...(cfg.subtitulo ? [{ texto: sub(cfg.subtitulo), tam: 15, espaco: 10 }] : []),
+        ...(cfg.ente ? [{ texto: naCapa(cfg.ente, 200).toUpperCase(), tam: 12, negrito: true }] : []),
+        { texto: naCapa(cfg.titulo, 120).toUpperCase(), tam: 24, negrito: true, espaco: 70 },
+        ...(cfg.subtitulo ? [{ texto: naCapa(cfg.subtitulo, 160), tam: 15, espaco: 10 }] : []),
         { texto: d.pca.nome, tam: 12, cor: "@muted", espaco: 18 },
         ...(emissao ? [] : [{ texto: "PRÉVIA — SEM VALIDADE", tam: 12, negrito: true, espaco: 24 }]),
-        { texto: `${cfg.local ? `${sub(cfg.local)} · ` : ""}${dataPorExtensoBR(quando)}`, tam: 11, espaco: 90 },
+        { texto: `${cfg.local ? `${naCapa(cfg.local, 120)} · ` : ""}${dataPorExtensoBR(quando)}`, tam: 11, espaco: 90 },
       ],
     });
   } else if (!emissao) {
@@ -528,7 +572,7 @@ export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, e
   if (a.prioridade && itens.some((i) => i.prioridade)) {
     secao("Resumo por prioridade");
     const ordem = ["ALTA", "MÉDIA", "BAIXA"];
-    const g = agrupar(itens, (i) => (i.prioridade ? i.prioridade.toUpperCase() : "SEM PRIORIDADE")).sort((x, y) => {
+    const g = agrupar(itens, (i) => prioridadeCanonica(i.prioridade) ?? "SEM PRIORIDADE").sort((x, y) => {
       const ix = ordem.indexOf(x.chave);
       const iy = ordem.indexOf(y.chave);
       return (ix < 0 ? 9 : ix) - (iy < 0 ? 9 : iy);
@@ -543,17 +587,27 @@ export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, e
     secao("Cronograma das contratações");
     b.push({
       tipo: "paragrafo",
-      texto: "Previsão de entrega informada nos DFDs: os itens com mês definido aparecem no mês; os de previsão genérica (anual, semestral, quadrimestral, trimestral) aparecem à parte.",
+      texto: "Previsão de entrega informada nos DFDs: os itens com mês definido no exercício aparecem no mês; os de previsão genérica (anual, semestral, quadrimestral, trimestral) e os de outro exercício aparecem à parte.",
       cor: "muted",
     });
+    // No mês, só a previsão DO EXERCÍCIO do PCA (sem ano informado também); a de outro ano vai numa linha própria.
+    const noExercicio = (i: ItemRow) => !!i.mes && (d.pca.ano == null || i.ano == null || i.ano === d.pca.ano);
+    const porMes = new Map<number, { n: number; v: number }>();
+    for (const i of itens)
+      if (noExercicio(i)) {
+        const x = porMes.get(i.mes as number) ?? { n: 0, v: 0 };
+        x.n++;
+        x.v += Number(i.valorTotal ?? 0);
+        porMes.set(i.mes as number, x);
+      }
     const linhas: LinhaDoc[] = [];
     for (let m = 1; m <= 12; m++) {
-      const doMes = itens.filter((i) => i.mes === m);
-      linhas.push({ celulas: [MESES[m - 1], num(doMes.length), brl(doMes.reduce((s, i) => s + Number(i.valorTotal ?? 0), 0)), pct(doMes.reduce((s, i) => s + Number(i.valorTotal ?? 0), 0), t.valor)] });
+      const x = porMes.get(m) ?? { n: 0, v: 0 };
+      linhas.push({ celulas: [MESES[m - 1], num(x.n), brl(x.v), pct(x.v, t.valor)] });
     }
     const genericos = agrupar(
-      itens.filter((i) => !i.mes),
-      (i) => (i.anual ? `Genérica — ${(i.periodo ?? "ANUAL").toUpperCase()}` : "Sem previsão"),
+      itens.filter((i) => !noExercicio(i)),
+      (i) => (i.mes ? `Outro exercício — ${previsaoDoItem(i)}` : i.anual ? `Genérica — ${(i.periodo ?? "ANUAL").toUpperCase()}` : "Sem previsão"),
     );
     for (const x of genericos) linhas.push({ celulas: [x.chave, num(x.itens), brl(x.valor), pct(x.valor, t.valor)] });
     linhas.push(linhaTotal(["TOTAL", num(t.itens), brl(t.valor), pct(t.valor, t.valor)]));
@@ -575,13 +629,14 @@ export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, e
         { titulo: "Valor", peso: 1.2, alinhar: "right" },
       ],
       linhas: [
-        ...dfds.map((x) => ({ celulas: [x.numero, ou(x.planejamento), ou(x.tipo), ou(x.sigla), ou(x.prioridade), ou(x.previsao), num(x.itens), brl(x.valor)] })),
+        ...corte(dfds, previa?.dfds).map((x) => ({ celulas: [x.numero, ou(x.planejamento), ou(x.tipo), ou(x.sigla), ou(x.prioridade), ou(x.previsao), num(x.itens), brl(x.valor)] })),
         linhaTotal(["TOTAL", "", "", "", "", "", num(dfds.reduce((s, x) => s + x.itens, 0)), brl(dfds.reduce((s, x) => s + x.valor, 0))]),
       ],
     });
+    notaCorte(corte(dfds, previa?.dfds).length, dfds.length, "DFDs");
     if (a.justificativas) {
       secao("Objeto e justificativa das demandas");
-      for (const x of dfds) {
+      for (const x of corte(dfds, previa?.dfds)) {
         b.push({ tipo: "subsecao", texto: `DFD ${x.numero}${x.planejamento ? ` (Planej. ${x.planejamento})` : ""}`, detalhe: [x.sigla, brl(x.valor)].filter(Boolean).join(" · ") });
         b.push({ tipo: "paragrafo", texto: `Objeto: ${ou(x.objeto)}`, alinhar: "justificado" });
         if (x.justificativa) b.push({ tipo: "paragrafo", texto: `Justificativa: ${x.justificativa}`, alinhar: "justificado" });
@@ -599,11 +654,12 @@ export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, e
     tipo: "tabela",
     colunas: cols.map((c) => ({ titulo: COLUNAS_ITEM_DOC[c].titulo, peso: COLUNAS_ITEM_DOC[c].peso, alinhar: COLUNAS_ITEM_DOC[c].alinhar })),
     linhas: [
-      ...itens.map((i) => ({ celulas: cols.map((c) => celulaItem(i, c, planejamento)) })),
+      ...corte(itens, previa?.itens).map((i) => ({ celulas: cols.map((c) => celulaItem(i, c, planejamento)) })),
       linhaTotal(cols.map((c, k) => (k === 0 ? "TOTAL" : k === colTotal ? brl(t.valor) : c === "descricao" ? `${num(t.itens)} itens` : ""))),
     ],
     vazio: "Nenhum item no PCA.",
   });
+  notaCorte(corte(itens, previa?.itens).length, itens.length, "itens");
   if (cfg.itensPaisagem) b.push({ tipo: "pagina" });
 
   if (cfg.notas.trim()) {
@@ -627,9 +683,10 @@ export function blocosDocumentoPca(d: DadosDocumento, cfg: ConfigDocumentoPca, e
         { rotulo: "Itens · valor", valor: `${num(t.itens)} · ${brl(t.valor)}` },
         { rotulo: "Código de verificação", valor: emissao.codigo },
         { rotulo: "Confira em", valor: emissao.url },
+        ...(emissao.dadosHash ? [{ rotulo: "Impressão dos dados", valor: emissao.dadosHash }] : []),
         { rotulo: "Selo", valor: emissao.selo },
       ],
-      nota: "Documento gerado a partir dos dados publicados do PCA. A autenticidade e os números da emissão podem ser conferidos no endereço acima.",
+      nota: "Documento gerado a partir dos dados publicados do PCA. A verificação no endereço acima confirma a emissão: a data, o número de itens, o valor total e a impressão digital dos dados.",
       cor: "#4a4a4a",
     });
   return b;

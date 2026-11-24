@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { baixarNoNavegador, comoBlob } from "@/lib/arquivo-navegador";
 import { brl, dataHoraBR, num } from "@/lib/format";
 import { itensDoTexto } from "@/lib/itens-dash-texto";
@@ -48,8 +48,27 @@ const COLS_EMISSOES: Column<EmissaoResumo>[] = [
   { key: "origem", header: "Origem", nowrap: true, value: (e) => e.ipHash ?? "—", render: (e) => <span className="font-mono text-[12px] text-muted">{e.ipHash ?? "—"}</span>, total: false },
 ];
 
-/** Quantos itens a prévia na tela desenha (o PDF completo traz todos). */
-const ITENS_NA_PREVIA = 40;
+/** Quantas linhas das listas longas (itens, DFDs) a prévia na tela desenha — os NÚMEROS são do PCA inteiro. */
+const LINHAS_NA_PREVIA = 40;
+
+/** O rascunho não salvo fica na ABA (sair da tela — outra aba do PCA, o menu — e voltar não perde nada). */
+const chaveRascunho = (pcaId: number) => `documento-pca:rascunho:${pcaId}`;
+function lerRascunho(pcaId: number): ConfigDocumentoPca | null {
+  try {
+    const t = sessionStorage.getItem(chaveRascunho(pcaId));
+    return t ? lerConfigDocumento(JSON.parse(t)) : null;
+  } catch {
+    return null;
+  }
+}
+function gravarRascunho(pcaId: number, cfg: ConfigDocumentoPca | null) {
+  try {
+    if (cfg) sessionStorage.setItem(chaveRascunho(pcaId), textoConfig(cfg));
+    else sessionStorage.removeItem(chaveRascunho(pcaId));
+  } catch {
+    /* sem armazenamento: vale só o aviso ao fechar a página */
+  }
+}
 
 /** Uma lista de pessoas (cargo + nome) — o expediente e as assinaturas. */
 function ListaAutoridades({ lista, onMudar, rotulo }: { lista: Autoridade[]; onMudar: (l: Autoridade[]) => void; rotulo: string }) {
@@ -59,8 +78,8 @@ function ListaAutoridades({ lista, onMudar, rotulo }: { lista: Autoridade[]; onM
       {lista.length === 0 && <p className="text-[13px] text-muted">Nenhuma pessoa.</p>}
       {lista.map((a, i) => (
         <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <TextField label="Cargo" value={a.cargo} maxLength={LIMITES_DOC.campo} onChange={(e) => mudar(i, { cargo: e.target.value })} compacto />
-          <TextField label="Nome" value={a.nome} maxLength={LIMITES_DOC.campo} onChange={(e) => mudar(i, { nome: e.target.value })} compacto />
+          <TextField label={`Cargo ${i + 1}`} value={a.cargo} maxLength={LIMITES_DOC.campo} onChange={(e) => mudar(i, { cargo: e.target.value })} compacto />
+          <TextField label={`Nome ${i + 1}`} value={a.nome} maxLength={LIMITES_DOC.campo} onChange={(e) => mudar(i, { nome: e.target.value })} compacto />
           <AcoesCadastro
             nome={a.nome || a.cargo || rotulo}
             primeira={i === 0}
@@ -111,6 +130,18 @@ export function DocumentoPcaAdmin({
   const abortar = useRef<AbortController | null>(null);
   const muda = (p: Partial<ConfigDocumentoPca>) => setCfg((c) => ({ ...c, ...p }));
 
+  // O rascunho guardado na aba volta ao abrir a tela (uma vez, depois do desenho — sem diferença de hidratação).
+  const inicialRef = useRef(inicial);
+  useEffect(() => {
+    const r = lerRascunho(pca.id);
+    if (r && textoConfig(r) !== textoConfig(inicialRef.current)) {
+      setCfg(r);
+      toast.info("Alterações ainda não salvas foram restauradas.");
+    } else gravarRascunho(pca.id, null);
+  }, [pca.id]);
+  useEffect(() => {
+    gravarRascunho(pca.id, sujo ? cfg : null);
+  }, [pca.id, cfg, sujo]);
   useEffect(() => {
     if (!sujo) return;
     const aviso = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -121,12 +152,14 @@ export function DocumentoPcaAdmin({
 
   const salvar = async () => {
     setSalvando(true);
+    const enviado = textoConfig(cfg);
     try {
-      const res = await fetch(`/api/admin/pcas/${pca.id}/documento`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+      const res = await fetch(`/api/admin/pcas/${pca.id}/documento`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: enviado });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; config?: ConfigDocumentoPca };
       if (!res.ok || !j.ok || !j.config) throw new Error(j.error ?? "Não foi possível salvar.");
       const c = lerConfigDocumento(j.config);
-      setCfg(c);
+      // O que foi digitado DURANTE a gravação fica (e segue como alteração não salva).
+      setCfg((atual) => (textoConfig(atual) === enviado ? c : atual));
       setGravado(textoConfig(c));
       toast.success("Configuração do documento salva.");
       router.refresh();
@@ -155,14 +188,16 @@ export function DocumentoPcaAdmin({
 
   const itens = useMemo(() => (dados ? itensDoTexto(dados.itensTexto) : null), [dados]);
   const pcaDoc = useMemo(() => ({ id: pca.id, nome: pca.nome, ano: pca.ano }), [pca.id, pca.nome, pca.ano]);
-  // A PRÉVIA na tela: os blocos de verdade, com só os primeiros itens (o PDF completo traz todos).
+  // A PRÉVIA na tela: os blocos de verdade com os NÚMEROS do PCA inteiro; só as listas longas mostram as primeiras linhas
+  // (o PDF completo traz todas). Calculada sobre o valor ADIADO — digitar não espera a prévia.
+  const cfgPrevia = useDeferredValue(cfg);
   const previa = useMemo(() => {
     if (!dados || !itens) return null;
-    const ordenados = [...itens].sort((a, b) => (a.sequencial ?? 1e12) - (b.sequencial ?? 1e12) || a.id - b.id);
-    return blocosDocumentoPca({ pca: pcaDoc, itens: ordenados.slice(0, ITENS_NA_PREVIA), dfds: dados.dfds, unidades: dados.unidades }, cfg, null, new Date().toISOString()).filter(
-      (b) => b.tipo !== "pagina",
-    );
-  }, [dados, itens, cfg, pcaDoc]);
+    return blocosDocumentoPca({ pca: pcaDoc, itens, dfds: dados.dfds, unidades: dados.unidades }, cfgPrevia, null, new Date().toISOString(), {
+      itens: LINHAS_NA_PREVIA,
+      dfds: LINHAS_NA_PREVIA,
+    }).filter((b) => b.tipo !== "pagina");
+  }, [dados, itens, cfgPrevia, pcaDoc]);
 
   const baixarPrevia = async () => {
     const d = dados ?? (await carregarDados());
@@ -179,11 +214,14 @@ export function DocumentoPcaAdmin({
           onProgresso: (p) =>
             setGerando(
               p.etapa === "desenhando"
-                ? { pct: 10 + (p.total ? (p.feito / p.total) * 85 : 0), texto: `Desenhando a página ${num(p.feito)} de ${num(p.total)}…` }
-                : { pct: p.etapa === "salvando" ? 97 : 5, texto: p.etapa === "salvando" ? "Salvando o arquivo…" : "Montando as páginas…" },
+                ? { pct: 40 + (p.total ? (p.feito / p.total) * 55 : 0), texto: `Desenhando a página ${num(p.feito)} de ${num(p.total)}…` }
+                : p.etapa === "montando"
+                  ? { pct: 5 + (p.total ? Math.min(1, p.feito / p.total) * 35 : 0), texto: "Montando as páginas…" }
+                  : { pct: 97, texto: "Salvando o arquivo…" },
             ),
         },
       );
+      ctl.signal.throwIfAborted();
       baixarNoNavegador(`PRÉVIA - ${nomeArquivoDocumento({ pca: pcaDoc })}`, comoBlob(bytes));
     } catch (e) {
       if ((e as Error).name !== "AbortError") toast.error((e as Error).message || "Não foi possível gerar a prévia.");
@@ -267,7 +305,7 @@ export function DocumentoPcaAdmin({
                   <div className="min-w-[12rem] flex-1">
                     <TextField label={`Seção ${i + 1}`} value={s.titulo} maxLength={LIMITES_DOC.titulo} onChange={(e) => mudarSecao(i, { titulo: e.target.value })} compacto />
                   </div>
-                  <Switch checked={s.ativa} onChange={(v) => mudarSecao(i, { ativa: v })} label="No documento" />
+                  <Switch checked={s.ativa} onChange={(v) => mudarSecao(i, { ativa: v })} label={`Seção ${i + 1} no documento`} />
                   <AcoesCadastro
                     nome={s.titulo || `seção ${i + 1}`}
                     primeira={i === 0}
@@ -354,7 +392,7 @@ export function DocumentoPcaAdmin({
           {gerando && <Progress value={gerando.pct} label={gerando.texto} />}
           {itens && (
             <p className="text-[12px] text-muted">
-              {num(itens.length)} itens · {num(dados?.dfds.length ?? 0)} DFDs · {brl(itens.reduce((s, i) => s + Number(i.valorTotal ?? 0), 0))} — a prévia mostra os {ITENS_NA_PREVIA} primeiros itens.
+              {num(itens.length)} itens · {num(dados?.dfds.length ?? 0)} DFDs · {brl(itens.reduce((s, i) => s + Number(i.valorTotal ?? 0), 0))} — os números da prévia são do PCA inteiro; as listas mostram as {LINHAS_NA_PREVIA} primeiras linhas.
             </p>
           )}
         </SecaoBanner>

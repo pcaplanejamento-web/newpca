@@ -57,7 +57,7 @@ export const VERSOES: readonly Versao[] = [
         tipo: "novo",
         area: "Segurança",
         texto:
-          "A emissão pública exige a verificação anti-robô, tem limite por endereço e registra código e selo; qualquer pessoa confere a autenticidade em /pca/documento/verificar.",
+          "A emissão pública exige a verificação anti-robô, tem limite por endereço, entrega só os dados que o documento imprime e registra código, selo e a impressão digital dos dados; qualquer pessoa confere a emissão em /pca/documento/verificar.",
         link: "/pca/documento/verificar",
       },
     ],

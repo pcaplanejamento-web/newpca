@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { montarPaginas, PAGINA_A4, PAGINA_A4_PAISAGEM } from "../src/lib/documento-pdf-core.ts";
+import { montarPaginas, PAGINA_A4, PAGINA_A4_PAISAGEM, passosDasPaginas } from "../src/lib/documento-pdf-core.ts";
 import { gerarDocumentoPdf } from "../src/lib/documento-pdf-gerar.ts";
 import {
   blocosDocumentoPca,
@@ -197,4 +197,49 @@ test("selo: o texto canônico muda com qualquer número da emissão", () => {
   const base = { codigo: "C", pcaId: 1, emitidoEm: "2026-01-01T00:00:00.000Z", itens: 10, valor: 1.5, dfds: 2, dadosHash: "h", configHash: "k" };
   assert.equal(textoSelo(base), textoSelo({ ...base }));
   for (const [k, v] of Object.entries({ codigo: "D", itens: 11, valor: 1.5001, dfds: 3, dadosHash: "x", configHash: "y" })) assert.notEqual(textoSelo({ ...base, [k]: v }), textoSelo(base));
+});
+
+test("auditoria: prévia com os NÚMEROS do PCA inteiro; prioridade canônica; cronograma só do exercício; marcadores do protótipo", () => {
+  const d = dados(100);
+  const b = blocosDocumentoPca(d, configPadrao(), null, "2026-03-05T15:00:00.000Z", { itens: 10, dfds: 2 });
+  const itens = b.filter((x) => x.tipo === "tabela").at(-1);
+  assert.ok(itens && itens.tipo === "tabela");
+  assert.equal(itens.linhas.length, 11); // 10 + o TOTAL do PCA inteiro
+  assert.ok(itens.linhas[10].celulas.some((c) => c.includes("2.100,00")));
+  assert.ok(JSON.stringify(b).includes("mostrando 10 de 100 itens"));
+
+  const mista = dados(4);
+  mista.itens[0].prioridade = "Média";
+  mista.itens[1].prioridade = "MEDIA ";
+  mista.itens[2].prioridade = "média";
+  mista.itens[3].prioridade = "ALTA";
+  mista.itens[0].mes = 3;
+  mista.itens[0].ano = 2027;
+  const bm = blocosDocumentoPca(mista, configPadrao(), null, "2026-03-05T15:00:00.000Z");
+  const s = JSON.stringify(bm);
+  assert.equal(s.includes("MEDIA"), false);
+  assert.ok(s.includes("Outro exercício — MAR/2027"));
+
+  const v = valoresMarcadores(d, totaisDocumento(d), configPadrao(), "2026-03-05T15:00:00.000Z");
+  assert.equal(substituirMarcadores("{{constructor}} {{toString}}", v), "{{constructor}} {{toString}}");
+  assert.deepEqual(marcadoresDesconhecidos("{{constructor}}"), ["constructor"]);
+});
+
+test("auditoria: os campos públicos do item não levam protocolo nem id interno", async () => {
+  const { CAMPOS_ITEM_DOCUMENTO } = await import("../src/lib/pca-documento-core.ts");
+  for (const c of ["protocoloNumero", "protocoloIdExterno", "dfdId", "itemNumero", "id"]) assert.equal((CAMPOS_ITEM_DOCUMENTO as readonly string[]).includes(c), false, c);
+});
+
+test("auditoria: a montagem em passos dá o MESMO resultado da montagem direta", () => {
+  const b = blocosDocumentoPca(dados(600), configPadrao(), null, "2026-03-05T15:00:00.000Z");
+  const direto = montarPaginas(b, medir, { titulo: "PCA", rodape: "r" });
+  const g = passosDasPaginas(b, medir, { titulo: "PCA", rodape: "r" });
+  let passos = 0;
+  let r = g.next();
+  while (!r.done) {
+    passos++;
+    r = g.next();
+  }
+  assert.ok(passos >= 2);
+  assert.deepEqual(r.value, direto);
 });

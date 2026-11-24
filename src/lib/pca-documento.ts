@@ -1,11 +1,12 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { dfds, pcaDocumentoEmissoes, pcaDocumentos } from "@/db/schema";
 import { sha256 } from "./conferencia-cache-core";
 import { getDb } from "./db";
 import { prioridadeDoDfd, textoSecao } from "./dfd-tratamento";
-import { itensDoTexto } from "./itens-dash-texto";
+import { itensDoTexto, linhasParaTexto } from "./itens-dash-texto";
 import { previsaoDoDfd } from "./pca-core";
 import {
+  CAMPOS_ITEM_DOCUMENTO,
   type ConfigDocumentoPca,
   type DfdDocumento,
   lerConfigDocumento,
@@ -59,8 +60,10 @@ const MAX_JUSTIFICATIVA = 2000;
 const MESES_CURTOS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
 export function dadosDoDocumento(pca: PcaEspaco): Promise<DadosDocumentoServidor> {
-  return memoPorVersao(`docpca:${chavePca(pca)}`, async () => {
-    const dash = await dashboardDoPca(pca);
+  // NUNCA a prévia (os DFDs ainda não incorporados): o documento é só o que está NO PCA — a prévia do ADM e a emissão iguais.
+  const semPrevia: PcaEspaco = { ...pca, mesaMarcados: false };
+  return memoPorVersao(`docpca:${chavePca(semPrevia)}`, async () => {
+    const dash = await dashboardDoPca(semPrevia);
     const ids = dash.dfdsLista.map((d) => d.id);
     // Objeto e seções dos DFDs VIGENTES (os do Dashboard) — os ids num parâmetro só.
     const extra = new Map<number, { objeto: string | null; secoes: string | null }>();
@@ -94,25 +97,50 @@ export function dadosDoDocumento(pca: PcaEspaco): Promise<DadosDocumentoServidor
         valor: d.valor,
       };
     });
-    const totais = totaisDocumento({ itens: itensDoTexto(dash.itensTexto), dfds: lista });
+    const itens = itensDoTexto(dash.itensTexto);
+    const totais = totaisDocumento({ itens, dfds: lista });
+    // Só os campos que o documento imprime (nada de protocolo nem de id interno — a resposta é PÚBLICA).
+    const itensTexto = linhasParaTexto(itens, CAMPOS_ITEM_DOCUMENTO);
     const unidades = dash.nomesUnidades ?? {};
     return {
-      itensTexto: dash.itensTexto,
+      itensTexto,
       dfds: lista,
       unidades,
       totais,
-      dadosHash: await sha256(`${dash.itensTexto}\n${JSON.stringify(lista)}\n${JSON.stringify(unidades)}`),
+      dadosHash: await sha256(`${itensTexto}\n${JSON.stringify(lista)}\n${JSON.stringify(unidades)}`),
     };
   });
 }
 
-export type EmissaoRegistrada = { codigo: string; emitidoEm: string; selo: string };
+/** A janela em que a mesma origem recebe a MESMA emissão de volta (cliques repetidos, nova tentativa). */
+const REUSO_EMISSAO_MS = 10 * 60 * 1000;
+
+export type EmissaoRegistrada = { codigo: string; emitidoEm: string; selo: string; dadosHash: string };
 
 /** REGISTRA uma emissão (o código de verificação, os números e o selo) — chamada pela rota pública depois das travas. */
 export async function registrarEmissao(pca: PcaEspaco, cfg: ConfigDocumentoPca, dados: DadosDocumentoServidor, ip: string): Promise<EmissaoRegistrada> {
+  const configHash = await sha256(textoConfig(cfg));
+  // O IP só como HASH (contar emissões por origem sem guardar o dado pessoal).
+  const ipHash = (await sha256(`docpca:${ip}`)).slice(0, 16);
+  // A MESMA origem pedindo o MESMO documento (mesmos dados e configuração) há pouco = a MESMA emissão (sem linha nova).
+  const desde = new Date(Date.now() - REUSO_EMISSAO_MS).toISOString();
+  const [ja] = await getDb()
+    .select({ codigo: pcaDocumentoEmissoes.codigo, emitidoEm: pcaDocumentoEmissoes.emitidoEm, selo: pcaDocumentoEmissoes.selo })
+    .from(pcaDocumentoEmissoes)
+    .where(
+      and(
+        eq(pcaDocumentoEmissoes.pcaId, pca.id),
+        eq(pcaDocumentoEmissoes.ipHash, ipHash),
+        eq(pcaDocumentoEmissoes.dadosHash, dados.dadosHash),
+        eq(pcaDocumentoEmissoes.configHash, configHash),
+        gt(pcaDocumentoEmissoes.emitidoEm, desde),
+      ),
+    )
+    .orderBy(desc(pcaDocumentoEmissoes.id))
+    .limit(1);
+  if (ja) return { ...ja, dadosHash: dados.dadosHash };
   const codigo = codigoDeBytes(crypto.getRandomValues(new Uint8Array(16)));
   const emitidoEm = new Date().toISOString();
-  const configHash = await sha256(textoConfig(cfg));
   const t = dados.totais;
   const selo = await sha256(textoSelo({ codigo, pcaId: pca.id, emitidoEm, itens: t.itens, valor: t.valor, dfds: t.dfds, dadosHash: dados.dadosHash, configHash }));
   await getDb()
@@ -127,10 +155,9 @@ export async function registrarEmissao(pca: PcaEspaco, cfg: ConfigDocumentoPca, 
       dadosHash: dados.dadosHash,
       configHash,
       selo,
-      // O IP só como HASH (contar emissões por origem sem guardar o dado pessoal).
-      ipHash: (await sha256(`docpca:${ip}`)).slice(0, 16),
+      ipHash,
     });
-  return { codigo, emitidoEm, selo };
+  return { codigo, emitidoEm, selo, dadosHash: dados.dadosHash };
 }
 
 export type EmissaoDocumento = typeof pcaDocumentoEmissoes.$inferSelect;

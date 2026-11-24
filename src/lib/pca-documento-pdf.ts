@@ -39,6 +39,8 @@ export async function gerarPdfDocumentoPca(p: PacoteDocumento, o: Pick<OpcoesGer
       data: new Date(emissao?.emitidoEm ?? agora),
       assunto: `Plano de Contratações Anual · ${p.pca.nome}${emissao ? ` · código ${emissao.codigo}` : " · prévia"}`,
       palavras: emissao ? [`codigo:${emissao.codigo}`, `selo:${emissao.selo}`] : ["previa"],
+      // O total do andamento da montagem: as linhas de todas as tabelas.
+      linhasTotal: blocos.reduce((n, b) => n + (b.tipo === "tabela" ? b.linhas.length : 0), 0),
       ...o,
     },
   );

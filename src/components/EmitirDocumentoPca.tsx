@@ -21,12 +21,19 @@ type Estado =
 
 /** A fração (0–100) e o texto de cada etapa — o andamento REAL (o desenho conta página a página). */
 function andamento(e: Extract<Estado, { fase: "gerando" }>): { pct: number; texto: string } {
+  const f = e.total ? Math.min(1, e.feito / e.total) : 0;
   if (e.etapa === "registrando") return { pct: 3, texto: "Registrando a emissão e buscando os dados publicados…" };
-  if (e.etapa === "montando") return { pct: 12, texto: "Montando as páginas do documento…" };
+  if (e.etapa === "montando") return { pct: 5 + f * 35, texto: e.total ? `Montando as páginas — ${num(e.feito)} de ${num(e.total)} linhas…` : "Montando as páginas do documento…" };
   if (e.etapa === "salvando") return { pct: 97, texto: "Salvando o arquivo…" };
-  const f = e.total ? e.feito / e.total : 0;
-  return { pct: 15 + f * 80, texto: `Desenhando a página ${num(e.feito)} de ${num(e.total)}…` };
+  return { pct: 40 + f * 55, texto: `Desenhando a página ${num(e.feito)} de ${num(e.total)}…` };
 }
+
+const ETAPAS: Record<Etapa, string> = {
+  registrando: "Registrando a emissão.",
+  montando: "Montando as páginas.",
+  desenhando: "Desenhando as páginas.",
+  salvando: "Salvando o arquivo.",
+};
 
 /**
  * EMITIR O DOCUMENTO OFICIAL DO PCA (tela pública): a verificação anti-robô → `POST /api/pca/[id]/documento` (o servidor
@@ -57,6 +64,7 @@ export function EmitirDocumentoPca({ pcaId, pcaNome, turnstile, open, onClose }:
       if (!res.ok || !j.ok || !j.emissao || !j.config || !j.pca || !j.dados) throw new Error(j.error ?? "Não foi possível emitir o documento.");
       const pacote = j as PacoteDocumento;
       const { gerarPdfDocumentoPca } = await import("@/lib/pca-documento-pdf");
+      ctl.signal.throwIfAborted();
       const bytes = await gerarPdfDocumentoPca(pacote, {
         sinal: ctl.signal,
         onProgresso: (p) => {
@@ -64,9 +72,11 @@ export function EmitirDocumentoPca({ pcaId, pcaNome, turnstile, open, onClose }:
           setEstado({ fase: "gerando", etapa: p.etapa, feito: p.feito, total: p.total });
         },
       });
+      const { itensDoTexto } = await import("@/lib/itens-dash-texto");
+      // Cancelado ou fechado no último instante: nada é baixado.
+      ctl.signal.throwIfAborted();
       const nome = nomeArquivoDocumento(pacote);
       baixarNoNavegador(nome, comoBlob(bytes));
-      const { itensDoTexto } = await import("@/lib/itens-dash-texto");
       const itens = itensDoTexto(pacote.dados.itensTexto);
       const e = pacote.emissao as NonNullable<PacoteDocumento["emissao"]>;
       setEstado({
@@ -81,18 +91,24 @@ export function EmitirDocumentoPca({ pcaId, pcaNome, turnstile, open, onClose }:
         paginas,
       });
     } catch (e) {
+      // Fechado no meio (`fechar` já limpou a tela): nada a mostrar.
+      if (abortar.current !== ctl) return;
       const cancelado = (e as Error).name === "AbortError";
       setEstado({ fase: "inicio", erro: cancelado ? "Geração cancelada." : (e as Error).message });
     } finally {
-      abortar.current = null;
+      if (abortar.current === ctl) abortar.current = null;
       // O token anti-robô vale UMA vez: a próxima emissão verifica de novo.
       captcha.renovar();
     }
   };
 
   const fechar = () => {
-    abortar.current?.abort();
+    const ctl = abortar.current;
+    abortar.current = null;
+    ctl?.abort();
     setEstado({ fase: "inicio" });
+    // A verificação começa de novo ao reabrir (o token guardado podia ter vencido).
+    captcha.renovar();
     onClose();
   };
   const gerando = estado.fase === "gerando";
@@ -106,8 +122,9 @@ export function EmitirDocumentoPca({ pcaId, pcaNome, turnstile, open, onClose }:
       size="md"
       fecharNoBackdrop={!gerando}
       rodape={
-        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+        <div className={`flex w-full flex-wrap items-center gap-2 ${gerando ? "justify-start" : "justify-end"}`}>
           {gerando ? (
+            // À ESQUERDA (o "Gerar" fica à direita): um duplo clique no Gerar não cancela.
             <Button variant="secondary" size="sm" onClick={() => abortar.current?.abort()}>
               Cancelar
             </Button>
@@ -135,8 +152,12 @@ export function EmitirDocumentoPca({ pcaId, pcaNome, turnstile, open, onClose }:
           </>
         )}
         {gerando && a && (
-          <div className="space-y-2" aria-live="polite">
+          <div className="space-y-2">
             <Progress value={a.pct} label={a.texto} />
+            {/* O leitor de tela ouve só a troca de ETAPA (não cada página). */}
+            <p className="sr-only" aria-live="polite">
+              {ETAPAS[estado.etapa]}
+            </p>
             <p className="text-[12px] text-muted">Documentos grandes têm milhares de páginas — mantenha esta tela aberta até o download.</p>
           </div>
         )}
